@@ -21,6 +21,7 @@ class Settings:
     azure_openai_deployment: str = ""
     azure_openai_api_version: str = ""
     azure_openai_key: str = ""
+    enable_live_ai: bool = False
     azure_speech_region: str = ""
     azure_speech_key: str = ""
     log_level: str = "INFO"
@@ -48,6 +49,7 @@ class Settings:
                 key_vault_url,
             ),
             azure_openai_key=_env_or_secret("AZURE_OPENAI_KEY", "azure-openai-key", key_vault_url),
+            enable_live_ai=_bool_env("LALA_ENABLE_LIVE_AI", default=False),
             azure_speech_region=_env_or_secret("AZURE_SPEECH_REGION", "azure-speech-region", key_vault_url),
             azure_speech_key=_env_or_secret("AZURE_SPEECH_KEY", "azure-speech-key", key_vault_url),
             log_level=(os.getenv("LOG_LEVEL") or "INFO").strip(),
@@ -63,3 +65,10 @@ def _env_or_secret(env_name: str, secret_name: str, key_vault_url: str) -> str:
     if value:
         return value
     return get_secret_if_configured(key_vault_url, secret_name)
+
+
+def _bool_env(env_name: str, *, default: bool) -> bool:
+    raw = (os.getenv(env_name) or "").strip().lower()
+    if not raw:
+        return default
+    return raw in {"1", "true", "yes", "on"}

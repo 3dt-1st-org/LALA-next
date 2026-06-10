@@ -69,3 +69,12 @@ JSON failure:
 
 Wave 1 service responses are skeleton-safe and mock-friendly. Azure-backed generation and DB-backed query implementations are later waves.
 
+## Live AI
+
+Azure OpenAI resources exist for LALA-next, but live generation is opt-in:
+
+```powershell
+$env:LALA_ENABLE_LIVE_AI = "true"
+```
+
+When live AI is enabled and Key Vault or environment variables provide the OpenAI settings, `POST /api/v1/docents/script` uses the `gpt-4o-mini` deployment. Otherwise it returns the deterministic skeleton fallback.

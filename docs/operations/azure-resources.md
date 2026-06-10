@@ -18,6 +18,8 @@ Secrets stored in Key Vault:
 
 The secret values are intentionally not recorded in this repository.
 
+Live AI calls are opt-in with `LALA_ENABLE_LIVE_AI=true`. This keeps unit tests and basic smoke checks deterministic while still allowing demo runs to use `gpt-4o-mini`.
+
 ## Local Configuration
 
 `.env.example` includes non-secret resource identifiers and endpoints. For local development, prefer Azure login plus `KEY_VAULT_URL` so the API can load secrets from Key Vault.
