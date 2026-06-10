@@ -44,6 +44,12 @@ Run tests:
 python -m pytest apps/api/tests
 ```
 
+Run the full local verification pass:
+
+```powershell
+.\scripts\windows\verify_repo.ps1 -SkipInstall
+```
+
 ## API Contract
 
 See [docs/api/flutter-contract.md](docs/api/flutter-contract.md).
@@ -68,3 +74,7 @@ Wave 1 resources were created in resource group `3dt-final-team1`:
 - Azure OpenAI deployment: `gpt-4o-mini`
 
 See [docs/operations/azure-resources.md](docs/operations/azure-resources.md).
+
+## Verification
+
+See [docs/operations/verification.md](docs/operations/verification.md).
