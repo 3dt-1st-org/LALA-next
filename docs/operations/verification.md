@@ -104,3 +104,6 @@ The paid smoke checks verify that `docents/script` is backed by Azure OpenAI and
 that `docents/audio` returns `audio/mpeg` bytes. They do not print secret values
 or generated audio content. With `-PaidDependency`, a missing `IOS_API_KEY` is a
 failure rather than a skipped check.
+
+The latest controller-session live smoke evidence is recorded in
+[live-azure-smoke-2026-06-11.md](live-azure-smoke-2026-06-11.md).
