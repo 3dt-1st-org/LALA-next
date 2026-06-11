@@ -53,7 +53,7 @@ def test_repo_docs_and_scripts_do_not_contain_secret_literals():
         re.compile(r"^AZURE_OPENAI_API_KEY[ \t]*=[ \t]*[^#\r\n]+", re.MULTILINE),
         re.compile(r"^AZURE_OPENAI_KEY[ \t]*=[ \t]*[^#\r\n]+", re.MULTILINE),
         re.compile(r"^AZURE_SPEECH_KEY[ \t]*=[ \t]*[^#\r\n]+", re.MULTILINE),
-        re.compile(r"SharedAccessKey=", re.IGNORECASE),
+        re.compile("SharedAccessKey" + "=", re.IGNORECASE),
         re.compile(r"BEGIN [A-Z ]*PRIVATE KEY"),
         re.compile(r"(?<![A-Za-z])sk-[A-Za-z0-9]{20,}"),
     ]
@@ -79,6 +79,12 @@ def test_paid_smoke_requires_authenticated_api_key():
     db_schema_script = (ROOT / "scripts" / "windows" / "verify_db_schema.ps1").read_text(
         encoding="utf-8"
     )
+    apply_sql_script = (ROOT / "scripts" / "windows" / "apply_canonical_sql.ps1").read_text(
+        encoding="utf-8"
+    )
+    apply_sql_tool = (
+        ROOT / "apps" / "api" / "app" / "tools" / "apply_canonical_sql.py"
+    ).read_text(encoding="utf-8")
 
     assert "[string]$KeyVaultUrl" in script
     assert "[string]$KeyVaultUrl" in start_script
@@ -90,6 +96,10 @@ def test_paid_smoke_requires_authenticated_api_key():
     assert "DB_DSN value is never printed by this script." in db_schema_script
     assert "Write-Host $env:DB_DSN" not in db_schema_script
     assert "$toolArgs" in db_schema_script
+    assert "Default mode is dry-run plan only." in apply_sql_script
+    assert "Write-Host $env:DB_DSN" not in apply_sql_script
+    assert "ALLOW_CANONICAL_SQL_APPLY" in apply_sql_tool
+    assert "APPLY_CANONICAL_SQL" in apply_sql_tool
 
 
 def test_key_vault_url_is_lala_next_only():

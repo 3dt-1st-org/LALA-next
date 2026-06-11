@@ -60,6 +60,27 @@ verification before the API handoff:
 This check confirms the canonical extensions, schemas, tables, and views are
 present. It does not apply migrations and does not print `DB_DSN`.
 
+If the schema is missing because the target is an approved dev/shared database,
+review the canonical SQL plan first:
+
+```powershell
+.\scripts\windows\apply_canonical_sql.ps1
+```
+
+Only after review should an operator apply the non-destructive canonical
+baseline:
+
+```powershell
+$env:ALLOW_CANONICAL_SQL_APPLY = "1"
+.\scripts\windows\apply_canonical_sql.ps1 `
+  -Apply `
+  -Confirm APPLY_CANONICAL_SQL `
+  -KeyVaultUrl https://lala-next-kv-27db5e.vault.azure.net/
+```
+
+After apply mode succeeds, rerun `verify_db_schema.ps1` and then `/readyz`
+before handing the backend URL to Flutter clients.
+
 ## LAN Exposure
 
 Use `127.0.0.1` for operator-only checks and the Windows host LAN IP for real

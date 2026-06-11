@@ -21,6 +21,9 @@ Port pure service logic from the legacy LALA repo without Flask, Jinja, or reque
 ## Session D - SQL Canonical
 
 Deepen canonical SQL mapping and convert legacy SQL into safe shared migration order. Keep canonical SQL non-destructive, preserve `v_legacy_*_api` compatibility view naming, and place destructive reset/seed helpers under `sql/dev_reset`.
+Use `apply_canonical_sql.ps1` for dry-run plan review first; apply mode requires
+the explicit `APPLY_CANONICAL_SQL` confirmation and
+`ALLOW_CANONICAL_SQL_APPLY=1`.
 
 ## Session E - Windows Ops
 

@@ -45,6 +45,7 @@ Azure dependency handoff.
 | LALA-next-only Key Vault usage | Done | `apps/api/app/core/key_vault.py`, `scripts/windows/verify_azure_resources.ps1` |
 | Existing ONMU vault not used | Done | `docs/operations/azure-resources.md`, Azure verification script |
 | Canonical SQL baseline | Done | `sql/canonical/*.sql`, SQL safety tests |
+| Guarded canonical SQL plan/apply tooling | Done | `apps/api/app/services/canonical_sql.py`, `scripts/windows/apply_canonical_sql.ps1`, canonical SQL tests |
 | No destructive shared SQL | Done | `apps/api/tests/test_safety_contracts.py` |
 | Read-only canonical DB schema verification | Done | `apps/api/app/services/db_schema.py`, `scripts/windows/verify_db_schema.ps1`, DB schema tests |
 | Windows start/smoke scripts | Done | `scripts/windows/start_api.ps1`, `scripts/windows/smoke_api.ps1` |
@@ -63,6 +64,7 @@ Controller-session local verification:
 ```powershell
 python -m pytest apps/api/tests
 .\scripts\windows\verify_repo.ps1 -SkipInstall
+.\scripts\windows\apply_canonical_sql.ps1
 .\scripts\windows\verify_db_schema.ps1
 .\scripts\windows\verify_azure_resources.ps1
 ```
@@ -78,6 +80,9 @@ LALA-next Azure resource verification completed
 `verify_db_schema.ps1` is expected to return non-zero when `DB_DSN` is absent or
 when a target DB is missing canonical objects. That result is a rollout guard,
 not a CI failure. The script never prints `DB_DSN`.
+`apply_canonical_sql.ps1` defaults to a no-DB dry-run plan. Apply mode requires
+`-Apply`, `-Confirm APPLY_CANONICAL_SQL`, and
+`ALLOW_CANONICAL_SQL_APPLY=1`.
 
 Live paid dependency smoke was run with:
 
@@ -109,7 +114,7 @@ missing from this migration skeleton:
 
 - Flutter app implementation.
 - Final OAuth/Entra-style identity model.
-- Live DB migration execution against Azure PostgreSQL.
+- Unguarded live DB migration execution against Azure PostgreSQL.
 - Full worker/batch rewrite for Azure Functions, Event Hub, and Stream
   Analytics producers.
 - Observability dashboards and persistent runtime log aggregation.
@@ -121,7 +126,7 @@ The next implementation wave should pick one of these lanes explicitly:
 
 - Flutter app integration against the `/api/v1/*` contract.
 - Final OAuth/Entra-style client identity model.
-- Live DB rollout and seed/migration procedure beyond the current read-only
-  schema guard.
+- Live DB rollout and seed/migration procedure beyond the current guarded
+  canonical SQL apply path.
 - Worker/batch boundary implementation.
 - Observability and operations hardening.

@@ -10,14 +10,14 @@ This repository intentionally starts as a migration skeleton instead of a full c
 - Flutter-facing `/api/v1/*` contract.
 - PostgreSQL-backed read/cache hooks, docent cache write-back, and skeleton fallback.
 - Windows shared backend start and smoke scripts.
-- Canonical SQL and compatibility view baseline for future migration review.
+- Canonical SQL, compatibility views, and guarded SQL plan/apply tooling.
 - Documentation for Flutter handoff and Windows operations.
 
 Out of scope for Wave 1:
 
 - Building the Flutter app.
 - Removing or replacing the legacy Flask app.
-- Running live DB migrations.
+- Running unguarded live DB migrations.
 - Moving Azure managed resources into Windows.
 
 ## Quick Start
@@ -49,6 +49,12 @@ Run the full local verification pass:
 
 ```powershell
 .\scripts\windows\verify_repo.ps1 -SkipInstall
+```
+
+Review the canonical SQL rollout plan without touching a database:
+
+```powershell
+.\scripts\windows\apply_canonical_sql.ps1
 ```
 
 ## API Contract

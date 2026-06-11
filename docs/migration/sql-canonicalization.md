@@ -1,7 +1,7 @@
 # SQL Canonicalization
 
-Wave 1 establishes a non-destructive canonical SQL baseline. It does not apply
-migrations to a live database.
+Wave 1 establishes a non-destructive canonical SQL baseline and a guarded
+plan/apply path. It does not run an unreviewed live migration.
 
 Folders:
 
@@ -28,6 +28,37 @@ Rules:
 - Local Windows DB is a resettable development target only.
 - Compatibility views use explicit `v_legacy_*_api` names. They do not replace
   or shadow legacy table names such as `docent_script_cache`.
+
+## Plan and Apply Guard
+
+Generate the canonical rollout plan:
+
+```powershell
+.\scripts\windows\apply_canonical_sql.ps1
+```
+
+The default command does not require `DB_DSN`, does not connect to PostgreSQL,
+and does not apply SQL. It reports:
+
+- The sorted canonical file order.
+- Statement counts.
+- SHA-256 hashes for review and handoff.
+- Any destructive or secret-like safety finding.
+
+Apply mode is intentionally guarded. It requires `-Apply`, the exact confirm
+string, and `ALLOW_CANONICAL_SQL_APPLY=1`:
+
+```powershell
+$env:ALLOW_CANONICAL_SQL_APPLY = "1"
+.\scripts\windows\apply_canonical_sql.ps1 `
+  -Apply `
+  -Confirm APPLY_CANONICAL_SQL `
+  -KeyVaultUrl https://lala-next-kv-27db5e.vault.azure.net/
+```
+
+Apply mode runs the canonical files in sorted order inside one transaction with
+short lock and statement timeouts. It does not print `DB_DSN`. If any statement
+fails, PostgreSQL rolls the transaction back through the driver context.
 
 ## Read-Only Rollout Verification
 

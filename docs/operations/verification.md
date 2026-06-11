@@ -27,6 +27,7 @@ The script runs:
 - FastAPI route tests.
 - API-key and response-envelope contract tests.
 - Request id, request duration, and secret-safe request logging tests.
+- Canonical SQL plan/apply guard tests.
 - SQL and documentation secret-safety tests.
 - PowerShell script parser checks.
 
@@ -69,6 +70,29 @@ failure, or missing canonical object returns a non-zero exit code so operators
 can stop before handing the DB to Flutter/API smoke testers.
 Use `-Json` when another tool needs machine-readable output; in that mode the
 PowerShell wrapper suppresses human-readable preamble text.
+
+To review the exact canonical SQL files before any DB rollout, run:
+
+```powershell
+.\scripts\windows\apply_canonical_sql.ps1
+```
+
+Default mode is dry-run plan only. It lists canonical files, statement counts,
+and SHA-256 hashes without connecting to PostgreSQL. Applying the plan requires
+all three explicit controls:
+
+```powershell
+$env:ALLOW_CANONICAL_SQL_APPLY = "1"
+.\scripts\windows\apply_canonical_sql.ps1 `
+  -Apply `
+  -Confirm APPLY_CANONICAL_SQL `
+  -KeyVaultUrl https://lala-next-kv-27db5e.vault.azure.net/
+```
+
+The apply path reads `DB_DSN` from the process, `.env`, or LALA-next Key Vault,
+runs `sql/canonical/*.sql` in sorted order inside one transaction, and does not
+print the DSN. Use it only for an approved dev/shared target after the plan has
+been reviewed.
 
 `docents/script` reads non-expired rows from `locallink.docent_cache` before
 calling Azure OpenAI. Successful live Azure OpenAI scripts are written back to

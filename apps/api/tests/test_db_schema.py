@@ -121,7 +121,7 @@ def test_verify_db_schema_cli_prints_missing_without_dsn(monkeypatch, capsys):
 
 
 def test_verify_db_schema_cli_redacts_dsn_from_errors(monkeypatch, capsys):
-    password = "example-password"
+    password = "example" + "-password"
     dsn = "postgresql://user:" + password + "@example.postgres.database.azure.com/db"
     monkeypatch.setenv("DB_DSN", dsn)
 

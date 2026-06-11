@@ -3,10 +3,10 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import sys
 
 from apps.api.app.core.config import get_settings
+from apps.api.app.core.redaction import redact_secret_text
 from apps.api.app.services.db_schema import inspect_canonical_schema
 
 
@@ -55,14 +55,7 @@ def _safe_error(exc: Exception, dsn: str) -> str:
     message = str(exc) or exc.__class__.__name__
     if dsn:
         message = message.replace(dsn, "[redacted DB_DSN]")
-    message = re.sub(
-        r"(postgres(?:ql)?://)([^:\s/@]+):([^@\s]+)@",
-        r"\1***:***@",
-        message,
-        flags=re.IGNORECASE,
-    )
-    message = re.sub(r"(password=)([^ \t\r\n;]+)", r"\1***", message, flags=re.IGNORECASE)
-    return message
+    return redact_secret_text(message)
 
 
 if __name__ == "__main__":
