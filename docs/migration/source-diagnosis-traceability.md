@@ -27,8 +27,9 @@ C:\Users\EL035\dataschool\08_First_Team_Project\3dt-1st-Project\artifacts\lala-w
 - Azure Key Vault, Azure OpenAI, and Azure Speech are configured as managed
   dependencies.
 - Live OpenAI/Speech calls are opt-in and have a paid smoke path.
-- PostgreSQL-backed places, weather, planner, and cache reads are not yet wired;
-  deterministic service adapters hold the Flutter-facing contract stable.
+- PostgreSQL-backed places, weather, planner, and docent-cache reads are wired
+  behind `DB_DSN`, with deterministic skeleton fallback when DB access is absent
+  or unavailable.
 - SQL canonical files are a review baseline only. No live DB migration has been
   executed from this repository.
 
@@ -36,7 +37,7 @@ C:\Users\EL035\dataschool\08_First_Team_Project\3dt-1st-Project\artifacts\lala-w
 
 | Backlog item | Why it remains |
 |---|---|
-| DB repository layer for places/weather/planner/docent cache | Wave 1 froze the API contract before touching live DB behavior. |
+| DB repository depth | Current repository layer is read-only and fallback-safe; ranking, freshness policy, cache write-back, and compatibility views remain. |
 | Production mobile auth | Static `IOS_API_KEY` is acceptable only for the migration window. |
 | Compatibility views for legacy Flask route data shapes | Not needed until FastAPI reads from the shared PostgreSQL schema. |
 | Worker/batch boundary implementation | Azure Functions/Event Hub/Stream Analytics remain external producer systems. |

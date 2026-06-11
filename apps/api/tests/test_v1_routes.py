@@ -39,6 +39,37 @@ def test_places_normalizes_kr_language_alias(client, auth_headers):
     assert body["data"]["query"]["language"] == "ko"
 
 
+def test_places_uses_db_repository_when_rows_exist(client, auth_headers, monkeypatch):
+    monkeypatch.setattr(
+        "apps.api.app.services.db_repository.fetch_places",
+        lambda **kwargs: [
+            {
+                "place_id": "db-place-1",
+                "name": "DB Place",
+                "name_ko": "DB 장소",
+                "name_en": "DB Place",
+                "category": "event",
+                "lat": 37.2,
+                "lng": 127.0,
+                "address": "DB address",
+                "distance_m": 25,
+                "source": "db",
+            }
+        ],
+    )
+
+    response = client.get(
+        "/api/v1/places?lat=37.2&lng=127.0&category=event&lang=en",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["data"]["source"] == "db"
+    assert body["data"]["count"] == 1
+    assert body["data"]["places"][0]["place_id"] == "db-place-1"
+
+
 def test_places_invalid_category_returns_json_error(client, auth_headers):
     response = client.get("/api/v1/places?category=bad", headers=auth_headers)
 
@@ -67,6 +98,30 @@ def test_weather_route_returns_envelope(client, auth_headers):
     assert body["data"]["dust"]["grade"] == "normal"
 
 
+def test_weather_uses_db_repository_when_available(client, auth_headers, monkeypatch):
+    monkeypatch.setattr(
+        "apps.api.app.services.db_repository.fetch_latest_weather",
+        lambda **kwargs: {
+            "lat": kwargs["lat"],
+            "lng": kwargs["lng"],
+            "temp": "18.5",
+            "icon": "rain",
+            "dust": {"pm10": "40", "pm25": "18", "grade": "normal", "grade_ko": "보통"},
+            "forecast": [],
+            "outdoor_status": "bad",
+            "source": "db",
+        },
+    )
+
+    response = client.get("/api/v1/weather?lat=37.2&lng=127.0", headers=auth_headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["data"]["source"] == "db"
+    assert body["data"]["temp"] == "18.5"
+    assert body["data"]["force"] is False
+
+
 def test_docent_script_returns_envelope(client, auth_headers):
     response = client.post(
         "/api/v1/docents/script",
@@ -85,6 +140,38 @@ def test_docent_script_returns_envelope(client, auth_headers):
     assert body["data"]["place_id"] == "event-1"
     assert body["data"]["script"]
     assert body["data"]["source"] == "skeleton"
+
+
+def test_docent_script_uses_db_cache_before_generation(client, auth_headers, monkeypatch):
+    monkeypatch.setattr(
+        "apps.api.app.services.db_repository.fetch_docent_script_cache",
+        lambda **kwargs: {
+            "place_id": kwargs["place_id"],
+            "category": kwargs["category"],
+            "language": kwargs["language"],
+            "mode": kwargs["mode"],
+            "script": "Cached DB docent script.",
+            "source": "db_cache",
+            "generated_at": "2026-06-11T00:00:00+00:00",
+            "ttl_sec": 0,
+        },
+    )
+
+    response = client.post(
+        "/api/v1/docents/script",
+        headers=auth_headers,
+        json={
+            "place_id": "event-cache",
+            "category": "event",
+            "language": "ko",
+            "mode": "brief",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["data"]["source"] == "db_cache"
+    assert body["data"]["script"] == "Cached DB docent script."
 
 
 def test_docent_script_accepts_legacy_detail_mode_and_english_language(client, auth_headers):
@@ -217,6 +304,35 @@ def test_daily_plan_normalizes_english_language(client, auth_headers):
     body = response.json()
     assert body["data"]["language"] == "en"
     assert body["data"]["slots"][0]["place"]["name"] == "Suwon Hwaseong"
+
+
+def test_daily_plan_marks_mixed_source_when_db_places_are_used(client, auth_headers, monkeypatch):
+    monkeypatch.setattr(
+        "apps.api.app.services.db_repository.fetch_places",
+        lambda **kwargs: [
+            {
+                "place_id": "db-plan-place",
+                "name": "DB Plan Place",
+                "category": "attraction",
+                "lat": kwargs["lat"],
+                "lng": kwargs["lng"],
+                "address": "DB address",
+                "distance_m": 15,
+                "source": "db",
+            }
+        ],
+    )
+
+    response = client.post(
+        "/api/v1/plans/daily",
+        headers=auth_headers,
+        json={"lat": 37.2, "lng": 127.0, "language": "ko"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["data"]["source"] == "mixed"
+    assert body["data"]["slots"][0]["place"]["place_id"] == "db-plan-place"
 
 
 def test_intervention_route_returns_envelope(client, auth_headers):

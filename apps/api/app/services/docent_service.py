@@ -3,11 +3,20 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from apps.api.app.schemas.docent import DocentAudioRequest, DocentScriptRequest
-from apps.api.app.services import ai_service, speech_service
+from apps.api.app.services import ai_service, db_repository, speech_service
 from apps.api.app.services.normalization import display_language
 
 
 def generate_script(request: DocentScriptRequest) -> dict:
+    cached = db_repository.fetch_docent_script_cache(
+        place_id=request.place_id,
+        category=request.category,
+        language=request.language,
+        mode=request.mode,
+    )
+    if cached:
+        return cached
+
     generated_at = datetime.now(UTC).isoformat()
     if ai_service.live_ai_enabled():
         script = ai_service.generate_docent_script_text(request)

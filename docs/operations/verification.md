@@ -43,6 +43,10 @@ Those dependencies are represented as `configured`, `missing`, `degraded`, or
 `skipped` in `/readyz` and are smoke-tested manually when credentials are
 available.
 
+When `DB_DSN` is configured, `/readyz` performs a short PostgreSQL `SELECT 1`
+probe. Without `DB_DSN`, DB readiness is `skipped` and DB-backed routes use
+their skeleton fallback.
+
 ## Manual API Smoke
 
 Start the API:

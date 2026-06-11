@@ -79,3 +79,7 @@ Health: /healthz
 Ready: /readyz
 Known degraded features: DB/Azure live calls are not required in Wave 1
 ```
+
+If `DB_DSN` is set, `/readyz` probes PostgreSQL and places/weather/planner/docent
+cache routes can read from the canonical schema. If the DB is absent or degraded,
+the API remains usable through deterministic skeleton fallbacks.

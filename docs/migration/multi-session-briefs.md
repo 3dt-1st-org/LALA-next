@@ -1,6 +1,6 @@
 # Multi-Session Implementation Briefs
 
-These briefs are for visible Codex sessions that continue work after the Wave 1 skeleton is committed. After `237de74`, Wave 1 includes the FastAPI edge, `/api/v1/*` contract routes, deterministic skeleton adapters, opt-in Azure OpenAI/Speech checks, canonical SQL files, and Windows start/smoke/verification scripts.
+These briefs are for visible Codex sessions that continue work after the Wave 1 skeleton is committed. After `0183639`, Wave 1 includes the FastAPI edge, `/api/v1/*` contract routes, deterministic skeleton fallbacks, opt-in Azure OpenAI/Speech checks, canonical SQL files, Windows start/smoke/verification scripts, and LALA-next-only Key Vault handoff.
 
 ## Controller
 
@@ -16,7 +16,7 @@ Expand `/api/v1/*` route behavior only when the Flutter contract requires it. Pr
 
 ## Session C - Service Import
 
-Port pure service logic from the legacy LALA repo without Flask, Jinja, or request/session coupling. Current places, weather, and planner services are skeleton adapters; Azure OpenAI and Azure Speech are already live-capable behind explicit opt-in flags.
+Port pure service logic from the legacy LALA repo without Flask, Jinja, or request/session coupling. Current places, weather, planner, and docent-cache services have read-only PostgreSQL hooks behind `DB_DSN` plus skeleton fallback; Azure OpenAI and Azure Speech are live-capable behind explicit opt-in flags.
 
 ## Session D - SQL Canonical
 

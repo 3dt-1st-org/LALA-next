@@ -69,8 +69,9 @@ JSON failure:
 
 Wave 1 service responses are deterministic when live dependencies are disabled.
 Azure OpenAI and Azure Speech are available as opt-in live paths. DB-backed
-queries remain a later wave; places, weather, and planner routes currently return
-contract-safe skeleton data.
+places, weather, planner, and docent-cache reads are also available when
+`DB_DSN` points at the canonical schema. If DB access is absent or unavailable,
+the same routes return contract-safe skeleton data.
 
 ## Route Details
 
@@ -174,6 +175,9 @@ Query parameters:
 }
 ```
 
+When the canonical PostgreSQL read model returns rows, this payload keeps the
+same shape and uses `source: "db"`.
+
 `GET /api/v1/weather`:
 
 ```json
@@ -253,6 +257,9 @@ $env:LALA_ENABLE_LIVE_AI = "true"
 ```
 
 When live AI is enabled and Key Vault or environment variables provide the OpenAI settings, `POST /api/v1/docents/script` uses the `gpt-4o-mini` deployment and returns `source: "azure_openai"`. Otherwise it returns the deterministic skeleton fallback with `source: "skeleton"`.
+
+If `DB_DSN` is configured and `locallink.docent_cache` has a matching non-expired
+entry, the script route returns the cached script before calling Azure OpenAI.
 
 ## Live Speech
 

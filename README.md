@@ -8,6 +8,7 @@ This repository intentionally starts as a migration skeleton instead of a full c
 
 - FastAPI public API edge under `apps/api`.
 - Flutter-facing `/api/v1/*` contract.
+- Optional PostgreSQL-backed read/cache hooks with skeleton fallback.
 - Windows shared backend start and smoke scripts.
 - Canonical SQL folder shape for future migration review.
 - Documentation for Flutter handoff and Windows operations.

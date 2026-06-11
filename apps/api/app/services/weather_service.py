@@ -1,7 +1,14 @@
 from __future__ import annotations
 
+from apps.api.app.services import db_repository
+
 
 def current_weather(*, lat: float, lng: float, force: bool = False) -> dict:
+    db_weather = db_repository.fetch_latest_weather(lat=lat, lng=lng)
+    if db_weather:
+        db_weather["force"] = force
+        return db_weather
+
     return {
         "lat": lat,
         "lng": lng,
@@ -20,4 +27,3 @@ def current_weather(*, lat: float, lng: float, force: bool = False) -> dict:
         "force": force,
         "source": "skeleton",
     }
-

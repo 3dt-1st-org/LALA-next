@@ -16,6 +16,7 @@ def daily_plan(request: DailyPlanRequest) -> dict:
         category="all",
         language=language,
     )
+    source = _combined_source(places.get("source"), weather.get("source"))
     return {
         "language": language,
         "center": {"lat": request.lat, "lng": request.lng},
@@ -32,7 +33,7 @@ def daily_plan(request: DailyPlanRequest) -> dict:
                 "weather_hint": weather["outdoor_status"],
             },
         ],
-        "source": "skeleton",
+        "source": source,
     }
 
 
@@ -44,5 +45,14 @@ def intervention(*, lat: float, lng: float, radius_m: int) -> dict:
         "should_intervene": weather["outdoor_status"] != "good",
         "reason": "Weather-aware placeholder intervention from LALA-next skeleton.",
         "recommended_action": "Show nearby indoor or short-walk alternatives.",
-        "source": "skeleton",
+        "source": "db" if weather.get("source") == "db" else "skeleton",
     }
+
+
+def _combined_source(place_source: str | None, weather_source: str | None) -> str:
+    sources = {place_source or "skeleton", weather_source or "skeleton"}
+    if sources == {"db"}:
+        return "db"
+    if "db" in sources:
+        return "mixed"
+    return "skeleton"

@@ -11,6 +11,11 @@ def client() -> TestClient:
     return TestClient(create_app())
 
 
+@pytest.fixture(autouse=True)
+def isolate_db_env(monkeypatch) -> None:
+    monkeypatch.delenv("DB_DSN", raising=False)
+
+
 @pytest.fixture()
 def api_key(monkeypatch) -> str:
     key = "test-client-key"
@@ -21,4 +26,3 @@ def api_key(monkeypatch) -> str:
 @pytest.fixture()
 def auth_headers(api_key: str) -> dict[str, str]:
     return {"X-API-Key": api_key}
-
