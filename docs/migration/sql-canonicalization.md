@@ -28,3 +28,23 @@ Rules:
 - Local Windows DB is a resettable development target only.
 - Compatibility views use explicit `v_legacy_*_api` names. They do not replace
   or shadow legacy table names such as `docent_script_cache`.
+
+## Read-Only Rollout Verification
+
+Before pointing the shared Windows backend at a live PostgreSQL target, verify
+that the database already satisfies this canonical baseline:
+
+```powershell
+.\scripts\windows\verify_db_schema.ps1
+```
+
+The verification path is intentionally read-only. It checks:
+
+- Required extensions: `postgis`, `vector`, `pgcrypto`.
+- Required schemas: `locallink`, `daangn`, `monitoring`.
+- Required API/reporting relations, including `locallink.v_public_places`,
+  `locallink.v_latest_weather_api`, and `monitoring.v_dependency_latest`.
+
+This command does not run `sql/canonical/*.sql`, does not apply migrations, and
+does not print `DB_DSN`. A non-zero exit means the DB is not yet safe to treat as
+the canonical shared target.

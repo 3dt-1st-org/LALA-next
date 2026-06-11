@@ -50,6 +50,16 @@ For live Azure OpenAI and Speech validation:
 .\scripts\windows\smoke_api.ps1 -BaseUrl "http://127.0.0.1:8080" -KeyVaultUrl https://lala-next-kv-27db5e.vault.azure.net/ -PaidDependency
 ```
 
+If the shared backend will use a PostgreSQL target, run the read-only schema
+verification before the API handoff:
+
+```powershell
+.\scripts\windows\verify_db_schema.ps1 -KeyVaultUrl https://lala-next-kv-27db5e.vault.azure.net/
+```
+
+This check confirms the canonical extensions, schemas, tables, and views are
+present. It does not apply migrations and does not print `DB_DSN`.
+
 ## LAN Exposure
 
 Use `127.0.0.1` for operator-only checks and the Windows host LAN IP for real

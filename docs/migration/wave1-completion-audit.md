@@ -46,6 +46,7 @@ Azure dependency handoff.
 | Existing ONMU vault not used | Done | `docs/operations/azure-resources.md`, Azure verification script |
 | Canonical SQL baseline | Done | `sql/canonical/*.sql`, SQL safety tests |
 | No destructive shared SQL | Done | `apps/api/tests/test_safety_contracts.py` |
+| Read-only canonical DB schema verification | Done | `apps/api/app/services/db_schema.py`, `scripts/windows/verify_db_schema.ps1`, DB schema tests |
 | Windows start/smoke scripts | Done | `scripts/windows/start_api.ps1`, `scripts/windows/smoke_api.ps1` |
 | OpenAPI export for Flutter handoff | Done | `scripts/windows/export_openapi.ps1`, `docs/api/openapi-usage.md` |
 | Configurable browser CORS | Done | `CORS_ALLOW_ORIGINS`, `apps/api/tests/test_cors.py` |
@@ -62,6 +63,7 @@ Controller-session local verification:
 ```powershell
 python -m pytest apps/api/tests
 .\scripts\windows\verify_repo.ps1 -SkipInstall
+.\scripts\windows\verify_db_schema.ps1
 .\scripts\windows\verify_azure_resources.ps1
 ```
 
@@ -72,6 +74,10 @@ Observed latest local result before this audit:
 PowerShell parser pass
 LALA-next Azure resource verification completed
 ```
+
+`verify_db_schema.ps1` is expected to return non-zero when `DB_DSN` is absent or
+when a target DB is missing canonical objects. That result is a rollout guard,
+not a CI failure. The script never prints `DB_DSN`.
 
 Live paid dependency smoke was run with:
 
@@ -115,6 +121,7 @@ The next implementation wave should pick one of these lanes explicitly:
 
 - Flutter app integration against the `/api/v1/*` contract.
 - Final OAuth/Entra-style client identity model.
-- Live DB rollout and seed/migration procedure.
+- Live DB rollout and seed/migration procedure beyond the current read-only
+  schema guard.
 - Worker/batch boundary implementation.
 - Observability and operations hardening.

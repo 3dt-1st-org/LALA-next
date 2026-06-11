@@ -55,6 +55,21 @@ Without `DB_DSN`, DB readiness is `skipped` and DB-backed routes use their
 skeleton fallback. If the connection works but those relations are absent,
 DB readiness is `degraded` rather than `configured`.
 
+For an explicit read-only canonical schema check against the configured DB,
+run:
+
+```powershell
+.\scripts\windows\verify_db_schema.ps1
+```
+
+The script reads `DB_DSN` from the process, `.env`, or the configured
+LALA-next Key Vault. It checks required extensions, schemas, tables, and views
+without applying migrations or printing the DSN. A missing `DB_DSN`, connection
+failure, or missing canonical object returns a non-zero exit code so operators
+can stop before handing the DB to Flutter/API smoke testers.
+Use `-Json` when another tool needs machine-readable output; in that mode the
+PowerShell wrapper suppresses human-readable preamble text.
+
 `docents/script` reads non-expired rows from `locallink.docent_cache` before
 calling Azure OpenAI. Successful live Azure OpenAI scripts are written back to
 that cache on a best-effort basis. A cache write failure should be logged in a

@@ -76,6 +76,9 @@ def test_repo_docs_and_scripts_do_not_contain_secret_literals():
 def test_paid_smoke_requires_authenticated_api_key():
     script = (ROOT / "scripts" / "windows" / "smoke_api.ps1").read_text(encoding="utf-8")
     start_script = (ROOT / "scripts" / "windows" / "start_api.ps1").read_text(encoding="utf-8")
+    db_schema_script = (ROOT / "scripts" / "windows" / "verify_db_schema.ps1").read_text(
+        encoding="utf-8"
+    )
 
     assert "[string]$KeyVaultUrl" in script
     assert "[string]$KeyVaultUrl" in start_script
@@ -84,6 +87,9 @@ def test_paid_smoke_requires_authenticated_api_key():
     assert "if ($PaidDependency)" in script
     assert "Client auth is required for paid dependency smoke" in script
     assert "--no-access-log" in start_script
+    assert "DB_DSN value is never printed by this script." in db_schema_script
+    assert "Write-Host $env:DB_DSN" not in db_schema_script
+    assert "$toolArgs" in db_schema_script
 
 
 def test_key_vault_url_is_lala_next_only():
