@@ -38,6 +38,8 @@ C:\Users\EL035\dataschool\08_First_Team_Project\3dt-1st-Project\artifacts\lala-w
   place/docent/weather handoff shapes without shadowing old table names.
 - SQL canonical files are a review baseline only. No live DB migration has been
   executed from this repository.
+- The current requirement-by-requirement completion evidence is tracked in
+  `docs/migration/wave1-completion-audit.md`.
 
 ## Remaining Backlog
 

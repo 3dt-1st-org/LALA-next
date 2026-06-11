@@ -86,3 +86,8 @@ See [docs/operations/azure-resources.md](docs/operations/azure-resources.md).
 ## Verification
 
 See [docs/operations/verification.md](docs/operations/verification.md).
+
+## Migration Status
+
+See [docs/migration/wave1-completion-audit.md](docs/migration/wave1-completion-audit.md)
+for the current Wave 1 requirement-by-requirement completion audit.
