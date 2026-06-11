@@ -1,21 +1,23 @@
 from __future__ import annotations
 
 from apps.api.app.schemas.planner import DailyPlanRequest
+from apps.api.app.services.normalization import normalize_language
 from apps.api.app.services.places_service import list_places
 from apps.api.app.services.weather_service import current_weather
 
 
 def daily_plan(request: DailyPlanRequest) -> dict:
+    language = normalize_language(request.language)
     weather = current_weather(lat=request.lat, lng=request.lng)
     places = list_places(
         lat=request.lat,
         lng=request.lng,
         radius_m=3000,
         category="all",
-        language=request.language,
+        language=language,
     )
     return {
-        "language": request.language,
+        "language": language,
         "center": {"lat": request.lat, "lng": request.lng},
         "weather": weather,
         "slots": [
@@ -44,4 +46,3 @@ def intervention(*, lat: float, lng: float, radius_m: int) -> dict:
         "recommended_action": "Show nearby indoor or short-walk alternatives.",
         "source": "skeleton",
     }
-

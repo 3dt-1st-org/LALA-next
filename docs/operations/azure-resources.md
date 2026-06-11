@@ -2,11 +2,14 @@
 
 Wave 1 resources are in resource group `3dt-final-team1` in subscription `27db5ec6-d206-4028-b5e1-6004dca5eeef`.
 
+LALA-next must use only the LALA-next Key Vault, `lala-next-kv-27db5e`, with `KEY_VAULT_URL=https://lala-next-kv-27db5e.vault.azure.net/`. The existing ONMU vault, `onmu-dev-kv-27db5e`, is in the same resource group but is not used by this repository.
+
 | Resource | Name | Location | Purpose |
 |---|---|---|---|
 | Key Vault | `lala-next-kv-27db5e` | `koreacentral` | LALA-next secret storage |
 | Azure OpenAI | `lala-next-aoai-27db5e` | `koreacentral` | AI API account |
 | Azure OpenAI deployment | `gpt-4o-mini` | `koreacentral` | Wave 1 text generation deployment |
+| Azure Speech | `lala-next-speech-27db5e` | `koreacentral` | Wave 1 opt-in text-to-speech account |
 
 Secrets stored in Key Vault:
 
@@ -15,14 +18,17 @@ Secrets stored in Key Vault:
 - `azure-openai-key`
 - `azure-openai-deployment`
 - `azure-openai-api-version`
+- `azure-speech-key`
+- `azure-speech-region`
+- `azure-speech-endpoint`
 
 The secret values are intentionally not recorded in this repository.
 
-Live AI calls are opt-in with `LALA_ENABLE_LIVE_AI=true`. This keeps unit tests and basic smoke checks deterministic while still allowing demo runs to use `gpt-4o-mini`.
+Live AI calls are opt-in with `LALA_ENABLE_LIVE_AI=true`. Live text-to-speech calls are opt-in with `LALA_ENABLE_LIVE_SPEECH=true`. This keeps unit tests and basic smoke checks deterministic while still allowing demo runs to use `gpt-4o-mini` and Azure Speech.
 
 ## Local Configuration
 
-`.env.example` includes non-secret resource identifiers and endpoints. For local development, prefer Azure login plus `KEY_VAULT_URL` so the API can load secrets from Key Vault.
+`.env.example` includes non-secret resource identifiers and endpoints. For local development, prefer Azure login plus the LALA-next `KEY_VAULT_URL` so the API can load secrets from `lala-next-kv-27db5e`.
 
 ```powershell
 az login

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from apps.api.app.core.errors import ServiceError
+from apps.api.app.services.normalization import normalize_language
 
 _ALLOWED_CATEGORIES = {"all", "attraction", "restaurant", "event"}
-_ALLOWED_LANGUAGES = {"ko", "en"}
 
 
 def list_places(
@@ -15,7 +15,7 @@ def list_places(
     language: str,
 ) -> dict:
     category = (category or "all").strip().lower()
-    language = (language or "ko").strip().lower()
+    language = normalize_language(language)
     if category not in _ALLOWED_CATEGORIES:
         raise ServiceError(
             status_code=400,
@@ -23,9 +23,6 @@ def list_places(
             message="category must be all|attraction|restaurant|event.",
             retryable=False,
         )
-    if language not in _ALLOWED_LANGUAGES:
-        language = "ko"
-
     resolved_category = "attraction" if category == "all" else category
     name = "Suwon Hwaseong" if language == "en" else "수원화성"
     address = "Suwon-si, Gyeonggi-do" if language == "en" else "경기도 수원시"
@@ -53,4 +50,3 @@ def list_places(
         },
         "source": "skeleton",
     }
-

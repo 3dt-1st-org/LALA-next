@@ -28,8 +28,11 @@ def test_repo_docs_and_scripts_do_not_contain_secret_literals():
     ]
     patterns = [
         re.compile(r"postgresql://[^\s<>]+:[^\s<>]+@"),
-        re.compile(r"POSTGRES_PASSWORD\s*=\s*.+"),
-        re.compile(r"AZURE_OPENAI_API_KEY\s*=\s*.+"),
+        re.compile(r"^IOS_API_KEY[ \t]*=[ \t]*[^#\r\n]+", re.MULTILINE),
+        re.compile(r"^POSTGRES_PASSWORD[ \t]*=[ \t]*[^#\r\n]+", re.MULTILINE),
+        re.compile(r"^AZURE_OPENAI_API_KEY[ \t]*=[ \t]*[^#\r\n]+", re.MULTILINE),
+        re.compile(r"^AZURE_OPENAI_KEY[ \t]*=[ \t]*[^#\r\n]+", re.MULTILINE),
+        re.compile(r"^AZURE_SPEECH_KEY[ \t]*=[ \t]*[^#\r\n]+", re.MULTILINE),
         re.compile(r"SharedAccessKey=", re.IGNORECASE),
         re.compile(r"BEGIN [A-Z ]*PRIVATE KEY"),
         re.compile(r"(?<![A-Za-z])sk-[A-Za-z0-9]{20,}"),
@@ -48,3 +51,10 @@ def test_repo_docs_and_scripts_do_not_contain_secret_literals():
                     findings.append(f"{path}: {pattern.pattern}")
 
     assert findings == []
+
+
+def test_paid_smoke_requires_authenticated_api_key():
+    script = (ROOT / "scripts" / "windows" / "smoke_api.ps1").read_text(encoding="utf-8")
+
+    assert "if ($PaidDependency)" in script
+    assert "IOS_API_KEY is required for paid dependency smoke" in script

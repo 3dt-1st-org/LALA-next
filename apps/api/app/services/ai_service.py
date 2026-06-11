@@ -3,6 +3,7 @@ from __future__ import annotations
 from apps.api.app.core.config import get_settings
 from apps.api.app.core.errors import ServiceError
 from apps.api.app.schemas.docent import DocentScriptRequest
+from apps.api.app.services.normalization import display_language
 
 
 def live_ai_enabled() -> bool:
@@ -40,7 +41,7 @@ def generate_docent_script_text(request: DocentScriptRequest) -> str:
         api_key=settings.azure_openai_key,
         api_version=settings.azure_openai_api_version,
     )
-    language = "Korean" if request.language == "ko" else "English"
+    language = display_language(request.language)
     prompt = (
         f"Write a {request.mode} mobile docent script in {language}. "
         f"Category: {request.category}. Place id: {request.place_id}. "

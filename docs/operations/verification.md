@@ -13,6 +13,9 @@ From `C:\Users\EL035\dataschool\LALA-next`:
 .\scripts\windows\verify_repo.ps1
 ```
 
+The script uses `.venv\Scripts\python.exe` automatically when it exists. Use
+`-Python <path-to-python.exe>` to override the interpreter.
+
 If dependencies are already installed:
 
 ```powershell
@@ -56,9 +59,25 @@ Smoke the public and authenticated routes:
 
 `smoke_api.ps1` can load `IOS_API_KEY` from Key Vault when `KEY_VAULT_URL` is
 configured and Azure CLI is authenticated. It never prints the key value.
+Without `-PaidDependency`, authenticated route checks are skipped when an API key
+is not available.
 
 ## Paid Dependency Checks
 
 Live Azure OpenAI and Azure Speech checks are kept opt-in. Use them only when a
-small paid smoke request is acceptable and record the result in the PR or
-handoff notes.
+small paid smoke request is acceptable:
+
+```powershell
+.\scripts\windows\start_api.ps1 -Port 8080 -EnableLiveAI -EnableLiveSpeech
+```
+
+In another terminal:
+
+```powershell
+.\scripts\windows\smoke_api.ps1 -BaseUrl http://127.0.0.1:8080 -PaidDependency
+```
+
+The paid smoke checks verify that `docents/script` is backed by Azure OpenAI and
+that `docents/audio` returns `audio/mpeg` bytes. They do not print secret values
+or generated audio content. With `-PaidDependency`, a missing `IOS_API_KEY` is a
+failure rather than a skipped check.

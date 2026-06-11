@@ -20,7 +20,9 @@ def build_readiness(settings: Settings | None = None) -> dict:
         "azure_openai_key": _status(settings.azure_openai_key, required=False),
         "live_ai": "enabled" if settings.enable_live_ai else "disabled",
         "azure_speech_region": _status(settings.azure_speech_region, required=False),
+        "azure_speech_endpoint": _status(settings.azure_speech_endpoint, required=False),
         "azure_speech_key": _status(settings.azure_speech_key, required=False),
+        "live_speech": "enabled" if settings.enable_live_speech else "disabled",
     }
     if checks["api_key"] == "missing":
         overall = "degraded"

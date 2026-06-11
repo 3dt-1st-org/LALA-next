@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from apps.api.app.core.errors import ServiceError
 from apps.api.app.schemas.docent import DocentAudioRequest, DocentScriptRequest
-from apps.api.app.services import ai_service
+from apps.api.app.services import ai_service, speech_service
+from apps.api.app.services.normalization import display_language
 
 
 def generate_script(request: DocentScriptRequest) -> dict:
@@ -28,7 +28,7 @@ def generate_script(request: DocentScriptRequest) -> dict:
 
 
 def _fallback_script(request: DocentScriptRequest) -> str:
-    language_label = "Korean" if request.language == "ko" else "English"
+    language_label = display_language(request.language)
     return (
         f"This is a {request.mode} {language_label} docent script for "
         f"{request.category} place {request.place_id}. "
@@ -39,13 +39,8 @@ def _fallback_script(request: DocentScriptRequest) -> str:
 
 def generate_audio(request: DocentAudioRequest) -> bytes:
     script = request.script.strip()
-    if not script:
-        raise ServiceError(
-            status_code=400,
-            code="SCRIPT_REQUIRED",
-            message="script is required.",
-            retryable=False,
-        )
+    if speech_service.live_speech_enabled():
+        return speech_service.synthesize_docent_audio(request)
     header = b"ID3\x04\x00\x00\x00\x00\x00!"
     body = f"LALA-next skeleton audio: {request.language}: {script[:128]}".encode("utf-8")
     return header + body

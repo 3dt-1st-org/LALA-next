@@ -73,6 +73,8 @@ Wave 1 resources were created in resource group `3dt-final-team1`:
 - Azure OpenAI account: `lala-next-aoai-27db5e`
 - Azure OpenAI deployment: `gpt-4o-mini`
 
+Use `KEY_VAULT_URL=https://lala-next-kv-27db5e.vault.azure.net/` for this repository. The ONMU vault `onmu-dev-kv-27db5e` is in the same resource group, but LALA-next does not use it.
+
 See [docs/operations/azure-resources.md](docs/operations/azure-resources.md).
 
 ## Verification

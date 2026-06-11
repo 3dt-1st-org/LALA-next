@@ -23,7 +23,9 @@ class Settings:
     azure_openai_key: str = ""
     enable_live_ai: bool = False
     azure_speech_region: str = ""
+    azure_speech_endpoint: str = ""
     azure_speech_key: str = ""
+    enable_live_speech: bool = False
     log_level: str = "INFO"
 
     @classmethod
@@ -51,7 +53,9 @@ class Settings:
             azure_openai_key=_env_or_secret("AZURE_OPENAI_KEY", "azure-openai-key", key_vault_url),
             enable_live_ai=_bool_env("LALA_ENABLE_LIVE_AI", default=False),
             azure_speech_region=_env_or_secret("AZURE_SPEECH_REGION", "azure-speech-region", key_vault_url),
+            azure_speech_endpoint=_env_or_secret("AZURE_SPEECH_ENDPOINT", "azure-speech-endpoint", key_vault_url),
             azure_speech_key=_env_or_secret("AZURE_SPEECH_KEY", "azure-speech-key", key_vault_url),
+            enable_live_speech=_bool_env("LALA_ENABLE_LIVE_SPEECH", default=False),
             log_level=(os.getenv("LOG_LEVEL") or "INFO").strip(),
         )
 

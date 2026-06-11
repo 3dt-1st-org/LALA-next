@@ -78,3 +78,13 @@ $env:LALA_ENABLE_LIVE_AI = "true"
 ```
 
 When live AI is enabled and Key Vault or environment variables provide the OpenAI settings, `POST /api/v1/docents/script` uses the `gpt-4o-mini` deployment. Otherwise it returns the deterministic skeleton fallback.
+
+## Live Speech
+
+Azure Speech resources exist for LALA-next, but live synthesis is opt-in:
+
+```powershell
+$env:LALA_ENABLE_LIVE_SPEECH = "true"
+```
+
+When live Speech is enabled and Key Vault or environment variables provide the Speech settings, `POST /api/v1/docents/audio` returns Azure-generated MP3 bytes. Otherwise it returns deterministic skeleton MP3-like bytes for contract testing.

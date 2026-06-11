@@ -18,8 +18,8 @@ router = APIRouter(
 @router.get("/places")
 def places(
     request: Request,
-    lat: float = Query(37.2636),
-    lng: float = Query(127.0286),
+    lat: float = Query(37.2636, ge=-90, le=90),
+    lng: float = Query(127.0286, ge=-180, le=180),
     radius_m: int = Query(1000, gt=0, le=50000),
     category: str = Query("all"),
     lang: str = Query("ko"),
@@ -37,8 +37,8 @@ def places(
 @router.get("/weather")
 def weather(
     request: Request,
-    lat: float = Query(37.2636),
-    lng: float = Query(127.0286),
+    lat: float = Query(37.2636, ge=-90, le=90),
+    lng: float = Query(127.0286, ge=-180, le=180),
     force: bool = Query(False),
 ) -> dict:
     payload = weather_service.current_weather(lat=lat, lng=lng, force=force)
@@ -70,10 +70,9 @@ def daily_plan(request: Request, body: DailyPlanRequest) -> dict:
 @router.get("/plans/intervention")
 def intervention(
     request: Request,
-    lat: float = Query(37.2636),
-    lng: float = Query(127.0286),
+    lat: float = Query(37.2636, ge=-90, le=90),
+    lng: float = Query(127.0286, ge=-180, le=180),
     radius_m: int = Query(10000, gt=0, le=50000),
 ) -> dict:
     payload = planner_service.intervention(lat=lat, lng=lng, radius_m=radius_m)
     return success_envelope(request=request, data=payload, meta={"source": payload.get("source", "computed")})
-

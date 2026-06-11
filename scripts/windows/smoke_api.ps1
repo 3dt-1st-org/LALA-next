@@ -50,7 +50,75 @@ function Invoke-SmokePost {
     )
     $url = "$BaseUrl$Path"
     Write-Host "POST $Path"
-    Invoke-RestMethod -Method Post -Uri $url -Headers $Headers -Body ($Body | ConvertTo-Json -Depth 8) -ContentType "application/json" | Out-Null
+    $json = $Body | ConvertTo-Json -Depth 8
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
+    Invoke-RestMethod -Method Post -Uri $url -Headers $Headers -Body $bytes -ContentType "application/json; charset=utf-8"
+}
+
+function Invoke-SmokeAudioPost {
+    param(
+        [string]$Path,
+        [object]$Body,
+        [hashtable]$Headers = @{}
+    )
+    $url = "$BaseUrl$Path"
+    Write-Host "POST $Path"
+    $json = $Body | ConvertTo-Json -Depth 8
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
+    $request = [System.Net.HttpWebRequest]::Create($url)
+    $request.Method = "POST"
+    $request.ContentType = "application/json; charset=utf-8"
+    $request.ContentLength = $bytes.Length
+    foreach ($key in $Headers.Keys) {
+        $request.Headers[$key] = [string]$Headers[$key]
+    }
+
+    $requestStream = $request.GetRequestStream()
+    try {
+        $requestStream.Write($bytes, 0, $bytes.Length)
+    } finally {
+        $requestStream.Dispose()
+    }
+
+    try {
+        $response = [System.Net.HttpWebResponse]$request.GetResponse()
+    } catch [System.Net.WebException] {
+        if ($_.Exception.Response) {
+            $errorResponse = [System.Net.HttpWebResponse]$_.Exception.Response
+            throw "Audio smoke failed with HTTP $([int]$errorResponse.StatusCode)."
+        }
+        throw
+    }
+
+    try {
+        $statusCode = [int]$response.StatusCode
+        if ($statusCode -lt 200 -or $statusCode -ge 300) {
+            throw "Audio smoke failed with HTTP $statusCode."
+        }
+        $contentType = $response.ContentType
+        if (-not $contentType -or -not $contentType.ToString().StartsWith("audio/mpeg")) {
+            throw "Audio smoke returned unexpected content type: $contentType"
+        }
+
+        $buffer = New-Object byte[] 8192
+        $totalBytes = 0
+        $responseStream = $response.GetResponseStream()
+        try {
+            do {
+                $read = $responseStream.Read($buffer, 0, $buffer.Length)
+                $totalBytes += $read
+            } while ($read -gt 0)
+        } finally {
+            $responseStream.Dispose()
+        }
+
+        if ($totalBytes -le 0) {
+            throw "Audio smoke returned an empty audio response."
+        }
+        Write-Host "Audio smoke returned audio/mpeg bytes."
+    } finally {
+        $response.Dispose()
+    }
 }
 
 Invoke-SmokeGet "/healthz"
@@ -66,6 +134,9 @@ if (-not $env:IOS_API_KEY) {
         }
     }
     if (-not $env:IOS_API_KEY) {
+        if ($PaidDependency) {
+            throw "IOS_API_KEY is required for paid dependency smoke. Set IOS_API_KEY or KEY_VAULT_URL with an authenticated Azure CLI session."
+        }
         Write-Host "IOS_API_KEY is not available; authenticated /api/v1 smoke checks skipped."
         exit 0
     }
@@ -81,10 +152,26 @@ Invoke-SmokePost "/api/v1/docents/script" -Headers $headers -Body @{
     category = "attraction"
     language = "ko"
     mode = "brief"
-}
+} | Out-Null
 
 if ($PaidDependency) {
-    Write-Host "Paid dependency smoke is reserved for future Azure OpenAI/Speech live checks."
+    Write-Host "Paid dependency smoke requested. Start the API with -EnableLiveAI and -EnableLiveSpeech before running this check."
+    $scriptResult = Invoke-SmokePost "/api/v1/docents/script" -Headers $headers -Body @{
+        place_id = "paid-smoke-suwon"
+        category = "attraction"
+        language = "ko"
+        mode = "brief"
+    }
+    if ($scriptResult.data.source -ne "azure_openai") {
+        throw "Expected Azure OpenAI script source, got $($scriptResult.data.source)."
+    }
+    if (-not $scriptResult.data.script) {
+        throw "Azure OpenAI script smoke returned an empty script."
+    }
+    Invoke-SmokeAudioPost "/api/v1/docents/audio" -Headers $headers -Body @{
+        script = $scriptResult.data.script
+        language = "ko"
+    }
 }
 
 Write-Host "LALA-next API smoke completed."
