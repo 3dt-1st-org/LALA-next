@@ -2,16 +2,16 @@
 
 Audit date: 2026-06-11
 
-Verified implementation head before this audit document was added:
+Verified implementation head for this audit:
 
 ```text
-a7f67af Verify canonical DB relations in readiness
+0610101 Add in-process OpenAPI export
 ```
 
 Latest CI evidence:
 
 ```text
-CI run: https://github.com/3dt-1st-org/LALA-next/actions/runs/27321591131
+CI run: https://github.com/3dt-1st-org/LALA-next/actions/runs/27324991266
 Job: API tests and safety contracts
 Result: success
 ```
@@ -49,14 +49,14 @@ Azure dependency handoff.
 | No destructive shared SQL | Done | `apps/api/tests/test_safety_contracts.py` |
 | Read-only canonical DB schema verification | Done | `apps/api/app/services/db_schema.py`, `scripts/windows/verify_db_schema.ps1`, DB schema tests |
 | Windows start/smoke scripts | Done | `scripts/windows/start_api.ps1`, `scripts/windows/smoke_api.ps1` |
-| OpenAPI export for Flutter handoff | Done | `scripts/windows/export_openapi.ps1`, `docs/api/openapi-usage.md` |
+| OpenAPI export for Flutter handoff | Done | `apps/api/app/tools/export_openapi.py`, `scripts/windows/export_openapi.ps1`, OpenAPI export tests, `docs/api/openapi-usage.md` |
 | Configurable browser CORS | Done | `CORS_ALLOW_ORIGINS`, `apps/api/tests/test_cors.py` |
 | Secret-safe request logging, duration headers, and process-local metrics | Done | `apps/api/app/core/observability.py`, `apps/api/app/core/metrics.py`, `apps/api/tests/test_observability.py` |
 | Flutter handoff checklist | Done | `docs/api/flutter-handoff-checklist.md` |
 | Azure resource verification | Done | `scripts/windows/verify_azure_resources.ps1` |
 | PostgreSQL rollout readiness verification | Done | `scripts/windows/verify_db_resources.ps1`, `docs/operations/live-db-rollout.md` |
 | Live Azure paid smoke evidence | Done | `docs/operations/live-azure-smoke-2026-06-11.md` |
-| CI for tests and PowerShell parser | Done | `.github/workflows/ci.yml`, latest CI success |
+| CI for tests, worker smoke, OpenAPI export, and PowerShell parser | Done | `.github/workflows/ci.yml`, latest CI success |
 | Worker/batch dry-run contracts | Done | `apps/workers/app/contracts.py`, `apps/workers/app/cli.py`, `scripts/windows/smoke_workers.ps1`, worker contract tests |
 
 ## Verification Commands
@@ -66,6 +66,8 @@ Controller-session local verification:
 ```powershell
 python -m pytest apps/api/tests
 .\scripts\windows\verify_repo.ps1 -SkipInstall
+.\scripts\windows\smoke_workers.ps1
+.\scripts\windows\export_openapi.ps1 -InProcess
 .\scripts\windows\apply_canonical_sql.ps1
 .\scripts\windows\verify_db_schema.ps1
 .\scripts\windows\verify_db_resources.ps1
@@ -75,7 +77,9 @@ python -m pytest apps/api/tests
 Observed latest local result before this audit:
 
 ```text
-46 passed
+75 passed
+worker dry-run smoke pass
+OpenAPI in-process export pass, path_count=9
 PowerShell parser pass
 LALA-next Azure resource verification completed
 ```
