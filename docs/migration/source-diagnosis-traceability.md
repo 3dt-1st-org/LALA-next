@@ -32,6 +32,8 @@ C:\Users\EL035\dataschool\08_First_Team_Project\3dt-1st-Project\artifacts\lala-w
   or unavailable.
 - Places DB reads are radius-filtered and distance-ranked in SQL; docent-cache
   reads expose approximate remaining TTL when `expires_at` is present.
+- Canonical SQL includes `v_legacy_*_api` compatibility views for legacy
+  place/docent/weather handoff shapes without shadowing old table names.
 - SQL canonical files are a review baseline only. No live DB migration has been
   executed from this repository.
 
@@ -39,8 +41,8 @@ C:\Users\EL035\dataschool\08_First_Team_Project\3dt-1st-Project\artifacts\lala-w
 
 | Backlog item | Why it remains |
 |---|---|
-| DB repository depth | Current repository layer has read fallbacks, radius-ranked places, cache TTL, and docent-cache write-back; weather location matching and compatibility views remain. |
+| DB repository depth | Current repository layer has read fallbacks, radius-ranked places, cache TTL, docent-cache write-back, and compatibility view baselines; weather location matching remains. |
 | Production mobile auth | Static `IOS_API_KEY` is acceptable only for the migration window. |
-| Compatibility views for legacy Flask route data shapes | Not needed until FastAPI reads from the shared PostgreSQL schema. |
+| Compatibility views for legacy Flask route data shapes | Baseline views exist, but live DB rollout and consumer migration are intentionally separate. |
 | Worker/batch boundary implementation | Azure Functions/Event Hub/Stream Analytics remain external producer systems. |
 | Flutter app implementation | Explicitly out of scope for Wave 1. |

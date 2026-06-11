@@ -15,7 +15,8 @@ Canonical order:
 3. `020_locallink_domain_tables.sql`: weather, docent cache, and event tables.
 4. `030_daangn_core_tables.sql`: community crawling and weekly mention tables.
 5. `040_monitoring_core_tables.sql`: function, dependency, and cost monitoring.
-6. `050_views_and_indexes.sql`: stable read views for API/reporting.
+6. `050_views_and_indexes.sql`: stable read views for API/reporting, plus
+   read-only compatibility views for legacy Flask-shaped handoff data.
 
 Rules:
 
@@ -25,3 +26,5 @@ Rules:
 - Credentials and DSNs must not be committed.
 - Azure PostgreSQL remains the source of truth unless a later migration explicitly changes that decision.
 - Local Windows DB is a resettable development target only.
+- Compatibility views use explicit `v_legacy_*_api` names. They do not replace
+  or shadow legacy table names such as `docent_script_cache`.

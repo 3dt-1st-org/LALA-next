@@ -27,6 +27,16 @@ def test_canonical_sql_has_no_shared_destructive_statements():
     assert findings == []
 
 
+def test_canonical_sql_declares_compatibility_views():
+    views_sql = (ROOT / "sql" / "canonical" / "050_views_and_indexes.sql").read_text(
+        encoding="utf-8"
+    )
+
+    assert "locallink.v_legacy_places_api" in views_sql
+    assert "locallink.v_legacy_docent_script_cache_api" in views_sql
+    assert "locallink.v_latest_weather_api" in views_sql
+
+
 def test_repo_docs_and_scripts_do_not_contain_secret_literals():
     target_roots = [
         ROOT / ".env.example",
