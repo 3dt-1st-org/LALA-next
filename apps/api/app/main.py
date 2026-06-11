@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from apps.api.app.core.config import get_settings
@@ -18,6 +19,15 @@ def create_app() -> FastAPI:
         version=settings.app_version,
         description="FastAPI edge for the Flutter-facing LALA-next contract.",
     )
+    if settings.cors_allow_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=list(settings.cors_allow_origins),
+            allow_methods=["GET", "POST", "OPTIONS"],
+            allow_headers=["Content-Type", "X-API-Key", "X-Request-ID"],
+            expose_headers=["X-Request-ID"],
+            max_age=600,
+        )
 
     @app.middleware("http")
     async def request_id_middleware(request: Request, call_next):
@@ -57,4 +67,3 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
-

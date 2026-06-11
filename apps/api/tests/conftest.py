@@ -24,6 +24,7 @@ def isolate_db_env(monkeypatch) -> None:
         "AZURE_SPEECH_REGION",
         "AZURE_SPEECH_KEY",
         "AZURE_SPEECH_ENDPOINT",
+        "CORS_ALLOW_ORIGINS",
     ):
         monkeypatch.delenv(name, raising=False)
 

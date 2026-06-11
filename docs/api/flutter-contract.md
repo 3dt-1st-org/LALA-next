@@ -13,6 +13,13 @@ Base URL examples:
 
 Mobile clients should not use `localhost` unless the API process runs on the same device.
 
+Flutter mobile clients do not need browser CORS. Flutter Web or browser-based
+contract checks should set `CORS_ALLOW_ORIGINS` on the API process, for example:
+
+```powershell
+$env:CORS_ALLOW_ORIGINS = "http://localhost:3000,http://127.0.0.1:3000"
+```
+
 ## Authentication
 
 Wave 1 uses the existing migration guard:

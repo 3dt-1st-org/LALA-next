@@ -21,6 +21,17 @@ For a live Azure demo:
 .\scripts\windows\start_api.ps1 -Port 8080 -KeyVaultUrl https://lala-next-kv-27db5e.vault.azure.net/ -EnableLiveAI -EnableLiveSpeech
 ```
 
+For Flutter Web or browser-based contract checks, configure explicit browser
+origins before starting the API:
+
+```powershell
+$env:CORS_ALLOW_ORIGINS = "http://localhost:3000,http://127.0.0.1:3000"
+.\scripts\windows\start_api.ps1 -Port 8080
+```
+
+CORS is disabled by default. Do not use a wildcard for a shared backend unless
+the team has agreed that the URL is temporary and LAN-only.
+
 ## Smoke
 
 ```powershell

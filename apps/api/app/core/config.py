@@ -26,6 +26,7 @@ class Settings:
     azure_speech_endpoint: str = ""
     azure_speech_key: str = ""
     enable_live_speech: bool = False
+    cors_allow_origins: tuple[str, ...] = ()
     log_level: str = "INFO"
 
     @classmethod
@@ -56,6 +57,7 @@ class Settings:
             azure_speech_endpoint=_env_or_secret("AZURE_SPEECH_ENDPOINT", "azure-speech-endpoint", key_vault_url),
             azure_speech_key=_env_or_secret("AZURE_SPEECH_KEY", "azure-speech-key", key_vault_url),
             enable_live_speech=_bool_env("LALA_ENABLE_LIVE_SPEECH", default=False),
+            cors_allow_origins=_csv_env("CORS_ALLOW_ORIGINS"),
             log_level=(os.getenv("LOG_LEVEL") or "INFO").strip(),
         )
 
@@ -76,3 +78,15 @@ def _bool_env(env_name: str, *, default: bool) -> bool:
     if not raw:
         return default
     return raw in {"1", "true", "yes", "on"}
+
+
+def _csv_env(env_name: str) -> tuple[str, ...]:
+    raw = (os.getenv(env_name) or "").strip()
+    if not raw:
+        return ()
+    values: list[str] = []
+    for item in raw.split(","):
+        value = item.strip().rstrip("/")
+        if value:
+            values.append(value)
+    return tuple(values)
