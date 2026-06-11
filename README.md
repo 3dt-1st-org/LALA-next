@@ -29,7 +29,7 @@ python -m venv .venv
 python -m pip install -e ".[dev]"
 Copy-Item .env.example .env
 $env:IOS_API_KEY = "local-dev-key"
-python -m uvicorn apps.api.app.main:app --host 0.0.0.0 --port 8080
+python -m uvicorn apps.api.app.main:app --host 0.0.0.0 --port 8080 --no-access-log
 ```
 
 Smoke check:

@@ -26,6 +26,7 @@ The script runs:
 
 - FastAPI route tests.
 - API-key and response-envelope contract tests.
+- Request id, request duration, and secret-safe request logging tests.
 - SQL and documentation secret-safety tests.
 - PowerShell script parser checks.
 

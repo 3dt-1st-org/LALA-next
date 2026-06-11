@@ -49,6 +49,7 @@ Azure dependency handoff.
 | Windows start/smoke scripts | Done | `scripts/windows/start_api.ps1`, `scripts/windows/smoke_api.ps1` |
 | OpenAPI export for Flutter handoff | Done | `scripts/windows/export_openapi.ps1`, `docs/api/openapi-usage.md` |
 | Configurable browser CORS | Done | `CORS_ALLOW_ORIGINS`, `apps/api/tests/test_cors.py` |
+| Secret-safe request logging and duration headers | Done | `apps/api/app/core/observability.py`, `apps/api/tests/test_observability.py` |
 | Flutter handoff checklist | Done | `docs/api/flutter-handoff-checklist.md` |
 | Azure resource verification | Done | `scripts/windows/verify_azure_resources.ps1` |
 | Live Azure paid smoke evidence | Done | `docs/operations/live-azure-smoke-2026-06-11.md` |

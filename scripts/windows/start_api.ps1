@@ -114,7 +114,7 @@ if ($EnableLiveSpeech) {
     Write-Host "Live Azure Speech synthesis: enabled"
 }
 
-& $Python -m uvicorn apps.api.app.main:app --host $HostName --port $Port
+& $Python -m uvicorn apps.api.app.main:app --host $HostName --port $Port --no-access-log
 if ($LASTEXITCODE -ne 0) {
     throw "uvicorn exited with code $LASTEXITCODE."
 }

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from time import perf_counter
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,6 +9,7 @@ from fastapi.responses import JSONResponse
 
 from apps.api.app.core.config import get_settings
 from apps.api.app.core.errors import ApiError
+from apps.api.app.core.observability import configure_logging, request_log_extra
 from apps.api.app.core.responses import error_envelope, ensure_request_id
 from apps.api.app.routers.health import router as health_router
 from apps.api.app.routers.v1 import router as v1_router
@@ -14,6 +17,7 @@ from apps.api.app.routers.v1 import router as v1_router
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    logger = configure_logging(settings.log_level)
     app = FastAPI(
         title="LALA-next Public API",
         version=settings.app_version,
@@ -31,9 +35,33 @@ def create_app() -> FastAPI:
 
     @app.middleware("http")
     async def request_id_middleware(request: Request, call_next):
-        ensure_request_id(request)
+        request_id = ensure_request_id(request)
+        started_at = perf_counter()
         response = await call_next(request)
-        response.headers["X-Request-ID"] = request.state.request_id
+        duration_ms = round((perf_counter() - started_at) * 1000, 2)
+        response.headers["X-Request-ID"] = request_id
+        response.headers["X-Request-Duration-Ms"] = f"{duration_ms:.2f}"
+        client_host = request.client.host if request.client else ""
+        logger.info(
+            (
+                "request_completed request_id=%s method=%s path=%s "
+                "status_code=%s duration_ms=%.2f client_host=%s"
+            ),
+            request_id,
+            request.method,
+            request.url.path,
+            response.status_code,
+            duration_ms,
+            client_host,
+            extra=request_log_extra(
+                request_id=request_id,
+                method=request.method,
+                path=request.url.path,
+                status_code=response.status_code,
+                duration_ms=duration_ms,
+                client_host=client_host,
+            ),
+        )
         return response
 
     @app.exception_handler(ApiError)

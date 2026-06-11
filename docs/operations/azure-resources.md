@@ -59,7 +59,7 @@ The script verifies:
 ```powershell
 az login
 Copy-Item .env.example .env
-python -m uvicorn apps.api.app.main:app --host 0.0.0.0 --port 8080
+python -m uvicorn apps.api.app.main:app --host 0.0.0.0 --port 8080 --no-access-log
 ```
 
 If Key Vault access is unavailable, set process-local environment variables instead. Do not commit `.env`.

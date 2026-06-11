@@ -33,6 +33,8 @@ Notes:
   is configured.
 - JSON route responses use the `{ ok, data, meta, error }` envelope with
   `meta.request_id`.
+- Responses include `X-Request-ID` and `X-Request-Duration-Ms` headers for
+  client-side debugging and backend log correlation.
 - `POST /api/v1/docents/audio` is the success-response exception and returns
   `audio/mpeg` bytes. Validation or service failures still return the JSON
   envelope.

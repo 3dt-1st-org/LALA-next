@@ -79,6 +79,17 @@ New-Item -ItemType Directory -Force .\runtime\logs | Out-Null
 process from the same branch/commit, then rerun smoke before handing the URL
 back to teammates.
 
+Each API response includes:
+
+- `X-Request-ID`
+- `X-Request-Duration-Ms`
+
+The start script disables uvicorn access logs and the API writes one
+`request_completed` log entry per request with method, path, status, duration,
+request id, and client host. It does not log query strings or auth headers. Set
+`LOG_LEVEL=DEBUG`, `INFO`, `WARNING`, or `ERROR` before starting the API to
+adjust verbosity.
+
 ## Handoff
 
 Share this format with teammates:

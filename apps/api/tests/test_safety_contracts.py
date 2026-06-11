@@ -83,6 +83,7 @@ def test_paid_smoke_requires_authenticated_api_key():
     assert "lala-next-kv-27db5e.vault.azure.net" in start_script
     assert "if ($PaidDependency)" in script
     assert "Client auth is required for paid dependency smoke" in script
+    assert "--no-access-log" in start_script
 
 
 def test_key_vault_url_is_lala_next_only():
