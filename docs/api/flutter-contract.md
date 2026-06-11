@@ -260,6 +260,9 @@ When live AI is enabled and Key Vault or environment variables provide the OpenA
 
 If `DB_DSN` is configured and `locallink.docent_cache` has a matching non-expired
 entry, the script route returns the cached script before calling Azure OpenAI.
+When live Azure OpenAI generation succeeds and `DB_DSN` is configured, the route
+best-effort writes the generated script back to `locallink.docent_cache`.
+Database write failures do not fail the API response.
 
 ## Live Speech
 

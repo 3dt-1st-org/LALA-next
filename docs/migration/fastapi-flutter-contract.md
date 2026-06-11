@@ -26,7 +26,9 @@ Implemented Wave 1 boundaries:
 Next migration boundary:
 
 - Deepen PostgreSQL-backed repository functions with exact ranking, freshness,
-  cache write-back, and compatibility views.
+  and compatibility views.
+- Keep docent-cache write-back best-effort until shared DB migration ownership is
+  formally assigned.
 - Introduce production mobile auth after the shared Windows backend workflow is
   stable.
 - Keep live Azure dependencies behind mockable service functions so tests stay

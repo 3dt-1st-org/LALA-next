@@ -200,9 +200,18 @@ def test_docent_script_uses_live_ai_when_enabled(client, auth_headers, monkeypat
     monkeypatch.setenv("AZURE_OPENAI_KEY", "test-key")
     monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini")
     monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2024-10-21")
+    saved_calls = []
+    monkeypatch.setattr(
+        "apps.api.app.services.db_repository.fetch_docent_script_cache",
+        lambda **kwargs: None,
+    )
     monkeypatch.setattr(
         "apps.api.app.services.ai_service.generate_docent_script_text",
         lambda request: f"AI script for {request.place_id}",
+    )
+    monkeypatch.setattr(
+        "apps.api.app.services.db_repository.save_docent_script_cache",
+        lambda **kwargs: saved_calls.append(kwargs) or True,
     )
 
     response = client.post(
@@ -221,6 +230,98 @@ def test_docent_script_uses_live_ai_when_enabled(client, auth_headers, monkeypat
     assert body["ok"] is True
     assert body["data"]["source"] == "azure_openai"
     assert body["data"]["script"] == "AI script for event-2"
+    assert saved_calls == [
+        {
+            "place_id": "event-2",
+            "category": "event",
+            "language": "ko",
+            "mode": "brief",
+            "script": "AI script for event-2",
+            "source": "azure_openai",
+            "ttl_sec": 604800,
+        }
+    ]
+
+
+def test_docent_script_cache_write_failure_keeps_live_ai_response(
+    client,
+    auth_headers,
+    monkeypatch,
+):
+    monkeypatch.setenv("LALA_ENABLE_LIVE_AI", "true")
+    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.openai.azure.com/")
+    monkeypatch.setenv("AZURE_OPENAI_KEY", "test-key")
+    monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini")
+    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2024-10-21")
+    saved_calls = []
+    monkeypatch.setattr(
+        "apps.api.app.services.db_repository.fetch_docent_script_cache",
+        lambda **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "apps.api.app.services.ai_service.generate_docent_script_text",
+        lambda request: f"AI script for {request.place_id}",
+    )
+
+    def fail_write(**kwargs):
+        saved_calls.append(kwargs)
+        return False
+
+    monkeypatch.setattr(
+        "apps.api.app.services.db_repository.save_docent_script_cache",
+        fail_write,
+    )
+
+    response = client.post(
+        "/api/v1/docents/script",
+        headers=auth_headers,
+        json={
+            "place_id": "event-write-fail",
+            "category": "event",
+            "language": "ko",
+            "mode": "brief",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is True
+    assert body["data"]["source"] == "azure_openai"
+    assert body["data"]["script"] == "AI script for event-write-fail"
+    assert len(saved_calls) == 1
+
+
+def test_docent_script_skeleton_fallback_does_not_write_cache(
+    client,
+    auth_headers,
+    monkeypatch,
+):
+    saved_calls = []
+    monkeypatch.setattr(
+        "apps.api.app.services.db_repository.fetch_docent_script_cache",
+        lambda **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "apps.api.app.services.db_repository.save_docent_script_cache",
+        lambda **kwargs: saved_calls.append(kwargs) or True,
+    )
+
+    response = client.post(
+        "/api/v1/docents/script",
+        headers=auth_headers,
+        json={
+            "place_id": "event-skeleton",
+            "category": "event",
+            "language": "ko",
+            "mode": "brief",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["data"]["source"] == "skeleton"
+    assert body["data"]["script"]
+    assert saved_calls == []
 
 
 def test_docent_audio_success_returns_mpeg(client, auth_headers):

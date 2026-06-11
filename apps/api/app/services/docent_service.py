@@ -24,6 +24,17 @@ def generate_script(request: DocentScriptRequest) -> dict:
     else:
         script = _fallback_script(request)
         source = "skeleton"
+    ttl_sec = 604800
+    if source == "azure_openai":
+        db_repository.save_docent_script_cache(
+            place_id=request.place_id,
+            category=request.category,
+            language=request.language,
+            mode=request.mode,
+            script=script,
+            source=source,
+            ttl_sec=ttl_sec,
+        )
     return {
         "place_id": request.place_id,
         "category": request.category,
@@ -32,7 +43,7 @@ def generate_script(request: DocentScriptRequest) -> dict:
         "script": script,
         "source": source,
         "generated_at": generated_at,
-        "ttl_sec": 604800,
+        "ttl_sec": ttl_sec,
     }
 
 

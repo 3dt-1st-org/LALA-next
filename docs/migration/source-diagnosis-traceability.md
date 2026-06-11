@@ -37,7 +37,7 @@ C:\Users\EL035\dataschool\08_First_Team_Project\3dt-1st-Project\artifacts\lala-w
 
 | Backlog item | Why it remains |
 |---|---|
-| DB repository depth | Current repository layer is read-only and fallback-safe; ranking, freshness policy, cache write-back, and compatibility views remain. |
+| DB repository depth | Current repository layer has read fallbacks and docent-cache write-back, but exact ranking, freshness policy, and compatibility views remain. |
 | Production mobile auth | Static `IOS_API_KEY` is acceptable only for the migration window. |
 | Compatibility views for legacy Flask route data shapes | Not needed until FastAPI reads from the shared PostgreSQL schema. |
 | Worker/batch boundary implementation | Azure Functions/Event Hub/Stream Analytics remain external producer systems. |

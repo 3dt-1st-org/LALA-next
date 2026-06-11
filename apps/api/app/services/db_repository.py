@@ -224,6 +224,63 @@ def fetch_docent_script_cache(
     }
 
 
+def save_docent_script_cache(
+    *,
+    place_id: str,
+    category: str,
+    language: str,
+    mode: str,
+    script: str,
+    source: str,
+    ttl_sec: int,
+) -> bool:
+    dsn = get_settings().db_dsn
+    if not dsn:
+        return False
+    try:
+        import psycopg2
+    except Exception:
+        return False
+
+    sql = """
+        INSERT INTO locallink.docent_cache (
+            place_id,
+            category,
+            language,
+            mode,
+            script,
+            source,
+            generated_at,
+            expires_at
+        )
+        VALUES (
+            %s,
+            %s,
+            %s,
+            %s,
+            %s,
+            %s,
+            now(),
+            now() + (%s * interval '1 second')
+        )
+        ON CONFLICT (place_id, category, language, mode)
+        DO UPDATE SET
+            script = EXCLUDED.script,
+            source = EXCLUDED.source,
+            generated_at = EXCLUDED.generated_at,
+            expires_at = EXCLUDED.expires_at
+    """
+    params = (place_id, category, language, mode, script, source, ttl_sec)
+    try:
+        with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, params)
+            conn.commit()
+    except Exception:
+        return False
+    return True
+
+
 def _weather_icon(precipitation_type: Any) -> str:
     raw = str(precipitation_type or "").strip().lower()
     if raw in {"rain", "비", "1"}:

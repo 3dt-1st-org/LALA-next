@@ -47,6 +47,11 @@ When `DB_DSN` is configured, `/readyz` performs a short PostgreSQL `SELECT 1`
 probe. Without `DB_DSN`, DB readiness is `skipped` and DB-backed routes use
 their skeleton fallback.
 
+`docents/script` reads non-expired rows from `locallink.docent_cache` before
+calling Azure OpenAI. Successful live Azure OpenAI scripts are written back to
+that cache on a best-effort basis. A cache write failure should be logged in a
+later observability wave, but it does not fail the Wave 1 API contract.
+
 ## Manual API Smoke
 
 Start the API:
