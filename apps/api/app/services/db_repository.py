@@ -6,6 +6,12 @@ from typing import Any
 
 from apps.api.app.core.config import get_settings
 
+_REQUIRED_DB_RELATIONS = (
+    "locallink.v_public_places",
+    "locallink.realtime_weather_conditions",
+    "locallink.docent_cache",
+)
+
 
 def check_db_status(dsn: str) -> str:
     if not dsn:
@@ -17,9 +23,18 @@ def check_db_status(dsn: str) -> str:
     try:
         with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT 1")
-                cur.fetchone()
+                cur.execute(
+                    """
+                    SELECT
+                        to_regclass('locallink.v_public_places') IS NOT NULL,
+                        to_regclass('locallink.realtime_weather_conditions') IS NOT NULL,
+                        to_regclass('locallink.docent_cache') IS NOT NULL
+                    """
+                )
+                row = cur.fetchone()
     except Exception:
+        return "degraded"
+    if not row or not all(bool(value) for value in row):
         return "degraded"
     return "configured"
 

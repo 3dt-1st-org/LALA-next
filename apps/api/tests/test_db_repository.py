@@ -7,6 +7,71 @@ from datetime import UTC, datetime, timedelta
 from apps.api.app.services import db_repository
 
 
+def test_check_db_status_requires_canonical_relations(monkeypatch):
+    captured = {}
+
+    class FakeCursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def execute(self, sql):
+            captured["sql"] = sql
+
+        def fetchone(self):
+            return (True, True, True)
+
+    class FakeConnection:
+        def cursor(self):
+            return FakeCursor()
+
+        def close(self):
+            return None
+
+    psycopg2_module = types.ModuleType("psycopg2")
+    psycopg2_module.connect = lambda dsn, connect_timeout: FakeConnection()
+    monkeypatch.setitem(sys.modules, "psycopg2", psycopg2_module)
+
+    status = db_repository.check_db_status("postgresql://db.example/lala")
+
+    assert status == "configured"
+    assert "to_regclass('locallink.v_public_places')" in captured["sql"]
+    assert "to_regclass('locallink.realtime_weather_conditions')" in captured["sql"]
+    assert "to_regclass('locallink.docent_cache')" in captured["sql"]
+
+
+def test_check_db_status_degrades_when_canonical_relation_is_missing(monkeypatch):
+    class FakeCursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def execute(self, sql):
+            return None
+
+        def fetchone(self):
+            return (True, False, True)
+
+    class FakeConnection:
+        def cursor(self):
+            return FakeCursor()
+
+        def close(self):
+            return None
+
+    psycopg2_module = types.ModuleType("psycopg2")
+    psycopg2_module.connect = lambda dsn, connect_timeout: FakeConnection()
+    monkeypatch.setitem(sys.modules, "psycopg2", psycopg2_module)
+
+    status = db_repository.check_db_status("postgresql://db.example/lala")
+
+    assert status == "degraded"
+
+
 def test_fetch_places_uses_radius_bound_ranking_query(monkeypatch):
     captured = {}
 

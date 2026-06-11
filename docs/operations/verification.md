@@ -43,9 +43,16 @@ Those dependencies are represented as `configured`, `missing`, `degraded`, or
 `skipped` in `/readyz` and are smoke-tested manually when credentials are
 available.
 
-When `DB_DSN` is configured, `/readyz` performs a short PostgreSQL `SELECT 1`
-probe. Without `DB_DSN`, DB readiness is `skipped` and DB-backed routes use
-their skeleton fallback.
+When `DB_DSN` is configured, `/readyz` connects to PostgreSQL and verifies the
+canonical relations required by the API:
+
+- `locallink.v_public_places`
+- `locallink.realtime_weather_conditions`
+- `locallink.docent_cache`
+
+Without `DB_DSN`, DB readiness is `skipped` and DB-backed routes use their
+skeleton fallback. If the connection works but those relations are absent,
+DB readiness is `degraded` rather than `configured`.
 
 `docents/script` reads non-expired rows from `locallink.docent_cache` before
 calling Azure OpenAI. Successful live Azure OpenAI scripts are written back to
