@@ -24,6 +24,10 @@ Secrets stored in Key Vault:
 - `azure-speech-region`
 - `azure-speech-endpoint`
 
+Optional bearer transition secret:
+
+- `api-bearer-token`
+
 The secret values are intentionally not recorded in this repository.
 
 Live AI calls are opt-in with `LALA_ENABLE_LIVE_AI=true`. Live text-to-speech calls are opt-in with `LALA_ENABLE_LIVE_SPEECH=true`. This keeps unit tests and basic smoke checks deterministic while still allowing demo runs to use `gpt-4o-mini` and Azure Speech.

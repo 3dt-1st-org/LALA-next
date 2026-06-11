@@ -27,8 +27,10 @@ The default output path is
 Notes:
 
 - `/healthz`, `/readyz`, `/docs`, `/redoc`, and `/openapi.json` are public.
-- `/api/v1/*` routes require the `X-API-Key` header. The server reads the
-  expected value from `IOS_API_KEY`.
+- `/api/v1/*` routes require client auth. New clients should send
+  `Authorization: Bearer <token>` with `API_BEARER_TOKEN` configured on the
+  server. The migration `X-API-Key` header remains accepted while `IOS_API_KEY`
+  is configured.
 - JSON route responses use the `{ ok, data, meta, error }` envelope with
   `meta.request_id`.
 - `POST /api/v1/docents/audio` is the success-response exception and returns

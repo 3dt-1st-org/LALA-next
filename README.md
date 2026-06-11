@@ -68,6 +68,9 @@ Wave 1 routes:
 - `POST /api/v1/plans/daily`
 - `GET /api/v1/plans/intervention`
 
+Client auth accepts either `Authorization: Bearer <token>` from
+`API_BEARER_TOKEN` or the migration `X-API-Key` header from `IOS_API_KEY`.
+
 ## Azure Resources
 
 Wave 1 resources were created in resource group `3dt-final-team1`:

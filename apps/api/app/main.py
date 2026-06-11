@@ -24,7 +24,7 @@ def create_app() -> FastAPI:
             CORSMiddleware,
             allow_origins=list(settings.cors_allow_origins),
             allow_methods=["GET", "POST", "OPTIONS"],
-            allow_headers=["Content-Type", "X-API-Key", "X-Request-ID"],
+            allow_headers=["Authorization", "Content-Type", "X-API-Key", "X-Request-ID"],
             expose_headers=["X-Request-ID"],
             max_age=600,
         )

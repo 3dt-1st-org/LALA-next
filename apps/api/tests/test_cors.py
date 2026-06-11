@@ -28,12 +28,13 @@ def test_cors_allows_configured_flutter_web_origin(monkeypatch):
         headers={
             "Origin": "http://localhost:3000",
             "Access-Control-Request-Method": "GET",
-            "Access-Control-Request-Headers": "X-API-Key",
+            "Access-Control-Request-Headers": "Authorization, X-API-Key",
         },
     )
 
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
+    assert "Authorization" in response.headers["access-control-allow-headers"]
     assert "X-API-Key" in response.headers["access-control-allow-headers"]
 
 

@@ -73,11 +73,13 @@ Smoke the public and authenticated routes:
 .\scripts\windows\smoke_api.ps1 -BaseUrl http://127.0.0.1:8080
 ```
 
-`smoke_api.ps1` can load `IOS_API_KEY` from Key Vault when `KEY_VAULT_URL` is
-configured and Azure CLI is authenticated. It never prints the key value.
+`smoke_api.ps1` can use `API_BEARER_TOKEN` or `IOS_API_KEY`. When
+`KEY_VAULT_URL` is configured and Azure CLI is authenticated, it attempts to load
+the migration API key and then the optional bearer token from Key Vault. It never
+prints secret values.
 Public smoke checks include `/healthz`, `/readyz`, and `/openapi.json`.
-Without `-PaidDependency`, authenticated route checks are skipped when an API key
-is not available.
+Without `-PaidDependency`, authenticated route checks are skipped when client
+auth is not available.
 
 ## Azure Resource Verification
 
@@ -109,7 +111,7 @@ In another terminal:
 
 The paid smoke checks verify that `docents/script` is backed by Azure OpenAI and
 that `docents/audio` returns `audio/mpeg` bytes. They do not print secret values
-or generated audio content. With `-PaidDependency`, a missing `IOS_API_KEY` is a
+or generated audio content. With `-PaidDependency`, missing client auth is a
 failure rather than a skipped check.
 
 The latest controller-session live smoke evidence is recorded in

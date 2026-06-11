@@ -7,7 +7,8 @@ Decisions:
 - Flutter will target `/api/v1/*`.
 - Legacy Flask routes are not removed in this wave.
 - `/healthz` and `/readyz` are operational endpoints and do not require client auth.
-- `/api/v1/*` requires `X-API-Key` during migration.
+- `/api/v1/*` accepts `Authorization: Bearer <token>` for new clients and
+  `X-API-Key` during migration.
 - JSON responses use `{ ok, data, meta, error }`.
 - Audio success returns `audio/mpeg`; audio errors return JSON envelope.
 
@@ -34,8 +35,8 @@ Next migration boundary:
   assigned.
 - Keep docent-cache write-back best-effort until shared DB migration ownership is
   formally assigned.
-- Introduce production mobile auth after the shared Windows backend workflow is
-  stable.
+- Replace static bearer/API-key credentials with the final production identity
+  provider after the shared Windows backend workflow is stable.
 - Keep live Azure dependencies behind mockable service functions so tests stay
   deterministic.
 

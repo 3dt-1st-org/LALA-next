@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 
-from apps.api.app.core.auth import require_api_key
+from apps.api.app.core.auth import require_client_auth
 from apps.api.app.core.responses import ensure_request_id, success_envelope
 from apps.api.app.schemas.docent import DocentAudioRequest, DocentScriptRequest
 from apps.api.app.schemas.planner import DailyPlanRequest
@@ -11,7 +11,7 @@ from apps.api.app.services import docent_service, planner_service, places_servic
 router = APIRouter(
     prefix="/api/v1",
     tags=["v1"],
-    dependencies=[Depends(require_api_key)],
+    dependencies=[Depends(require_client_auth)],
 )
 
 

@@ -48,6 +48,7 @@ def test_repo_docs_and_scripts_do_not_contain_secret_literals():
     patterns = [
         re.compile(r"postgresql://[^\s<>]+:[^\s<>]+@"),
         re.compile(r"^IOS_API_KEY[ \t]*=[ \t]*[^#\r\n]+", re.MULTILINE),
+        re.compile(r"^API_BEARER_TOKEN[ \t]*=[ \t]*[^#\r\n]+", re.MULTILINE),
         re.compile(r"^POSTGRES_PASSWORD[ \t]*=[ \t]*[^#\r\n]+", re.MULTILINE),
         re.compile(r"^AZURE_OPENAI_API_KEY[ \t]*=[ \t]*[^#\r\n]+", re.MULTILINE),
         re.compile(r"^AZURE_OPENAI_KEY[ \t]*=[ \t]*[^#\r\n]+", re.MULTILINE),
@@ -81,7 +82,7 @@ def test_paid_smoke_requires_authenticated_api_key():
     assert "lala-next-kv-27db5e.vault.azure.net" in script
     assert "lala-next-kv-27db5e.vault.azure.net" in start_script
     assert "if ($PaidDependency)" in script
-    assert "IOS_API_KEY is required for paid dependency smoke" in script
+    assert "Client auth is required for paid dependency smoke" in script
 
 
 def test_key_vault_url_is_lala_next_only():

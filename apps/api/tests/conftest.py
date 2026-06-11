@@ -15,6 +15,7 @@ def client() -> TestClient:
 def isolate_db_env(monkeypatch) -> None:
     monkeypatch.delenv("DB_DSN", raising=False)
     for name in (
+        "API_BEARER_TOKEN",
         "LALA_ENABLE_LIVE_AI",
         "AZURE_OPENAI_ENDPOINT",
         "AZURE_OPENAI_KEY",
@@ -33,6 +34,7 @@ def isolate_db_env(monkeypatch) -> None:
 def api_key(monkeypatch) -> str:
     key = "test-client-key"
     monkeypatch.setenv("IOS_API_KEY", key)
+    monkeypatch.delenv("API_BEARER_TOKEN", raising=False)
     return key
 
 

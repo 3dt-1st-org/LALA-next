@@ -133,7 +133,7 @@ Invoke-SmokeGet "/healthz"
 Invoke-SmokeGet "/readyz"
 Invoke-SmokeGet "/openapi.json"
 
-if (-not $env:IOS_API_KEY) {
+if (-not $env:IOS_API_KEY -and -not $env:API_BEARER_TOKEN) {
     $vaultName = Get-VaultNameFromUrl $env:KEY_VAULT_URL
     if ($vaultName) {
         try {
@@ -141,17 +141,29 @@ if (-not $env:IOS_API_KEY) {
         } catch {
             $env:IOS_API_KEY = ""
         }
-    }
-    if (-not $env:IOS_API_KEY) {
-        if ($PaidDependency) {
-            throw "IOS_API_KEY is required for paid dependency smoke. Set IOS_API_KEY or KEY_VAULT_URL with an authenticated Azure CLI session."
+        if (-not $env:API_BEARER_TOKEN) {
+            try {
+                $env:API_BEARER_TOKEN = az keyvault secret show --vault-name $vaultName --name api-bearer-token --query value -o tsv
+            } catch {
+                $env:API_BEARER_TOKEN = ""
+            }
         }
-        Write-Host "IOS_API_KEY is not available; authenticated /api/v1 smoke checks skipped."
+    }
+    if (-not $env:IOS_API_KEY -and -not $env:API_BEARER_TOKEN) {
+        if ($PaidDependency) {
+            throw "Client auth is required for paid dependency smoke. Set IOS_API_KEY, API_BEARER_TOKEN, or KEY_VAULT_URL with an authenticated Azure CLI session."
+        }
+        Write-Host "Client auth is not available; authenticated /api/v1 smoke checks skipped."
         exit 0
     }
 }
 
-$headers = @{ "X-API-Key" = $env:IOS_API_KEY }
+$headers = @{}
+if ($env:API_BEARER_TOKEN) {
+    $headers["Authorization"] = "Bearer $env:API_BEARER_TOKEN"
+} else {
+    $headers["X-API-Key"] = $env:IOS_API_KEY
+}
 
 Invoke-SmokeGet "/api/v1/places?lat=37.2636&lng=127.0286&radius_m=1000" -Headers $headers
 Invoke-SmokeGet "/api/v1/weather?lat=37.2636&lng=127.0286" -Headers $headers

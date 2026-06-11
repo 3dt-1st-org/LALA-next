@@ -41,6 +41,8 @@ Copy-Item .env.example .env
 ```
 
 The smoke script does not print secret values. If Key Vault access is unavailable, set `IOS_API_KEY` as a process-local environment variable before running authenticated checks.
+For new clients, prefer `API_BEARER_TOKEN`; the smoke script uses bearer auth
+when that environment variable is present and falls back to `IOS_API_KEY`.
 
 For live Azure OpenAI and Speech validation:
 

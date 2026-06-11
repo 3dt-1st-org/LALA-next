@@ -22,13 +22,22 @@ $env:CORS_ALLOW_ORIGINS = "http://localhost:3000,http://127.0.0.1:3000"
 
 ## Authentication
 
-Wave 1 uses the existing migration guard:
+The preferred client auth header for new clients is:
+
+```text
+Authorization: Bearer <client token>
+```
+
+The server reads the expected bearer token from `API_BEARER_TOKEN`. During the
+migration window, the existing guard is still accepted:
 
 ```text
 X-API-Key: <client api key>
 ```
 
-The server reads the expected value from `IOS_API_KEY`. Production bearer auth is a later wave.
+The server reads the expected API key from `IOS_API_KEY`. Configure at least one
+of `API_BEARER_TOKEN` or `IOS_API_KEY`; if both are missing, `/api/v1/*` returns
+`CLIENT_AUTH_NOT_CONFIGURED`.
 
 ## Response Envelope
 

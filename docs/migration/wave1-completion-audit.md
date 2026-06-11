@@ -33,6 +33,7 @@ Azure dependency handoff.
 | FastAPI app under `apps/api` | Done | `apps/api/app/main.py`, `apps/api/app/routers/*` |
 | Public `/healthz` and `/readyz` | Done | `apps/api/app/routers/health.py`, `apps/api/tests/test_health_auth.py` |
 | `/api/v1/*` guarded by `X-API-Key` | Done | `apps/api/app/core/auth.py`, auth tests, OpenAPI test |
+| `/api/v1/*` accepts `Authorization: Bearer` transition auth | Done | `apps/api/app/core/auth.py`, auth tests, OpenAPI test |
 | JSON envelope with `meta.request_id` | Done | `apps/api/app/core/responses.py`, route tests |
 | `docents/audio` success returns `audio/mpeg` | Done | `apps/api/app/routers/v1.py`, `apps/api/tests/test_openapi_contract.py`, route tests |
 | Flutter-facing route family | Done | `apps/api/app/routers/v1.py`, `docs/api/flutter-contract.md` |
@@ -100,7 +101,7 @@ These items remain intentionally outside Wave 1 and should not be treated as
 missing from this migration skeleton:
 
 - Flutter app implementation.
-- Production bearer/OAuth auth model.
+- Final OAuth/Entra-style identity model.
 - Live DB migration execution against Azure PostgreSQL.
 - Full worker/batch rewrite for Azure Functions, Event Hub, and Stream
   Analytics producers.
@@ -112,7 +113,7 @@ missing from this migration skeleton:
 The next implementation wave should pick one of these lanes explicitly:
 
 - Flutter app integration against the `/api/v1/*` contract.
-- Production auth and client identity model.
+- Final OAuth/Entra-style client identity model.
 - Live DB rollout and seed/migration procedure.
 - Worker/batch boundary implementation.
 - Observability and operations hardening.

@@ -85,6 +85,7 @@ $EffectiveKeyVaultUrl = [Environment]::GetEnvironmentVariable("KEY_VAULT_URL", "
 if ($EffectiveKeyVaultUrl) {
     $VaultName = Get-LalaVaultNameFromUrl $EffectiveKeyVaultUrl
     Set-SecretEnvIfMissing -VaultName $VaultName -EnvName "IOS_API_KEY" -SecretName "ios-api-key"
+    Set-SecretEnvIfMissing -VaultName $VaultName -EnvName "API_BEARER_TOKEN" -SecretName "api-bearer-token"
     Set-SecretEnvIfMissing -VaultName $VaultName -EnvName "AZURE_OPENAI_ENDPOINT" -SecretName "azure-openai-endpoint"
     Set-SecretEnvIfMissing -VaultName $VaultName -EnvName "AZURE_OPENAI_KEY" -SecretName "azure-openai-key"
     Set-SecretEnvIfMissing -VaultName $VaultName -EnvName "AZURE_OPENAI_DEPLOYMENT" -SecretName "azure-openai-deployment"
@@ -92,7 +93,7 @@ if ($EffectiveKeyVaultUrl) {
     Set-SecretEnvIfMissing -VaultName $VaultName -EnvName "AZURE_SPEECH_KEY" -SecretName "azure-speech-key"
     Set-SecretEnvIfMissing -VaultName $VaultName -EnvName "AZURE_SPEECH_REGION" -SecretName "azure-speech-region"
     Set-SecretEnvIfMissing -VaultName $VaultName -EnvName "AZURE_SPEECH_ENDPOINT" -SecretName "azure-speech-endpoint"
-    Write-Host "Key Vault secret preload: api_key=$(Get-EnvStatus 'IOS_API_KEY'), openai_key=$(Get-EnvStatus 'AZURE_OPENAI_KEY'), speech_key=$(Get-EnvStatus 'AZURE_SPEECH_KEY')"
+    Write-Host "Key Vault secret preload: api_key=$(Get-EnvStatus 'IOS_API_KEY'), bearer_token=$(Get-EnvStatus 'API_BEARER_TOKEN'), openai_key=$(Get-EnvStatus 'AZURE_OPENAI_KEY'), speech_key=$(Get-EnvStatus 'AZURE_SPEECH_KEY')"
 }
 
 if ($EnableLiveAI) {

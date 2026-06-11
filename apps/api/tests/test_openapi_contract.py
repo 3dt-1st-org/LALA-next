@@ -20,12 +20,16 @@ def test_openapi_schema_is_public_and_lists_wave1_routes(client):
         assert route in paths
 
 
-def test_openapi_documents_api_key_header_on_v1_routes(client):
+def test_openapi_documents_client_auth_headers_on_v1_routes(client):
     schema = client.get("/openapi.json").json()
     places_params = schema["paths"]["/api/v1/places"]["get"]["parameters"]
 
     assert any(
         param["name"] == "X-API-Key" and param["in"] == "header"
+        for param in places_params
+    )
+    assert any(
+        param["name"] == "Authorization" and param["in"] == "header"
         for param in places_params
     )
 

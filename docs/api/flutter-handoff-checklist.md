@@ -6,7 +6,8 @@ developer.
 ## Required Inputs
 
 - Backend base URL, for example `http://<windows-host-lan-ip>:8080`.
-- Client API key value for the `X-API-Key` header.
+- Client bearer token for `Authorization: Bearer <token>`, or migration API key
+  value for `X-API-Key`.
 - Current git commit SHA from the backend operator.
 - Whether the backend is running in skeleton, DB-backed, or live Azure demo mode.
 
@@ -25,7 +26,13 @@ API process is running on the same device.
 
 ## Authenticated Routes
 
-Every `/api/v1/*` request must include:
+Every `/api/v1/*` request must include one of:
+
+```text
+Authorization: Bearer <client token>
+```
+
+or the migration fallback:
 
 ```text
 X-API-Key: <client api key>
@@ -67,5 +74,4 @@ Expected handoff artifacts:
   reads with fallback to skeleton behavior.
 - `LALA_ENABLE_LIVE_AI=true` enables Azure OpenAI script generation.
 - `LALA_ENABLE_LIVE_SPEECH=true` enables Azure Speech MP3 generation.
-- Production bearer auth and the actual Flutter app implementation are later
-  waves.
+- The actual Flutter app implementation remains a later wave.

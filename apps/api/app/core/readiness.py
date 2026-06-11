@@ -13,7 +13,9 @@ def _status(value: str, *, required: bool = False) -> str:
 def build_readiness(settings: Settings | None = None) -> dict:
     settings = settings or get_settings()
     checks = {
-        "api_key": _status(settings.ios_api_key, required=True),
+        "client_auth": "configured" if settings.ios_api_key or settings.api_bearer_token else "missing",
+        "api_key": _status(settings.ios_api_key, required=False),
+        "bearer_token": _status(settings.api_bearer_token, required=False),
         "db": db_repository.check_db_status(settings.db_dsn),
         "key_vault": _status(settings.key_vault_url, required=False),
         "azure_openai_endpoint": _status(settings.azure_openai_endpoint, required=False),
@@ -25,7 +27,7 @@ def build_readiness(settings: Settings | None = None) -> dict:
         "azure_speech_key": _status(settings.azure_speech_key, required=False),
         "live_speech": "enabled" if settings.enable_live_speech else "disabled",
     }
-    if checks["api_key"] == "missing":
+    if checks["client_auth"] == "missing":
         overall = "degraded"
     elif any(value == "degraded" for value in checks.values()):
         overall = "degraded"

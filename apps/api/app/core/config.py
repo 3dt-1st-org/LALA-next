@@ -15,6 +15,7 @@ class Settings:
     app_name: str = "LALA-next Public API"
     app_version: str = "0.1.0"
     ios_api_key: str = ""
+    api_bearer_token: str = ""
     db_dsn: str = ""
     key_vault_url: str = ""
     azure_openai_endpoint: str = ""
@@ -34,6 +35,7 @@ class Settings:
         key_vault_url = (os.getenv("KEY_VAULT_URL") or "").strip()
         return cls(
             ios_api_key=_env_or_secret("IOS_API_KEY", "ios-api-key", key_vault_url),
+            api_bearer_token=_env_or_secret("API_BEARER_TOKEN", "api-bearer-token", key_vault_url),
             db_dsn=_env_or_secret("DB_DSN", "db-dsn", key_vault_url),
             key_vault_url=key_vault_url,
             azure_openai_endpoint=_env_or_secret(

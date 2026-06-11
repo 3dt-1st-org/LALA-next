@@ -14,7 +14,7 @@ C:\Users\EL035\dataschool\08_First_Team_Project\3dt-1st-Project\artifacts\lala-w
 | Source doc | Decision carried into LALA-next | Implemented in |
 |---|---|---|
 | `09_fastapi_flutter_contract_design.md` | Flutter should use one versioned public API family, `/api/v1/*`, plus `/healthz` and `/readyz`. | `apps/api/app/routers/v1.py`, `apps/api/app/routers/health.py`, `docs/api/flutter-contract.md` |
-| `09_fastapi_flutter_contract_design.md` | Migration auth keeps `X-API-Key` while production bearer auth remains a later wave. | `apps/api/app/core/auth.py`, `docs/api/flutter-contract.md` |
+| `09_fastapi_flutter_contract_design.md` | Migration auth keeps `X-API-Key`; LALA-next now also accepts `Authorization: Bearer` as the next client auth step. | `apps/api/app/core/auth.py`, `docs/api/flutter-contract.md` |
 | `09_fastapi_flutter_contract_design.md` | JSON routes use `{ ok, data, meta, error }`, with `meta.request_id`; audio success is the exception. | `apps/api/app/core/responses.py`, `apps/api/app/routers/v1.py` |
 | `09_fastapi_flutter_contract_design.md` | Azure Key Vault remains managed outside Windows and must not accidentally point at the ONMU vault. | `apps/api/app/core/key_vault.py`, `docs/operations/azure-resources.md` |
 | `10_windows_shared_backend_runbook_draft.md` | Windows owns the API edge, env injection, health/readiness, smoke, and handoff; Azure managed services stay in Azure. | `scripts/windows/start_api.ps1`, `scripts/windows/smoke_api.ps1`, `docs/operations/windows-shared-backend.md` |
@@ -46,7 +46,7 @@ C:\Users\EL035\dataschool\08_First_Team_Project\3dt-1st-Project\artifacts\lala-w
 | Backlog item | Why it remains |
 |---|---|
 | DB repository depth | Current repository layer has read fallbacks, radius-ranked places, cache TTL, weather region preference, docent-cache write-back, and compatibility view baselines; live DB rollout remains separate. |
-| Production mobile auth | Static `IOS_API_KEY` is acceptable only for the migration window. |
+| Production identity provider | Static bearer/API-key credentials are acceptable only before the final OAuth/Entra-style identity decision. |
 | Compatibility views for legacy Flask route data shapes | Baseline views exist, but live DB rollout and consumer migration are intentionally separate. |
 | Worker/batch boundary implementation | Azure Functions/Event Hub/Stream Analytics remain external producer systems. |
 | Flutter app implementation | Explicitly out of scope for Wave 1. |
