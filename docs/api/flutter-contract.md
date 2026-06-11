@@ -3,6 +3,7 @@
 This document describes the Wave 1 Flutter-facing API for LALA-next.
 For generated schema export and interactive docs, see
 `docs/api/openapi-usage.md`.
+For handoff steps, see `docs/api/flutter-handoff-checklist.md`.
 
 Base URL examples:
 

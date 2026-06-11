@@ -55,6 +55,7 @@ Run the full local verification pass:
 
 See [docs/api/flutter-contract.md](docs/api/flutter-contract.md).
 For generated schema handoff, see [docs/api/openapi-usage.md](docs/api/openapi-usage.md).
+For the client handoff checklist, see [docs/api/flutter-handoff-checklist.md](docs/api/flutter-handoff-checklist.md).
 
 Wave 1 routes:
 
