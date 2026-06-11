@@ -29,6 +29,10 @@ jobs:
       - name: Run tests
         run: python -m pytest apps/api/tests
 
+      - name: Run worker dry-run smoke
+        shell: pwsh
+        run: .\scripts\windows\smoke_workers.ps1 -Python python
+
       - name: Verify PowerShell scripts parse
         shell: pwsh
         run: |
