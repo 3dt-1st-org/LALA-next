@@ -44,6 +44,7 @@ def test_repo_docs_and_scripts_do_not_contain_secret_literals():
         ROOT / "sql",
         ROOT / "docs",
         ROOT / "apps" / "api" / "app",
+        ROOT / "apps" / "workers" / "app",
     ]
     patterns = [
         re.compile(r"postgresql://[^\s<>]+:[^\s<>]+@"),
@@ -85,6 +86,12 @@ def test_paid_smoke_requires_authenticated_api_key():
     apply_sql_script = (ROOT / "scripts" / "windows" / "apply_canonical_sql.ps1").read_text(
         encoding="utf-8"
     )
+    worker_smoke_script = (
+        ROOT / "scripts" / "windows" / "smoke_workers.ps1"
+    ).read_text(encoding="utf-8")
+    worker_contracts = (
+        ROOT / "apps" / "workers" / "app" / "contracts.py"
+    ).read_text(encoding="utf-8")
     apply_sql_tool = (
         ROOT / "apps" / "api" / "app" / "tools" / "apply_canonical_sql.py"
     ).read_text(encoding="utf-8")
@@ -104,6 +111,10 @@ def test_paid_smoke_requires_authenticated_api_key():
     assert "db-dsn" in db_resources_script
     assert "Default mode is dry-run plan only." in apply_sql_script
     assert "Write-Host $env:DB_DSN" not in apply_sql_script
+    assert "-m apps.workers.app.cli" in worker_smoke_script
+    assert "--dry-run" in worker_smoke_script
+    assert "Write-Host $env:DB_DSN" not in worker_smoke_script
+    assert "ALLOW_WORKER_MUTATION" in worker_contracts
     assert "ALLOW_CANONICAL_SQL_APPLY" in apply_sql_tool
     assert "APPLY_CANONICAL_SQL" in apply_sql_tool
 

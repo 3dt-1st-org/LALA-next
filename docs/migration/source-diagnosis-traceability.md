@@ -39,6 +39,9 @@ C:\Users\EL035\dataschool\08_First_Team_Project\3dt-1st-Project\artifacts\lala-w
 - SQL canonical files have a guarded dry-run/apply tool. The default path only
   prints the sorted plan and hashes; apply mode requires explicit operator
   confirmation and an environment guard.
+- Worker/batch producer responsibilities are represented by an executable
+  dry-run registry under `apps/workers`; live mutation remains blocked until a
+  later Azure Functions/Event Hub rollout decision.
 - The current requirement-by-requirement completion evidence is tracked in
   `docs/migration/wave1-completion-audit.md`.
 
@@ -49,5 +52,5 @@ C:\Users\EL035\dataschool\08_First_Team_Project\3dt-1st-Project\artifacts\lala-w
 | DB repository depth | Current repository layer has read fallbacks, radius-ranked places, cache TTL, weather region preference, docent-cache write-back, and compatibility view baselines; live DB rollout remains separate. |
 | Production identity provider | Static bearer/API-key credentials are acceptable only before the final OAuth/Entra-style identity decision. |
 | Compatibility views for legacy Flask route data shapes | Baseline views and guarded SQL apply tooling exist, but live DB rollout evidence and consumer migration are intentionally separate. |
-| Worker/batch boundary implementation | Azure Functions/Event Hub/Stream Analytics remain external producer systems. |
+| Worker/batch live execution | Dry-run contracts exist for job ids, write targets, and dependencies; actual Azure Functions/Event Hub/Stream Analytics mutation remains a later rollout. |
 | Flutter app implementation | Explicitly out of scope for Wave 1. |

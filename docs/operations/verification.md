@@ -28,6 +28,7 @@ The script runs:
 - API-key and response-envelope contract tests.
 - Request id, request duration, public metrics, and secret-safe request logging tests.
 - Canonical SQL plan/apply guard tests.
+- Worker/batch dry-run contract tests and smoke.
 - SQL and documentation secret-safety tests.
 - PowerShell script parser checks.
 
@@ -93,6 +94,15 @@ The apply path reads `DB_DSN` from the process, `.env`, or LALA-next Key Vault,
 runs `sql/canonical/*.sql` in sorted order inside one transaction, and does not
 print the DSN. Use it only for an approved dev/shared target after the plan has
 been reviewed.
+
+To verify worker and batch boundaries without external reads or writes, run:
+
+```powershell
+.\scripts\windows\smoke_workers.ps1
+```
+
+This command lists worker contracts and dry-runs each job. It is safe without
+`DB_DSN`, Key Vault access, Event Hub access, or live Azure Functions.
 
 Before any live DB apply, verify Azure-side database readiness:
 

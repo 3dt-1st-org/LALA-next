@@ -32,6 +32,12 @@ try {
         throw "FastAPI tests or safety contracts failed."
     }
 
+    Write-Host "Running worker dry-run smoke..."
+    & powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\windows\smoke_workers.ps1" -Python $Python
+    if ($LASTEXITCODE -ne 0) {
+        throw "Worker dry-run smoke failed."
+    }
+
     Write-Host "Checking PowerShell script syntax..."
     $parseErrors = @()
     Get-ChildItem -Path "scripts/windows" -Filter "*.ps1" | ForEach-Object {

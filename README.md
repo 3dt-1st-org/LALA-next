@@ -11,6 +11,7 @@ This repository intentionally starts as a migration skeleton instead of a full c
 - PostgreSQL-backed read/cache hooks, docent cache write-back, and skeleton fallback.
 - Windows shared backend start and smoke scripts.
 - Canonical SQL, compatibility views, and guarded SQL plan/apply tooling.
+- Worker/batch dry-run contracts for producer boundaries.
 - Documentation for Flutter handoff and Windows operations.
 
 Out of scope for Wave 1:
@@ -63,6 +64,12 @@ Check whether Azure PostgreSQL rollout prerequisites exist:
 .\scripts\windows\verify_db_resources.ps1
 ```
 
+Dry-run the worker/batch contracts without external writes:
+
+```powershell
+.\scripts\windows\smoke_workers.ps1
+```
+
 ## API Contract
 
 See [docs/api/flutter-contract.md](docs/api/flutter-contract.md).
@@ -102,6 +109,9 @@ See [docs/operations/azure-resources.md](docs/operations/azure-resources.md).
 ## Verification
 
 See [docs/operations/verification.md](docs/operations/verification.md).
+
+Worker and batch producer boundaries are described in
+[docs/operations/worker-batch-boundary.md](docs/operations/worker-batch-boundary.md).
 
 ## Migration Status
 

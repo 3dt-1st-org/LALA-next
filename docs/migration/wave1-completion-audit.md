@@ -57,6 +57,7 @@ Azure dependency handoff.
 | PostgreSQL rollout readiness verification | Done | `scripts/windows/verify_db_resources.ps1`, `docs/operations/live-db-rollout.md` |
 | Live Azure paid smoke evidence | Done | `docs/operations/live-azure-smoke-2026-06-11.md` |
 | CI for tests and PowerShell parser | Done | `.github/workflows/ci.yml`, latest CI success |
+| Worker/batch dry-run contracts | Done | `apps/workers/app/contracts.py`, `apps/workers/app/cli.py`, `scripts/windows/smoke_workers.ps1`, worker contract tests |
 
 ## Verification Commands
 
@@ -118,7 +119,7 @@ missing from this migration skeleton:
 - Final OAuth/Entra-style identity model.
 - Unguarded live DB migration execution against Azure PostgreSQL.
 - PostgreSQL Flexible Server provisioning and `db-dsn` secret creation.
-- Full worker/batch rewrite for Azure Functions, Event Hub, and Stream
+- Live worker/batch mutation for Azure Functions, Event Hub, and Stream
   Analytics producers.
 - Observability dashboards and persistent runtime log aggregation beyond the
   current in-process metrics surface.
@@ -132,5 +133,5 @@ The next implementation wave should pick one of these lanes explicitly:
 - Final OAuth/Entra-style client identity model.
 - Live DB rollout and seed/migration procedure beyond the current guarded
   canonical SQL apply path.
-- Worker/batch boundary implementation.
+- Worker/batch live execution and Azure producer wiring.
 - Observability and operations hardening.

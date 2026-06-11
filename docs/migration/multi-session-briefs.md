@@ -1,6 +1,6 @@
 # Multi-Session Implementation Briefs
 
-These briefs are for visible Codex sessions that continue work after the Wave 1 skeleton is committed. Current Wave 1 includes the FastAPI edge, `/api/v1/*` contract routes, deterministic skeleton fallbacks, opt-in Azure OpenAI/Speech checks, DB-backed read/cache hooks, docent-cache write-back, canonical SQL compatibility views, Windows start/smoke/verification scripts, and LALA-next-only Key Vault handoff.
+These briefs are for visible Codex sessions that continue work after the Wave 1 skeleton is committed. Current Wave 1 includes the FastAPI edge, `/api/v1/*` contract routes, deterministic skeleton fallbacks, opt-in Azure OpenAI/Speech checks, DB-backed read/cache hooks, docent-cache write-back, canonical SQL compatibility views, dry-run worker/batch contracts, Windows start/smoke/verification scripts, and LALA-next-only Key Vault handoff.
 
 ## Controller
 
@@ -36,3 +36,10 @@ Keep API contract, OpenAPI usage, migration docs, and Flutter handoff synchroniz
 ## Session G - Verification
 
 Run tests, secret scans, SQL safety checks, and report residual risks.
+
+## Session H - Worker/Batch Boundary
+
+Maintain the dry-run job registry under `apps/workers`. Keep live mutation
+blocked until the team approves PostgreSQL target readiness, Azure Function or
+Windows scheduler ownership, Event Hub binding shape, retry/idempotency policy,
+and observability destinations.
