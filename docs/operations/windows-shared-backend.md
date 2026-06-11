@@ -121,6 +121,15 @@ request id, and client host. It does not log query strings or auth headers. Set
 `LOG_LEVEL=DEBUG`, `INFO`, `WARNING`, or `ERROR` before starting the API to
 adjust verbosity.
 
+The API also exposes process-local Prometheus text metrics at `/metrics`.
+Metrics include process uptime, request counts, duration sums, and max duration
+by method, route path, status code, and status class. They do not include query
+strings, request bodies, auth headers, API keys, bearer tokens, or client IPs.
+Unmatched 404 paths are collapsed into the fixed `__unmatched__` label instead
+of exporting arbitrary URL paths.
+The `/metrics` scrape route itself is excluded from request counters, and the
+counters reset when the API process restarts.
+
 ## Handoff
 
 Share this format with teammates:
@@ -132,6 +141,7 @@ Branch/build: main or commit SHA
 DB target: skeleton or approved dev DB
 Health: /healthz
 Ready: /readyz
+Metrics: /metrics
 Known degraded features: DB/Azure live calls are not required in Wave 1
 ```
 

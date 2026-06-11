@@ -51,7 +51,7 @@ Azure dependency handoff.
 | Windows start/smoke scripts | Done | `scripts/windows/start_api.ps1`, `scripts/windows/smoke_api.ps1` |
 | OpenAPI export for Flutter handoff | Done | `scripts/windows/export_openapi.ps1`, `docs/api/openapi-usage.md` |
 | Configurable browser CORS | Done | `CORS_ALLOW_ORIGINS`, `apps/api/tests/test_cors.py` |
-| Secret-safe request logging and duration headers | Done | `apps/api/app/core/observability.py`, `apps/api/tests/test_observability.py` |
+| Secret-safe request logging, duration headers, and process-local metrics | Done | `apps/api/app/core/observability.py`, `apps/api/app/core/metrics.py`, `apps/api/tests/test_observability.py` |
 | Flutter handoff checklist | Done | `docs/api/flutter-handoff-checklist.md` |
 | Azure resource verification | Done | `scripts/windows/verify_azure_resources.ps1` |
 | Live Azure paid smoke evidence | Done | `docs/operations/live-azure-smoke-2026-06-11.md` |
@@ -117,7 +117,8 @@ missing from this migration skeleton:
 - Unguarded live DB migration execution against Azure PostgreSQL.
 - Full worker/batch rewrite for Azure Functions, Event Hub, and Stream
   Analytics producers.
-- Observability dashboards and persistent runtime log aggregation.
+- Observability dashboards and persistent runtime log aggregation beyond the
+  current in-process metrics surface.
 - Replacing or removing the legacy Flask application.
 
 ## Next Decision Gate

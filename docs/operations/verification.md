@@ -26,7 +26,7 @@ The script runs:
 
 - FastAPI route tests.
 - API-key and response-envelope contract tests.
-- Request id, request duration, and secret-safe request logging tests.
+- Request id, request duration, public metrics, and secret-safe request logging tests.
 - Canonical SQL plan/apply guard tests.
 - SQL and documentation secret-safety tests.
 - PowerShell script parser checks.
@@ -117,7 +117,8 @@ Smoke the public and authenticated routes:
 `KEY_VAULT_URL` is configured and Azure CLI is authenticated, it attempts to load
 the migration API key and then the optional bearer token from Key Vault. It never
 prints secret values.
-Public smoke checks include `/healthz`, `/readyz`, and `/openapi.json`.
+Public smoke checks include `/healthz`, `/readyz`, `/metrics`, and
+`/openapi.json`.
 Without `-PaidDependency`, authenticated route checks are skipped when client
 auth is not available.
 

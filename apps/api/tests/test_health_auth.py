@@ -25,6 +25,14 @@ def test_readyz_reports_degraded_without_required_env(client, monkeypatch):
     assert body["data"]["checks"]["client_auth"] == "missing"
 
 
+def test_metrics_is_public(client):
+    response = client.get("/metrics")
+
+    assert response.status_code == 200
+    assert "text/plain" in response.headers["content-type"]
+    assert "lala_next_process_uptime_seconds" in response.text
+
+
 def test_readyz_accepts_bearer_token_as_client_auth(client, monkeypatch):
     monkeypatch.delenv("IOS_API_KEY", raising=False)
     monkeypatch.setenv("API_BEARER_TOKEN", "test-bearer-token")

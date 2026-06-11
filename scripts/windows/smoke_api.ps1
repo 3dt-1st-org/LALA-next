@@ -131,6 +131,7 @@ function Invoke-SmokeAudioPost {
 
 Invoke-SmokeGet "/healthz"
 Invoke-SmokeGet "/readyz"
+Invoke-SmokeGet "/metrics"
 Invoke-SmokeGet "/openapi.json"
 
 if (-not $env:IOS_API_KEY -and -not $env:API_BEARER_TOKEN) {

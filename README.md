@@ -67,6 +67,7 @@ Wave 1 routes:
 
 - `GET /healthz`
 - `GET /readyz`
+- `GET /metrics`
 - `GET /api/v1/places`
 - `GET /api/v1/weather`
 - `POST /api/v1/docents/script`

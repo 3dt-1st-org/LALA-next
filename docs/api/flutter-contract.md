@@ -79,6 +79,7 @@ JSON failure:
 |---|---|---|
 | GET | `/healthz` | Process liveness |
 | GET | `/readyz` | Dependency readiness summary |
+| GET | `/metrics` | Operator metrics in Prometheus text format |
 | GET | `/api/v1/places` | Nearby place list |
 | GET | `/api/v1/weather` | Current weather context |
 | POST | `/api/v1/docents/script` | Generate or fetch docent script |

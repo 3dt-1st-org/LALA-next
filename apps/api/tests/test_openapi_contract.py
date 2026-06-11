@@ -9,6 +9,7 @@ def test_openapi_schema_is_public_and_lists_wave1_routes(client):
     paths = schema["paths"]
     for route in (
         "/healthz",
+        "/metrics",
         "/readyz",
         "/api/v1/places",
         "/api/v1/weather",
