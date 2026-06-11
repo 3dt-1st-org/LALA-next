@@ -1,6 +1,8 @@
 # Flutter API Contract
 
 This document describes the Wave 1 Flutter-facing API for LALA-next.
+For generated schema export and interactive docs, see
+`docs/api/openapi-usage.md`.
 
 Base URL examples:
 
