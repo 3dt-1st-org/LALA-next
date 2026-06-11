@@ -68,6 +68,7 @@ Smoke the public and authenticated routes:
 
 `smoke_api.ps1` can load `IOS_API_KEY` from Key Vault when `KEY_VAULT_URL` is
 configured and Azure CLI is authenticated. It never prints the key value.
+Public smoke checks include `/healthz`, `/readyz`, and `/openapi.json`.
 Without `-PaidDependency`, authenticated route checks are skipped when an API key
 is not available.
 

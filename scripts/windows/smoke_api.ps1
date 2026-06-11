@@ -131,6 +131,7 @@ function Invoke-SmokeAudioPost {
 
 Invoke-SmokeGet "/healthz"
 Invoke-SmokeGet "/readyz"
+Invoke-SmokeGet "/openapi.json"
 
 if (-not $env:IOS_API_KEY) {
     $vaultName = Get-VaultNameFromUrl $env:KEY_VAULT_URL
