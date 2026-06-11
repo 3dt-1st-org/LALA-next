@@ -79,6 +79,9 @@ def test_paid_smoke_requires_authenticated_api_key():
     db_schema_script = (ROOT / "scripts" / "windows" / "verify_db_schema.ps1").read_text(
         encoding="utf-8"
     )
+    db_resources_script = (
+        ROOT / "scripts" / "windows" / "verify_db_resources.ps1"
+    ).read_text(encoding="utf-8")
     apply_sql_script = (ROOT / "scripts" / "windows" / "apply_canonical_sql.ps1").read_text(
         encoding="utf-8"
     )
@@ -96,6 +99,9 @@ def test_paid_smoke_requires_authenticated_api_key():
     assert "DB_DSN value is never printed by this script." in db_schema_script
     assert "Write-Host $env:DB_DSN" not in db_schema_script
     assert "$toolArgs" in db_schema_script
+    assert "Secret values are never printed by this script." in db_resources_script
+    assert "secret show" not in db_resources_script
+    assert "db-dsn" in db_resources_script
     assert "Default mode is dry-run plan only." in apply_sql_script
     assert "Write-Host $env:DB_DSN" not in apply_sql_script
     assert "ALLOW_CANONICAL_SQL_APPLY" in apply_sql_tool

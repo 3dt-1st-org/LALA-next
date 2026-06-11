@@ -54,6 +54,7 @@ Azure dependency handoff.
 | Secret-safe request logging, duration headers, and process-local metrics | Done | `apps/api/app/core/observability.py`, `apps/api/app/core/metrics.py`, `apps/api/tests/test_observability.py` |
 | Flutter handoff checklist | Done | `docs/api/flutter-handoff-checklist.md` |
 | Azure resource verification | Done | `scripts/windows/verify_azure_resources.ps1` |
+| PostgreSQL rollout readiness verification | Done | `scripts/windows/verify_db_resources.ps1`, `docs/operations/live-db-rollout.md` |
 | Live Azure paid smoke evidence | Done | `docs/operations/live-azure-smoke-2026-06-11.md` |
 | CI for tests and PowerShell parser | Done | `.github/workflows/ci.yml`, latest CI success |
 
@@ -66,6 +67,7 @@ python -m pytest apps/api/tests
 .\scripts\windows\verify_repo.ps1 -SkipInstall
 .\scripts\windows\apply_canonical_sql.ps1
 .\scripts\windows\verify_db_schema.ps1
+.\scripts\windows\verify_db_resources.ps1
 .\scripts\windows\verify_azure_resources.ps1
 ```
 
@@ -115,6 +117,7 @@ missing from this migration skeleton:
 - Flutter app implementation.
 - Final OAuth/Entra-style identity model.
 - Unguarded live DB migration execution against Azure PostgreSQL.
+- PostgreSQL Flexible Server provisioning and `db-dsn` secret creation.
 - Full worker/batch rewrite for Azure Functions, Event Hub, and Stream
   Analytics producers.
 - Observability dashboards and persistent runtime log aggregation beyond the

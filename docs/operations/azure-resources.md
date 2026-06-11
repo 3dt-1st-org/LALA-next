@@ -28,6 +28,10 @@ Optional bearer transition secret:
 
 - `api-bearer-token`
 
+Optional live database rollout secret:
+
+- `db-dsn`
+
 The secret values are intentionally not recorded in this repository.
 
 Live AI calls are opt-in with `LALA_ENABLE_LIVE_AI=true`. Live text-to-speech calls are opt-in with `LALA_ENABLE_LIVE_SPEECH=true`. This keeps unit tests and basic smoke checks deterministic while still allowing demo runs to use `gpt-4o-mini` and Azure Speech.
@@ -51,6 +55,16 @@ The script verifies:
 - Azure OpenAI deployment `gpt-4o-mini`.
 - Azure Speech account `lala-next-speech-27db5e`.
 - ONMU vault name separation.
+
+To verify PostgreSQL rollout readiness, including the optional `db-dsn` secret
+name and Azure Database for PostgreSQL Flexible Server target, run:
+
+```powershell
+.\scripts\windows\verify_db_resources.ps1
+```
+
+Use `-RequireDatabase` when the database target is expected to exist and the
+check should fail if any DB rollout prerequisite is missing.
 
 ## Local Configuration
 

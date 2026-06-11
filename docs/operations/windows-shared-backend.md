@@ -54,6 +54,7 @@ If the shared backend will use a PostgreSQL target, run the read-only schema
 verification before the API handoff:
 
 ```powershell
+.\scripts\windows\verify_db_resources.ps1
 .\scripts\windows\verify_db_schema.ps1 -KeyVaultUrl https://lala-next-kv-27db5e.vault.azure.net/
 ```
 

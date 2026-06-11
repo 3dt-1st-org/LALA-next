@@ -57,6 +57,12 @@ Review the canonical SQL rollout plan without touching a database:
 .\scripts\windows\apply_canonical_sql.ps1
 ```
 
+Check whether Azure PostgreSQL rollout prerequisites exist:
+
+```powershell
+.\scripts\windows\verify_db_resources.ps1
+```
+
 ## API Contract
 
 See [docs/api/flutter-contract.md](docs/api/flutter-contract.md).

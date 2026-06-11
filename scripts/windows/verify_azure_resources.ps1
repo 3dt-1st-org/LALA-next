@@ -21,6 +21,10 @@ $ExpectedSecretNames = @(
     "azure-speech-region",
     "azure-speech-endpoint"
 )
+$OptionalSecretNames = @(
+    "api-bearer-token",
+    "db-dsn"
+)
 
 function Invoke-AzJson {
     param([string[]]$Arguments)
@@ -95,6 +99,12 @@ if ($missingSecrets.Count -gt 0) {
     throw "LALA-next Key Vault is missing expected secret names: $($missingSecrets -join ', ')"
 }
 Write-Host "Key Vault secret names verified: $($ExpectedSecretNames.Count) expected names present."
+$presentOptionalSecrets = @($OptionalSecretNames | Where-Object { $secretNames -contains $_ })
+if ($presentOptionalSecrets.Count -gt 0) {
+    Write-Host "Optional Key Vault secret names present: $($presentOptionalSecrets -join ', ')"
+} else {
+    Write-Host "Optional Key Vault secret names are not present yet: $($OptionalSecretNames -join ', ')"
+}
 
 $openAI = Invoke-AzJson -Arguments @(
     "cognitiveservices", "account", "show",

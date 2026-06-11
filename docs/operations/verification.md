@@ -94,6 +94,16 @@ runs `sql/canonical/*.sql` in sorted order inside one transaction, and does not
 print the DSN. Use it only for an approved dev/shared target after the plan has
 been reviewed.
 
+Before any live DB apply, verify Azure-side database readiness:
+
+```powershell
+.\scripts\windows\verify_db_resources.ps1
+```
+
+The strict form uses `-RequireDatabase` and fails when the PostgreSQL Flexible
+Server, database, required extension allowlist, or Key Vault `db-dsn` secret
+name is missing.
+
 `docents/script` reads non-expired rows from `locallink.docent_cache` before
 calling Azure OpenAI. Successful live Azure OpenAI scripts are written back to
 that cache on a best-effort basis. A cache write failure should be logged in a
