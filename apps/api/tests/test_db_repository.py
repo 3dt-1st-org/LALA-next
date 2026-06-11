@@ -1,0 +1,84 @@
+from __future__ import annotations
+
+import sys
+import types
+from datetime import UTC, datetime, timedelta
+
+from apps.api.app.services import db_repository
+
+
+def test_fetch_places_uses_radius_bound_ranking_query(monkeypatch):
+    captured = {}
+
+    class FakeCursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def execute(self, sql, params):
+            captured["sql"] = sql
+            captured["params"] = params
+
+        def fetchall(self):
+            return [
+                {
+                    "place_id": "db-place-1",
+                    "name_ko": "DB 장소",
+                    "name_en": "DB Place",
+                    "category": "event",
+                    "address_ko": "DB 주소",
+                    "address_en": "DB address",
+                    "region_ko": "수원",
+                    "region_en": "Suwon",
+                    "lat": 37.2,
+                    "lng": 127.0,
+                    "source": "canonical",
+                    "updated_at": datetime.now(UTC),
+                    "distance_m": 125.2,
+                }
+            ]
+
+    class FakeConnection:
+        def cursor(self, cursor_factory=None):
+            captured["cursor_factory"] = cursor_factory
+            return FakeCursor()
+
+        def close(self):
+            return None
+
+    psycopg2_module = types.ModuleType("psycopg2")
+    psycopg2_module.connect = lambda dsn, connect_timeout: FakeConnection()
+    extras_module = types.ModuleType("psycopg2.extras")
+    extras_module.RealDictCursor = object()
+    monkeypatch.setitem(sys.modules, "psycopg2", psycopg2_module)
+    monkeypatch.setitem(sys.modules, "psycopg2.extras", extras_module)
+    monkeypatch.setenv("DB_DSN", "postgresql://db.example/lala")
+
+    places = db_repository.fetch_places(
+        lat=37.2,
+        lng=127.0,
+        radius_m=3000,
+        category="all",
+        language="en",
+    )
+
+    assert places[0]["place_id"] == "db-place-1"
+    assert places[0]["distance_m"] == 125
+    assert places[0]["source"] == "db"
+    assert "WHERE distance_m <= %s" in captured["sql"]
+    assert "ORDER BY distance_m ASC, updated_at DESC" in captured["sql"]
+    assert captured["params"] == (37.2, 127.0, "all", "all", 3000)
+
+
+def test_remaining_ttl_sec_reports_future_expiry():
+    ttl = db_repository._remaining_ttl_sec(datetime.now(UTC) + timedelta(seconds=90))
+
+    assert 0 < ttl <= 90
+
+
+def test_remaining_ttl_sec_clamps_expired_values():
+    ttl = db_repository._remaining_ttl_sec(datetime.now(UTC) - timedelta(seconds=1))
+
+    assert ttl == 0

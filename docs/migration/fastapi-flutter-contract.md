@@ -19,13 +19,15 @@ Implemented Wave 1 boundaries:
   `LALA_ENABLE_LIVE_AI=true` and `LALA_ENABLE_LIVE_SPEECH=true`.
 - Places, weather, planner, and docent-cache services use PostgreSQL-backed
   repository reads when `DB_DSN` is configured and the canonical schema is
-  available, then fall back to deterministic skeleton adapters.
+  available, then fall back to deterministic skeleton adapters. Places DB reads
+  are radius-filtered and distance-ranked in SQL; docent-cache hits expose
+  approximate remaining TTL.
 - Flutter can build against `docs/api/flutter-contract.md` without waiting for
   the Flutter app repository structure.
 
 Next migration boundary:
 
-- Deepen PostgreSQL-backed repository functions with exact ranking, freshness,
+- Deepen PostgreSQL-backed repository functions with weather location matching
   and compatibility views.
 - Keep docent-cache write-back best-effort until shared DB migration ownership is
   formally assigned.

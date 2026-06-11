@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import closing
+from datetime import UTC, datetime
 from typing import Any
 
 from apps.api.app.core.config import get_settings
@@ -41,26 +42,31 @@ def fetch_places(
         return []
 
     sql = """
-        SELECT
-            place_id,
-            name_ko,
-            name_en,
-            category,
-            address_ko,
-            address_en,
-            region_ko,
-            region_en,
-            lat,
-            lng,
-            source,
-            updated_at,
-            SQRT(POWER((lat - %s) * 111000, 2) + POWER((lng - %s) * 88000, 2)) AS distance_m
-        FROM locallink.v_public_places
-        WHERE (%s = 'all' OR category = %s)
-        ORDER BY SQRT(POWER((lat - %s) * 111000, 2) + POWER((lng - %s) * 88000, 2))
+        WITH ranked_places AS (
+            SELECT
+                place_id,
+                name_ko,
+                name_en,
+                category,
+                address_ko,
+                address_en,
+                region_ko,
+                region_en,
+                lat,
+                lng,
+                source,
+                updated_at,
+                SQRT(POWER((lat - %s) * 111000, 2) + POWER((lng - %s) * 88000, 2)) AS distance_m
+            FROM locallink.v_public_places
+            WHERE (%s = 'all' OR category = %s)
+        )
+        SELECT *
+        FROM ranked_places
+        WHERE distance_m <= %s
+        ORDER BY distance_m ASC, updated_at DESC
         LIMIT 20
     """
-    params = (lat, lng, category, category, lat, lng)
+    params = (lat, lng, category, category, radius_m)
     try:
         with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -220,7 +226,7 @@ def fetch_docent_script_cache(
         "source": "db_cache",
         "upstream_source": row.get("source") or "unknown",
         "generated_at": row.get("generated_at").isoformat() if row.get("generated_at") else None,
-        "ttl_sec": 0,
+        "ttl_sec": _remaining_ttl_sec(row.get("expires_at")),
     }
 
 
@@ -288,3 +294,15 @@ def _weather_icon(precipitation_type: Any) -> str:
     if raw in {"snow", "눈", "3"}:
         return "snow"
     return "partly-cloudy"
+
+
+def _remaining_ttl_sec(expires_at: Any) -> int:
+    if not expires_at:
+        return 0
+    if isinstance(expires_at, datetime):
+        expires_at_aware = expires_at
+        if expires_at_aware.tzinfo is None:
+            expires_at_aware = expires_at_aware.replace(tzinfo=UTC)
+        now = datetime.now(expires_at_aware.tzinfo)
+        return max(0, int((expires_at_aware - now).total_seconds()))
+    return 0

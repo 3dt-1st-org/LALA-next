@@ -176,7 +176,9 @@ Query parameters:
 ```
 
 When the canonical PostgreSQL read model returns rows, this payload keeps the
-same shape and uses `source: "db"`.
+same shape and uses `source: "db"`. DB rows are radius-filtered and sorted by
+approximate distance in the repository query before the skeleton fallback is
+considered.
 
 `GET /api/v1/weather`:
 
@@ -260,6 +262,8 @@ When live AI is enabled and Key Vault or environment variables provide the OpenA
 
 If `DB_DSN` is configured and `locallink.docent_cache` has a matching non-expired
 entry, the script route returns the cached script before calling Azure OpenAI.
+Those cache hits return `source: "db_cache"` and `ttl_sec` as the approximate
+remaining seconds until `expires_at`.
 When live Azure OpenAI generation succeeds and `DB_DSN` is configured, the route
 best-effort writes the generated script back to `locallink.docent_cache`.
 Database write failures do not fail the API response.
