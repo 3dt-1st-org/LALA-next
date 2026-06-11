@@ -72,6 +72,19 @@ Public smoke checks include `/healthz`, `/readyz`, and `/openapi.json`.
 Without `-PaidDependency`, authenticated route checks are skipped when an API key
 is not available.
 
+## Azure Resource Verification
+
+When the question is whether this repository is using the new LALA-next Azure
+resources rather than the existing ONMU vault, run:
+
+```powershell
+.\scripts\windows\verify_azure_resources.ps1
+```
+
+This check is intentionally separate from local and CI verification because it
+requires Azure CLI login and live Azure read access. It prints resource names,
+deployment metadata, and secret names only; it does not print secret values.
+
 ## Paid Dependency Checks
 
 Live Azure OpenAI and Azure Speech checks are kept opt-in. Use them only when a
