@@ -68,13 +68,13 @@ Live Azure OpenAI and Azure Speech checks are kept opt-in. Use them only when a
 small paid smoke request is acceptable:
 
 ```powershell
-.\scripts\windows\start_api.ps1 -Port 8080 -EnableLiveAI -EnableLiveSpeech
+.\scripts\windows\start_api.ps1 -Port 8080 -KeyVaultUrl https://lala-next-kv-27db5e.vault.azure.net/ -EnableLiveAI -EnableLiveSpeech
 ```
 
 In another terminal:
 
 ```powershell
-.\scripts\windows\smoke_api.ps1 -BaseUrl http://127.0.0.1:8080 -PaidDependency
+.\scripts\windows\smoke_api.ps1 -BaseUrl http://127.0.0.1:8080 -KeyVaultUrl https://lala-next-kv-27db5e.vault.azure.net/ -PaidDependency
 ```
 
 The paid smoke checks verify that `docents/script` is backed by Azure OpenAI and

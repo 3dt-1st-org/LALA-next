@@ -2,6 +2,7 @@ param(
     [string]$HostName = "0.0.0.0",
     [int]$Port = 8080,
     [string]$Python = "",
+    [string]$KeyVaultUrl = "",
     [switch]$EnableLiveAI,
     [switch]$EnableLiveSpeech
 )
@@ -21,6 +22,10 @@ if (-not $Python) {
     }
 }
 
+if ($KeyVaultUrl) {
+    [Environment]::SetEnvironmentVariable("KEY_VAULT_URL", $KeyVaultUrl, "Process")
+}
+
 $EnvFile = Join-Path $RepoRoot ".env"
 if (Test-Path $EnvFile) {
     Get-Content $EnvFile | ForEach-Object {
@@ -35,6 +40,59 @@ if (Test-Path $EnvFile) {
             [Environment]::SetEnvironmentVariable($name, $value, "Process")
         }
     }
+}
+
+function Get-LalaVaultNameFromUrl {
+    param([string]$VaultUrl)
+    if (-not $VaultUrl) {
+        return ""
+    }
+    $uri = [Uri]$VaultUrl
+    if ($uri.Scheme -ne "https" -or $uri.Host.ToLowerInvariant() -ne "lala-next-kv-27db5e.vault.azure.net") {
+        throw "Unsupported Key Vault URL for LALA-next: $VaultUrl"
+    }
+    return $uri.Host.Split(".")[0]
+}
+
+function Set-SecretEnvIfMissing {
+    param(
+        [string]$VaultName,
+        [string]$EnvName,
+        [string]$SecretName
+    )
+    if ([Environment]::GetEnvironmentVariable($EnvName, "Process")) {
+        return
+    }
+    try {
+        $value = az keyvault secret show --vault-name $VaultName --name $SecretName --query value -o tsv 2>$null
+        if ($LASTEXITCODE -eq 0 -and $value) {
+            [Environment]::SetEnvironmentVariable($EnvName, $value, "Process")
+        }
+    } catch {
+        return
+    }
+}
+
+function Get-EnvStatus {
+    param([string]$EnvName)
+    if ([Environment]::GetEnvironmentVariable($EnvName, "Process")) {
+        return "configured"
+    }
+    return "missing"
+}
+
+$EffectiveKeyVaultUrl = [Environment]::GetEnvironmentVariable("KEY_VAULT_URL", "Process")
+if ($EffectiveKeyVaultUrl) {
+    $VaultName = Get-LalaVaultNameFromUrl $EffectiveKeyVaultUrl
+    Set-SecretEnvIfMissing -VaultName $VaultName -EnvName "IOS_API_KEY" -SecretName "ios-api-key"
+    Set-SecretEnvIfMissing -VaultName $VaultName -EnvName "AZURE_OPENAI_ENDPOINT" -SecretName "azure-openai-endpoint"
+    Set-SecretEnvIfMissing -VaultName $VaultName -EnvName "AZURE_OPENAI_KEY" -SecretName "azure-openai-key"
+    Set-SecretEnvIfMissing -VaultName $VaultName -EnvName "AZURE_OPENAI_DEPLOYMENT" -SecretName "azure-openai-deployment"
+    Set-SecretEnvIfMissing -VaultName $VaultName -EnvName "AZURE_OPENAI_API_VERSION" -SecretName "azure-openai-api-version"
+    Set-SecretEnvIfMissing -VaultName $VaultName -EnvName "AZURE_SPEECH_KEY" -SecretName "azure-speech-key"
+    Set-SecretEnvIfMissing -VaultName $VaultName -EnvName "AZURE_SPEECH_REGION" -SecretName "azure-speech-region"
+    Set-SecretEnvIfMissing -VaultName $VaultName -EnvName "AZURE_SPEECH_ENDPOINT" -SecretName "azure-speech-endpoint"
+    Write-Host "Key Vault secret preload: api_key=$(Get-EnvStatus 'IOS_API_KEY'), openai_key=$(Get-EnvStatus 'AZURE_OPENAI_KEY'), speech_key=$(Get-EnvStatus 'AZURE_SPEECH_KEY')"
 }
 
 if ($EnableLiveAI) {

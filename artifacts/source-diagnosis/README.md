@@ -11,5 +11,5 @@ Wave 1 migrated the decisions from documents `09`, `10`, and `11` into:
 - `docs/api/flutter-contract.md`
 - `docs/migration/fastapi-flutter-contract.md`
 - `docs/migration/sql-canonicalization.md`
+- `docs/migration/source-diagnosis-traceability.md`
 - `docs/operations/windows-shared-backend.md`
-

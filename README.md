@@ -72,8 +72,11 @@ Wave 1 resources were created in resource group `3dt-final-team1`:
 - Key Vault: `lala-next-kv-27db5e`
 - Azure OpenAI account: `lala-next-aoai-27db5e`
 - Azure OpenAI deployment: `gpt-4o-mini`
+- Azure Speech account: `lala-next-speech-27db5e`
 
-Use `KEY_VAULT_URL=https://lala-next-kv-27db5e.vault.azure.net/` for this repository. The ONMU vault `onmu-dev-kv-27db5e` is in the same resource group, but LALA-next does not use it.
+Use `KEY_VAULT_URL=https://lala-next-kv-27db5e.vault.azure.net/` for this repository. The ONMU vault `onmu-dev-kv-27db5e` is in the same resource group, but LALA-next does not use it. The API allowlists the LALA-next vault host and ignores other Key Vault URLs.
+
+Live Azure calls are opt-in. Start the API with `.\scripts\windows\start_api.ps1 -KeyVaultUrl https://lala-next-kv-27db5e.vault.azure.net/ -EnableLiveAI -EnableLiveSpeech` and run `.\scripts\windows\smoke_api.ps1 -KeyVaultUrl https://lala-next-kv-27db5e.vault.azure.net/ -PaidDependency` when a small paid OpenAI/Speech smoke check is acceptable.
 
 See [docs/operations/azure-resources.md](docs/operations/azure-resources.md).
 

@@ -3,17 +3,26 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from apps.api.app.core.key_vault import is_allowed_key_vault_url, key_vault_name_from_url
+
 ROOT = Path(__file__).resolve().parents[3]
 TEXT_SUFFIXES = {".env", ".example", ".md", ".ps1", ".py", ".sql", ".toml", ".txt"}
 
 
-def test_canonical_sql_has_no_shared_destructive_drop_table():
+def test_canonical_sql_has_no_shared_destructive_statements():
     canonical_dir = ROOT / "sql" / "canonical"
+    destructive_patterns = [
+        re.compile(r"\bDROP\s+(TABLE|SCHEMA|VIEW|MATERIALIZED\s+VIEW|DATABASE)\b", re.IGNORECASE),
+        re.compile(r"\bTRUNCATE\b", re.IGNORECASE),
+        re.compile(r"\bDELETE\s+FROM\b", re.IGNORECASE),
+        re.compile(r"\bALTER\s+TABLE\b.*\bDROP\s+COLUMN\b", re.IGNORECASE | re.DOTALL),
+    ]
     findings: list[str] = []
     for path in canonical_dir.glob("*.sql"):
         text = path.read_text(encoding="utf-8")
-        if re.search(r"\bDROP\s+TABLE\b", text, flags=re.IGNORECASE):
-            findings.append(str(path))
+        for pattern in destructive_patterns:
+            if pattern.search(text):
+                findings.append(f"{path}: {pattern.pattern}")
 
     assert findings == []
 
@@ -55,6 +64,19 @@ def test_repo_docs_and_scripts_do_not_contain_secret_literals():
 
 def test_paid_smoke_requires_authenticated_api_key():
     script = (ROOT / "scripts" / "windows" / "smoke_api.ps1").read_text(encoding="utf-8")
+    start_script = (ROOT / "scripts" / "windows" / "start_api.ps1").read_text(encoding="utf-8")
 
+    assert "[string]$KeyVaultUrl" in script
+    assert "[string]$KeyVaultUrl" in start_script
+    assert "lala-next-kv-27db5e.vault.azure.net" in script
+    assert "lala-next-kv-27db5e.vault.azure.net" in start_script
     assert "if ($PaidDependency)" in script
     assert "IOS_API_KEY is required for paid dependency smoke" in script
+
+
+def test_key_vault_url_is_lala_next_only():
+    assert is_allowed_key_vault_url("https://lala-next-kv-27db5e.vault.azure.net/")
+    assert not is_allowed_key_vault_url("https://onmu-dev-kv-27db5e.vault.azure.net/")
+    assert not is_allowed_key_vault_url("http://lala-next-kv-27db5e.vault.azure.net/")
+    assert key_vault_name_from_url("https://lala-next-kv-27db5e.vault.azure.net/") == "lala-next-kv-27db5e"
+    assert key_vault_name_from_url("https://onmu-dev-kv-27db5e.vault.azure.net/") == ""

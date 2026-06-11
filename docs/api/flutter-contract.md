@@ -67,7 +67,182 @@ JSON failure:
 | POST | `/api/v1/plans/daily` | Create daily plan |
 | GET | `/api/v1/plans/intervention` | Weather/location intervention |
 
-Wave 1 service responses are skeleton-safe and mock-friendly. Azure-backed generation and DB-backed query implementations are later waves.
+Wave 1 service responses are deterministic when live dependencies are disabled.
+Azure OpenAI and Azure Speech are available as opt-in live paths. DB-backed
+queries remain a later wave; places, weather, and planner routes currently return
+contract-safe skeleton data.
+
+## Route Details
+
+### `GET /api/v1/places`
+
+Query parameters:
+
+| Name | Type | Default | Notes |
+|---|---|---|---|
+| `lat` | number | `37.2636` | `-90` to `90` |
+| `lng` | number | `127.0286` | `-180` to `180` |
+| `radius_m` | integer | `1000` | `1` to `50000` |
+| `category` | string | `all` | `all`, `attraction`, `restaurant`, `event` |
+| `lang` | string | `ko` | `ko`, `kr`, `kor`, `korean`, `en`, `eng`, `english` |
+
+### `GET /api/v1/weather`
+
+Query parameters:
+
+| Name | Type | Default | Notes |
+|---|---|---|---|
+| `lat` | number | `37.2636` | `-90` to `90` |
+| `lng` | number | `127.0286` | `-180` to `180` |
+| `force` | boolean | `false` | Reserved for bypassing cached weather later |
+
+### `POST /api/v1/docents/script`
+
+Request:
+
+```json
+{
+  "place_id": "skeleton-suwon-hwaseong",
+  "category": "attraction",
+  "language": "ko",
+  "mode": "brief"
+}
+```
+
+`category` must be `attraction`, `restaurant`, or `event`. `mode` accepts
+`brief`, `detail`, `standard`, and `deep`.
+
+### `POST /api/v1/docents/audio`
+
+Request:
+
+```json
+{
+  "script": "Short docent script text.",
+  "language": "ko"
+}
+```
+
+Success returns `audio/mpeg` bytes and an `X-Request-ID` response header.
+
+### `POST /api/v1/plans/daily`
+
+Request:
+
+```json
+{
+  "lat": 37.2636,
+  "lng": 127.0286,
+  "language": "ko"
+}
+```
+
+### `GET /api/v1/plans/intervention`
+
+Query parameters:
+
+| Name | Type | Default | Notes |
+|---|---|---|---|
+| `lat` | number | `37.2636` | `-90` to `90` |
+| `lng` | number | `127.0286` | `-180` to `180` |
+| `radius_m` | integer | `10000` | `1` to `50000` |
+
+## Response Data Examples
+
+`GET /api/v1/places`:
+
+```json
+{
+  "query": {
+    "lat": 37.2636,
+    "lng": 127.0286,
+    "radius_m": 1000,
+    "category": "all",
+    "language": "ko"
+  },
+  "places": [
+    {
+      "place_id": "skeleton-suwon-hwaseong",
+      "name": "Suwon Hwaseong",
+      "category": "attraction",
+      "distance_m": 420,
+      "lat": 37.2869,
+      "lng": 127.0116
+    }
+  ],
+  "source": "skeleton"
+}
+```
+
+`GET /api/v1/weather`:
+
+```json
+{
+  "lat": 37.2636,
+  "lng": 127.0286,
+  "temp": "11",
+  "icon": "partly-cloudy",
+  "dust": {
+    "pm10": "37",
+    "pm25": "26",
+    "grade": "normal",
+    "grade_ko": "보통"
+  },
+  "forecast": [
+    {
+      "time": "2026-06-11T12:00:00+09:00",
+      "temp": "12",
+      "icon": "partly-cloudy"
+    }
+  ],
+  "outdoor_status": "good",
+  "force": false,
+  "source": "skeleton"
+}
+```
+
+`POST /api/v1/plans/daily`:
+
+```json
+{
+  "language": "ko",
+  "center": {
+    "lat": 37.2636,
+    "lng": 127.0286
+  },
+  "weather": {
+    "outdoor_status": "good",
+    "source": "skeleton"
+  },
+  "slots": [
+    {
+      "period": "morning",
+      "title": "Start near a landmark",
+      "place": {
+        "place_id": "skeleton-suwon-hwaseong",
+        "name": "수원화성"
+      }
+    }
+  ],
+  "source": "skeleton"
+}
+```
+
+`GET /api/v1/plans/intervention`:
+
+```json
+{
+  "center": {
+    "lat": 37.2636,
+    "lng": 127.0286
+  },
+  "radius_m": 10000,
+  "should_intervene": false,
+  "reason": "Weather-aware placeholder intervention from LALA-next skeleton.",
+  "recommended_action": "Show nearby indoor or short-walk alternatives.",
+  "source": "skeleton"
+}
+```
 
 ## Live AI
 
@@ -77,7 +252,7 @@ Azure OpenAI resources exist for LALA-next, but live generation is opt-in:
 $env:LALA_ENABLE_LIVE_AI = "true"
 ```
 
-When live AI is enabled and Key Vault or environment variables provide the OpenAI settings, `POST /api/v1/docents/script` uses the `gpt-4o-mini` deployment. Otherwise it returns the deterministic skeleton fallback.
+When live AI is enabled and Key Vault or environment variables provide the OpenAI settings, `POST /api/v1/docents/script` uses the `gpt-4o-mini` deployment and returns `source: "azure_openai"`. Otherwise it returns the deterministic skeleton fallback with `source: "skeleton"`.
 
 ## Live Speech
 

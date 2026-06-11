@@ -2,7 +2,7 @@
 
 Wave 1 resources are in resource group `3dt-final-team1` in subscription `27db5ec6-d206-4028-b5e1-6004dca5eeef`.
 
-LALA-next must use only the LALA-next Key Vault, `lala-next-kv-27db5e`, with `KEY_VAULT_URL=https://lala-next-kv-27db5e.vault.azure.net/`. The existing ONMU vault, `onmu-dev-kv-27db5e`, is in the same resource group but is not used by this repository.
+LALA-next must use only the LALA-next Key Vault, `lala-next-kv-27db5e`, with `KEY_VAULT_URL=https://lala-next-kv-27db5e.vault.azure.net/`. The existing ONMU vault, `onmu-dev-kv-27db5e`, is in the same resource group but is not used by this repository. The API code allowlists the LALA-next vault host and ignores other Key Vault URLs. Secret loading tries Azure SDK credentials first and then falls back to Azure CLI for Windows dev sessions.
 
 | Resource | Name | Location | Purpose |
 |---|---|---|---|

@@ -1,6 +1,6 @@
 # Multi-Session Implementation Briefs
 
-These briefs are for visible Codex sessions that continue work after the Wave 1 skeleton is committed.
+These briefs are for visible Codex sessions that continue work after the Wave 1 skeleton is committed. After `237de74`, Wave 1 includes the FastAPI edge, `/api/v1/*` contract routes, deterministic skeleton adapters, opt-in Azure OpenAI/Speech checks, canonical SQL files, and Windows start/smoke/verification scripts.
 
 ## Controller
 
@@ -8,23 +8,23 @@ Owns branch state, merge order, verification, commit, and push.
 
 ## Session A - API Skeleton
 
-Improve FastAPI app structure, health/readiness, auth dependency, request ID handling, and response envelope.
+Maintain FastAPI app structure, health/readiness, auth dependency, request ID handling, and response envelope behavior. Keep `/healthz` and `/readyz` unauthenticated and `/api/v1/*` behind `X-API-Key`.
 
 ## Session B - V1 Routes
 
-Expand `/api/v1/*` route behavior and align schemas with Flutter needs.
+Expand `/api/v1/*` route behavior only when the Flutter contract requires it. Preserve current language normalization, JSON envelope behavior, and the audio success exception returning `audio/mpeg`.
 
 ## Session C - Service Import
 
-Port pure service logic from the legacy LALA repo without Flask, Jinja, or request/session coupling.
+Port pure service logic from the legacy LALA repo without Flask, Jinja, or request/session coupling. Current places, weather, and planner services are skeleton adapters; Azure OpenAI and Azure Speech are already live-capable behind explicit opt-in flags.
 
 ## Session D - SQL Canonical
 
-Deepen canonical SQL mapping and convert legacy SQL into safe shared migration order.
+Deepen canonical SQL mapping and convert legacy SQL into safe shared migration order. Keep canonical SQL non-destructive and place destructive reset/seed helpers under `sql/dev_reset`.
 
 ## Session E - Windows Ops
 
-Harden PowerShell start/smoke scripts and LAN backend handoff docs.
+Harden PowerShell start/smoke scripts and LAN backend handoff docs. Keep `.venv\Scripts\python.exe` auto-selection, `-Python` overrides, and `-KeyVaultUrl` live-smoke handoff documented for start, smoke, and verification flows.
 
 ## Session F - Docs/Contract
 
@@ -33,4 +33,3 @@ Keep API contract, OpenAPI usage, migration docs, and Flutter handoff synchroniz
 ## Session G - Verification
 
 Run tests, secret scans, SQL safety checks, and report residual risks.
-

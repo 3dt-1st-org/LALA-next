@@ -1,5 +1,6 @@
 param(
     [string]$BaseUrl = "http://127.0.0.1:8080",
+    [string]$KeyVaultUrl = "",
     [switch]$PaidDependency
 )
 
@@ -7,6 +8,10 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
+if ($KeyVaultUrl) {
+    [Environment]::SetEnvironmentVariable("KEY_VAULT_URL", $KeyVaultUrl, "Process")
+}
+
 $EnvFile = Join-Path $RepoRoot ".env"
 if (Test-Path $EnvFile) {
     Get-Content $EnvFile | ForEach-Object {
@@ -29,6 +34,9 @@ function Get-VaultNameFromUrl {
         return ""
     }
     $uri = [Uri]$VaultUrl
+    if ($uri.Scheme -ne "https" -or $uri.Host.ToLowerInvariant() -ne "lala-next-kv-27db5e.vault.azure.net") {
+        throw "Unsupported Key Vault URL for LALA-next: $VaultUrl"
+    }
     return $uri.Host.Split(".")[0]
 }
 
