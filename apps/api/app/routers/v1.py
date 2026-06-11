@@ -51,7 +51,15 @@ def docent_script(request: Request, body: DocentScriptRequest) -> dict:
     return success_envelope(request=request, data=payload, meta={"source": payload.get("source", "computed")})
 
 
-@router.post("/docents/audio")
+@router.post(
+    "/docents/audio",
+    responses={
+        200: {
+            "description": "Successful MP3 audio response",
+            "content": {"audio/mpeg": {"schema": {"type": "string", "format": "binary"}}},
+        }
+    },
+)
 def docent_audio(request: Request, body: DocentAudioRequest) -> Response:
     audio = docent_service.generate_audio(body)
     return Response(

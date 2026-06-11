@@ -18,11 +18,11 @@ Open or fetch:
 Export a local schema copy for Flutter handoff:
 
 ```powershell
-New-Item -ItemType Directory -Force .\artifacts\openapi | Out-Null
-Invoke-RestMethod "http://127.0.0.1:8080/openapi.json" |
-    ConvertTo-Json -Depth 100 |
-    Set-Content -Path .\artifacts\openapi\lala-next-openapi.json -Encoding UTF8
+.\scripts\windows\export_openapi.ps1 -BaseUrl "http://127.0.0.1:8080"
 ```
+
+The default output path is
+`.\artifacts\openapi\lala-next-openapi.json`.
 
 Notes:
 
