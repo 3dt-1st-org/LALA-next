@@ -13,4 +13,4 @@ build/
 logs/
 runtime/
 artifacts/tmp/
-
+artifacts/openapi/

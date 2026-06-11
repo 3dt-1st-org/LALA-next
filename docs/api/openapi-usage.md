@@ -21,6 +21,16 @@ Export a local schema copy for Flutter handoff:
 .\scripts\windows\export_openapi.ps1 -BaseUrl "http://127.0.0.1:8080"
 ```
 
+Or export without starting the API process:
+
+```powershell
+.\scripts\windows\export_openapi.ps1 -InProcess
+```
+
+For local development, omit `-Python` so the wrapper can prefer
+`.venv\Scripts\python.exe`. Use `-Python` only when the chosen interpreter has
+the LALA-next package and dependencies installed.
+
 The default output path is
 `.\artifacts\openapi\lala-next-openapi.json`.
 

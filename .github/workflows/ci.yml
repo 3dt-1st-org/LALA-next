@@ -33,6 +33,10 @@ jobs:
         shell: pwsh
         run: .\scripts\windows\smoke_workers.ps1 -Python python
 
+      - name: Export OpenAPI schema
+        shell: pwsh
+        run: .\scripts\windows\export_openapi.ps1 -InProcess -Python python
+
       - name: Verify PowerShell scripts parse
         shell: pwsh
         run: |

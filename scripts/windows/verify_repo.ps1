@@ -38,6 +38,12 @@ try {
         throw "Worker dry-run smoke failed."
     }
 
+    Write-Host "Exporting OpenAPI schema in-process..."
+    & powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\windows\export_openapi.ps1" -InProcess -Python $Python
+    if ($LASTEXITCODE -ne 0) {
+        throw "OpenAPI schema export failed."
+    }
+
     Write-Host "Checking PowerShell script syntax..."
     $parseErrors = @()
     Get-ChildItem -Path "scripts/windows" -Filter "*.ps1" | ForEach-Object {

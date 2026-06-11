@@ -29,6 +29,7 @@ The script runs:
 - Request id, request duration, public metrics, and secret-safe request logging tests.
 - Canonical SQL plan/apply guard tests.
 - Worker/batch dry-run contract tests and smoke.
+- In-process OpenAPI export tests and local handoff export.
 - SQL and documentation secret-safety tests.
 - PowerShell script parser checks.
 
@@ -103,6 +104,17 @@ To verify worker and batch boundaries without external reads or writes, run:
 
 This command lists worker contracts and dry-runs each job. It is safe without
 `DB_DSN`, Key Vault access, Event Hub access, or live Azure Functions.
+
+To export the Flutter handoff schema without running a server, run:
+
+```powershell
+.\scripts\windows\export_openapi.ps1 -InProcess
+```
+
+The schema is written under `artifacts/openapi/`, which is a local handoff
+artifact path and is ignored by git. Omit `-Python` locally unless you need to
+override the interpreter; the wrapper prefers `.venv\Scripts\python.exe` when it
+exists.
 
 Before any live DB apply, verify Azure-side database readiness:
 
