@@ -21,7 +21,8 @@ Implemented Wave 1 boundaries:
   repository reads when `DB_DSN` is configured and the canonical schema is
   available, then fall back to deterministic skeleton adapters. Places DB reads
   are radius-filtered and distance-ranked in SQL; docent-cache hits expose
-  approximate remaining TTL.
+  approximate remaining TTL. Weather DB reads prefer the nearest canonical
+  region when a matching weather location exists.
 - Canonical SQL includes read-only `v_legacy_*_api` compatibility views for
   legacy place, docent-cache, and weather handoff shapes.
 - Flutter can build against `docs/api/flutter-contract.md` without waiting for
@@ -29,7 +30,6 @@ Implemented Wave 1 boundaries:
 
 Next migration boundary:
 
-- Deepen PostgreSQL-backed repository functions with weather location matching.
 - Roll out compatibility views to a live dev database only after DB ownership is
   assigned.
 - Keep docent-cache write-back best-effort until shared DB migration ownership is

@@ -117,26 +117,45 @@ def fetch_latest_weather(*, lat: float, lng: float) -> dict[str, Any] | None:
         return None
 
     sql = """
+        WITH nearest_region AS (
+            SELECT
+                NULLIF(TRIM(region_ko), '') AS region_ko,
+                NULLIF(TRIM(region_en), '') AS region_en
+            FROM locallink.v_public_places
+            ORDER BY SQRT(POWER((lat - %s) * 111000, 2) + POWER((lng - %s) * 88000, 2))
+            LIMIT 1
+        )
         SELECT
-            location,
-            temperature,
-            precipitation_type,
-            pm10,
-            pm25,
-            is_rain_snow,
-            is_bad_dust,
-            is_heatwave,
-            is_coldwave,
-            is_strong_wind,
-            record_time
-        FROM locallink.realtime_weather_conditions
-        ORDER BY record_time DESC
+            w.location,
+            w.temperature,
+            w.precipitation_type,
+            w.pm10,
+            w.pm25,
+            w.is_rain_snow,
+            w.is_bad_dust,
+            w.is_heatwave,
+            w.is_coldwave,
+            w.is_strong_wind,
+            w.record_time,
+            CASE
+                WHEN EXISTS (
+                    SELECT 1
+                    FROM nearest_region nr
+                    WHERE LOWER(REPLACE(COALESCE(w.location, ''), ' ', '')) =
+                          LOWER(REPLACE(COALESCE(nr.region_ko, ''), ' ', ''))
+                       OR LOWER(REPLACE(COALESCE(w.location, ''), ' ', '')) =
+                          LOWER(REPLACE(COALESCE(nr.region_en, ''), ' ', ''))
+                ) THEN 0
+                ELSE 1
+            END AS location_match_rank
+        FROM locallink.realtime_weather_conditions w
+        ORDER BY location_match_rank ASC, w.record_time DESC
         LIMIT 1
     """
     try:
         with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute(sql)
+                cur.execute(sql, (lat, lng))
                 row = cur.fetchone()
     except Exception:
         return None
@@ -166,6 +185,7 @@ def fetch_latest_weather(*, lat: float, lng: float) -> dict[str, Any] | None:
         },
         "forecast": [],
         "outdoor_status": outdoor_status,
+        "location_match": row.get("location_match_rank") == 0,
         "record_time": row.get("record_time").isoformat() if row.get("record_time") else None,
         "source": "db",
     }

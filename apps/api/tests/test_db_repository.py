@@ -72,6 +72,113 @@ def test_fetch_places_uses_radius_bound_ranking_query(monkeypatch):
     assert captured["params"] == (37.2, 127.0, "all", "all", 3000)
 
 
+def test_fetch_latest_weather_prefers_nearest_region_match(monkeypatch):
+    captured = {}
+
+    class FakeCursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def execute(self, sql, params):
+            captured["sql"] = sql
+            captured["params"] = params
+
+        def fetchone(self):
+            return {
+                "location": "수원",
+                "temperature": 11.4,
+                "precipitation_type": "rain",
+                "pm10": 45,
+                "pm25": 21,
+                "is_rain_snow": True,
+                "is_bad_dust": False,
+                "is_heatwave": False,
+                "is_coldwave": False,
+                "is_strong_wind": False,
+                "record_time": datetime.now(UTC),
+                "location_match_rank": 0,
+            }
+
+    class FakeConnection:
+        def cursor(self, cursor_factory=None):
+            captured["cursor_factory"] = cursor_factory
+            return FakeCursor()
+
+        def close(self):
+            return None
+
+    psycopg2_module = types.ModuleType("psycopg2")
+    psycopg2_module.connect = lambda dsn, connect_timeout: FakeConnection()
+    extras_module = types.ModuleType("psycopg2.extras")
+    extras_module.RealDictCursor = object()
+    monkeypatch.setitem(sys.modules, "psycopg2", psycopg2_module)
+    monkeypatch.setitem(sys.modules, "psycopg2.extras", extras_module)
+    monkeypatch.setenv("DB_DSN", "postgresql://db.example/lala")
+
+    weather = db_repository.fetch_latest_weather(lat=37.2, lng=127.0)
+
+    assert weather is not None
+    assert weather["location"] == "수원"
+    assert weather["icon"] == "rain"
+    assert weather["location_match"] is True
+    assert "WITH nearest_region AS" in captured["sql"]
+    assert "ORDER BY location_match_rank ASC, w.record_time DESC" in captured["sql"]
+    assert captured["params"] == (37.2, 127.0)
+
+
+def test_fetch_latest_weather_marks_latest_fallback_without_region_match(monkeypatch):
+    class FakeCursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def execute(self, sql, params):
+            return None
+
+        def fetchone(self):
+            return {
+                "location": "fallback-station",
+                "temperature": 9.8,
+                "precipitation_type": None,
+                "pm10": 20,
+                "pm25": 11,
+                "is_rain_snow": False,
+                "is_bad_dust": False,
+                "is_heatwave": False,
+                "is_coldwave": False,
+                "is_strong_wind": False,
+                "record_time": datetime.now(UTC),
+                "location_match_rank": 1,
+            }
+
+    class FakeConnection:
+        def cursor(self, cursor_factory=None):
+            return FakeCursor()
+
+        def close(self):
+            return None
+
+    psycopg2_module = types.ModuleType("psycopg2")
+    psycopg2_module.connect = lambda dsn, connect_timeout: FakeConnection()
+    extras_module = types.ModuleType("psycopg2.extras")
+    extras_module.RealDictCursor = object()
+    monkeypatch.setitem(sys.modules, "psycopg2", psycopg2_module)
+    monkeypatch.setitem(sys.modules, "psycopg2.extras", extras_module)
+    monkeypatch.setenv("DB_DSN", "postgresql://db.example/lala")
+
+    weather = db_repository.fetch_latest_weather(lat=37.2, lng=127.0)
+
+    assert weather is not None
+    assert weather["location"] == "fallback-station"
+    assert weather["location_match"] is False
+    assert weather["outdoor_status"] == "good"
+
+
 def test_remaining_ttl_sec_reports_future_expiry():
     ttl = db_repository._remaining_ttl_sec(datetime.now(UTC) + timedelta(seconds=90))
 

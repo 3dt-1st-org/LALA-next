@@ -207,6 +207,11 @@ considered.
 }
 ```
 
+When `DB_DSN` is configured, weather reads prefer the latest row whose
+`location` matches the nearest canonical place region. If no region match is
+available, the API falls back to the latest weather row and marks
+`location_match: false`.
+
 `POST /api/v1/plans/daily`:
 
 ```json
