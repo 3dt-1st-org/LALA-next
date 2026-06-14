@@ -43,6 +43,24 @@ curl -fsS http://127.0.0.1:8080/healthz
 curl -fsS http://127.0.0.1:8080/readyz
 ```
 
+Review the local PostgreSQL MVP bootstrap plan:
+
+```bash
+scripts/unix/bootstrap_local_mvp_db.sh
+```
+
+To execute the local DB pipeline, set `LALA_POSTGRES_PASSWORD` in your shell or
+`.env`, then run the guarded local-only flow:
+
+```bash
+scripts/unix/bootstrap_local_mvp_db.sh --all
+```
+
+That starts `compose.local.yml`, applies canonical SQL, loads local demo seed
+data, computes `local-value-v1` score snapshots, and refreshes the bundled
+public MVP snapshot. The script builds a localhost `DB_DSN` internally and never
+prints it.
+
 Run the full local verification pass:
 
 ```bash

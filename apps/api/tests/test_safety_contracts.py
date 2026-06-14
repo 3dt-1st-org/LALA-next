@@ -270,6 +270,7 @@ def test_unix_scripts_have_safe_operational_guards():
     assert {
         "_common.sh",
         "apply_canonical_sql.sh",
+        "bootstrap_local_mvp_db.sh",
         "export_openapi.sh",
         "export_public_mvp_snapshot.sh",
         "handoff_report.sh",
@@ -322,6 +323,7 @@ def test_unix_scripts_have_safe_operational_guards():
     assert "plan_db_rollout" in scripts["plan_db_rollout.sh"]
     assert "does not create Azure resources" in scripts["plan_db_rollout.sh"]
     assert "plan_db_rollout.sh" in scripts["verify_repo.sh"]
+    assert "bootstrap_local_mvp_db.sh" in scripts["verify_repo.sh"]
     assert "plan_observability" in scripts["plan_observability.sh"]
     assert "does not create dashboards" in scripts["plan_observability.sh"]
     assert "plan_observability.sh" in scripts["verify_repo.sh"]
@@ -380,6 +382,13 @@ def test_unix_scripts_have_safe_operational_guards():
     assert "DB_DSN value is never printed by this script." in scripts["verify_db_schema.sh"]
     assert "DB_DSN value is never printed by this script." in scripts["apply_canonical_sql.sh"]
     assert "--confirm APPLY_CANONICAL_SQL" in scripts["apply_canonical_sql.sh"]
+    assert "compose.local.yml" in scripts["bootstrap_local_mvp_db.sh"]
+    assert "LALA_POSTGRES_PASSWORD is required" in scripts["bootstrap_local_mvp_db.sh"]
+    assert "DB_DSN and LALA_POSTGRES_PASSWORD values are never printed by this script." in scripts["bootstrap_local_mvp_db.sh"]
+    assert "ALLOW_CANONICAL_SQL_APPLY=1" in scripts["bootstrap_local_mvp_db.sh"]
+    assert "ALLOW_DEV_RESET_APPLY=1" in scripts["bootstrap_local_mvp_db.sh"]
+    assert "ALLOW_PLACE_SCORE_BATCH_APPLY=1" in scripts["bootstrap_local_mvp_db.sh"]
+    assert "ALLOW_PUBLIC_MVP_SNAPSHOT_WRITE=1" in scripts["bootstrap_local_mvp_db.sh"]
     assert "--paid-dependency" in scripts["smoke_api.sh"]
     assert "--cors-origin" in scripts["smoke_api.sh"]
     assert "smoke_cors_preflight" in scripts["smoke_api.sh"]

@@ -67,6 +67,9 @@ echo "Running local OAuth/JWT smoke..."
 echo "Planning approved DB rollout sequence..."
 "$ROOT/scripts/unix/plan_db_rollout.sh" --python "$PYTHON"
 
+echo "Planning local MVP DB bootstrap..."
+"$ROOT/scripts/unix/bootstrap_local_mvp_db.sh" --python "$PYTHON"
+
 echo "Planning observability alerts and dashboards..."
 "$ROOT/scripts/unix/plan_observability.sh" --python "$PYTHON"
 

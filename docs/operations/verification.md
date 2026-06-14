@@ -53,6 +53,37 @@ If dependencies are already installed:
 .\scripts\windows\verify_repo.ps1 -SkipInstall
 ```
 
+## Local MVP DB Bootstrap
+
+The local PostgreSQL container is defined in `compose.local.yml` and uses
+PostGIS plus pgvector from `infra/local-postgres/Dockerfile`. Review the
+bootstrap plan without starting Docker or touching a database:
+
+```bash
+scripts/unix/bootstrap_local_mvp_db.sh
+```
+
+Execution is explicit and localhost-only. Set `LALA_POSTGRES_PASSWORD` in the
+process or `.env`; optional `LALA_POSTGRES_USER`, `LALA_POSTGRES_DB`, and
+`LALA_POSTGRES_PORT` default to `lala`, `lala`, and `55432`.
+
+```bash
+scripts/unix/bootstrap_local_mvp_db.sh --start-compose
+scripts/unix/bootstrap_local_mvp_db.sh --apply-canonical
+scripts/unix/bootstrap_local_mvp_db.sh --apply-dev-reset
+scripts/unix/bootstrap_local_mvp_db.sh --score-apply
+scripts/unix/bootstrap_local_mvp_db.sh --snapshot-write
+```
+
+For a full local MVP data refresh:
+
+```bash
+scripts/unix/bootstrap_local_mvp_db.sh --all
+```
+
+The script builds a localhost `DB_DSN` inside the process, applies only existing
+guarded wrappers, and never prints `DB_DSN` or `LALA_POSTGRES_PASSWORD`.
+
 The script runs:
 
 - FastAPI route tests.
