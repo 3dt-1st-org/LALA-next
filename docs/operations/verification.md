@@ -70,6 +70,7 @@ The script runs:
 - Non-mutating DB rollout plan generation.
 - Non-mutating observability alert/dashboard plan generation.
 - Non-mutating OAuth/Entra identity rollout plan generation.
+- Non-mutating TourAPI and card-spending ingestion plan generation.
 - Non-mutating legacy Flask replacement/retirement plan generation.
 - SQL and documentation secret-safety tests.
 - PowerShell script parser checks.
@@ -282,6 +283,59 @@ $env:ALLOW_TOUR_API_INGEST_APPLY = "1"
 ```
 
 The wrapper never prints `PUBLIC_DATA_SERVICE_KEY` or `DB_DSN`.
+
+To review public card spending file ingestion without reading a source file or
+writing to the database:
+
+```bash
+scripts/unix/plan_card_spending_file_ingest.sh
+```
+
+```powershell
+.\scripts\windows\plan_card_spending_file_ingest.ps1
+```
+
+Default mode is plan-only. The supported sources are the public-data file
+datasets `경기도_카드 소비 데이터` and `경기도_데이터분석 카드매출 시군구 성연령별 집계`.
+Preview parses a downloaded CSV/XLSX file into the standard economy tables but
+does not mutate the DB:
+
+```bash
+scripts/unix/plan_card_spending_file_ingest.sh \
+  --preview \
+  --file-path local-artifacts/source-data/card-spending.csv
+```
+
+```powershell
+.\scripts\windows\plan_card_spending_file_ingest.ps1 `
+  -Preview `
+  -FilePath local-artifacts\source-data\card-spending.csv
+```
+
+Apply inserts rows into `economy.card_spending_area_monthly` and
+`economy.card_spending_demographics`, after recording the source file in
+`ingest.source_files`. It requires the exact confirm string plus a process-local
+allow flag:
+
+```bash
+ALLOW_CARD_SPENDING_FILE_INGEST_APPLY=1 \
+  scripts/unix/plan_card_spending_file_ingest.sh \
+  --apply \
+  --confirm APPLY_CARD_SPENDING_FILE_INGEST \
+  --file-path local-artifacts/source-data/card-spending.csv
+```
+
+```powershell
+$env:ALLOW_CARD_SPENDING_FILE_INGEST_APPLY = "1"
+.\scripts\windows\plan_card_spending_file_ingest.ps1 `
+  -Apply `
+  -Confirm APPLY_CARD_SPENDING_FILE_INGEST `
+  -FilePath local-artifacts\source-data\card-spending.csv
+```
+
+The wrapper never prints `DB_DSN`. If the source file only has unmapped region
+codes, pass `--region-map <path>` or `-RegionMap <path>` with a CSV/XLSX mapping
+that contains code/name columns.
 
 To export the Flutter handoff schema without running a server, run:
 

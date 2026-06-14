@@ -82,6 +82,9 @@ echo "Planning local-value place score batch..."
 echo "Planning TourAPI place ingestion..."
 "$ROOT/scripts/unix/plan_tour_api_ingest.sh" --python "$PYTHON"
 
+echo "Planning card spending file ingestion..."
+"$ROOT/scripts/unix/plan_card_spending_file_ingest.sh" --python "$PYTHON"
+
 echo "Planning legacy Flask replacement or retirement..."
 "$ROOT/scripts/unix/plan_legacy_retirement.sh" --python "$PYTHON"
 
