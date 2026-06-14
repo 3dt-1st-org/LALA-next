@@ -76,6 +76,9 @@ echo "Planning OAuth/Entra identity rollout..."
 echo "Planning safe ONMU Key Vault reuse..."
 "$ROOT/scripts/unix/plan_key_vault_reuse.sh" --python "$PYTHON"
 
+echo "Planning local-value place score batch..."
+"$ROOT/scripts/unix/plan_place_score_batch.sh" --python "$PYTHON"
+
 echo "Planning legacy Flask replacement or retirement..."
 "$ROOT/scripts/unix/plan_legacy_retirement.sh" --python "$PYTHON"
 

@@ -197,6 +197,47 @@ The plan keeps all commands pointed at the LALA-next Key Vault, rejects ONMU
 vault targets, and treats Azure Functions, Event Hub, idempotency, poison
 handling, alerts, and rollback ownership as approval gates.
 
+To review the local-value recommendation score batch without connecting to a
+database:
+
+```bash
+scripts/unix/plan_place_score_batch.sh
+```
+
+```powershell
+.\scripts\windows\plan_place_score_batch.ps1
+```
+
+Default mode is plan-only. It reports the `local-value-v1` formula, input
+relations, and target table without printing `DB_DSN`. When a canonical DB has
+`travel`, `economy`, `culture`, and `analytics` relations loaded, preview the
+rows that would be written:
+
+```bash
+scripts/unix/plan_place_score_batch.sh --preview --limit 20
+```
+
+```powershell
+.\scripts\windows\plan_place_score_batch.ps1 -Preview -Limit 20
+```
+
+Apply inserts new rows into `analytics.place_score_snapshots` and requires the
+exact confirm string plus a process-local allow flag:
+
+```bash
+ALLOW_PLACE_SCORE_BATCH_APPLY=1 \
+  scripts/unix/plan_place_score_batch.sh \
+  --apply \
+  --confirm APPLY_PLACE_SCORE_BATCH
+```
+
+```powershell
+$env:ALLOW_PLACE_SCORE_BATCH_APPLY = "1"
+.\scripts\windows\plan_place_score_batch.ps1 `
+  -Apply `
+  -Confirm APPLY_PLACE_SCORE_BATCH
+```
+
 To export the Flutter handoff schema without running a server, run:
 
 ```bash

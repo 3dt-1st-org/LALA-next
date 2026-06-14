@@ -117,6 +117,22 @@ $env:ALLOW_DEV_RESET_APPLY = "1"
   -Confirm APPLY_DEV_RESET_SQL
 ```
 
+Review the local-value place score batch without touching a database:
+
+```bash
+scripts/unix/plan_place_score_batch.sh
+```
+
+```powershell
+.\scripts\windows\plan_place_score_batch.ps1
+```
+
+After canonical SQL and local seed data are loaded, preview score snapshots:
+
+```bash
+scripts/unix/plan_place_score_batch.sh --preview --limit 20
+```
+
 Check whether Azure PostgreSQL rollout prerequisites exist:
 
 ```bash

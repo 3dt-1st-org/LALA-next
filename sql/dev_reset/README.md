@@ -39,7 +39,8 @@ $env:ALLOW_DEV_RESET_APPLY = "1"
 ```
 
 The current files seed public/demo Suwon place, weather, docent-cache,
-community, and ops rows for local DB experiments after the canonical
-schema exists. They use `ON CONFLICT` or `WHERE NOT EXISTS` guards where the
-schema has a suitable key. Live DB rollout still requires explicit approval and
-must start from `scripts/unix/verify_db_resources.sh`, not this folder.
+economy/card-spending, culture event, community, and ops rows for local DB
+experiments after the canonical schema exists. They use `ON CONFLICT` or
+`WHERE NOT EXISTS` guards where the schema has a suitable key. Live DB rollout
+still requires explicit approval and must start from
+`scripts/unix/verify_db_resources.sh`, not this folder.

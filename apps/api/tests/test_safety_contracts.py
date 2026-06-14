@@ -110,6 +110,9 @@ def test_paid_smoke_requires_authenticated_api_key():
     key_vault_reuse_script = (
         ROOT / "scripts" / "windows" / "plan_key_vault_reuse.ps1"
     ).read_text(encoding="utf-8")
+    place_score_batch_script = (
+        ROOT / "scripts" / "windows" / "plan_place_score_batch.ps1"
+    ).read_text(encoding="utf-8")
     access_log_inspect_script = (
         ROOT / "scripts" / "windows" / "inspect_access_log.ps1"
     ).read_text(encoding="utf-8")
@@ -174,6 +177,11 @@ def test_paid_smoke_requires_authenticated_api_key():
     assert "apps.api.app.tools.plan_key_vault_reuse" in key_vault_reuse_script
     assert "secret show" not in key_vault_reuse_script
     assert "secret set" not in key_vault_reuse_script
+    assert "apps.api.app.tools.run_place_score_batch" in place_score_batch_script
+    assert "ALLOW_PLACE_SCORE_BATCH_APPLY=1" in place_score_batch_script
+    assert "DB_DSN value is never printed by this script." in place_score_batch_script
+    assert "secret show" not in place_score_batch_script
+    assert "Write-Host $env:DB_DSN" not in place_score_batch_script
     assert "read-only and prints only bounded access-log fields" in access_log_inspect_script
     assert "apps.api.app.tools.inspect_access_log" in access_log_inspect_script
     assert "secret show" not in access_log_inspect_script
@@ -226,6 +234,7 @@ def test_unix_scripts_have_safe_operational_guards():
         "plan_identity_rollout.sh",
         "plan_key_vault_reuse.sh",
         "plan_observability.sh",
+        "plan_place_score_batch.sh",
         "smoke_api.sh",
         "smoke_oauth_jwt.sh",
         "smoke_workers.sh",
@@ -274,6 +283,11 @@ def test_unix_scripts_have_safe_operational_guards():
     assert "plan_key_vault_reuse.sh" in scripts["verify_repo.sh"]
     assert "secret show" not in scripts["plan_key_vault_reuse.sh"]
     assert "secret set" not in scripts["plan_key_vault_reuse.sh"]
+    assert "run_place_score_batch" in scripts["plan_place_score_batch.sh"]
+    assert "plan_place_score_batch.sh" in scripts["verify_repo.sh"]
+    assert "ALLOW_PLACE_SCORE_BATCH_APPLY=1" in scripts["plan_place_score_batch.sh"]
+    assert "--confirm APPLY_PLACE_SCORE_BATCH" in scripts["plan_place_score_batch.sh"]
+    assert "DB_DSN value is never printed by this script." in scripts["plan_place_score_batch.sh"]
     assert "--check-compat" in scripts["export_openapi.sh"]
     assert "plan_dev_reset" in scripts["plan_dev_reset.sh"]
     assert "plan_dev_reset.sh" in scripts["verify_repo.sh"]

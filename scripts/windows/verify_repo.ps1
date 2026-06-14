@@ -101,6 +101,12 @@ try {
         throw "Key Vault reuse plan failed."
     }
 
+    Write-Host "Planning local-value place score batch..."
+    & powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\windows\plan_place_score_batch.ps1" -Python $Python
+    if ($LASTEXITCODE -ne 0) {
+        throw "Place score batch plan failed."
+    }
+
     Write-Host "Planning legacy Flask replacement or retirement..."
     & powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\windows\plan_legacy_retirement.ps1" -Python $Python
     if ($LASTEXITCODE -ne 0) {

@@ -23,6 +23,7 @@ def test_load_dev_reset_sql_plan_is_local_only_and_secret_safe():
     assert [item["name"] for item in payload["files"]] == [
         "010_seed_demo_travel.sql",
         "020_seed_demo_weather_docent.sql",
+        "025_seed_demo_economy_culture.sql",
         "030_seed_demo_worker_ops.sql",
     ]
     assert payload["statement_count"] >= 3
