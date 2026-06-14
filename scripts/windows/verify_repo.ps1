@@ -113,6 +113,12 @@ try {
         throw "TourAPI ingest plan failed."
     }
 
+    Write-Host "Planning KCISA culture info ingestion..."
+    & powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\windows\plan_culture_info_ingest.ps1" -Python $Python
+    if ($LASTEXITCODE -ne 0) {
+        throw "KCISA culture info ingest plan failed."
+    }
+
     Write-Host "Planning card spending file ingestion..."
     & powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\windows\plan_card_spending_file_ingest.ps1" -Python $Python
     if ($LASTEXITCODE -ne 0) {

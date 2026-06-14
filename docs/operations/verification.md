@@ -70,7 +70,7 @@ The script runs:
 - Non-mutating DB rollout plan generation.
 - Non-mutating observability alert/dashboard plan generation.
 - Non-mutating OAuth/Entra identity rollout plan generation.
-- Non-mutating TourAPI and card-spending ingestion plan generation.
+- Non-mutating TourAPI, KCISA culture-info, and card-spending ingestion plan generation.
 - Non-mutating legacy Flask replacement/retirement plan generation.
 - SQL and documentation secret-safety tests.
 - PowerShell script parser checks.
@@ -280,6 +280,56 @@ $env:ALLOW_TOUR_API_INGEST_APPLY = "1"
   -Apply `
   -Confirm APPLY_TOUR_API_INGEST `
   -Rows 40
+```
+
+The wrapper never prints `PUBLIC_DATA_SERVICE_KEY` or `DB_DSN`.
+
+To review KCISA culture information ingestion without calling the external API
+or writing to the database:
+
+```bash
+scripts/unix/plan_culture_info_ingest.sh
+```
+
+```powershell
+.\scripts\windows\plan_culture_info_ingest.ps1
+```
+
+Default mode is plan-only. The source is the public-data
+`한국문화정보원_한눈에보는문화정보조회서비스` service and the default target is
+`culture.events`. Preview calls KCISA with `PUBLIC_DATA_SERVICE_KEY` but does not
+mutate the DB:
+
+```bash
+scripts/unix/plan_culture_info_ingest.sh --preview --sido 경기 --sigungu 수원시 --rows 20
+```
+
+```powershell
+.\scripts\windows\plan_culture_info_ingest.ps1 -Preview -Sido 경기 -Sigungu 수원시 -Rows 20
+```
+
+Apply upserts KCISA rows into `culture.events` and records an ingest hash in
+`ingest.source_files`. It requires the exact confirm string plus a process-local
+allow flag:
+
+```bash
+ALLOW_CULTURE_INFO_INGEST_APPLY=1 \
+  scripts/unix/plan_culture_info_ingest.sh \
+  --apply \
+  --confirm APPLY_CULTURE_INFO_INGEST \
+  --sido 경기 \
+  --sigungu 수원시 \
+  --rows 20
+```
+
+```powershell
+$env:ALLOW_CULTURE_INFO_INGEST_APPLY = "1"
+.\scripts\windows\plan_culture_info_ingest.ps1 `
+  -Apply `
+  -Confirm APPLY_CULTURE_INFO_INGEST `
+  -Sido 경기 `
+  -Sigungu 수원시 `
+  -Rows 20
 ```
 
 The wrapper never prints `PUBLIC_DATA_SERVICE_KEY` or `DB_DSN`.
