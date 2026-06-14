@@ -33,6 +33,20 @@ def test_places_accepts_legacy_english_language_value(client, auth_headers):
     assert body["data"]["places"][0]["name"] == "Suwon Hwaseong"
 
 
+def test_places_accepts_language_query_alias(client, auth_headers, monkeypatch):
+    monkeypatch.setenv("LALA_PUBLIC_DEMO_MODE", "true")
+    response = client.get(
+        "/api/v1/places?lat=37.2636&lng=127.0286&radius_m=50000&language=en",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["data"]["query"]["language"] == "en"
+    assert body["data"]["places"][0]["name"] == body["data"]["places"][0]["name_en"]
+    assert "Gyeonggi-do" in body["data"]["places"][0]["address"]
+
+
 def test_places_normalizes_kr_language_alias(client, auth_headers):
     response = client.get(
         "/api/v1/places?lat=37.2&lng=127.0&lang=kr",

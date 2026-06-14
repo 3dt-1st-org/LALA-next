@@ -23,13 +23,15 @@ def places(
     radius_m: int = Query(1000, gt=0, le=50000),
     category: str = Query("all"),
     lang: str = Query("ko"),
+    language: str | None = Query(None),
 ) -> dict:
+    selected_language = language or lang
     payload = places_service.list_places(
         lat=lat,
         lng=lng,
         radius_m=radius_m,
         category=category,
-        language=lang,
+        language=selected_language,
     )
     return success_envelope(request=request, data=payload, meta={"source": payload.get("source", "computed")})
 
