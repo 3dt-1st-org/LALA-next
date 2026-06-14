@@ -29,6 +29,7 @@ class Settings:
     kopis_api_key: str = ""
     public_data_service_key: str = ""
     gyeonggi_data_dream_api_key: str = ""
+    public_demo_mode: bool = False
     db_dsn: str = ""
     key_vault_url: str = ""
     azure_openai_endpoint: str = ""
@@ -77,6 +78,7 @@ class Settings:
                 "gyeonggi-data-dream-api-key",
                 key_vault_url,
             ),
+            public_demo_mode=_bool_env("LALA_PUBLIC_DEMO_MODE", default=False),
             db_dsn=_env_or_secret("DB_DSN", "db-dsn", key_vault_url),
             key_vault_url=key_vault_url,
             azure_openai_endpoint=_env_or_secret(

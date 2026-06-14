@@ -22,6 +22,7 @@ def isolate_db_env(monkeypatch) -> None:
         "OAUTH_JWKS_URL",
         "OAUTH_CLIENT_ID",
         "OAUTH_REQUIRED_SCOPES",
+        "LALA_PUBLIC_DEMO_MODE",
         "LALA_ENABLE_LIVE_AI",
         "AZURE_OPENAI_ENDPOINT",
         "AZURE_OPENAI_KEY",

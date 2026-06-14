@@ -21,6 +21,8 @@ def _worker_contract_status() -> str:
 
 
 def _client_identity_status(settings: Settings) -> str:
+    if settings.public_demo_mode:
+        return "public-demo"
     oauth_configured = all(
         (
             settings.oauth_issuer,
@@ -108,13 +110,16 @@ def _overall_runtime_mode(mode: dict[str, str]) -> str:
 def build_readiness(settings: Settings | None = None) -> dict:
     settings = settings or get_settings()
     jwt_validation_configured = is_oauth_jwt_validation_configured(settings)
+    client_auth_status = "missing"
+    if settings.public_demo_mode:
+        client_auth_status = "public-demo"
+    elif settings.ios_api_key or settings.api_bearer_token or jwt_validation_configured:
+        client_auth_status = "configured"
+
     checks = {
-        "client_auth": (
-            "configured"
-            if settings.ios_api_key or settings.api_bearer_token or jwt_validation_configured
-            else "missing"
-        ),
+        "client_auth": client_auth_status,
         "client_identity": _client_identity_status(settings),
+        "public_demo_mode": "enabled" if settings.public_demo_mode else "disabled",
         "api_key": _status(settings.ios_api_key, required=False),
         "bearer_token": _status(settings.api_bearer_token, required=False),
         "jwt_validation": "configured" if jwt_validation_configured else "skipped",

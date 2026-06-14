@@ -24,6 +24,13 @@ def require_client_auth(
 ) -> None:
     settings = get_settings()
     jwt_validation_configured = is_oauth_jwt_validation_configured(settings)
+    api_key = _normalize_header_value(x_api_key)
+    authorization_value = _normalize_header_value(authorization)
+    bearer_token = _parse_bearer_token(authorization_value)
+
+    if settings.public_demo_mode and not api_key and not authorization_value:
+        return
+
     if not settings.ios_api_key and not settings.api_bearer_token and not jwt_validation_configured:
         raise ApiError(
             status_code=503,
@@ -32,12 +39,10 @@ def require_client_auth(
             retryable=False,
         )
 
-    api_key = _normalize_header_value(x_api_key)
     if settings.ios_api_key and api_key:
         if _constant_time_secret_match(api_key, settings.ios_api_key):
             return
 
-    bearer_token = _parse_bearer_token(authorization)
     if settings.api_bearer_token and bearer_token:
         if _constant_time_secret_match(bearer_token, settings.api_bearer_token):
             return

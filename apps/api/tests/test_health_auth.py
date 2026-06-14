@@ -67,6 +67,25 @@ def test_readyz_accepts_bearer_token_as_client_auth(client, monkeypatch):
     assert body["data"]["checks"]["bearer_token"] == "configured"
 
 
+def test_readyz_reports_public_demo_mode(client, monkeypatch):
+    monkeypatch.delenv("IOS_API_KEY", raising=False)
+    monkeypatch.delenv("API_BEARER_TOKEN", raising=False)
+    monkeypatch.delenv("OAUTH_ISSUER", raising=False)
+    monkeypatch.delenv("OAUTH_AUDIENCE", raising=False)
+    monkeypatch.delenv("OAUTH_JWKS_URL", raising=False)
+    monkeypatch.delenv("OAUTH_CLIENT_ID", raising=False)
+    monkeypatch.delenv("OAUTH_REQUIRED_SCOPES", raising=False)
+    monkeypatch.setenv("LALA_PUBLIC_DEMO_MODE", "true")
+
+    response = client.get("/readyz")
+
+    assert response.status_code == 200
+    checks = response.json()["data"]["checks"]
+    assert checks["client_auth"] == "public-demo"
+    assert checks["client_identity"] == "public-demo"
+    assert checks["public_demo_mode"] == "enabled"
+
+
 def test_readyz_reports_oauth_identity_rollout_configuration(client, monkeypatch):
     monkeypatch.setenv("API_BEARER_TOKEN", "test-bearer-token")
     monkeypatch.setenv("OAUTH_ISSUER", "https://login.microsoftonline.com/tenant/v2.0")
@@ -170,6 +189,22 @@ def test_v1_requires_configured_client_auth(client, monkeypatch):
     body = response.json()
     assert body["ok"] is False
     assert body["error"]["code"] == "CLIENT_AUTH_NOT_CONFIGURED"
+
+
+def test_v1_accepts_unauthenticated_public_demo_request(client, monkeypatch):
+    monkeypatch.delenv("IOS_API_KEY", raising=False)
+    monkeypatch.delenv("API_BEARER_TOKEN", raising=False)
+    monkeypatch.delenv("OAUTH_ISSUER", raising=False)
+    monkeypatch.delenv("OAUTH_AUDIENCE", raising=False)
+    monkeypatch.delenv("OAUTH_JWKS_URL", raising=False)
+    monkeypatch.delenv("OAUTH_CLIENT_ID", raising=False)
+    monkeypatch.delenv("OAUTH_REQUIRED_SCOPES", raising=False)
+    monkeypatch.setenv("LALA_PUBLIC_DEMO_MODE", "true")
+
+    response = client.get("/api/v1/places")
+
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
 
 
 def test_v1_requires_present_credentials_when_oauth_is_configured(client, monkeypatch):

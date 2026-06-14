@@ -292,20 +292,18 @@ class _LalaHomePageState extends State<LalaHomePage> {
       LalaEnvelope<LalaDocentScript>? docentScript;
       String? loadError;
 
-      if (config.hasAuth) {
-        try {
-          places = await _backend.getPlaces();
-          weather = await _backend.getWeather();
-          intervention = await _backend.getIntervention();
-          dailyPlan = await _backend.createDailyPlan();
-          final placeItems = places.data?.places ?? const <LalaPlace>[];
-          final firstPlace = placeItems.isEmpty ? null : placeItems.first;
-          if (firstPlace != null) {
-            docentScript = await _backend.createDocentScript(place: firstPlace);
-          }
-        } on Object catch (error) {
-          loadError = _safeErrorMessage(error);
+      try {
+        places = await _backend.getPlaces();
+        weather = await _backend.getWeather();
+        intervention = await _backend.getIntervention();
+        dailyPlan = await _backend.createDailyPlan();
+        final placeItems = places.data?.places ?? const <LalaPlace>[];
+        final firstPlace = placeItems.isEmpty ? null : placeItems.first;
+        if (firstPlace != null) {
+          docentScript = await _backend.createDocentScript(place: firstPlace);
         }
+      } on Object catch (error) {
+        loadError = _safeErrorMessage(error);
       }
 
       if (!mounted) {
@@ -650,7 +648,7 @@ class _Dashboard extends StatelessWidget {
           children: [
             _RuntimePanel(readiness: readiness),
             _WeatherPanel(weather: weather),
-            _PlacesPanel(places: places, hasAuth: hasAuth),
+            _PlacesPanel(places: places),
             _PlanPanel(dailyPlan: dailyPlan, intervention: intervention),
             _DocentPanel(
               docentScript: docentScript,
@@ -833,10 +831,9 @@ class _WeatherPanel extends StatelessWidget {
 }
 
 class _PlacesPanel extends StatelessWidget {
-  const _PlacesPanel({required this.places, required this.hasAuth});
+  const _PlacesPanel({required this.places});
 
   final LalaEnvelope<LalaPlacesResponse>? places;
-  final bool hasAuth;
 
   @override
   Widget build(BuildContext context) {
@@ -851,9 +848,7 @@ class _PlacesPanel extends StatelessWidget {
           _MetricRow(label: 'Count', value: data?.count.toString() ?? '-'),
           _MetricRow(label: 'Source', value: data?.source ?? '-'),
           const SizedBox(height: 8),
-          if (!hasAuth)
-            const _MutedText('Add auth to load nearby places.')
-          else if (items.isEmpty)
+          if (items.isEmpty)
             const _MutedText('No places returned.')
           else
             ...items.map(

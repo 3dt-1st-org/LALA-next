@@ -1,0 +1,14 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api/index.py"
+    }
+  ],
+  "functions": {
+    "api/index.py": {
+      "excludeFiles": "{.venv/**,.vercel/**,artifacts/**,apps/flutter_app/**,clients/flutter/**,apps/api/tests/**,**/__pycache__/**,.pytest_cache/**,.ruff_cache/**,output/**,logs/**,runtime/**,docs/**,local-artifacts/**,scripts/**,infra/**,sql/**,build/**,*.zip}"
+    }
+  }
+}

@@ -6,7 +6,7 @@ import 'package:lala_next_app/main.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 void main() {
-  testWidgets('loads public readiness before auth is configured', (
+  testWidgets('loads public demo panels before auth is configured', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -22,7 +22,14 @@ void main() {
     expect(find.text('ok'), findsWidgets);
     expect(find.text('skeleton'), findsWidgets);
     expect(find.text('public only'), findsOneWidget);
-    expect(find.text('Add auth to load nearby places.'), findsOneWidget);
+    expect(find.text('Suwon Hwaseong'), findsOneWidget);
+    expect(find.text('22C'), findsOneWidget);
+    expect(find.textContaining('Morning landmark walk'), findsOneWidget);
+    expect(find.text('Docent story for Suwon Hwaseong.'), findsOneWidget);
+    expect(find.text('ready test-request-id'), findsOneWidget);
+    expect(find.text('places test-request-id'), findsOneWidget);
+    expect(find.text('plan test-request-id'), findsOneWidget);
+    expect(find.text('docent test-request-id'), findsOneWidget);
   });
 
   testWidgets('loads authenticated API panels with the reference contract', (

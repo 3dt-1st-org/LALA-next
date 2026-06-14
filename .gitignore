@@ -25,3 +25,4 @@ output/playwright/
 clients/flutter/.dart_tool/
 clients/flutter/pubspec.lock
 apps/flutter_app/.dart_tool/
+.vercel
