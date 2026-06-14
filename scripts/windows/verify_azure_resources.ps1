@@ -23,7 +23,21 @@ $ExpectedSecretNames = @(
 )
 $OptionalSecretNames = @(
     "api-bearer-token",
-    "db-dsn"
+    "db-dsn",
+    "cors-allow-origins",
+    "oauth-issuer",
+    "oauth-audience",
+    "oauth-jwks-url",
+    "oauth-client-id",
+    "oauth-required-scopes",
+    "kakao-rest-api-key",
+    "kakao-javascript-key",
+    "kakao-redirect-uri",
+    "naver-client-id",
+    "naver-client-secret",
+    "kopis-api-key",
+    "public-data-service-key",
+    "gyeonggi-data-dream-api-key"
 )
 
 function Invoke-AzJson {

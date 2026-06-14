@@ -16,6 +16,19 @@ class Settings:
     app_version: str = "0.1.0"
     ios_api_key: str = ""
     api_bearer_token: str = ""
+    oauth_issuer: str = ""
+    oauth_audience: str = ""
+    oauth_jwks_url: str = ""
+    oauth_client_id: str = ""
+    oauth_required_scopes: tuple[str, ...] = ()
+    kakao_rest_api_key: str = ""
+    kakao_javascript_key: str = ""
+    kakao_redirect_uri: str = ""
+    naver_client_id: str = ""
+    naver_client_secret: str = ""
+    kopis_api_key: str = ""
+    public_data_service_key: str = ""
+    gyeonggi_data_dream_api_key: str = ""
     db_dsn: str = ""
     key_vault_url: str = ""
     azure_openai_endpoint: str = ""
@@ -29,6 +42,7 @@ class Settings:
     enable_live_speech: bool = False
     cors_allow_origins: tuple[str, ...] = ()
     log_level: str = "INFO"
+    access_log_path: str = ""
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -36,6 +50,33 @@ class Settings:
         return cls(
             ios_api_key=_env_or_secret("IOS_API_KEY", "ios-api-key", key_vault_url),
             api_bearer_token=_env_or_secret("API_BEARER_TOKEN", "api-bearer-token", key_vault_url),
+            oauth_issuer=_env_or_secret("OAUTH_ISSUER", "oauth-issuer", key_vault_url),
+            oauth_audience=_env_or_secret("OAUTH_AUDIENCE", "oauth-audience", key_vault_url),
+            oauth_jwks_url=_env_or_secret("OAUTH_JWKS_URL", "oauth-jwks-url", key_vault_url),
+            oauth_client_id=_env_or_secret("OAUTH_CLIENT_ID", "oauth-client-id", key_vault_url),
+            oauth_required_scopes=_csv_value(
+                _env_or_secret("OAUTH_REQUIRED_SCOPES", "oauth-required-scopes", key_vault_url)
+            ),
+            kakao_rest_api_key=_env_or_secret("KAKAO_REST_API_KEY", "kakao-rest-api-key", key_vault_url),
+            kakao_javascript_key=_env_or_secret(
+                "KAKAO_JAVASCRIPT_KEY",
+                "kakao-javascript-key",
+                key_vault_url,
+            ),
+            kakao_redirect_uri=_env_or_secret("KAKAO_REDIRECT_URI", "kakao-redirect-uri", key_vault_url),
+            naver_client_id=_env_or_secret("NAVER_CLIENT_ID", "naver-client-id", key_vault_url),
+            naver_client_secret=_env_or_secret("NAVER_CLIENT_SECRET", "naver-client-secret", key_vault_url),
+            kopis_api_key=_env_or_secret("KOPIS_API_KEY", "kopis-api-key", key_vault_url),
+            public_data_service_key=_env_or_secret(
+                "PUBLIC_DATA_SERVICE_KEY",
+                "public-data-service-key",
+                key_vault_url,
+            ),
+            gyeonggi_data_dream_api_key=_env_or_secret(
+                "GYEONGGI_DATA_DREAM_API_KEY",
+                "gyeonggi-data-dream-api-key",
+                key_vault_url,
+            ),
             db_dsn=_env_or_secret("DB_DSN", "db-dsn", key_vault_url),
             key_vault_url=key_vault_url,
             azure_openai_endpoint=_env_or_secret(
@@ -59,8 +100,11 @@ class Settings:
             azure_speech_endpoint=_env_or_secret("AZURE_SPEECH_ENDPOINT", "azure-speech-endpoint", key_vault_url),
             azure_speech_key=_env_or_secret("AZURE_SPEECH_KEY", "azure-speech-key", key_vault_url),
             enable_live_speech=_bool_env("LALA_ENABLE_LIVE_SPEECH", default=False),
-            cors_allow_origins=_csv_env("CORS_ALLOW_ORIGINS"),
+            cors_allow_origins=_csv_value(
+                _env_or_secret("CORS_ALLOW_ORIGINS", "cors-allow-origins", key_vault_url)
+            ),
             log_level=(os.getenv("LOG_LEVEL") or "INFO").strip(),
+            access_log_path=(os.getenv("LALA_ACCESS_LOG_PATH") or "").strip(),
         )
 
 
@@ -84,6 +128,11 @@ def _bool_env(env_name: str, *, default: bool) -> bool:
 
 def _csv_env(env_name: str) -> tuple[str, ...]:
     raw = (os.getenv(env_name) or "").strip()
+    return _csv_value(raw)
+
+
+def _csv_value(raw: str) -> tuple[str, ...]:
+    raw = (raw or "").strip()
     if not raw:
         return ()
     values: list[str] = []

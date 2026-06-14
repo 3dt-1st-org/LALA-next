@@ -1,6 +1,6 @@
 # Multi-Session Implementation Briefs
 
-These briefs are for visible Codex sessions that continue work after the Wave 1 skeleton is committed. Current Wave 1 includes the FastAPI edge, `/api/v1/*` contract routes, deterministic skeleton fallbacks, opt-in Azure OpenAI/Speech checks, DB-backed read/cache hooks, docent-cache write-back, canonical SQL compatibility views, dry-run worker/batch contracts, Windows start/smoke/verification scripts, and LALA-next-only Key Vault handoff.
+These briefs are for visible Codex sessions that continue work after the Wave 1 skeleton is committed. Current Wave 1 includes the FastAPI edge, `/api/v1/*` contract routes, deterministic skeleton fallbacks, opt-in Azure OpenAI/Speech checks, DB-backed read/cache hooks, docent-cache write-back, canonical SQL compatibility views, a checked reference Dart client, dry-run worker/batch contracts, Windows start/smoke/verification scripts, and LALA-next-only Key Vault handoff.
 
 ## Controller
 
@@ -20,7 +20,7 @@ Port pure service logic from the legacy LALA repo without Flask, Jinja, or reque
 
 ## Session D - SQL Canonical
 
-Deepen canonical SQL mapping and convert legacy SQL into safe shared migration order. Keep canonical SQL non-destructive, preserve `v_legacy_*_api` compatibility view naming, and place destructive reset/seed helpers under `sql/dev_reset`.
+Deepen canonical SQL mapping and convert legacy SQL into safe shared migration order. Keep canonical SQL non-destructive, keep legacy compatibility views under `compat`, and place destructive reset/seed helpers under `sql/dev_reset`.
 Use `apply_canonical_sql.ps1` for dry-run plan review first; apply mode requires
 the explicit `APPLY_CANONICAL_SQL` confirmation and
 `ALLOW_CANONICAL_SQL_APPLY=1`.
@@ -31,7 +31,8 @@ Harden PowerShell start/smoke scripts and LAN backend handoff docs. Keep `.venv\
 
 ## Session F - Docs/Contract
 
-Keep API contract, OpenAPI usage, migration docs, and Flutter handoff synchronized.
+Keep API contract, OpenAPI usage, the reference Dart client, migration docs, and
+Flutter handoff synchronized.
 
 ## Session G - Verification
 
@@ -43,3 +44,6 @@ Maintain the dry-run job registry under `apps/workers`. Keep live mutation
 blocked until the team approves PostgreSQL target readiness, Azure Function or
 Windows scheduler ownership, Event Hub binding shape, retry/idempotency policy,
 and observability destinations.
+The registry should keep retry, idempotency, and poison-message policy visible
+in JSON output so later worker implementations do not invent those semantics
+inside hidden runtime code.

@@ -7,9 +7,9 @@ from typing import Any
 from apps.api.app.core.config import get_settings
 
 _REQUIRED_DB_RELATIONS = (
-    "locallink.v_public_places",
-    "locallink.realtime_weather_conditions",
-    "locallink.docent_cache",
+    "travel.public_places",
+    "travel.weather_observations",
+    "travel.docent_scripts",
 )
 
 
@@ -26,9 +26,9 @@ def check_db_status(dsn: str) -> str:
                 cur.execute(
                     """
                     SELECT
-                        to_regclass('locallink.v_public_places') IS NOT NULL,
-                        to_regclass('locallink.realtime_weather_conditions') IS NOT NULL,
-                        to_regclass('locallink.docent_cache') IS NOT NULL
+                        to_regclass('travel.public_places') IS NOT NULL,
+                        to_regclass('travel.weather_observations') IS NOT NULL,
+                        to_regclass('travel.docent_scripts') IS NOT NULL
                     """
                 )
                 row = cur.fetchone()
@@ -72,7 +72,7 @@ def fetch_places(
                 source,
                 updated_at,
                 SQRT(POWER((lat - %s) * 111000, 2) + POWER((lng - %s) * 88000, 2)) AS distance_m
-            FROM locallink.v_public_places
+            FROM travel.public_places
             WHERE (%s = 'all' OR category = %s)
         )
         SELECT *
@@ -136,7 +136,7 @@ def fetch_latest_weather(*, lat: float, lng: float) -> dict[str, Any] | None:
             SELECT
                 NULLIF(TRIM(region_ko), '') AS region_ko,
                 NULLIF(TRIM(region_en), '') AS region_en
-            FROM locallink.v_public_places
+            FROM travel.public_places
             ORDER BY SQRT(POWER((lat - %s) * 111000, 2) + POWER((lng - %s) * 88000, 2))
             LIMIT 1
         )
@@ -163,7 +163,7 @@ def fetch_latest_weather(*, lat: float, lng: float) -> dict[str, Any] | None:
                 ) THEN 0
                 ELSE 1
             END AS location_match_rank
-        FROM locallink.realtime_weather_conditions w
+        FROM travel.latest_weather w
         ORDER BY location_match_rank ASC, w.record_time DESC
         LIMIT 1
     """
@@ -229,10 +229,10 @@ def fetch_docent_script_cache(
             language,
             mode,
             script,
-            source,
+            source_method,
             generated_at,
             expires_at
-        FROM locallink.docent_cache
+        FROM travel.docent_scripts
         WHERE place_id = %s
           AND category = %s
           AND language = %s
@@ -259,7 +259,7 @@ def fetch_docent_script_cache(
         "mode": row["mode"],
         "script": row["script"],
         "source": "db_cache",
-        "upstream_source": row.get("source") or "unknown",
+        "upstream_source": row.get("source_method") or "unknown",
         "generated_at": row.get("generated_at").isoformat() if row.get("generated_at") else None,
         "ttl_sec": _remaining_ttl_sec(row.get("expires_at")),
     }
@@ -284,13 +284,13 @@ def save_docent_script_cache(
         return False
 
     sql = """
-        INSERT INTO locallink.docent_cache (
+        INSERT INTO travel.docent_scripts (
             place_id,
             category,
             language,
             mode,
             script,
-            source,
+            source_method,
             generated_at,
             expires_at
         )
@@ -307,7 +307,7 @@ def save_docent_script_cache(
         ON CONFLICT (place_id, category, language, mode)
         DO UPDATE SET
             script = EXCLUDED.script,
-            source = EXCLUDED.source,
+            source_method = EXCLUDED.source_method,
             generated_at = EXCLUDED.generated_at,
             expires_at = EXCLUDED.expires_at
     """

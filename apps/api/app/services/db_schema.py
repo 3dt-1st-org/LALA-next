@@ -4,25 +4,40 @@ from dataclasses import dataclass
 from typing import Any
 
 REQUIRED_EXTENSIONS = ("postgis", "vector", "pgcrypto")
-REQUIRED_SCHEMAS = ("locallink", "daangn", "monitoring")
+REQUIRED_SCHEMAS = (
+    "travel",
+    "culture",
+    "economy",
+    "community",
+    "ingest",
+    "analytics",
+    "ops",
+    "compat",
+)
 REQUIRED_RELATIONS = (
-    "locallink.places",
-    "locallink.realtime_weather_conditions",
-    "locallink.docent_cache",
-    "locallink.place_events",
-    "daangn.weekly_keywords",
-    "daangn.crawl_runs",
-    "daangn.crawl_tasks",
-    "daangn.community_posts",
-    "daangn.place_mentions_weekly",
-    "monitoring.function_runs",
-    "monitoring.dependency_checks",
-    "monitoring.cost_daily",
-    "locallink.v_public_places",
-    "locallink.v_legacy_places_api",
-    "locallink.v_legacy_docent_script_cache_api",
-    "locallink.v_latest_weather_api",
-    "monitoring.v_dependency_latest",
+    "travel.places",
+    "travel.place_enrichments",
+    "travel.weather_observations",
+    "travel.docent_scripts",
+    "travel.place_events",
+    "culture.events",
+    "economy.card_spending_area_monthly",
+    "economy.card_spending_demographics",
+    "community.keyword_watchlist",
+    "community.ingest_runs",
+    "community.ingest_tasks",
+    "community.posts",
+    "community.place_mentions_weekly",
+    "ingest.source_files",
+    "analytics.place_score_snapshots",
+    "ops.job_runs",
+    "ops.dependency_checks",
+    "ops.daily_costs",
+    "travel.public_places",
+    "travel.latest_weather",
+    "compat.legacy_places_api",
+    "compat.legacy_docent_scripts_api",
+    "ops.dependency_latest",
 )
 
 

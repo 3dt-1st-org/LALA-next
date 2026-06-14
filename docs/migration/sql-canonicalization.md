@@ -11,11 +11,12 @@ Folders:
 Canonical order:
 
 1. `000_extensions_and_schemas.sql`: PostGIS, pgvector, pgcrypto, and schemas.
-2. `010_locallink_core_tables.sql`: public place read model.
-3. `020_locallink_domain_tables.sql`: weather, docent cache, and event tables.
-4. `030_daangn_core_tables.sql`: community crawling and weekly mention tables.
-5. `040_monitoring_core_tables.sql`: function, dependency, and cost monitoring.
-6. `050_views_and_indexes.sql`: stable read views for API/reporting, plus
+2. `010_travel_core_tables.sql`: public place read model and place enrichment history.
+3. `020_travel_domain_tables.sql`: weather, docent script, and place event tables.
+4. `030_community_core_tables.sql`: provider-neutral community keyword and mention tables.
+5. `035_data_pipeline_tables.sql`: source file, culture, economy, and analytics tables.
+6. `040_ops_core_tables.sql`: job, dependency, and cost operation tables.
+7. `050_views_and_indexes.sql`: stable read views for API/reporting, plus
    read-only compatibility views for legacy Flask-shaped handoff data.
 
 Rules:
@@ -26,8 +27,35 @@ Rules:
 - Credentials and DSNs must not be committed.
 - Azure PostgreSQL remains the source of truth unless a later migration explicitly changes that decision.
 - Local Windows DB is a resettable development target only.
-- Compatibility views use explicit `v_legacy_*_api` names. They do not replace
-  or shadow legacy table names such as `docent_script_cache`.
+- Compatibility views live under the `compat` schema. They do not replace or
+  shadow canonical `travel.*` table names.
+
+## Dev Reset and Seed Plan
+
+`sql/dev_reset` is intentionally outside the shared canonical migration path.
+It can contain local-only reset or seed helpers. The default command is a
+dry-run plan:
+
+```bash
+scripts/unix/plan_dev_reset.sh
+```
+
+The plan reports file order, statement counts, SHA-256 hashes, and any secret or
+marker findings. It does not read `DB_DSN`, does not connect to PostgreSQL, and
+does not apply SQL.
+
+Apply mode exists for localhost development databases only:
+
+```bash
+ALLOW_DEV_RESET_APPLY=1 \
+  scripts/unix/plan_dev_reset.sh \
+  --apply \
+  --confirm APPLY_DEV_RESET_SQL
+```
+
+The apply guard rejects non-local hosts before connecting and still does not
+print `DB_DSN`. Current seed files insert public/demo Suwon data for local DB
+experiments after the canonical schema exists.
 
 ## Plan and Apply Guard
 
@@ -72,9 +100,11 @@ that the database already satisfies this canonical baseline:
 The verification path is intentionally read-only. It checks:
 
 - Required extensions: `postgis`, `vector`, `pgcrypto`.
-- Required schemas: `locallink`, `daangn`, `monitoring`.
-- Required API/reporting relations, including `locallink.v_public_places`,
-  `locallink.v_latest_weather_api`, and `monitoring.v_dependency_latest`.
+- Required schemas: `travel`, `culture`, `economy`, `community`, `ingest`,
+  `analytics`, `ops`, and `compat`.
+- Required API/reporting relations, including `travel.public_places`,
+  `travel.latest_weather`, `compat.legacy_places_api`, and
+  `ops.dependency_latest`.
 
 This command does not run `sql/canonical/*.sql`, does not apply migrations, and
 does not print `DB_DSN`. A non-zero exit means the DB is not yet safe to treat as

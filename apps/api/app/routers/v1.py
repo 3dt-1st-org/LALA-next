@@ -62,10 +62,15 @@ def docent_script(request: Request, body: DocentScriptRequest) -> dict:
 )
 def docent_audio(request: Request, body: DocentAudioRequest) -> Response:
     audio = docent_service.generate_audio(body)
+    identity = docent_service.audio_identity(body)
     return Response(
         content=audio,
         media_type="audio/mpeg",
-        headers={"X-Request-ID": ensure_request_id(request)},
+        headers={
+            "X-Request-ID": ensure_request_id(request),
+            "X-LALA-Request-Hash": identity["request_hash"],
+            "X-LALA-Cache-Key": identity["cache_key"],
+        },
     )
 
 

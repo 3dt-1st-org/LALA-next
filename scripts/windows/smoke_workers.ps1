@@ -25,6 +25,23 @@ try {
     }
     $listPayload = $listOutput | ConvertFrom-Json
 
+    Write-Host "Evaluating worker live preflight..."
+    $preflightArgs = @("-m", "apps.workers.app.cli", "preflight", "--json")
+    if ($JobId) {
+        $preflightArgs += @("--job-id", $JobId)
+    }
+    $preflightOutput = & $Python @preflightArgs
+    if ($LASTEXITCODE -ne 0) {
+        throw "Worker live preflight failed."
+    }
+    $preflightPayload = $preflightOutput | ConvertFrom-Json
+    if (-not $preflightPayload.ok -or $preflightPayload.mode -ne "live_preflight") {
+        throw "Worker preflight returned an unexpected payload."
+    }
+    if ($preflightPayload.ready -ne $false) {
+        throw "Worker live preflight should remain blocked in Wave 1."
+    }
+
     if ($JobId) {
         $jobIds = @($JobId)
     } else {

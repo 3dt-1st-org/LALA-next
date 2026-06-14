@@ -1,0 +1,647 @@
+from __future__ import annotations
+
+from collections.abc import Mapping
+from typing import Any
+
+from fastapi import FastAPI
+from fastapi.openapi.utils import get_openapi
+
+from apps.api.app.core.config import Settings
+
+V1_PATH_PREFIX = "/api/v1/"
+DOCENT_AUDIO_PATH = "/api/v1/docents/audio"
+HEALTHZ_PATH = "/healthz"
+METRICS_PATH = "/metrics"
+READYZ_PATH = "/readyz"
+PLACES_PATH = "/api/v1/places"
+WEATHER_PATH = "/api/v1/weather"
+DOCENT_SCRIPT_PATH = "/api/v1/docents/script"
+DAILY_PLAN_PATH = "/api/v1/plans/daily"
+INTERVENTION_PATH = "/api/v1/plans/intervention"
+
+OPERATION_TIMEOUT_SECONDS = {
+    HEALTHZ_PATH: 3,
+    METRICS_PATH: 3,
+    READYZ_PATH: 3,
+    PLACES_PATH: 5,
+    WEATHER_PATH: 5,
+    DOCENT_SCRIPT_PATH: 30,
+    DOCENT_AUDIO_PATH: 30,
+    DAILY_PLAN_PATH: 20,
+    INTERVENTION_PATH: 5,
+}
+
+
+def configure_openapi(app: FastAPI, settings: Settings) -> None:
+    def custom_openapi() -> dict[str, Any]:
+        if app.openapi_schema:
+            return app.openapi_schema
+
+        schema = get_openapi(
+            title=app.title,
+            version=settings.app_version,
+            description=app.description,
+            routes=app.routes,
+        )
+        _add_client_auth_security(schema)
+        _fix_docent_audio_success_content(schema)
+        _add_success_envelope_responses(schema)
+        _add_operation_contract_extensions(schema)
+        _add_standard_response_headers(schema)
+        app.openapi_schema = schema
+        return app.openapi_schema
+
+    app.openapi = custom_openapi  # type: ignore[method-assign]
+
+
+def _add_client_auth_security(schema: dict[str, Any]) -> None:
+    components = schema.setdefault("components", {})
+    security_schemes = components.setdefault("securitySchemes", {})
+    schemas = components.setdefault("schemas", {})
+    schemas.setdefault("ApiMeta", _api_meta_schema())
+    schemas.setdefault("ApiError", _api_error_schema())
+    schemas.setdefault("ApiSuccessEnvelope", _api_success_envelope_schema())
+    schemas.setdefault("ApiErrorEnvelope", _api_error_envelope_schema())
+    schemas.setdefault("HealthzData", _healthz_data_schema())
+    schemas.setdefault("HealthzSuccessEnvelope", _success_envelope_schema("HealthzData"))
+    schemas.setdefault("ReadinessChecks", _readiness_checks_schema())
+    schemas.setdefault("RuntimeMode", _runtime_mode_schema())
+    schemas.setdefault("ReadyzData", _readyz_data_schema())
+    schemas.setdefault("ReadyzSuccessEnvelope", _success_envelope_schema("ReadyzData"))
+    schemas.setdefault("Coordinate", _coordinate_schema())
+    schemas.setdefault("Place", _place_schema())
+    schemas.setdefault("PlacesQuery", _places_query_schema())
+    schemas.setdefault("PlacesData", _places_data_schema())
+    schemas.setdefault("PlacesSuccessEnvelope", _success_envelope_schema("PlacesData"))
+    schemas.setdefault("Dust", _dust_schema())
+    schemas.setdefault("ForecastItem", _forecast_item_schema())
+    schemas.setdefault("WeatherData", _weather_data_schema())
+    schemas.setdefault("WeatherSuccessEnvelope", _success_envelope_schema("WeatherData"))
+    schemas.setdefault("DocentScriptData", _docent_script_data_schema())
+    schemas.setdefault(
+        "DocentScriptSuccessEnvelope",
+        _success_envelope_schema("DocentScriptData"),
+    )
+    schemas.setdefault("DailyPlanSlot", _daily_plan_slot_schema())
+    schemas.setdefault("DailyPlanData", _daily_plan_data_schema())
+    schemas.setdefault("DailyPlanSuccessEnvelope", _success_envelope_schema("DailyPlanData"))
+    schemas.setdefault("InterventionData", _intervention_data_schema())
+    schemas.setdefault(
+        "InterventionSuccessEnvelope",
+        _success_envelope_schema("InterventionData"),
+    )
+
+    security_schemes["BearerAuth"] = {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Preferred client token. Accepts API_BEARER_TOKEN during migration or a signed OAuth/Entra JWT when OAuth configuration is complete.",
+    }
+    security_schemes["MigrationApiKey"] = {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "Migration client key from IOS_API_KEY.",
+    }
+
+    for path, path_item in (schema.get("paths") or {}).items():
+        if not path.startswith(V1_PATH_PREFIX) or not isinstance(path_item, Mapping):
+            continue
+        for operation in path_item.values():
+            if isinstance(operation, dict):
+                operation["security"] = [
+                    {"BearerAuth": []},
+                    {"MigrationApiKey": []},
+                ]
+                _add_error_envelope_responses(operation)
+
+
+def _add_error_envelope_responses(operation: dict[str, Any]) -> None:
+    responses = operation.setdefault("responses", {})
+    responses.setdefault(
+        "401",
+        {
+            "description": "Client authentication required or invalid.",
+            "content": {
+                "application/json": {
+                    "schema": {"$ref": "#/components/schemas/ApiErrorEnvelope"}
+                }
+            },
+        },
+    )
+    responses["422"] = {
+        "description": "Request validation failed.",
+        "content": {
+            "application/json": {
+                "schema": {"$ref": "#/components/schemas/ApiErrorEnvelope"}
+            }
+        },
+    }
+
+
+def _fix_docent_audio_success_content(schema: dict[str, Any]) -> None:
+    audio_operation = (schema.get("paths") or {}).get(DOCENT_AUDIO_PATH, {}).get("post")
+    if not isinstance(audio_operation, dict):
+        return
+    success_response = (audio_operation.get("responses") or {}).get("200")
+    if not isinstance(success_response, dict):
+        return
+    content = success_response.setdefault("content", {})
+    if "audio/mpeg" in content:
+        success_response["content"] = {"audio/mpeg": content["audio/mpeg"]}
+    _ensure_generation_identity_headers(success_response)
+
+
+def _add_success_envelope_responses(schema: dict[str, Any]) -> None:
+    for path, path_item in (schema.get("paths") or {}).items():
+        if path == DOCENT_AUDIO_PATH or not isinstance(path_item, Mapping):
+            continue
+        for operation in path_item.values():
+            if not isinstance(operation, dict):
+                continue
+            success_response = (operation.get("responses") or {}).get("200")
+            if not isinstance(success_response, dict):
+                continue
+            content = success_response.get("content") or {}
+            json_content = content.get("application/json") if isinstance(content, dict) else None
+            if isinstance(json_content, dict):
+                json_content["schema"] = _success_response_ref(path)
+
+
+def _add_operation_contract_extensions(schema: dict[str, Any]) -> None:
+    for path, path_item in (schema.get("paths") or {}).items():
+        timeout_seconds = OPERATION_TIMEOUT_SECONDS.get(path)
+        if timeout_seconds is None or not isinstance(path_item, Mapping):
+            continue
+        for operation in path_item.values():
+            if not isinstance(operation, dict):
+                continue
+            operation["x-lala-timeout-seconds"] = timeout_seconds
+            operation["x-lala-auth-required"] = path.startswith(V1_PATH_PREFIX)
+
+
+def _add_standard_response_headers(schema: dict[str, Any]) -> None:
+    for path_item in (schema.get("paths") or {}).values():
+        if not isinstance(path_item, Mapping):
+            continue
+        for operation in path_item.values():
+            if not isinstance(operation, dict):
+                continue
+            for response in (operation.get("responses") or {}).values():
+                if isinstance(response, dict):
+                    _ensure_standard_headers(response)
+
+
+def _ensure_standard_headers(response: dict[str, Any]) -> None:
+    headers = response.setdefault("headers", {})
+    headers.setdefault(
+        "X-Request-ID",
+        {
+            "description": "Safe request correlation id generated or accepted by the API.",
+            "schema": {"type": "string"},
+        },
+    )
+    headers.setdefault(
+        "X-Request-Duration-Ms",
+        {
+            "description": "Server-side request duration in milliseconds.",
+            "schema": {"type": "string"},
+        },
+    )
+
+
+def _ensure_generation_identity_headers(response: dict[str, Any]) -> None:
+    headers = response.setdefault("headers", {})
+    headers.setdefault(
+        "X-LALA-Request-Hash",
+        {
+            "description": "Deterministic SHA-256 hash of the normalized generation request.",
+            "schema": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        },
+    )
+    headers.setdefault(
+        "X-LALA-Cache-Key",
+        {
+            "description": "Opaque client-safe generation cache key derived from the request hash.",
+            "schema": {"type": "string"},
+        },
+    )
+
+
+def _api_meta_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": ["request_id"],
+        "properties": {
+            "request_id": {"type": "string"},
+        },
+        "additionalProperties": True,
+    }
+
+
+def _api_error_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": ["code", "message", "retryable"],
+        "properties": {
+            "code": {"type": "string"},
+            "message": {"type": "string"},
+            "retryable": {"type": "boolean"},
+            "details": {},
+        },
+        "additionalProperties": True,
+    }
+
+
+def _api_success_envelope_schema() -> dict[str, Any]:
+    return _success_envelope_schema()
+
+
+def _success_envelope_schema(data_schema_name: str | None = None) -> dict[str, Any]:
+    data_schema: dict[str, Any] = {}
+    if data_schema_name:
+        data_schema = {"$ref": f"#/components/schemas/{data_schema_name}"}
+    return {
+        "type": "object",
+        "required": ["ok", "data", "meta", "error"],
+        "properties": {
+            "ok": {"type": "boolean", "const": True},
+            "data": data_schema,
+            "meta": {"$ref": "#/components/schemas/ApiMeta"},
+            "error": {"type": "null"},
+        },
+        "additionalProperties": False,
+    }
+
+
+def _api_error_envelope_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": ["ok", "data", "meta", "error"],
+        "properties": {
+            "ok": {"type": "boolean", "const": False},
+            "data": {"type": "null"},
+            "meta": {"$ref": "#/components/schemas/ApiMeta"},
+            "error": {"$ref": "#/components/schemas/ApiError"},
+        },
+        "additionalProperties": False,
+    }
+
+
+def _success_response_ref(path: str) -> dict[str, Any]:
+    if path == HEALTHZ_PATH:
+        return {"$ref": "#/components/schemas/HealthzSuccessEnvelope"}
+    if path == READYZ_PATH:
+        return {"$ref": "#/components/schemas/ReadyzSuccessEnvelope"}
+    if path == PLACES_PATH:
+        return {"$ref": "#/components/schemas/PlacesSuccessEnvelope"}
+    if path == WEATHER_PATH:
+        return {"$ref": "#/components/schemas/WeatherSuccessEnvelope"}
+    if path == DOCENT_SCRIPT_PATH:
+        return {"$ref": "#/components/schemas/DocentScriptSuccessEnvelope"}
+    if path == DAILY_PLAN_PATH:
+        return {"$ref": "#/components/schemas/DailyPlanSuccessEnvelope"}
+    if path == INTERVENTION_PATH:
+        return {"$ref": "#/components/schemas/InterventionSuccessEnvelope"}
+    return {"$ref": "#/components/schemas/ApiSuccessEnvelope"}
+
+
+def _healthz_data_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": ["status", "service", "version"],
+        "properties": {
+            "status": {"type": "string", "enum": ["ok"]},
+            "service": {"type": "string", "enum": ["lala-next-api"]},
+            "version": {"type": "string"},
+        },
+        "additionalProperties": False,
+    }
+
+
+def _readyz_data_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": ["status", "checks", "mode"],
+        "properties": {
+            "status": {"type": "string", "enum": ["ok", "degraded"]},
+            "checks": {"$ref": "#/components/schemas/ReadinessChecks"},
+            "mode": {"$ref": "#/components/schemas/RuntimeMode"},
+        },
+        "additionalProperties": False,
+    }
+
+
+def _readiness_checks_schema() -> dict[str, Any]:
+    configured_or_missing = {"type": "string", "enum": ["configured", "missing"]}
+    configured_or_skipped = {"type": "string", "enum": ["configured", "skipped"]}
+    configured_skipped_degraded = {
+        "type": "string",
+        "enum": ["configured", "skipped", "degraded"],
+    }
+    enabled_or_disabled = {"type": "string", "enum": ["enabled", "disabled"]}
+    return {
+        "type": "object",
+        "required": [
+            "client_auth",
+            "client_identity",
+            "api_key",
+            "bearer_token",
+            "jwt_validation",
+            "oauth_issuer",
+            "oauth_audience",
+            "oauth_jwks_url",
+            "oauth_client_id",
+            "oauth_required_scopes",
+            "db",
+            "key_vault",
+            "azure_openai_endpoint",
+            "azure_openai_deployment",
+            "azure_openai_key",
+            "live_ai",
+            "azure_speech_region",
+            "azure_speech_endpoint",
+            "azure_speech_key",
+            "live_speech",
+            "worker_contracts",
+        ],
+        "properties": {
+            "client_auth": configured_or_missing,
+            "client_identity": {
+                "type": "string",
+                "enum": ["static", "transition", "oauth-configured", "missing"],
+            },
+            "api_key": configured_or_skipped,
+            "bearer_token": configured_or_skipped,
+            "jwt_validation": configured_or_skipped,
+            "oauth_issuer": configured_or_skipped,
+            "oauth_audience": configured_or_skipped,
+            "oauth_jwks_url": configured_or_skipped,
+            "oauth_client_id": configured_or_skipped,
+            "oauth_required_scopes": configured_or_skipped,
+            "db": configured_skipped_degraded,
+            "key_vault": configured_or_skipped,
+            "azure_openai_endpoint": configured_or_skipped,
+            "azure_openai_deployment": configured_or_skipped,
+            "azure_openai_key": configured_or_skipped,
+            "live_ai": enabled_or_disabled,
+            "azure_speech_region": configured_or_skipped,
+            "azure_speech_endpoint": configured_or_skipped,
+            "azure_speech_key": configured_or_skipped,
+            "live_speech": enabled_or_disabled,
+            "worker_contracts": {
+                "type": "string",
+                "enum": ["configured", "missing", "degraded"],
+            },
+        },
+        "additionalProperties": True,
+    }
+
+
+def _runtime_mode_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": ["overall", "data", "ai", "speech", "worker"],
+        "properties": {
+            "overall": {
+                "type": "string",
+                "enum": ["skeleton", "db-backed", "live-azure", "degraded"],
+            },
+            "data": {"type": "string", "enum": ["skeleton", "db-backed", "degraded"]},
+            "ai": {"type": "string", "enum": ["skeleton", "live-azure", "degraded"]},
+            "speech": {"type": "string", "enum": ["skeleton", "live-azure", "degraded"]},
+            "worker": {"type": "string", "enum": ["dry-run", "degraded"]},
+        },
+        "additionalProperties": False,
+    }
+
+
+def _coordinate_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": ["lat", "lng"],
+        "properties": {
+            "lat": {"type": "number", "format": "double"},
+            "lng": {"type": "number", "format": "double"},
+        },
+        "additionalProperties": False,
+    }
+
+
+def _place_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": [
+            "place_id",
+            "name",
+            "category",
+            "lat",
+            "lng",
+            "address",
+            "distance_m",
+            "source",
+        ],
+        "properties": {
+            "place_id": {"type": "string"},
+            "name": {"type": "string"},
+            "name_ko": {"type": "string", "nullable": True},
+            "name_en": {"type": "string", "nullable": True},
+            "category": {"type": "string", "enum": ["attraction", "restaurant", "event"]},
+            "lat": {"type": "number", "format": "double"},
+            "lng": {"type": "number", "format": "double"},
+            "address": {"type": "string"},
+            "region_ko": {"type": "string", "nullable": True},
+            "region_en": {"type": "string", "nullable": True},
+            "distance_m": {"type": "integer"},
+            "source": {"type": "string", "enum": ["skeleton", "db"]},
+            "upstream_source": {"type": "string", "nullable": True},
+        },
+        "additionalProperties": True,
+    }
+
+
+def _places_query_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": ["lat", "lng", "radius_m", "category", "language"],
+        "properties": {
+            "lat": {"type": "number", "format": "double"},
+            "lng": {"type": "number", "format": "double"},
+            "radius_m": {"type": "integer"},
+            "category": {"type": "string", "enum": ["all", "attraction", "restaurant", "event"]},
+            "language": {"type": "string", "enum": ["ko", "en"]},
+        },
+        "additionalProperties": False,
+    }
+
+
+def _places_data_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": ["count", "places", "query", "source"],
+        "properties": {
+            "count": {"type": "integer"},
+            "places": {
+                "type": "array",
+                "items": {"$ref": "#/components/schemas/Place"},
+            },
+            "query": {"$ref": "#/components/schemas/PlacesQuery"},
+            "source": {"type": "string", "enum": ["skeleton", "db"]},
+        },
+        "additionalProperties": False,
+    }
+
+
+def _dust_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": ["pm10", "pm25", "grade", "grade_ko"],
+        "properties": {
+            "pm10": {"type": "string"},
+            "pm25": {"type": "string"},
+            "grade": {"type": "string"},
+            "grade_ko": {"type": "string"},
+        },
+        "additionalProperties": False,
+    }
+
+
+def _forecast_item_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": ["time", "temp", "icon"],
+        "properties": {
+            "time": {"type": "string"},
+            "temp": {"type": "string"},
+            "icon": {"type": "string"},
+        },
+        "additionalProperties": False,
+    }
+
+
+def _weather_data_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": [
+            "lat",
+            "lng",
+            "temp",
+            "icon",
+            "dust",
+            "forecast",
+            "outdoor_status",
+            "force",
+            "source",
+        ],
+        "properties": {
+            "lat": {"type": "number", "format": "double"},
+            "lng": {"type": "number", "format": "double"},
+            "location": {"type": "string", "nullable": True},
+            "temp": {"type": "string"},
+            "icon": {"type": "string"},
+            "dust": {"$ref": "#/components/schemas/Dust"},
+            "forecast": {
+                "type": "array",
+                "items": {"$ref": "#/components/schemas/ForecastItem"},
+            },
+            "outdoor_status": {"type": "string", "enum": ["good", "bad"]},
+            "force": {"type": "boolean"},
+            "location_match": {"type": "boolean", "nullable": True},
+            "record_time": {"type": "string", "nullable": True},
+            "source": {"type": "string", "enum": ["skeleton", "db"]},
+        },
+        "additionalProperties": True,
+    }
+
+
+def _docent_script_data_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": [
+            "place_id",
+            "category",
+            "language",
+            "mode",
+            "script",
+            "source",
+            "request_hash",
+            "cache_key",
+        ],
+        "properties": {
+            "place_id": {"type": "string"},
+            "category": {"type": "string", "enum": ["attraction", "restaurant", "event"]},
+            "language": {"type": "string", "enum": ["ko", "en"]},
+            "mode": {"type": "string", "enum": ["brief", "detail"]},
+            "script": {"type": "string"},
+            "source": {"type": "string", "enum": ["skeleton", "db_cache", "azure_openai"]},
+            "generated_at": {"type": "string", "nullable": True},
+            "ttl_sec": {"type": "integer", "nullable": True},
+            "request_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "cache_key": {"type": "string"},
+        },
+        "additionalProperties": False,
+    }
+
+
+def _daily_plan_slot_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": ["period", "title"],
+        "properties": {
+            "period": {"type": "string"},
+            "title": {"type": "string"},
+            "place": {"$ref": "#/components/schemas/Place"},
+            "weather_hint": {"type": "string", "nullable": True},
+        },
+        "additionalProperties": False,
+    }
+
+
+def _daily_plan_data_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": [
+            "language",
+            "center",
+            "weather",
+            "slots",
+            "source",
+            "request_hash",
+            "cache_key",
+        ],
+        "properties": {
+            "language": {"type": "string", "enum": ["ko", "en"]},
+            "center": {"$ref": "#/components/schemas/Coordinate"},
+            "weather": {"$ref": "#/components/schemas/WeatherData"},
+            "slots": {
+                "type": "array",
+                "items": {"$ref": "#/components/schemas/DailyPlanSlot"},
+            },
+            "source": {"type": "string", "enum": ["skeleton", "db", "mixed"]},
+            "request_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "cache_key": {"type": "string"},
+        },
+        "additionalProperties": False,
+    }
+
+
+def _intervention_data_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": [
+            "center",
+            "radius_m",
+            "should_intervene",
+            "reason",
+            "recommended_action",
+            "source",
+        ],
+        "properties": {
+            "center": {"$ref": "#/components/schemas/Coordinate"},
+            "radius_m": {"type": "integer"},
+            "should_intervene": {"type": "boolean"},
+            "reason": {"type": "string"},
+            "recommended_action": {"type": "string"},
+            "source": {"type": "string", "enum": ["skeleton", "db"]},
+        },
+        "additionalProperties": False,
+    }

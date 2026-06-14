@@ -20,6 +20,10 @@ contract checks should set `CORS_ALLOW_ORIGINS` on the API process, for example:
 $env:CORS_ALLOW_ORIGINS = "http://localhost:3000,http://127.0.0.1:3000"
 ```
 
+When the API runs with `KEY_VAULT_URL=https://lala-next-kv-27db5e.vault.azure.net/`,
+it can also load the optional `cors-allow-origins` secret into
+`CORS_ALLOW_ORIGINS`.
+
 ## Authentication
 
 The preferred client auth header for new clients is:
@@ -28,18 +32,33 @@ The preferred client auth header for new clients is:
 Authorization: Bearer <client token>
 ```
 
-The server reads the expected bearer token from `API_BEARER_TOKEN`. During the
-migration window, the existing guard is still accepted:
+During the migration window, the server accepts the exact static bearer token
+from `API_BEARER_TOKEN`. When OAuth/Entra settings are complete
+(`OAUTH_ISSUER`, `OAUTH_AUDIENCE`, `OAUTH_JWKS_URL`, and
+`OAUTH_REQUIRED_SCOPES`), the same header can carry a signed RS256 JWT. The JWT
+must match issuer and audience and include all required scopes in `scp` or
+`roles`.
+
+The existing migration guard is still accepted:
 
 ```text
 X-API-Key: <client api key>
 ```
 
-The server reads the expected API key from `IOS_API_KEY`. Configure at least one
-of `API_BEARER_TOKEN` or `IOS_API_KEY`; if both are missing, `/api/v1/*` returns
-`CLIENT_AUTH_NOT_CONFIGURED`.
+The server reads the expected API key from `IOS_API_KEY`. Configure static
+credentials or complete OAuth/Entra JWT validation settings; if none are
+available, `/api/v1/*` returns `CLIENT_AUTH_NOT_CONFIGURED`.
+Credentials are trimmed at the header edges, compared with a constant-time
+digest comparison, and rejected when the header value is oversized or when a
+bearer token contains internal whitespace. Auth values and JWT validation
+errors are never logged into response bodies.
 
 ## Response Envelope
+
+Clients may send `X-Request-ID` for correlation. The server preserves only
+1-128 character IDs containing letters, digits, `.`, `_`, `:`, or `-`; otherwise
+it generates a new request id so arbitrary header values are not echoed or
+logged.
 
 JSON success:
 
@@ -72,14 +91,18 @@ JSON failure:
 ```
 
 `POST /api/v1/docents/audio` is the only Wave 1 exception: success returns `audio/mpeg` bytes, while failures still return the JSON envelope.
+Authentication failures and validation failures use the same failure envelope;
+the OpenAPI schema documents `/api/v1/*` 401 and 422 responses as
+`ApiErrorEnvelope`. Validation failures may include `error.details`, but raw
+request `input` values are removed before the response is returned.
 
 ## Routes
 
 | Method | Route | Purpose |
 |---|---|---|
 | GET | `/healthz` | Process liveness |
-| GET | `/readyz` | Dependency readiness summary |
-| GET | `/metrics` | Operator metrics in Prometheus text format |
+| GET | `/readyz` | Dependency readiness summary plus `data.mode` runtime mode |
+| GET | `/metrics` | Operator metrics, readiness gauges, and runtime mode gauges in Prometheus text format |
 | GET | `/api/v1/places` | Nearby place list |
 | GET | `/api/v1/weather` | Current weather context |
 | POST | `/api/v1/docents/script` | Generate or fetch docent script |
@@ -92,6 +115,38 @@ Azure OpenAI and Azure Speech are available as opt-in live paths. DB-backed
 places, weather, planner, and docent-cache reads are also available when
 `DB_DSN` points at the canonical schema. If DB access is absent or unavailable,
 the same routes return contract-safe skeleton data.
+Flutter can read `/readyz.data.mode.overall` for a compact handoff label:
+`skeleton`, `db-backed`, `live-azure`, or `degraded`. Component labels are also
+available at `data.mode.data`, `data.mode.ai`, `data.mode.speech`, and
+`data.mode.worker`.
+The reference Dart client exposes public `getHealth()` and `getReadiness()`
+methods without requiring client auth; `/api/v1/*` client methods still require
+`Authorization: Bearer <token>` or `X-API-Key`.
+The first Flutter app shell displays latest readiness, `/api/v1/*`, and audio
+request ids from response metadata/headers so handoff testers can correlate a
+screen state with server JSONL access logs without exposing credentials or
+request bodies.
+It also parses the main `/api/v1/*` JSON payloads into typed DTOs
+(`LalaPlacesResponse`, `LalaWeather`, `LalaDocentScript`, `LalaDailyPlan`, and
+`LalaIntervention`) so Flutter screens do not have to index raw maps for the
+common contract fields.
+The generated OpenAPI schema mirrors those common DTO fields through
+route-specific success envelope schemas for places, weather, docent script,
+daily plan, and intervention responses.
+The first Flutter app shell in `apps/flutter_app` uses that reference client
+for public readiness and authenticated `/api/v1/*` panels.
+Generation routes expose deterministic client-safe identity values: JSON
+generation responses include `request_hash` and `cache_key`; the binary audio
+success response exposes the same information through `X-LALA-Request-Hash` and
+`X-LALA-Cache-Key` headers. Hashes are derived from normalized request fields
+and do not expose raw credentials.
+Client-side timeout expectations are bounded in the reference client:
+health/readiness 3s, places/weather/intervention reads 5s, daily plan 20s, and
+docent script/audio generation 30s. Each method accepts a `timeout:` override;
+timeouts are reported as retryable `LalaApiException(code: REQUEST_TIMEOUT)`
+without exposing response bodies or credentials. The generated OpenAPI schema
+mirrors these defaults through `x-lala-timeout-seconds`; it also marks
+`/api/v1/*` operations with `x-lala-auth-required: true`.
 
 ## Route Details
 
@@ -132,6 +187,8 @@ Request:
 
 `category` must be `attraction`, `restaurant`, or `event`. `mode` accepts
 `brief`, `detail`, `standard`, and `deep`.
+Success data includes `request_hash` and `cache_key` for idempotency-aware
+client flows.
 
 ### `POST /api/v1/docents/audio`
 
@@ -144,7 +201,8 @@ Request:
 }
 ```
 
-Success returns `audio/mpeg` bytes and an `X-Request-ID` response header.
+Success returns `audio/mpeg` bytes plus `X-Request-ID`,
+`X-LALA-Request-Hash`, and `X-LALA-Cache-Key` response headers.
 
 ### `POST /api/v1/plans/daily`
 
@@ -157,6 +215,9 @@ Request:
   "language": "ko"
 }
 ```
+
+Success data includes `request_hash` and `cache_key` for idempotency-aware
+client flows.
 
 ### `GET /api/v1/plans/intervention`
 
@@ -285,12 +346,12 @@ $env:LALA_ENABLE_LIVE_AI = "true"
 
 When live AI is enabled and Key Vault or environment variables provide the OpenAI settings, `POST /api/v1/docents/script` uses the `gpt-4o-mini` deployment and returns `source: "azure_openai"`. Otherwise it returns the deterministic skeleton fallback with `source: "skeleton"`.
 
-If `DB_DSN` is configured and `locallink.docent_cache` has a matching non-expired
+If `DB_DSN` is configured and `travel.docent_scripts` has a matching non-expired
 entry, the script route returns the cached script before calling Azure OpenAI.
 Those cache hits return `source: "db_cache"` and `ttl_sec` as the approximate
 remaining seconds until `expires_at`.
 When live Azure OpenAI generation succeeds and `DB_DSN` is configured, the route
-best-effort writes the generated script back to `locallink.docent_cache`.
+best-effort writes the generated script back to `travel.docent_scripts`.
 Database write failures do not fail the API response.
 
 ## Live Speech

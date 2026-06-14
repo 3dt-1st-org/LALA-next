@@ -10,8 +10,9 @@ from fastapi.responses import JSONResponse
 from apps.api.app.core.config import get_settings
 from apps.api.app.core.errors import ApiError
 from apps.api.app.core.metrics import RuntimeMetrics, route_path_from_scope
-from apps.api.app.core.observability import configure_logging, request_log_extra
-from apps.api.app.core.responses import error_envelope, ensure_request_id
+from apps.api.app.core.observability import append_access_log, configure_logging, request_log_extra
+from apps.api.app.core.openapi import configure_openapi
+from apps.api.app.core.responses import error_envelope, ensure_request_id, safe_validation_details
 from apps.api.app.routers.health import router as health_router
 from apps.api.app.routers.v1 import router as v1_router
 
@@ -52,6 +53,14 @@ def create_app() -> FastAPI:
                 duration_ms=duration_ms,
             )
         client_host = request.client.host if request.client else ""
+        access_log_record = request_log_extra(
+            request_id=request_id,
+            method=request.method,
+            path=metric_path,
+            status_code=response.status_code,
+            duration_ms=duration_ms,
+            client_host=client_host,
+        )
         logger.info(
             (
                 "request_completed request_id=%s method=%s path=%s "
@@ -63,15 +72,9 @@ def create_app() -> FastAPI:
             response.status_code,
             duration_ms,
             client_host,
-            extra=request_log_extra(
-                request_id=request_id,
-                method=request.method,
-                path=metric_path,
-                status_code=response.status_code,
-                duration_ms=duration_ms,
-                client_host=client_host,
-            ),
+            extra=access_log_record,
         )
+        append_access_log(settings.access_log_path, access_log_record, logger)
         return response
 
     @app.exception_handler(ApiError)
@@ -95,12 +98,13 @@ def create_app() -> FastAPI:
                 code="VALIDATION_ERROR",
                 message="Request validation failed.",
                 retryable=False,
-                details=exc.errors(),
+                details=safe_validation_details(exc.errors()),
             ),
         )
 
     app.include_router(health_router)
     app.include_router(v1_router)
+    configure_openapi(app, settings)
     return app
 
 

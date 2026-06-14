@@ -37,9 +37,9 @@ def test_check_db_status_requires_canonical_relations(monkeypatch):
     status = db_repository.check_db_status("postgresql://db.example/lala")
 
     assert status == "configured"
-    assert "to_regclass('locallink.v_public_places')" in captured["sql"]
-    assert "to_regclass('locallink.realtime_weather_conditions')" in captured["sql"]
-    assert "to_regclass('locallink.docent_cache')" in captured["sql"]
+    assert "to_regclass('travel.public_places')" in captured["sql"]
+    assert "to_regclass('travel.weather_observations')" in captured["sql"]
+    assert "to_regclass('travel.docent_scripts')" in captured["sql"]
 
 
 def test_check_db_status_degrades_when_canonical_relation_is_missing(monkeypatch):

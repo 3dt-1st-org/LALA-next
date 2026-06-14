@@ -1,12 +1,29 @@
 from __future__ import annotations
 
 import re
+import shutil
+import subprocess
 from pathlib import Path
+
+import pytest
 
 from apps.api.app.core.key_vault import is_allowed_key_vault_url, key_vault_name_from_url
 
 ROOT = Path(__file__).resolve().parents[3]
-TEXT_SUFFIXES = {".env", ".example", ".md", ".ps1", ".py", ".sql", ".toml", ".txt"}
+TEXT_SUFFIXES = {
+    ".dart",
+    ".env",
+    ".example",
+    ".md",
+    ".ps1",
+    ".py",
+    ".sh",
+    ".sql",
+    ".toml",
+    ".txt",
+    ".yaml",
+    ".yml",
+}
 
 
 def test_canonical_sql_has_no_shared_destructive_statements():
@@ -32,9 +49,9 @@ def test_canonical_sql_declares_compatibility_views():
         encoding="utf-8"
     )
 
-    assert "locallink.v_legacy_places_api" in views_sql
-    assert "locallink.v_legacy_docent_script_cache_api" in views_sql
-    assert "locallink.v_latest_weather_api" in views_sql
+    assert "compat.legacy_places_api" in views_sql
+    assert "compat.legacy_docent_scripts_api" in views_sql
+    assert "travel.latest_weather" in views_sql
 
 
 def test_repo_docs_and_scripts_do_not_contain_secret_literals():
@@ -43,6 +60,7 @@ def test_repo_docs_and_scripts_do_not_contain_secret_literals():
         ROOT / "scripts",
         ROOT / "sql",
         ROOT / "docs",
+        ROOT / "clients",
         ROOT / "apps" / "api" / "app",
         ROOT / "apps" / "workers" / "app",
     ]
@@ -83,24 +101,61 @@ def test_paid_smoke_requires_authenticated_api_key():
     db_resources_script = (
         ROOT / "scripts" / "windows" / "verify_db_resources.ps1"
     ).read_text(encoding="utf-8")
+    db_rollout_plan_script = (
+        ROOT / "scripts" / "windows" / "plan_db_rollout.ps1"
+    ).read_text(encoding="utf-8")
+    observability_plan_script = (
+        ROOT / "scripts" / "windows" / "plan_observability.ps1"
+    ).read_text(encoding="utf-8")
+    key_vault_reuse_script = (
+        ROOT / "scripts" / "windows" / "plan_key_vault_reuse.ps1"
+    ).read_text(encoding="utf-8")
+    access_log_inspect_script = (
+        ROOT / "scripts" / "windows" / "inspect_access_log.ps1"
+    ).read_text(encoding="utf-8")
     apply_sql_script = (ROOT / "scripts" / "windows" / "apply_canonical_sql.ps1").read_text(
+        encoding="utf-8"
+    )
+    flutter_client_script = (
+        ROOT / "scripts" / "windows" / "verify_flutter_client.ps1"
+    ).read_text(encoding="utf-8")
+    flutter_web_smoke_script = (
+        ROOT / "scripts" / "windows" / "smoke_flutter_web.ps1"
+    ).read_text(encoding="utf-8")
+    dev_reset_script = (ROOT / "scripts" / "windows" / "plan_dev_reset.ps1").read_text(
         encoding="utf-8"
     )
     worker_smoke_script = (
         ROOT / "scripts" / "windows" / "smoke_workers.ps1"
     ).read_text(encoding="utf-8")
+    oauth_smoke_script = (
+        ROOT / "scripts" / "windows" / "smoke_oauth_jwt.ps1"
+    ).read_text(encoding="utf-8")
     worker_contracts = (
         ROOT / "apps" / "workers" / "app" / "contracts.py"
+    ).read_text(encoding="utf-8")
+    oauth_smoke_tool = (
+        ROOT / "apps" / "api" / "app" / "tools" / "smoke_oauth_jwt.py"
     ).read_text(encoding="utf-8")
     apply_sql_tool = (
         ROOT / "apps" / "api" / "app" / "tools" / "apply_canonical_sql.py"
     ).read_text(encoding="utf-8")
 
     assert "[string]$KeyVaultUrl" in script
+    assert "[string]$CorsOrigin" in script
     assert "[string]$KeyVaultUrl" in start_script
+    assert "[string]$AccessLogPath" in start_script
     assert "lala-next-kv-27db5e.vault.azure.net" in script
     assert "lala-next-kv-27db5e.vault.azure.net" in start_script
+    assert "cors-allow-origins" in start_script
+    assert "LALA_ACCESS_LOG_PATH" in start_script
     assert "if ($PaidDependency)" in script
+    assert "Invoke-SmokeReadyz" in script
+    assert "runtime_mode=" in script
+    assert "identity=" in script
+    assert "LALA_SMOKE_BEARER_TOKEN" in script
+    assert "LALA_SMOKE_API_KEY" in script
+    assert "Invoke-SmokeCorsPreflight" in script
     assert "Client auth is required for paid dependency smoke" in script
     assert "--no-access-log" in start_script
     assert "DB_DSN value is never printed by this script." in db_schema_script
@@ -109,14 +164,162 @@ def test_paid_smoke_requires_authenticated_api_key():
     assert "Secret values are never printed by this script." in db_resources_script
     assert "secret show" not in db_resources_script
     assert "db-dsn" in db_resources_script
+    assert "does not create Azure resources" in db_rollout_plan_script
+    assert "apps.api.app.tools.plan_db_rollout" in db_rollout_plan_script
+    assert "secret show" not in db_rollout_plan_script
+    assert "does not create dashboards" in observability_plan_script
+    assert "apps.api.app.tools.plan_observability" in observability_plan_script
+    assert "secret show" not in observability_plan_script
+    assert "does not read or print secret values" in key_vault_reuse_script
+    assert "apps.api.app.tools.plan_key_vault_reuse" in key_vault_reuse_script
+    assert "secret show" not in key_vault_reuse_script
+    assert "secret set" not in key_vault_reuse_script
+    assert "read-only and prints only bounded access-log fields" in access_log_inspect_script
+    assert "apps.api.app.tools.inspect_access_log" in access_log_inspect_script
+    assert "secret show" not in access_log_inspect_script
+    assert "Write-Host $env:DB_DSN" not in access_log_inspect_script
     assert "Default mode is dry-run plan only." in apply_sql_script
     assert "Write-Host $env:DB_DSN" not in apply_sql_script
+    assert "ALLOW_DEV_RESET_APPLY=1" in dev_reset_script
+    assert "DB_DSN value is never printed by this script." in dev_reset_script
+    assert "apps.api.app.tools.plan_dev_reset" in dev_reset_script
+    assert "Write-Host $env:DB_DSN" not in dev_reset_script
     assert "-m apps.workers.app.cli" in worker_smoke_script
     assert "--dry-run" in worker_smoke_script
+    assert "preflight" in worker_smoke_script
     assert "Write-Host $env:DB_DSN" not in worker_smoke_script
+    assert "apps.api.app.tools.smoke_oauth_jwt" in oauth_smoke_script
+    assert "local JWKS server" in oauth_smoke_script
+    assert "az " not in oauth_smoke_script
+    assert "LALA_SMOKE_BEARER_TOKEN" in oauth_smoke_tool
+    assert "API_BEARER_TOKEN" in oauth_smoke_tool
+    assert "secret show" not in oauth_smoke_tool
+    assert "playwright-cli" in flutter_web_smoke_script
+    assert "--no-wasm-dry-run" in flutter_web_smoke_script
+    assert "KEY_VAULT_URL\", \"\"" in flutter_web_smoke_script
+    assert "DB_DSN\", \"\"" in flutter_web_smoke_script
+    assert "LALA_ENABLE_LIVE_AI\", \"false\"" in flutter_web_smoke_script
+    assert "LALA_ENABLE_LIVE_SPEECH\", \"false\"" in flutter_web_smoke_script
+    assert "CORS_ALLOW_ORIGINS" in flutter_web_smoke_script
+    assert "/api/v1/docents/script" in flutter_web_smoke_script
+    assert "secret show" not in flutter_web_smoke_script
     assert "ALLOW_WORKER_MUTATION" in worker_contracts
     assert "ALLOW_CANONICAL_SQL_APPLY" in apply_sql_tool
     assert "APPLY_CANONICAL_SQL" in apply_sql_tool
+    assert "Dart SDK is not available" in flutter_client_script
+    assert "dart analyze" in flutter_client_script
+    assert "dart test" in flutter_client_script
+
+
+def test_unix_scripts_have_safe_operational_guards():
+    unix_dir = ROOT / "scripts" / "unix"
+    scripts = {path.name: path.read_text(encoding="utf-8") for path in unix_dir.glob("*.sh")}
+
+    assert {
+        "_common.sh",
+        "apply_canonical_sql.sh",
+        "export_openapi.sh",
+        "handoff_report.sh",
+        "inspect_access_log.sh",
+        "plan_db_rollout.sh",
+        "plan_dev_reset.sh",
+        "plan_identity_rollout.sh",
+        "plan_key_vault_reuse.sh",
+        "plan_observability.sh",
+        "smoke_api.sh",
+        "smoke_oauth_jwt.sh",
+        "smoke_workers.sh",
+        "start_api.sh",
+        "verify_azure_resources.sh",
+        "verify_db_resources.sh",
+        "verify_db_schema.sh",
+        "verify_flutter_client.sh",
+        "verify_repo.sh",
+    }.issubset(scripts)
+
+    assert "lala-next-kv-27db5e.vault.azure.net" in scripts["_common.sh"]
+    assert "Unsupported Key Vault URL for LALA-next" in scripts["_common.sh"]
+    assert "Worker smoke uses dry-run only" in scripts["smoke_workers.sh"]
+    assert "--dry-run" in scripts["smoke_workers.sh"]
+    assert "preflight" in scripts["smoke_workers.sh"]
+    assert "Live Azure checks are intentionally excluded" in scripts["verify_repo.sh"]
+    assert "check_flutter_client_contract" in scripts["verify_repo.sh"]
+    assert "verify_flutter_client.sh" in scripts["verify_repo.sh"]
+    assert "smoke_oauth_jwt.sh" in scripts["verify_repo.sh"]
+    assert "local JWKS server" in scripts["smoke_oauth_jwt.sh"]
+    assert "apps.api.app.tools.smoke_oauth_jwt" in scripts["smoke_oauth_jwt.sh"]
+    assert "az " not in scripts["smoke_oauth_jwt.sh"]
+    assert "Dart SDK is not available" in scripts["verify_flutter_client.sh"]
+    assert "dart analyze" in scripts["verify_flutter_client.sh"]
+    assert "dart test" in scripts["verify_flutter_client.sh"]
+    assert "Risk Gates" in scripts["handoff_report.sh"]
+    assert "OpenAPI Compatibility" in scripts["handoff_report.sh"]
+    assert "check_openapi_compat" in scripts["handoff_report.sh"]
+    assert "verify_db_resources.sh" in scripts["handoff_report.sh"]
+    assert "secret show" not in scripts["handoff_report.sh"]
+    assert "inspect_access_log" in scripts["inspect_access_log.sh"]
+    assert "read-only and prints only bounded access-log fields" in scripts["inspect_access_log.sh"]
+    assert "secret show" not in scripts["inspect_access_log.sh"]
+    assert "plan_db_rollout" in scripts["plan_db_rollout.sh"]
+    assert "does not create Azure resources" in scripts["plan_db_rollout.sh"]
+    assert "plan_db_rollout.sh" in scripts["verify_repo.sh"]
+    assert "plan_observability" in scripts["plan_observability.sh"]
+    assert "does not create dashboards" in scripts["plan_observability.sh"]
+    assert "plan_observability.sh" in scripts["verify_repo.sh"]
+    assert "plan_identity_rollout" in scripts["plan_identity_rollout.sh"]
+    assert "does not create Entra apps" in scripts["plan_identity_rollout.sh"]
+    assert "plan_identity_rollout.sh" in scripts["verify_repo.sh"]
+    assert "plan_key_vault_reuse" in scripts["plan_key_vault_reuse.sh"]
+    assert "does not read or print secret values" in scripts["plan_key_vault_reuse.sh"]
+    assert "plan_key_vault_reuse.sh" in scripts["verify_repo.sh"]
+    assert "secret show" not in scripts["plan_key_vault_reuse.sh"]
+    assert "secret set" not in scripts["plan_key_vault_reuse.sh"]
+    assert "--check-compat" in scripts["export_openapi.sh"]
+    assert "plan_dev_reset" in scripts["plan_dev_reset.sh"]
+    assert "plan_dev_reset.sh" in scripts["verify_repo.sh"]
+    assert "ALLOW_DEV_RESET_APPLY=1" in scripts["plan_dev_reset.sh"]
+    assert "--confirm APPLY_DEV_RESET_SQL" in scripts["plan_dev_reset.sh"]
+    assert "DB_DSN value is never printed by this script." in scripts["plan_dev_reset.sh"]
+    assert "secret list" in scripts["verify_db_resources.sh"]
+    assert "secret show" not in scripts["verify_db_resources.sh"]
+    assert "db-dsn" in scripts["verify_db_resources.sh"]
+    assert "DB_DSN value is never printed by this script." in scripts["verify_db_schema.sh"]
+    assert "DB_DSN value is never printed by this script." in scripts["apply_canonical_sql.sh"]
+    assert "--confirm APPLY_CANONICAL_SQL" in scripts["apply_canonical_sql.sh"]
+    assert "--paid-dependency" in scripts["smoke_api.sh"]
+    assert "--cors-origin" in scripts["smoke_api.sh"]
+    assert "smoke_cors_preflight" in scripts["smoke_api.sh"]
+    assert "smoke_readyz" in scripts["smoke_api.sh"]
+    assert "runtime_mode=" in scripts["smoke_api.sh"]
+    assert "identity=" in scripts["smoke_api.sh"]
+    assert "LALA_SMOKE_BEARER_TOKEN" in scripts["smoke_api.sh"]
+    assert "LALA_SMOKE_API_KEY" in scripts["smoke_api.sh"]
+    assert "Client auth is required for paid dependency smoke" in scripts["smoke_api.sh"]
+    assert "write_auth_config" in scripts["smoke_api.sh"]
+    assert 'CURL_AUTH_ARGS=(-K "$AUTH_CONFIG_FILE")' in scripts["smoke_api.sh"]
+    assert "AUTH_HEADER=(-H" not in scripts["smoke_api.sh"]
+    assert "--no-access-log" in scripts["start_api.sh"]
+    assert "--access-log-path" in scripts["start_api.sh"]
+    assert "LALA_ACCESS_LOG_PATH" in scripts["start_api.sh"]
+    assert "env_status API_BEARER_TOKEN" in scripts["start_api.sh"]
+    assert "env_status CORS_ALLOW_ORIGINS" in scripts["start_api.sh"]
+    assert "cors-allow-origins" in scripts["_common.sh"]
+
+
+def test_unix_scripts_parse_with_bash():
+    bash = shutil.which("bash")
+    if not bash:
+        pytest.skip("bash is not available")
+
+    scripts = sorted((ROOT / "scripts" / "unix").glob("*.sh"))
+    result = subprocess.run(
+        [bash, "-n", *[str(path) for path in scripts]],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_key_vault_url_is_lala_next_only():

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 
 def test_places_route_returns_envelope(client, auth_headers):
     response = client.get(
@@ -88,6 +90,23 @@ def test_places_rejects_out_of_range_coordinates(client, auth_headers):
     assert body["error"]["code"] == "VALIDATION_ERROR"
 
 
+def test_validation_error_details_do_not_echo_input_values(client, auth_headers):
+    marker = "should-not-be-echoed-validation-input"
+    response = client.post(
+        "/api/v1/docents/audio",
+        headers=auth_headers,
+        json={"script": {"secret": marker}, "language": "ko"},
+    )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert body["ok"] is False
+    assert body["error"]["code"] == "VALIDATION_ERROR"
+    assert "details" in body["error"]
+    assert '"input"' not in response.text
+    assert marker not in response.text
+
+
 def test_weather_route_returns_envelope(client, auth_headers):
     response = client.get("/api/v1/weather?lat=37.2&lng=127.0", headers=auth_headers)
 
@@ -140,6 +159,8 @@ def test_docent_script_returns_envelope(client, auth_headers):
     assert body["data"]["place_id"] == "event-1"
     assert body["data"]["script"]
     assert body["data"]["source"] == "skeleton"
+    assert len(body["data"]["request_hash"]) == 64
+    assert body["data"]["cache_key"].startswith("docent_script:")
 
 
 def test_docent_script_uses_db_cache_before_generation(client, auth_headers, monkeypatch):
@@ -172,6 +193,8 @@ def test_docent_script_uses_db_cache_before_generation(client, auth_headers, mon
     body = response.json()
     assert body["data"]["source"] == "db_cache"
     assert body["data"]["script"] == "Cached DB docent script."
+    assert len(body["data"]["request_hash"]) == 64
+    assert body["data"]["cache_key"].startswith("docent_script:")
 
 
 def test_docent_script_accepts_legacy_detail_mode_and_english_language(client, auth_headers):
@@ -192,6 +215,29 @@ def test_docent_script_accepts_legacy_detail_mode_and_english_language(client, a
     assert body["data"]["language"] == "en"
     assert body["data"]["mode"] == "detail"
     assert "detail English docent script" in body["data"]["script"]
+
+
+def test_docent_script_generation_identity_is_deterministic(client, auth_headers):
+    payload = {
+        "place_id": " event-identity ",
+        "category": "event",
+        "language": "English",
+        "mode": "detail",
+    }
+
+    first = client.post("/api/v1/docents/script", headers=auth_headers, json=payload)
+    second = client.post(
+        "/api/v1/docents/script",
+        headers=auth_headers,
+        json={**payload, "place_id": "event-identity", "language": "en"},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    first_data = first.json()["data"]
+    second_data = second.json()["data"]
+    assert first_data["request_hash"] == second_data["request_hash"]
+    assert first_data["cache_key"] == second_data["cache_key"]
 
 
 def test_docent_script_uses_live_ai_when_enabled(client, auth_headers, monkeypatch):
@@ -247,7 +293,9 @@ def test_docent_script_cache_write_failure_keeps_live_ai_response(
     client,
     auth_headers,
     monkeypatch,
+    caplog,
 ):
+    caplog.set_level(logging.WARNING, logger="lala_next.api")
     monkeypatch.setenv("LALA_ENABLE_LIVE_AI", "true")
     monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.openai.azure.com/")
     monkeypatch.setenv("AZURE_OPENAI_KEY", "test-key")
@@ -289,6 +337,14 @@ def test_docent_script_cache_write_failure_keeps_live_ai_response(
     assert body["data"]["source"] == "azure_openai"
     assert body["data"]["script"] == "AI script for event-write-fail"
     assert len(saved_calls) == 1
+    rendered_logs = " ".join(
+        record.getMessage()
+        for record in caplog.records
+        if record.name == "lala_next.api"
+    )
+    assert "docent_script_write_failed" in rendered_logs
+    assert "event-write-fail" in rendered_logs
+    assert "AI script for event-write-fail" not in rendered_logs
 
 
 def test_docent_script_skeleton_fallback_does_not_write_cache(
@@ -334,6 +390,8 @@ def test_docent_audio_success_returns_mpeg(client, auth_headers):
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("audio/mpeg")
     assert response.content.startswith(b"ID3")
+    assert len(response.headers["x-lala-request-hash"]) == 64
+    assert response.headers["x-lala-cache-key"].startswith("docent_audio:")
 
 
 def test_docent_audio_accepts_korean_language_alias(client, auth_headers):
@@ -346,6 +404,24 @@ def test_docent_audio_accepts_korean_language_alias(client, auth_headers):
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("audio/mpeg")
     assert b"ko: hello" in response.content
+
+
+def test_docent_audio_generation_identity_uses_normalized_request(client, auth_headers):
+    first = client.post(
+        "/api/v1/docents/audio",
+        headers=auth_headers,
+        json={"script": " hello ", "language": "Korean"},
+    )
+    second = client.post(
+        "/api/v1/docents/audio",
+        headers=auth_headers,
+        json={"script": "hello", "language": "ko"},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.headers["x-lala-request-hash"] == second.headers["x-lala-request-hash"]
+    assert first.headers["x-lala-cache-key"] == second.headers["x-lala-cache-key"]
 
 
 def test_docent_audio_uses_live_speech_when_enabled(client, auth_headers, monkeypatch):
@@ -392,6 +468,8 @@ def test_daily_plan_route_returns_envelope(client, auth_headers):
     body = response.json()
     assert body["ok"] is True
     assert body["data"]["slots"]
+    assert len(body["data"]["request_hash"]) == 64
+    assert body["data"]["cache_key"].startswith("daily_plan:")
 
 
 def test_daily_plan_normalizes_english_language(client, auth_headers):
@@ -405,6 +483,38 @@ def test_daily_plan_normalizes_english_language(client, auth_headers):
     body = response.json()
     assert body["data"]["language"] == "en"
     assert body["data"]["slots"][0]["place"]["name"] == "Suwon Hwaseong"
+
+
+def test_daily_plan_generation_identity_is_deterministic(client, auth_headers):
+    first = client.post(
+        "/api/v1/plans/daily",
+        headers=auth_headers,
+        json={"lat": 37.2, "lng": 127.0, "language": "English"},
+    )
+    second = client.post(
+        "/api/v1/plans/daily",
+        headers=auth_headers,
+        json={"lat": 37.2, "lng": 127.0, "language": "en"},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["data"]["request_hash"] == second.json()["data"]["request_hash"]
+    assert first.json()["data"]["cache_key"] == second.json()["data"]["cache_key"]
+
+
+def test_daily_plan_rejects_out_of_range_coordinates(client, auth_headers):
+    response = client.post(
+        "/api/v1/plans/daily",
+        headers=auth_headers,
+        json={"lat": 120, "lng": 127.0, "language": "ko"},
+    )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert body["ok"] is False
+    assert body["error"]["code"] == "VALIDATION_ERROR"
+    assert '"input"' not in response.text
 
 
 def test_daily_plan_marks_mixed_source_when_db_places_are_used(client, auth_headers, monkeypatch):

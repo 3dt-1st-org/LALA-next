@@ -3,6 +3,7 @@ from __future__ import annotations
 from apps.api.app.schemas.planner import DailyPlanRequest
 from apps.api.app.services.normalization import normalize_language
 from apps.api.app.services.places_service import list_places
+from apps.api.app.services.request_identity import generation_identity
 from apps.api.app.services.weather_service import current_weather
 
 
@@ -34,6 +35,7 @@ def daily_plan(request: DailyPlanRequest) -> dict:
             },
         ],
         "source": source,
+        **daily_plan_identity(request, language=language),
     }
 
 
@@ -56,3 +58,14 @@ def _combined_source(place_source: str | None, weather_source: str | None) -> st
     if "db" in sources:
         return "mixed"
     return "skeleton"
+
+
+def daily_plan_identity(request: DailyPlanRequest, *, language: str | None = None) -> dict[str, str]:
+    return generation_identity(
+        "daily_plan",
+        {
+            "lat": request.lat,
+            "lng": request.lng,
+            "language": language or normalize_language(request.language),
+        },
+    )

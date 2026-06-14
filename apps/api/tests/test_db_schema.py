@@ -76,8 +76,8 @@ def test_inspect_canonical_schema_lists_missing_objects(monkeypatch):
         )
     }
     present["vector"] = False
-    present["monitoring"] = False
-    present["locallink.v_latest_weather_api"] = False
+    present["ops"] = False
+    present["travel.latest_weather"] = False
     install_fake_psycopg2(monkeypatch, present, [])
 
     report = db_schema.inspect_canonical_schema(dsn="postgresql://redacted")
@@ -85,8 +85,8 @@ def test_inspect_canonical_schema_lists_missing_objects(monkeypatch):
     assert report.ok is False
     assert report.missing() == {
         "extensions": ["vector"],
-        "schemas": ["monitoring"],
-        "relations": ["locallink.v_latest_weather_api"],
+        "schemas": ["ops"],
+        "relations": ["travel.latest_weather"],
     }
     assert report.to_dict()["ok"] is False
 
@@ -106,8 +106,8 @@ def test_verify_db_schema_cli_exits_degraded_without_dsn(monkeypatch, capsys):
 def test_verify_db_schema_cli_prints_missing_without_dsn(monkeypatch, capsys):
     report = db_schema.DbSchemaReport(
         extensions={"postgis": True, "vector": False, "pgcrypto": True},
-        schemas={"locallink": True, "daangn": True, "monitoring": True},
-        relations={"locallink.v_public_places": True},
+        schemas={"travel": True, "community": True, "ops": True},
+        relations={"travel.public_places": True},
     )
     monkeypatch.setenv("DB_DSN", "postgresql://redacted")
     monkeypatch.setattr(verify_db_schema, "inspect_canonical_schema", lambda **kwargs: report)

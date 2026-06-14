@@ -31,6 +31,8 @@ $env:CORS_ALLOW_ORIGINS = "http://localhost:3000,http://127.0.0.1:3000"
 
 CORS is disabled by default. Do not use a wildcard for a shared backend unless
 the team has agreed that the URL is temporary and LAN-only.
+When `KEY_VAULT_URL` points at the LALA-next vault, the start wrapper and API can
+also load the optional `cors-allow-origins` secret into `CORS_ALLOW_ORIGINS`.
 
 ## Smoke
 
@@ -40,14 +42,23 @@ Copy-Item .env.example .env
 .\scripts\windows\smoke_api.ps1 -BaseUrl "http://127.0.0.1:8080"
 ```
 
-The smoke script does not print secret values. If Key Vault access is unavailable, set `IOS_API_KEY` as a process-local environment variable before running authenticated checks.
-For new clients, prefer `API_BEARER_TOKEN`; the smoke script uses bearer auth
-when that environment variable is present and falls back to `IOS_API_KEY`.
+The smoke script does not print secret values. If Key Vault access is
+unavailable, set `IOS_API_KEY` as a process-local environment variable before
+running authenticated checks. For OAuth/Entra JWT validation, prefer
+`LALA_SMOKE_BEARER_TOKEN`; the smoke script uses it before falling back to the
+static transition `API_BEARER_TOKEN`, then `IOS_API_KEY`.
 
 For live Azure OpenAI and Speech validation:
 
 ```powershell
 .\scripts\windows\smoke_api.ps1 -BaseUrl "http://127.0.0.1:8080" -KeyVaultUrl https://lala-next-kv-27db5e.vault.azure.net/ -PaidDependency
+```
+
+For Flutter Web or browser-based contract checks, add a CORS preflight smoke
+against one allowed origin:
+
+```powershell
+.\scripts\windows\smoke_api.ps1 -BaseUrl "http://127.0.0.1:8080" -CorsOrigin http://localhost:3000
 ```
 
 If the shared backend will use a PostgreSQL target, run the read-only schema
@@ -104,7 +115,10 @@ shared session, assign one operator who owns the process and captures logs:
 ```powershell
 $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
 New-Item -ItemType Directory -Force .\runtime\logs | Out-Null
-.\scripts\windows\start_api.ps1 -Port 8080 *> ".\runtime\logs\api-$stamp.log"
+.\scripts\windows\start_api.ps1 `
+  -Port 8080 `
+  -AccessLogPath ".\runtime\logs\api-access-$stamp.jsonl" `
+  *> ".\runtime\logs\api-$stamp.log"
 ```
 
 `runtime/` is ignored by git. If `/healthz` fails, stop and restart the API
@@ -121,15 +135,56 @@ The start script disables uvicorn access logs and the API writes one
 request id, and client host. It does not log query strings or auth headers. Set
 `LOG_LEVEL=DEBUG`, `INFO`, `WARNING`, or `ERROR` before starting the API to
 adjust verbosity.
+For Windows handoff log correlation, pass `-AccessLogPath` or set
+`LALA_ACCESS_LOG_PATH` to a local ignored path such as
+`runtime/api-access.jsonl`. When configured, the API writes one JSON object per
+request with only these fields:
+
+- `request_id`
+- `method`
+- route-template `path`
+- `status_code`
+- `duration_ms`
+- `client_host`
+
+The JSONL access log does not include query strings, request bodies, API keys,
+bearer tokens, or generated content. Leave `LALA_ACCESS_LOG_PATH` empty when
+stdout/stderr collection is enough.
+When the Flutter app shell shows a request id, inspect the local JSONL file with
+the read-only helper:
+
+```powershell
+.\scripts\windows\inspect_access_log.ps1 `
+  -Path .\runtime\api-access.jsonl `
+  -RequestId <request-id>
+```
+
+The helper prints only the bounded access-log fields and drops any untrusted
+extra fields if a log line contains them.
+Caller-provided `X-Request-ID` values are preserved only when they are
+1-128 characters using letters, digits, `.`, `_`, `:`, or `-`; unsafe values are
+replaced with a generated id before they reach response headers, envelopes, or
+logs.
 
 The API also exposes process-local Prometheus text metrics at `/metrics`.
 Metrics include process uptime, request counts, duration sums, and max duration
-by method, route path, status code, and status class. They do not include query
-strings, request bodies, auth headers, API keys, bearer tokens, or client IPs.
-Unmatched 404 paths are collapsed into the fixed `__unmatched__` label instead
-of exporting arbitrary URL paths.
+by method, route path, status code, and status class. The same endpoint also
+exports readiness gauges for the overall `/readyz` status and each dependency
+check, plus `lala_next_runtime_mode` labels for `skeleton`, `db-backed`,
+`live-azure`, or `degraded` operation. They do not include query strings,
+request bodies, auth headers, API keys, bearer tokens, or client IPs. Unmatched
+404 paths are collapsed into the fixed `__unmatched__` label instead of
+exporting arbitrary URL paths.
+Known FastAPI static paths such as `/openapi.json`, `/docs`, and `/redoc` are
+exported by fixed path labels.
 The `/metrics` scrape route itself is excluded from request counters, and the
-counters reset when the API process restarts.
+counters reset when the API process restarts. If `DB_DSN` is configured,
+scraping `/metrics` can perform the same short DB readiness probe as `/readyz`.
+Before creating persistent dashboards or alerts, review the non-mutating plan:
+
+```powershell
+.\scripts\windows\plan_observability.ps1
+```
 
 ## Handoff
 
@@ -137,7 +192,7 @@ Share this format with teammates:
 
 ```text
 Backend URL: http://<host>:8080
-Mode: shared LAN dev
+Mode: copy /readyz data.mode.overall (skeleton, db-backed, live-azure, or degraded)
 Branch/build: main or commit SHA
 DB target: skeleton or approved dev DB
 Health: /healthz
@@ -148,7 +203,8 @@ Known degraded features: DB/Azure live calls are not required in Wave 1
 
 If `DB_DSN` is set, `/readyz` connects to PostgreSQL and verifies the canonical
 relations used by places/weather/planner/docent cache routes:
-`locallink.v_public_places`, `locallink.realtime_weather_conditions`, and
-`locallink.docent_cache`. If the DB is absent, missing those relations, or
+`travel.public_places`, `travel.weather_observations`, and
+`travel.docent_scripts`. If the DB is absent, missing those relations, or
 otherwise degraded, the API remains usable through deterministic skeleton
-fallbacks.
+fallbacks. `/readyz.data.mode.data` reports `db-backed` only when that DB probe
+is configured; otherwise it reports `skeleton` or `degraded`.

@@ -23,19 +23,91 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install package
-        run: python -m pip install -e ".[dev]"
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync Python dependencies
+        run: uv sync --extra dev
 
       - name: Run tests
-        run: python -m pytest apps/api/tests
+        run: uv run pytest apps/api/tests
 
       - name: Run worker dry-run smoke
         shell: pwsh
-        run: .\scripts\windows\smoke_workers.ps1 -Python python
+        run: .\scripts\windows\smoke_workers.ps1
+
+      - name: Plan worker batch rollout gates
+        shell: pwsh
+        run: .\scripts\windows\plan_worker_rollout.ps1
 
       - name: Export OpenAPI schema
         shell: pwsh
-        run: .\scripts\windows\export_openapi.ps1 -InProcess -Python python
+        run: .\scripts\windows\export_openapi.ps1 -InProcess
+
+      - name: Check Flutter reference client contract
+        run: uv run python -m apps.api.app.tools.check_flutter_client_contract
+
+      - name: Verify Flutter reference client when Dart is available
+        shell: pwsh
+        run: .\scripts\windows\verify_flutter_client.ps1
+
+      - name: Verify Flutter app shell when Flutter is available
+        shell: pwsh
+        run: .\scripts\windows\verify_flutter_app.ps1
+
+      - name: Run local OAuth JWT smoke
+        shell: pwsh
+        run: .\scripts\windows\smoke_oauth_jwt.ps1
+
+      - name: Plan approved DB rollout sequence
+        shell: pwsh
+        run: .\scripts\windows\plan_db_rollout.ps1
+
+      - name: Plan observability alerts and dashboards
+        shell: pwsh
+        run: .\scripts\windows\plan_observability.ps1
+
+      - name: Plan OAuth Entra identity rollout
+        shell: pwsh
+        run: .\scripts\windows\plan_identity_rollout.ps1
+
+      - name: Plan legacy Flask retirement
+        shell: pwsh
+        run: .\scripts\windows\plan_legacy_retirement.ps1
+
+      - name: Plan local-only dev seed reset SQL with Windows wrapper
+        shell: pwsh
+        run: .\scripts\windows\plan_dev_reset.ps1
+
+      - name: Run Unix worker dry-run smoke
+        shell: bash
+        run: bash scripts/unix/smoke_workers.sh
+
+      - name: Plan worker batch rollout gates with Unix wrapper
+        shell: bash
+        run: bash scripts/unix/plan_worker_rollout.sh
+
+      - name: Export OpenAPI schema with Unix wrapper
+        shell: bash
+        run: bash scripts/unix/export_openapi.sh --in-process
+
+      - name: Run local OAuth JWT smoke with Unix wrapper
+        shell: bash
+        run: bash scripts/unix/smoke_oauth_jwt.sh
+
+      - name: Plan local-only dev seed reset SQL
+        shell: bash
+        run: bash scripts/unix/plan_dev_reset.sh
+
+      - name: Plan OAuth Entra identity rollout with Unix wrapper
+        shell: bash
+        run: bash scripts/unix/plan_identity_rollout.sh
+
+      - name: Plan legacy Flask retirement with Unix wrapper
+        shell: bash
+        run: bash scripts/unix/plan_legacy_retirement.sh
 
       - name: Verify PowerShell scripts parse
         shell: pwsh
@@ -54,3 +126,31 @@ jobs:
               throw "PowerShell parse failed for $($script.FullName): $($errors[0].Message)"
             }
           }
+
+      - name: Verify Unix shell scripts parse
+        shell: bash
+        run: bash -n scripts/unix/*.sh
+
+  unix-verification:
+    name: Unix wrapper verification
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync Python dependencies
+        run: uv sync --extra dev
+
+      - name: Run Unix verification wrapper
+        run: bash scripts/unix/verify_repo.sh --skip-install

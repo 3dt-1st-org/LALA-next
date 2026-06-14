@@ -14,3 +14,14 @@ logs/
 runtime/
 artifacts/tmp/
 artifacts/openapi/
+.playwright-cli/
+output/playwright/
+
+# Local legacy/reference imports from the previous LALA project.
+/lala-macbook-usb-local-artifacts-*.zip
+/lala-legacy-*/
+/legacy-lala*/
+
+clients/flutter/.dart_tool/
+clients/flutter/pubspec.lock
+apps/flutter_app/.dart_tool/

@@ -1,6 +1,7 @@
 param(
     [string]$BaseUrl = "http://127.0.0.1:8080",
     [string]$KeyVaultUrl = "",
+    [string]$CorsOrigin = "",
     [switch]$PaidDependency
 )
 
@@ -48,6 +49,29 @@ function Invoke-SmokeGet {
     $url = "$BaseUrl$Path"
     Write-Host "GET $Path"
     Invoke-RestMethod -Method Get -Uri $url -Headers $Headers | Out-Null
+}
+
+function Invoke-SmokeReadyz {
+    $url = "$BaseUrl/readyz"
+    Write-Host "GET /readyz"
+    $payload = Invoke-RestMethod -Method Get -Uri $url
+    if (-not $payload.data -or -not $payload.data.mode) {
+        throw "/readyz is missing runtime mode."
+    }
+    $mode = $payload.data.mode
+    foreach ($name in @("overall", "data", "ai", "speech", "worker")) {
+        if (-not ($mode.PSObject.Properties.Name -contains $name) -or -not $mode.$name) {
+            throw "/readyz is missing runtime mode field: $name"
+        }
+    }
+    Write-Host "runtime_mode=$($mode.overall) data=$($mode.data) ai=$($mode.ai) speech=$($mode.speech) worker=$($mode.worker)"
+    $checks = $payload.data.checks
+    foreach ($name in @("client_identity", "jwt_validation")) {
+        if (-not $checks -or -not ($checks.PSObject.Properties.Name -contains $name)) {
+            throw "/readyz is missing identity check: $name"
+        }
+    }
+    Write-Host "identity=$($checks.client_identity) jwt_validation=$($checks.jwt_validation)"
 }
 
 function Invoke-SmokePost {
@@ -129,30 +153,61 @@ function Invoke-SmokeAudioPost {
     }
 }
 
+function Invoke-SmokeCorsPreflight {
+    param([string]$Origin)
+
+    $url = "$BaseUrl/api/v1/places"
+    Write-Host "OPTIONS /api/v1/places (CORS)"
+    $response = Invoke-WebRequest `
+        -Method Options `
+        -Uri $url `
+        -Headers @{
+            Origin = $Origin
+            "Access-Control-Request-Method" = "GET"
+            "Access-Control-Request-Headers" = "Authorization, X-API-Key"
+        }
+    $allowOrigin = $response.Headers["Access-Control-Allow-Origin"]
+    if ($allowOrigin -ne $Origin) {
+        throw "CORS preflight returned unexpected allow-origin."
+    }
+}
+
 Invoke-SmokeGet "/healthz"
-Invoke-SmokeGet "/readyz"
+Invoke-SmokeReadyz
 Invoke-SmokeGet "/metrics"
 Invoke-SmokeGet "/openapi.json"
+if ($CorsOrigin) {
+    Invoke-SmokeCorsPreflight -Origin $CorsOrigin
+}
 
-if (-not $env:IOS_API_KEY -and -not $env:API_BEARER_TOKEN) {
+$clientBearerToken = if ($env:LALA_SMOKE_BEARER_TOKEN) { $env:LALA_SMOKE_BEARER_TOKEN } elseif ($env:API_BEARER_TOKEN) { $env:API_BEARER_TOKEN } else { "" }
+$clientApiKey = if ($env:LALA_SMOKE_API_KEY) { $env:LALA_SMOKE_API_KEY } elseif ($env:IOS_API_KEY) { $env:IOS_API_KEY } else { "" }
+
+if (-not $clientApiKey -and -not $clientBearerToken) {
     $vaultName = Get-VaultNameFromUrl $env:KEY_VAULT_URL
     if ($vaultName) {
         try {
             $env:IOS_API_KEY = az keyvault secret show --vault-name $vaultName --name ios-api-key --query value -o tsv
+            if (-not $clientApiKey -and $env:IOS_API_KEY) {
+                $clientApiKey = $env:IOS_API_KEY
+            }
         } catch {
             $env:IOS_API_KEY = ""
         }
-        if (-not $env:API_BEARER_TOKEN) {
+        if (-not $clientBearerToken) {
             try {
                 $env:API_BEARER_TOKEN = az keyvault secret show --vault-name $vaultName --name api-bearer-token --query value -o tsv
+                if ($env:API_BEARER_TOKEN) {
+                    $clientBearerToken = $env:API_BEARER_TOKEN
+                }
             } catch {
                 $env:API_BEARER_TOKEN = ""
             }
         }
     }
-    if (-not $env:IOS_API_KEY -and -not $env:API_BEARER_TOKEN) {
+    if (-not $clientApiKey -and -not $clientBearerToken) {
         if ($PaidDependency) {
-            throw "Client auth is required for paid dependency smoke. Set IOS_API_KEY, API_BEARER_TOKEN, or KEY_VAULT_URL with an authenticated Azure CLI session."
+            throw "Client auth is required for paid dependency smoke. Set LALA_SMOKE_BEARER_TOKEN, LALA_SMOKE_API_KEY, IOS_API_KEY, API_BEARER_TOKEN, or KEY_VAULT_URL with an authenticated Azure CLI session."
         }
         Write-Host "Client auth is not available; authenticated /api/v1 smoke checks skipped."
         exit 0
@@ -160,10 +215,10 @@ if (-not $env:IOS_API_KEY -and -not $env:API_BEARER_TOKEN) {
 }
 
 $headers = @{}
-if ($env:API_BEARER_TOKEN) {
-    $headers["Authorization"] = "Bearer $env:API_BEARER_TOKEN"
+if ($clientBearerToken) {
+    $headers["Authorization"] = "Bearer $clientBearerToken"
 } else {
-    $headers["X-API-Key"] = $env:IOS_API_KEY
+    $headers["X-API-Key"] = $clientApiKey
 }
 
 Invoke-SmokeGet "/api/v1/places?lat=37.2636&lng=127.0286&radius_m=1000" -Headers $headers

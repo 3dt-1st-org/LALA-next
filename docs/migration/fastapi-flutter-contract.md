@@ -9,6 +9,9 @@ Decisions:
 - `/healthz` and `/readyz` are operational endpoints and do not require client auth.
 - `/api/v1/*` accepts `Authorization: Bearer <token>` for new clients and
   `X-API-Key` during migration.
+- Static migration credentials are normalized, bounded, constant-time compared,
+  and excluded from logs/metrics. Signed OAuth/Entra JWT validation is available
+  when issuer, audience, JWKS URL, and required scopes are configured.
 - JSON responses use `{ ok, data, meta, error }`.
 - Audio success returns `audio/mpeg`; audio errors return JSON envelope.
 
@@ -24,10 +27,15 @@ Implemented Wave 1 boundaries:
   are radius-filtered and distance-ranked in SQL; docent-cache hits expose
   approximate remaining TTL. Weather DB reads prefer the nearest canonical
   region when a matching weather location exists.
-- Canonical SQL includes read-only `v_legacy_*_api` compatibility views for
+- Canonical SQL includes read-only `compat.*` compatibility views for
   legacy place, docent-cache, and weather handoff shapes.
 - Flutter can build against `docs/api/flutter-contract.md` without waiting for
   the Flutter app repository structure.
+- `clients/flutter/lib/lala_api_client.dart` provides a checked reference Dart
+  client for `/api/v1/*` and exposes `LalaAuthMode` so the app can distinguish
+  public-only, migration API-key, static bearer-token, and OAuth/JWT
+  bearer-token states without decoding tokens; it is not a full app shell or
+  state-management layer.
 
 Next migration boundary:
 
@@ -35,8 +43,9 @@ Next migration boundary:
   assigned.
 - Keep docent-cache write-back best-effort until shared DB migration ownership is
   formally assigned.
-- Replace static bearer/API-key credentials with the final production identity
-  provider after the shared Windows backend workflow is stable.
+- Add Flutter token acquisition for the configured OAuth/Entra identity
+  provider, then retire static bearer/API-key credentials after rollback is
+  approved.
 - Keep live Azure dependencies behind mockable service functions so tests stay
   deterministic.
 

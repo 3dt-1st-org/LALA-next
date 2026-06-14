@@ -1,0 +1,12 @@
+name: lala_next_flutter_client_reference
+description: Reference Dart client for the LALA-next Wave 1 API contract.
+publish_to: none
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  http: ^1.2.0
+
+dev_dependencies:
+  test: ^1.25.0

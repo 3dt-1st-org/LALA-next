@@ -1,13 +1,19 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+import logging
 
+from apps.api.app.core.observability import LOGGER_NAME
 from apps.api.app.schemas.docent import DocentAudioRequest, DocentScriptRequest
 from apps.api.app.services import ai_service, db_repository, speech_service
 from apps.api.app.services.normalization import display_language
+from apps.api.app.services.request_identity import generation_identity
+
+logger = logging.getLogger(LOGGER_NAME)
 
 
 def generate_script(request: DocentScriptRequest) -> dict:
+    identity = script_identity(request)
     cached = db_repository.fetch_docent_script_cache(
         place_id=request.place_id,
         category=request.category,
@@ -15,7 +21,7 @@ def generate_script(request: DocentScriptRequest) -> dict:
         mode=request.mode,
     )
     if cached:
-        return cached
+        return {**cached, **identity}
 
     generated_at = datetime.now(UTC).isoformat()
     if ai_service.live_ai_enabled():
@@ -26,7 +32,7 @@ def generate_script(request: DocentScriptRequest) -> dict:
         source = "skeleton"
     ttl_sec = 604800
     if source == "azure_openai":
-        db_repository.save_docent_script_cache(
+        cache_saved = db_repository.save_docent_script_cache(
             place_id=request.place_id,
             category=request.category,
             language=request.language,
@@ -35,6 +41,18 @@ def generate_script(request: DocentScriptRequest) -> dict:
             source=source,
             ttl_sec=ttl_sec,
         )
+        if not cache_saved:
+            logger.warning(
+                (
+                    "docent_script_write_failed place_id=%s category=%s "
+                    "language=%s mode=%s source=%s"
+                ),
+                request.place_id,
+                request.category,
+                request.language,
+                request.mode,
+                source,
+            )
     return {
         "place_id": request.place_id,
         "category": request.category,
@@ -44,6 +62,7 @@ def generate_script(request: DocentScriptRequest) -> dict:
         "source": source,
         "generated_at": generated_at,
         "ttl_sec": ttl_sec,
+        **identity,
     }
 
 
@@ -64,3 +83,25 @@ def generate_audio(request: DocentAudioRequest) -> bytes:
     header = b"ID3\x04\x00\x00\x00\x00\x00!"
     body = f"LALA-next skeleton audio: {request.language}: {script[:128]}".encode("utf-8")
     return header + body
+
+
+def script_identity(request: DocentScriptRequest) -> dict[str, str]:
+    return generation_identity(
+        "docent_script",
+        {
+            "place_id": request.place_id,
+            "category": request.category,
+            "language": request.language,
+            "mode": request.mode,
+        },
+    )
+
+
+def audio_identity(request: DocentAudioRequest) -> dict[str, str]:
+    return generation_identity(
+        "docent_audio",
+        {
+            "script": request.script.strip(),
+            "language": request.language,
+        },
+    )

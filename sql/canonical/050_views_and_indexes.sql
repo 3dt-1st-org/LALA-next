@@ -1,6 +1,6 @@
--- Stable read views for API and reporting.
+-- Stable read views for API, compatibility, and reporting.
 
-CREATE OR REPLACE VIEW locallink.v_public_places AS
+CREATE OR REPLACE VIEW travel.public_places AS
 SELECT
     place_id,
     name_ko,
@@ -8,15 +8,22 @@ SELECT
     category,
     address_ko,
     address_en,
-    region_ko,
-    region_en,
+    region_name_ko,
+    region_name_en,
+    region_name_ko AS region_ko,
+    region_name_en AS region_en,
+    province_code,
+    city_code,
     lat,
     lng,
-    source,
+    is_indoor,
+    primary_source AS source,
+    primary_source,
+    source_record_id,
     updated_at
-FROM locallink.places;
+FROM travel.places;
 
-CREATE OR REPLACE VIEW locallink.v_legacy_places_api AS
+CREATE OR REPLACE VIEW compat.legacy_places_api AS
 SELECT
     place_id AS id,
     place_id,
@@ -31,6 +38,7 @@ SELECT
     COALESCE(address_en, address_ko, '') AS address_en,
     COALESCE(region_ko, '') AS region,
     COALESCE(region_en, region_ko, '') AS region_en,
+    is_indoor,
     NULL::text AS image_url,
     false AS is_approximate_location,
     NULL::text AS event_start_date,
@@ -39,16 +47,16 @@ SELECT
     category AS source_type,
     source AS upstream_source,
     updated_at
-FROM locallink.v_public_places;
+FROM travel.public_places;
 
-CREATE OR REPLACE VIEW locallink.v_legacy_docent_script_cache_api AS
+CREATE OR REPLACE VIEW compat.legacy_docent_scripts_api AS
 SELECT
     place_id,
     category,
     language,
     mode,
     script,
-    source AS upstream_source,
+    source_method AS upstream_source,
     generated_at AS created_at,
     generated_at,
     expires_at,
@@ -56,14 +64,14 @@ SELECT
         WHEN expires_at IS NULL THEN NULL
         ELSE GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (expires_at - now())))::integer)
     END AS ttl_sec
-FROM locallink.docent_cache
+FROM travel.docent_scripts
 WHERE expires_at IS NULL OR expires_at > now();
 
-CREATE OR REPLACE VIEW locallink.v_latest_weather_api AS
-SELECT DISTINCT ON (location)
-    location,
-    temperature,
-    temperature::text AS temp,
+CREATE OR REPLACE VIEW travel.latest_weather AS
+SELECT DISTINCT ON (location_name)
+    location_name AS location,
+    temperature_c AS temperature,
+    temperature_c::text AS temp,
     precipitation_type,
     pm10,
     pm25,
@@ -72,16 +80,16 @@ SELECT DISTINCT ON (location)
     is_heatwave,
     is_coldwave,
     is_strong_wind,
-    record_time,
-    created_at
-FROM locallink.realtime_weather_conditions
-ORDER BY location, record_time DESC;
+    observed_at AS record_time,
+    collected_at AS created_at
+FROM travel.weather_observations
+ORDER BY location_name, observed_at DESC;
 
-CREATE OR REPLACE VIEW monitoring.v_dependency_latest AS
+CREATE OR REPLACE VIEW ops.dependency_latest AS
 SELECT DISTINCT ON (dependency_name)
     dependency_name,
     status,
     latency_ms,
     checked_at
-FROM monitoring.dependency_checks
+FROM ops.dependency_checks
 ORDER BY dependency_name, checked_at DESC;

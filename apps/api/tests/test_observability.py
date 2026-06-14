@@ -1,6 +1,12 @@
 from __future__ import annotations
 
+import json
 import logging
+from uuid import UUID
+
+from fastapi.testclient import TestClient
+
+from apps.api.app.main import create_app
 
 
 def test_request_duration_header_is_returned(client):
@@ -44,6 +50,57 @@ def test_request_logging_omits_auth_headers_and_query_string(client, auth_header
     assert "should-not-be-logged" not in rendered
 
 
+def test_optional_jsonl_access_log_is_secret_safe(tmp_path, monkeypatch, api_key):
+    access_log_path = tmp_path / "runtime" / "api-access.jsonl"
+    monkeypatch.setenv("LALA_ACCESS_LOG_PATH", str(access_log_path))
+    client = TestClient(create_app())
+
+    response = client.get(
+        "/api/v1/places?token=should-not-be-written",
+        headers={
+            "X-API-Key": api_key,
+            "X-Request-ID": "jsonl-log-test",
+        },
+    )
+
+    assert response.status_code == 200
+    lines = access_log_path.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 1
+    payload = json.loads(lines[0])
+    assert payload["request_id"] == "jsonl-log-test"
+    assert payload["method"] == "GET"
+    assert payload["path"] == "/api/v1/places"
+    assert payload["status_code"] == 200
+    assert payload["duration_ms"] >= 0
+    assert payload["client_host"]
+    assert "should-not-be-written" not in lines[0]
+    assert api_key not in lines[0]
+    assert "X-API-Key" not in lines[0]
+    assert "Authorization" not in lines[0]
+
+
+def test_unsafe_request_id_header_is_not_logged_or_echoed(client, caplog):
+    caplog.set_level(logging.INFO, logger="lala_next.api")
+    marker = "super-secret request id"
+
+    response = client.get("/healthz", headers={"X-Request-ID": marker})
+
+    assert response.status_code == 200
+    assert response.headers["X-Request-ID"] != marker
+    UUID(response.headers["X-Request-ID"])
+    body = response.json()
+    assert body["meta"]["request_id"] == response.headers["X-Request-ID"]
+    assert marker not in response.text
+
+    rendered = " ".join(
+        record.getMessage()
+        for record in caplog.records
+        if record.name == "lala_next.api" and record.getMessage().startswith("request_completed")
+    )
+    assert marker not in rendered
+    assert response.headers["X-Request-ID"] in rendered
+
+
 def test_metrics_endpoint_is_public_and_omits_query_and_auth_values(client, auth_headers):
     marker = "should-not-be-exported"
     response = client.get(
@@ -63,6 +120,12 @@ def test_metrics_endpoint_is_public_and_omits_query_and_auth_values(client, auth
     body = metrics.text
     assert "lala_next_process_uptime_seconds" in body
     assert "lala_next_http_requests_total" in body
+    assert "lala_next_readiness_status" in body
+    assert "lala_next_dependency_ready" in body
+    assert "lala_next_runtime_mode" in body
+    assert 'lala_next_dependency_ready{name="client_auth",status="configured"} 1' in body
+    assert 'lala_next_dependency_ready{name="worker_contracts",status="configured"} 1' in body
+    assert 'lala_next_runtime_mode{component="overall",mode="skeleton"} 1' in body
     assert 'method="GET",path="/api/v1/places",status_code="200",status_class="2xx"' in body
     assert 'path="/metrics"' not in body
     assert marker not in body
@@ -104,3 +167,46 @@ def test_unmatched_paths_are_collapsed_in_logs_and_metrics(client, caplog):
     assert "path=__unmatched__" in rendered
     assert "should-not-be-path-label" not in rendered
     assert "should-not-be-exported" not in rendered
+
+
+def test_static_operational_paths_are_not_collapsed_to_unmatched(client):
+    response = client.get("/openapi.json")
+    assert response.status_code == 200
+
+    metrics = client.get("/metrics")
+
+    assert 'method="GET",path="/openapi.json",status_code="200",status_class="2xx"' in metrics.text
+    assert 'path="__unmatched__",status_code="200"' not in metrics.text
+
+
+def test_metrics_exports_readiness_gauges(client, monkeypatch):
+    monkeypatch.setattr(
+        "apps.api.app.routers.health.build_readiness",
+        lambda: {
+            "status": "ok",
+            "checks": {
+                "api_key": "configured",
+                "db": "degraded",
+                "live_ai": "disabled",
+                "live_speech": "enabled",
+            },
+            "mode": {
+                "overall": "degraded",
+                "data": "degraded",
+                "ai": "skeleton",
+                "speech": "live-azure",
+            },
+        },
+    )
+
+    metrics = client.get("/metrics")
+
+    assert metrics.status_code == 200
+    assert 'lala_next_readiness_status{status="ok"} 1' in metrics.text
+    assert 'lala_next_dependency_ready{name="api_key",status="configured"} 1' in metrics.text
+    assert 'lala_next_dependency_ready{name="db",status="degraded"} 0' in metrics.text
+    assert 'lala_next_dependency_ready{name="live_ai",status="disabled"} 0' in metrics.text
+    assert 'lala_next_dependency_ready{name="live_speech",status="enabled"} 1' in metrics.text
+    assert 'lala_next_runtime_mode{component="data",mode="degraded"} 1' in metrics.text
+    assert 'lala_next_runtime_mode{component="overall",mode="degraded"} 1' in metrics.text
+    assert 'lala_next_runtime_mode{component="speech",mode="live-azure"} 1' in metrics.text

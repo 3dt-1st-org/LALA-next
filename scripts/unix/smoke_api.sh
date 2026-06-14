@@ -1,0 +1,218 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+source "$SCRIPT_DIR/_common.sh"
+
+BASE_URL="http://127.0.0.1:8080"
+KEY_VAULT_URL_ARG=""
+PAID_DEPENDENCY="false"
+CORS_ORIGIN=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --base-url) BASE_URL="${2:-}"; shift 2 ;;
+    --key-vault-url) KEY_VAULT_URL_ARG="${2:-}"; shift 2 ;;
+    --paid-dependency) PAID_DEPENDENCY="true"; shift ;;
+    --cors-origin) CORS_ORIGIN="${2:-}"; shift 2 ;;
+    -h|--help)
+      echo "Usage: scripts/unix/smoke_api.sh [--base-url URL] [--key-vault-url URL] [--cors-origin ORIGIN] [--paid-dependency]"
+      echo "Set LALA_SMOKE_BEARER_TOKEN to smoke OAuth/JWT auth without changing server-side API_BEARER_TOKEN."
+      exit 0
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      exit 2
+      ;;
+  esac
+done
+
+ROOT="$(repo_root)"
+PYTHON="$(select_python "")"
+cd "$ROOT"
+
+require_command curl
+
+if [[ -n "$KEY_VAULT_URL_ARG" ]]; then
+  export KEY_VAULT_URL="$KEY_VAULT_URL_ARG"
+fi
+
+load_env_file "$ROOT/.env"
+load_lala_key_vault_secrets
+
+smoke_get() {
+  local path="$1"
+  shift || true
+  echo "GET $path" >&2
+  curl -fsS "$@" "$BASE_URL$path" >/dev/null
+}
+
+smoke_readyz() {
+  local payload
+  echo "GET /readyz" >&2
+  payload="$(curl -fsS "$BASE_URL/readyz")"
+  READYZ_PAYLOAD="$payload" "$PYTHON" - <<'PY'
+import json
+import os
+
+payload = json.loads(os.environ["READYZ_PAYLOAD"])
+data = payload.get("data") or {}
+mode = data.get("mode") or {}
+required = ("overall", "data", "ai", "speech", "worker")
+missing = [name for name in required if not mode.get(name)]
+if missing:
+    raise SystemExit(f"/readyz is missing runtime mode fields: {', '.join(missing)}")
+print(
+    "runtime_mode="
+    f"{mode['overall']} data={mode['data']} ai={mode['ai']} "
+    f"speech={mode['speech']} worker={mode['worker']}"
+)
+checks = data.get("checks") or {}
+missing_checks = [name for name in ("client_identity", "jwt_validation") if name not in checks]
+if missing_checks:
+    raise SystemExit(f"/readyz is missing identity checks: {', '.join(missing_checks)}")
+print(
+    "identity="
+    f"{checks['client_identity']} jwt_validation={checks['jwt_validation']}"
+)
+PY
+}
+
+smoke_post_json() {
+  local path="$1"
+  local body="$2"
+  shift 2
+  echo "POST $path" >&2
+  curl -fsS "$@" \
+    -H "Content-Type: application/json; charset=utf-8" \
+    --data "$body" \
+    "$BASE_URL$path"
+}
+
+smoke_cors_preflight() {
+  local origin="$1"
+  local headers_file allow_origin
+  headers_file="$(mktemp)"
+  echo "OPTIONS /api/v1/places (CORS)" >&2
+  if ! curl -fsS \
+    -X OPTIONS \
+    -H "Origin: $origin" \
+    -H "Access-Control-Request-Method: GET" \
+    -H "Access-Control-Request-Headers: Authorization, X-API-Key" \
+    -D "$headers_file" \
+    -o /dev/null \
+    "$BASE_URL/api/v1/places"; then
+    rm -f "$headers_file"
+    echo "CORS preflight failed for configured origin." >&2
+    exit 1
+  fi
+  allow_origin="$(tr -d '\r' < "$headers_file" | awk -F': ' 'tolower($1)=="access-control-allow-origin"{print $2; exit}')"
+  rm -f "$headers_file"
+  if [[ "$allow_origin" != "$origin" ]]; then
+    echo "CORS preflight returned unexpected allow-origin." >&2
+    exit 1
+  fi
+}
+
+write_auth_config() {
+  local header_name="$1"
+  local header_value="$2"
+  local config_file
+  config_file="$(mktemp)"
+  chmod 600 "$config_file"
+  HEADER_NAME="$header_name" HEADER_VALUE="$header_value" "$PYTHON" - "$config_file" <<'PY'
+import os
+import sys
+from pathlib import Path
+
+name = os.environ["HEADER_NAME"]
+value = os.environ["HEADER_VALUE"].replace("\\", "\\\\").replace('"', '\\"')
+Path(sys.argv[1]).write_text(f'header = "{name}: {value}"\n', encoding="utf-8")
+PY
+  printf '%s\n' "$config_file"
+}
+
+smoke_get "/healthz"
+smoke_readyz
+smoke_get "/metrics"
+smoke_get "/openapi.json"
+if [[ -n "$CORS_ORIGIN" ]]; then
+  smoke_cors_preflight "$CORS_ORIGIN"
+fi
+
+CLIENT_BEARER_TOKEN="${LALA_SMOKE_BEARER_TOKEN:-${API_BEARER_TOKEN:-}}"
+CLIENT_API_KEY="${LALA_SMOKE_API_KEY:-${IOS_API_KEY:-}}"
+
+if [[ -z "$CLIENT_API_KEY" && -z "$CLIENT_BEARER_TOKEN" ]]; then
+  if [[ "$PAID_DEPENDENCY" == "true" ]]; then
+    echo "Client auth is required for paid dependency smoke. Set LALA_SMOKE_BEARER_TOKEN, LALA_SMOKE_API_KEY, IOS_API_KEY, API_BEARER_TOKEN, or KEY_VAULT_URL with an authenticated Azure CLI session." >&2
+    exit 1
+  fi
+  echo "Client auth is not available; authenticated /api/v1 smoke checks skipped."
+  exit 0
+fi
+
+CURL_AUTH_ARGS=()
+AUTH_CONFIG_FILE=""
+if [[ -n "$CLIENT_BEARER_TOKEN" ]]; then
+  AUTH_CONFIG_FILE="$(write_auth_config "Authorization" "Bearer $CLIENT_BEARER_TOKEN")"
+else
+  AUTH_CONFIG_FILE="$(write_auth_config "X-API-Key" "$CLIENT_API_KEY")"
+fi
+CURL_AUTH_ARGS=(-K "$AUTH_CONFIG_FILE")
+trap 'rm -f "$AUTH_CONFIG_FILE" "${HEADERS_FILE:-}" "${AUDIO_FILE:-}"' EXIT
+
+smoke_get "/api/v1/places?lat=37.2636&lng=127.0286&radius_m=1000" "${CURL_AUTH_ARGS[@]}"
+smoke_get "/api/v1/weather?lat=37.2636&lng=127.0286" "${CURL_AUTH_ARGS[@]}"
+smoke_get "/api/v1/plans/intervention?lat=37.2636&lng=127.0286&radius_m=1000" "${CURL_AUTH_ARGS[@]}"
+
+SCRIPT_BODY='{"place_id":"skeleton-suwon-hwaseong","category":"attraction","language":"ko","mode":"brief"}'
+smoke_post_json "/api/v1/docents/script" "$SCRIPT_BODY" "${CURL_AUTH_ARGS[@]}" >/dev/null
+
+if [[ "$PAID_DEPENDENCY" == "true" ]]; then
+  echo "Paid dependency smoke requested. Start the API with --enable-live-ai and --enable-live-speech before running this check."
+  PAID_BODY='{"place_id":"paid-smoke-suwon","category":"attraction","language":"ko","mode":"brief"}'
+  SCRIPT_RESULT="$(smoke_post_json "/api/v1/docents/script" "$PAID_BODY" "${CURL_AUTH_ARGS[@]}")"
+  SCRIPT_TEXT="$(JSON_PAYLOAD="$SCRIPT_RESULT" "$PYTHON" - <<'PY'
+import json
+import os
+
+payload = json.loads(os.environ["JSON_PAYLOAD"])
+data = payload.get("data") or {}
+if data.get("source") != "azure_openai":
+    raise SystemExit(f"Expected Azure OpenAI script source, got {data.get('source')}.")
+script = data.get("script") or ""
+if not script:
+    raise SystemExit("Azure OpenAI script smoke returned an empty script.")
+print(script)
+PY
+)"
+  AUDIO_BODY="$(SCRIPT_TEXT="$SCRIPT_TEXT" "$PYTHON" - <<'PY'
+import json
+import os
+
+print(json.dumps({"script": os.environ["SCRIPT_TEXT"], "language": "ko"}, ensure_ascii=False))
+PY
+)"
+  HEADERS_FILE="$(mktemp)"
+  AUDIO_FILE="$(mktemp)"
+  echo "POST /api/v1/docents/audio"
+  curl -fsS "${CURL_AUTH_ARGS[@]}" \
+    -H "Content-Type: application/json; charset=utf-8" \
+    --data "$AUDIO_BODY" \
+    -D "$HEADERS_FILE" \
+    -o "$AUDIO_FILE" \
+    "$BASE_URL/api/v1/docents/audio"
+  if ! grep -i '^content-type: audio/mpeg' "$HEADERS_FILE" >/dev/null; then
+    echo "Audio smoke returned unexpected content type." >&2
+    exit 1
+  fi
+  if [[ ! -s "$AUDIO_FILE" ]]; then
+    echo "Audio smoke returned an empty audio response." >&2
+    exit 1
+  fi
+  echo "Audio smoke returned audio/mpeg bytes."
+fi
+
+echo "LALA-next API smoke completed."

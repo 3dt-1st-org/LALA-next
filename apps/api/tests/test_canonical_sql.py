@@ -42,10 +42,11 @@ def test_load_canonical_sql_plan_is_safe_and_ordered():
     assert plan.ok is True
     assert [item.name for item in plan.files] == [
         "000_extensions_and_schemas.sql",
-        "010_locallink_core_tables.sql",
-        "020_locallink_domain_tables.sql",
-        "030_daangn_core_tables.sql",
-        "040_monitoring_core_tables.sql",
+        "010_travel_core_tables.sql",
+        "020_travel_domain_tables.sql",
+        "030_community_core_tables.sql",
+        "035_data_pipeline_tables.sql",
+        "040_ops_core_tables.sql",
         "050_views_and_indexes.sql",
     ]
     assert plan.to_dict()["statement_count"] >= 10
@@ -56,9 +57,9 @@ def test_sql_safety_scan_flags_destructive_and_secret_text():
     fake_dsn = "postgresql://user:" + "pass@example/db"
     findings = canonical_sql.scan_sql_safety(
         text=(
-            "DROP TABLE locallink.places;\n"
+            "DROP TABLE travel.places;\n"
             f"SELECT '{fake_dsn}';\n"
-            "DELETE FROM monitoring.cost_daily;"
+            "DELETE FROM ops.daily_costs;"
         ),
         label="bad.sql",
     )
@@ -74,7 +75,7 @@ def test_apply_canonical_sql_cli_defaults_to_plan_json(capsys):
     assert exit_code == 0
     assert output["ok"] is True
     assert output["mode"] == "plan"
-    assert output["plan"]["file_count"] == 6
+    assert output["plan"]["file_count"] == 7
     assert "result" not in output
 
 

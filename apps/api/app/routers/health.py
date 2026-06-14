@@ -33,6 +33,6 @@ def readyz(request: Request) -> dict:
 @router.get("/metrics", response_class=PlainTextResponse)
 def metrics(request: Request) -> PlainTextResponse:
     return PlainTextResponse(
-        render_prometheus(request.app.state.metrics),
+        render_prometheus(request.app.state.metrics, readiness=build_readiness()),
         media_type="text/plain; version=0.0.4; charset=utf-8",
     )

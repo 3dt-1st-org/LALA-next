@@ -15,7 +15,13 @@ def client() -> TestClient:
 def isolate_db_env(monkeypatch) -> None:
     monkeypatch.delenv("DB_DSN", raising=False)
     for name in (
+        "KEY_VAULT_URL",
         "API_BEARER_TOKEN",
+        "OAUTH_ISSUER",
+        "OAUTH_AUDIENCE",
+        "OAUTH_JWKS_URL",
+        "OAUTH_CLIENT_ID",
+        "OAUTH_REQUIRED_SCOPES",
         "LALA_ENABLE_LIVE_AI",
         "AZURE_OPENAI_ENDPOINT",
         "AZURE_OPENAI_KEY",
@@ -26,6 +32,7 @@ def isolate_db_env(monkeypatch) -> None:
         "AZURE_SPEECH_KEY",
         "AZURE_SPEECH_ENDPOINT",
         "CORS_ALLOW_ORIGINS",
+        "LALA_ACCESS_LOG_PATH",
     ):
         monkeypatch.delenv(name, raising=False)
 

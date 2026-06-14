@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from threading import Lock
 from time import monotonic
+
+
+READY_STATUSES = frozenset(
+    {"ok", "configured", "enabled", "static", "transition", "oauth-configured"}
+)
 
 
 @dataclass(frozen=True)
@@ -60,7 +66,7 @@ class RuntimeMetrics:
         return uptime_seconds, routes
 
 
-def render_prometheus(metrics: RuntimeMetrics) -> str:
+def render_prometheus(metrics: RuntimeMetrics, readiness: Mapping[str, object] | None = None) -> str:
     uptime_seconds, routes = metrics.snapshot()
     lines = [
         "# HELP lala_next_process_uptime_seconds Process uptime in seconds.",
@@ -96,16 +102,31 @@ def render_prometheus(metrics: RuntimeMetrics) -> str:
             f"lala_next_http_request_duration_ms_max{{{labels}}} "
             f"{route.duration_ms_max:.2f}"
         )
+    if readiness is not None:
+        lines.extend(_readiness_lines(readiness))
     return "\n".join(lines) + "\n"
 
 
 UNMATCHED_ROUTE_PATH = "__unmatched__"
+STATIC_ROUTE_PATHS = frozenset(
+    {
+        "/docs",
+        "/docs/oauth2-redirect",
+        "/openapi.json",
+        "/redoc",
+    }
+)
 
 
 def route_path_from_scope(scope: dict, fallback_path: str = UNMATCHED_ROUTE_PATH) -> str:
     route = scope.get("route")
     route_path = getattr(route, "path", "")
-    return route_path or fallback_path
+    if route_path:
+        return route_path
+    raw_path = str(scope.get("path", ""))
+    if raw_path in STATIC_ROUTE_PATHS:
+        return raw_path
+    return fallback_path
 
 
 def _labels(route: RouteMetric) -> str:
@@ -115,6 +136,46 @@ def _labels(route: RouteMetric) -> str:
         f'status_code="{route.status_code}",'
         f'status_class="{route.status_class}"'
     )
+
+
+def _readiness_lines(readiness: Mapping[str, object]) -> list[str]:
+    status = str(readiness.get("status", "unknown"))
+    checks = readiness.get("checks", {})
+    mode = readiness.get("mode", {})
+    lines = [
+        "# HELP lala_next_readiness_status Overall readiness status as 1 when ok.",
+        "# TYPE lala_next_readiness_status gauge",
+        f'lala_next_readiness_status{{status="{_escape_label(status)}"}} '
+        f"{_status_value(status)}",
+        "# HELP lala_next_dependency_ready Dependency readiness as 1 when configured, enabled, or ok.",
+        "# TYPE lala_next_dependency_ready gauge",
+    ]
+    if isinstance(checks, Mapping):
+        for name, value in sorted(checks.items()):
+            dependency_status = str(value)
+            labels = (
+                f'name="{_escape_label(str(name))}",'
+                f'status="{_escape_label(dependency_status)}"'
+            )
+            lines.append(f"lala_next_dependency_ready{{{labels}}} {_status_value(dependency_status)}")
+    if isinstance(mode, Mapping):
+        lines.extend(
+            [
+                "# HELP lala_next_runtime_mode Runtime mode by component as a labeled gauge.",
+                "# TYPE lala_next_runtime_mode gauge",
+            ]
+        )
+        for component, runtime_mode in sorted(mode.items()):
+            labels = (
+                f'component="{_escape_label(str(component))}",'
+                f'mode="{_escape_label(str(runtime_mode))}"'
+            )
+            lines.append(f"lala_next_runtime_mode{{{labels}}} 1")
+    return lines
+
+
+def _status_value(status: str) -> int:
+    return 1 if status in READY_STATUSES else 0
 
 
 def _escape_label(value: str) -> str:
