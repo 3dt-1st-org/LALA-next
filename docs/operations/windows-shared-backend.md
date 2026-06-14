@@ -170,8 +170,8 @@ The API also exposes process-local Prometheus text metrics at `/metrics`.
 Metrics include process uptime, request counts, duration sums, and max duration
 by method, route path, status code, and status class. The same endpoint also
 exports readiness gauges for the overall `/readyz` status and each dependency
-check, plus `lala_next_runtime_mode` labels for `skeleton`, `db-backed`,
-`live-azure`, or `degraded` operation. They do not include query strings,
+check, plus `lala_next_runtime_mode` labels for `skeleton`, `public-cache`,
+`db-backed`, `live-azure`, or `degraded` operation. They do not include query strings,
 request bodies, auth headers, API keys, bearer tokens, or client IPs. Unmatched
 404 paths are collapsed into the fixed `__unmatched__` label instead of
 exporting arbitrary URL paths.
@@ -192,7 +192,7 @@ Share this format with teammates:
 
 ```text
 Backend URL: http://<host>:8080
-Mode: copy /readyz data.mode.overall (skeleton, db-backed, live-azure, or degraded)
+Mode: copy /readyz data.mode.overall (skeleton, public-cache, db-backed, live-azure, or degraded)
 Branch/build: main or commit SHA
 DB target: skeleton or approved dev DB
 Health: /healthz

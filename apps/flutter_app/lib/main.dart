@@ -59,7 +59,7 @@ class LalaAppConfig {
     this.apiKey = '',
     this.lat = 37.2636,
     this.lng = 127.0286,
-    this.radiusM = 1000,
+    this.radiusM = 50000,
   });
 
   const LalaAppConfig.fromEnvironment()
@@ -71,7 +71,7 @@ class LalaAppConfig {
       apiKey = const String.fromEnvironment('LALA_IOS_API_KEY'),
       lat = 37.2636,
       lng = 127.0286,
-      radiusM = 1000;
+      radiusM = 50000;
 
   final String baseUri;
   final String bearerToken;
@@ -266,7 +266,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
       apiKey: _apiKeyController.text.trim(),
       lat: double.tryParse(_latController.text.trim()) ?? 37.2636,
       lng: double.tryParse(_lngController.text.trim()) ?? 127.0286,
-      radiusM: int.tryParse(_radiusController.text.trim()) ?? 1000,
+      radiusM: int.tryParse(_radiusController.text.trim()) ?? 50000,
     );
   }
 
@@ -1271,6 +1271,7 @@ String _sourceLabel(String? value) {
   return switch ((value ?? '').trim()) {
     'db' => 'DB 기반',
     'mixed' => '혼합 데이터',
+    'public_mvp_snapshot' => '공공 스냅샷',
     'skeleton' => '데모 데이터',
     '' => '-',
     final source => source,
@@ -1281,6 +1282,7 @@ String _basisLabel(String value) {
   return switch (value.trim()) {
     'actual_data' => '실데이터',
     'demo_seed' => '시드 데이터',
+    'public_mvp_snapshot' => '공개 MVP 스냅샷',
     'demo_fallback' => '데모 기준',
     final basis when basis.isEmpty => '-',
     final basis => basis,

@@ -9,7 +9,7 @@ from apps.api.app.services.normalization import normalize_docent_mode, normalize
 
 class DocentScriptRequest(BaseModel):
     place_id: str = Field(min_length=1)
-    category: Literal["attraction", "restaurant", "event"]
+    category: Literal["attraction", "restaurant", "event", "culture_venue"]
     language: str = "ko"
     mode: str = "brief"
 

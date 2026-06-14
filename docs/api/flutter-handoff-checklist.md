@@ -10,7 +10,7 @@ developer.
   token or signed OAuth/Entra JWT), or migration API key value for `X-API-Key`.
 - Current git commit SHA from the backend operator.
 - Backend runtime mode from `/readyz.data.mode.overall`: `skeleton`,
-  `db-backed`, `live-azure`, or `degraded`.
+  `public-cache`, `db-backed`, `live-azure`, or `degraded`.
 
 ## Public Checks
 
@@ -50,12 +50,12 @@ X-API-Key: <client api key>
 Wave 1 Flutter routes:
 
 ```text
-GET  /api/v1/places?lat=37.2636&lng=127.0286&radius_m=1000
+GET  /api/v1/places?lat=37.2636&lng=127.0286&radius_m=50000
 GET  /api/v1/weather?lat=37.2636&lng=127.0286
 POST /api/v1/docents/script
 POST /api/v1/docents/audio
 POST /api/v1/plans/daily
-GET  /api/v1/plans/intervention?lat=37.2636&lng=127.0286&radius_m=1000
+GET  /api/v1/plans/intervention?lat=37.2636&lng=127.0286&radius_m=50000
 ```
 
 JSON routes return `{ ok, data, meta, error }`. Audio success from
@@ -81,8 +81,8 @@ shell and clear it after the check.
 Expected handoff artifacts:
 
 - Smoke result: `/healthz`, `/readyz`, and `/openapi.json` pass.
-- Runtime mode: `/readyz.data.mode` matches the intended skeleton, DB-backed,
-  or live Azure handoff.
+- Runtime mode: `/readyz.data.mode` matches the intended skeleton, public-cache,
+  DB-backed, or live Azure handoff.
 - Request correlation: the Flutter app shell shows latest public/API/audio
   request ids from response metadata or headers; use those ids with JSONL access
   logs when debugging a handoff.

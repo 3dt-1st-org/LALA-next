@@ -126,11 +126,17 @@ def test_openapi_documents_readyz_runtime_mode(client):
     runtime_mode = schemas["RuntimeMode"]["properties"]
     assert runtime_mode["overall"]["enum"] == [
         "skeleton",
+        "public-cache",
         "db-backed",
         "live-azure",
         "degraded",
     ]
-    assert runtime_mode["data"]["enum"] == ["skeleton", "db-backed", "degraded"]
+    assert runtime_mode["data"]["enum"] == [
+        "skeleton",
+        "public-cache",
+        "db-backed",
+        "degraded",
+    ]
     assert runtime_mode["worker"]["enum"] == ["dry-run", "degraded"]
     readiness_checks = schemas["ReadinessChecks"]["properties"]
     assert readiness_checks["client_auth"]["enum"] == [
@@ -146,6 +152,7 @@ def test_openapi_documents_readyz_runtime_mode(client):
         "missing",
     ]
     assert readiness_checks["public_demo_mode"]["enum"] == ["enabled", "disabled"]
+    assert readiness_checks["public_data_snapshot"]["enum"] == ["configured", "missing"]
     assert readiness_checks["jwt_validation"]["enum"] == ["configured", "skipped"]
     assert readiness_checks["oauth_jwks_url"]["enum"] == ["configured", "skipped"]
 
@@ -188,6 +195,34 @@ def test_openapi_documents_v1_success_data_schemas(client):
         "$ref": "#/components/schemas/PlaceScoreComponents"
     }
     assert schemas["PlaceScoreComponents"]["properties"]["local_spending_score"]["nullable"] is True
+    assert schemas["Place"]["properties"]["category"]["enum"] == [
+        "attraction",
+        "restaurant",
+        "event",
+        "culture_venue",
+    ]
+    assert schemas["Place"]["properties"]["source"]["enum"] == [
+        "skeleton",
+        "public_mvp_snapshot",
+        "db",
+    ]
+    assert schemas["PlaceScore"]["properties"]["data_basis"]["enum"] == [
+        "analytics.place_score_snapshots",
+        "public_mvp_snapshot",
+        "demo_fallback",
+    ]
+    assert schemas["PlacesQuery"]["properties"]["category"]["enum"] == [
+        "all",
+        "attraction",
+        "restaurant",
+        "event",
+        "culture_venue",
+    ]
+    assert schemas["PlacesData"]["properties"]["source"]["enum"] == [
+        "skeleton",
+        "public_mvp_snapshot",
+        "db",
+    ]
     assert schemas["WeatherData"]["properties"]["dust"] == {
         "$ref": "#/components/schemas/Dust"
     }
@@ -195,6 +230,12 @@ def test_openapi_documents_v1_success_data_schemas(client):
         "skeleton",
         "db_cache",
         "azure_openai",
+    ]
+    assert schemas["DocentScriptData"]["properties"]["category"]["enum"] == [
+        "attraction",
+        "restaurant",
+        "event",
+        "culture_venue",
     ]
     assert "request_hash" in schemas["DocentScriptData"]["required"]
     assert schemas["DocentScriptData"]["properties"]["request_hash"]["pattern"] == (

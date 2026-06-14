@@ -9,6 +9,7 @@ Current app surface:
 - Public `/healthz` and `/readyz` status before auth is available.
 - Runtime mode display from `/readyz.data.mode`.
 - Runtime editable backend base URL.
+- 50 km default public MVP radius for the Suwon/Gyeonggi demo snapshot.
 - Bearer token or migration API key input for `/api/v1/*`.
 - Recommendation-first home surface that highlights the top place, local-value
   score, local spending, demand dispersion, weather fit, culture relevance, and
@@ -19,9 +20,9 @@ Current app surface:
 - Partial-failure handling that keeps public health/readiness visible when an
   authenticated `/api/v1/*` request fails.
 
-Docent audio fetch is deliberately manual. In skeleton mode it verifies the
-binary `audio/mpeg` contract, while a live Speech-enabled backend may create a
-paid Azure Speech request.
+Docent audio fetch is deliberately manual. In skeleton or public-cache mode it
+verifies the binary `audio/mpeg` contract, while a live Speech-enabled backend
+may create a paid Azure Speech request.
 
 Run from the repository root:
 
@@ -90,10 +91,10 @@ flutter run \
 ```
 
 The public MVP backend can run with `LALA_PUBLIC_DEMO_MODE=true`, so the app
-loads places, weather, intervention, daily plan, and docent script panels even
-when no bearer token or migration API key is entered. If the backend disables
-public demo mode, the server returns the normal JSON auth error and the app keeps
-readiness visible.
+loads places from the bundled public snapshot plus weather, intervention, daily
+plan, and docent script panels even when no bearer token or migration API key is
+entered. If the backend disables public demo mode, the server returns the normal
+JSON auth error and the app keeps readiness visible.
 
 Do not commit client tokens or API keys. For local testing, prefer entering
 short-lived credentials in the app UI or using an operator-owned environment.

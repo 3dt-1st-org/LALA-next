@@ -335,6 +335,7 @@ def _readyz_data_schema() -> dict[str, Any]:
 
 def _readiness_checks_schema() -> dict[str, Any]:
     configured_or_skipped = {"type": "string", "enum": ["configured", "skipped"]}
+    configured_or_missing = {"type": "string", "enum": ["configured", "missing"]}
     configured_skipped_degraded = {
         "type": "string",
         "enum": ["configured", "skipped", "degraded"],
@@ -346,6 +347,7 @@ def _readiness_checks_schema() -> dict[str, Any]:
             "client_auth",
             "client_identity",
             "public_demo_mode",
+            "public_data_snapshot",
             "api_key",
             "bearer_token",
             "jwt_validation",
@@ -376,6 +378,7 @@ def _readiness_checks_schema() -> dict[str, Any]:
                 "enum": ["static", "transition", "oauth-configured", "public-demo", "missing"],
             },
             "public_demo_mode": enabled_or_disabled,
+            "public_data_snapshot": configured_or_missing,
             "api_key": configured_or_skipped,
             "bearer_token": configured_or_skipped,
             "jwt_validation": configured_or_skipped,
@@ -410,9 +413,12 @@ def _runtime_mode_schema() -> dict[str, Any]:
         "properties": {
             "overall": {
                 "type": "string",
-                "enum": ["skeleton", "db-backed", "live-azure", "degraded"],
+                "enum": ["skeleton", "public-cache", "db-backed", "live-azure", "degraded"],
             },
-            "data": {"type": "string", "enum": ["skeleton", "db-backed", "degraded"]},
+            "data": {
+                "type": "string",
+                "enum": ["skeleton", "public-cache", "db-backed", "degraded"],
+            },
             "ai": {"type": "string", "enum": ["skeleton", "live-azure", "degraded"]},
             "speech": {"type": "string", "enum": ["skeleton", "live-azure", "degraded"]},
             "worker": {"type": "string", "enum": ["dry-run", "degraded"]},
@@ -476,7 +482,11 @@ def _place_score_schema() -> dict[str, Any]:
             "components": {"$ref": "#/components/schemas/PlaceScoreComponents"},
             "data_basis": {
                 "type": "string",
-                "enum": ["analytics.place_score_snapshots", "demo_fallback"],
+                "enum": [
+                    "analytics.place_score_snapshots",
+                    "public_mvp_snapshot",
+                    "demo_fallback",
+                ],
             },
             "features": {"type": "object"},
         },
@@ -502,14 +512,17 @@ def _place_schema() -> dict[str, Any]:
             "name": {"type": "string"},
             "name_ko": {"type": "string", "nullable": True},
             "name_en": {"type": "string", "nullable": True},
-            "category": {"type": "string", "enum": ["attraction", "restaurant", "event"]},
+            "category": {
+                "type": "string",
+                "enum": ["attraction", "restaurant", "event", "culture_venue"],
+            },
             "lat": {"type": "number", "format": "double"},
             "lng": {"type": "number", "format": "double"},
             "address": {"type": "string"},
             "region_ko": {"type": "string", "nullable": True},
             "region_en": {"type": "string", "nullable": True},
             "distance_m": {"type": "integer"},
-            "source": {"type": "string", "enum": ["skeleton", "db"]},
+            "source": {"type": "string", "enum": ["skeleton", "public_mvp_snapshot", "db"]},
             "upstream_source": {"type": "string", "nullable": True},
             "score": {"$ref": "#/components/schemas/PlaceScore", "nullable": True},
         },
@@ -525,7 +538,10 @@ def _places_query_schema() -> dict[str, Any]:
             "lat": {"type": "number", "format": "double"},
             "lng": {"type": "number", "format": "double"},
             "radius_m": {"type": "integer"},
-            "category": {"type": "string", "enum": ["all", "attraction", "restaurant", "event"]},
+            "category": {
+                "type": "string",
+                "enum": ["all", "attraction", "restaurant", "event", "culture_venue"],
+            },
             "language": {"type": "string", "enum": ["ko", "en"]},
         },
         "additionalProperties": False,
@@ -543,7 +559,7 @@ def _places_data_schema() -> dict[str, Any]:
                 "items": {"$ref": "#/components/schemas/Place"},
             },
             "query": {"$ref": "#/components/schemas/PlacesQuery"},
-            "source": {"type": "string", "enum": ["skeleton", "db"]},
+            "source": {"type": "string", "enum": ["skeleton", "public_mvp_snapshot", "db"]},
         },
         "additionalProperties": False,
     }
@@ -626,7 +642,10 @@ def _docent_script_data_schema() -> dict[str, Any]:
         ],
         "properties": {
             "place_id": {"type": "string"},
-            "category": {"type": "string", "enum": ["attraction", "restaurant", "event"]},
+            "category": {
+                "type": "string",
+                "enum": ["attraction", "restaurant", "event", "culture_venue"],
+            },
             "language": {"type": "string", "enum": ["ko", "en"]},
             "mode": {"type": "string", "enum": ["brief", "detail"]},
             "script": {"type": "string"},

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from apps.api.app.core.config import Settings, get_settings
 from apps.api.app.core.jwt_auth import is_oauth_jwt_validation_configured
-from apps.api.app.services import db_repository
+from apps.api.app.services import db_repository, public_mvp_data
 from apps.workers.app import contracts as worker_contracts
 
 
@@ -44,7 +44,11 @@ def _client_identity_status(settings: Settings) -> str:
 
 def _runtime_mode(checks: dict[str, str]) -> dict[str, str]:
     mode = {
-        "data": _data_mode(checks.get("db", "skipped")),
+        "data": _data_mode(
+            db_status=checks.get("db", "skipped"),
+            public_demo_status=checks.get("public_demo_mode", "disabled"),
+            public_snapshot_status=checks.get("public_data_snapshot", "missing"),
+        ),
         "ai": _live_dependency_mode(
             enabled=checks.get("live_ai") == "enabled",
             required_statuses=(
@@ -71,11 +75,18 @@ def _runtime_mode(checks: dict[str, str]) -> dict[str, str]:
     }
 
 
-def _data_mode(db_status: str) -> str:
+def _data_mode(
+    *,
+    db_status: str,
+    public_demo_status: str,
+    public_snapshot_status: str,
+) -> str:
     if db_status == "configured":
         return "db-backed"
     if db_status == "degraded":
         return "degraded"
+    if public_demo_status == "enabled" and public_snapshot_status == "configured":
+        return "public-cache"
     return "skeleton"
 
 
@@ -102,6 +113,8 @@ def _overall_runtime_mode(mode: dict[str, str]) -> str:
         return "degraded"
     if mode["ai"] == "live-azure" or mode["speech"] == "live-azure":
         return "live-azure"
+    if mode["data"] == "public-cache":
+        return "public-cache"
     if mode["data"] == "db-backed":
         return "db-backed"
     return "skeleton"
@@ -120,6 +133,7 @@ def build_readiness(settings: Settings | None = None) -> dict:
         "client_auth": client_auth_status,
         "client_identity": _client_identity_status(settings),
         "public_demo_mode": "enabled" if settings.public_demo_mode else "disabled",
+        "public_data_snapshot": public_mvp_data.snapshot_status(),
         "api_key": _status(settings.ios_api_key, required=False),
         "bearer_token": _status(settings.api_bearer_token, required=False),
         "jwt_validation": "configured" if jwt_validation_configured else "skipped",

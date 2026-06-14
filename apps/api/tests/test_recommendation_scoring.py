@@ -25,3 +25,10 @@ def test_demo_place_score_marks_fallback_basis_and_missing_signals():
     assert 0 < score["final_score"] <= 1
     assert score["components"]["review_quality_score"] is None
     assert "card_spending_snapshot" in score["features"]["missing_signals"]
+
+
+def test_demo_place_score_keeps_culture_venue_prior():
+    score = recommendation_scoring.demo_place_score(category="culture_venue", distance_m=1200)
+
+    assert score["features"]["category_prior"] == "culture_venue"
+    assert score["components"]["culture_relevance_score"] == 0.94

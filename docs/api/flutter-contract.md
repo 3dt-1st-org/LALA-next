@@ -113,12 +113,13 @@ request `input` values are removed before the response is returned.
 Wave 1 service responses are deterministic when live dependencies are disabled.
 Azure OpenAI and Azure Speech are available as opt-in live paths. DB-backed
 places, weather, planner, and docent-cache reads are also available when
-`DB_DSN` points at the canonical schema. If DB access is absent or unavailable,
-the same routes return contract-safe skeleton data.
+`DB_DSN` points at the canonical schema. If DB access is absent but
+`LALA_PUBLIC_DEMO_MODE=true`, places use the bundled `public_mvp_snapshot`;
+otherwise the same routes return contract-safe skeleton data.
 Flutter can read `/readyz.data.mode.overall` for a compact handoff label:
-`skeleton`, `db-backed`, `live-azure`, or `degraded`. Component labels are also
-available at `data.mode.data`, `data.mode.ai`, `data.mode.speech`, and
-`data.mode.worker`.
+`skeleton`, `public-cache`, `db-backed`, `live-azure`, or `degraded`. Component
+labels are also available at `data.mode.data`, `data.mode.ai`,
+`data.mode.speech`, and `data.mode.worker`.
 The reference Dart client exposes public `getHealth()` and `getReadiness()`
 methods without requiring client auth; `/api/v1/*` client methods still require
 `Authorization: Bearer <token>` or `X-API-Key`.
@@ -159,7 +160,7 @@ Query parameters:
 | `lat` | number | `37.2636` | `-90` to `90` |
 | `lng` | number | `127.0286` | `-180` to `180` |
 | `radius_m` | integer | `1000` | `1` to `50000` |
-| `category` | string | `all` | `all`, `attraction`, `restaurant`, `event` |
+| `category` | string | `all` | `all`, `attraction`, `restaurant`, `event`, `culture_venue` |
 | `lang` | string | `ko` | `ko`, `kr`, `kor`, `korean`, `en`, `eng`, `english` |
 
 ### `GET /api/v1/weather`
@@ -185,8 +186,8 @@ Request:
 }
 ```
 
-`category` must be `attraction`, `restaurant`, or `event`. `mode` accepts
-`brief`, `detail`, `standard`, and `deep`.
+`category` must be `attraction`, `restaurant`, `event`, or `culture_venue`.
+`mode` accepts `brief`, `detail`, `standard`, and `deep`.
 Success data includes `request_hash` and `cache_key` for idempotency-aware
 client flows.
 
@@ -238,39 +239,41 @@ Query parameters:
   "query": {
     "lat": 37.2636,
     "lng": 127.0286,
-    "radius_m": 1000,
+    "radius_m": 50000,
     "category": "all",
     "language": "ko"
   },
   "places": [
     {
-      "place_id": "skeleton-suwon-hwaseong",
-      "name": "Suwon Hwaseong",
-      "category": "attraction",
-      "distance_m": 420,
-      "lat": 37.2869,
-      "lng": 127.0116,
+      "place_id": "tour-api-129765",
+      "name": "호암미술관",
+      "category": "culture_venue",
+      "distance_m": 14857,
+      "lat": 37.293314781,
+      "lng": 127.1923454131,
       "score": {
-        "final_score": 0.7427,
+        "final_score": 0.8562,
         "formula_version": "local-value-v1",
         "components": {
-          "local_spending_score": 0.62,
-          "demand_dispersion_score": 0.66,
-          "weather_fit_score": 0.74,
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.95,
+          "weather_fit_score": null,
           "review_quality_score": null,
-          "culture_relevance_score": 0.86
+          "culture_relevance_score": 0.7
         },
-        "data_basis": "demo_fallback",
+        "data_basis": "public_mvp_snapshot",
         "features": {
+          "primary_source": "tour_api",
           "missing_signals": [
-            "card_spending_snapshot",
-            "review_attribute_analysis"
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
           ]
         }
       }
     }
   ],
-  "source": "skeleton"
+  "source": "public_mvp_snapshot"
 }
 ```
 
@@ -278,8 +281,10 @@ When the canonical PostgreSQL read model returns rows, this payload keeps the
 same shape and uses `source: "db"`. DB rows are radius-filtered, joined to the
 latest `analytics.place_score_snapshots` row, then sorted by final score before
 distance. When a DB-backed score is present, `score.data_basis` is
-`analytics.place_score_snapshots`; public demo fallback scores are explicitly
-marked `demo_fallback` and must not be described as real card-spending evidence.
+`analytics.place_score_snapshots`. The public MVP cache uses
+`score.data_basis=public_mvp_snapshot`; final skeleton fallback scores are
+explicitly marked `demo_fallback` and must not be described as real
+card-spending evidence.
 
 `GET /api/v1/weather`:
 

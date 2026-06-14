@@ -32,6 +32,12 @@ _CATEGORY_PRIORS = {
         "weather_fit_score": 0.68,
         "culture_relevance_score": 0.90,
     },
+    "culture_venue": {
+        "local_spending_score": 0.54,
+        "demand_dispersion_score": 0.76,
+        "weather_fit_score": 0.86,
+        "culture_relevance_score": 0.94,
+    },
 }
 
 

@@ -60,8 +60,8 @@ secret values, generated scripts, or audio payloads to dashboards or alerts.
 Route labels are bounded by known route paths. Unknown 404 paths collapse into
 `__unmatched__`, so arbitrary URLs and query strings are not exported.
 Runtime mode labels are bounded to the known components `overall`, `data`, `ai`,
-`speech`, and `worker`, with values such as `skeleton`, `db-backed`,
-`live-azure`, `dry-run`, and `degraded`.
+`speech`, and `worker`, with values such as `skeleton`, `public-cache`,
+`db-backed`, `live-azure`, `dry-run`, and `degraded`.
 
 ## Approval Gate
 

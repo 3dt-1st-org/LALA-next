@@ -76,7 +76,7 @@ Notes:
 - `/healthz` and `/readyz` use specialized success envelope schemas for their
   public operational payloads. `/readyz` documents `data.mode.overall` and
   component mode labels so Flutter handoff/codegen can distinguish skeleton,
-  DB-backed, live Azure, and degraded runtime states.
+  public-cache, DB-backed, live Azure, and degraded runtime states.
 - `/api/v1/places`, `/weather`, `/docents/script`, `/plans/daily`, and
   `/plans/intervention` document their common success `data` fields with
   route-specific schemas that mirror the reference Dart DTOs. The audio route

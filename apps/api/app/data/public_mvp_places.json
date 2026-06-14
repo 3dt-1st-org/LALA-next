@@ -1,0 +1,200 @@
+{
+  "snapshot_id": "public-mvp-2026-06-15",
+  "description": "Small public MVP snapshot derived from local canonical data after TourAPI, KCISA, KOPIS, and dev seed score batches. It is used only when the public demo API has no DB_DSN.",
+  "places": [
+    {
+      "place_id": "tour-api-129765",
+      "name_ko": "호암미술관",
+      "name_en": "Ho-Am Art Museum",
+      "category": "culture_venue",
+      "lat": 37.293314781,
+      "lng": 127.1923454131,
+      "address_ko": "경기도 용인시 처인구 포곡읍 에버랜드로562번길 38",
+      "address_en": "38 Everland-ro 562beon-gil, Pogok-eup, Cheoin-gu, Yongin-si, Gyeonggi-do",
+      "region_ko": "용인시",
+      "region_en": "Yongin",
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8562,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.95,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "primary_source": "tour_api",
+          "region_name_ko": "용인시",
+          "missing_signals": ["card_spending_area_monthly", "review_attribute_analysis", "weather_observations"],
+          "input_sources": ["travel.places", "culture.events", "travel.place_events", "travel.weather_observations"]
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-3049823",
+      "name_ko": "겨울엔 양평, 불빛:애",
+      "name_en": "Winter in Yangpyeong, Light:ae",
+      "category": "event",
+      "lat": 37.4917499278,
+      "lng": 127.4874296618,
+      "address_ko": "경기도 양평군 양평읍 군청앞길 2",
+      "address_en": "2 Guncheongap-gil, Yangpyeong-eup, Yangpyeong-gun, Gyeonggi-do",
+      "region_ko": "양평군",
+      "region_en": "Yangpyeong",
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8562,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.95,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "primary_source": "tour_api",
+          "region_name_ko": "양평군",
+          "missing_signals": ["card_spending_area_monthly", "review_attribute_analysis", "weather_observations"],
+          "input_sources": ["travel.places", "culture.events", "travel.place_events", "travel.weather_observations"]
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-125518",
+      "name_ko": "서운동산",
+      "name_en": "Seoun Garden",
+      "category": "attraction",
+      "lat": 37.7717177509,
+      "lng": 127.201880895,
+      "address_ko": "경기도 포천시 내촌면 내진로9번길 237",
+      "address_en": "237 Naejin-ro 9beon-gil, Naechon-myeon, Pocheon-si, Gyeonggi-do",
+      "region_ko": "포천시",
+      "region_en": "Pocheon",
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8188,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.95,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.6
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "primary_source": "tour_api",
+          "region_name_ko": "포천시",
+          "missing_signals": ["card_spending_area_monthly", "review_attribute_analysis", "weather_observations"],
+          "input_sources": ["travel.places", "culture.events", "travel.place_events", "travel.weather_observations"]
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-3588837",
+      "name_ko": "강남할배제빵소 오이도",
+      "name_en": "Gangnam Grandpa Bakery Oido",
+      "category": "restaurant",
+      "lat": 37.3475078614,
+      "lng": 126.6887174374,
+      "address_ko": "경기도 시흥시 오이도로 149-1 (정왕동)",
+      "address_en": "149-1 Oido-ro, Siheung-si, Gyeonggi-do",
+      "region_ko": "시흥시",
+      "region_en": "Siheung",
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.7813,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.95,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.5
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "primary_source": "tour_api",
+          "region_name_ko": "시흥시",
+          "missing_signals": ["card_spending_area_monthly", "review_attribute_analysis", "weather_observations"],
+          "input_sources": ["travel.places", "culture.events", "travel.place_events", "travel.weather_observations"]
+        }
+      }
+    },
+    {
+      "place_id": "demo-suwon-night-walk",
+      "name_ko": "화성행궁 야간 산책",
+      "name_en": "Hwaseong Haenggung Night Walk",
+      "category": "event",
+      "lat": 37.2819,
+      "lng": 127.0142,
+      "address_ko": "경기도 수원시 팔달구 행궁동",
+      "address_en": "Haenggung-dong, Paldal-gu, Suwon-si, Gyeonggi-do",
+      "region_ko": "수원시",
+      "region_en": "Suwon",
+      "upstream_source": "dev_seed",
+      "score": {
+        "final_score": 0.6359,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": 0.7,
+          "demand_dispersion_score": 0.35,
+          "weather_fit_score": 0.72,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.9
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "primary_source": "dev_seed",
+          "region_name_ko": "수원시",
+          "card_month": "2026-05-01",
+          "region_spend_amount": 14000000,
+          "region_transaction_count": 1700,
+          "culture_event_count": 12,
+          "missing_signals": ["review_attribute_analysis"],
+          "input_sources": ["travel.places", "economy.card_spending_area_monthly", "culture.events", "travel.place_events", "travel.weather_observations"]
+        }
+      }
+    },
+    {
+      "place_id": "demo-suwon-hwaseong",
+      "name_ko": "수원화성",
+      "name_en": "Suwon Hwaseong",
+      "category": "attraction",
+      "lat": 37.2879,
+      "lng": 127.0116,
+      "address_ko": "경기도 수원시 팔달구 정조로 825",
+      "address_en": "825 Jeongjo-ro, Paldal-gu, Suwon-si, Gyeonggi-do",
+      "region_ko": "수원시",
+      "region_en": "Suwon",
+      "upstream_source": "dev_seed",
+      "score": {
+        "final_score": 0.6182,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": 0.7,
+          "demand_dispersion_score": 0.35,
+          "weather_fit_score": 0.72,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.8
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "primary_source": "dev_seed",
+          "region_name_ko": "수원시",
+          "card_month": "2026-05-01",
+          "region_spend_amount": 14000000,
+          "region_transaction_count": 1700,
+          "culture_event_count": 12,
+          "missing_signals": ["review_attribute_analysis"],
+          "input_sources": ["travel.places", "economy.card_spending_area_monthly", "culture.events", "travel.place_events", "travel.weather_observations"]
+        }
+      }
+    }
+  ]
+}

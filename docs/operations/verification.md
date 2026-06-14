@@ -96,8 +96,10 @@ available.
 `/readyz.data.mode` adds the operator-facing runtime summary:
 `overall=skeleton` when deterministic fallbacks are active, `overall=db-backed`
 when the canonical DB probe is configured and no live Azure dependency is in
-use, `overall=live-azure` when opt-in AI or Speech live calls are configured,
-and `overall=degraded` when a requested runtime dependency is unhealthy.
+use, `overall=public-cache` when public demo mode serves the bundled MVP
+snapshot without a live DB, `overall=live-azure` when opt-in AI or Speech live
+calls are configured, and `overall=degraded` when a requested runtime dependency
+is unhealthy.
 
 When `DB_DSN` is configured, `/readyz` connects to PostgreSQL and verifies the
 canonical relations required by the API:

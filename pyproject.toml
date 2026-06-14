@@ -31,6 +31,9 @@ dev = [
 where = ["."]
 include = ["apps*"]
 
+[tool.setuptools.package-data]
+"apps.api.app.data" = ["*.json"]
+
 [tool.pytest.ini_options]
 testpaths = ["apps/api/tests"]
 pythonpath = ["."]

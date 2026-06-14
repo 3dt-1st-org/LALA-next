@@ -180,6 +180,24 @@ def test_docent_script_returns_envelope(client, auth_headers):
     assert body["data"]["cache_key"].startswith("docent_script:")
 
 
+def test_docent_script_accepts_culture_venue_category(client, auth_headers):
+    response = client.post(
+        "/api/v1/docents/script",
+        headers=auth_headers,
+        json={
+            "place_id": "culture-venue-1",
+            "category": "culture_venue",
+            "language": "ko",
+            "mode": "brief",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["data"]["category"] == "culture_venue"
+    assert body["data"]["script"]
+
+
 def test_docent_script_uses_db_cache_before_generation(client, auth_headers, monkeypatch):
     monkeypatch.setattr(
         "apps.api.app.services.db_repository.fetch_docent_script_cache",

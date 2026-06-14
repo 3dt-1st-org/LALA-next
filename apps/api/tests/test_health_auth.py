@@ -84,6 +84,14 @@ def test_readyz_reports_public_demo_mode(client, monkeypatch):
     assert checks["client_auth"] == "public-demo"
     assert checks["client_identity"] == "public-demo"
     assert checks["public_demo_mode"] == "enabled"
+    assert checks["public_data_snapshot"] == "configured"
+    assert response.json()["data"]["mode"] == {
+        "overall": "public-cache",
+        "data": "public-cache",
+        "ai": "skeleton",
+        "speech": "skeleton",
+        "worker": "dry-run",
+    }
 
 
 def test_readyz_reports_oauth_identity_rollout_configuration(client, monkeypatch):
@@ -201,10 +209,13 @@ def test_v1_accepts_unauthenticated_public_demo_request(client, monkeypatch):
     monkeypatch.delenv("OAUTH_REQUIRED_SCOPES", raising=False)
     monkeypatch.setenv("LALA_PUBLIC_DEMO_MODE", "true")
 
-    response = client.get("/api/v1/places")
+    response = client.get("/api/v1/places?lat=37.2636&lng=127.0286&radius_m=50000")
 
     assert response.status_code == 200
-    assert response.json()["ok"] is True
+    body = response.json()
+    assert body["ok"] is True
+    assert body["data"]["source"] == "public_mvp_snapshot"
+    assert body["data"]["places"][0]["score"]["data_basis"] == "public_mvp_snapshot"
 
 
 def test_v1_requires_present_credentials_when_oauth_is_configured(client, monkeypatch):

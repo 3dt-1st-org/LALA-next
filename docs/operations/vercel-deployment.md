@@ -26,9 +26,11 @@ LALA_ENABLE_LIVE_AI=false
 LALA_ENABLE_LIVE_SPEECH=false
 ```
 
-The public MVP intentionally leaves DB, live AI, live speech, and OAuth/JWT
-rollouts disabled. `/readyz` should therefore report `client_auth=public-demo`
-and `mode.overall=skeleton`.
+The public MVP intentionally leaves live DB, live AI, live speech, and OAuth/JWT
+rollouts disabled. When `LALA_PUBLIC_DEMO_MODE=true`, the API serves the bundled
+`public_mvp_snapshot` if `DB_DSN` is absent, so `/readyz` should report
+`client_auth=public-demo`, `checks.public_data_snapshot=configured`, and
+`mode.overall=public-cache`.
 
 Deploy the API:
 
@@ -41,7 +43,7 @@ Smoke the API:
 ```bash
 curl -fsS https://api.lala-next.cloud/healthz
 curl -fsS https://api.lala-next.cloud/readyz
-curl -fsS https://api.lala-next.cloud/api/v1/places
+curl -fsS 'https://api.lala-next.cloud/api/v1/places?lat=37.2636&lng=127.0286&radius_m=50000'
 ```
 
 ## Frontend
@@ -70,6 +72,10 @@ Smoke the frontend:
 curl -sS -o /dev/null -w '%{http_code}\n' https://lala-next.cloud
 curl -sS -o /dev/null -w '%{http_code}\n' https://www.lala-next.cloud
 ```
+
+The production Flutter build uses `LALA_API_BASE_URL=https://api.lala-next.cloud`
+and a 50 km default recommendation radius so the public Gyeonggi MVP snapshot is
+visible on first load.
 
 ## DNS
 
