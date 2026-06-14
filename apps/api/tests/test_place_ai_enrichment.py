@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 from apps.api.app.tools import enrich_place_ai_columns
 
@@ -16,6 +17,7 @@ def test_place_ai_enrichment_plan_uses_data_dictionary_names(capsys):
     assert payload["target"] == "travel.places"
     assert "region_name_en" in payload["enriched_columns"]
     assert "travel.place_enrichments" in payload["enriched_columns"]
+    assert payload["retry_attempts"] == 3
     assert payload["live_ai_call"] is False
     assert payload["db_mutation"] is False
 
@@ -80,3 +82,28 @@ def test_parse_ai_response_accepts_region_name_en_and_legacy_alias():
     assert parsed[0].is_indoor is False
     assert parsed[0].confidence == 0.91
     assert parsed[1].region_name_en == "Suwon-si"
+
+
+def test_ai_completion_retries_rate_limit(monkeypatch):
+    calls = {"count": 0}
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            calls["count"] += 1
+            if calls["count"] == 1:
+                raise RuntimeError("Too Many Requests")
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="{}"))])
+
+    client = SimpleNamespace(chat=SimpleNamespace(completions=FakeCompletions()))
+    monkeypatch.setattr(enrich_place_ai_columns.time, "sleep", lambda delay: None)
+
+    response = enrich_place_ai_columns._create_chat_completion_with_retry(
+        client=client,
+        model="test-model",
+        messages=[],
+        retry_attempts=2,
+        retry_delay_sec=0,
+    )
+
+    assert calls["count"] == 2
+    assert response.choices[0].message.content == "{}"

@@ -119,7 +119,7 @@ def _snapshot_place(row: dict[str, Any]) -> dict[str, Any]:
         "lat": _required_float(row.get("lat")),
         "lng": _required_float(row.get("lng")),
         "address_ko": _optional_text(row.get("address_ko")),
-        "address_en": _optional_text(row.get("address_en")),
+        "address_en": _snapshot_address_en(row),
         "region_ko": _optional_text(row.get("region_ko")),
         "region_en": _optional_text(row.get("region_en")),
         "upstream_source": _optional_text(row.get("upstream_source")) or "canonical",
@@ -148,6 +148,16 @@ def _snapshot_score(row: dict[str, Any]) -> dict[str, Any] | None:
         "data_basis": SNAPSHOT_DATA_BASIS,
         "features": features,
     }
+
+
+def _snapshot_address_en(row: dict[str, Any]) -> str | None:
+    address_en = _optional_text(row.get("address_en"))
+    if not address_en:
+        return None
+    address_ko = _optional_text(row.get("address_ko")) or ""
+    if "경기도" in address_ko and "gyeonggi" not in address_en.lower():
+        return f"{address_en}, Gyeonggi-do"
+    return address_en
 
 
 def _json_safe(value: Any) -> Any:

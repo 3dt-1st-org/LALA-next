@@ -59,6 +59,22 @@ def test_build_snapshot_payload_marks_public_mvp_basis() -> None:
     assert place["score"]["features"]["snapshot_source"] == "analytics.place_score_snapshots"
 
 
+def test_build_snapshot_payload_preserves_gyeonggi_in_english_address() -> None:
+    rows = _db_rows()
+    rows[0]["address_en"] = "38 Everland-ro 562beon-gil, Pogok-eup, Cheoin-gu, Yongin-si"
+
+    payload = public_mvp_snapshot.build_snapshot_payload(
+        rows,
+        snapshot_id="test-address",
+        lat=37.2636,
+        lng=127.0286,
+        radius_m=50000,
+        category="all",
+    )
+
+    assert payload["places"][0]["address_en"].endswith(", Gyeonggi-do")
+
+
 def test_export_plan_does_not_require_db(capsys) -> None:
     exit_code = export_public_mvp_snapshot.main(["--json"])
 

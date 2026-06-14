@@ -16,7 +16,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     -h|--help)
       echo "Usage: scripts/unix/plan_place_ai_enrichment.sh [tool args...] [--python PATH]"
-      echo "Tool args include --dry-run-ai, --apply, --confirm APPLY_AI_PLACE_ENRICHMENT, --category NAME, --limit N, --json."
+      echo "Tool args include --dry-run-ai, --apply, --confirm APPLY_AI_PLACE_ENRICHMENT, --category NAME, --limit N, --retry-attempts N, --json."
       exit 0
       ;;
     *)

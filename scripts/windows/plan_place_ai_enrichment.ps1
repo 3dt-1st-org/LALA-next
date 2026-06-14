@@ -7,6 +7,8 @@ param(
     [string]$Category = "all",
     [int]$Limit = 50,
     [int]$BatchSize = 20,
+    [int]$RetryAttempts = 3,
+    [double]$RetryDelaySec = 5.0,
     [int]$ConnectTimeout = 5,
     [switch]$Json
 )
@@ -63,6 +65,10 @@ try {
         "$Limit",
         "--batch-size",
         "$BatchSize",
+        "--retry-attempts",
+        "$RetryAttempts",
+        "--retry-delay-sec",
+        "$RetryDelaySec",
         "--connect-timeout",
         "$ConnectTimeout"
     )

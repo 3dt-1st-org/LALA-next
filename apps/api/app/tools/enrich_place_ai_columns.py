@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import sys
+import time
 from dataclasses import asdict, dataclass
 from typing import Any, Sequence
 
@@ -205,6 +206,8 @@ def generate_enrichments(
     *,
     candidates: Sequence[PlaceCandidate],
     batch_size: int,
+    retry_attempts: int,
+    retry_delay_sec: float,
 ) -> list[PlaceEnrichment]:
     if not candidates:
         return []
@@ -227,7 +230,8 @@ def generate_enrichments(
     enrichments: list[PlaceEnrichment] = []
     for start in range(0, len(candidates), batch_size):
         batch = list(candidates[start : start + batch_size])
-        response = client.chat.completions.create(
+        response = _create_chat_completion_with_retry(
+            client=client,
             model=settings.azure_openai_deployment,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
@@ -239,13 +243,59 @@ def generate_enrichments(
                     ),
                 },
             ],
-            temperature=0.1,
-            max_tokens=4000,
-            response_format={"type": "json_object"},
+            retry_attempts=retry_attempts,
+            retry_delay_sec=retry_delay_sec,
         )
         raw = response.choices[0].message.content or ""
         enrichments.extend(parse_ai_response(raw, batch))
     return enrichments
+
+
+def _create_chat_completion_with_retry(
+    *,
+    client: Any,
+    model: str,
+    messages: list[dict[str, str]],
+    retry_attempts: int,
+    retry_delay_sec: float,
+) -> Any:
+    attempts = max(1, retry_attempts)
+    delay = max(0.0, retry_delay_sec)
+    last_exc: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=0.1,
+                max_tokens=4000,
+                response_format={"type": "json_object"},
+            )
+        except Exception as exc:
+            last_exc = exc
+            if attempt >= attempts or not _is_retryable_ai_error(exc):
+                raise
+            time.sleep(delay * attempt)
+    if last_exc:
+        raise last_exc
+    raise RuntimeError("Azure OpenAI completion failed before a request was attempted.")
+
+
+def _is_retryable_ai_error(exc: Exception) -> bool:
+    status_code = getattr(exc, "status_code", None)
+    if status_code in {408, 409, 429, 500, 502, 503, 504}:
+        return True
+    text = str(exc).lower()
+    return any(
+        marker in text
+        for marker in (
+            "too many requests",
+            "rate limit",
+            "timeout",
+            "temporarily unavailable",
+            "service unavailable",
+        )
+    )
 
 
 def apply_enrichments(
@@ -350,6 +400,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--limit", type=int, default=50)
     parser.add_argument("--batch-size", type=int, default=20)
+    parser.add_argument("--retry-attempts", type=int, default=3)
+    parser.add_argument("--retry-delay-sec", type=float, default=5.0)
     parser.add_argument("--connect-timeout", type=int, default=5)
     args = parser.parse_args(argv)
 
@@ -358,6 +410,12 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.batch_size <= 0:
         _write(args, {"ok": False, "mode": "plan", "error": "--batch-size must be positive."})
+        return 2
+    if args.retry_attempts <= 0:
+        _write(args, {"ok": False, "mode": "plan", "error": "--retry-attempts must be positive."})
+        return 2
+    if args.retry_delay_sec < 0:
+        _write(args, {"ok": False, "mode": "plan", "error": "--retry-delay-sec must be non-negative."})
         return 2
     if args.apply and args.dry_run_ai:
         _write(args, {"ok": False, "mode": "plan", "error": "Use either --apply or --dry-run-ai."})
@@ -373,6 +431,7 @@ def main(argv: list[str] | None = None) -> int:
                 "db_mutation": False,
                 "target": "travel.places",
                 "prompt_version": PROMPT_VERSION,
+                "retry_attempts": args.retry_attempts,
                 "enriched_columns": [
                     "name_en",
                     "address_en",
@@ -403,7 +462,12 @@ def main(argv: list[str] | None = None) -> int:
             limit=args.limit,
             connect_timeout=args.connect_timeout,
         )
-        enrichments = generate_enrichments(candidates=candidates, batch_size=args.batch_size)
+        enrichments = generate_enrichments(
+            candidates=candidates,
+            batch_size=args.batch_size,
+            retry_attempts=args.retry_attempts,
+            retry_delay_sec=args.retry_delay_sec,
+        )
         updated_rows = 0
         if args.apply:
             updated_rows = apply_enrichments(
