@@ -366,6 +366,32 @@ MVP에서 우선 구현할 보강 항목:
 - 리뷰 광고 필터 후 `taste`, `service`, `price`, `atmosphere` 속성 점수
 - `local_spending_score`, `demand_dispersion_score`, `culture_relevance_score`
 
+## Official API Ingestion
+
+### TourAPI places
+
+`apps.api.app.tools.run_tour_api_ingest`는 한국관광공사
+[`한국관광공사_국문 관광정보 서비스_GW`](https://www.data.go.kr/data/15101578/openapi.do)의
+`areaBasedList2` 응답을
+`travel.places`로 정규화한다. 공공데이터포털의 해당 서비스는 REST API이며
+JSON/XML을 제공하고, 지역기반관광정보/위치기반관광정보/행사정보 등 국내 관광정보를
+제공한다.
+
+| TourAPI field | LALA column | Rule |
+|---|---|---|
+| `contentid` | `source_record_id`, `place_id` | `place_id = tour-api-{contentid}` |
+| `contenttypeid` | `category` | `12=attraction`, `14=culture_venue`, `15=event`, `39=restaurant` |
+| `title` | `name_ko` | 원문 제목 보존 |
+| `addr1`, `addr2` | `address_ko`, `region_name_ko` | `region_name_ko`는 주소의 시군구 토큰에서 추출 |
+| `areacode`, `sigungucode` | `province_code`, `city_code` | TourAPI 지역 코드 보존 |
+| `mapy`, `mapx` | `lat`, `lng` | 위도/경도 숫자 변환 |
+
+기본 지역 코드는 `31`(경기)이고, 서비스 키는 `PUBLIC_DATA_SERVICE_KEY`를 사용한다.
+기본 실행은 plan-only이며, `--preview`는 TourAPI만 호출하고 DB를 쓰지 않는다.
+`--apply`는 `ALLOW_TOUR_API_INGEST_APPLY=1`과
+`--confirm APPLY_TOUR_API_INGEST`가 있을 때만 `travel.places`를 upsert하고
+`ingest.source_files`에 실행 해시를 남긴다.
+
 ## Open Questions
 
 - `event`를 `travel.places.category` 안에 둘지, `culture.events` 중심으로만 둘지

@@ -113,6 +113,9 @@ def test_paid_smoke_requires_authenticated_api_key():
     place_score_batch_script = (
         ROOT / "scripts" / "windows" / "plan_place_score_batch.ps1"
     ).read_text(encoding="utf-8")
+    tour_api_ingest_script = (
+        ROOT / "scripts" / "windows" / "plan_tour_api_ingest.ps1"
+    ).read_text(encoding="utf-8")
     access_log_inspect_script = (
         ROOT / "scripts" / "windows" / "inspect_access_log.ps1"
     ).read_text(encoding="utf-8")
@@ -182,6 +185,12 @@ def test_paid_smoke_requires_authenticated_api_key():
     assert "DB_DSN value is never printed by this script." in place_score_batch_script
     assert "secret show" not in place_score_batch_script
     assert "Write-Host $env:DB_DSN" not in place_score_batch_script
+    assert "apps.api.app.tools.run_tour_api_ingest" in tour_api_ingest_script
+    assert "ALLOW_TOUR_API_INGEST_APPLY=1" in tour_api_ingest_script
+    assert "PUBLIC_DATA_SERVICE_KEY and DB_DSN values are never printed by this script." in tour_api_ingest_script
+    assert "secret show" not in tour_api_ingest_script
+    assert "Write-Host $env:DB_DSN" not in tour_api_ingest_script
+    assert "Write-Host $env:PUBLIC_DATA_SERVICE_KEY" not in tour_api_ingest_script
     assert "read-only and prints only bounded access-log fields" in access_log_inspect_script
     assert "apps.api.app.tools.inspect_access_log" in access_log_inspect_script
     assert "secret show" not in access_log_inspect_script
@@ -235,6 +244,7 @@ def test_unix_scripts_have_safe_operational_guards():
         "plan_key_vault_reuse.sh",
         "plan_observability.sh",
         "plan_place_score_batch.sh",
+        "plan_tour_api_ingest.sh",
         "smoke_api.sh",
         "smoke_oauth_jwt.sh",
         "smoke_workers.sh",
@@ -288,6 +298,11 @@ def test_unix_scripts_have_safe_operational_guards():
     assert "ALLOW_PLACE_SCORE_BATCH_APPLY=1" in scripts["plan_place_score_batch.sh"]
     assert "--confirm APPLY_PLACE_SCORE_BATCH" in scripts["plan_place_score_batch.sh"]
     assert "DB_DSN value is never printed by this script." in scripts["plan_place_score_batch.sh"]
+    assert "run_tour_api_ingest" in scripts["plan_tour_api_ingest.sh"]
+    assert "plan_tour_api_ingest.sh" in scripts["verify_repo.sh"]
+    assert "ALLOW_TOUR_API_INGEST_APPLY=1" in scripts["plan_tour_api_ingest.sh"]
+    assert "--confirm APPLY_TOUR_API_INGEST" in scripts["plan_tour_api_ingest.sh"]
+    assert "PUBLIC_DATA_SERVICE_KEY and DB_DSN values are never printed by this script." in scripts["plan_tour_api_ingest.sh"]
     assert "--check-compat" in scripts["export_openapi.sh"]
     assert "plan_dev_reset" in scripts["plan_dev_reset.sh"]
     assert "plan_dev_reset.sh" in scripts["verify_repo.sh"]

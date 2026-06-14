@@ -133,6 +133,19 @@ After canonical SQL and local seed data are loaded, preview score snapshots:
 scripts/unix/plan_place_score_batch.sh --preview --limit 20
 ```
 
+Review TourAPI place ingestion without external calls or DB writes:
+
+```bash
+scripts/unix/plan_tour_api_ingest.sh
+```
+
+After `PUBLIC_DATA_SERVICE_KEY` and `DB_DSN` are configured, preview official
+TourAPI rows:
+
+```bash
+scripts/unix/plan_tour_api_ingest.sh --preview --rows 20
+```
+
 Check whether Azure PostgreSQL rollout prerequisites exist:
 
 ```bash

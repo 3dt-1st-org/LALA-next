@@ -238,6 +238,51 @@ $env:ALLOW_PLACE_SCORE_BATCH_APPLY = "1"
   -Confirm APPLY_PLACE_SCORE_BATCH
 ```
 
+To review TourAPI place ingestion without calling the external API or writing to
+the database:
+
+```bash
+scripts/unix/plan_tour_api_ingest.sh
+```
+
+```powershell
+.\scripts\windows\plan_tour_api_ingest.ps1
+```
+
+Default mode is plan-only. The source is the public-data `한국관광공사_국문
+관광정보 서비스_GW` service and the default target is `travel.places`.
+Preview calls TourAPI with `PUBLIC_DATA_SERVICE_KEY` but does not mutate the DB:
+
+```bash
+scripts/unix/plan_tour_api_ingest.sh --preview --rows 20
+```
+
+```powershell
+.\scripts\windows\plan_tour_api_ingest.ps1 -Preview -Rows 20
+```
+
+Apply upserts TourAPI rows into `travel.places` and records an ingest hash in
+`ingest.source_files`. It requires the exact confirm string plus a process-local
+allow flag:
+
+```bash
+ALLOW_TOUR_API_INGEST_APPLY=1 \
+  scripts/unix/plan_tour_api_ingest.sh \
+  --apply \
+  --confirm APPLY_TOUR_API_INGEST \
+  --rows 40
+```
+
+```powershell
+$env:ALLOW_TOUR_API_INGEST_APPLY = "1"
+.\scripts\windows\plan_tour_api_ingest.ps1 `
+  -Apply `
+  -Confirm APPLY_TOUR_API_INGEST `
+  -Rows 40
+```
+
+The wrapper never prints `PUBLIC_DATA_SERVICE_KEY` or `DB_DSN`.
+
 To export the Flutter handoff schema without running a server, run:
 
 ```bash

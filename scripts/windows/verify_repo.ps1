@@ -107,6 +107,12 @@ try {
         throw "Place score batch plan failed."
     }
 
+    Write-Host "Planning TourAPI place ingestion..."
+    & powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\windows\plan_tour_api_ingest.ps1" -Python $Python
+    if ($LASTEXITCODE -ne 0) {
+        throw "TourAPI ingest plan failed."
+    }
+
     Write-Host "Planning legacy Flask replacement or retirement..."
     & powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\windows\plan_legacy_retirement.ps1" -Python $Python
     if ($LASTEXITCODE -ne 0) {

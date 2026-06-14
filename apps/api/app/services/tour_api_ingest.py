@@ -1,0 +1,337 @@
+from __future__ import annotations
+
+import hashlib
+import json
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
+from typing import Any, Iterable, Sequence
+
+TOUR_API_BASE_URL = "https://apis.data.go.kr/B551011/KorService2"
+TOUR_API_OPERATION = "areaBasedList2"
+DEFAULT_AREA_CODE = "31"
+DEFAULT_CONTENT_TYPE_IDS = ("12", "14", "15", "39")
+
+CONTENT_TYPE_CATEGORY = {
+    "12": "attraction",
+    "14": "culture_venue",
+    "15": "event",
+    "39": "restaurant",
+}
+
+
+@dataclass(frozen=True)
+class TourApiPlace:
+    content_id: str
+    content_type_id: str
+    title: str
+    category: str
+    addr1: str | None
+    addr2: str | None
+    area_code: str | None
+    sigungu_code: str | None
+    lat: float
+    lng: float
+    first_image: str | None
+    modified_time: str | None
+
+    @property
+    def place_id(self) -> str:
+        return f"tour-api-{self.content_id}"
+
+    @property
+    def address_ko(self) -> str | None:
+        return _join_address(self.addr1, self.addr2)
+
+    @property
+    def region_name_ko(self) -> str | None:
+        return infer_region_name_ko(self.addr1)
+
+    def to_place_row(self) -> dict[str, Any]:
+        return {
+            "place_id": self.place_id,
+            "name_ko": self.title,
+            "category": self.category,
+            "address_ko": self.address_ko,
+            "region_name_ko": self.region_name_ko,
+            "province_code": self.area_code,
+            "city_code": self.sigungu_code,
+            "lat": self.lat,
+            "lng": self.lng,
+            "primary_source": "tour_api",
+            "source_record_id": self.content_id,
+        }
+
+
+@dataclass(frozen=True)
+class TourApiFetchResult:
+    places: tuple[TourApiPlace, ...]
+    request_count: int
+    raw_count: int
+    area_code: str
+    content_type_ids: tuple[str, ...]
+    source_name: str = "tour_api"
+    dataset_name: str = "한국관광공사_국문 관광정보 서비스_GW"
+    operation: str = TOUR_API_OPERATION
+
+    def to_public_dict(self) -> dict[str, Any]:
+        return {
+            "source_name": self.source_name,
+            "dataset_name": self.dataset_name,
+            "operation": self.operation,
+            "area_code": self.area_code,
+            "content_type_ids": list(self.content_type_ids),
+            "request_count": self.request_count,
+            "raw_count": self.raw_count,
+            "place_count": len(self.places),
+            "preview": [item.to_place_row() for item in self.places[:5]],
+        }
+
+
+def fetch_tour_api_places(
+    *,
+    service_key: str,
+    area_code: str = DEFAULT_AREA_CODE,
+    content_type_ids: Sequence[str] = DEFAULT_CONTENT_TYPE_IDS,
+    rows: int = 100,
+    page_size: int = 20,
+    timeout: int = 10,
+) -> TourApiFetchResult:
+    if not service_key:
+        raise ValueError("PUBLIC_DATA_SERVICE_KEY is required.")
+    if rows <= 0:
+        raise ValueError("rows must be positive.")
+    if page_size <= 0:
+        raise ValueError("page_size must be positive.")
+
+    import requests
+
+    places: list[TourApiPlace] = []
+    request_count = 0
+    raw_count = 0
+    per_type_rows = max(1, rows // max(len(content_type_ids), 1))
+
+    for content_type_id in content_type_ids:
+        remaining = per_type_rows
+        page_no = 1
+        while remaining > 0:
+            num_rows = min(page_size, remaining)
+            response = requests.get(
+                f"{TOUR_API_BASE_URL}/{TOUR_API_OPERATION}",
+                params={
+                    "serviceKey": service_key,
+                    "MobileOS": "ETC",
+                    "MobileApp": "LALA-next",
+                    "_type": "json",
+                    "numOfRows": num_rows,
+                    "pageNo": page_no,
+                    "areaCode": area_code,
+                    "contentTypeId": content_type_id,
+                    "arrange": "C",
+                },
+                timeout=timeout,
+            )
+            request_count += 1
+            response.raise_for_status()
+            payload = response.json()
+            items = _extract_items(payload)
+            raw_count += len(items)
+            places.extend(
+                place
+                for item in items
+                if (place := parse_tour_api_place(item)) is not None
+            )
+            if len(items) < num_rows:
+                break
+            remaining -= num_rows
+            page_no += 1
+
+    return TourApiFetchResult(
+        places=tuple(_dedupe_places(places)),
+        request_count=request_count,
+        raw_count=raw_count,
+        area_code=area_code,
+        content_type_ids=tuple(content_type_ids),
+    )
+
+
+def parse_tour_api_place(item: dict[str, Any]) -> TourApiPlace | None:
+    content_id = _optional_text(item.get("contentid"))
+    content_type_id = _optional_text(item.get("contenttypeid"))
+    title = _optional_text(item.get("title"))
+    lat = _optional_float(item.get("mapy"))
+    lng = _optional_float(item.get("mapx"))
+    if not (content_id and content_type_id and title and lat is not None and lng is not None):
+        return None
+
+    category = CONTENT_TYPE_CATEGORY.get(content_type_id)
+    if not category:
+        return None
+
+    return TourApiPlace(
+        content_id=content_id,
+        content_type_id=content_type_id,
+        title=title,
+        category=category,
+        addr1=_optional_text(item.get("addr1")),
+        addr2=_optional_text(item.get("addr2")),
+        area_code=_optional_text(item.get("areacode")),
+        sigungu_code=_optional_text(item.get("sigungucode")),
+        lat=lat,
+        lng=lng,
+        first_image=_optional_text(item.get("firstimage")),
+        modified_time=_optional_text(item.get("modifiedtime")),
+    )
+
+
+def upsert_tour_api_places(
+    *,
+    dsn: str,
+    result: TourApiFetchResult,
+    connect_timeout: int,
+) -> dict[str, Any]:
+    import psycopg2
+
+    source_payload = result.to_public_dict()
+    source_payload["preview"] = []
+    file_sha256 = hashlib.sha256(
+        json.dumps(source_payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+
+    source_sql = """
+        INSERT INTO ingest.source_files (
+            source_name,
+            dataset_name,
+            file_name,
+            file_sha256,
+            local_path
+        )
+        VALUES (%s, %s, %s, %s, %s)
+        RETURNING id
+    """
+    upsert_sql = """
+        INSERT INTO travel.places (
+            place_id,
+            name_ko,
+            category,
+            address_ko,
+            region_name_ko,
+            province_code,
+            city_code,
+            lat,
+            lng,
+            primary_source,
+            source_record_id
+        )
+        VALUES (
+            %(place_id)s,
+            %(name_ko)s,
+            %(category)s,
+            %(address_ko)s,
+            %(region_name_ko)s,
+            %(province_code)s,
+            %(city_code)s,
+            %(lat)s,
+            %(lng)s,
+            %(primary_source)s,
+            %(source_record_id)s
+        )
+        ON CONFLICT (place_id) DO UPDATE SET
+            name_ko = EXCLUDED.name_ko,
+            category = EXCLUDED.category,
+            address_ko = EXCLUDED.address_ko,
+            region_name_ko = EXCLUDED.region_name_ko,
+            province_code = EXCLUDED.province_code,
+            city_code = EXCLUDED.city_code,
+            lat = EXCLUDED.lat,
+            lng = EXCLUDED.lng,
+            primary_source = EXCLUDED.primary_source,
+            source_record_id = EXCLUDED.source_record_id,
+            updated_at = now()
+    """
+    inserted_or_updated = 0
+    with psycopg2.connect(dsn, connect_timeout=connect_timeout) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                source_sql,
+                (
+                    result.source_name,
+                    result.dataset_name,
+                    _source_file_name(result),
+                    file_sha256,
+                    None,
+                ),
+            )
+            source_file_id = str(cur.fetchone()[0])
+            for place in result.places:
+                cur.execute(upsert_sql, place.to_place_row())
+                inserted_or_updated += cur.rowcount
+        conn.commit()
+
+    return {
+        "ok": True,
+        "source_file_id": source_file_id,
+        "upserted_rows": inserted_or_updated,
+        "place_count": len(result.places),
+    }
+
+
+def infer_region_name_ko(address: str | None) -> str | None:
+    text = _optional_text(address)
+    if not text:
+        return None
+    parts = text.split()
+    if len(parts) >= 2 and parts[0] in {"경기도", "서울특별시", "인천광역시"}:
+        return parts[1]
+    if parts:
+        return parts[0]
+    return None
+
+
+def _extract_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    header = ((payload.get("response") or {}).get("header") or {})
+    result_code = str(header.get("resultCode") or "")
+    if result_code and result_code != "0000":
+        result_message = str(header.get("resultMsg") or "TourAPI request failed.")
+        raise RuntimeError(f"TourAPI error {result_code}: {result_message}")
+
+    body = (payload.get("response") or {}).get("body") or {}
+    items = (body.get("items") or {}).get("item") if isinstance(body.get("items"), dict) else []
+    if isinstance(items, dict):
+        return [items]
+    if isinstance(items, list):
+        return [item for item in items if isinstance(item, dict)]
+    return []
+
+
+def _dedupe_places(places: Iterable[TourApiPlace]) -> list[TourApiPlace]:
+    deduped: dict[str, TourApiPlace] = {}
+    for place in places:
+        deduped[place.place_id] = place
+    return list(deduped.values())
+
+
+def _source_file_name(result: TourApiFetchResult) -> str:
+    content_types = "-".join(result.content_type_ids)
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    return f"tour_api_{result.operation}_area{result.area_code}_{content_types}_{timestamp}.json"
+
+
+def _join_address(addr1: str | None, addr2: str | None) -> str | None:
+    values = [value for value in (_optional_text(addr1), _optional_text(addr2)) if value]
+    return " ".join(values) if values else None
+
+
+def _optional_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _optional_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
