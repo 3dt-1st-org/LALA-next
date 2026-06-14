@@ -421,18 +421,18 @@ class _LalaHomePageState extends State<LalaHomePage> {
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  SizedBox(
-                    width: 360,
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(16),
-                      child: configPanel,
-                    ),
-                  ),
-                  const VerticalDivider(width: 1),
                   Expanded(
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.all(16),
                       child: dashboard,
+                    ),
+                  ),
+                  const VerticalDivider(width: 1),
+                  SizedBox(
+                    width: 340,
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(16),
+                      child: configPanel,
                     ),
                   ),
                 ],
@@ -443,7 +443,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [configPanel, const SizedBox(height: 16), dashboard],
+                children: [dashboard, const SizedBox(height: 16), configPanel],
               ),
             );
           },
@@ -594,6 +594,8 @@ class _Dashboard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final runtimeMode = readiness?.data?.mode.overall;
+    final topPlaces = places?.data?.places ?? const <LalaPlace>[];
+    final topPlace = topPlaces.isEmpty ? null : topPlaces.first;
     final requestIds = _RequestCorrelation(
       readiness: readiness?.requestId,
       places: places?.requestId,
@@ -644,10 +646,15 @@ class _Dashboard extends StatelessWidget {
         else
           const SizedBox(height: 3),
         const SizedBox(height: 16),
+        _ExperienceHero(
+          place: topPlace,
+          weather: weather?.data,
+          intervention: intervention?.data,
+          source: places?.data?.source,
+        ),
+        const SizedBox(height: 16),
         _ResponsiveGrid(
           children: [
-            _RuntimePanel(readiness: readiness),
-            _WeatherPanel(weather: weather),
             _PlacesPanel(places: places),
             _PlanPanel(dailyPlan: dailyPlan, intervention: intervention),
             _DocentPanel(
@@ -657,9 +664,224 @@ class _Dashboard extends StatelessWidget {
               audioError: audioError,
               onFetchAudio: onFetchAudio,
             ),
+            _WeatherPanel(weather: weather),
+            _RuntimePanel(readiness: readiness),
           ],
         ),
       ],
+    );
+  }
+}
+
+class _ExperienceHero extends StatelessWidget {
+  const _ExperienceHero({
+    required this.place,
+    required this.weather,
+    required this.intervention,
+    required this.source,
+  });
+
+  final LalaPlace? place;
+  final LalaWeather? weather;
+  final LalaIntervention? intervention;
+  final String? source;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final currentPlace = place;
+    final score = currentPlace?.score;
+    final action = intervention?.recommendedAction;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colorScheme.primary.withValues(alpha: 0.16)),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final scoreBadge = _ScoreBadge(score: score);
+          final summary = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.near_me_outlined, color: colorScheme.primary),
+                  const SizedBox(width: 8),
+                  Text('오늘의 로컬 연결', style: theme.textTheme.titleMedium),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                currentPlace?.name ?? '추천 후보를 불러오는 중',
+                style: theme.textTheme.headlineSmall,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                currentPlace == null
+                    ? '위치와 반경을 기준으로 가까운 장소를 계산한다.'
+                    : '${currentPlace.address} · ${currentPlace.distanceM}m',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onPrimaryContainer,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _MiniChip(
+                    icon: Icons.storage_outlined,
+                    label: _sourceLabel(source ?? currentPlace?.source),
+                  ),
+                  if (score != null)
+                    _MiniChip(
+                      icon: Icons.insights_outlined,
+                      label: _basisLabel(score.dataBasis),
+                    ),
+                  if (weather != null)
+                    _MiniChip(
+                      icon: Icons.wb_cloudy_outlined,
+                      label: '${weather!.location ?? 'Suwon'} ${weather!.temp}',
+                    ),
+                  if (action != null && action.trim().isNotEmpty)
+                    _MiniChip(icon: Icons.alt_route_outlined, label: action),
+                ],
+              ),
+            ],
+          );
+
+          if (constraints.maxWidth >= 720) {
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: summary),
+                const SizedBox(width: 20),
+                SizedBox(width: 220, child: scoreBadge),
+              ],
+            );
+          }
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              summary,
+              const SizedBox(height: 16),
+              Align(alignment: Alignment.centerLeft, child: scoreBadge),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ScoreBadge extends StatelessWidget {
+  const _ScoreBadge({required this.score});
+
+  final LalaPlaceScore? score;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final currentScore = score;
+    final percent = currentScore?.percent;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          width: 112,
+          height: 112,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: colorScheme.surface,
+            shape: BoxShape.circle,
+            border: Border.all(color: colorScheme.primary, width: 2),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                percent == null ? '-' : '$percent',
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
+              Text('로컬 점수', style: Theme.of(context).textTheme.labelMedium),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        if (currentScore == null)
+          const _MutedText('점수 계산 대기')
+        else
+          _ScoreBreakdown(score: currentScore),
+      ],
+    );
+  }
+}
+
+class _ScoreBreakdown extends StatelessWidget {
+  const _ScoreBreakdown({required this.score});
+
+  final LalaPlaceScore score;
+
+  @override
+  Widget build(BuildContext context) {
+    final components = score.components;
+    return Column(
+      children: [
+        _ScoreBar(label: '내국인 소비', value: components.localSpendingScore),
+        _ScoreBar(label: '수요 분산', value: components.demandDispersionScore),
+        _ScoreBar(label: '날씨 적합', value: components.weatherFitScore),
+        _ScoreBar(label: '문화 연계', value: components.cultureRelevanceScore),
+        _ScoreBar(label: '리뷰 품질', value: components.reviewQualityScore),
+      ],
+    );
+  }
+}
+
+class _ScoreBar extends StatelessWidget {
+  const _ScoreBar({required this.label, required this.value});
+
+  final String label;
+  final double? value;
+
+  @override
+  Widget build(BuildContext context) {
+    final bounded = value?.clamp(0.0, 1.0);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 7),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 72,
+            child: Text(label, style: Theme.of(context).textTheme.labelSmall),
+          ),
+          Expanded(
+            child: LinearProgressIndicator(
+              value: bounded ?? 0,
+              minHeight: 6,
+              borderRadius: BorderRadius.circular(8),
+              backgroundColor: Theme.of(context).colorScheme.surface,
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 34,
+            child: Text(
+              value == null ? '대기' : '${(bounded! * 100).round()}',
+              textAlign: TextAlign.right,
+              style: Theme.of(context).textTheme.labelSmall,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -840,32 +1062,48 @@ class _PlacesPanel extends StatelessWidget {
     final data = places?.data;
     final items = data?.places.take(3).toList() ?? const <LalaPlace>[];
     return _Panel(
-      title: 'Places',
+      title: '추천 장소',
       icon: Icons.place_outlined,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _MetricRow(label: 'Count', value: data?.count.toString() ?? '-'),
-          _MetricRow(label: 'Source', value: data?.source ?? '-'),
+          _MetricRow(label: 'Source', value: _sourceLabel(data?.source)),
           const SizedBox(height: 8),
           if (items.isEmpty)
             const _MutedText('No places returned.')
           else
             ...items.map(
               (place) => Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Row(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.location_on_outlined, size: 18),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(place.name, overflow: TextOverflow.ellipsis),
+                    Row(
+                      children: [
+                        const Icon(Icons.location_on_outlined, size: 18),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            place.name,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (place.score != null) ...[
+                          Text('${place.score!.percent}'),
+                          const SizedBox(width: 8),
+                        ],
+                        Text('${place.distanceM}m'),
+                      ],
                     ),
                     if (place.score != null) ...[
-                      Text('${place.score!.percent}'),
-                      const SizedBox(width: 8),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${_basisLabel(place.score!.dataBasis)} · ${place.score!.formulaVersion}',
+                        style: Theme.of(context).textTheme.labelSmall,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ],
-                    Text('${place.distanceM}m'),
                   ],
                 ),
               ),
@@ -993,6 +1231,60 @@ class _DocentPanel extends StatelessWidget {
       ),
     );
   }
+}
+
+class _MiniChip extends StatelessWidget {
+  const _MiniChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: colorScheme.surface.withValues(alpha: 0.78),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _sourceLabel(String? value) {
+  return switch ((value ?? '').trim()) {
+    'db' => 'DB 기반',
+    'mixed' => '혼합 데이터',
+    'skeleton' => '데모 데이터',
+    '' => '-',
+    final source => source,
+  };
+}
+
+String _basisLabel(String value) {
+  return switch (value.trim()) {
+    'actual_data' => '실데이터',
+    'demo_seed' => '시드 데이터',
+    'demo_fallback' => '데모 기준',
+    final basis when basis.isEmpty => '-',
+    final basis => basis,
+  };
 }
 
 class _Panel extends StatelessWidget {

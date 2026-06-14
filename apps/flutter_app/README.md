@@ -10,8 +10,12 @@ Current app surface:
 - Runtime mode display from `/readyz.data.mode`.
 - Runtime editable backend base URL.
 - Bearer token or migration API key input for `/api/v1/*`.
+- Recommendation-first home surface that highlights the top place, local-value
+  score, local spending, demand dispersion, weather fit, culture relevance, and
+  review-quality readiness from `/api/v1/places`.
 - Places, weather, intervention, daily plan, first-place docent script, and
-  manual docent audio metadata panels once auth is present.
+  manual docent audio metadata panels for operator handoff and public-demo
+  fallback checks.
 - Partial-failure handling that keeps public health/readiness visible when an
   authenticated `/api/v1/*` request fails.
 

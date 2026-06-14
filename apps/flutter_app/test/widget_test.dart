@@ -22,8 +22,13 @@ void main() {
     expect(find.text('ok'), findsWidgets);
     expect(find.text('skeleton'), findsWidgets);
     expect(find.text('public only'), findsOneWidget);
-    expect(find.text('Suwon Hwaseong'), findsOneWidget);
-    expect(find.text('84'), findsOneWidget);
+    expect(find.text('오늘의 로컬 연결'), findsOneWidget);
+    expect(find.text('로컬 점수'), findsOneWidget);
+    expect(find.text('내국인 소비'), findsOneWidget);
+    expect(find.text('수요 분산'), findsOneWidget);
+    expect(find.text('문화 연계'), findsOneWidget);
+    expect(find.text('Suwon Hwaseong'), findsAtLeastNWidgets(1));
+    expect(find.text('84'), findsAtLeastNWidgets(1));
     expect(find.text('22C'), findsOneWidget);
     expect(find.textContaining('Morning landmark walk'), findsOneWidget);
     expect(find.text('Docent story for Suwon Hwaseong.'), findsOneWidget);
@@ -49,7 +54,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('static bearer'), findsOneWidget);
-    expect(find.text('Suwon Hwaseong'), findsOneWidget);
+    expect(find.text('오늘의 로컬 연결'), findsOneWidget);
+    expect(find.text('Suwon Hwaseong'), findsAtLeastNWidgets(1));
     expect(find.text('22C'), findsOneWidget);
     expect(find.textContaining('Morning landmark walk'), findsOneWidget);
     expect(find.text('Docent story for Suwon Hwaseong.'), findsOneWidget);
@@ -107,7 +113,10 @@ void main() {
       find.widgetWithText(TextField, 'Migration API key'),
       'migration-key',
     );
-    await tester.tap(find.widgetWithText(FilledButton, 'Refresh'));
+    final refreshButton = find.widgetWithText(FilledButton, 'Refresh');
+    await tester.ensureVisible(refreshButton);
+    await tester.pumpAndSettle();
+    await tester.tap(refreshButton);
     await tester.pumpAndSettle();
 
     expect(configs.last.baseUri, 'http://10.0.0.5:8080');
@@ -131,7 +140,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('oauth jwt'), findsOneWidget);
-    expect(find.text('Suwon Hwaseong'), findsOneWidget);
+    expect(find.text('Suwon Hwaseong'), findsAtLeastNWidgets(1));
   });
 
   testWidgets('fetches docent audio only after explicit tap', (tester) async {
