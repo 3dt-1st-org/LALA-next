@@ -119,6 +119,12 @@ try {
         throw "KCISA culture info ingest plan failed."
     }
 
+    Write-Host "Planning KOPIS performance ingestion..."
+    & powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\windows\plan_kopis_ingest.ps1" -Python $Python
+    if ($LASTEXITCODE -ne 0) {
+        throw "KOPIS performance ingest plan failed."
+    }
+
     Write-Host "Planning card spending file ingestion..."
     & powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\windows\plan_card_spending_file_ingest.ps1" -Python $Python
     if ($LASTEXITCODE -ne 0) {

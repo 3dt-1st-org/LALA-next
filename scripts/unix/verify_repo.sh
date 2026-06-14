@@ -85,6 +85,9 @@ echo "Planning TourAPI place ingestion..."
 echo "Planning KCISA culture info ingestion..."
 "$ROOT/scripts/unix/plan_culture_info_ingest.sh" --python "$PYTHON"
 
+echo "Planning KOPIS performance ingestion..."
+"$ROOT/scripts/unix/plan_kopis_ingest.sh" --python "$PYTHON"
+
 echo "Planning card spending file ingestion..."
 "$ROOT/scripts/unix/plan_card_spending_file_ingest.sh" --python "$PYTHON"
 

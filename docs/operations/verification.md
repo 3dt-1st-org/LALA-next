@@ -70,7 +70,7 @@ The script runs:
 - Non-mutating DB rollout plan generation.
 - Non-mutating observability alert/dashboard plan generation.
 - Non-mutating OAuth/Entra identity rollout plan generation.
-- Non-mutating TourAPI, KCISA culture-info, and card-spending ingestion plan generation.
+- Non-mutating TourAPI, KCISA culture-info, KOPIS, and card-spending ingestion plan generation.
 - Non-mutating legacy Flask replacement/retirement plan generation.
 - SQL and documentation secret-safety tests.
 - PowerShell script parser checks.
@@ -333,6 +333,53 @@ $env:ALLOW_CULTURE_INFO_INGEST_APPLY = "1"
 ```
 
 The wrapper never prints `PUBLIC_DATA_SERVICE_KEY` or `DB_DSN`.
+
+To review KOPIS performance ingestion without calling the external API or
+writing to the database:
+
+```bash
+scripts/unix/plan_kopis_ingest.sh
+```
+
+```powershell
+.\scripts\windows\plan_kopis_ingest.ps1
+```
+
+Default mode is plan-only. The source is the KOPIS
+`공연예술통합전산망 OPEN API 공연목록 조회 서비스` and the default target is
+`culture.events`. The default region is `signgucode=41` for Gyeonggi-do, and
+the default date window stays within the KOPIS 31-day list-query limit. Preview
+calls KOPIS with `KOPIS_API_KEY` but does not mutate the DB:
+
+```bash
+scripts/unix/plan_kopis_ingest.sh --preview --rows 20
+```
+
+```powershell
+.\scripts\windows\plan_kopis_ingest.ps1 -Preview -Rows 20
+```
+
+Apply upserts KOPIS rows into `culture.events` and records an ingest hash in
+`ingest.source_files`. It requires the exact confirm string plus a process-local
+allow flag:
+
+```bash
+ALLOW_KOPIS_INGEST_APPLY=1 \
+  scripts/unix/plan_kopis_ingest.sh \
+  --apply \
+  --confirm APPLY_KOPIS_INGEST \
+  --rows 40
+```
+
+```powershell
+$env:ALLOW_KOPIS_INGEST_APPLY = "1"
+.\scripts\windows\plan_kopis_ingest.ps1 `
+  -Apply `
+  -Confirm APPLY_KOPIS_INGEST `
+  -Rows 40
+```
+
+The wrapper never prints `KOPIS_API_KEY` or `DB_DSN`.
 
 To review public card spending file ingestion without reading a source file or
 writing to the database:
