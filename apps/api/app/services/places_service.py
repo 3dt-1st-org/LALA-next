@@ -3,6 +3,7 @@ from __future__ import annotations
 from apps.api.app.core.errors import ServiceError
 from apps.api.app.services import db_repository
 from apps.api.app.services.normalization import normalize_language
+from apps.api.app.services.recommendation_scoring import demo_place_score
 
 _ALLOWED_CATEGORIES = {"all", "attraction", "restaurant", "event"}
 
@@ -48,6 +49,7 @@ def list_places(
     resolved_category = "attraction" if category == "all" else category
     name = "Suwon Hwaseong" if language == "en" else "수원화성"
     address = "Suwon-si, Gyeonggi-do" if language == "en" else "경기도 수원시"
+    distance_m = min(radius_m, 1000)
     place = {
         "place_id": "skeleton-suwon-hwaseong",
         "name": name,
@@ -57,8 +59,9 @@ def list_places(
         "lat": lat,
         "lng": lng,
         "address": address,
-        "distance_m": min(radius_m, 1000),
+        "distance_m": distance_m,
         "source": "skeleton",
+        "score": demo_place_score(category=resolved_category, distance_m=distance_m),
     }
     return {
         "count": 1,

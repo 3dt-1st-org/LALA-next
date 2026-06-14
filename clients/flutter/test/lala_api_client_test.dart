@@ -133,6 +133,21 @@ void main() {
                     'address': '경기도 수원시',
                     'distance_m': 1000,
                     'source': 'skeleton',
+                    'score': {
+                      'final_score': 0.84,
+                      'formula_version': 'local-value-v1',
+                      'components': {
+                        'local_spending_score': 0.9,
+                        'demand_dispersion_score': 0.8,
+                        'weather_fit_score': 0.7,
+                        'review_quality_score': null,
+                        'culture_relevance_score': 0.8,
+                      },
+                      'data_basis': 'demo_fallback',
+                      'features': {
+                        'missing_signals': ['card_spending_snapshot'],
+                      },
+                    },
                   },
                 ],
                 'query': {
@@ -181,6 +196,12 @@ void main() {
       expect(envelope.data?.query.radiusM, 1200);
       expect(envelope.data?.places.first.placeId, 'skeleton-suwon-hwaseong');
       expect(envelope.data?.places.first.nameKo, '수원화성');
+      expect(envelope.data?.places.first.score?.percent, 84);
+      expect(envelope.data?.places.first.score?.dataBasis, 'demo_fallback');
+      expect(
+        envelope.data?.places.first.score?.components.reviewQualityScore,
+        isNull,
+      );
     },
   );
 
@@ -420,15 +441,39 @@ void main() {
     );
   });
 
-  test('/api/v1 routes require one client auth strategy', () async {
+  test('/api/v1 routes can be sent without client auth for public demo mode',
+      () async {
+    late http.Request captured;
     final client = LalaApiClient(
       baseUri: Uri.parse('http://api.example.test'),
       httpClient: MockClient((request) async {
-        fail('authenticated route should fail before sending a request');
+        captured = request;
+        return _jsonResponse({
+          'ok': true,
+          'data': {
+            'count': 0,
+            'places': <Object?>[],
+            'query': {
+              'lat': 37.2636,
+              'lng': 127.0286,
+              'radius_m': 1000,
+              'category': 'all',
+              'language': 'ko',
+            },
+            'source': 'skeleton',
+          },
+          'meta': {'request_id': 'public-demo-request-id'},
+          'error': null,
+        });
       }),
     );
 
-    await expectLater(client.getPlaces(), throwsArgumentError);
+    final envelope = await client.getPlaces();
+
+    expect(captured.headers.containsKey('authorization'), isFalse);
+    expect(captured.headers.containsKey('x-api-key'), isFalse);
+    expect(envelope.ok, isTrue);
+    expect(envelope.requestId, 'public-demo-request-id');
   });
 }
 

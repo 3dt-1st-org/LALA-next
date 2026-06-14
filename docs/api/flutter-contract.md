@@ -249,7 +249,25 @@ Query parameters:
       "category": "attraction",
       "distance_m": 420,
       "lat": 37.2869,
-      "lng": 127.0116
+      "lng": 127.0116,
+      "score": {
+        "final_score": 0.7427,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": 0.62,
+          "demand_dispersion_score": 0.66,
+          "weather_fit_score": 0.74,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.86
+        },
+        "data_basis": "demo_fallback",
+        "features": {
+          "missing_signals": [
+            "card_spending_snapshot",
+            "review_attribute_analysis"
+          ]
+        }
+      }
     }
   ],
   "source": "skeleton"
@@ -257,9 +275,11 @@ Query parameters:
 ```
 
 When the canonical PostgreSQL read model returns rows, this payload keeps the
-same shape and uses `source: "db"`. DB rows are radius-filtered and sorted by
-approximate distance in the repository query before the skeleton fallback is
-considered.
+same shape and uses `source: "db"`. DB rows are radius-filtered, joined to the
+latest `analytics.place_score_snapshots` row, then sorted by final score before
+distance. When a DB-backed score is present, `score.data_basis` is
+`analytics.place_score_snapshots`; public demo fallback scores are explicitly
+marked `demo_fallback` and must not be described as real card-spending evidence.
 
 `GET /api/v1/weather`:
 

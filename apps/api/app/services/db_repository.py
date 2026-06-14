@@ -10,6 +10,7 @@ _REQUIRED_DB_RELATIONS = (
     "travel.public_places",
     "travel.weather_observations",
     "travel.docent_scripts",
+    "analytics.place_score_snapshots",
 )
 
 
@@ -28,7 +29,8 @@ def check_db_status(dsn: str) -> str:
                     SELECT
                         to_regclass('travel.public_places') IS NOT NULL,
                         to_regclass('travel.weather_observations') IS NOT NULL,
-                        to_regclass('travel.docent_scripts') IS NOT NULL
+                        to_regclass('travel.docent_scripts') IS NOT NULL,
+                        to_regclass('analytics.place_score_snapshots') IS NOT NULL
                     """
                 )
                 row = cur.fetchone()
@@ -75,10 +77,34 @@ def fetch_places(
             FROM travel.public_places
             WHERE (%s = 'all' OR category = %s)
         )
-        SELECT *
+        , latest_scores AS (
+            SELECT DISTINCT ON (place_id)
+                place_id,
+                local_spending_score,
+                demand_dispersion_score,
+                weather_fit_score,
+                review_quality_score,
+                culture_relevance_score,
+                final_score,
+                formula_version,
+                features
+            FROM analytics.place_score_snapshots
+            ORDER BY place_id, scored_at DESC
+        )
+        SELECT
+            ranked_places.*,
+            latest_scores.local_spending_score,
+            latest_scores.demand_dispersion_score,
+            latest_scores.weather_fit_score,
+            latest_scores.review_quality_score,
+            latest_scores.culture_relevance_score,
+            latest_scores.final_score,
+            latest_scores.formula_version,
+            latest_scores.features AS score_features
         FROM ranked_places
+        LEFT JOIN latest_scores ON latest_scores.place_id = ranked_places.place_id
         WHERE distance_m <= %s
-        ORDER BY distance_m ASC, updated_at DESC
+        ORDER BY COALESCE(latest_scores.final_score, 0) DESC, distance_m ASC, updated_at DESC
         LIMIT 20
     """
     params = (lat, lng, category, category, radius_m)
@@ -116,9 +142,37 @@ def fetch_places(
                 "distance_m": int(round(distance_m)),
                 "source": "db",
                 "upstream_source": row.get("source") or "canonical",
+                "score": _place_score_from_row(row),
             }
         )
     return places
+
+
+def _place_score_from_row(row: dict[str, Any]) -> dict[str, Any] | None:
+    if row.get("final_score") is None:
+        return None
+    return {
+        "final_score": _optional_float(row.get("final_score")) or 0.0,
+        "formula_version": row.get("formula_version") or "unknown",
+        "components": {
+            "local_spending_score": _optional_float(row.get("local_spending_score")),
+            "demand_dispersion_score": _optional_float(row.get("demand_dispersion_score")),
+            "weather_fit_score": _optional_float(row.get("weather_fit_score")),
+            "review_quality_score": _optional_float(row.get("review_quality_score")),
+            "culture_relevance_score": _optional_float(row.get("culture_relevance_score")),
+        },
+        "data_basis": "analytics.place_score_snapshots",
+        "features": row.get("score_features") or {},
+    }
+
+
+def _optional_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def fetch_latest_weather(*, lat: float, lng: float) -> dict[str, Any] | None:

@@ -15,6 +15,9 @@ def test_places_route_returns_envelope(client, auth_headers):
     assert body["data"]["count"] == 1
     assert body["data"]["places"][0]["category"] == "event"
     assert body["data"]["places"][0]["name"] == "Suwon Hwaseong"
+    assert body["data"]["places"][0]["score"]["data_basis"] == "demo_fallback"
+    assert body["data"]["places"][0]["score"]["components"]["local_spending_score"] is not None
+    assert body["data"]["places"][0]["score"]["components"]["review_quality_score"] is None
     assert body["meta"]["request_id"]
 
 
@@ -56,6 +59,19 @@ def test_places_uses_db_repository_when_rows_exist(client, auth_headers, monkeyp
                 "address": "DB address",
                 "distance_m": 25,
                 "source": "db",
+                "score": {
+                    "final_score": 0.84,
+                    "formula_version": "local-value-v1",
+                    "components": {
+                        "local_spending_score": 0.9,
+                        "demand_dispersion_score": 0.8,
+                        "weather_fit_score": 0.7,
+                        "review_quality_score": None,
+                        "culture_relevance_score": 0.8,
+                    },
+                    "data_basis": "analytics.place_score_snapshots",
+                    "features": {},
+                },
             }
         ],
     )
@@ -70,6 +86,7 @@ def test_places_uses_db_repository_when_rows_exist(client, auth_headers, monkeyp
     assert body["data"]["source"] == "db"
     assert body["data"]["count"] == 1
     assert body["data"]["places"][0]["place_id"] == "db-place-1"
+    assert body["data"]["places"][0]["score"]["final_score"] == 0.84
 
 
 def test_places_invalid_category_returns_json_error(client, auth_headers):

@@ -85,5 +85,11 @@ flutter run \
   --dart-define LALA_API_BASE_URL=http://127.0.0.1:8080
 ```
 
+The public MVP backend can run with `LALA_PUBLIC_DEMO_MODE=true`, so the app
+loads places, weather, intervention, daily plan, and docent script panels even
+when no bearer token or migration API key is entered. If the backend disables
+public demo mode, the server returns the normal JSON auth error and the app keeps
+readiness visible.
+
 Do not commit client tokens or API keys. For local testing, prefer entering
 short-lived credentials in the app UI or using an operator-owned environment.

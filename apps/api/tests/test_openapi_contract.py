@@ -133,12 +133,19 @@ def test_openapi_documents_readyz_runtime_mode(client):
     assert runtime_mode["data"]["enum"] == ["skeleton", "db-backed", "degraded"]
     assert runtime_mode["worker"]["enum"] == ["dry-run", "degraded"]
     readiness_checks = schemas["ReadinessChecks"]["properties"]
+    assert readiness_checks["client_auth"]["enum"] == [
+        "configured",
+        "missing",
+        "public-demo",
+    ]
     assert readiness_checks["client_identity"]["enum"] == [
         "static",
         "transition",
         "oauth-configured",
+        "public-demo",
         "missing",
     ]
+    assert readiness_checks["public_demo_mode"]["enum"] == ["enabled", "disabled"]
     assert readiness_checks["jwt_validation"]["enum"] == ["configured", "skipped"]
     assert readiness_checks["oauth_jwks_url"]["enum"] == ["configured", "skipped"]
 
@@ -173,6 +180,14 @@ def test_openapi_documents_v1_success_data_schemas(client):
         "$ref": "#/components/schemas/Place"
     }
     assert "distance_m" in schemas["Place"]["required"]
+    assert schemas["Place"]["properties"]["score"] == {
+        "$ref": "#/components/schemas/PlaceScore",
+        "nullable": True,
+    }
+    assert schemas["PlaceScore"]["properties"]["components"] == {
+        "$ref": "#/components/schemas/PlaceScoreComponents"
+    }
+    assert schemas["PlaceScoreComponents"]["properties"]["local_spending_score"]["nullable"] is True
     assert schemas["WeatherData"]["properties"]["dust"] == {
         "$ref": "#/components/schemas/Dust"
     }

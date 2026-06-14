@@ -104,6 +104,7 @@ canonical relations required by the API:
 - `travel.public_places`
 - `travel.weather_observations`
 - `travel.docent_scripts`
+- `analytics.place_score_snapshots`
 
 Without `DB_DSN`, DB readiness is `skipped` and DB-backed routes use their
 skeleton fallback. If the connection works but those relations are absent,

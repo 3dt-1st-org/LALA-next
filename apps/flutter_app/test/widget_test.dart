@@ -23,6 +23,7 @@ void main() {
     expect(find.text('skeleton'), findsWidgets);
     expect(find.text('public only'), findsOneWidget);
     expect(find.text('Suwon Hwaseong'), findsOneWidget);
+    expect(find.text('84'), findsOneWidget);
     expect(find.text('22C'), findsOneWidget);
     expect(find.textContaining('Morning landmark walk'), findsOneWidget);
     expect(find.text('Docent story for Suwon Hwaseong.'), findsOneWidget);
@@ -339,6 +340,21 @@ LalaPlace _place() {
     address: 'Suwon',
     distanceM: 420,
     source: 'skeleton',
+    score: LalaPlaceScore(
+      finalScore: 0.84,
+      formulaVersion: 'local-value-v1',
+      components: LalaPlaceScoreComponents(
+        localSpendingScore: 0.9,
+        demandDispersionScore: 0.8,
+        weatherFitScore: 0.7,
+        reviewQualityScore: null,
+        cultureRelevanceScore: 0.8,
+      ),
+      dataBasis: 'demo_fallback',
+      features: {
+        'missing_signals': <String>['card_spending_snapshot'],
+      },
+    ),
   );
 }
 

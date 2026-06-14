@@ -21,7 +21,7 @@ def test_check_db_status_requires_canonical_relations(monkeypatch):
             captured["sql"] = sql
 
         def fetchone(self):
-            return (True, True, True)
+            return (True, True, True, True)
 
     class FakeConnection:
         def cursor(self):
@@ -40,6 +40,7 @@ def test_check_db_status_requires_canonical_relations(monkeypatch):
     assert "to_regclass('travel.public_places')" in captured["sql"]
     assert "to_regclass('travel.weather_observations')" in captured["sql"]
     assert "to_regclass('travel.docent_scripts')" in captured["sql"]
+    assert "to_regclass('analytics.place_score_snapshots')" in captured["sql"]
 
 
 def test_check_db_status_degrades_when_canonical_relation_is_missing(monkeypatch):
@@ -54,7 +55,7 @@ def test_check_db_status_degrades_when_canonical_relation_is_missing(monkeypatch
             return None
 
         def fetchone(self):
-            return (True, False, True)
+            return (True, False, True, True)
 
     class FakeConnection:
         def cursor(self):
@@ -102,6 +103,14 @@ def test_fetch_places_uses_radius_bound_ranking_query(monkeypatch):
                     "source": "canonical",
                     "updated_at": datetime.now(UTC),
                     "distance_m": 125.2,
+                    "local_spending_score": 0.81,
+                    "demand_dispersion_score": 0.72,
+                    "weather_fit_score": 0.66,
+                    "review_quality_score": None,
+                    "culture_relevance_score": 0.88,
+                    "final_score": 0.775,
+                    "formula_version": "local-value-v1",
+                    "score_features": {"source": "unit-test"},
                 }
             ]
 
@@ -132,8 +141,22 @@ def test_fetch_places_uses_radius_bound_ranking_query(monkeypatch):
     assert places[0]["place_id"] == "db-place-1"
     assert places[0]["distance_m"] == 125
     assert places[0]["source"] == "db"
+    assert places[0]["score"] == {
+        "final_score": 0.775,
+        "formula_version": "local-value-v1",
+        "components": {
+            "local_spending_score": 0.81,
+            "demand_dispersion_score": 0.72,
+            "weather_fit_score": 0.66,
+            "review_quality_score": None,
+            "culture_relevance_score": 0.88,
+        },
+        "data_basis": "analytics.place_score_snapshots",
+        "features": {"source": "unit-test"},
+    }
+    assert "FROM analytics.place_score_snapshots" in captured["sql"]
     assert "WHERE distance_m <= %s" in captured["sql"]
-    assert "ORDER BY distance_m ASC, updated_at DESC" in captured["sql"]
+    assert "ORDER BY COALESCE(latest_scores.final_score, 0) DESC, distance_m ASC" in captured["sql"]
     assert captured["params"] == (37.2, 127.0, "all", "all", 3000)
 
 

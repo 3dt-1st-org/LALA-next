@@ -861,6 +861,10 @@ class _PlacesPanel extends StatelessWidget {
                     Expanded(
                       child: Text(place.name, overflow: TextOverflow.ellipsis),
                     ),
+                    if (place.score != null) ...[
+                      Text('${place.score!.percent}'),
+                      const SizedBox(width: 8),
+                    ],
                     Text('${place.distanceM}m'),
                   ],
                 ),

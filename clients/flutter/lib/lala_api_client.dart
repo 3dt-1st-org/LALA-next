@@ -37,7 +37,6 @@ class LalaApiClient {
       'GET',
       '/healthz',
       requestId: requestId,
-      authRequired: false,
       timeout: timeout ?? healthTimeout,
     );
   }
@@ -50,7 +49,6 @@ class LalaApiClient {
       'GET',
       '/readyz',
       requestId: requestId,
-      authRequired: false,
       timeout: timeout ?? readinessTimeout,
       parseData: LalaReadiness.fromJsonObject,
     );
@@ -134,7 +132,6 @@ class LalaApiClient {
           requestId: requestId,
           contentType: 'application/json',
           accept: 'audio/mpeg, application/json',
-          authRequired: true,
         ),
         body: jsonEncode({'script': script, 'language': language}),
       ),
@@ -202,7 +199,6 @@ class LalaApiClient {
     Map<String, String>? query,
     Map<String, Object?>? body,
     String? requestId,
-    bool authRequired = true,
     T Function(Object?)? parseData,
     Duration? timeout,
   }) async {
@@ -211,7 +207,6 @@ class LalaApiClient {
       requestId: requestId,
       contentType: body == null ? null : 'application/json',
       accept: 'application/json',
-      authRequired: authRequired,
     );
 
     late Future<http.Response> responseFuture;
@@ -315,7 +310,6 @@ class LalaApiClient {
     String? requestId,
     String? contentType,
     String accept = 'application/json',
-    bool authRequired = true,
   }) {
     final headers = <String, String>{'Accept': accept};
     final token = bearerToken?.trim();
@@ -325,8 +319,6 @@ class LalaApiClient {
       headers['Authorization'] = 'Bearer $token';
     } else if (key != null && key.isNotEmpty) {
       headers['X-API-Key'] = key;
-    } else if (authRequired) {
-      throw ArgumentError('Provide bearerToken or apiKey for /api/v1 routes.');
     }
     if (contentType != null) {
       headers['Content-Type'] = contentType;
@@ -506,6 +498,7 @@ class LalaPlace {
     this.nameEn,
     this.regionKo,
     this.regionEn,
+    this.score,
   });
 
   final String placeId;
@@ -520,6 +513,7 @@ class LalaPlace {
   final String? nameEn;
   final String? regionKo;
   final String? regionEn;
+  final LalaPlaceScore? score;
 
   static LalaPlace fromJsonObject(Object? value) {
     return LalaPlace.fromJson(_asMap(value));
@@ -539,6 +533,63 @@ class LalaPlace {
       nameEn: _asOptionalString(json['name_en']),
       regionKo: _asOptionalString(json['region_ko']),
       regionEn: _asOptionalString(json['region_en']),
+      score: json['score'] is Map<String, dynamic>
+          ? LalaPlaceScore.fromJson(_asMap(json['score']))
+          : null,
+    );
+  }
+}
+
+class LalaPlaceScore {
+  const LalaPlaceScore({
+    required this.finalScore,
+    required this.formulaVersion,
+    required this.components,
+    required this.dataBasis,
+    required this.features,
+  });
+
+  final double finalScore;
+  final String formulaVersion;
+  final LalaPlaceScoreComponents components;
+  final String dataBasis;
+  final Map<String, dynamic> features;
+
+  int get percent => (finalScore * 100).round();
+
+  factory LalaPlaceScore.fromJson(Map<String, dynamic> json) {
+    return LalaPlaceScore(
+      finalScore: _asDouble(json['final_score']),
+      formulaVersion: _asString(json['formula_version']),
+      components: LalaPlaceScoreComponents.fromJson(_asMap(json['components'])),
+      dataBasis: _asString(json['data_basis']),
+      features: _asMap(json['features']),
+    );
+  }
+}
+
+class LalaPlaceScoreComponents {
+  const LalaPlaceScoreComponents({
+    required this.localSpendingScore,
+    required this.demandDispersionScore,
+    required this.weatherFitScore,
+    required this.reviewQualityScore,
+    required this.cultureRelevanceScore,
+  });
+
+  final double? localSpendingScore;
+  final double? demandDispersionScore;
+  final double? weatherFitScore;
+  final double? reviewQualityScore;
+  final double? cultureRelevanceScore;
+
+  factory LalaPlaceScoreComponents.fromJson(Map<String, dynamic> json) {
+    return LalaPlaceScoreComponents(
+      localSpendingScore: _asOptionalDouble(json['local_spending_score']),
+      demandDispersionScore: _asOptionalDouble(json['demand_dispersion_score']),
+      weatherFitScore: _asOptionalDouble(json['weather_fit_score']),
+      reviewQualityScore: _asOptionalDouble(json['review_quality_score']),
+      cultureRelevanceScore: _asOptionalDouble(json['culture_relevance_score']),
     );
   }
 }
@@ -1008,6 +1059,13 @@ double _asDouble(Object? value) {
     return value.toDouble();
   }
   return double.tryParse('$value') ?? 0;
+}
+
+double? _asOptionalDouble(Object? value) {
+  if (value == null) {
+    return null;
+  }
+  return _asDouble(value);
 }
 
 bool _asBool(Object? value) {

@@ -69,6 +69,8 @@ def _add_client_auth_security(schema: dict[str, Any]) -> None:
     schemas.setdefault("ReadyzData", _readyz_data_schema())
     schemas.setdefault("ReadyzSuccessEnvelope", _success_envelope_schema("ReadyzData"))
     schemas.setdefault("Coordinate", _coordinate_schema())
+    schemas.setdefault("PlaceScoreComponents", _place_score_components_schema())
+    schemas.setdefault("PlaceScore", _place_score_schema())
     schemas.setdefault("Place", _place_schema())
     schemas.setdefault("PlacesQuery", _places_query_schema())
     schemas.setdefault("PlacesData", _places_data_schema())
@@ -332,7 +334,6 @@ def _readyz_data_schema() -> dict[str, Any]:
 
 
 def _readiness_checks_schema() -> dict[str, Any]:
-    configured_or_missing = {"type": "string", "enum": ["configured", "missing"]}
     configured_or_skipped = {"type": "string", "enum": ["configured", "skipped"]}
     configured_skipped_degraded = {
         "type": "string",
@@ -344,6 +345,7 @@ def _readiness_checks_schema() -> dict[str, Any]:
         "required": [
             "client_auth",
             "client_identity",
+            "public_demo_mode",
             "api_key",
             "bearer_token",
             "jwt_validation",
@@ -365,11 +367,15 @@ def _readiness_checks_schema() -> dict[str, Any]:
             "worker_contracts",
         ],
         "properties": {
-            "client_auth": configured_or_missing,
+            "client_auth": {
+                "type": "string",
+                "enum": ["configured", "missing", "public-demo"],
+            },
             "client_identity": {
                 "type": "string",
-                "enum": ["static", "transition", "oauth-configured", "missing"],
+                "enum": ["static", "transition", "oauth-configured", "public-demo", "missing"],
             },
+            "public_demo_mode": enabled_or_disabled,
             "api_key": configured_or_skipped,
             "bearer_token": configured_or_skipped,
             "jwt_validation": configured_or_skipped,
@@ -427,6 +433,57 @@ def _coordinate_schema() -> dict[str, Any]:
     }
 
 
+def _place_score_components_schema() -> dict[str, Any]:
+    nullable_score = {
+        "type": "number",
+        "format": "double",
+        "minimum": 0,
+        "maximum": 1,
+        "nullable": True,
+    }
+    return {
+        "type": "object",
+        "required": [
+            "local_spending_score",
+            "demand_dispersion_score",
+            "weather_fit_score",
+            "review_quality_score",
+            "culture_relevance_score",
+        ],
+        "properties": {
+            "local_spending_score": nullable_score,
+            "demand_dispersion_score": nullable_score,
+            "weather_fit_score": nullable_score,
+            "review_quality_score": nullable_score,
+            "culture_relevance_score": nullable_score,
+        },
+        "additionalProperties": False,
+    }
+
+
+def _place_score_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": ["final_score", "formula_version", "components", "data_basis", "features"],
+        "properties": {
+            "final_score": {
+                "type": "number",
+                "format": "double",
+                "minimum": 0,
+                "maximum": 1,
+            },
+            "formula_version": {"type": "string"},
+            "components": {"$ref": "#/components/schemas/PlaceScoreComponents"},
+            "data_basis": {
+                "type": "string",
+                "enum": ["analytics.place_score_snapshots", "demo_fallback"],
+            },
+            "features": {"type": "object"},
+        },
+        "additionalProperties": False,
+    }
+
+
 def _place_schema() -> dict[str, Any]:
     return {
         "type": "object",
@@ -454,6 +511,7 @@ def _place_schema() -> dict[str, Any]:
             "distance_m": {"type": "integer"},
             "source": {"type": "string", "enum": ["skeleton", "db"]},
             "upstream_source": {"type": "string", "nullable": True},
+            "score": {"$ref": "#/components/schemas/PlaceScore", "nullable": True},
         },
         "additionalProperties": True,
     }
