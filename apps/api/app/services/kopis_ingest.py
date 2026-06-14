@@ -5,10 +5,9 @@ import html
 import json
 import re
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta, timezone
 from typing import Any, Iterable
 from xml.etree import ElementTree
-from zoneinfo import ZoneInfo
 
 KOPIS_BASE_URL = "http://www.kopis.or.kr/openApi/restful"
 KOPIS_OPERATION = "pblprfr"
@@ -16,7 +15,7 @@ DEFAULT_SIGNGUCODE = "41"
 DEFAULT_SOURCE_NAME = "kopis"
 DEFAULT_DATASET_NAME = "공연예술통합전산망_공연목록 조회 서비스"
 MAX_DATE_RANGE_DAYS = 31
-KST = ZoneInfo("Asia/Seoul")
+KST = timezone(timedelta(hours=9), "Asia/Seoul")
 
 GYEONGGI_REGION_ALIASES = {
     "가평": "가평군",
