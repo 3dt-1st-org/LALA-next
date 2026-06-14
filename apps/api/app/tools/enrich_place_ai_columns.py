@@ -384,17 +384,17 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
-    settings = get_settings()
-    dsn = os.getenv("DB_DSN") or settings.db_dsn
-    if not dsn:
-        _write(args, {"ok": False, "mode": _mode(args), "error": "DB_DSN is not configured."})
-        return 2
-
     if args.apply:
         guard_error = _apply_guard_error(args)
         if guard_error:
             _write(args, {"ok": False, "mode": "apply", "error": guard_error})
             return 2
+
+    settings = get_settings()
+    dsn = os.getenv("DB_DSN") or settings.db_dsn
+    if not dsn:
+        _write(args, {"ok": False, "mode": _mode(args), "error": "DB_DSN is not configured."})
+        return 2
 
     try:
         candidates = fetch_candidates(

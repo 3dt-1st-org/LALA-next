@@ -35,6 +35,12 @@ rollouts disabled. When `LALA_PUBLIC_DEMO_MODE=true`, the API serves the bundled
 Refresh the bundled snapshot from a canonical DB before a production demo:
 
 ```bash
+scripts/unix/plan_place_ai_enrichment.sh --dry-run-ai --limit 20
+ALLOW_AI_PLACE_ENRICHMENT_APPLY=1 \
+  scripts/unix/plan_place_ai_enrichment.sh \
+  --apply \
+  --confirm APPLY_AI_PLACE_ENRICHMENT
+scripts/unix/plan_place_score_batch.sh --preview --limit 20
 scripts/unix/export_public_mvp_snapshot.sh --preview --limit 20
 ALLOW_PUBLIC_MVP_SNAPSHOT_WRITE=1 \
   scripts/unix/export_public_mvp_snapshot.sh \

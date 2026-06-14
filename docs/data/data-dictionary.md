@@ -368,6 +368,12 @@ DB가 없으면 배포 패키지의 `public_mvp_snapshot`을 사용하고 `data_
 4. 현재 앱에서 바로 쓸 선택값만 `travel.places`에 반영한다.
 5. `run_place_score_batch`로 추천 계산식을 `analytics.place_score_snapshots`에 버전별로 남긴다.
 
+`apps.api.app.tools.enrich_place_ai_columns`는 이 흐름의 MVP AI 보강 도구다.
+기본 실행은 plan-only이며 Azure OpenAI나 DB를 호출하지 않는다. `--dry-run-ai`는
+DB 후보를 읽고 Azure OpenAI 결과를 미리 보되 행을 수정하지 않는다. `--apply`는
+`ALLOW_AI_PLACE_ENRICHMENT_APPLY=1`과 `--confirm APPLY_AI_PLACE_ENRICHMENT`가 있을 때만
+`travel.places`와 `travel.place_enrichments`를 갱신한다.
+
 MVP에서 우선 구현할 보강 항목:
 
 - `name_en`, `address_en`, `region_name_en`

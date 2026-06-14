@@ -79,6 +79,9 @@ echo "Planning safe ONMU Key Vault reuse..."
 echo "Planning local-value place score batch..."
 "$ROOT/scripts/unix/plan_place_score_batch.sh" --python "$PYTHON"
 
+echo "Planning place AI enrichment..."
+"$ROOT/scripts/unix/plan_place_ai_enrichment.sh" --python "$PYTHON"
+
 echo "Planning public MVP snapshot export..."
 "$ROOT/scripts/unix/export_public_mvp_snapshot.sh" --python "$PYTHON"
 

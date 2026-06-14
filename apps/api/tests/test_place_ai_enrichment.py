@@ -20,6 +20,23 @@ def test_place_ai_enrichment_plan_uses_data_dictionary_names(capsys):
     assert payload["db_mutation"] is False
 
 
+def test_place_ai_enrichment_apply_requires_guard_before_settings(monkeypatch, capsys):
+    monkeypatch.delenv(enrich_place_ai_columns.ALLOW_ENV, raising=False)
+
+    def fail_if_called():
+        raise AssertionError("settings should not be read before apply guard passes")
+
+    monkeypatch.setattr(enrich_place_ai_columns, "get_settings", fail_if_called)
+
+    exit_code = enrich_place_ai_columns.main(
+        ["--apply", "--confirm", enrich_place_ai_columns.CONFIRM_TEXT]
+    )
+
+    output = capsys.readouterr().out
+    assert exit_code == 2
+    assert enrich_place_ai_columns.ALLOW_ENV in output
+
+
 def test_parse_ai_response_accepts_region_name_en_and_legacy_alias():
     candidates = [
         enrich_place_ai_columns.PlaceCandidate(

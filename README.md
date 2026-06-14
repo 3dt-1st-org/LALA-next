@@ -127,6 +127,34 @@ scripts/unix/plan_place_score_batch.sh
 .\scripts\windows\plan_place_score_batch.ps1
 ```
 
+Review Azure OpenAI place enrichment without touching a database or calling AI:
+
+```bash
+scripts/unix/plan_place_ai_enrichment.sh
+```
+
+```powershell
+.\scripts\windows\plan_place_ai_enrichment.ps1
+```
+
+After canonical places are loaded, use dry-run AI to preview English names,
+English addresses, region labels, and indoor/outdoor classification without
+updating rows:
+
+```bash
+scripts/unix/plan_place_ai_enrichment.sh --dry-run-ai --limit 20
+```
+
+Apply requires an explicit guard because it calls Azure OpenAI and updates
+`travel.places` plus `travel.place_enrichments`:
+
+```bash
+ALLOW_AI_PLACE_ENRICHMENT_APPLY=1 \
+  scripts/unix/plan_place_ai_enrichment.sh \
+  --apply \
+  --confirm APPLY_AI_PLACE_ENRICHMENT
+```
+
 After canonical SQL and local seed data are loaded, preview score snapshots:
 
 ```bash

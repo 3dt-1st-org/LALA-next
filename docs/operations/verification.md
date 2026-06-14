@@ -241,6 +241,49 @@ $env:ALLOW_PLACE_SCORE_BATCH_APPLY = "1"
   -Confirm APPLY_PLACE_SCORE_BATCH
 ```
 
+To review Azure OpenAI place enrichment without connecting to a database or
+calling AI:
+
+```bash
+scripts/unix/plan_place_ai_enrichment.sh
+```
+
+```powershell
+.\scripts\windows\plan_place_ai_enrichment.ps1
+```
+
+Default mode is plan-only. It reports the `place-ai-enrichment-v1` prompt
+contract, enriched columns, and target tables without printing `DB_DSN` or
+`AZURE_OPENAI_KEY`. When canonical places are loaded and Azure OpenAI settings
+are configured, dry-run AI previews generated values without updating rows:
+
+```bash
+scripts/unix/plan_place_ai_enrichment.sh --dry-run-ai --limit 20
+```
+
+```powershell
+.\scripts\windows\plan_place_ai_enrichment.ps1 -DryRunAi -Limit 20
+```
+
+Apply updates missing `name_en`, `address_en`, `region_name_en`, and
+`is_indoor` values in `travel.places`, records provenance in
+`travel.place_enrichments`, and requires the exact confirm string plus a
+process-local allow flag:
+
+```bash
+ALLOW_AI_PLACE_ENRICHMENT_APPLY=1 \
+  scripts/unix/plan_place_ai_enrichment.sh \
+  --apply \
+  --confirm APPLY_AI_PLACE_ENRICHMENT
+```
+
+```powershell
+$env:ALLOW_AI_PLACE_ENRICHMENT_APPLY = "1"
+.\scripts\windows\plan_place_ai_enrichment.ps1 `
+  -Apply `
+  -Confirm APPLY_AI_PLACE_ENRICHMENT
+```
+
 To review the public MVP snapshot export without connecting to a database:
 
 ```bash

@@ -107,6 +107,12 @@ try {
         throw "Place score batch plan failed."
     }
 
+    Write-Host "Planning place AI enrichment..."
+    & powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\windows\plan_place_ai_enrichment.ps1" -Python $Python
+    if ($LASTEXITCODE -ne 0) {
+        throw "Place AI enrichment plan failed."
+    }
+
     Write-Host "Planning TourAPI place ingestion..."
     & powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\windows\plan_tour_api_ingest.ps1" -Python $Python
     if ($LASTEXITCODE -ne 0) {
