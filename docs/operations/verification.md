@@ -241,6 +241,32 @@ $env:ALLOW_PLACE_SCORE_BATCH_APPLY = "1"
   -Confirm APPLY_PLACE_SCORE_BATCH
 ```
 
+To review the public MVP snapshot export without connecting to a database:
+
+```bash
+scripts/unix/export_public_mvp_snapshot.sh
+```
+
+Default mode is plan-only. It reports the output file and DB input relations
+without printing `DB_DSN`. When `travel.public_places` and
+`analytics.place_score_snapshots` are populated, preview the Vercel fallback
+payload that would be bundled into the API package:
+
+```bash
+scripts/unix/export_public_mvp_snapshot.sh --preview --limit 20
+```
+
+Writing `apps/api/app/data/public_mvp_places.json` is a local file update, not a
+DB mutation, and requires the exact confirm string plus a process-local allow
+flag:
+
+```bash
+ALLOW_PUBLIC_MVP_SNAPSHOT_WRITE=1 \
+  scripts/unix/export_public_mvp_snapshot.sh \
+  --write \
+  --confirm WRITE_PUBLIC_MVP_SNAPSHOT
+```
+
 To review TourAPI place ingestion without calling the external API or writing to
 the database:
 

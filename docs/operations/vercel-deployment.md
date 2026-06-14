@@ -32,6 +32,16 @@ rollouts disabled. When `LALA_PUBLIC_DEMO_MODE=true`, the API serves the bundled
 `client_auth=public-demo`, `checks.public_data_snapshot=configured`, and
 `mode.overall=public-cache`.
 
+Refresh the bundled snapshot from a canonical DB before a production demo:
+
+```bash
+scripts/unix/export_public_mvp_snapshot.sh --preview --limit 20
+ALLOW_PUBLIC_MVP_SNAPSHOT_WRITE=1 \
+  scripts/unix/export_public_mvp_snapshot.sh \
+  --write \
+  --confirm WRITE_PUBLIC_MVP_SNAPSHOT
+```
+
 Deploy the API:
 
 ```bash

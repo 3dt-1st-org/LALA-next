@@ -262,6 +262,7 @@ def test_unix_scripts_have_safe_operational_guards():
         "_common.sh",
         "apply_canonical_sql.sh",
         "export_openapi.sh",
+        "export_public_mvp_snapshot.sh",
         "handoff_report.sh",
         "inspect_access_log.sh",
         "plan_db_rollout.sh",
@@ -327,6 +328,11 @@ def test_unix_scripts_have_safe_operational_guards():
     assert "ALLOW_PLACE_SCORE_BATCH_APPLY=1" in scripts["plan_place_score_batch.sh"]
     assert "--confirm APPLY_PLACE_SCORE_BATCH" in scripts["plan_place_score_batch.sh"]
     assert "DB_DSN value is never printed by this script." in scripts["plan_place_score_batch.sh"]
+    assert "export_public_mvp_snapshot" in scripts["export_public_mvp_snapshot.sh"]
+    assert "export_public_mvp_snapshot.sh" in scripts["verify_repo.sh"]
+    assert "ALLOW_PUBLIC_MVP_SNAPSHOT_WRITE=1" in scripts["export_public_mvp_snapshot.sh"]
+    assert "--confirm WRITE_PUBLIC_MVP_SNAPSHOT" in scripts["export_public_mvp_snapshot.sh"]
+    assert "DB_DSN value is never printed by this script." in scripts["export_public_mvp_snapshot.sh"]
     assert "run_tour_api_ingest" in scripts["plan_tour_api_ingest.sh"]
     assert "plan_tour_api_ingest.sh" in scripts["verify_repo.sh"]
     assert "ALLOW_TOUR_API_INGEST_APPLY=1" in scripts["plan_tour_api_ingest.sh"]

@@ -306,6 +306,13 @@ DB가 없으면 배포 패키지의 `public_mvp_snapshot`을 사용하고 `data_
 계산 결과를 미리 보여주고, `--apply`는 명시적인 guard를 통과했을 때만
 `analytics.place_score_snapshots`에 새 행을 추가한다.
 
+`apps.api.app.tools.export_public_mvp_snapshot`은 DB-backed 점수 결과를
+`apps/api/app/data/public_mvp_places.json`으로 내보내는 공개 MVP fallback 작성기다.
+기본 실행은 plan-only이며 DB에 연결하지 않는다. `--preview`는
+`travel.public_places`와 `analytics.place_score_snapshots`를 읽어 번들될 장소 목록을
+미리 보여주고, `--write`는 명시적인 guard를 통과했을 때만 로컬 JSON 파일을 갱신한다.
+이 파일은 Vercel production에서 `DB_DSN`이 없을 때만 사용한다.
+
 | Batch input | Used for |
 |---|---|
 | `travel.places` | 대상 장소, 카테고리, 지역, 실내외 여부 |

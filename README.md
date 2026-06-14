@@ -133,6 +133,29 @@ After canonical SQL and local seed data are loaded, preview score snapshots:
 scripts/unix/plan_place_score_batch.sh --preview --limit 20
 ```
 
+Review the public MVP snapshot export without connecting to a database:
+
+```bash
+scripts/unix/export_public_mvp_snapshot.sh
+```
+
+After score snapshots exist in the canonical DB, preview the bundled fallback
+payload that Vercel can serve without `DB_DSN`:
+
+```bash
+scripts/unix/export_public_mvp_snapshot.sh --preview --limit 20
+```
+
+Writing `apps/api/app/data/public_mvp_places.json` is a local file mutation and
+requires an explicit guard:
+
+```bash
+ALLOW_PUBLIC_MVP_SNAPSHOT_WRITE=1 \
+  scripts/unix/export_public_mvp_snapshot.sh \
+  --write \
+  --confirm WRITE_PUBLIC_MVP_SNAPSHOT
+```
+
 Review TourAPI place ingestion without external calls or DB writes:
 
 ```bash
