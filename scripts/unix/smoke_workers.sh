@@ -56,7 +56,7 @@ PY
 if [[ -n "$JOB_ID" ]]; then
   JOB_IDS=("$JOB_ID")
 else
-  mapfile -t JOB_IDS < <(JSON_PAYLOAD="$LIST_OUTPUT" "$PYTHON" - <<'PY'
+  mapfile -t JOB_IDS < <(JSON_PAYLOAD="$LIST_OUTPUT" "$PYTHON" - <<'PY' | tr -d '\r'
 import json
 import os
 
