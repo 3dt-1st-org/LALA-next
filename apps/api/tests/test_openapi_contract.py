@@ -244,11 +244,28 @@ def test_openapi_documents_v1_success_data_schemas(client):
     assert schemas["DailyPlanData"]["properties"]["weather"] == {
         "$ref": "#/components/schemas/WeatherData"
     }
+    assert schemas["DailyPlanData"]["properties"]["radius_m"] == {"type": "integer"}
+    assert schemas["DailyPlanData"]["properties"]["source"]["enum"] == [
+        "skeleton",
+        "public_mvp_snapshot",
+        "db",
+        "mixed",
+    ]
     assert "cache_key" in schemas["DailyPlanData"]["required"]
     assert schemas["DailyPlanData"]["properties"]["cache_key"] == {"type": "string"}
     assert schemas["InterventionData"]["properties"]["recommended_action"] == {
         "type": "string"
     }
+    assert schemas["InterventionData"]["properties"]["place"] == {
+        "$ref": "#/components/schemas/Place",
+        "nullable": True,
+    }
+    assert schemas["InterventionData"]["properties"]["source"]["enum"] == [
+        "skeleton",
+        "public_mvp_snapshot",
+        "db",
+        "mixed",
+    ]
 
 
 def test_openapi_documents_standard_response_headers(client):
@@ -274,6 +291,9 @@ def test_openapi_documents_daily_plan_coordinate_bounds(client):
     assert daily_plan["lat"]["maximum"] == 90
     assert daily_plan["lng"]["minimum"] == -180
     assert daily_plan["lng"]["maximum"] == 180
+    assert daily_plan["radius_m"]["default"] == 50000
+    assert daily_plan["radius_m"]["exclusiveMinimum"] == 0
+    assert daily_plan["radius_m"]["maximum"] == 50000
 
 
 def test_openapi_documents_docent_audio_mpeg_success(client):

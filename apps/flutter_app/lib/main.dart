@@ -171,7 +171,11 @@ class LalaApiBackend implements LalaBackend {
 
   @override
   Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan() {
-    return _client.createDailyPlan(lat: config.lat, lng: config.lng);
+    return _client.createDailyPlan(
+      lat: config.lat,
+      lng: config.lng,
+      radiusM: config.radiusM,
+    );
   }
 
   @override
@@ -1131,8 +1135,13 @@ class _PlanPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _MetricRow(label: 'Source', value: plan?.source ?? '-'),
+          _MetricRow(
+            label: 'Radius',
+            value: plan == null ? '-' : '${plan.radiusM}m',
+          ),
           _MetricRow(label: 'Cache', value: plan?.cacheKey ?? '-'),
           _MetricRow(label: 'Action', value: action?.recommendedAction ?? '-'),
+          _MetricRow(label: 'Candidate', value: action?.place?.name ?? '-'),
           const SizedBox(height: 8),
           if (plan == null)
             const _MutedText('Plan waits for authenticated API data.')

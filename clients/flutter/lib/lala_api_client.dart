@@ -158,6 +158,7 @@ class LalaApiClient {
   Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({
     double lat = 37.2636,
     double lng = 127.0286,
+    int radiusM = 50000,
     String language = 'ko',
     String? requestId,
     Duration? timeout,
@@ -165,7 +166,7 @@ class LalaApiClient {
     return _sendJson<LalaDailyPlan>(
       'POST',
       '/api/v1/plans/daily',
-      body: {'lat': lat, 'lng': lng, 'language': language},
+      body: {'lat': lat, 'lng': lng, 'radius_m': radiusM, 'language': language},
       requestId: requestId,
       timeout: timeout ?? plannerTimeout,
       parseData: LalaDailyPlan.fromJsonObject,
@@ -743,6 +744,7 @@ class LalaDailyPlan {
   const LalaDailyPlan({
     required this.language,
     required this.center,
+    required this.radiusM,
     required this.weather,
     required this.slots,
     required this.source,
@@ -752,6 +754,7 @@ class LalaDailyPlan {
 
   final String language;
   final LalaCoordinate center;
+  final int radiusM;
   final LalaWeather weather;
   final List<LalaPlanSlot> slots;
   final String source;
@@ -766,6 +769,7 @@ class LalaDailyPlan {
     return LalaDailyPlan(
       language: _asString(json['language']),
       center: LalaCoordinate.fromJson(_asMap(json['center'])),
+      radiusM: _asInt(json['radius_m']),
       weather: LalaWeather.fromJson(_asMap(json['weather'])),
       slots: _asList(json['slots']).map(LalaPlanSlot.fromJsonObject).toList(),
       source: _asString(json['source']),
@@ -813,6 +817,7 @@ class LalaIntervention {
     required this.reason,
     required this.recommendedAction,
     required this.source,
+    this.place,
   });
 
   final LalaCoordinate center;
@@ -821,6 +826,7 @@ class LalaIntervention {
   final String reason;
   final String recommendedAction;
   final String source;
+  final LalaPlace? place;
 
   static LalaIntervention fromJsonObject(Object? value) {
     return LalaIntervention.fromJson(_asMap(value));
@@ -834,6 +840,9 @@ class LalaIntervention {
       reason: _asString(json['reason']),
       recommendedAction: _asString(json['recommended_action']),
       source: _asString(json['source']),
+      place: json['place'] is Map<String, dynamic>
+          ? LalaPlace.fromJson(_asMap(json['place']))
+          : null,
     );
   }
 }

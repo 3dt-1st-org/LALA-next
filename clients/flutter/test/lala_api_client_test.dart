@@ -278,6 +278,7 @@ void main() {
               'data': {
                 'language': 'ko',
                 'center': {'lat': 37.2, 'lng': 127.0},
+                'radius_m': 50000,
                 'weather': _weatherPayload(),
                 'slots': [
                   {
@@ -308,6 +309,7 @@ void main() {
               'should_intervene': false,
               'reason': 'Weather-aware placeholder.',
               'recommended_action': 'Show nearby alternatives.',
+              'place': _placePayload(),
               'source': 'skeleton',
             },
             'meta': {'request_id': 'intervention-request-id'},
@@ -323,6 +325,7 @@ void main() {
       expect(weather.data?.dust.gradeKo, '보통');
       expect(weather.data?.forecast.first.icon, 'partly-cloudy');
       expect(plan.data?.center.lat, 37.2);
+      expect(plan.data?.radiusM, 50000);
       expect(plan.data?.weather.outdoorStatus, 'good');
       expect(plan.data?.slots.first.place?.name, '수원화성');
       expect(plan.data?.slots.last.weatherHint, 'good');
@@ -330,8 +333,43 @@ void main() {
       expect(plan.data?.cacheKey, startsWith('daily_plan:'));
       expect(intervention.data?.shouldIntervene, isFalse);
       expect(intervention.data?.recommendedAction, 'Show nearby alternatives.');
+      expect(intervention.data?.place?.placeId, 'skeleton-suwon-hwaseong');
     },
   );
+
+  test('createDailyPlan sends the selected radius', () async {
+    late http.Request captured;
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      apiKey: 'migration-key',
+      httpClient: MockClient((request) async {
+        captured = request;
+        return _jsonResponse({
+          'ok': true,
+          'data': {
+            'language': 'ko',
+            'center': {'lat': 37.2, 'lng': 127.0},
+            'radius_m': 42000,
+            'weather': _weatherPayload(),
+            'slots': [],
+            'source': 'skeleton',
+            'request_hash':
+                'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
+            'cache_key': 'daily_plan:abcdef0123456789abcdef0123456789',
+          },
+          'meta': {'request_id': 'plan-request-id'},
+          'error': null,
+        });
+      }),
+    );
+
+    await client.createDailyPlan(lat: 37.2, lng: 127.0, radiusM: 42000);
+
+    final body = jsonDecode(captured.body) as Map<String, dynamic>;
+    expect(captured.method, 'POST');
+    expect(captured.url.path, '/api/v1/plans/daily');
+    expect(body['radius_m'], 42000);
+  });
 
   test('createDocentAudio returns mpeg bytes and request id', () async {
     late http.Request captured;

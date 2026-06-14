@@ -266,6 +266,7 @@ class FakeBackend implements LalaBackend {
         reason: 'Weather is fine.',
         recommendedAction: 'Keep the current route.',
         source: 'skeleton',
+        place: _place(),
       ),
     );
   }
@@ -276,6 +277,7 @@ class FakeBackend implements LalaBackend {
       LalaDailyPlan(
         language: 'ko',
         center: LalaCoordinate(lat: config.lat, lng: config.lng),
+        radiusM: config.radiusM,
         weather: _weather(),
         slots: [
           LalaPlanSlot(

@@ -496,12 +496,13 @@ def test_daily_plan_route_returns_envelope(client, auth_headers):
     response = client.post(
         "/api/v1/plans/daily",
         headers=auth_headers,
-        json={"lat": 37.2, "lng": 127.0, "language": "ko"},
+        json={"lat": 37.2, "lng": 127.0, "radius_m": 1200, "language": "ko"},
     )
 
     assert response.status_code == 200
     body = response.json()
     assert body["ok"] is True
+    assert body["data"]["radius_m"] == 1200
     assert body["data"]["slots"]
     assert len(body["data"]["request_hash"]) == 64
     assert body["data"]["cache_key"].startswith("daily_plan:")
@@ -536,6 +537,23 @@ def test_daily_plan_generation_identity_is_deterministic(client, auth_headers):
     assert second.status_code == 200
     assert first.json()["data"]["request_hash"] == second.json()["data"]["request_hash"]
     assert first.json()["data"]["cache_key"] == second.json()["data"]["cache_key"]
+
+
+def test_daily_plan_generation_identity_includes_radius(client, auth_headers):
+    first = client.post(
+        "/api/v1/plans/daily",
+        headers=auth_headers,
+        json={"lat": 37.2, "lng": 127.0, "radius_m": 1000, "language": "ko"},
+    )
+    second = client.post(
+        "/api/v1/plans/daily",
+        headers=auth_headers,
+        json={"lat": 37.2, "lng": 127.0, "radius_m": 50000, "language": "ko"},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["data"]["request_hash"] != second.json()["data"]["request_hash"]
 
 
 def test_daily_plan_rejects_out_of_range_coordinates(client, auth_headers):
@@ -581,6 +599,23 @@ def test_daily_plan_marks_mixed_source_when_db_places_are_used(client, auth_head
     assert body["data"]["slots"][0]["place"]["place_id"] == "db-plan-place"
 
 
+def test_daily_plan_uses_public_snapshot_radius_in_public_demo(client, monkeypatch):
+    monkeypatch.delenv("IOS_API_KEY", raising=False)
+    monkeypatch.delenv("API_BEARER_TOKEN", raising=False)
+    monkeypatch.setenv("LALA_PUBLIC_DEMO_MODE", "true")
+
+    response = client.post(
+        "/api/v1/plans/daily",
+        json={"lat": 37.2636, "lng": 127.0286, "radius_m": 50000, "language": "ko"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["data"]["source"] == "mixed"
+    assert body["data"]["slots"][0]["place"]["source"] == "public_mvp_snapshot"
+    assert body["data"]["slots"][0]["place"]["place_id"] == "tour-api-129765"
+
+
 def test_intervention_route_returns_envelope(client, auth_headers):
     response = client.get(
         "/api/v1/plans/intervention?lat=37.2&lng=127.0&radius_m=1000",
@@ -591,3 +626,20 @@ def test_intervention_route_returns_envelope(client, auth_headers):
     body = response.json()
     assert body["ok"] is True
     assert body["data"]["recommended_action"]
+    assert body["data"]["place"]
+
+
+def test_intervention_uses_public_snapshot_candidate_in_public_demo(client, monkeypatch):
+    monkeypatch.delenv("IOS_API_KEY", raising=False)
+    monkeypatch.delenv("API_BEARER_TOKEN", raising=False)
+    monkeypatch.setenv("LALA_PUBLIC_DEMO_MODE", "true")
+
+    response = client.get(
+        "/api/v1/plans/intervention?lat=37.2636&lng=127.0286&radius_m=50000",
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["data"]["source"] == "mixed"
+    assert body["data"]["place"]["source"] == "public_mvp_snapshot"
+    assert body["data"]["place"]["place_id"] == "tour-api-129765"

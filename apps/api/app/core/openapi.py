@@ -679,6 +679,7 @@ def _daily_plan_data_schema() -> dict[str, Any]:
         "required": [
             "language",
             "center",
+            "radius_m",
             "weather",
             "slots",
             "source",
@@ -688,12 +689,16 @@ def _daily_plan_data_schema() -> dict[str, Any]:
         "properties": {
             "language": {"type": "string", "enum": ["ko", "en"]},
             "center": {"$ref": "#/components/schemas/Coordinate"},
+            "radius_m": {"type": "integer"},
             "weather": {"$ref": "#/components/schemas/WeatherData"},
             "slots": {
                 "type": "array",
                 "items": {"$ref": "#/components/schemas/DailyPlanSlot"},
             },
-            "source": {"type": "string", "enum": ["skeleton", "db", "mixed"]},
+            "source": {
+                "type": "string",
+                "enum": ["skeleton", "public_mvp_snapshot", "db", "mixed"],
+            },
             "request_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
             "cache_key": {"type": "string"},
         },
@@ -718,7 +723,11 @@ def _intervention_data_schema() -> dict[str, Any]:
             "should_intervene": {"type": "boolean"},
             "reason": {"type": "string"},
             "recommended_action": {"type": "string"},
-            "source": {"type": "string", "enum": ["skeleton", "db"]},
+            "place": {"$ref": "#/components/schemas/Place", "nullable": True},
+            "source": {
+                "type": "string",
+                "enum": ["skeleton", "public_mvp_snapshot", "db", "mixed"],
+            },
         },
         "additionalProperties": False,
     }

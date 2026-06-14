@@ -17,6 +17,8 @@ Current app surface:
 - Places, weather, intervention, daily plan, first-place docent script, and
   manual docent audio metadata panels for operator handoff and public-demo
   fallback checks.
+- Daily plan and intervention share the same editable radius as places, so the
+  public MVP snapshot remains consistent across panels.
 - Partial-failure handling that keeps public health/readiness visible when an
   authenticated `/api/v1/*` request fails.
 

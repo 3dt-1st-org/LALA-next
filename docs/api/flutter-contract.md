@@ -213,6 +213,7 @@ Request:
 {
   "lat": 37.2636,
   "lng": 127.0286,
+  "radius_m": 50000,
   "language": "ko"
 }
 ```
@@ -327,6 +328,7 @@ available, the API falls back to the latest weather row and marks
     "lat": 37.2636,
     "lng": 127.0286
   },
+  "radius_m": 50000,
   "weather": {
     "outdoor_status": "good",
     "source": "skeleton"
@@ -336,12 +338,13 @@ available, the API falls back to the latest weather row and marks
       "period": "morning",
       "title": "Start near a landmark",
       "place": {
-        "place_id": "skeleton-suwon-hwaseong",
-        "name": "수원화성"
+        "place_id": "tour-api-129765",
+        "name": "호암미술관",
+        "source": "public_mvp_snapshot"
       }
     }
   ],
-  "source": "skeleton"
+  "source": "mixed"
 }
 ```
 
@@ -353,11 +356,16 @@ available, the API falls back to the latest weather row and marks
     "lat": 37.2636,
     "lng": 127.0286
   },
-  "radius_m": 10000,
+  "radius_m": 50000,
   "should_intervene": false,
-  "reason": "Weather-aware placeholder intervention from LALA-next skeleton.",
-  "recommended_action": "Show nearby indoor or short-walk alternatives.",
-  "source": "skeleton"
+  "reason": "Weather is suitable, so keep the current route toward 호암미술관.",
+  "recommended_action": "Keep 호암미술관 as the primary local stop.",
+  "place": {
+    "place_id": "tour-api-129765",
+    "name": "호암미술관",
+    "source": "public_mvp_snapshot"
+  },
+  "source": "mixed"
 }
 ```
 
