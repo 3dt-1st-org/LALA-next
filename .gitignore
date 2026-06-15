@@ -15,7 +15,7 @@ runtime/
 artifacts/tmp/
 artifacts/openapi/
 .playwright-cli/
-output/playwright/
+output/
 
 # Local legacy/reference imports from the previous LALA project.
 /lala-macbook-usb-local-artifacts-*.zip

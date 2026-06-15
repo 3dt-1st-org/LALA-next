@@ -18,9 +18,9 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('LALA'), findsOneWidget);
-    expect(find.text('지도'), findsOneWidget);
-    expect(find.text('대시보드'), findsOneWidget);
+    expect(find.text('전체'), findsOneWidget);
+    expect(find.text('명소'), findsAtLeastNWidgets(1));
+    expect(find.text('대시보드'), findsNothing);
     expect(find.text('추천 장소 보기'), findsOneWidget);
     expect(find.text('Kakao Map API'), findsOneWidget);
     expect(find.text('로컬 점수'), findsNothing);
@@ -36,7 +36,7 @@ void main() {
     expect(find.text('TourAPI'), findsNothing);
     expect(find.textContaining('조선 왕실'), findsOneWidget);
 
-    final evidenceButton = find.widgetWithText(OutlinedButton, '점수/근거 보기');
+    final evidenceButton = find.widgetWithText(TextButton, '점수/근거');
     await tester.ensureVisible(evidenceButton);
     await tester.tap(evidenceButton);
     await tester.pumpAndSettle();
@@ -150,7 +150,20 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('설정'));
+    await tester.tap(find.byIcon(Icons.settings).first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('개인정보 동의 안내'), findsOneWidget);
+    expect(find.text('위치기반 정보 제공 동의'), findsOneWidget);
+    expect(find.text('언어'), findsOneWidget);
+    expect(find.text('글꼴 크기'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.text('개발 연결'),
+      320,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(find.text('개발 연결'));
     await tester.pumpAndSettle();
 
     await tester.enterText(
@@ -174,6 +187,29 @@ void main() {
     expect(configs.last.baseUri, 'http://10.0.0.5:8080');
     expect(configs.last.apiKey, 'migration-key');
     expect(configs.last.kakaoJavascriptKey, 'kakao-js-key');
+  });
+
+  testWidgets('settings language switch updates map filter labels', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      LalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.settings).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('English'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.arrow_back_ios_new));
+    await tester.pumpAndSettle();
+
+    expect(find.text('All'), findsOneWidget);
+    expect(find.text('Attractions'), findsOneWidget);
+    expect(find.text('Daily Plan'), findsOneWidget);
   });
 
   testWidgets('surfaces OAuth JWT auth mode separately from static bearer', (

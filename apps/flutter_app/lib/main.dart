@@ -257,6 +257,9 @@ class _LalaHomePageState extends State<LalaHomePage> {
   bool _voiceEnabled = true;
   bool _autoDocentEnabled = false;
   bool _showEvidence = false;
+  bool _locationConsentEnabled = true;
+  String _uiLanguage = 'ko';
+  double _fontScale = 1.0;
 
   @override
   void initState() {
@@ -470,63 +473,108 @@ class _LalaHomePageState extends State<LalaHomePage> {
     });
   }
 
+  void _setUiLanguage(String language) {
+    setState(() {
+      _uiLanguage = language;
+    });
+  }
+
+  void _setFontScale(double scale) {
+    setState(() {
+      _fontScale = scale;
+    });
+  }
+
+  void _setLocationConsent(bool enabled) {
+    setState(() {
+      _locationConsentEnabled = enabled;
+    });
+  }
+
+  Future<void> _openSettingsSheet(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            void updateSheet(VoidCallback action) {
+              action();
+              setSheetState(() {});
+            }
+
+            return _UserSettingsSheet(
+              locationConsentEnabled: _locationConsentEnabled,
+              uiLanguage: _uiLanguage,
+              fontScale: _fontScale,
+              baseUrlController: _baseUrlController,
+              bearerTokenController: _bearerTokenController,
+              apiKeyController: _apiKeyController,
+              kakaoJavascriptKeyController: _kakaoJavascriptKeyController,
+              latController: _latController,
+              lngController: _lngController,
+              radiusController: _radiusController,
+              loading: _loading,
+              onRefresh: _refresh,
+              onLocationConsentChanged: (enabled) =>
+                  updateSheet(() => _setLocationConsent(enabled)),
+              onLanguageChanged: (language) =>
+                  updateSheet(() => _setUiLanguage(language)),
+              onFontScaleChanged: (scale) =>
+                  updateSheet(() => _setFontScale(scale)),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final config = _currentConfig();
-    final configPanel = _ConfigPanel(
-      baseUrlController: _baseUrlController,
-      bearerTokenController: _bearerTokenController,
-      apiKeyController: _apiKeyController,
-      kakaoJavascriptKeyController: _kakaoJavascriptKeyController,
-      latController: _latController,
-      lngController: _lngController,
-      radiusController: _radiusController,
-      loading: _loading,
-      onRefresh: _refresh,
-    );
-
-    return Scaffold(
-      endDrawer: Drawer(
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: configPanel,
-          ),
-        ),
-      ),
-      body: SafeArea(
-        child: Builder(
-          builder: (context) => _Dashboard(
-            loading: _loading,
-            error: _error,
-            health: _health,
-            readiness: _readiness,
-            places: _places,
-            weather: _weather,
-            intervention: _intervention,
-            dailyPlan: _dailyPlan,
-            docentScript: _docentScript,
-            docentAudio: _docentAudio,
-            audioLoading: _audioLoading,
-            audioError: _audioError,
-            authMode: config.authMode,
-            kakaoJavascriptKey: config.kakaoJavascriptKey,
-            selectedCategory: _selectedCategory,
-            selectedPlaceId: _selectedPlaceId,
-            activeSheet: _activeSheet,
-            voiceEnabled: _voiceEnabled,
-            autoDocentEnabled: _autoDocentEnabled,
-            showEvidence: _showEvidence,
-            onSelectCategory: _selectCategory,
-            onSelectPlace: _selectPlace,
-            onOpenSheet: _openSheet,
-            onCloseSheet: _closeSheet,
-            onToggleVoice: _toggleVoice,
-            onToggleAutoDocent: _toggleAutoDocent,
-            onToggleEvidence: _toggleEvidence,
-            onFetchAudio: _fetchAudio,
-            onRefresh: _refresh,
-            onOpenSettings: () => Scaffold.of(context).openEndDrawer(),
+    return MediaQuery(
+      data: MediaQuery.of(
+        context,
+      ).copyWith(textScaler: TextScaler.linear(_fontScale)),
+      child: Scaffold(
+        body: SafeArea(
+          child: Builder(
+            builder: (context) => _Dashboard(
+              loading: _loading,
+              error: _error,
+              health: _health,
+              readiness: _readiness,
+              places: _places,
+              weather: _weather,
+              intervention: _intervention,
+              dailyPlan: _dailyPlan,
+              docentScript: _docentScript,
+              docentAudio: _docentAudio,
+              audioLoading: _audioLoading,
+              audioError: _audioError,
+              authMode: config.authMode,
+              kakaoJavascriptKey: config.kakaoJavascriptKey,
+              selectedCategory: _selectedCategory,
+              selectedPlaceId: _selectedPlaceId,
+              activeSheet: _activeSheet,
+              uiLanguage: _uiLanguage,
+              voiceEnabled: _voiceEnabled,
+              autoDocentEnabled: _autoDocentEnabled,
+              showEvidence: _showEvidence,
+              locationConsentEnabled: _locationConsentEnabled,
+              onSelectCategory: _selectCategory,
+              onSelectPlace: _selectPlace,
+              onOpenSheet: _openSheet,
+              onCloseSheet: _closeSheet,
+              onToggleVoice: _toggleVoice,
+              onToggleAutoDocent: _toggleAutoDocent,
+              onToggleEvidence: _toggleEvidence,
+              onFetchAudio: _fetchAudio,
+              onRefresh: _refresh,
+              onOpenSettings: () => _openSettingsSheet(context),
+            ),
           ),
         ),
       ),
@@ -648,6 +696,262 @@ class _ConfigPanel extends StatelessWidget {
   }
 }
 
+class _UserSettingsSheet extends StatelessWidget {
+  const _UserSettingsSheet({
+    required this.locationConsentEnabled,
+    required this.uiLanguage,
+    required this.fontScale,
+    required this.baseUrlController,
+    required this.bearerTokenController,
+    required this.apiKeyController,
+    required this.kakaoJavascriptKeyController,
+    required this.latController,
+    required this.lngController,
+    required this.radiusController,
+    required this.loading,
+    required this.onRefresh,
+    required this.onLocationConsentChanged,
+    required this.onLanguageChanged,
+    required this.onFontScaleChanged,
+  });
+
+  final bool locationConsentEnabled;
+  final String uiLanguage;
+  final double fontScale;
+  final TextEditingController baseUrlController;
+  final TextEditingController bearerTokenController;
+  final TextEditingController apiKeyController;
+  final TextEditingController kakaoJavascriptKeyController;
+  final TextEditingController latController;
+  final TextEditingController lngController;
+  final TextEditingController radiusController;
+  final bool loading;
+  final VoidCallback onRefresh;
+  final ValueChanged<bool> onLocationConsentChanged;
+  final ValueChanged<String> onLanguageChanged;
+  final ValueChanged<double> onFontScaleChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.82,
+      minChildSize: 0.48,
+      maxChildSize: 0.95,
+      builder: (context, scrollController) {
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            color: const Color(0xFFF5F5F5),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            boxShadow: const [
+              BoxShadow(
+                blurRadius: 28,
+                offset: Offset(0, -10),
+                color: Color(0x26000000),
+              ),
+            ],
+          ),
+          child: ListView(
+            controller: scrollController,
+            padding: const EdgeInsets.fromLTRB(18, 10, 18, 28),
+            children: [
+              Center(
+                child: Container(
+                  width: 46,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFC8D0D9),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  IconButton.filledTonal(
+                    tooltip: '닫기',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.arrow_back_ios_new),
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF1A202C),
+                    ),
+                  ),
+                  const Expanded(
+                    child: Center(
+                      child: Text(
+                        '설정',
+                        style: TextStyle(
+                          color: Color(0xFF111827),
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 48),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _SettingsSection(
+                title: '개인정보 동의 안내',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '서비스 품질 향상을 위해 최소한의 이용 정보와 위치 기반 추천 정보가 사용됩니다.',
+                      style: TextStyle(
+                        color: Color(0xFF64748B),
+                        height: 1.38,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: () {},
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        foregroundColor: const Color(0xFF2B6CB0),
+                        textStyle: const TextStyle(fontWeight: FontWeight.w900),
+                      ),
+                      child: const Text('자세히 보기'),
+                    ),
+                  ],
+                ),
+              ),
+              _SettingsSection(
+                title: '위치기반 정보 제공 동의',
+                trailing: Switch(
+                  value: locationConsentEnabled,
+                  onChanged: onLocationConsentChanged,
+                ),
+              ),
+              _SettingsSection(
+                title: '언어',
+                child: SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: 'ko', label: Text('한국어')),
+                    ButtonSegment(value: 'en', label: Text('English')),
+                  ],
+                  selected: {uiLanguage},
+                  onSelectionChanged: (values) =>
+                      onLanguageChanged(values.first),
+                  style: SegmentedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    selectedBackgroundColor: const Color(0xFF2B6CB0),
+                    selectedForegroundColor: Colors.white,
+                  ),
+                ),
+              ),
+              _SettingsSection(
+                title: '글꼴 크기',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Slider(
+                      value: fontScale,
+                      min: 0.9,
+                      max: 1.18,
+                      divisions: 7,
+                      label: 'x${fontScale.toStringAsFixed(2)}',
+                      onChanged: onFontScaleChanged,
+                    ),
+                    Text(
+                      'x${fontScale.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        color: Color(0xFF64748B),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              _SettingsSection(
+                title: '앱 정보',
+                child: const _MetricRow(label: '버전', value: '1.0'),
+              ),
+              ExpansionTile(
+                tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+                childrenPadding: const EdgeInsets.fromLTRB(0, 0, 0, 12),
+                collapsedBackgroundColor: Colors.white,
+                backgroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                collapsedShape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                title: const Text(
+                  '개발 연결',
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: _ConfigPanel(
+                      baseUrlController: baseUrlController,
+                      bearerTokenController: bearerTokenController,
+                      apiKeyController: apiKeyController,
+                      kakaoJavascriptKeyController:
+                          kakaoJavascriptKeyController,
+                      latController: latController,
+                      lngController: lngController,
+                      radiusController: radiusController,
+                      loading: loading,
+                      onRefresh: onRefresh,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _SettingsSection extends StatelessWidget {
+  const _SettingsSection({required this.title, this.child, this.trailing});
+
+  final String title;
+  final Widget? child;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    color: Color(0xFF111827),
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+              ?trailing,
+            ],
+          ),
+          if (child != null) ...[const SizedBox(height: 12), child!],
+        ],
+      ),
+    );
+  }
+}
+
 class _Dashboard extends StatelessWidget {
   const _Dashboard({
     required this.loading,
@@ -667,9 +971,11 @@ class _Dashboard extends StatelessWidget {
     required this.selectedCategory,
     required this.selectedPlaceId,
     required this.activeSheet,
+    required this.uiLanguage,
     required this.voiceEnabled,
     required this.autoDocentEnabled,
     required this.showEvidence,
+    required this.locationConsentEnabled,
     required this.onSelectCategory,
     required this.onSelectPlace,
     required this.onOpenSheet,
@@ -699,9 +1005,11 @@ class _Dashboard extends StatelessWidget {
   final String selectedCategory;
   final String? selectedPlaceId;
   final _ActiveMapSheet? activeSheet;
+  final String uiLanguage;
   final bool voiceEnabled;
   final bool autoDocentEnabled;
   final bool showEvidence;
+  final bool locationConsentEnabled;
   final ValueChanged<String> onSelectCategory;
   final ValueChanged<LalaPlace> onSelectPlace;
   final ValueChanged<_ActiveMapSheet> onOpenSheet;
@@ -741,24 +1049,24 @@ class _Dashboard extends StatelessWidget {
               top: 0,
               child: _TopMapChrome(
                 loading: loading,
+                language: uiLanguage,
                 selectedCategory: selectedCategory,
                 onSelectCategory: onSelectCategory,
-                onRefresh: onRefresh,
-                onOpenSettings: onOpenSettings,
               ),
             ),
             Positioned(
               right: 16,
-              top: isWide ? 154 : 308,
+              top: isWide ? 124 : 238,
               child: _WeatherMapPill(
                 weather: currentWeather,
+                language: uiLanguage,
                 onPressed: () => onOpenSheet(_ActiveMapSheet.weather),
               ),
             ),
             Positioned(
               left: 16,
               right: 16,
-              top: isWide ? 112 : 146,
+              top: isWide ? 76 : 68,
               child: _MapPlaceCarouselOverlay(
                 places: topPlaces,
                 source: places?.data?.source,
@@ -768,17 +1076,30 @@ class _Dashboard extends StatelessWidget {
             ),
             Positioned(
               left: 16,
-              top: isWide ? 154 : 308,
+              top: isWide ? 124 : 238,
               child: _PlannerMapPill(
                 dailyPlan: dailyPlan?.data,
+                language: uiLanguage,
                 onPressed: () => onOpenSheet(_ActiveMapSheet.planner),
+              ),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              top: isWide ? 124 : 238,
+              child: Center(
+                child: _MapRoundButton(
+                  tooltip: uiLanguage == 'en' ? 'Settings' : '설정',
+                  icon: Icons.settings,
+                  onPressed: onOpenSettings,
+                ),
               ),
             ),
             if (visibleError != null)
               Positioned(
                 left: 16,
                 right: 16,
-                top: isWide ? 112 : 132,
+                top: isWide ? 88 : 118,
                 child: _MapToast(
                   icon: Icons.error_outline,
                   label: visibleError,
@@ -794,6 +1115,7 @@ class _Dashboard extends StatelessWidget {
                 places: topPlaces,
                 source: places?.data?.source,
                 topPlace: topPlace,
+                uiLanguage: uiLanguage,
                 weather: currentWeather,
                 intervention: intervention?.data,
                 dailyPlan: dailyPlan?.data,
@@ -809,10 +1131,11 @@ class _Dashboard extends StatelessWidget {
             ),
             Positioned(
               right: 16,
-              top: isWide ? 218 : 354,
+              bottom: isWide ? 44 : 336,
               child: _FloatingMapControls(
                 voiceEnabled: voiceEnabled,
                 autoDocentEnabled: autoDocentEnabled,
+                language: uiLanguage,
                 onToggleVoice: onToggleVoice,
                 onToggleAutoDocent: onToggleAutoDocent,
                 onRefresh: onRefresh,
@@ -824,6 +1147,7 @@ class _Dashboard extends StatelessWidget {
                   activeSheet: activeSheet!,
                   place: topPlace,
                   weather: currentWeather,
+                  language: uiLanguage,
                   intervention: intervention?.data,
                   dailyPlan: dailyPlan?.data,
                   docentScript: docentScript?.data,
@@ -847,91 +1171,53 @@ class _Dashboard extends StatelessWidget {
 class _TopMapChrome extends StatelessWidget {
   const _TopMapChrome({
     required this.loading,
+    required this.language,
     required this.selectedCategory,
     required this.onSelectCategory,
-    required this.onRefresh,
-    required this.onOpenSettings,
   });
 
   final bool loading;
+  final String language;
   final String selectedCategory;
   final ValueChanged<String> onSelectCategory;
-  final VoidCallback onRefresh;
-  final VoidCallback onOpenSettings;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 12, 18, 0),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            height: 72,
-            padding: const EdgeInsets.symmetric(horizontal: 18),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.96),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-              boxShadow: const [
-                BoxShadow(
-                  blurRadius: 22,
-                  offset: Offset(0, 8),
-                  color: Color(0x18000000),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                const _LalaWordmark(),
-                const Spacer(),
-                const _NavTab(label: '지도', selected: true),
-                const _NavTab(label: '대시보드'),
-                Tooltip(
-                  message: '개발 설정',
-                  child: TextButton(
-                    onPressed: onOpenSettings,
-                    style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFF1A202C),
-                      textStyle: const TextStyle(fontWeight: FontWeight.w900),
-                    ),
-                    child: const Text('설정'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
                 _CategoryChip(
-                  label: '전체',
+                  label: _categoryFilterLabel('all', language),
                   active: selectedCategory == 'all',
                   color: const Color(0xFF1A202C),
                   onTap: () => onSelectCategory('all'),
                 ),
                 _CategoryChip(
-                  label: '명소',
+                  label: _categoryFilterLabel('attraction', language),
                   active: selectedCategory == 'attraction',
                   color: const Color(0xFFC53030),
                   onTap: () => onSelectCategory('attraction'),
                 ),
                 _CategoryChip(
-                  label: '맛집',
+                  label: _categoryFilterLabel('restaurant', language),
                   active: selectedCategory == 'restaurant',
                   color: const Color(0xFFF5C842),
                   onTap: () => onSelectCategory('restaurant'),
                 ),
                 _CategoryChip(
-                  label: '행사',
+                  label: _categoryFilterLabel('event', language),
                   active: selectedCategory == 'event',
                   color: const Color(0xFF2B6CB0),
                   onTap: () => onSelectCategory('event'),
                 ),
                 _CategoryChip(
-                  label: '문화',
+                  label: _categoryFilterLabel('culture_venue', language),
                   active: selectedCategory == 'culture_venue',
                   color: const Color(0xFF0F766E),
                   onTap: () => onSelectCategory('culture_venue'),
@@ -940,7 +1226,7 @@ class _TopMapChrome extends StatelessWidget {
             ),
           ),
           if (loading) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             ClipRRect(
               borderRadius: BorderRadius.circular(999),
               child: const LinearProgressIndicator(minHeight: 3),
@@ -1147,9 +1433,14 @@ class _RailPlaceThumb extends StatelessWidget {
 }
 
 class _PlannerMapPill extends StatelessWidget {
-  const _PlannerMapPill({required this.dailyPlan, required this.onPressed});
+  const _PlannerMapPill({
+    required this.dailyPlan,
+    required this.language,
+    required this.onPressed,
+  });
 
   final LalaDailyPlan? dailyPlan;
+  final String language;
   final VoidCallback onPressed;
 
   @override
@@ -1157,48 +1448,9 @@ class _PlannerMapPill extends StatelessWidget {
     final slots = dailyPlan?.slots ?? const <LalaPlanSlot>[];
     return _SmallStatusPill(
       icon: Icons.event_note,
-      label: '하루 일정',
+      label: language == 'en' ? 'Daily Plan' : '하루 일정',
       active: slots.isNotEmpty,
       onPressed: onPressed,
-    );
-  }
-}
-
-class _NavTab extends StatelessWidget {
-  const _NavTab({required this.label, this.selected = false});
-
-  final String label;
-  final bool selected;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 4),
-      child: TextButton(
-        onPressed: () {},
-        style: TextButton.styleFrom(
-          foregroundColor: selected
-              ? Theme.of(context).colorScheme.primary
-              : const Color(0xFF1A202C),
-          textStyle: const TextStyle(fontWeight: FontWeight.w900),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(label),
-            const SizedBox(height: 4),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              width: selected ? 28 : 0,
-              height: 3,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary,
-                borderRadius: BorderRadius.circular(999),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -1209,6 +1461,7 @@ class _MapBottomDock extends StatelessWidget {
     required this.places,
     required this.source,
     required this.topPlace,
+    required this.uiLanguage,
     required this.weather,
     required this.intervention,
     required this.dailyPlan,
@@ -1226,6 +1479,7 @@ class _MapBottomDock extends StatelessWidget {
   final List<LalaPlace> places;
   final String? source;
   final LalaPlace? topPlace;
+  final String uiLanguage;
   final LalaWeather? weather;
   final LalaIntervention? intervention;
   final LalaDailyPlan? dailyPlan;
@@ -1240,7 +1494,12 @@ class _MapBottomDock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final maxHeight = isWide ? 360.0 : 430.0;
+    final currentPlace = topPlace ?? _fallbackUiPlaces().first;
+    final effectiveDocent = docentScript?.placeId == currentPlace.placeId
+        ? docentScript
+        : null;
+    final slots = dailyPlan?.slots ?? const <LalaPlanSlot>[];
+    final maxHeight = isWide ? 320.0 : 314.0;
     return ConstrainedBox(
       constraints: BoxConstraints(maxHeight: maxHeight),
       child: DecoratedBox(
@@ -1256,7 +1515,7 @@ class _MapBottomDock extends StatelessWidget {
           ],
         ),
         child: SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(16, 10, 16, isWide ? 16 : 22),
+          padding: EdgeInsets.fromLTRB(16, 10, 16, isWide ? 16 : 18),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -1280,29 +1539,54 @@ class _MapBottomDock extends StatelessWidget {
                   TextButton.icon(
                     onPressed: onOpenDetail,
                     icon: const Icon(Icons.keyboard_arrow_up),
-                    label: const Text('상세'),
+                    label: Text(uiLanguage == 'en' ? 'Details' : '상세'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  _CategoryBadge(category: currentPlace.category),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      currentPlace.nameKo ?? currentPlace.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: const Color(0xFF111827),
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      if (!showEvidence) {
+                        onToggleEvidence();
+                      }
+                      onOpenDetail();
+                    },
+                    child: Text(
+                      uiLanguage == 'en' ? 'Signals' : '점수/근거',
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
                   ),
                 ],
               ),
               const SizedBox(height: 6),
-              Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 840),
-                  child: _FeaturedPlacePanel(
-                    place: topPlace,
-                    weather: weather,
-                    intervention: intervention,
-                    dailyPlan: dailyPlan,
-                    docentScript: docentScript,
-                    docentAudio: docentAudio,
-                    audioLoading: audioLoading,
-                    audioError: audioError,
-                    source: source,
-                    showEvidence: showEvidence,
-                    onToggleEvidence: onToggleEvidence,
-                    onFetchAudio: onFetchAudio,
-                  ),
-                ),
+              _DocentSubtitle(
+                place: currentPlace,
+                script: effectiveDocent?.script,
+                action:
+                    intervention?.recommendedAction ??
+                    (slots.isEmpty ? null : slots.first.title),
+                audioLoading: audioLoading,
+                audioError: audioError,
+                docentAudio: docentAudio,
+                canFetchAudio:
+                    effectiveDocent?.script.trim().isNotEmpty == true &&
+                    !audioLoading,
+                onFetchAudio: onFetchAudio,
               ),
             ],
           ),
@@ -1317,6 +1601,7 @@ class _MapDraggableSheet extends StatelessWidget {
     required this.activeSheet,
     required this.place,
     required this.weather,
+    required this.language,
     required this.intervention,
     required this.dailyPlan,
     required this.docentScript,
@@ -1333,6 +1618,7 @@ class _MapDraggableSheet extends StatelessWidget {
   final _ActiveMapSheet activeSheet;
   final LalaPlace? place;
   final LalaWeather? weather;
+  final String language;
   final LalaIntervention? intervention;
   final LalaDailyPlan? dailyPlan;
   final LalaDocentScript? docentScript;
@@ -1348,9 +1634,9 @@ class _MapDraggableSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final title = switch (activeSheet) {
-      _ActiveMapSheet.detail => '장소 상세',
-      _ActiveMapSheet.planner => '오늘 일정',
-      _ActiveMapSheet.weather => '날씨',
+      _ActiveMapSheet.detail => language == 'en' ? 'Details' : '장소 상세',
+      _ActiveMapSheet.planner => language == 'en' ? 'Daily Plan' : '오늘 일정',
+      _ActiveMapSheet.weather => language == 'en' ? 'Weather' : '날씨',
     };
     final icon = switch (activeSheet) {
       _ActiveMapSheet.detail => Icons.place_outlined,
@@ -2661,10 +2947,43 @@ class _MapLocationLabel extends StatelessWidget {
   }
 }
 
+class _MapRoundButton extends StatelessWidget {
+  const _MapRoundButton({
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: IconButton.filledTonal(
+        onPressed: onPressed,
+        icon: Icon(icon, size: 22),
+        style: IconButton.styleFrom(
+          fixedSize: const Size.square(46),
+          backgroundColor: Colors.white.withValues(alpha: 0.95),
+          foregroundColor: const Color(0xFF1A202C),
+          shape: const CircleBorder(
+            side: BorderSide(color: Color(0xFFE2E8F0), width: 1.4),
+          ),
+          elevation: 7,
+        ),
+      ),
+    );
+  }
+}
+
 class _FloatingMapControls extends StatelessWidget {
   const _FloatingMapControls({
     required this.voiceEnabled,
     required this.autoDocentEnabled,
+    required this.language,
     required this.onToggleVoice,
     required this.onToggleAutoDocent,
     required this.onRefresh,
@@ -2672,6 +2991,7 @@ class _FloatingMapControls extends StatelessWidget {
 
   final bool voiceEnabled;
   final bool autoDocentEnabled;
+  final String language;
   final VoidCallback onToggleVoice;
   final VoidCallback onToggleAutoDocent;
   final VoidCallback onRefresh;
@@ -2683,9 +3003,13 @@ class _FloatingMapControls extends StatelessWidget {
       children: [
         _MapFab(
           key: const ValueKey('voice-toggle'),
-          tooltip: voiceEnabled ? '음성 끄기' : '음성 켜기',
+          tooltip: language == 'en'
+              ? (voiceEnabled ? 'Mute voice' : 'Enable voice')
+              : (voiceEnabled ? '음성 끄기' : '음성 켜기'),
           icon: voiceEnabled ? Icons.volume_up : Icons.volume_off,
-          label: voiceEnabled ? '음성 ON' : '음성 OFF',
+          label: language == 'en'
+              ? (voiceEnabled ? 'Voice ON' : 'Voice OFF')
+              : (voiceEnabled ? '음성 ON' : '음성 OFF'),
           active: voiceEnabled,
           statusLabel: voiceEnabled ? 'ON' : 'OFF',
           onPressed: onToggleVoice,
@@ -2693,9 +3017,13 @@ class _FloatingMapControls extends StatelessWidget {
         const SizedBox(width: 9),
         _MapFab(
           key: const ValueKey('auto-docent-toggle'),
-          tooltip: autoDocentEnabled ? '자동 도슨트 끄기' : '자동 도슨트 켜기',
+          tooltip: language == 'en'
+              ? (autoDocentEnabled ? 'Auto guide off' : 'Auto guide on')
+              : (autoDocentEnabled ? '자동 도슨트 끄기' : '자동 도슨트 켜기'),
           icon: Icons.auto_awesome,
-          label: autoDocentEnabled ? '자동 ON' : '자동 OFF',
+          label: language == 'en'
+              ? (autoDocentEnabled ? 'Auto ON' : 'Auto OFF')
+              : (autoDocentEnabled ? '자동 ON' : '자동 OFF'),
           active: autoDocentEnabled,
           statusLabel: autoDocentEnabled ? 'ON' : 'OFF',
           onPressed: onToggleAutoDocent,
@@ -2703,9 +3031,9 @@ class _FloatingMapControls extends StatelessWidget {
         const SizedBox(width: 9),
         _MapFab(
           key: const ValueKey('location-refresh'),
-          tooltip: '내 위치',
+          tooltip: language == 'en' ? 'My location' : '내 위치',
           icon: Icons.my_location,
-          label: '내 위치',
+          label: language == 'en' ? 'My location' : '내 위치',
           active: true,
           statusLabel: null,
           onPressed: onRefresh,
@@ -3087,16 +3415,22 @@ class _CategoryChip extends StatelessWidget {
 }
 
 class _WeatherMapPill extends StatelessWidget {
-  const _WeatherMapPill({required this.weather, required this.onPressed});
+  const _WeatherMapPill({
+    required this.weather,
+    required this.language,
+    required this.onPressed,
+  });
 
   final LalaWeather? weather;
+  final String language;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
+    final dustPrefix = language == 'en' ? 'Dust' : '미세먼지';
     final label = weather == null
-        ? '${_fallbackWeather().temp} · 미세먼지 ${_fallbackWeather().dust.gradeKo}'
-        : '${_temperatureLabel(weather!.temp)} · 미세먼지 ${weather!.dust.gradeKo}';
+        ? '${_fallbackWeather().temp} · $dustPrefix ${_fallbackWeather().dust.gradeKo}'
+        : '${_temperatureLabel(weather!.temp)} · $dustPrefix ${weather!.dust.gradeKo}';
     return _SmallStatusPill(
       icon: Icons.thermostat,
       label: label,
@@ -3302,6 +3636,23 @@ String _categoryLabel(String category) {
     'culture_venue' => '문화',
     'attraction' => '명소',
     _ => '로컬',
+  };
+}
+
+String _categoryFilterLabel(String category, String language) {
+  if (language == 'en') {
+    return switch (category) {
+      'all' => 'All',
+      'restaurant' => 'Restaurants',
+      'event' => 'Events',
+      'culture_venue' => 'Culture',
+      'attraction' => 'Attractions',
+      _ => 'Local',
+    };
+  }
+  return switch (category) {
+    'all' => '전체',
+    _ => _categoryLabel(category),
   };
 }
 
