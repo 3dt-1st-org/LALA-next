@@ -638,12 +638,26 @@ class _Dashboard extends StatelessWidget {
             ),
             Positioned(
               right: 16,
-              top: isWide ? 154 : 186,
+              top: isWide ? 154 : 308,
               child: _WeatherMapPill(weather: weather?.data),
             ),
             Positioned(
+              left: 16,
               right: 16,
-              top: isWide ? 218 : 304,
+              top: isWide ? 112 : 146,
+              child: _MapPlaceCarouselOverlay(
+                places: topPlaces,
+                source: places?.data?.source,
+              ),
+            ),
+            Positioned(
+              left: 16,
+              top: isWide ? 154 : 308,
+              child: _PlannerMapPill(dailyPlan: dailyPlan?.data),
+            ),
+            Positioned(
+              right: 16,
+              top: isWide ? 218 : 354,
               child: _FloatingMapControls(onRefresh: onRefresh),
             ),
             if (visibleError != null)
@@ -696,7 +710,6 @@ class _TopMapChrome extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 0),
       child: Column(
@@ -722,8 +735,7 @@ class _TopMapChrome extends StatelessWidget {
                 const _LalaWordmark(),
                 const Spacer(),
                 const _NavTab(label: '지도', selected: true),
-                const _NavTab(label: '코스'),
-                const _NavTab(label: '도슨트'),
+                const _NavTab(label: '대시보드'),
                 Tooltip(
                   message: '개발 설정',
                   child: TextButton(
@@ -746,7 +758,7 @@ class _TopMapChrome extends StatelessWidget {
                 _CategoryChip(
                   label: '전체',
                   active: true,
-                  color: colorScheme.primary,
+                  color: const Color(0xFF1A202C),
                 ),
                 _CategoryChip(
                   label: '명소',
@@ -780,6 +792,191 @@ class _TopMapChrome extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+class _MapPlaceCarouselOverlay extends StatelessWidget {
+  const _MapPlaceCarouselOverlay({required this.places, required this.source});
+
+  final List<LalaPlace> places;
+  final String? source;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = _railPlaces(places);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Align(
+          alignment: Alignment.center,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.94),
+              borderRadius: BorderRadius.circular(999),
+              boxShadow: const [
+                BoxShadow(
+                  blurRadius: 12,
+                  offset: Offset(0, 4),
+                  color: Color(0x18000000),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.keyboard_arrow_down, size: 17),
+                const SizedBox(width: 4),
+                Text(
+                  '추천 장소 보기',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: const Color(0xFF374151),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '${items.length}곳 · ${_sourceLabel(source)}',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: const Color(0xFF64748B),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 112,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.82),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.72)),
+              boxShadow: const [
+                BoxShadow(
+                  blurRadius: 18,
+                  offset: Offset(0, 8),
+                  color: Color(0x16000000),
+                ),
+              ],
+            ),
+            child: ListView.separated(
+              padding: const EdgeInsets.all(8),
+              scrollDirection: Axis.horizontal,
+              itemCount: items.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 10),
+              itemBuilder: (context, index) =>
+                  _MapRailPlaceCard(place: items[index], selected: index == 0),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MapRailPlaceCard extends StatelessWidget {
+  const _MapRailPlaceCard({required this.place, required this.selected});
+
+  final LalaPlace place;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _categoryColor(place.category);
+    final score = place.score?.percent;
+    return Container(
+      width: 230,
+      padding: const EdgeInsets.all(9),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: selected ? 0.98 : 0.93),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: selected ? color : const Color(0xFFE2E8F0),
+          width: selected ? 2 : 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  place.nameKo ?? place.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: const Color(0xFF111827),
+                    fontWeight: FontWeight.w900,
+                    height: 1.12,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _categoryLabel(place.category),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: [
+                    if (place.distanceM > 0) _TinyMeta('${place.distanceM}m'),
+                    if (score != null) _TinyMeta('$score점'),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          _RailPlaceThumb(place: place),
+        ],
+      ),
+    );
+  }
+}
+
+class _RailPlaceThumb extends StatelessWidget {
+  const _RailPlaceThumb({required this.place});
+
+  final LalaPlace place;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: Image.asset(
+        'assets/images/lala-hwaseong-haenggung.png',
+        width: 72,
+        height: 72,
+        fit: BoxFit.cover,
+      ),
+    );
+  }
+}
+
+class _PlannerMapPill extends StatelessWidget {
+  const _PlannerMapPill({required this.dailyPlan});
+
+  final LalaDailyPlan? dailyPlan;
+
+  @override
+  Widget build(BuildContext context) {
+    final slots = dailyPlan?.slots ?? const <LalaPlanSlot>[];
+    return _SmallStatusPill(
+      icon: Icons.event_note,
+      label: '하루 일정',
+      active: slots.isNotEmpty,
     );
   }
 }
@@ -1562,7 +1759,7 @@ class _DocentSubtitle extends StatelessWidget {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.volume_up),
-                label: Text(audioLoading ? '음성 생성 중' : 'AI 도슨트 듣기'),
+                label: Text(audioLoading ? '음성 생성 중' : '정보 더 듣기'),
               ),
             ),
             const SizedBox(width: 10),
@@ -1733,20 +1930,21 @@ class _FloatingMapControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        _MapFab(
-          tooltip: '내 위치',
-          icon: Icons.my_location,
-          label: '내 위치',
-          onPressed: onRefresh,
-        ),
-        const SizedBox(height: 12),
         _MapFab(
           tooltip: '자동 도슨트',
           icon: Icons.auto_awesome,
           label: '자동 도슨트',
           onPressed: () {},
+        ),
+        const SizedBox(width: 9),
+        _MapFab(
+          tooltip: '내 위치',
+          icon: Icons.my_location,
+          label: '내 위치',
+          onPressed: onRefresh,
         ),
       ],
     );
@@ -1770,18 +1968,22 @@ class _MapFab extends StatelessWidget {
   Widget build(BuildContext context) {
     return Tooltip(
       message: tooltip,
-      child: FilledButton.tonalIcon(
-        onPressed: onPressed,
-        icon: Icon(icon, size: 22),
-        label: Text(label),
-        style: FilledButton.styleFrom(
-          backgroundColor: Colors.white.withValues(alpha: 0.96),
-          foregroundColor: Theme.of(context).colorScheme.primary,
-          elevation: 4,
-          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 13),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(22),
-            side: const BorderSide(color: Color(0xFFD7E3F5)),
+      child: Semantics(
+        button: true,
+        label: label,
+        child: IconButton.filled(
+          onPressed: onPressed,
+          icon: Icon(icon, size: 22),
+          style: IconButton.styleFrom(
+            fixedSize: const Size.square(52),
+            backgroundColor: icon == Icons.auto_awesome
+                ? const Color(0xFF1A202C).withValues(alpha: 0.88)
+                : const Color(0xFF2B6CB0),
+            foregroundColor: Colors.white,
+            shape: const CircleBorder(
+              side: BorderSide(color: Colors.white, width: 2.2),
+            ),
+            elevation: 8,
           ),
         ),
       ),
@@ -2198,6 +2400,33 @@ class _InlineMeta extends StatelessWidget {
   }
 }
 
+class _TinyMeta extends StatelessWidget {
+  const _TinyMeta(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: Color(0xFF475569),
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
 class _MapToast extends StatelessWidget {
   const _MapToast({
     required this.icon,
@@ -2261,6 +2490,110 @@ String _categoryLabel(String category) {
     'attraction' => '명소',
     _ => '로컬',
   };
+}
+
+Color _categoryColor(String category) {
+  return switch (category) {
+    'restaurant' => const Color(0xFFC53030),
+    'event' => const Color(0xFFF5C842),
+    'culture_venue' => const Color(0xFF2B6CB0),
+    'attraction' => const Color(0xFF1A202C),
+    _ => const Color(0xFF1A202C),
+  };
+}
+
+List<LalaPlace> _fallbackUiPlaces() {
+  return const [
+    LalaPlace(
+      placeId: 'hwaseong-haenggung',
+      name: '화성행궁',
+      category: 'attraction',
+      lat: 37.2819,
+      lng: 127.0142,
+      address: '경기도 수원시 팔달구 정조로 825',
+      distanceM: 145,
+      source: 'public_mvp_snapshot',
+      score: LalaPlaceScore(
+        finalScore: 0.86,
+        formulaVersion: 'local-value-v1',
+        components: LalaPlaceScoreComponents(
+          localSpendingScore: 0.82,
+          demandDispersionScore: 0.78,
+          weatherFitScore: 0.74,
+          reviewQualityScore: null,
+          cultureRelevanceScore: 0.91,
+        ),
+        dataBasis: 'public_mvp_snapshot',
+        features: {
+          'signals': <String>['tour_api', 'card_spending'],
+        },
+      ),
+    ),
+    LalaPlace(
+      placeId: 'suwon-hwaseong',
+      name: '수원화성',
+      category: 'culture_venue',
+      lat: 37.2870,
+      lng: 127.0110,
+      address: '경기도 수원시 장안구 영화동',
+      distanceM: 620,
+      source: 'public_mvp_snapshot',
+      score: LalaPlaceScore(
+        finalScore: 0.82,
+        formulaVersion: 'local-value-v1',
+        components: LalaPlaceScoreComponents(
+          localSpendingScore: 0.68,
+          demandDispersionScore: 0.73,
+          weatherFitScore: 0.76,
+          reviewQualityScore: null,
+          cultureRelevanceScore: 0.96,
+        ),
+        dataBasis: 'public_mvp_snapshot',
+        features: {
+          'signals': <String>['tour_api', 'culture_data'],
+        },
+      ),
+    ),
+    LalaPlace(
+      placeId: 'haenggung-cafe-street',
+      name: '행궁동 카페거리',
+      category: 'restaurant',
+      lat: 37.2828,
+      lng: 127.0101,
+      address: '경기도 수원시 팔달구 행궁동',
+      distanceM: 780,
+      source: 'public_mvp_snapshot',
+      score: LalaPlaceScore(
+        finalScore: 0.78,
+        formulaVersion: 'local-value-v1',
+        components: LalaPlaceScoreComponents(
+          localSpendingScore: 0.88,
+          demandDispersionScore: 0.54,
+          weatherFitScore: 0.70,
+          reviewQualityScore: null,
+          cultureRelevanceScore: 0.62,
+        ),
+        dataBasis: 'public_mvp_snapshot',
+        features: {
+          'signals': <String>['card_spending', 'local_business'],
+        },
+      ),
+    ),
+  ];
+}
+
+List<LalaPlace> _railPlaces(List<LalaPlace> places) {
+  if (places.isEmpty) {
+    return _fallbackUiPlaces();
+  }
+  final featured = _featuredPlace(places);
+  if (featured == null) {
+    return places.take(8).toList();
+  }
+  return [
+    featured,
+    ...places.where((place) => place.placeId != featured.placeId),
+  ].take(8).toList();
 }
 
 LalaPlace? _featuredPlace(List<LalaPlace> places) {

@@ -20,8 +20,8 @@ void main() {
 
     expect(find.text('LALA'), findsOneWidget);
     expect(find.text('지도'), findsOneWidget);
-    expect(find.text('코스'), findsOneWidget);
-    expect(find.text('도슨트'), findsOneWidget);
+    expect(find.text('대시보드'), findsOneWidget);
+    expect(find.text('추천 장소 보기'), findsOneWidget);
     expect(find.text('Kakao Map API'), findsOneWidget);
     expect(find.text('로컬 점수'), findsOneWidget);
     expect(find.text('내국인 소비'), findsOneWidget);
@@ -31,7 +31,7 @@ void main() {
     expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
     expect(find.text('86'), findsAtLeastNWidgets(1));
     expect(find.textContaining('14°C'), findsWidgets);
-    expect(find.text('AI 도슨트 듣기'), findsOneWidget);
+    expect(find.text('정보 더 듣기'), findsOneWidget);
     expect(find.text('오늘 코스에 추가'), findsOneWidget);
     expect(find.text('TourAPI'), findsOneWidget);
     expect(find.textContaining('조선 왕실'), findsOneWidget);
@@ -158,9 +158,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(backend.audioRequests, isEmpty);
-    expect(find.text('AI 도슨트 듣기'), findsOneWidget);
+    expect(find.text('정보 더 듣기'), findsOneWidget);
 
-    final audioButton = find.widgetWithText(FilledButton, 'AI 도슨트 듣기');
+    final audioButton = find.widgetWithText(FilledButton, '정보 더 듣기');
     await tester.ensureVisible(audioButton);
     await tester.pumpAndSettle();
     await tester.tap(audioButton);
