@@ -227,6 +227,8 @@ class LalaHomePage extends StatefulWidget {
   State<LalaHomePage> createState() => _LalaHomePageState();
 }
 
+enum _ActiveMapSheet { detail, planner, weather }
+
 class _LalaHomePageState extends State<LalaHomePage> {
   late final TextEditingController _baseUrlController;
   late final TextEditingController _bearerTokenController;
@@ -249,6 +251,12 @@ class _LalaHomePageState extends State<LalaHomePage> {
   LalaAudioResponse? _docentAudio;
   bool _audioLoading = false;
   String? _audioError;
+  String _selectedCategory = 'all';
+  String? _selectedPlaceId;
+  _ActiveMapSheet? _activeSheet;
+  bool _voiceEnabled = true;
+  bool _autoDocentEnabled = false;
+  bool _showEvidence = false;
 
   @override
   void initState() {
@@ -307,26 +315,34 @@ class _LalaHomePageState extends State<LalaHomePage> {
     try {
       final health = await _backend.getHealth();
       final readiness = await _backend.getReadiness();
-      LalaEnvelope<LalaPlacesResponse>? places;
-      LalaEnvelope<LalaWeather>? weather;
-      LalaEnvelope<LalaIntervention>? intervention;
-      LalaEnvelope<LalaDailyPlan>? dailyPlan;
-      LalaEnvelope<LalaDocentScript>? docentScript;
-      String? loadError;
-
-      try {
-        places = await _backend.getPlaces();
-        weather = await _backend.getWeather();
-        intervention = await _backend.getIntervention();
-        dailyPlan = await _backend.createDailyPlan();
-        final placeItems = places.data?.places ?? const <LalaPlace>[];
-        final firstPlace = _featuredPlace(placeItems);
-        if (firstPlace != null) {
-          docentScript = await _backend.createDocentScript(place: firstPlace);
+      final loadErrors = <String>[];
+      Future<T?> loadOptional<T>(Future<T> Function() loader) async {
+        try {
+          return await loader();
+        } on Object catch (error) {
+          loadErrors.add(_safeErrorMessage(error));
+          return null;
         }
-      } on Object catch (error) {
-        loadError = _safeErrorMessage(error);
       }
+
+      final places = await loadOptional(_backend.getPlaces);
+      final weather = await loadOptional(_backend.getWeather);
+      final intervention = await loadOptional(_backend.getIntervention);
+      final dailyPlan = await loadOptional(_backend.createDailyPlan);
+      LalaEnvelope<LalaDocentScript>? docentScript;
+      final placeItems = places?.data?.places ?? _fallbackUiPlaces();
+      final filteredItems = _filterPlaces(placeItems, _selectedCategory);
+      final firstPlace = _featuredPlace(
+        filteredItems.isEmpty ? placeItems : filteredItems,
+      );
+      if (firstPlace != null) {
+        docentScript = await loadOptional(
+          () => _backend.createDocentScript(place: firstPlace),
+        );
+      }
+      final loadError = loadErrors.isEmpty
+          ? null
+          : loadErrors.toSet().take(2).join(' / ');
 
       if (!mounted) {
         return;
@@ -404,6 +420,56 @@ class _LalaHomePageState extends State<LalaHomePage> {
     }
   }
 
+  void _selectCategory(String category) {
+    setState(() {
+      _selectedCategory = category;
+      _selectedPlaceId = null;
+      _activeSheet = null;
+      _docentAudio = null;
+      _audioError = null;
+      _showEvidence = false;
+    });
+  }
+
+  void _selectPlace(LalaPlace place) {
+    setState(() {
+      _selectedPlaceId = place.placeId;
+      _activeSheet = _ActiveMapSheet.detail;
+      _docentAudio = null;
+      _audioError = null;
+    });
+  }
+
+  void _openSheet(_ActiveMapSheet sheet) {
+    setState(() {
+      _activeSheet = sheet;
+    });
+  }
+
+  void _closeSheet() {
+    setState(() {
+      _activeSheet = null;
+    });
+  }
+
+  void _toggleVoice() {
+    setState(() {
+      _voiceEnabled = !_voiceEnabled;
+    });
+  }
+
+  void _toggleAutoDocent() {
+    setState(() {
+      _autoDocentEnabled = !_autoDocentEnabled;
+    });
+  }
+
+  void _toggleEvidence() {
+    setState(() {
+      _showEvidence = !_showEvidence;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final config = _currentConfig();
@@ -445,6 +511,19 @@ class _LalaHomePageState extends State<LalaHomePage> {
             audioError: _audioError,
             authMode: config.authMode,
             kakaoJavascriptKey: config.kakaoJavascriptKey,
+            selectedCategory: _selectedCategory,
+            selectedPlaceId: _selectedPlaceId,
+            activeSheet: _activeSheet,
+            voiceEnabled: _voiceEnabled,
+            autoDocentEnabled: _autoDocentEnabled,
+            showEvidence: _showEvidence,
+            onSelectCategory: _selectCategory,
+            onSelectPlace: _selectPlace,
+            onOpenSheet: _openSheet,
+            onCloseSheet: _closeSheet,
+            onToggleVoice: _toggleVoice,
+            onToggleAutoDocent: _toggleAutoDocent,
+            onToggleEvidence: _toggleEvidence,
             onFetchAudio: _fetchAudio,
             onRefresh: _refresh,
             onOpenSettings: () => Scaffold.of(context).openEndDrawer(),
@@ -585,6 +664,19 @@ class _Dashboard extends StatelessWidget {
     required this.audioError,
     required this.authMode,
     required this.kakaoJavascriptKey,
+    required this.selectedCategory,
+    required this.selectedPlaceId,
+    required this.activeSheet,
+    required this.voiceEnabled,
+    required this.autoDocentEnabled,
+    required this.showEvidence,
+    required this.onSelectCategory,
+    required this.onSelectPlace,
+    required this.onOpenSheet,
+    required this.onCloseSheet,
+    required this.onToggleVoice,
+    required this.onToggleAutoDocent,
+    required this.onToggleEvidence,
     required this.onFetchAudio,
     required this.onRefresh,
     required this.onOpenSettings,
@@ -604,15 +696,32 @@ class _Dashboard extends StatelessWidget {
   final String? audioError;
   final LalaAuthMode authMode;
   final String kakaoJavascriptKey;
+  final String selectedCategory;
+  final String? selectedPlaceId;
+  final _ActiveMapSheet? activeSheet;
+  final bool voiceEnabled;
+  final bool autoDocentEnabled;
+  final bool showEvidence;
+  final ValueChanged<String> onSelectCategory;
+  final ValueChanged<LalaPlace> onSelectPlace;
+  final ValueChanged<_ActiveMapSheet> onOpenSheet;
+  final VoidCallback onCloseSheet;
+  final VoidCallback onToggleVoice;
+  final VoidCallback onToggleAutoDocent;
+  final VoidCallback onToggleEvidence;
   final VoidCallback onFetchAudio;
   final VoidCallback onRefresh;
   final VoidCallback onOpenSettings;
 
   @override
   Widget build(BuildContext context) {
-    final topPlaces = places?.data?.places ?? const <LalaPlace>[];
-    final topPlace = _featuredPlace(topPlaces);
-    final visibleError = topPlaces.isEmpty ? null : error;
+    final apiPlaces = places?.data?.places ?? const <LalaPlace>[];
+    final allPlaces = apiPlaces.isEmpty ? _fallbackUiPlaces() : apiPlaces;
+    final topPlaces = _filterPlaces(allPlaces, selectedCategory);
+    final topPlace =
+        _placeById(topPlaces, selectedPlaceId) ?? _featuredPlace(topPlaces);
+    final currentWeather = weather?.data ?? _fallbackWeather();
+    final visibleError = apiPlaces.isEmpty ? null : error;
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= 860;
@@ -622,7 +731,7 @@ class _Dashboard extends StatelessWidget {
               child: _LegacyMapCanvas(
                 places: topPlaces,
                 selectedPlace: topPlace,
-                weather: weather?.data,
+                weather: currentWeather,
                 kakaoJavascriptKey: kakaoJavascriptKey,
               ),
             ),
@@ -632,6 +741,8 @@ class _Dashboard extends StatelessWidget {
               top: 0,
               child: _TopMapChrome(
                 loading: loading,
+                selectedCategory: selectedCategory,
+                onSelectCategory: onSelectCategory,
                 onRefresh: onRefresh,
                 onOpenSettings: onOpenSettings,
               ),
@@ -639,7 +750,10 @@ class _Dashboard extends StatelessWidget {
             Positioned(
               right: 16,
               top: isWide ? 154 : 308,
-              child: _WeatherMapPill(weather: weather?.data),
+              child: _WeatherMapPill(
+                weather: currentWeather,
+                onPressed: () => onOpenSheet(_ActiveMapSheet.weather),
+              ),
             ),
             Positioned(
               left: 16,
@@ -648,17 +762,17 @@ class _Dashboard extends StatelessWidget {
               child: _MapPlaceCarouselOverlay(
                 places: topPlaces,
                 source: places?.data?.source,
+                selectedPlaceId: topPlace?.placeId,
+                onSelectPlace: onSelectPlace,
               ),
             ),
             Positioned(
               left: 16,
               top: isWide ? 154 : 308,
-              child: _PlannerMapPill(dailyPlan: dailyPlan?.data),
-            ),
-            Positioned(
-              right: 16,
-              top: isWide ? 218 : 354,
-              child: _FloatingMapControls(onRefresh: onRefresh),
+              child: _PlannerMapPill(
+                dailyPlan: dailyPlan?.data,
+                onPressed: () => onOpenSheet(_ActiveMapSheet.planner),
+              ),
             ),
             if (visibleError != null)
               Positioned(
@@ -680,16 +794,49 @@ class _Dashboard extends StatelessWidget {
                 places: topPlaces,
                 source: places?.data?.source,
                 topPlace: topPlace,
-                weather: weather?.data,
+                weather: currentWeather,
                 intervention: intervention?.data,
                 dailyPlan: dailyPlan?.data,
                 docentScript: docentScript?.data,
                 docentAudio: docentAudio,
                 audioLoading: audioLoading,
                 audioError: audioError,
+                showEvidence: showEvidence,
+                onOpenDetail: () => onOpenSheet(_ActiveMapSheet.detail),
+                onToggleEvidence: onToggleEvidence,
                 onFetchAudio: onFetchAudio,
               ),
             ),
+            Positioned(
+              right: 16,
+              top: isWide ? 218 : 354,
+              child: _FloatingMapControls(
+                voiceEnabled: voiceEnabled,
+                autoDocentEnabled: autoDocentEnabled,
+                onToggleVoice: onToggleVoice,
+                onToggleAutoDocent: onToggleAutoDocent,
+                onRefresh: onRefresh,
+              ),
+            ),
+            if (activeSheet != null)
+              Positioned.fill(
+                child: _MapDraggableSheet(
+                  activeSheet: activeSheet!,
+                  place: topPlace,
+                  weather: currentWeather,
+                  intervention: intervention?.data,
+                  dailyPlan: dailyPlan?.data,
+                  docentScript: docentScript?.data,
+                  docentAudio: docentAudio,
+                  audioLoading: audioLoading,
+                  audioError: audioError,
+                  source: places?.data?.source,
+                  showEvidence: showEvidence,
+                  onToggleEvidence: onToggleEvidence,
+                  onFetchAudio: onFetchAudio,
+                  onClose: onCloseSheet,
+                ),
+              ),
           ],
         );
       },
@@ -700,11 +847,15 @@ class _Dashboard extends StatelessWidget {
 class _TopMapChrome extends StatelessWidget {
   const _TopMapChrome({
     required this.loading,
+    required this.selectedCategory,
+    required this.onSelectCategory,
     required this.onRefresh,
     required this.onOpenSettings,
   });
 
   final bool loading;
+  final String selectedCategory;
+  final ValueChanged<String> onSelectCategory;
   final VoidCallback onRefresh;
   final VoidCallback onOpenSettings;
 
@@ -757,28 +908,33 @@ class _TopMapChrome extends StatelessWidget {
               children: [
                 _CategoryChip(
                   label: '전체',
-                  active: true,
+                  active: selectedCategory == 'all',
                   color: const Color(0xFF1A202C),
+                  onTap: () => onSelectCategory('all'),
                 ),
                 _CategoryChip(
                   label: '명소',
-                  active: false,
+                  active: selectedCategory == 'attraction',
                   color: const Color(0xFFC53030),
+                  onTap: () => onSelectCategory('attraction'),
                 ),
                 _CategoryChip(
                   label: '맛집',
-                  active: false,
+                  active: selectedCategory == 'restaurant',
                   color: const Color(0xFFF5C842),
+                  onTap: () => onSelectCategory('restaurant'),
                 ),
                 _CategoryChip(
                   label: '행사',
-                  active: false,
+                  active: selectedCategory == 'event',
                   color: const Color(0xFF2B6CB0),
+                  onTap: () => onSelectCategory('event'),
                 ),
                 _CategoryChip(
                   label: '문화',
-                  active: false,
+                  active: selectedCategory == 'culture_venue',
                   color: const Color(0xFF0F766E),
+                  onTap: () => onSelectCategory('culture_venue'),
                 ),
               ],
             ),
@@ -797,10 +953,17 @@ class _TopMapChrome extends StatelessWidget {
 }
 
 class _MapPlaceCarouselOverlay extends StatelessWidget {
-  const _MapPlaceCarouselOverlay({required this.places, required this.source});
+  const _MapPlaceCarouselOverlay({
+    required this.places,
+    required this.source,
+    required this.selectedPlaceId,
+    required this.onSelectPlace,
+  });
 
   final List<LalaPlace> places;
   final String? source;
+  final String? selectedPlaceId;
+  final ValueChanged<LalaPlace> onSelectPlace;
 
   @override
   Widget build(BuildContext context) {
@@ -868,8 +1031,13 @@ class _MapPlaceCarouselOverlay extends StatelessWidget {
               scrollDirection: Axis.horizontal,
               itemCount: items.length,
               separatorBuilder: (_, _) => const SizedBox(width: 10),
-              itemBuilder: (context, index) =>
-                  _MapRailPlaceCard(place: items[index], selected: index == 0),
+              itemBuilder: (context, index) => _MapRailPlaceCard(
+                place: items[index],
+                selected:
+                    selectedPlaceId == null && index == 0 ||
+                    selectedPlaceId == items[index].placeId,
+                onTap: () => onSelectPlace(items[index]),
+              ),
             ),
           ),
         ),
@@ -879,68 +1047,81 @@ class _MapPlaceCarouselOverlay extends StatelessWidget {
 }
 
 class _MapRailPlaceCard extends StatelessWidget {
-  const _MapRailPlaceCard({required this.place, required this.selected});
+  const _MapRailPlaceCard({
+    required this.place,
+    required this.selected,
+    required this.onTap,
+  });
 
   final LalaPlace place;
   final bool selected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final color = _categoryColor(place.category);
-    final score = place.score?.percent;
-    return Container(
-      width: 230,
-      padding: const EdgeInsets.all(9),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: selected ? 0.98 : 0.93),
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: selected ? color : const Color(0xFFE2E8F0),
-          width: selected ? 2 : 1,
-        ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  place.nameKo ?? place.name,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: const Color(0xFF111827),
-                    fontWeight: FontWeight.w900,
-                    height: 1.12,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  _categoryLabel(place.category),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: color,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
-                  children: [
-                    if (place.distanceM > 0) _TinyMeta('${place.distanceM}m'),
-                    if (score != null) _TinyMeta('$score점'),
-                  ],
-                ),
-              ],
+        onTap: onTap,
+        child: Container(
+          width: 230,
+          padding: const EdgeInsets.all(9),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: selected ? 0.98 : 0.93),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: selected ? color : const Color(0xFFE2E8F0),
+              width: selected ? 2 : 1,
             ),
           ),
-          const SizedBox(width: 10),
-          _RailPlaceThumb(place: place),
-        ],
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      place.nameKo ?? place.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: const Color(0xFF111827),
+                        fontWeight: FontWeight.w900,
+                        height: 1.12,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      _categoryLabel(place.category),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: color,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        if (place.distanceM > 0)
+                          _TinyMeta('${place.distanceM}m'),
+                        _TinyMeta('상세'),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              _RailPlaceThumb(place: place),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -966,9 +1147,10 @@ class _RailPlaceThumb extends StatelessWidget {
 }
 
 class _PlannerMapPill extends StatelessWidget {
-  const _PlannerMapPill({required this.dailyPlan});
+  const _PlannerMapPill({required this.dailyPlan, required this.onPressed});
 
   final LalaDailyPlan? dailyPlan;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -977,6 +1159,7 @@ class _PlannerMapPill extends StatelessWidget {
       icon: Icons.event_note,
       label: '하루 일정',
       active: slots.isNotEmpty,
+      onPressed: onPressed,
     );
   }
 }
@@ -1033,6 +1216,9 @@ class _MapBottomDock extends StatelessWidget {
     required this.docentAudio,
     required this.audioLoading,
     required this.audioError,
+    required this.showEvidence,
+    required this.onOpenDetail,
+    required this.onToggleEvidence,
     required this.onFetchAudio,
   });
 
@@ -1047,6 +1233,9 @@ class _MapBottomDock extends StatelessWidget {
   final LalaAudioResponse? docentAudio;
   final bool audioLoading;
   final String? audioError;
+  final bool showEvidence;
+  final VoidCallback onOpenDetail;
+  final VoidCallback onToggleEvidence;
   final VoidCallback onFetchAudio;
 
   @override
@@ -1071,17 +1260,31 @@ class _MapBottomDock extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Center(
-                child: Container(
-                  width: 44,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFCBD5E0),
-                    borderRadius: BorderRadius.circular(999),
+              Row(
+                children: [
+                  Expanded(
+                    child: Center(
+                      child: GestureDetector(
+                        onTap: onOpenDetail,
+                        child: Container(
+                          width: 44,
+                          height: 5,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFCBD5E0),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                  TextButton.icon(
+                    onPressed: onOpenDetail,
+                    icon: const Icon(Icons.keyboard_arrow_up),
+                    label: const Text('상세'),
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 6),
               Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 840),
@@ -1095,6 +1298,8 @@ class _MapBottomDock extends StatelessWidget {
                     audioLoading: audioLoading,
                     audioError: audioError,
                     source: source,
+                    showEvidence: showEvidence,
+                    onToggleEvidence: onToggleEvidence,
                     onFetchAudio: onFetchAudio,
                   ),
                 ),
@@ -1102,6 +1307,461 @@ class _MapBottomDock extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _MapDraggableSheet extends StatelessWidget {
+  const _MapDraggableSheet({
+    required this.activeSheet,
+    required this.place,
+    required this.weather,
+    required this.intervention,
+    required this.dailyPlan,
+    required this.docentScript,
+    required this.docentAudio,
+    required this.audioLoading,
+    required this.audioError,
+    required this.source,
+    required this.showEvidence,
+    required this.onToggleEvidence,
+    required this.onFetchAudio,
+    required this.onClose,
+  });
+
+  final _ActiveMapSheet activeSheet;
+  final LalaPlace? place;
+  final LalaWeather? weather;
+  final LalaIntervention? intervention;
+  final LalaDailyPlan? dailyPlan;
+  final LalaDocentScript? docentScript;
+  final LalaAudioResponse? docentAudio;
+  final bool audioLoading;
+  final String? audioError;
+  final String? source;
+  final bool showEvidence;
+  final VoidCallback onToggleEvidence;
+  final VoidCallback onFetchAudio;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = switch (activeSheet) {
+      _ActiveMapSheet.detail => '장소 상세',
+      _ActiveMapSheet.planner => '오늘 일정',
+      _ActiveMapSheet.weather => '날씨',
+    };
+    final icon = switch (activeSheet) {
+      _ActiveMapSheet.detail => Icons.place_outlined,
+      _ActiveMapSheet.planner => Icons.route_outlined,
+      _ActiveMapSheet.weather => Icons.wb_cloudy_outlined,
+    };
+    final initialSize = switch (activeSheet) {
+      _ActiveMapSheet.detail => 0.66,
+      _ActiveMapSheet.planner => 0.48,
+      _ActiveMapSheet.weather => 0.44,
+    };
+
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: GestureDetector(
+            onTap: onClose,
+            child: ColoredBox(color: Colors.black.withValues(alpha: 0.18)),
+          ),
+        ),
+        DraggableScrollableSheet(
+          initialChildSize: initialSize,
+          minChildSize: 0.30,
+          maxChildSize: 0.92,
+          builder: (context, scrollController) {
+            return DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.98),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(28),
+                ),
+                boxShadow: const [
+                  BoxShadow(
+                    blurRadius: 32,
+                    offset: Offset(0, -12),
+                    color: Color(0x26000000),
+                  ),
+                ],
+              ),
+              child: ListView(
+                controller: scrollController,
+                padding: const EdgeInsets.fromLTRB(18, 10, 18, 28),
+                children: [
+                  Center(
+                    child: Container(
+                      width: 46,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFCBD5E0),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Icon(icon, color: const Color(0xFF2B6CB0)),
+                      const SizedBox(width: 8),
+                      Text(
+                        title,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              color: const Color(0xFF111827),
+                              fontWeight: FontWeight.w900,
+                            ),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        tooltip: '닫기',
+                        onPressed: onClose,
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  switch (activeSheet) {
+                    _ActiveMapSheet.detail => _FeaturedPlacePanel(
+                      place: place,
+                      weather: weather,
+                      intervention: intervention,
+                      dailyPlan: dailyPlan,
+                      docentScript: docentScript,
+                      docentAudio: docentAudio,
+                      audioLoading: audioLoading,
+                      audioError: audioError,
+                      source: source,
+                      showEvidence: showEvidence,
+                      onToggleEvidence: onToggleEvidence,
+                      onFetchAudio: onFetchAudio,
+                    ),
+                    _ActiveMapSheet.planner => _PlannerSheetContent(
+                      dailyPlan: dailyPlan,
+                      intervention: intervention,
+                    ),
+                    _ActiveMapSheet.weather => _WeatherSheetContent(
+                      weather: weather,
+                    ),
+                  },
+                ],
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _PlannerSheetContent extends StatelessWidget {
+  const _PlannerSheetContent({
+    required this.dailyPlan,
+    required this.intervention,
+  });
+
+  final LalaDailyPlan? dailyPlan;
+  final LalaIntervention? intervention;
+
+  @override
+  Widget build(BuildContext context) {
+    final slots = dailyPlan?.slots ?? const <LalaPlanSlot>[];
+    final action = _docentActionLabel(
+      place: intervention?.place,
+      action: intervention?.recommendedAction,
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (action != null)
+          _CompactInfoTile(
+            icon: Icons.alt_route_outlined,
+            label: '추천 동선',
+            value: action,
+          ),
+        if (action != null) const SizedBox(height: 12),
+        if (slots.isEmpty)
+          const _MutedSheetCard(
+            icon: Icons.route_outlined,
+            label: '현재 위치와 날씨 기준으로 코스를 준비 중입니다.',
+          )
+        else
+          ...slots
+              .take(5)
+              .map(
+                (slot) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _PlanSlotTile(slot: slot),
+                ),
+              ),
+      ],
+    );
+  }
+}
+
+class _PlanSlotTile extends StatelessWidget {
+  const _PlanSlotTile({required this.slot});
+
+  final LalaPlanSlot slot;
+
+  @override
+  Widget build(BuildContext context) {
+    final place = slot.place;
+    return Container(
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFD7E3F5)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: const Color(0xFF2B6CB0).withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              _periodLabel(slot.period),
+              style: const TextStyle(
+                color: Color(0xFF2B6CB0),
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  slot.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+                ),
+                if (place != null)
+                  Text(
+                    '${place.nameKo ?? place.name} · ${_categoryLabel(place.category)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: const Color(0xFF64748B),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WeatherSheetContent extends StatelessWidget {
+  const _WeatherSheetContent({required this.weather});
+
+  final LalaWeather? weather;
+
+  @override
+  Widget build(BuildContext context) {
+    final data = weather ?? _fallbackWeather();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _WeatherHeroCard(weather: data),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            _WeatherFact(label: '미세먼지', value: data.dust.gradeKo),
+            _WeatherFact(label: 'PM10', value: data.dust.pm10),
+            _WeatherFact(label: 'PM2.5', value: data.dust.pm25),
+            _WeatherFact(
+              label: '야외 상태',
+              value: _outdoorLabel(data.outdoorStatus),
+            ),
+          ],
+        ),
+        if (data.forecast.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Text(
+            '예보',
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 82,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: data.forecast.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                final item = data.forecast[index];
+                return _ForecastChip(item: item);
+              },
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _WeatherHeroCard extends StatelessWidget {
+  const _WeatherHeroCard({required this.weather});
+
+  final LalaWeather weather;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEAF2FB),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFD7E3F5)),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.wb_cloudy_outlined,
+            size: 42,
+            color: Color(0xFF2B6CB0),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  weather.location ?? '수원',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: const Color(0xFF64748B),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                Text(
+                  _temperatureLabel(weather.temp),
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    color: const Color(0xFF111827),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          _ProofChip(label: weather.source),
+        ],
+      ),
+    );
+  }
+}
+
+class _WeatherFact extends StatelessWidget {
+  const _WeatherFact({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 148,
+      child: _CompactInfoTile(
+        icon: Icons.check_circle_outline,
+        label: label,
+        value: value,
+      ),
+    );
+  }
+}
+
+class _ForecastChip extends StatelessWidget {
+  const _ForecastChip({required this.item});
+
+  final LalaForecastItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 88,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFD7E3F5)),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            item.time,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: const Color(0xFF64748B),
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _temperatureLabel(item.temp),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MutedSheetCard extends StatelessWidget {
+  const _MutedSheetCard({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFD7E3F5)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: const Color(0xFF64748B)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: const Color(0xFF64748B),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1118,6 +1778,8 @@ class _FeaturedPlacePanel extends StatelessWidget {
     required this.audioLoading,
     required this.audioError,
     required this.source,
+    required this.showEvidence,
+    required this.onToggleEvidence,
     required this.onFetchAudio,
   });
 
@@ -1130,6 +1792,8 @@ class _FeaturedPlacePanel extends StatelessWidget {
   final bool audioLoading;
   final String? audioError;
   final String? source;
+  final bool showEvidence;
+  final VoidCallback onToggleEvidence;
   final VoidCallback onFetchAudio;
 
   @override
@@ -1138,21 +1802,41 @@ class _FeaturedPlacePanel extends StatelessWidget {
     final score = currentPlace.score;
     final components = score?.components;
     final slots = dailyPlan?.slots ?? const <LalaPlanSlot>[];
+    final effectiveDocent = docentScript?.placeId == currentPlace.placeId
+        ? docentScript
+        : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _FeaturedPlaceHeader(place: currentPlace),
+        _FeaturedPlaceHeader(place: currentPlace, showEvidence: showEvidence),
         const SizedBox(height: 12),
-        _SignalGrid(
-          localSpending: components?.localSpendingScore,
-          demandDispersion: components?.demandDispersionScore,
-          cultureRelevance: components?.cultureRelevanceScore,
-          weatherFit: components?.weatherFitScore,
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: onToggleEvidence,
+            icon: Icon(
+              showEvidence ? Icons.visibility_off : Icons.insights_outlined,
+            ),
+            label: Text(showEvidence ? '점수/근거 숨기기' : '점수/근거 보기'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF1A202C),
+              side: const BorderSide(color: Color(0xFFD7E3F5)),
+            ),
+          ),
         ),
+        if (showEvidence) ...[
+          const SizedBox(height: 12),
+          _SignalGrid(
+            localSpending: components?.localSpendingScore,
+            demandDispersion: components?.demandDispersionScore,
+            cultureRelevance: components?.cultureRelevanceScore,
+            weatherFit: components?.weatherFitScore,
+          ),
+        ],
         const SizedBox(height: 12),
         _DocentSubtitle(
           place: currentPlace,
-          script: docentScript?.script,
+          script: effectiveDocent?.script,
           action:
               intervention?.recommendedAction ??
               (slots.isEmpty ? null : slots.first.title),
@@ -1160,15 +1844,18 @@ class _FeaturedPlacePanel extends StatelessWidget {
           audioError: audioError,
           docentAudio: docentAudio,
           canFetchAudio:
-              docentScript?.script.trim().isNotEmpty == true && !audioLoading,
+              effectiveDocent?.script.trim().isNotEmpty == true &&
+              !audioLoading,
           onFetchAudio: onFetchAudio,
         ),
-        const SizedBox(height: 12),
-        _PublicDataProofRow(
-          source: source ?? currentPlace.source,
-          weather: weather,
-          score: score,
-        ),
+        if (showEvidence) ...[
+          const SizedBox(height: 12),
+          _PublicDataProofRow(
+            source: source ?? currentPlace.source,
+            weather: weather,
+            score: score,
+          ),
+        ],
       ],
     );
   }
@@ -1203,9 +1890,10 @@ class _FeaturedPlacePanel extends StatelessWidget {
 }
 
 class _FeaturedPlaceHeader extends StatelessWidget {
-  const _FeaturedPlaceHeader({required this.place});
+  const _FeaturedPlaceHeader({required this.place, required this.showEvidence});
 
   final LalaPlace place;
+  final bool showEvidence;
 
   @override
   Widget build(BuildContext context) {
@@ -1259,27 +1947,35 @@ class _FeaturedPlaceHeader extends StatelessWidget {
                     icon: Icons.directions_walk,
                     label: '${place.distanceM}m',
                   ),
-                  Text(
-                    '로컬 점수',
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: const Color(0xFF1A202C),
-                      fontWeight: FontWeight.w900,
+                  if (!showEvidence)
+                    _InlineIconText(
+                      icon: Icons.auto_awesome_outlined,
+                      label: '로컬 추천',
                     ),
-                  ),
-                  Text(
-                    '$score',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: const Color(0xFFC53030),
-                      fontWeight: FontWeight.w900,
+                  if (showEvidence) ...[
+                    Text(
+                      '로컬 점수',
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: const Color(0xFF1A202C),
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
-                  ),
-                  const Text(
-                    '/100',
-                    style: TextStyle(
-                      color: Color(0xFF64748B),
-                      fontWeight: FontWeight.w800,
+                    Text(
+                      '$score',
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(
+                            color: const Color(0xFFC53030),
+                            fontWeight: FontWeight.w900,
+                          ),
                     ),
-                  ),
+                    const Text(
+                      '/100',
+                      style: TextStyle(
+                        color: Color(0xFF64748B),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ],
@@ -1585,7 +2281,7 @@ class _RouteAndDocentPanel extends StatelessWidget {
                 label: '날씨',
                 value: weather == null
                     ? '확인 중'
-                    : '${weather!.temp} · ${weather!.dust.gradeKo}',
+                    : '${_temperatureLabel(weather!.temp)} · ${weather!.dust.gradeKo}',
               ),
             ),
           ],
@@ -1802,20 +2498,7 @@ class _LegacyMapCanvas extends StatelessWidget {
     final centerLng = selected?.lng ?? 127.0179;
     final mapPlaces = places.isEmpty
         ? _fallbackMapPlaces()
-        : places
-              .take(12)
-              .map(
-                (place) => KakaoMapPlace(
-                  id: place.placeId,
-                  name: place.nameKo ?? place.name,
-                  category: place.category,
-                  lat: place.lat,
-                  lng: place.lng,
-                  scorePercent: place.score?.percent,
-                  selected: place.placeId == selected?.placeId,
-                ),
-              )
-              .toList();
+        : _clusterMapPlaces(places, selected);
 
     return Stack(
       children: [
@@ -1867,7 +2550,6 @@ class _LegacyMapCanvas extends StatelessWidget {
         category: 'attraction',
         lat: 37.2819,
         lng: 127.0142,
-        scorePercent: 86,
         selected: true,
       ),
       KakaoMapPlace(
@@ -1876,7 +2558,6 @@ class _LegacyMapCanvas extends StatelessWidget {
         category: 'culture_venue',
         lat: 37.2870,
         lng: 127.0110,
-        scorePercent: 82,
       ),
       KakaoMapPlace(
         id: 'haenggung-cafe-street',
@@ -1884,9 +2565,66 @@ class _LegacyMapCanvas extends StatelessWidget {
         category: 'restaurant',
         lat: 37.2828,
         lng: 127.0101,
-        scorePercent: 78,
       ),
     ];
+  }
+
+  List<KakaoMapPlace> _clusterMapPlaces(
+    List<LalaPlace> places,
+    LalaPlace? selected,
+  ) {
+    final selectedId = selected?.placeId;
+    final selectedMarkers = <KakaoMapPlace>[];
+    final buckets = <String, List<LalaPlace>>{};
+
+    for (final place in places.take(48)) {
+      if (place.placeId == selectedId) {
+        selectedMarkers.add(_toMapPlace(place, selected: true));
+        continue;
+      }
+      final latBucket = (place.lat * 180).round();
+      final lngBucket = (place.lng * 180).round();
+      final key = '${place.category}:$latBucket:$lngBucket';
+      buckets.putIfAbsent(key, () => <LalaPlace>[]).add(place);
+    }
+
+    final clustered = <KakaoMapPlace>[];
+    for (final entry in buckets.entries) {
+      final group = entry.value;
+      if (group.length >= 3) {
+        final lat =
+            group.fold<double>(0, (sum, place) => sum + place.lat) /
+            group.length;
+        final lng =
+            group.fold<double>(0, (sum, place) => sum + place.lng) /
+            group.length;
+        clustered.add(
+          KakaoMapPlace(
+            id: 'cluster-${entry.key}',
+            name: '${group.length}곳',
+            category: group.first.category,
+            lat: lat,
+            lng: lng,
+            clusterCount: group.length,
+          ),
+        );
+      } else {
+        clustered.addAll(group.map(_toMapPlace));
+      }
+    }
+
+    return [...clustered, ...selectedMarkers];
+  }
+
+  KakaoMapPlace _toMapPlace(LalaPlace place, {bool selected = false}) {
+    return KakaoMapPlace(
+      id: place.placeId,
+      name: place.nameKo ?? place.name,
+      category: place.category,
+      lat: place.lat,
+      lng: place.lng,
+      selected: selected,
+    );
   }
 }
 
@@ -1924,8 +2662,18 @@ class _MapLocationLabel extends StatelessWidget {
 }
 
 class _FloatingMapControls extends StatelessWidget {
-  const _FloatingMapControls({required this.onRefresh});
+  const _FloatingMapControls({
+    required this.voiceEnabled,
+    required this.autoDocentEnabled,
+    required this.onToggleVoice,
+    required this.onToggleAutoDocent,
+    required this.onRefresh,
+  });
 
+  final bool voiceEnabled;
+  final bool autoDocentEnabled;
+  final VoidCallback onToggleVoice;
+  final VoidCallback onToggleAutoDocent;
   final VoidCallback onRefresh;
 
   @override
@@ -1934,16 +2682,32 @@ class _FloatingMapControls extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         _MapFab(
-          tooltip: '자동 도슨트',
-          icon: Icons.auto_awesome,
-          label: '자동 도슨트',
-          onPressed: () {},
+          key: const ValueKey('voice-toggle'),
+          tooltip: voiceEnabled ? '음성 끄기' : '음성 켜기',
+          icon: voiceEnabled ? Icons.volume_up : Icons.volume_off,
+          label: voiceEnabled ? '음성 ON' : '음성 OFF',
+          active: voiceEnabled,
+          statusLabel: voiceEnabled ? 'ON' : 'OFF',
+          onPressed: onToggleVoice,
         ),
         const SizedBox(width: 9),
         _MapFab(
+          key: const ValueKey('auto-docent-toggle'),
+          tooltip: autoDocentEnabled ? '자동 도슨트 끄기' : '자동 도슨트 켜기',
+          icon: Icons.auto_awesome,
+          label: autoDocentEnabled ? '자동 ON' : '자동 OFF',
+          active: autoDocentEnabled,
+          statusLabel: autoDocentEnabled ? 'ON' : 'OFF',
+          onPressed: onToggleAutoDocent,
+        ),
+        const SizedBox(width: 9),
+        _MapFab(
+          key: const ValueKey('location-refresh'),
           tooltip: '내 위치',
           icon: Icons.my_location,
           label: '내 위치',
+          active: true,
+          statusLabel: null,
           onPressed: onRefresh,
         ),
       ],
@@ -1953,15 +2717,20 @@ class _FloatingMapControls extends StatelessWidget {
 
 class _MapFab extends StatelessWidget {
   const _MapFab({
+    super.key,
     required this.tooltip,
     required this.icon,
     required this.label,
+    required this.active,
+    required this.statusLabel,
     required this.onPressed,
   });
 
   final String tooltip;
   final IconData icon;
   final String label;
+  final bool active;
+  final String? statusLabel;
   final VoidCallback onPressed;
 
   @override
@@ -1971,19 +2740,39 @@ class _MapFab extends StatelessWidget {
       child: Semantics(
         button: true,
         label: label,
-        child: IconButton.filled(
-          onPressed: onPressed,
-          icon: Icon(icon, size: 22),
-          style: IconButton.styleFrom(
-            fixedSize: const Size.square(52),
-            backgroundColor: icon == Icons.auto_awesome
-                ? const Color(0xFF1A202C).withValues(alpha: 0.88)
-                : const Color(0xFF2B6CB0),
-            foregroundColor: Colors.white,
-            shape: const CircleBorder(
-              side: BorderSide(color: Colors.white, width: 2.2),
+        child: Badge(
+          isLabelVisible: statusLabel != null,
+          alignment: Alignment.topRight,
+          backgroundColor: active
+              ? const Color(0xFFF5C842)
+              : const Color(0xFF64748B),
+          textColor: active ? const Color(0xFF1A202C) : Colors.white,
+          label: statusLabel == null
+              ? null
+              : Text(
+                  statusLabel!,
+                  style: const TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+          child: IconButton.filled(
+            onPressed: onPressed,
+            icon: Icon(icon, size: 22),
+            style: IconButton.styleFrom(
+              fixedSize: const Size.square(52),
+              backgroundColor: active
+                  ? const Color(0xFF2B6CB0)
+                  : Colors.white.withValues(alpha: 0.92),
+              foregroundColor: active ? Colors.white : const Color(0xFF1A202C),
+              shape: CircleBorder(
+                side: BorderSide(
+                  color: active ? Colors.white : const Color(0xFFCBD5E0),
+                  width: 2.2,
+                ),
+              ),
+              elevation: 8,
             ),
-            elevation: 8,
           ),
         ),
       ),
@@ -2248,38 +3037,48 @@ class _CategoryChip extends StatelessWidget {
     required this.label,
     required this.active,
     required this.color,
+    required this.onTap,
   });
 
   final String label;
   final bool active;
   final Color color;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(right: 8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-        decoration: BoxDecoration(
-          color: active ? color : Colors.white.withValues(alpha: 0.95),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(999),
+        child: InkWell(
           borderRadius: BorderRadius.circular(999),
-          boxShadow: const [
-            BoxShadow(
-              blurRadius: 12,
-              offset: Offset(0, 4),
-              color: Color(0x12000000),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+            decoration: BoxDecoration(
+              color: active ? color : Colors.white.withValues(alpha: 0.95),
+              borderRadius: BorderRadius.circular(999),
+              boxShadow: const [
+                BoxShadow(
+                  blurRadius: 12,
+                  offset: Offset(0, 4),
+                  color: Color(0x12000000),
+                ),
+              ],
             ),
-          ],
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: active
-                ? (color == const Color(0xFFF5C842)
-                      ? const Color(0xFF1A202C)
-                      : Colors.white)
-                : const Color(0xFF0F172A),
-            fontWeight: FontWeight.w900,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: active
+                    ? (color == const Color(0xFFF5C842)
+                          ? const Color(0xFF1A202C)
+                          : Colors.white)
+                    : const Color(0xFF0F172A),
+                fontWeight: FontWeight.w900,
+              ),
+            ),
           ),
         ),
       ),
@@ -2288,19 +3087,21 @@ class _CategoryChip extends StatelessWidget {
 }
 
 class _WeatherMapPill extends StatelessWidget {
-  const _WeatherMapPill({required this.weather});
+  const _WeatherMapPill({required this.weather, required this.onPressed});
 
   final LalaWeather? weather;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     final label = weather == null
-        ? '날씨 확인 중'
-        : '${weather!.temp} · 미세먼지 ${weather!.dust.gradeKo}';
+        ? '${_fallbackWeather().temp} · 미세먼지 ${_fallbackWeather().dust.gradeKo}'
+        : '${_temperatureLabel(weather!.temp)} · 미세먼지 ${weather!.dust.gradeKo}';
     return _SmallStatusPill(
       icon: Icons.thermostat,
       label: label,
-      active: weather != null,
+      active: true,
+      onPressed: onPressed,
     );
   }
 }
@@ -2310,47 +3111,59 @@ class _SmallStatusPill extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.active,
+    required this.onPressed,
   });
 
   final IconData icon;
   final String label;
   final bool active;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-      decoration: BoxDecoration(
-        color: active
-            ? Colors.white.withValues(alpha: 0.98)
-            : Colors.white.withValues(alpha: 0.72),
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
         borderRadius: BorderRadius.circular(999),
-        boxShadow: const [
-          BoxShadow(
-            blurRadius: 12,
-            offset: Offset(0, 4),
-            color: Color(0x12000000),
+        onTap: onPressed,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          decoration: BoxDecoration(
+            color: active
+                ? Colors.white.withValues(alpha: 0.98)
+                : Colors.white.withValues(alpha: 0.72),
+            borderRadius: BorderRadius.circular(999),
+            boxShadow: const [
+              BoxShadow(
+                blurRadius: 12,
+                offset: Offset(0, 4),
+                color: Color(0x12000000),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            size: 16,
-            color: active ? const Color(0xFF2B6CB0) : const Color(0xFF64748B),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 16,
+                color: active
+                    ? const Color(0xFF2B6CB0)
+                    : const Color(0xFF64748B),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Color(0xFF0F172A),
+                  fontWeight: FontWeight.w800,
+                  fontSize: 12,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: const TextStyle(
-              color: Color(0xFF0F172A),
-              fontWeight: FontWeight.w800,
-              fontSize: 12,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -2492,6 +3305,25 @@ String _categoryLabel(String category) {
   };
 }
 
+List<LalaPlace> _filterPlaces(List<LalaPlace> places, String category) {
+  if (category == 'all') {
+    return places;
+  }
+  return places.where((place) => place.category == category).toList();
+}
+
+LalaPlace? _placeById(List<LalaPlace> places, String? placeId) {
+  if (placeId == null) {
+    return null;
+  }
+  for (final place in places) {
+    if (place.placeId == placeId) {
+      return place;
+    }
+  }
+  return null;
+}
+
 Color _categoryColor(String category) {
   return switch (category) {
     'restaurant' => const Color(0xFFC53030),
@@ -2499,6 +3331,62 @@ Color _categoryColor(String category) {
     'culture_venue' => const Color(0xFF2B6CB0),
     'attraction' => const Color(0xFF1A202C),
     _ => const Color(0xFF1A202C),
+  };
+}
+
+LalaWeather _fallbackWeather() {
+  return const LalaWeather(
+    lat: 37.2636,
+    lng: 127.0286,
+    temp: '14°C',
+    icon: 'partly-cloudy',
+    dust: LalaDust(pm10: '31', pm25: '14', grade: 'normal', gradeKo: '보통'),
+    forecast: [
+      LalaForecastItem(time: '15:00', temp: '22°C', icon: 'partly-cloudy'),
+      LalaForecastItem(time: '18:00', temp: '20°C', icon: 'partly-cloudy'),
+      LalaForecastItem(time: '21:00', temp: '18°C', icon: 'clear'),
+    ],
+    outdoorStatus: 'good',
+    force: false,
+    source: 'fallback',
+    location: '수원',
+  );
+}
+
+String _temperatureLabel(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) {
+    return '-';
+  }
+  if (RegExp(r'^-?\d+(\.\d+)?$').hasMatch(trimmed)) {
+    return '$trimmed°C';
+  }
+  if (RegExp(r'^-?\d+(\.\d+)?C$').hasMatch(trimmed)) {
+    return trimmed.replaceFirst('C', '°C');
+  }
+  return trimmed;
+}
+
+String _periodLabel(String period) {
+  return switch (period) {
+    'morning' => '오전',
+    'afternoon' => '오후',
+    'evening' => '저녁',
+    _ =>
+      period.isEmpty
+          ? '-'
+          : period.length <= 2
+          ? period
+          : period.substring(0, 2),
+  };
+}
+
+String _outdoorLabel(String status) {
+  return switch (status) {
+    'good' => '좋음',
+    'normal' => '보통',
+    'bad' => '주의',
+    _ => status,
   };
 }
 
@@ -2729,7 +3617,8 @@ class _ExperienceHero extends StatelessWidget {
                   if (weather != null)
                     _MiniChip(
                       icon: Icons.wb_cloudy_outlined,
-                      label: '${weather!.location ?? 'Suwon'} ${weather!.temp}',
+                      label:
+                          '${weather!.location ?? 'Suwon'} ${_temperatureLabel(weather!.temp)}',
                     ),
                   if (action != null && action.trim().isNotEmpty)
                     _MiniChip(icon: Icons.alt_route_outlined, label: action),
@@ -2943,7 +3832,7 @@ class _WeatherPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _LargeValue(
-            value: data?.temp ?? '-',
+            value: data == null ? '-' : _temperatureLabel(data.temp),
             label: data?.location ?? 'Suwon',
           ),
           _MetricRow(label: 'Dust', value: data?.dust.gradeKo ?? '-'),
@@ -2952,7 +3841,8 @@ class _WeatherPanel extends StatelessWidget {
           if (data?.forecast.isNotEmpty == true)
             _MetricRow(
               label: 'Next',
-              value: '${data!.forecast.first.time} ${data.forecast.first.temp}',
+              value:
+                  '${data!.forecast.first.time} ${_temperatureLabel(data.forecast.first.temp)}',
             ),
         ],
       ),

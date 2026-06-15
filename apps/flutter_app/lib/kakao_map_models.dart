@@ -8,7 +8,7 @@ class KakaoMapPlace {
     required this.category,
     required this.lat,
     required this.lng,
-    this.scorePercent,
+    this.clusterCount,
     this.selected = false,
   });
 
@@ -17,6 +17,6 @@ class KakaoMapPlace {
   final String category;
   final double lat;
   final double lng;
-  final int? scorePercent;
+  final int? clusterCount;
   final bool selected;
 }

@@ -132,7 +132,7 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
                 'category': place.category,
                 'lat': place.lat,
                 'lng': place.lng,
-                'scorePercent': place.scorePercent,
+                'clusterCount': place.clusterCount,
                 'selected': place.selected,
               },
             )
@@ -182,33 +182,34 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
     }
 
     places.forEach(function (place) {
-      var size = place.selected ? 58 : 42;
+      var isCluster = place.clusterCount != null && place.clusterCount > 1;
+      var size = isCluster ? Math.min(66, 38 + place.clusterCount * 4) : (place.selected ? 58 : 42);
       var marker = document.createElement("div");
       marker.title = place.name;
       marker.style.width = size + "px";
       marker.style.height = size + "px";
-      marker.style.borderRadius = "50% 50% 50% 8px";
+      marker.style.borderRadius = isCluster ? "50%" : "50% 50% 50% 8px";
       marker.style.background = colorFor(place.category);
       marker.style.border = place.selected ? "5px solid #ffffff" : "3px solid #ffffff";
       marker.style.boxShadow = "0 10px 24px rgba(15, 23, 42, 0.26)";
-      marker.style.transform = "rotate(-45deg)";
+      marker.style.transform = isCluster ? "none" : "rotate(-45deg)";
       marker.style.display = "grid";
       marker.style.placeItems = "center";
 
       var label = document.createElement("div");
-      label.style.transform = "rotate(45deg)";
+      label.style.transform = isCluster ? "none" : "rotate(45deg)";
       label.style.color = place.category === "event" ? "#1A202C" : "#ffffff";
-      label.style.fontSize = place.selected ? "15px" : "13px";
+      label.style.fontSize = isCluster ? "16px" : (place.selected ? "15px" : "13px");
       label.style.fontWeight = "900";
       label.style.fontFamily = "system-ui, -apple-system, sans-serif";
-      label.textContent = place.scorePercent == null ? glyphFor(place.category) : String(place.scorePercent);
+      label.textContent = isCluster ? String(place.clusterCount) : glyphFor(place.category);
       marker.appendChild(label);
 
       var overlay = new kakao.maps.CustomOverlay({
         position: new kakao.maps.LatLng(place.lat, place.lng),
         content: marker,
         yAnchor: 1.08,
-        zIndex: place.selected ? 12 : 6
+        zIndex: place.selected ? 12 : (isCluster ? 9 : 6)
       });
       overlay.setMap(map);
     });

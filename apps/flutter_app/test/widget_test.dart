@@ -23,18 +23,74 @@ void main() {
     expect(find.text('대시보드'), findsOneWidget);
     expect(find.text('추천 장소 보기'), findsOneWidget);
     expect(find.text('Kakao Map API'), findsOneWidget);
+    expect(find.text('로컬 점수'), findsNothing);
+    expect(find.text('내국인 소비'), findsNothing);
+    expect(find.text('수요 분산'), findsNothing);
+    expect(find.text('문화 연계'), findsNothing);
+    expect(find.text('날씨 적합'), findsNothing);
+    expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
+    expect(find.text('86'), findsNothing);
+    expect(find.textContaining('14°C'), findsWidgets);
+    expect(find.text('정보 더 듣기'), findsOneWidget);
+    expect(find.text('오늘 코스에 추가'), findsOneWidget);
+    expect(find.text('TourAPI'), findsNothing);
+    expect(find.textContaining('조선 왕실'), findsOneWidget);
+
+    final evidenceButton = find.widgetWithText(OutlinedButton, '점수/근거 보기');
+    await tester.ensureVisible(evidenceButton);
+    await tester.tap(evidenceButton);
+    await tester.pumpAndSettle();
+
     expect(find.text('로컬 점수'), findsOneWidget);
     expect(find.text('내국인 소비'), findsOneWidget);
     expect(find.text('수요 분산'), findsOneWidget);
     expect(find.text('문화 연계'), findsOneWidget);
     expect(find.text('날씨 적합'), findsOneWidget);
-    expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
     expect(find.text('86'), findsAtLeastNWidgets(1));
-    expect(find.textContaining('14°C'), findsWidgets);
-    expect(find.text('정보 더 듣기'), findsOneWidget);
-    expect(find.text('오늘 코스에 추가'), findsOneWidget);
     expect(find.text('TourAPI'), findsOneWidget);
-    expect(find.textContaining('조선 왕실'), findsOneWidget);
+  });
+
+  testWidgets('filters places from category chips and toggles map modes', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      LalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('맛집').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('행궁동 카페거리'), findsAtLeastNWidgets(1));
+    expect(find.text('행궁동 카페거리 도슨트'), findsOneWidget);
+
+    final voiceToggle = find.byKey(const ValueKey('voice-toggle'));
+    expect(
+      find.descendant(of: voiceToggle, matching: find.text('ON')),
+      findsOneWidget,
+    );
+    await tester.tap(voiceToggle);
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(of: voiceToggle, matching: find.text('OFF')),
+      findsOneWidget,
+    );
+
+    final autoToggle = find.byKey(const ValueKey('auto-docent-toggle'));
+    expect(
+      find.descendant(of: autoToggle, matching: find.text('OFF')),
+      findsOneWidget,
+    );
+    await tester.tap(autoToggle);
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(of: autoToggle, matching: find.text('ON')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('loads authenticated API panels with the reference contract', (
@@ -232,8 +288,8 @@ class FakeBackend implements LalaBackend {
     }
     return _envelope(
       LalaPlacesResponse(
-        count: 1,
-        places: [_place()],
+        count: 3,
+        places: [_place(), _culturePlace(), _restaurantPlace()],
         query: LalaPlacesQuery(
           lat: config.lat,
           lng: config.lng,
@@ -355,6 +411,62 @@ LalaPlace _place() {
       dataBasis: 'demo_fallback',
       features: {
         'missing_signals': <String>['card_spending_snapshot'],
+      },
+    ),
+  );
+}
+
+LalaPlace _culturePlace() {
+  return const LalaPlace(
+    placeId: 'suwon-hwaseong',
+    name: '수원화성',
+    category: 'culture_venue',
+    lat: 37.2870,
+    lng: 127.0110,
+    address: '경기도 수원시 장안구 영화동',
+    distanceM: 620,
+    source: 'skeleton',
+    score: LalaPlaceScore(
+      finalScore: 0.82,
+      formulaVersion: 'local-value-v1',
+      components: LalaPlaceScoreComponents(
+        localSpendingScore: 0.68,
+        demandDispersionScore: 0.73,
+        weatherFitScore: 0.76,
+        reviewQualityScore: null,
+        cultureRelevanceScore: 0.96,
+      ),
+      dataBasis: 'demo_fallback',
+      features: {
+        'signals': <String>['tour_api', 'culture_data'],
+      },
+    ),
+  );
+}
+
+LalaPlace _restaurantPlace() {
+  return const LalaPlace(
+    placeId: 'haenggung-cafe-street',
+    name: '행궁동 카페거리',
+    category: 'restaurant',
+    lat: 37.2828,
+    lng: 127.0101,
+    address: '경기도 수원시 팔달구 행궁동',
+    distanceM: 780,
+    source: 'skeleton',
+    score: LalaPlaceScore(
+      finalScore: 0.78,
+      formulaVersion: 'local-value-v1',
+      components: LalaPlaceScoreComponents(
+        localSpendingScore: 0.88,
+        demandDispersionScore: 0.54,
+        weatherFitScore: 0.70,
+        reviewQualityScore: null,
+        cultureRelevanceScore: 0.62,
+      ),
+      dataBasis: 'demo_fallback',
+      features: {
+        'signals': <String>['card_spending', 'local_business'],
       },
     ),
   );
