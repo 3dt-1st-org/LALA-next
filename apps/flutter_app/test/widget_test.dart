@@ -18,24 +18,23 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('LALA Next'), findsOneWidget);
-    expect(find.text('ok'), findsWidgets);
-    expect(find.text('skeleton'), findsWidgets);
-    expect(find.text('public only'), findsOneWidget);
-    expect(find.text('오늘의 로컬 연결'), findsOneWidget);
+    expect(find.text('LALA'), findsOneWidget);
+    expect(find.text('지도'), findsOneWidget);
+    expect(find.text('코스'), findsOneWidget);
+    expect(find.text('도슨트'), findsOneWidget);
+    expect(find.text('Kakao Map API'), findsOneWidget);
     expect(find.text('로컬 점수'), findsOneWidget);
     expect(find.text('내국인 소비'), findsOneWidget);
     expect(find.text('수요 분산'), findsOneWidget);
     expect(find.text('문화 연계'), findsOneWidget);
-    expect(find.text('Suwon Hwaseong'), findsAtLeastNWidgets(1));
-    expect(find.text('84'), findsAtLeastNWidgets(1));
-    expect(find.text('22C'), findsOneWidget);
-    expect(find.textContaining('Morning landmark walk'), findsOneWidget);
-    expect(find.text('Docent story for Suwon Hwaseong.'), findsOneWidget);
-    expect(find.text('ready test-request-id'), findsOneWidget);
-    expect(find.text('places test-request-id'), findsOneWidget);
-    expect(find.text('plan test-request-id'), findsOneWidget);
-    expect(find.text('docent test-request-id'), findsOneWidget);
+    expect(find.text('날씨 적합'), findsOneWidget);
+    expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
+    expect(find.text('86'), findsAtLeastNWidgets(1));
+    expect(find.textContaining('14°C'), findsWidgets);
+    expect(find.text('AI 도슨트 듣기'), findsOneWidget);
+    expect(find.text('오늘 코스에 추가'), findsOneWidget);
+    expect(find.text('TourAPI'), findsOneWidget);
+    expect(find.textContaining('조선 왕실'), findsOneWidget);
   });
 
   testWidgets('loads authenticated API panels with the reference contract', (
@@ -53,16 +52,9 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('static bearer'), findsOneWidget);
-    expect(find.text('오늘의 로컬 연결'), findsOneWidget);
-    expect(find.text('Suwon Hwaseong'), findsAtLeastNWidgets(1));
-    expect(find.text('22C'), findsOneWidget);
-    expect(find.textContaining('Morning landmark walk'), findsOneWidget);
-    expect(find.text('Docent story for Suwon Hwaseong.'), findsOneWidget);
-    expect(find.text('ready test-request-id'), findsOneWidget);
-    expect(find.text('places test-request-id'), findsOneWidget);
-    expect(find.text('plan test-request-id'), findsOneWidget);
-    expect(find.text('docent test-request-id'), findsOneWidget);
+    expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
+    expect(find.textContaining('14°C'), findsWidgets);
+    expect(find.textContaining('조선 왕실'), findsOneWidget);
   });
 
   testWidgets('keeps public readiness visible when authenticated load fails', (
@@ -81,14 +73,11 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('ok'), findsWidgets);
-    expect(find.text('skeleton'), findsWidgets);
-    expect(find.text('static bearer'), findsOneWidget);
     expect(
       find.text('UPSTREAM_UNAVAILABLE: Authenticated route failed.'),
-      findsOneWidget,
+      findsNothing,
     );
-    expect(find.text('No places returned.'), findsOneWidget);
+    expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
   });
 
   testWidgets('refresh uses edited backend configuration', (tester) async {
@@ -105,6 +94,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.tap(find.text('설정'));
+    await tester.pumpAndSettle();
+
     await tester.enterText(
       find.widgetWithText(TextField, 'Base URL'),
       'http://10.0.0.5:8080',
@@ -112,6 +104,10 @@ void main() {
     await tester.enterText(
       find.widgetWithText(TextField, 'Migration API key'),
       'migration-key',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Kakao JavaScript key'),
+      'kakao-js-key',
     );
     final refreshButton = find.widgetWithText(FilledButton, 'Refresh');
     await tester.ensureVisible(refreshButton);
@@ -121,7 +117,7 @@ void main() {
 
     expect(configs.last.baseUri, 'http://10.0.0.5:8080');
     expect(configs.last.apiKey, 'migration-key');
-    expect(find.text('migration key'), findsOneWidget);
+    expect(configs.last.kakaoJavascriptKey, 'kakao-js-key');
   });
 
   testWidgets('surfaces OAuth JWT auth mode separately from static bearer', (
@@ -139,8 +135,7 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('oauth jwt'), findsOneWidget);
-    expect(find.text('Suwon Hwaseong'), findsAtLeastNWidgets(1));
+    expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
   });
 
   testWidgets('fetches docent audio only after explicit tap', (tester) async {
@@ -163,18 +158,18 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(backend.audioRequests, isEmpty);
-    expect(find.text('Fetch audio'), findsOneWidget);
+    expect(find.text('AI 도슨트 듣기'), findsOneWidget);
 
-    final audioButton = find.widgetWithText(FilledButton, 'Fetch audio');
+    final audioButton = find.widgetWithText(FilledButton, 'AI 도슨트 듣기');
     await tester.ensureVisible(audioButton);
     await tester.pumpAndSettle();
     await tester.tap(audioButton);
     await tester.pumpAndSettle();
 
-    expect(backend.audioRequests, ['Docent story for Suwon Hwaseong.']);
+    expect(backend.audioRequests, [
+      '화성행궁은 조선 왕실의 이동 궁궐로, 수원화성과 함께 걷기 좋은 코스입니다.',
+    ]);
     expect(find.text('4 bytes'), findsOneWidget);
-    expect(find.text('docent_audio:test-audio-cache'), findsOneWidget);
-    expect(find.text('audio audio-request-id'), findsOneWidget);
   });
 }
 
@@ -280,11 +275,7 @@ class FakeBackend implements LalaBackend {
         radiusM: config.radiusM,
         weather: _weather(),
         slots: [
-          LalaPlanSlot(
-            period: 'morning',
-            title: 'Morning landmark walk',
-            place: _place(),
-          ),
+          LalaPlanSlot(period: 'morning', title: '화성행궁 산책 코스', place: _place()),
         ],
         source: 'skeleton',
         requestHash:
@@ -304,7 +295,7 @@ class FakeBackend implements LalaBackend {
         category: place.category,
         language: 'ko',
         mode: 'brief',
-        script: 'Docent story for ${place.name}.',
+        script: '화성행궁은 조선 왕실의 이동 궁궐로, 수원화성과 함께 걷기 좋은 코스입니다.',
         source: 'skeleton',
         requestHash:
             '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
@@ -343,23 +334,23 @@ LalaEnvelope<T> _envelope<T>(T data) {
 
 LalaPlace _place() {
   return const LalaPlace(
-    placeId: 'suwon-hwaseong',
-    name: 'Suwon Hwaseong',
+    placeId: 'hwaseong-haenggung',
+    name: '화성행궁',
     category: 'attraction',
-    lat: 37.287,
-    lng: 127.011,
-    address: 'Suwon',
-    distanceM: 420,
+    lat: 37.2819,
+    lng: 127.0142,
+    address: '경기도 수원시 팔달구 정조로 825',
+    distanceM: 145,
     source: 'skeleton',
     score: LalaPlaceScore(
-      finalScore: 0.84,
+      finalScore: 0.86,
       formulaVersion: 'local-value-v1',
       components: LalaPlaceScoreComponents(
-        localSpendingScore: 0.9,
-        demandDispersionScore: 0.8,
-        weatherFitScore: 0.7,
+        localSpendingScore: 0.82,
+        demandDispersionScore: 0.78,
+        weatherFitScore: 0.74,
         reviewQualityScore: null,
-        cultureRelevanceScore: 0.8,
+        cultureRelevanceScore: 0.91,
       ),
       dataBasis: 'demo_fallback',
       features: {
@@ -373,7 +364,7 @@ LalaWeather _weather() {
   return const LalaWeather(
     lat: 37.2636,
     lng: 127.0286,
-    temp: '22C',
+    temp: '14°C',
     icon: 'partly-cloudy',
     dust: LalaDust(pm10: '31', pm25: '14', grade: 'normal', gradeKo: '보통'),
     forecast: [

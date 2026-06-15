@@ -181,6 +181,10 @@ try {
     if ($StartApi) {
         $buildArgs += @("--dart-define", "LALA_IOS_API_KEY=$SmokeApiKey")
     }
+    $KakaoJavascriptKey = [Environment]::GetEnvironmentVariable("KAKAO_JAVASCRIPT_KEY", "Process")
+    if ($KakaoJavascriptKey) {
+        $buildArgs += @("--dart-define", "KAKAO_JAVASCRIPT_KEY=$KakaoJavascriptKey")
+    }
     Push-Location $AppDir
     try {
         & flutter @buildArgs
@@ -227,7 +231,7 @@ async () => {
     $runtimeStatePath = Join-Path $OutputDir "flutter-web-runtime.json"
     Set-Content -Path $runtimeStatePath -Value $runtimeState -Encoding UTF8
     $state = $runtimeState | ConvertFrom-Json
-    if ($state.title -ne "LALA Next") {
+    if ($state.title -ne "LALA") {
         throw "Unexpected Flutter web title: $($state.title)"
     }
     if (-not $state.hasFlutterEntrypoint) {

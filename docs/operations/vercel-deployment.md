@@ -67,7 +67,9 @@ curl -fsS 'https://api.lala-next.cloud/api/v1/places?lat=37.2636&lng=127.0286&ra
 Build Flutter web against the custom API domain:
 
 ```bash
-flutter build web --release --dart-define LALA_API_BASE_URL=https://api.lala-next.cloud
+flutter build web --release \
+  --dart-define LALA_API_BASE_URL=https://api.lala-next.cloud \
+  --dart-define KAKAO_JAVASCRIPT_KEY="$KAKAO_JAVASCRIPT_KEY"
 ```
 
 Deploy the built frontend to the `lala-next` Vercel project:
@@ -89,9 +91,11 @@ curl -sS -o /dev/null -w '%{http_code}\n' https://lala-next.cloud
 curl -sS -o /dev/null -w '%{http_code}\n' https://www.lala-next.cloud
 ```
 
-The production Flutter build uses `LALA_API_BASE_URL=https://api.lala-next.cloud`
-and a 50 km default recommendation radius so the public Gyeonggi MVP snapshot is
-visible on first load.
+The production Flutter build uses `LALA_API_BASE_URL=https://api.lala-next.cloud`,
+the Kakao Maps JavaScript key, and a 50 km default recommendation radius so the
+public Gyeonggi MVP snapshot is visible on first load. Kakao Developers must
+allow the deployed web domains, including `https://lala-next.cloud`,
+`https://www.lala-next.cloud`, and any Vercel preview domain used for judging.
 
 ## DNS
 

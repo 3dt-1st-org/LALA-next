@@ -26,7 +26,7 @@ try {
     }
 
     Write-Host "Formatting Flutter app in check-only mode..."
-    dart format --set-exit-if-changed lib/main.dart test/widget_test.dart
+    dart format --set-exit-if-changed lib/main.dart lib/kakao_map_models.dart lib/kakao_map_view.dart lib/kakao_map_view_stub.dart lib/kakao_map_view_web.dart test/widget_test.dart
     if ($LASTEXITCODE -ne 0) {
         throw "dart format check failed."
     }
@@ -44,7 +44,12 @@ try {
     }
 
     Write-Host "Building Flutter web release bundle..."
-    flutter build web --release
+    $buildArgs = @("build", "web", "--release")
+    $KakaoJavascriptKey = [Environment]::GetEnvironmentVariable("KAKAO_JAVASCRIPT_KEY", "Process")
+    if ($KakaoJavascriptKey) {
+        $buildArgs += @("--dart-define", "KAKAO_JAVASCRIPT_KEY=$KakaoJavascriptKey")
+    }
+    flutter @buildArgs
     if ($LASTEXITCODE -ne 0) {
         throw "flutter build web failed."
     }

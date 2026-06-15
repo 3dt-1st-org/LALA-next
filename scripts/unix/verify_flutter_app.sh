@@ -26,6 +26,8 @@ done
 
 ROOT="$(repo_root)"
 APP_DIR="$ROOT/apps/flutter_app"
+load_env_file "$ROOT/.env"
+load_lala_key_vault_secrets
 
 if ! command -v flutter >/dev/null 2>&1; then
   if [[ "$REQUIRE_FLUTTER" == "true" ]]; then
@@ -42,7 +44,7 @@ echo "Resolving Flutter app dependencies..."
 flutter pub get
 
 echo "Formatting Flutter app in check-only mode..."
-dart format --set-exit-if-changed lib/main.dart test/widget_test.dart
+dart format --set-exit-if-changed lib/main.dart lib/kakao_*.dart test/widget_test.dart
 
 echo "Analyzing Flutter app..."
 flutter analyze
@@ -51,4 +53,8 @@ echo "Running Flutter app widget tests..."
 flutter test
 
 echo "Building Flutter web release bundle..."
-flutter build web --release
+FLUTTER_BUILD_ARGS=(build web --release)
+if [[ -n "${KAKAO_JAVASCRIPT_KEY:-}" ]]; then
+  FLUTTER_BUILD_ARGS+=(--dart-define "KAKAO_JAVASCRIPT_KEY=$KAKAO_JAVASCRIPT_KEY")
+fi
+flutter "${FLUTTER_BUILD_ARGS[@]}"

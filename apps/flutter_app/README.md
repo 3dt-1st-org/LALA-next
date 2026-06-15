@@ -9,6 +9,8 @@ Current app surface:
 - Public `/healthz` and `/readyz` status before auth is available.
 - Runtime mode display from `/readyz.data.mode`.
 - Runtime editable backend base URL.
+- Kakao Maps Web API background map, loaded with `KAKAO_JAVASCRIPT_KEY` at
+  Flutter web build time.
 - 50 km default public MVP radius for the Suwon/Gyeonggi demo snapshot.
 - Bearer token or migration API key input for `/api/v1/*`.
 - Recommendation-first home surface that highlights the top place, local-value
@@ -89,7 +91,8 @@ Optional compile-time defaults:
 
 ```bash
 flutter run \
-  --dart-define LALA_API_BASE_URL=http://127.0.0.1:8080
+  --dart-define LALA_API_BASE_URL=http://127.0.0.1:8080 \
+  --dart-define KAKAO_JAVASCRIPT_KEY="$KAKAO_JAVASCRIPT_KEY"
 ```
 
 The public MVP backend can run with `LALA_PUBLIC_DEMO_MODE=true`, so the app
@@ -100,3 +103,5 @@ JSON auth error and the app keeps readiness visible.
 
 Do not commit client tokens or API keys. For local testing, prefer entering
 short-lived credentials in the app UI or using an operator-owned environment.
+The Kakao JavaScript key is embedded in web builds by design and must be
+protected by Kakao's JavaScript SDK domain allowlist.

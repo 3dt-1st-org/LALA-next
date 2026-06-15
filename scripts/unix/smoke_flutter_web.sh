@@ -71,6 +71,9 @@ API_LOG="/tmp/lala-next-flutter-web-api-smoke-$PORT-$API_PORT.log"
 WEB_LOG="/tmp/lala-next-flutter-web-smoke-$PORT.log"
 SMOKE_API_KEY="lala-web-smoke-key"
 
+load_env_file "$ROOT/.env"
+load_lala_key_vault_secrets
+
 cleanup() {
   if [[ -x "$PWCLI" ]]; then
     "$PWCLI" -s="$PW_SESSION" close >/dev/null 2>&1 || true
@@ -163,6 +166,9 @@ FLUTTER_BUILD_ARGS=(
 if [[ "$START_API" == "true" ]]; then
   FLUTTER_BUILD_ARGS+=(--dart-define "LALA_IOS_API_KEY=$SMOKE_API_KEY")
 fi
+if [[ -n "${KAKAO_JAVASCRIPT_KEY:-}" ]]; then
+  FLUTTER_BUILD_ARGS+=(--dart-define "KAKAO_JAVASCRIPT_KEY=$KAKAO_JAVASCRIPT_KEY")
+fi
 (cd "$APP_DIR" && flutter "${FLUTTER_BUILD_ARGS[@]}")
 
 echo "Serving Flutter web bundle on $WEB_ORIGIN ..."
@@ -210,7 +216,7 @@ except Exception as exc:
         f"Could not parse Flutter runtime state: {exc}; raw={raw[:200]!r}"
     ) from exc
 
-if state.get("title") != "LALA Next":
+if state.get("title") != "LALA":
     raise SystemExit(f"Unexpected Flutter web title: {state.get('title')!r}")
 if not state.get("hasFlutterEntrypoint"):
     raise SystemExit("Flutter web entrypoint was not present in the rendered DOM.")
