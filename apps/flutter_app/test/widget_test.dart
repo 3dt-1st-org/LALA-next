@@ -239,6 +239,27 @@ void main() {
     expect(backend.dailyPlanRequests, 2);
   });
 
+  testWidgets('planner slot cards select their place detail', (tester) async {
+    await tester.pumpWidget(
+      LalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('planner-pill-hit-target')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('planner-slot-hwaseong-haenggung')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('장소 상세'), findsOneWidget);
+    expect(find.text('화성행궁 도슨트'), findsAtLeastNWidgets(1));
+  });
+
   testWidgets('auto docent on opens the nearest place detail sheet', (
     tester,
   ) async {

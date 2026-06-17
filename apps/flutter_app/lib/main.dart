@@ -2354,6 +2354,7 @@ class _MapDraggableSheet extends StatelessWidget {
                       intervention: intervention,
                       loading: loading,
                       onRegenerate: onRefresh,
+                      onSelectPlace: onSelectPlace,
                     ),
                     _ActiveMapSheet.weather => _WeatherSheetContent(
                       language: language,
@@ -2473,6 +2474,7 @@ class _PlannerSheetContent extends StatelessWidget {
     required this.intervention,
     required this.loading,
     required this.onRegenerate,
+    required this.onSelectPlace,
   });
 
   final String language;
@@ -2481,6 +2483,7 @@ class _PlannerSheetContent extends StatelessWidget {
   final LalaIntervention? intervention;
   final bool loading;
   final VoidCallback onRegenerate;
+  final ValueChanged<LalaPlace> onSelectPlace;
 
   @override
   Widget build(BuildContext context) {
@@ -2523,7 +2526,11 @@ class _PlannerSheetContent extends StatelessWidget {
               .map(
                 (slot) => Padding(
                   padding: const EdgeInsets.only(bottom: 10),
-                  child: _PlanSlotTile(slot: slot, language: language),
+                  child: _PlanSlotTile(
+                    slot: slot,
+                    language: language,
+                    onSelectPlace: onSelectPlace,
+                  ),
                 ),
               ),
       ],
@@ -2671,66 +2678,87 @@ class _PlannerOverviewCard extends StatelessWidget {
 }
 
 class _PlanSlotTile extends StatelessWidget {
-  const _PlanSlotTile({required this.slot, required this.language});
+  const _PlanSlotTile({
+    required this.slot,
+    required this.language,
+    required this.onSelectPlace,
+  });
 
   final LalaPlanSlot slot;
   final String language;
+  final ValueChanged<LalaPlace> onSelectPlace;
 
   @override
   Widget build(BuildContext context) {
     final place = slot.place;
-    return Container(
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+    return Material(
+      color: const Color(0xFFF8FAFC),
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        key: ValueKey('planner-slot-${place?.placeId ?? slot.period}'),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFD7E3F5)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: const Color(0xFF2B6CB0).withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: Text(
-              _periodLabel(slot.period, language: language),
-              style: const TextStyle(
-                color: Color(0xFF2B6CB0),
-                fontWeight: FontWeight.w900,
-              ),
-            ),
+        onTap: place == null ? null : () => onSelectPlace(place),
+        child: Container(
+          padding: const EdgeInsets.all(13),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFD7E3F5)),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _planSlotTitle(slot, language),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2B6CB0).withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
                 ),
-                if (place != null)
-                  Text(
-                    '${_placeDisplayName(place, language)} · ${_categoryLabel(place.category, language: language)}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: const Color(0xFF64748B),
-                      fontWeight: FontWeight.w700,
-                    ),
+                child: Text(
+                  _periodLabel(slot.period, language: language),
+                  style: const TextStyle(
+                    color: Color(0xFF2B6CB0),
+                    fontWeight: FontWeight.w900,
                   ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _planSlotTitle(slot, language),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    if (place != null)
+                      Text(
+                        '${_placeDisplayName(place, language)} · ${_categoryLabel(place.category, language: language)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: const Color(0xFF64748B),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              if (place != null) ...[
+                const SizedBox(width: 8),
+                const Icon(
+                  Icons.chevron_right,
+                  color: Color(0xFF94A3B8),
+                  size: 22,
+                ),
               ],
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

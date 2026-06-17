@@ -58,6 +58,9 @@ evidence, but they are not the latest MVP acceptance source.
   updates. The app updates the active center and refreshes places, weather,
   planner, and docent data from that map center, matching the legacy
   `dragend -> loadPlaces()` interaction more closely.
+- Implemented: planner slot cards are now active route stops. Tapping a stop
+  moves the user into the corresponding place detail/docent surface, preserving
+  the legacy planner-card-to-map-context interaction.
 
 ## Next Acceptance Items
 
