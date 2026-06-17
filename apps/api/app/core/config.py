@@ -34,7 +34,9 @@ class Settings:
     key_vault_url: str = ""
     azure_openai_endpoint: str = ""
     azure_openai_deployment: str = ""
+    azure_openai_embedding_deployment: str = ""
     azure_openai_api_version: str = ""
+    azure_openai_embedding_api_version: str = ""
     azure_openai_key: str = ""
     enable_live_ai: bool = False
     azure_speech_region: str = ""
@@ -91,10 +93,27 @@ class Settings:
                 "azure-openai-deployment",
                 key_vault_url,
             ),
+            azure_openai_embedding_deployment=_env_or_secret(
+                "AZURE_OPENAI_EMBEDDING_DEPLOYMENT",
+                "azure-openai-embedding-deployment",
+                key_vault_url,
+            ),
             azure_openai_api_version=_env_or_secret(
                 "AZURE_OPENAI_API_VERSION",
                 "azure-openai-api-version",
                 key_vault_url,
+            ),
+            azure_openai_embedding_api_version=(
+                _env_or_secret(
+                    "AZURE_OPENAI_EMBEDDING_API_VERSION",
+                    "azure-openai-embedding-api-version",
+                    key_vault_url,
+                )
+                or _env_or_secret(
+                    "AZURE_OPENAI_API_VERSION",
+                    "azure-openai-api-version",
+                    key_vault_url,
+                )
             ),
             azure_openai_key=_env_or_secret("AZURE_OPENAI_KEY", "azure-openai-key", key_vault_url),
             enable_live_ai=_bool_env("LALA_ENABLE_LIVE_AI", default=False),

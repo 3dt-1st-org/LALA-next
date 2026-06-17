@@ -93,6 +93,57 @@ void main() {
     );
   });
 
+  testWidgets('weather pill opens a forecast chart sheet', (tester) async {
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      LalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('weather-pill-hit-target')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('날씨'), findsOneWidget);
+    expect(find.text('날씨 추이'), findsOneWidget);
+    expect(find.text('15시'), findsOneWidget);
+    expect(find.text('22°'), findsOneWidget);
+    expect(find.text('PM10'), findsOneWidget);
+  });
+
+  testWidgets('auto docent on opens the nearest place detail sheet', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      LalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('auto-docent-toggle')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('장소 상세'), findsOneWidget);
+    expect(find.text('화성행궁 도슨트'), findsAtLeastNWidgets(1));
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('auto-docent-toggle')),
+        matching: find.text('ON'),
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('recommendation rail collapses and place cards select detail', (
     tester,
   ) async {

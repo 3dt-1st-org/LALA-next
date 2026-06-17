@@ -15,8 +15,9 @@ Canonical order:
 3. `020_travel_domain_tables.sql`: weather, docent script, and place event tables.
 4. `030_community_core_tables.sql`: provider-neutral community keyword and mention tables.
 5. `035_data_pipeline_tables.sql`: source file, culture, economy, and analytics tables.
-6. `040_ops_core_tables.sql`: job, dependency, and cost operation tables.
-7. `050_views_and_indexes.sql`: stable read views for API/reporting, plus
+6. `036_rag_knowledge_tables.sql`: pgvector-backed RAG knowledge chunks.
+7. `040_ops_core_tables.sql`: job, dependency, and cost operation tables.
+8. `050_views_and_indexes.sql`: stable read views for API/reporting, plus
    read-only compatibility views for legacy Flask-shaped handoff data.
 
 Rules:
@@ -101,7 +102,7 @@ The verification path is intentionally read-only. It checks:
 
 - Required extensions: `postgis`, `vector`, `pgcrypto`.
 - Required schemas: `travel`, `culture`, `economy`, `community`, `ingest`,
-  `analytics`, `ops`, and `compat`.
+  `analytics`, `rag`, `ops`, and `compat`.
 - Required API/reporting relations, including `travel.public_places`,
   `travel.latest_weather`, `compat.legacy_places_api`, and
   `ops.dependency_latest`.

@@ -1,5 +1,7 @@
 // ignore_for_file: unused_element
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
@@ -482,8 +484,21 @@ class _LalaHomePageState extends State<LalaHomePage> {
   }
 
   void _toggleAutoDocent() {
+    final willEnable = !_autoDocentEnabled;
+    final nearestPlace = willEnable
+        ? _nearestAutoDocentPlace(_visiblePlacesForCurrentCategory())
+        : null;
     setState(() {
-      _autoDocentEnabled = !_autoDocentEnabled;
+      _autoDocentEnabled = willEnable;
+      if (nearestPlace != null) {
+        _selectedPlaceId = nearestPlace.placeId;
+        _activeSheet = _ActiveMapSheet.detail;
+        _docentAudio = null;
+        _audioError = null;
+        _mapFocusLat = null;
+        _mapFocusLng = null;
+        _mapLevel = 4;
+      }
     });
   }
 
@@ -515,6 +530,22 @@ class _LalaHomePageState extends State<LalaHomePage> {
     setState(() {
       _locationConsentEnabled = enabled;
     });
+  }
+
+  List<LalaPlace> _visiblePlacesForCurrentCategory() {
+    final apiPlaces = _places?.data?.places ?? const <LalaPlace>[];
+    final allPlaces = apiPlaces.isEmpty ? _fallbackUiPlaces() : apiPlaces;
+    final filteredPlaces = _filterPlaces(allPlaces, _selectedCategory);
+    return filteredPlaces.isEmpty ? allPlaces : filteredPlaces;
+  }
+
+  LalaPlace? _nearestAutoDocentPlace(List<LalaPlace> places) {
+    if (places.isEmpty) {
+      return null;
+    }
+    final sorted = [...places]
+      ..sort((a, b) => a.distanceM.compareTo(b.distanceM));
+    return sorted.first;
   }
 
   Future<void> _openSettingsSheet(BuildContext context) async {
@@ -1114,6 +1145,7 @@ class _Dashboard extends StatelessWidget {
               right: 16,
               top: isWide ? 124 : 238,
               child: _WeatherMapPill(
+                key: const ValueKey('weather-pill'),
                 weather: currentWeather,
                 language: uiLanguage,
                 onPressed: () => onOpenSheet(_ActiveMapSheet.weather),
@@ -2073,12 +2105,14 @@ class _WeatherSheetContent extends StatelessWidget {
         if (data.forecast.isNotEmpty) ...[
           const SizedBox(height: 16),
           Text(
-            '예보',
+            '날씨 추이',
             style: Theme.of(
               context,
             ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 8),
+          _WeatherForecastChartCard(items: data.forecast),
+          const SizedBox(height: 10),
           SizedBox(
             height: 82,
             child: ListView.separated(
@@ -2094,6 +2128,171 @@ class _WeatherSheetContent extends StatelessWidget {
         ],
       ],
     );
+  }
+}
+
+class _WeatherForecastChartCard extends StatelessWidget {
+  const _WeatherForecastChartCard({required this.items});
+
+  final List<LalaForecastItem> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final visibleItems = items.take(8).toList(growable: false);
+    final columnWidth = visibleItems.length <= 4 ? 72.0 : 62.0;
+    final chartWidth = math.max(
+      MediaQuery.sizeOf(context).width - 72,
+      visibleItems.length * columnWidth,
+    );
+    final points = _weatherChartPoints(
+      items: visibleItems,
+      columnWidth: columnWidth,
+      chartHeight: 96,
+    );
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 12, 10, 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFD7E3F5)),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: SizedBox(
+          width: chartWidth,
+          child: Column(
+            children: [
+              SizedBox(
+                height: 98,
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: CustomPaint(
+                        painter: _WeatherForecastChartPainter(points: points),
+                      ),
+                    ),
+                    for (final point in points)
+                      Positioned(
+                        left: point.x - 18,
+                        top: math.max(0, point.y - 26),
+                        width: 36,
+                        child: Text(
+                          point.label,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Color(0xFF1A202C),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 2),
+              Row(
+                children: [
+                  for (final item in visibleItems)
+                    SizedBox(
+                      width: columnWidth,
+                      child: Icon(
+                        _weatherForecastIcon(item.icon),
+                        size: 22,
+                        color: const Color(0xFF2B6CB0),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  for (final item in visibleItems)
+                    SizedBox(
+                      width: columnWidth,
+                      child: Text(
+                        _weatherChartTimeLabel(item.time),
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF64748B),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WeatherChartPoint {
+  const _WeatherChartPoint({
+    required this.x,
+    required this.y,
+    required this.label,
+  });
+
+  final double x;
+  final double y;
+  final String label;
+}
+
+class _WeatherForecastChartPainter extends CustomPainter {
+  const _WeatherForecastChartPainter({required this.points});
+
+  final List<_WeatherChartPoint> points;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final gridPaint = Paint()
+      ..color = const Color(0xFFE2E8F0)
+      ..strokeWidth = 1;
+    for (final y in <double>[26, 52, 78]) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+
+    if (points.isEmpty) {
+      return;
+    }
+
+    final path = Path()..moveTo(points.first.x, points.first.y);
+    for (var index = 1; index < points.length; index += 1) {
+      final previous = points[index - 1];
+      final current = points[index];
+      final midX = (previous.x + current.x) / 2;
+      path.cubicTo(midX, previous.y, midX, current.y, current.x, current.y);
+    }
+
+    final linePaint = Paint()
+      ..color = const Color(0xFF2B6CB0)
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..style = PaintingStyle.stroke;
+    canvas.drawPath(path, linePaint);
+
+    final fillPaint = Paint()..color = const Color(0xFFF5C842);
+    final strokePaint = Paint()
+      ..color = Colors.white
+      ..strokeWidth = 3
+      ..style = PaintingStyle.stroke;
+    for (final point in points) {
+      final offset = Offset(point.x, point.y);
+      canvas.drawCircle(offset, 5.5, fillPaint);
+      canvas.drawCircle(offset, 5.5, strokePaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _WeatherForecastChartPainter oldDelegate) {
+    return oldDelegate.points != points;
   }
 }
 
@@ -3638,6 +3837,7 @@ class _CategoryChip extends StatelessWidget {
 
 class _WeatherMapPill extends StatelessWidget {
   const _WeatherMapPill({
+    super.key,
     required this.weather,
     required this.language,
     required this.onPressed,
@@ -3654,6 +3854,7 @@ class _WeatherMapPill extends StatelessWidget {
         ? '${_fallbackWeather().temp} · $dustPrefix ${_fallbackWeather().dust.gradeKo}'
         : '${_temperatureLabel(weather!.temp)} · $dustPrefix ${weather!.dust.gradeKo}';
     return _SmallStatusPill(
+      key: const ValueKey('weather-pill-hit-target'),
       icon: Icons.thermostat,
       label: label,
       active: true,
@@ -3664,6 +3865,7 @@ class _WeatherMapPill extends StatelessWidget {
 
 class _SmallStatusPill extends StatelessWidget {
   const _SmallStatusPill({
+    super.key,
     required this.icon,
     required this.label,
     required this.active,
@@ -3938,6 +4140,66 @@ String _temperatureLabel(String value) {
     return trimmed.replaceFirst('C', '°C');
   }
   return trimmed;
+}
+
+double? _temperatureValue(String value) {
+  final match = RegExp(r'-?\d+(?:\.\d+)?').firstMatch(value.trim());
+  if (match == null) {
+    return null;
+  }
+  return double.tryParse(match.group(0)!);
+}
+
+List<_WeatherChartPoint> _weatherChartPoints({
+  required List<LalaForecastItem> items,
+  required double columnWidth,
+  required double chartHeight,
+}) {
+  final values = items.map((item) => _temperatureValue(item.temp)).toList();
+  final validValues = values.whereType<double>().toList(growable: false);
+  final maxValue = validValues.isEmpty ? 1.0 : validValues.reduce(math.max);
+  final minValue = validValues.isEmpty ? 0.0 : validValues.reduce(math.min);
+  final range = math.max(0.1, maxValue - minValue);
+  const topPadding = 28.0;
+  const bottomPadding = 18.0;
+  final drawHeight = math.max(1.0, chartHeight - topPadding - bottomPadding);
+
+  return [
+    for (var index = 0; index < items.length; index += 1)
+      _WeatherChartPoint(
+        x: index * columnWidth + columnWidth / 2,
+        y:
+            topPadding +
+            (((maxValue - (values[index] ?? minValue)) / range) * drawHeight),
+        label: values[index] == null ? '--' : '${values[index]!.round()}°',
+      ),
+  ];
+}
+
+String _weatherChartTimeLabel(String raw) {
+  final trimmed = raw.trim();
+  final match = RegExp(r'(\d{1,2})(?=:\d{2})').firstMatch(trimmed);
+  if (match == null) {
+    return trimmed;
+  }
+  return '${match.group(1)!.padLeft(2, '0')}시';
+}
+
+IconData _weatherForecastIcon(String icon) {
+  final normalized = icon.toLowerCase();
+  if (normalized.contains('rain') || normalized.contains('shower')) {
+    return Icons.water_drop_outlined;
+  }
+  if (normalized.contains('snow') || normalized.contains('sleet')) {
+    return Icons.ac_unit;
+  }
+  if (normalized.contains('fog') || normalized.contains('dust')) {
+    return Icons.blur_on;
+  }
+  if (normalized.contains('clear') || normalized.contains('sun')) {
+    return Icons.wb_sunny_outlined;
+  }
+  return Icons.wb_cloudy_outlined;
 }
 
 String _periodLabel(String period) {

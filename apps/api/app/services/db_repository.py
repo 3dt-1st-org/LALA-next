@@ -11,6 +11,7 @@ _REQUIRED_DB_RELATIONS = (
     "travel.weather_observations",
     "travel.docent_scripts",
     "analytics.place_score_snapshots",
+    "rag.knowledge_chunks",
 )
 
 
@@ -30,7 +31,8 @@ def check_db_status(dsn: str) -> str:
                         to_regclass('travel.public_places') IS NOT NULL,
                         to_regclass('travel.weather_observations') IS NOT NULL,
                         to_regclass('travel.docent_scripts') IS NOT NULL,
-                        to_regclass('analytics.place_score_snapshots') IS NOT NULL
+                        to_regclass('analytics.place_score_snapshots') IS NOT NULL,
+                        to_regclass('rag.knowledge_chunks') IS NOT NULL
                     """
                 )
                 row = cur.fetchone()

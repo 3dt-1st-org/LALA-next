@@ -11,6 +11,7 @@ REQUIRED_SCHEMAS = (
     "community",
     "ingest",
     "analytics",
+    "rag",
     "ops",
     "compat",
 )
@@ -30,6 +31,7 @@ REQUIRED_RELATIONS = (
     "community.place_mentions_weekly",
     "ingest.source_files",
     "analytics.place_score_snapshots",
+    "rag.knowledge_chunks",
     "ops.job_runs",
     "ops.dependency_checks",
     "ops.daily_costs",

@@ -82,6 +82,9 @@ echo "Planning safe ONMU Key Vault reuse..."
 echo "Planning local-value place score batch..."
 "$ROOT/scripts/unix/plan_place_score_batch.sh" --python "$PYTHON"
 
+echo "Planning RAG knowledge index..."
+"$ROOT/scripts/unix/plan_rag_index.sh" --python "$PYTHON"
+
 echo "Planning place AI enrichment..."
 "$ROOT/scripts/unix/plan_place_ai_enrichment.sh" --python "$PYTHON"
 

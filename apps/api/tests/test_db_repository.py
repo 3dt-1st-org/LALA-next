@@ -21,7 +21,7 @@ def test_check_db_status_requires_canonical_relations(monkeypatch):
             captured["sql"] = sql
 
         def fetchone(self):
-            return (True, True, True, True)
+            return (True, True, True, True, True)
 
     class FakeConnection:
         def cursor(self):
@@ -41,6 +41,7 @@ def test_check_db_status_requires_canonical_relations(monkeypatch):
     assert "to_regclass('travel.weather_observations')" in captured["sql"]
     assert "to_regclass('travel.docent_scripts')" in captured["sql"]
     assert "to_regclass('analytics.place_score_snapshots')" in captured["sql"]
+    assert "to_regclass('rag.knowledge_chunks')" in captured["sql"]
 
 
 def test_check_db_status_degrades_when_canonical_relation_is_missing(monkeypatch):
@@ -55,7 +56,7 @@ def test_check_db_status_degrades_when_canonical_relation_is_missing(monkeypatch
             return None
 
         def fetchone(self):
-            return (True, False, True, True)
+            return (True, False, True, True, True)
 
     class FakeConnection:
         def cursor(self):

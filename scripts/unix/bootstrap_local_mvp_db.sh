@@ -10,6 +10,7 @@ START_COMPOSE="false"
 APPLY_CANONICAL="false"
 APPLY_DEV_RESET="false"
 SCORE_APPLY="false"
+RAG_APPLY="false"
 SNAPSHOT_WRITE="false"
 RUN_ALL="false"
 CONNECT_TIMEOUT="5"
@@ -36,6 +37,10 @@ while [[ $# -gt 0 ]]; do
       SCORE_APPLY="true"
       shift
       ;;
+    --rag-apply)
+      RAG_APPLY="true"
+      shift
+      ;;
     --snapshot-write)
       SNAPSHOT_WRITE="true"
       shift
@@ -49,7 +54,7 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     -h|--help)
-      echo "Usage: scripts/unix/bootstrap_local_mvp_db.sh [--all] [--start-compose] [--apply-canonical] [--apply-dev-reset] [--score-apply] [--snapshot-write] [--python PATH]"
+      echo "Usage: scripts/unix/bootstrap_local_mvp_db.sh [--all] [--start-compose] [--apply-canonical] [--apply-dev-reset] [--score-apply] [--rag-apply] [--snapshot-write] [--python PATH]"
       echo "Default mode is plan only. Execution uses compose.local.yml and a localhost-only DB_DSN built from LALA_POSTGRES_* env values."
       exit 0
       ;;
@@ -65,16 +70,63 @@ PYTHON="$(select_python "$PYTHON_ARG")"
 cd "$ROOT"
 load_env_file "$ROOT/.env"
 
+hydrate_local_postgres_env_from_db_dsn() {
+  [[ -n "${DB_DSN:-}" ]] || return 0
+  if [[ -n "${LALA_POSTGRES_PASSWORD:-}" &&
+        -n "${LALA_POSTGRES_PORT:-}" &&
+        -n "${LALA_POSTGRES_DB:-}" &&
+        -n "${LALA_POSTGRES_USER:-}" ]]; then
+    return 0
+  fi
+
+  local exports
+  exports="$("$PYTHON" - <<'PY'
+import os
+import shlex
+from urllib.parse import unquote, urlparse
+
+dsn = os.environ.get("DB_DSN", "").strip()
+if not dsn:
+    raise SystemExit(0)
+
+parsed = urlparse(dsn)
+host = parsed.hostname or ""
+if host not in {"localhost", "127.0.0.1", "::1"}:
+    raise SystemExit(0)
+
+values = {
+    "LALA_POSTGRES_USER": unquote(parsed.username or "lala"),
+    "LALA_POSTGRES_PASSWORD": unquote(parsed.password or ""),
+    "LALA_POSTGRES_PORT": str(parsed.port or 5432),
+    "LALA_POSTGRES_DB": unquote((parsed.path or "/lala").lstrip("/") or "lala"),
+}
+
+for key, value in values.items():
+    if os.environ.get(key, "").strip():
+        continue
+    if key == "LALA_POSTGRES_PASSWORD" and not value:
+        continue
+    print(f"export {key}={shlex.quote(value)}")
+PY
+)"
+  if [[ -n "$exports" ]]; then
+    eval "$exports"
+  fi
+}
+
+hydrate_local_postgres_env_from_db_dsn
+
 if [[ "$RUN_ALL" == "true" ]]; then
   START_COMPOSE="true"
   APPLY_CANONICAL="true"
   APPLY_DEV_RESET="true"
   SCORE_APPLY="true"
+  RAG_APPLY="true"
   SNAPSHOT_WRITE="true"
 fi
 
 requested_any="false"
-for flag in "$START_COMPOSE" "$APPLY_CANONICAL" "$APPLY_DEV_RESET" "$SCORE_APPLY" "$SNAPSHOT_WRITE"; do
+for flag in "$START_COMPOSE" "$APPLY_CANONICAL" "$APPLY_DEV_RESET" "$SCORE_APPLY" "$RAG_APPLY" "$SNAPSHOT_WRITE"; do
   if [[ "$flag" == "true" ]]; then
     requested_any="true"
   fi
@@ -94,7 +146,8 @@ print_plan() {
   echo "step=2 apply canonical SQL: scripts/unix/bootstrap_local_mvp_db.sh --apply-canonical"
   echo "step=3 seed demo data: scripts/unix/bootstrap_local_mvp_db.sh --apply-dev-reset"
   echo "step=4 compute scores: scripts/unix/bootstrap_local_mvp_db.sh --score-apply"
-  echo "step=5 write bundled public snapshot: scripts/unix/bootstrap_local_mvp_db.sh --snapshot-write"
+  echo "step=5 build RAG vectors: scripts/unix/bootstrap_local_mvp_db.sh --rag-apply"
+  echo "step=6 write bundled public snapshot: scripts/unix/bootstrap_local_mvp_db.sh --snapshot-write"
   echo "step=all run the local pipeline: scripts/unix/bootstrap_local_mvp_db.sh --all"
   echo "DB_DSN and LALA_POSTGRES_PASSWORD values are never printed by this script."
 }
@@ -185,6 +238,17 @@ if [[ "$SCORE_APPLY" == "true" ]]; then
   ALLOW_PLACE_SCORE_BATCH_APPLY=1 "$ROOT/scripts/unix/plan_place_score_batch.sh" \
     --apply \
     --confirm APPLY_PLACE_SCORE_BATCH \
+    --connect-timeout "$CONNECT_TIMEOUT" \
+    --python "$PYTHON"
+fi
+
+if [[ "$RAG_APPLY" == "true" ]]; then
+  echo "Building local RAG knowledge vectors..."
+  ALLOW_RAG_INDEX_APPLY=1 "$ROOT/scripts/unix/plan_rag_index.sh" \
+    --apply \
+    --confirm APPLY_RAG_INDEX \
+    --source all \
+    --embedding-method local-hash \
     --connect-timeout "$CONNECT_TIMEOUT" \
     --python "$PYTHON"
 fi

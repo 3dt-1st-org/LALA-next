@@ -46,6 +46,7 @@ def test_load_canonical_sql_plan_is_safe_and_ordered():
         "020_travel_domain_tables.sql",
         "030_community_core_tables.sql",
         "035_data_pipeline_tables.sql",
+        "036_rag_knowledge_tables.sql",
         "040_ops_core_tables.sql",
         "050_views_and_indexes.sql",
     ]
@@ -75,7 +76,7 @@ def test_apply_canonical_sql_cli_defaults_to_plan_json(capsys):
     assert exit_code == 0
     assert output["ok"] is True
     assert output["mode"] == "plan"
-    assert output["plan"]["file_count"] == 7
+    assert output["plan"]["file_count"] == 8
     assert "result" not in output
 
 
