@@ -664,6 +664,15 @@ void main() {
     expect(find.textContaining('Weather'), findsNothing);
     expect(find.textContaining('Keep'), findsNothing);
     expect(find.textContaining('날씨가 좋아요'), findsAtLeastNWidgets(1));
+    expect(find.textContaining('Hwaseong Haenggung connects'), findsNothing);
+    expect(find.textContaining('화성행궁은'), findsAtLeastNWidgets(1));
+
+    await tester.tap(find.byKey(const ValueKey('planner-pill-hit-target')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('화성행궁 산책'), findsAtLeastNWidgets(1));
+    expect(find.textContaining('Hwaseong walk'), findsNothing);
+    await tester.tap(find.byIcon(Icons.close).last);
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byIcon(Icons.settings).first);
     await tester.pumpAndSettle();
@@ -675,6 +684,16 @@ void main() {
     expect(find.textContaining('Weather is good'), findsAtLeastNWidgets(1));
     expect(find.textContaining('Keep walking'), findsAtLeastNWidgets(1));
     expect(find.textContaining('날씨가 좋아요'), findsNothing);
+    expect(
+      find.textContaining('Hwaseong Haenggung connects'),
+      findsAtLeastNWidgets(1),
+    );
+    expect(find.textContaining('화성행궁은'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('planner-pill-hit-target')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Hwaseong walk'), findsAtLeastNWidgets(1));
+    expect(find.textContaining('화성행궁 산책'), findsNothing);
   });
 
   testWidgets('surfaces OAuth JWT auth mode separately from static bearer', (
@@ -946,6 +965,30 @@ class BilingualInterventionBackend extends FakeBackend {
         requestHash:
             'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
         cacheKey: 'daily_plan:abcdef0123456789abcdef0123456789',
+      ),
+    );
+  }
+
+  @override
+  Future<LalaEnvelope<LalaDocentScript>> createDocentScript({
+    required LalaPlace place,
+    String mode = 'brief',
+  }) async {
+    docentScriptRequests.add('$mode:${place.placeId}');
+    final script = mode == 'detail'
+        ? '화성행궁 상세 도슨트입니다. Detailed docent for Hwaseong Haenggung.'
+        : '화성행궁은 조선 왕실의 이동 궁궐입니다. Hwaseong Haenggung connects royal history and local streets.';
+    return _envelope(
+      LalaDocentScript(
+        placeId: place.placeId,
+        category: place.category,
+        language: config.lang,
+        mode: mode,
+        script: script,
+        source: 'skeleton',
+        requestHash:
+            '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+        cacheKey: 'docent_script:0123456789abcdef0123456789abcdef',
       ),
     );
   }

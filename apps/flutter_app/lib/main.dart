@@ -6674,23 +6674,29 @@ String _docentBody({
   final lower = trimmed.toLowerCase();
   if (lower.contains('migration skeleton') ||
       lower.contains('azure openai') ||
-      RegExp(r'^this is a .+ docent script').hasMatch(lower) ||
-      _hasMixedKoreanEnglish(trimmed) ||
-      (_isEnglish(language) && !_looksEnglishText(trimmed)) ||
-      (!_isEnglish(language) &&
-          _looksEnglishText(trimmed) &&
-          !_containsKorean(trimmed))) {
-    if (_isEnglish(language)) {
-      return placeName == null
-          ? 'Preparing a local story from official tourism, culture, and spending signals.'
-          : '$placeName connects official tourism and culture data with nearby local spending signals.';
-    }
-    return placeName == null
-        ? '공식 관광·문화 데이터와 지역 소비 신호를 바탕으로 로컬 이야기를 준비하고 있습니다.'
-        : '$placeName은 공식 관광·문화 데이터와 지역 소비 신호를 함께 살펴볼 수 있는 로컬 코스입니다.';
+      RegExp(r'^this is a .+ docent script').hasMatch(lower)) {
+    return _fallbackDocentBody(placeName: placeName, language: language);
   }
 
-  return trimmed;
+  final localized = _singleLanguageText(trimmed, language);
+  if (localized != null && localized.isNotEmpty) {
+    return localized;
+  }
+  return _fallbackDocentBody(placeName: placeName, language: language);
+}
+
+String _fallbackDocentBody({
+  required String? placeName,
+  required String language,
+}) {
+  if (_isEnglish(language)) {
+    return placeName == null
+        ? 'Preparing a local story from official tourism, culture, and spending signals.'
+        : '$placeName connects official tourism and culture data with nearby local spending signals.';
+  }
+  return placeName == null
+      ? '공식 관광·문화 데이터와 지역 소비 신호를 바탕으로 로컬 이야기를 준비하고 있습니다.'
+      : '$placeName은 공식 관광·문화 데이터와 지역 소비 신호를 함께 살펴볼 수 있는 로컬 코스입니다.';
 }
 
 String _docentSummary({
