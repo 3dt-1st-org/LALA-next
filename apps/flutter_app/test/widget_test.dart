@@ -216,6 +216,15 @@ void main() {
       findsOneWidget,
     );
     expect(tester.getSize(autoToggle), const Size(74, 74));
+    final bottomDockRect = tester.getRect(
+      find.byKey(const ValueKey('map-bottom-dock')),
+    );
+    final autoToggleRect = tester.getRect(autoToggle);
+    final guidancePanelRect = tester.getRect(
+      find.byKey(const ValueKey('map-guidance-panel')),
+    );
+    expect(autoToggleRect.bottom, lessThan(bottomDockRect.top));
+    expect(guidancePanelRect.bottom, lessThan(autoToggleRect.top));
     await tester.tap(autoToggle);
     await tester.pumpAndSettle();
     expect(

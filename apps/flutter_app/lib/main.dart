@@ -1554,6 +1554,9 @@ class _Dashboard extends StatelessWidget {
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= 860;
         final floatingPillTop = isWide ? 264.0 : 266.0;
+        final bottomDockHeight = isWide ? 126.0 : 150.0;
+        final floatingControlsBottom = bottomDockHeight + 16;
+        final guidancePanelBottom = floatingControlsBottom + 88;
         return Stack(
           children: [
             Positioned.fill(
@@ -1641,7 +1644,7 @@ class _Dashboard extends StatelessWidget {
               Positioned(
                 left: 16,
                 right: 16,
-                bottom: isWide ? 188 : 174,
+                bottom: guidancePanelBottom,
                 child: Center(
                   child: _MapGuidancePanel(
                     place: topPlace,
@@ -1677,6 +1680,7 @@ class _Dashboard extends StatelessWidget {
                 source: effectiveSource,
                 topPlace: topPlace,
                 uiLanguage: uiLanguage,
+                height: bottomDockHeight,
                 showEvidence: showEvidence,
                 onOpenDetail: () => onOpenSheet(_ActiveMapSheet.detail),
                 onToggleEvidence: onToggleEvidence,
@@ -1685,7 +1689,7 @@ class _Dashboard extends StatelessWidget {
             Positioned(
               left: 0,
               right: 0,
-              bottom: isWide ? 44 : 196,
+              bottom: floatingControlsBottom,
               child: Center(
                 child: _FloatingMapControls(
                   voiceEnabled: voiceEnabled,
@@ -2302,6 +2306,7 @@ class _MapGuidancePanel extends StatelessWidget {
       language: language,
     );
     return ConstrainedBox(
+      key: const ValueKey('map-guidance-panel'),
       constraints: const BoxConstraints(maxWidth: 460),
       child: DecoratedBox(
         decoration: BoxDecoration(
@@ -2468,6 +2473,7 @@ class _MapBottomDock extends StatelessWidget {
     required this.source,
     required this.topPlace,
     required this.uiLanguage,
+    required this.height,
     required this.showEvidence,
     required this.onOpenDetail,
     required this.onToggleEvidence,
@@ -2478,6 +2484,7 @@ class _MapBottomDock extends StatelessWidget {
   final String? source;
   final LalaPlace? topPlace;
   final String uiLanguage;
+  final double height;
   final bool showEvidence;
   final VoidCallback onOpenDetail;
   final VoidCallback onToggleEvidence;
@@ -2485,9 +2492,9 @@ class _MapBottomDock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final currentPlace = topPlace ?? _fallbackUiPlaces().first;
-    final maxHeight = isWide ? 164.0 : 156.0;
-    return ConstrainedBox(
-      constraints: BoxConstraints(maxHeight: maxHeight),
+    return SizedBox(
+      key: const ValueKey('map-bottom-dock'),
+      height: height,
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.96),
@@ -2501,7 +2508,7 @@ class _MapBottomDock extends StatelessWidget {
           ],
         ),
         child: SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(16, 10, 16, isWide ? 16 : 18),
+          padding: EdgeInsets.fromLTRB(16, 8, 16, isWide ? 14 : 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [

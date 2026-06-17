@@ -77,6 +77,9 @@ evidence, but they are not the latest MVP acceptance source.
 - Implemented: the floating control cluster now mirrors the legacy iOS bottom
   control hierarchy: a large center auto-docent ON/OFF button with smaller
   voice and current-location buttons on each side.
+- Implemented: the bottom map chrome now keeps the legacy vertical hierarchy
+  by stacking the selected-place dock, floating controls, and docent subtitle
+  panel without overlap on compact and desktop viewports.
 - Implemented: user-facing map, sheet, and docent copy follows the selected
   language only; bilingual upstream place/script fragments are reduced to the
   active language before rendering.
