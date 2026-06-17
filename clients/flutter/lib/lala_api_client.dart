@@ -497,6 +497,7 @@ class LalaPlace {
     required this.source,
     this.nameKo,
     this.nameEn,
+    this.imageUrl,
     this.regionKo,
     this.regionEn,
     this.score,
@@ -512,6 +513,7 @@ class LalaPlace {
   final String source;
   final String? nameKo;
   final String? nameEn;
+  final String? imageUrl;
   final String? regionKo;
   final String? regionEn;
   final LalaPlaceScore? score;
@@ -532,6 +534,7 @@ class LalaPlace {
       source: _asString(json['source']),
       nameKo: _asOptionalString(json['name_ko']),
       nameEn: _asOptionalString(json['name_en']),
+      imageUrl: _asOptionalString(json['image_url']),
       regionKo: _asOptionalString(json['region_ko']),
       regionEn: _asOptionalString(json['region_en']),
       score: json['score'] is Map<String, dynamic>

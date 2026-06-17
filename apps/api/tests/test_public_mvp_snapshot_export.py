@@ -18,6 +18,7 @@ def _db_rows() -> list[dict]:
             "lng": Decimal("127.1923454131"),
             "address_ko": "경기도 용인시 처인구 포곡읍 에버랜드로562번길 38",
             "address_en": "38 Everland-ro 562beon-gil, Yongin-si, Gyeonggi-do",
+            "image_url": "https://example.test/hoam.jpg",
             "region_ko": "용인시",
             "region_en": "Yongin",
             "upstream_source": "tour_api",
@@ -53,6 +54,7 @@ def test_build_snapshot_payload_marks_public_mvp_basis() -> None:
     assert decoded["snapshot_id"] == "test-snapshot"
     assert decoded["query"]["radius_m"] == 50000
     assert place["place_id"] == "tour-api-129765"
+    assert place["image_url"] == "https://example.test/hoam.jpg"
     assert place["upstream_source"] == "tour_api"
     assert place["score"]["data_basis"] == "public_mvp_snapshot"
     assert place["score"]["final_score"] == 0.8562

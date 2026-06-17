@@ -21,8 +21,11 @@ Widget buildKakaoMapView({
   ValueChanged<String>? onPlaceTap,
 }) {
   if (javascriptKey.trim().isEmpty) {
-    return const _KakaoMapUnavailable(
+    return _KakaoMapUnavailable(
       message: 'KAKAO_JAVASCRIPT_KEY를 설정하면 실제 카카오 지도가 표시됩니다.',
+      places: places,
+      centerLat: centerLat,
+      centerLng: centerLng,
     );
   }
 
@@ -123,16 +126,13 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
           if (!mounted || generation != _generation) {
             return;
           }
-          container.children.clear();
-          container
-            ..style.display = 'grid'
-            ..style.padding = '24px'
-            ..style.boxSizing = 'border-box'
-            ..style.backgroundColor = '#eaf2fb'
-            ..style.color = '#1a202c'
-            ..style.fontWeight = '800'
-            ..style.setProperty('place-items', 'center')
-            ..text = '카카오 지도 로드에 실패했습니다. 도메인 등록과 JavaScript Key를 확인하세요.';
+          _drawFallbackMap(
+            container,
+            message: '카카오 지도 연결 대기 중',
+            places: widget.places,
+            centerLat: widget.centerLat,
+            centerLng: widget.centerLng,
+          );
         });
   }
 
@@ -200,31 +200,66 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
       return "L";
     }
 
+    function shortName(name) {
+      name = String(name || "장소");
+      return name.length > 14 ? name.slice(0, 14) + "..." : name;
+    }
+
     places.forEach(function (place) {
       var isCluster = place.clusterCount != null && place.clusterCount > 1;
-      var size = isCluster ? Math.min(66, 38 + place.clusterCount * 4) : (place.selected ? 58 : 42);
+      var size = isCluster ? Math.min(58, 34 + place.clusterCount * 4) : (place.selected ? 42 : 34);
       var marker = document.createElement("div");
       marker.title = place.name;
-      marker.style.width = size + "px";
-      marker.style.height = size + "px";
-      marker.style.borderRadius = isCluster ? "50%" : "50% 50% 50% 8px";
-      marker.style.background = colorFor(place.category);
-      marker.style.border = place.selected ? "5px solid #ffffff" : "3px solid #ffffff";
-      marker.style.boxShadow = "0 10px 24px rgba(15, 23, 42, 0.26)";
-      marker.style.transform = isCluster ? "none" : "rotate(-45deg)";
-      marker.style.display = "grid";
-      marker.style.placeItems = "center";
+      marker.style.display = "flex";
+      marker.style.flexDirection = "column";
+      marker.style.alignItems = "center";
+      marker.style.gap = "5px";
       marker.style.pointerEvents = "auto";
       marker.style.cursor = "pointer";
+      marker.style.fontFamily = "system-ui, -apple-system, sans-serif";
+
+      if (place.selected && !isCluster) {
+        var namePill = document.createElement("div");
+        namePill.textContent = shortName(place.name);
+        namePill.style.maxWidth = "132px";
+        namePill.style.padding = "5px 10px";
+        namePill.style.borderRadius = "999px";
+        namePill.style.background = "#ffffff";
+        namePill.style.color = "#111827";
+        namePill.style.fontSize = "11px";
+        namePill.style.fontWeight = "800";
+        namePill.style.whiteSpace = "nowrap";
+        namePill.style.overflow = "hidden";
+        namePill.style.textOverflow = "ellipsis";
+        namePill.style.boxShadow = "0 6px 18px rgba(15, 23, 42, 0.18)";
+        marker.appendChild(namePill);
+      }
+
+      var circle = document.createElement("div");
+      circle.style.width = size + "px";
+      circle.style.height = size + "px";
+      circle.style.borderRadius = "50%";
+      circle.style.background = "#ffffff";
+      circle.style.boxShadow = "0 4px 14px rgba(15, 23, 42, 0.22)";
+      circle.style.display = "grid";
+      circle.style.placeItems = "center";
+
+      var inner = document.createElement("div");
+      inner.style.width = Math.round(size * 0.64) + "px";
+      inner.style.height = Math.round(size * 0.64) + "px";
+      inner.style.borderRadius = "50%";
+      inner.style.background = colorFor(place.category);
+      inner.style.display = "grid";
+      inner.style.placeItems = "center";
 
       var label = document.createElement("div");
-      label.style.transform = isCluster ? "none" : "rotate(45deg)";
       label.style.color = place.category === "event" ? "#1A202C" : "#ffffff";
-      label.style.fontSize = isCluster ? "16px" : (place.selected ? "15px" : "13px");
+      label.style.fontSize = isCluster ? "15px" : (place.selected ? "13px" : "11px");
       label.style.fontWeight = "900";
-      label.style.fontFamily = "system-ui, -apple-system, sans-serif";
       label.textContent = isCluster ? String(place.clusterCount) : glyphFor(place.category);
-      marker.appendChild(label);
+      inner.appendChild(label);
+      circle.appendChild(inner);
+      marker.appendChild(circle);
       marker.addEventListener("click", function (event) {
         event.stopPropagation();
         if (place.id) {
@@ -237,7 +272,7 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
       var overlay = new kakao.maps.CustomOverlay({
         position: new kakao.maps.LatLng(place.lat, place.lng),
         content: marker,
-        yAnchor: 1.08,
+        yAnchor: place.selected && !isCluster ? 1.0 : 0.5,
         zIndex: place.selected ? 12 : (isCluster ? 9 : 6)
       });
       overlay.setMap(map);
@@ -253,6 +288,201 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
     html.document.body?.append(script);
     script.remove();
   }
+}
+
+void _drawFallbackMap(
+  html.DivElement container, {
+  required String message,
+  required List<KakaoMapPlace> places,
+  required double centerLat,
+  required double centerLng,
+}) {
+  container.children.clear();
+  container.text = '';
+  container
+    ..style.display = 'block'
+    ..style.padding = '0'
+    ..style.boxSizing = 'border-box'
+    ..style.backgroundColor = '#dceee2'
+    ..style.backgroundImage =
+        'linear-gradient(90deg, rgba(43,108,176,.10) 1px, transparent 1px),'
+        'linear-gradient(0deg, rgba(43,108,176,.10) 1px, transparent 1px),'
+        'radial-gradient(circle at 16% 24%, rgba(21,128,61,.22) 0 12%, transparent 13%),'
+        'radial-gradient(circle at 80% 72%, rgba(21,128,61,.20) 0 10%, transparent 11%),'
+        'linear-gradient(135deg, #eaf7ee 0%, #f8fafc 54%, #e7f1ff 100%)'
+    ..style.backgroundSize =
+        '54px 54px, 54px 54px, 100% 100%, 100% 100%, 100% 100%'
+    ..style.color = '#1a202c'
+    ..style.fontWeight = '800'
+    ..style.overflow = 'hidden';
+
+  final roadLayer = html.DivElement()
+    ..style.position = 'absolute'
+    ..style.backgroundImage =
+        'linear-gradient(118deg, transparent 0 38%, rgba(255,255,255,.82) 39% 42%, transparent 43% 100%),'
+        'linear-gradient(74deg, transparent 0 48%, rgba(255,255,255,.72) 49% 51%, transparent 52% 100%),'
+        'linear-gradient(0deg, transparent 0 58%, rgba(245,200,66,.45) 59% 60%, transparent 61% 100%)';
+  roadLayer.style.setProperty('inset', '0');
+  container.append(roadLayer);
+
+  final riverLayer = html.DivElement()
+    ..style.position = 'absolute'
+    ..style.left = '-8%'
+    ..style.top = '55%'
+    ..style.width = '116%'
+    ..style.height = '70px'
+    ..style.transform = 'rotate(-13deg)'
+    ..style.borderRadius = '999px'
+    ..style.backgroundColor = 'rgba(43,108,176,.16)';
+  container.append(riverLayer);
+
+  final notice = html.DivElement()
+    ..text = message
+    ..style.position = 'absolute'
+    ..style.left = '50%'
+    ..style.top = '48%'
+    ..style.transform = 'translate(-50%, -50%)'
+    ..style.padding = '9px 13px'
+    ..style.borderRadius = '999px'
+    ..style.backgroundColor = 'rgba(255,255,255,.86)'
+    ..style.boxShadow = '0 8px 18px rgba(15, 23, 42, .14)'
+    ..style.color = '#334155'
+    ..style.fontSize = '13px'
+    ..style.fontFamily = 'system-ui, -apple-system, sans-serif';
+  container.append(notice);
+
+  final visiblePlaces = places.isEmpty
+      ? _fallbackHtmlPlaces(centerLat, centerLng)
+      : places;
+  for (final place in visiblePlaces.take(40)) {
+    final point = _fallbackPosition(
+      lat: place.lat,
+      lng: place.lng,
+      centerLat: centerLat,
+      centerLng: centerLng,
+    );
+    final marker = html.DivElement()
+      ..title = place.name
+      ..style.position = 'absolute'
+      ..style.left = '${point.x}%'
+      ..style.top = '${point.y}%'
+      ..style.transform = place.selected && !place.isCluster
+          ? 'translate(-50%, -100%)'
+          : 'translate(-50%, -50%)'
+      ..style.display = 'flex'
+      ..style.flexDirection = 'column'
+      ..style.alignItems = 'center'
+      ..style.gap = '5px'
+      ..style.fontFamily = 'system-ui, -apple-system, sans-serif';
+
+    if (place.selected && !place.isCluster) {
+      final namePill = html.DivElement()
+        ..text = place.name.length > 14
+            ? '${place.name.substring(0, 14)}...'
+            : place.name
+        ..style.maxWidth = '132px'
+        ..style.padding = '5px 10px'
+        ..style.borderRadius = '999px'
+        ..style.backgroundColor = '#ffffff'
+        ..style.color = '#111827'
+        ..style.fontSize = '11px'
+        ..style.fontWeight = '800'
+        ..style.whiteSpace = 'nowrap'
+        ..style.overflow = 'hidden'
+        ..style.textOverflow = 'ellipsis'
+        ..style.boxShadow = '0 6px 18px rgba(15, 23, 42, .18)';
+      marker.append(namePill);
+    }
+
+    final size = place.isCluster ? 48 : (place.selected ? 42 : 34);
+    final circle = html.DivElement()
+      ..style.width = '${size}px'
+      ..style.height = '${size}px'
+      ..style.borderRadius = '50%'
+      ..style.backgroundColor = '#ffffff'
+      ..style.boxShadow = '0 4px 14px rgba(15, 23, 42, .22)'
+      ..style.display = 'grid'
+      ..style.setProperty('place-items', 'center');
+
+    final innerSize = (size * 0.64).round();
+    final inner = html.DivElement()
+      ..style.width = '${innerSize}px'
+      ..style.height = '${innerSize}px'
+      ..style.borderRadius = '50%'
+      ..style.backgroundColor = _fallbackMarkerColor(place.category)
+      ..style.display = 'grid'
+      ..style.setProperty('place-items', 'center');
+
+    final label = html.DivElement()
+      ..text = place.isCluster
+          ? '${place.clusterCount}'
+          : _fallbackMarkerGlyph(place.category)
+      ..style.color = place.category == 'event' ? '#1a202c' : '#ffffff'
+      ..style.fontSize = place.isCluster ? '15px' : '11px'
+      ..style.fontWeight = '900';
+    inner.append(label);
+    circle.append(inner);
+    marker.append(circle);
+    container.append(marker);
+  }
+}
+
+({double x, double y}) _fallbackPosition({
+  required double lat,
+  required double lng,
+  required double centerLat,
+  required double centerLng,
+}) {
+  final x = 50 + ((lng - centerLng) * 7200);
+  final y = 50 - ((lat - centerLat) * 9000);
+  return (x: x.clamp(8, 92).toDouble(), y: y.clamp(12, 82).toDouble());
+}
+
+List<KakaoMapPlace> _fallbackHtmlPlaces(double centerLat, double centerLng) {
+  return [
+    KakaoMapPlace(
+      id: 'fallback-center',
+      name: '현재 추천 지점',
+      category: 'attraction',
+      lat: centerLat,
+      lng: centerLng,
+      selected: true,
+    ),
+    KakaoMapPlace(
+      id: 'fallback-food',
+      name: '로컬 맛집',
+      category: 'restaurant',
+      lat: centerLat - 0.0015,
+      lng: centerLng + 0.0012,
+    ),
+    KakaoMapPlace(
+      id: 'fallback-culture',
+      name: '문화 행사',
+      category: 'event',
+      lat: centerLat + 0.0012,
+      lng: centerLng - 0.001,
+    ),
+  ];
+}
+
+String _fallbackMarkerColor(String category) {
+  return switch (category) {
+    'restaurant' => '#C53030',
+    'event' => '#F5C842',
+    'culture_venue' => '#2B6CB0',
+    'attraction' => '#D73333',
+    _ => '#1A202C',
+  };
+}
+
+String _fallbackMarkerGlyph(String category) {
+  return switch (category) {
+    'restaurant' => '맛',
+    'event' => '행',
+    'culture_venue' => '문',
+    'attraction' => '명',
+    _ => 'L',
+  };
 }
 
 html.DivElement _ensureBackgroundContainer() {
@@ -321,38 +551,252 @@ Future<void> _ensureKakaoMapsSdk(String javascriptKey) {
 }
 
 class _KakaoMapUnavailable extends StatelessWidget {
-  const _KakaoMapUnavailable({required this.message});
+  const _KakaoMapUnavailable({
+    required this.message,
+    required this.places,
+    required this.centerLat,
+    required this.centerLng,
+  });
 
   final String message;
+  final List<KakaoMapPlace> places;
+  final double centerLat;
+  final double centerLng;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: const Color(0xFFEAF2FB),
-      alignment: Alignment.center,
-      child: Container(
-        margin: const EdgeInsets.all(24),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.94),
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: const [
-            BoxShadow(
-              blurRadius: 18,
-              offset: Offset(0, 8),
-              color: Color(0x18000000),
+    final visiblePlaces = places.isEmpty
+        ? _fallbackHtmlPlaces(centerLat, centerLng)
+        : places.take(24).toList(growable: false);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Container(
+          color: const Color(0xFFEAF2FB),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: CustomPaint(painter: _FallbackFlutterMapPainter()),
+              ),
+              for (final place in visiblePlaces)
+                _FallbackFlutterMarker(
+                  place: place,
+                  position: _fallbackPosition(
+                    lat: place.lat,
+                    lng: place.lng,
+                    centerLat: centerLat,
+                    centerLng: centerLng,
+                  ),
+                ),
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.88),
+                    borderRadius: BorderRadius.circular(999),
+                    boxShadow: const [
+                      BoxShadow(
+                        blurRadius: 18,
+                        offset: Offset(0, 8),
+                        color: Color(0x18000000),
+                      ),
+                    ],
+                  ),
+                  child: Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Color(0xFF1A202C),
+                      fontWeight: FontWeight.w900,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _FallbackFlutterMarker extends StatelessWidget {
+  const _FallbackFlutterMarker({required this.place, required this.position});
+
+  final KakaoMapPlace place;
+  final ({double x, double y}) position;
+
+  @override
+  Widget build(BuildContext context) {
+    final size = place.isCluster ? 48.0 : (place.selected ? 42.0 : 34.0);
+    final color = Color(
+      int.parse(_fallbackMarkerColor(place.category).replaceFirst('#', '0xFF')),
+    );
+    final screenSize = MediaQuery.sizeOf(context);
+    return Positioned(
+      left: screenSize.width * position.x / 100,
+      top: screenSize.height * position.y / 100,
+      child: Transform.translate(
+        offset: Offset(-size / 2, place.selected ? -size - 34 : -size / 2),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (place.selected && !place.isCluster) ...[
+              Container(
+                constraints: const BoxConstraints(maxWidth: 132),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(999),
+                  boxShadow: const [
+                    BoxShadow(
+                      blurRadius: 18,
+                      offset: Offset(0, 6),
+                      color: Color(0x2E0F172A),
+                    ),
+                  ],
+                ),
+                child: Text(
+                  place.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF111827),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 5),
+            ],
+            Container(
+              width: size,
+              height: size,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(999),
+                boxShadow: const [
+                  BoxShadow(
+                    blurRadius: 14,
+                    offset: Offset(0, 4),
+                    color: Color(0x380F172A),
+                  ),
+                ],
+              ),
+              child: Container(
+                width: size * 0.64,
+                height: size * 0.64,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  place.isCluster
+                      ? '${place.clusterCount}'
+                      : _fallbackMarkerGlyph(place.category),
+                  style: TextStyle(
+                    color: place.category == 'event'
+                        ? const Color(0xFF1A202C)
+                        : Colors.white,
+                    fontSize: place.isCluster ? 15 : 11,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
             ),
           ],
-        ),
-        child: Text(
-          message,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: Color(0xFF1A202C),
-            fontWeight: FontWeight.w900,
-          ),
         ),
       ),
     );
   }
+}
+
+class _FallbackFlutterMapPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final background = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFFEAF7EE), Color(0xFFF8FAFC), Color(0xFFE7F1FF)],
+      ).createShader(Offset.zero & size);
+    canvas.drawRect(Offset.zero & size, background);
+
+    final parkPaint = Paint()..color = const Color(0x3322C55E);
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(size.width * 0.16, size.height * 0.24),
+        width: size.width * 0.34,
+        height: size.height * 0.26,
+      ),
+      parkPaint,
+    );
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(size.width * 0.80, size.height * 0.72),
+        width: size.width * 0.28,
+        height: size.height * 0.22,
+      ),
+      parkPaint,
+    );
+
+    final roadPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.78)
+      ..strokeWidth = 22
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+    final roadPath = Path()
+      ..moveTo(size.width * -0.1, size.height * 0.76)
+      ..cubicTo(
+        size.width * 0.28,
+        size.height * 0.52,
+        size.width * 0.54,
+        size.height * 0.58,
+        size.width * 1.1,
+        size.height * 0.36,
+      );
+    canvas.drawPath(roadPath, roadPaint);
+
+    final sideRoadPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.58)
+      ..strokeWidth = 14
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(
+      Offset(size.width * 0.34, size.height * -0.1),
+      Offset(size.width * 0.72, size.height * 1.1),
+      sideRoadPaint,
+    );
+
+    final riverPaint = Paint()..color = const Color(0x292B6CB0);
+    final riverPath = Path()
+      ..moveTo(size.width * -0.1, size.height * 0.62)
+      ..quadraticBezierTo(
+        size.width * 0.38,
+        size.height * 0.72,
+        size.width * 1.1,
+        size.height * 0.56,
+      )
+      ..lineTo(size.width * 1.1, size.height * 0.66)
+      ..quadraticBezierTo(
+        size.width * 0.42,
+        size.height * 0.82,
+        size.width * -0.1,
+        size.height * 0.70,
+      )
+      ..close();
+    canvas.drawPath(riverPath, riverPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _FallbackFlutterMapPainter oldDelegate) => false;
 }

@@ -75,6 +75,7 @@ def _place_payload(row: dict[str, Any], *, distance_m: float, language: str) -> 
         "lat": float(row.get("lat") or 0),
         "lng": float(row.get("lng") or 0),
         "address": address,
+        "image_url": row.get("image_url"),
         "region_ko": row.get("region_ko"),
         "region_en": row.get("region_en"),
         "distance_m": int(round(distance_m)),

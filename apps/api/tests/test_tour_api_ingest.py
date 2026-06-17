@@ -50,6 +50,7 @@ def test_parse_tour_api_place_maps_fields_to_data_dictionary_names():
         "name_ko": "포천아트밸리",
         "category": "attraction",
         "address_ko": "경기도 포천시 신북면 아트밸리로 234",
+        "image_url": "https://example.invalid/image.jpg",
         "region_name_ko": "포천시",
         "province_code": "31",
         "city_code": "29",

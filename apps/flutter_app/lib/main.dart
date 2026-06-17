@@ -1099,12 +1099,16 @@ class _Dashboard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final apiPlaces = places?.data?.places ?? const <LalaPlace>[];
-    final allPlaces = apiPlaces.isEmpty ? _fallbackUiPlaces() : apiPlaces;
+    final usingFallbackPlaces = apiPlaces.isEmpty;
+    final effectiveSource = usingFallbackPlaces
+        ? 'demo_fallback'
+        : places?.data?.source;
+    final allPlaces = usingFallbackPlaces ? _fallbackUiPlaces() : apiPlaces;
     final topPlaces = _filterPlaces(allPlaces, selectedCategory);
     final topPlace =
         _placeById(topPlaces, selectedPlaceId) ?? _featuredPlace(topPlaces);
     final currentWeather = weather?.data ?? _fallbackWeather();
-    final visibleError = apiPlaces.isEmpty ? null : error;
+    final visibleError = error;
     void selectPlaceById(String placeId) {
       final place = _placeById(topPlaces, placeId);
       if (place != null) {
@@ -1115,6 +1119,7 @@ class _Dashboard extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= 860;
+        final floatingPillTop = isWide ? 204.0 : 238.0;
         return Stack(
           children: [
             Positioned.fill(
@@ -1143,7 +1148,7 @@ class _Dashboard extends StatelessWidget {
             ),
             Positioned(
               right: 16,
-              top: isWide ? 124 : 238,
+              top: floatingPillTop,
               child: _WeatherMapPill(
                 key: const ValueKey('weather-pill'),
                 weather: currentWeather,
@@ -1157,7 +1162,7 @@ class _Dashboard extends StatelessWidget {
               top: isWide ? 76 : 68,
               child: _MapPlaceCarouselOverlay(
                 places: topPlaces,
-                source: places?.data?.source,
+                source: effectiveSource,
                 selectedPlaceId: topPlace?.placeId,
                 expanded: recommendationRailExpanded,
                 onSelectPlace: onSelectPlace,
@@ -1166,7 +1171,7 @@ class _Dashboard extends StatelessWidget {
             ),
             Positioned(
               left: 16,
-              top: isWide ? 124 : 238,
+              top: floatingPillTop,
               child: _PlannerMapPill(
                 dailyPlan: dailyPlan?.data,
                 language: uiLanguage,
@@ -1176,7 +1181,7 @@ class _Dashboard extends StatelessWidget {
             Positioned(
               left: 0,
               right: 0,
-              top: isWide ? 124 : 238,
+              top: floatingPillTop,
               child: Center(
                 child: _MapRoundButton(
                   tooltip: uiLanguage == 'en' ? 'Settings' : '설정',
@@ -1203,7 +1208,7 @@ class _Dashboard extends StatelessWidget {
               child: _MapBottomDock(
                 isWide: isWide,
                 places: topPlaces,
-                source: places?.data?.source,
+                source: effectiveSource,
                 topPlace: topPlace,
                 uiLanguage: uiLanguage,
                 weather: currentWeather,
@@ -1244,7 +1249,7 @@ class _Dashboard extends StatelessWidget {
                   docentAudio: docentAudio,
                   audioLoading: audioLoading,
                   audioError: audioError,
-                  source: places?.data?.source,
+                  source: effectiveSource,
                   showEvidence: showEvidence,
                   onToggleEvidence: onToggleEvidence,
                   onFetchAudio: onFetchAudio,
@@ -1557,12 +1562,7 @@ class _RailPlaceThumb extends StatelessWidget {
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
-      child: Image.asset(
-        'assets/images/lala-hwaseong-haenggung.png',
-        width: 72,
-        height: 72,
-        fit: BoxFit.cover,
-      ),
+      child: _PlaceImage(place: place, width: 72, height: 72),
     );
   }
 }
@@ -2577,12 +2577,7 @@ class _FeaturedPlaceHeader extends StatelessWidget {
       children: [
         ClipRRect(
           borderRadius: BorderRadius.circular(18),
-          child: Image.asset(
-            'assets/images/lala-hwaseong-haenggung.png',
-            width: 94,
-            height: 94,
-            fit: BoxFit.cover,
-          ),
+          child: _PlaceImage(place: place, width: 94, height: 94),
         ),
         const SizedBox(width: 14),
         Expanded(
@@ -2623,7 +2618,7 @@ class _FeaturedPlaceHeader extends StatelessWidget {
                   ),
                   if (!showEvidence)
                     _InlineIconText(
-                      icon: Icons.auto_awesome_outlined,
+                      icon: Icons.explore_outlined,
                       label: '로컬 추천',
                     ),
                   if (showEvidence) ...[
@@ -3001,115 +2996,159 @@ class _DocentSubtitle extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final body = _docentBody(place: place, script: script);
+    final summary = _docentSummary(
+      place: place,
+      script: script,
+      action: action,
+    );
     final actionLabel = _docentActionLabel(place: place, action: action);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
           decoration: BoxDecoration(
-            color: const Color(0xFF1A202C),
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2B6CB0).withValues(alpha: 0.42),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: const Icon(
-                  Icons.smart_toy_outlined,
-                  color: Colors.white,
-                  size: 28,
-                ),
+            color: Colors.white.withValues(alpha: 0.98),
+            borderRadius: BorderRadius.circular(16),
+            border: const Border(
+              left: BorderSide(color: Color(0xFF2B6CB0), width: 4),
+            ),
+            boxShadow: const [
+              BoxShadow(
+                blurRadius: 24,
+                offset: Offset(0, 8),
+                color: Color(0x24121F2D),
               ),
-              const SizedBox(width: 13),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.record_voice_over_outlined,
+                      color: Color(0xFF2B6CB0),
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(
-                          Icons.auto_awesome,
-                          color: Color(0xFFF5C842),
-                          size: 16,
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            place == null
-                                ? 'AI 도슨트 한 줄 설명'
-                                : '${place!.name} 도슨트',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Color(0xFFBEE3F8),
-                              fontWeight: FontWeight.w900,
-                              fontSize: 13,
-                            ),
+                        Text(
+                          place == null ? '로컬 도슨트' : '${place!.name} 도슨트',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFF111827),
+                            fontWeight: FontWeight.w900,
+                            fontSize: 14,
                           ),
                         ),
-                        if (docentAudio != null)
-                          Text(
-                            '${docentAudio!.bytes.length} bytes',
-                            style: const TextStyle(
-                              color: Color(0xFFCBD5E0),
-                              fontSize: 11,
-                            ),
+                        const SizedBox(height: 2),
+                        Text(
+                          summary,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFF64748B),
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
                           ),
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      body,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        height: 1.38,
-                        fontWeight: FontWeight.w800,
+                  ),
+                  if (docentAudio != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Text(
+                        '${docentAudio!.bytes.length} bytes',
+                        style: const TextStyle(
+                          color: Color(0xFF64748B),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
-                    if (actionLabel != null) ...[
-                      const SizedBox(height: 5),
-                      Text(
+                ],
+              ),
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Text(
+                  body,
+                  maxLines: 4,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF111827),
+                    height: 1.5,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+              if (actionLabel != null) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.route_outlined,
+                      size: 15,
+                      color: Color(0xFF2B6CB0),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
                         actionLabel,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          color: Color(0xFFF5C842),
-                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF475569),
+                          fontWeight: FontWeight.w700,
                           fontSize: 12,
                         ),
                       ),
-                    ],
-                    if (audioError != null) ...[
-                      const SizedBox(height: 5),
-                      Text(
-                        audioError!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: colorScheme.tertiaryContainer),
-                      ),
-                    ],
+                    ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 10),
-              IconButton.filled(
-                tooltip: '자동 도슨트',
-                onPressed: () {},
-                style: IconButton.styleFrom(
-                  backgroundColor: Colors.white.withValues(alpha: 0.14),
-                  foregroundColor: Colors.white,
+              ],
+              if (audioError != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  audioError!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: colorScheme.error,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
                 ),
-                icon: const Icon(Icons.volume_up),
-              ),
+              ],
             ],
           ),
         ),
@@ -3441,7 +3480,7 @@ class _FloatingMapControls extends StatelessWidget {
           tooltip: language == 'en'
               ? (autoDocentEnabled ? 'Auto guide off' : 'Auto guide on')
               : (autoDocentEnabled ? '자동 도슨트 끄기' : '자동 도슨트 켜기'),
-          icon: Icons.auto_awesome,
+          icon: Icons.record_voice_over_outlined,
           label: language == 'en'
               ? (autoDocentEnabled ? 'Auto ON' : 'Auto OFF')
               : (autoDocentEnabled ? '자동 ON' : '자동 OFF'),
@@ -3652,12 +3691,78 @@ class _PlaceThumb extends StatelessWidget {
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(18),
-      child: Image.asset(
-        'assets/images/lala-hwaseong-haenggung.png',
-        width: 76,
-        height: 76,
+      child: _PlaceImage(place: place, width: 76, height: 76),
+    );
+  }
+}
+
+class _PlaceImage extends StatelessWidget {
+  const _PlaceImage({
+    required this.place,
+    required this.width,
+    required this.height,
+  });
+
+  final LalaPlace place;
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final imageUrl = place.imageUrl?.trim();
+    final parsedImageUrl = imageUrl == null ? null : Uri.tryParse(imageUrl);
+    if (imageUrl != null &&
+        imageUrl.isNotEmpty &&
+        parsedImageUrl?.hasScheme == true &&
+        (parsedImageUrl?.host.isNotEmpty ?? false)) {
+      return Image.network(
+        imageUrl,
+        width: width,
+        height: height,
         fit: BoxFit.cover,
-      ),
+        errorBuilder: (_, _, _) => _FallbackPlaceImage(
+          category: place.category,
+          width: width,
+          height: height,
+        ),
+      );
+    }
+    return _FallbackPlaceImage(
+      category: place.category,
+      width: width,
+      height: height,
+    );
+  }
+}
+
+class _FallbackPlaceImage extends StatelessWidget {
+  const _FallbackPlaceImage({
+    required this.category,
+    required this.width,
+    required this.height,
+  });
+
+  final String category;
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        Image.asset(
+          'assets/images/lala-hwaseong-haenggung.png',
+          width: width,
+          height: height,
+          fit: BoxFit.cover,
+        ),
+        Positioned.fill(
+          child: ColoredBox(
+            color: _categoryColor(category).withValues(alpha: 0.10),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -4345,7 +4450,7 @@ String _docentBody({required LalaPlace? place, required String? script}) {
   if (trimmed == null || trimmed.isEmpty) {
     return placeName == null
         ? '지도를 움직이면 가까운 로컬 경험과 도슨트가 준비됩니다.'
-        : '$placeName의 문화 맥락과 주변 로컬 경험을 AI 도슨트로 준비하고 있습니다.';
+        : '$placeName의 문화 맥락과 주변 로컬 경험을 도슨트로 준비하고 있습니다.';
   }
 
   final lower = trimmed.toLowerCase();
@@ -4358,6 +4463,37 @@ String _docentBody({required LalaPlace? place, required String? script}) {
   }
 
   return trimmed;
+}
+
+String _docentSummary({
+  required LalaPlace? place,
+  required String? script,
+  required String? action,
+}) {
+  final trimmed = script?.trim();
+  if (trimmed != null && trimmed.isNotEmpty) {
+    final normalized = trimmed.replaceAll(RegExp(r'\s+'), ' ');
+    final sentence = RegExp(
+      r'^(.{18,80}?[.!?。]|.{18,80}?다[. ]?)',
+    ).firstMatch(normalized)?.group(1)?.trim();
+    if (sentence != null && sentence.isNotEmpty) {
+      return sentence;
+    }
+    return normalized.length > 56
+        ? '${normalized.substring(0, 56)}...'
+        : normalized;
+  }
+
+  final trimmedAction = action?.trim();
+  if (trimmedAction != null && trimmedAction.isNotEmpty) {
+    return _docentActionLabel(place: place, action: trimmedAction) ??
+        trimmedAction;
+  }
+
+  final placeName = place?.nameKo ?? place?.name;
+  return placeName == null
+      ? '현재 위치 주변의 로컬 경험을 준비하고 있습니다.'
+      : '$placeName 주변의 문화 맥락과 동선을 준비하고 있습니다.';
 }
 
 String? _docentActionLabel({
@@ -4632,7 +4768,7 @@ class _RuntimePanel extends StatelessWidget {
           _MetricRow(label: 'Status', value: data?.status ?? '-'),
           _MetricRow(label: 'Overall', value: mode?.overall ?? '-'),
           _MetricRow(label: 'Data', value: mode?.data ?? '-'),
-          _MetricRow(label: 'AI', value: mode?.ai ?? '-'),
+          _MetricRow(label: 'Narrative', value: mode?.ai ?? '-'),
           _MetricRow(label: 'Speech', value: mode?.speech ?? '-'),
           _MetricRow(label: 'Worker', value: mode?.worker ?? '-'),
           _MetricRow(
@@ -4910,6 +5046,7 @@ String _sourceLabel(String? value) {
     'db' => 'DB 기반',
     'mixed' => '혼합 데이터',
     'public_mvp_snapshot' => '공공 스냅샷',
+    'demo_fallback' => '데모 기준',
     'skeleton' => '데모 데이터',
     '' => '-',
     final source => source,

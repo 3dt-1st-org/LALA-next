@@ -519,6 +519,7 @@ def _place_schema() -> dict[str, Any]:
             "lat": {"type": "number", "format": "double"},
             "lng": {"type": "number", "format": "double"},
             "address": {"type": "string"},
+            "image_url": {"type": "string", "format": "uri", "nullable": True},
             "region_ko": {"type": "string", "nullable": True},
             "region_en": {"type": "string", "nullable": True},
             "distance_m": {"type": "integer"},

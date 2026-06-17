@@ -34,7 +34,7 @@ void main() {
     expect(find.text('정보 더 듣기'), findsOneWidget);
     expect(find.text('오늘 코스에 추가'), findsOneWidget);
     expect(find.text('TourAPI'), findsNothing);
-    expect(find.textContaining('조선 왕실'), findsOneWidget);
+    expect(find.textContaining('조선 왕실'), findsAtLeastNWidgets(1));
 
     final evidenceButton = find.widgetWithText(TextButton, '점수/근거');
     await tester.ensureVisible(evidenceButton);
@@ -220,10 +220,10 @@ void main() {
 
     expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
     expect(find.textContaining('14°C'), findsWidgets);
-    expect(find.textContaining('조선 왕실'), findsOneWidget);
+    expect(find.textContaining('조선 왕실'), findsAtLeastNWidgets(1));
   });
 
-  testWidgets('keeps public readiness visible when authenticated load fails', (
+  testWidgets('surfaces fallback state when authenticated load fails', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -241,8 +241,9 @@ void main() {
 
     expect(
       find.text('UPSTREAM_UNAVAILABLE: Authenticated route failed.'),
-      findsNothing,
+      findsOneWidget,
     );
+    expect(find.textContaining('데모 기준'), findsWidgets);
     expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
   });
 

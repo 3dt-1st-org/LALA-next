@@ -20,7 +20,8 @@ SELECT
     primary_source AS source,
     primary_source,
     source_record_id,
-    updated_at
+    updated_at,
+    image_url
 FROM travel.places;
 
 CREATE OR REPLACE VIEW compat.legacy_places_api AS
@@ -39,7 +40,7 @@ SELECT
     COALESCE(region_ko, '') AS region,
     COALESCE(region_en, region_ko, '') AS region_en,
     is_indoor,
-    NULL::text AS image_url,
+    image_url,
     false AS is_approximate_location,
     NULL::text AS event_start_date,
     NULL::text AS event_end_date,

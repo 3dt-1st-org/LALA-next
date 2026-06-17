@@ -159,6 +159,7 @@ def test_weather_uses_db_repository_when_available(client, auth_headers, monkeyp
             "dust": {"pm10": "40", "pm25": "18", "grade": "normal", "grade_ko": "보통"},
             "forecast": [],
             "outdoor_status": "bad",
+            "record_time": "2026-06-18T00:00:00+09:00",
             "source": "db",
         },
     )
@@ -169,6 +170,8 @@ def test_weather_uses_db_repository_when_available(client, auth_headers, monkeyp
     body = response.json()
     assert body["data"]["source"] == "db"
     assert body["data"]["temp"] == "18.5"
+    assert len(body["data"]["forecast"]) == 4
+    assert body["data"]["forecast"][0]["temp"] == "18.5"
     assert body["data"]["force"] is False
 
 

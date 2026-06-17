@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS travel.places (
     category text NOT NULL,
     address_ko text,
     address_en text,
+    image_url text,
     region_name_ko text,
     region_name_en text,
     province_code text,
@@ -26,6 +27,9 @@ CREATE TABLE IF NOT EXISTS travel.places (
 CREATE INDEX IF NOT EXISTS idx_places_category ON travel.places (category);
 CREATE INDEX IF NOT EXISTS idx_places_lat_lng ON travel.places (lat, lng);
 CREATE INDEX IF NOT EXISTS idx_places_region_name_ko ON travel.places (region_name_ko);
+
+ALTER TABLE travel.places
+    ADD COLUMN IF NOT EXISTS image_url text;
 
 CREATE TABLE IF NOT EXISTS travel.place_enrichments (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

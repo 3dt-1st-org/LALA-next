@@ -82,6 +82,7 @@ def list_places(
         "lat": lat,
         "lng": lng,
         "address": address,
+        "image_url": None,
         "distance_m": distance_m,
         "source": "skeleton",
         "score": demo_place_score(category=resolved_category, distance_m=distance_m),
