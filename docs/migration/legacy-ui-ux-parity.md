@@ -82,6 +82,10 @@ evidence, but they are not the latest MVP acceptance source.
   updates. The app updates the active center and refreshes places, weather,
   planner, and docent data from that map center, matching the legacy
   `dragend -> loadPlaces()` interaction more closely.
+- Implemented: Kakao map zoom events now also flow back into Flutter camera
+  state on both web and native WebView map bridges, preserving the legacy
+  `zoom_changed -> syncMarkerState()` behavior for cluster and selected-marker
+  presentation.
 - Implemented: the current-location floating control now resets selected
   place, active sheet, evidence, audio state, and map focus before refreshing,
   preserving the legacy `loc-btn -> requestCurrentLocation(...reload...)`

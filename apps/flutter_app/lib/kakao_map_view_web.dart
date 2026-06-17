@@ -352,7 +352,7 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
       overlay.setMap(map);
     });
 
-    kakao.maps.event.addListener(map, "dragend", function () {
+    function dispatchCameraIdle() {
       var nextCenter = map.getCenter();
       window.dispatchEvent(new CustomEvent("lala-map-camera-idle", {
         detail: JSON.stringify({
@@ -361,7 +361,10 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
           level: map.getLevel()
         })
       }));
-    });
+    }
+
+    kakao.maps.event.addListener(map, "dragend", dispatchCameraIdle);
+    kakao.maps.event.addListener(map, "zoom_changed", dispatchCameraIdle);
 
     window.setTimeout(function () {
       map.relayout();

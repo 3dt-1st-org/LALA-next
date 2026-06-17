@@ -139,7 +139,7 @@
             overlay.setMap(map);
           });
 
-          kakao.maps.event.addListener(map, "dragend", function () {
+          function postCameraIdle() {
             const nextCenter = map.getCenter();
             if (window.LalaMap && window.LalaMap.postMessage) {
               window.LalaMap.postMessage(JSON.stringify({
@@ -149,7 +149,10 @@
                 level: map.getLevel()
               }));
             }
-          });
+          }
+
+          kakao.maps.event.addListener(map, "dragend", postCameraIdle);
+          kakao.maps.event.addListener(map, "zoom_changed", postCameraIdle);
 
           window.setTimeout(function () {
             map.relayout();

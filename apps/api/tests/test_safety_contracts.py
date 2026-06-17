@@ -92,6 +92,25 @@ def test_repo_docs_and_scripts_do_not_contain_secret_literals():
     assert findings == []
 
 
+def test_kakao_map_bridges_forward_zoom_camera_updates():
+    web_bridge = (ROOT / "apps" / "flutter_app" / "lib" / "kakao_map_view_web.dart").read_text(
+        encoding="utf-8"
+    )
+    native_embed = (ROOT / "apps" / "flutter_app" / "web" / "kakao-map-embed.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'kakao.maps.event.addListener(map, "dragend"' in web_bridge
+    assert 'kakao.maps.event.addListener(map, "zoom_changed"' in web_bridge
+    assert '"lala-map-camera-idle"' in web_bridge
+    assert 'level: map.getLevel()' in web_bridge
+
+    assert 'kakao.maps.event.addListener(map, "dragend"' in native_embed
+    assert 'kakao.maps.event.addListener(map, "zoom_changed"' in native_embed
+    assert 'type: "cameraIdle"' in native_embed
+    assert 'level: map.getLevel()' in native_embed
+
+
 def test_paid_smoke_requires_authenticated_api_key():
     script = (ROOT / "scripts" / "windows" / "smoke_api.ps1").read_text(encoding="utf-8")
     start_script = (ROOT / "scripts" / "windows" / "start_api.ps1").read_text(encoding="utf-8")
