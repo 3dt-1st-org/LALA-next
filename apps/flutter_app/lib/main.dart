@@ -237,7 +237,7 @@ class LalaHomePage extends StatefulWidget {
   State<LalaHomePage> createState() => _LalaHomePageState();
 }
 
-enum _ActiveMapSheet { detail, planner, weather }
+enum _ActiveMapSheet { detail, planner, weather, tour }
 
 class _LalaHomePageState extends State<LalaHomePage> {
   late final TextEditingController _baseUrlController;
@@ -1166,6 +1166,7 @@ class _Dashboard extends StatelessWidget {
         : places?.data?.source;
     final allPlaces = usingFallbackPlaces ? _fallbackUiPlaces() : apiPlaces;
     final topPlaces = _filterPlaces(allPlaces, selectedCategory);
+    final tourPlaces = _restaurantTourPlaces(allPlaces);
     final topPlace =
         _placeById(topPlaces, selectedPlaceId) ?? _featuredPlace(topPlaces);
     final currentWeather = weather?.data ?? _fallbackWeather();
@@ -1241,6 +1242,16 @@ class _Dashboard extends StatelessWidget {
                 onPressed: () => onOpenSheet(_ActiveMapSheet.planner),
               ),
             ),
+            if (tourPlaces.isNotEmpty)
+              Positioned(
+                right: 16,
+                top: 52,
+                child: _TourMapPill(
+                  places: tourPlaces,
+                  language: uiLanguage,
+                  onPressed: () => onOpenSheet(_ActiveMapSheet.tour),
+                ),
+              ),
             Positioned(
               left: 0,
               right: 0,
@@ -1304,6 +1315,7 @@ class _Dashboard extends StatelessWidget {
                 child: _MapDraggableSheet(
                   activeSheet: activeSheet!,
                   place: topPlace,
+                  places: tourPlaces,
                   weather: currentWeather,
                   language: uiLanguage,
                   intervention: intervention?.data,
@@ -1652,6 +1664,29 @@ class _PlannerMapPill extends StatelessWidget {
   }
 }
 
+class _TourMapPill extends StatelessWidget {
+  const _TourMapPill({
+    required this.places,
+    required this.language,
+    required this.onPressed,
+  });
+
+  final List<LalaPlace> places;
+  final String language;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SmallStatusPill(
+      key: const ValueKey('tour-pill-hit-target'),
+      icon: Icons.restaurant_menu,
+      label: _copy(language, ko: '맛집 투어', en: 'Food tour'),
+      active: places.isNotEmpty,
+      onPressed: onPressed,
+    );
+  }
+}
+
 class _MapBottomDock extends StatelessWidget {
   const _MapBottomDock({
     required this.isWide,
@@ -1801,6 +1836,7 @@ class _MapDraggableSheet extends StatelessWidget {
   const _MapDraggableSheet({
     required this.activeSheet,
     required this.place,
+    required this.places,
     required this.weather,
     required this.language,
     required this.intervention,
@@ -1818,6 +1854,7 @@ class _MapDraggableSheet extends StatelessWidget {
 
   final _ActiveMapSheet activeSheet;
   final LalaPlace? place;
+  final List<LalaPlace> places;
   final LalaWeather? weather;
   final String language;
   final LalaIntervention? intervention;
@@ -1838,16 +1875,19 @@ class _MapDraggableSheet extends StatelessWidget {
       _ActiveMapSheet.detail => language == 'en' ? 'Details' : '장소 상세',
       _ActiveMapSheet.planner => language == 'en' ? 'Daily Plan' : '오늘 일정',
       _ActiveMapSheet.weather => language == 'en' ? 'Weather' : '날씨',
+      _ActiveMapSheet.tour => language == 'en' ? 'Food Tour' : '맛집 투어',
     };
     final icon = switch (activeSheet) {
       _ActiveMapSheet.detail => Icons.place_outlined,
       _ActiveMapSheet.planner => Icons.route_outlined,
       _ActiveMapSheet.weather => Icons.wb_cloudy_outlined,
+      _ActiveMapSheet.tour => Icons.restaurant_menu,
     };
     final initialSize = switch (activeSheet) {
       _ActiveMapSheet.detail => 0.66,
       _ActiveMapSheet.planner => 0.48,
       _ActiveMapSheet.weather => 0.44,
+      _ActiveMapSheet.tour => 0.54,
     };
 
     return Stack(
@@ -1906,7 +1946,7 @@ class _MapDraggableSheet extends StatelessWidget {
                       ),
                       const Spacer(),
                       IconButton(
-                        tooltip: '닫기',
+                        tooltip: _copy(language, ko: '닫기', en: 'Close'),
                         onPressed: onClose,
                         icon: const Icon(Icons.close),
                       ),
@@ -1937,6 +1977,10 @@ class _MapDraggableSheet extends StatelessWidget {
                     _ActiveMapSheet.weather => _WeatherSheetContent(
                       language: language,
                       weather: weather,
+                    ),
+                    _ActiveMapSheet.tour => _TourSheetContent(
+                      places: places,
+                      language: language,
                     ),
                   },
                 ],
@@ -2144,6 +2188,192 @@ class _PlanSlotTile extends StatelessWidget {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TourSheetContent extends StatelessWidget {
+  const _TourSheetContent({required this.places, required this.language});
+
+  final List<LalaPlace> places;
+  final String language;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = places.take(5).toList(growable: false);
+    if (items.isEmpty) {
+      return _MutedSheetCard(
+        icon: Icons.restaurant_menu,
+        label: _copy(
+          language,
+          ko: '근처 맛집 투어 후보를 찾고 있습니다.',
+          en: 'Looking for nearby food tour stops.',
+        ),
+      );
+    }
+
+    final headline = _copy(
+      language,
+      ko: '가까운 맛집 ${items.length}곳을 이어 걷는 코스',
+      en: '${items.length} nearby food stops for a walkable route',
+    );
+    final first = items.first;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF8E1),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFF5C842)),
+          ),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: _PlaceImage(place: first, width: 64, height: 64),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      headline,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: const Color(0xFF1A202C),
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      _copy(
+                        language,
+                        ko: '${_placeDisplayName(first, language)}부터 시작 · ${first.distanceM}m',
+                        en: 'Start at ${_placeDisplayName(first, language)} · ${first.distanceM}m',
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF64748B),
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        ...items.indexed.map(
+          (entry) => Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _TourStopTile(
+              index: entry.$1,
+              place: entry.$2,
+              language: language,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TourStopTile extends StatelessWidget {
+  const _TourStopTile({
+    required this.index,
+    required this.place,
+    required this.language,
+  });
+
+  final int index;
+  final LalaPlace place;
+  final String language;
+
+  @override
+  Widget build(BuildContext context) {
+    final spending = place.score?.components.localSpendingScore;
+    final spendingLabel = spending == null
+        ? _basisLabel(
+            place.score?.dataBasis ?? place.source,
+            language: language,
+          )
+        : '${(spending.clamp(0.0, 1.0) * 100).round()}';
+    return Container(
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: const [
+          BoxShadow(
+            blurRadius: 14,
+            offset: Offset(0, 7),
+            color: Color(0x10000000),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: const Color(0xFFC53030).withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              '${index + 1}',
+              style: const TextStyle(
+                color: Color(0xFFC53030),
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _placeDisplayName(place, language),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 4),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: [
+                    _TinyMeta('${place.distanceM}m'),
+                    _TinyMeta(
+                      _copy(
+                        language,
+                        ko: '소비 신호 $spendingLabel',
+                        en: 'Spend $spendingLabel',
+                      ),
+                    ),
+                    if (place.regionKo?.trim().isNotEmpty == true ||
+                        place.regionEn?.trim().isNotEmpty == true)
+                      _TinyMeta(_placeRegionLabel(place, language)),
+                  ],
+                ),
               ],
             ),
           ),
@@ -4438,6 +4668,25 @@ List<LalaPlace> _filterPlaces(List<LalaPlace> places, String category) {
   return places.where((place) => place.category == category).toList();
 }
 
+List<LalaPlace> _restaurantTourPlaces(List<LalaPlace> places) {
+  final restaurants = places
+      .where((place) => place.category == 'restaurant')
+      .toList(growable: false);
+  if (restaurants.isEmpty) {
+    return const <LalaPlace>[];
+  }
+  final sorted = [...restaurants]
+    ..sort((a, b) {
+      final scoreCompare = (b.score?.components.localSpendingScore ?? 0)
+          .compareTo(a.score?.components.localSpendingScore ?? 0);
+      if (scoreCompare != 0) {
+        return scoreCompare;
+      }
+      return a.distanceM.compareTo(b.distanceM);
+    });
+  return sorted.take(6).toList(growable: false);
+}
+
 LalaPlace? _placeById(List<LalaPlace> places, String? placeId) {
   if (placeId == null) {
     return null;
@@ -4448,6 +4697,34 @@ LalaPlace? _placeById(List<LalaPlace> places, String? placeId) {
     }
   }
   return null;
+}
+
+String _placeDisplayName(LalaPlace place, String language) {
+  if (_isEnglish(language)) {
+    final nameEn = place.nameEn?.trim();
+    if (nameEn != null && nameEn.isNotEmpty) {
+      return nameEn;
+    }
+  }
+  final nameKo = place.nameKo?.trim();
+  if (nameKo != null && nameKo.isNotEmpty) {
+    return nameKo;
+  }
+  return place.name;
+}
+
+String _placeRegionLabel(LalaPlace place, String language) {
+  if (_isEnglish(language)) {
+    final regionEn = place.regionEn?.trim();
+    if (regionEn != null && regionEn.isNotEmpty) {
+      return regionEn;
+    }
+  }
+  final regionKo = place.regionKo?.trim();
+  if (regionKo != null && regionKo.isNotEmpty) {
+    return regionKo;
+  }
+  return place.address;
 }
 
 Color _categoryColor(String category) {

@@ -121,6 +121,25 @@ void main() {
     expect(find.text('PM10'), findsOneWidget);
   });
 
+  testWidgets('food tour pill opens restaurant tour sheet', (tester) async {
+    await tester.pumpWidget(
+      LalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('tour-pill-hit-target')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('맛집 투어'), findsAtLeastNWidgets(1));
+    expect(find.textContaining('가까운 맛집'), findsOneWidget);
+    expect(find.text('행궁동 카페거리'), findsAtLeastNWidgets(1));
+    expect(find.textContaining('소비 신호'), findsAtLeastNWidgets(1));
+  });
+
   testWidgets('auto docent on opens the nearest place detail sheet', (
     tester,
   ) async {
