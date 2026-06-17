@@ -301,7 +301,7 @@ void main() {
     expect(find.text('화성행궁 도슨트'), findsAtLeastNWidgets(1));
     expect(find.text('로컬 맥락'), findsOneWidget);
     expect(find.text('장소 연계 행사 1건'), findsOneWidget);
-    expect(find.text('카드 소비 1,400만원'), findsOneWidget);
+    expect(find.text('카드 소비 1,400만원'), findsNothing);
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('auto-docent-toggle')),
@@ -603,7 +603,14 @@ void main() {
     expect(find.text('Details'), findsWidgets);
     expect(find.text('Suwon'), findsAtLeastNWidgets(1));
     expect(find.text('Local context'), findsOneWidget);
+    expect(find.text('1 linked events'), findsOneWidget);
+    expect(find.text('Card spend KRW 14,000,000'), findsNothing);
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Show signals'));
+    await tester.pumpAndSettle();
+
     expect(find.text('Card spend KRW 14,000,000'), findsOneWidget);
+    expect(find.text('Local score'), findsOneWidget);
     expect(find.textContaining('화성행궁'), findsNothing);
     expect(find.textContaining('경기도'), findsNothing);
   });

@@ -3762,6 +3762,7 @@ class _FeaturedPlacePanel extends StatelessWidget {
           place: currentPlace,
           language: language,
           weather: weather,
+          showEvidence: showEvidence,
         ),
         if (_shouldShowEventInfo(currentPlace)) ...[
           const SizedBox(height: 12),
@@ -3969,11 +3970,13 @@ class _PlaceContextCard extends StatelessWidget {
     required this.place,
     required this.language,
     required this.weather,
+    required this.showEvidence,
   });
 
   final LalaPlace place;
   final String language;
   final LalaWeather? weather;
+  final bool showEvidence;
 
   @override
   Widget build(BuildContext context) {
@@ -3981,6 +3984,7 @@ class _PlaceContextCard extends StatelessWidget {
       place: place,
       language: language,
       weather: weather,
+      includeEvidence: showEvidence,
     );
     return Container(
       padding: const EdgeInsets.all(13),
@@ -6336,6 +6340,7 @@ List<_ContextFact> _placeContextFacts({
   required LalaPlace place,
   required String language,
   required LalaWeather? weather,
+  required bool includeEvidence,
 }) {
   final score = place.score;
   final features = score?.features ?? const <String, dynamic>{};
@@ -6377,7 +6382,7 @@ List<_ContextFact> _placeContextFacts({
   }
 
   final spendAmount = _asFeatureDouble(features['region_spend_amount']);
-  if (spendAmount > 0) {
+  if (includeEvidence && spendAmount > 0) {
     add(
       Icons.payments_outlined,
       _copy(
@@ -6389,7 +6394,7 @@ List<_ContextFact> _placeContextFacts({
   }
 
   final transactionCount = _asFeatureInt(features['region_transaction_count']);
-  if (transactionCount > 0) {
+  if (includeEvidence && transactionCount > 0) {
     add(
       Icons.receipt_long_outlined,
       _copy(
@@ -6407,14 +6412,16 @@ List<_ContextFact> _placeContextFacts({
     );
   }
 
-  add(
-    Icons.verified_outlined,
-    _externalSourceLabel(
-          place.upstreamSource ?? features['primary_source'],
-          language: language,
-        ) ??
-        _sourceLabel(place.source, language: language),
-  );
+  if (includeEvidence) {
+    add(
+      Icons.verified_outlined,
+      _externalSourceLabel(
+            place.upstreamSource ?? features['primary_source'],
+            language: language,
+          ) ??
+          _sourceLabel(place.source, language: language),
+    );
+  }
 
   return facts.take(5).toList(growable: false);
 }
