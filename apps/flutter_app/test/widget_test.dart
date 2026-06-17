@@ -299,7 +299,10 @@ void main() {
   ) async {
     await tester.pumpWidget(
       LalaApp(
-        backendFactory: FakeBackend.new,
+        backendFactory: (config) => FakeBackend(
+          config,
+          places: [_place(), _restaurantPlace(distanceM: 80), _culturePlace()],
+        ),
         initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
       ),
     );
@@ -310,10 +313,47 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('장소 상세'), findsNothing);
-    expect(find.text('화성행궁 도슨트'), findsAtLeastNWidgets(1));
+    expect(
+      find.byKey(const ValueKey('kakao-map-fallback-center-37.2828-127.0101')),
+      findsOneWidget,
+    );
     expect(find.text('로컬 맥락'), findsNothing);
     expect(find.text('장소 연계 행사 1건'), findsNothing);
     expect(find.text('카드 소비 1,400만원'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('auto-docent-toggle')),
+        matching: find.text('켬'),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('auto docent ignores places outside the legacy trigger radius', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      LalaApp(
+        backendFactory: (config) => FakeBackend(
+          config,
+          places: [_place(), _restaurantPlace(distanceM: 120), _culturePlace()],
+        ),
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('auto-docent-toggle')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('장소 상세'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('kakao-map-fallback-center-37.2819-127.0142')),
+      findsOneWidget,
+    );
+    expect(find.text('화성행궁 도슨트'), findsAtLeastNWidgets(1));
+    expect(find.text('행궁동 카페거리 도슨트'), findsNothing);
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('auto-docent-toggle')),
@@ -1247,8 +1287,8 @@ LalaPlace _culturePlace() {
   );
 }
 
-LalaPlace _restaurantPlace() {
-  return const LalaPlace(
+LalaPlace _restaurantPlace({int distanceM = 780}) {
+  return LalaPlace(
     placeId: 'haenggung-cafe-street',
     name: '행궁동 카페거리',
     nameKo: '행궁동 카페거리',
@@ -1259,10 +1299,10 @@ LalaPlace _restaurantPlace() {
     address: '경기도 수원시 팔달구 행궁동',
     regionKo: '수원',
     regionEn: 'Suwon',
-    distanceM: 780,
+    distanceM: distanceM,
     source: 'skeleton',
     upstreamSource: 'tour_api',
-    score: LalaPlaceScore(
+    score: const LalaPlaceScore(
       finalScore: 0.78,
       formulaVersion: 'local-value-v1',
       components: LalaPlaceScoreComponents(

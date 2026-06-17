@@ -676,6 +676,9 @@ class _KakaoMapUnavailable extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         return Container(
+          key: ValueKey(
+            'kakao-map-fallback-center-${centerLat.toStringAsFixed(4)}-${centerLng.toStringAsFixed(4)}',
+          ),
           color: const Color(0xFFEAF2FB),
           child: Stack(
             children: [

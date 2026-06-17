@@ -65,6 +65,9 @@ evidence, but they are not the latest MVP acceptance source.
   `runAutoDocentIfNeeded -> selectPlace(openDetail: false)` behavior by
   selecting and panning to the nearest place while keeping the user in the map
   guidance context instead of forcing the detail sheet open.
+- Implemented: auto-docent also respects the legacy 100m trigger radius used
+  by both web and iOS, so enabling auto mode does not jump to a far-away
+  nearest place.
 - Implemented: turning voice OFF now clears prepared docent and tour audio
   state, matching the legacy voice toggle behavior that stops both current
   docent audio and tour-guide audio.

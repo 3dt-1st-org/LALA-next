@@ -255,6 +255,8 @@ class LalaHomePage extends StatefulWidget {
 enum _ActiveMapSheet { detail, planner, weather, tour }
 
 class _LalaHomePageState extends State<LalaHomePage> {
+  static const int _autoDocentTriggerMeters = 100;
+
   late final TextEditingController _baseUrlController;
   late final TextEditingController _bearerTokenController;
   late final TextEditingController _apiKeyController;
@@ -759,9 +761,12 @@ class _LalaHomePageState extends State<LalaHomePage> {
     if (places.isEmpty) {
       return null;
     }
-    final sorted = [...places]
-      ..sort((a, b) => a.distanceM.compareTo(b.distanceM));
-    return sorted.first;
+    final sorted =
+        places
+            .where((place) => place.distanceM <= _autoDocentTriggerMeters)
+            .toList()
+          ..sort((a, b) => a.distanceM.compareTo(b.distanceM));
+    return sorted.isEmpty ? null : sorted.first;
   }
 
   Future<void> _openSettingsSheet(BuildContext context) async {
