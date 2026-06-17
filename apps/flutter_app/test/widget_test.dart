@@ -93,6 +93,36 @@ void main() {
     );
   });
 
+  testWidgets('recommendation rail collapses and place cards select detail', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      LalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('수원화성'), findsOneWidget);
+
+    await tester.tap(find.text('추천 장소 보기'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('수원화성'), findsNothing);
+    expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
+
+    await tester.tap(find.text('추천 장소 보기'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('수원화성'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('장소 상세'), findsOneWidget);
+    expect(find.text('수원화성 도슨트'), findsAtLeastNWidgets(1));
+    expect(find.text('화성행궁 도슨트'), findsNothing);
+  });
+
   testWidgets('loads authenticated API panels with the reference contract', (
     tester,
   ) async {

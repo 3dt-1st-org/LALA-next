@@ -258,6 +258,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
   bool _autoDocentEnabled = false;
   bool _showEvidence = false;
   bool _locationConsentEnabled = true;
+  bool _recommendationRailExpanded = true;
   String _uiLanguage = 'ko';
   double _fontScale = 1.0;
 
@@ -473,6 +474,12 @@ class _LalaHomePageState extends State<LalaHomePage> {
     });
   }
 
+  void _toggleRecommendationRail() {
+    setState(() {
+      _recommendationRailExpanded = !_recommendationRailExpanded;
+    });
+  }
+
   void _setUiLanguage(String language) {
     setState(() {
       _uiLanguage = language;
@@ -564,8 +571,10 @@ class _LalaHomePageState extends State<LalaHomePage> {
               autoDocentEnabled: _autoDocentEnabled,
               showEvidence: _showEvidence,
               locationConsentEnabled: _locationConsentEnabled,
+              recommendationRailExpanded: _recommendationRailExpanded,
               onSelectCategory: _selectCategory,
               onSelectPlace: _selectPlace,
+              onToggleRecommendationRail: _toggleRecommendationRail,
               onOpenSheet: _openSheet,
               onCloseSheet: _closeSheet,
               onToggleVoice: _toggleVoice,
@@ -976,8 +985,10 @@ class _Dashboard extends StatelessWidget {
     required this.autoDocentEnabled,
     required this.showEvidence,
     required this.locationConsentEnabled,
+    required this.recommendationRailExpanded,
     required this.onSelectCategory,
     required this.onSelectPlace,
+    required this.onToggleRecommendationRail,
     required this.onOpenSheet,
     required this.onCloseSheet,
     required this.onToggleVoice,
@@ -1010,8 +1021,10 @@ class _Dashboard extends StatelessWidget {
   final bool autoDocentEnabled;
   final bool showEvidence;
   final bool locationConsentEnabled;
+  final bool recommendationRailExpanded;
   final ValueChanged<String> onSelectCategory;
   final ValueChanged<LalaPlace> onSelectPlace;
+  final VoidCallback onToggleRecommendationRail;
   final ValueChanged<_ActiveMapSheet> onOpenSheet;
   final VoidCallback onCloseSheet;
   final VoidCallback onToggleVoice;
@@ -1030,6 +1043,13 @@ class _Dashboard extends StatelessWidget {
         _placeById(topPlaces, selectedPlaceId) ?? _featuredPlace(topPlaces);
     final currentWeather = weather?.data ?? _fallbackWeather();
     final visibleError = apiPlaces.isEmpty ? null : error;
+    void selectPlaceById(String placeId) {
+      final place = _placeById(topPlaces, placeId);
+      if (place != null) {
+        onSelectPlace(place);
+      }
+    }
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= 860;
@@ -1041,6 +1061,7 @@ class _Dashboard extends StatelessWidget {
                 selectedPlace: topPlace,
                 weather: currentWeather,
                 kakaoJavascriptKey: kakaoJavascriptKey,
+                onSelectPlaceId: selectPlaceById,
               ),
             ),
             Positioned(
@@ -1071,7 +1092,9 @@ class _Dashboard extends StatelessWidget {
                 places: topPlaces,
                 source: places?.data?.source,
                 selectedPlaceId: topPlace?.placeId,
+                expanded: recommendationRailExpanded,
                 onSelectPlace: onSelectPlace,
+                onToggleExpanded: onToggleRecommendationRail,
               ),
             ),
             Positioned(
@@ -1243,13 +1266,17 @@ class _MapPlaceCarouselOverlay extends StatelessWidget {
     required this.places,
     required this.source,
     required this.selectedPlaceId,
+    required this.expanded,
     required this.onSelectPlace,
+    required this.onToggleExpanded,
   });
 
   final List<LalaPlace> places;
   final String? source;
   final String? selectedPlaceId;
+  final bool expanded;
   final ValueChanged<LalaPlace> onSelectPlace;
+  final VoidCallback onToggleExpanded;
 
   @override
   Widget build(BuildContext context) {
@@ -1259,73 +1286,107 @@ class _MapPlaceCarouselOverlay extends StatelessWidget {
       children: [
         Align(
           alignment: Alignment.center,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.94),
+          child: Material(
+            color: Colors.white.withValues(alpha: 0.94),
+            borderRadius: BorderRadius.circular(999),
+            elevation: 0,
+            shadowColor: const Color(0x18000000),
+            child: InkWell(
               borderRadius: BorderRadius.circular(999),
-              boxShadow: const [
-                BoxShadow(
-                  blurRadius: 12,
-                  offset: Offset(0, 4),
-                  color: Color(0x18000000),
+              onTap: onToggleExpanded,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 7,
                 ),
-              ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.keyboard_arrow_down, size: 17),
-                const SizedBox(width: 4),
-                Text(
-                  '추천 장소 보기',
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: const Color(0xFF374151),
-                    fontWeight: FontWeight.w900,
-                  ),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(999),
+                  boxShadow: const [
+                    BoxShadow(
+                      blurRadius: 12,
+                      offset: Offset(0, 4),
+                      color: Color(0x18000000),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  '${items.length}곳 · ${_sourceLabel(source)}',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: const Color(0xFF64748B),
-                    fontWeight: FontWeight.w800,
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      expanded
+                          ? Icons.keyboard_arrow_up
+                          : Icons.keyboard_arrow_down,
+                      size: 17,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '추천 장소 보기',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: const Color(0xFF374151),
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '${items.length}곳 · ${_sourceLabel(source)}',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: const Color(0xFF64748B),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        SizedBox(
-          height: 112,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.82),
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.72)),
-              boxShadow: const [
-                BoxShadow(
-                  blurRadius: 18,
-                  offset: Offset(0, 8),
-                  color: Color(0x16000000),
-                ),
-              ],
-            ),
-            child: ListView.separated(
-              padding: const EdgeInsets.all(8),
-              scrollDirection: Axis.horizontal,
-              itemCount: items.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 10),
-              itemBuilder: (context, index) => _MapRailPlaceCard(
-                place: items[index],
-                selected:
-                    selectedPlaceId == null && index == 0 ||
-                    selectedPlaceId == items[index].placeId,
-                onTap: () => onSelectPlace(items[index]),
               ),
             ),
           ),
+        ),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 180),
+          switchInCurve: Curves.easeOut,
+          switchOutCurve: Curves.easeIn,
+          child: expanded
+              ? Column(
+                  key: const ValueKey('recommendation-rail-expanded'),
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 112,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.82),
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.72),
+                          ),
+                          boxShadow: const [
+                            BoxShadow(
+                              blurRadius: 18,
+                              offset: Offset(0, 8),
+                              color: Color(0x16000000),
+                            ),
+                          ],
+                        ),
+                        child: ListView.separated(
+                          padding: const EdgeInsets.all(8),
+                          scrollDirection: Axis.horizontal,
+                          itemCount: items.length,
+                          separatorBuilder: (_, _) => const SizedBox(width: 10),
+                          itemBuilder: (context, index) => _MapRailPlaceCard(
+                            place: items[index],
+                            selected:
+                                (selectedPlaceId == null && index == 0) ||
+                                selectedPlaceId == items[index].placeId,
+                            onTap: () => onSelectPlace(items[index]),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              : const SizedBox.shrink(
+                  key: ValueKey('recommendation-rail-collapsed'),
+                ),
         ),
       ],
     );
@@ -2770,12 +2831,14 @@ class _LegacyMapCanvas extends StatelessWidget {
     required this.selectedPlace,
     required this.weather,
     required this.kakaoJavascriptKey,
+    required this.onSelectPlaceId,
   });
 
   final List<LalaPlace> places;
   final LalaPlace? selectedPlace;
   final LalaWeather? weather;
   final String kakaoJavascriptKey;
+  final ValueChanged<String> onSelectPlaceId;
 
   @override
   Widget build(BuildContext context) {
@@ -2795,6 +2858,7 @@ class _LegacyMapCanvas extends StatelessWidget {
             centerLng: centerLng,
             level: 4,
             places: mapPlaces,
+            onPlaceTap: onSelectPlaceId,
           ),
         ),
         Positioned.fill(

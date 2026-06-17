@@ -32,6 +32,7 @@ Widget buildKakaoMapView({
     centerLng: centerLng,
     level: level,
     places: places,
+    onPlaceTap: onPlaceTap,
   );
 }
 
@@ -42,6 +43,7 @@ class _KakaoMapBackgroundBridge extends StatefulWidget {
     required this.centerLng,
     required this.level,
     required this.places,
+    this.onPlaceTap,
   });
 
   final String javascriptKey;
@@ -49,6 +51,7 @@ class _KakaoMapBackgroundBridge extends StatefulWidget {
   final double centerLng;
   final int level;
   final List<KakaoMapPlace> places;
+  final ValueChanged<String>? onPlaceTap;
 
   @override
   State<_KakaoMapBackgroundBridge> createState() =>
@@ -57,11 +60,26 @@ class _KakaoMapBackgroundBridge extends StatefulWidget {
 
 class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
   int _generation = 0;
+  StreamSubscription<html.Event>? _placeTapSubscription;
 
   @override
   void initState() {
     super.initState();
+    _placeTapSubscription = html.window.on['lala-map-place-tap'].listen((
+      event,
+    ) {
+      final detail = event is html.CustomEvent ? event.detail : null;
+      if (detail is String && detail.trim().isNotEmpty) {
+        widget.onPlaceTap?.call(detail.trim());
+      }
+    });
     _renderMap();
+  }
+
+  @override
+  void dispose() {
+    _placeTapSubscription?.cancel();
+    super.dispose();
   }
 
   @override
@@ -195,6 +213,8 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
       marker.style.transform = isCluster ? "none" : "rotate(-45deg)";
       marker.style.display = "grid";
       marker.style.placeItems = "center";
+      marker.style.pointerEvents = "auto";
+      marker.style.cursor = "pointer";
 
       var label = document.createElement("div");
       label.style.transform = isCluster ? "none" : "rotate(45deg)";
@@ -204,6 +224,14 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
       label.style.fontFamily = "system-ui, -apple-system, sans-serif";
       label.textContent = isCluster ? String(place.clusterCount) : glyphFor(place.category);
       marker.appendChild(label);
+      marker.addEventListener("click", function (event) {
+        event.stopPropagation();
+        if (!isCluster && place.id) {
+          window.dispatchEvent(new CustomEvent("lala-map-place-tap", {
+            detail: String(place.id)
+          }));
+        }
+      });
 
       var overlay = new kakao.maps.CustomOverlay({
         position: new kakao.maps.LatLng(place.lat, place.lng),
