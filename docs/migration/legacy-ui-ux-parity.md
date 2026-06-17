@@ -38,22 +38,29 @@ evidence, but they are not the latest MVP acceptance source.
 - Implemented: Kakao Maps API background, map-first shell, LALA navigation,
   category filters, horizontal recommended place rail, planner/weather pills,
   auto-docent/current-location floating controls, selected place panel, local
-  score meters, AI docent card, and public-data proof chips.
+  score meters, legacy-style docent subtitle panel, and public-data proof chips.
 - Implemented: first recommended rail card is prioritized to match the selected
   place in the bottom panel.
 - Implemented: primary docent CTA now uses the legacy-style `정보 더 듣기` copy.
-- Partial: category filter interaction is visual only in the current Flutter web
-  MVP.
-- Partial: planner/weather/detail bottom-sheet interactions are represented in
-  the main screen, but dedicated sheet states still need full Flutter behavior.
-- Partial: voice and auto-docent buttons are visible, but persistent ON/OFF
-  state and proximity-triggered auto-docent logic should be ported from the
-  legacy state machine.
+- Implemented: category chips filter the map, recommendation rail, and selected
+  detail context.
+- Implemented: planner, weather, and detail use dedicated draggable Flutter
+  sheets.
+- Implemented: voice and auto-docent controls have persistent ON/OFF state and
+  visible map feedback.
+- Implemented: marker clustering and selected-marker treatment now follow the
+  legacy web/iOS rule more closely: small circular category markers, selected
+  marker name pill, and category-aware cluster counts.
+- Implemented: place media can flow from official-source `image_url` values
+  such as TourAPI `firstimage`, with local fallback only when a source has no
+  usable image URL.
 
 ## Next Acceptance Items
 
-- Add real chip filtering in Flutter state, not just visual chips.
-- Add draggable or modal Flutter sheets for detail, planner, and weather.
-- Add voice toggle and auto-docent ON/OFF state with visible feedback.
-- Port the marker clustering policy closer to the legacy iOS/web behavior.
-- Keep public-data scoring and proof chips as the LALA-next differentiator.
+- Verify deployed production rendering after each Vercel build, especially
+  Kakao domain allowlisting, DB-backed source labels, and TourAPI image loading.
+- Expand live data coverage beyond the current DB snapshot so more default
+  Suwon/Gyeonggi recommendations carry official image URLs.
+- Keep public-data scoring and proof chips available on demand as the LALA-next
+  differentiator, without making score/reason text dominate the default map
+  experience.

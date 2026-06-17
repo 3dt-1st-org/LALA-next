@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 
+from apps.api.app.services import public_mvp_data
+
 
 def test_places_route_returns_envelope(client, auth_headers):
     response = client.get(
@@ -43,8 +45,9 @@ def test_places_accepts_language_query_alias(client, auth_headers, monkeypatch):
     assert response.status_code == 200
     body = response.json()
     assert body["data"]["query"]["language"] == "en"
-    assert body["data"]["places"][0]["name"] == body["data"]["places"][0]["name_en"]
-    assert "Gyeonggi-do" in body["data"]["places"][0]["address"]
+    enriched = next(place for place in body["data"]["places"] if place.get("name_en"))
+    assert enriched["name"] == enriched["name_en"]
+    assert "Gyeonggi-do" in enriched["address"]
 
 
 def test_places_normalizes_kr_language_alias(client, auth_headers):
@@ -628,9 +631,16 @@ def test_daily_plan_uses_public_snapshot_radius_in_public_demo(client, monkeypat
 
     assert response.status_code == 200
     body = response.json()
+    expected_place = public_mvp_data.fetch_places(
+        lat=37.2636,
+        lng=127.0286,
+        radius_m=50000,
+        category="all",
+        language="ko",
+    )[0]
     assert body["data"]["source"] == "mixed"
     assert body["data"]["slots"][0]["place"]["source"] == "public_mvp_snapshot"
-    assert body["data"]["slots"][0]["place"]["place_id"] == "tour-api-129765"
+    assert body["data"]["slots"][0]["place"]["place_id"] == expected_place["place_id"]
 
 
 def test_intervention_route_returns_envelope(client, auth_headers):
@@ -657,6 +667,13 @@ def test_intervention_uses_public_snapshot_candidate_in_public_demo(client, monk
 
     assert response.status_code == 200
     body = response.json()
+    expected_place = public_mvp_data.fetch_places(
+        lat=37.2636,
+        lng=127.0286,
+        radius_m=50000,
+        category="all",
+        language="ko",
+    )[0]
     assert body["data"]["source"] == "mixed"
     assert body["data"]["place"]["source"] == "public_mvp_snapshot"
-    assert body["data"]["place"]["place_id"] == "tour-api-129765"
+    assert body["data"]["place"]["place_id"] == expected_place["place_id"]

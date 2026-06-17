@@ -133,6 +133,7 @@ void main() {
                     'address': '경기도 수원시',
                     'distance_m': 1000,
                     'source': 'skeleton',
+                    'upstream_source': 'tour_api',
                     'score': {
                       'final_score': 0.84,
                       'formula_version': 'local-value-v1',
@@ -196,6 +197,7 @@ void main() {
       expect(envelope.data?.query.radiusM, 1200);
       expect(envelope.data?.places.first.placeId, 'skeleton-suwon-hwaseong');
       expect(envelope.data?.places.first.nameKo, '수원화성');
+      expect(envelope.data?.places.first.upstreamSource, 'tour_api');
       expect(envelope.data?.places.first.score?.percent, 84);
       expect(envelope.data?.places.first.score?.dataBasis, 'demo_fallback');
       expect(

@@ -45,5 +45,8 @@ def test_public_mvp_snapshot_uses_english_fields_when_requested() -> None:
     )
 
     assert places
-    assert places[0]["name"] == places[0]["name_en"]
-    assert "Gyeonggi-do" in places[0]["address"]
+    enriched = next(place for place in places if place.get("name_en"))
+    assert enriched["name"] == enriched["name_en"]
+    assert "Gyeonggi-do" in enriched["address"]
+    fallback = next(place for place in places if not place.get("name_en"))
+    assert fallback["name"] == fallback["name_ko"]

@@ -2525,6 +2525,7 @@ class _FeaturedPlacePanel extends StatelessWidget {
         if (showEvidence) ...[
           const SizedBox(height: 12),
           _PublicDataProofRow(
+            place: currentPlace,
             source: source ?? currentPlace.source,
             weather: weather,
             score: score,
@@ -2796,17 +2797,25 @@ class _SignalMeter extends StatelessWidget {
 
 class _PublicDataProofRow extends StatelessWidget {
   const _PublicDataProofRow({
+    required this.place,
     required this.source,
     required this.weather,
     required this.score,
   });
 
+  final LalaPlace place;
   final String? source;
   final LalaWeather? weather;
   final LalaPlaceScore? score;
 
   @override
   Widget build(BuildContext context) {
+    final labels = _proofSourceLabels(
+      place: place,
+      source: source,
+      weather: weather,
+      score: score,
+    );
     return Container(
       padding: const EdgeInsets.all(11),
       decoration: BoxDecoration(
@@ -2826,16 +2835,58 @@ class _PublicDataProofRow extends StatelessWidget {
               fontWeight: FontWeight.w900,
             ),
           ),
-          _ProofChip(label: 'TourAPI'),
-          _ProofChip(label: _sourceLabel(source)),
-          _ProofChip(
-            label: score == null ? '카드소비' : _basisLabel(score!.dataBasis),
-          ),
-          _ProofChip(label: weather == null ? '날씨' : weather!.dust.gradeKo),
+          ...labels.map((label) => _ProofChip(label: label)),
         ],
       ),
     );
   }
+}
+
+List<String> _proofSourceLabels({
+  required LalaPlace place,
+  required String? source,
+  required LalaWeather? weather,
+  required LalaPlaceScore? score,
+}) {
+  final labels = <String>[];
+  void add(String? label) {
+    final trimmed = label?.trim();
+    if (trimmed == null || trimmed.isEmpty || trimmed == '-') {
+      return;
+    }
+    if (!labels.contains(trimmed)) {
+      labels.add(trimmed);
+    }
+  }
+
+  final features = score?.features ?? const <String, dynamic>{};
+  add(_sourceLabel(source));
+  add(_externalSourceLabel(place.upstreamSource ?? features['primary_source']));
+  if (score != null) {
+    add(_basisLabel(score.dataBasis));
+  }
+
+  final inputSources = _stringList(features['input_sources']);
+  if (inputSources.any((source) => source.startsWith('economy.'))) {
+    add('카드소비');
+  }
+  if (inputSources.contains('culture.events') ||
+      _asFeatureInt(features['culture_event_count']) > 0) {
+    add('KCISA/KOPIS 문화행사');
+  }
+  if (inputSources.contains('travel.weather_observations') ||
+      score?.components.weatherFitScore != null ||
+      weather != null) {
+    add(weather == null ? '날씨 관측' : '날씨 ${weather.dust.gradeKo}');
+  }
+  if (inputSources.contains('travel.places')) {
+    add('공식 장소 DB');
+  }
+  if (_stringList(features['dynamic_source_types']).isNotEmpty ||
+      _stringList(features['rag_source_types']).isNotEmpty) {
+    add('RAG 컨텍스트');
+  }
+  return labels.take(8).toList(growable: false);
 }
 
 class _ProofChip extends StatelessWidget {
@@ -3709,17 +3760,14 @@ class _PlaceImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final imageUrl = place.imageUrl?.trim();
-    final parsedImageUrl = imageUrl == null ? null : Uri.tryParse(imageUrl);
-    if (imageUrl != null &&
-        imageUrl.isNotEmpty &&
-        parsedImageUrl?.hasScheme == true &&
-        (parsedImageUrl?.host.isNotEmpty ?? false)) {
+    final imageUri = _normalizedPlaceImageUri(place.imageUrl);
+    if (imageUri != null) {
       return Image.network(
-        imageUrl,
+        imageUri.toString(),
         width: width,
         height: height,
         fit: BoxFit.cover,
+        webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
         errorBuilder: (_, _, _) => _FallbackPlaceImage(
           category: place.category,
           width: width,
@@ -3733,6 +3781,24 @@ class _PlaceImage extends StatelessWidget {
       height: height,
     );
   }
+}
+
+Uri? _normalizedPlaceImageUri(String? rawUrl) {
+  final imageUrl = rawUrl?.trim();
+  if (imageUrl == null || imageUrl.isEmpty) {
+    return null;
+  }
+  final parsedImageUrl = Uri.tryParse(imageUrl);
+  if (parsedImageUrl == null ||
+      !parsedImageUrl.hasScheme ||
+      parsedImageUrl.host.isEmpty) {
+    return null;
+  }
+  if (parsedImageUrl.scheme == 'http' &&
+      parsedImageUrl.host == 'tong.visitkorea.or.kr') {
+    return parsedImageUrl.replace(scheme: 'https');
+  }
+  return parsedImageUrl;
 }
 
 class _FallbackPlaceImage extends StatelessWidget {
@@ -4470,18 +4536,9 @@ String _docentSummary({
   required String? script,
   required String? action,
 }) {
-  final trimmed = script?.trim();
-  if (trimmed != null && trimmed.isNotEmpty) {
-    final normalized = trimmed.replaceAll(RegExp(r'\s+'), ' ');
-    final sentence = RegExp(
-      r'^(.{18,80}?[.!?。]|.{18,80}?다[. ]?)',
-    ).firstMatch(normalized)?.group(1)?.trim();
-    if (sentence != null && sentence.isNotEmpty) {
-      return sentence;
-    }
-    return normalized.length > 56
-        ? '${normalized.substring(0, 56)}...'
-        : normalized;
+  final body = _docentBody(place: place, script: script).trim();
+  if (body.isNotEmpty) {
+    return _compactDocentSummary(body);
   }
 
   final trimmedAction = action?.trim();
@@ -4494,6 +4551,19 @@ String _docentSummary({
   return placeName == null
       ? '현재 위치 주변의 로컬 경험을 준비하고 있습니다.'
       : '$placeName 주변의 문화 맥락과 동선을 준비하고 있습니다.';
+}
+
+String _compactDocentSummary(String text) {
+  final normalized = text.replaceAll(RegExp(r'\s+'), ' ');
+  final sentence = RegExp(
+    r'^(.{18,80}?[.!?。]|.{18,80}?다[. ]?)',
+  ).firstMatch(normalized)?.group(1)?.trim();
+  if (sentence != null && sentence.isNotEmpty) {
+    return sentence;
+  }
+  return normalized.length > 56
+      ? '${normalized.substring(0, 56)}...'
+      : normalized;
 }
 
 String? _docentActionLabel({
@@ -5053,6 +5123,19 @@ String _sourceLabel(String? value) {
   };
 }
 
+String? _externalSourceLabel(Object? value) {
+  return switch ((value?.toString() ?? '').trim()) {
+    'tour_api' => 'TourAPI',
+    'kcisa' => 'KCISA',
+    'kopis' => 'KOPIS',
+    'dev_seed' => '시드 데이터',
+    'public_mvp_snapshot' => '공공 스냅샷',
+    'canonical' => '공식 장소 DB',
+    '' => null,
+    final source => source,
+  };
+}
+
 String _basisLabel(String value) {
   return switch (value.trim()) {
     'actual_data' => '실데이터',
@@ -5062,6 +5145,27 @@ String _basisLabel(String value) {
     final basis when basis.isEmpty => '-',
     final basis => basis,
   };
+}
+
+List<String> _stringList(Object? value) {
+  if (value is Iterable) {
+    return value
+        .map((item) => item.toString().trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+  }
+  final text = value?.toString().trim();
+  return text == null || text.isEmpty ? const <String>[] : <String>[text];
+}
+
+int _asFeatureInt(Object? value) {
+  if (value is int) {
+    return value;
+  }
+  if (value is num) {
+    return value.round();
+  }
+  return int.tryParse(value?.toString() ?? '') ?? 0;
 }
 
 class _Panel extends StatelessWidget {

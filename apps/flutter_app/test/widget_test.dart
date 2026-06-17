@@ -48,6 +48,9 @@ void main() {
     expect(find.text('날씨 적합'), findsOneWidget);
     expect(find.text('86'), findsAtLeastNWidgets(1));
     expect(find.text('TourAPI'), findsOneWidget);
+    expect(find.text('카드소비'), findsOneWidget);
+    expect(find.text('KCISA/KOPIS 문화행사'), findsOneWidget);
+    expect(find.textContaining('날씨'), findsWidgets);
   });
 
   testWidgets('filters places from category chips and toggles map modes', (
@@ -545,6 +548,7 @@ LalaPlace _place() {
     address: '경기도 수원시 팔달구 정조로 825',
     distanceM: 145,
     source: 'skeleton',
+    upstreamSource: 'tour_api',
     score: LalaPlaceScore(
       finalScore: 0.86,
       formulaVersion: 'local-value-v1',
@@ -557,7 +561,15 @@ LalaPlace _place() {
       ),
       dataBasis: 'demo_fallback',
       features: {
-        'missing_signals': <String>['card_spending_snapshot'],
+        'primary_source': 'tour_api',
+        'input_sources': <String>[
+          'travel.places',
+          'economy.card_spending_area_monthly',
+          'culture.events',
+          'travel.weather_observations',
+        ],
+        'culture_event_count': 3,
+        'missing_signals': <String>['review_attribute_analysis'],
       },
     ),
   );
@@ -573,6 +585,7 @@ LalaPlace _culturePlace() {
     address: '경기도 수원시 장안구 영화동',
     distanceM: 620,
     source: 'skeleton',
+    upstreamSource: 'tour_api',
     score: LalaPlaceScore(
       finalScore: 0.82,
       formulaVersion: 'local-value-v1',
@@ -585,7 +598,9 @@ LalaPlace _culturePlace() {
       ),
       dataBasis: 'demo_fallback',
       features: {
-        'signals': <String>['tour_api', 'culture_data'],
+        'primary_source': 'tour_api',
+        'input_sources': <String>['travel.places', 'culture.events'],
+        'culture_event_count': 2,
       },
     ),
   );
@@ -601,6 +616,7 @@ LalaPlace _restaurantPlace() {
     address: '경기도 수원시 팔달구 행궁동',
     distanceM: 780,
     source: 'skeleton',
+    upstreamSource: 'tour_api',
     score: LalaPlaceScore(
       finalScore: 0.78,
       formulaVersion: 'local-value-v1',
@@ -613,7 +629,11 @@ LalaPlace _restaurantPlace() {
       ),
       dataBasis: 'demo_fallback',
       features: {
-        'signals': <String>['card_spending', 'local_business'],
+        'primary_source': 'tour_api',
+        'input_sources': <String>[
+          'travel.places',
+          'economy.card_spending_area_monthly',
+        ],
       },
     ),
   );
