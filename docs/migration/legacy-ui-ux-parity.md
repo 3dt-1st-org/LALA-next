@@ -117,6 +117,9 @@ evidence, but they are not the latest MVP acceptance source.
   more closely by opening the weather sheet and triggering the shared refresh
   path, so weather, intervention, and planner context are refreshed when the
   user explicitly asks for weather.
+- Implemented: intervention toasts now keep the legacy 8-second auto-dismiss
+  behavior from `showInterventionToast()`, so route/weather alerts do not keep
+  covering the map until the user manually closes them.
 - Implemented: score and evidence-like context now stay on demand in the detail
   flow. Card-spending, transaction, source, score, and data-basis signals are
   revealed through the score/evidence control instead of competing with the

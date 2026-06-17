@@ -257,6 +257,7 @@ enum _ActiveMapSheet { detail, planner, weather, tour }
 class _LalaHomePageState extends State<LalaHomePage> {
   static const int _autoDocentTriggerMeters = 100;
   static const Duration _autoDocentCooldown = Duration(seconds: 12);
+  static const Duration _interventionToastAutoDismiss = Duration(seconds: 8);
 
   late final TextEditingController _baseUrlController;
   late final TextEditingController _bearerTokenController;
@@ -299,6 +300,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
   double? _mapFocusLng;
   int _mapLevel = 4;
   Timer? _mapCameraDebounce;
+  Timer? _interventionToastTimer;
   String _uiLanguage = 'ko';
   double _fontScale = 1.0;
 
@@ -323,6 +325,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
   @override
   void dispose() {
     _mapCameraDebounce?.cancel();
+    _interventionToastTimer?.cancel();
     _backend.close();
     _baseUrlController.dispose();
     _bearerTokenController.dispose();
@@ -421,6 +424,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
           _applyAutoDocentPlace(autoDocentPlace, closeActiveSheet: false);
         }
       });
+      _syncInterventionToastTimer();
     } on Object catch (error) {
       if (!mounted) {
         return;
@@ -428,6 +432,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
       setState(() {
         _error = _safeErrorMessage(error);
       });
+      _cancelInterventionToastTimer();
     } finally {
       if (mounted) {
         setState(() {
@@ -665,9 +670,32 @@ class _LalaHomePageState extends State<LalaHomePage> {
   }
 
   void _dismissInterventionToast() {
+    _cancelInterventionToastTimer();
     setState(() {
       _interventionToastDismissed = true;
     });
+  }
+
+  void _syncInterventionToastTimer() {
+    _cancelInterventionToastTimer();
+    if (_error != null ||
+        _interventionToastDismissed ||
+        _intervention?.data?.shouldIntervene != true) {
+      return;
+    }
+    _interventionToastTimer = Timer(_interventionToastAutoDismiss, () {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _interventionToastDismissed = true;
+      });
+    });
+  }
+
+  void _cancelInterventionToastTimer() {
+    _interventionToastTimer?.cancel();
+    _interventionToastTimer = null;
   }
 
   void _toggleVoice() {

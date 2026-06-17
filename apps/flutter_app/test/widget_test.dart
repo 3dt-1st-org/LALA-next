@@ -240,6 +240,28 @@ void main() {
     expect(find.textContaining('날씨가 바뀌었어요'), findsNothing);
   });
 
+  testWidgets(
+    'weather intervention toast auto-dismisses after legacy timeout',
+    (tester) async {
+      await tester.pumpWidget(
+        LalaApp(
+          backendFactory: (config) =>
+              FakeBackend(config, shouldIntervene: true),
+          initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('날씨가 바뀌었어요'), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 8));
+      await tester.pump();
+
+      expect(find.textContaining('날씨가 바뀌었어요'), findsNothing);
+    },
+  );
+
   testWidgets('planner sheet shows weather header and regenerates plan', (
     tester,
   ) async {
