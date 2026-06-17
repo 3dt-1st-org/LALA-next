@@ -5286,7 +5286,10 @@ String _placeRegionLabel(LalaPlace place, String language) {
     }
     final regionKo = place.regionKo?.trim();
     if (regionKo != null && regionKo.isNotEmpty) {
-      return _locationLabel(regionKo, language);
+      final localizedRegion = _locationLabel(regionKo, language);
+      if (!_containsKorean(localizedRegion)) {
+        return localizedRegion;
+      }
     }
     if (!_containsKorean(place.address)) {
       return place.address;
@@ -5296,6 +5299,9 @@ String _placeRegionLabel(LalaPlace place, String language) {
   final regionKo = place.regionKo?.trim();
   if (regionKo != null && regionKo.isNotEmpty) {
     return regionKo;
+  }
+  if (_looksEnglishText(place.address) && !_containsKorean(place.address)) {
+    return '주변 지역';
   }
   return place.address;
 }

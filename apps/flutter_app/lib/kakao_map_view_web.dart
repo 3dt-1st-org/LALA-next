@@ -27,6 +27,7 @@ Widget buildKakaoMapView({
       message: isEnglish
           ? 'Set the Kakao map key to show the live map.'
           : '카카오 지도 키를 설정하면 실제 지도가 표시됩니다.',
+      language: language,
       places: places,
       centerLat: centerLat,
       centerLng: centerLng,
@@ -99,6 +100,7 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
         oldWidget.centerLat != widget.centerLat ||
         oldWidget.centerLng != widget.centerLng ||
         oldWidget.level != widget.level ||
+        oldWidget.language != widget.language ||
         oldWidget.places != widget.places) {
       _renderMap();
     }
@@ -135,6 +137,7 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
           }
           _drawFallbackMap(
             container,
+            language: widget.language,
             message: widget.language == 'en'
                 ? 'Waiting for the Kakao map connection'
                 : '카카오 지도 연결 대기 중',
@@ -149,6 +152,7 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
     container.children.clear();
     container.text = '';
     container.style.display = 'block';
+    final isEnglish = widget.language == 'en';
     final placesPayload = Uri.encodeComponent(
       jsonEncode(
         widget.places
@@ -202,6 +206,13 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
     }
 
     function glyphFor(category) {
+      if (${jsonEncode(isEnglish)}) {
+        if (category === "restaurant") return "F";
+        if (category === "event") return "E";
+        if (category === "culture_venue") return "C";
+        if (category === "attraction") return "A";
+        return "L";
+      }
       if (category === "restaurant") return "맛";
       if (category === "event") return "행";
       if (category === "culture_venue") return "문";
@@ -210,7 +221,7 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
     }
 
     function shortName(name) {
-      name = String(name || "장소");
+      name = String(name || (${jsonEncode(isEnglish ? 'Local place' : '장소')}));
       return name.length > 14 ? name.slice(0, 14) + "..." : name;
     }
 
@@ -301,6 +312,7 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
 
 void _drawFallbackMap(
   html.DivElement container, {
+  required String language,
   required String message,
   required List<KakaoMapPlace> places,
   required double centerLat,
@@ -361,7 +373,7 @@ void _drawFallbackMap(
   container.append(notice);
 
   final visiblePlaces = places.isEmpty
-      ? _fallbackHtmlPlaces(centerLat, centerLng)
+      ? _fallbackHtmlPlaces(centerLat, centerLng, language)
       : places;
   for (final place in visiblePlaces.take(40)) {
     final point = _fallbackPosition(
@@ -425,7 +437,7 @@ void _drawFallbackMap(
     final label = html.DivElement()
       ..text = place.isCluster
           ? '${place.clusterCount}'
-          : _fallbackMarkerGlyph(place.category)
+          : _fallbackMarkerGlyph(place.category, language)
       ..style.color = place.category == 'event' ? '#1a202c' : '#ffffff'
       ..style.fontSize = place.isCluster ? '15px' : '11px'
       ..style.fontWeight = '900';
@@ -447,11 +459,16 @@ void _drawFallbackMap(
   return (x: x.clamp(8, 92).toDouble(), y: y.clamp(12, 82).toDouble());
 }
 
-List<KakaoMapPlace> _fallbackHtmlPlaces(double centerLat, double centerLng) {
+List<KakaoMapPlace> _fallbackHtmlPlaces(
+  double centerLat,
+  double centerLng,
+  String language,
+) {
+  final isEnglish = language == 'en';
   return [
     KakaoMapPlace(
       id: 'fallback-center',
-      name: '현재 추천 지점',
+      name: isEnglish ? 'Current recommendation' : '현재 추천 지점',
       category: 'attraction',
       lat: centerLat,
       lng: centerLng,
@@ -459,14 +476,14 @@ List<KakaoMapPlace> _fallbackHtmlPlaces(double centerLat, double centerLng) {
     ),
     KakaoMapPlace(
       id: 'fallback-food',
-      name: '로컬 맛집',
+      name: isEnglish ? 'Local food' : '로컬 맛집',
       category: 'restaurant',
       lat: centerLat - 0.0015,
       lng: centerLng + 0.0012,
     ),
     KakaoMapPlace(
       id: 'fallback-culture',
-      name: '문화 행사',
+      name: isEnglish ? 'Culture event' : '문화 행사',
       category: 'event',
       lat: centerLat + 0.0012,
       lng: centerLng - 0.001,
@@ -484,7 +501,16 @@ String _fallbackMarkerColor(String category) {
   };
 }
 
-String _fallbackMarkerGlyph(String category) {
+String _fallbackMarkerGlyph(String category, String language) {
+  if (language == 'en') {
+    return switch (category) {
+      'restaurant' => 'F',
+      'event' => 'E',
+      'culture_venue' => 'C',
+      'attraction' => 'A',
+      _ => 'L',
+    };
+  }
   return switch (category) {
     'restaurant' => '맛',
     'event' => '행',
@@ -562,12 +588,14 @@ Future<void> _ensureKakaoMapsSdk(String javascriptKey) {
 class _KakaoMapUnavailable extends StatelessWidget {
   const _KakaoMapUnavailable({
     required this.message,
+    required this.language,
     required this.places,
     required this.centerLat,
     required this.centerLng,
   });
 
   final String message;
+  final String language;
   final List<KakaoMapPlace> places;
   final double centerLat;
   final double centerLng;
@@ -575,7 +603,7 @@ class _KakaoMapUnavailable extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final visiblePlaces = places.isEmpty
-        ? _fallbackHtmlPlaces(centerLat, centerLng)
+        ? _fallbackHtmlPlaces(centerLat, centerLng, language)
         : places.take(24).toList(growable: false);
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -589,6 +617,7 @@ class _KakaoMapUnavailable extends StatelessWidget {
               for (final place in visiblePlaces)
                 _FallbackFlutterMarker(
                   place: place,
+                  language: language,
                   position: _fallbackPosition(
                     lat: place.lat,
                     lng: place.lng,
@@ -634,9 +663,14 @@ class _KakaoMapUnavailable extends StatelessWidget {
 }
 
 class _FallbackFlutterMarker extends StatelessWidget {
-  const _FallbackFlutterMarker({required this.place, required this.position});
+  const _FallbackFlutterMarker({
+    required this.place,
+    required this.language,
+    required this.position,
+  });
 
   final KakaoMapPlace place;
+  final String language;
   final ({double x, double y}) position;
 
   @override
@@ -711,7 +745,7 @@ class _FallbackFlutterMarker extends StatelessWidget {
                 child: Text(
                   place.isCluster
                       ? '${place.clusterCount}'
-                      : _fallbackMarkerGlyph(place.category),
+                      : _fallbackMarkerGlyph(place.category, language),
                   style: TextStyle(
                     color: place.category == 'event'
                         ? const Color(0xFF1A202C)

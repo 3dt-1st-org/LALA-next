@@ -437,6 +437,59 @@ void main() {
     expect(find.textContaining('경기도'), findsNothing);
   });
 
+  testWidgets(
+    'english mode uses neutral copy when English place data is absent',
+    (tester) async {
+      await tester.pumpWidget(
+        LalaApp(
+          backendFactory: (config) =>
+              FakeBackend(config, places: [_koreanOnlyPlace()]),
+          initialConfig: const LalaAppConfig(
+            baseUri: 'http://api.test',
+            lang: 'en',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Local place'), findsAtLeastNWidgets(1));
+      expect(find.textContaining('호반아트리움'), findsNothing);
+      expect(find.textContaining('경기도'), findsNothing);
+
+      await tester.tap(find.widgetWithText(TextButton, 'Details'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Nearby area'), findsAtLeastNWidgets(1));
+      expect(find.textContaining('호반아트리움'), findsNothing);
+      expect(find.textContaining('경기도'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'korean mode uses neutral copy when Korean place data is absent',
+    (tester) async {
+      await tester.pumpWidget(
+        LalaApp(
+          backendFactory: (config) =>
+              FakeBackend(config, places: [_englishOnlyPlace()]),
+          initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('이 장소'), findsAtLeastNWidgets(1));
+      expect(find.textContaining('Hoam Art Museum'), findsNothing);
+      expect(find.textContaining('Everland-ro'), findsNothing);
+
+      await tester.tap(find.widgetWithText(TextButton, '상세'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('주변 지역'), findsAtLeastNWidgets(1));
+      expect(find.textContaining('Hoam Art Museum'), findsNothing);
+      expect(find.textContaining('Everland-ro'), findsNothing);
+    },
+  );
+
   testWidgets('surfaces OAuth JWT auth mode separately from static bearer', (
     tester,
   ) async {
@@ -504,11 +557,13 @@ class FakeBackend implements LalaBackend {
     this.config, {
     this.failAuthenticatedLoad = false,
     this.shouldIntervene = false,
+    this.places,
   });
 
   final LalaAppConfig config;
   final bool failAuthenticatedLoad;
   final bool shouldIntervene;
+  final List<LalaPlace>? places;
   final List<String> docentScriptRequests = <String>[];
   final List<String> audioRequests = <String>[];
   int dailyPlanRequests = 0;
@@ -563,10 +618,12 @@ class FakeBackend implements LalaBackend {
         requestId: 'failed-auth-route',
       );
     }
+    final responsePlaces =
+        places ?? [_place(), _culturePlace(), _restaurantPlace()];
     return _envelope(
       LalaPlacesResponse(
-        count: 3,
-        places: [_place(), _culturePlace(), _restaurantPlace()],
+        count: responsePlaces.length,
+        places: responsePlaces,
         query: LalaPlacesQuery(
           lat: config.lat,
           lng: config.lng,
@@ -586,6 +643,7 @@ class FakeBackend implements LalaBackend {
 
   @override
   Future<LalaEnvelope<LalaIntervention>> getIntervention() async {
+    final place = (places ?? [_place()]).first;
     return _envelope(
       LalaIntervention(
         center: LalaCoordinate(lat: config.lat, lng: config.lng),
@@ -594,7 +652,7 @@ class FakeBackend implements LalaBackend {
         reason: 'Weather is fine.',
         recommendedAction: 'Keep the current route.',
         source: 'skeleton',
-        place: _place(),
+        place: place,
       ),
     );
   }
@@ -602,6 +660,7 @@ class FakeBackend implements LalaBackend {
   @override
   Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan() async {
     dailyPlanRequests += 1;
+    final place = (places ?? [_place()]).first;
     return _envelope(
       LalaDailyPlan(
         language: 'ko',
@@ -609,7 +668,7 @@ class FakeBackend implements LalaBackend {
         radiusM: config.radiusM,
         weather: _weather(),
         slots: [
-          LalaPlanSlot(period: 'morning', title: '화성행궁 산책 코스', place: _place()),
+          LalaPlanSlot(period: 'morning', title: '화성행궁 산책 코스', place: place),
         ],
         source: 'skeleton',
         requestHash:
@@ -784,6 +843,38 @@ LalaPlace _restaurantPlace() {
         ],
       },
     ),
+  );
+}
+
+LalaPlace _koreanOnlyPlace() {
+  return const LalaPlace(
+    placeId: 'korean-only-place',
+    name: '호반아트리움',
+    nameKo: '호반아트리움',
+    category: 'attraction',
+    lat: 37.4260,
+    lng: 127.0020,
+    address: '경기도 과천시 사기막길 71-7',
+    regionKo: '과천시',
+    distanceM: 320,
+    source: 'public_mvp_snapshot',
+    upstreamSource: 'tour_api',
+  );
+}
+
+LalaPlace _englishOnlyPlace() {
+  return const LalaPlace(
+    placeId: 'english-only-place',
+    name: 'Hoam Art Museum',
+    nameEn: 'Hoam Art Museum',
+    category: 'culture_venue',
+    lat: 37.2930,
+    lng: 127.2020,
+    address: '38 Everland-ro 562beon-gil, Yongin-si, Gyeonggi-do',
+    regionEn: 'Yongin',
+    distanceM: 620,
+    source: 'public_mvp_snapshot',
+    upstreamSource: 'tour_api',
   );
 }
 
