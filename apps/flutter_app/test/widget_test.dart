@@ -547,6 +547,19 @@ void main() {
     );
     expect(find.text('수원화성 도슨트'), findsAtLeastNWidgets(1));
     expect(find.text('화성행궁 도슨트'), findsNothing);
+
+    await tester.tap(find.byIcon(Icons.close).last);
+    await tester.pumpAndSettle();
+    final selectedRailCard = find.byKey(
+      const ValueKey('tour-stop-action-suwon-hwaseong'),
+    );
+    final selectedRailCardTopLeft = tester.getTopLeft(selectedRailCard);
+    await tester.tapAt(selectedRailCardTopLeft + const Offset(24, 24));
+    await tester.pumpAndSettle();
+
+    expect(find.text('장소 상세'), findsNothing);
+    expect(find.text('화성행궁 도슨트'), findsAtLeastNWidgets(1));
+    expect(find.text('수원화성 도슨트'), findsNothing);
   });
 
   testWidgets('cluster marker focuses its member recommendations', (

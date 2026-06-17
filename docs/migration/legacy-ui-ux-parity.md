@@ -45,6 +45,9 @@ evidence, but they are not the latest MVP acceptance source.
   category badges are visible, event cards include ongoing/ended status, and
   tapping the already-selected card keeps the user in the map context instead
   of reopening detail.
+- Implemented: explicitly re-tapping the selected recommendation rail card now
+  follows the iOS `MapGuidanceLogic.reduceSelection()` behavior by clearing the
+  selection and returning to the default map guidance without opening detail.
 - Implemented: selecting a place from the rail, marker, auto-docent, or tour
   context now explicitly focuses the map on that place, matching the legacy
   `selectPlace -> map.panTo(place)` behavior.

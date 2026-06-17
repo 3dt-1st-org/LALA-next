@@ -594,6 +594,18 @@ class _LalaHomePageState extends State<LalaHomePage> {
     });
   }
 
+  void _clearPlaceSelection() {
+    setState(() {
+      _selectedPlaceId = null;
+      _activeSheet = null;
+      _docentScript = null;
+      _docentAudio = null;
+      _audioError = null;
+      _focusedClusterMemberIds = const <String>[];
+      _showEvidence = false;
+    });
+  }
+
   void _focusCluster(KakaoMapPlace cluster) {
     setState(() {
       _mapFocusLat = cluster.lat;
@@ -925,6 +937,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
               onSelectPlace: _selectPlace,
               onSelectCluster: _focusCluster,
               onCameraIdle: _handleMapCameraIdle,
+              onClearPlaceSelection: _clearPlaceSelection,
               onToggleRecommendationRail: _toggleRecommendationRail,
               onOpenSheet: _openSheet,
               onCloseSheet: _closeSheet,
@@ -1390,6 +1403,7 @@ class _Dashboard extends StatelessWidget {
     required this.onSelectPlace,
     required this.onSelectCluster,
     required this.onCameraIdle,
+    required this.onClearPlaceSelection,
     required this.onToggleRecommendationRail,
     required this.onOpenSheet,
     required this.onCloseSheet,
@@ -1441,6 +1455,7 @@ class _Dashboard extends StatelessWidget {
   final ValueChanged<LalaPlace> onSelectPlace;
   final ValueChanged<KakaoMapPlace> onSelectCluster;
   final ValueChanged<KakaoMapCamera> onCameraIdle;
+  final VoidCallback onClearPlaceSelection;
   final VoidCallback onToggleRecommendationRail;
   final ValueChanged<_ActiveMapSheet> onOpenSheet;
   final VoidCallback onCloseSheet;
@@ -1537,8 +1552,10 @@ class _Dashboard extends StatelessWidget {
                 source: effectiveSource,
                 language: uiLanguage,
                 selectedPlaceId: topPlace?.placeId,
+                explicitSelectedPlaceId: selectedPlaceId,
                 expanded: recommendationRailExpanded,
                 onSelectPlace: onSelectPlace,
+                onReselectSelectedPlace: onClearPlaceSelection,
                 onToggleExpanded: onToggleRecommendationRail,
               ),
             ),
@@ -1779,8 +1796,10 @@ class _MapPlaceCarouselOverlay extends StatelessWidget {
     required this.source,
     required this.language,
     required this.selectedPlaceId,
+    required this.explicitSelectedPlaceId,
     required this.expanded,
     required this.onSelectPlace,
+    required this.onReselectSelectedPlace,
     required this.onToggleExpanded,
   });
 
@@ -1788,8 +1807,10 @@ class _MapPlaceCarouselOverlay extends StatelessWidget {
   final String? source;
   final String language;
   final String? selectedPlaceId;
+  final String? explicitSelectedPlaceId;
   final bool expanded;
   final ValueChanged<LalaPlace> onSelectPlace;
+  final VoidCallback onReselectSelectedPlace;
   final VoidCallback onToggleExpanded;
 
   @override
@@ -1890,18 +1911,24 @@ class _MapPlaceCarouselOverlay extends StatelessWidget {
                           scrollDirection: Axis.horizontal,
                           itemCount: items.length,
                           separatorBuilder: (_, _) => const SizedBox(width: 10),
-                          itemBuilder: (context, index) => _MapRailPlaceCard(
-                            place: items[index],
-                            language: language,
-                            selected:
+                          itemBuilder: (context, index) {
+                            final place = items[index];
+                            final selected =
                                 (selectedPlaceId == null && index == 0) ||
-                                selectedPlaceId == items[index].placeId,
-                            onTap:
-                                ((selectedPlaceId == null && index == 0) ||
-                                    selectedPlaceId == items[index].placeId)
-                                ? null
-                                : () => onSelectPlace(items[index]),
-                          ),
+                                selectedPlaceId == place.placeId;
+                            final explicitlySelected =
+                                explicitSelectedPlaceId == place.placeId;
+                            return _MapRailPlaceCard(
+                              place: place,
+                              language: language,
+                              selected: selected,
+                              onTap: explicitlySelected
+                                  ? onReselectSelectedPlace
+                                  : selected
+                                  ? null
+                                  : () => onSelectPlace(place),
+                            );
+                          },
                         ),
                       ),
                     ),
