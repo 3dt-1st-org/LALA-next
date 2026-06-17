@@ -682,7 +682,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _autoDocentEnabled = willEnable;
       if (nearestPlace != null) {
         _selectedPlaceId = nearestPlace.placeId;
-        _activeSheet = _ActiveMapSheet.detail;
+        _activeSheet = null;
         _docentAudio = null;
         _audioError = null;
         _focusedClusterMemberIds = const <String>[];

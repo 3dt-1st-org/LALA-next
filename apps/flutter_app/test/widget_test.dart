@@ -294,7 +294,7 @@ void main() {
     expect(find.text('화성행궁 도슨트'), findsAtLeastNWidgets(1));
   });
 
-  testWidgets('auto docent on opens the nearest place detail sheet', (
+  testWidgets('auto docent on keeps the nearest place in map guidance', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -309,10 +309,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('auto-docent-toggle')));
     await tester.pumpAndSettle();
 
-    expect(find.text('장소 상세'), findsOneWidget);
+    expect(find.text('장소 상세'), findsNothing);
     expect(find.text('화성행궁 도슨트'), findsAtLeastNWidgets(1));
-    expect(find.text('로컬 맥락'), findsOneWidget);
-    expect(find.text('장소 연계 행사 1건'), findsOneWidget);
+    expect(find.text('로컬 맥락'), findsNothing);
+    expect(find.text('장소 연계 행사 1건'), findsNothing);
     expect(find.text('카드 소비 1,400만원'), findsNothing);
     expect(
       find.descendant(

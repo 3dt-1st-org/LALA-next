@@ -61,6 +61,10 @@ evidence, but they are not the latest MVP acceptance source.
   sheets.
 - Implemented: voice and auto-docent controls have persistent ON/OFF state and
   visible map feedback.
+- Implemented: auto-docent now follows the legacy
+  `runAutoDocentIfNeeded -> selectPlace(openDetail: false)` behavior by
+  selecting and panning to the nearest place while keeping the user in the map
+  guidance context instead of forcing the detail sheet open.
 - Implemented: turning voice OFF now clears prepared docent and tour audio
   state, matching the legacy voice toggle behavior that stops both current
   docent audio and tour-guide audio.
