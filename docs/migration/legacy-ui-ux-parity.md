@@ -45,6 +45,9 @@ evidence, but they are not the latest MVP acceptance source.
   category badges are visible, event cards include ongoing/ended status, and
   tapping the already-selected card keeps the user in the map context instead
   of reopening detail.
+- Implemented: selected recommendation rail cards now carry an obang palette
+  gradient ring, preserving the legacy iOS `AnimatedObangBorder` selection cue
+  in the Flutter map shell.
 - Implemented: explicitly re-tapping the selected recommendation rail card now
   follows the iOS `MapGuidanceLogic.reduceSelection()` behavior by clearing the
   selection and returning to the default map guidance without opening detail.

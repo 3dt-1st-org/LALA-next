@@ -618,6 +618,10 @@ void main() {
 
     expect(find.text('수원화성'), findsOneWidget);
     expect(
+      find.byKey(const ValueKey('obang-border-hwaseong-haenggung')),
+      findsOneWidget,
+    );
+    expect(
       find.byKey(const ValueKey('kakao-map-fallback-center-37.2819-127.0142')),
       findsOneWidget,
     );
@@ -644,6 +648,10 @@ void main() {
     expect(find.text('장소 상세'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('kakao-map-fallback-center-37.2870-127.0110')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('obang-border-suwon-hwaseong')),
       findsOneWidget,
     );
     expect(find.text('수원화성 도슨트'), findsAtLeastNWidgets(1));

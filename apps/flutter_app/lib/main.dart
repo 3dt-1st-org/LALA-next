@@ -1945,7 +1945,7 @@ class _MapPlaceCarouselOverlay extends StatelessWidget {
                   children: [
                     const SizedBox(height: 8),
                     SizedBox(
-                      height: 132,
+                      height: 138,
                       child: DecoratedBox(
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.82),
@@ -2023,55 +2023,90 @@ class _MapRailPlaceCard extends StatelessWidget {
         onTap: onTap,
         child: Container(
           width: 230,
-          padding: const EdgeInsets.all(9),
+          padding: selected ? const EdgeInsets.all(3) : EdgeInsets.zero,
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: selected ? 0.98 : 0.93),
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: selected ? color : const Color(0xFFE2E8F0),
-              width: selected ? 2 : 1,
-            ),
+            gradient: selected ? _obangGradient() : null,
+            border: selected
+                ? null
+                : Border.all(color: const Color(0xFFE2E8F0)),
+            boxShadow: selected
+                ? const [
+                    BoxShadow(
+                      blurRadius: 16,
+                      offset: Offset(0, 7),
+                      color: Color(0x240F172A),
+                    ),
+                  ]
+                : null,
           ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      _placeDisplayName(place, language),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: const Color(0xFF111827),
-                        fontWeight: FontWeight.w900,
-                        height: 1.12,
+          child: Container(
+            key: selected ? ValueKey('obang-border-${place.placeId}') : null,
+            padding: const EdgeInsets.all(9),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: selected ? 0.98 : 0.93),
+              borderRadius: BorderRadius.circular(selected ? 15 : 18),
+              border: selected
+                  ? Border.all(color: Colors.white.withValues(alpha: 0.72))
+                  : null,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        _placeDisplayName(place, language),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: selected ? color : const Color(0xFF111827),
+                          fontWeight: FontWeight.w900,
+                          height: 1.12,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    _RailCategoryBadge(place: place, language: language),
-                    const SizedBox(height: 5),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: [
-                        if (place.distanceM > 0)
-                          _TinyMeta('${place.distanceM}m'),
-                        _TinyMeta(_copy(language, ko: '상세', en: 'Details')),
-                      ],
-                    ),
-                  ],
+                      const SizedBox(height: 4),
+                      _RailCategoryBadge(place: place, language: language),
+                      const SizedBox(height: 5),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          if (place.distanceM > 0)
+                            _TinyMeta('${place.distanceM}m'),
+                          _TinyMeta(_copy(language, ko: '상세', en: 'Details')),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              _RailPlaceThumb(place: place),
-            ],
+                const SizedBox(width: 10),
+                _RailPlaceThumb(place: place),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
+}
+
+LinearGradient _obangGradient() {
+  return const LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [
+      Color(0xFF1A202C),
+      Color(0xFF2B6CB0),
+      Color(0xFFC53030),
+      Color(0xFFFFFFFF),
+      Color(0xFFF5C842),
+      Color(0xFF1A202C),
+    ],
+    stops: [0, 0.22, 0.44, 0.62, 0.82, 1],
+  );
 }
 
 class _RailCategoryBadge extends StatelessWidget {
