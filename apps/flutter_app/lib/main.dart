@@ -1717,15 +1717,18 @@ class _Dashboard extends StatelessWidget {
               ),
             ),
             Positioned(
-              right: 16,
-              bottom: isWide ? 44 : 204,
-              child: _FloatingMapControls(
-                voiceEnabled: voiceEnabled,
-                autoDocentEnabled: autoDocentEnabled,
-                language: uiLanguage,
-                onToggleVoice: onToggleVoice,
-                onToggleAutoDocent: onToggleAutoDocent,
-                onReturnToLocation: onReturnToLocation,
+              left: 0,
+              right: 0,
+              bottom: isWide ? 44 : 196,
+              child: Center(
+                child: _FloatingMapControls(
+                  voiceEnabled: voiceEnabled,
+                  autoDocentEnabled: autoDocentEnabled,
+                  language: uiLanguage,
+                  onToggleVoice: onToggleVoice,
+                  onToggleAutoDocent: onToggleAutoDocent,
+                  onReturnToLocation: onReturnToLocation,
+                ),
               ),
             ),
             if (activeSheet != null)
@@ -2303,7 +2306,7 @@ class _MapGuidancePanel extends StatelessWidget {
                         border: Border.all(color: const Color(0xFFE2E8F0)),
                       ),
                       child: Text(
-                        '${docentAudio!.bytes.length} bytes',
+                        _audioBytesLabel(docentAudio!.bytes.length, language),
                         style: const TextStyle(
                           color: Color(0xFF64748B),
                           fontSize: 11,
@@ -4750,7 +4753,7 @@ class _PlaceRail extends StatelessWidget {
             const Icon(Icons.expand_less, size: 18),
             const SizedBox(width: 6),
             Text(
-              '추천 장소',
+              _copy(language, ko: '추천 장소', en: 'Recommended places'),
               style: Theme.of(
                 context,
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
@@ -4767,7 +4770,7 @@ class _PlaceRail extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         if (items.isEmpty)
-          const _EmptyPlaceState()
+          _EmptyPlaceState(language: language)
         else
           SizedBox(
             height: 164,
@@ -4991,7 +4994,7 @@ class _DocentSubtitle extends StatelessWidget {
                         border: Border.all(color: const Color(0xFFE2E8F0)),
                       ),
                       child: Text(
-                        '${docentAudio!.bytes.length} bytes',
+                        _audioBytesLabel(docentAudio!.bytes.length, language),
                         style: const TextStyle(
                           color: Color(0xFF64748B),
                           fontSize: 11,
@@ -5405,13 +5408,12 @@ class _FloatingMapControls extends StatelessWidget {
               : (voiceEnabled ? '켬' : '끔'),
           onPressed: onToggleVoice,
         ),
-        const SizedBox(width: 9),
-        _MapFab(
+        const SizedBox(width: 14),
+        _AutoDocentFab(
           key: const ValueKey('auto-docent-toggle'),
           tooltip: language == 'en'
               ? (autoDocentEnabled ? 'Auto guide off' : 'Auto guide on')
               : (autoDocentEnabled ? '자동 도슨트 끄기' : '자동 도슨트 켜기'),
-          icon: Icons.record_voice_over_outlined,
           label: language == 'en'
               ? (autoDocentEnabled ? 'Auto on' : 'Auto off')
               : (autoDocentEnabled ? '자동 켜짐' : '자동 꺼짐'),
@@ -5421,7 +5423,7 @@ class _FloatingMapControls extends StatelessWidget {
               : (autoDocentEnabled ? '켬' : '끔'),
           onPressed: onToggleAutoDocent,
         ),
-        const SizedBox(width: 9),
+        const SizedBox(width: 14),
         _MapFab(
           key: const ValueKey('location-refresh'),
           tooltip: language == 'en' ? 'My location' : '내 위치',
@@ -5432,6 +5434,64 @@ class _FloatingMapControls extends StatelessWidget {
           onPressed: onReturnToLocation,
         ),
       ],
+    );
+  }
+}
+
+class _AutoDocentFab extends StatelessWidget {
+  const _AutoDocentFab({
+    super.key,
+    required this.tooltip,
+    required this.label,
+    required this.active,
+    required this.statusLabel,
+    required this.onPressed,
+  });
+
+  final String tooltip;
+  final String label;
+  final bool active;
+  final String statusLabel;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final backgroundColor = active
+        ? const Color(0xFF2B6CB0)
+        : const Color(0xFF1A202C).withValues(alpha: 0.84);
+    return Tooltip(
+      message: tooltip,
+      child: Semantics(
+        button: true,
+        label: label,
+        child: FilledButton(
+          onPressed: onPressed,
+          style: FilledButton.styleFrom(
+            fixedSize: const Size.square(74),
+            shape: const CircleBorder(),
+            padding: EdgeInsets.zero,
+            backgroundColor: backgroundColor,
+            foregroundColor: Colors.white,
+            elevation: 9,
+            shadowColor: const Color(0x33000000),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.auto_awesome, size: 19),
+              const SizedBox(height: 3),
+              Text(
+                statusLabel,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                  height: 1,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -5481,15 +5541,17 @@ class _MapFab extends StatelessWidget {
             onPressed: onPressed,
             icon: Icon(icon, size: 22),
             style: IconButton.styleFrom(
-              fixedSize: const Size.square(52),
+              fixedSize: const Size.square(46),
               backgroundColor: active
                   ? const Color(0xFF2B6CB0)
-                  : Colors.white.withValues(alpha: 0.92),
-              foregroundColor: active ? Colors.white : const Color(0xFF1A202C),
+                  : const Color(0xFF1A202C).withValues(alpha: 0.82),
+              foregroundColor: Colors.white,
               shape: CircleBorder(
                 side: BorderSide(
-                  color: active ? Colors.white : const Color(0xFFCBD5E0),
-                  width: 2.2,
+                  color: active
+                      ? Colors.white.withValues(alpha: 0.86)
+                      : Colors.white.withValues(alpha: 0.22),
+                  width: 1.6,
                 ),
               ),
               elevation: 8,
@@ -6221,7 +6283,9 @@ class _InterventionToast extends StatelessWidget {
 }
 
 class _EmptyPlaceState extends StatelessWidget {
-  const _EmptyPlaceState();
+  const _EmptyPlaceState({required this.language});
+
+  final String language;
 
   @override
   Widget build(BuildContext context) {
@@ -6233,7 +6297,9 @@ class _EmptyPlaceState extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
-      child: const Text('No places returned.'),
+      child: Text(
+        _copy(language, ko: '추천 장소를 불러오지 못했습니다.', en: 'No places returned.'),
+      ),
     );
   }
 }
@@ -6613,6 +6679,10 @@ String _cleanLocalizedFragment(String value) {
       .trim()
       .replaceAll(RegExp(r'^[,.:;~-]+|[,.:;~-]+$'), '')
       .trim();
+}
+
+String _audioBytesLabel(int bytes, String language) {
+  return _isEnglish(language) ? '$bytes bytes' : '$bytes바이트';
 }
 
 bool _shouldShowEventInfo(LalaPlace place) {

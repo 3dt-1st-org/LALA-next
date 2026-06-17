@@ -71,6 +71,12 @@ evidence, but they are not the latest MVP acceptance source.
   sheets.
 - Implemented: voice and auto-docent controls have persistent ON/OFF state and
   visible map feedback.
+- Implemented: the floating control cluster now mirrors the legacy iOS bottom
+  control hierarchy: a large center auto-docent ON/OFF button with smaller
+  voice and current-location buttons on each side.
+- Implemented: user-facing map, sheet, and docent copy follows the selected
+  language only; bilingual upstream place/script fragments are reduced to the
+  active language before rendering.
 - Implemented: auto-docent now follows the legacy
   `runAutoDocentIfNeeded -> selectPlace(openDetail: false)` behavior by
   selecting and panning to the nearest place while keeping the user in the map

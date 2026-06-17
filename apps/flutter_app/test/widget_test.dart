@@ -195,6 +195,14 @@ void main() {
       find.descendant(of: autoToggle, matching: find.text('끔')),
       findsOneWidget,
     );
+    expect(
+      find.descendant(
+        of: autoToggle,
+        matching: find.byIcon(Icons.auto_awesome),
+      ),
+      findsOneWidget,
+    );
+    expect(tester.getSize(autoToggle), const Size(74, 74));
     await tester.tap(autoToggle);
     await tester.pumpAndSettle();
     expect(
@@ -1113,6 +1121,7 @@ void main() {
     expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
     expect(find.textContaining('Hwaseong'), findsNothing);
     expect(find.textContaining('Suwon-si'), findsNothing);
+    expect(_visibleMixedLanguageTexts(tester), isEmpty);
 
     await tester.tap(find.byIcon(Icons.settings).first);
     await tester.pumpAndSettle();
@@ -1124,6 +1133,7 @@ void main() {
     expect(find.text('Hwaseong Haenggung'), findsAtLeastNWidgets(1));
     expect(find.textContaining('화성행궁'), findsNothing);
     expect(find.textContaining('경기도'), findsNothing);
+    expect(_visibleMixedLanguageTexts(tester), isEmpty);
   });
 
   testWidgets('selected language removes bilingual intervention copy', (
@@ -1151,6 +1161,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('상세 도슨트입니다'), findsAtLeastNWidgets(1));
     expect(find.textContaining('Detailed'), findsNothing);
+    expect(find.textContaining('bytes'), findsNothing);
+    expect(_visibleMixedLanguageTexts(tester), isEmpty);
 
     await tester.tap(find.byKey(const ValueKey('planner-pill-hit-target')));
     await tester.pumpAndSettle();
@@ -1179,6 +1191,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('Hwaseong walk'), findsAtLeastNWidgets(1));
     expect(find.textContaining('화성행궁 산책'), findsNothing);
+    expect(_visibleMixedLanguageTexts(tester), isEmpty);
   });
 
   testWidgets('localized API errors follow the selected language only', (
@@ -1264,7 +1277,8 @@ void main() {
     expect(backend.audioRequests, [
       '화성행궁 상세 도슨트입니다. 행궁동 골목, 수원화성 성곽, 주변 로컬 상권을 이어서 천천히 걸어보세요.',
     ]);
-    expect(find.text('4 bytes'), findsOneWidget);
+    expect(find.text('4바이트'), findsOneWidget);
+    expect(find.text('4 bytes'), findsNothing);
     expect(find.textContaining('상세 도슨트입니다'), findsAtLeastNWidgets(1));
     expect(find.widgetWithText(FilledButton, '정보 더 듣기'), findsNothing);
   });
