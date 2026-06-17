@@ -1375,7 +1375,10 @@ class _Dashboard extends StatelessWidget {
                 key: const ValueKey('weather-pill'),
                 weather: currentWeather,
                 language: uiLanguage,
-                onPressed: () => onOpenSheet(_ActiveMapSheet.weather),
+                onPressed: () {
+                  onOpenSheet(_ActiveMapSheet.weather);
+                  onRefresh();
+                },
               ),
             ),
             Positioned(

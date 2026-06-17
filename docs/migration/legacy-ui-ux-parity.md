@@ -68,6 +68,10 @@ evidence, but they are not the latest MVP acceptance source.
   affordance. In addition to opening settings, it exposes a localized retry
   action that restores in-app location consent and refreshes the map context,
   matching the legacy `overlay-retry -> loc-btn` flow.
+- Implemented: the weather pill now mirrors the legacy `click_weather` flow
+  more closely by opening the weather sheet and triggering the shared refresh
+  path, so weather, intervention, and planner context are refreshed when the
+  user explicitly asks for weather.
 
 ## Next Acceptance Items
 

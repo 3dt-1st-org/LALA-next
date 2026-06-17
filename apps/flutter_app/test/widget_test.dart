@@ -101,19 +101,24 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
+    final backend = FakeBackend(
+      const LalaAppConfig(baseUri: 'http://api.test'),
+    );
 
     await tester.pumpWidget(
       LalaApp(
-        backendFactory: FakeBackend.new,
+        backendFactory: (_) => backend,
         initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
       ),
     );
 
     await tester.pumpAndSettle();
+    expect(backend.weatherRequests, 1);
 
     await tester.tap(find.byKey(const ValueKey('weather-pill-hit-target')));
     await tester.pumpAndSettle();
 
+    expect(backend.weatherRequests, 2);
     expect(find.text('날씨'), findsOneWidget);
     expect(find.text('날씨 추이'), findsOneWidget);
     expect(find.text('15시'), findsAtLeastNWidgets(1));
@@ -802,6 +807,7 @@ class FakeBackend implements LalaBackend {
   final List<LalaPlace>? places;
   final List<String> docentScriptRequests = <String>[];
   final List<String> audioRequests = <String>[];
+  int weatherRequests = 0;
   int dailyPlanRequests = 0;
 
   @override
@@ -874,6 +880,7 @@ class FakeBackend implements LalaBackend {
 
   @override
   Future<LalaEnvelope<LalaWeather>> getWeather() async {
+    weatherRequests += 1;
     return _envelope(_weather());
   }
 
