@@ -475,6 +475,13 @@ void main() {
       find.byKey(const ValueKey('kakao-map-fallback-center-37.2819-127.0142')),
       findsOneWidget,
     );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('kakao-map-marker-hwaseong-haenggung')),
+        matching: find.byIcon(Icons.account_balance),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('화성행궁 도슨트'), findsAtLeastNWidgets(1));
     expect(find.text('행궁동 카페거리 도슨트'), findsNothing);
     expect(
@@ -696,6 +703,15 @@ void main() {
         const ValueKey('kakao-map-marker-cluster-restaurant:6710:22862'),
       ),
       findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey('kakao-map-marker-cluster-restaurant:6710:22862'),
+        ),
+        matching: find.text('맛'),
+      ),
+      findsNothing,
     );
     expect(find.text('화성행궁 도슨트'), findsOneWidget);
 

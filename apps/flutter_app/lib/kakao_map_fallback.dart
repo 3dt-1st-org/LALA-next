@@ -110,8 +110,8 @@ class _FallbackMarker extends StatelessWidget {
             constraints: const BoxConstraints(maxWidth: 132),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(999),
+              color: const Color(0xFF111827).withValues(alpha: 0.72),
+              borderRadius: BorderRadius.circular(12),
               boxShadow: const [
                 BoxShadow(
                   blurRadius: 18,
@@ -125,8 +125,8 @@ class _FallbackMarker extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                color: Color(0xFF111827),
-                fontSize: 11,
+                color: Colors.white,
+                fontSize: 10,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -140,6 +140,9 @@ class _FallbackMarker extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(999),
+            border: place.isCluster
+                ? Border.all(color: _markerColor(place.category), width: 2.2)
+                : null,
             boxShadow: const [
               BoxShadow(
                 blurRadius: 14,
@@ -148,27 +151,31 @@ class _FallbackMarker extends StatelessWidget {
               ),
             ],
           ),
-          child: Container(
-            width: size * 0.64,
-            height: size * 0.64,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: _markerColor(place.category),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(
-              place.isCluster
-                  ? '${place.clusterCount}'
-                  : _markerGlyph(place.category, language),
-              style: TextStyle(
-                color: place.category == 'event'
-                    ? const Color(0xFF1A202C)
-                    : Colors.white,
-                fontSize: place.isCluster ? 15 : 11,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
+          child: place.isCluster
+              ? Text(
+                  '${place.clusterCount}',
+                  style: TextStyle(
+                    color: _markerTextColor(place.category),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                  ),
+                )
+              : Container(
+                  width: size * 0.64,
+                  height: size * 0.64,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: _markerColor(place.category),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Icon(
+                    _markerIcon(place.category),
+                    color: place.category == 'event'
+                        ? const Color(0xFF1A202C)
+                        : Colors.white,
+                    size: place.selected ? 15 : 13,
+                  ),
+                ),
         ),
       ],
     );
@@ -330,21 +337,24 @@ Color _markerColor(String category) {
   };
 }
 
-String _markerGlyph(String category, String language) {
-  if (language == 'en') {
-    return switch (category) {
-      'restaurant' => 'F',
-      'event' => 'E',
-      'culture_venue' => 'C',
-      'attraction' => 'A',
-      _ => 'L',
-    };
+Color _markerTextColor(String category) {
+  if (category == 'restaurant') {
+    return const Color(0xFF6B4F0D);
   }
   return switch (category) {
-    'restaurant' => '맛',
-    'event' => '행',
-    'culture_venue' => '문',
-    'attraction' => '명',
-    _ => 'L',
+    'event' => const Color(0xFF2B6CB0),
+    'culture_venue' => const Color(0xFF2B6CB0),
+    'attraction' => const Color(0xFFD73333),
+    _ => const Color(0xFF1A202C),
+  };
+}
+
+IconData _markerIcon(String category) {
+  return switch (category) {
+    'restaurant' => Icons.restaurant,
+    'event' => Icons.calendar_month,
+    'culture_venue' => Icons.account_balance,
+    'attraction' => Icons.account_balance,
+    _ => Icons.place,
   };
 }

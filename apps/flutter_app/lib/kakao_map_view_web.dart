@@ -259,19 +259,14 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
       return "#1A202C";
     }
 
-    function glyphFor(category) {
-      if (${jsonEncode(isEnglish)}) {
-        if (category === "restaurant") return "F";
-        if (category === "event") return "E";
-        if (category === "culture_venue") return "C";
-        if (category === "attraction") return "A";
-        return "L";
+    function iconSvgFor(category) {
+      if (category === "restaurant") {
+        return '<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M7 3v8M5 3v8M9 3v8M5 11h4v10M16 3v18M16 3c3 2 4 5 3 9h-3" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
       }
-      if (category === "restaurant") return "맛";
-      if (category === "event") return "행";
-      if (category === "culture_venue") return "문";
-      if (category === "attraction") return "명";
-      return "L";
+      if (category === "event") {
+        return '<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M8 3v4M16 3v4M4 10h16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
+      }
+      return '<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M4 10h16L12 4 4 10ZM6 10v8M10 10v8M14 10v8M18 10v8M4 20h16" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     }
 
     function shortName(name) {
@@ -281,7 +276,7 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
 
     places.forEach(function (place) {
       var isCluster = place.clusterCount != null && place.clusterCount > 1;
-      var size = isCluster ? Math.min(58, 34 + place.clusterCount * 4) : (place.selected ? 42 : 34);
+      var size = isCluster ? 42 : (place.selected ? 34 : 28);
       var marker = document.createElement("div");
       marker.title = place.name;
       marker.style.display = "flex";
@@ -297,10 +292,10 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
         namePill.textContent = shortName(place.name);
         namePill.style.maxWidth = "132px";
         namePill.style.padding = "5px 10px";
-        namePill.style.borderRadius = "999px";
-        namePill.style.background = "#ffffff";
-        namePill.style.color = "#111827";
-        namePill.style.fontSize = "11px";
+        namePill.style.borderRadius = "12px";
+        namePill.style.background = "rgba(17, 24, 39, .72)";
+        namePill.style.color = "#ffffff";
+        namePill.style.fontSize = "10px";
         namePill.style.fontWeight = "800";
         namePill.style.whiteSpace = "nowrap";
         namePill.style.overflow = "hidden";
@@ -317,6 +312,9 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
       circle.style.boxShadow = "0 4px 14px rgba(15, 23, 42, 0.22)";
       circle.style.display = "grid";
       circle.style.placeItems = "center";
+      if (isCluster) {
+        circle.style.border = "2.2px solid " + colorFor(place.category);
+      }
 
       var inner = document.createElement("div");
       inner.style.width = Math.round(size * 0.64) + "px";
@@ -328,11 +326,21 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
 
       var label = document.createElement("div");
       label.style.color = place.category === "event" ? "#1A202C" : "#ffffff";
-      label.style.fontSize = isCluster ? "15px" : (place.selected ? "13px" : "11px");
+      if (isCluster) {
+        label.style.color = place.category === "restaurant" ? "#6B4F0D" : colorFor(place.category);
+      }
+      label.style.fontSize = isCluster ? "14px" : (place.selected ? "13px" : "11px");
       label.style.fontWeight = "900";
-      label.textContent = isCluster ? String(place.clusterCount) : glyphFor(place.category);
-      inner.appendChild(label);
-      circle.appendChild(inner);
+      label.style.display = "grid";
+      label.style.placeItems = "center";
+      if (isCluster) {
+        label.textContent = String(place.clusterCount);
+        circle.appendChild(label);
+      } else {
+        label.innerHTML = iconSvgFor(place.category);
+        inner.appendChild(label);
+        circle.appendChild(inner);
+      }
       marker.appendChild(circle);
       marker.addEventListener("click", function (event) {
         event.stopPropagation();
@@ -471,10 +479,10 @@ void _drawFallbackMap(
             : place.name
         ..style.maxWidth = '132px'
         ..style.padding = '5px 10px'
-        ..style.borderRadius = '999px'
-        ..style.backgroundColor = '#ffffff'
-        ..style.color = '#111827'
-        ..style.fontSize = '11px'
+        ..style.borderRadius = '12px'
+        ..style.backgroundColor = 'rgba(17, 24, 39, .72)'
+        ..style.color = '#ffffff'
+        ..style.fontSize = '10px'
         ..style.fontWeight = '800'
         ..style.whiteSpace = 'nowrap'
         ..style.overflow = 'hidden'
@@ -483,7 +491,7 @@ void _drawFallbackMap(
       marker.append(namePill);
     }
 
-    final size = place.isCluster ? 48 : (place.selected ? 42 : 34);
+    final size = place.isCluster ? 42 : (place.selected ? 34 : 28);
     final circle = html.DivElement()
       ..style.width = '${size}px'
       ..style.height = '${size}px'
@@ -492,6 +500,10 @@ void _drawFallbackMap(
       ..style.boxShadow = '0 4px 14px rgba(15, 23, 42, .22)'
       ..style.display = 'grid'
       ..style.setProperty('place-items', 'center');
+    if (place.isCluster) {
+      circle.style.border =
+          '2.2px solid ${_fallbackMarkerColor(place.category)}';
+    }
 
     final innerSize = (size * 0.64).round();
     final inner = html.DivElement()
@@ -505,12 +517,18 @@ void _drawFallbackMap(
     final label = html.DivElement()
       ..text = place.isCluster
           ? '${place.clusterCount}'
-          : _fallbackMarkerGlyph(place.category, language)
-      ..style.color = place.category == 'event' ? '#1a202c' : '#ffffff'
-      ..style.fontSize = place.isCluster ? '15px' : '11px'
+          : _fallbackMarkerSymbol(place.category)
+      ..style.color = place.isCluster
+          ? _fallbackMarkerTextColorHex(place.category)
+          : (place.category == 'event' ? '#1a202c' : '#ffffff')
+      ..style.fontSize = place.isCluster ? '14px' : '11px'
       ..style.fontWeight = '900';
-    inner.append(label);
-    circle.append(inner);
+    if (place.isCluster) {
+      circle.append(label);
+    } else {
+      inner.append(label);
+      circle.append(inner);
+    }
     marker.append(circle);
     container.append(marker);
   }
@@ -569,22 +587,39 @@ String _fallbackMarkerColor(String category) {
   };
 }
 
-String _fallbackMarkerGlyph(String category, String language) {
-  if (language == 'en') {
-    return switch (category) {
-      'restaurant' => 'F',
-      'event' => 'E',
-      'culture_venue' => 'C',
-      'attraction' => 'A',
-      _ => 'L',
-    };
-  }
+String _fallbackMarkerTextColorHex(String category) {
   return switch (category) {
-    'restaurant' => '맛',
-    'event' => '행',
-    'culture_venue' => '문',
-    'attraction' => '명',
-    _ => 'L',
+    'restaurant' => '#6B4F0D',
+    'event' => '#2B6CB0',
+    'culture_venue' => '#2B6CB0',
+    'attraction' => '#D73333',
+    _ => '#1A202C',
+  };
+}
+
+Color _fallbackMarkerTextColor(String category) {
+  return Color(
+    int.parse(_fallbackMarkerTextColorHex(category).replaceFirst('#', '0xFF')),
+  );
+}
+
+IconData _fallbackMarkerIcon(String category) {
+  return switch (category) {
+    'restaurant' => Icons.restaurant,
+    'event' => Icons.calendar_month,
+    'culture_venue' => Icons.account_balance,
+    'attraction' => Icons.account_balance,
+    _ => Icons.place,
+  };
+}
+
+String _fallbackMarkerSymbol(String category) {
+  return switch (category) {
+    'restaurant' => '♨',
+    'event' => '□',
+    'culture_venue' => '▥',
+    'attraction' => '▥',
+    _ => '•',
   };
 }
 
@@ -767,8 +802,8 @@ class _FallbackFlutterMarker extends StatelessWidget {
                   vertical: 5,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(999),
+                  color: const Color(0xFF111827).withValues(alpha: 0.72),
+                  borderRadius: BorderRadius.circular(12),
                   boxShadow: const [
                     BoxShadow(
                       blurRadius: 18,
@@ -782,8 +817,8 @@ class _FallbackFlutterMarker extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: Color(0xFF111827),
-                    fontSize: 11,
+                    color: Colors.white,
+                    fontSize: 10,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -797,6 +832,9 @@ class _FallbackFlutterMarker extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(999),
+                border: place.isCluster
+                    ? Border.all(color: color, width: 2.2)
+                    : null,
                 boxShadow: const [
                   BoxShadow(
                     blurRadius: 14,
@@ -805,27 +843,31 @@ class _FallbackFlutterMarker extends StatelessWidget {
                   ),
                 ],
               ),
-              child: Container(
-                width: size * 0.64,
-                height: size * 0.64,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: color,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  place.isCluster
-                      ? '${place.clusterCount}'
-                      : _fallbackMarkerGlyph(place.category, language),
-                  style: TextStyle(
-                    color: place.category == 'event'
-                        ? const Color(0xFF1A202C)
-                        : Colors.white,
-                    fontSize: place.isCluster ? 15 : 11,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
+              child: place.isCluster
+                  ? Text(
+                      '${place.clusterCount}',
+                      style: TextStyle(
+                        color: _fallbackMarkerTextColor(place.category),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    )
+                  : Container(
+                      width: size * 0.64,
+                      height: size * 0.64,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: color,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Icon(
+                        _fallbackMarkerIcon(place.category),
+                        color: place.category == 'event'
+                            ? const Color(0xFF1A202C)
+                            : Colors.white,
+                        size: place.selected ? 15 : 13,
+                      ),
+                    ),
             ),
           ],
         ),

@@ -48,6 +48,10 @@ evidence, but they are not the latest MVP acceptance source.
 - Implemented: selected recommendation rail cards now carry an obang palette
   gradient ring, preserving the legacy iOS `AnimatedObangBorder` selection cue
   in the Flutter map shell.
+- Implemented: map markers now follow the legacy iOS `PlacePinView` and
+  `ClusterPinView` language: selected place labels use the dark translucent
+  title pill, place pins use category icons, and clusters use a white circle
+  with category-colored stroke and count text.
 - Implemented: explicitly re-tapping the selected recommendation rail card now
   follows the iOS `MapGuidanceLogic.reduceSelection()` behavior by clearing the
   selection and returning to the default map guidance without opening detail.
