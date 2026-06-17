@@ -22,7 +22,7 @@ void main() {
     expect(find.text('명소'), findsAtLeastNWidgets(1));
     expect(find.text('대시보드'), findsNothing);
     expect(find.text('추천 장소 보기'), findsOneWidget);
-    expect(find.text('Kakao Map API'), findsOneWidget);
+    expect(find.textContaining('KAKAO_JAVASCRIPT_KEY'), findsOneWidget);
     expect(find.text('로컬 점수'), findsNothing);
     expect(find.text('내국인 소비'), findsNothing);
     expect(find.text('수요 분산'), findsNothing);

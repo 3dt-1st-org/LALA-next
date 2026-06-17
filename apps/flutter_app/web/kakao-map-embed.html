@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LALA Kakao Map</title>
+  <style>
+    html,
+    body,
+    #map {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #eaf2fb;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .message {
+      display: grid;
+      width: 100%;
+      height: 100%;
+      place-items: center;
+      color: #1a202c;
+      font-weight: 900;
+      text-align: center;
+    }
+
+    .lala-marker {
+      display: grid;
+      place-items: center;
+      border: 3px solid #fff;
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.26);
+      box-sizing: border-box;
+      cursor: pointer;
+      font-weight: 900;
+    }
+
+    .lala-marker-pin {
+      border-radius: 50% 50% 50% 8px;
+      transform: rotate(-45deg);
+    }
+
+    .lala-marker-cluster {
+      border-radius: 50%;
+    }
+
+    .lala-marker-label {
+      color: #fff;
+      font-size: 13px;
+      line-height: 1;
+      pointer-events: none;
+    }
+
+    .lala-marker-pin .lala-marker-label {
+      transform: rotate(45deg);
+    }
+  </style>
+</head>
+<body>
+  <div id="map" role="img" aria-label="LALA Kakao map"></div>
+  <script>
+    (function () {
+      const params = new URLSearchParams(window.location.search);
+      const mapElement = document.getElementById("map");
+      const appKey = params.get("appkey") || "";
+      const centerLat = Number(params.get("lat") || "37.2823");
+      const centerLng = Number(params.get("lng") || "127.0179");
+      const level = Number(params.get("level") || "4");
+      let places = [];
+
+      try {
+        places = JSON.parse(params.get("places") || "[]");
+      } catch (_) {
+        places = [];
+      }
+
+      function showMessage(message) {
+        mapElement.innerHTML = "";
+        const node = document.createElement("div");
+        node.className = "message";
+        node.textContent = message;
+        mapElement.appendChild(node);
+      }
+
+      if (!appKey) {
+        showMessage("KAKAO_JAVASCRIPT_KEY를 설정하면 실제 카카오 지도가 표시됩니다.");
+        return;
+      }
+
+      const script = document.createElement("script");
+      script.async = true;
+      script.src = "https://dapi.kakao.com/v2/maps/sdk.js?appkey=" +
+        encodeURIComponent(appKey) +
+        "&libraries=services,clusterer&autoload=false";
+      script.onload = drawMap;
+      script.onerror = function () {
+        showMessage("카카오 지도 로드에 실패했습니다.");
+      };
+      document.head.appendChild(script);
+
+      function drawMap() {
+        if (!window.kakao || !window.kakao.maps) {
+          showMessage("카카오 지도 로드에 실패했습니다.");
+          return;
+        }
+
+        window.kakao.maps.load(function () {
+          mapElement.innerHTML = "";
+          const center = new kakao.maps.LatLng(centerLat, centerLng);
+          const map = new kakao.maps.Map(mapElement, {
+            center: center,
+            level: level
+          });
+          const circle = new kakao.maps.Circle({
+            center: center,
+            radius: 95,
+            strokeWeight: 2,
+            strokeColor: "#2B6CB0",
+            strokeOpacity: 0.75,
+            fillColor: "#2B6CB0",
+            fillOpacity: 0.12
+          });
+          circle.setMap(map);
+
+          places.forEach(function (place) {
+            const marker = buildMarker(place);
+            marker.addEventListener("click", function () {
+              if (window.LalaMap && window.LalaMap.postMessage) {
+                window.LalaMap.postMessage(String(place.id || ""));
+              }
+            });
+            const overlay = new kakao.maps.CustomOverlay({
+              position: new kakao.maps.LatLng(Number(place.lat), Number(place.lng)),
+              content: marker,
+              yAnchor: 1.08,
+              zIndex: place.selected ? 12 : (place.clusterCount > 1 ? 9 : 6)
+            });
+            overlay.setMap(map);
+          });
+
+          window.setTimeout(function () {
+            map.relayout();
+            map.setCenter(center);
+          }, 0);
+        });
+      }
+
+      function buildMarker(place) {
+        const isCluster = Number(place.clusterCount || 0) > 1;
+        const size = isCluster
+          ? Math.min(66, 38 + Number(place.clusterCount || 0) * 4)
+          : (place.selected ? 58 : 42);
+        const marker = document.createElement("div");
+        marker.className = "lala-marker " + (isCluster ? "lala-marker-cluster" : "lala-marker-pin");
+        marker.title = place.name || "";
+        marker.style.width = size + "px";
+        marker.style.height = size + "px";
+        marker.style.background = colorFor(place.category);
+        marker.style.borderWidth = place.selected ? "5px" : "3px";
+
+        const label = document.createElement("div");
+        label.className = "lala-marker-label";
+        label.style.color = place.category === "event" ? "#1A202C" : "#ffffff";
+        label.style.fontSize = isCluster ? "16px" : (place.selected ? "15px" : "13px");
+        label.textContent = isCluster ? String(place.clusterCount) : glyphFor(place.category);
+        marker.appendChild(label);
+        return marker;
+      }
+
+      function colorFor(category) {
+        if (category === "restaurant") return "#C53030";
+        if (category === "event") return "#F5C842";
+        if (category === "culture_venue") return "#2B6CB0";
+        if (category === "attraction") return "#D73333";
+        return "#1A202C";
+      }
+
+      function glyphFor(category) {
+        if (category === "restaurant") return "맛";
+        if (category === "event") return "행";
+        if (category === "culture_venue") return "문";
+        if (category === "attraction") return "명";
+        return "L";
+      }
+    })();
+  </script>
+</body>
+</html>
