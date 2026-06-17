@@ -386,9 +386,13 @@ void main() {
   testWidgets('settings language switch updates map filter labels', (
     tester,
   ) async {
+    final configs = <LalaAppConfig>[];
     await tester.pumpWidget(
       LalaApp(
-        backendFactory: FakeBackend.new,
+        backendFactory: (config) {
+          configs.add(config);
+          return FakeBackend(config);
+        },
         initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
       ),
     );
@@ -404,6 +408,9 @@ void main() {
     expect(find.text('All'), findsOneWidget);
     expect(find.text('Attractions'), findsOneWidget);
     expect(find.text('Daily Plan'), findsOneWidget);
+    expect(find.text('전체'), findsNothing);
+    expect(find.text('하루 일정'), findsNothing);
+    expect(configs.last.lang, 'en');
   });
 
   testWidgets('english language setting does not mix Korean place copy', (
@@ -536,6 +543,32 @@ void main() {
       expect(find.textContaining('Everland-ro'), findsNothing);
     },
   );
+
+  testWidgets('selected language removes bilingual place text', (tester) async {
+    await tester.pumpWidget(
+      LalaApp(
+        backendFactory: (config) =>
+            FakeBackend(config, places: [_bilingualPlace()]),
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
+    expect(find.textContaining('Hwaseong'), findsNothing);
+    expect(find.textContaining('Suwon-si'), findsNothing);
+
+    await tester.tap(find.byIcon(Icons.settings).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('영어'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.arrow_back_ios_new));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Hwaseong Haenggung'), findsAtLeastNWidgets(1));
+    expect(find.textContaining('화성행궁'), findsNothing);
+    expect(find.textContaining('경기도'), findsNothing);
+  });
 
   testWidgets('surfaces OAuth JWT auth mode separately from static bearer', (
     tester,
@@ -966,6 +999,20 @@ LalaPlace _englishOnlyPlace() {
     address: '38 Everland-ro 562beon-gil, Yongin-si, Gyeonggi-do',
     regionEn: 'Yongin',
     distanceM: 620,
+    source: 'public_mvp_snapshot',
+    upstreamSource: 'tour_api',
+  );
+}
+
+LalaPlace _bilingualPlace() {
+  return const LalaPlace(
+    placeId: 'bilingual-place',
+    name: '화성행궁 Hwaseong Haenggung',
+    category: 'attraction',
+    lat: 37.2819,
+    lng: 127.0142,
+    address: '경기도 수원시 팔달구 Suwon-si, Gyeonggi-do',
+    distanceM: 145,
     source: 'public_mvp_snapshot',
     upstreamSource: 'tour_api',
   );

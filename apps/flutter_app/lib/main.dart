@@ -176,6 +176,7 @@ class LalaApiBackend implements LalaBackend {
       lat: config.lat,
       lng: config.lng,
       radiusM: config.radiusM,
+      lang: config.lang,
     );
   }
 
@@ -199,6 +200,7 @@ class LalaApiBackend implements LalaBackend {
       lat: config.lat,
       lng: config.lng,
       radiusM: config.radiusM,
+      language: config.lang,
     );
   }
 
@@ -1211,6 +1213,8 @@ class _Dashboard extends StatelessWidget {
     final tourPlaces = _restaurantTourPlaces(allPlaces);
     final topPlace =
         _placeById(topPlaces, selectedPlaceId) ?? _featuredPlace(topPlaces);
+    final activeDocent = docentScript?.data;
+    final activeDailyPlan = dailyPlan?.data;
     final currentWeather = weather?.data ?? _fallbackWeather();
     final activeIntervention = intervention?.data;
     final visibleError = error;
@@ -1298,7 +1302,7 @@ class _Dashboard extends StatelessWidget {
             Positioned(
               left: 0,
               right: 0,
-              top: floatingPillTop,
+              top: isWide ? 150 : 166,
               child: Center(
                 child: _MapRoundButton(
                   tooltip: uiLanguage == 'en' ? 'Settings' : '설정',
@@ -1334,6 +1338,36 @@ class _Dashboard extends StatelessWidget {
                   ),
                 ),
               ),
+            if (activeSheet == null && locationConsentEnabled)
+              Positioned(
+                left: 16,
+                right: 16,
+                bottom: isWide ? 188 : 174,
+                child: Center(
+                  child: _MapGuidancePanel(
+                    place: topPlace,
+                    language: uiLanguage,
+                    script: activeDocent?.placeId == topPlace?.placeId
+                        ? activeDocent?.script
+                        : null,
+                    action:
+                        activeIntervention?.recommendedAction ??
+                        (activeDailyPlan?.slots.isEmpty == false
+                            ? activeDailyPlan?.slots.first.title
+                            : null),
+                    audioLoading: audioLoading,
+                    audioError: audioError,
+                    docentAudio: docentAudio,
+                    canFetchAudio:
+                        activeDocent?.placeId == topPlace?.placeId &&
+                        activeDocent?.script.trim().isNotEmpty == true &&
+                        !audioLoading &&
+                        topPlace != null &&
+                        !detailDocentPlayedPlaceIds.contains(topPlace.placeId),
+                    onFetchAudio: onFetchAudio,
+                  ),
+                ),
+              ),
             Positioned(
               left: 0,
               right: 0,
@@ -1344,23 +1378,14 @@ class _Dashboard extends StatelessWidget {
                 source: effectiveSource,
                 topPlace: topPlace,
                 uiLanguage: uiLanguage,
-                weather: currentWeather,
-                intervention: intervention?.data,
-                dailyPlan: dailyPlan?.data,
-                docentScript: docentScript?.data,
-                docentAudio: docentAudio,
-                audioLoading: audioLoading,
-                audioError: audioError,
                 showEvidence: showEvidence,
-                detailDocentPlayedPlaceIds: detailDocentPlayedPlaceIds,
                 onOpenDetail: () => onOpenSheet(_ActiveMapSheet.detail),
                 onToggleEvidence: onToggleEvidence,
-                onFetchAudio: onFetchAudio,
               ),
             ),
             Positioned(
               right: 16,
-              bottom: isWide ? 44 : 336,
+              bottom: isWide ? 44 : 204,
               child: _FloatingMapControls(
                 voiceEnabled: voiceEnabled,
                 autoDocentEnabled: autoDocentEnabled,
@@ -1751,6 +1776,200 @@ class _TourMapPill extends StatelessWidget {
   }
 }
 
+class _MapGuidancePanel extends StatelessWidget {
+  const _MapGuidancePanel({
+    required this.place,
+    required this.language,
+    required this.script,
+    required this.action,
+    required this.audioLoading,
+    required this.audioError,
+    required this.docentAudio,
+    required this.canFetchAudio,
+    required this.onFetchAudio,
+  });
+
+  final LalaPlace? place;
+  final String language;
+  final String? script;
+  final String? action;
+  final bool audioLoading;
+  final String? audioError;
+  final LalaAudioResponse? docentAudio;
+  final bool canFetchAudio;
+  final VoidCallback onFetchAudio;
+
+  @override
+  Widget build(BuildContext context) {
+    final placeName = place == null
+        ? null
+        : _placeDisplayName(place!, language);
+    final body = _docentBody(place: place, script: script, language: language);
+    final actionLabel = _docentActionLabel(
+      place: place,
+      action: action,
+      language: language,
+    );
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 460),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.98),
+          borderRadius: BorderRadius.circular(16),
+          border: const Border(
+            left: BorderSide(color: Color(0xFF2B6CB0), width: 4),
+          ),
+          boxShadow: const [
+            BoxShadow(
+              blurRadius: 28,
+              offset: Offset(0, 10),
+              color: Color(0x26121F2D),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.record_voice_over_outlined,
+                      color: Color(0xFF2B6CB0),
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      placeName == null
+                          ? _copy(language, ko: '로컬 도슨트', en: 'Local docent')
+                          : _copy(
+                              language,
+                              ko: '$placeName 도슨트',
+                              en: '$placeName docent',
+                            ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF111827),
+                        fontWeight: FontWeight.w900,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                  if (docentAudio != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Text(
+                        '${docentAudio!.bytes.length} bytes',
+                        style: const TextStyle(
+                          color: Color(0xFF64748B),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                body,
+                maxLines: 5,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFF111827),
+                  height: 1.5,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+              if (actionLabel != null) ...[
+                const SizedBox(height: 8),
+                _InlineIconText(icon: Icons.route_outlined, label: actionLabel),
+              ],
+              if (audioError != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  audioError!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.error,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  if (canFetchAudio || audioLoading) ...[
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: canFetchAudio ? onFetchAudio : null,
+                        icon: audioLoading
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.volume_up, size: 18),
+                        label: Text(
+                          audioLoading
+                              ? _copy(
+                                  language,
+                                  ko: '음성 생성 중',
+                                  en: 'Preparing audio',
+                                )
+                              : _copy(language, ko: '정보 더 듣기', en: 'Listen'),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                  ],
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.add_circle_outline, size: 18),
+                      label: Text(
+                        _copy(language, ko: '오늘 코스에 추가', en: 'Add to plan'),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF2B6CB0),
+                        side: const BorderSide(color: Color(0xFF2B6CB0)),
+                      ),
+                      onPressed: () {},
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _MapBottomDock extends StatelessWidget {
   const _MapBottomDock({
     required this.isWide,
@@ -1758,18 +1977,9 @@ class _MapBottomDock extends StatelessWidget {
     required this.source,
     required this.topPlace,
     required this.uiLanguage,
-    required this.weather,
-    required this.intervention,
-    required this.dailyPlan,
-    required this.docentScript,
-    required this.docentAudio,
-    required this.audioLoading,
-    required this.audioError,
     required this.showEvidence,
-    required this.detailDocentPlayedPlaceIds,
     required this.onOpenDetail,
     required this.onToggleEvidence,
-    required this.onFetchAudio,
   });
 
   final bool isWide;
@@ -1777,27 +1987,14 @@ class _MapBottomDock extends StatelessWidget {
   final String? source;
   final LalaPlace? topPlace;
   final String uiLanguage;
-  final LalaWeather? weather;
-  final LalaIntervention? intervention;
-  final LalaDailyPlan? dailyPlan;
-  final LalaDocentScript? docentScript;
-  final LalaAudioResponse? docentAudio;
-  final bool audioLoading;
-  final String? audioError;
   final bool showEvidence;
-  final Set<String> detailDocentPlayedPlaceIds;
   final VoidCallback onOpenDetail;
   final VoidCallback onToggleEvidence;
-  final VoidCallback onFetchAudio;
 
   @override
   Widget build(BuildContext context) {
     final currentPlace = topPlace ?? _fallbackUiPlaces().first;
-    final effectiveDocent = docentScript?.placeId == currentPlace.placeId
-        ? docentScript
-        : null;
-    final slots = dailyPlan?.slots ?? const <LalaPlanSlot>[];
-    final maxHeight = isWide ? 320.0 : 314.0;
+    final maxHeight = isWide ? 164.0 : 156.0;
     return ConstrainedBox(
       constraints: BoxConstraints(maxHeight: maxHeight),
       child: DecoratedBox(
@@ -1874,22 +2071,15 @@ class _MapBottomDock extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 6),
-              _DocentSubtitle(
-                place: currentPlace,
-                language: uiLanguage,
-                script: effectiveDocent?.script,
-                action:
-                    intervention?.recommendedAction ??
-                    (slots.isEmpty ? null : slots.first.title),
-                audioLoading: audioLoading,
-                audioError: audioError,
-                docentAudio: docentAudio,
-                canFetchAudio:
-                    effectiveDocent?.script.trim().isNotEmpty == true &&
-                    !audioLoading &&
-                    !detailDocentPlayedPlaceIds.contains(currentPlace.placeId),
-                onFetchAudio: onFetchAudio,
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _TinyMeta(_placeRegionLabel(currentPlace, uiLanguage)),
+                  _TinyMeta('${currentPlace.distanceM}m'),
+                  _TinyMeta(_sourceLabel(source, language: uiLanguage)),
+                ],
               ),
             ],
           ),
@@ -3866,7 +4056,7 @@ class _RouteAndDocentPanel extends StatelessWidget {
                         ko: '날씨 기준 대체 동선 준비 중',
                         en: 'Preparing a weather-aware route',
                       )
-                    : slots.first.title,
+                    : _planSlotTitle(slots.first, language),
               ),
             ),
             const SizedBox(width: 10),
@@ -5389,22 +5579,22 @@ LalaPlace? _placeById(List<LalaPlace> places, String? placeId) {
 
 String _placeDisplayName(LalaPlace place, String language) {
   if (_isEnglish(language)) {
-    final nameEn = place.nameEn?.trim();
-    if (nameEn != null && nameEn.isNotEmpty) {
+    final nameEn = _singleLanguageText(place.nameEn, language);
+    if (nameEn != null) {
       return nameEn;
     }
-    final primaryName = place.name.trim();
-    if (primaryName.isNotEmpty && !_containsKorean(primaryName)) {
+    final primaryName = _singleLanguageText(place.name, language);
+    if (primaryName != null) {
       return primaryName;
     }
     return 'Local place';
   }
-  final nameKo = place.nameKo?.trim();
-  if (nameKo != null && nameKo.isNotEmpty) {
+  final nameKo = _singleLanguageText(place.nameKo, language);
+  if (nameKo != null) {
     return nameKo;
   }
-  final primaryName = place.name.trim();
-  if (primaryName.isNotEmpty && !_looksEnglishText(primaryName)) {
+  final primaryName = _singleLanguageText(place.name, language);
+  if (primaryName != null) {
     return primaryName;
   }
   return '이 장소';
@@ -5412,35 +5602,85 @@ String _placeDisplayName(LalaPlace place, String language) {
 
 String _placeRegionLabel(LalaPlace place, String language) {
   if (_isEnglish(language)) {
-    final regionEn = place.regionEn?.trim();
-    if (regionEn != null && regionEn.isNotEmpty) {
+    final regionEn = _singleLanguageText(place.regionEn, language);
+    if (regionEn != null) {
       return regionEn;
     }
-    final regionKo = place.regionKo?.trim();
-    if (regionKo != null && regionKo.isNotEmpty) {
+    final regionKo = _singleLanguageText(place.regionKo, 'ko');
+    if (regionKo != null) {
       final localizedRegion = _locationLabel(regionKo, language);
       if (!_containsKorean(localizedRegion)) {
         return localizedRegion;
       }
     }
-    if (!_containsKorean(place.address)) {
-      return place.address;
+    final address = _singleLanguageText(place.address, language);
+    if (address != null) {
+      return address;
     }
     return 'Nearby area';
   }
-  final regionKo = place.regionKo?.trim();
-  if (regionKo != null && regionKo.isNotEmpty) {
+  final regionKo = _singleLanguageText(place.regionKo, language);
+  if (regionKo != null) {
     return regionKo;
   }
-  if (_looksEnglishText(place.address) && !_containsKorean(place.address)) {
-    return '주변 지역';
+  final address = _singleLanguageText(place.address, language);
+  if (address != null) {
+    return address;
   }
-  return place.address;
+  return '주변 지역';
 }
 
 bool _containsKorean(String value) => RegExp(r'[가-힣]').hasMatch(value);
 
 bool _looksEnglishText(String value) => RegExp(r'[A-Za-z]{3,}').hasMatch(value);
+
+bool _hasMixedKoreanEnglish(String value) {
+  return _containsKorean(value) && _looksEnglishText(value);
+}
+
+String? _singleLanguageText(String? value, String language) {
+  final trimmed = value?.trim();
+  if (trimmed == null || trimmed.isEmpty) {
+    return null;
+  }
+  if (_isEnglish(language)) {
+    if (_containsKorean(trimmed)) {
+      return _extractEnglishText(trimmed);
+    }
+    return trimmed;
+  }
+  if (!_containsKorean(trimmed) && _looksEnglishText(trimmed)) {
+    return null;
+  }
+  if (_hasMixedKoreanEnglish(trimmed)) {
+    return _extractKoreanText(trimmed);
+  }
+  return trimmed;
+}
+
+String? _extractEnglishText(String value) {
+  final withoutKorean = value.replaceAll(RegExp(r'[가-힣]+'), ' ');
+  final cleaned = _cleanLocalizedFragment(withoutKorean);
+  return _looksEnglishText(cleaned) ? cleaned : null;
+}
+
+String? _extractKoreanText(String value) {
+  final withoutEnglish = value.replaceAll(
+    RegExp(r"[A-Za-z][A-Za-z0-9&'.,()/-]*(?:\s+[A-Za-z][A-Za-z0-9&'.,()/-]*)*"),
+    ' ',
+  );
+  final cleaned = _cleanLocalizedFragment(withoutEnglish);
+  return _containsKorean(cleaned) ? cleaned : null;
+}
+
+String _cleanLocalizedFragment(String value) {
+  return value
+      .replaceAll(RegExp(r'[\[\]{}()|/·]+'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim()
+      .replaceAll(RegExp(r'^[,.:;~-]+|[,.:;~-]+$'), '')
+      .trim();
+}
 
 bool _shouldShowEventInfo(LalaPlace place) {
   return place.category == 'event' ||
@@ -5623,6 +5863,10 @@ String _planSlotTitle(LalaPlanSlot slot, String language) {
   final place = slot.place;
   if (title.isEmpty) {
     return _copy(language, ko: '일정 준비 중', en: 'Preparing stop');
+  }
+  final localizedTitle = _singleLanguageText(title, language);
+  if (localizedTitle != null && localizedTitle.isNotEmpty) {
+    return localizedTitle;
   }
   if (_isEnglish(language) && _containsKorean(title)) {
     final placeName = place == null
@@ -5957,6 +6201,7 @@ String _docentBody({
   if (lower.contains('migration skeleton') ||
       lower.contains('azure openai') ||
       RegExp(r'^this is a .+ docent script').hasMatch(lower) ||
+      _hasMixedKoreanEnglish(trimmed) ||
       (_isEnglish(language) && !_looksEnglishText(trimmed)) ||
       (!_isEnglish(language) &&
           _looksEnglishText(trimmed) &&
@@ -6035,6 +6280,10 @@ String? _docentActionLabel({
   final placeName = place == null
       ? _copy(language, ko: '이 장소', en: 'this place')
       : _placeDisplayName(place, language);
+  final localizedAction = _singleLanguageText(trimmed, language);
+  if (localizedAction != null && localizedAction.isNotEmpty) {
+    return localizedAction;
+  }
   final looksEnglish = _looksEnglishText(trimmed);
   if (looksEnglish) {
     if (_isEnglish(language)) {
@@ -6072,6 +6321,11 @@ class _ExperienceHero extends StatelessWidget {
     final currentPlace = place;
     final score = currentPlace?.score;
     final action = intervention?.recommendedAction;
+    final actionLabel = _docentActionLabel(
+      place: currentPlace,
+      action: action,
+      language: language,
+    );
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -6147,8 +6401,11 @@ class _ExperienceHero extends StatelessWidget {
                       label:
                           '${_locationLabel(weather!.location, language)} ${_temperatureLabel(weather!.temp)}',
                     ),
-                  if (action != null && action.trim().isNotEmpty)
-                    _MiniChip(icon: Icons.alt_route_outlined, label: action),
+                  if (actionLabel != null)
+                    _MiniChip(
+                      icon: Icons.alt_route_outlined,
+                      label: actionLabel,
+                    ),
                 ],
               ),
             ],

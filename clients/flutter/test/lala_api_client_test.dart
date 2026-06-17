@@ -161,7 +161,7 @@ void main() {
                   'lng': 127.0,
                   'radius_m': 1200,
                   'category': 'event',
-                  'language': 'ko',
+                  'language': 'en',
                 },
                 'source': 'skeleton',
               },
@@ -182,7 +182,7 @@ void main() {
         lng: 127.0,
         radiusM: 1200,
         category: 'event',
-        lang: 'ko',
+        lang: 'en',
         requestId: 'client-request-id',
       );
 
@@ -192,6 +192,7 @@ void main() {
       expect(captured.url.queryParameters['lng'], '127.0');
       expect(captured.url.queryParameters['radius_m'], '1200');
       expect(captured.url.queryParameters['category'], 'event');
+      expect(captured.url.queryParameters['lang'], 'en');
       expect(captured.headers['authorization'], 'Bearer bearer-token');
       expect(captured.headers.containsKey('x-api-key'), isFalse);
       expect(captured.headers['x-request-id'], 'client-request-id');
@@ -350,7 +351,7 @@ void main() {
     },
   );
 
-  test('createDailyPlan sends the selected radius', () async {
+  test('createDailyPlan sends the selected radius and language', () async {
     late http.Request captured;
     final client = LalaApiClient(
       baseUri: Uri.parse('http://api.example.test'),
@@ -360,7 +361,7 @@ void main() {
         return _jsonResponse({
           'ok': true,
           'data': {
-            'language': 'ko',
+            'language': 'en',
             'center': {'lat': 37.2, 'lng': 127.0},
             'radius_m': 42000,
             'weather': _weatherPayload(),
@@ -376,12 +377,18 @@ void main() {
       }),
     );
 
-    await client.createDailyPlan(lat: 37.2, lng: 127.0, radiusM: 42000);
+    await client.createDailyPlan(
+      lat: 37.2,
+      lng: 127.0,
+      radiusM: 42000,
+      language: 'en',
+    );
 
     final body = jsonDecode(captured.body) as Map<String, dynamic>;
     expect(captured.method, 'POST');
     expect(captured.url.path, '/api/v1/plans/daily');
     expect(body['radius_m'], 42000);
+    expect(body['language'], 'en');
   });
 
   test('createDocentAudio returns mpeg bytes and request id', () async {
