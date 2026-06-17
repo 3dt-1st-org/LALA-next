@@ -609,6 +609,28 @@ class _LalaHomePageState extends State<LalaHomePage> {
     });
   }
 
+  void _returnToCurrentLocation() {
+    setState(() {
+      _selectedPlaceId = null;
+      _activeSheet = null;
+      _docentAudio = null;
+      _audioError = null;
+      _tourAudio = null;
+      _tourAudioError = null;
+      _tourAudioLoading = false;
+      _showEvidence = false;
+      _mapFocusLat = double.tryParse(_latController.text.trim()) ?? 37.2636;
+      _mapFocusLng = double.tryParse(_lngController.text.trim()) ?? 127.0286;
+      _mapLevel = 4;
+      _recommendationRailExpanded = true;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _refresh();
+      }
+    });
+  }
+
   void _openSheet(_ActiveMapSheet sheet) {
     setState(() {
       _activeSheet = sheet;
@@ -828,6 +850,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
               onFetchAudio: _fetchMoreInfo,
               onFetchTourAudio: _fetchTourAudio,
               onRefresh: _refresh,
+              onReturnToLocation: _returnToCurrentLocation,
               onOpenSettings: () => _openSettingsSheet(context),
               onRetryLocation: _retryLocationConsent,
             ),
@@ -1291,6 +1314,7 @@ class _Dashboard extends StatelessWidget {
     required this.onFetchAudio,
     required this.onFetchTourAudio,
     required this.onRefresh,
+    required this.onReturnToLocation,
     required this.onOpenSettings,
     required this.onRetryLocation,
   });
@@ -1340,6 +1364,7 @@ class _Dashboard extends StatelessWidget {
   final VoidCallback onFetchAudio;
   final VoidCallback onFetchTourAudio;
   final VoidCallback onRefresh;
+  final VoidCallback onReturnToLocation;
   final VoidCallback onOpenSettings;
   final VoidCallback onRetryLocation;
 
@@ -1540,7 +1565,7 @@ class _Dashboard extends StatelessWidget {
                 language: uiLanguage,
                 onToggleVoice: onToggleVoice,
                 onToggleAutoDocent: onToggleAutoDocent,
-                onRefresh: onRefresh,
+                onReturnToLocation: onReturnToLocation,
               ),
             ),
             if (activeSheet != null)
@@ -5102,7 +5127,7 @@ class _FloatingMapControls extends StatelessWidget {
     required this.language,
     required this.onToggleVoice,
     required this.onToggleAutoDocent,
-    required this.onRefresh,
+    required this.onReturnToLocation,
   });
 
   final bool voiceEnabled;
@@ -5110,7 +5135,7 @@ class _FloatingMapControls extends StatelessWidget {
   final String language;
   final VoidCallback onToggleVoice;
   final VoidCallback onToggleAutoDocent;
-  final VoidCallback onRefresh;
+  final VoidCallback onReturnToLocation;
 
   @override
   Widget build(BuildContext context) {
@@ -5156,7 +5181,7 @@ class _FloatingMapControls extends StatelessWidget {
           label: language == 'en' ? 'My location' : '내 위치',
           active: true,
           statusLabel: null,
-          onPressed: onRefresh,
+          onPressed: onReturnToLocation,
         ),
       ],
     );

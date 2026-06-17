@@ -311,6 +311,38 @@ void main() {
     );
   });
 
+  testWidgets('my location control returns to the map recommendation context', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      LalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('수원화성'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('장소 상세'), findsOneWidget);
+    expect(find.text('수원화성 도슨트'), findsAtLeastNWidgets(1));
+
+    await tester.tapAt(const Offset(20, 20));
+    await tester.pumpAndSettle();
+
+    expect(find.text('장소 상세'), findsNothing);
+    expect(find.text('수원화성 도슨트'), findsAtLeastNWidgets(1));
+
+    await tester.tap(find.byKey(const ValueKey('location-refresh')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('수원화성 도슨트'), findsNothing);
+    expect(find.text('화성행궁 도슨트'), findsAtLeastNWidgets(1));
+    expect(find.text('추천 장소 보기'), findsOneWidget);
+  });
+
   testWidgets('recommendation rail collapses and place cards select detail', (
     tester,
   ) async {
