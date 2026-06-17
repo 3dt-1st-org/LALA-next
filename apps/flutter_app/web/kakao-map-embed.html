@@ -139,6 +139,18 @@
             overlay.setMap(map);
           });
 
+          kakao.maps.event.addListener(map, "dragend", function () {
+            const nextCenter = map.getCenter();
+            if (window.LalaMap && window.LalaMap.postMessage) {
+              window.LalaMap.postMessage(JSON.stringify({
+                type: "cameraIdle",
+                lat: nextCenter.getLat(),
+                lng: nextCenter.getLng(),
+                level: map.getLevel()
+              }));
+            }
+          });
+
           window.setTimeout(function () {
             map.relayout();
             map.setCenter(center);

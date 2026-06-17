@@ -24,3 +24,16 @@ class KakaoMapPlace {
 
   bool get isCluster => (clusterCount ?? 0) > 1;
 }
+
+@immutable
+class KakaoMapCamera {
+  const KakaoMapCamera({
+    required this.lat,
+    required this.lng,
+    required this.level,
+  });
+
+  final double lat;
+  final double lng;
+  final int level;
+}

@@ -16,6 +16,7 @@ Widget buildKakaoMapView({
   required int level,
   required List<KakaoMapPlace> places,
   ValueChanged<String>? onPlaceTap,
+  ValueChanged<KakaoMapCamera>? onCameraIdle,
 }) {
   return impl.buildKakaoMapView(
     javascriptKey: javascriptKey,
@@ -25,5 +26,6 @@ Widget buildKakaoMapView({
     level: level,
     places: places,
     onPlaceTap: onPlaceTap,
+    onCameraIdle: onCameraIdle,
   );
 }

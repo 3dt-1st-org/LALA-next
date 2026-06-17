@@ -1,5 +1,6 @@
 // ignore_for_file: unused_element
 
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -282,6 +283,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
   double? _mapFocusLat;
   double? _mapFocusLng;
   int _mapLevel = 4;
+  Timer? _mapCameraDebounce;
   String _uiLanguage = 'ko';
   double _fontScale = 1.0;
 
@@ -305,6 +307,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
 
   @override
   void dispose() {
+    _mapCameraDebounce?.cancel();
     _backend.close();
     _baseUrlController.dispose();
     _bearerTokenController.dispose();
@@ -559,6 +562,31 @@ class _LalaHomePageState extends State<LalaHomePage> {
     });
   }
 
+  void _handleMapCameraIdle(KakaoMapCamera camera) {
+    final normalizedLevel = camera.level.clamp(2, 10).toInt();
+    _latController.text = camera.lat.toStringAsFixed(6);
+    _lngController.text = camera.lng.toStringAsFixed(6);
+    setState(() {
+      _mapFocusLat = camera.lat;
+      _mapFocusLng = camera.lng;
+      _mapLevel = normalizedLevel;
+      _selectedPlaceId = null;
+      _activeSheet = null;
+      _docentAudio = null;
+      _audioError = null;
+      _tourAudio = null;
+      _tourAudioError = null;
+      _tourAudioLoading = false;
+      _recommendationRailExpanded = true;
+    });
+    _mapCameraDebounce?.cancel();
+    _mapCameraDebounce = Timer(const Duration(milliseconds: 450), () {
+      if (mounted) {
+        _refresh();
+      }
+    });
+  }
+
   void _openSheet(_ActiveMapSheet sheet) {
     setState(() {
       _activeSheet = sheet;
@@ -747,6 +775,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
               onSelectCategory: _selectCategory,
               onSelectPlace: _selectPlace,
               onSelectCluster: _focusCluster,
+              onCameraIdle: _handleMapCameraIdle,
               onToggleRecommendationRail: _toggleRecommendationRail,
               onOpenSheet: _openSheet,
               onCloseSheet: _closeSheet,
@@ -1208,6 +1237,7 @@ class _Dashboard extends StatelessWidget {
     required this.onSelectCategory,
     required this.onSelectPlace,
     required this.onSelectCluster,
+    required this.onCameraIdle,
     required this.onToggleRecommendationRail,
     required this.onOpenSheet,
     required this.onCloseSheet,
@@ -1255,6 +1285,7 @@ class _Dashboard extends StatelessWidget {
   final ValueChanged<String> onSelectCategory;
   final ValueChanged<LalaPlace> onSelectPlace;
   final ValueChanged<KakaoMapPlace> onSelectCluster;
+  final ValueChanged<KakaoMapCamera> onCameraIdle;
   final VoidCallback onToggleRecommendationRail;
   final ValueChanged<_ActiveMapSheet> onOpenSheet;
   final VoidCallback onCloseSheet;
@@ -1309,6 +1340,7 @@ class _Dashboard extends StatelessWidget {
                 mapLevel: mapLevel,
                 onSelectPlaceId: selectPlaceById,
                 onSelectCluster: onSelectCluster,
+                onCameraIdle: onCameraIdle,
               ),
             ),
             Positioned(
@@ -4724,6 +4756,7 @@ class _LegacyMapCanvas extends StatelessWidget {
     required this.mapLevel,
     required this.onSelectPlaceId,
     required this.onSelectCluster,
+    required this.onCameraIdle,
   });
 
   final List<LalaPlace> places;
@@ -4736,6 +4769,7 @@ class _LegacyMapCanvas extends StatelessWidget {
   final int mapLevel;
   final ValueChanged<String> onSelectPlaceId;
   final ValueChanged<KakaoMapPlace> onSelectCluster;
+  final ValueChanged<KakaoMapCamera> onCameraIdle;
 
   @override
   Widget build(BuildContext context) {
@@ -4770,6 +4804,7 @@ class _LegacyMapCanvas extends StatelessWidget {
             level: mapLevel,
             places: mapPlaces,
             onPlaceTap: handleMapFeatureTap,
+            onCameraIdle: onCameraIdle,
           ),
         ),
         Positioned.fill(

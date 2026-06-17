@@ -20,6 +20,7 @@ Widget buildKakaoMapView({
   required int level,
   required List<KakaoMapPlace> places,
   ValueChanged<String>? onPlaceTap,
+  ValueChanged<KakaoMapCamera>? onCameraIdle,
 }) {
   final isEnglish = language == 'en';
   if (javascriptKey.trim().isEmpty) {
@@ -42,6 +43,7 @@ Widget buildKakaoMapView({
     level: level,
     places: places,
     onPlaceTap: onPlaceTap,
+    onCameraIdle: onCameraIdle,
   );
 }
 
@@ -54,6 +56,7 @@ class _KakaoMapBackgroundBridge extends StatefulWidget {
     required this.level,
     required this.places,
     this.onPlaceTap,
+    this.onCameraIdle,
   });
 
   final String javascriptKey;
@@ -63,6 +66,7 @@ class _KakaoMapBackgroundBridge extends StatefulWidget {
   final int level;
   final List<KakaoMapPlace> places;
   final ValueChanged<String>? onPlaceTap;
+  final ValueChanged<KakaoMapCamera>? onCameraIdle;
 
   @override
   State<_KakaoMapBackgroundBridge> createState() =>
@@ -72,6 +76,7 @@ class _KakaoMapBackgroundBridge extends StatefulWidget {
 class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
   int _generation = 0;
   StreamSubscription<html.Event>? _placeTapSubscription;
+  StreamSubscription<html.Event>? _cameraIdleSubscription;
 
   @override
   void initState() {
@@ -84,12 +89,23 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
         widget.onPlaceTap?.call(detail.trim());
       }
     });
+    _cameraIdleSubscription = html.window.on['lala-map-camera-idle'].listen((
+      event,
+    ) {
+      final detail = event is html.CustomEvent ? event.detail : null;
+      final camera = _cameraFromDetail(detail);
+      if (camera == null) {
+        return;
+      }
+      widget.onCameraIdle?.call(camera);
+    });
     _renderMap();
   }
 
   @override
   void dispose() {
     _placeTapSubscription?.cancel();
+    _cameraIdleSubscription?.cancel();
     super.dispose();
   }
 
@@ -104,6 +120,44 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
         oldWidget.places != widget.places) {
       _renderMap();
     }
+  }
+
+  KakaoMapCamera? _cameraFromDetail(Object? detail) {
+    Object? payload = detail;
+    if (detail is String) {
+      try {
+        payload = jsonDecode(detail);
+      } on FormatException {
+        return null;
+      }
+    }
+    if (payload is! Map) {
+      return null;
+    }
+    final lat = _asDouble(payload['lat']);
+    final lng = _asDouble(payload['lng']);
+    final level = _asInt(payload['level']);
+    if (lat == null || lng == null || level == null) {
+      return null;
+    }
+    return KakaoMapCamera(lat: lat, lng: lng, level: level);
+  }
+
+  double? _asDouble(Object? value) {
+    if (value is num) {
+      return value.toDouble();
+    }
+    return double.tryParse(value?.toString() ?? '');
+  }
+
+  int? _asInt(Object? value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.round();
+    }
+    return int.tryParse(value?.toString() ?? '');
   }
 
   @override
@@ -296,6 +350,17 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
         zIndex: place.selected ? 12 : (isCluster ? 9 : 6)
       });
       overlay.setMap(map);
+    });
+
+    kakao.maps.event.addListener(map, "dragend", function () {
+      var nextCenter = map.getCenter();
+      window.dispatchEvent(new CustomEvent("lala-map-camera-idle", {
+        detail: JSON.stringify({
+          lat: nextCenter.getLat(),
+          lng: nextCenter.getLng(),
+          level: map.getLevel()
+        })
+      }));
     });
 
     window.setTimeout(function () {

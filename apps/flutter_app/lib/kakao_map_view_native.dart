@@ -14,6 +14,7 @@ Widget buildKakaoMapView({
   required int level,
   required List<KakaoMapPlace> places,
   ValueChanged<String>? onPlaceTap,
+  ValueChanged<KakaoMapCamera>? onCameraIdle,
 }) {
   final normalizedKey = javascriptKey.trim();
   if (normalizedKey.isEmpty) {
@@ -37,6 +38,7 @@ Widget buildKakaoMapView({
     level: level,
     places: places,
     onPlaceTap: onPlaceTap,
+    onCameraIdle: onCameraIdle,
   );
 }
 
@@ -48,6 +50,7 @@ class _KakaoMapNativeWebView extends StatefulWidget {
     required this.level,
     required this.places,
     this.onPlaceTap,
+    this.onCameraIdle,
   });
 
   final String javascriptKey;
@@ -56,6 +59,7 @@ class _KakaoMapNativeWebView extends StatefulWidget {
   final int level;
   final List<KakaoMapPlace> places;
   final ValueChanged<String>? onPlaceTap;
+  final ValueChanged<KakaoMapCamera>? onCameraIdle;
 
   @override
   State<_KakaoMapNativeWebView> createState() => _KakaoMapNativeWebViewState();
@@ -72,8 +76,7 @@ class _KakaoMapNativeWebViewState extends State<_KakaoMapNativeWebView> {
       ..setBackgroundColor(const Color(0xFFEAF2FB))
       ..addJavaScriptChannel(
         'LalaMap',
-        onMessageReceived: (message) =>
-            widget.onPlaceTap?.call(message.message),
+        onMessageReceived: (message) => _handleMapMessage(message.message),
       )
       ..setNavigationDelegate(
         NavigationDelegate(
@@ -136,6 +139,55 @@ class _KakaoMapNativeWebViewState extends State<_KakaoMapNativeWebView> {
             .toList(),
       ),
     });
+  }
+
+  void _handleMapMessage(String rawMessage) {
+    final trimmed = rawMessage.trim();
+    if (trimmed.isEmpty) {
+      return;
+    }
+    Object? decoded;
+    try {
+      decoded = jsonDecode(trimmed);
+    } on FormatException {
+      decoded = null;
+    }
+    if (decoded is Map<String, dynamic>) {
+      if (decoded['type'] == 'cameraIdle') {
+        final lat = _asDouble(decoded['lat']);
+        final lng = _asDouble(decoded['lng']);
+        final level = _asInt(decoded['level']);
+        if (lat != null && lng != null && level != null) {
+          widget.onCameraIdle?.call(
+            KakaoMapCamera(lat: lat, lng: lng, level: level),
+          );
+        }
+        return;
+      }
+      final placeId = decoded['placeId']?.toString().trim();
+      if (placeId != null && placeId.isNotEmpty) {
+        widget.onPlaceTap?.call(placeId);
+      }
+      return;
+    }
+    widget.onPlaceTap?.call(trimmed);
+  }
+
+  double? _asDouble(Object? value) {
+    if (value is num) {
+      return value.toDouble();
+    }
+    return double.tryParse(value?.toString() ?? '');
+  }
+
+  int? _asInt(Object? value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.round();
+    }
+    return int.tryParse(value?.toString() ?? '');
   }
 }
 

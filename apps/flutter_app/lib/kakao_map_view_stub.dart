@@ -10,6 +10,7 @@ Widget buildKakaoMapView({
   required int level,
   required List<KakaoMapPlace> places,
   ValueChanged<String>? onPlaceTap,
+  ValueChanged<KakaoMapCamera>? onCameraIdle,
 }) {
   return Container(
     color: const Color(0xFFEAF2FB),
