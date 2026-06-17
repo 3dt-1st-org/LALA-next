@@ -267,6 +267,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
   bool _voiceEnabled = true;
   bool _autoDocentEnabled = false;
   bool _showEvidence = false;
+  bool _interventionToastDismissed = false;
   bool _locationConsentEnabled = true;
   bool _recommendationRailExpanded = true;
   double? _mapFocusLat;
@@ -377,6 +378,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
         _docentAudio = null;
         _audioError = null;
         _error = loadError;
+        _interventionToastDismissed = false;
       });
     } on Object catch (error) {
       if (!mounted) {
@@ -488,6 +490,12 @@ class _LalaHomePageState extends State<LalaHomePage> {
   void _closeSheet() {
     setState(() {
       _activeSheet = null;
+    });
+  }
+
+  void _dismissInterventionToast() {
+    setState(() {
+      _interventionToastDismissed = true;
     });
   }
 
@@ -645,6 +653,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
               voiceEnabled: _voiceEnabled,
               autoDocentEnabled: _autoDocentEnabled,
               showEvidence: _showEvidence,
+              interventionToastDismissed: _interventionToastDismissed,
               locationConsentEnabled: _locationConsentEnabled,
               recommendationRailExpanded: _recommendationRailExpanded,
               mapFocusLat: _mapFocusLat,
@@ -659,6 +668,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
               onToggleVoice: _toggleVoice,
               onToggleAutoDocent: _toggleAutoDocent,
               onToggleEvidence: _toggleEvidence,
+              onDismissInterventionToast: _dismissInterventionToast,
               onFetchAudio: _fetchAudio,
               onRefresh: _refresh,
               onOpenSettings: () => _openSettingsSheet(context),
@@ -1099,6 +1109,7 @@ class _Dashboard extends StatelessWidget {
     required this.voiceEnabled,
     required this.autoDocentEnabled,
     required this.showEvidence,
+    required this.interventionToastDismissed,
     required this.locationConsentEnabled,
     required this.recommendationRailExpanded,
     required this.mapFocusLat,
@@ -1113,6 +1124,7 @@ class _Dashboard extends StatelessWidget {
     required this.onToggleVoice,
     required this.onToggleAutoDocent,
     required this.onToggleEvidence,
+    required this.onDismissInterventionToast,
     required this.onFetchAudio,
     required this.onRefresh,
     required this.onOpenSettings,
@@ -1139,6 +1151,7 @@ class _Dashboard extends StatelessWidget {
   final bool voiceEnabled;
   final bool autoDocentEnabled;
   final bool showEvidence;
+  final bool interventionToastDismissed;
   final bool locationConsentEnabled;
   final bool recommendationRailExpanded;
   final double? mapFocusLat;
@@ -1153,6 +1166,7 @@ class _Dashboard extends StatelessWidget {
   final VoidCallback onToggleVoice;
   final VoidCallback onToggleAutoDocent;
   final VoidCallback onToggleEvidence;
+  final VoidCallback onDismissInterventionToast;
   final VoidCallback onFetchAudio;
   final VoidCallback onRefresh;
   final VoidCallback onOpenSettings;
@@ -1170,6 +1184,7 @@ class _Dashboard extends StatelessWidget {
     final topPlace =
         _placeById(topPlaces, selectedPlaceId) ?? _featuredPlace(topPlaces);
     final currentWeather = weather?.data ?? _fallbackWeather();
+    final activeIntervention = intervention?.data;
     final visibleError = error;
     void selectPlaceById(String placeId) {
       final place = _placeById(topPlaces, placeId);
@@ -1273,6 +1288,22 @@ class _Dashboard extends StatelessWidget {
                   icon: Icons.error_outline,
                   label: visibleError,
                   color: Theme.of(context).colorScheme.errorContainer,
+                ),
+              ),
+            if (visibleError == null &&
+                activeIntervention?.shouldIntervene == true &&
+                !interventionToastDismissed)
+              Positioned(
+                left: 16,
+                right: 16,
+                top: isWide ? 92 : 110,
+                child: Center(
+                  child: _InterventionToast(
+                    intervention: activeIntervention!,
+                    language: uiLanguage,
+                    onOpenPlanner: () => onOpenSheet(_ActiveMapSheet.planner),
+                    onDismiss: onDismissInterventionToast,
+                  ),
                 ),
               ),
             Positioned(
@@ -4601,6 +4632,93 @@ class _MapToast extends StatelessWidget {
   }
 }
 
+class _InterventionToast extends StatelessWidget {
+  const _InterventionToast({
+    required this.intervention,
+    required this.language,
+    required this.onOpenPlanner,
+    required this.onDismiss,
+  });
+
+  final LalaIntervention intervention;
+  final String language;
+  final VoidCallback onOpenPlanner;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = _interventionToastLabel(intervention, language);
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 430),
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0F172A).withValues(alpha: 0.92),
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: const [
+              BoxShadow(
+                blurRadius: 18,
+                offset: Offset(0, 8),
+                color: Color(0x30000000),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.tips_and_updates_outlined,
+                color: Color(0xFFF5C842),
+                size: 19,
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
+                    height: 1.22,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              TextButton(
+                key: const ValueKey('intervention-toast-plan'),
+                onPressed: onOpenPlanner,
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: const Size(0, 34),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  foregroundColor: const Color(0xFFF5C842),
+                  textStyle: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+                child: Text(_copy(language, ko: '일정 보기', en: 'Plan')),
+              ),
+              IconButton(
+                key: const ValueKey('intervention-toast-close'),
+                tooltip: _copy(language, ko: '닫기', en: 'Close'),
+                onPressed: onDismiss,
+                icon: const Icon(Icons.close, size: 16),
+                style: IconButton.styleFrom(
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  minimumSize: const Size(32, 32),
+                  foregroundColor: const Color(0xFFCBD5E1),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _EmptyPlaceState extends StatelessWidget {
   const _EmptyPlaceState();
 
@@ -4623,6 +4741,40 @@ bool _isEnglish(String language) => language == 'en';
 
 String _copy(String language, {required String ko, required String en}) {
   return _isEnglish(language) ? en : ko;
+}
+
+String _interventionToastLabel(LalaIntervention intervention, String language) {
+  final place = intervention.place == null
+      ? null
+      : _placeDisplayName(intervention.place!, language);
+  final reason = intervention.reason.trim();
+  final action = intervention.recommendedAction.trim();
+  final hasEnglishReason = RegExp(r'[A-Za-z]{3,}').hasMatch(reason);
+  final hasEnglishAction = RegExp(r'[A-Za-z]{3,}').hasMatch(action);
+
+  if (_isEnglish(language)) {
+    if (reason.isNotEmpty && action.isNotEmpty) {
+      return '$reason · $action';
+    }
+    if (reason.isNotEmpty) {
+      return reason;
+    }
+    if (place != null) {
+      return 'Weather changed. Adjust the route near $place.';
+    }
+    return 'Weather changed. Review today\'s route.';
+  }
+
+  if (reason.isNotEmpty && !hasEnglishReason) {
+    return reason;
+  }
+  if (action.isNotEmpty && !hasEnglishAction) {
+    return action;
+  }
+  if (place != null) {
+    return '날씨가 바뀌었어요. $place 중심으로 동선을 다시 확인해보세요.';
+  }
+  return '날씨가 바뀌었어요. 오늘 일정을 다시 확인해보세요.';
 }
 
 String _categoryLabel(String category, {String language = 'ko'}) {

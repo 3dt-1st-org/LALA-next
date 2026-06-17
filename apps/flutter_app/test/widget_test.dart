@@ -140,6 +140,31 @@ void main() {
     expect(find.textContaining('소비 신호'), findsAtLeastNWidgets(1));
   });
 
+  testWidgets('weather intervention toast opens planner and can dismiss', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      LalaApp(
+        backendFactory: (config) => FakeBackend(config, shouldIntervene: true),
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('날씨가 바뀌었어요'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('intervention-toast-plan')));
+    await tester.pumpAndSettle();
+    expect(find.text('오늘 일정'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.close).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('intervention-toast-close')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('날씨가 바뀌었어요'), findsNothing);
+  });
+
   testWidgets('auto docent on opens the nearest place detail sheet', (
     tester,
   ) async {
@@ -399,10 +424,15 @@ void main() {
 }
 
 class FakeBackend implements LalaBackend {
-  FakeBackend(this.config, {this.failAuthenticatedLoad = false});
+  FakeBackend(
+    this.config, {
+    this.failAuthenticatedLoad = false,
+    this.shouldIntervene = false,
+  });
 
   final LalaAppConfig config;
   final bool failAuthenticatedLoad;
+  final bool shouldIntervene;
   final List<String> audioRequests = <String>[];
 
   @override
@@ -482,7 +512,7 @@ class FakeBackend implements LalaBackend {
       LalaIntervention(
         center: LalaCoordinate(lat: config.lat, lng: config.lng),
         radiusM: config.radiusM,
-        shouldIntervene: false,
+        shouldIntervene: shouldIntervene,
         reason: 'Weather is fine.',
         recommendedAction: 'Keep the current route.',
         source: 'skeleton',
