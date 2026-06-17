@@ -4,6 +4,7 @@ import 'kakao_map_models.dart';
 
 Widget buildKakaoMapView({
   required String javascriptKey,
+  required String language,
   required double centerLat,
   required double centerLng,
   required int level,
@@ -29,9 +30,9 @@ Widget buildKakaoMapView({
             ),
           ],
         ),
-        child: const Text(
-          'Kakao Map API',
-          style: TextStyle(
+        child: Text(
+          language == 'en' ? 'Kakao Map API' : '카카오 지도',
+          style: const TextStyle(
             color: Color(0xFF1A202C),
             fontWeight: FontWeight.w900,
           ),

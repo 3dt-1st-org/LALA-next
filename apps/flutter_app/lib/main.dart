@@ -70,6 +70,7 @@ class LalaAppConfig {
     this.lat = 37.2636,
     this.lng = 127.0286,
     this.radiusM = 50000,
+    this.lang = 'ko',
   });
 
   const LalaAppConfig.fromEnvironment()
@@ -82,7 +83,11 @@ class LalaAppConfig {
       kakaoJavascriptKey = const String.fromEnvironment('KAKAO_JAVASCRIPT_KEY'),
       lat = 37.2636,
       lng = 127.0286,
-      radiusM = 50000;
+      radiusM = 50000,
+      lang = const String.fromEnvironment(
+        'LALA_UI_LANGUAGE',
+        defaultValue: 'ko',
+      );
 
   final String baseUri;
   final String bearerToken;
@@ -91,6 +96,7 @@ class LalaAppConfig {
   final double lat;
   final double lng;
   final int radiusM;
+  final String lang;
 
   bool get hasAuth => bearerToken.trim().isNotEmpty || apiKey.trim().isNotEmpty;
   LalaAuthMode get authMode =>
@@ -104,6 +110,7 @@ class LalaAppConfig {
     double? lat,
     double? lng,
     int? radiusM,
+    String? lang,
   }) {
     return LalaAppConfig(
       baseUri: baseUri ?? this.baseUri,
@@ -113,6 +120,7 @@ class LalaAppConfig {
       lat: lat ?? this.lat,
       lng: lng ?? this.lng,
       radiusM: radiusM ?? this.radiusM,
+      lang: lang ?? this.lang,
     );
   }
 }
@@ -199,14 +207,14 @@ class LalaApiBackend implements LalaBackend {
     return _client.createDocentScript(
       placeId: place.placeId,
       category: place.category,
-      language: 'ko',
+      language: config.lang,
       mode: 'brief',
     );
   }
 
   @override
   Future<LalaAudioResponse> createDocentAudio({required String script}) {
-    return _client.createDocentAudio(script: script, language: 'ko');
+    return _client.createDocentAudio(script: script, language: config.lang);
   }
 
   @override
@@ -280,6 +288,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
     _latController = TextEditingController(text: config.lat.toStringAsFixed(4));
     _lngController = TextEditingController(text: config.lng.toStringAsFixed(4));
     _radiusController = TextEditingController(text: '${config.radiusM}');
+    _uiLanguage = config.lang;
     _backend = widget.backendFactory(config);
     WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
   }
@@ -306,6 +315,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
       lat: double.tryParse(_latController.text.trim()) ?? 37.2636,
       lng: double.tryParse(_lngController.text.trim()) ?? 127.0286,
       radiusM: int.tryParse(_radiusController.text.trim()) ?? 50000,
+      lang: _uiLanguage,
     );
   }
 
@@ -391,7 +401,11 @@ class _LalaHomePageState extends State<LalaHomePage> {
     if (error is FormatException) {
       return error.message;
     }
-    return 'Unable to load the LALA API snapshot.';
+    return _copy(
+      _uiLanguage,
+      ko: 'LALA API 정보를 불러오지 못했습니다.',
+      en: 'Unable to load the LALA API snapshot.',
+    );
   }
 
   Future<void> _fetchAudio() async {
@@ -515,8 +529,19 @@ class _LalaHomePageState extends State<LalaHomePage> {
   }
 
   void _setUiLanguage(String language) {
+    if (_uiLanguage == language) {
+      return;
+    }
     setState(() {
       _uiLanguage = language;
+      _docentScript = null;
+      _docentAudio = null;
+      _audioError = null;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _refresh();
+      }
     });
   }
 
@@ -647,6 +672,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
 
 class _ConfigPanel extends StatelessWidget {
   const _ConfigPanel({
+    required this.language,
     required this.baseUrlController,
     required this.bearerTokenController,
     required this.apiKeyController,
@@ -658,6 +684,7 @@ class _ConfigPanel extends StatelessWidget {
     required this.onRefresh,
   });
 
+  final String language;
   final TextEditingController baseUrlController;
   final TextEditingController bearerTokenController;
   final TextEditingController apiKeyController;
@@ -671,7 +698,7 @@ class _ConfigPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _Panel(
-      title: 'Backend',
+      title: _copy(language, ko: '백엔드', en: 'Backend'),
       icon: Icons.dns_outlined,
       fill: false,
       child: Column(
@@ -679,36 +706,44 @@ class _ConfigPanel extends StatelessWidget {
         children: [
           TextField(
             controller: baseUrlController,
-            decoration: const InputDecoration(
-              labelText: 'Base URL',
-              prefixIcon: Icon(Icons.link),
+            decoration: InputDecoration(
+              labelText: _copy(language, ko: '기본 URL', en: 'Base URL'),
+              prefixIcon: const Icon(Icons.link),
             ),
             keyboardType: TextInputType.url,
           ),
           const SizedBox(height: 12),
           TextField(
             controller: bearerTokenController,
-            decoration: const InputDecoration(
-              labelText: 'Bearer token',
-              prefixIcon: Icon(Icons.key_outlined),
+            decoration: InputDecoration(
+              labelText: _copy(language, ko: '인증 토큰', en: 'Bearer token'),
+              prefixIcon: const Icon(Icons.key_outlined),
             ),
             obscureText: true,
           ),
           const SizedBox(height: 12),
           TextField(
             controller: apiKeyController,
-            decoration: const InputDecoration(
-              labelText: 'Migration API key',
-              prefixIcon: Icon(Icons.vpn_key_outlined),
+            decoration: InputDecoration(
+              labelText: _copy(
+                language,
+                ko: '마이그레이션 API 키',
+                en: 'Migration API key',
+              ),
+              prefixIcon: const Icon(Icons.vpn_key_outlined),
             ),
             obscureText: true,
           ),
           const SizedBox(height: 12),
           TextField(
             controller: kakaoJavascriptKeyController,
-            decoration: const InputDecoration(
-              labelText: 'Kakao JavaScript key',
-              prefixIcon: Icon(Icons.map_outlined),
+            decoration: InputDecoration(
+              labelText: _copy(
+                language,
+                ko: '카카오 JavaScript 키',
+                en: 'Kakao JavaScript key',
+              ),
+              prefixIcon: const Icon(Icons.map_outlined),
             ),
             obscureText: true,
           ),
@@ -718,9 +753,9 @@ class _ConfigPanel extends StatelessWidget {
               Expanded(
                 child: TextField(
                   controller: latController,
-                  decoration: const InputDecoration(
-                    labelText: 'Lat',
-                    prefixIcon: Icon(Icons.my_location_outlined),
+                  decoration: InputDecoration(
+                    labelText: _copy(language, ko: '위도', en: 'Lat'),
+                    prefixIcon: const Icon(Icons.my_location_outlined),
                   ),
                   keyboardType: TextInputType.number,
                 ),
@@ -729,9 +764,9 @@ class _ConfigPanel extends StatelessWidget {
               Expanded(
                 child: TextField(
                   controller: lngController,
-                  decoration: const InputDecoration(
-                    labelText: 'Lng',
-                    prefixIcon: Icon(Icons.explore_outlined),
+                  decoration: InputDecoration(
+                    labelText: _copy(language, ko: '경도', en: 'Lng'),
+                    prefixIcon: const Icon(Icons.explore_outlined),
                   ),
                   keyboardType: TextInputType.number,
                 ),
@@ -741,9 +776,9 @@ class _ConfigPanel extends StatelessWidget {
           const SizedBox(height: 12),
           TextField(
             controller: radiusController,
-            decoration: const InputDecoration(
-              labelText: 'Radius meters',
-              prefixIcon: Icon(Icons.radio_button_checked),
+            decoration: InputDecoration(
+              labelText: _copy(language, ko: '반경(m)', en: 'Radius meters'),
+              prefixIcon: const Icon(Icons.radio_button_checked),
             ),
             keyboardType: TextInputType.number,
           ),
@@ -751,7 +786,7 @@ class _ConfigPanel extends StatelessWidget {
           FilledButton.icon(
             onPressed: loading ? null : onRefresh,
             icon: const Icon(Icons.sync),
-            label: const Text('Refresh'),
+            label: Text(_copy(language, ko: '새로고침', en: 'Refresh')),
           ),
         ],
       ),
@@ -796,6 +831,8 @@ class _UserSettingsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final title = _copy(uiLanguage, ko: '설정', en: 'Settings');
+    final closeLabel = _copy(uiLanguage, ko: '닫기', en: 'Close');
     return DraggableScrollableSheet(
       expand: false,
       initialChildSize: 0.82,
@@ -832,7 +869,7 @@ class _UserSettingsSheet extends StatelessWidget {
               Row(
                 children: [
                   IconButton.filledTonal(
-                    tooltip: '닫기',
+                    tooltip: closeLabel,
                     onPressed: () => Navigator.of(context).pop(),
                     icon: const Icon(Icons.arrow_back_ios_new),
                     style: IconButton.styleFrom(
@@ -840,11 +877,11 @@ class _UserSettingsSheet extends StatelessWidget {
                       foregroundColor: const Color(0xFF1A202C),
                     ),
                   ),
-                  const Expanded(
+                  Expanded(
                     child: Center(
                       child: Text(
-                        '설정',
-                        style: TextStyle(
+                        title,
+                        style: const TextStyle(
                           color: Color(0xFF111827),
                           fontSize: 18,
                           fontWeight: FontWeight.w900,
@@ -857,13 +894,21 @@ class _UserSettingsSheet extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               _SettingsSection(
-                title: '개인정보 동의 안내',
+                title: _copy(
+                  uiLanguage,
+                  ko: '개인정보 동의 안내',
+                  en: 'Privacy notice',
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      '서비스 품질 향상을 위해 최소한의 이용 정보와 위치 기반 추천 정보가 사용됩니다.',
-                      style: TextStyle(
+                    Text(
+                      _copy(
+                        uiLanguage,
+                        ko: '서비스 품질 향상을 위해 최소한의 이용 정보와 위치 기반 추천 정보가 사용됩니다.',
+                        en: 'LALA uses minimal usage and location signals to improve recommendations.',
+                      ),
+                      style: const TextStyle(
                         color: Color(0xFF64748B),
                         height: 1.38,
                         fontWeight: FontWeight.w700,
@@ -877,24 +922,36 @@ class _UserSettingsSheet extends StatelessWidget {
                         foregroundColor: const Color(0xFF2B6CB0),
                         textStyle: const TextStyle(fontWeight: FontWeight.w900),
                       ),
-                      child: const Text('자세히 보기'),
+                      child: Text(
+                        _copy(uiLanguage, ko: '자세히 보기', en: 'Learn more'),
+                      ),
                     ),
                   ],
                 ),
               ),
               _SettingsSection(
-                title: '위치기반 정보 제공 동의',
+                title: _copy(
+                  uiLanguage,
+                  ko: '위치기반 정보 제공 동의',
+                  en: 'Location recommendations',
+                ),
                 trailing: Switch(
                   value: locationConsentEnabled,
                   onChanged: onLocationConsentChanged,
                 ),
               ),
               _SettingsSection(
-                title: '언어',
+                title: _copy(uiLanguage, ko: '언어', en: 'Language'),
                 child: SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(value: 'ko', label: Text('한국어')),
-                    ButtonSegment(value: 'en', label: Text('English')),
+                  segments: [
+                    ButtonSegment(
+                      value: 'ko',
+                      label: Text(_copy(uiLanguage, ko: '한국어', en: 'Korean')),
+                    ),
+                    ButtonSegment(
+                      value: 'en',
+                      label: Text(_copy(uiLanguage, ko: '영어', en: 'English')),
+                    ),
                   ],
                   selected: {uiLanguage},
                   onSelectionChanged: (values) =>
@@ -907,7 +964,7 @@ class _UserSettingsSheet extends StatelessWidget {
                 ),
               ),
               _SettingsSection(
-                title: '글꼴 크기',
+                title: _copy(uiLanguage, ko: '글꼴 크기', en: 'Font size'),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -930,8 +987,11 @@ class _UserSettingsSheet extends StatelessWidget {
                 ),
               ),
               _SettingsSection(
-                title: '앱 정보',
-                child: const _MetricRow(label: '버전', value: '1.0'),
+                title: _copy(uiLanguage, ko: '앱 정보', en: 'App info'),
+                child: _MetricRow(
+                  label: _copy(uiLanguage, ko: '버전', en: 'Version'),
+                  value: '1.0',
+                ),
               ),
               ExpansionTile(
                 tilePadding: const EdgeInsets.symmetric(horizontal: 16),
@@ -944,14 +1004,15 @@ class _UserSettingsSheet extends StatelessWidget {
                 collapsedShape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(18),
                 ),
-                title: const Text(
-                  '개발 연결',
-                  style: TextStyle(fontWeight: FontWeight.w900),
+                title: Text(
+                  _copy(uiLanguage, ko: '개발 연결', en: 'Developer connection'),
+                  style: const TextStyle(fontWeight: FontWeight.w900),
                 ),
                 children: [
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     child: _ConfigPanel(
+                      language: uiLanguage,
                       baseUrlController: baseUrlController,
                       bearerTokenController: bearerTokenController,
                       apiKeyController: apiKeyController,
@@ -1128,6 +1189,7 @@ class _Dashboard extends StatelessWidget {
                 selectedPlace: topPlace,
                 weather: currentWeather,
                 kakaoJavascriptKey: kakaoJavascriptKey,
+                language: uiLanguage,
                 mapFocusLat: mapFocusLat,
                 mapFocusLng: mapFocusLng,
                 mapLevel: mapLevel,
@@ -1163,6 +1225,7 @@ class _Dashboard extends StatelessWidget {
               child: _MapPlaceCarouselOverlay(
                 places: topPlaces,
                 source: effectiveSource,
+                language: uiLanguage,
                 selectedPlaceId: topPlace?.placeId,
                 expanded: recommendationRailExpanded,
                 onSelectPlace: onSelectPlace,
@@ -1344,6 +1407,7 @@ class _MapPlaceCarouselOverlay extends StatelessWidget {
   const _MapPlaceCarouselOverlay({
     required this.places,
     required this.source,
+    required this.language,
     required this.selectedPlaceId,
     required this.expanded,
     required this.onSelectPlace,
@@ -1352,6 +1416,7 @@ class _MapPlaceCarouselOverlay extends StatelessWidget {
 
   final List<LalaPlace> places;
   final String? source;
+  final String language;
   final String? selectedPlaceId;
   final bool expanded;
   final ValueChanged<LalaPlace> onSelectPlace;
@@ -1399,7 +1464,7 @@ class _MapPlaceCarouselOverlay extends StatelessWidget {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      '추천 장소 보기',
+                      _copy(language, ko: '추천 장소 보기', en: 'Show places'),
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
                         color: const Color(0xFF374151),
                         fontWeight: FontWeight.w900,
@@ -1407,7 +1472,11 @@ class _MapPlaceCarouselOverlay extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      '${items.length}곳 · ${_sourceLabel(source)}',
+                      _copy(
+                        language,
+                        ko: '${items.length}곳 · ${_sourceLabel(source, language: language)}',
+                        en: '${items.length} places · ${_sourceLabel(source, language: language)}',
+                      ),
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
                         color: const Color(0xFF64748B),
                         fontWeight: FontWeight.w800,
@@ -1453,6 +1522,7 @@ class _MapPlaceCarouselOverlay extends StatelessWidget {
                           separatorBuilder: (_, _) => const SizedBox(width: 10),
                           itemBuilder: (context, index) => _MapRailPlaceCard(
                             place: items[index],
+                            language: language,
                             selected:
                                 (selectedPlaceId == null && index == 0) ||
                                 selectedPlaceId == items[index].placeId,
@@ -1475,11 +1545,13 @@ class _MapPlaceCarouselOverlay extends StatelessWidget {
 class _MapRailPlaceCard extends StatelessWidget {
   const _MapRailPlaceCard({
     required this.place,
+    required this.language,
     required this.selected,
     required this.onTap,
   });
 
   final LalaPlace place;
+  final String language;
   final bool selected;
   final VoidCallback onTap;
 
@@ -1512,7 +1584,7 @@ class _MapRailPlaceCard extends StatelessWidget {
                   children: [
                     Text(
                       place.nameKo ?? place.name,
-                      maxLines: 2,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
                         color: const Color(0xFF111827),
@@ -1520,24 +1592,14 @@ class _MapRailPlaceCard extends StatelessWidget {
                         height: 1.12,
                       ),
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      _categoryLabel(place.category),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: color,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
                     Wrap(
                       spacing: 6,
                       runSpacing: 4,
                       children: [
                         if (place.distanceM > 0)
                           _TinyMeta('${place.distanceM}m'),
-                        _TinyMeta('상세'),
+                        _TinyMeta(_copy(language, ko: '상세', en: 'Details')),
                       ],
                     ),
                   ],
@@ -1681,7 +1743,10 @@ class _MapBottomDock extends StatelessWidget {
               const SizedBox(height: 4),
               Row(
                 children: [
-                  _CategoryBadge(category: currentPlace.category),
+                  _CategoryBadge(
+                    category: currentPlace.category,
+                    language: uiLanguage,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -1711,6 +1776,7 @@ class _MapBottomDock extends StatelessWidget {
               const SizedBox(height: 6),
               _DocentSubtitle(
                 place: currentPlace,
+                language: uiLanguage,
                 script: effectiveDocent?.script,
                 action:
                     intervention?.recommendedAction ??
@@ -1850,6 +1916,7 @@ class _MapDraggableSheet extends StatelessWidget {
                   switch (activeSheet) {
                     _ActiveMapSheet.detail => _FeaturedPlacePanel(
                       place: place,
+                      language: language,
                       weather: weather,
                       intervention: intervention,
                       dailyPlan: dailyPlan,
@@ -1863,10 +1930,12 @@ class _MapDraggableSheet extends StatelessWidget {
                       onFetchAudio: onFetchAudio,
                     ),
                     _ActiveMapSheet.planner => _PlannerSheetContent(
+                      language: language,
                       dailyPlan: dailyPlan,
                       intervention: intervention,
                     ),
                     _ActiveMapSheet.weather => _WeatherSheetContent(
+                      language: language,
                       weather: weather,
                     ),
                   },
@@ -1968,10 +2037,12 @@ class _LocationConsentOverlay extends StatelessWidget {
 
 class _PlannerSheetContent extends StatelessWidget {
   const _PlannerSheetContent({
+    required this.language,
     required this.dailyPlan,
     required this.intervention,
   });
 
+  final String language;
   final LalaDailyPlan? dailyPlan;
   final LalaIntervention? intervention;
 
@@ -1981,6 +2052,7 @@ class _PlannerSheetContent extends StatelessWidget {
     final action = _docentActionLabel(
       place: intervention?.place,
       action: intervention?.recommendedAction,
+      language: language,
     );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1988,14 +2060,18 @@ class _PlannerSheetContent extends StatelessWidget {
         if (action != null)
           _CompactInfoTile(
             icon: Icons.alt_route_outlined,
-            label: '추천 동선',
+            label: _copy(language, ko: '추천 동선', en: 'Suggested route'),
             value: action,
           ),
         if (action != null) const SizedBox(height: 12),
         if (slots.isEmpty)
-          const _MutedSheetCard(
+          _MutedSheetCard(
             icon: Icons.route_outlined,
-            label: '현재 위치와 날씨 기준으로 코스를 준비 중입니다.',
+            label: _copy(
+              language,
+              ko: '현재 위치와 날씨 기준으로 코스를 준비 중입니다.',
+              en: 'Preparing a route from your location and weather.',
+            ),
           )
         else
           ...slots
@@ -2003,7 +2079,7 @@ class _PlannerSheetContent extends StatelessWidget {
               .map(
                 (slot) => Padding(
                   padding: const EdgeInsets.only(bottom: 10),
-                  child: _PlanSlotTile(slot: slot),
+                  child: _PlanSlotTile(slot: slot, language: language),
                 ),
               ),
       ],
@@ -2012,9 +2088,10 @@ class _PlannerSheetContent extends StatelessWidget {
 }
 
 class _PlanSlotTile extends StatelessWidget {
-  const _PlanSlotTile({required this.slot});
+  const _PlanSlotTile({required this.slot, required this.language});
 
   final LalaPlanSlot slot;
+  final String language;
 
   @override
   Widget build(BuildContext context) {
@@ -2037,7 +2114,7 @@ class _PlanSlotTile extends StatelessWidget {
               shape: BoxShape.circle,
             ),
             child: Text(
-              _periodLabel(slot.period),
+              _periodLabel(slot.period, language: language),
               style: const TextStyle(
                 color: Color(0xFF2B6CB0),
                 fontWeight: FontWeight.w900,
@@ -2059,7 +2136,7 @@ class _PlanSlotTile extends StatelessWidget {
                 ),
                 if (place != null)
                   Text(
-                    '${place.nameKo ?? place.name} · ${_categoryLabel(place.category)}',
+                    '${place.nameKo ?? place.name} · ${_categoryLabel(place.category, language: language)}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -2077,8 +2154,9 @@ class _PlanSlotTile extends StatelessWidget {
 }
 
 class _WeatherSheetContent extends StatelessWidget {
-  const _WeatherSheetContent({required this.weather});
+  const _WeatherSheetContent({required this.language, required this.weather});
 
+  final String language;
   final LalaWeather? weather;
 
   @override
@@ -2087,31 +2165,34 @@ class _WeatherSheetContent extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _WeatherHeroCard(weather: data),
+        _WeatherHeroCard(weather: data, language: language),
         const SizedBox(height: 12),
         Wrap(
           spacing: 10,
           runSpacing: 10,
           children: [
-            _WeatherFact(label: '미세먼지', value: data.dust.gradeKo),
+            _WeatherFact(
+              label: _copy(language, ko: '미세먼지', en: 'Dust'),
+              value: _dustLabel(data.dust, language),
+            ),
             _WeatherFact(label: 'PM10', value: data.dust.pm10),
             _WeatherFact(label: 'PM2.5', value: data.dust.pm25),
             _WeatherFact(
-              label: '야외 상태',
-              value: _outdoorLabel(data.outdoorStatus),
+              label: _copy(language, ko: '야외 상태', en: 'Outdoor'),
+              value: _outdoorLabel(data.outdoorStatus, language: language),
             ),
           ],
         ),
         if (data.forecast.isNotEmpty) ...[
           const SizedBox(height: 16),
           Text(
-            '날씨 추이',
+            _copy(language, ko: '날씨 추이', en: 'Forecast trend'),
             style: Theme.of(
               context,
             ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 8),
-          _WeatherForecastChartCard(items: data.forecast),
+          _WeatherForecastChartCard(items: data.forecast, language: language),
           const SizedBox(height: 10),
           SizedBox(
             height: 82,
@@ -2121,7 +2202,7 @@ class _WeatherSheetContent extends StatelessWidget {
               separatorBuilder: (_, _) => const SizedBox(width: 8),
               itemBuilder: (context, index) {
                 final item = data.forecast[index];
-                return _ForecastChip(item: item);
+                return _ForecastChip(item: item, language: language);
               },
             ),
           ),
@@ -2132,9 +2213,13 @@ class _WeatherSheetContent extends StatelessWidget {
 }
 
 class _WeatherForecastChartCard extends StatelessWidget {
-  const _WeatherForecastChartCard({required this.items});
+  const _WeatherForecastChartCard({
+    required this.items,
+    required this.language,
+  });
 
   final List<LalaForecastItem> items;
+  final String language;
 
   @override
   Widget build(BuildContext context) {
@@ -2211,7 +2296,7 @@ class _WeatherForecastChartCard extends StatelessWidget {
                     SizedBox(
                       width: columnWidth,
                       child: Text(
-                        _weatherChartTimeLabel(item.time),
+                        _weatherChartTimeLabel(item.time, language: language),
                         textAlign: TextAlign.center,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -2297,9 +2382,10 @@ class _WeatherForecastChartPainter extends CustomPainter {
 }
 
 class _WeatherHeroCard extends StatelessWidget {
-  const _WeatherHeroCard({required this.weather});
+  const _WeatherHeroCard({required this.weather, required this.language});
 
   final LalaWeather weather;
+  final String language;
 
   @override
   Widget build(BuildContext context) {
@@ -2339,7 +2425,7 @@ class _WeatherHeroCard extends StatelessWidget {
               ],
             ),
           ),
-          _ProofChip(label: weather.source),
+          _ProofChip(label: _sourceLabel(weather.source, language: language)),
         ],
       ),
     );
@@ -2366,9 +2452,10 @@ class _WeatherFact extends StatelessWidget {
 }
 
 class _ForecastChip extends StatelessWidget {
-  const _ForecastChip({required this.item});
+  const _ForecastChip({required this.item, required this.language});
 
   final LalaForecastItem item;
+  final String language;
 
   @override
   Widget build(BuildContext context) {
@@ -2384,7 +2471,7 @@ class _ForecastChip extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(
-            item.time,
+            language == 'en' ? item.time : _weatherChartTimeLabel(item.time),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
@@ -2444,6 +2531,7 @@ class _MutedSheetCard extends StatelessWidget {
 class _FeaturedPlacePanel extends StatelessWidget {
   const _FeaturedPlacePanel({
     required this.place,
+    required this.language,
     required this.weather,
     required this.intervention,
     required this.dailyPlan,
@@ -2458,6 +2546,7 @@ class _FeaturedPlacePanel extends StatelessWidget {
   });
 
   final LalaPlace? place;
+  final String language;
   final LalaWeather? weather;
   final LalaIntervention? intervention;
   final LalaDailyPlan? dailyPlan;
@@ -2482,7 +2571,11 @@ class _FeaturedPlacePanel extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _FeaturedPlaceHeader(place: currentPlace, showEvidence: showEvidence),
+        _FeaturedPlaceHeader(
+          place: currentPlace,
+          language: language,
+          showEvidence: showEvidence,
+        ),
         const SizedBox(height: 12),
         Align(
           alignment: Alignment.centerLeft,
@@ -2491,7 +2584,11 @@ class _FeaturedPlacePanel extends StatelessWidget {
             icon: Icon(
               showEvidence ? Icons.visibility_off : Icons.insights_outlined,
             ),
-            label: Text(showEvidence ? '점수/근거 숨기기' : '점수/근거 보기'),
+            label: Text(
+              showEvidence
+                  ? _copy(language, ko: '점수/근거 숨기기', en: 'Hide signals')
+                  : _copy(language, ko: '점수/근거 보기', en: 'Show signals'),
+            ),
             style: OutlinedButton.styleFrom(
               foregroundColor: const Color(0xFF1A202C),
               side: const BorderSide(color: Color(0xFFD7E3F5)),
@@ -2501,6 +2598,7 @@ class _FeaturedPlacePanel extends StatelessWidget {
         if (showEvidence) ...[
           const SizedBox(height: 12),
           _SignalGrid(
+            language: language,
             localSpending: components?.localSpendingScore,
             demandDispersion: components?.demandDispersionScore,
             cultureRelevance: components?.cultureRelevanceScore,
@@ -2510,6 +2608,7 @@ class _FeaturedPlacePanel extends StatelessWidget {
         const SizedBox(height: 12),
         _DocentSubtitle(
           place: currentPlace,
+          language: language,
           script: effectiveDocent?.script,
           action:
               intervention?.recommendedAction ??
@@ -2526,6 +2625,7 @@ class _FeaturedPlacePanel extends StatelessWidget {
           const SizedBox(height: 12),
           _PublicDataProofRow(
             place: currentPlace,
+            language: language,
             source: source ?? currentPlace.source,
             weather: weather,
             score: score,
@@ -2565,9 +2665,14 @@ class _FeaturedPlacePanel extends StatelessWidget {
 }
 
 class _FeaturedPlaceHeader extends StatelessWidget {
-  const _FeaturedPlaceHeader({required this.place, required this.showEvidence});
+  const _FeaturedPlaceHeader({
+    required this.place,
+    required this.language,
+    required this.showEvidence,
+  });
 
   final LalaPlace place;
+  final String language;
   final bool showEvidence;
 
   @override
@@ -2587,10 +2692,10 @@ class _FeaturedPlaceHeader extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  _CategoryBadge(category: place.category),
+                  _CategoryBadge(category: place.category, language: language),
                   const Spacer(),
                   IconButton(
-                    tooltip: '저장',
+                    tooltip: _copy(language, ko: '저장', en: 'Save'),
                     onPressed: () {},
                     icon: const Icon(Icons.favorite_border),
                   ),
@@ -2620,11 +2725,11 @@ class _FeaturedPlaceHeader extends StatelessWidget {
                   if (!showEvidence)
                     _InlineIconText(
                       icon: Icons.explore_outlined,
-                      label: '로컬 추천',
+                      label: _copy(language, ko: '로컬 추천', en: 'Local pick'),
                     ),
                   if (showEvidence) ...[
                     Text(
-                      '로컬 점수',
+                      _copy(language, ko: '로컬 점수', en: 'Local score'),
                       style: Theme.of(context).textTheme.labelLarge?.copyWith(
                         color: const Color(0xFF1A202C),
                         fontWeight: FontWeight.w900,
@@ -2687,12 +2792,14 @@ class _InlineIconText extends StatelessWidget {
 
 class _SignalGrid extends StatelessWidget {
   const _SignalGrid({
+    required this.language,
     required this.localSpending,
     required this.demandDispersion,
     required this.cultureRelevance,
     required this.weatherFit,
   });
 
+  final String language;
   final double? localSpending;
   final double? demandDispersion;
   final double? cultureRelevance;
@@ -2711,28 +2818,28 @@ class _SignalGrid extends StatelessWidget {
         children: [
           Expanded(
             child: _SignalMeter(
-              label: '내국인 소비',
+              label: _copy(language, ko: '내국인 소비', en: 'Local spending'),
               value: localSpending ?? 0.82,
               color: const Color(0xFFC53030),
             ),
           ),
           Expanded(
             child: _SignalMeter(
-              label: '수요 분산',
+              label: _copy(language, ko: '수요 분산', en: 'Demand spread'),
               value: demandDispersion ?? 0.78,
               color: const Color(0xFFF5C842),
             ),
           ),
           Expanded(
             child: _SignalMeter(
-              label: '문화 연계',
+              label: _copy(language, ko: '문화 연계', en: 'Culture fit'),
               value: cultureRelevance ?? 0.91,
               color: const Color(0xFF2B6CB0),
             ),
           ),
           Expanded(
             child: _SignalMeter(
-              label: '날씨 적합',
+              label: _copy(language, ko: '날씨 적합', en: 'Weather fit'),
               value: weatherFit ?? 0.74,
               color: const Color(0xFF0F766E),
             ),
@@ -2798,12 +2905,14 @@ class _SignalMeter extends StatelessWidget {
 class _PublicDataProofRow extends StatelessWidget {
   const _PublicDataProofRow({
     required this.place,
+    required this.language,
     required this.source,
     required this.weather,
     required this.score,
   });
 
   final LalaPlace place;
+  final String language;
   final String? source;
   final LalaWeather? weather;
   final LalaPlaceScore? score;
@@ -2812,6 +2921,7 @@ class _PublicDataProofRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final labels = _proofSourceLabels(
       place: place,
+      language: language,
       source: source,
       weather: weather,
       score: score,
@@ -2829,7 +2939,7 @@ class _PublicDataProofRow extends StatelessWidget {
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           Text(
-            '공공데이터 기반 정보',
+            _copy(language, ko: '공공데이터 기반 정보', en: 'Public data evidence'),
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
               color: const Color(0xFF64748B),
               fontWeight: FontWeight.w900,
@@ -2844,6 +2954,7 @@ class _PublicDataProofRow extends StatelessWidget {
 
 List<String> _proofSourceLabels({
   required LalaPlace place,
+  required String language,
   required String? source,
   required LalaWeather? weather,
   required LalaPlaceScore? score,
@@ -2860,31 +2971,44 @@ List<String> _proofSourceLabels({
   }
 
   final features = score?.features ?? const <String, dynamic>{};
-  add(_sourceLabel(source));
-  add(_externalSourceLabel(place.upstreamSource ?? features['primary_source']));
+  add(_sourceLabel(source, language: language));
+  add(
+    _externalSourceLabel(
+      place.upstreamSource ?? features['primary_source'],
+      language: language,
+    ),
+  );
   if (score != null) {
-    add(_basisLabel(score.dataBasis));
+    add(_basisLabel(score.dataBasis, language: language));
   }
 
   final inputSources = _stringList(features['input_sources']);
   if (inputSources.any((source) => source.startsWith('economy.'))) {
-    add('카드소비');
+    add(_copy(language, ko: '카드 소비', en: 'Card spending'));
   }
   if (inputSources.contains('culture.events') ||
       _asFeatureInt(features['culture_event_count']) > 0) {
-    add('KCISA/KOPIS 문화행사');
+    add(_copy(language, ko: '문화행사 데이터', en: 'Culture events'));
   }
   if (inputSources.contains('travel.weather_observations') ||
       score?.components.weatherFitScore != null ||
       weather != null) {
-    add(weather == null ? '날씨 관측' : '날씨 ${weather.dust.gradeKo}');
+    add(
+      weather == null
+          ? _copy(language, ko: '날씨 관측', en: 'Weather observations')
+          : _copy(
+              language,
+              ko: '날씨 ${weather.dust.gradeKo}',
+              en: 'Weather ${_dustLabel(weather.dust, language)}',
+            ),
+    );
   }
   if (inputSources.contains('travel.places')) {
-    add('공식 장소 DB');
+    add(_copy(language, ko: '공식 장소 DB', en: 'Official place DB'));
   }
   if (_stringList(features['dynamic_source_types']).isNotEmpty ||
       _stringList(features['rag_source_types']).isNotEmpty) {
-    add('RAG 컨텍스트');
+    add(_copy(language, ko: '검색 컨텍스트', en: 'RAG context'));
   }
   return labels.take(8).toList(growable: false);
 }
@@ -2956,6 +3080,7 @@ class _PlaceRail extends StatelessWidget {
 class _RouteAndDocentPanel extends StatelessWidget {
   const _RouteAndDocentPanel({
     required this.place,
+    required this.language,
     required this.weather,
     required this.intervention,
     required this.dailyPlan,
@@ -2967,6 +3092,7 @@ class _RouteAndDocentPanel extends StatelessWidget {
   });
 
   final LalaPlace? place;
+  final String language;
   final LalaWeather? weather;
   final LalaIntervention? intervention;
   final LalaDailyPlan? dailyPlan;
@@ -2990,18 +3116,24 @@ class _RouteAndDocentPanel extends StatelessWidget {
             Expanded(
               child: _CompactInfoTile(
                 icon: Icons.route,
-                label: '오늘 코스',
-                value: slots.isEmpty ? '날씨 기준 대체 동선 준비 중' : slots.first.title,
+                label: _copy(language, ko: '오늘 코스', en: 'Today route'),
+                value: slots.isEmpty
+                    ? _copy(
+                        language,
+                        ko: '날씨 기준 대체 동선 준비 중',
+                        en: 'Preparing a weather-aware route',
+                      )
+                    : slots.first.title,
               ),
             ),
             const SizedBox(width: 10),
             Expanded(
               child: _CompactInfoTile(
                 icon: Icons.cloud,
-                label: '날씨',
+                label: _copy(language, ko: '날씨', en: 'Weather'),
                 value: weather == null
-                    ? '확인 중'
-                    : '${_temperatureLabel(weather!.temp)} · ${weather!.dust.gradeKo}',
+                    ? _copy(language, ko: '확인 중', en: 'Checking')
+                    : '${_temperatureLabel(weather!.temp)} · ${_dustLabel(weather!.dust, language)}',
               ),
             ),
           ],
@@ -3009,6 +3141,7 @@ class _RouteAndDocentPanel extends StatelessWidget {
         const SizedBox(height: 10),
         _DocentSubtitle(
           place: place,
+          language: language,
           script: script,
           action: intervention?.recommendedAction,
           audioLoading: audioLoading,
@@ -3025,6 +3158,7 @@ class _RouteAndDocentPanel extends StatelessWidget {
 class _DocentSubtitle extends StatelessWidget {
   const _DocentSubtitle({
     required this.place,
+    required this.language,
     required this.script,
     required this.action,
     required this.audioLoading,
@@ -3035,6 +3169,7 @@ class _DocentSubtitle extends StatelessWidget {
   });
 
   final LalaPlace? place;
+  final String language;
   final String? script;
   final String? action;
   final bool audioLoading;
@@ -3046,13 +3181,18 @@ class _DocentSubtitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final body = _docentBody(place: place, script: script);
+    final body = _docentBody(place: place, script: script, language: language);
     final summary = _docentSummary(
       place: place,
+      language: language,
       script: script,
       action: action,
     );
-    final actionLabel = _docentActionLabel(place: place, action: action);
+    final actionLabel = _docentActionLabel(
+      place: place,
+      action: action,
+      language: language,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -3096,7 +3236,17 @@ class _DocentSubtitle extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          place == null ? '로컬 도슨트' : '${place!.name} 도슨트',
+                          place == null
+                              ? _copy(
+                                  language,
+                                  ko: '로컬 도슨트',
+                                  en: 'Local docent',
+                                )
+                              : _copy(
+                                  language,
+                                  ko: '${place!.nameKo ?? place!.name} 도슨트',
+                                  en: '${place!.nameKo ?? place!.name} docent',
+                                ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
@@ -3219,14 +3369,20 @@ class _DocentSubtitle extends StatelessWidget {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.volume_up),
-                label: Text(audioLoading ? '음성 생성 중' : '정보 더 듣기'),
+                label: Text(
+                  audioLoading
+                      ? _copy(language, ko: '음성 생성 중', en: 'Preparing audio')
+                      : _copy(language, ko: '정보 더 듣기', en: 'Listen'),
+                ),
               ),
             ),
             const SizedBox(width: 10),
             Expanded(
               child: OutlinedButton.icon(
                 icon: const Icon(Icons.add_circle_outline),
-                label: const Text('오늘 코스에 추가'),
+                label: Text(
+                  _copy(language, ko: '오늘 코스에 추가', en: 'Add to plan'),
+                ),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFF2B6CB0),
                   side: const BorderSide(color: Color(0xFF2B6CB0)),
@@ -3248,6 +3404,7 @@ class _LegacyMapCanvas extends StatelessWidget {
     required this.selectedPlace,
     required this.weather,
     required this.kakaoJavascriptKey,
+    required this.language,
     required this.mapFocusLat,
     required this.mapFocusLng,
     required this.mapLevel,
@@ -3259,6 +3416,7 @@ class _LegacyMapCanvas extends StatelessWidget {
   final LalaPlace? selectedPlace;
   final LalaWeather? weather;
   final String kakaoJavascriptKey;
+  final String language;
   final double? mapFocusLat;
   final double? mapFocusLng;
   final int mapLevel;
@@ -3292,6 +3450,7 @@ class _LegacyMapCanvas extends StatelessWidget {
         Positioned.fill(
           child: buildKakaoMapView(
             javascriptKey: kakaoJavascriptKey,
+            language: language,
             centerLat: centerLat,
             centerLng: centerLng,
             level: mapLevel,
@@ -3519,10 +3678,12 @@ class _FloatingMapControls extends StatelessWidget {
               : (voiceEnabled ? '음성 끄기' : '음성 켜기'),
           icon: voiceEnabled ? Icons.volume_up : Icons.volume_off,
           label: language == 'en'
-              ? (voiceEnabled ? 'Voice ON' : 'Voice OFF')
-              : (voiceEnabled ? '음성 ON' : '음성 OFF'),
+              ? (voiceEnabled ? 'Voice on' : 'Voice off')
+              : (voiceEnabled ? '음성 켜짐' : '음성 꺼짐'),
           active: voiceEnabled,
-          statusLabel: voiceEnabled ? 'ON' : 'OFF',
+          statusLabel: language == 'en'
+              ? (voiceEnabled ? 'ON' : 'OFF')
+              : (voiceEnabled ? '켬' : '끔'),
           onPressed: onToggleVoice,
         ),
         const SizedBox(width: 9),
@@ -3533,10 +3694,12 @@ class _FloatingMapControls extends StatelessWidget {
               : (autoDocentEnabled ? '자동 도슨트 끄기' : '자동 도슨트 켜기'),
           icon: Icons.record_voice_over_outlined,
           label: language == 'en'
-              ? (autoDocentEnabled ? 'Auto ON' : 'Auto OFF')
-              : (autoDocentEnabled ? '자동 ON' : '자동 OFF'),
+              ? (autoDocentEnabled ? 'Auto on' : 'Auto off')
+              : (autoDocentEnabled ? '자동 켜짐' : '자동 꺼짐'),
           active: autoDocentEnabled,
-          statusLabel: autoDocentEnabled ? 'ON' : 'OFF',
+          statusLabel: language == 'en'
+              ? (autoDocentEnabled ? 'ON' : 'OFF')
+              : (autoDocentEnabled ? '켬' : '끔'),
           onPressed: onToggleAutoDocent,
         ),
         const SizedBox(width: 9),
@@ -3834,9 +3997,10 @@ class _FallbackPlaceImage extends StatelessWidget {
 }
 
 class _CategoryBadge extends StatelessWidget {
-  const _CategoryBadge({required this.category});
+  const _CategoryBadge({required this.category, this.language = 'ko'});
 
   final String category;
+  final String language;
 
   @override
   Widget build(BuildContext context) {
@@ -3856,7 +4020,7 @@ class _CategoryBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
-        _categoryLabel(category),
+        _categoryLabel(category, language: language),
         style: TextStyle(
           color: textColor,
           fontSize: 11,
@@ -4021,9 +4185,10 @@ class _WeatherMapPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dustPrefix = language == 'en' ? 'Dust' : '미세먼지';
+    final fallback = _fallbackWeather();
     final label = weather == null
-        ? '${_fallbackWeather().temp} · $dustPrefix ${_fallbackWeather().dust.gradeKo}'
-        : '${_temperatureLabel(weather!.temp)} · $dustPrefix ${weather!.dust.gradeKo}';
+        ? '${_temperatureLabel(fallback.temp)} · $dustPrefix ${_dustLabel(fallback.dust, language)}'
+        : '${_temperatureLabel(weather!.temp)} · $dustPrefix ${_dustLabel(weather!.dust, language)}';
     return _SmallStatusPill(
       key: const ValueKey('weather-pill-hit-target'),
       icon: Icons.thermostat,
@@ -4224,7 +4389,22 @@ class _EmptyPlaceState extends StatelessWidget {
   }
 }
 
-String _categoryLabel(String category) {
+bool _isEnglish(String language) => language == 'en';
+
+String _copy(String language, {required String ko, required String en}) {
+  return _isEnglish(language) ? en : ko;
+}
+
+String _categoryLabel(String category, {String language = 'ko'}) {
+  if (_isEnglish(language)) {
+    return switch (category) {
+      'restaurant' => 'Food',
+      'event' => 'Event',
+      'culture_venue' => 'Culture',
+      'attraction' => 'Attraction',
+      _ => 'Local',
+    };
+  }
   return switch (category) {
     'restaurant' => '맛집',
     'event' => '행사',
@@ -4247,7 +4427,7 @@ String _categoryFilterLabel(String category, String language) {
   }
   return switch (category) {
     'all' => '전체',
-    _ => _categoryLabel(category),
+    _ => _categoryLabel(category, language: language),
   };
 }
 
@@ -4347,7 +4527,10 @@ List<_WeatherChartPoint> _weatherChartPoints({
   ];
 }
 
-String _weatherChartTimeLabel(String raw) {
+String _weatherChartTimeLabel(String raw, {String language = 'ko'}) {
+  if (_isEnglish(language)) {
+    return raw.trim();
+  }
   final trimmed = raw.trim();
   final match = RegExp(r'(\d{1,2})(?=:\d{2})').firstMatch(trimmed);
   if (match == null) {
@@ -4373,7 +4556,20 @@ IconData _weatherForecastIcon(String icon) {
   return Icons.wb_cloudy_outlined;
 }
 
-String _periodLabel(String period) {
+String _periodLabel(String period, {String language = 'ko'}) {
+  if (_isEnglish(language)) {
+    return switch (period) {
+      'morning' => 'Morning',
+      'afternoon' => 'Afternoon',
+      'evening' => 'Evening',
+      _ =>
+        period.isEmpty
+            ? '-'
+            : period.length <= 3
+            ? period
+            : period.substring(0, 3),
+    };
+  }
   return switch (period) {
     'morning' => '오전',
     'afternoon' => '오후',
@@ -4387,12 +4583,34 @@ String _periodLabel(String period) {
   };
 }
 
-String _outdoorLabel(String status) {
+String _outdoorLabel(String status, {String language = 'ko'}) {
+  if (_isEnglish(language)) {
+    return switch (status) {
+      'good' => 'Good',
+      'normal' => 'Normal',
+      'bad' => 'Caution',
+      _ => status,
+    };
+  }
   return switch (status) {
     'good' => '좋음',
     'normal' => '보통',
     'bad' => '주의',
     _ => status,
+  };
+}
+
+String _dustLabel(LalaDust dust, String language) {
+  if (!_isEnglish(language)) {
+    return dust.gradeKo.trim().isEmpty ? dust.grade : dust.gradeKo;
+  }
+  return switch (dust.grade.trim()) {
+    'good' => 'Good',
+    'normal' => 'Normal',
+    'bad' => 'Bad',
+    'very_bad' => 'Very bad',
+    final grade when grade.isEmpty => dust.gradeKo,
+    final grade => grade,
   };
 }
 
@@ -4510,10 +4728,19 @@ LalaPlace? _featuredPlace(List<LalaPlace> places) {
   return places.first;
 }
 
-String _docentBody({required LalaPlace? place, required String? script}) {
+String _docentBody({
+  required LalaPlace? place,
+  required String? script,
+  required String language,
+}) {
   final trimmed = script?.trim();
   final placeName = place?.nameKo ?? place?.name;
   if (trimmed == null || trimmed.isEmpty) {
+    if (_isEnglish(language)) {
+      return placeName == null
+          ? 'Move the map to prepare nearby local experiences and docent notes.'
+          : 'Preparing the cultural context and nearby local experience for $placeName.';
+    }
     return placeName == null
         ? '지도를 움직이면 가까운 로컬 경험과 도슨트가 준비됩니다.'
         : '$placeName의 문화 맥락과 주변 로컬 경험을 도슨트로 준비하고 있습니다.';
@@ -4522,7 +4749,12 @@ String _docentBody({required LalaPlace? place, required String? script}) {
   final lower = trimmed.toLowerCase();
   if (lower.contains('migration skeleton') ||
       lower.contains('azure openai') ||
-      lower.startsWith('this is a brief')) {
+      RegExp(r'^this is a .+ docent script').hasMatch(lower)) {
+    if (_isEnglish(language)) {
+      return placeName == null
+          ? 'Preparing a local story from official tourism, culture, and spending signals.'
+          : '$placeName connects official tourism and culture data with nearby local spending signals.';
+    }
     return placeName == null
         ? '공식 관광·문화 데이터와 지역 소비 신호를 바탕으로 로컬 이야기를 준비하고 있습니다.'
         : '$placeName은 공식 관광·문화 데이터와 지역 소비 신호를 함께 살펴볼 수 있는 로컬 코스입니다.';
@@ -4533,21 +4765,35 @@ String _docentBody({required LalaPlace? place, required String? script}) {
 
 String _docentSummary({
   required LalaPlace? place,
+  required String language,
   required String? script,
   required String? action,
 }) {
-  final body = _docentBody(place: place, script: script).trim();
+  final body = _docentBody(
+    place: place,
+    script: script,
+    language: language,
+  ).trim();
   if (body.isNotEmpty) {
     return _compactDocentSummary(body);
   }
 
   final trimmedAction = action?.trim();
   if (trimmedAction != null && trimmedAction.isNotEmpty) {
-    return _docentActionLabel(place: place, action: trimmedAction) ??
+    return _docentActionLabel(
+          place: place,
+          action: trimmedAction,
+          language: language,
+        ) ??
         trimmedAction;
   }
 
   final placeName = place?.nameKo ?? place?.name;
+  if (_isEnglish(language)) {
+    return placeName == null
+        ? 'Preparing local experiences around your current location.'
+        : 'Preparing the cultural context and route around $placeName.';
+  }
   return placeName == null
       ? '현재 위치 주변의 로컬 경험을 준비하고 있습니다.'
       : '$placeName 주변의 문화 맥락과 동선을 준비하고 있습니다.';
@@ -4569,6 +4815,7 @@ String _compactDocentSummary(String text) {
 String? _docentActionLabel({
   required LalaPlace? place,
   required String? action,
+  String language = 'ko',
 }) {
   final trimmed = action?.trim();
   if (trimmed == null || trimmed.isEmpty) {
@@ -4577,7 +4824,15 @@ String? _docentActionLabel({
   final placeName = place?.nameKo ?? place?.name ?? '이 장소';
   final looksEnglish = RegExp(r'[A-Za-z]{3,}').hasMatch(trimmed);
   if (looksEnglish) {
+    if (_isEnglish(language)) {
+      return trimmed;
+    }
     return '$placeName 주변 골목과 지역 상권을 함께 걷는 코스로 이어집니다.';
+  }
+  if (_isEnglish(language)) {
+    return placeName == '이 장소'
+        ? 'This route continues through nearby local streets and businesses.'
+        : 'This route continues through local streets and businesses around $placeName.';
   }
   return trimmed;
 }
@@ -5111,7 +5366,18 @@ class _MiniChip extends StatelessWidget {
   }
 }
 
-String _sourceLabel(String? value) {
+String _sourceLabel(String? value, {String language = 'ko'}) {
+  if (_isEnglish(language)) {
+    return switch ((value ?? '').trim()) {
+      'db' => 'Database',
+      'mixed' => 'Mixed data',
+      'public_mvp_snapshot' => 'Public snapshot',
+      'demo_fallback' => 'Demo fallback',
+      'skeleton' => 'Demo data',
+      '' => '-',
+      final source => source,
+    };
+  }
   return switch ((value ?? '').trim()) {
     'db' => 'DB 기반',
     'mixed' => '혼합 데이터',
@@ -5123,7 +5389,19 @@ String _sourceLabel(String? value) {
   };
 }
 
-String? _externalSourceLabel(Object? value) {
+String? _externalSourceLabel(Object? value, {String language = 'ko'}) {
+  if (_isEnglish(language)) {
+    return switch ((value?.toString() ?? '').trim()) {
+      'tour_api' => 'TourAPI',
+      'kcisa' => 'KCISA',
+      'kopis' => 'KOPIS',
+      'dev_seed' => 'Seed data',
+      'public_mvp_snapshot' => 'Public snapshot',
+      'canonical' => 'Official place DB',
+      '' => null,
+      final source => source,
+    };
+  }
   return switch ((value?.toString() ?? '').trim()) {
     'tour_api' => 'TourAPI',
     'kcisa' => 'KCISA',
@@ -5136,7 +5414,17 @@ String? _externalSourceLabel(Object? value) {
   };
 }
 
-String _basisLabel(String value) {
+String _basisLabel(String value, {String language = 'ko'}) {
+  if (_isEnglish(language)) {
+    return switch (value.trim()) {
+      'actual_data' => 'Real data',
+      'demo_seed' => 'Seed data',
+      'public_mvp_snapshot' => 'Public MVP snapshot',
+      'demo_fallback' => 'Demo fallback',
+      final basis when basis.isEmpty => '-',
+      final basis => basis,
+    };
+  }
   return switch (value.trim()) {
     'actual_data' => '실데이터',
     'demo_seed' => '시드 데이터',

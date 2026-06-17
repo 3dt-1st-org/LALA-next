@@ -14,15 +14,19 @@ Future<void>? _sdkLoader;
 
 Widget buildKakaoMapView({
   required String javascriptKey,
+  required String language,
   required double centerLat,
   required double centerLng,
   required int level,
   required List<KakaoMapPlace> places,
   ValueChanged<String>? onPlaceTap,
 }) {
+  final isEnglish = language == 'en';
   if (javascriptKey.trim().isEmpty) {
     return _KakaoMapUnavailable(
-      message: 'KAKAO_JAVASCRIPT_KEY를 설정하면 실제 카카오 지도가 표시됩니다.',
+      message: isEnglish
+          ? 'Set the Kakao map key to show the live map.'
+          : '카카오 지도 키를 설정하면 실제 지도가 표시됩니다.',
       places: places,
       centerLat: centerLat,
       centerLng: centerLng,
@@ -31,6 +35,7 @@ Widget buildKakaoMapView({
 
   return _KakaoMapBackgroundBridge(
     javascriptKey: javascriptKey.trim(),
+    language: language,
     centerLat: centerLat,
     centerLng: centerLng,
     level: level,
@@ -42,6 +47,7 @@ Widget buildKakaoMapView({
 class _KakaoMapBackgroundBridge extends StatefulWidget {
   const _KakaoMapBackgroundBridge({
     required this.javascriptKey,
+    required this.language,
     required this.centerLat,
     required this.centerLng,
     required this.level,
@@ -50,6 +56,7 @@ class _KakaoMapBackgroundBridge extends StatefulWidget {
   });
 
   final String javascriptKey;
+  final String language;
   final double centerLat;
   final double centerLng;
   final int level;
@@ -112,7 +119,7 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
       ..style.color = '#1a202c'
       ..style.fontWeight = '800'
       ..style.setProperty('place-items', 'center')
-      ..text = 'Kakao Map API 로딩 중';
+      ..text = widget.language == 'en' ? 'Loading Kakao Map' : '카카오 지도 로딩 중';
     _makeFlutterLayerTransparent();
 
     _ensureKakaoMapsSdk(widget.javascriptKey)
@@ -128,7 +135,9 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
           }
           _drawFallbackMap(
             container,
-            message: '카카오 지도 연결 대기 중',
+            message: widget.language == 'en'
+                ? 'Waiting for the Kakao map connection'
+                : '카카오 지도 연결 대기 중',
             places: widget.places,
             centerLat: widget.centerLat,
             centerLng: widget.centerLng,

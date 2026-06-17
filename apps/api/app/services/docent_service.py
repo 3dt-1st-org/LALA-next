@@ -67,6 +67,20 @@ def generate_script(request: DocentScriptRequest) -> dict:
 
 
 def _fallback_script(request: DocentScriptRequest) -> str:
+    if request.language == "ko":
+        mode_label = "자세한" if request.mode == "detail" else "짧은"
+        category_label = {
+            "attraction": "명소",
+            "restaurant": "맛집",
+            "event": "행사",
+            "culture_venue": "문화공간",
+        }.get(request.category, "장소")
+        return (
+            f"{request.place_id} {category_label}에 대한 {mode_label} 도슨트입니다. "
+            "공식 관광·문화 데이터와 지역 소비 신호를 바탕으로 로컬 맥락을 준비하고 있으며, "
+            "이 문구는 향후 정식 인공지능 도메인 서비스로 대체됩니다."
+        )
+
     language_label = display_language(request.language)
     return (
         f"This is a {request.mode} {language_label} docent script for "

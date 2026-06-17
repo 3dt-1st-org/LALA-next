@@ -10,6 +10,7 @@ export 'kakao_map_models.dart';
 
 Widget buildKakaoMapView({
   required String javascriptKey,
+  required String language,
   required double centerLat,
   required double centerLng,
   required int level,
@@ -18,6 +19,7 @@ Widget buildKakaoMapView({
 }) {
   return impl.buildKakaoMapView(
     javascriptKey: javascriptKey,
+    language: language,
     centerLat: centerLat,
     centerLng: centerLng,
     level: level,

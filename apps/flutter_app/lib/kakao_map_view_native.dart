@@ -8,6 +8,7 @@ import 'kakao_map_models.dart';
 
 Widget buildKakaoMapView({
   required String javascriptKey,
+  required String language,
   required double centerLat,
   required double centerLng,
   required int level,
@@ -16,13 +17,17 @@ Widget buildKakaoMapView({
 }) {
   final normalizedKey = javascriptKey.trim();
   if (normalizedKey.isEmpty) {
-    return const _KakaoMapNativeUnavailable(
-      message: 'KAKAO_JAVASCRIPT_KEY를 설정하면 실제 카카오 지도가 표시됩니다.',
+    return _KakaoMapNativeUnavailable(
+      message: language == 'en'
+          ? 'Set the Kakao map key to show the live map.'
+          : '카카오 지도 키를 설정하면 실제 지도가 표시됩니다.',
     );
   }
 
   if (!io.Platform.isIOS && !io.Platform.isAndroid) {
-    return const _KakaoMapNativeUnavailable(message: 'Kakao Map API');
+    return _KakaoMapNativeUnavailable(
+      message: language == 'en' ? 'Kakao Map API' : '카카오 지도',
+    );
   }
 
   return _KakaoMapNativeWebView(

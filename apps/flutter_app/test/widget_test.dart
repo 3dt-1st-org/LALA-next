@@ -22,7 +22,7 @@ void main() {
     expect(find.text('명소'), findsAtLeastNWidgets(1));
     expect(find.text('대시보드'), findsNothing);
     expect(find.text('추천 장소 보기'), findsOneWidget);
-    expect(find.textContaining('KAKAO_JAVASCRIPT_KEY'), findsOneWidget);
+    expect(find.textContaining('카카오 지도 키'), findsOneWidget);
     expect(find.text('로컬 점수'), findsNothing);
     expect(find.text('내국인 소비'), findsNothing);
     expect(find.text('수요 분산'), findsNothing);
@@ -48,8 +48,8 @@ void main() {
     expect(find.text('날씨 적합'), findsOneWidget);
     expect(find.text('86'), findsAtLeastNWidgets(1));
     expect(find.text('TourAPI'), findsOneWidget);
-    expect(find.text('카드소비'), findsOneWidget);
-    expect(find.text('KCISA/KOPIS 문화행사'), findsOneWidget);
+    expect(find.text('카드 소비'), findsOneWidget);
+    expect(find.text('문화행사 데이터'), findsOneWidget);
     expect(find.textContaining('날씨'), findsWidgets);
   });
 
@@ -73,25 +73,25 @@ void main() {
 
     final voiceToggle = find.byKey(const ValueKey('voice-toggle'));
     expect(
-      find.descendant(of: voiceToggle, matching: find.text('ON')),
+      find.descendant(of: voiceToggle, matching: find.text('켬')),
       findsOneWidget,
     );
     await tester.tap(voiceToggle);
     await tester.pumpAndSettle();
     expect(
-      find.descendant(of: voiceToggle, matching: find.text('OFF')),
+      find.descendant(of: voiceToggle, matching: find.text('끔')),
       findsOneWidget,
     );
 
     final autoToggle = find.byKey(const ValueKey('auto-docent-toggle'));
     expect(
-      find.descendant(of: autoToggle, matching: find.text('OFF')),
+      find.descendant(of: autoToggle, matching: find.text('끔')),
       findsOneWidget,
     );
     await tester.tap(autoToggle);
     await tester.pumpAndSettle();
     expect(
-      find.descendant(of: autoToggle, matching: find.text('ON')),
+      find.descendant(of: autoToggle, matching: find.text('켬')),
       findsOneWidget,
     );
   });
@@ -116,7 +116,7 @@ void main() {
 
     expect(find.text('날씨'), findsOneWidget);
     expect(find.text('날씨 추이'), findsOneWidget);
-    expect(find.text('15시'), findsOneWidget);
+    expect(find.text('15시'), findsAtLeastNWidgets(1));
     expect(find.text('22°'), findsOneWidget);
     expect(find.text('PM10'), findsOneWidget);
   });
@@ -141,7 +141,7 @@ void main() {
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('auto-docent-toggle')),
-        matching: find.text('ON'),
+        matching: find.text('켬'),
       ),
       findsOneWidget,
     );
@@ -281,18 +281,18 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(
-      find.widgetWithText(TextField, 'Base URL'),
+      find.widgetWithText(TextField, '기본 URL'),
       'http://10.0.0.5:8080',
     );
     await tester.enterText(
-      find.widgetWithText(TextField, 'Migration API key'),
+      find.widgetWithText(TextField, '마이그레이션 API 키'),
       'migration-key',
     );
     await tester.enterText(
-      find.widgetWithText(TextField, 'Kakao JavaScript key'),
+      find.widgetWithText(TextField, '카카오 JavaScript 키'),
       'kakao-js-key',
     );
-    final refreshButton = find.widgetWithText(FilledButton, 'Refresh');
+    final refreshButton = find.widgetWithText(FilledButton, '새로고침');
     await tester.ensureVisible(refreshButton);
     await tester.pumpAndSettle();
     await tester.tap(refreshButton);
@@ -316,7 +316,7 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.settings).first);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('English'));
+    await tester.tap(find.text('영어'));
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.arrow_back_ios_new));
     await tester.pumpAndSettle();
