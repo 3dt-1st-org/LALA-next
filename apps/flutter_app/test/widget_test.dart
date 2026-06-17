@@ -132,6 +132,11 @@ void main() {
     await tester.tap(evidenceButton);
     await tester.pumpAndSettle();
 
+    final detailHeroSize = tester.getSize(
+      find.byKey(const ValueKey('detail-place-hero-image')),
+    );
+    expect(detailHeroSize.height, 170);
+    expect(detailHeroSize.width, greaterThan(320));
     expect(find.text('로컬 점수'), findsOneWidget);
     expect(find.text('내국인 소비'), findsOneWidget);
     expect(find.text('수요 분산'), findsOneWidget);
@@ -1016,12 +1021,23 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Details'), findsWidgets);
+    final detailHeroSize = tester.getSize(
+      find.byKey(const ValueKey('detail-place-hero-image')),
+    );
+    expect(detailHeroSize.height, 170);
+    expect(detailHeroSize.width, greaterThan(320));
     expect(find.text('Suwon'), findsAtLeastNWidgets(1));
     expect(find.text('Local context'), findsOneWidget);
     expect(find.text('1 linked events'), findsOneWidget);
     expect(find.text('Card spend KRW 14,000,000'), findsNothing);
 
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Show signals'));
+    final showSignalsButton = find.widgetWithText(
+      OutlinedButton,
+      'Show signals',
+    );
+    await tester.ensureVisible(showSignalsButton);
+    await tester.pumpAndSettle();
+    await tester.tap(showSignalsButton);
     await tester.pumpAndSettle();
 
     expect(find.text('Card spend KRW 14,000,000'), findsOneWidget);

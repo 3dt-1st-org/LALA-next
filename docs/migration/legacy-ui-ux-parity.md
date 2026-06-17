@@ -62,6 +62,9 @@ evidence, but they are not the latest MVP acceptance source.
   context now explicitly focuses the map on that place, matching the legacy
   `selectPlace -> map.panTo(place)` behavior.
 - Implemented: primary docent CTA now uses the legacy-style `정보 더 듣기` copy.
+- Implemented: the place detail sheet now follows the legacy web/iOS detail
+  hierarchy with a full-width 170px hero image above localized title,
+  category, region, address, recommendation, and docent CTA content.
 - Implemented: category chips filter the map, recommendation rail, and selected
   detail context.
 - Implemented: category chips now also propagate the active category into the

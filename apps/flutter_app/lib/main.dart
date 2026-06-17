@@ -4197,86 +4197,104 @@ class _FeaturedPlaceHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final score = place.score?.percent ?? 86;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         ClipRRect(
-          borderRadius: BorderRadius.circular(18),
-          child: _PlaceImage(place: place, width: 94, height: 94),
+          borderRadius: BorderRadius.circular(14),
+          child: SizedBox(
+            key: const ValueKey('detail-place-hero-image'),
+            height: 170,
+            child: _PlaceImage(
+              place: place,
+              width: double.infinity,
+              height: 170,
+            ),
+          ),
         ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+        const SizedBox(height: 14),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _CategoryBadge(category: place.category, language: language),
-                  const Spacer(),
-                  IconButton(
-                    tooltip: _copy(language, ko: '저장', en: 'Save'),
-                    onPressed: () {},
-                    icon: const Icon(Icons.favorite_border),
+                  const SizedBox(height: 7),
+                  Text(
+                    _placeDisplayName(place, language),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      color: const Color(0xFF111827),
+                      height: 1.08,
+                    ),
                   ),
                 ],
               ),
+            ),
+            IconButton(
+              tooltip: _copy(language, ko: '저장', en: 'Save'),
+              onPressed: () {},
+              icon: const Icon(Icons.favorite_border),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        _InlineIconText(
+          icon: Icons.place_outlined,
+          label: _placeRegionLabel(place, language),
+        ),
+        if (place.address.trim().isNotEmpty) ...[
+          const SizedBox(height: 5),
+          _InlineIconText(
+            icon: Icons.map_outlined,
+            label:
+                _singleLanguageText(place.address, language) ??
+                _placeRegionLabel(place, language),
+          ),
+        ],
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 12,
+          runSpacing: 6,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            _InlineIconText(
+              icon: Icons.directions_walk,
+              label: '${place.distanceM}m',
+            ),
+            if (!showEvidence)
+              _InlineIconText(
+                icon: Icons.explore_outlined,
+                label: _copy(language, ko: '로컬 추천', en: 'Local pick'),
+              ),
+            if (showEvidence) ...[
               Text(
-                _placeDisplayName(place, language),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                _copy(language, ko: '로컬 점수', en: 'Local score'),
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: const Color(0xFF1A202C),
                   fontWeight: FontWeight.w900,
-                  color: const Color(0xFF111827),
                 ),
               ),
-              const SizedBox(height: 5),
-              _InlineIconText(
-                icon: Icons.place_outlined,
-                label: _placeRegionLabel(place, language),
+              Text(
+                '$score',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: const Color(0xFFC53030),
+                  fontWeight: FontWeight.w900,
+                ),
               ),
-              const SizedBox(height: 7),
-              Wrap(
-                spacing: 12,
-                runSpacing: 6,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  _InlineIconText(
-                    icon: Icons.directions_walk,
-                    label: '${place.distanceM}m',
-                  ),
-                  if (!showEvidence)
-                    _InlineIconText(
-                      icon: Icons.explore_outlined,
-                      label: _copy(language, ko: '로컬 추천', en: 'Local pick'),
-                    ),
-                  if (showEvidence) ...[
-                    Text(
-                      _copy(language, ko: '로컬 점수', en: 'Local score'),
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: const Color(0xFF1A202C),
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    Text(
-                      '$score',
-                      style: Theme.of(context).textTheme.headlineSmall
-                          ?.copyWith(
-                            color: const Color(0xFFC53030),
-                            fontWeight: FontWeight.w900,
-                          ),
-                    ),
-                    const Text(
-                      '/100',
-                      style: TextStyle(
-                        color: Color(0xFF64748B),
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
-                ],
+              const Text(
+                '/100',
+                style: TextStyle(
+                  color: Color(0xFF64748B),
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ],
-          ),
+          ],
         ),
       ],
     );
