@@ -45,6 +45,9 @@ evidence, but they are not the latest MVP acceptance source.
   category badges are visible, event cards include ongoing/ended status, and
   tapping the already-selected card keeps the user in the map context instead
   of reopening detail.
+- Implemented: recommendation rail cards now follow the legacy iOS card
+  information hierarchy more closely by showing localized place name, category,
+  region, distance, and a larger 86px place thumbnail.
 - Implemented: selected recommendation rail cards now carry an obang palette
   gradient ring, preserving the legacy iOS `AnimatedObangBorder` selection cue
   in the Flutter map shell.
@@ -77,6 +80,9 @@ evidence, but they are not the latest MVP acceptance source.
 - Implemented: user-facing map, sheet, and docent copy follows the selected
   language only; bilingual upstream place/script fragments are reduced to the
   active language before rendering.
+- Implemented: the settings sheet language selector also follows the active
+  language only, so Korean mode shows `한국어/영어` and English mode shows
+  `Korean/English` without simultaneous bilingual labels.
 - Implemented: auto-docent now follows the legacy
   `runAutoDocentIfNeeded -> selectPlace(openDetail: false)` behavior by
   selecting and panning to the nearest place while keeping the user in the map

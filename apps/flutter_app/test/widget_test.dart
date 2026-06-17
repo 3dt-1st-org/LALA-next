@@ -177,6 +177,19 @@ void main() {
     );
     expect(find.text('행궁동 카페거리'), findsAtLeastNWidgets(1));
     expect(find.text('행궁동 카페거리 도슨트'), findsOneWidget);
+    final restaurantRailCard = find.byKey(
+      const ValueKey('tour-stop-action-haenggung-cafe-street'),
+    );
+    expect(
+      find.descendant(of: restaurantRailCard, matching: find.text('수원')),
+      findsOneWidget,
+    );
+    expect(
+      tester.getSize(
+        find.byKey(const ValueKey('rail-place-thumb-haenggung-cafe-street')),
+      ),
+      const Size(86, 86),
+    );
 
     final voiceToggle = find.byKey(const ValueKey('voice-toggle'));
     expect(
@@ -747,7 +760,7 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.settings).first);
+    await tester.tap(find.byKey(const ValueKey('settings-button')));
     await tester.pumpAndSettle();
     await tester.tap(find.byType(Switch).first);
     await tester.pumpAndSettle();
@@ -777,7 +790,7 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.settings).first);
+    await tester.tap(find.byKey(const ValueKey('settings-button')));
     await tester.pumpAndSettle();
     await tester.tap(find.byType(Switch).first);
     await tester.pumpAndSettle();
@@ -871,7 +884,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.settings).first);
+    await tester.tap(find.byKey(const ValueKey('settings-button')));
     await tester.pumpAndSettle();
 
     expect(find.text('개인정보 동의 안내'), findsOneWidget);
@@ -925,7 +938,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.settings).first);
+    await tester.tap(find.byKey(const ValueKey('settings-button')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('영어'));
     await tester.pumpAndSettle();
@@ -951,13 +964,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.settings).first);
+    await tester.tap(find.byKey(const ValueKey('settings-button')));
     await tester.pumpAndSettle();
 
     expect(find.text('한국어'), findsOneWidget);
     expect(find.text('영어'), findsOneWidget);
     expect(find.text('Korean'), findsNothing);
     expect(find.text('English'), findsNothing);
+    expect(_visibleMixedLanguageTexts(tester), isEmpty);
 
     await tester.tap(find.text('영어'));
     await tester.pumpAndSettle();
@@ -966,6 +980,7 @@ void main() {
     expect(find.text('English'), findsOneWidget);
     expect(find.text('한국어'), findsNothing);
     expect(find.text('영어'), findsNothing);
+    expect(_visibleMixedLanguageTexts(tester), isEmpty);
   });
 
   testWidgets('english language setting does not mix Korean place copy', (
@@ -1123,7 +1138,7 @@ void main() {
     expect(find.textContaining('Suwon-si'), findsNothing);
     expect(_visibleMixedLanguageTexts(tester), isEmpty);
 
-    await tester.tap(find.byIcon(Icons.settings).first);
+    await tester.tap(find.byKey(const ValueKey('settings-button')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('영어'));
     await tester.pumpAndSettle();
@@ -1133,6 +1148,8 @@ void main() {
     expect(find.text('Hwaseong Haenggung'), findsAtLeastNWidgets(1));
     expect(find.textContaining('화성행궁'), findsNothing);
     expect(find.textContaining('경기도'), findsNothing);
+    expect(find.textContaining('Hwaseong Haenggung / 화성행궁'), findsNothing);
+    expect(find.textContaining('화성행궁 / Hwaseong Haenggung'), findsNothing);
     expect(_visibleMixedLanguageTexts(tester), isEmpty);
   });
 
@@ -1171,7 +1188,7 @@ void main() {
     await tester.tap(find.byIcon(Icons.close).last);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.settings).first);
+    await tester.tap(find.byKey(const ValueKey('settings-button')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('영어'));
     await tester.pumpAndSettle();
@@ -1209,7 +1226,7 @@ void main() {
     expect(find.textContaining('Places failed'), findsNothing);
     expect(_visibleMixedLanguageTexts(tester), isEmpty);
 
-    await tester.tap(find.byIcon(Icons.settings).first);
+    await tester.tap(find.byKey(const ValueKey('settings-button')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('영어'));
     await tester.pumpAndSettle();

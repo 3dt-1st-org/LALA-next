@@ -1553,7 +1553,7 @@ class _Dashboard extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= 860;
-        final floatingPillTop = isWide ? 204.0 : 238.0;
+        final floatingPillTop = isWide ? 264.0 : 266.0;
         return Stack(
           children: [
             Positioned.fill(
@@ -1583,19 +1583,6 @@ class _Dashboard extends StatelessWidget {
               ),
             ),
             Positioned(
-              right: 16,
-              top: floatingPillTop,
-              child: _WeatherMapPill(
-                key: const ValueKey('weather-pill'),
-                weather: currentWeather,
-                language: uiLanguage,
-                onPressed: () {
-                  onOpenSheet(_ActiveMapSheet.weather);
-                  onRefreshWeather();
-                },
-              ),
-            ),
-            Positioned(
               left: 16,
               right: 16,
               top: isWide ? 76 : 68,
@@ -1611,15 +1598,6 @@ class _Dashboard extends StatelessWidget {
                 onToggleExpanded: onToggleRecommendationRail,
               ),
             ),
-            Positioned(
-              left: 16,
-              top: floatingPillTop,
-              child: _PlannerMapPill(
-                dailyPlan: dailyPlan?.data,
-                language: uiLanguage,
-                onPressed: () => onOpenSheet(_ActiveMapSheet.planner),
-              ),
-            ),
             if (selectedCategory == 'restaurant' && tourPlaces.isNotEmpty)
               Positioned(
                 right: 16,
@@ -1630,18 +1608,6 @@ class _Dashboard extends StatelessWidget {
                   onPressed: () => onOpenSheet(_ActiveMapSheet.tour),
                 ),
               ),
-            Positioned(
-              left: 0,
-              right: 0,
-              top: isWide ? 150 : 166,
-              child: Center(
-                child: _MapRoundButton(
-                  tooltip: uiLanguage == 'en' ? 'Settings' : '설정',
-                  icon: Icons.settings,
-                  onPressed: onOpenSettings,
-                ),
-              ),
-            ),
             if (visibleError != null)
               Positioned(
                 left: 16,
@@ -1729,6 +1695,22 @@ class _Dashboard extends StatelessWidget {
                   onToggleAutoDocent: onToggleAutoDocent,
                   onReturnToLocation: onReturnToLocation,
                 ),
+              ),
+            ),
+            Positioned(
+              left: 16,
+              right: 16,
+              top: floatingPillTop,
+              child: _MapUtilityControlRow(
+                dailyPlan: activeDailyPlan,
+                weather: currentWeather,
+                language: uiLanguage,
+                onOpenPlanner: () => onOpenSheet(_ActiveMapSheet.planner),
+                onOpenWeather: () {
+                  onOpenSheet(_ActiveMapSheet.weather);
+                  onRefreshWeather();
+                },
+                onOpenSettings: onOpenSettings,
               ),
             ),
             if (activeSheet != null)
@@ -1948,7 +1930,7 @@ class _MapPlaceCarouselOverlay extends StatelessWidget {
                   children: [
                     const SizedBox(height: 8),
                     SizedBox(
-                      height: 138,
+                      height: 150,
                       child: DecoratedBox(
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.82),
@@ -2025,7 +2007,7 @@ class _MapRailPlaceCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         onTap: onTap,
         child: Container(
-          width: 230,
+          width: 252,
           padding: selected ? const EdgeInsets.all(3) : EdgeInsets.zero,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
@@ -2045,7 +2027,7 @@ class _MapRailPlaceCard extends StatelessWidget {
           ),
           child: Container(
             key: selected ? ValueKey('obang-border-${place.placeId}') : null,
-            padding: const EdgeInsets.all(9),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: selected ? 0.98 : 0.93),
               borderRadius: BorderRadius.circular(selected ? 15 : 18),
@@ -2073,13 +2055,37 @@ class _MapRailPlaceCard extends StatelessWidget {
                       const SizedBox(height: 4),
                       _RailCategoryBadge(place: place, language: language),
                       const SizedBox(height: 5),
+                      Row(
+                        key: ValueKey('rail-place-region-${place.placeId}'),
+                        children: [
+                          const Icon(
+                            Icons.place_outlined,
+                            size: 13,
+                            color: Color(0xFF64748B),
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              _placeRegionLabel(place, language),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(
+                                    color: const Color(0xFF64748B),
+                                    fontWeight: FontWeight.w700,
+                                    height: 1.05,
+                                  ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 5),
                       Wrap(
                         spacing: 6,
                         runSpacing: 4,
                         children: [
                           if (place.distanceM > 0)
                             _TinyMeta('${place.distanceM}m'),
-                          _TinyMeta(_copy(language, ko: '상세', en: 'Details')),
                         ],
                       ),
                     ],
@@ -2151,7 +2157,12 @@ class _RailPlaceThumb extends StatelessWidget {
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
-      child: _PlaceImage(place: place, width: 72, height: 72),
+      child: SizedBox(
+        key: ValueKey('rail-place-thumb-${place.placeId}'),
+        width: 86,
+        height: 86,
+        child: _PlaceImage(place: place, width: 86, height: 86),
+      ),
     );
   }
 }
@@ -2176,6 +2187,59 @@ class _PlannerMapPill extends StatelessWidget {
       label: language == 'en' ? 'Daily Plan' : '하루 일정',
       active: slots.isNotEmpty,
       onPressed: onPressed,
+    );
+  }
+}
+
+class _MapUtilityControlRow extends StatelessWidget {
+  const _MapUtilityControlRow({
+    required this.dailyPlan,
+    required this.weather,
+    required this.language,
+    required this.onOpenPlanner,
+    required this.onOpenWeather,
+    required this.onOpenSettings,
+  });
+
+  final LalaDailyPlan? dailyPlan;
+  final LalaWeather? weather;
+  final String language;
+  final VoidCallback onOpenPlanner;
+  final VoidCallback onOpenWeather;
+  final VoidCallback onOpenSettings;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: _PlannerMapPill(
+              dailyPlan: dailyPlan,
+              language: language,
+              onPressed: onOpenPlanner,
+            ),
+          ),
+        ),
+        _MapRoundButton(
+          buttonKey: const ValueKey('settings-button'),
+          tooltip: _copy(language, ko: '설정', en: 'Settings'),
+          icon: Icons.settings,
+          onPressed: onOpenSettings,
+        ),
+        Expanded(
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: _WeatherMapPill(
+              key: const ValueKey('weather-pill'),
+              weather: weather,
+              language: language,
+              onPressed: onOpenWeather,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -5341,11 +5405,13 @@ class _MapLocationLabel extends StatelessWidget {
 
 class _MapRoundButton extends StatelessWidget {
   const _MapRoundButton({
+    this.buttonKey,
     required this.tooltip,
     required this.icon,
     required this.onPressed,
   });
 
+  final Key? buttonKey;
   final String tooltip;
   final IconData icon;
   final VoidCallback onPressed;
@@ -5354,17 +5420,25 @@ class _MapRoundButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Tooltip(
       message: tooltip,
-      child: IconButton.filledTonal(
-        onPressed: onPressed,
-        icon: Icon(icon, size: 22),
-        style: IconButton.styleFrom(
-          fixedSize: const Size.square(46),
-          backgroundColor: Colors.white.withValues(alpha: 0.95),
-          foregroundColor: const Color(0xFF1A202C),
-          shape: const CircleBorder(
-            side: BorderSide(color: Color(0xFFE2E8F0), width: 1.4),
+      child: Semantics(
+        button: true,
+        label: tooltip,
+        child: Listener(
+          key: buttonKey,
+          behavior: HitTestBehavior.opaque,
+          onPointerUp: (_) => onPressed(),
+          child: Material(
+            color: Colors.white.withValues(alpha: 0.95),
+            elevation: 7,
+            shadowColor: const Color(0x22000000),
+            shape: const CircleBorder(
+              side: BorderSide(color: Color(0xFFE2E8F0), width: 1.4),
+            ),
+            child: SizedBox.square(
+              dimension: 46,
+              child: Icon(icon, size: 22, color: const Color(0xFF1A202C)),
+            ),
           ),
-          elevation: 7,
         ),
       ),
     );
@@ -6026,41 +6100,48 @@ class _SmallStatusPill extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(999),
         onTap: onPressed,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-          decoration: BoxDecoration(
-            color: active
-                ? Colors.white.withValues(alpha: 0.98)
-                : Colors.white.withValues(alpha: 0.72),
-            borderRadius: BorderRadius.circular(999),
-            boxShadow: const [
-              BoxShadow(
-                blurRadius: 12,
-                offset: Offset(0, 4),
-                color: Color(0x12000000),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                size: 16,
-                color: active
-                    ? const Color(0xFF2B6CB0)
-                    : const Color(0xFF64748B),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Color(0xFF0F172A),
-                  fontWeight: FontWeight.w800,
-                  fontSize: 12,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 150),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            decoration: BoxDecoration(
+              color: active
+                  ? Colors.white.withValues(alpha: 0.98)
+                  : Colors.white.withValues(alpha: 0.72),
+              borderRadius: BorderRadius.circular(999),
+              boxShadow: const [
+                BoxShadow(
+                  blurRadius: 12,
+                  offset: Offset(0, 4),
+                  color: Color(0x12000000),
                 ),
-              ),
-            ],
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 16,
+                  color: active
+                      ? const Color(0xFF2B6CB0)
+                      : const Color(0xFF64748B),
+                ),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF0F172A),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
