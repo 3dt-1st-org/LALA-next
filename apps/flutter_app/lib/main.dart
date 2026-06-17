@@ -1349,6 +1349,7 @@ class _Dashboard extends StatelessWidget {
                   places: tourPlaces,
                   weather: currentWeather,
                   language: uiLanguage,
+                  loading: loading,
                   intervention: intervention?.data,
                   dailyPlan: dailyPlan?.data,
                   docentScript: docentScript?.data,
@@ -1359,6 +1360,7 @@ class _Dashboard extends StatelessWidget {
                   showEvidence: showEvidence,
                   onToggleEvidence: onToggleEvidence,
                   onFetchAudio: onFetchAudio,
+                  onRefresh: onRefresh,
                   onClose: onCloseSheet,
                 ),
               ),
@@ -1687,6 +1689,7 @@ class _PlannerMapPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final slots = dailyPlan?.slots ?? const <LalaPlanSlot>[];
     return _SmallStatusPill(
+      key: const ValueKey('planner-pill-hit-target'),
       icon: Icons.event_note,
       label: language == 'en' ? 'Daily Plan' : '하루 일정',
       active: slots.isNotEmpty,
@@ -1870,6 +1873,7 @@ class _MapDraggableSheet extends StatelessWidget {
     required this.places,
     required this.weather,
     required this.language,
+    required this.loading,
     required this.intervention,
     required this.dailyPlan,
     required this.docentScript,
@@ -1880,6 +1884,7 @@ class _MapDraggableSheet extends StatelessWidget {
     required this.showEvidence,
     required this.onToggleEvidence,
     required this.onFetchAudio,
+    required this.onRefresh,
     required this.onClose,
   });
 
@@ -1888,6 +1893,7 @@ class _MapDraggableSheet extends StatelessWidget {
   final List<LalaPlace> places;
   final LalaWeather? weather;
   final String language;
+  final bool loading;
   final LalaIntervention? intervention;
   final LalaDailyPlan? dailyPlan;
   final LalaDocentScript? docentScript;
@@ -1898,6 +1904,7 @@ class _MapDraggableSheet extends StatelessWidget {
   final bool showEvidence;
   final VoidCallback onToggleEvidence;
   final VoidCallback onFetchAudio;
+  final VoidCallback onRefresh;
   final VoidCallback onClose;
 
   @override
@@ -2002,8 +2009,11 @@ class _MapDraggableSheet extends StatelessWidget {
                     ),
                     _ActiveMapSheet.planner => _PlannerSheetContent(
                       language: language,
+                      weather: weather,
                       dailyPlan: dailyPlan,
                       intervention: intervention,
+                      loading: loading,
+                      onRegenerate: onRefresh,
                     ),
                     _ActiveMapSheet.weather => _WeatherSheetContent(
                       language: language,
@@ -2113,13 +2123,19 @@ class _LocationConsentOverlay extends StatelessWidget {
 class _PlannerSheetContent extends StatelessWidget {
   const _PlannerSheetContent({
     required this.language,
+    required this.weather,
     required this.dailyPlan,
     required this.intervention,
+    required this.loading,
+    required this.onRegenerate,
   });
 
   final String language;
+  final LalaWeather? weather;
   final LalaDailyPlan? dailyPlan;
   final LalaIntervention? intervention;
+  final bool loading;
+  final VoidCallback onRegenerate;
 
   @override
   Widget build(BuildContext context) {
@@ -2132,6 +2148,14 @@ class _PlannerSheetContent extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        _PlannerOverviewCard(
+          language: language,
+          weather: weather,
+          dailyPlan: dailyPlan,
+          loading: loading,
+          onRegenerate: () => _confirmRegenerate(context),
+        ),
+        const SizedBox(height: 12),
         if (action != null)
           _CompactInfoTile(
             icon: Icons.alt_route_outlined,
@@ -2158,6 +2182,145 @@ class _PlannerSheetContent extends StatelessWidget {
                 ),
               ),
       ],
+    );
+  }
+
+  Future<void> _confirmRegenerate(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(
+            _copy(language, ko: '하루 일정 재생성', en: 'Regenerate daily plan'),
+          ),
+          content: Text(
+            _copy(
+              language,
+              ko: '현재 지도의 위치와 날씨를 기준으로 새 일정을 만들까요?',
+              en: 'Create a new plan from the current map location and weather?',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(_copy(language, ko: '취소', en: 'Cancel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(_copy(language, ko: '다시 생성', en: 'Regenerate')),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed == true) {
+      onRegenerate();
+    }
+  }
+}
+
+class _PlannerOverviewCard extends StatelessWidget {
+  const _PlannerOverviewCard({
+    required this.language,
+    required this.weather,
+    required this.dailyPlan,
+    required this.loading,
+    required this.onRegenerate,
+  });
+
+  final String language;
+  final LalaWeather? weather;
+  final LalaDailyPlan? dailyPlan;
+  final bool loading;
+  final VoidCallback onRegenerate;
+
+  @override
+  Widget build(BuildContext context) {
+    final location = weather?.location?.trim().isNotEmpty == true
+        ? _locationLabel(weather!.location, language)
+        : _copy(language, ko: '현재 위치', en: 'Current location');
+    final weatherLabel = weather == null
+        ? _copy(language, ko: '날씨 확인 중', en: 'Checking weather')
+        : '${_outdoorLabel(weather!.outdoorStatus, language: language)} · ${_temperatureLabel(weather!.temp)} · ${_dustLabel(weather!.dust, language)}';
+    final slotCount = dailyPlan?.slots.length ?? 0;
+    return Container(
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0FDF4),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFBBF7D0)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: const Color(0xFF0F766E).withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.alt_route_outlined,
+              color: Color(0xFF0F766E),
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  location,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: const Color(0xFF14532D),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 5,
+                  children: [
+                    _TinyMeta(weatherLabel),
+                    if (slotCount > 0)
+                      _TinyMeta(
+                        _copy(
+                          language,
+                          ko: '$slotCount개 일정',
+                          en: '$slotCount stops',
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton.icon(
+            key: const ValueKey('planner-regenerate'),
+            onPressed: loading ? null : onRegenerate,
+            icon: loading
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.refresh, size: 17),
+            label: Text(_copy(language, ko: '일정 재생성', en: 'Regenerate')),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF0F766E),
+              side: const BorderSide(color: Color(0xFF86EFAC)),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+              textStyle: const TextStyle(fontWeight: FontWeight.w900),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -2670,7 +2833,7 @@ class _WeatherHeroCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  weather.location ?? '수원',
+                  _locationLabel(weather.location, language),
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
                     color: const Color(0xFF64748B),
                     fontWeight: FontWeight.w900,
@@ -3742,7 +3905,7 @@ class _LegacyMapCanvas extends StatelessWidget {
           top: 260,
           child: _MapLocationLabel(
             label: weather?.location?.trim().isNotEmpty == true
-                ? weather!.location!
+                ? _locationLabel(weather!.location, language)
                 : '수원시',
           ),
         ),
@@ -4741,6 +4904,24 @@ bool _isEnglish(String language) => language == 'en';
 
 String _copy(String language, {required String ko, required String en}) {
   return _isEnglish(language) ? en : ko;
+}
+
+String _locationLabel(String? value, String language) {
+  final trimmed = value?.trim();
+  if (trimmed == null || trimmed.isEmpty) {
+    return _copy(language, ko: '수원', en: 'Suwon');
+  }
+  final normalized = trimmed.toLowerCase();
+  if (_isEnglish(language)) {
+    return switch (trimmed) {
+      '수원' || '수원시' => 'Suwon',
+      final location => location,
+    };
+  }
+  return switch (normalized) {
+    'suwon' || 'suwon-si' || 'suwon city' => '수원',
+    _ => trimmed,
+  };
 }
 
 String _interventionToastLabel(LalaIntervention intervention, String language) {

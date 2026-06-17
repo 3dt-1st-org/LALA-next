@@ -165,6 +165,39 @@ void main() {
     expect(find.textContaining('날씨가 바뀌었어요'), findsNothing);
   });
 
+  testWidgets('planner sheet shows weather header and regenerates plan', (
+    tester,
+  ) async {
+    final backend = FakeBackend(
+      const LalaAppConfig(baseUri: 'http://api.test'),
+    );
+
+    await tester.pumpWidget(
+      LalaApp(
+        backendFactory: (_) => backend,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    expect(backend.dailyPlanRequests, 1);
+
+    await tester.tap(find.byKey(const ValueKey('planner-pill-hit-target')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('수원'), findsAtLeastNWidgets(1));
+    expect(find.textContaining('14°C'), findsWidgets);
+    expect(find.text('일정 재생성'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('planner-regenerate')));
+    await tester.pumpAndSettle();
+    expect(find.text('하루 일정 재생성'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, '다시 생성'));
+    await tester.pumpAndSettle();
+    expect(backend.dailyPlanRequests, 2);
+  });
+
   testWidgets('auto docent on opens the nearest place detail sheet', (
     tester,
   ) async {
@@ -434,6 +467,7 @@ class FakeBackend implements LalaBackend {
   final bool failAuthenticatedLoad;
   final bool shouldIntervene;
   final List<String> audioRequests = <String>[];
+  int dailyPlanRequests = 0;
 
   @override
   Future<LalaEnvelope<Map<String, dynamic>>> getHealth() async {
@@ -523,6 +557,7 @@ class FakeBackend implements LalaBackend {
 
   @override
   Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan() async {
+    dailyPlanRequests += 1;
     return _envelope(
       LalaDailyPlan(
         language: 'ko',
