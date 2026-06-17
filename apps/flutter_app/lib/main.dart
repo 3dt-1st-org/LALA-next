@@ -439,6 +439,9 @@ class _LalaHomePageState extends State<LalaHomePage> {
   }
 
   Future<void> _fetchMoreInfo() async {
+    if (!_voiceEnabled) {
+      return;
+    }
     final place = _currentDocentPlace();
     if (place == null ||
         _detailDocentPlayedPlaceIds.contains(place.placeId) ||
@@ -466,8 +469,10 @@ class _LalaHomePageState extends State<LalaHomePage> {
         return;
       }
       setState(() {
-        _docentScript = detailScript;
-        _docentAudio = audio;
+        if (_voiceEnabled) {
+          _docentScript = detailScript;
+          _docentAudio = audio;
+        }
       });
     } on Object catch (error) {
       if (!mounted) {
@@ -487,7 +492,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
   }
 
   Future<void> _fetchTourAudio() async {
-    if (_tourAudioLoading) {
+    if (!_voiceEnabled || _tourAudioLoading) {
       return;
     }
     final restaurants = _restaurantTourPlaces(
@@ -507,7 +512,9 @@ class _LalaHomePageState extends State<LalaHomePage> {
         return;
       }
       setState(() {
-        _tourAudio = audio;
+        if (_voiceEnabled) {
+          _tourAudio = audio;
+        }
       });
     } on Object catch (error) {
       if (!mounted) {
@@ -621,8 +628,17 @@ class _LalaHomePageState extends State<LalaHomePage> {
   }
 
   void _toggleVoice() {
+    final willEnable = !_voiceEnabled;
     setState(() {
-      _voiceEnabled = !_voiceEnabled;
+      _voiceEnabled = willEnable;
+      if (!willEnable) {
+        _docentAudio = null;
+        _audioError = null;
+        _audioLoading = false;
+        _tourAudio = null;
+        _tourAudioError = null;
+        _tourAudioLoading = false;
+      }
     });
   }
 

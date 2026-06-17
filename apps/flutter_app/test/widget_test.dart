@@ -167,6 +167,17 @@ void main() {
     expect(find.text('투어 음성 준비됨'), findsOneWidget);
     expect(find.text('오디오 캐시 4바이트'), findsOneWidget);
     expect(find.textContaining('bytes 오디오'), findsNothing);
+
+    await tester.tapAt(const Offset(20, 20));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('voice-toggle')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('tour-pill-hit-target')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('투어 음성 준비됨'), findsNothing);
+    expect(find.text('오디오 캐시 4바이트'), findsNothing);
+    expect(find.text('도슨트 음성으로 듣기'), findsOneWidget);
   });
 
   testWidgets('food tour tags open the selected restaurant detail', (

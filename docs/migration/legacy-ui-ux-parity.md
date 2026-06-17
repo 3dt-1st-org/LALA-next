@@ -51,6 +51,9 @@ evidence, but they are not the latest MVP acceptance source.
   sheets.
 - Implemented: voice and auto-docent controls have persistent ON/OFF state and
   visible map feedback.
+- Implemented: turning voice OFF now clears prepared docent and tour audio
+  state, matching the legacy voice toggle behavior that stops both current
+  docent audio and tour-guide audio.
 - Implemented: marker clustering and selected-marker treatment now follow the
   legacy web/iOS rule more closely: small circular category markers, selected
   marker name pill, and category-aware cluster counts.
