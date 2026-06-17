@@ -380,9 +380,11 @@ class _LalaHomePageState extends State<LalaHomePage> {
       LalaEnvelope<LalaDocentScript>? docentScript;
       final placeItems = places?.data?.places ?? _fallbackUiPlaces();
       final filteredItems = _filterPlaces(placeItems, _selectedCategory);
-      final firstPlace = _featuredPlace(
-        filteredItems.isEmpty ? placeItems : filteredItems,
-      );
+      final effectiveItems = filteredItems.isEmpty ? placeItems : filteredItems;
+      final autoDocentPlace = _autoDocentEnabled
+          ? _nearestAutoDocentPlace(effectiveItems)
+          : null;
+      final firstPlace = autoDocentPlace ?? _featuredPlace(effectiveItems);
       if (firstPlace != null) {
         docentScript = await loadOptional(
           () => _backend.createDocentScript(place: firstPlace),
@@ -410,6 +412,9 @@ class _LalaHomePageState extends State<LalaHomePage> {
         _tourAudioLoading = false;
         _error = loadError;
         _interventionToastDismissed = false;
+        if (autoDocentPlace != null) {
+          _applyAutoDocentPlace(autoDocentPlace, closeActiveSheet: false);
+        }
       });
     } on Object catch (error) {
       if (!mounted) {
@@ -683,14 +688,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
     setState(() {
       _autoDocentEnabled = willEnable;
       if (nearestPlace != null) {
-        _selectedPlaceId = nearestPlace.placeId;
-        _activeSheet = null;
-        _docentAudio = null;
-        _audioError = null;
-        _focusedClusterMemberIds = const <String>[];
-        _mapFocusLat = nearestPlace.lat;
-        _mapFocusLng = nearestPlace.lng;
-        _mapLevel = 4;
+        _applyAutoDocentPlace(nearestPlace, closeActiveSheet: true);
       }
     });
   }
@@ -767,6 +765,22 @@ class _LalaHomePageState extends State<LalaHomePage> {
             .toList()
           ..sort((a, b) => a.distanceM.compareTo(b.distanceM));
     return sorted.isEmpty ? null : sorted.first;
+  }
+
+  void _applyAutoDocentPlace(
+    LalaPlace place, {
+    required bool closeActiveSheet,
+  }) {
+    _selectedPlaceId = place.placeId;
+    if (closeActiveSheet) {
+      _activeSheet = null;
+    }
+    _docentAudio = null;
+    _audioError = null;
+    _focusedClusterMemberIds = const <String>[];
+    _mapFocusLat = place.lat;
+    _mapFocusLng = place.lng;
+    _mapLevel = 4;
   }
 
   Future<void> _openSettingsSheet(BuildContext context) async {

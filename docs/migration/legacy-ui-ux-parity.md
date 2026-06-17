@@ -68,6 +68,9 @@ evidence, but they are not the latest MVP acceptance source.
 - Implemented: auto-docent also respects the legacy 100m trigger radius used
   by both web and iOS, so enabling auto mode does not jump to a far-away
   nearest place.
+- Implemented: when auto-docent is already ON, shared refreshes re-evaluate the
+  nearest in-radius place after the new place list loads, matching the legacy
+  `loadPlaces() -> runAutoDocentIfNeeded()` loop.
 - Implemented: turning voice OFF now clears prepared docent and tour audio
   state, matching the legacy voice toggle behavior that stops both current
   docent audio and tour-guide audio.

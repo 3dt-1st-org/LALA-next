@@ -363,6 +363,46 @@ void main() {
     );
   });
 
+  testWidgets('auto docent re-evaluates the nearest place after refresh', (
+    tester,
+  ) async {
+    var backendCreations = 0;
+    await tester.pumpWidget(
+      LalaApp(
+        backendFactory: (config) {
+          backendCreations += 1;
+          return FakeBackend(
+            config,
+            places: backendCreations <= 2
+                ? [_place(), _restaurantPlace(distanceM: 120), _culturePlace()]
+                : [_place(), _restaurantPlace(distanceM: 80), _culturePlace()],
+          );
+        },
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('auto-docent-toggle')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('kakao-map-fallback-center-37.2828-127.0101')),
+      findsNothing,
+    );
+    expect(find.text('장소 상세'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('location-refresh')));
+    await tester.pumpAndSettle();
+
+    expect(backendCreations, 3);
+    expect(find.text('장소 상세'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('kakao-map-fallback-center-37.2828-127.0101')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('my location control returns to the map recommendation context', (
     tester,
   ) async {
