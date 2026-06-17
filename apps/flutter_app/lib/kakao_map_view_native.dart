@@ -124,6 +124,7 @@ class _KakaoMapNativeWebViewState extends State<_KakaoMapNativeWebView> {
                 'lat': place.lat,
                 'lng': place.lng,
                 'clusterCount': place.clusterCount,
+                'clusterMemberIds': place.clusterMemberIds,
                 'selected': place.selected,
               },
             )

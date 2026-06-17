@@ -123,6 +123,35 @@ void main() {
     expect(find.text('화성행궁 도슨트'), findsNothing);
   });
 
+  testWidgets('location consent off surfaces the map permission overlay', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      LalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.settings).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(Switch).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('닫기').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('위치기반 추천이 꺼져 있어요'), findsOneWidget);
+    expect(find.text('설정에서 켜기'), findsOneWidget);
+
+    await tester.tap(find.text('설정에서 켜기'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('설정'), findsOneWidget);
+    expect(find.text('위치기반 정보 제공 동의'), findsOneWidget);
+  });
+
   testWidgets('loads authenticated API panels with the reference contract', (
     tester,
   ) async {

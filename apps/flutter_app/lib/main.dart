@@ -259,6 +259,9 @@ class _LalaHomePageState extends State<LalaHomePage> {
   bool _showEvidence = false;
   bool _locationConsentEnabled = true;
   bool _recommendationRailExpanded = true;
+  double? _mapFocusLat;
+  double? _mapFocusLng;
+  int _mapLevel = 4;
   String _uiLanguage = 'ko';
   double _fontScale = 1.0;
 
@@ -432,6 +435,9 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _docentAudio = null;
       _audioError = null;
       _showEvidence = false;
+      _mapFocusLat = null;
+      _mapFocusLng = null;
+      _mapLevel = 4;
     });
   }
 
@@ -441,6 +447,19 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _activeSheet = _ActiveMapSheet.detail;
       _docentAudio = null;
       _audioError = null;
+      _mapFocusLat = null;
+      _mapFocusLng = null;
+      _mapLevel = 4;
+    });
+  }
+
+  void _focusCluster(KakaoMapPlace cluster) {
+    setState(() {
+      _mapFocusLat = cluster.lat;
+      _mapFocusLng = cluster.lng;
+      _mapLevel = _mapLevel <= 2 ? 2 : _mapLevel - 1;
+      _activeSheet = null;
+      _recommendationRailExpanded = true;
     });
   }
 
@@ -572,8 +591,12 @@ class _LalaHomePageState extends State<LalaHomePage> {
               showEvidence: _showEvidence,
               locationConsentEnabled: _locationConsentEnabled,
               recommendationRailExpanded: _recommendationRailExpanded,
+              mapFocusLat: _mapFocusLat,
+              mapFocusLng: _mapFocusLng,
+              mapLevel: _mapLevel,
               onSelectCategory: _selectCategory,
               onSelectPlace: _selectPlace,
+              onSelectCluster: _focusCluster,
               onToggleRecommendationRail: _toggleRecommendationRail,
               onOpenSheet: _openSheet,
               onCloseSheet: _closeSheet,
@@ -986,8 +1009,12 @@ class _Dashboard extends StatelessWidget {
     required this.showEvidence,
     required this.locationConsentEnabled,
     required this.recommendationRailExpanded,
+    required this.mapFocusLat,
+    required this.mapFocusLng,
+    required this.mapLevel,
     required this.onSelectCategory,
     required this.onSelectPlace,
+    required this.onSelectCluster,
     required this.onToggleRecommendationRail,
     required this.onOpenSheet,
     required this.onCloseSheet,
@@ -1022,8 +1049,12 @@ class _Dashboard extends StatelessWidget {
   final bool showEvidence;
   final bool locationConsentEnabled;
   final bool recommendationRailExpanded;
+  final double? mapFocusLat;
+  final double? mapFocusLng;
+  final int mapLevel;
   final ValueChanged<String> onSelectCategory;
   final ValueChanged<LalaPlace> onSelectPlace;
+  final ValueChanged<KakaoMapPlace> onSelectCluster;
   final VoidCallback onToggleRecommendationRail;
   final ValueChanged<_ActiveMapSheet> onOpenSheet;
   final VoidCallback onCloseSheet;
@@ -1061,7 +1092,11 @@ class _Dashboard extends StatelessWidget {
                 selectedPlace: topPlace,
                 weather: currentWeather,
                 kakaoJavascriptKey: kakaoJavascriptKey,
+                mapFocusLat: mapFocusLat,
+                mapFocusLng: mapFocusLng,
+                mapLevel: mapLevel,
                 onSelectPlaceId: selectPlaceById,
+                onSelectCluster: onSelectCluster,
               ),
             ),
             Positioned(
@@ -1182,6 +1217,13 @@ class _Dashboard extends StatelessWidget {
                   onToggleEvidence: onToggleEvidence,
                   onFetchAudio: onFetchAudio,
                   onClose: onCloseSheet,
+                ),
+              ),
+            if (!locationConsentEnabled)
+              Positioned.fill(
+                child: _LocationConsentOverlay(
+                  language: uiLanguage,
+                  onOpenSettings: onOpenSettings,
                 ),
               ),
           ],
@@ -1802,6 +1844,92 @@ class _MapDraggableSheet extends StatelessWidget {
           },
         ),
       ],
+    );
+  }
+}
+
+class _LocationConsentOverlay extends StatelessWidget {
+  const _LocationConsentOverlay({
+    required this.language,
+    required this.onOpenSettings,
+  });
+
+  final String language;
+  final VoidCallback onOpenSettings;
+
+  @override
+  Widget build(BuildContext context) {
+    final isEnglish = language == 'en';
+    return ColoredBox(
+      color: Colors.black.withValues(alpha: 0.34),
+      child: SafeArea(
+        child: Center(
+          child: Container(
+            width: double.infinity,
+            constraints: const BoxConstraints(maxWidth: 420),
+            margin: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(22),
+              boxShadow: const [
+                BoxShadow(
+                  blurRadius: 32,
+                  offset: Offset(0, 16),
+                  color: Color(0x33000000),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEAF2FB),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: const Icon(
+                    Icons.location_off_outlined,
+                    color: Color(0xFF2B6CB0),
+                    size: 30,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  isEnglish ? 'Location consent is off' : '위치기반 추천이 꺼져 있어요',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: const Color(0xFF111827),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  isEnglish
+                      ? 'LALA uses your approximate location only to recommend nearby public culture, weather, and local spending signals.'
+                      : 'LALA는 주변 문화·날씨·지역 소비 신호를 연결하기 위해 대략적인 위치 동의가 필요합니다.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xFF4B5563),
+                    height: 1.45,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                FilledButton.icon(
+                  onPressed: onOpenSettings,
+                  icon: const Icon(Icons.tune),
+                  label: Text(isEnglish ? 'Open settings' : '설정에서 켜기'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -2831,23 +2959,44 @@ class _LegacyMapCanvas extends StatelessWidget {
     required this.selectedPlace,
     required this.weather,
     required this.kakaoJavascriptKey,
+    required this.mapFocusLat,
+    required this.mapFocusLng,
+    required this.mapLevel,
     required this.onSelectPlaceId,
+    required this.onSelectCluster,
   });
 
   final List<LalaPlace> places;
   final LalaPlace? selectedPlace;
   final LalaWeather? weather;
   final String kakaoJavascriptKey;
+  final double? mapFocusLat;
+  final double? mapFocusLng;
+  final int mapLevel;
   final ValueChanged<String> onSelectPlaceId;
+  final ValueChanged<KakaoMapPlace> onSelectCluster;
 
   @override
   Widget build(BuildContext context) {
     final selected = selectedPlace;
-    final centerLat = selected?.lat ?? 37.2823;
-    final centerLng = selected?.lng ?? 127.0179;
+    final centerLat = mapFocusLat ?? selected?.lat ?? 37.2823;
+    final centerLng = mapFocusLng ?? selected?.lng ?? 127.0179;
     final mapPlaces = places.isEmpty
         ? _fallbackMapPlaces()
-        : _clusterMapPlaces(places, selected);
+        : _clusterMapPlaces(places, selected, mapLevel);
+
+    void handleMapFeatureTap(String featureId) {
+      for (final marker in mapPlaces) {
+        if (marker.id == featureId) {
+          if (marker.isCluster) {
+            onSelectCluster(marker);
+            return;
+          }
+          break;
+        }
+      }
+      onSelectPlaceId(featureId);
+    }
 
     return Stack(
       children: [
@@ -2856,9 +3005,9 @@ class _LegacyMapCanvas extends StatelessWidget {
             javascriptKey: kakaoJavascriptKey,
             centerLat: centerLat,
             centerLng: centerLng,
-            level: 4,
+            level: mapLevel,
             places: mapPlaces,
-            onPlaceTap: onSelectPlaceId,
+            onPlaceTap: handleMapFeatureTap,
           ),
         ),
         Positioned.fill(
@@ -2922,14 +3071,20 @@ class _LegacyMapCanvas extends StatelessWidget {
   List<KakaoMapPlace> _clusterMapPlaces(
     List<LalaPlace> places,
     LalaPlace? selected,
+    int mapLevel,
   ) {
     final selectedId = selected?.placeId;
     final selectedMarkers = <KakaoMapPlace>[];
     final buckets = <String, List<LalaPlace>>{};
+    final shouldExpandClusters = mapLevel <= 3;
 
     for (final place in places.take(48)) {
       if (place.placeId == selectedId) {
         selectedMarkers.add(_toMapPlace(place, selected: true));
+        continue;
+      }
+      if (shouldExpandClusters) {
+        selectedMarkers.add(_toMapPlace(place));
         continue;
       }
       final latBucket = (place.lat * 180).round();
@@ -2956,6 +3111,9 @@ class _LegacyMapCanvas extends StatelessWidget {
             lat: lat,
             lng: lng,
             clusterCount: group.length,
+            clusterMemberIds: group
+                .map((place) => place.placeId)
+                .toList(growable: false),
           ),
         );
       } else {

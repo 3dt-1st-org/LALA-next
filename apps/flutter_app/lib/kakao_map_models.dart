@@ -9,6 +9,7 @@ class KakaoMapPlace {
     required this.lat,
     required this.lng,
     this.clusterCount,
+    this.clusterMemberIds = const <String>[],
     this.selected = false,
   });
 
@@ -18,5 +19,8 @@ class KakaoMapPlace {
   final double lat;
   final double lng;
   final int? clusterCount;
+  final List<String> clusterMemberIds;
   final bool selected;
+
+  bool get isCluster => (clusterCount ?? 0) > 1;
 }

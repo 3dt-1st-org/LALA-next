@@ -151,6 +151,7 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
                 'lat': place.lat,
                 'lng': place.lng,
                 'clusterCount': place.clusterCount,
+                'clusterMemberIds': place.clusterMemberIds,
                 'selected': place.selected,
               },
             )
@@ -226,7 +227,7 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
       marker.appendChild(label);
       marker.addEventListener("click", function (event) {
         event.stopPropagation();
-        if (!isCluster && place.id) {
+        if (place.id) {
           window.dispatchEvent(new CustomEvent("lala-map-place-tap", {
             detail: String(place.id)
           }));
