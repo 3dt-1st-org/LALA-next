@@ -6,6 +6,39 @@ import 'package:lala_next_app/main.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 void main() {
+  test('map move reload policy follows the legacy places threshold', () {
+    expect(
+      shouldReloadPlacesForMapMove(
+        hasAnyPlaces: false,
+        lastFetchLat: 37.2636,
+        lastFetchLng: 127.0286,
+        currentLat: 37.2636,
+        currentLng: 127.0286,
+      ),
+      isTrue,
+    );
+    expect(
+      shouldReloadPlacesForMapMove(
+        hasAnyPlaces: true,
+        lastFetchLat: 37.2636,
+        lastFetchLng: 127.0286,
+        currentLat: 37.2640,
+        currentLng: 127.0290,
+      ),
+      isFalse,
+    );
+    expect(
+      shouldReloadPlacesForMapMove(
+        hasAnyPlaces: true,
+        lastFetchLat: 37.2636,
+        lastFetchLng: 127.0286,
+        currentLat: 37.2670,
+        currentLng: 127.0320,
+      ),
+      isTrue,
+    );
+  });
+
   testWidgets('loads public demo panels before auth is configured', (
     tester,
   ) async {

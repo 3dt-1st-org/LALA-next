@@ -98,6 +98,9 @@ evidence, but they are not the latest MVP acceptance source.
   updates. The app updates the active center and refreshes places, weather,
   planner, and docent data from that map center, matching the legacy
   `dragend -> loadPlaces()` interaction more closely.
+- Implemented: Flutter map-camera reloads now respect the iOS legacy
+  `PlacesReloadPolicy` 250m threshold, so small map pans update the visible
+  center without clearing the selected guidance or reloading all place data.
 - Implemented: Kakao map zoom events now also flow back into Flutter camera
   state on both web and native WebView map bridges, preserving the legacy
   `zoom_changed -> syncMarkerState()` behavior for cluster and selected-marker

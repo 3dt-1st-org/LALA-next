@@ -256,6 +256,7 @@ enum _ActiveMapSheet { detail, planner, weather, tour }
 
 class _LalaHomePageState extends State<LalaHomePage> {
   static const int _autoDocentTriggerMeters = 100;
+  static const double _placesReloadThresholdMeters = 250;
   static const Duration _autoDocentCooldown = Duration(seconds: 12);
   static const Duration _interventionToastAutoDismiss = Duration(seconds: 8);
 
@@ -296,6 +297,8 @@ class _LalaHomePageState extends State<LalaHomePage> {
   final Set<String> _detailDocentPlayedPlaceIds = <String>{};
   DateTime? _lastAutoDocentAt;
   String? _lastAutoDocentPlaceId;
+  double? _lastPlacesFetchLat;
+  double? _lastPlacesFetchLng;
   double? _mapFocusLat;
   double? _mapFocusLng;
   int _mapLevel = 4;
@@ -420,6 +423,10 @@ class _LalaHomePageState extends State<LalaHomePage> {
         _tourAudioLoading = false;
         _error = loadError;
         _interventionToastDismissed = false;
+        if (places != null) {
+          _lastPlacesFetchLat = config.lat;
+          _lastPlacesFetchLng = config.lng;
+        }
         if (autoDocentPlace != null) {
           _applyAutoDocentPlace(autoDocentPlace, closeActiveSheet: false);
         }
@@ -622,22 +629,35 @@ class _LalaHomePageState extends State<LalaHomePage> {
 
   void _handleMapCameraIdle(KakaoMapCamera camera) {
     final normalizedLevel = camera.level.clamp(2, 10).toInt();
+    final shouldReloadPlaces = shouldReloadPlacesForMapMove(
+      hasAnyPlaces: _visiblePlacesForCurrentCategory().isNotEmpty,
+      lastFetchLat: _lastPlacesFetchLat,
+      lastFetchLng: _lastPlacesFetchLng,
+      currentLat: camera.lat,
+      currentLng: camera.lng,
+      thresholdMeters: _placesReloadThresholdMeters,
+    );
     _latController.text = camera.lat.toStringAsFixed(6);
     _lngController.text = camera.lng.toStringAsFixed(6);
     setState(() {
       _mapFocusLat = camera.lat;
       _mapFocusLng = camera.lng;
       _mapLevel = normalizedLevel;
-      _selectedPlaceId = null;
-      _focusedClusterMemberIds = const <String>[];
-      _activeSheet = null;
-      _docentAudio = null;
-      _audioError = null;
-      _tourAudio = null;
-      _tourAudioError = null;
-      _tourAudioLoading = false;
-      _recommendationRailExpanded = true;
+      if (shouldReloadPlaces) {
+        _selectedPlaceId = null;
+        _focusedClusterMemberIds = const <String>[];
+        _activeSheet = null;
+        _docentAudio = null;
+        _audioError = null;
+        _tourAudio = null;
+        _tourAudioError = null;
+        _tourAudioLoading = false;
+        _recommendationRailExpanded = true;
+      }
     });
+    if (!shouldReloadPlaces) {
+      return;
+    }
     _mapCameraDebounce?.cancel();
     _mapCameraDebounce = Timer(const Duration(milliseconds: 450), () {
       if (mounted) {
@@ -6149,6 +6169,43 @@ class _EmptyPlaceState extends StatelessWidget {
 }
 
 bool _isEnglish(String language) => language == 'en';
+
+bool shouldReloadPlacesForMapMove({
+  required bool hasAnyPlaces,
+  required double? lastFetchLat,
+  required double? lastFetchLng,
+  required double currentLat,
+  required double currentLng,
+  double thresholdMeters = 250,
+}) {
+  if (!hasAnyPlaces || lastFetchLat == null || lastFetchLng == null) {
+    return true;
+  }
+  return _distanceMeters(lastFetchLat, lastFetchLng, currentLat, currentLng) >=
+      thresholdMeters;
+}
+
+double _distanceMeters(
+  double fromLat,
+  double fromLng,
+  double toLat,
+  double toLng,
+) {
+  const earthRadiusMeters = 6371000.0;
+  final fromLatRadians = fromLat * math.pi / 180;
+  final toLatRadians = toLat * math.pi / 180;
+  final deltaLat = (toLat - fromLat) * math.pi / 180;
+  final deltaLng = (toLng - fromLng) * math.pi / 180;
+  final haversine =
+      math.sin(deltaLat / 2) * math.sin(deltaLat / 2) +
+      math.cos(fromLatRadians) *
+          math.cos(toLatRadians) *
+          math.sin(deltaLng / 2) *
+          math.sin(deltaLng / 2);
+  final centralAngle =
+      2 * math.atan2(math.sqrt(haversine), math.sqrt(1 - haversine));
+  return earthRadiusMeters * centralAngle;
+}
 
 String _copy(String language, {required String ko, required String en}) {
   return _isEnglish(language) ? en : ko;
