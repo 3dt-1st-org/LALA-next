@@ -26,6 +26,9 @@ class KakaoMapFallbackView extends StatelessWidget {
         ? _fallbackPlaces(centerLat, centerLng, language)
         : places.take(40).toList(growable: false);
     return ColoredBox(
+      key: ValueKey(
+        'kakao-map-fallback-center-${centerLat.toStringAsFixed(4)}-${centerLng.toStringAsFixed(4)}',
+      ),
       color: const Color(0xFFEAF2FB),
       child: Stack(
         children: [

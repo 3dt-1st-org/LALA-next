@@ -571,8 +571,8 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _docentAudio = null;
       _audioError = null;
       _focusedClusterMemberIds = const <String>[];
-      _mapFocusLat = null;
-      _mapFocusLng = null;
+      _mapFocusLat = place.lat;
+      _mapFocusLng = place.lng;
       _mapLevel = 4;
     });
   }
@@ -686,8 +686,8 @@ class _LalaHomePageState extends State<LalaHomePage> {
         _docentAudio = null;
         _audioError = null;
         _focusedClusterMemberIds = const <String>[];
-        _mapFocusLat = null;
-        _mapFocusLng = null;
+        _mapFocusLat = nearestPlace.lat;
+        _mapFocusLng = nearestPlace.lng;
         _mapLevel = 4;
       }
     });

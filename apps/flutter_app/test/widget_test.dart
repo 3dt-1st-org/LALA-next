@@ -368,6 +368,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('수원화성'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('kakao-map-fallback-center-37.2819-127.0142')),
+      findsOneWidget,
+    );
 
     await tester.tap(
       find.byKey(const ValueKey('tour-stop-action-hwaseong-haenggung')),
@@ -389,6 +393,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('장소 상세'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('kakao-map-fallback-center-37.2870-127.0110')),
+      findsOneWidget,
+    );
     expect(find.text('수원화성 도슨트'), findsAtLeastNWidgets(1));
     expect(find.text('화성행궁 도슨트'), findsNothing);
   });

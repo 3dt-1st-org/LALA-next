@@ -45,6 +45,9 @@ evidence, but they are not the latest MVP acceptance source.
   category badges are visible, event cards include ongoing/ended status, and
   tapping the already-selected card keeps the user in the map context instead
   of reopening detail.
+- Implemented: selecting a place from the rail, marker, auto-docent, or tour
+  context now explicitly focuses the map on that place, matching the legacy
+  `selectPlace -> map.panTo(place)` behavior.
 - Implemented: primary docent CTA now uses the legacy-style `정보 더 듣기` copy.
 - Implemented: category chips filter the map, recommendation rail, and selected
   detail context.
