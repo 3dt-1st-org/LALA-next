@@ -4,6 +4,7 @@ import 'dart:io' as io;
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import 'kakao_map_fallback.dart';
 import 'kakao_map_models.dart';
 
 Widget buildKakaoMapView({
@@ -22,12 +23,22 @@ Widget buildKakaoMapView({
       message: language == 'en'
           ? 'Set the Kakao map key to show the live map.'
           : '카카오 지도 키를 설정하면 실제 지도가 표시됩니다.',
+      language: language,
+      centerLat: centerLat,
+      centerLng: centerLng,
+      places: places,
+      onPlaceTap: onPlaceTap,
     );
   }
 
   if (!io.Platform.isIOS && !io.Platform.isAndroid) {
     return _KakaoMapNativeUnavailable(
       message: language == 'en' ? 'Kakao Map API' : '카카오 지도',
+      language: language,
+      centerLat: centerLat,
+      centerLng: centerLng,
+      places: places,
+      onPlaceTap: onPlaceTap,
     );
   }
 
@@ -192,41 +203,31 @@ class _KakaoMapNativeWebViewState extends State<_KakaoMapNativeWebView> {
 }
 
 class _KakaoMapNativeUnavailable extends StatelessWidget {
-  const _KakaoMapNativeUnavailable({required this.message});
+  const _KakaoMapNativeUnavailable({
+    required this.message,
+    required this.language,
+    required this.centerLat,
+    required this.centerLng,
+    required this.places,
+    required this.onPlaceTap,
+  });
 
   final String message;
+  final String language;
+  final double centerLat;
+  final double centerLng;
+  final List<KakaoMapPlace> places;
+  final ValueChanged<String>? onPlaceTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: const Color(0xFFEAF2FB),
-      alignment: Alignment.center,
-      child: Semantics(
-        label: 'Kakao Map API fallback',
-        child: Container(
-          margin: const EdgeInsets.all(24),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.92),
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: const [
-              BoxShadow(
-                blurRadius: 18,
-                offset: Offset(0, 8),
-                color: Color(0x18000000),
-              ),
-            ],
-          ),
-          child: Text(
-            message,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Color(0xFF1A202C),
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ),
-      ),
+    return KakaoMapFallbackView(
+      message: message,
+      language: language,
+      centerLat: centerLat,
+      centerLng: centerLng,
+      places: places,
+      onPlaceTap: onPlaceTap,
     );
   }
 }

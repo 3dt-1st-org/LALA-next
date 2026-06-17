@@ -288,6 +288,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
   bool _interventionToastDismissed = false;
   bool _locationConsentEnabled = true;
   bool _recommendationRailExpanded = true;
+  List<String> _focusedClusterMemberIds = const <String>[];
   final Set<String> _detailDocentPlayedPlaceIds = <String>{};
   double? _mapFocusLat;
   double? _mapFocusLng;
@@ -551,6 +552,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _tourAudioError = null;
       _tourAudioLoading = false;
       _showEvidence = false;
+      _focusedClusterMemberIds = const <String>[];
       _mapFocusLat = null;
       _mapFocusLng = null;
       _mapLevel = 4;
@@ -568,6 +570,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _activeSheet = _ActiveMapSheet.detail;
       _docentAudio = null;
       _audioError = null;
+      _focusedClusterMemberIds = const <String>[];
       _mapFocusLat = null;
       _mapFocusLng = null;
       _mapLevel = 4;
@@ -579,6 +582,10 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _mapFocusLat = cluster.lat;
       _mapFocusLng = cluster.lng;
       _mapLevel = _mapLevel <= 2 ? 2 : _mapLevel - 1;
+      _focusedClusterMemberIds = cluster.clusterMemberIds;
+      _selectedPlaceId = cluster.clusterMemberIds.isEmpty
+          ? null
+          : cluster.clusterMemberIds.first;
       _activeSheet = null;
       _recommendationRailExpanded = true;
     });
@@ -593,6 +600,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _mapFocusLng = camera.lng;
       _mapLevel = normalizedLevel;
       _selectedPlaceId = null;
+      _focusedClusterMemberIds = const <String>[];
       _activeSheet = null;
       _docentAudio = null;
       _audioError = null;
@@ -619,6 +627,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _tourAudioError = null;
       _tourAudioLoading = false;
       _showEvidence = false;
+      _focusedClusterMemberIds = const <String>[];
       _mapFocusLat = double.tryParse(_latController.text.trim()) ?? 37.2636;
       _mapFocusLng = double.tryParse(_lngController.text.trim()) ?? 127.0286;
       _mapLevel = 4;
@@ -676,6 +685,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
         _activeSheet = _ActiveMapSheet.detail;
         _docentAudio = null;
         _audioError = null;
+        _focusedClusterMemberIds = const <String>[];
         _mapFocusLat = null;
         _mapFocusLng = null;
         _mapLevel = 4;
@@ -833,6 +843,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
               interventionToastDismissed: _interventionToastDismissed,
               locationConsentEnabled: _locationConsentEnabled,
               recommendationRailExpanded: _recommendationRailExpanded,
+              focusedClusterMemberIds: _focusedClusterMemberIds,
               mapFocusLat: _mapFocusLat,
               mapFocusLng: _mapFocusLng,
               mapLevel: _mapLevel,
@@ -1297,6 +1308,7 @@ class _Dashboard extends StatelessWidget {
     required this.interventionToastDismissed,
     required this.locationConsentEnabled,
     required this.recommendationRailExpanded,
+    required this.focusedClusterMemberIds,
     required this.mapFocusLat,
     required this.mapFocusLng,
     required this.mapLevel,
@@ -1347,6 +1359,7 @@ class _Dashboard extends StatelessWidget {
   final bool interventionToastDismissed;
   final bool locationConsentEnabled;
   final bool recommendationRailExpanded;
+  final List<String> focusedClusterMemberIds;
   final double? mapFocusLat;
   final double? mapFocusLng;
   final int mapLevel;
@@ -1376,7 +1389,11 @@ class _Dashboard extends StatelessWidget {
         ? 'demo_fallback'
         : places?.data?.source;
     final allPlaces = usingFallbackPlaces ? _fallbackUiPlaces() : apiPlaces;
-    final topPlaces = _filterPlaces(allPlaces, selectedCategory);
+    final filteredTopPlaces = _filterPlaces(allPlaces, selectedCategory);
+    final topPlaces = _prioritizeClusterMembers(
+      filteredTopPlaces,
+      focusedClusterMemberIds,
+    );
     final tourPlaces = _restaurantTourPlaces(allPlaces);
     final topPlace =
         _placeById(topPlaces, selectedPlaceId) ?? _featuredPlace(topPlaces);
@@ -6109,6 +6126,33 @@ List<LalaPlace> _filterPlaces(List<LalaPlace> places, String category) {
     return places;
   }
   return places.where((place) => place.category == category).toList();
+}
+
+List<LalaPlace> _prioritizeClusterMembers(
+  List<LalaPlace> places,
+  List<String> focusedClusterMemberIds,
+) {
+  if (places.isEmpty || focusedClusterMemberIds.isEmpty) {
+    return places;
+  }
+  final memberOrder = <String, int>{
+    for (final entry in focusedClusterMemberIds.indexed) entry.$2: entry.$1,
+  };
+  final clusterPlaces =
+      places
+          .where((place) => memberOrder.containsKey(place.placeId))
+          .toList(growable: false)
+        ..sort(
+          (a, b) => memberOrder[a.placeId]!.compareTo(memberOrder[b.placeId]!),
+        );
+  if (clusterPlaces.isEmpty) {
+    return places;
+  }
+  final clusterPlaceIds = clusterPlaces.map((place) => place.placeId).toSet();
+  return [
+    ...clusterPlaces,
+    ...places.where((place) => !clusterPlaceIds.contains(place.placeId)),
+  ];
 }
 
 List<LalaPlace> _restaurantTourPlaces(List<LalaPlace> places) {

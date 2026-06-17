@@ -57,6 +57,14 @@ evidence, but they are not the latest MVP acceptance source.
 - Implemented: marker clustering and selected-marker treatment now follow the
   legacy web/iOS rule more closely: small circular category markers, selected
   marker name pill, and category-aware cluster counts.
+- Implemented: cluster marker taps now preserve the legacy zoom-in/context
+  behavior more closely by focusing the cluster center, selecting the first
+  cluster member as the active map context, and moving cluster members to the
+  front of the recommendation rail.
+- Implemented: the non-web/Kakao-key-missing fallback map now renders the same
+  marker shapes, selected marker pill, cluster counts, and marker tap callbacks
+  used by the live map path, so simulator and widget-test UI parity can be
+  verified without depending on the Kakao SDK.
 - Implemented: place media can flow from official-source `image_url` values
   such as TourAPI `firstimage`, with local fallback only when a source has no
   usable image URL.

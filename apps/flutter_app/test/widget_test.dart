@@ -373,6 +373,46 @@ void main() {
     expect(find.text('화성행궁 도슨트'), findsNothing);
   });
 
+  testWidgets('cluster marker focuses its member recommendations', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      LalaApp(
+        backendFactory: (config) => FakeBackend(
+          config,
+          places: [
+            _place(),
+            _clusterRestaurant('cluster-food-a', '클러스터 맛집 A', 210),
+            _clusterRestaurant('cluster-food-b', '클러스터 맛집 B', 260),
+            _clusterRestaurant('cluster-food-c', '클러스터 맛집 C', 310),
+          ],
+        ),
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(
+        const ValueKey('kakao-map-marker-cluster-restaurant:6710:22862'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('화성행궁 도슨트'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey('kakao-map-marker-cluster-restaurant:6710:22862'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('클러스터 맛집 A 도슨트'), findsOneWidget);
+    expect(find.text('화성행궁 도슨트'), findsNothing);
+    expect(find.text('클러스터 맛집 A'), findsAtLeastNWidgets(1));
+  });
+
   testWidgets('location consent off surfaces the map permission overlay', (
     tester,
   ) async {
@@ -1209,6 +1249,40 @@ LalaPlace _restaurantPlace() {
           'travel.places',
           'economy.card_spending_area_monthly',
         ],
+      },
+    ),
+  );
+}
+
+LalaPlace _clusterRestaurant(String placeId, String name, int distanceM) {
+  return LalaPlace(
+    placeId: placeId,
+    name: name,
+    nameKo: name,
+    nameEn: name.replaceAll('클러스터 맛집', 'Cluster Food'),
+    category: 'restaurant',
+    lat: 37.2800,
+    lng: 127.0100,
+    address: '경기도 수원시 팔달구 행궁동',
+    regionKo: '수원',
+    regionEn: 'Suwon',
+    distanceM: distanceM,
+    source: 'skeleton',
+    upstreamSource: 'tour_api',
+    score: const LalaPlaceScore(
+      finalScore: 0.77,
+      formulaVersion: 'local-value-v1',
+      components: LalaPlaceScoreComponents(
+        localSpendingScore: 0.89,
+        demandDispersionScore: 0.61,
+        weatherFitScore: 0.72,
+        reviewQualityScore: null,
+        cultureRelevanceScore: 0.58,
+      ),
+      dataBasis: 'demo_fallback',
+      features: {
+        'primary_source': 'tour_api',
+        'input_sources': <String>['travel.places'],
       },
     ),
   );
