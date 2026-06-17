@@ -1628,7 +1628,7 @@ class _MapRailPlaceCard extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      place.nameKo ?? place.name,
+                      _placeDisplayName(place, language),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
@@ -1819,7 +1819,7 @@ class _MapBottomDock extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      currentPlace.nameKo ?? currentPlace.name,
+                      _placeDisplayName(currentPlace, uiLanguage),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -2365,7 +2365,7 @@ class _PlanSlotTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  slot.title,
+                  _planSlotTitle(slot, language),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(
@@ -2374,7 +2374,7 @@ class _PlanSlotTile extends StatelessWidget {
                 ),
                 if (place != null)
                   Text(
-                    '${place.nameKo ?? place.name} · ${_categoryLabel(place.category, language: language)}',
+                    '${_placeDisplayName(place, language)} · ${_categoryLabel(place.category, language: language)}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -3063,10 +3063,14 @@ class _FeaturedPlacePanel extends StatelessWidget {
     return const LalaPlace(
       placeId: 'hwaseong-haenggung',
       name: '화성행궁',
+      nameKo: '화성행궁',
+      nameEn: 'Hwaseong Haenggung',
       category: 'attraction',
       lat: 37.2819,
       lng: 127.0142,
       address: '경기도 수원시 팔달구 정조로 825',
+      regionKo: '수원',
+      regionEn: 'Suwon',
       distanceM: 145,
       source: 'public_mvp_snapshot',
       score: LalaPlaceScore(
@@ -3126,7 +3130,7 @@ class _FeaturedPlaceHeader extends StatelessWidget {
                 ],
               ),
               Text(
-                place.nameKo ?? place.name,
+                _placeDisplayName(place, language),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
@@ -3135,7 +3139,10 @@ class _FeaturedPlaceHeader extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 5),
-              _InlineIconText(icon: Icons.place_outlined, label: place.address),
+              _InlineIconText(
+                icon: Icons.place_outlined,
+                label: _placeRegionLabel(place, language),
+              ),
               const SizedBox(height: 7),
               Wrap(
                 spacing: 12,
@@ -3455,10 +3462,15 @@ class _ProofChip extends StatelessWidget {
 }
 
 class _PlaceRail extends StatelessWidget {
-  const _PlaceRail({required this.places, required this.source});
+  const _PlaceRail({
+    required this.places,
+    required this.source,
+    required this.language,
+  });
 
   final List<LalaPlace> places;
   final String? source;
+  final String language;
 
   @override
   Widget build(BuildContext context) {
@@ -3479,7 +3491,13 @@ class _PlaceRail extends StatelessWidget {
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
             ),
             const Spacer(),
-            _InlineMeta('${items.length}곳 · ${_sourceLabel(source)}'),
+            _InlineMeta(
+              _copy(
+                language,
+                ko: '${items.length}곳 · ${_sourceLabel(source, language: language)}',
+                en: '${items.length} places · ${_sourceLabel(source, language: language)}',
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 10),
@@ -3492,8 +3510,11 @@ class _PlaceRail extends StatelessWidget {
               scrollDirection: Axis.horizontal,
               itemCount: items.length,
               separatorBuilder: (_, _) => const SizedBox(width: 12),
-              itemBuilder: (context, index) =>
-                  _LegacyPlaceCard(place: items[index], selected: index == 0),
+              itemBuilder: (context, index) => _LegacyPlaceCard(
+                place: items[index],
+                selected: index == 0,
+                language: language,
+              ),
             ),
           ),
       ],
@@ -3668,8 +3689,8 @@ class _DocentSubtitle extends StatelessWidget {
                                 )
                               : _copy(
                                   language,
-                                  ko: '${place!.nameKo ?? place!.name} 도슨트',
-                                  en: '${place!.nameKo ?? place!.name} docent',
+                                  ko: '${_placeDisplayName(place!, language)} 도슨트',
+                                  en: '${_placeDisplayName(place!, language)} docent',
                                 ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -3906,7 +3927,7 @@ class _LegacyMapCanvas extends StatelessWidget {
           child: _MapLocationLabel(
             label: weather?.location?.trim().isNotEmpty == true
                 ? _locationLabel(weather!.location, language)
-                : '수원시',
+                : _locationLabel('수원시', language),
           ),
         ),
       ],
@@ -3914,10 +3935,10 @@ class _LegacyMapCanvas extends StatelessWidget {
   }
 
   List<KakaoMapPlace> _fallbackMapPlaces() {
-    return const [
+    return [
       KakaoMapPlace(
         id: 'hwaseong-haenggung',
-        name: '화성행궁',
+        name: _copy(language, ko: '화성행궁', en: 'Hwaseong Haenggung'),
         category: 'attraction',
         lat: 37.2819,
         lng: 127.0142,
@@ -3925,14 +3946,14 @@ class _LegacyMapCanvas extends StatelessWidget {
       ),
       KakaoMapPlace(
         id: 'suwon-hwaseong',
-        name: '수원화성',
+        name: _copy(language, ko: '수원화성', en: 'Suwon Hwaseong Fortress'),
         category: 'culture_venue',
         lat: 37.2870,
         lng: 127.0110,
       ),
       KakaoMapPlace(
         id: 'haenggung-cafe-street',
-        name: '행궁동 카페거리',
+        name: _copy(language, ko: '행궁동 카페거리', en: 'Haenggung Cafe Street'),
         category: 'restaurant',
         lat: 37.2828,
         lng: 127.0101,
@@ -3978,7 +3999,11 @@ class _LegacyMapCanvas extends StatelessWidget {
         clustered.add(
           KakaoMapPlace(
             id: 'cluster-${entry.key}',
-            name: '${group.length}곳',
+            name: _copy(
+              language,
+              ko: '${group.length}곳',
+              en: '${group.length} places',
+            ),
             category: group.first.category,
             lat: lat,
             lng: lng,
@@ -3999,7 +4024,7 @@ class _LegacyMapCanvas extends StatelessWidget {
   KakaoMapPlace _toMapPlace(LalaPlace place, {bool selected = false}) {
     return KakaoMapPlace(
       id: place.placeId,
-      name: place.nameKo ?? place.name,
+      name: _placeDisplayName(place, language),
       category: place.category,
       lat: place.lat,
       lng: place.lng,
@@ -4207,10 +4232,15 @@ class _MapFab extends StatelessWidget {
 }
 
 class _LegacyPlaceCard extends StatelessWidget {
-  const _LegacyPlaceCard({required this.place, required this.selected});
+  const _LegacyPlaceCard({
+    required this.place,
+    required this.selected,
+    this.language = 'ko',
+  });
 
   final LalaPlace place;
   final bool selected;
+  final String language;
 
   @override
   Widget build(BuildContext context) {
@@ -4241,7 +4271,10 @@ class _LegacyPlaceCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    _CategoryBadge(category: place.category),
+                    _CategoryBadge(
+                      category: place.category,
+                      language: language,
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       '${place.distanceM}m',
@@ -4251,7 +4284,7 @@ class _LegacyPlaceCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  place.name,
+                  _placeDisplayName(place, language),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -4261,7 +4294,7 @@ class _LegacyPlaceCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  _localReason(place),
+                  _localReason(place, language),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -4274,7 +4307,11 @@ class _LegacyPlaceCard extends StatelessWidget {
                     Icon(Icons.auto_graph, size: 16, color: categoryColor),
                     const SizedBox(width: 5),
                     Text(
-                      '${place.score?.percent ?? '-'} 로컬 점수',
+                      _copy(
+                        language,
+                        ko: '${place.score?.percent ?? '-'} 로컬 점수',
+                        en: '${place.score?.percent ?? '-'} local score',
+                      ),
                       style: TextStyle(
                         color: categoryColor,
                         fontWeight: FontWeight.w900,
@@ -4301,22 +4338,34 @@ class _LegacyPlaceCard extends StatelessWidget {
     };
   }
 
-  String _localReason(LalaPlace place) {
+  String _localReason(LalaPlace place, String language) {
     final score = place.score;
     if (score == null) {
-      return place.address;
+      return _placeRegionLabel(place, language);
     }
     final components = score.components;
     if ((components.demandDispersionScore ?? 0) >= 0.8) {
-      return '관광 수요 분산 효과가 높은 로컬 후보';
+      return _copy(
+        language,
+        ko: '관광 수요 분산 효과가 높은 로컬 후보',
+        en: 'Local pick with strong demand-spread value',
+      );
     }
     if ((components.cultureRelevanceScore ?? 0) >= 0.7) {
-      return '공식 문화데이터와 연결된 장소';
+      return _copy(
+        language,
+        ko: '공식 문화데이터와 연결된 장소',
+        en: 'Connected to official culture data',
+      );
     }
     if ((components.localSpendingScore ?? 0) >= 0.6) {
-      return '지역 소비 신호가 살아있는 주변 경험';
+      return _copy(
+        language,
+        ko: '지역 소비 신호가 살아있는 주변 경험',
+        en: 'Nearby experience with local spending signal',
+      );
     }
-    return _basisLabel(score.dataBasis);
+    return _basisLabel(score.dataBasis, language: language);
   }
 }
 
@@ -4930,15 +4979,21 @@ String _interventionToastLabel(LalaIntervention intervention, String language) {
       : _placeDisplayName(intervention.place!, language);
   final reason = intervention.reason.trim();
   final action = intervention.recommendedAction.trim();
-  final hasEnglishReason = RegExp(r'[A-Za-z]{3,}').hasMatch(reason);
-  final hasEnglishAction = RegExp(r'[A-Za-z]{3,}').hasMatch(action);
+  final hasEnglishReason = _looksEnglishText(reason);
+  final hasEnglishAction = _looksEnglishText(action);
 
   if (_isEnglish(language)) {
-    if (reason.isNotEmpty && action.isNotEmpty) {
+    if (reason.isNotEmpty &&
+        action.isNotEmpty &&
+        hasEnglishReason &&
+        hasEnglishAction) {
       return '$reason · $action';
     }
-    if (reason.isNotEmpty) {
+    if (reason.isNotEmpty && hasEnglishReason) {
       return reason;
+    }
+    if (action.isNotEmpty && hasEnglishAction) {
+      return action;
     }
     if (place != null) {
       return 'Weather changed. Adjust the route near $place.';
@@ -5038,12 +5093,21 @@ String _placeDisplayName(LalaPlace place, String language) {
     if (nameEn != null && nameEn.isNotEmpty) {
       return nameEn;
     }
+    final primaryName = place.name.trim();
+    if (primaryName.isNotEmpty && !_containsKorean(primaryName)) {
+      return primaryName;
+    }
+    return 'Local place';
   }
   final nameKo = place.nameKo?.trim();
   if (nameKo != null && nameKo.isNotEmpty) {
     return nameKo;
   }
-  return place.name;
+  final primaryName = place.name.trim();
+  if (primaryName.isNotEmpty && !_looksEnglishText(primaryName)) {
+    return primaryName;
+  }
+  return '이 장소';
 }
 
 String _placeRegionLabel(LalaPlace place, String language) {
@@ -5052,12 +5116,47 @@ String _placeRegionLabel(LalaPlace place, String language) {
     if (regionEn != null && regionEn.isNotEmpty) {
       return regionEn;
     }
+    final regionKo = place.regionKo?.trim();
+    if (regionKo != null && regionKo.isNotEmpty) {
+      return _locationLabel(regionKo, language);
+    }
+    if (!_containsKorean(place.address)) {
+      return place.address;
+    }
+    return 'Nearby area';
   }
   final regionKo = place.regionKo?.trim();
   if (regionKo != null && regionKo.isNotEmpty) {
     return regionKo;
   }
   return place.address;
+}
+
+bool _containsKorean(String value) => RegExp(r'[가-힣]').hasMatch(value);
+
+bool _looksEnglishText(String value) => RegExp(r'[A-Za-z]{3,}').hasMatch(value);
+
+String _planSlotTitle(LalaPlanSlot slot, String language) {
+  final title = slot.title.trim();
+  final place = slot.place;
+  if (title.isEmpty) {
+    return _copy(language, ko: '일정 준비 중', en: 'Preparing stop');
+  }
+  if (_isEnglish(language) && _containsKorean(title)) {
+    final placeName = place == null
+        ? _copy(language, ko: '이 장소', en: 'this place')
+        : _placeDisplayName(place, language);
+    return '${_periodLabel(slot.period, language: language)} at $placeName';
+  }
+  if (!_isEnglish(language) &&
+      _looksEnglishText(title) &&
+      !_containsKorean(title)) {
+    final placeName = place == null
+        ? _copy(language, ko: '이 장소', en: 'this place')
+        : _placeDisplayName(place, language);
+    return '${_periodLabel(slot.period, language: language)} $placeName';
+  }
+  return title;
 }
 
 Color _categoryColor(String category) {
@@ -5229,10 +5328,14 @@ List<LalaPlace> _fallbackUiPlaces() {
     LalaPlace(
       placeId: 'hwaseong-haenggung',
       name: '화성행궁',
+      nameKo: '화성행궁',
+      nameEn: 'Hwaseong Haenggung',
       category: 'attraction',
       lat: 37.2819,
       lng: 127.0142,
       address: '경기도 수원시 팔달구 정조로 825',
+      regionKo: '수원',
+      regionEn: 'Suwon',
       distanceM: 145,
       source: 'public_mvp_snapshot',
       score: LalaPlaceScore(
@@ -5254,10 +5357,14 @@ List<LalaPlace> _fallbackUiPlaces() {
     LalaPlace(
       placeId: 'suwon-hwaseong',
       name: '수원화성',
+      nameKo: '수원화성',
+      nameEn: 'Suwon Hwaseong Fortress',
       category: 'culture_venue',
       lat: 37.2870,
       lng: 127.0110,
       address: '경기도 수원시 장안구 영화동',
+      regionKo: '수원',
+      regionEn: 'Suwon',
       distanceM: 620,
       source: 'public_mvp_snapshot',
       score: LalaPlaceScore(
@@ -5279,10 +5386,14 @@ List<LalaPlace> _fallbackUiPlaces() {
     LalaPlace(
       placeId: 'haenggung-cafe-street',
       name: '행궁동 카페거리',
+      nameKo: '행궁동 카페거리',
+      nameEn: 'Haenggung Cafe Street',
       category: 'restaurant',
       lat: 37.2828,
       lng: 127.0101,
       address: '경기도 수원시 팔달구 행궁동',
+      regionKo: '수원',
+      regionEn: 'Suwon',
       distanceM: 780,
       source: 'public_mvp_snapshot',
       score: LalaPlaceScore(
@@ -5344,7 +5455,7 @@ String _docentBody({
   required String language,
 }) {
   final trimmed = script?.trim();
-  final placeName = place?.nameKo ?? place?.name;
+  final placeName = place == null ? null : _placeDisplayName(place, language);
   if (trimmed == null || trimmed.isEmpty) {
     if (_isEnglish(language)) {
       return placeName == null
@@ -5359,7 +5470,11 @@ String _docentBody({
   final lower = trimmed.toLowerCase();
   if (lower.contains('migration skeleton') ||
       lower.contains('azure openai') ||
-      RegExp(r'^this is a .+ docent script').hasMatch(lower)) {
+      RegExp(r'^this is a .+ docent script').hasMatch(lower) ||
+      (_isEnglish(language) && !_looksEnglishText(trimmed)) ||
+      (!_isEnglish(language) &&
+          _looksEnglishText(trimmed) &&
+          !_containsKorean(trimmed))) {
     if (_isEnglish(language)) {
       return placeName == null
           ? 'Preparing a local story from official tourism, culture, and spending signals.'
@@ -5398,7 +5513,7 @@ String _docentSummary({
         trimmedAction;
   }
 
-  final placeName = place?.nameKo ?? place?.name;
+  final placeName = place == null ? null : _placeDisplayName(place, language);
   if (_isEnglish(language)) {
     return placeName == null
         ? 'Preparing local experiences around your current location.'
@@ -5431,8 +5546,10 @@ String? _docentActionLabel({
   if (trimmed == null || trimmed.isEmpty) {
     return null;
   }
-  final placeName = place?.nameKo ?? place?.name ?? '이 장소';
-  final looksEnglish = RegExp(r'[A-Za-z]{3,}').hasMatch(trimmed);
+  final placeName = place == null
+      ? _copy(language, ko: '이 장소', en: 'this place')
+      : _placeDisplayName(place, language);
+  final looksEnglish = _looksEnglishText(trimmed);
   if (looksEnglish) {
     if (_isEnglish(language)) {
       return trimmed;
@@ -5440,7 +5557,7 @@ String? _docentActionLabel({
     return '$placeName 주변 골목과 지역 상권을 함께 걷는 코스로 이어집니다.';
   }
   if (_isEnglish(language)) {
-    return placeName == '이 장소'
+    return place == null
         ? 'This route continues through nearby local streets and businesses.'
         : 'This route continues through local streets and businesses around $placeName.';
   }
@@ -5450,12 +5567,14 @@ String? _docentActionLabel({
 class _ExperienceHero extends StatelessWidget {
   const _ExperienceHero({
     required this.place,
+    required this.language,
     required this.weather,
     required this.intervention,
     required this.source,
   });
 
   final LalaPlace? place;
+  final String language;
   final LalaWeather? weather;
   final LalaIntervention? intervention;
   final String? source;
@@ -5477,7 +5596,7 @@ class _ExperienceHero extends StatelessWidget {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final scoreBadge = _ScoreBadge(score: score);
+          final scoreBadge = _ScoreBadge(score: score, language: language);
           final summary = Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -5485,12 +5604,21 @@ class _ExperienceHero extends StatelessWidget {
                 children: [
                   Icon(Icons.near_me_outlined, color: colorScheme.primary),
                   const SizedBox(width: 8),
-                  Text('오늘의 로컬 연결', style: theme.textTheme.titleMedium),
+                  Text(
+                    _copy(language, ko: '오늘의 로컬 연결', en: 'Today local link'),
+                    style: theme.textTheme.titleMedium,
+                  ),
                 ],
               ),
               const SizedBox(height: 10),
               Text(
-                currentPlace?.name ?? '추천 후보를 불러오는 중',
+                currentPlace == null
+                    ? _copy(
+                        language,
+                        ko: '추천 후보를 불러오는 중',
+                        en: 'Loading recommendation',
+                      )
+                    : _placeDisplayName(currentPlace, language),
                 style: theme.textTheme.headlineSmall,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
@@ -5498,8 +5626,12 @@ class _ExperienceHero extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 currentPlace == null
-                    ? '위치와 반경을 기준으로 가까운 장소를 계산한다.'
-                    : '${currentPlace.address} · ${currentPlace.distanceM}m',
+                    ? _copy(
+                        language,
+                        ko: '위치와 반경을 기준으로 가까운 장소를 계산합니다.',
+                        en: 'Finding nearby places from your location and radius.',
+                      )
+                    : '${_placeRegionLabel(currentPlace, language)} · ${currentPlace.distanceM}m',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: colorScheme.onPrimaryContainer,
                 ),
@@ -5513,18 +5645,21 @@ class _ExperienceHero extends StatelessWidget {
                 children: [
                   _MiniChip(
                     icon: Icons.storage_outlined,
-                    label: _sourceLabel(source ?? currentPlace?.source),
+                    label: _sourceLabel(
+                      source ?? currentPlace?.source,
+                      language: language,
+                    ),
                   ),
                   if (score != null)
                     _MiniChip(
                       icon: Icons.insights_outlined,
-                      label: _basisLabel(score.dataBasis),
+                      label: _basisLabel(score.dataBasis, language: language),
                     ),
                   if (weather != null)
                     _MiniChip(
                       icon: Icons.wb_cloudy_outlined,
                       label:
-                          '${weather!.location ?? 'Suwon'} ${_temperatureLabel(weather!.temp)}',
+                          '${_locationLabel(weather!.location, language)} ${_temperatureLabel(weather!.temp)}',
                     ),
                   if (action != null && action.trim().isNotEmpty)
                     _MiniChip(icon: Icons.alt_route_outlined, label: action),
@@ -5559,9 +5694,10 @@ class _ExperienceHero extends StatelessWidget {
 }
 
 class _ScoreBadge extends StatelessWidget {
-  const _ScoreBadge({required this.score});
+  const _ScoreBadge({required this.score, this.language = 'ko'});
 
   final LalaPlaceScore? score;
+  final String language;
 
   @override
   Widget build(BuildContext context) {
@@ -5587,45 +5723,74 @@ class _ScoreBadge extends StatelessWidget {
                 percent == null ? '-' : '$percent',
                 style: Theme.of(context).textTheme.headlineMedium,
               ),
-              Text('로컬 점수', style: Theme.of(context).textTheme.labelMedium),
+              Text(
+                _copy(language, ko: '로컬 점수', en: 'Local score'),
+                style: Theme.of(context).textTheme.labelMedium,
+              ),
             ],
           ),
         ),
         const SizedBox(height: 12),
         if (currentScore == null)
-          const _MutedText('점수 계산 대기')
+          _MutedText(_copy(language, ko: '점수 계산 대기', en: 'Score pending'))
         else
-          _ScoreBreakdown(score: currentScore),
+          _ScoreBreakdown(score: currentScore, language: language),
       ],
     );
   }
 }
 
 class _ScoreBreakdown extends StatelessWidget {
-  const _ScoreBreakdown({required this.score});
+  const _ScoreBreakdown({required this.score, this.language = 'ko'});
 
   final LalaPlaceScore score;
+  final String language;
 
   @override
   Widget build(BuildContext context) {
     final components = score.components;
     return Column(
       children: [
-        _ScoreBar(label: '내국인 소비', value: components.localSpendingScore),
-        _ScoreBar(label: '수요 분산', value: components.demandDispersionScore),
-        _ScoreBar(label: '날씨 적합', value: components.weatherFitScore),
-        _ScoreBar(label: '문화 연계', value: components.cultureRelevanceScore),
-        _ScoreBar(label: '리뷰 품질', value: components.reviewQualityScore),
+        _ScoreBar(
+          label: _copy(language, ko: '내국인 소비', en: 'Local spending'),
+          value: components.localSpendingScore,
+          language: language,
+        ),
+        _ScoreBar(
+          label: _copy(language, ko: '수요 분산', en: 'Demand spread'),
+          value: components.demandDispersionScore,
+          language: language,
+        ),
+        _ScoreBar(
+          label: _copy(language, ko: '날씨 적합', en: 'Weather fit'),
+          value: components.weatherFitScore,
+          language: language,
+        ),
+        _ScoreBar(
+          label: _copy(language, ko: '문화 연계', en: 'Culture fit'),
+          value: components.cultureRelevanceScore,
+          language: language,
+        ),
+        _ScoreBar(
+          label: _copy(language, ko: '리뷰 품질', en: 'Review quality'),
+          value: components.reviewQualityScore,
+          language: language,
+        ),
       ],
     );
   }
 }
 
 class _ScoreBar extends StatelessWidget {
-  const _ScoreBar({required this.label, required this.value});
+  const _ScoreBar({
+    required this.label,
+    required this.value,
+    this.language = 'ko',
+  });
 
   final String label;
   final double? value;
+  final String language;
 
   @override
   Widget build(BuildContext context) {
@@ -5650,7 +5815,9 @@ class _ScoreBar extends StatelessWidget {
           SizedBox(
             width: 34,
             child: Text(
-              value == null ? '대기' : '${(bounded! * 100).round()}',
+              value == null
+                  ? _copy(language, ko: '대기', en: 'Wait')
+                  : '${(bounded! * 100).round()}',
               textAlign: TextAlign.right,
               style: Theme.of(context).textTheme.labelSmall,
             ),

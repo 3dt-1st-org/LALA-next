@@ -403,6 +403,35 @@ void main() {
     expect(find.text('Daily Plan'), findsOneWidget);
   });
 
+  testWidgets('english language setting does not mix Korean place copy', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      LalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(
+          baseUri: 'http://api.test',
+          lang: 'en',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Hwaseong Haenggung'), findsAtLeastNWidgets(1));
+    expect(find.text('Daily Plan'), findsOneWidget);
+    expect(find.text('Listen'), findsOneWidget);
+    expect(find.textContaining('화성행궁'), findsNothing);
+    expect(find.textContaining('경기도'), findsNothing);
+
+    await tester.tap(find.widgetWithText(TextButton, 'Details'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Details'), findsWidgets);
+    expect(find.text('Suwon'), findsAtLeastNWidgets(1));
+    expect(find.textContaining('화성행궁'), findsNothing);
+    expect(find.textContaining('경기도'), findsNothing);
+  });
+
   testWidgets('surfaces OAuth JWT auth mode separately from static bearer', (
     tester,
   ) async {
@@ -626,10 +655,14 @@ LalaPlace _place() {
   return const LalaPlace(
     placeId: 'hwaseong-haenggung',
     name: '화성행궁',
+    nameKo: '화성행궁',
+    nameEn: 'Hwaseong Haenggung',
     category: 'attraction',
     lat: 37.2819,
     lng: 127.0142,
     address: '경기도 수원시 팔달구 정조로 825',
+    regionKo: '수원',
+    regionEn: 'Suwon',
     distanceM: 145,
     source: 'skeleton',
     upstreamSource: 'tour_api',
@@ -663,10 +696,14 @@ LalaPlace _culturePlace() {
   return const LalaPlace(
     placeId: 'suwon-hwaseong',
     name: '수원화성',
+    nameKo: '수원화성',
+    nameEn: 'Suwon Hwaseong Fortress',
     category: 'culture_venue',
     lat: 37.2870,
     lng: 127.0110,
     address: '경기도 수원시 장안구 영화동',
+    regionKo: '수원',
+    regionEn: 'Suwon',
     distanceM: 620,
     source: 'skeleton',
     upstreamSource: 'tour_api',
@@ -694,10 +731,14 @@ LalaPlace _restaurantPlace() {
   return const LalaPlace(
     placeId: 'haenggung-cafe-street',
     name: '행궁동 카페거리',
+    nameKo: '행궁동 카페거리',
+    nameEn: 'Haenggung Cafe Street',
     category: 'restaurant',
     lat: 37.2828,
     lng: 127.0101,
     address: '경기도 수원시 팔달구 행궁동',
+    regionKo: '수원',
+    regionEn: 'Suwon',
     distanceM: 780,
     source: 'skeleton',
     upstreamSource: 'tour_api',
