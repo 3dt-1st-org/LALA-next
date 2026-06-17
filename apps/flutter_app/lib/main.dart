@@ -257,8 +257,10 @@ enum _ActiveMapSheet { detail, planner, weather, tour }
 class _LalaHomePageState extends State<LalaHomePage> {
   static const int _autoDocentTriggerMeters = 100;
   static const double _placesReloadThresholdMeters = 250;
+  static const double _weatherReloadThresholdMeters = 10000;
   static const Duration _autoDocentCooldown = Duration(seconds: 12);
   static const Duration _interventionToastAutoDismiss = Duration(seconds: 8);
+  static const Duration _weatherMaxAge = Duration(minutes: 10);
 
   late final TextEditingController _baseUrlController;
   late final TextEditingController _bearerTokenController;
@@ -299,6 +301,9 @@ class _LalaHomePageState extends State<LalaHomePage> {
   String? _lastAutoDocentPlaceId;
   double? _lastPlacesFetchLat;
   double? _lastPlacesFetchLng;
+  DateTime? _lastWeatherFetchAt;
+  double? _lastWeatherFetchLat;
+  double? _lastWeatherFetchLng;
   double? _mapFocusLat;
   double? _mapFocusLng;
   int _mapLevel = 4;
@@ -354,7 +359,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
     );
   }
 
-  Future<void> _refresh() async {
+  Future<void> _refresh({bool forceWeather = false}) async {
     final config = _currentConfig();
     setState(() {
       _loading = true;
@@ -382,9 +387,26 @@ class _LalaHomePageState extends State<LalaHomePage> {
         }
       }
 
+      final shouldReloadWeather = shouldReloadWeatherForMapMove(
+        force: forceWeather,
+        hasWeather: _weather?.data != null,
+        lastFetchAt: _lastWeatherFetchAt,
+        lastFetchLat: _lastWeatherFetchLat,
+        lastFetchLng: _lastWeatherFetchLng,
+        currentLat: config.lat,
+        currentLng: config.lng,
+        maxAge: _weatherMaxAge,
+        thresholdMeters: _weatherReloadThresholdMeters,
+      );
+      final previousWeather = _weather;
+      final previousIntervention = _intervention;
       final places = await loadOptional(_backend.getPlaces);
-      final weather = await loadOptional(_backend.getWeather);
-      final intervention = await loadOptional(_backend.getIntervention);
+      final weather = shouldReloadWeather
+          ? await loadOptional(_backend.getWeather)
+          : previousWeather;
+      final intervention = shouldReloadWeather
+          ? await loadOptional(_backend.getIntervention)
+          : previousIntervention;
       final dailyPlan = await loadOptional(_backend.createDailyPlan);
       LalaEnvelope<LalaDocentScript>? docentScript;
       final placeItems = places?.data?.places ?? _fallbackUiPlaces();
@@ -412,8 +434,8 @@ class _LalaHomePageState extends State<LalaHomePage> {
         _health = health;
         _readiness = readiness;
         _places = places;
-        _weather = weather;
-        _intervention = intervention;
+        _weather = weather ?? previousWeather;
+        _intervention = intervention ?? previousIntervention;
         _dailyPlan = dailyPlan;
         _docentScript = docentScript;
         _docentAudio = null;
@@ -422,10 +444,17 @@ class _LalaHomePageState extends State<LalaHomePage> {
         _tourAudioError = null;
         _tourAudioLoading = false;
         _error = loadError;
-        _interventionToastDismissed = false;
+        if (shouldReloadWeather) {
+          _interventionToastDismissed = false;
+        }
         if (places != null) {
           _lastPlacesFetchLat = config.lat;
           _lastPlacesFetchLng = config.lng;
+        }
+        if (weather != null && shouldReloadWeather) {
+          _lastWeatherFetchAt = DateTime.now();
+          _lastWeatherFetchLat = config.lat;
+          _lastWeatherFetchLng = config.lng;
         }
         if (autoDocentPlace != null) {
           _applyAutoDocentPlace(autoDocentPlace, closeActiveSheet: false);
@@ -785,7 +814,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        _refresh();
+        _refresh(forceWeather: true);
       }
     });
   }
@@ -808,7 +837,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        _refresh();
+        _refresh(forceWeather: true);
       }
     });
   }
@@ -896,7 +925,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
               lngController: _lngController,
               radiusController: _radiusController,
               loading: _loading,
-              onRefresh: _refresh,
+              onRefresh: () => _refresh(forceWeather: true),
               onLocationConsentChanged: (enabled) =>
                   updateSheet(() => _setLocationConsent(enabled)),
               onLanguageChanged: (language) =>
@@ -967,7 +996,8 @@ class _LalaHomePageState extends State<LalaHomePage> {
               onDismissInterventionToast: _dismissInterventionToast,
               onFetchAudio: _fetchMoreInfo,
               onFetchTourAudio: _fetchTourAudio,
-              onRefresh: _refresh,
+              onRefresh: () => _refresh(),
+              onRefreshWeather: () => _refresh(forceWeather: true),
               onReturnToLocation: _returnToCurrentLocation,
               onOpenSettings: () => _openSettingsSheet(context),
               onRetryLocation: _retryLocationConsent,
@@ -1434,6 +1464,7 @@ class _Dashboard extends StatelessWidget {
     required this.onFetchAudio,
     required this.onFetchTourAudio,
     required this.onRefresh,
+    required this.onRefreshWeather,
     required this.onReturnToLocation,
     required this.onOpenSettings,
     required this.onRetryLocation,
@@ -1486,6 +1517,7 @@ class _Dashboard extends StatelessWidget {
   final VoidCallback onFetchAudio;
   final VoidCallback onFetchTourAudio;
   final VoidCallback onRefresh;
+  final VoidCallback onRefreshWeather;
   final VoidCallback onReturnToLocation;
   final VoidCallback onOpenSettings;
   final VoidCallback onRetryLocation;
@@ -1510,7 +1542,7 @@ class _Dashboard extends StatelessWidget {
     final activeDailyPlan = dailyPlan?.data;
     final currentWeather = weather?.data ?? _fallbackWeather();
     final activeIntervention = intervention?.data;
-    final visibleError = error;
+    final visibleError = _localizedUiMessage(error, uiLanguage);
     void selectPlaceById(String placeId) {
       final place = _placeById(topPlaces, placeId);
       if (place != null) {
@@ -1559,7 +1591,7 @@ class _Dashboard extends StatelessWidget {
                 language: uiLanguage,
                 onPressed: () {
                   onOpenSheet(_ActiveMapSheet.weather);
-                  onRefresh();
+                  onRefreshWeather();
                 },
               ),
             ),
@@ -1657,7 +1689,7 @@ class _Dashboard extends StatelessWidget {
                             ? activeDailyPlan?.slots.first.title
                             : null),
                     audioLoading: audioLoading,
-                    audioError: audioError,
+                    audioError: _localizedUiMessage(audioError, uiLanguage),
                     docentAudio: docentAudio,
                     canFetchAudio:
                         activeDocent?.placeId == topPlace?.placeId &&
@@ -1711,9 +1743,12 @@ class _Dashboard extends StatelessWidget {
                   docentAudio: docentAudio,
                   tourAudio: tourAudio,
                   audioLoading: audioLoading,
-                  audioError: audioError,
+                  audioError: _localizedUiMessage(audioError, uiLanguage),
                   tourAudioLoading: tourAudioLoading,
-                  tourAudioError: tourAudioError,
+                  tourAudioError: _localizedUiMessage(
+                    tourAudioError,
+                    uiLanguage,
+                  ),
                   source: effectiveSource,
                   showEvidence: showEvidence,
                   detailDocentPlayedPlaceIds: detailDocentPlayedPlaceIds,
@@ -6185,6 +6220,32 @@ bool shouldReloadPlacesForMapMove({
       thresholdMeters;
 }
 
+bool shouldReloadWeatherForMapMove({
+  required bool force,
+  required bool hasWeather,
+  required DateTime? lastFetchAt,
+  required double? lastFetchLat,
+  required double? lastFetchLng,
+  required double currentLat,
+  required double currentLng,
+  Duration maxAge = const Duration(minutes: 10),
+  double thresholdMeters = 10000,
+  DateTime? now,
+}) {
+  if (force || !hasWeather || lastFetchAt == null) {
+    return true;
+  }
+  if (lastFetchLat == null || lastFetchLng == null) {
+    return true;
+  }
+  final effectiveNow = now ?? DateTime.now();
+  if (effectiveNow.difference(lastFetchAt) >= maxAge) {
+    return true;
+  }
+  return _distanceMeters(lastFetchLat, lastFetchLng, currentLat, currentLng) >=
+      thresholdMeters;
+}
+
 double _distanceMeters(
   double fromLat,
   double fromLng,
@@ -6209,6 +6270,22 @@ double _distanceMeters(
 
 String _copy(String language, {required String ko, required String en}) {
   return _isEnglish(language) ? en : ko;
+}
+
+String? _localizedUiMessage(String? value, String language) {
+  final localized = _singleLanguageText(value, language);
+  if (localized != null && localized.isNotEmpty) {
+    return localized;
+  }
+  final trimmed = value?.trim();
+  if (trimmed == null || trimmed.isEmpty) {
+    return null;
+  }
+  return _copy(
+    language,
+    ko: '요청을 처리하지 못했습니다.',
+    en: 'Unable to complete the request.',
+  );
 }
 
 String _languageOptionLabel(String optionLanguage, String uiLanguage) {

@@ -123,6 +123,10 @@ evidence, but they are not the latest MVP acceptance source.
   more closely by opening the weather sheet and triggering the shared refresh
   path, so weather, intervention, and planner context are refreshed when the
   user explicitly asks for weather.
+- Implemented: weather refresh now keeps the legacy `WeatherReloadPolicy`
+  gates. Cached weather/intervention context is reused until force refresh,
+  10-minute age expiry, or a 10km map move, so ordinary category/filter
+  changes do not flicker weather state.
 - Implemented: intervention toasts now keep the legacy 8-second auto-dismiss
   behavior from `showInterventionToast()`, so route/weather alerts do not keep
   covering the map until the user manually closes them.

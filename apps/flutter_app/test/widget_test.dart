@@ -39,6 +39,64 @@ void main() {
     );
   });
 
+  test('weather reload policy follows the legacy distance and age gates', () {
+    final lastFetchAt = DateTime(2026, 6, 18, 10);
+    final now = lastFetchAt.add(const Duration(minutes: 5));
+
+    expect(
+      shouldReloadWeatherForMapMove(
+        force: true,
+        hasWeather: true,
+        lastFetchAt: lastFetchAt,
+        lastFetchLat: 37.2636,
+        lastFetchLng: 127.0286,
+        currentLat: 37.2636,
+        currentLng: 127.0286,
+        now: now,
+      ),
+      isTrue,
+    );
+    expect(
+      shouldReloadWeatherForMapMove(
+        force: false,
+        hasWeather: true,
+        lastFetchAt: lastFetchAt,
+        lastFetchLat: 37.2636,
+        lastFetchLng: 127.0286,
+        currentLat: 37.2640,
+        currentLng: 127.0290,
+        now: now,
+      ),
+      isFalse,
+    );
+    expect(
+      shouldReloadWeatherForMapMove(
+        force: false,
+        hasWeather: true,
+        lastFetchAt: lastFetchAt,
+        lastFetchLat: 37.2636,
+        lastFetchLng: 127.0286,
+        currentLat: 37.2636,
+        currentLng: 127.0286,
+        now: lastFetchAt.add(const Duration(minutes: 10)),
+      ),
+      isTrue,
+    );
+    expect(
+      shouldReloadWeatherForMapMove(
+        force: false,
+        hasWeather: true,
+        lastFetchAt: lastFetchAt,
+        lastFetchLat: 37.2636,
+        lastFetchLng: 127.0286,
+        currentLat: 37.3600,
+        currentLng: 127.1200,
+        now: now,
+      ),
+      isTrue,
+    );
+  });
+
   testWidgets('loads public demo panels before auth is configured', (
     tester,
   ) async {
@@ -90,11 +148,14 @@ void main() {
     tester,
   ) async {
     final configs = <LalaAppConfig>[];
+    final backends = <FakeBackend>[];
     await tester.pumpWidget(
       LalaApp(
         backendFactory: (config) {
           configs.add(config);
-          return FakeBackend(config);
+          final backend = FakeBackend(config);
+          backends.add(backend);
+          return backend;
         },
         initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
       ),
@@ -107,6 +168,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(configs.last.category, 'restaurant');
+    expect(
+      backends.fold<int>(
+        0,
+        (total, backend) => total + backend.weatherRequests,
+      ),
+      1,
+    );
     expect(find.text('행궁동 카페거리'), findsAtLeastNWidgets(1));
     expect(find.text('행궁동 카페거리 도슨트'), findsOneWidget);
 
@@ -736,9 +804,10 @@ void main() {
 
     await tester.pumpAndSettle();
 
+    expect(find.text('요청을 처리하지 못했습니다.'), findsOneWidget);
     expect(
       find.text('UPSTREAM_UNAVAILABLE: Authenticated route failed.'),
-      findsOneWidget,
+      findsNothing,
     );
     expect(find.textContaining('데모 기준'), findsWidgets);
     expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
@@ -1088,6 +1157,33 @@ void main() {
     expect(find.textContaining('화성행궁 산책'), findsNothing);
   });
 
+  testWidgets('localized API errors follow the selected language only', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      LalaApp(
+        backendFactory: BilingualLoadFailureBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('장소를 불러오지 못했어요'), findsOneWidget);
+    expect(find.textContaining('Places failed'), findsNothing);
+    expect(_visibleMixedLanguageTexts(tester), isEmpty);
+
+    await tester.tap(find.byIcon(Icons.settings).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('영어'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.arrow_back_ios_new));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Places failed'), findsOneWidget);
+    expect(find.textContaining('장소를 불러오지 못했어요'), findsNothing);
+    expect(_visibleMixedLanguageTexts(tester), isEmpty);
+  });
+
   testWidgets('surfaces OAuth JWT auth mode separately from static bearer', (
     tester,
   ) async {
@@ -1386,6 +1482,34 @@ class BilingualInterventionBackend extends FakeBackend {
       ),
     );
   }
+}
+
+class BilingualLoadFailureBackend extends FakeBackend {
+  BilingualLoadFailureBackend(super.config);
+
+  @override
+  Future<LalaEnvelope<LalaPlacesResponse>> getPlaces() async {
+    throw const LalaApiException(
+      code: 'UPSTREAM_UNAVAILABLE',
+      message: '장소를 불러오지 못했어요 Places failed.',
+      statusCode: 503,
+      retryable: true,
+      requestId: 'bilingual-load-failure',
+    );
+  }
+}
+
+List<String> _visibleMixedLanguageTexts(WidgetTester tester) {
+  return tester
+      .widgetList<Text>(find.byType(Text))
+      .map((widget) => widget.data ?? widget.textSpan?.toPlainText() ?? '')
+      .where((text) => _hasMixedKoreanEnglish(text))
+      .toList(growable: false);
+}
+
+bool _hasMixedKoreanEnglish(String value) {
+  return RegExp(r'[가-힣]').hasMatch(value) &&
+      RegExp(r'[A-Za-z]{3,}').hasMatch(value);
 }
 
 LalaEnvelope<T> _envelope<T>(T data) {
