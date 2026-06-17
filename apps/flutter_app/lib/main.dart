@@ -3001,6 +3001,12 @@ class _FeaturedPlacePanel extends StatelessWidget {
           showEvidence: showEvidence,
         ),
         const SizedBox(height: 12),
+        _PlaceContextCard(
+          place: currentPlace,
+          language: language,
+          weather: weather,
+        ),
+        const SizedBox(height: 12),
         Align(
           alignment: Alignment.centerLeft,
           child: OutlinedButton.icon(
@@ -3086,6 +3092,10 @@ class _FeaturedPlacePanel extends StatelessWidget {
         dataBasis: 'public_mvp_snapshot',
         features: {
           'signals': <String>['tour_api', 'card_spending'],
+          'culture_event_count': 13,
+          'place_event_count': 1,
+          'region_spend_amount': 14000000.0,
+          'region_transaction_count': 1700,
         },
       ),
     );
@@ -3188,6 +3198,124 @@ class _FeaturedPlaceHeader extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _PlaceContextCard extends StatelessWidget {
+  const _PlaceContextCard({
+    required this.place,
+    required this.language,
+    required this.weather,
+  });
+
+  final LalaPlace place;
+  final String language;
+  final LalaWeather? weather;
+
+  @override
+  Widget build(BuildContext context) {
+    final facts = _placeContextFacts(
+      place: place,
+      language: language,
+      weather: weather,
+    );
+    return Container(
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFD7E3F5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEAF2FB),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Icon(
+                  _placeContextIcon(place.category),
+                  color: const Color(0xFF2B6CB0),
+                  size: 19,
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  _placeContextTitle(place.category, language),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: const Color(0xFF111827),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: facts
+                .map(
+                  (fact) =>
+                      _ContextFactChip(icon: fact.icon, label: fact.label),
+                )
+                .toList(growable: false),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ContextFact {
+  const _ContextFact({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+}
+
+class _ContextFactChip extends StatelessWidget {
+  const _ContextFactChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: const Color(0xFF475569)),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: const Color(0xFF334155),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -5136,6 +5264,111 @@ bool _containsKorean(String value) => RegExp(r'[가-힣]').hasMatch(value);
 
 bool _looksEnglishText(String value) => RegExp(r'[A-Za-z]{3,}').hasMatch(value);
 
+String _placeContextTitle(String category, String language) {
+  return switch (category) {
+    'event' => _copy(language, ko: '행사 맥락', en: 'Event context'),
+    'restaurant' => _copy(language, ko: '맛집 로컬 맥락', en: 'Food local context'),
+    'culture_venue' => _copy(language, ko: '문화 연계 맥락', en: 'Culture context'),
+    _ => _copy(language, ko: '로컬 맥락', en: 'Local context'),
+  };
+}
+
+IconData _placeContextIcon(String category) {
+  return switch (category) {
+    'event' => Icons.event_available_outlined,
+    'restaurant' => Icons.restaurant_menu,
+    'culture_venue' => Icons.account_balance_outlined,
+    _ => Icons.travel_explore_outlined,
+  };
+}
+
+List<_ContextFact> _placeContextFacts({
+  required LalaPlace place,
+  required String language,
+  required LalaWeather? weather,
+}) {
+  final score = place.score;
+  final features = score?.features ?? const <String, dynamic>{};
+  final facts = <_ContextFact>[];
+
+  void add(IconData icon, String? label) {
+    final trimmed = label?.trim();
+    if (trimmed == null || trimmed.isEmpty || trimmed == '-') {
+      return;
+    }
+    if (facts.any((fact) => fact.label == trimmed)) {
+      return;
+    }
+    facts.add(_ContextFact(icon: icon, label: trimmed));
+  }
+
+  add(Icons.place_outlined, _placeRegionLabel(place, language));
+
+  final placeEventCount = _asFeatureInt(features['place_event_count']);
+  final cultureEventCount = _asFeatureInt(features['culture_event_count']);
+  if (placeEventCount > 0) {
+    add(
+      Icons.event_note_outlined,
+      _copy(
+        language,
+        ko: '장소 연계 행사 ${_commaInt(placeEventCount)}건',
+        en: '${_commaInt(placeEventCount)} linked events',
+      ),
+    );
+  } else if (cultureEventCount > 0) {
+    add(
+      Icons.festival_outlined,
+      _copy(
+        language,
+        ko: '지역 문화행사 ${_commaInt(cultureEventCount)}건',
+        en: '${_commaInt(cultureEventCount)} nearby culture events',
+      ),
+    );
+  }
+
+  final spendAmount = _asFeatureDouble(features['region_spend_amount']);
+  if (spendAmount > 0) {
+    add(
+      Icons.payments_outlined,
+      _copy(
+        language,
+        ko: '카드 소비 ${_formatWonCompact(spendAmount, language)}',
+        en: 'Card spend ${_formatWonCompact(spendAmount, language)}',
+      ),
+    );
+  }
+
+  final transactionCount = _asFeatureInt(features['region_transaction_count']);
+  if (transactionCount > 0) {
+    add(
+      Icons.receipt_long_outlined,
+      _copy(
+        language,
+        ko: '거래 ${_commaInt(transactionCount)}건',
+        en: '${_commaInt(transactionCount)} transactions',
+      ),
+    );
+  }
+
+  if (weather != null) {
+    add(
+      Icons.wb_cloudy_outlined,
+      '${_outdoorLabel(weather.outdoorStatus, language: language)} · ${_temperatureLabel(weather.temp)}',
+    );
+  }
+
+  add(
+    Icons.verified_outlined,
+    _externalSourceLabel(
+          place.upstreamSource ?? features['primary_source'],
+          language: language,
+        ) ??
+        _sourceLabel(place.source, language: language),
+  );
+
+  return facts.take(5).toList(growable: false);
+}
+
 String _planSlotTitle(LalaPlanSlot slot, String language) {
   final title = slot.title.trim();
   final place = slot.place;
@@ -5351,6 +5584,10 @@ List<LalaPlace> _fallbackUiPlaces() {
         dataBasis: 'public_mvp_snapshot',
         features: {
           'signals': <String>['tour_api', 'card_spending'],
+          'culture_event_count': 13,
+          'place_event_count': 1,
+          'region_spend_amount': 14000000.0,
+          'region_transaction_count': 1700,
         },
       ),
     ),
@@ -6231,6 +6468,36 @@ int _asFeatureInt(Object? value) {
     return value.round();
   }
   return int.tryParse(value?.toString() ?? '') ?? 0;
+}
+
+double _asFeatureDouble(Object? value) {
+  if (value is num) {
+    return value.toDouble();
+  }
+  return double.tryParse(value?.toString() ?? '') ?? 0;
+}
+
+String _commaInt(num value) {
+  final text = value.round().abs().toString();
+  final buffer = StringBuffer();
+  for (var index = 0; index < text.length; index += 1) {
+    if (index > 0 && (text.length - index) % 3 == 0) {
+      buffer.write(',');
+    }
+    buffer.write(text[index]);
+  }
+  return value < 0 ? '-$buffer' : buffer.toString();
+}
+
+String _formatWonCompact(num value, String language) {
+  if (_isEnglish(language)) {
+    return 'KRW ${_commaInt(value)}';
+  }
+  final rounded = value.round();
+  if (rounded >= 10000) {
+    return '${_commaInt(rounded / 10000)}만원';
+  }
+  return '${_commaInt(rounded)}원';
 }
 
 class _Panel extends StatelessWidget {
