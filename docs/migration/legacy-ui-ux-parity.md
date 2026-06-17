@@ -44,6 +44,9 @@ evidence, but they are not the latest MVP acceptance source.
 - Implemented: primary docent CTA now uses the legacy-style `정보 더 듣기` copy.
 - Implemented: category chips filter the map, recommendation rail, and selected
   detail context.
+- Implemented: category chips now also propagate the active category into the
+  places request and trigger the shared refresh path, matching the legacy
+  `click_category_filter -> loadPlaces()` interaction.
 - Implemented: planner, weather, and detail use dedicated draggable Flutter
   sheets.
 - Implemented: voice and auto-docent controls have persistent ON/OFF state and

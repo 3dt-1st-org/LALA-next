@@ -72,6 +72,7 @@ class LalaAppConfig {
     this.lat = 37.2636,
     this.lng = 127.0286,
     this.radiusM = 50000,
+    this.category = 'all',
     this.lang = 'ko',
   });
 
@@ -86,6 +87,10 @@ class LalaAppConfig {
       lat = 37.2636,
       lng = 127.0286,
       radiusM = 50000,
+      category = const String.fromEnvironment(
+        'LALA_PLACE_CATEGORY',
+        defaultValue: 'all',
+      ),
       lang = const String.fromEnvironment(
         'LALA_UI_LANGUAGE',
         defaultValue: 'ko',
@@ -98,6 +103,7 @@ class LalaAppConfig {
   final double lat;
   final double lng;
   final int radiusM;
+  final String category;
   final String lang;
 
   bool get hasAuth => bearerToken.trim().isNotEmpty || apiKey.trim().isNotEmpty;
@@ -112,6 +118,7 @@ class LalaAppConfig {
     double? lat,
     double? lng,
     int? radiusM,
+    String? category,
     String? lang,
   }) {
     return LalaAppConfig(
@@ -122,6 +129,7 @@ class LalaAppConfig {
       lat: lat ?? this.lat,
       lng: lng ?? this.lng,
       radiusM: radiusM ?? this.radiusM,
+      category: category ?? this.category,
       lang: lang ?? this.lang,
     );
   }
@@ -177,6 +185,7 @@ class LalaApiBackend implements LalaBackend {
       lat: config.lat,
       lng: config.lng,
       radiusM: config.radiusM,
+      category: config.category,
       lang: config.lang,
     );
   }
@@ -328,6 +337,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
       lat: double.tryParse(_latController.text.trim()) ?? 37.2636,
       lng: double.tryParse(_lngController.text.trim()) ?? 127.0286,
       radiusM: int.tryParse(_radiusController.text.trim()) ?? 50000,
+      category: _selectedCategory,
       lang: _uiLanguage,
     );
   }
@@ -537,6 +547,11 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _mapFocusLat = null;
       _mapFocusLng = null;
       _mapLevel = 4;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _refresh();
+      }
     });
   }
 

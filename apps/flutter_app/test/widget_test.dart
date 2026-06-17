@@ -56,18 +56,24 @@ void main() {
   testWidgets('filters places from category chips and toggles map modes', (
     tester,
   ) async {
+    final configs = <LalaAppConfig>[];
     await tester.pumpWidget(
       LalaApp(
-        backendFactory: FakeBackend.new,
+        backendFactory: (config) {
+          configs.add(config);
+          return FakeBackend(config);
+        },
         initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
       ),
     );
 
     await tester.pumpAndSettle();
+    expect(configs.last.category, 'all');
 
     await tester.tap(find.text('맛집').first);
     await tester.pumpAndSettle();
 
+    expect(configs.last.category, 'restaurant');
     expect(find.text('행궁동 카페거리'), findsAtLeastNWidgets(1));
     expect(find.text('행궁동 카페거리 도슨트'), findsOneWidget);
 
@@ -870,8 +876,8 @@ class FakeBackend implements LalaBackend {
           lat: config.lat,
           lng: config.lng,
           radiusM: config.radiusM,
-          category: 'all',
-          language: 'ko',
+          category: config.category,
+          language: config.lang,
         ),
         source: 'skeleton',
       ),
