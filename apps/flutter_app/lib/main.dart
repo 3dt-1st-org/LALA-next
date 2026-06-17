@@ -264,8 +264,11 @@ class _LalaHomePageState extends State<LalaHomePage> {
   LalaEnvelope<LalaDailyPlan>? _dailyPlan;
   LalaEnvelope<LalaDocentScript>? _docentScript;
   LalaAudioResponse? _docentAudio;
+  LalaAudioResponse? _tourAudio;
   bool _audioLoading = false;
   String? _audioError;
+  bool _tourAudioLoading = false;
+  String? _tourAudioError;
   String _selectedCategory = 'all';
   String? _selectedPlaceId;
   _ActiveMapSheet? _activeSheet;
@@ -333,6 +336,9 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _error = null;
       _audioError = null;
       _docentAudio = null;
+      _tourAudio = null;
+      _tourAudioError = null;
+      _tourAudioLoading = false;
     });
 
     _backend.close();
@@ -382,7 +388,10 @@ class _LalaHomePageState extends State<LalaHomePage> {
         _dailyPlan = dailyPlan;
         _docentScript = docentScript;
         _docentAudio = null;
+        _tourAudio = null;
         _audioError = null;
+        _tourAudioError = null;
+        _tourAudioLoading = false;
         _error = loadError;
         _interventionToastDismissed = false;
       });
@@ -464,6 +473,45 @@ class _LalaHomePageState extends State<LalaHomePage> {
     }
   }
 
+  Future<void> _fetchTourAudio() async {
+    if (_tourAudioLoading) {
+      return;
+    }
+    final restaurants = _restaurantTourPlaces(
+      _visiblePlacesForCurrentCategory(),
+    ).take(5).toList(growable: false);
+    if (restaurants.isEmpty) {
+      return;
+    }
+    final script = _tourGuideScript(restaurants, _uiLanguage);
+    setState(() {
+      _tourAudioLoading = true;
+      _tourAudioError = null;
+    });
+    try {
+      final audio = await _backend.createDocentAudio(script: script);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _tourAudio = audio;
+      });
+    } on Object catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _tourAudioError = _safeErrorMessage(error);
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _tourAudioLoading = false;
+        });
+      }
+    }
+  }
+
   LalaPlace? _currentDocentPlace() {
     final places = _visiblePlacesForCurrentCategory();
     if (places.isEmpty) {
@@ -479,6 +527,9 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _activeSheet = null;
       _docentAudio = null;
       _audioError = null;
+      _tourAudio = null;
+      _tourAudioError = null;
+      _tourAudioLoading = false;
       _showEvidence = false;
       _mapFocusLat = null;
       _mapFocusLng = null;
@@ -571,7 +622,10 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _uiLanguage = language;
       _docentScript = null;
       _docentAudio = null;
+      _tourAudio = null;
       _audioError = null;
+      _tourAudioError = null;
+      _tourAudioLoading = false;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -669,8 +723,11 @@ class _LalaHomePageState extends State<LalaHomePage> {
               dailyPlan: _dailyPlan,
               docentScript: _docentScript,
               docentAudio: _docentAudio,
+              tourAudio: _tourAudio,
               audioLoading: _audioLoading,
               audioError: _audioError,
+              tourAudioLoading: _tourAudioLoading,
+              tourAudioError: _tourAudioError,
               authMode: config.authMode,
               kakaoJavascriptKey: config.kakaoJavascriptKey,
               selectedCategory: _selectedCategory,
@@ -698,6 +755,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
               onToggleEvidence: _toggleEvidence,
               onDismissInterventionToast: _dismissInterventionToast,
               onFetchAudio: _fetchMoreInfo,
+              onFetchTourAudio: _fetchTourAudio,
               onRefresh: _refresh,
               onOpenSettings: () => _openSettingsSheet(context),
             ),
@@ -745,7 +803,7 @@ class _ConfigPanel extends StatelessWidget {
           TextField(
             controller: baseUrlController,
             decoration: InputDecoration(
-              labelText: _copy(language, ko: '기본 URL', en: 'Base URL'),
+              labelText: _copy(language, ko: '기본 주소', en: 'Base URL'),
               prefixIcon: const Icon(Icons.link),
             ),
             keyboardType: TextInputType.url,
@@ -765,7 +823,7 @@ class _ConfigPanel extends StatelessWidget {
             decoration: InputDecoration(
               labelText: _copy(
                 language,
-                ko: '마이그레이션 API 키',
+                ko: '마이그레이션 키',
                 en: 'Migration API key',
               ),
               prefixIcon: const Icon(Icons.vpn_key_outlined),
@@ -778,7 +836,7 @@ class _ConfigPanel extends StatelessWidget {
             decoration: InputDecoration(
               labelText: _copy(
                 language,
-                ko: '카카오 JavaScript 키',
+                ko: '카카오 지도 키',
                 en: 'Kakao JavaScript key',
               ),
               prefixIcon: const Icon(Icons.map_outlined),
@@ -815,7 +873,7 @@ class _ConfigPanel extends StatelessWidget {
           TextField(
             controller: radiusController,
             decoration: InputDecoration(
-              labelText: _copy(language, ko: '반경(m)', en: 'Radius meters'),
+              labelText: _copy(language, ko: '반경(미터)', en: 'Radius meters'),
               prefixIcon: const Icon(Icons.radio_button_checked),
             ),
             keyboardType: TextInputType.number,
@@ -1126,8 +1184,11 @@ class _Dashboard extends StatelessWidget {
     required this.dailyPlan,
     required this.docentScript,
     required this.docentAudio,
+    required this.tourAudio,
     required this.audioLoading,
     required this.audioError,
+    required this.tourAudioLoading,
+    required this.tourAudioError,
     required this.authMode,
     required this.kakaoJavascriptKey,
     required this.selectedCategory,
@@ -1155,6 +1216,7 @@ class _Dashboard extends StatelessWidget {
     required this.onToggleEvidence,
     required this.onDismissInterventionToast,
     required this.onFetchAudio,
+    required this.onFetchTourAudio,
     required this.onRefresh,
     required this.onOpenSettings,
   });
@@ -1169,8 +1231,11 @@ class _Dashboard extends StatelessWidget {
   final LalaEnvelope<LalaDailyPlan>? dailyPlan;
   final LalaEnvelope<LalaDocentScript>? docentScript;
   final LalaAudioResponse? docentAudio;
+  final LalaAudioResponse? tourAudio;
   final bool audioLoading;
   final String? audioError;
+  final bool tourAudioLoading;
+  final String? tourAudioError;
   final LalaAuthMode authMode;
   final String kakaoJavascriptKey;
   final String selectedCategory;
@@ -1198,6 +1263,7 @@ class _Dashboard extends StatelessWidget {
   final VoidCallback onToggleEvidence;
   final VoidCallback onDismissInterventionToast;
   final VoidCallback onFetchAudio;
+  final VoidCallback onFetchTourAudio;
   final VoidCallback onRefresh;
   final VoidCallback onOpenSettings;
 
@@ -1408,13 +1474,18 @@ class _Dashboard extends StatelessWidget {
                   dailyPlan: dailyPlan?.data,
                   docentScript: docentScript?.data,
                   docentAudio: docentAudio,
+                  tourAudio: tourAudio,
                   audioLoading: audioLoading,
                   audioError: audioError,
+                  tourAudioLoading: tourAudioLoading,
+                  tourAudioError: tourAudioError,
                   source: effectiveSource,
                   showEvidence: showEvidence,
                   detailDocentPlayedPlaceIds: detailDocentPlayedPlaceIds,
                   onToggleEvidence: onToggleEvidence,
                   onFetchAudio: onFetchAudio,
+                  onFetchTourAudio: onFetchTourAudio,
+                  onSelectPlace: onSelectPlace,
                   onRefresh: onRefresh,
                   onClose: onCloseSheet,
                 ),
@@ -1662,6 +1733,7 @@ class _MapRailPlaceCard extends StatelessWidget {
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
+        key: ValueKey('tour-stop-action-${place.placeId}'),
         borderRadius: BorderRadius.circular(18),
         onTap: onTap,
         child: Container(
@@ -2101,13 +2173,18 @@ class _MapDraggableSheet extends StatelessWidget {
     required this.dailyPlan,
     required this.docentScript,
     required this.docentAudio,
+    required this.tourAudio,
     required this.audioLoading,
     required this.audioError,
+    required this.tourAudioLoading,
+    required this.tourAudioError,
     required this.source,
     required this.showEvidence,
     required this.detailDocentPlayedPlaceIds,
     required this.onToggleEvidence,
     required this.onFetchAudio,
+    required this.onFetchTourAudio,
+    required this.onSelectPlace,
     required this.onRefresh,
     required this.onClose,
   });
@@ -2122,13 +2199,18 @@ class _MapDraggableSheet extends StatelessWidget {
   final LalaDailyPlan? dailyPlan;
   final LalaDocentScript? docentScript;
   final LalaAudioResponse? docentAudio;
+  final LalaAudioResponse? tourAudio;
   final bool audioLoading;
   final String? audioError;
+  final bool tourAudioLoading;
+  final String? tourAudioError;
   final String? source;
   final bool showEvidence;
   final Set<String> detailDocentPlayedPlaceIds;
   final VoidCallback onToggleEvidence;
   final VoidCallback onFetchAudio;
+  final VoidCallback onFetchTourAudio;
+  final ValueChanged<LalaPlace> onSelectPlace;
   final VoidCallback onRefresh;
   final VoidCallback onClose;
 
@@ -2150,7 +2232,7 @@ class _MapDraggableSheet extends StatelessWidget {
       _ActiveMapSheet.detail => 0.66,
       _ActiveMapSheet.planner => 0.48,
       _ActiveMapSheet.weather => 0.44,
-      _ActiveMapSheet.tour => 0.54,
+      _ActiveMapSheet.tour => 0.68,
     };
 
     return Stack(
@@ -2248,6 +2330,11 @@ class _MapDraggableSheet extends StatelessWidget {
                     _ActiveMapSheet.tour => _TourSheetContent(
                       places: places,
                       language: language,
+                      tourAudio: tourAudio,
+                      audioLoading: tourAudioLoading,
+                      audioError: tourAudioError,
+                      onFetchAudio: onFetchTourAudio,
+                      onSelectPlace: onSelectPlace,
                     ),
                   },
                 ],
@@ -2618,10 +2705,23 @@ class _PlanSlotTile extends StatelessWidget {
 }
 
 class _TourSheetContent extends StatelessWidget {
-  const _TourSheetContent({required this.places, required this.language});
+  const _TourSheetContent({
+    required this.places,
+    required this.language,
+    required this.tourAudio,
+    required this.audioLoading,
+    required this.audioError,
+    required this.onFetchAudio,
+    required this.onSelectPlace,
+  });
 
   final List<LalaPlace> places;
   final String language;
+  final LalaAudioResponse? tourAudio;
+  final bool audioLoading;
+  final String? audioError;
+  final VoidCallback onFetchAudio;
+  final ValueChanged<LalaPlace> onSelectPlace;
 
   @override
   Widget build(BuildContext context) {
@@ -2643,6 +2743,12 @@ class _TourSheetContent extends StatelessWidget {
       en: '${items.length} nearby food stops for a walkable route',
     );
     final first = items.first;
+    final script = _tourGuideScript(items, language);
+    final sourceLabel = _copy(
+      language,
+      ko: '${items.length}개 맛집 · 공공데이터 기반',
+      en: '${items.length} restaurants · Public data based',
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2696,13 +2802,42 @@ class _TourSheetContent extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final place in items)
+              _TourTag(
+                key: ValueKey('tour-tag-${place.placeId}'),
+                label: _placeDisplayName(place, language),
+                onPressed: () => onSelectPlace(place),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _TourScriptCard(
+          script: script,
+          sourceLabel: sourceLabel,
+          language: language,
+        ),
+        const SizedBox(height: 12),
+        _TourAudioBar(
+          language: language,
+          audio: tourAudio,
+          loading: audioLoading,
+          error: audioError,
+          onFetchAudio: onFetchAudio,
+        ),
+        const SizedBox(height: 14),
         ...items.indexed.map(
           (entry) => Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: _TourStopTile(
+              key: ValueKey('tour-stop-${entry.$2.placeId}'),
               index: entry.$1,
               place: entry.$2,
               language: language,
+              onTap: () => onSelectPlace(entry.$2),
             ),
           ),
         ),
@@ -2711,16 +2846,216 @@ class _TourSheetContent extends StatelessWidget {
   }
 }
 
+class _TourTag extends StatelessWidget {
+  const _TourTag({super.key, required this.label, required this.onPressed});
+
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return ActionChip(
+      avatar: const Icon(Icons.restaurant_menu, size: 16),
+      label: Text(label, overflow: TextOverflow.ellipsis),
+      onPressed: onPressed,
+      backgroundColor: Colors.white,
+      side: const BorderSide(color: Color(0xFFF5C842)),
+      labelStyle: const TextStyle(
+        color: Color(0xFF744210),
+        fontWeight: FontWeight.w900,
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+    );
+  }
+}
+
+class _TourScriptCard extends StatelessWidget {
+  const _TourScriptCard({
+    required this.script,
+    required this.sourceLabel,
+    required this.language,
+  });
+
+  final String script;
+  final String sourceLabel;
+  final String language;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: const [
+          BoxShadow(
+            blurRadius: 16,
+            offset: Offset(0, 7),
+            color: Color(0x10000000),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.record_voice_over_outlined,
+                size: 19,
+                color: Color(0xFFC87F11),
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  _copy(language, ko: '투어 도슨트 스크립트', en: 'Tour docent script'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: const Color(0xFF111827),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              _TinyMeta(sourceLabel),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            script,
+            style: const TextStyle(
+              color: Color(0xFF1A202C),
+              fontWeight: FontWeight.w600,
+              height: 1.55,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TourAudioBar extends StatelessWidget {
+  const _TourAudioBar({
+    required this.language,
+    required this.audio,
+    required this.loading,
+    required this.error,
+    required this.onFetchAudio,
+  });
+
+  final String language;
+  final LalaAudioResponse? audio;
+  final bool loading;
+  final String? error;
+  final VoidCallback onFetchAudio;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasAudio = audio != null;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFBEB),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFF5C842)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            hasAudio ? Icons.graphic_eq : Icons.volume_up_outlined,
+            color: const Color(0xFFC87F11),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  hasAudio
+                      ? _copy(language, ko: '투어 음성 준비됨', en: 'Tour audio ready')
+                      : _copy(
+                          language,
+                          ko: '도슨트 음성으로 듣기',
+                          en: 'Listen as a docent audio guide',
+                        ),
+                  style: const TextStyle(
+                    color: Color(0xFF744210),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                if (error != null) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    error!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ] else if (hasAudio) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    _copy(
+                      language,
+                      ko: '오디오 캐시 ${audio!.bytes.length}바이트',
+                      en: '${audio!.bytes.length} bytes cached',
+                    ),
+                    style: const TextStyle(
+                      color: Color(0xFF92400E),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          FilledButton.icon(
+            onPressed: loading ? null : onFetchAudio,
+            icon: loading
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(hasAudio ? Icons.replay : Icons.play_arrow),
+            label: Text(
+              loading
+                  ? _copy(language, ko: '변환 중', en: 'Converting')
+                  : hasAudio
+                  ? _copy(language, ko: '다시 준비', en: 'Prepare again')
+                  : _copy(language, ko: '오디오 준비', en: 'Prepare audio'),
+            ),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFC87F11),
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _TourStopTile extends StatelessWidget {
   const _TourStopTile({
+    super.key,
     required this.index,
     required this.place,
     required this.language,
+    required this.onTap,
   });
 
   final int index;
   final LalaPlace place;
   final String language;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -2731,76 +3066,120 @@ class _TourStopTile extends StatelessWidget {
             language: language,
           )
         : '${(spending.clamp(0.0, 1.0) * 100).round()}';
-    return Container(
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: Colors.white,
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: const [
-          BoxShadow(
-            blurRadius: 14,
-            offset: Offset(0, 7),
-            color: Color(0x10000000),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: const Color(0xFFC53030).withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: Text(
-              '${index + 1}',
-              style: const TextStyle(
-                color: Color(0xFFC53030),
-                fontWeight: FontWeight.w900,
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(13),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+            boxShadow: const [
+              BoxShadow(
+                blurRadius: 14,
+                offset: Offset(0, 7),
+                color: Color(0x10000000),
               ),
-            ),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _placeDisplayName(place, language),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFC53030).withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
                 ),
-                const SizedBox(height: 4),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
+                child: Text(
+                  '${index + 1}',
+                  style: const TextStyle(
+                    color: Color(0xFFC53030),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _TinyMeta('${place.distanceM}m'),
-                    _TinyMeta(
-                      _copy(
-                        language,
-                        ko: '소비 신호 $spendingLabel',
-                        en: 'Spend $spendingLabel',
+                    Text(
+                      _placeDisplayName(place, language),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w900,
                       ),
                     ),
-                    if (place.regionKo?.trim().isNotEmpty == true ||
-                        place.regionEn?.trim().isNotEmpty == true)
-                      _TinyMeta(_placeRegionLabel(place, language)),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        _TinyMeta('${place.distanceM}m'),
+                        _TinyMeta(
+                          _copy(
+                            language,
+                            ko: '소비 신호 $spendingLabel',
+                            en: 'Spend $spendingLabel',
+                          ),
+                        ),
+                        if (place.regionKo?.trim().isNotEmpty == true ||
+                            place.regionEn?.trim().isNotEmpty == true)
+                          _TinyMeta(_placeRegionLabel(place, language)),
+                      ],
+                    ),
                   ],
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(
+                Icons.chevron_right,
+                color: Color(0xFF94A3B8),
+                size: 22,
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
+}
+
+String _tourGuideScript(List<LalaPlace> places, String language) {
+  final items = places.take(5).toList(growable: false);
+  if (items.isEmpty) {
+    return _copy(
+      language,
+      ko: '근처 맛집 후보를 찾으면 로컬 투어 스크립트를 준비합니다.',
+      en: 'LALA prepares a local food tour script when nearby food stops are found.',
+    );
+  }
+  final names = items
+      .map((place) => _placeDisplayName(place, language))
+      .toList();
+  final first = names.first;
+  final tail = names.skip(1).take(3).toList();
+  final localSignal = items
+      .map((place) => place.score?.components.localSpendingScore ?? 0)
+      .fold<double>(0, math.max);
+  if (_isEnglish(language)) {
+    final middle = tail.isEmpty ? '' : ' Continue through ${tail.join(', ')}.';
+    final signal = localSignal >= 0.7
+        ? ' These stops show strong local spending signals.'
+        : ' The route favors nearby public and local context.';
+    return 'Start at $first and keep the walk compact for a real neighborhood food route.$middle$signal Tap each stop for details before you go.';
+  }
+  final middle = tail.isEmpty ? '' : ' 이어서 ${tail.join(', ')} 쪽으로 걸어가면 좋아요.';
+  final signal = localSignal >= 0.7
+      ? ' 지역 소비 신호가 살아있는 맛집들을 우선 연결했습니다.'
+      : ' 가까운 거리와 공공 장소 맥락을 함께 보고 묶은 코스입니다.';
+  return '$first에서 시작해 동네 흐름을 따라 짧게 걷는 맛집 코스입니다.$middle$signal 출발 전 각 정류장을 눌러 상세 정보를 확인해보세요.';
 }
 
 class _WeatherSheetContent extends StatelessWidget {
@@ -5451,15 +5830,28 @@ String _locationLabel(String? value, String language) {
     return _copy(language, ko: '수원', en: 'Suwon');
   }
   final normalized = trimmed.toLowerCase();
+  final localized = _singleLanguageText(trimmed, language);
   if (_isEnglish(language)) {
-    return switch (trimmed) {
+    if (localized == null || localized.isEmpty) {
+      return switch (trimmed) {
+        '수원' || '수원시' => 'Suwon',
+        _ => 'Nearby area',
+      };
+    }
+    return switch (localized) {
       '수원' || '수원시' => 'Suwon',
       final location => location,
     };
   }
+  if (localized == null || localized.isEmpty) {
+    return switch (normalized) {
+      'suwon' || 'suwon-si' || 'suwon city' => '수원',
+      _ => '주변 지역',
+    };
+  }
   return switch (normalized) {
     'suwon' || 'suwon-si' || 'suwon city' => '수원',
-    _ => trimmed,
+    _ => localized,
   };
 }
 
@@ -5469,21 +5861,18 @@ String _interventionToastLabel(LalaIntervention intervention, String language) {
       : _placeDisplayName(intervention.place!, language);
   final reason = intervention.reason.trim();
   final action = intervention.recommendedAction.trim();
-  final hasEnglishReason = _looksEnglishText(reason);
-  final hasEnglishAction = _looksEnglishText(action);
+  final localizedReason = _singleLanguageText(reason, language);
+  final localizedAction = _singleLanguageText(action, language);
 
   if (_isEnglish(language)) {
-    if (reason.isNotEmpty &&
-        action.isNotEmpty &&
-        hasEnglishReason &&
-        hasEnglishAction) {
-      return '$reason · $action';
+    if (localizedReason != null && localizedAction != null) {
+      return '$localizedReason · $localizedAction';
     }
-    if (reason.isNotEmpty && hasEnglishReason) {
-      return reason;
+    if (localizedReason != null) {
+      return localizedReason;
     }
-    if (action.isNotEmpty && hasEnglishAction) {
-      return action;
+    if (localizedAction != null) {
+      return localizedAction;
     }
     if (place != null) {
       return 'Weather changed. Adjust the route near $place.';
@@ -5491,11 +5880,11 @@ String _interventionToastLabel(LalaIntervention intervention, String language) {
     return 'Weather changed. Review today\'s route.';
   }
 
-  if (reason.isNotEmpty && !hasEnglishReason) {
-    return reason;
+  if (localizedReason != null) {
+    return localizedReason;
   }
-  if (action.isNotEmpty && !hasEnglishAction) {
-    return action;
+  if (localizedAction != null) {
+    return localizedAction;
   }
   if (place != null) {
     return '날씨가 바뀌었어요. $place 중심으로 동선을 다시 확인해보세요.';
@@ -5728,7 +6117,7 @@ String? _formatEventDate(String? rawDate, String language) {
   }
   final match = RegExp(r'^(\d{4})-(\d{2})-(\d{2})').firstMatch(trimmed);
   if (match == null) {
-    return trimmed;
+    return _singleLanguageText(trimmed, language) ?? trimmed;
   }
   final year = match.group(1)!;
   final month = int.parse(match.group(2)!);
@@ -6037,7 +6426,8 @@ String _outdoorLabel(String status, {String language = 'ko'}) {
 
 String _dustLabel(LalaDust dust, String language) {
   if (!_isEnglish(language)) {
-    return dust.gradeKo.trim().isEmpty ? dust.grade : dust.gradeKo;
+    final gradeKo = _singleLanguageText(dust.gradeKo, language);
+    return gradeKo ?? dust.grade;
   }
   return switch (dust.grade.trim()) {
     'good' => 'Good',

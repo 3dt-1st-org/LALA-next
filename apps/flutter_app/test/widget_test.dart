@@ -122,9 +122,12 @@ void main() {
   });
 
   testWidgets('food tour pill opens restaurant tour sheet', (tester) async {
+    final backend = FakeBackend(
+      const LalaAppConfig(baseUri: 'http://api.test'),
+    );
     await tester.pumpWidget(
       LalaApp(
-        backendFactory: FakeBackend.new,
+        backendFactory: (_) => backend,
         initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
       ),
     );
@@ -138,6 +141,44 @@ void main() {
     expect(find.textContaining('가까운 맛집'), findsOneWidget);
     expect(find.text('행궁동 카페거리'), findsAtLeastNWidgets(1));
     expect(find.textContaining('소비 신호'), findsAtLeastNWidgets(1));
+    expect(find.text('투어 도슨트 스크립트'), findsOneWidget);
+    expect(find.textContaining('행궁동 카페거리에서 시작'), findsOneWidget);
+    expect(find.text('도슨트 음성으로 듣기'), findsOneWidget);
+
+    final audioButton = find.widgetWithText(FilledButton, '오디오 준비');
+    await tester.ensureVisible(audioButton);
+    await tester.pumpAndSettle();
+    await tester.tap(audioButton);
+    await tester.pumpAndSettle();
+
+    expect(backend.audioRequests, hasLength(1));
+    expect(backend.audioRequests.single, contains('행궁동 카페거리'));
+    expect(find.text('투어 음성 준비됨'), findsOneWidget);
+    expect(find.text('오디오 캐시 4바이트'), findsOneWidget);
+    expect(find.textContaining('bytes 오디오'), findsNothing);
+  });
+
+  testWidgets('food tour tags open the selected restaurant detail', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      LalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('tour-pill-hit-target')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('tour-tag-haenggung-cafe-street')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('장소 상세'), findsOneWidget);
+    expect(find.text('행궁동 카페거리 도슨트'), findsAtLeastNWidgets(1));
   });
 
   testWidgets('weather intervention toast opens planner and can dismiss', (
@@ -361,15 +402,15 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(
-      find.widgetWithText(TextField, '기본 URL'),
+      find.widgetWithText(TextField, '기본 주소'),
       'http://10.0.0.5:8080',
     );
     await tester.enterText(
-      find.widgetWithText(TextField, '마이그레이션 API 키'),
+      find.widgetWithText(TextField, '마이그레이션 키'),
       'migration-key',
     );
     await tester.enterText(
-      find.widgetWithText(TextField, '카카오 JavaScript 키'),
+      find.widgetWithText(TextField, '카카오 지도 키'),
       'kakao-js-key',
     );
     final refreshButton = find.widgetWithText(FilledButton, '새로고침');
@@ -568,6 +609,33 @@ void main() {
     expect(find.text('Hwaseong Haenggung'), findsAtLeastNWidgets(1));
     expect(find.textContaining('화성행궁'), findsNothing);
     expect(find.textContaining('경기도'), findsNothing);
+  });
+
+  testWidgets('selected language removes bilingual intervention copy', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      LalaApp(
+        backendFactory: BilingualInterventionBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Weather'), findsNothing);
+    expect(find.textContaining('Keep'), findsNothing);
+    expect(find.textContaining('날씨가 좋아요'), findsAtLeastNWidgets(1));
+
+    await tester.tap(find.byIcon(Icons.settings).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('영어'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.arrow_back_ios_new));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Weather is good'), findsAtLeastNWidgets(1));
+    expect(find.textContaining('Keep walking'), findsAtLeastNWidgets(1));
+    expect(find.textContaining('날씨가 좋아요'), findsNothing);
   });
 
   testWidgets('surfaces OAuth JWT auth mode separately from static bearer', (
@@ -797,6 +865,51 @@ class FakeBackend implements LalaBackend {
 
   @override
   void close() {}
+}
+
+class BilingualInterventionBackend extends FakeBackend {
+  BilingualInterventionBackend(super.config) : super(shouldIntervene: true);
+
+  @override
+  Future<LalaEnvelope<LalaIntervention>> getIntervention() async {
+    final place = (places ?? [_bilingualPlace()]).first;
+    return _envelope(
+      LalaIntervention(
+        center: LalaCoordinate(lat: config.lat, lng: config.lng),
+        radiusM: config.radiusM,
+        shouldIntervene: true,
+        reason: '날씨가 좋아요 Weather is good.',
+        recommendedAction: '지금 코스를 유지하세요 Keep walking.',
+        source: 'skeleton',
+        place: place,
+      ),
+    );
+  }
+
+  @override
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan() async {
+    dailyPlanRequests += 1;
+    final place = (places ?? [_bilingualPlace()]).first;
+    return _envelope(
+      LalaDailyPlan(
+        language: config.lang,
+        center: LalaCoordinate(lat: config.lat, lng: config.lng),
+        radiusM: config.radiusM,
+        weather: _weather(),
+        slots: [
+          LalaPlanSlot(
+            period: 'morning',
+            title: '화성행궁 산책 Hwaseong walk',
+            place: place,
+          ),
+        ],
+        source: 'skeleton',
+        requestHash:
+            'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
+        cacheKey: 'daily_plan:abcdef0123456789abcdef0123456789',
+      ),
+    );
+  }
 }
 
 LalaEnvelope<T> _envelope<T>(T data) {
