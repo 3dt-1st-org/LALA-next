@@ -145,6 +145,13 @@ void main() {
 
     await tester.pumpAndSettle();
 
+    expect(find.byKey(const ValueKey('tour-pill-hit-target')), findsNothing);
+
+    await tester.tap(find.text('맛집').first);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('tour-pill-hit-target')), findsOneWidget);
+
     await tester.tap(find.byKey(const ValueKey('tour-pill-hit-target')));
     await tester.pumpAndSettle();
 
@@ -191,6 +198,11 @@ void main() {
     );
 
     await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('tour-pill-hit-target')), findsNothing);
+
+    await tester.tap(find.text('맛집').first);
+    await tester.pumpAndSettle();
+
     await tester.tap(find.byKey(const ValueKey('tour-pill-hit-target')));
     await tester.pumpAndSettle();
 

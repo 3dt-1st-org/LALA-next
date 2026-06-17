@@ -47,6 +47,9 @@ evidence, but they are not the latest MVP acceptance source.
 - Implemented: category chips now also propagate the active category into the
   places request and trigger the shared refresh path, matching the legacy
   `click_category_filter -> loadPlaces()` interaction.
+- Implemented: the food-tour map pill follows the legacy `tour-btn` visibility
+  rule. It stays off the default/all map surface and appears after the user
+  enters the restaurant category, keeping the first map screen focused.
 - Implemented: planner, weather, and detail use dedicated draggable Flutter
   sheets.
 - Implemented: voice and auto-docent controls have persistent ON/OFF state and

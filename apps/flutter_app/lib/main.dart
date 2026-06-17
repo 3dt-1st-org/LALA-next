@@ -1477,7 +1477,7 @@ class _Dashboard extends StatelessWidget {
                 onPressed: () => onOpenSheet(_ActiveMapSheet.planner),
               ),
             ),
-            if (tourPlaces.isNotEmpty)
+            if (selectedCategory == 'restaurant' && tourPlaces.isNotEmpty)
               Positioned(
                 right: 16,
                 top: 52,
