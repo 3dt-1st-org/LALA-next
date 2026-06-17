@@ -41,6 +41,10 @@ evidence, but they are not the latest MVP acceptance source.
   score meters, legacy-style docent subtitle panel, and public-data proof chips.
 - Implemented: first recommended rail card is prioritized to match the selected
   place in the bottom panel.
+- Implemented: recommendation rail cards now preserve the legacy card semantics:
+  category badges are visible, event cards include ongoing/ended status, and
+  tapping the already-selected card keeps the user in the map context instead
+  of reopening detail.
 - Implemented: primary docent CTA now uses the legacy-style `정보 더 듣기` copy.
 - Implemented: category chips filter the map, recommendation rail, and selected
   detail context.

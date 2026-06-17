@@ -1795,7 +1795,7 @@ class _MapPlaceCarouselOverlay extends StatelessWidget {
                   children: [
                     const SizedBox(height: 8),
                     SizedBox(
-                      height: 112,
+                      height: 132,
                       child: DecoratedBox(
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.82),
@@ -1822,7 +1822,11 @@ class _MapPlaceCarouselOverlay extends StatelessWidget {
                             selected:
                                 (selectedPlaceId == null && index == 0) ||
                                 selectedPlaceId == items[index].placeId,
-                            onTap: () => onSelectPlace(items[index]),
+                            onTap:
+                                ((selectedPlaceId == null && index == 0) ||
+                                    selectedPlaceId == items[index].placeId)
+                                ? null
+                                : () => onSelectPlace(items[index]),
                           ),
                         ),
                       ),
@@ -1843,13 +1847,13 @@ class _MapRailPlaceCard extends StatelessWidget {
     required this.place,
     required this.language,
     required this.selected,
-    required this.onTap,
+    this.onTap,
   });
 
   final LalaPlace place;
   final String language;
   final bool selected;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1890,6 +1894,8 @@ class _MapRailPlaceCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 4),
+                    _RailCategoryBadge(place: place, language: language),
+                    const SizedBox(height: 5),
                     Wrap(
                       spacing: 6,
                       runSpacing: 4,
@@ -1906,6 +1912,36 @@ class _MapRailPlaceCard extends StatelessWidget {
               _RailPlaceThumb(place: place),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RailCategoryBadge extends StatelessWidget {
+  const _RailCategoryBadge({required this.place, required this.language});
+
+  final LalaPlace place;
+  final String language;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _categoryColor(place.category);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
+      ),
+      child: Text(
+        _railCategoryLabel(place, language),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w900,
+          height: 1,
         ),
       ),
     );
@@ -6119,6 +6155,17 @@ String _categoryFilterLabel(String category, String language) {
     'all' => '전체',
     _ => _categoryLabel(category, language: language),
   };
+}
+
+String _railCategoryLabel(LalaPlace place, String language) {
+  final category = _categoryLabel(place.category, language: language);
+  if (place.category != 'event') {
+    return category;
+  }
+  final status = place.isOngoing == false
+      ? _copy(language, ko: '종료', en: 'Ended')
+      : _copy(language, ko: '진행 중', en: 'Ongoing');
+  return '$category · $status';
 }
 
 List<LalaPlace> _filterPlaces(List<LalaPlace> places, String category) {

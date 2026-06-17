@@ -369,6 +369,14 @@ void main() {
 
     expect(find.text('수원화성'), findsOneWidget);
 
+    await tester.tap(
+      find.byKey(const ValueKey('tour-stop-action-hwaseong-haenggung')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('장소 상세'), findsNothing);
+    expect(find.text('화성행궁 도슨트'), findsOneWidget);
+
     await tester.tap(find.text('추천 장소 보기'));
     await tester.pumpAndSettle();
 
@@ -678,6 +686,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+
+      expect(find.text('행사 · 진행 중'), findsOneWidget);
 
       await tester.tap(find.widgetWithText(TextButton, '상세'));
       await tester.pumpAndSettle();
