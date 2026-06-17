@@ -256,6 +256,7 @@ enum _ActiveMapSheet { detail, planner, weather, tour }
 
 class _LalaHomePageState extends State<LalaHomePage> {
   static const int _autoDocentTriggerMeters = 100;
+  static const Duration _autoDocentCooldown = Duration(seconds: 12);
 
   late final TextEditingController _baseUrlController;
   late final TextEditingController _bearerTokenController;
@@ -292,6 +293,8 @@ class _LalaHomePageState extends State<LalaHomePage> {
   bool _recommendationRailExpanded = true;
   List<String> _focusedClusterMemberIds = const <String>[];
   final Set<String> _detailDocentPlayedPlaceIds = <String>{};
+  DateTime? _lastAutoDocentAt;
+  String? _lastAutoDocentPlaceId;
   double? _mapFocusLat;
   double? _mapFocusLng;
   int _mapLevel = 4;
@@ -382,9 +385,11 @@ class _LalaHomePageState extends State<LalaHomePage> {
       final filteredItems = _filterPlaces(placeItems, _selectedCategory);
       final effectiveItems = filteredItems.isEmpty ? placeItems : filteredItems;
       final autoDocentPlace = _autoDocentEnabled
-          ? _nearestAutoDocentPlace(effectiveItems)
+          ? _nextAutoDocentPlace(effectiveItems)
           : null;
-      final firstPlace = autoDocentPlace ?? _featuredPlace(effectiveItems);
+      final selectedPlace = _placeById(effectiveItems, _selectedPlaceId);
+      final firstPlace =
+          autoDocentPlace ?? selectedPlace ?? _featuredPlace(effectiveItems);
       if (firstPlace != null) {
         docentScript = await loadOptional(
           () => _backend.createDocentScript(place: firstPlace),
@@ -683,7 +688,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
   void _toggleAutoDocent() {
     final willEnable = !_autoDocentEnabled;
     final nearestPlace = willEnable
-        ? _nearestAutoDocentPlace(_visiblePlacesForCurrentCategory())
+        ? _nextAutoDocentPlace(_visiblePlacesForCurrentCategory())
         : null;
     setState(() {
       _autoDocentEnabled = willEnable;
@@ -765,6 +770,28 @@ class _LalaHomePageState extends State<LalaHomePage> {
             .toList()
           ..sort((a, b) => a.distanceM.compareTo(b.distanceM));
     return sorted.isEmpty ? null : sorted.first;
+  }
+
+  LalaPlace? _nextAutoDocentPlace(List<LalaPlace> places) {
+    final nearestPlace = _nearestAutoDocentPlace(places);
+    if (nearestPlace == null) {
+      _lastAutoDocentPlaceId = null;
+      return null;
+    }
+
+    final now = DateTime.now();
+    final lastAutoDocentAt = _lastAutoDocentAt;
+    if (lastAutoDocentAt != null &&
+        now.difference(lastAutoDocentAt) < _autoDocentCooldown) {
+      return null;
+    }
+    if (nearestPlace.placeId == _lastAutoDocentPlaceId) {
+      return null;
+    }
+
+    _lastAutoDocentAt = now;
+    _lastAutoDocentPlaceId = nearestPlace.placeId;
+    return nearestPlace;
   }
 
   void _applyAutoDocentPlace(
@@ -1167,11 +1194,11 @@ class _UserSettingsSheet extends StatelessWidget {
                   segments: [
                     ButtonSegment(
                       value: 'ko',
-                      label: Text(_copy(uiLanguage, ko: '한국어', en: 'Korean')),
+                      label: Text(_languageOptionLabel('ko', uiLanguage)),
                     ),
                     ButtonSegment(
                       value: 'en',
-                      label: Text(_copy(uiLanguage, ko: '영어', en: 'English')),
+                      label: Text(_languageOptionLabel('en', uiLanguage)),
                     ),
                   ],
                   selected: {uiLanguage},
@@ -6070,6 +6097,13 @@ bool _isEnglish(String language) => language == 'en';
 
 String _copy(String language, {required String ko, required String en}) {
   return _isEnglish(language) ? en : ko;
+}
+
+String _languageOptionLabel(String optionLanguage, String uiLanguage) {
+  if (_isEnglish(uiLanguage)) {
+    return optionLanguage == 'en' ? 'English' : 'Korean';
+  }
+  return optionLanguage == 'en' ? '영어' : '한국어';
 }
 
 String _locationLabel(String? value, String language) {

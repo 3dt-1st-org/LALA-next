@@ -71,6 +71,9 @@ evidence, but they are not the latest MVP acceptance source.
 - Implemented: when auto-docent is already ON, shared refreshes re-evaluate the
   nearest in-radius place after the new place list loads, matching the legacy
   `loadPlaces() -> runAutoDocentIfNeeded()` loop.
+- Implemented: auto-docent now keeps the legacy cooldown and same-place
+  suppression behavior, so repeated refreshes do not immediately reset map and
+  docent context.
 - Implemented: turning voice OFF now clears prepared docent and tour audio
   state, matching the legacy voice toggle behavior that stops both current
   docent audio and tour-guide audio.

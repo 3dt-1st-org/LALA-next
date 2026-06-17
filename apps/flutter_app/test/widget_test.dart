@@ -403,6 +403,52 @@ void main() {
     );
   });
 
+  testWidgets('auto docent keeps context during the legacy cooldown window', (
+    tester,
+  ) async {
+    var backendCreations = 0;
+    await tester.pumpWidget(
+      LalaApp(
+        backendFactory: (config) {
+          backendCreations += 1;
+          return FakeBackend(
+            config,
+            places: backendCreations <= 2
+                ? [_place(), _restaurantPlace(distanceM: 80), _culturePlace()]
+                : [
+                    _place(),
+                    _restaurantPlace(distanceM: 80),
+                    _culturePlace(distanceM: 70),
+                  ],
+          );
+        },
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('auto-docent-toggle')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('kakao-map-fallback-center-37.2828-127.0101')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('weather-pill')));
+    await tester.pumpAndSettle();
+
+    expect(backendCreations, 3);
+    expect(
+      find.byKey(const ValueKey('kakao-map-fallback-center-37.2828-127.0101')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('kakao-map-fallback-center-37.2870-127.0110')),
+      findsNothing,
+    );
+  });
+
   testWidgets('my location control returns to the map recommendation context', (
     tester,
   ) async {
@@ -725,6 +771,34 @@ void main() {
     expect(configs.last.lang, 'en');
   });
 
+  testWidgets('settings language labels follow the selected language only', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      LalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.settings).first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('한국어'), findsOneWidget);
+    expect(find.text('영어'), findsOneWidget);
+    expect(find.text('Korean'), findsNothing);
+    expect(find.text('English'), findsNothing);
+
+    await tester.tap(find.text('영어'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Korean'), findsOneWidget);
+    expect(find.text('English'), findsOneWidget);
+    expect(find.text('한국어'), findsNothing);
+    expect(find.text('영어'), findsNothing);
+  });
+
   testWidgets('english language setting does not mix Korean place copy', (
     tester,
   ) async {
@@ -904,9 +978,18 @@ void main() {
 
     expect(find.textContaining('Weather'), findsNothing);
     expect(find.textContaining('Keep'), findsNothing);
+    expect(find.textContaining('Detailed'), findsNothing);
     expect(find.textContaining('날씨가 좋아요'), findsAtLeastNWidgets(1));
     expect(find.textContaining('Hwaseong Haenggung connects'), findsNothing);
     expect(find.textContaining('화성행궁은'), findsAtLeastNWidgets(1));
+
+    final audioButton = find.widgetWithText(FilledButton, '정보 더 듣기');
+    await tester.ensureVisible(audioButton);
+    await tester.pumpAndSettle();
+    await tester.tap(audioButton);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('상세 도슨트입니다'), findsAtLeastNWidgets(1));
+    expect(find.textContaining('Detailed'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('planner-pill-hit-target')));
     await tester.pumpAndSettle();
@@ -1292,8 +1375,8 @@ LalaPlace _place() {
   );
 }
 
-LalaPlace _culturePlace() {
-  return const LalaPlace(
+LalaPlace _culturePlace({int distanceM = 620}) {
+  return LalaPlace(
     placeId: 'suwon-hwaseong',
     name: '수원화성',
     nameKo: '수원화성',
@@ -1304,10 +1387,10 @@ LalaPlace _culturePlace() {
     address: '경기도 수원시 장안구 영화동',
     regionKo: '수원',
     regionEn: 'Suwon',
-    distanceM: 620,
+    distanceM: distanceM,
     source: 'skeleton',
     upstreamSource: 'tour_api',
-    score: LalaPlaceScore(
+    score: const LalaPlaceScore(
       finalScore: 0.82,
       formulaVersion: 'local-value-v1',
       components: LalaPlaceScoreComponents(
