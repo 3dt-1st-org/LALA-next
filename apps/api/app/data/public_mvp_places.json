@@ -304,6 +304,11 @@
       "image_url": null,
       "region_ko": "수원시",
       "region_en": "Suwon",
+      "event_start_date": "2026-06-01",
+      "event_end_date": "2026-08-31",
+      "event_url": "https://example.invalid/lala-next/dev-seed/suwon-night-walk-2026",
+      "is_ongoing": true,
+      "is_approximate_location": false,
       "upstream_source": "dev_seed",
       "score": {
         "final_score": 0.7947,

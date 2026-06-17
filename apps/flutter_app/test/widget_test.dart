@@ -438,6 +438,53 @@ void main() {
   });
 
   testWidgets(
+    'event detail shows legacy metadata without opening score signals',
+    (tester) async {
+      await tester.pumpWidget(
+        LalaApp(
+          backendFactory: (config) =>
+              FakeBackend(config, places: [_eventPlace()]),
+          initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(TextButton, '상세'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('행사 정보'), findsOneWidget);
+      expect(find.text('진행 중'), findsOneWidget);
+      expect(find.text('2026년 06월 01일 ~ 2026년 08월 31일'), findsOneWidget);
+      expect(find.text('행사 상세 보기'), findsOneWidget);
+      expect(find.text('로컬 점수'), findsNothing);
+      expect(find.text('내국인 소비'), findsNothing);
+    },
+  );
+
+  testWidgets('event detail follows English language setting', (tester) async {
+    await tester.pumpWidget(
+      LalaApp(
+        backendFactory: (config) =>
+            FakeBackend(config, places: [_eventPlace()]),
+        initialConfig: const LalaAppConfig(
+          baseUri: 'http://api.test',
+          lang: 'en',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(TextButton, 'Details'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Event info'), findsOneWidget);
+    expect(find.text('Ongoing'), findsOneWidget);
+    expect(find.text('Jun 1, 2026 ~ Aug 31, 2026'), findsOneWidget);
+    expect(find.text('Open event details'), findsOneWidget);
+    expect(find.textContaining('행사'), findsNothing);
+  });
+
+  testWidgets(
     'english mode uses neutral copy when English place data is absent',
     (tester) async {
       await tester.pumpWidget(
@@ -841,6 +888,52 @@ LalaPlace _restaurantPlace() {
           'travel.places',
           'economy.card_spending_area_monthly',
         ],
+      },
+    ),
+  );
+}
+
+LalaPlace _eventPlace() {
+  return const LalaPlace(
+    placeId: 'demo-suwon-night-walk',
+    name: '화성행궁 야간 산책',
+    nameKo: '화성행궁 야간 산책',
+    nameEn: 'Hwaseong Haenggung Night Walk',
+    category: 'event',
+    lat: 37.2819,
+    lng: 127.0142,
+    address: '경기도 수원시 팔달구 행궁동',
+    regionKo: '수원시',
+    regionEn: 'Suwon',
+    eventStartDate: '2026-06-01',
+    eventEndDate: '2026-08-31',
+    eventUrl: 'https://example.test/events/suwon-night-walk-2026',
+    isOngoing: true,
+    isApproximateLocation: false,
+    distanceM: 180,
+    source: 'public_mvp_snapshot',
+    upstreamSource: 'dev_seed',
+    score: LalaPlaceScore(
+      finalScore: 0.79,
+      formulaVersion: 'local-value-v1',
+      components: LalaPlaceScoreComponents(
+        localSpendingScore: 0.95,
+        demandDispersionScore: 0.59,
+        weatherFitScore: 0.72,
+        reviewQualityScore: null,
+        cultureRelevanceScore: 0.90,
+      ),
+      dataBasis: 'public_mvp_snapshot',
+      features: {
+        'primary_source': 'dev_seed',
+        'input_sources': <String>[
+          'travel.places',
+          'travel.place_events',
+          'culture.events',
+          'economy.card_spending_area_monthly',
+        ],
+        'place_event_count': 1,
+        'culture_event_count': 13,
       },
     ),
   );

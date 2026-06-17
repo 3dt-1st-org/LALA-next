@@ -87,6 +87,27 @@ def fetch_snapshot_places(
         )
         SELECT
             ranked_places.*,
+            CASE
+                WHEN ranked_places.category = 'event' AND linked_event.place_id IS NOT NULL
+                THEN to_char(linked_event.starts_at AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD')
+                ELSE NULL
+            END AS event_start_date,
+            CASE
+                WHEN ranked_places.category = 'event' AND linked_event.place_id IS NOT NULL
+                THEN to_char(linked_event.ends_at AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD')
+                ELSE NULL
+            END AS event_end_date,
+            CASE
+                WHEN ranked_places.category = 'event' AND linked_event.place_id IS NOT NULL
+                THEN linked_event.url
+                ELSE NULL
+            END AS event_url,
+            CASE
+                WHEN ranked_places.category = 'event' AND linked_event.place_id IS NOT NULL
+                THEN linked_event.ends_at IS NULL OR linked_event.ends_at >= now()
+                ELSE NULL
+            END AS is_ongoing,
+            false AS is_approximate_location,
             latest_scores.local_spending_score,
             latest_scores.demand_dispersion_score,
             latest_scores.weather_fit_score,
@@ -97,6 +118,20 @@ def fetch_snapshot_places(
             latest_scores.features AS score_features
         FROM ranked_places
         LEFT JOIN latest_scores ON latest_scores.place_id = ranked_places.place_id
+        LEFT JOIN LATERAL (
+            SELECT
+                place_id,
+                starts_at,
+                ends_at,
+                url
+            FROM travel.place_events
+            WHERE place_id = ranked_places.place_id
+            ORDER BY
+                CASE WHEN ends_at IS NULL OR ends_at >= now() THEN 0 ELSE 1 END,
+                starts_at DESC NULLS LAST,
+                updated_at DESC
+            LIMIT 1
+        ) linked_event ON TRUE
         WHERE distance_m <= %s
         ORDER BY COALESCE(latest_scores.final_score, 0) DESC, distance_m ASC, updated_at DESC
         LIMIT %s
@@ -124,6 +159,11 @@ def _snapshot_place(row: dict[str, Any]) -> dict[str, Any]:
         "image_url": _optional_text(row.get("image_url")),
         "region_ko": _optional_text(row.get("region_ko")),
         "region_en": _optional_text(row.get("region_en")),
+        "event_start_date": _optional_text(row.get("event_start_date")),
+        "event_end_date": _optional_text(row.get("event_end_date")),
+        "event_url": _optional_text(row.get("event_url")),
+        "is_ongoing": _optional_bool(row.get("is_ongoing")),
+        "is_approximate_location": _optional_bool(row.get("is_approximate_location")),
         "upstream_source": _optional_text(row.get("upstream_source")) or "canonical",
         "score": _snapshot_score(row),
     }
@@ -187,6 +227,21 @@ def _optional_float(value: Any) -> float | None:
 
 def _required_float(value: Any) -> float:
     return _optional_float(value) or 0.0
+
+
+def _optional_bool(value: Any) -> bool | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    text = str(value).strip().lower()
+    if text in {"true", "t", "1", "yes", "y"}:
+        return True
+    if text in {"false", "f", "0", "no", "n"}:
+        return False
+    return None
 
 
 def _optional_text(value: Any) -> str | None:

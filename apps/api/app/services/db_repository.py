@@ -8,6 +8,7 @@ from apps.api.app.core.config import get_settings
 
 _REQUIRED_DB_RELATIONS = (
     "travel.public_places",
+    "travel.place_events",
     "travel.weather_observations",
     "travel.docent_scripts",
     "analytics.place_score_snapshots",
@@ -29,6 +30,7 @@ def check_db_status(dsn: str) -> str:
                     """
                     SELECT
                         to_regclass('travel.public_places') IS NOT NULL,
+                        to_regclass('travel.place_events') IS NOT NULL,
                         to_regclass('travel.weather_observations') IS NOT NULL,
                         to_regclass('travel.docent_scripts') IS NOT NULL,
                         to_regclass('analytics.place_score_snapshots') IS NOT NULL,
@@ -96,6 +98,27 @@ def fetch_places(
         )
         SELECT
             ranked_places.*,
+            CASE
+                WHEN ranked_places.category = 'event' AND linked_event.place_id IS NOT NULL
+                THEN to_char(linked_event.starts_at AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD')
+                ELSE NULL
+            END AS event_start_date,
+            CASE
+                WHEN ranked_places.category = 'event' AND linked_event.place_id IS NOT NULL
+                THEN to_char(linked_event.ends_at AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD')
+                ELSE NULL
+            END AS event_end_date,
+            CASE
+                WHEN ranked_places.category = 'event' AND linked_event.place_id IS NOT NULL
+                THEN linked_event.url
+                ELSE NULL
+            END AS event_url,
+            CASE
+                WHEN ranked_places.category = 'event' AND linked_event.place_id IS NOT NULL
+                THEN linked_event.ends_at IS NULL OR linked_event.ends_at >= now()
+                ELSE NULL
+            END AS is_ongoing,
+            false AS is_approximate_location,
             latest_scores.local_spending_score,
             latest_scores.demand_dispersion_score,
             latest_scores.weather_fit_score,
@@ -106,6 +129,20 @@ def fetch_places(
             latest_scores.features AS score_features
         FROM ranked_places
         LEFT JOIN latest_scores ON latest_scores.place_id = ranked_places.place_id
+        LEFT JOIN LATERAL (
+            SELECT
+                place_id,
+                starts_at,
+                ends_at,
+                url
+            FROM travel.place_events
+            WHERE place_id = ranked_places.place_id
+            ORDER BY
+                CASE WHEN ends_at IS NULL OR ends_at >= now() THEN 0 ELSE 1 END,
+                starts_at DESC NULLS LAST,
+                updated_at DESC
+            LIMIT 1
+        ) linked_event ON TRUE
         WHERE distance_m <= %s
         ORDER BY COALESCE(latest_scores.final_score, 0) DESC, distance_m ASC, updated_at DESC
         LIMIT 20
@@ -143,6 +180,11 @@ def fetch_places(
                 "image_url": row.get("image_url"),
                 "region_ko": row.get("region_ko"),
                 "region_en": row.get("region_en"),
+                "event_start_date": row.get("event_start_date"),
+                "event_end_date": row.get("event_end_date"),
+                "event_url": row.get("event_url"),
+                "is_ongoing": row.get("is_ongoing"),
+                "is_approximate_location": row.get("is_approximate_location"),
                 "distance_m": int(round(distance_m)),
                 "source": "db",
                 "upstream_source": row.get("source") or "canonical",

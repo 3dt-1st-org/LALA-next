@@ -196,6 +196,19 @@ def test_openapi_documents_v1_success_data_schemas(client):
     }
     assert schemas["PlaceScoreComponents"]["properties"]["local_spending_score"]["nullable"] is True
     assert schemas["Place"]["properties"]["image_url"]["nullable"] is True
+    assert schemas["Place"]["properties"]["event_start_date"] == {
+        "type": "string",
+        "format": "date",
+        "nullable": True,
+    }
+    assert schemas["Place"]["properties"]["event_end_date"] == {
+        "type": "string",
+        "format": "date",
+        "nullable": True,
+    }
+    assert schemas["Place"]["properties"]["event_url"]["format"] == "uri"
+    assert schemas["Place"]["properties"]["is_ongoing"]["nullable"] is True
+    assert schemas["Place"]["properties"]["is_approximate_location"]["nullable"] is True
     assert schemas["Place"]["properties"]["category"]["enum"] == [
         "attraction",
         "restaurant",

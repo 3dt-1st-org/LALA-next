@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'kakao_map_view.dart';
 
@@ -3043,6 +3044,10 @@ class _FeaturedPlacePanel extends StatelessWidget {
           language: language,
           weather: weather,
         ),
+        if (_shouldShowEventInfo(currentPlace)) ...[
+          const SizedBox(height: 12),
+          _EventInfoCard(place: currentPlace, language: language),
+        ],
         const SizedBox(height: 12),
         Align(
           alignment: Alignment.centerLeft,
@@ -3353,6 +3358,133 @@ class _ContextFactChip extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _EventInfoCard extends StatelessWidget {
+  const _EventInfoCard({required this.place, required this.language});
+
+  final LalaPlace place;
+  final String language;
+
+  @override
+  Widget build(BuildContext context) {
+    final isOngoing = place.isOngoing != false;
+    final dateText = _eventDateRangeText(place, language);
+    final eventUrl = _validEventUri(place.eventUrl);
+    return Container(
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFD7E3F5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF8E1),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: const Icon(
+                  Icons.event_available_outlined,
+                  color: Color(0xFF1A202C),
+                  size: 19,
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  _copy(language, ko: '행사 정보', en: 'Event info'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: const Color(0xFF111827),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              _EventStatusPill(isOngoing: isOngoing, language: language),
+            ],
+          ),
+          if (dateText != null) ...[
+            const SizedBox(height: 10),
+            _InlineIconText(
+              icon: Icons.calendar_month_outlined,
+              label: dateText,
+            ),
+          ],
+          if (place.isApproximateLocation == true) ...[
+            const SizedBox(height: 8),
+            _InlineIconText(
+              icon: Icons.near_me_disabled_outlined,
+              label: _copy(
+                language,
+                ko: '정확한 좌표가 없어 시 중심 위치로 표시돼요',
+                en: 'Exact coordinates are unavailable, so the city center is shown.',
+              ),
+            ),
+          ],
+          if (eventUrl != null) ...[
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FilledButton.icon(
+                onPressed: () =>
+                    launchUrl(eventUrl, mode: LaunchMode.externalApplication),
+                icon: const Icon(Icons.open_in_new, size: 18),
+                label: Text(
+                  _copy(language, ko: '행사 상세 보기', en: 'Open event details'),
+                ),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF2B6CB0),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 13,
+                    vertical: 11,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _EventStatusPill extends StatelessWidget {
+  const _EventStatusPill({required this.isOngoing, required this.language});
+
+  final bool isOngoing;
+  final String language;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isOngoing ? const Color(0xFF2B6CB0) : const Color(0xFF94A3B8);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.26)),
+      ),
+      child: Text(
+        isOngoing
+            ? _copy(language, ko: '진행 중', en: 'Ongoing')
+            : _copy(language, ko: '종료', en: 'Ended'),
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w900,
+          fontSize: 12,
+        ),
       ),
     );
   }
@@ -5309,6 +5441,77 @@ String _placeRegionLabel(LalaPlace place, String language) {
 bool _containsKorean(String value) => RegExp(r'[가-힣]').hasMatch(value);
 
 bool _looksEnglishText(String value) => RegExp(r'[A-Za-z]{3,}').hasMatch(value);
+
+bool _shouldShowEventInfo(LalaPlace place) {
+  return place.category == 'event' ||
+      place.eventStartDate?.trim().isNotEmpty == true ||
+      place.eventEndDate?.trim().isNotEmpty == true ||
+      place.eventUrl?.trim().isNotEmpty == true ||
+      place.isOngoing != null ||
+      place.isApproximateLocation == true;
+}
+
+Uri? _validEventUri(String? rawUrl) {
+  final trimmed = rawUrl?.trim();
+  if (trimmed == null || trimmed.isEmpty) {
+    return null;
+  }
+  final uri = Uri.tryParse(trimmed);
+  if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
+    return null;
+  }
+  if (uri.scheme != 'https' && uri.scheme != 'http') {
+    return null;
+  }
+  return uri;
+}
+
+String? _eventDateRangeText(LalaPlace place, String language) {
+  final start = _formatEventDate(place.eventStartDate, language);
+  final end = _formatEventDate(place.eventEndDate, language);
+  if (start == null && end == null) {
+    return null;
+  }
+  if (start != null && end != null) {
+    return '$start ~ $end';
+  }
+  if (start != null) {
+    return _copy(language, ko: '$start부터', en: 'From $start');
+  }
+  return _copy(language, ko: '~$end까지', en: 'Until $end');
+}
+
+String? _formatEventDate(String? rawDate, String language) {
+  final trimmed = rawDate?.trim();
+  if (trimmed == null || trimmed.isEmpty) {
+    return null;
+  }
+  final match = RegExp(r'^(\d{4})-(\d{2})-(\d{2})').firstMatch(trimmed);
+  if (match == null) {
+    return trimmed;
+  }
+  final year = match.group(1)!;
+  final month = int.parse(match.group(2)!);
+  final day = int.parse(match.group(3)!);
+  if (_isEnglish(language)) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${months[month - 1]} $day, $year';
+  }
+  return '$year년 ${month.toString().padLeft(2, '0')}월 ${day.toString().padLeft(2, '0')}일';
+}
 
 String _placeContextTitle(String category, String language) {
   return switch (category) {

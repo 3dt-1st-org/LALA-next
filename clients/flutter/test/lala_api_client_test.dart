@@ -134,6 +134,11 @@ void main() {
                     'distance_m': 1000,
                     'source': 'skeleton',
                     'upstream_source': 'tour_api',
+                    'event_start_date': '2026-06-01',
+                    'event_end_date': '2026-08-31',
+                    'event_url': 'https://example.test/events/suwon',
+                    'is_ongoing': true,
+                    'is_approximate_location': false,
                     'score': {
                       'final_score': 0.84,
                       'formula_version': 'local-value-v1',
@@ -198,6 +203,12 @@ void main() {
       expect(envelope.data?.places.first.placeId, 'skeleton-suwon-hwaseong');
       expect(envelope.data?.places.first.nameKo, '수원화성');
       expect(envelope.data?.places.first.upstreamSource, 'tour_api');
+      expect(envelope.data?.places.first.eventStartDate, '2026-06-01');
+      expect(envelope.data?.places.first.eventEndDate, '2026-08-31');
+      expect(envelope.data?.places.first.eventUrl,
+          'https://example.test/events/suwon');
+      expect(envelope.data?.places.first.isOngoing, isTrue);
+      expect(envelope.data?.places.first.isApproximateLocation, isFalse);
       expect(envelope.data?.places.first.score?.percent, 84);
       expect(envelope.data?.places.first.score?.dataBasis, 'demo_fallback');
       expect(

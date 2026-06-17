@@ -87,6 +87,16 @@ def list_places(
         "source": "skeleton",
         "score": demo_place_score(category=resolved_category, distance_m=distance_m),
     }
+    if resolved_category == "event":
+        place.update(
+            {
+                "event_start_date": "2026-06-01",
+                "event_end_date": "2026-12-31",
+                "event_url": "https://example.invalid/lala-next/skeleton/suwon-hwaseong-event",
+                "is_ongoing": True,
+                "is_approximate_location": False,
+            }
+        )
     return {
         "count": 1,
         "places": [place],

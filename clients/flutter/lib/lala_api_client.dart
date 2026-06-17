@@ -501,6 +501,11 @@ class LalaPlace {
     this.upstreamSource,
     this.regionKo,
     this.regionEn,
+    this.eventStartDate,
+    this.eventEndDate,
+    this.eventUrl,
+    this.isOngoing,
+    this.isApproximateLocation,
     this.score,
   });
 
@@ -518,6 +523,11 @@ class LalaPlace {
   final String? upstreamSource;
   final String? regionKo;
   final String? regionEn;
+  final String? eventStartDate;
+  final String? eventEndDate;
+  final String? eventUrl;
+  final bool? isOngoing;
+  final bool? isApproximateLocation;
   final LalaPlaceScore? score;
 
   static LalaPlace fromJsonObject(Object? value) {
@@ -540,6 +550,11 @@ class LalaPlace {
       upstreamSource: _asOptionalString(json['upstream_source']),
       regionKo: _asOptionalString(json['region_ko']),
       regionEn: _asOptionalString(json['region_en']),
+      eventStartDate: _asOptionalString(json['event_start_date']),
+      eventEndDate: _asOptionalString(json['event_end_date']),
+      eventUrl: _asOptionalString(json['event_url']),
+      isOngoing: _asOptionalBool(json['is_ongoing']),
+      isApproximateLocation: _asOptionalBool(json['is_approximate_location']),
       score: json['score'] is Map<String, dynamic>
           ? LalaPlaceScore.fromJson(_asMap(json['score']))
           : null,

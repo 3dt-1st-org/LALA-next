@@ -20,6 +20,12 @@ def test_public_mvp_snapshot_returns_nearby_ranked_places() -> None:
     assert places[0]["source"] == "public_mvp_snapshot"
     assert places[0]["score"]["data_basis"] == "public_mvp_snapshot"
     assert {place["category"] for place in places} >= {"attraction", "event"}
+    event = next(place for place in places if place["place_id"] == "demo-suwon-night-walk")
+    assert event["event_start_date"] == "2026-06-01"
+    assert event["event_end_date"] == "2026-08-31"
+    assert event["event_url"].endswith("/suwon-night-walk-2026")
+    assert event["is_ongoing"] is True
+    assert event["is_approximate_location"] is False
 
 
 def test_public_mvp_snapshot_filters_culture_venues() -> None:

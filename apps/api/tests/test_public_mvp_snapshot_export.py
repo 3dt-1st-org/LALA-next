@@ -21,6 +21,11 @@ def _db_rows() -> list[dict]:
             "image_url": "https://example.test/hoam.jpg",
             "region_ko": "용인시",
             "region_en": "Yongin",
+            "event_start_date": None,
+            "event_end_date": None,
+            "event_url": None,
+            "is_ongoing": None,
+            "is_approximate_location": False,
             "upstream_source": "tour_api",
             "local_spending_score": None,
             "demand_dispersion_score": Decimal("0.9500"),
@@ -55,6 +60,10 @@ def test_build_snapshot_payload_marks_public_mvp_basis() -> None:
     assert decoded["query"]["radius_m"] == 50000
     assert place["place_id"] == "tour-api-129765"
     assert place["image_url"] == "https://example.test/hoam.jpg"
+    assert place["event_start_date"] is None
+    assert place["event_url"] is None
+    assert place["is_ongoing"] is None
+    assert place["is_approximate_location"] is False
     assert place["upstream_source"] == "tour_api"
     assert place["score"]["data_basis"] == "public_mvp_snapshot"
     assert place["score"]["final_score"] == 0.8562

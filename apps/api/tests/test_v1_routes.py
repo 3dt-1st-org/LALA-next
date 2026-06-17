@@ -17,6 +17,11 @@ def test_places_route_returns_envelope(client, auth_headers):
     assert body["data"]["count"] == 1
     assert body["data"]["places"][0]["category"] == "event"
     assert body["data"]["places"][0]["name"] == "Suwon Hwaseong"
+    assert body["data"]["places"][0]["event_start_date"] == "2026-06-01"
+    assert body["data"]["places"][0]["event_end_date"] == "2026-12-31"
+    assert body["data"]["places"][0]["event_url"].endswith("/suwon-hwaseong-event")
+    assert body["data"]["places"][0]["is_ongoing"] is True
+    assert body["data"]["places"][0]["is_approximate_location"] is False
     assert body["data"]["places"][0]["score"]["data_basis"] == "demo_fallback"
     assert body["data"]["places"][0]["score"]["components"]["local_spending_score"] is not None
     assert body["data"]["places"][0]["score"]["components"]["review_quality_score"] is None
