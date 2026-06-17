@@ -674,6 +674,17 @@ class _LalaHomePageState extends State<LalaHomePage> {
     });
   }
 
+  void _retryLocationConsent() {
+    setState(() {
+      _locationConsentEnabled = true;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _refresh();
+      }
+    });
+  }
+
   List<LalaPlace> _visiblePlacesForCurrentCategory() {
     final apiPlaces = _places?.data?.places ?? const <LalaPlace>[];
     final allPlaces = apiPlaces.isEmpty ? _fallbackUiPlaces() : apiPlaces;
@@ -787,6 +798,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
               onFetchTourAudio: _fetchTourAudio,
               onRefresh: _refresh,
               onOpenSettings: () => _openSettingsSheet(context),
+              onRetryLocation: _retryLocationConsent,
             ),
           ),
         ),
@@ -1249,6 +1261,7 @@ class _Dashboard extends StatelessWidget {
     required this.onFetchTourAudio,
     required this.onRefresh,
     required this.onOpenSettings,
+    required this.onRetryLocation,
   });
 
   final bool loading;
@@ -1297,6 +1310,7 @@ class _Dashboard extends StatelessWidget {
   final VoidCallback onFetchTourAudio;
   final VoidCallback onRefresh;
   final VoidCallback onOpenSettings;
+  final VoidCallback onRetryLocation;
 
   @override
   Widget build(BuildContext context) {
@@ -1529,6 +1543,7 @@ class _Dashboard extends StatelessWidget {
                 child: _LocationConsentOverlay(
                   language: uiLanguage,
                   onOpenSettings: onOpenSettings,
+                  onRetryLocation: onRetryLocation,
                 ),
               ),
           ],
@@ -2386,10 +2401,12 @@ class _LocationConsentOverlay extends StatelessWidget {
   const _LocationConsentOverlay({
     required this.language,
     required this.onOpenSettings,
+    required this.onRetryLocation,
   });
 
   final String language;
   final VoidCallback onOpenSettings;
+  final VoidCallback onRetryLocation;
 
   @override
   Widget build(BuildContext context) {
@@ -2457,6 +2474,18 @@ class _LocationConsentOverlay extends StatelessWidget {
                   label: Text(isEnglish ? 'Open settings' : '설정에서 켜기'),
                   style: FilledButton.styleFrom(
                     minimumSize: const Size.fromHeight(48),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  key: const ValueKey('location-consent-retry'),
+                  onPressed: onRetryLocation,
+                  icon: const Icon(Icons.my_location_outlined),
+                  label: Text(isEnglish ? 'Retry location' : '다시 확인'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                    foregroundColor: const Color(0xFF2B6CB0),
+                    side: const BorderSide(color: Color(0xFFB9D4F3)),
                   ),
                 ),
               ],

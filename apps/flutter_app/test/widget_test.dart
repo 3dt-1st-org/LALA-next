@@ -340,12 +340,42 @@ void main() {
 
     expect(find.text('위치기반 추천이 꺼져 있어요'), findsOneWidget);
     expect(find.text('설정에서 켜기'), findsOneWidget);
+    expect(find.text('다시 확인'), findsOneWidget);
 
     await tester.tap(find.text('설정에서 켜기'));
     await tester.pumpAndSettle();
 
     expect(find.text('설정'), findsOneWidget);
     expect(find.text('위치기반 정보 제공 동의'), findsOneWidget);
+  });
+
+  testWidgets('location consent retry restores map recommendations', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      LalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.settings).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(Switch).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('닫기').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('위치기반 추천이 꺼져 있어요'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('location-consent-retry')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('위치기반 추천이 꺼져 있어요'), findsNothing);
+    expect(find.text('추천 장소 보기'), findsOneWidget);
+    expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
   });
 
   testWidgets('loads authenticated API panels with the reference contract', (

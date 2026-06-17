@@ -64,6 +64,10 @@ evidence, but they are not the latest MVP acceptance source.
 - Implemented: map-level load errors now keep the legacy recovery affordance.
   The Flutter error toast exposes a localized retry action wired to the same
   refresh path as the legacy `retry-btn -> loadPlaces()` flow.
+- Implemented: the location consent overlay now keeps the legacy recovery
+  affordance. In addition to opening settings, it exposes a localized retry
+  action that restores in-app location consent and refreshes the map context,
+  matching the legacy `overlay-retry -> loc-btn` flow.
 
 ## Next Acceptance Items
 
