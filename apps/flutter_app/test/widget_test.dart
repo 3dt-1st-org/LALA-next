@@ -455,7 +455,9 @@ void main() {
     expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
   });
 
-  testWidgets('fetches docent audio only after explicit tap', (tester) async {
+  testWidgets('fetches detail docent audio once after explicit tap', (
+    tester,
+  ) async {
     final backend = FakeBackend(
       const LalaAppConfig(
         baseUri: 'http://api.test',
@@ -474,6 +476,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(backend.docentScriptRequests, ['brief:hwaseong-haenggung']);
     expect(backend.audioRequests, isEmpty);
     expect(find.text('정보 더 듣기'), findsOneWidget);
 
@@ -483,10 +486,16 @@ void main() {
     await tester.tap(audioButton);
     await tester.pumpAndSettle();
 
+    expect(backend.docentScriptRequests, [
+      'brief:hwaseong-haenggung',
+      'detail:hwaseong-haenggung',
+    ]);
     expect(backend.audioRequests, [
-      '화성행궁은 조선 왕실의 이동 궁궐로, 수원화성과 함께 걷기 좋은 코스입니다.',
+      '화성행궁 상세 도슨트입니다. 행궁동 골목, 수원화성 성곽, 주변 로컬 상권을 이어서 천천히 걸어보세요.',
     ]);
     expect(find.text('4 bytes'), findsOneWidget);
+    expect(find.textContaining('상세 도슨트입니다'), findsAtLeastNWidgets(1));
+    expect(find.widgetWithText(FilledButton, '정보 더 듣기'), findsNothing);
   });
 }
 
@@ -500,6 +509,7 @@ class FakeBackend implements LalaBackend {
   final LalaAppConfig config;
   final bool failAuthenticatedLoad;
   final bool shouldIntervene;
+  final List<String> docentScriptRequests = <String>[];
   final List<String> audioRequests = <String>[];
   int dailyPlanRequests = 0;
 
@@ -612,14 +622,19 @@ class FakeBackend implements LalaBackend {
   @override
   Future<LalaEnvelope<LalaDocentScript>> createDocentScript({
     required LalaPlace place,
+    String mode = 'brief',
   }) async {
+    docentScriptRequests.add('$mode:${place.placeId}');
+    final script = mode == 'detail'
+        ? '화성행궁 상세 도슨트입니다. 행궁동 골목, 수원화성 성곽, 주변 로컬 상권을 이어서 천천히 걸어보세요.'
+        : '화성행궁은 조선 왕실의 이동 궁궐로, 수원화성과 함께 걷기 좋은 코스입니다.';
     return _envelope(
       LalaDocentScript(
         placeId: place.placeId,
         category: place.category,
         language: 'ko',
-        mode: 'brief',
-        script: '화성행궁은 조선 왕실의 이동 궁궐로, 수원화성과 함께 걷기 좋은 코스입니다.',
+        mode: mode,
+        script: script,
         source: 'skeleton',
         requestHash:
             '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',

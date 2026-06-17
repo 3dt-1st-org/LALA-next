@@ -140,6 +140,7 @@ abstract class LalaBackend {
 
   Future<LalaEnvelope<LalaDocentScript>> createDocentScript({
     required LalaPlace place,
+    String mode = 'brief',
   });
 
   Future<LalaAudioResponse> createDocentAudio({required String script});
@@ -203,12 +204,13 @@ class LalaApiBackend implements LalaBackend {
   @override
   Future<LalaEnvelope<LalaDocentScript>> createDocentScript({
     required LalaPlace place,
+    String mode = 'brief',
   }) {
     return _client.createDocentScript(
       placeId: place.placeId,
       category: place.category,
       language: config.lang,
-      mode: 'brief',
+      mode: mode,
     );
   }
 
@@ -270,6 +272,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
   bool _interventionToastDismissed = false;
   bool _locationConsentEnabled = true;
   bool _recommendationRailExpanded = true;
+  final Set<String> _detailDocentPlayedPlaceIds = <String>{};
   double? _mapFocusLat;
   double? _mapFocusLng;
   int _mapLevel = 4;
@@ -410,23 +413,35 @@ class _LalaHomePageState extends State<LalaHomePage> {
     );
   }
 
-  Future<void> _fetchAudio() async {
-    final script = _docentScript?.data?.script;
-    if (script == null || script.trim().isEmpty) {
+  Future<void> _fetchMoreInfo() async {
+    final place = _currentDocentPlace();
+    if (place == null ||
+        _detailDocentPlayedPlaceIds.contains(place.placeId) ||
+        _audioLoading) {
       return;
     }
 
     setState(() {
       _audioLoading = true;
       _audioError = null;
+      _detailDocentPlayedPlaceIds.add(place.placeId);
     });
 
     try {
-      final audio = await _backend.createDocentAudio(script: script);
+      final detailScript = await _backend.createDocentScript(
+        place: place,
+        mode: 'detail',
+      );
+      final script = detailScript.data?.script.trim();
+      LalaAudioResponse? audio;
+      if (script != null && script.isNotEmpty && _voiceEnabled) {
+        audio = await _backend.createDocentAudio(script: script);
+      }
       if (!mounted) {
         return;
       }
       setState(() {
+        _docentScript = detailScript;
         _docentAudio = audio;
       });
     } on Object catch (error) {
@@ -434,6 +449,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
         return;
       }
       setState(() {
+        _detailDocentPlayedPlaceIds.remove(place.placeId);
         _audioError = _safeErrorMessage(error);
       });
     } finally {
@@ -443,6 +459,14 @@ class _LalaHomePageState extends State<LalaHomePage> {
         });
       }
     }
+  }
+
+  LalaPlace? _currentDocentPlace() {
+    final places = _visiblePlacesForCurrentCategory();
+    if (places.isEmpty) {
+      return null;
+    }
+    return _placeById(places, _selectedPlaceId) ?? _featuredPlace(places);
   }
 
   void _selectCategory(String category) {
@@ -653,6 +677,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
               voiceEnabled: _voiceEnabled,
               autoDocentEnabled: _autoDocentEnabled,
               showEvidence: _showEvidence,
+              detailDocentPlayedPlaceIds: _detailDocentPlayedPlaceIds,
               interventionToastDismissed: _interventionToastDismissed,
               locationConsentEnabled: _locationConsentEnabled,
               recommendationRailExpanded: _recommendationRailExpanded,
@@ -669,7 +694,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
               onToggleAutoDocent: _toggleAutoDocent,
               onToggleEvidence: _toggleEvidence,
               onDismissInterventionToast: _dismissInterventionToast,
-              onFetchAudio: _fetchAudio,
+              onFetchAudio: _fetchMoreInfo,
               onRefresh: _refresh,
               onOpenSettings: () => _openSettingsSheet(context),
             ),
@@ -1109,6 +1134,7 @@ class _Dashboard extends StatelessWidget {
     required this.voiceEnabled,
     required this.autoDocentEnabled,
     required this.showEvidence,
+    required this.detailDocentPlayedPlaceIds,
     required this.interventionToastDismissed,
     required this.locationConsentEnabled,
     required this.recommendationRailExpanded,
@@ -1151,6 +1177,7 @@ class _Dashboard extends StatelessWidget {
   final bool voiceEnabled;
   final bool autoDocentEnabled;
   final bool showEvidence;
+  final Set<String> detailDocentPlayedPlaceIds;
   final bool interventionToastDismissed;
   final bool locationConsentEnabled;
   final bool recommendationRailExpanded;
@@ -1324,6 +1351,7 @@ class _Dashboard extends StatelessWidget {
                 audioLoading: audioLoading,
                 audioError: audioError,
                 showEvidence: showEvidence,
+                detailDocentPlayedPlaceIds: detailDocentPlayedPlaceIds,
                 onOpenDetail: () => onOpenSheet(_ActiveMapSheet.detail),
                 onToggleEvidence: onToggleEvidence,
                 onFetchAudio: onFetchAudio,
@@ -1358,6 +1386,7 @@ class _Dashboard extends StatelessWidget {
                   audioError: audioError,
                   source: effectiveSource,
                   showEvidence: showEvidence,
+                  detailDocentPlayedPlaceIds: detailDocentPlayedPlaceIds,
                   onToggleEvidence: onToggleEvidence,
                   onFetchAudio: onFetchAudio,
                   onRefresh: onRefresh,
@@ -1736,6 +1765,7 @@ class _MapBottomDock extends StatelessWidget {
     required this.audioLoading,
     required this.audioError,
     required this.showEvidence,
+    required this.detailDocentPlayedPlaceIds,
     required this.onOpenDetail,
     required this.onToggleEvidence,
     required this.onFetchAudio,
@@ -1754,6 +1784,7 @@ class _MapBottomDock extends StatelessWidget {
   final bool audioLoading;
   final String? audioError;
   final bool showEvidence;
+  final Set<String> detailDocentPlayedPlaceIds;
   final VoidCallback onOpenDetail;
   final VoidCallback onToggleEvidence;
   final VoidCallback onFetchAudio;
@@ -1855,7 +1886,8 @@ class _MapBottomDock extends StatelessWidget {
                 docentAudio: docentAudio,
                 canFetchAudio:
                     effectiveDocent?.script.trim().isNotEmpty == true &&
-                    !audioLoading,
+                    !audioLoading &&
+                    !detailDocentPlayedPlaceIds.contains(currentPlace.placeId),
                 onFetchAudio: onFetchAudio,
               ),
             ],
@@ -1882,6 +1914,7 @@ class _MapDraggableSheet extends StatelessWidget {
     required this.audioError,
     required this.source,
     required this.showEvidence,
+    required this.detailDocentPlayedPlaceIds,
     required this.onToggleEvidence,
     required this.onFetchAudio,
     required this.onRefresh,
@@ -1902,6 +1935,7 @@ class _MapDraggableSheet extends StatelessWidget {
   final String? audioError;
   final String? source;
   final bool showEvidence;
+  final Set<String> detailDocentPlayedPlaceIds;
   final VoidCallback onToggleEvidence;
   final VoidCallback onFetchAudio;
   final VoidCallback onRefresh;
@@ -2004,6 +2038,7 @@ class _MapDraggableSheet extends StatelessWidget {
                       audioError: audioError,
                       source: source,
                       showEvidence: showEvidence,
+                      detailDocentPlayedPlaceIds: detailDocentPlayedPlaceIds,
                       onToggleEvidence: onToggleEvidence,
                       onFetchAudio: onFetchAudio,
                     ),
@@ -2965,6 +3000,7 @@ class _FeaturedPlacePanel extends StatelessWidget {
     required this.audioError,
     required this.source,
     required this.showEvidence,
+    required this.detailDocentPlayedPlaceIds,
     required this.onToggleEvidence,
     required this.onFetchAudio,
   });
@@ -2980,6 +3016,7 @@ class _FeaturedPlacePanel extends StatelessWidget {
   final String? audioError;
   final String? source;
   final bool showEvidence;
+  final Set<String> detailDocentPlayedPlaceIds;
   final VoidCallback onToggleEvidence;
   final VoidCallback onFetchAudio;
 
@@ -3048,7 +3085,8 @@ class _FeaturedPlacePanel extends StatelessWidget {
           docentAudio: docentAudio,
           canFetchAudio:
               effectiveDocent?.script.trim().isNotEmpty == true &&
-              !audioLoading,
+              !audioLoading &&
+              !detailDocentPlayedPlaceIds.contains(currentPlace.placeId),
           onFetchAudio: onFetchAudio,
         ),
         if (showEvidence) ...[
@@ -3929,27 +3967,29 @@ class _DocentSubtitle extends StatelessWidget {
         const SizedBox(height: 12),
         Row(
           children: [
-            Expanded(
-              child: FilledButton.icon(
-                onPressed: canFetchAudio ? onFetchAudio : null,
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                icon: audioLoading
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.volume_up),
-                label: Text(
-                  audioLoading
-                      ? _copy(language, ko: '음성 생성 중', en: 'Preparing audio')
-                      : _copy(language, ko: '정보 더 듣기', en: 'Listen'),
+            if (canFetchAudio || audioLoading) ...[
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: canFetchAudio ? onFetchAudio : null,
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  icon: audioLoading
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.volume_up),
+                  label: Text(
+                    audioLoading
+                        ? _copy(language, ko: '음성 생성 중', en: 'Preparing audio')
+                        : _copy(language, ko: '정보 더 듣기', en: 'Listen'),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 10),
+              const SizedBox(width: 10),
+            ],
             Expanded(
               child: OutlinedButton.icon(
                 icon: const Icon(Icons.add_circle_outline),
