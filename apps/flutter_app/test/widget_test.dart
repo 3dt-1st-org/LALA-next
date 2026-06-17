@@ -371,10 +371,16 @@ void main() {
   testWidgets('surfaces fallback state when authenticated load fails', (
     tester,
   ) async {
+    var backendCreations = 0;
     await tester.pumpWidget(
       LalaApp(
-        backendFactory: (config) =>
-            FakeBackend(config, failAuthenticatedLoad: true),
+        backendFactory: (config) {
+          backendCreations += 1;
+          return FakeBackend(
+            config,
+            failAuthenticatedLoad: backendCreations == 2,
+          );
+        },
         initialConfig: const LalaAppConfig(
           baseUri: 'http://api.test',
           bearerToken: 'test-token',
@@ -390,6 +396,18 @@ void main() {
     );
     expect(find.textContaining('데모 기준'), findsWidgets);
     expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
+    expect(find.byKey(const ValueKey('map-error-retry')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('map-error-retry')));
+    await tester.pumpAndSettle();
+
+    expect(backendCreations, 3);
+    expect(
+      find.text('UPSTREAM_UNAVAILABLE: Authenticated route failed.'),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey('map-error-retry')), findsNothing);
+    expect(find.textContaining('조선 왕실'), findsAtLeastNWidgets(1));
   });
 
   testWidgets('refresh uses edited backend configuration', (tester) async {

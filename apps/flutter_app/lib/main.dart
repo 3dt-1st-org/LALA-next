@@ -1417,6 +1417,8 @@ class _Dashboard extends StatelessWidget {
                 child: _MapToast(
                   icon: Icons.error_outline,
                   label: visibleError,
+                  actionLabel: _copy(uiLanguage, ko: '다시 시도', en: 'Retry'),
+                  onAction: onRefresh,
                   color: Theme.of(context).colorScheme.errorContainer,
                 ),
               ),
@@ -5744,11 +5746,15 @@ class _MapToast extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.color,
+    this.actionLabel,
+    this.onAction,
   });
 
   final IconData icon;
   final String label;
   final Color color;
+  final String? actionLabel;
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -5770,6 +5776,21 @@ class _MapToast extends StatelessWidget {
           Icon(icon),
           const SizedBox(width: 8),
           Expanded(child: Text(label)),
+          if (actionLabel != null && onAction != null) ...[
+            const SizedBox(width: 8),
+            TextButton(
+              key: const ValueKey('map-error-retry'),
+              onPressed: onAction,
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                minimumSize: const Size(0, 36),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                foregroundColor: Theme.of(context).colorScheme.onErrorContainer,
+                textStyle: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+              child: Text(actionLabel!),
+            ),
+          ],
         ],
       ),
     );
