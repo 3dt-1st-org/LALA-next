@@ -274,7 +274,9 @@ def test_docent_script_accepts_legacy_detail_mode_and_english_language(client, a
     assert body["data"]["place_id"] == "event-legacy"
     assert body["data"]["language"] == "en"
     assert body["data"]["mode"] == "detail"
-    assert "detail English docent script" in body["data"]["script"]
+    assert "detail English docent note" in body["data"]["script"]
+    assert "event legacy" in body["data"]["script"]
+    assert "skeleton" not in body["data"]["script"].lower()
 
 
 def test_docent_script_generation_identity_is_deterministic(client, auth_headers):
@@ -426,7 +428,8 @@ def test_docent_script_skeleton_fallback_does_not_write_cache(
         "/api/v1/docents/script",
         headers=auth_headers,
         json={
-            "place_id": "event-skeleton",
+            "place_id": "event-public",
+            "place_name": "화성행궁",
             "category": "event",
             "language": "ko",
             "mode": "brief",
@@ -437,6 +440,12 @@ def test_docent_script_skeleton_fallback_does_not_write_cache(
     body = response.json()
     assert body["data"]["source"] == "skeleton"
     assert body["data"]["script"]
+    assert "화성행궁" in body["data"]["script"]
+    assert "event-public" not in body["data"]["script"]
+    assert "인공지능" not in body["data"]["script"]
+    assert "대체됩니다" not in body["data"]["script"]
+    assert "skeleton" not in body["data"]["script"].lower()
+    assert "azure openai" not in body["data"]["script"].lower()
     assert saved_calls == []
 
 

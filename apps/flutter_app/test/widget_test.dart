@@ -866,10 +866,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('위치기반 추천이 꺼져 있어요'), findsOneWidget);
-    expect(find.text('설정에서 켜기'), findsOneWidget);
+    expect(find.text('위치 동의 켜기'), findsOneWidget);
     expect(find.text('다시 확인'), findsOneWidget);
 
-    await tester.tap(find.text('설정에서 켜기'));
+    await tester.tap(find.text('위치 동의 켜기'));
     await tester.pumpAndSettle();
 
     expect(find.text('설정'), findsOneWidget);
@@ -1037,6 +1037,37 @@ void main() {
     expect(find.textContaining('공식 API'), findsNothing);
     expect(find.textContaining('스냅샷'), findsNothing);
     expect(find.textContaining('개발'), findsNothing);
+  });
+
+  testWidgets('desktop map chrome keeps app controls at usable width', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      LalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final dockWidth = tester
+        .getSize(find.byKey(const ValueKey('map-bottom-dock')))
+        .width;
+    final railWidth = tester
+        .getSize(find.byKey(const ValueKey('recommendation-rail-list')))
+        .width;
+    final utilityWidth = tester
+        .getSize(find.byKey(const ValueKey('map-utility-control-row')))
+        .width;
+
+    expect(dockWidth, lessThanOrEqualTo(760));
+    expect(railWidth, lessThanOrEqualTo(780));
+    expect(utilityWidth, lessThanOrEqualTo(760));
   });
 
   testWidgets('place detail save control toggles local saved state', (

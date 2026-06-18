@@ -221,6 +221,7 @@ class LalaApiBackend implements LalaBackend {
   }) {
     return _client.createDocentScript(
       placeId: place.placeId,
+      placeName: _placeDisplayName(place, config.lang),
       category: place.category,
       language: config.lang,
       mode: mode,
@@ -1580,17 +1581,24 @@ class _Dashboard extends StatelessWidget {
               left: 16,
               right: 16,
               top: isWide ? 76 : 68,
-              child: _MapPlaceCarouselOverlay(
-                places: topPlaces,
-                source: effectiveSource,
-                language: uiLanguage,
-                selectedPlaceId: topPlace?.placeId,
-                explicitSelectedPlaceId: selectedPlaceId,
-                expanded: recommendationRailExpanded,
-                compact: compactMapChrome,
-                onSelectPlace: onSelectPlace,
-                onReselectSelectedPlace: onClearPlaceSelection,
-                onToggleExpanded: onToggleRecommendationRail,
+              child: Center(
+                child: SizedBox(
+                  width: isWide
+                      ? math.min(780.0, constraints.maxWidth - 32)
+                      : constraints.maxWidth - 32,
+                  child: _MapPlaceCarouselOverlay(
+                    places: topPlaces,
+                    source: effectiveSource,
+                    language: uiLanguage,
+                    selectedPlaceId: topPlace?.placeId,
+                    explicitSelectedPlaceId: selectedPlaceId,
+                    expanded: recommendationRailExpanded,
+                    compact: compactMapChrome,
+                    onSelectPlace: onSelectPlace,
+                    onReselectSelectedPlace: onClearPlaceSelection,
+                    onToggleExpanded: onToggleRecommendationRail,
+                  ),
+                ),
               ),
             ),
             if (selectedCategory == 'restaurant' && tourPlaces.isNotEmpty)
@@ -1670,16 +1678,23 @@ class _Dashboard extends StatelessWidget {
               left: 0,
               right: 0,
               bottom: 0,
-              child: _MapBottomDock(
-                isWide: isWide,
-                places: topPlaces,
-                source: effectiveSource,
-                topPlace: topPlace,
-                uiLanguage: uiLanguage,
-                height: bottomDockHeight,
-                showEvidence: showEvidence,
-                onOpenDetail: () => onOpenSheet(_ActiveMapSheet.detail),
-                onToggleEvidence: onToggleEvidence,
+              child: Center(
+                child: SizedBox(
+                  width: isWide
+                      ? math.min(760.0, constraints.maxWidth - 32)
+                      : constraints.maxWidth,
+                  child: _MapBottomDock(
+                    isWide: isWide,
+                    places: topPlaces,
+                    source: effectiveSource,
+                    topPlace: topPlace,
+                    uiLanguage: uiLanguage,
+                    height: bottomDockHeight,
+                    showEvidence: showEvidence,
+                    onOpenDetail: () => onOpenSheet(_ActiveMapSheet.detail),
+                    onToggleEvidence: onToggleEvidence,
+                  ),
+                ),
               ),
             ),
             Positioned(
@@ -1701,16 +1716,23 @@ class _Dashboard extends StatelessWidget {
               left: 16,
               right: 16,
               top: floatingPillTop,
-              child: _MapUtilityControlRow(
-                dailyPlan: activeDailyPlan,
-                weather: currentWeather,
-                language: uiLanguage,
-                onOpenPlanner: () => onOpenSheet(_ActiveMapSheet.planner),
-                onOpenWeather: () {
-                  onOpenSheet(_ActiveMapSheet.weather);
-                  onRefreshWeather();
-                },
-                onOpenSettings: onOpenSettings,
+              child: Center(
+                child: SizedBox(
+                  width: isWide
+                      ? math.min(760.0, constraints.maxWidth - 32)
+                      : constraints.maxWidth - 32,
+                  child: _MapUtilityControlRow(
+                    dailyPlan: activeDailyPlan,
+                    weather: currentWeather,
+                    language: uiLanguage,
+                    onOpenPlanner: () => onOpenSheet(_ActiveMapSheet.planner),
+                    onOpenWeather: () {
+                      onOpenSheet(_ActiveMapSheet.weather);
+                      onRefreshWeather();
+                    },
+                    onOpenSettings: onOpenSettings,
+                  ),
+                ),
               ),
             ),
             if (activeSheet != null)
@@ -2945,7 +2967,7 @@ class _LocationConsentOverlay extends StatelessWidget {
                 FilledButton.icon(
                   onPressed: onOpenSettings,
                   icon: const Icon(Icons.tune),
-                  label: Text(isEnglish ? 'Open settings' : '설정에서 켜기'),
+                  label: Text(isEnglish ? 'Turn on location' : '위치 동의 켜기'),
                   style: FilledButton.styleFrom(
                     minimumSize: const Size.fromHeight(48),
                   ),

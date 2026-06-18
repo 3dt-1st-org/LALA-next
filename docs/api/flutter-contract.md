@@ -180,6 +180,7 @@ Request:
 ```json
 {
   "place_id": "skeleton-suwon-hwaseong",
+  "place_name": "수원화성",
   "category": "attraction",
   "language": "ko",
   "mode": "brief"
@@ -187,6 +188,8 @@ Request:
 ```
 
 `category` must be `attraction`, `restaurant`, `event`, or `culture_venue`.
+`place_name` is optional but recommended so fallback docent copy can use the
+user-facing localized place name instead of an internal source id.
 `mode` accepts `brief`, `detail`, `standard`, and `deep`.
 Success data includes `request_hash` and `cache_key` for idempotency-aware
 client flows.

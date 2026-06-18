@@ -227,6 +227,7 @@ void main() {
       httpClient: MockClient((request) async {
         captured = request;
         expect(jsonDecode(request.body)['place_id'], 'demo-place');
+        expect(jsonDecode(request.body)['place_name'], 'Demo Place');
         return http.Response(
           jsonEncode({
             'ok': true,
@@ -254,6 +255,7 @@ void main() {
 
     final envelope = await client.createDocentScript(
       placeId: 'demo-place',
+      placeName: ' Demo Place ',
       category: 'attraction',
       language: 'ko',
       mode: 'brief',

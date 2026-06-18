@@ -98,6 +98,7 @@ class LalaApiClient {
 
   Future<LalaEnvelope<LalaDocentScript>> createDocentScript({
     required String placeId,
+    String? placeName,
     required String category,
     String language = 'ko',
     String mode = 'brief',
@@ -109,6 +110,8 @@ class LalaApiClient {
       '/api/v1/docents/script',
       body: {
         'place_id': placeId,
+        if ((placeName ?? '').trim().isNotEmpty)
+          'place_name': placeName!.trim(),
         'category': category,
         'language': language,
         'mode': mode,
