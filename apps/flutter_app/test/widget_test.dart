@@ -193,7 +193,7 @@ void main() {
       tester.getSize(
         find.byKey(const ValueKey('rail-place-thumb-haenggung-cafe-street')),
       ),
-      const Size(86, 86),
+      const Size(72, 72),
     );
 
     final voiceToggle = find.byKey(const ValueKey('voice-toggle'));
@@ -884,15 +884,10 @@ void main() {
     expect(find.textContaining('조선 왕실'), findsAtLeastNWidgets(1));
   });
 
-  testWidgets('refresh uses edited backend configuration', (tester) async {
-    final configs = <LalaAppConfig>[];
-
+  testWidgets('settings hides developer connection controls', (tester) async {
     await tester.pumpWidget(
       LalaApp(
-        backendFactory: (config) {
-          configs.add(config);
-          return FakeBackend(config);
-        },
+        backendFactory: (config) => FakeBackend(config),
         initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
       ),
     );
@@ -905,36 +900,16 @@ void main() {
     expect(find.text('위치기반 정보 제공 동의'), findsOneWidget);
     expect(find.text('언어'), findsOneWidget);
     expect(find.text('글꼴 크기'), findsOneWidget);
-
     await tester.scrollUntilVisible(
-      find.text('개발 연결'),
-      320,
+      find.text('앱 정보'),
+      180,
       scrollable: find.byType(Scrollable).last,
     );
-    await tester.tap(find.text('개발 연결'));
-    await tester.pumpAndSettle();
-
-    await tester.enterText(
-      find.widgetWithText(TextField, '기본 주소'),
-      'http://10.0.0.5:8080',
-    );
-    await tester.enterText(
-      find.widgetWithText(TextField, '마이그레이션 키'),
-      'migration-key',
-    );
-    await tester.enterText(
-      find.widgetWithText(TextField, '카카오 지도 키'),
-      'kakao-js-key',
-    );
-    final refreshButton = find.widgetWithText(FilledButton, '새로고침');
-    await tester.ensureVisible(refreshButton);
-    await tester.pumpAndSettle();
-    await tester.tap(refreshButton);
-    await tester.pumpAndSettle();
-
-    expect(configs.last.baseUri, 'http://10.0.0.5:8080');
-    expect(configs.last.apiKey, 'migration-key');
-    expect(configs.last.kakaoJavascriptKey, 'kakao-js-key');
+    expect(find.text('앱 정보'), findsOneWidget);
+    expect(find.text('개발 연결'), findsNothing);
+    expect(find.text('기본 주소'), findsNothing);
+    expect(find.text('마이그레이션 키'), findsNothing);
+    expect(find.text('카카오 지도 키'), findsNothing);
   });
 
   testWidgets('settings language switch updates map filter labels', (

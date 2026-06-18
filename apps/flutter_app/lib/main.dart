@@ -917,15 +917,6 @@ class _LalaHomePageState extends State<LalaHomePage> {
               locationConsentEnabled: _locationConsentEnabled,
               uiLanguage: _uiLanguage,
               fontScale: _fontScale,
-              baseUrlController: _baseUrlController,
-              bearerTokenController: _bearerTokenController,
-              apiKeyController: _apiKeyController,
-              kakaoJavascriptKeyController: _kakaoJavascriptKeyController,
-              latController: _latController,
-              lngController: _lngController,
-              radiusController: _radiusController,
-              loading: _loading,
-              onRefresh: () => _refresh(forceWeather: true),
               onLocationConsentChanged: (enabled) =>
                   updateSheet(() => _setLocationConsent(enabled)),
               onLanguageChanged: (language) =>
@@ -1009,144 +1000,11 @@ class _LalaHomePageState extends State<LalaHomePage> {
   }
 }
 
-class _ConfigPanel extends StatelessWidget {
-  const _ConfigPanel({
-    required this.language,
-    required this.baseUrlController,
-    required this.bearerTokenController,
-    required this.apiKeyController,
-    required this.kakaoJavascriptKeyController,
-    required this.latController,
-    required this.lngController,
-    required this.radiusController,
-    required this.loading,
-    required this.onRefresh,
-  });
-
-  final String language;
-  final TextEditingController baseUrlController;
-  final TextEditingController bearerTokenController;
-  final TextEditingController apiKeyController;
-  final TextEditingController kakaoJavascriptKeyController;
-  final TextEditingController latController;
-  final TextEditingController lngController;
-  final TextEditingController radiusController;
-  final bool loading;
-  final VoidCallback onRefresh;
-
-  @override
-  Widget build(BuildContext context) {
-    return _Panel(
-      title: _copy(language, ko: '백엔드', en: 'Backend'),
-      icon: Icons.dns_outlined,
-      fill: false,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          TextField(
-            controller: baseUrlController,
-            decoration: InputDecoration(
-              labelText: _copy(language, ko: '기본 주소', en: 'Base URL'),
-              prefixIcon: const Icon(Icons.link),
-            ),
-            keyboardType: TextInputType.url,
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: bearerTokenController,
-            decoration: InputDecoration(
-              labelText: _copy(language, ko: '인증 토큰', en: 'Bearer token'),
-              prefixIcon: const Icon(Icons.key_outlined),
-            ),
-            obscureText: true,
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: apiKeyController,
-            decoration: InputDecoration(
-              labelText: _copy(
-                language,
-                ko: '마이그레이션 키',
-                en: 'Migration API key',
-              ),
-              prefixIcon: const Icon(Icons.vpn_key_outlined),
-            ),
-            obscureText: true,
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: kakaoJavascriptKeyController,
-            decoration: InputDecoration(
-              labelText: _copy(
-                language,
-                ko: '카카오 지도 키',
-                en: 'Kakao JavaScript key',
-              ),
-              prefixIcon: const Icon(Icons.map_outlined),
-            ),
-            obscureText: true,
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: latController,
-                  decoration: InputDecoration(
-                    labelText: _copy(language, ko: '위도', en: 'Lat'),
-                    prefixIcon: const Icon(Icons.my_location_outlined),
-                  ),
-                  keyboardType: TextInputType.number,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: TextField(
-                  controller: lngController,
-                  decoration: InputDecoration(
-                    labelText: _copy(language, ko: '경도', en: 'Lng'),
-                    prefixIcon: const Icon(Icons.explore_outlined),
-                  ),
-                  keyboardType: TextInputType.number,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: radiusController,
-            decoration: InputDecoration(
-              labelText: _copy(language, ko: '반경(미터)', en: 'Radius meters'),
-              prefixIcon: const Icon(Icons.radio_button_checked),
-            ),
-            keyboardType: TextInputType.number,
-          ),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: loading ? null : onRefresh,
-            icon: const Icon(Icons.sync),
-            label: Text(_copy(language, ko: '새로고침', en: 'Refresh')),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _UserSettingsSheet extends StatelessWidget {
   const _UserSettingsSheet({
     required this.locationConsentEnabled,
     required this.uiLanguage,
     required this.fontScale,
-    required this.baseUrlController,
-    required this.bearerTokenController,
-    required this.apiKeyController,
-    required this.kakaoJavascriptKeyController,
-    required this.latController,
-    required this.lngController,
-    required this.radiusController,
-    required this.loading,
-    required this.onRefresh,
     required this.onLocationConsentChanged,
     required this.onLanguageChanged,
     required this.onFontScaleChanged,
@@ -1155,15 +1013,6 @@ class _UserSettingsSheet extends StatelessWidget {
   final bool locationConsentEnabled;
   final String uiLanguage;
   final double fontScale;
-  final TextEditingController baseUrlController;
-  final TextEditingController bearerTokenController;
-  final TextEditingController apiKeyController;
-  final TextEditingController kakaoJavascriptKeyController;
-  final TextEditingController latController;
-  final TextEditingController lngController;
-  final TextEditingController radiusController;
-  final bool loading;
-  final VoidCallback onRefresh;
   final ValueChanged<bool> onLocationConsentChanged;
   final ValueChanged<String> onLanguageChanged;
   final ValueChanged<double> onFontScaleChanged;
@@ -1331,40 +1180,6 @@ class _UserSettingsSheet extends StatelessWidget {
                   label: _copy(uiLanguage, ko: '버전', en: 'Version'),
                   value: '1.0',
                 ),
-              ),
-              ExpansionTile(
-                tilePadding: const EdgeInsets.symmetric(horizontal: 16),
-                childrenPadding: const EdgeInsets.fromLTRB(0, 0, 0, 12),
-                collapsedBackgroundColor: Colors.white,
-                backgroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                collapsedShape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                title: Text(
-                  _copy(uiLanguage, ko: '개발 연결', en: 'Developer connection'),
-                  style: const TextStyle(fontWeight: FontWeight.w900),
-                ),
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: _ConfigPanel(
-                      language: uiLanguage,
-                      baseUrlController: baseUrlController,
-                      bearerTokenController: bearerTokenController,
-                      apiKeyController: apiKeyController,
-                      kakaoJavascriptKeyController:
-                          kakaoJavascriptKeyController,
-                      latController: latController,
-                      lngController: lngController,
-                      radiusController: radiusController,
-                      loading: loading,
-                      onRefresh: onRefresh,
-                    ),
-                  ),
-                ],
               ),
             ],
           ),
@@ -1553,10 +1368,23 @@ class _Dashboard extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= 860;
-        final floatingPillTop = isWide ? 264.0 : 266.0;
-        final bottomDockHeight = isWide ? 126.0 : 150.0;
+        final compactMapChrome =
+            !isWide &&
+            (constraints.maxWidth <= 430 || constraints.maxHeight < 760);
+        final floatingPillTop = isWide
+            ? 264.0
+            : compactMapChrome
+            ? 242.0
+            : 266.0;
+        final bottomDockHeight = isWide
+            ? 126.0
+            : compactMapChrome
+            ? 132.0
+            : 150.0;
         final floatingControlsBottom = bottomDockHeight + 16;
-        final guidancePanelBottom = floatingControlsBottom + 88;
+        final guidancePanelBottom =
+            floatingControlsBottom +
+            (compactMapChrome && constraints.maxHeight >= 760 ? 136.0 : 88.0);
         return Stack(
           children: [
             Positioned.fill(
@@ -1596,6 +1424,7 @@ class _Dashboard extends StatelessWidget {
                 selectedPlaceId: topPlace?.placeId,
                 explicitSelectedPlaceId: selectedPlaceId,
                 expanded: recommendationRailExpanded,
+                compact: compactMapChrome,
                 onSelectPlace: onSelectPlace,
                 onReselectSelectedPlace: onClearPlaceSelection,
                 onToggleExpanded: onToggleRecommendationRail,
@@ -1842,6 +1671,7 @@ class _MapPlaceCarouselOverlay extends StatelessWidget {
     required this.selectedPlaceId,
     required this.explicitSelectedPlaceId,
     required this.expanded,
+    required this.compact,
     required this.onSelectPlace,
     required this.onReselectSelectedPlace,
     required this.onToggleExpanded,
@@ -1853,6 +1683,7 @@ class _MapPlaceCarouselOverlay extends StatelessWidget {
   final String? selectedPlaceId;
   final String? explicitSelectedPlaceId;
   final bool expanded;
+  final bool compact;
   final ValueChanged<LalaPlace> onSelectPlace;
   final VoidCallback onReselectSelectedPlace;
   final VoidCallback onToggleExpanded;
@@ -1934,7 +1765,7 @@ class _MapPlaceCarouselOverlay extends StatelessWidget {
                   children: [
                     const SizedBox(height: 8),
                     SizedBox(
-                      height: 150,
+                      height: compact ? 126 : 150,
                       child: DecoratedBox(
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.82),
@@ -1966,6 +1797,7 @@ class _MapPlaceCarouselOverlay extends StatelessWidget {
                               place: place,
                               language: language,
                               selected: selected,
+                              compact: compact,
                               onTap: explicitlySelected
                                   ? onReselectSelectedPlace
                                   : selected
@@ -1992,12 +1824,14 @@ class _MapRailPlaceCard extends StatelessWidget {
     required this.place,
     required this.language,
     required this.selected,
+    required this.compact,
     this.onTap,
   });
 
   final LalaPlace place;
   final String language;
   final bool selected;
+  final bool compact;
   final VoidCallback? onTap;
 
   @override
@@ -2011,7 +1845,7 @@ class _MapRailPlaceCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         onTap: onTap,
         child: Container(
-          width: 252,
+          width: compact ? 226 : 252,
           padding: selected ? const EdgeInsets.all(3) : EdgeInsets.zero,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
@@ -2031,7 +1865,10 @@ class _MapRailPlaceCard extends StatelessWidget {
           ),
           child: Container(
             key: selected ? ValueKey('obang-border-${place.placeId}') : null,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 8 : 10,
+              vertical: compact ? 7 : 8,
+            ),
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: selected ? 0.98 : 0.93),
               borderRadius: BorderRadius.circular(selected ? 15 : 18),
@@ -2095,8 +1932,8 @@ class _MapRailPlaceCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(width: 10),
-                _RailPlaceThumb(place: place),
+                SizedBox(width: compact ? 8 : 10),
+                _RailPlaceThumb(place: place, compact: compact),
               ],
             ),
           ),
@@ -2153,19 +1990,21 @@ class _RailCategoryBadge extends StatelessWidget {
 }
 
 class _RailPlaceThumb extends StatelessWidget {
-  const _RailPlaceThumb({required this.place});
+  const _RailPlaceThumb({required this.place, required this.compact});
 
   final LalaPlace place;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
+    final dimension = compact ? 72.0 : 86.0;
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
       child: SizedBox(
         key: ValueKey('rail-place-thumb-${place.placeId}'),
-        width: 86,
-        height: 86,
-        child: _PlaceImage(place: place, width: 86, height: 86),
+        width: dimension,
+        height: dimension,
+        child: _PlaceImage(place: place, width: dimension, height: dimension),
       ),
     );
   }
@@ -2215,6 +2054,7 @@ class _MapUtilityControlRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
+      key: const ValueKey('map-utility-control-row'),
       children: [
         Expanded(
           child: Align(
@@ -5881,21 +5721,38 @@ class _FallbackPlaceImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        Image.asset(
-          'assets/images/lala-hwaseong-haenggung.png',
-          width: width,
-          height: height,
-          fit: BoxFit.cover,
+    final color = _categoryColor(category);
+    final icon = switch (category) {
+      'restaurant' => Icons.restaurant_menu,
+      'event' => Icons.event,
+      'culture_venue' => Icons.museum,
+      _ => Icons.landscape,
+    };
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            color.withValues(alpha: 0.16),
+            const Color(0xFFFFFFFF).withValues(alpha: 0.92),
+          ],
         ),
-        Positioned.fill(
-          child: ColoredBox(
-            color: _categoryColor(category).withValues(alpha: 0.10),
+      ),
+      child: Center(
+        child: Container(
+          width: math.min(width, height) * 0.48,
+          height: math.min(width, height) * 0.48,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.82),
+            shape: BoxShape.circle,
+            border: Border.all(color: color.withValues(alpha: 0.18)),
           ),
+          child: Icon(icon, color: color, size: math.min(width, height) * 0.24),
         ),
-      ],
+      ),
     );
   }
 }
@@ -8126,17 +7983,11 @@ String _formatWonCompact(num value, String language) {
 }
 
 class _Panel extends StatelessWidget {
-  const _Panel({
-    required this.title,
-    required this.icon,
-    required this.child,
-    this.fill = true,
-  });
+  const _Panel({required this.title, required this.icon, required this.child});
 
   final String title;
   final IconData icon;
   final Widget child;
-  final bool fill;
 
   @override
   Widget build(BuildContext context) {
@@ -8156,7 +8007,7 @@ class _Panel extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            if (fill) Expanded(child: child) else child,
+            Expanded(child: child),
           ],
         ),
       ),

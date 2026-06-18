@@ -51,8 +51,19 @@ def test_public_mvp_snapshot_uses_english_fields_when_requested() -> None:
     )
 
     assert places
-    enriched = next(place for place in places if place.get("name_en"))
-    assert enriched["name"] == enriched["name_en"]
-    assert "Gyeonggi-do" in enriched["address"]
-    fallback = next(place for place in places if not place.get("name_en"))
-    assert fallback["name"] == fallback["name_ko"]
+    assert all(place.get("name_en") for place in places)
+    assert all(place["name"] == place["name_en"] for place in places)
+    assert all("Gyeonggi-do" in place["address"] for place in places)
+
+
+def test_public_mvp_snapshot_preserves_official_image_urls() -> None:
+    places = public_mvp_data.fetch_places(
+        lat=37.2636,
+        lng=127.0286,
+        radius_m=50000,
+        category="all",
+        language="ko",
+    )
+
+    hoam = next(place for place in places if place["place_id"] == "tour-api-129765")
+    assert hoam["image_url"] == "http://tong.visitkorea.or.kr/cms/resource/93/3086393_image2_1.jpg"
