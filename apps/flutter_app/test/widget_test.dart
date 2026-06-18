@@ -201,17 +201,17 @@ void main() {
     expect(find.text('86'), findsNothing);
     expect(find.textContaining('14°C'), findsWidgets);
     expect(find.text('정보 더 듣기'), findsOneWidget);
-    expect(find.text('오늘 코스에 추가'), findsOneWidget);
+    expect(find.text('하루 일정 보기'), findsOneWidget);
     expect(find.text('한국관광공사'), findsNothing);
     expect(find.textContaining('조선 왕실'), findsAtLeastNWidgets(1));
 
-    final addToPlanButton = find.widgetWithText(OutlinedButton, '오늘 코스에 추가');
+    final addToPlanButton = find.widgetWithText(OutlinedButton, '하루 일정 보기');
     await tester.ensureVisible(addToPlanButton);
     await tester.pumpAndSettle();
     await tester.tap(addToPlanButton);
     await tester.pumpAndSettle();
 
-    expect(find.text('오늘 일정'), findsOneWidget);
+    expect(find.text('하루 일정'), findsAtLeastNWidgets(1));
     expect(find.textContaining('화성행궁'), findsAtLeastNWidgets(1));
 
     await tester.tap(find.byTooltip('닫기').first);
@@ -565,7 +565,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('intervention-toast-plan')));
     await tester.pumpAndSettle();
-    expect(find.text('오늘 일정'), findsOneWidget);
+    expect(find.text('하루 일정'), findsAtLeastNWidgets(1));
 
     await tester.tap(find.byIcon(Icons.close).last);
     await tester.pumpAndSettle();

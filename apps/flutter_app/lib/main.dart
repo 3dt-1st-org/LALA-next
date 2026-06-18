@@ -2627,7 +2627,7 @@ class _DockDocentPreview extends StatelessWidget {
                     onPressed: onAddToPlan,
                     icon: const Icon(Icons.add_circle_outline, size: 18),
                     label: Text(
-                      _copy(language, ko: '오늘 코스에 추가', en: 'Add to plan'),
+                      _copy(language, ko: '하루 일정 보기', en: 'View plan'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -2785,7 +2785,7 @@ class _MapDraggableSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final title = switch (activeSheet) {
       _ActiveMapSheet.detail => language == 'en' ? 'Details' : '장소 상세',
-      _ActiveMapSheet.planner => language == 'en' ? 'Daily Plan' : '오늘 일정',
+      _ActiveMapSheet.planner => language == 'en' ? 'Daily Plan' : '하루 일정',
       _ActiveMapSheet.weather => language == 'en' ? 'Weather' : '날씨',
       _ActiveMapSheet.tour => language == 'en' ? 'Food Tour' : '맛집 투어',
     };
@@ -2797,7 +2797,7 @@ class _MapDraggableSheet extends StatelessWidget {
     };
     final initialSize = switch (activeSheet) {
       _ActiveMapSheet.detail => 0.66,
-      _ActiveMapSheet.planner => 0.48,
+      _ActiveMapSheet.planner => 0.52,
       _ActiveMapSheet.weather => 0.44,
       _ActiveMapSheet.tour => 0.68,
     };
@@ -3040,11 +3040,9 @@ class _PlannerSheetContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final slots = dailyPlan?.slots ?? const <LalaPlanSlot>[];
-    final action = _docentActionLabel(
-      place: intervention?.place,
-      action: intervention?.recommendedAction,
-      language: language,
-    );
+    final visibleSlots = slots
+        .where((slot) => _hasVisiblePlanSlot(slot, language))
+        .toList(growable: false);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -3052,28 +3050,15 @@ class _PlannerSheetContent extends StatelessWidget {
           language: language,
           weather: weather,
           dailyPlan: dailyPlan,
+          visibleSlotCount: visibleSlots.length,
           loading: loading,
           onRegenerate: () => _confirmRegenerate(context),
         ),
         const SizedBox(height: 12),
-        if (action != null)
-          _CompactInfoTile(
-            icon: Icons.alt_route_outlined,
-            label: _copy(language, ko: '추천 동선', en: 'Suggested route'),
-            value: action,
-          ),
-        if (action != null) const SizedBox(height: 12),
-        if (slots.isEmpty)
-          _MutedSheetCard(
-            icon: Icons.route_outlined,
-            label: _copy(
-              language,
-              ko: '현재 위치와 날씨 기준으로 코스를 준비 중입니다.',
-              en: 'Preparing a route from your location and weather.',
-            ),
-          )
+        if (visibleSlots.isEmpty)
+          _PlannerLoadingCard(language: language)
         else
-          ...slots
+          ...visibleSlots
               .take(5)
               .map(
                 (slot) => Padding(
@@ -3095,13 +3080,13 @@ class _PlannerSheetContent extends StatelessWidget {
       builder: (context) {
         return AlertDialog(
           title: Text(
-            _copy(language, ko: '하루 일정 재생성', en: 'Regenerate daily plan'),
+            _copy(language, ko: '하루 일정 재생성', en: 'Regenerate Daily Plan'),
           ),
           content: Text(
             _copy(
               language,
-              ko: '현재 지도의 위치와 날씨를 기준으로 새 일정을 만들까요?',
-              en: 'Create a new plan from the current map location and weather?',
+              ko: '현재 지도의 위치를 기준으로 새 일정이 만들어집니다.',
+              en: 'A new plan will be created based on the current map center.',
             ),
           ),
           actions: [
@@ -3128,6 +3113,7 @@ class _PlannerOverviewCard extends StatelessWidget {
     required this.language,
     required this.weather,
     required this.dailyPlan,
+    required this.visibleSlotCount,
     required this.loading,
     required this.onRegenerate,
   });
@@ -3135,6 +3121,7 @@ class _PlannerOverviewCard extends StatelessWidget {
   final String language;
   final LalaWeather? weather;
   final LalaDailyPlan? dailyPlan;
+  final int visibleSlotCount;
   final bool loading;
   final VoidCallback onRegenerate;
 
@@ -3146,32 +3133,15 @@ class _PlannerOverviewCard extends StatelessWidget {
     final weatherLabel = weather == null
         ? _copy(language, ko: '날씨 확인 중', en: 'Checking weather')
         : '${_outdoorLabel(weather!.outdoorStatus, language: language)} · ${_temperatureLabel(weather!.temp)} · ${_dustLabel(weather!.dust, language)}';
-    final slotCount = dailyPlan?.slots.length ?? 0;
     return Container(
-      padding: const EdgeInsets.all(13),
+      padding: const EdgeInsets.fromLTRB(2, 0, 2, 0),
       decoration: BoxDecoration(
-        color: const Color(0xFFF0FDF4),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFBBF7D0)),
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Container(
-            width: 38,
-            height: 38,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: const Color(0xFF0F766E).withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.alt_route_outlined,
-              color: Color(0xFF0F766E),
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 11),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -3181,7 +3151,7 @@ class _PlannerOverviewCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: const Color(0xFF14532D),
+                    color: const Color(0xFF64748B),
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -3191,12 +3161,12 @@ class _PlannerOverviewCard extends StatelessWidget {
                   runSpacing: 5,
                   children: [
                     _TinyMeta(weatherLabel),
-                    if (slotCount > 0)
+                    if (visibleSlotCount > 0)
                       _TinyMeta(
                         _copy(
                           language,
-                          ko: '$slotCount개 일정',
-                          en: '$slotCount stops',
+                          ko: '$visibleSlotCount개 일정',
+                          en: '$visibleSlotCount stops',
                         ),
                       ),
                   ],
@@ -3217,10 +3187,68 @@ class _PlannerOverviewCard extends StatelessWidget {
                 : const Icon(Icons.refresh, size: 17),
             label: Text(_copy(language, ko: '일정 재생성', en: 'Regenerate')),
             style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFF0F766E),
-              side: const BorderSide(color: Color(0xFF86EFAC)),
+              foregroundColor: const Color(0xFF2B6CB0),
+              side: const BorderSide(color: Color(0xFFB9D4F3)),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
               textStyle: const TextStyle(fontWeight: FontWeight.w900),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlannerLoadingCard extends StatelessWidget {
+  const _PlannerLoadingCard({required this.language});
+
+  final String language;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _copy(
+                    language,
+                    ko: '일정을 생성하는 중...',
+                    en: 'Generating your daily plan...',
+                  ),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xFF1E293B),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  _copy(
+                    language,
+                    ko: '처음 방문하는 장소는 최대 5~10초 소요돼요',
+                    en: 'New locations may take 5-10 seconds.',
+                  ),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: const Color(0xFF64748B),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -3243,69 +3271,103 @@ class _PlanSlotTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final place = slot.place;
+    final periodLabel = _periodLabel(slot.period, language: language);
+    final title = place == null
+        ? _planSlotTitle(slot, language)
+        : _placeDisplayName(place, language);
+    final subtitle = place == null ? null : _placeRegionLabel(place, language);
+    final weatherHint = _singleLanguageText(slot.weatherHint ?? '', language);
+    final detail = _planSlotDetail(slot, language);
     return Material(
       color: const Color(0xFFF8FAFC),
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(12),
       child: InkWell(
         key: ValueKey('planner-slot-${place?.placeId ?? slot.period}'),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(12),
         onTap: place == null ? null : () => onSelectPlace(place),
         child: Container(
-          padding: const EdgeInsets.all(13),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: const Color(0xFFD7E3F5)),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
           ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 42,
-                height: 42,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2B6CB0).withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: Text(
-                  _periodLabel(slot.period, language: language),
-                  style: const TextStyle(
-                    color: Color(0xFF2B6CB0),
-                    fontWeight: FontWeight.w900,
+              Row(
+                children: [
+                  Icon(
+                    _periodIcon(slot.period),
+                    size: 17,
+                    color: const Color(0xFF64748B),
                   ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+                  const SizedBox(width: 6),
+                  Text(
+                    periodLabel,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: const Color(0xFF64748B),
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  if (weatherHint != null) ...[
+                    const Spacer(),
                     Text(
-                      _planSlotTitle(slot, language),
+                      weatherHint,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w900,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: const Color(0xFF94A3B8),
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                    if (place != null)
-                      Text(
-                        '${_placeDisplayName(place, language)} · ${_categoryLabel(place.category, language: language)}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: const Color(0xFF64748B),
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
                   ],
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: const Color(0xFF1E293B),
+                  fontWeight: FontWeight.w900,
+                  height: 1.18,
                 ),
               ),
+              if (subtitle != null) ...[
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: const Color(0xFF94A3B8),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+              if (detail != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  detail,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: const Color(0xFF475569),
+                    fontWeight: FontWeight.w600,
+                    height: 1.45,
+                  ),
+                ),
+              ],
               if (place != null) ...[
-                const SizedBox(width: 8),
-                const Icon(
-                  Icons.chevron_right,
-                  color: Color(0xFF94A3B8),
-                  size: 22,
+                const SizedBox(height: 7),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Icon(
+                    Icons.chevron_right,
+                    color: const Color(0xFF94A3B8),
+                    size: 20,
+                  ),
                 ),
               ],
             ],
@@ -5392,9 +5454,7 @@ class _DocentSubtitle extends StatelessWidget {
               Expanded(
                 child: OutlinedButton.icon(
                   icon: const Icon(Icons.add_circle_outline),
-                  label: Text(
-                    _copy(language, ko: '오늘 코스에 추가', en: 'Add to plan'),
-                  ),
+                  label: Text(_copy(language, ko: '하루 일정 보기', en: 'View plan')),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFF2B6CB0),
                     side: const BorderSide(color: Color(0xFF2B6CB0)),
@@ -6687,7 +6747,7 @@ String _interventionToastLabel(LalaIntervention intervention, String language) {
   if (place != null) {
     return '날씨가 바뀌었어요. $place 중심으로 동선을 다시 확인해보세요.';
   }
-  return '날씨가 바뀌었어요. 오늘 일정을 다시 확인해보세요.';
+  return '날씨가 바뀌었어요. 하루 일정을 다시 확인해보세요.';
 }
 
 String _categoryLabel(String category, {String language = 'ko'}) {
@@ -7117,6 +7177,47 @@ String _planSlotTitle(LalaPlanSlot slot, String language) {
   return title;
 }
 
+bool _hasVisiblePlanSlot(LalaPlanSlot slot, String language) {
+  if (slot.place != null) {
+    return true;
+  }
+  final title = _planSlotTitle(slot, language).trim();
+  if (title.isEmpty) {
+    return false;
+  }
+  final lowerTitle = title.toLowerCase();
+  return !title.contains('이 장소') &&
+      !lowerTitle.contains('this place') &&
+      title != _copy(language, ko: '일정 준비 중', en: 'Preparing stop');
+}
+
+String? _planSlotDetail(LalaPlanSlot slot, String language) {
+  final place = slot.place;
+  if (place == null) {
+    return null;
+  }
+  final detail = _planSlotTitle(slot, language).trim();
+  if (detail.isEmpty) {
+    return null;
+  }
+  final placeName = _placeDisplayName(place, language).trim();
+  final period = _periodLabel(slot.period, language: language).trim();
+  final normalizedDetail = detail.replaceAll(RegExp(r'\s+'), ' ');
+  final normalizedPlace = placeName.replaceAll(RegExp(r'\s+'), ' ');
+  final periodPlace = '$period $normalizedPlace'.trim();
+  if (normalizedDetail == normalizedPlace || normalizedDetail == periodPlace) {
+    return null;
+  }
+  if (period.isNotEmpty && normalizedDetail.startsWith('$period ')) {
+    final afterPeriod = normalizedDetail.substring(period.length).trim();
+    if (afterPeriod == normalizedPlace ||
+        afterPeriod.startsWith(normalizedPlace)) {
+      return null;
+    }
+  }
+  return detail;
+}
+
 Color _categoryColor(String category) {
   return switch (category) {
     'attraction' => const Color(0xFFC53030),
@@ -7242,6 +7343,16 @@ String _periodLabel(String period, {String language = 'ko'}) {
           : period.length <= 2
           ? period
           : period.substring(0, 2),
+  };
+}
+
+IconData _periodIcon(String period) {
+  return switch (period) {
+    'morning' || '오전' => Icons.wb_twilight_outlined,
+    'lunch' || '점심' => Icons.restaurant_outlined,
+    'afternoon' || '오후' => Icons.wb_sunny_outlined,
+    'evening' || '저녁' || 'night' => Icons.nights_stay_outlined,
+    _ => Icons.place_outlined,
   };
 }
 
