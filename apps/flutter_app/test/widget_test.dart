@@ -141,11 +141,7 @@ void main() {
     await tester.tap(evidenceButton);
     await tester.pumpAndSettle();
 
-    final detailHeroSize = tester.getSize(
-      find.byKey(const ValueKey('detail-place-hero-image')),
-    );
-    expect(detailHeroSize.height, 170);
-    expect(detailHeroSize.width, greaterThan(320));
+    expect(find.byKey(const ValueKey('detail-place-hero-image')), findsNothing);
     expect(find.text('로컬 점수'), findsOneWidget);
     expect(find.text('내국인 소비'), findsOneWidget);
     expect(find.text('수요 분산'), findsOneWidget);
@@ -201,10 +197,8 @@ void main() {
       findsOneWidget,
     );
     expect(
-      tester.getSize(
-        find.byKey(const ValueKey('rail-place-thumb-haenggung-cafe-street')),
-      ),
-      const Size(72, 72),
+      find.byKey(const ValueKey('rail-place-thumb-haenggung-cafe-street')),
+      findsNothing,
     );
 
     final voiceToggle = find.byKey(const ValueKey('voice-toggle'));
@@ -245,6 +239,40 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       find.descendant(of: autoToggle, matching: find.text('켬')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('place photos render only from official image URLs', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      LalaApp(
+        backendFactory: (config) => FakeBackend(
+          config,
+          places: [
+            _place(),
+            _restaurantPlace(
+              imageUrl: 'https://tong.visitkorea.or.kr/cms/resource/photo.jpg',
+            ),
+          ],
+        ),
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('rail-place-thumb-hwaseong-haenggung')),
+      findsNothing,
+    );
+
+    await tester.tap(find.text('맛집').first);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('rail-place-thumb-haenggung-cafe-street')),
       findsOneWidget,
     );
   });
@@ -1050,11 +1078,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Details'), findsWidgets);
-    final detailHeroSize = tester.getSize(
-      find.byKey(const ValueKey('detail-place-hero-image')),
-    );
-    expect(detailHeroSize.height, 170);
-    expect(detailHeroSize.width, greaterThan(320));
+    expect(find.byKey(const ValueKey('detail-place-hero-image')), findsNothing);
     expect(find.text('Suwon'), findsAtLeastNWidgets(1));
     expect(find.text('Local context'), findsOneWidget);
     expect(find.text('1 linked events'), findsOneWidget);
@@ -1773,7 +1797,7 @@ LalaPlace _culturePlace({int distanceM = 620}) {
   );
 }
 
-LalaPlace _restaurantPlace({int distanceM = 780}) {
+LalaPlace _restaurantPlace({int distanceM = 780, String? imageUrl}) {
   return LalaPlace(
     placeId: 'haenggung-cafe-street',
     name: '행궁동 카페거리',
@@ -1785,6 +1809,7 @@ LalaPlace _restaurantPlace({int distanceM = 780}) {
     address: '경기도 수원시 팔달구 행궁동',
     regionKo: '수원',
     regionEn: 'Suwon',
+    imageUrl: imageUrl,
     distanceM: distanceM,
     source: 'skeleton',
     upstreamSource: 'tour_api',

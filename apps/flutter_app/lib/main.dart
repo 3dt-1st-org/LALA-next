@@ -2110,8 +2110,10 @@ class _MapRailPlaceCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                SizedBox(width: compact ? 8 : 10),
-                _RailPlaceThumb(place: place, compact: compact),
+                if (_hasOfficialPlaceImage(place)) ...[
+                  SizedBox(width: compact ? 8 : 10),
+                  _RailPlaceThumb(place: place, compact: compact),
+                ],
               ],
             ),
           ),
@@ -3259,11 +3261,13 @@ class _TourSheetContent extends StatelessWidget {
           ),
           child: Row(
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: _PlaceImage(place: first, width: 64, height: 64),
-              ),
-              const SizedBox(width: 12),
+              if (_hasOfficialPlaceImage(first)) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: _PlaceImage(place: first, width: 64, height: 64),
+                ),
+                const SizedBox(width: 12),
+              ],
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -4245,19 +4249,21 @@ class _FeaturedPlaceHeader extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(14),
-          child: SizedBox(
-            key: const ValueKey('detail-place-hero-image'),
-            height: 170,
-            child: _PlaceImage(
-              place: place,
-              width: double.infinity,
+        if (_hasOfficialPlaceImage(place)) ...[
+          ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: SizedBox(
+              key: const ValueKey('detail-place-hero-image'),
               height: 170,
+              child: _PlaceImage(
+                place: place,
+                width: double.infinity,
+                height: 170,
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 14),
+          const SizedBox(height: 14),
+        ],
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -5804,8 +5810,10 @@ class _LegacyPlaceCard extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: 10),
-          _PlaceThumb(place: place),
+          if (_hasOfficialPlaceImage(place)) ...[
+            const SizedBox(width: 10),
+            _PlaceThumb(place: place),
+          ],
         ],
       ),
     );
@@ -5858,6 +5866,9 @@ class _PlaceThumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!_hasOfficialPlaceImage(place)) {
+      return const SizedBox.shrink();
+    }
     return ClipRRect(
       borderRadius: BorderRadius.circular(18),
       child: _PlaceImage(place: place, width: 76, height: 76),
@@ -5886,19 +5897,19 @@ class _PlaceImage extends StatelessWidget {
         height: height,
         fit: BoxFit.cover,
         webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
-        errorBuilder: (_, _, _) => _FallbackPlaceImage(
+        errorBuilder: (_, _, _) => _UnavailablePlaceImage(
           category: place.category,
           width: width,
           height: height,
         ),
       );
     }
-    return _FallbackPlaceImage(
-      category: place.category,
-      width: width,
-      height: height,
-    );
+    return const SizedBox.shrink();
   }
+}
+
+bool _hasOfficialPlaceImage(LalaPlace place) {
+  return _normalizedPlaceImageUri(place.imageUrl) != null;
 }
 
 Uri? _normalizedPlaceImageUri(String? rawUrl) {
@@ -5919,8 +5930,8 @@ Uri? _normalizedPlaceImageUri(String? rawUrl) {
   return parsedImageUrl;
 }
 
-class _FallbackPlaceImage extends StatelessWidget {
-  const _FallbackPlaceImage({
+class _UnavailablePlaceImage extends StatelessWidget {
+  const _UnavailablePlaceImage({
     required this.category,
     required this.width,
     required this.height,
@@ -5933,136 +5944,21 @@ class _FallbackPlaceImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = _categoryColor(category);
-    final icon = switch (category) {
-      'restaurant' => Icons.restaurant_menu,
-      'event' => Icons.event,
-      'culture_venue' => Icons.museum,
-      _ => Icons.landscape,
-    };
     return SizedBox(
       width: width,
       height: height,
-      child: CustomPaint(
-        painter: _FallbackPlaceImagePainter(color: color),
-        child: Align(
-          alignment: Alignment.bottomRight,
-          child: Padding(
-            padding: EdgeInsets.all(
-              math.max(7, math.min(width, height) * 0.10),
-            ),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.90),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: color.withValues(alpha: 0.24)),
-                boxShadow: const [
-                  BoxShadow(
-                    blurRadius: 8,
-                    offset: Offset(0, 3),
-                    color: Color(0x16000000),
-                  ),
-                ],
-              ),
-              child: SizedBox.square(
-                dimension: math.max(30, math.min(width, height) * 0.42),
-                child: Icon(
-                  icon,
-                  color: color,
-                  size: math.max(17, math.min(width, height) * 0.20),
-                ),
-              ),
-            ),
-          ),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          border: Border.all(color: color.withValues(alpha: 0.18)),
+        ),
+        child: Icon(
+          Icons.image_not_supported_outlined,
+          color: color.withValues(alpha: 0.62),
+          size: math.max(18, math.min(width, height) * 0.24),
         ),
       ),
     );
-  }
-}
-
-class _FallbackPlaceImagePainter extends CustomPainter {
-  const _FallbackPlaceImagePainter({required this.color});
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-    final paint = Paint();
-    paint.shader = LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [
-        Color.lerp(const Color(0xFFFFFFFF), color, 0.08)!,
-        const Color(0xFFF7FAFC),
-        Color.lerp(const Color(0xFFE8F0F6), color, 0.12)!,
-      ],
-      stops: const [0, 0.58, 1],
-    ).createShader(rect);
-    canvas.drawRect(rect, paint);
-
-    final roadPaint = Paint()
-      ..color = const Color(0xFFFFFFFF).withValues(alpha: 0.72)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = math.max(8, size.shortestSide * 0.13)
-      ..strokeCap = StrokeCap.round;
-    final roadPath = Path()
-      ..moveTo(size.width * -0.08, size.height * 0.72)
-      ..cubicTo(
-        size.width * 0.22,
-        size.height * 0.52,
-        size.width * 0.46,
-        size.height * 0.86,
-        size.width * 0.76,
-        size.height * 0.62,
-      )
-      ..cubicTo(
-        size.width * 0.92,
-        size.height * 0.48,
-        size.width * 0.96,
-        size.height * 0.32,
-        size.width * 1.08,
-        size.height * 0.22,
-      );
-    canvas.drawPath(roadPath, roadPaint);
-
-    final contourPaint = Paint()
-      ..color = color.withValues(alpha: 0.14)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2;
-    for (var index = 0; index < 4; index += 1) {
-      final inset = 8.0 + index * size.shortestSide * 0.10;
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(
-            -inset,
-            -inset * 0.45,
-            size.width + inset * 1.9,
-            size.height * 0.58 + inset,
-          ),
-          Radius.circular(size.shortestSide * (0.20 + index * 0.06)),
-        ),
-        contourPaint,
-      );
-    }
-
-    final pinPaint = Paint()
-      ..color = color.withValues(alpha: 0.22)
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(
-      Offset(size.width * 0.26, size.height * 0.30),
-      math.max(4, size.shortestSide * 0.055),
-      pinPaint,
-    );
-    canvas.drawCircle(
-      Offset(size.width * 0.62, size.height * 0.42),
-      math.max(3, size.shortestSide * 0.04),
-      pinPaint..color = const Color(0xFF2B6CB0).withValues(alpha: 0.14),
-    );
-  }
-
-  @override
-  bool shouldRepaint(_FallbackPlaceImagePainter oldDelegate) {
-    return oldDelegate.color != color;
   }
 }
 
