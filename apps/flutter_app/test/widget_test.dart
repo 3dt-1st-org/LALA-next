@@ -947,7 +947,7 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('요청을 처리하지 못했습니다.'), findsOneWidget);
+    expect(find.textContaining('요청을 처리하지 못했습니다'), findsOneWidget);
     expect(
       find.text('UPSTREAM_UNAVAILABLE: Authenticated route failed.'),
       findsNothing,
@@ -967,6 +967,31 @@ void main() {
     );
     expect(find.byKey(const ValueKey('map-error-retry')), findsNothing);
     expect(find.textContaining('조선 왕실'), findsAtLeastNWidgets(1));
+  });
+
+  testWidgets('english fallback errors hide internal API details', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      LalaApp(
+        backendFactory: (config) =>
+            FakeBackend(config, failAuthenticatedLoad: true),
+        initialConfig: const LalaAppConfig(
+          baseUri: 'http://api.test',
+          bearerToken: 'test-token',
+          lang: 'en',
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('Unable to complete the request'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('UPSTREAM_UNAVAILABLE'), findsNothing);
+    expect(find.textContaining('Authenticated route failed'), findsNothing);
   });
 
   testWidgets('settings hides developer connection controls', (tester) async {

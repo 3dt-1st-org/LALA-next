@@ -459,16 +459,12 @@ class _LalaHomePageState extends State<LalaHomePage> {
 
   String _safeErrorMessage(Object error) {
     if (error is LalaApiException) {
-      return '${error.code}: ${error.message}';
+      return _safeUiErrorMessage(error.message);
     }
     if (error is FormatException) {
-      return error.message;
+      return _safeUiErrorMessage(error.message);
     }
-    return _copy(
-      _uiLanguage,
-      ko: 'LALA API 정보를 불러오지 못했습니다.',
-      en: 'Unable to load the LALA API data.',
-    );
+    return _requestFailureMessage();
   }
 
   Future<void> _fetchMoreInfo() async {
@@ -6513,6 +6509,21 @@ String? _localizedUiMessage(String? value, String language) {
     ko: '요청을 처리하지 못했습니다.',
     en: 'Unable to complete the request.',
   );
+}
+
+String _safeUiErrorMessage(String? value) {
+  final trimmed = value?.trim();
+  if (trimmed == null || trimmed.isEmpty) {
+    return _requestFailureMessage();
+  }
+  if (_containsKorean(trimmed)) {
+    return trimmed;
+  }
+  return _requestFailureMessage();
+}
+
+String _requestFailureMessage() {
+  return '요청을 처리하지 못했습니다. Unable to complete the request.';
 }
 
 String _languageOptionLabel(String optionLanguage, String uiLanguage) {
