@@ -1,7 +1,7 @@
 {
   "snapshot_id": "public-mvp-gyeonggi-coverage-2026-06-18",
   "description": "Public MVP snapshot exported from the canonical DB read model. It is used only when the public demo API has no DB_DSN.",
-  "generated_at": "2026-06-18T14:52:19.840746+00:00",
+  "generated_at": "2026-06-18T15:02:36.856416+00:00",
   "query": {
     "lat": 37.2636,
     "lng": 127.0286,
@@ -12,7 +12,7 @@
     {
       "place_id": "tour-api-130104",
       "name_ko": "군포문화원",
-      "name_en": "Gunpomunhwa-Won Cultural Center",
+      "name_en": "Gunpo Cultural Center",
       "category": "culture_venue",
       "lat": 37.3472764967,
       "lng": 126.9548487894,
@@ -136,7 +136,7 @@
     {
       "place_id": "tour-api-3551000",
       "name_ko": "2025 에듀의왕! 어울림축제",
-      "name_en": "2025 Edyu-Ui-Wang! Eo-Ullimchugje Festival",
+      "name_en": "2025 Edu Uiwang Harmony Festival",
       "category": "event",
       "lat": 37.3056701893,
       "lng": 126.9537833824,
@@ -198,7 +198,7 @@
     {
       "place_id": "tour-api-2851985",
       "name_ko": "의왕백운호수축제",
-      "name_en": "Ui-Wangbaeg-Unhosuchugje Festival",
+      "name_en": "Uiwang Baegun Lake Festival",
       "category": "event",
       "lat": 37.3834399412,
       "lng": 127.0091872809,
@@ -260,7 +260,7 @@
     {
       "place_id": "tour-api-2648242",
       "name_ko": "시흥오이도박물관",
-      "name_en": "Siheung-O-Idobagmulgwan Museum",
+      "name_en": "Siheung Oido Museum",
       "category": "culture_venue",
       "lat": 37.3347094008,
       "lng": 126.6917702916,
@@ -322,7 +322,7 @@
     {
       "place_id": "tour-api-3019085",
       "name_ko": "2025 이천펫축제",
-      "name_en": "2025 Icheonpeschugje Festival",
+      "name_en": "2025 Icheon Pet Festival",
       "category": "event",
       "lat": 37.2913267465,
       "lng": 127.3806506302,
@@ -384,7 +384,7 @@
     {
       "place_id": "tour-api-581040",
       "name_ko": "전국해양스포츠제전",
-      "name_en": "Jeongughae-Yangseupocheujejeon",
+      "name_en": "National Marine Sports Festival",
       "category": "event",
       "lat": 37.3267988841,
       "lng": 126.6734082927,
@@ -446,7 +446,7 @@
     {
       "place_id": "tour-api-622946",
       "name_ko": "구리 코스모스 축제",
-      "name_en": "Guli Koseumoseu Chugje Festival",
+      "name_en": "Guri Cosmos Festival",
       "category": "event",
       "lat": 37.5745310968,
       "lng": 127.1328789538,
@@ -570,7 +570,7 @@
     {
       "place_id": "tour-api-129865",
       "name_ko": "구리문화원",
-      "name_en": "Gulimunhwa-Won Cultural Center",
+      "name_en": "Guri Cultural Center",
       "category": "culture_venue",
       "lat": 37.611787996,
       "lng": 127.1393661883,
@@ -632,7 +632,7 @@
     {
       "place_id": "tour-api-2733410",
       "name_ko": "광명에디슨뮤지엄",
-      "name_en": "Gwangmyeong-Ediseunmyuji-Eom",
+      "name_en": "Gwangmyeong Edison Museum",
       "category": "culture_venue",
       "lat": 37.4209138762,
       "lng": 126.8818561453,
@@ -694,7 +694,7 @@
     {
       "place_id": "tour-api-3551206",
       "name_ko": "광명동굴 빛 축제",
-      "name_en": "Gwangmyeongdonggul Bich Chugje Light Festival",
+      "name_en": "Gwangmyeong Cave Light Festival",
       "category": "event",
       "lat": 37.4243548415,
       "lng": 126.8648909266,
@@ -756,7 +756,7 @@
     {
       "place_id": "tour-api-130707",
       "name_ko": "충현박물관",
-      "name_en": "Chunghyeonbagmulgwan Museum",
+      "name_en": "Chunghyeon Museum",
       "category": "culture_venue",
       "lat": 37.4335095727,
       "lng": 126.8782866731,
@@ -818,7 +818,7 @@
     {
       "place_id": "tour-api-2034106",
       "name_ko": "광명업사이클아트센터",
-      "name_en": "Gwangmyeong-Eobsa-Ikeul-Ateusenteo Art Center",
+      "name_en": "Gwangmyeong Upcycle Art Center",
       "category": "culture_venue",
       "lat": 37.4625588826,
       "lng": 126.8729446789,
@@ -880,7 +880,7 @@
     {
       "place_id": "tour-api-782884",
       "name_ko": "안산시행복예절관",
-      "name_en": "Ansansihaengbog-Yejeolgwan",
+      "name_en": "Ansan Etiquette Center",
       "category": "attraction",
       "lat": 37.3321899449,
       "lng": 126.8317298482,
@@ -942,7 +942,7 @@
     {
       "place_id": "tour-api-2761294",
       "name_ko": "개미허리아치교",
-      "name_en": "Gaemiheoli-Achigyo",
+      "name_en": "Ant Waist Arch Bridge",
       "category": "attraction",
       "lat": 37.2867511488,
       "lng": 126.5377106391,
@@ -1004,7 +1004,7 @@
     {
       "place_id": "tour-api-130819",
       "name_ko": "부천시립심곡도서관",
-      "name_en": "Bucheonsilibsimgogdoseogwan Library",
+      "name_en": "Bucheon Simgok Library",
       "category": "culture_venue",
       "lat": 37.4809635015,
       "lng": 126.7843022402,
@@ -1066,7 +1066,7 @@
     {
       "place_id": "tour-api-749822",
       "name_ko": "소사복숭아축제",
-      "name_en": "Sosabogsung-Achugje Festival",
+      "name_en": "Sosa Peach Festival",
       "category": "event",
       "lat": 37.4816630099,
       "lng": 126.7611737737,
@@ -1128,7 +1128,7 @@
     {
       "place_id": "tour-api-2392159",
       "name_ko": "제10회 부천국제브레이킹대회(BIBC)",
-      "name_en": "Je10Hoe Bucheongugjebeule-Ikingdaehoe(Bibc)",
+      "name_en": "10th Bucheon International Breaking Competition (BIBC)",
       "category": "event",
       "lat": 37.5037883025,
       "lng": 126.7660282681,
@@ -1190,7 +1190,7 @@
     {
       "place_id": "tour-api-2470347",
       "name_ko": "한국만화박물관",
-      "name_en": "Hangugmanhwabagmulgwan Museum",
+      "name_en": "Korea Manhwa Museum",
       "category": "culture_venue",
       "lat": 37.50825125,
       "lng": 126.7422053159,
@@ -1252,7 +1252,7 @@
     {
       "place_id": "tour-api-3551014",
       "name_ko": "2025 제7회 BMF(블랙뮤직페스티벌)",
-      "name_en": "2025 Je7Hoe Bmf(Beullaegmyujigpeseutibeol)",
+      "name_en": "2025 7th BMF Black Music Festival",
       "category": "event",
       "lat": 37.7481534845,
       "lng": 127.0297139555,
@@ -1314,7 +1314,7 @@
     {
       "place_id": "tour-api-2948061",
       "name_ko": "동광극장",
-      "name_en": "Donggwanggeugjang",
+      "name_en": "Donggwang Theater",
       "category": "culture_venue",
       "lat": 37.9088879332,
       "lng": 127.0520211817,
@@ -1376,7 +1376,7 @@
     {
       "place_id": "tour-api-1730495",
       "name_ko": "연천수레울아트홀",
-      "name_en": "Yeoncheonsule-Ul-Ateuhol",
+      "name_en": "Yeoncheon Sureul Art Hall",
       "category": "culture_venue",
       "lat": 38.108798432,
       "lng": 127.0800683593,
@@ -1438,7 +1438,7 @@
     {
       "place_id": "tour-api-2642613",
       "name_ko": "CICA 미술관",
-      "name_en": "Cica Misulgwan Art Museum",
+      "name_en": "CICA Art Museum",
       "category": "culture_venue",
       "lat": 37.6082509493,
       "lng": 126.5977962666,
@@ -1562,7 +1562,7 @@
     {
       "place_id": "tour-api-130709",
       "name_ko": "서호미술관",
-      "name_en": "Seohomisulgwan Art Museum",
+      "name_en": "Seohomi Art Museum",
       "category": "culture_venue",
       "lat": 37.6327671912,
       "lng": 127.3515129409,
@@ -1624,7 +1624,7 @@
     {
       "place_id": "tour-api-2867300",
       "name_ko": "평택 원평나루 억새축제",
-      "name_en": "Pyeongtaeg Wonpyeongnalu Eogsaechugje Festival",
+      "name_en": "Pyeongtaek Wonpyeong Naru Silver Grass Festival",
       "category": "event",
       "lat": 36.9844984904,
       "lng": 127.081480734,
@@ -1686,7 +1686,7 @@
     {
       "place_id": "tour-api-134601",
       "name_ko": "무진장갈비",
-      "name_en": "Mujinjanggalbi",
+      "name_en": "Mujinjang Galbi",
       "category": "restaurant",
       "lat": 37.1810197465,
       "lng": 127.0542944073,
@@ -1748,7 +1748,7 @@
     {
       "place_id": "tour-api-2714751",
       "name_ko": "가원미술관",
-      "name_en": "Ga-Wonmisulgwan Art Museum",
+      "name_en": "Gawon Art Museum",
       "category": "culture_venue",
       "lat": 37.4240072797,
       "lng": 126.9992398229,
@@ -1870,7 +1870,7 @@
     {
       "place_id": "tour-api-1390147",
       "name_ko": "안양춤축제",
-      "name_en": "An-Yangchumchugje Festival",
+      "name_en": "Anyang Dance Festival",
       "category": "event",
       "lat": 37.3901883031,
       "lng": 126.9613442188,
@@ -1932,7 +1932,7 @@
     {
       "place_id": "tour-api-3372236",
       "name_ko": "튼튼 펫 페스타",
-      "name_en": "Teunteun Pes Peseuta",
+      "name_en": "Tuntun Pet Festa",
       "category": "event",
       "lat": 37.1992404182,
       "lng": 127.0855160695,
@@ -1994,7 +1994,7 @@
     {
       "place_id": "tour-api-3000203",
       "name_ko": "양주국가유산 야행",
-      "name_en": "Yangjugugga-Yusan Yahaeng",
+      "name_en": "Yangju National Heritage Night Tour",
       "category": "event",
       "lat": 37.78510751,
       "lng": 127.0295156915,
@@ -2056,7 +2056,7 @@
     {
       "place_id": "tour-api-130814",
       "name_ko": "성남시 분당도서관",
-      "name_en": "Seongnamsi Bundangdoseogwan Library",
+      "name_en": "Seongnam Bundang Library",
       "category": "culture_venue",
       "lat": 37.3581559086,
       "lng": 127.1165949023,
@@ -2118,7 +2118,7 @@
     {
       "place_id": "tour-api-1732075",
       "name_ko": "광주시문화재단 광주시문화예술의전당",
-      "name_en": "Gwangjusimunhwajaedan Gwangjusimunhwa-Yesul-Uijeondang",
+      "name_en": "Gwangju Cultural Foundation Arts Center",
       "category": "culture_venue",
       "lat": 37.4269198735,
       "lng": 127.2547220811,
@@ -2242,7 +2242,7 @@
     {
       "place_id": "tour-api-2946243",
       "name_ko": "경희대학교 국제캠퍼스 노천극장",
-      "name_en": "Gyeonghuidaehaggyo Gugjekaempeoseu Nocheongeugjang",
+      "name_en": "Kyung Hee University Global Campus Outdoor Theater",
       "category": "culture_venue",
       "lat": 37.2480013599,
       "lng": 127.0808817927,
@@ -2304,7 +2304,7 @@
     {
       "place_id": "tour-api-2609320",
       "name_ko": "지혜의 숲",
-      "name_en": "Jihye-Ui Sup",
+      "name_en": "Forest of Wisdom",
       "category": "culture_venue",
       "lat": 37.7086519509,
       "lng": 126.6872324943,
@@ -2366,7 +2366,7 @@
     {
       "place_id": "tour-api-130901",
       "name_ko": "이경순 소리박물관",
-      "name_en": "Igyeongsun Solibagmulgwan Museum",
+      "name_en": "Lee Kyung-soon Sound Museum",
       "category": "culture_venue",
       "lat": 37.0566174297,
       "lng": 127.3628588671,
@@ -2428,7 +2428,7 @@
     {
       "place_id": "tour-api-3008665",
       "name_ko": "포천시 청년축제",
-      "name_en": "Pocheonsi Cheongnyeonchugje Festival",
+      "name_en": "Pocheon Youth Festival",
       "category": "event",
       "lat": 37.8891984878,
       "lng": 127.2006276068,
@@ -2490,7 +2490,7 @@
     {
       "place_id": "tour-api-2623238",
       "name_ko": "세종대왕 역사문화관",
-      "name_en": "Sejongdae-Wang Yeogsamunhwagwan",
+      "name_en": "King Sejong History and Culture Center",
       "category": "culture_venue",
       "lat": 37.304984928,
       "lng": 127.6113515895,
@@ -2551,7 +2551,7 @@
     {
       "place_id": "tour-api-2948028",
       "name_ko": "이함캠퍼스",
-      "name_en": "Ihamkaempeoseu",
+      "name_en": "Iham Campus",
       "category": "culture_venue",
       "lat": 37.5028252925,
       "lng": 127.4256821682,
@@ -2613,7 +2613,7 @@
     {
       "place_id": "tour-api-1725993",
       "name_ko": "고양가을꽃축제",
-      "name_en": "Go-Yangga-Eulkkochchugje Festival",
+      "name_en": "Goyang Autumn Flower Festival",
       "category": "event",
       "lat": 37.6538792239,
       "lng": 126.7686654803,

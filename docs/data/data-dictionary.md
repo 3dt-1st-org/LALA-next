@@ -485,9 +485,11 @@ mixed-content 차단을 피한다. 더 많은 이미지를 채우려면 먼저
 
 따라서 현재 배포/스냅샷은 경기도 전체 시군을 품는 상태다. 남은 핵심 데이터 품질 과제는
 TourAPI 신규 장소의 로컬 로마자 영문명을 AI/공식 영문명으로 승격하고 `is_indoor`를
-보강하는 것이다. `.env`에 Azure/OpenAI 설정이 없으면 기존 AI 보강 스크립트는 실행할 수
-없으므로, 다음 적용 순서는 AI 또는 공식 영문/영문주소 API 보강, 실내외 분류, 점수 재계산,
-RAG 재색인, public snapshot export다.
+보강하는 것이다. 현재 bundled snapshot에 노출되는 주요 로컬 로마자 값은
+`local_romanization` 사전으로 다듬어 영어 UI에서 거친 로마자 패턴이 보이지 않게 했지만,
+이는 최종 공식 영문명이 아니라 임시 표시 품질 보강이다. `.env`에 Azure/OpenAI 설정이
+없으면 기존 AI 보강 스크립트는 실행할 수 없으므로, 다음 적용 순서는 AI 또는 공식
+영문/영문주소 API 보강, 실내외 분류, 점수 재계산, RAG 재색인, public snapshot export다.
 
 ### KOPIS performances
 

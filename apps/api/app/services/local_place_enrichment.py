@@ -8,6 +8,48 @@ from apps.api.app.services.public_mvp_snapshot import GYEONGGI_REGION_NAME_EN
 
 PROMPT_VERSION = "local-romanization-v1"
 
+_KNOWN_NAME_EN = {
+    "2025 에듀의왕! 어울림축제": "2025 Edu Uiwang Harmony Festival",
+    "의왕백운호수축제": "Uiwang Baegun Lake Festival",
+    "시흥오이도박물관": "Siheung Oido Museum",
+    "2025 이천펫축제": "2025 Icheon Pet Festival",
+    "전국해양스포츠제전": "National Marine Sports Festival",
+    "구리 코스모스 축제": "Guri Cosmos Festival",
+    "구리문화원": "Guri Cultural Center",
+    "군포문화원": "Gunpo Cultural Center",
+    "광명에디슨뮤지엄": "Gwangmyeong Edison Museum",
+    "광명동굴 빛 축제": "Gwangmyeong Cave Light Festival",
+    "충현박물관": "Chunghyeon Museum",
+    "광명업사이클아트센터": "Gwangmyeong Upcycle Art Center",
+    "안산시행복예절관": "Ansan Etiquette Center",
+    "개미허리아치교": "Ant Waist Arch Bridge",
+    "부천시립심곡도서관": "Bucheon Simgok Library",
+    "소사복숭아축제": "Sosa Peach Festival",
+    "제10회 부천국제브레이킹대회(BIBC)": "10th Bucheon International Breaking Competition (BIBC)",
+    "한국만화박물관": "Korea Manhwa Museum",
+    "2025 제7회 BMF(블랙뮤직페스티벌)": "2025 7th BMF Black Music Festival",
+    "동광극장": "Donggwang Theater",
+    "연천수레울아트홀": "Yeoncheon Sureul Art Hall",
+    "CICA 미술관": "CICA Art Museum",
+    "서호미술관": "Seohomi Art Museum",
+    "평택 원평나루 억새축제": "Pyeongtaek Wonpyeong Naru Silver Grass Festival",
+    "무진장갈비": "Mujinjang Galbi",
+    "가원미술관": "Gawon Art Museum",
+    "안양춤축제": "Anyang Dance Festival",
+    "튼튼 펫 페스타": "Tuntun Pet Festa",
+    "양주국가유산 야행": "Yangju National Heritage Night Tour",
+    "2025 양주관아지에서 만나는 특별한 주말": "2025 Special Weekend at Yangju Gwana Historic Site",
+    "성남시 분당도서관": "Seongnam Bundang Library",
+    "광주시문화재단 광주시문화예술의전당": "Gwangju Cultural Foundation Arts Center",
+    "경희대학교 국제캠퍼스 노천극장": "Kyung Hee University Global Campus Outdoor Theater",
+    "지혜의 숲": "Forest of Wisdom",
+    "이경순 소리박물관": "Lee Kyung-soon Sound Museum",
+    "포천시 청년축제": "Pocheon Youth Festival",
+    "세종대왕 역사문화관": "King Sejong History and Culture Center",
+    "이함캠퍼스": "Iham Campus",
+    "고양가을꽃축제": "Goyang Autumn Flower Festival",
+}
+
 _NAME_SUFFIXES = (
     ("과학축제", "Science Festival"),
     ("문화축제", "Culture Festival"),
@@ -49,13 +91,19 @@ class LocalPlaceEnrichment:
         return any((self.name_en, self.address_en, self.region_name_en))
 
 
-def build_local_enrichment(row: dict[str, Any]) -> LocalPlaceEnrichment:
+def build_local_enrichment(
+    row: dict[str, Any],
+    *,
+    replace_existing: bool = False,
+) -> LocalPlaceEnrichment:
     region_name_ko = _optional_text(row.get("region_name_ko"))
     region_name_en = _optional_text(row.get("region_name_en")) or _region_name_en(region_name_ko)
+    name_en = None if replace_existing else _optional_text(row.get("name_en"))
+    address_en = None if replace_existing else _optional_text(row.get("address_en"))
     return LocalPlaceEnrichment(
         place_id=str(row.get("place_id") or ""),
-        name_en=_optional_text(row.get("name_en")) or romanize_place_name(row.get("name_ko")),
-        address_en=_optional_text(row.get("address_en")) or romanize_address(row.get("address_ko")),
+        name_en=name_en or romanize_place_name(row.get("name_ko")),
+        address_en=address_en or romanize_address(row.get("address_ko")),
         region_name_en=region_name_en,
         confidence=0.62,
         reason="Local Hangul romanization fallback for static English display.",
@@ -66,6 +114,9 @@ def romanize_place_name(value: object) -> str | None:
     text = _optional_text(value)
     if not text:
         return None
+    known_name = _KNOWN_NAME_EN.get(text)
+    if known_name:
+        return known_name
     romanized = _romanize(text)
     if not romanized:
         return None
@@ -85,11 +136,17 @@ def romanize_address(value: object) -> str | None:
     return " ".join(parts).strip() or None
 
 
-def fetch_candidates(*, dsn: str, limit: int, connect_timeout: int) -> list[dict[str, Any]]:
+def fetch_candidates(
+    *,
+    dsn: str,
+    limit: int,
+    connect_timeout: int,
+    refresh_local: bool = False,
+) -> list[dict[str, Any]]:
     import psycopg2
     from psycopg2.extras import RealDictCursor
 
-    sql = """
+    missing_sql = """
         SELECT
             place_id,
             name_ko,
@@ -109,9 +166,28 @@ def fetch_candidates(*, dsn: str, limit: int, connect_timeout: int) -> list[dict
         ORDER BY updated_at DESC, place_id
         LIMIT %s
     """
+    refresh_sql = """
+        SELECT
+            places.place_id,
+            places.name_ko,
+            places.name_en,
+            places.address_ko,
+            places.address_en,
+            places.region_name_ko,
+            places.region_name_en
+        FROM travel.places places
+        WHERE EXISTS (
+            SELECT 1
+            FROM travel.place_enrichments enrichments
+            WHERE enrichments.place_id = places.place_id
+              AND enrichments.source_method = 'local_romanization'
+        )
+        ORDER BY places.updated_at DESC, places.place_id
+        LIMIT %s
+    """
     with psycopg2.connect(dsn, connect_timeout=connect_timeout) as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(sql, (limit,))
+            cur.execute(refresh_sql if refresh_local else missing_sql, (limit,))
             return [dict(row) for row in cur.fetchall()]
 
 
@@ -120,17 +196,27 @@ def apply_local_enrichments(
     dsn: str,
     enrichments: Sequence[LocalPlaceEnrichment],
     connect_timeout: int,
+    replace_existing: bool = False,
 ) -> int:
     import psycopg2
 
     if not enrichments:
         return 0
-    update_sql = """
+    merge_update_sql = """
         UPDATE travel.places
         SET
             name_en = COALESCE(NULLIF(trim(name_en), ''), %(name_en)s),
             address_en = COALESCE(NULLIF(trim(address_en), ''), %(address_en)s),
             region_name_en = COALESCE(NULLIF(trim(region_name_en), ''), %(region_name_en)s),
+            updated_at = now()
+        WHERE place_id = %(place_id)s
+    """
+    replace_update_sql = """
+        UPDATE travel.places
+        SET
+            name_en = %(name_en)s,
+            address_en = %(address_en)s,
+            region_name_en = %(region_name_en)s,
             updated_at = now()
         WHERE place_id = %(place_id)s
     """
@@ -175,7 +261,7 @@ def apply_local_enrichments(
                     "confidence": item.confidence,
                     "prompt_version": PROMPT_VERSION,
                 }
-                cur.execute(update_sql, params)
+                cur.execute(replace_update_sql if replace_existing else merge_update_sql, params)
                 updated += cur.rowcount
                 cur.execute(insert_sql, params)
         conn.commit()

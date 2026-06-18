@@ -6,9 +6,23 @@ from apps.api.app.services import local_place_enrichment
 def test_romanize_place_name_adds_useful_suffix() -> None:
     name = local_place_enrichment.romanize_place_name("시흥오이도박물관")
 
-    assert name
-    assert "Museum" in name
+    assert name == "Siheung Oido Museum"
+    assert "Bagmulgwan" not in name
     assert not any("가" <= char <= "힣" for char in name)
+
+
+def test_romanize_place_name_uses_curated_public_labels() -> None:
+    name = local_place_enrichment.romanize_place_name("2025 제7회 BMF(블랙뮤직페스티벌)")
+
+    assert name == "2025 7th BMF Black Music Festival"
+    assert "Je7Hoe" not in name
+
+
+def test_romanize_place_name_handles_event_phrases() -> None:
+    name = local_place_enrichment.romanize_place_name("2025 양주관아지에서 만나는 특별한 주말")
+
+    assert name == "2025 Special Weekend at Yangju Gwana Historic Site"
+    assert "Yangjugwan-Aji" not in name
 
 
 def test_romanize_address_uses_gyeonggi_region_dictionary() -> None:
@@ -36,3 +50,20 @@ def test_build_local_enrichment_preserves_existing_values() -> None:
     assert enrichment.region_name_en == "Suwon-si"
     assert enrichment.address_en
     assert not any("가" <= char <= "힣" for char in enrichment.address_en)
+
+
+def test_build_local_enrichment_can_refresh_local_values() -> None:
+    enrichment = local_place_enrichment.build_local_enrichment(
+        {
+            "place_id": "tour-api-3551014",
+            "name_ko": "2025 제7회 BMF(블랙뮤직페스티벌)",
+            "name_en": "2025 Je7Hoe Bmf(Beullaegmyujigpeseutibeol)",
+            "address_ko": "경기도 의정부시",
+            "address_en": "Gyeonggi-do Uijeongbu-si",
+            "region_name_ko": "의정부시",
+            "region_name_en": "Uijeongbu-si",
+        },
+        replace_existing=True,
+    )
+
+    assert enrichment.name_en == "2025 7th BMF Black Music Festival"
