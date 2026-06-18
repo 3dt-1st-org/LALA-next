@@ -4921,7 +4921,7 @@ class _PlaceRail extends StatelessWidget {
               scrollDirection: Axis.horizontal,
               itemCount: items.length,
               separatorBuilder: (_, _) => const SizedBox(width: 12),
-              itemBuilder: (context, index) => _LegacyPlaceCard(
+              itemBuilder: (context, index) => _RecommendedPlaceCard(
                 place: items[index],
                 selected: index == 0,
                 language: language,
@@ -5719,8 +5719,8 @@ class _MapFab extends StatelessWidget {
   }
 }
 
-class _LegacyPlaceCard extends StatelessWidget {
-  const _LegacyPlaceCard({
+class _RecommendedPlaceCard extends StatelessWidget {
+  const _RecommendedPlaceCard({
     required this.place,
     required this.selected,
     this.language = 'ko',
