@@ -1912,7 +1912,9 @@ class _MapPlaceCarouselOverlay extends StatelessWidget {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      _copy(language, ko: '추천 장소 보기', en: 'Show places'),
+                      expanded
+                          ? _copy(language, ko: '추천 장소 접기', en: 'Hide places')
+                          : _copy(language, ko: '추천 장소 보기', en: 'Show places'),
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
                         color: const Color(0xFF374151),
                         fontWeight: FontWeight.w900,

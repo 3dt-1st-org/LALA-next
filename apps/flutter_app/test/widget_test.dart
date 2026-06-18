@@ -112,7 +112,7 @@ void main() {
     expect(find.text('전체'), findsOneWidget);
     expect(find.text('명소'), findsAtLeastNWidgets(1));
     expect(find.text('대시보드'), findsNothing);
-    expect(find.text('추천 장소 보기'), findsOneWidget);
+    expect(find.text('추천 장소 접기'), findsOneWidget);
     expect(find.textContaining('카카오 지도 키'), findsOneWidget);
     expect(find.text('로컬 점수'), findsNothing);
     expect(find.text('내국인 소비'), findsNothing);
@@ -652,7 +652,7 @@ void main() {
 
     expect(find.text('수원화성 도슨트'), findsNothing);
     expect(find.text('화성행궁 도슨트'), findsAtLeastNWidgets(1));
-    expect(find.text('추천 장소 보기'), findsOneWidget);
+    expect(find.text('추천 장소 접기'), findsOneWidget);
   });
 
   testWidgets('recommendation rail collapses and place cards select detail', (
@@ -685,11 +685,12 @@ void main() {
     expect(find.text('장소 상세'), findsNothing);
     expect(find.text('화성행궁 도슨트'), findsOneWidget);
 
-    await tester.tap(find.text('추천 장소 보기'));
+    await tester.tap(find.text('추천 장소 접기'));
     await tester.pumpAndSettle();
 
     expect(find.text('수원화성'), findsNothing);
     expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
+    expect(find.text('추천 장소 보기'), findsOneWidget);
 
     await tester.tap(find.text('추천 장소 보기'));
     await tester.pumpAndSettle();
@@ -826,7 +827,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('위치기반 추천이 꺼져 있어요'), findsNothing);
-    expect(find.text('추천 장소 보기'), findsOneWidget);
+    expect(find.text('추천 장소 접기'), findsOneWidget);
     expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
   });
 
