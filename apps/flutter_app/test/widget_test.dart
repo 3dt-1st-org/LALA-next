@@ -274,6 +274,13 @@ void main() {
     expect(backend.weatherRequests, 2);
     expect(find.text('날씨'), findsOneWidget);
     expect(find.text('날씨 추이'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('weather-source-chip')),
+        matching: find.text('기본 날씨'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('15시'), findsAtLeastNWidgets(1));
     expect(find.text('22°'), findsOneWidget);
     expect(find.text('PM10'), findsOneWidget);

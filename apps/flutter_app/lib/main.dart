@@ -3951,7 +3951,10 @@ class _WeatherHeroCard extends StatelessWidget {
               ],
             ),
           ),
-          _ProofChip(label: _sourceLabel(weather.source, language: language)),
+          _ProofChip(
+            key: const ValueKey('weather-source-chip'),
+            label: _weatherSourceLabel(weather.source, language: language),
+          ),
         ],
       ),
     );
@@ -4847,7 +4850,7 @@ List<String> _proofSourceLabels({
 }
 
 class _ProofChip extends StatelessWidget {
-  const _ProofChip({required this.label});
+  const _ProofChip({super.key, required this.label});
 
   final String label;
 
@@ -8212,6 +8215,31 @@ String _sourceLabel(String? value, {String language = 'ko'}) {
     'skeleton' => '기본 장소',
     '' => '-',
     final source => source,
+  };
+}
+
+String _weatherSourceLabel(String? value, {String language = 'ko'}) {
+  if (_isEnglish(language)) {
+    return switch ((value ?? '').trim()) {
+      'db' => 'Weather DB',
+      'mixed' => 'Mixed weather',
+      'public_mvp_snapshot' => 'Public weather',
+      'demo_fallback' => 'Weather cache',
+      'skeleton' => 'Default weather',
+      'fallback' => 'Default weather',
+      '' => '-',
+      final source => _sourceLabel(source, language: language),
+    };
+  }
+  return switch ((value ?? '').trim()) {
+    'db' => '날씨 DB',
+    'mixed' => '혼합 날씨',
+    'public_mvp_snapshot' => '공공 날씨',
+    'demo_fallback' => '날씨 캐시',
+    'skeleton' => '기본 날씨',
+    'fallback' => '기본 날씨',
+    '' => '-',
+    final source => _sourceLabel(source, language: language),
   };
 }
 
