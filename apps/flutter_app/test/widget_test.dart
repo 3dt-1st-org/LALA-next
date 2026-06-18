@@ -952,7 +952,7 @@ void main() {
       find.text('UPSTREAM_UNAVAILABLE: Authenticated route failed.'),
       findsNothing,
     );
-    expect(find.textContaining('기본 표시'), findsWidgets);
+    expect(find.textContaining('기본 추천'), findsWidgets);
     expect(find.textContaining('데모'), findsNothing);
     expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
     expect(find.byKey(const ValueKey('map-error-retry')), findsOneWidget);
@@ -1000,7 +1000,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('위치 기반 추천'), findsOneWidget);
-    expect(find.text('공공 데이터 우선'), findsOneWidget);
+    expect(find.text('공식 데이터 우선'), findsOneWidget);
     expect(find.textContaining('공개 데이터를 우선 사용'), findsOneWidget);
     expect(find.textContaining('스냅샷'), findsNothing);
     expect(find.textContaining('개발'), findsNothing);
@@ -1158,7 +1158,7 @@ void main() {
 
     expect(find.text('Food Tour'), findsAtLeastNWidgets(1));
     expect(find.textContaining('nearby food stops'), findsOneWidget);
-    expect(find.textContaining('Official public data'), findsOneWidget);
+    expect(find.textContaining('Official data'), findsOneWidget);
     expect(find.text('Tour docent script'), findsOneWidget);
     expect(find.text('Listen as a docent audio guide'), findsOneWidget);
     expect(find.textContaining('맛집'), findsNothing);
@@ -1203,7 +1203,7 @@ void main() {
       await tester.tap(evidenceButton);
       await tester.pumpAndSettle();
 
-      expect(find.text('공공데이터'), findsOneWidget);
+      expect(find.text('공식 데이터'), findsOneWidget);
       expect(find.textContaining('스냅샷'), findsNothing);
     },
   );
@@ -1243,7 +1243,7 @@ void main() {
     await tester.tap(evidenceButton);
     await tester.pumpAndSettle();
 
-    expect(find.text('Public data'), findsOneWidget);
+    expect(find.text('Official data'), findsOneWidget);
     expect(find.textContaining('snapshot'), findsNothing);
   });
 

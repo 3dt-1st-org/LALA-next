@@ -1274,8 +1274,8 @@ class _PrivacyDetailsSheet extends StatelessWidget {
                 icon: Icons.public_outlined,
                 title: _copy(
                   language,
-                  ko: '공공 데이터 우선',
-                  en: 'Public data first',
+                  ko: '공식 데이터 우선',
+                  en: 'Official data first',
                 ),
                 body: _copy(
                   language,
@@ -3252,8 +3252,8 @@ class _TourSheetContent extends StatelessWidget {
     final script = _tourGuideScript(items, language);
     final sourceLabel = _copy(
       language,
-      ko: '${items.length}개 맛집 · 공공데이터 기반',
-      en: '${items.length} restaurants · Official public data',
+      ko: '${items.length}개 맛집 · 공식 데이터 기반',
+      en: '${items.length} restaurants · Official data',
     );
 
     return Column(
@@ -4788,7 +4788,7 @@ class _PublicDataProofRow extends StatelessWidget {
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           Text(
-            _copy(language, ko: '공공데이터 기반 정보', en: 'Public data evidence'),
+            _copy(language, ko: '공식 데이터 근거', en: 'Official data evidence'),
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
               color: const Color(0xFF64748B),
               fontWeight: FontWeight.w900,
@@ -8064,21 +8064,21 @@ class _MiniChip extends StatelessWidget {
 String _sourceLabel(String? value, {String language = 'ko'}) {
   if (_isEnglish(language)) {
     return switch ((value ?? '').trim()) {
-      'db' => 'Database',
-      'mixed' => 'Mixed data',
-      'public_mvp_snapshot' => 'Public data',
-      'demo_fallback' => 'Default view',
-      'skeleton' => 'Default places',
+      'db' => 'Live recommendations',
+      'mixed' => 'Live + official data',
+      'public_mvp_snapshot' => 'Official data',
+      'demo_fallback' => 'Default recommendations',
+      'skeleton' => 'Default recommendations',
       '' => '-',
       final source => source,
     };
   }
   return switch ((value ?? '').trim()) {
-    'db' => 'DB 기반',
-    'mixed' => '혼합 데이터',
-    'public_mvp_snapshot' => '공공데이터',
-    'demo_fallback' => '기본 표시',
-    'skeleton' => '기본 장소',
+    'db' => '실시간 추천',
+    'mixed' => '실시간·공식 데이터',
+    'public_mvp_snapshot' => '공식 데이터',
+    'demo_fallback' => '기본 추천',
+    'skeleton' => '기본 추천',
     '' => '-',
     final source => source,
   };
@@ -8087,9 +8087,9 @@ String _sourceLabel(String? value, {String language = 'ko'}) {
 String _weatherSourceLabel(String? value, {String language = 'ko'}) {
   if (_isEnglish(language)) {
     return switch ((value ?? '').trim()) {
-      'db' => 'Weather DB',
-      'mixed' => 'Mixed weather',
-      'public_mvp_snapshot' => 'Public weather',
+      'db' => 'Live weather',
+      'mixed' => 'Live + official weather',
+      'public_mvp_snapshot' => 'Official weather',
       'demo_fallback' => 'Default weather',
       'skeleton' => 'Default weather',
       'fallback' => 'Default weather',
@@ -8098,9 +8098,9 @@ String _weatherSourceLabel(String? value, {String language = 'ko'}) {
     };
   }
   return switch ((value ?? '').trim()) {
-    'db' => '날씨 DB',
-    'mixed' => '혼합 날씨',
-    'public_mvp_snapshot' => '공공 날씨',
+    'db' => '실시간 날씨',
+    'mixed' => '실시간·공식 날씨',
+    'public_mvp_snapshot' => '공식 날씨',
     'demo_fallback' => '기본 날씨',
     'skeleton' => '기본 날씨',
     'fallback' => '기본 날씨',
@@ -8115,9 +8115,9 @@ String? _externalSourceLabel(Object? value, {String language = 'ko'}) {
       'tour_api' => 'TourAPI',
       'kcisa' => 'KCISA',
       'kopis' => 'KOPIS',
-      'dev_seed' => 'Prepared data',
-      'public_mvp_snapshot' => 'Public data',
-      'canonical' => 'Official place DB',
+      'dev_seed' => 'LALA curation',
+      'public_mvp_snapshot' => 'Official data',
+      'canonical' => 'Official places',
       '' => null,
       final source => source,
     };
@@ -8126,9 +8126,9 @@ String? _externalSourceLabel(Object? value, {String language = 'ko'}) {
     'tour_api' => 'TourAPI',
     'kcisa' => 'KCISA',
     'kopis' => 'KOPIS',
-    'dev_seed' => '준비된 데이터',
-    'public_mvp_snapshot' => '공공데이터',
-    'canonical' => '공식 장소 DB',
+    'dev_seed' => 'LALA 큐레이션',
+    'public_mvp_snapshot' => '공식 데이터',
+    'canonical' => '공식 장소',
     '' => null,
     final source => source,
   };
@@ -8138,18 +8138,18 @@ String _basisLabel(String value, {String language = 'ko'}) {
   if (_isEnglish(language)) {
     return switch (value.trim()) {
       'actual_data' => 'Real data',
-      'demo_seed' => 'Prepared data',
-      'public_mvp_snapshot' => 'Public data',
-      'demo_fallback' => 'Default view',
+      'demo_seed' => 'LALA curation',
+      'public_mvp_snapshot' => 'Official data',
+      'demo_fallback' => 'Default recommendations',
       final basis when basis.isEmpty => '-',
       final basis => basis,
     };
   }
   return switch (value.trim()) {
     'actual_data' => '실데이터',
-    'demo_seed' => '준비된 데이터',
-    'public_mvp_snapshot' => '공공데이터',
-    'demo_fallback' => '기본 표시',
+    'demo_seed' => 'LALA 큐레이션',
+    'public_mvp_snapshot' => '공식 데이터',
+    'demo_fallback' => '기본 추천',
     final basis when basis.isEmpty => '-',
     final basis => basis,
   };
