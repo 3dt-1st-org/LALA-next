@@ -20,11 +20,10 @@ def test_public_mvp_snapshot_returns_nearby_ranked_places() -> None:
     assert places[0]["source"] == "public_mvp_snapshot"
     assert places[0]["score"]["data_basis"] == "public_mvp_snapshot"
     assert {place["category"] for place in places} >= {"attraction", "event"}
-    event = next(place for place in places if place["place_id"] == "demo-suwon-night-walk")
-    assert event["event_start_date"] == "2026-06-01"
-    assert event["event_end_date"] == "2026-08-31"
-    assert event["event_url"].endswith("/suwon-night-walk-2026")
-    assert event["is_ongoing"] is True
+    event = next(place for place in places if place["category"] == "event")
+    assert event["place_id"].startswith("tour-api-")
+    assert event["upstream_source"] == "tour_api"
+    assert event["image_url"]
     assert event["is_approximate_location"] is False
 
 
@@ -61,6 +60,13 @@ def test_public_mvp_snapshot_has_publishable_english_labels() -> None:
     assert rows
     assert all(place.get("name_en") for place in rows)
     assert all(place.get("address_en") for place in rows)
+
+
+def test_public_mvp_snapshot_does_not_include_dev_seed_rows() -> None:
+    rows = public_mvp_data._load_snapshot()["places"]
+
+    assert rows
+    assert all(place.get("upstream_source") != "dev_seed" for place in rows)
 
 
 def test_public_mvp_snapshot_does_not_show_generic_english_names() -> None:
