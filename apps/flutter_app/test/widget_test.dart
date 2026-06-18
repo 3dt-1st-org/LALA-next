@@ -411,6 +411,13 @@ void main() {
 
     await tester.pumpAndSettle();
     expect(backend.weatherRequests, 1);
+    final weatherPillText = tester.widget<Text>(
+      find.descendant(
+        of: find.byKey(const ValueKey('weather-pill-hit-target')),
+        matching: find.text('14°C · 미세먼지 보통'),
+      ),
+    );
+    expect(weatherPillText.maxLines, 2);
 
     await tester.tap(find.byKey(const ValueKey('weather-pill-hit-target')));
     await tester.pumpAndSettle();

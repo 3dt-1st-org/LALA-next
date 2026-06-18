@@ -6182,6 +6182,8 @@ class _WeatherMapPill extends StatelessWidget {
       icon: Icons.thermostat,
       label: label,
       active: true,
+      maxWidth: 202,
+      maxLines: 2,
       onPressed: onPressed,
     );
   }
@@ -6194,12 +6196,16 @@ class _SmallStatusPill extends StatelessWidget {
     required this.label,
     required this.active,
     required this.onPressed,
+    this.maxWidth = 150,
+    this.maxLines = 1,
   });
 
   final IconData icon;
   final String label;
   final bool active;
   final VoidCallback onPressed;
+  final double maxWidth;
+  final int maxLines;
 
   @override
   Widget build(BuildContext context) {
@@ -6210,7 +6216,7 @@ class _SmallStatusPill extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
         onTap: onPressed,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 150),
+          constraints: BoxConstraints(maxWidth: maxWidth),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
             decoration: BoxDecoration(
@@ -6240,7 +6246,7 @@ class _SmallStatusPill extends StatelessWidget {
                 Flexible(
                   child: Text(
                     label,
-                    maxLines: 1,
+                    maxLines: maxLines,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: Color(0xFF0F172A),
