@@ -377,6 +377,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
         maxAge: _weatherMaxAge,
         thresholdMeters: _weatherReloadThresholdMeters,
       );
+      final previousPlaces = _places;
       final previousWeather = _weather;
       final previousIntervention = _intervention;
       final places = await loadOptional(_backend.getPlaces);
@@ -388,7 +389,8 @@ class _LalaHomePageState extends State<LalaHomePage> {
           : previousIntervention;
       final dailyPlan = await loadOptional(_backend.createDailyPlan);
       LalaEnvelope<LalaDocentScript>? docentScript;
-      final placeItems = places?.data?.places ?? _fallbackUiPlaces();
+      final activePlaces = places ?? previousPlaces;
+      final placeItems = activePlaces?.data?.places ?? const <LalaPlace>[];
       final filteredItems = _filterPlaces(placeItems, _selectedCategory);
       final effectiveItems = filteredItems.isEmpty ? placeItems : filteredItems;
       final autoDocentPlace = _autoDocentEnabled
@@ -412,7 +414,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
       setState(() {
         _health = health;
         _readiness = readiness;
-        _places = places;
+        _places = places ?? previousPlaces;
         _weather = weather ?? previousWeather;
         _intervention = intervention ?? previousIntervention;
         _dailyPlan = dailyPlan;
@@ -831,9 +833,8 @@ class _LalaHomePageState extends State<LalaHomePage> {
 
   List<LalaPlace> _visiblePlacesForCurrentCategory() {
     final apiPlaces = _places?.data?.places ?? const <LalaPlace>[];
-    final allPlaces = apiPlaces.isEmpty ? _fallbackUiPlaces() : apiPlaces;
-    final filteredPlaces = _filterPlaces(allPlaces, _selectedCategory);
-    return filteredPlaces.isEmpty ? allPlaces : filteredPlaces;
+    final filteredPlaces = _filterPlaces(apiPlaces, _selectedCategory);
+    return filteredPlaces.isEmpty ? apiPlaces : filteredPlaces;
   }
 
   LalaPlace? _nearestAutoDocentPlace(List<LalaPlace> places) {
@@ -1505,11 +1506,8 @@ class _Dashboard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final apiPlaces = places?.data?.places ?? const <LalaPlace>[];
-    final usingFallbackPlaces = apiPlaces.isEmpty;
-    final effectiveSource = usingFallbackPlaces
-        ? 'demo_fallback'
-        : places?.data?.source;
-    final allPlaces = usingFallbackPlaces ? _fallbackUiPlaces() : apiPlaces;
+    final effectiveSource = places?.data?.source;
+    final allPlaces = apiPlaces;
     final filteredTopPlaces = _filterPlaces(allPlaces, selectedCategory);
     final topPlaces = _prioritizeClusterMembers(
       filteredTopPlaces,
@@ -2516,7 +2514,7 @@ class _MapBottomDock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final currentPlace = topPlace ?? _fallbackUiPlaces().first;
+    final currentPlace = topPlace;
     return SizedBox(
       key: const ValueKey('map-bottom-dock'),
       height: height,
@@ -2555,59 +2553,124 @@ class _MapBottomDock extends StatelessWidget {
                     ),
                   ),
                   TextButton.icon(
-                    onPressed: onOpenDetail,
+                    onPressed: currentPlace == null ? null : onOpenDetail,
                     icon: const Icon(Icons.keyboard_arrow_up),
                     label: Text(uiLanguage == 'en' ? 'Details' : '상세'),
                   ),
                 ],
               ),
               const SizedBox(height: 4),
-              Row(
-                children: [
-                  _CategoryBadge(
-                    category: currentPlace.category,
-                    language: uiLanguage,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _placeDisplayName(currentPlace, uiLanguage),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: const Color(0xFF111827),
-                        fontWeight: FontWeight.w900,
+              if (currentPlace == null)
+                _EmptyDockContent(language: uiLanguage)
+              else ...[
+                Row(
+                  children: [
+                    _CategoryBadge(
+                      category: currentPlace.category,
+                      language: uiLanguage,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _placeDisplayName(currentPlace, uiLanguage),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              color: const Color(0xFF111827),
+                              fontWeight: FontWeight.w900,
+                            ),
                       ),
                     ),
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      if (!showEvidence) {
-                        onToggleEvidence();
-                      }
-                      onOpenDetail();
-                    },
-                    child: Text(
-                      uiLanguage == 'en' ? 'Signals' : '점수/근거',
-                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    TextButton(
+                      onPressed: () {
+                        if (!showEvidence) {
+                          onToggleEvidence();
+                        }
+                        onOpenDetail();
+                      },
+                      child: Text(
+                        uiLanguage == 'en' ? 'Signals' : '점수/근거',
+                        style: const TextStyle(fontWeight: FontWeight.w900),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _TinyMeta(_placeRegionLabel(currentPlace, uiLanguage)),
-                  _TinyMeta('${currentPlace.distanceM}m'),
-                  _TinyMeta(_sourceLabel(source, language: uiLanguage)),
-                ],
-              ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _TinyMeta(_placeRegionLabel(currentPlace, uiLanguage)),
+                    _TinyMeta('${currentPlace.distanceM}m'),
+                    _TinyMeta(_sourceLabel(source, language: uiLanguage)),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+class _EmptyDockContent extends StatelessWidget {
+  const _EmptyDockContent({required this.language});
+
+  final String language;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 42,
+          height: 42,
+          decoration: const BoxDecoration(
+            color: Color(0xFFEAF2FF),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(
+            Icons.travel_explore,
+            color: Color(0xFF2B6CB0),
+            size: 21,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _copy(
+                  language,
+                  ko: '추천을 준비 중입니다',
+                  en: 'Preparing recommendations',
+                ),
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: const Color(0xFF111827),
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                _copy(
+                  language,
+                  ko: '공식 데이터가 확인된 장소만 표시합니다.',
+                  en: 'Only places backed by official data are shown.',
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: const Color(0xFF64748B),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -4105,7 +4168,17 @@ class _FeaturedPlacePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final currentPlace = place ?? _fallbackFeaturedPlace();
+    final currentPlace = place;
+    if (currentPlace == null) {
+      return _MutedSheetCard(
+        icon: Icons.place_outlined,
+        label: _copy(
+          language,
+          ko: '이 주변 추천을 준비 중입니다. 지도를 움직이거나 잠시 뒤 다시 시도해 주세요.',
+          en: 'Recommendations are still being prepared here. Move the map or try again shortly.',
+        ),
+      );
+    }
     final score = currentPlace.score;
     final components = score?.components;
     final slots = dailyPlan?.slots ?? const <LalaPlanSlot>[];
@@ -4191,42 +4264,6 @@ class _FeaturedPlacePanel extends StatelessWidget {
           ),
         ],
       ],
-    );
-  }
-
-  LalaPlace _fallbackFeaturedPlace() {
-    return const LalaPlace(
-      placeId: 'hwaseong-haenggung',
-      name: '화성행궁',
-      nameKo: '화성행궁',
-      nameEn: 'Hwaseong Haenggung',
-      category: 'attraction',
-      lat: 37.2819,
-      lng: 127.0142,
-      address: '경기도 수원시 팔달구 정조로 825',
-      regionKo: '수원',
-      regionEn: 'Suwon',
-      distanceM: 145,
-      source: 'public_mvp_snapshot',
-      score: LalaPlaceScore(
-        finalScore: 0.86,
-        formulaVersion: 'local-value-v1',
-        components: LalaPlaceScoreComponents(
-          localSpendingScore: 0.82,
-          demandDispersionScore: 0.78,
-          weatherFitScore: 0.74,
-          reviewQualityScore: null,
-          cultureRelevanceScore: 0.91,
-        ),
-        dataBasis: 'public_mvp_snapshot',
-        features: {
-          'signals': <String>['tour_api', 'card_spending'],
-          'culture_event_count': 13,
-          'place_event_count': 1,
-          'region_spend_amount': 14000000.0,
-          'region_transaction_count': 1700,
-        },
-      ),
     );
   }
 }
@@ -5294,9 +5331,7 @@ class _LegacyMapCanvas extends StatelessWidget {
     final selected = selectedPlace;
     final centerLat = mapFocusLat ?? selected?.lat ?? 37.2823;
     final centerLng = mapFocusLng ?? selected?.lng ?? 127.0179;
-    final mapPlaces = places.isEmpty
-        ? _fallbackMapPlaces()
-        : _clusterMapPlaces(places, selected, mapLevel);
+    final mapPlaces = _clusterMapPlaces(places, selected, mapLevel);
 
     void handleMapFeatureTap(String featureId) {
       for (final marker in mapPlaces) {
@@ -5354,33 +5389,6 @@ class _LegacyMapCanvas extends StatelessWidget {
         ),
       ],
     );
-  }
-
-  List<KakaoMapPlace> _fallbackMapPlaces() {
-    return [
-      KakaoMapPlace(
-        id: 'hwaseong-haenggung',
-        name: _copy(language, ko: '화성행궁', en: 'Hwaseong Haenggung'),
-        category: 'attraction',
-        lat: 37.2819,
-        lng: 127.0142,
-        selected: true,
-      ),
-      KakaoMapPlace(
-        id: 'suwon-hwaseong',
-        name: _copy(language, ko: '수원화성', en: 'Suwon Hwaseong Fortress'),
-        category: 'culture_venue',
-        lat: 37.2870,
-        lng: 127.0110,
-      ),
-      KakaoMapPlace(
-        id: 'haenggung-cafe-street',
-        name: _copy(language, ko: '행궁동 카페거리', en: 'Haenggung Cafe Street'),
-        category: 'restaurant',
-        lat: 37.2828,
-        lng: 127.0101,
-      ),
-    ];
   }
 
   List<KakaoMapPlace> _clusterMapPlaces(
@@ -7197,105 +7205,9 @@ String _dustLabel(LalaDust dust, String language) {
   };
 }
 
-List<LalaPlace> _fallbackUiPlaces() {
-  return const [
-    LalaPlace(
-      placeId: 'hwaseong-haenggung',
-      name: '화성행궁',
-      nameKo: '화성행궁',
-      nameEn: 'Hwaseong Haenggung',
-      category: 'attraction',
-      lat: 37.2819,
-      lng: 127.0142,
-      address: '경기도 수원시 팔달구 정조로 825',
-      regionKo: '수원',
-      regionEn: 'Suwon',
-      distanceM: 145,
-      source: 'public_mvp_snapshot',
-      score: LalaPlaceScore(
-        finalScore: 0.86,
-        formulaVersion: 'local-value-v1',
-        components: LalaPlaceScoreComponents(
-          localSpendingScore: 0.82,
-          demandDispersionScore: 0.78,
-          weatherFitScore: 0.74,
-          reviewQualityScore: null,
-          cultureRelevanceScore: 0.91,
-        ),
-        dataBasis: 'public_mvp_snapshot',
-        features: {
-          'signals': <String>['tour_api', 'card_spending'],
-          'culture_event_count': 13,
-          'place_event_count': 1,
-          'region_spend_amount': 14000000.0,
-          'region_transaction_count': 1700,
-        },
-      ),
-    ),
-    LalaPlace(
-      placeId: 'suwon-hwaseong',
-      name: '수원화성',
-      nameKo: '수원화성',
-      nameEn: 'Suwon Hwaseong Fortress',
-      category: 'culture_venue',
-      lat: 37.2870,
-      lng: 127.0110,
-      address: '경기도 수원시 장안구 영화동',
-      regionKo: '수원',
-      regionEn: 'Suwon',
-      distanceM: 620,
-      source: 'public_mvp_snapshot',
-      score: LalaPlaceScore(
-        finalScore: 0.82,
-        formulaVersion: 'local-value-v1',
-        components: LalaPlaceScoreComponents(
-          localSpendingScore: 0.68,
-          demandDispersionScore: 0.73,
-          weatherFitScore: 0.76,
-          reviewQualityScore: null,
-          cultureRelevanceScore: 0.96,
-        ),
-        dataBasis: 'public_mvp_snapshot',
-        features: {
-          'signals': <String>['tour_api', 'culture_data'],
-        },
-      ),
-    ),
-    LalaPlace(
-      placeId: 'haenggung-cafe-street',
-      name: '행궁동 카페거리',
-      nameKo: '행궁동 카페거리',
-      nameEn: 'Haenggung Cafe Street',
-      category: 'restaurant',
-      lat: 37.2828,
-      lng: 127.0101,
-      address: '경기도 수원시 팔달구 행궁동',
-      regionKo: '수원',
-      regionEn: 'Suwon',
-      distanceM: 780,
-      source: 'public_mvp_snapshot',
-      score: LalaPlaceScore(
-        finalScore: 0.78,
-        formulaVersion: 'local-value-v1',
-        components: LalaPlaceScoreComponents(
-          localSpendingScore: 0.88,
-          demandDispersionScore: 0.54,
-          weatherFitScore: 0.70,
-          reviewQualityScore: null,
-          cultureRelevanceScore: 0.62,
-        ),
-        dataBasis: 'public_mvp_snapshot',
-        features: {
-          'signals': <String>['card_spending', 'local_business'],
-        },
-      ),
-    ),
-  ];
-}
-
 List<LalaPlace> _railPlaces(List<LalaPlace> places) {
   if (places.isEmpty) {
-    return _fallbackUiPlaces();
+    return const <LalaPlace>[];
   }
   final featured = _featuredPlace(places);
   if (featured == null) {

@@ -952,9 +952,10 @@ void main() {
       find.text('UPSTREAM_UNAVAILABLE: Authenticated route failed.'),
       findsNothing,
     );
-    expect(find.textContaining('로컬 큐레이션'), findsWidgets);
+    expect(find.text('추천을 준비 중입니다'), findsOneWidget);
+    expect(find.textContaining('공식 데이터가 확인된 장소만 표시합니다'), findsOneWidget);
     expect(find.textContaining('데모'), findsNothing);
-    expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
+    expect(find.text('화성행궁'), findsNothing);
     expect(find.byKey(const ValueKey('map-error-retry')), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('map-error-retry')));
@@ -966,6 +967,7 @@ void main() {
       findsNothing,
     );
     expect(find.byKey(const ValueKey('map-error-retry')), findsNothing);
+    expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
     expect(find.textContaining('조선 왕실'), findsAtLeastNWidgets(1));
   });
 
@@ -992,6 +994,11 @@ void main() {
     );
     expect(find.textContaining('UPSTREAM_UNAVAILABLE'), findsNothing);
     expect(find.textContaining('Authenticated route failed'), findsNothing);
+    expect(find.text('Preparing recommendations'), findsOneWidget);
+    expect(
+      find.textContaining('Only places backed by official data'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('settings hides developer connection controls', (tester) async {
@@ -1184,7 +1191,7 @@ void main() {
 
     expect(find.text('Food Tour'), findsAtLeastNWidgets(1));
     expect(find.textContaining('nearby food stops'), findsOneWidget);
-    expect(find.textContaining('Official data'), findsOneWidget);
+    expect(find.textContaining('Official data'), findsWidgets);
     expect(find.text('Tour docent script'), findsOneWidget);
     expect(find.text('Listen as a docent audio guide'), findsOneWidget);
     expect(find.textContaining('맛집'), findsNothing);
@@ -1229,7 +1236,7 @@ void main() {
       await tester.tap(evidenceButton);
       await tester.pumpAndSettle();
 
-      expect(find.text('공식 데이터'), findsOneWidget);
+      expect(find.text('공식 데이터'), findsWidgets);
       expect(find.textContaining('스냅샷'), findsNothing);
     },
   );
@@ -1269,7 +1276,7 @@ void main() {
     await tester.tap(evidenceButton);
     await tester.pumpAndSettle();
 
-    expect(find.text('Official data'), findsOneWidget);
+    expect(find.text('Official data'), findsWidgets);
     expect(find.textContaining('snapshot'), findsNothing);
   });
 
@@ -1584,7 +1591,7 @@ class FakeBackend implements LalaBackend {
           category: config.category,
           language: config.lang,
         ),
-        source: 'skeleton',
+        source: 'public_mvp_snapshot',
       ),
     );
   }
