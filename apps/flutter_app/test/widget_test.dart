@@ -417,13 +417,42 @@ void main() {
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('weather-source-chip')),
-        matching: find.text('기본 날씨'),
+        matching: find.text('실시간 날씨'),
       ),
       findsOneWidget,
     );
     expect(find.text('15시'), findsAtLeastNWidgets(1));
     expect(find.text('22°'), findsOneWidget);
     expect(find.text('PM10'), findsOneWidget);
+  });
+
+  testWidgets('skeleton weather is not shown as real conditions', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      LalaApp(
+        backendFactory: (config) =>
+            FakeBackend(config, weather: _weather(source: 'skeleton')),
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('날씨 데이터 준비 중'), findsOneWidget);
+    expect(find.textContaining('14°'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('weather-pill-hit-target')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('날씨'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('weather-unavailable-card')),
+      findsOneWidget,
+    );
+    expect(find.text('날씨 추이'), findsNothing);
+    expect(find.text('PM10'), findsNothing);
+    expect(find.textContaining('14°'), findsNothing);
   });
 
   testWidgets('food tour pill opens restaurant tour sheet', (tester) async {
@@ -1623,12 +1652,14 @@ class FakeBackend implements LalaBackend {
     this.failAuthenticatedLoad = false,
     this.shouldIntervene = false,
     this.places,
+    this.weather,
   });
 
   final LalaAppConfig config;
   final bool failAuthenticatedLoad;
   final bool shouldIntervene;
   final List<LalaPlace>? places;
+  final LalaWeather? weather;
   final List<String> docentScriptRequests = <String>[];
   final List<String> audioRequests = <String>[];
   int weatherRequests = 0;
@@ -1705,7 +1736,7 @@ class FakeBackend implements LalaBackend {
   @override
   Future<LalaEnvelope<LalaWeather>> getWeather() async {
     weatherRequests += 1;
-    return _envelope(_weather());
+    return _envelope(weather ?? _weather());
   }
 
   @override
@@ -1733,7 +1764,7 @@ class FakeBackend implements LalaBackend {
         language: 'ko',
         center: LalaCoordinate(lat: config.lat, lng: config.lng),
         radiusM: config.radiusM,
-        weather: _weather(),
+        weather: weather ?? _weather(),
         slots: [
           LalaPlanSlot(period: 'morning', title: '화성행궁 산책 코스', place: place),
         ],
@@ -2137,8 +2168,8 @@ LalaPlace _bilingualPlace() {
   );
 }
 
-LalaWeather _weather() {
-  return const LalaWeather(
+LalaWeather _weather({String source = 'db'}) {
+  return LalaWeather(
     lat: 37.2636,
     lng: 127.0286,
     temp: '14°C',
@@ -2149,7 +2180,9 @@ LalaWeather _weather() {
     ],
     outdoorStatus: 'good',
     force: false,
-    source: 'skeleton',
+    source: source,
     location: 'Suwon',
+    recordTime: '2026-06-18T09:00:00+09:00',
+    locationMatch: true,
   );
 }

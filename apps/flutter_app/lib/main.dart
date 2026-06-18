@@ -1519,7 +1519,7 @@ class _Dashboard extends StatelessWidget {
         _placeById(topPlaces, selectedPlaceId) ?? _featuredPlace(topPlaces);
     final activeDocent = docentScript?.data;
     final activeDailyPlan = dailyPlan?.data;
-    final currentWeather = weather?.data ?? _fallbackWeather();
+    final currentWeather = _publicWeatherOrNull(weather?.data);
     final activeIntervention = intervention?.data;
     final visibleError = _localizedUiMessage(error, uiLanguage);
     void selectPlaceById(String placeId) {
@@ -3779,7 +3779,10 @@ class _WeatherSheetContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final data = weather ?? _fallbackWeather();
+    final data = _publicWeatherOrNull(weather);
+    if (data == null) {
+      return _WeatherUnavailableCard(language: language);
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -4046,6 +4049,67 @@ class _WeatherHeroCard extends StatelessWidget {
           _ProofChip(
             key: const ValueKey('weather-source-chip'),
             label: _weatherSourceLabel(weather.source, language: language),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WeatherUnavailableCard extends StatelessWidget {
+  const _WeatherUnavailableCard({required this.language});
+
+  final String language;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey('weather-unavailable-card'),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFD7E3F5)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.cloud_off_outlined,
+            size: 38,
+            color: Color(0xFF64748B),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _copy(
+                    language,
+                    ko: '날씨 데이터 준비 중',
+                    en: 'Weather data is being prepared',
+                  ),
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: const Color(0xFF111827),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  _copy(
+                    language,
+                    ko: '실시간 관측값이 확인될 때 온도와 미세먼지를 표시합니다.',
+                    en: 'Temperature and dust appear when verified observations are available.',
+                  ),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: const Color(0xFF64748B),
+                    height: 1.35,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -6111,10 +6175,10 @@ class _WeatherMapPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dustPrefix = language == 'en' ? 'Dust' : '미세먼지';
-    final fallback = _fallbackWeather();
-    final label = weather == null
-        ? '${_temperatureLabel(fallback.temp)} · $dustPrefix ${_dustLabel(fallback.dust, language)}'
-        : '${_temperatureLabel(weather!.temp)} · $dustPrefix ${_dustLabel(weather!.dust, language)}';
+    final data = _publicWeatherOrNull(weather);
+    final label = data == null
+        ? _copy(language, ko: '날씨 데이터 준비 중', en: 'Weather pending')
+        : '${_temperatureLabel(data.temp)} · $dustPrefix ${_dustLabel(data.dust, language)}';
     return _SmallStatusPill(
       key: const ValueKey('weather-pill-hit-target'),
       icon: Icons.thermostat,
@@ -7072,23 +7136,18 @@ Color _categoryColor(String category) {
   };
 }
 
-LalaWeather _fallbackWeather() {
-  return const LalaWeather(
-    lat: 37.2636,
-    lng: 127.0286,
-    temp: '14°C',
-    icon: 'partly-cloudy',
-    dust: LalaDust(pm10: '31', pm25: '14', grade: 'normal', gradeKo: '보통'),
-    forecast: [
-      LalaForecastItem(time: '15:00', temp: '22°C', icon: 'partly-cloudy'),
-      LalaForecastItem(time: '18:00', temp: '20°C', icon: 'partly-cloudy'),
-      LalaForecastItem(time: '21:00', temp: '18°C', icon: 'clear'),
-    ],
-    outdoorStatus: 'good',
-    force: false,
-    source: 'fallback',
-    location: '수원',
-  );
+LalaWeather? _publicWeatherOrNull(LalaWeather? weather) {
+  if (weather == null || _isPlaceholderWeatherSource(weather.source)) {
+    return null;
+  }
+  return weather;
+}
+
+bool _isPlaceholderWeatherSource(String? source) {
+  return switch ((source ?? '').trim()) {
+    '' || 'skeleton' || 'fallback' || 'demo_fallback' => true,
+    _ => false,
+  };
 }
 
 String _temperatureLabel(String value) {
@@ -7722,9 +7781,9 @@ String _weatherSourceLabel(String? value, {String language = 'ko'}) {
       'db' => 'Live weather',
       'mixed' => 'Live + official weather',
       'public_mvp_snapshot' => 'Official weather',
-      'demo_fallback' => 'Default weather',
-      'skeleton' => 'Default weather',
-      'fallback' => 'Default weather',
+      'demo_fallback' => 'Weather pending',
+      'skeleton' => 'Weather pending',
+      'fallback' => 'Weather pending',
       '' => '-',
       final source => _sourceLabel(source, language: language),
     };
@@ -7733,9 +7792,9 @@ String _weatherSourceLabel(String? value, {String language = 'ko'}) {
     'db' => '실시간 날씨',
     'mixed' => '실시간·공식 날씨',
     'public_mvp_snapshot' => '공식 날씨',
-    'demo_fallback' => '기본 날씨',
-    'skeleton' => '기본 날씨',
-    'fallback' => '기본 날씨',
+    'demo_fallback' => '날씨 준비 중',
+    'skeleton' => '날씨 준비 중',
+    'fallback' => '날씨 준비 중',
     '' => '-',
     final source => _sourceLabel(source, language: language),
   };
