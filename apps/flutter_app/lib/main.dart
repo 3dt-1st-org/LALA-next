@@ -1574,6 +1574,7 @@ class _Dashboard extends StatelessWidget {
                 language: uiLanguage,
                 selectedCategory: selectedCategory,
                 onSelectCategory: onSelectCategory,
+                onOpenSettings: onOpenSettings,
               ),
             ),
             Positioned(
@@ -1717,7 +1718,6 @@ class _Dashboard extends StatelessWidget {
                       onOpenSheet(_ActiveMapSheet.weather);
                       onRefreshWeather();
                     },
-                    onOpenSettings: onOpenSettings,
                   ),
                 ),
               ),
@@ -1778,12 +1778,14 @@ class _TopMapChrome extends StatelessWidget {
     required this.language,
     required this.selectedCategory,
     required this.onSelectCategory,
+    required this.onOpenSettings,
   });
 
   final bool loading;
   final String language;
   final String selectedCategory;
   final ValueChanged<String> onSelectCategory;
+  final VoidCallback onOpenSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -1792,42 +1794,56 @@ class _TopMapChrome extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _CategoryChip(
-                  label: _categoryFilterLabel('all', language),
-                  active: selectedCategory == 'all',
-                  color: const Color(0xFF1A202C),
-                  onTap: () => onSelectCategory('all'),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _CategoryChip(
+                        label: _categoryFilterLabel('all', language),
+                        active: selectedCategory == 'all',
+                        color: const Color(0xFF1A202C),
+                        onTap: () => onSelectCategory('all'),
+                      ),
+                      _CategoryChip(
+                        label: _categoryFilterLabel('attraction', language),
+                        active: selectedCategory == 'attraction',
+                        color: const Color(0xFFC53030),
+                        onTap: () => onSelectCategory('attraction'),
+                      ),
+                      _CategoryChip(
+                        label: _categoryFilterLabel('restaurant', language),
+                        active: selectedCategory == 'restaurant',
+                        color: const Color(0xFFF5C842),
+                        onTap: () => onSelectCategory('restaurant'),
+                      ),
+                      _CategoryChip(
+                        label: _categoryFilterLabel('event', language),
+                        active: selectedCategory == 'event',
+                        color: const Color(0xFF2B6CB0),
+                        onTap: () => onSelectCategory('event'),
+                      ),
+                      _CategoryChip(
+                        label: _categoryFilterLabel('culture_venue', language),
+                        active: selectedCategory == 'culture_venue',
+                        color: const Color(0xFF0F766E),
+                        onTap: () => onSelectCategory('culture_venue'),
+                      ),
+                    ],
+                  ),
                 ),
-                _CategoryChip(
-                  label: _categoryFilterLabel('attraction', language),
-                  active: selectedCategory == 'attraction',
-                  color: const Color(0xFFC53030),
-                  onTap: () => onSelectCategory('attraction'),
-                ),
-                _CategoryChip(
-                  label: _categoryFilterLabel('restaurant', language),
-                  active: selectedCategory == 'restaurant',
-                  color: const Color(0xFFF5C842),
-                  onTap: () => onSelectCategory('restaurant'),
-                ),
-                _CategoryChip(
-                  label: _categoryFilterLabel('event', language),
-                  active: selectedCategory == 'event',
-                  color: const Color(0xFF2B6CB0),
-                  onTap: () => onSelectCategory('event'),
-                ),
-                _CategoryChip(
-                  label: _categoryFilterLabel('culture_venue', language),
-                  active: selectedCategory == 'culture_venue',
-                  color: const Color(0xFF0F766E),
-                  onTap: () => onSelectCategory('culture_venue'),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 10),
+              _MapRoundButton(
+                buttonKey: const ValueKey('settings-button'),
+                tooltip: _copy(language, ko: '설정', en: 'Settings'),
+                icon: Icons.settings,
+                onPressed: onOpenSettings,
+              ),
+            ],
           ),
           if (loading) ...[
             const SizedBox(height: 8),
@@ -2231,7 +2247,6 @@ class _MapUtilityControlRow extends StatelessWidget {
     required this.language,
     required this.onOpenPlanner,
     required this.onOpenWeather,
-    required this.onOpenSettings,
   });
 
   final LalaDailyPlan? dailyPlan;
@@ -2239,7 +2254,6 @@ class _MapUtilityControlRow extends StatelessWidget {
   final String language;
   final VoidCallback onOpenPlanner;
   final VoidCallback onOpenWeather;
-  final VoidCallback onOpenSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -2256,12 +2270,7 @@ class _MapUtilityControlRow extends StatelessWidget {
             ),
           ),
         ),
-        _MapRoundButton(
-          buttonKey: const ValueKey('settings-button'),
-          tooltip: _copy(language, ko: '설정', en: 'Settings'),
-          icon: Icons.settings,
-          onPressed: onOpenSettings,
-        ),
+        const SizedBox(width: 46),
         Expanded(
           child: Align(
             alignment: Alignment.centerRight,
