@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import math
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Any
-from zoneinfo import ZoneInfo
 
 from apps.api.app.core.config import get_settings
 from apps.api.app.services import db_repository
@@ -12,7 +11,7 @@ KMA_ULTRA_SHORT_NOWCAST_URL = (
     "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst"
 )
 KMA_SOURCE = "kma_ultra_srt_ncst"
-KST = ZoneInfo("Asia/Seoul")
+KST = timezone(timedelta(hours=9))
 
 
 def current_weather(*, lat: float, lng: float, force: bool = False) -> dict:
