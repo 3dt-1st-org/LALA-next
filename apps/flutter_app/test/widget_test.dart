@@ -205,7 +205,10 @@ void main() {
     expect(find.text('한국관광공사'), findsNothing);
     expect(find.textContaining('조선 왕실'), findsAtLeastNWidgets(1));
 
-    await tester.tap(find.widgetWithText(OutlinedButton, '오늘 코스에 추가'));
+    final addToPlanButton = find.widgetWithText(OutlinedButton, '오늘 코스에 추가');
+    await tester.ensureVisible(addToPlanButton);
+    await tester.pumpAndSettle();
+    await tester.tap(addToPlanButton);
     await tester.pumpAndSettle();
 
     expect(find.text('오늘 일정'), findsOneWidget);
@@ -326,11 +329,12 @@ void main() {
       find.byKey(const ValueKey('map-bottom-dock')),
     );
     final autoToggleRect = tester.getRect(autoToggle);
-    final guidancePanelRect = tester.getRect(
-      find.byKey(const ValueKey('map-guidance-panel')),
-    );
+    final dockDocentPreview = find.byKey(const ValueKey('dock-docent-preview'));
+    final dockDocentPreviewRect = tester.getRect(dockDocentPreview);
     expect(autoToggleRect.bottom, lessThan(bottomDockRect.top));
-    expect(guidancePanelRect.bottom, lessThan(autoToggleRect.top));
+    expect(dockDocentPreview, findsOneWidget);
+    expect(dockDocentPreviewRect.top, greaterThan(bottomDockRect.top));
+    expect(find.byKey(const ValueKey('map-guidance-panel')), findsNothing);
     await tester.tap(autoToggle);
     await tester.pumpAndSettle();
     expect(

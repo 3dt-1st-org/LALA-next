@@ -1541,14 +1541,13 @@ class _Dashboard extends StatelessWidget {
             ? 242.0
             : 266.0;
         final bottomDockHeight = isWide
-            ? 126.0
+            ? 218.0
+            : constraints.maxHeight < 700
+            ? 164.0
             : compactMapChrome
-            ? 132.0
-            : 150.0;
+            ? 224.0
+            : 238.0;
         final floatingControlsBottom = bottomDockHeight + 16;
-        final guidancePanelBottom =
-            floatingControlsBottom +
-            (compactMapChrome && constraints.maxHeight >= 760 ? 136.0 : 88.0);
         return Stack(
           children: [
             Positioned.fill(
@@ -1643,37 +1642,6 @@ class _Dashboard extends StatelessWidget {
                   ),
                 ),
               ),
-            if (activeSheet == null && locationConsentEnabled)
-              Positioned(
-                left: 16,
-                right: 16,
-                bottom: guidancePanelBottom,
-                child: Center(
-                  child: _MapGuidancePanel(
-                    place: topPlace,
-                    language: uiLanguage,
-                    script: activeDocent?.placeId == topPlace?.placeId
-                        ? activeDocent?.script
-                        : null,
-                    action:
-                        activeIntervention?.recommendedAction ??
-                        (activeDailyPlan?.slots.isEmpty == false
-                            ? activeDailyPlan?.slots.first.title
-                            : null),
-                    audioLoading: audioLoading,
-                    audioError: _localizedUiMessage(audioError, uiLanguage),
-                    docentAudio: docentAudio,
-                    canFetchAudio:
-                        activeDocent?.placeId == topPlace?.placeId &&
-                        activeDocent?.script.trim().isNotEmpty == true &&
-                        !audioLoading &&
-                        topPlace != null &&
-                        !detailDocentPlayedPlaceIds.contains(topPlace.placeId),
-                    onFetchAudio: onFetchAudio,
-                    onAddToPlan: () => onOpenSheet(_ActiveMapSheet.planner),
-                  ),
-                ),
-              ),
             Positioned(
               left: 0,
               right: 0,
@@ -1690,7 +1658,26 @@ class _Dashboard extends StatelessWidget {
                     topPlace: topPlace,
                     uiLanguage: uiLanguage,
                     height: bottomDockHeight,
+                    docentScript: activeDocent?.placeId == topPlace?.placeId
+                        ? activeDocent?.script
+                        : null,
+                    docentAudio: docentAudio,
+                    docentAction:
+                        activeIntervention?.recommendedAction ??
+                        (activeDailyPlan?.slots.isEmpty == false
+                            ? activeDailyPlan?.slots.first.title
+                            : null),
+                    audioLoading: audioLoading,
+                    audioError: _localizedUiMessage(audioError, uiLanguage),
+                    canFetchAudio:
+                        activeDocent?.placeId == topPlace?.placeId &&
+                        activeDocent?.script.trim().isNotEmpty == true &&
+                        !audioLoading &&
+                        topPlace != null &&
+                        !detailDocentPlayedPlaceIds.contains(topPlace.placeId),
                     showEvidence: showEvidence,
+                    onFetchAudio: onFetchAudio,
+                    onAddToPlan: () => onOpenSheet(_ActiveMapSheet.planner),
                     onOpenDetail: () => onOpenSheet(_ActiveMapSheet.detail),
                     onToggleEvidence: onToggleEvidence,
                   ),
@@ -2314,203 +2301,6 @@ class _TourMapPill extends StatelessWidget {
   }
 }
 
-class _MapGuidancePanel extends StatelessWidget {
-  const _MapGuidancePanel({
-    required this.place,
-    required this.language,
-    required this.script,
-    required this.action,
-    required this.audioLoading,
-    required this.audioError,
-    required this.docentAudio,
-    required this.canFetchAudio,
-    required this.onFetchAudio,
-    required this.onAddToPlan,
-  });
-
-  final LalaPlace? place;
-  final String language;
-  final String? script;
-  final String? action;
-  final bool audioLoading;
-  final String? audioError;
-  final LalaAudioResponse? docentAudio;
-  final bool canFetchAudio;
-  final VoidCallback onFetchAudio;
-  final VoidCallback onAddToPlan;
-
-  @override
-  Widget build(BuildContext context) {
-    final placeName = place == null
-        ? null
-        : _placeDisplayName(place!, language);
-    final body = _docentBody(place: place, script: script, language: language);
-    final actionLabel = _docentActionLabel(
-      place: place,
-      action: action,
-      language: language,
-    );
-    return ConstrainedBox(
-      key: const ValueKey('map-guidance-panel'),
-      constraints: const BoxConstraints(maxWidth: 460),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.98),
-          borderRadius: BorderRadius.circular(16),
-          border: const Border(
-            left: BorderSide(color: Color(0xFF2B6CB0), width: 4),
-          ),
-          boxShadow: const [
-            BoxShadow(
-              blurRadius: 28,
-              offset: Offset(0, 10),
-              color: Color(0x26121F2D),
-            ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 34,
-                    height: 34,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEFF6FF),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(
-                      Icons.record_voice_over_outlined,
-                      color: Color(0xFF2B6CB0),
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      placeName == null
-                          ? _copy(language, ko: '로컬 도슨트', en: 'Local docent')
-                          : _copy(
-                              language,
-                              ko: '$placeName 도슨트',
-                              en: '$placeName docent',
-                            ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFF111827),
-                        fontWeight: FontWeight.w900,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ),
-                  if (docentAudio != null)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                      ),
-                      child: Text(
-                        _audioBytesLabel(docentAudio!.bytes.length, language),
-                        style: const TextStyle(
-                          color: Color(0xFF64748B),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Text(
-                body,
-                maxLines: 5,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Color(0xFF111827),
-                  height: 1.5,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                ),
-              ),
-              if (actionLabel != null) ...[
-                const SizedBox(height: 8),
-                _InlineIconText(icon: Icons.route_outlined, label: actionLabel),
-              ],
-              if (audioError != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  audioError!,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.error,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  if (canFetchAudio || audioLoading) ...[
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: canFetchAudio ? onFetchAudio : null,
-                        icon: audioLoading
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.volume_up, size: 18),
-                        label: Text(
-                          audioLoading
-                              ? _copy(
-                                  language,
-                                  ko: '음성 생성 중',
-                                  en: 'Preparing audio',
-                                )
-                              : _copy(language, ko: '정보 더 듣기', en: 'Listen'),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                  ],
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      icon: const Icon(Icons.add_circle_outline, size: 18),
-                      label: Text(
-                        _copy(language, ko: '오늘 코스에 추가', en: 'Add to plan'),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF2B6CB0),
-                        side: const BorderSide(color: Color(0xFF2B6CB0)),
-                      ),
-                      onPressed: onAddToPlan,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _MapBottomDock extends StatelessWidget {
   const _MapBottomDock({
     required this.isWide,
@@ -2519,7 +2309,15 @@ class _MapBottomDock extends StatelessWidget {
     required this.topPlace,
     required this.uiLanguage,
     required this.height,
+    required this.docentScript,
+    required this.docentAudio,
+    required this.docentAction,
+    required this.audioLoading,
+    required this.audioError,
+    required this.canFetchAudio,
     required this.showEvidence,
+    required this.onFetchAudio,
+    required this.onAddToPlan,
     required this.onOpenDetail,
     required this.onToggleEvidence,
   });
@@ -2530,7 +2328,15 @@ class _MapBottomDock extends StatelessWidget {
   final LalaPlace? topPlace;
   final String uiLanguage;
   final double height;
+  final String? docentScript;
+  final LalaAudioResponse? docentAudio;
+  final String? docentAction;
+  final bool audioLoading;
+  final String? audioError;
+  final bool canFetchAudio;
   final bool showEvidence;
+  final VoidCallback onFetchAudio;
+  final VoidCallback onAddToPlan;
   final VoidCallback onOpenDetail;
   final VoidCallback onToggleEvidence;
 
@@ -2628,9 +2434,234 @@ class _MapBottomDock extends StatelessWidget {
                     _TinyMeta(_sourceLabel(source, language: uiLanguage)),
                   ],
                 ),
+                const SizedBox(height: 12),
+                _DockDocentPreview(
+                  place: currentPlace,
+                  language: uiLanguage,
+                  script: docentScript,
+                  action: docentAction,
+                  audioLoading: audioLoading,
+                  audioError: audioError,
+                  docentAudio: docentAudio,
+                  canFetchAudio: canFetchAudio,
+                  onFetchAudio: onFetchAudio,
+                  onAddToPlan: onAddToPlan,
+                  onOpenDetail: onOpenDetail,
+                ),
               ],
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DockDocentPreview extends StatelessWidget {
+  const _DockDocentPreview({
+    required this.place,
+    required this.language,
+    required this.script,
+    required this.action,
+    required this.audioLoading,
+    required this.audioError,
+    required this.docentAudio,
+    required this.canFetchAudio,
+    required this.onFetchAudio,
+    required this.onAddToPlan,
+    required this.onOpenDetail,
+  });
+
+  final LalaPlace place;
+  final String language;
+  final String? script;
+  final String? action;
+  final bool audioLoading;
+  final String? audioError;
+  final LalaAudioResponse? docentAudio;
+  final bool canFetchAudio;
+  final VoidCallback onFetchAudio;
+  final VoidCallback onAddToPlan;
+  final VoidCallback onOpenDetail;
+
+  @override
+  Widget build(BuildContext context) {
+    final body = _docentBody(place: place, script: script, language: language);
+    final summary = _docentSummary(
+      place: place,
+      language: language,
+      script: script,
+      action: action,
+    );
+    final actionLabel = _docentActionLabel(
+      place: place,
+      action: action,
+      language: language,
+    );
+    final showListenButton = canFetchAudio || audioLoading;
+    return DecoratedBox(
+      key: const ValueKey('dock-docent-preview'),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFD7E3F5)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 11, 12, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEAF2FF),
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: const Icon(
+                    Icons.record_voice_over_outlined,
+                    color: Color(0xFF2B6CB0),
+                    size: 19,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _copy(
+                          language,
+                          ko: '${_placeDisplayName(place, language)} 도슨트',
+                          en: '${_placeDisplayName(place, language)} docent',
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF111827),
+                          fontWeight: FontWeight.w900,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        summary,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF64748B),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (docentAudio != null)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: Text(
+                      _audioBytesLabel(docentAudio!.bytes.length, language),
+                      style: const TextStyle(
+                        color: Color(0xFF64748B),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              body,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Color(0xFF111827),
+                height: 1.38,
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+              ),
+            ),
+            if (actionLabel != null) ...[
+              const SizedBox(height: 6),
+              _InlineIconText(icon: Icons.route_outlined, label: actionLabel),
+            ],
+            if (audioError != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                audioError!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.error,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                if (showListenButton) ...[
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: canFetchAudio ? onFetchAudio : null,
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 11),
+                      ),
+                      icon: audioLoading
+                          ? const SizedBox(
+                              width: 15,
+                              height: 15,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.volume_up, size: 18),
+                      label: Text(
+                        audioLoading
+                            ? _copy(language, ko: '음성 생성 중', en: 'Preparing')
+                            : _copy(language, ko: '정보 더 듣기', en: 'Listen'),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onAddToPlan,
+                    icon: const Icon(Icons.add_circle_outline, size: 18),
+                    label: Text(
+                      _copy(language, ko: '오늘 코스에 추가', en: 'Add to plan'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF2B6CB0),
+                      side: const BorderSide(color: Color(0xFF2B6CB0)),
+                      padding: const EdgeInsets.symmetric(vertical: 11),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: IconButton.filledTonal(
+                    tooltip: _copy(language, ko: '상세 열기', en: 'Open details'),
+                    onPressed: onOpenDetail,
+                    icon: const Icon(Icons.keyboard_arrow_up),
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF2B6CB0),
+                      side: const BorderSide(color: Color(0xFFD7E3F5)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
