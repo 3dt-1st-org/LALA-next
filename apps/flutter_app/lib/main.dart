@@ -7810,9 +7810,9 @@ String _weatherSourceLabel(String? value, {String language = 'ko'}) {
 String? _externalSourceLabel(Object? value, {String language = 'ko'}) {
   if (_isEnglish(language)) {
     return switch ((value?.toString() ?? '').trim()) {
-      'tour_api' => 'TourAPI',
-      'kcisa' => 'KCISA',
-      'kopis' => 'KOPIS',
+      'tour_api' => 'Korea Tourism data',
+      'kcisa' => 'Culture information data',
+      'kopis' => 'Performing arts data',
       'dev_seed' => 'LALA curation',
       'public_mvp_snapshot' => 'Official data',
       'canonical' => 'Official places',
@@ -7821,9 +7821,9 @@ String? _externalSourceLabel(Object? value, {String language = 'ko'}) {
     };
   }
   return switch ((value?.toString() ?? '').trim()) {
-    'tour_api' => 'TourAPI',
-    'kcisa' => 'KCISA',
-    'kopis' => 'KOPIS',
+    'tour_api' => '한국관광공사',
+    'kcisa' => '문화정보원',
+    'kopis' => '공연예술통합전산망',
     'dev_seed' => '로컬 큐레이션',
     'public_mvp_snapshot' => '공식 데이터',
     'canonical' => '공식 장소',

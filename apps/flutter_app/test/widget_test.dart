@@ -127,7 +127,7 @@ void main() {
     expect(find.textContaining('14°C'), findsWidgets);
     expect(find.text('정보 더 듣기'), findsOneWidget);
     expect(find.text('오늘 코스에 추가'), findsOneWidget);
-    expect(find.text('TourAPI'), findsNothing);
+    expect(find.text('한국관광공사'), findsNothing);
     expect(find.textContaining('조선 왕실'), findsAtLeastNWidgets(1));
 
     await tester.tap(find.widgetWithText(OutlinedButton, '오늘 코스에 추가'));
@@ -151,7 +151,7 @@ void main() {
     expect(find.text('문화 연계'), findsOneWidget);
     expect(find.text('날씨 적합'), findsOneWidget);
     expect(find.text('86'), findsAtLeastNWidgets(1));
-    expect(find.text('TourAPI'), findsOneWidget);
+    expect(find.text('한국관광공사'), findsOneWidget);
     expect(find.text('카드 소비'), findsOneWidget);
     expect(find.text('문화행사 데이터'), findsOneWidget);
     expect(find.textContaining('날씨'), findsWidgets);
