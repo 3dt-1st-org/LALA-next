@@ -623,7 +623,7 @@ def _weather_data_schema() -> dict[str, Any]:
                 "type": "array",
                 "items": {"$ref": "#/components/schemas/ForecastItem"},
             },
-            "outdoor_status": {"type": "string", "enum": ["good", "bad"]},
+            "outdoor_status": {"type": "string", "enum": ["good", "bad", "unknown"]},
             "force": {"type": "boolean"},
             "location_match": {"type": "boolean", "nullable": True},
             "record_time": {"type": "string", "nullable": True},

@@ -52,7 +52,7 @@ def intervention(*, lat: float, lng: float, radius_m: int) -> dict:
     candidate = (places.get("places") or [None])[0]
     source = _combined_source(places.get("source"), weather.get("source"))
     candidate_name = (candidate or {}).get("name") or "nearby local places"
-    is_bad_weather = weather["outdoor_status"] != "good"
+    is_bad_weather = weather["outdoor_status"] == "bad"
     return {
         "center": {"lat": lat, "lng": lng},
         "radius_m": radius_m,
@@ -86,6 +86,8 @@ def _combined_source(place_source: str | None, weather_source: str | None) -> st
 def _intervention_reason(*, weather_status: str, candidate_name: str) -> str:
     if weather_status == "good":
         return f"Weather is suitable, so keep the current route toward {candidate_name}."
+    if weather_status == "unknown":
+        return f"Weather data is still pending, so keep {candidate_name} as the current option."
     return (
         "Weather is not ideal; prioritize short-walk or indoor-friendly "
         f"options near {candidate_name}."
@@ -95,6 +97,8 @@ def _intervention_reason(*, weather_status: str, candidate_name: str) -> str:
 def _recommended_action(*, weather_status: str, candidate_name: str) -> str:
     if weather_status == "good":
         return f"Keep {candidate_name} as the primary local stop."
+    if weather_status == "unknown":
+        return f"Keep {candidate_name} while weather data is pending."
     return f"Show indoor or short-walk alternatives around {candidate_name}."
 
 

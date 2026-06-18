@@ -305,7 +305,7 @@ void main() {
                   {
                     'period': 'afternoon',
                     'title': 'Adjust by weather',
-                    'weather_hint': 'good',
+                    'weather_hint': 'unknown',
                   },
                 ],
                 'source': 'skeleton',
@@ -338,13 +338,13 @@ void main() {
       final plan = await client.createDailyPlan();
       final intervention = await client.getIntervention(radiusM: 1000);
 
-      expect(weather.data?.dust.gradeKo, '보통');
-      expect(weather.data?.forecast.first.icon, 'partly-cloudy');
+      expect(weather.data?.dust.gradeKo, '확인 중');
+      expect(weather.data?.forecast, isEmpty);
       expect(plan.data?.center.lat, 37.2);
       expect(plan.data?.radiusM, 50000);
-      expect(plan.data?.weather.outdoorStatus, 'good');
+      expect(plan.data?.weather.outdoorStatus, 'unknown');
       expect(plan.data?.slots.first.place?.name, '수원화성');
-      expect(plan.data?.slots.last.weatherHint, 'good');
+      expect(plan.data?.slots.last.weatherHint, 'unknown');
       expect(plan.data?.requestHash, startsWith('abcdef'));
       expect(plan.data?.cacheKey, startsWith('daily_plan:'));
       expect(intervention.data?.shouldIntervene, isFalse);
@@ -564,17 +564,11 @@ Map<String, Object?> _weatherPayload() {
   return {
     'lat': 37.2,
     'lng': 127.0,
-    'temp': '11',
-    'icon': 'partly-cloudy',
-    'dust': {'pm10': '37', 'pm25': '26', 'grade': 'normal', 'grade_ko': '보통'},
-    'forecast': [
-      {
-        'time': '2026-06-11T12:00:00+09:00',
-        'temp': '12',
-        'icon': 'partly-cloudy',
-      },
-    ],
-    'outdoor_status': 'good',
+    'temp': '',
+    'icon': 'unavailable',
+    'dust': {'pm10': '', 'pm25': '', 'grade': 'unknown', 'grade_ko': '확인 중'},
+    'forecast': [],
+    'outdoor_status': 'unknown',
     'force': false,
     'source': 'skeleton',
   };

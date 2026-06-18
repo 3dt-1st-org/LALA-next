@@ -153,7 +153,10 @@ def test_weather_route_returns_envelope(client, auth_headers):
     body = response.json()
     assert body["ok"] is True
     assert body["data"]["source"] == "skeleton"
-    assert body["data"]["dust"]["grade"] == "normal"
+    assert body["data"]["temp"] == ""
+    assert body["data"]["forecast"] == []
+    assert body["data"]["outdoor_status"] == "unknown"
+    assert body["data"]["dust"]["grade"] == "unknown"
 
 
 def test_weather_uses_db_repository_when_available(client, auth_headers, monkeypatch):
@@ -181,6 +184,16 @@ def test_weather_uses_db_repository_when_available(client, auth_headers, monkeyp
     assert len(body["data"]["forecast"]) == 4
     assert body["data"]["forecast"][0]["temp"] == "18.5"
     assert body["data"]["force"] is False
+
+
+def test_intervention_treats_unknown_weather_as_neutral(client, auth_headers):
+    response = client.get("/api/v1/plans/intervention?lat=37.2&lng=127.0", headers=auth_headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["data"]["should_intervene"] is False
+    assert "pending" in body["data"]["reason"]
+    assert "indoor" not in body["data"]["recommended_action"].lower()
 
 
 def test_docent_script_returns_envelope(client, auth_headers):
