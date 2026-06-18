@@ -262,13 +262,9 @@ class _LalaHomePageState extends State<LalaHomePage> {
   static const Duration _interventionToastAutoDismiss = Duration(seconds: 8);
   static const Duration _weatherMaxAge = Duration(minutes: 10);
 
-  late final TextEditingController _baseUrlController;
-  late final TextEditingController _bearerTokenController;
-  late final TextEditingController _apiKeyController;
-  late final TextEditingController _kakaoJavascriptKeyController;
-  late final TextEditingController _latController;
-  late final TextEditingController _lngController;
-  late final TextEditingController _radiusController;
+  late final LalaAppConfig _baseConfig;
+  late double _queryLat;
+  late double _queryLng;
   late LalaBackend _backend;
 
   bool _loading = false;
@@ -316,17 +312,11 @@ class _LalaHomePageState extends State<LalaHomePage> {
   void initState() {
     super.initState();
     final config = widget.initialConfig;
-    _baseUrlController = TextEditingController(text: config.baseUri);
-    _bearerTokenController = TextEditingController(text: config.bearerToken);
-    _apiKeyController = TextEditingController(text: config.apiKey);
-    _kakaoJavascriptKeyController = TextEditingController(
-      text: config.kakaoJavascriptKey,
-    );
-    _latController = TextEditingController(text: config.lat.toStringAsFixed(4));
-    _lngController = TextEditingController(text: config.lng.toStringAsFixed(4));
-    _radiusController = TextEditingController(text: '${config.radiusM}');
+    _baseConfig = config;
+    _queryLat = config.lat;
+    _queryLng = config.lng;
     _uiLanguage = config.lang;
-    _backend = widget.backendFactory(config);
+    _backend = widget.backendFactory(_currentConfig());
     WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
   }
 
@@ -335,25 +325,13 @@ class _LalaHomePageState extends State<LalaHomePage> {
     _mapCameraDebounce?.cancel();
     _interventionToastTimer?.cancel();
     _backend.close();
-    _baseUrlController.dispose();
-    _bearerTokenController.dispose();
-    _apiKeyController.dispose();
-    _kakaoJavascriptKeyController.dispose();
-    _latController.dispose();
-    _lngController.dispose();
-    _radiusController.dispose();
     super.dispose();
   }
 
   LalaAppConfig _currentConfig() {
-    return LalaAppConfig(
-      baseUri: _baseUrlController.text.trim(),
-      bearerToken: _bearerTokenController.text.trim(),
-      apiKey: _apiKeyController.text.trim(),
-      kakaoJavascriptKey: _kakaoJavascriptKeyController.text.trim(),
-      lat: double.tryParse(_latController.text.trim()) ?? 37.2636,
-      lng: double.tryParse(_lngController.text.trim()) ?? 127.0286,
-      radiusM: int.tryParse(_radiusController.text.trim()) ?? 50000,
+    return _baseConfig.copyWith(
+      lat: _queryLat,
+      lng: _queryLng,
       category: _selectedCategory,
       lang: _uiLanguage,
     );
@@ -666,9 +644,9 @@ class _LalaHomePageState extends State<LalaHomePage> {
       currentLng: camera.lng,
       thresholdMeters: _placesReloadThresholdMeters,
     );
-    _latController.text = camera.lat.toStringAsFixed(6);
-    _lngController.text = camera.lng.toStringAsFixed(6);
     setState(() {
+      _queryLat = camera.lat;
+      _queryLng = camera.lng;
       _mapFocusLat = camera.lat;
       _mapFocusLng = camera.lng;
       _mapLevel = normalizedLevel;
@@ -706,8 +684,10 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _tourAudioLoading = false;
       _showEvidence = false;
       _focusedClusterMemberIds = const <String>[];
-      _mapFocusLat = double.tryParse(_latController.text.trim()) ?? 37.2636;
-      _mapFocusLng = double.tryParse(_lngController.text.trim()) ?? 127.0286;
+      _queryLat = _baseConfig.lat;
+      _queryLng = _baseConfig.lng;
+      _mapFocusLat = _baseConfig.lat;
+      _mapFocusLng = _baseConfig.lng;
       _mapLevel = 4;
       _recommendationRailExpanded = true;
     });
