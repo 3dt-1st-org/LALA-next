@@ -8198,8 +8198,8 @@ String _sourceLabel(String? value, {String language = 'ko'}) {
       'db' => 'Database',
       'mixed' => 'Mixed data',
       'public_mvp_snapshot' => 'Public data',
-      'demo_fallback' => 'Demo fallback',
-      'skeleton' => 'Demo data',
+      'demo_fallback' => 'Fallback cache',
+      'skeleton' => 'Default places',
       '' => '-',
       final source => source,
     };
@@ -8208,8 +8208,8 @@ String _sourceLabel(String? value, {String language = 'ko'}) {
     'db' => 'DB 기반',
     'mixed' => '혼합 데이터',
     'public_mvp_snapshot' => '공공데이터',
-    'demo_fallback' => '데모 기준',
-    'skeleton' => '데모 데이터',
+    'demo_fallback' => '기본 표시',
+    'skeleton' => '기본 장소',
     '' => '-',
     final source => source,
   };
@@ -8221,7 +8221,7 @@ String? _externalSourceLabel(Object? value, {String language = 'ko'}) {
       'tour_api' => 'TourAPI',
       'kcisa' => 'KCISA',
       'kopis' => 'KOPIS',
-      'dev_seed' => 'Seed data',
+      'dev_seed' => 'Prepared data',
       'public_mvp_snapshot' => 'Public data',
       'canonical' => 'Official place DB',
       '' => null,
@@ -8232,7 +8232,7 @@ String? _externalSourceLabel(Object? value, {String language = 'ko'}) {
     'tour_api' => 'TourAPI',
     'kcisa' => 'KCISA',
     'kopis' => 'KOPIS',
-    'dev_seed' => '시드 데이터',
+    'dev_seed' => '준비된 데이터',
     'public_mvp_snapshot' => '공공데이터',
     'canonical' => '공식 장소 DB',
     '' => null,
@@ -8244,18 +8244,18 @@ String _basisLabel(String value, {String language = 'ko'}) {
   if (_isEnglish(language)) {
     return switch (value.trim()) {
       'actual_data' => 'Real data',
-      'demo_seed' => 'Seed data',
+      'demo_seed' => 'Prepared data',
       'public_mvp_snapshot' => 'Public data',
-      'demo_fallback' => 'Demo fallback',
+      'demo_fallback' => 'Fallback cache',
       final basis when basis.isEmpty => '-',
       final basis => basis,
     };
   }
   return switch (value.trim()) {
     'actual_data' => '실데이터',
-    'demo_seed' => '시드 데이터',
+    'demo_seed' => '준비된 데이터',
     'public_mvp_snapshot' => '공공데이터',
-    'demo_fallback' => '데모 기준',
+    'demo_fallback' => '기본 표시',
     final basis when basis.isEmpty => '-',
     final basis => basis,
   };

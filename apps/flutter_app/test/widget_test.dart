@@ -157,6 +157,7 @@ void main() {
     expect(find.text('문화행사 데이터'), findsOneWidget);
     expect(find.textContaining('날씨'), findsWidgets);
     expect(find.textContaining('스냅샷'), findsNothing);
+    expect(find.textContaining('데모'), findsNothing);
   });
 
   testWidgets('filters places from category chips and toggles map modes', (
@@ -879,7 +880,8 @@ void main() {
       find.text('UPSTREAM_UNAVAILABLE: Authenticated route failed.'),
       findsNothing,
     );
-    expect(find.textContaining('데모 기준'), findsWidgets);
+    expect(find.textContaining('기본 표시'), findsWidgets);
+    expect(find.textContaining('데모'), findsNothing);
     expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
     expect(find.byKey(const ValueKey('map-error-retry')), findsOneWidget);
 
