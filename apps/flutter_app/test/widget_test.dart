@@ -2,6 +2,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lala_next_app/kakao_map_fallback.dart';
+import 'package:lala_next_app/kakao_map_models.dart';
 import 'package:lala_next_app/main.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
@@ -95,6 +97,79 @@ void main() {
       ),
       isTrue,
     );
+  });
+
+  testWidgets('map fallback does not invent places when data is empty', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: SizedBox(
+          width: 390,
+          height: 640,
+          child: KakaoMapFallbackView(
+            message: '현재 지도를 표시할 수 없습니다.',
+            language: 'ko',
+            centerLat: 37.2636,
+            centerLng: 127.0286,
+            places: <KakaoMapPlace>[],
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('kakao-map-marker-fallback-center')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('kakao-map-marker-fallback-food')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('kakao-map-marker-fallback-culture')),
+      findsNothing,
+    );
+    expect(find.text('로컬 맛집'), findsNothing);
+    expect(find.text('문화 행사'), findsNothing);
+    expect(find.text('현재 지도를 표시할 수 없습니다.'), findsOneWidget);
+  });
+
+  testWidgets('map fallback renders only supplied real places', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: SizedBox(
+          width: 390,
+          height: 640,
+          child: KakaoMapFallbackView(
+            message: '현재 지도를 표시할 수 없습니다.',
+            language: 'ko',
+            centerLat: 37.2636,
+            centerLng: 127.0286,
+            places: <KakaoMapPlace>[
+              KakaoMapPlace(
+                id: 'official-place',
+                name: '공식 장소',
+                category: 'attraction',
+                lat: 37.2636,
+                lng: 127.0286,
+                selected: true,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('kakao-map-marker-official-place')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('kakao-map-marker-fallback-food')),
+      findsNothing,
+    );
+    expect(find.text('공식 장소'), findsOneWidget);
   });
 
   testWidgets('loads public demo panels before auth is configured', (

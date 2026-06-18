@@ -448,10 +448,7 @@ void _drawFallbackMap(
     ..style.fontFamily = 'system-ui, -apple-system, sans-serif';
   container.append(notice);
 
-  final visiblePlaces = places.isEmpty
-      ? _fallbackHtmlPlaces(centerLat, centerLng, language)
-      : places;
-  for (final place in visiblePlaces.take(40)) {
+  for (final place in places.take(40)) {
     final point = _fallbackPosition(
       lat: place.lat,
       lng: place.lng,
@@ -543,38 +540,6 @@ void _drawFallbackMap(
   final x = 50 + ((lng - centerLng) * 7200);
   final y = 50 - ((lat - centerLat) * 9000);
   return (x: x.clamp(8, 92).toDouble(), y: y.clamp(12, 82).toDouble());
-}
-
-List<KakaoMapPlace> _fallbackHtmlPlaces(
-  double centerLat,
-  double centerLng,
-  String language,
-) {
-  final isEnglish = language == 'en';
-  return [
-    KakaoMapPlace(
-      id: 'fallback-center',
-      name: isEnglish ? 'Current recommendation' : '현재 추천 지점',
-      category: 'attraction',
-      lat: centerLat,
-      lng: centerLng,
-      selected: true,
-    ),
-    KakaoMapPlace(
-      id: 'fallback-food',
-      name: isEnglish ? 'Local food' : '로컬 맛집',
-      category: 'restaurant',
-      lat: centerLat - 0.0015,
-      lng: centerLng + 0.0012,
-    ),
-    KakaoMapPlace(
-      id: 'fallback-culture',
-      name: isEnglish ? 'Culture event' : '문화 행사',
-      category: 'event',
-      lat: centerLat + 0.0012,
-      lng: centerLng - 0.001,
-    ),
-  ];
 }
 
 String _fallbackMarkerColor(String category) {
@@ -705,9 +670,7 @@ class _KakaoMapUnavailable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final visiblePlaces = places.isEmpty
-        ? _fallbackHtmlPlaces(centerLat, centerLng, language)
-        : places.take(24).toList(growable: false);
+    final visiblePlaces = places.take(24).toList(growable: false);
     return LayoutBuilder(
       builder: (context, constraints) {
         return Container(

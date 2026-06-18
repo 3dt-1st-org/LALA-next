@@ -22,9 +22,7 @@ class KakaoMapFallbackView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final visiblePlaces = places.isEmpty
-        ? _fallbackPlaces(centerLat, centerLng, language)
-        : places.take(40).toList(growable: false);
+    final visiblePlaces = places.take(40).toList(growable: false);
     return ColoredBox(
       key: ValueKey(
         'kakao-map-fallback-center-${centerLat.toStringAsFixed(4)}-${centerLng.toStringAsFixed(4)}',
@@ -293,38 +291,6 @@ class _FallbackMapPainter extends CustomPainter {
   final x = 50 + ((lng - centerLng) * 7200);
   final y = 50 - ((lat - centerLat) * 9000);
   return (x: x.clamp(8, 92).toDouble(), y: y.clamp(12, 82).toDouble());
-}
-
-List<KakaoMapPlace> _fallbackPlaces(
-  double centerLat,
-  double centerLng,
-  String language,
-) {
-  final isEnglish = language == 'en';
-  return [
-    KakaoMapPlace(
-      id: 'fallback-center',
-      name: isEnglish ? 'Current recommendation' : '현재 추천 지점',
-      category: 'attraction',
-      lat: centerLat,
-      lng: centerLng,
-      selected: true,
-    ),
-    KakaoMapPlace(
-      id: 'fallback-food',
-      name: isEnglish ? 'Local food' : '로컬 맛집',
-      category: 'restaurant',
-      lat: centerLat - 0.0015,
-      lng: centerLng + 0.0012,
-    ),
-    KakaoMapPlace(
-      id: 'fallback-culture',
-      name: isEnglish ? 'Culture event' : '문화 행사',
-      category: 'event',
-      lat: centerLat + 0.0012,
-      lng: centerLng - 0.001,
-    ),
-  ];
 }
 
 Color _markerColor(String category) {
