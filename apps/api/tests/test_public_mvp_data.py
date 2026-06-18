@@ -3,6 +3,41 @@ from __future__ import annotations
 from apps.api.app.services import public_mvp_data
 
 
+GYEONGGI_REGIONS = {
+    "가평군",
+    "고양시",
+    "과천시",
+    "광명시",
+    "광주시",
+    "구리시",
+    "군포시",
+    "김포시",
+    "남양주시",
+    "동두천시",
+    "부천시",
+    "성남시",
+    "수원시",
+    "시흥시",
+    "안산시",
+    "안성시",
+    "안양시",
+    "양주시",
+    "양평군",
+    "여주시",
+    "연천군",
+    "오산시",
+    "용인시",
+    "의왕시",
+    "의정부시",
+    "이천시",
+    "파주시",
+    "평택시",
+    "포천시",
+    "하남시",
+    "화성시",
+}
+
+
 def test_public_mvp_snapshot_is_available() -> None:
     assert public_mvp_data.snapshot_status() == "configured"
 
@@ -72,6 +107,25 @@ def test_public_mvp_snapshot_has_publishable_english_labels() -> None:
     assert rows
     assert all(place.get("name_en") for place in rows)
     assert all(place.get("address_en") for place in rows)
+    assert all(place.get("region_en") for place in rows)
+
+
+def test_public_mvp_snapshot_covers_all_gyeonggi_regions() -> None:
+    rows = public_mvp_data._load_snapshot()["places"]
+
+    assert rows
+    assert {place.get("region_ko") for place in rows} == GYEONGGI_REGIONS
+
+
+def test_public_mvp_snapshot_uses_only_real_official_images() -> None:
+    rows = public_mvp_data._load_snapshot()["places"]
+    image_urls = [place.get("image_url") for place in rows if place.get("image_url")]
+
+    assert image_urls
+    assert all(url.startswith("https://") for url in image_urls)
+    assert all("tong.visitkorea.or.kr" in url for url in image_urls)
+    assert all("placeholder" not in url.lower() for url in image_urls)
+    assert all("mock" not in url.lower() for url in image_urls)
 
 
 def test_public_mvp_snapshot_does_not_include_dev_seed_rows() -> None:
