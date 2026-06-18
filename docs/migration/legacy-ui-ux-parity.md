@@ -117,9 +117,10 @@ evidence, but they are not the latest MVP acceptance source.
   used by the live map path, so simulator and widget-test UI parity can be
   verified without depending on the Kakao SDK.
 - Implemented: place media can flow from official-source `image_url` values
-  such as TourAPI `firstimage`; when a source has no usable image URL, the
-  client shows a neutral category thumbnail instead of reusing another place
-  photo.
+  such as TourAPI `firstimage`; the TourAPI ingest path now checks
+  `detailImage2` for missing official images before falling back. When a source
+  still has no usable image URL, the client shows a neutral category thumbnail
+  instead of reusing another place photo.
 - Implemented: Kakao map drag events now flow back into Flutter as camera
   updates. The app updates the active center and refreshes places, weather,
   planner, and docent data from that map center, matching the legacy

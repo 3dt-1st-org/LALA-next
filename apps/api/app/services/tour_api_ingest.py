@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Any, Iterable, Sequence
 
 TOUR_API_BASE_URL = "https://apis.data.go.kr/B551011/KorService2"
 TOUR_API_OPERATION = "areaBasedList2"
+TOUR_API_DETAIL_IMAGE_OPERATION = "detailImage2"
 DEFAULT_AREA_CODE = "31"
 DEFAULT_CONTENT_TYPE_IDS = ("12", "14", "15", "39")
 
@@ -67,6 +68,8 @@ class TourApiPlace:
 class TourApiFetchResult:
     places: tuple[TourApiPlace, ...]
     request_count: int
+    image_request_count: int
+    image_error_count: int
     raw_count: int
     area_code: str
     content_type_ids: tuple[str, ...]
@@ -82,6 +85,8 @@ class TourApiFetchResult:
             "area_code": self.area_code,
             "content_type_ids": list(self.content_type_ids),
             "request_count": self.request_count,
+            "image_request_count": self.image_request_count,
+            "image_error_count": self.image_error_count,
             "raw_count": self.raw_count,
             "place_count": len(self.places),
             "preview": [item.to_place_row() for item in self.places[:5]],
@@ -96,6 +101,7 @@ def fetch_tour_api_places(
     rows: int = 100,
     page_size: int = 20,
     timeout: int = 10,
+    fetch_missing_images: bool = True,
 ) -> TourApiFetchResult:
     if not service_key:
         raise ValueError("PUBLIC_DATA_SERVICE_KEY is required.")
@@ -146,9 +152,26 @@ def fetch_tour_api_places(
             remaining -= num_rows
             page_no += 1
 
+    deduped_places = _dedupe_places(places)
+    image_request_count = 0
+    image_error_count = 0
+    if fetch_missing_images:
+        (
+            deduped_places,
+            image_request_count,
+            image_error_count,
+        ) = _fill_missing_official_images(
+            requests_module=requests,
+            service_key=service_key,
+            places=deduped_places,
+            timeout=timeout,
+        )
+
     return TourApiFetchResult(
-        places=tuple(_dedupe_places(places)),
+        places=tuple(deduped_places),
         request_count=request_count,
+        image_request_count=image_request_count,
+        image_error_count=image_error_count,
         raw_count=raw_count,
         area_code=area_code,
         content_type_ids=tuple(content_type_ids),
@@ -182,6 +205,72 @@ def parse_tour_api_place(item: dict[str, Any]) -> TourApiPlace | None:
         first_image=_optional_text(item.get("firstimage")),
         modified_time=_optional_text(item.get("modifiedtime")),
     )
+
+
+def _fill_missing_official_images(
+    *,
+    requests_module: Any,
+    service_key: str,
+    places: Sequence[TourApiPlace],
+    timeout: int,
+) -> tuple[list[TourApiPlace], int, int]:
+    resolved: list[TourApiPlace] = []
+    request_count = 0
+    error_count = 0
+    for place in places:
+        if place.first_image:
+            resolved.append(place)
+            continue
+        request_count += 1
+        try:
+            image_url = _fetch_detail_image_url(
+                requests_module=requests_module,
+                service_key=service_key,
+                content_id=place.content_id,
+                timeout=timeout,
+            )
+        except Exception:
+            error_count += 1
+            image_url = None
+        resolved.append(replace(place, first_image=image_url) if image_url else place)
+    return resolved, request_count, error_count
+
+
+def _fetch_detail_image_url(
+    *,
+    requests_module: Any,
+    service_key: str,
+    content_id: str,
+    timeout: int,
+) -> str | None:
+    response = requests_module.get(
+        f"{TOUR_API_BASE_URL}/{TOUR_API_DETAIL_IMAGE_OPERATION}",
+        params={
+            "serviceKey": service_key,
+            "MobileOS": "ETC",
+            "MobileApp": "LALA-next",
+            "_type": "json",
+            "contentId": content_id,
+            "imageYN": "Y",
+            "subImageYN": "Y",
+            "numOfRows": 10,
+            "pageNo": 1,
+        },
+        timeout=timeout,
+    )
+    response.raise_for_status()
+    items = _extract_items(response.json())
+    return _first_detail_image_url(items)
+
+
+def _first_detail_image_url(items: Sequence[dict[str, Any]]) -> str | None:
+    for item in items:
+        image_url = _optional_text(item.get("originimgurl")) or _optional_text(
+            item.get("smallimageurl")
+        )
+        if image_url:
+            return image_url
+    return None
 
 
 def upsert_tour_api_places(

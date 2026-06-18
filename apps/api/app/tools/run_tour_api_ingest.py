@@ -13,6 +13,7 @@ from apps.api.app.services.tour_api_ingest import (
     DEFAULT_AREA_CODE,
     DEFAULT_CONTENT_TYPE_IDS,
     TOUR_API_BASE_URL,
+    TOUR_API_DETAIL_IMAGE_OPERATION,
     TOUR_API_OPERATION,
     fetch_tour_api_places,
     upsert_tour_api_places,
@@ -129,6 +130,7 @@ def _plan_payload(area_code: str, content_type_ids: tuple[str, ...]) -> dict[str
         "source_name": "tour_api",
         "dataset_name": "한국관광공사_국문 관광정보 서비스_GW",
         "operation": TOUR_API_OPERATION,
+        "image_operation": TOUR_API_DETAIL_IMAGE_OPERATION,
         "base_url": TOUR_API_BASE_URL,
         "area_code": area_code,
         "content_type_ids": list(content_type_ids),
@@ -175,6 +177,8 @@ def _write(args: argparse.Namespace, payload: dict[str, Any]) -> None:
         print(f"operation={result.get('operation')}")
         print(f"area_code={result.get('area_code')}")
         print(f"request_count={result.get('request_count')}")
+        print(f"image_request_count={result.get('image_request_count')}")
+        print(f"image_error_count={result.get('image_error_count')}")
         print(f"raw_count={result.get('raw_count')}")
         print(f"place_count={result.get('place_count')}")
         for item in result.get("preview") or []:

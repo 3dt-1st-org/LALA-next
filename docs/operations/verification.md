@@ -354,7 +354,10 @@ scripts/unix/plan_tour_api_ingest.sh
 
 Default mode is plan-only. The source is the public-data `한국관광공사_국문
 관광정보 서비스_GW` service and the default target is `travel.places`.
-Preview calls TourAPI with `PUBLIC_DATA_SERVICE_KEY` but does not mutate the DB:
+Preview calls TourAPI with `PUBLIC_DATA_SERVICE_KEY` but does not mutate the DB.
+When a place has no `firstimage`, the preview/apply path also checks the official
+`detailImage2` image endpoint for that `contentId`; detail-image failures are
+counted as `image_error_count` and do not drop the place:
 
 ```bash
 scripts/unix/plan_tour_api_ingest.sh --preview --rows 20

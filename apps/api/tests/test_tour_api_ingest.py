@@ -18,6 +18,7 @@ def test_tour_api_ingest_plan_uses_public_data_key_without_live_call(capsys):
     assert payload["mode"] == "plan"
     assert payload["source_name"] == "tour_api"
     assert payload["operation"] == "areaBasedList2"
+    assert payload["image_operation"] == "detailImage2"
     assert payload["target"] == "travel.places"
     assert payload["required_env"] == ["PUBLIC_DATA_SERVICE_KEY"]
     assert payload["live_api_call"] is False
@@ -63,6 +64,92 @@ def test_parse_tour_api_place_maps_fields_to_data_dictionary_names():
 
 def test_fetch_result_dedupes_content_ids(monkeypatch):
     class Response:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._payload
+
+    list_payload = {
+        "response": {
+            "header": {"resultCode": "0000", "resultMsg": "OK"},
+            "body": {
+                "items": {
+                    "item": [
+                        {
+                            "contentid": "1",
+                            "contenttypeid": "12",
+                            "title": "장소",
+                            "addr1": "경기도 수원시 팔달구",
+                            "areacode": "31",
+                            "sigungucode": "13",
+                            "mapx": "127.0",
+                            "mapy": "37.0",
+                        },
+                        {
+                            "contentid": "1",
+                            "contenttypeid": "12",
+                            "title": "장소",
+                            "addr1": "경기도 수원시 팔달구",
+                            "areacode": "31",
+                            "sigungucode": "13",
+                            "mapx": "127.0",
+                            "mapy": "37.0",
+                        },
+                    ]
+                }
+            },
+        }
+    }
+    detail_payload = {
+        "response": {
+            "header": {"resultCode": "0000", "resultMsg": "OK"},
+            "body": {
+                "items": {
+                    "item": {
+                        "contentid": "1",
+                        "originimgurl": "https://example.invalid/detail.jpg",
+                    }
+                }
+            },
+        }
+    }
+
+    calls = []
+
+    def get(url, params, timeout):
+        calls.append({"url": url, "params": params, "timeout": timeout})
+        if url.endswith("/detailImage2"):
+            return Response(detail_payload)
+        return Response(list_payload)
+
+    monkeypatch.setitem(sys.modules, "requests", SimpleNamespace(get=get))
+
+    result = tour_api_ingest.fetch_tour_api_places(
+        service_key="secret-key",
+        content_type_ids=("12",),
+        rows=2,
+        page_size=2,
+    )
+
+    assert len(calls) == 2
+    assert calls[0]["url"].endswith("/areaBasedList2")
+    assert calls[0]["params"]["serviceKey"] == "secret-key"
+    assert calls[1]["url"].endswith("/detailImage2")
+    assert calls[1]["params"]["contentId"] == "1"
+    assert result.request_count == 1
+    assert result.image_request_count == 1
+    assert result.image_error_count == 0
+    assert result.raw_count == 2
+    assert len(result.places) == 1
+    assert result.places[0].first_image == "https://example.invalid/detail.jpg"
+
+
+def test_fetch_result_skips_detail_image_when_firstimage_exists(monkeypatch):
+    class Response:
         def raise_for_status(self):
             return None
 
@@ -82,16 +169,7 @@ def test_fetch_result_dedupes_content_ids(monkeypatch):
                                     "sigungucode": "13",
                                     "mapx": "127.0",
                                     "mapy": "37.0",
-                                },
-                                {
-                                    "contentid": "1",
-                                    "contenttypeid": "12",
-                                    "title": "장소",
-                                    "addr1": "경기도 수원시 팔달구",
-                                    "areacode": "31",
-                                    "sigungucode": "13",
-                                    "mapx": "127.0",
-                                    "mapy": "37.0",
+                                    "firstimage": "https://example.invalid/list.jpg",
                                 },
                             ]
                         }
@@ -110,14 +188,67 @@ def test_fetch_result_dedupes_content_ids(monkeypatch):
     result = tour_api_ingest.fetch_tour_api_places(
         service_key="secret-key",
         content_type_ids=("12",),
-        rows=2,
-        page_size=2,
+        rows=1,
+        page_size=1,
     )
 
     assert len(calls) == 1
-    assert calls[0]["params"]["serviceKey"] == "secret-key"
-    assert result.raw_count == 2
+    assert calls[0]["url"].endswith("/areaBasedList2")
+    assert result.image_request_count == 0
+    assert result.image_error_count == 0
+    assert result.raw_count == 1
     assert len(result.places) == 1
+    assert result.places[0].first_image == "https://example.invalid/list.jpg"
+
+
+def test_fetch_result_keeps_place_when_detail_image_lookup_fails(monkeypatch):
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "response": {
+                    "header": {"resultCode": "0000", "resultMsg": "OK"},
+                    "body": {
+                        "items": {
+                            "item": {
+                                "contentid": "1",
+                                "contenttypeid": "12",
+                                "title": "장소",
+                                "addr1": "경기도 수원시 팔달구",
+                                "areacode": "31",
+                                "sigungucode": "13",
+                                "mapx": "127.0",
+                                "mapy": "37.0",
+                            }
+                        }
+                    },
+                }
+            }
+
+    calls = []
+
+    def get(url, params, timeout):
+        calls.append({"url": url, "params": params, "timeout": timeout})
+        if url.endswith("/detailImage2"):
+            raise RuntimeError("detail image unavailable")
+        return Response()
+
+    monkeypatch.setitem(sys.modules, "requests", SimpleNamespace(get=get))
+
+    result = tour_api_ingest.fetch_tour_api_places(
+        service_key="secret-key",
+        content_type_ids=("12",),
+        rows=1,
+        page_size=1,
+    )
+
+    assert len(calls) == 2
+    assert result.image_request_count == 1
+    assert result.image_error_count == 1
+    assert len(result.places) == 1
+    assert result.places[0].first_image is None
 
 
 def test_apply_requires_guard_before_reading_db(monkeypatch, capsys):
@@ -208,6 +339,8 @@ def test_upsert_tour_api_places_targets_source_files_and_places(monkeypatch):
             ),
         ),
         request_count=1,
+        image_request_count=0,
+        image_error_count=0,
         raw_count=1,
         area_code="31",
         content_type_ids=("12",),
