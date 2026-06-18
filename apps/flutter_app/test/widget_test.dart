@@ -952,7 +952,7 @@ void main() {
       find.text('UPSTREAM_UNAVAILABLE: Authenticated route failed.'),
       findsNothing,
     );
-    expect(find.textContaining('기본 추천'), findsWidgets);
+    expect(find.textContaining('로컬 큐레이션'), findsWidgets);
     expect(find.textContaining('데모'), findsNothing);
     expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
     expect(find.byKey(const ValueKey('map-error-retry')), findsOneWidget);
@@ -1026,7 +1026,8 @@ void main() {
 
     expect(find.text('위치 기반 추천'), findsOneWidget);
     expect(find.text('공식 데이터 우선'), findsOneWidget);
-    expect(find.textContaining('공개 데이터를 우선 사용'), findsOneWidget);
+    expect(find.textContaining('공식 기관 데이터와 공개 데이터'), findsOneWidget);
+    expect(find.textContaining('공식 API'), findsNothing);
     expect(find.textContaining('스냅샷'), findsNothing);
     expect(find.textContaining('개발'), findsNothing);
   });

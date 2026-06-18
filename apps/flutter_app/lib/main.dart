@@ -1275,8 +1275,8 @@ class _PrivacyDetailsSheet extends StatelessWidget {
                 ),
                 body: _copy(
                   language,
-                  ko: '관광·문화·날씨·지역 소비 신호는 공식 API와 공개 데이터를 우선 사용합니다.',
-                  en: 'Tourism, culture, weather, and local signals prefer official APIs and public data.',
+                  ko: '관광·문화·날씨·지역 소비 신호는 공식 기관 데이터와 공개 데이터를 우선 사용합니다.',
+                  en: 'Tourism, culture, weather, and local signals prioritize official and public datasets.',
                 ),
               ),
             ],
@@ -6420,7 +6420,11 @@ class _EmptyPlaceState extends StatelessWidget {
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Text(
-        _copy(language, ko: '추천 장소를 불러오지 못했습니다.', en: 'No places returned.'),
+        _copy(
+          language,
+          ko: '이 주변 추천을 준비 중입니다.',
+          en: 'Recommendations are still being prepared here.',
+        ),
       ),
     );
   }
@@ -7761,8 +7765,8 @@ String _sourceLabel(String? value, {String language = 'ko'}) {
       'db' => 'Live recommendations',
       'mixed' => 'Live + official data',
       'public_mvp_snapshot' => 'Official data',
-      'demo_fallback' => 'Default recommendations',
-      'skeleton' => 'Default recommendations',
+      'demo_fallback' => 'LALA curation',
+      'skeleton' => 'LALA curation',
       '' => '-',
       final source => source,
     };
@@ -7771,8 +7775,8 @@ String _sourceLabel(String? value, {String language = 'ko'}) {
     'db' => '실시간 추천',
     'mixed' => '실시간·공식 데이터',
     'public_mvp_snapshot' => '공식 데이터',
-    'demo_fallback' => '기본 추천',
-    'skeleton' => '기본 추천',
+    'demo_fallback' => '로컬 큐레이션',
+    'skeleton' => '로컬 큐레이션',
     '' => '-',
     final source => source,
   };
@@ -7820,7 +7824,7 @@ String? _externalSourceLabel(Object? value, {String language = 'ko'}) {
     'tour_api' => 'TourAPI',
     'kcisa' => 'KCISA',
     'kopis' => 'KOPIS',
-    'dev_seed' => 'LALA 큐레이션',
+    'dev_seed' => '로컬 큐레이션',
     'public_mvp_snapshot' => '공식 데이터',
     'canonical' => '공식 장소',
     '' => null,
@@ -7834,16 +7838,16 @@ String _basisLabel(String value, {String language = 'ko'}) {
       'actual_data' => 'Real data',
       'demo_seed' => 'LALA curation',
       'public_mvp_snapshot' => 'Official data',
-      'demo_fallback' => 'Default recommendations',
+      'demo_fallback' => 'LALA curation',
       final basis when basis.isEmpty => '-',
       final basis => basis,
     };
   }
   return switch (value.trim()) {
     'actual_data' => '실데이터',
-    'demo_seed' => 'LALA 큐레이션',
+    'demo_seed' => '로컬 큐레이션',
     'public_mvp_snapshot' => '공식 데이터',
-    'demo_fallback' => '기본 추천',
+    'demo_fallback' => '로컬 큐레이션',
     final basis when basis.isEmpty => '-',
     final basis => basis,
   };
