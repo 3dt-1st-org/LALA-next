@@ -5933,32 +5933,130 @@ class _FallbackPlaceImage extends StatelessWidget {
       'culture_venue' => Icons.museum,
       _ => Icons.landscape,
     };
-    return Container(
+    return SizedBox(
       width: width,
       height: height,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            color.withValues(alpha: 0.16),
-            const Color(0xFFFFFFFF).withValues(alpha: 0.92),
-          ],
-        ),
-      ),
-      child: Center(
-        child: Container(
-          width: math.min(width, height) * 0.48,
-          height: math.min(width, height) * 0.48,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.82),
-            shape: BoxShape.circle,
-            border: Border.all(color: color.withValues(alpha: 0.18)),
+      child: CustomPaint(
+        painter: _FallbackPlaceImagePainter(color: color),
+        child: Align(
+          alignment: Alignment.bottomRight,
+          child: Padding(
+            padding: EdgeInsets.all(
+              math.max(7, math.min(width, height) * 0.10),
+            ),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.90),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: color.withValues(alpha: 0.24)),
+                boxShadow: const [
+                  BoxShadow(
+                    blurRadius: 8,
+                    offset: Offset(0, 3),
+                    color: Color(0x16000000),
+                  ),
+                ],
+              ),
+              child: SizedBox.square(
+                dimension: math.max(30, math.min(width, height) * 0.42),
+                child: Icon(
+                  icon,
+                  color: color,
+                  size: math.max(17, math.min(width, height) * 0.20),
+                ),
+              ),
+            ),
           ),
-          child: Icon(icon, color: color, size: math.min(width, height) * 0.24),
         ),
       ),
     );
+  }
+}
+
+class _FallbackPlaceImagePainter extends CustomPainter {
+  const _FallbackPlaceImagePainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final paint = Paint();
+    paint.shader = LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [
+        Color.lerp(const Color(0xFFFFFFFF), color, 0.08)!,
+        const Color(0xFFF7FAFC),
+        Color.lerp(const Color(0xFFE8F0F6), color, 0.12)!,
+      ],
+      stops: const [0, 0.58, 1],
+    ).createShader(rect);
+    canvas.drawRect(rect, paint);
+
+    final roadPaint = Paint()
+      ..color = const Color(0xFFFFFFFF).withValues(alpha: 0.72)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = math.max(8, size.shortestSide * 0.13)
+      ..strokeCap = StrokeCap.round;
+    final roadPath = Path()
+      ..moveTo(size.width * -0.08, size.height * 0.72)
+      ..cubicTo(
+        size.width * 0.22,
+        size.height * 0.52,
+        size.width * 0.46,
+        size.height * 0.86,
+        size.width * 0.76,
+        size.height * 0.62,
+      )
+      ..cubicTo(
+        size.width * 0.92,
+        size.height * 0.48,
+        size.width * 0.96,
+        size.height * 0.32,
+        size.width * 1.08,
+        size.height * 0.22,
+      );
+    canvas.drawPath(roadPath, roadPaint);
+
+    final contourPaint = Paint()
+      ..color = color.withValues(alpha: 0.14)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+    for (var index = 0; index < 4; index += 1) {
+      final inset = 8.0 + index * size.shortestSide * 0.10;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(
+            -inset,
+            -inset * 0.45,
+            size.width + inset * 1.9,
+            size.height * 0.58 + inset,
+          ),
+          Radius.circular(size.shortestSide * (0.20 + index * 0.06)),
+        ),
+        contourPaint,
+      );
+    }
+
+    final pinPaint = Paint()
+      ..color = color.withValues(alpha: 0.22)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(
+      Offset(size.width * 0.26, size.height * 0.30),
+      math.max(4, size.shortestSide * 0.055),
+      pinPaint,
+    );
+    canvas.drawCircle(
+      Offset(size.width * 0.62, size.height * 0.42),
+      math.max(3, size.shortestSide * 0.04),
+      pinPaint..color = const Color(0xFF2B6CB0).withValues(alpha: 0.14),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_FallbackPlaceImagePainter oldDelegate) {
+    return oldDelegate.color != color;
   }
 }
 
