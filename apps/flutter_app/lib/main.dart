@@ -5504,15 +5504,6 @@ class _LegacyMapCanvas extends StatelessWidget {
             ),
           ),
         ),
-        Positioned(
-          left: 22,
-          top: 260,
-          child: _MapLocationLabel(
-            label: weather?.location?.trim().isNotEmpty == true
-                ? _locationLabel(weather!.location, language)
-                : _locationLabel('수원시', language),
-          ),
-        ),
       ],
     );
   }
@@ -5585,39 +5576,6 @@ class _LegacyMapCanvas extends StatelessWidget {
       lat: place.lat,
       lng: place.lng,
       selected: selected,
-    );
-  }
-}
-
-class _MapLocationLabel extends StatelessWidget {
-  const _MapLocationLabel({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.86),
-        borderRadius: BorderRadius.circular(999),
-        boxShadow: const [
-          BoxShadow(
-            blurRadius: 14,
-            offset: Offset(0, 5),
-            color: Color(0x14000000),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-        child: Text(
-          label,
-          style: const TextStyle(
-            color: Color(0xFF1A202C),
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-      ),
     );
   }
 }
