@@ -1612,14 +1612,17 @@ class _Dashboard extends StatelessWidget {
             if (visibleError != null)
               Positioned(
                 left: 16,
-                right: 16,
+                right: isWide ? null : 16,
                 top: isWide ? 88 : 118,
-                child: _MapToast(
-                  icon: Icons.error_outline,
-                  label: visibleError,
-                  actionLabel: _copy(uiLanguage, ko: '다시 시도', en: 'Retry'),
-                  onAction: onRefresh,
-                  color: Theme.of(context).colorScheme.errorContainer,
+                child: SizedBox(
+                  width: isWide ? 420 : null,
+                  child: _MapToast(
+                    icon: Icons.error_outline,
+                    label: visibleError,
+                    actionLabel: _copy(uiLanguage, ko: '다시 시도', en: 'Retry'),
+                    onAction: onRefresh,
+                    color: Theme.of(context).colorScheme.errorContainer,
+                  ),
                 ),
               ),
             if (visibleError == null &&
@@ -6422,40 +6425,64 @@ class _MapToast extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
+    final foreground = Theme.of(context).colorScheme.onErrorContainer;
+    final accent = Theme.of(context).colorScheme.error;
+    return DecoratedBox(
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.96),
-        borderRadius: BorderRadius.circular(18),
+        color: Colors.white.withValues(alpha: 0.94),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.78)),
         boxShadow: const [
           BoxShadow(
-            blurRadius: 18,
-            offset: Offset(0, 8),
-            color: Color(0x1A000000),
+            blurRadius: 14,
+            offset: Offset(0, 5),
+            color: Color(0x16000000),
           ),
         ],
       ),
-      child: Row(
-        children: [
-          Icon(icon),
-          const SizedBox(width: 8),
-          Expanded(child: Text(label)),
-          if (actionLabel != null && onAction != null) ...[
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 18, color: accent),
             const SizedBox(width: 8),
-            TextButton(
-              key: const ValueKey('map-error-retry'),
-              onPressed: onAction,
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                minimumSize: const Size(0, 36),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                foregroundColor: Theme.of(context).colorScheme.onErrorContainer,
-                textStyle: const TextStyle(fontWeight: FontWeight.w900),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: foreground,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
-              child: Text(actionLabel!),
             ),
+            if (actionLabel != null && onAction != null) ...[
+              const SizedBox(width: 8),
+              TextButton(
+                key: const ValueKey('map-error-retry'),
+                onPressed: onAction,
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  minimumSize: const Size(0, 32),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  foregroundColor: accent,
+                  backgroundColor: color.withValues(alpha: 0.42),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  textStyle: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 12,
+                  ),
+                ),
+                child: Text(actionLabel!),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
