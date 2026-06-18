@@ -292,6 +292,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
   bool _locationConsentEnabled = true;
   bool _recommendationRailExpanded = true;
   List<String> _focusedClusterMemberIds = const <String>[];
+  final Set<String> _savedPlaceIds = <String>{};
   final Set<String> _detailDocentPlayedPlaceIds = <String>{};
   DateTime? _lastAutoDocentAt;
   String? _lastAutoDocentPlaceId;
@@ -773,6 +774,16 @@ class _LalaHomePageState extends State<LalaHomePage> {
     });
   }
 
+  void _toggleSavedPlace(String placeId) {
+    setState(() {
+      if (_savedPlaceIds.contains(placeId)) {
+        _savedPlaceIds.remove(placeId);
+      } else {
+        _savedPlaceIds.add(placeId);
+      }
+    });
+  }
+
   void _toggleRecommendationRail() {
     setState(() {
       _recommendationRailExpanded = !_recommendationRailExpanded;
@@ -945,6 +956,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
               voiceEnabled: _voiceEnabled,
               autoDocentEnabled: _autoDocentEnabled,
               showEvidence: _showEvidence,
+              savedPlaceIds: _savedPlaceIds,
               detailDocentPlayedPlaceIds: _detailDocentPlayedPlaceIds,
               interventionToastDismissed: _interventionToastDismissed,
               locationConsentEnabled: _locationConsentEnabled,
@@ -964,6 +976,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
               onToggleVoice: _toggleVoice,
               onToggleAutoDocent: _toggleAutoDocent,
               onToggleEvidence: _toggleEvidence,
+              onToggleSavedPlace: _toggleSavedPlace,
               onDismissInterventionToast: _dismissInterventionToast,
               onFetchAudio: _fetchMoreInfo,
               onFetchTourAudio: _fetchTourAudio,
@@ -1084,7 +1097,8 @@ class _UserSettingsSheet extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     TextButton(
-                      onPressed: () {},
+                      onPressed: () =>
+                          _showPrivacyDetailsSheet(context, uiLanguage),
                       style: TextButton.styleFrom(
                         padding: EdgeInsets.zero,
                         foregroundColor: const Color(0xFF2B6CB0),
@@ -1169,6 +1183,186 @@ class _UserSettingsSheet extends StatelessWidget {
   }
 }
 
+Future<void> _showPrivacyDetailsSheet(
+  BuildContext context,
+  String language,
+) async {
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) => _PrivacyDetailsSheet(language: language),
+  );
+}
+
+class _PrivacyDetailsSheet extends StatelessWidget {
+  const _PrivacyDetailsSheet({required this.language});
+
+  final String language;
+
+  @override
+  Widget build(BuildContext context) {
+    final closeLabel = _copy(language, ko: '닫기', en: 'Close');
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.54,
+      minChildSize: 0.34,
+      maxChildSize: 0.82,
+      builder: (context, scrollController) {
+        return DecoratedBox(
+          decoration: const BoxDecoration(
+            color: Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+            boxShadow: [
+              BoxShadow(
+                blurRadius: 28,
+                offset: Offset(0, -10),
+                color: Color(0x24000000),
+              ),
+            ],
+          ),
+          child: ListView(
+            controller: scrollController,
+            padding: const EdgeInsets.fromLTRB(18, 10, 18, 28),
+            children: [
+              Center(
+                child: Container(
+                  width: 46,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFC8D0D9),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _copy(language, ko: '개인정보 동의 안내', en: 'Privacy notice'),
+                      style: const TextStyle(
+                        color: Color(0xFF111827),
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  IconButton.filledTonal(
+                    tooltip: closeLabel,
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close),
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF1A202C),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _PrivacyDetailRow(
+                icon: Icons.my_location_outlined,
+                title: _copy(language, ko: '위치 기반 추천', en: 'Location context'),
+                body: _copy(
+                  language,
+                  ko: '현재 화면의 지도 중심과 반경을 사용해 가까운 장소, 날씨, 일정을 계산합니다.',
+                  en: 'LALA uses the current map center and radius for nearby places, weather, and plans.',
+                ),
+              ),
+              _PrivacyDetailRow(
+                icon: Icons.public_outlined,
+                title: _copy(
+                  language,
+                  ko: '공공 데이터 우선',
+                  en: 'Public data first',
+                ),
+                body: _copy(
+                  language,
+                  ko: '관광·문화·날씨·지역 소비 신호는 공식 API와 공개 스냅샷을 우선 사용합니다.',
+                  en: 'Tourism, culture, weather, and local signals prefer official APIs and public snapshots.',
+                ),
+              ),
+              _PrivacyDetailRow(
+                icon: Icons.key_off_outlined,
+                title: _copy(language, ko: '키 정보 비노출', en: 'No key exposure'),
+                body: _copy(
+                  language,
+                  ko: 'API 키나 개발 연결 값은 공개 설정 화면에 표시하지 않습니다.',
+                  en: 'API keys and developer connection values are not shown in public settings.',
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _PrivacyDetailRow extends StatelessWidget {
+  const _PrivacyDetailRow({
+    required this.icon,
+    required this.title,
+    required this.body,
+  });
+
+  final IconData icon;
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: const Color(0xFFEFF6FF),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: const Color(0xFF2B6CB0), size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Color(0xFF111827),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  body,
+                  style: const TextStyle(
+                    color: Color(0xFF64748B),
+                    height: 1.35,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SettingsSection extends StatelessWidget {
   const _SettingsSection({required this.title, this.child, this.trailing});
 
@@ -1236,6 +1430,7 @@ class _Dashboard extends StatelessWidget {
     required this.voiceEnabled,
     required this.autoDocentEnabled,
     required this.showEvidence,
+    required this.savedPlaceIds,
     required this.detailDocentPlayedPlaceIds,
     required this.interventionToastDismissed,
     required this.locationConsentEnabled,
@@ -1255,6 +1450,7 @@ class _Dashboard extends StatelessWidget {
     required this.onToggleVoice,
     required this.onToggleAutoDocent,
     required this.onToggleEvidence,
+    required this.onToggleSavedPlace,
     required this.onDismissInterventionToast,
     required this.onFetchAudio,
     required this.onFetchTourAudio,
@@ -1289,6 +1485,7 @@ class _Dashboard extends StatelessWidget {
   final bool voiceEnabled;
   final bool autoDocentEnabled;
   final bool showEvidence;
+  final Set<String> savedPlaceIds;
   final Set<String> detailDocentPlayedPlaceIds;
   final bool interventionToastDismissed;
   final bool locationConsentEnabled;
@@ -1308,6 +1505,7 @@ class _Dashboard extends StatelessWidget {
   final VoidCallback onToggleVoice;
   final VoidCallback onToggleAutoDocent;
   final VoidCallback onToggleEvidence;
+  final ValueChanged<String> onToggleSavedPlace;
   final VoidCallback onDismissInterventionToast;
   final VoidCallback onFetchAudio;
   final VoidCallback onFetchTourAudio;
@@ -1476,6 +1674,7 @@ class _Dashboard extends StatelessWidget {
                         topPlace != null &&
                         !detailDocentPlayedPlaceIds.contains(topPlace.placeId),
                     onFetchAudio: onFetchAudio,
+                    onAddToPlan: () => onOpenSheet(_ActiveMapSheet.planner),
                   ),
                 ),
               ),
@@ -1549,8 +1748,11 @@ class _Dashboard extends StatelessWidget {
                   ),
                   source: effectiveSource,
                   showEvidence: showEvidence,
+                  savedPlaceIds: savedPlaceIds,
                   detailDocentPlayedPlaceIds: detailDocentPlayedPlaceIds,
                   onToggleEvidence: onToggleEvidence,
+                  onToggleSavedPlace: onToggleSavedPlace,
+                  onAddToPlan: () => onOpenSheet(_ActiveMapSheet.planner),
                   onFetchAudio: onFetchAudio,
                   onFetchTourAudio: onFetchTourAudio,
                   onSelectPlace: onSelectPlace,
@@ -2102,6 +2304,7 @@ class _MapGuidancePanel extends StatelessWidget {
     required this.docentAudio,
     required this.canFetchAudio,
     required this.onFetchAudio,
+    required this.onAddToPlan,
   });
 
   final LalaPlace? place;
@@ -2113,6 +2316,7 @@ class _MapGuidancePanel extends StatelessWidget {
   final LalaAudioResponse? docentAudio;
   final bool canFetchAudio;
   final VoidCallback onFetchAudio;
+  final VoidCallback onAddToPlan;
 
   @override
   Widget build(BuildContext context) {
@@ -2273,7 +2477,7 @@ class _MapGuidancePanel extends StatelessWidget {
                         foregroundColor: const Color(0xFF2B6CB0),
                         side: const BorderSide(color: Color(0xFF2B6CB0)),
                       ),
-                      onPressed: () {},
+                      onPressed: onAddToPlan,
                     ),
                   ),
                 ],
@@ -2426,8 +2630,11 @@ class _MapDraggableSheet extends StatelessWidget {
     required this.tourAudioError,
     required this.source,
     required this.showEvidence,
+    required this.savedPlaceIds,
     required this.detailDocentPlayedPlaceIds,
     required this.onToggleEvidence,
+    required this.onToggleSavedPlace,
+    required this.onAddToPlan,
     required this.onFetchAudio,
     required this.onFetchTourAudio,
     required this.onSelectPlace,
@@ -2452,8 +2659,11 @@ class _MapDraggableSheet extends StatelessWidget {
   final String? tourAudioError;
   final String? source;
   final bool showEvidence;
+  final Set<String> savedPlaceIds;
   final Set<String> detailDocentPlayedPlaceIds;
   final VoidCallback onToggleEvidence;
+  final ValueChanged<String> onToggleSavedPlace;
+  final VoidCallback onAddToPlan;
   final VoidCallback onFetchAudio;
   final VoidCallback onFetchTourAudio;
   final ValueChanged<LalaPlace> onSelectPlace;
@@ -2557,8 +2767,11 @@ class _MapDraggableSheet extends StatelessWidget {
                       audioError: audioError,
                       source: source,
                       showEvidence: showEvidence,
+                      savedPlaceIds: savedPlaceIds,
                       detailDocentPlayedPlaceIds: detailDocentPlayedPlaceIds,
                       onToggleEvidence: onToggleEvidence,
+                      onToggleSavedPlace: onToggleSavedPlace,
+                      onAddToPlan: onAddToPlan,
                       onFetchAudio: onFetchAudio,
                     ),
                     _ActiveMapSheet.planner => _PlannerSheetContent(
@@ -3858,8 +4071,11 @@ class _FeaturedPlacePanel extends StatelessWidget {
     required this.audioError,
     required this.source,
     required this.showEvidence,
+    required this.savedPlaceIds,
     required this.detailDocentPlayedPlaceIds,
     required this.onToggleEvidence,
+    required this.onToggleSavedPlace,
+    required this.onAddToPlan,
     required this.onFetchAudio,
   });
 
@@ -3874,8 +4090,11 @@ class _FeaturedPlacePanel extends StatelessWidget {
   final String? audioError;
   final String? source;
   final bool showEvidence;
+  final Set<String> savedPlaceIds;
   final Set<String> detailDocentPlayedPlaceIds;
   final VoidCallback onToggleEvidence;
+  final ValueChanged<String> onToggleSavedPlace;
+  final VoidCallback onAddToPlan;
   final VoidCallback onFetchAudio;
 
   @override
@@ -3894,6 +4113,8 @@ class _FeaturedPlacePanel extends StatelessWidget {
           place: currentPlace,
           language: language,
           showEvidence: showEvidence,
+          saved: savedPlaceIds.contains(currentPlace.placeId),
+          onToggleSaved: () => onToggleSavedPlace(currentPlace.placeId),
         ),
         const SizedBox(height: 12),
         _PlaceContextCard(
@@ -3951,6 +4172,7 @@ class _FeaturedPlacePanel extends StatelessWidget {
               !audioLoading &&
               !detailDocentPlayedPlaceIds.contains(currentPlace.placeId),
           onFetchAudio: onFetchAudio,
+          onAddToPlan: onAddToPlan,
         ),
         if (showEvidence) ...[
           const SizedBox(height: 12),
@@ -4008,11 +4230,15 @@ class _FeaturedPlaceHeader extends StatelessWidget {
     required this.place,
     required this.language,
     required this.showEvidence,
+    required this.saved,
+    required this.onToggleSaved,
   });
 
   final LalaPlace place;
   final String language;
   final bool showEvidence;
+  final bool saved;
+  final VoidCallback onToggleSaved;
 
   @override
   Widget build(BuildContext context) {
@@ -4056,9 +4282,12 @@ class _FeaturedPlaceHeader extends StatelessWidget {
               ),
             ),
             IconButton(
-              tooltip: _copy(language, ko: '저장', en: 'Save'),
-              onPressed: () {},
-              icon: const Icon(Icons.favorite_border),
+              tooltip: saved
+                  ? _copy(language, ko: '저장됨', en: 'Saved')
+                  : _copy(language, ko: '저장', en: 'Save'),
+              onPressed: onToggleSaved,
+              color: saved ? const Color(0xFFC53030) : const Color(0xFF64748B),
+              icon: Icon(saved ? Icons.favorite : Icons.favorite_border),
             ),
           ],
         ),
@@ -4788,6 +5017,7 @@ class _DocentSubtitle extends StatelessWidget {
     required this.docentAudio,
     required this.canFetchAudio,
     required this.onFetchAudio,
+    this.onAddToPlan,
   });
 
   final LalaPlace? place;
@@ -4799,6 +5029,7 @@ class _DocentSubtitle extends StatelessWidget {
   final LalaAudioResponse? docentAudio;
   final bool canFetchAudio;
   final VoidCallback onFetchAudio;
+  final VoidCallback? onAddToPlan;
 
   @override
   Widget build(BuildContext context) {
@@ -5001,20 +5232,21 @@ class _DocentSubtitle extends StatelessWidget {
               ),
               const SizedBox(width: 10),
             ],
-            Expanded(
-              child: OutlinedButton.icon(
-                icon: const Icon(Icons.add_circle_outline),
-                label: Text(
-                  _copy(language, ko: '오늘 코스에 추가', en: 'Add to plan'),
+            if (onAddToPlan != null)
+              Expanded(
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.add_circle_outline),
+                  label: Text(
+                    _copy(language, ko: '오늘 코스에 추가', en: 'Add to plan'),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF2B6CB0),
+                    side: const BorderSide(color: Color(0xFF2B6CB0)),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  onPressed: onAddToPlan,
                 ),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF2B6CB0),
-                  side: const BorderSide(color: Color(0xFF2B6CB0)),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                onPressed: () {},
               ),
-            ),
           ],
         ),
       ],

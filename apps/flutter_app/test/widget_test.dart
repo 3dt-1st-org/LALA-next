@@ -127,6 +127,15 @@ void main() {
     expect(find.text('TourAPI'), findsNothing);
     expect(find.textContaining('조선 왕실'), findsAtLeastNWidgets(1));
 
+    await tester.tap(find.widgetWithText(OutlinedButton, '오늘 코스에 추가'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('오늘 일정'), findsOneWidget);
+    expect(find.textContaining('화성행궁'), findsAtLeastNWidgets(1));
+
+    await tester.tap(find.byTooltip('닫기').first);
+    await tester.pumpAndSettle();
+
     final evidenceButton = find.widgetWithText(TextButton, '점수/근거');
     await tester.ensureVisible(evidenceButton);
     await tester.tap(evidenceButton);
@@ -910,6 +919,38 @@ void main() {
     expect(find.text('기본 주소'), findsNothing);
     expect(find.text('마이그레이션 키'), findsNothing);
     expect(find.text('카카오 지도 키'), findsNothing);
+
+    await tester.tap(find.text('자세히 보기'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('위치 기반 추천'), findsOneWidget);
+    expect(find.text('공공 데이터 우선'), findsOneWidget);
+    expect(find.text('키 정보 비노출'), findsOneWidget);
+  });
+
+  testWidgets('place detail save control toggles local saved state', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      LalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(TextButton, '상세'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('장소 상세'), findsOneWidget);
+    expect(find.byIcon(Icons.favorite_border), findsOneWidget);
+    expect(find.byTooltip('저장'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('저장'));
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.favorite), findsOneWidget);
+    expect(find.byTooltip('저장됨'), findsOneWidget);
   });
 
   testWidgets('settings language switch updates map filter labels', (
