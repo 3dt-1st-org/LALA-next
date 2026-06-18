@@ -467,7 +467,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
     return _copy(
       _uiLanguage,
       ko: 'LALA API 정보를 불러오지 못했습니다.',
-      en: 'Unable to load the LALA API snapshot.',
+      en: 'Unable to load the LALA API data.',
     );
   }
 
@@ -1279,8 +1279,8 @@ class _PrivacyDetailsSheet extends StatelessWidget {
                 ),
                 body: _copy(
                   language,
-                  ko: '관광·문화·날씨·지역 소비 신호는 공식 API와 공개 스냅샷을 우선 사용합니다.',
-                  en: 'Tourism, culture, weather, and local signals prefer official APIs and public snapshots.',
+                  ko: '관광·문화·날씨·지역 소비 신호는 공식 API와 공개 데이터를 우선 사용합니다.',
+                  en: 'Tourism, culture, weather, and local signals prefer official APIs and public data.',
                 ),
               ),
               _PrivacyDetailRow(
@@ -8081,7 +8081,7 @@ String _sourceLabel(String? value, {String language = 'ko'}) {
     return switch ((value ?? '').trim()) {
       'db' => 'Database',
       'mixed' => 'Mixed data',
-      'public_mvp_snapshot' => 'Public snapshot',
+      'public_mvp_snapshot' => 'Public data',
       'demo_fallback' => 'Demo fallback',
       'skeleton' => 'Demo data',
       '' => '-',
@@ -8091,7 +8091,7 @@ String _sourceLabel(String? value, {String language = 'ko'}) {
   return switch ((value ?? '').trim()) {
     'db' => 'DB 기반',
     'mixed' => '혼합 데이터',
-    'public_mvp_snapshot' => '공공 스냅샷',
+    'public_mvp_snapshot' => '공공데이터',
     'demo_fallback' => '데모 기준',
     'skeleton' => '데모 데이터',
     '' => '-',
@@ -8106,7 +8106,7 @@ String? _externalSourceLabel(Object? value, {String language = 'ko'}) {
       'kcisa' => 'KCISA',
       'kopis' => 'KOPIS',
       'dev_seed' => 'Seed data',
-      'public_mvp_snapshot' => 'Public snapshot',
+      'public_mvp_snapshot' => 'Public data',
       'canonical' => 'Official place DB',
       '' => null,
       final source => source,
@@ -8117,7 +8117,7 @@ String? _externalSourceLabel(Object? value, {String language = 'ko'}) {
     'kcisa' => 'KCISA',
     'kopis' => 'KOPIS',
     'dev_seed' => '시드 데이터',
-    'public_mvp_snapshot' => '공공 스냅샷',
+    'public_mvp_snapshot' => '공공데이터',
     'canonical' => '공식 장소 DB',
     '' => null,
     final source => source,
@@ -8129,7 +8129,7 @@ String _basisLabel(String value, {String language = 'ko'}) {
     return switch (value.trim()) {
       'actual_data' => 'Real data',
       'demo_seed' => 'Seed data',
-      'public_mvp_snapshot' => 'Public MVP snapshot',
+      'public_mvp_snapshot' => 'Public data',
       'demo_fallback' => 'Demo fallback',
       final basis when basis.isEmpty => '-',
       final basis => basis,
@@ -8138,7 +8138,7 @@ String _basisLabel(String value, {String language = 'ko'}) {
   return switch (value.trim()) {
     'actual_data' => '실데이터',
     'demo_seed' => '시드 데이터',
-    'public_mvp_snapshot' => '공개 MVP 스냅샷',
+    'public_mvp_snapshot' => '공공데이터',
     'demo_fallback' => '데모 기준',
     final basis when basis.isEmpty => '-',
     final basis => basis,

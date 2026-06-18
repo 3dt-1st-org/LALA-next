@@ -156,6 +156,7 @@ void main() {
     expect(find.text('카드 소비'), findsOneWidget);
     expect(find.text('문화행사 데이터'), findsOneWidget);
     expect(find.textContaining('날씨'), findsWidgets);
+    expect(find.textContaining('스냅샷'), findsNothing);
   });
 
   testWidgets('filters places from category chips and toggles map modes', (
@@ -926,6 +927,8 @@ void main() {
 
     expect(find.text('위치 기반 추천'), findsOneWidget);
     expect(find.text('공공 데이터 우선'), findsOneWidget);
+    expect(find.textContaining('공개 데이터를 우선 사용'), findsOneWidget);
+    expect(find.textContaining('스냅샷'), findsNothing);
     expect(find.text('키 정보 비노출'), findsOneWidget);
   });
 
@@ -1061,6 +1064,7 @@ void main() {
     expect(find.text('Local score'), findsOneWidget);
     expect(find.textContaining('화성행궁'), findsNothing);
     expect(find.textContaining('경기도'), findsNothing);
+    expect(find.textContaining('snapshot'), findsNothing);
   });
 
   testWidgets('english food tour sheet keeps tour copy localized', (
@@ -1095,6 +1099,10 @@ void main() {
   testWidgets(
     'event detail shows legacy metadata without opening score signals',
     (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
       await tester.pumpWidget(
         LalaApp(
           backendFactory: (config) =>
@@ -1115,10 +1123,26 @@ void main() {
       expect(find.text('행사 상세 보기'), findsOneWidget);
       expect(find.text('로컬 점수'), findsNothing);
       expect(find.text('내국인 소비'), findsNothing);
+
+      final evidenceButton = find.widgetWithText(OutlinedButton, '점수/근거 보기');
+      await tester.scrollUntilVisible(
+        evidenceButton,
+        180,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.tap(evidenceButton);
+      await tester.pumpAndSettle();
+
+      expect(find.text('공공데이터'), findsOneWidget);
+      expect(find.textContaining('스냅샷'), findsNothing);
     },
   );
 
   testWidgets('event detail follows English language setting', (tester) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
       LalaApp(
         backendFactory: (config) =>
@@ -1139,6 +1163,18 @@ void main() {
     expect(find.text('Jun 1, 2026 ~ Aug 31, 2026'), findsOneWidget);
     expect(find.text('Open event details'), findsOneWidget);
     expect(find.textContaining('행사'), findsNothing);
+
+    final evidenceButton = find.widgetWithText(OutlinedButton, 'Show signals');
+    await tester.scrollUntilVisible(
+      evidenceButton,
+      180,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(evidenceButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Public data'), findsOneWidget);
+    expect(find.textContaining('snapshot'), findsNothing);
   });
 
   testWidgets(
