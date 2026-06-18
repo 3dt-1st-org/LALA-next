@@ -49,7 +49,7 @@ class KakaoMapFallbackView extends StatelessWidget {
             ),
           Center(
             child: Semantics(
-              label: 'Kakao Map API fallback',
+              label: language == 'en' ? 'Map preview' : '지도 미리보기',
               child: Container(
                 margin: const EdgeInsets.all(24),
                 padding: const EdgeInsets.symmetric(

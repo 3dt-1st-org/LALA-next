@@ -33,7 +33,9 @@ Widget buildKakaoMapView({
 
   if (!io.Platform.isIOS && !io.Platform.isAndroid) {
     return _KakaoMapNativeUnavailable(
-      message: language == 'en' ? 'Kakao Map API' : '카카오 지도',
+      message: language == 'en'
+          ? 'The live map is not available right now.'
+          : '현재 지도를 표시할 수 없습니다.',
       language: language,
       centerLat: centerLat,
       centerLng: centerLng,

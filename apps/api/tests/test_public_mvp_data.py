@@ -55,7 +55,15 @@ def test_public_mvp_snapshot_uses_english_fields_when_requested() -> None:
     assert all("Gyeonggi-do" in place["address"] for place in places)
 
 
-def test_public_mvp_snapshot_uses_safe_english_display_when_name_is_missing() -> None:
+def test_public_mvp_snapshot_has_publishable_english_labels() -> None:
+    rows = public_mvp_data._load_snapshot()["places"]
+
+    assert rows
+    assert all(place.get("name_en") for place in rows)
+    assert all(place.get("address_en") for place in rows)
+
+
+def test_public_mvp_snapshot_does_not_show_generic_english_names() -> None:
     places = public_mvp_data.fetch_places(
         lat=37.2636,
         lng=127.0286,
@@ -64,13 +72,7 @@ def test_public_mvp_snapshot_uses_safe_english_display_when_name_is_missing() ->
         language="en",
     )
 
-    missing_name = next(place for place in places if not place.get("name_en"))
-    assert missing_name["name"] in {
-        f"Attraction in {missing_name['region_en']}",
-        f"Culture venue in {missing_name['region_en']}",
-        f"Event in {missing_name['region_en']}",
-        f"Restaurant in {missing_name['region_en']}",
-    }
+    assert all(" in " not in place["name"] for place in places)
 
 
 def test_public_mvp_snapshot_preserves_official_image_urls() -> None:

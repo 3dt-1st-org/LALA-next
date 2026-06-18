@@ -193,8 +193,8 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
             container,
             language: widget.language,
             message: widget.language == 'en'
-                ? 'Waiting for the Kakao map connection'
-                : '카카오 지도 연결 대기 중',
+                ? 'Preparing the map view'
+                : '지도 화면을 준비하고 있습니다',
             places: widget.places,
             centerLat: widget.centerLat,
             centerLng: widget.centerLng,
