@@ -6,6 +6,8 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any, Sequence
 
+from apps.api.app.services.official_media import normalize_official_image_url
+
 SNAPSHOT_DATA_BASIS = "public_mvp_snapshot"
 DEFAULT_SNAPSHOT_DESCRIPTION = (
     "Public MVP snapshot exported from the canonical DB read model. It is used "
@@ -190,7 +192,7 @@ def _snapshot_place(row: dict[str, Any]) -> dict[str, Any]:
         "lng": _required_float(row.get("lng")),
         "address_ko": _optional_text(row.get("address_ko")),
         "address_en": _snapshot_address_en(row),
-        "image_url": _optional_text(row.get("image_url")),
+        "image_url": normalize_official_image_url(row.get("image_url")),
         "region_ko": _optional_text(row.get("region_ko")),
         "region_en": _snapshot_region_en(row),
         "event_start_date": _optional_text(row.get("event_start_date")),

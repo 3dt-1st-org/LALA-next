@@ -36,7 +36,7 @@ def test_parse_tour_api_place_maps_fields_to_data_dictionary_names():
         "sigungucode": "29",
         "mapx": "127.236",
         "mapy": "37.923",
-        "firstimage": "https://example.invalid/image.jpg",
+        "firstimage": "http://tong.visitkorea.or.kr/cms/resource/image.jpg",
         "modifiedtime": "20260601010101",
     }
 
@@ -51,7 +51,7 @@ def test_parse_tour_api_place_maps_fields_to_data_dictionary_names():
         "name_ko": "포천아트밸리",
         "category": "attraction",
         "address_ko": "경기도 포천시 신북면 아트밸리로 234",
-        "image_url": "https://example.invalid/image.jpg",
+        "image_url": "https://tong.visitkorea.or.kr/cms/resource/image.jpg",
         "region_name_ko": "포천시",
         "province_code": "31",
         "city_code": "29",
@@ -169,7 +169,7 @@ def test_fetch_result_skips_detail_image_when_firstimage_exists(monkeypatch):
                                     "sigungucode": "13",
                                     "mapx": "127.0",
                                     "mapy": "37.0",
-                                    "firstimage": "https://example.invalid/list.jpg",
+                                    "firstimage": "http://tong.visitkorea.or.kr/cms/resource/list.jpg",
                                 },
                             ]
                         }
@@ -198,7 +198,10 @@ def test_fetch_result_skips_detail_image_when_firstimage_exists(monkeypatch):
     assert result.image_error_count == 0
     assert result.raw_count == 1
     assert len(result.places) == 1
-    assert result.places[0].first_image == "https://example.invalid/list.jpg"
+    assert (
+        result.places[0].first_image
+        == "https://tong.visitkorea.or.kr/cms/resource/list.jpg"
+    )
 
 
 def test_fetch_result_keeps_place_when_detail_image_lookup_fails(monkeypatch):

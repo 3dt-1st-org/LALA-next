@@ -86,6 +86,25 @@ def test_build_snapshot_payload_preserves_gyeonggi_in_english_address() -> None:
     assert payload["places"][0]["address_en"].endswith(", Gyeonggi-do")
 
 
+def test_build_snapshot_payload_upgrades_tour_api_images_to_https() -> None:
+    rows = _db_rows()
+    rows[0]["image_url"] = "http://tong.visitkorea.or.kr/cms/resource/photo.jpg"
+
+    payload = public_mvp_snapshot.build_snapshot_payload(
+        rows,
+        snapshot_id="test-image-url",
+        lat=37.2636,
+        lng=127.0286,
+        radius_m=50000,
+        category="all",
+    )
+
+    assert (
+        payload["places"][0]["image_url"]
+        == "https://tong.visitkorea.or.kr/cms/resource/photo.jpg"
+    )
+
+
 def test_build_snapshot_payload_fills_gyeonggi_region_english_name() -> None:
     rows = _db_rows()
     rows[0]["region_en"] = None

@@ -7,6 +7,7 @@ from importlib.resources import files
 from math import sqrt
 from typing import Any
 
+from apps.api.app.services.official_media import normalize_official_image_url
 from apps.api.app.services.public_mvp_snapshot import GYEONGGI_REGION_NAME_EN
 
 SNAPSHOT_PACKAGE = "apps.api.app.data"
@@ -85,7 +86,7 @@ def _place_payload(row: dict[str, Any], *, distance_m: float, language: str) -> 
         "lat": float(row.get("lat") or 0),
         "lng": float(row.get("lng") or 0),
         "address": address,
-        "image_url": row.get("image_url"),
+        "image_url": normalize_official_image_url(row.get("image_url")),
         "region_ko": row.get("region_ko"),
         "region_en": row.get("region_en"),
         "event_start_date": row.get("event_start_date"),

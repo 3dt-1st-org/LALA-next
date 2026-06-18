@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from apps.api.app.core.config import get_settings
+from apps.api.app.services.official_media import normalize_official_image_url
 from apps.api.app.services.public_mvp_snapshot import GYEONGGI_REGION_NAME_EN
 
 _REQUIRED_DB_RELATIONS = (
@@ -186,7 +187,7 @@ def fetch_places(
                 "lat": float(row["lat"]),
                 "lng": float(row["lng"]),
                 "address": address,
-                "image_url": row.get("image_url"),
+                "image_url": normalize_official_image_url(row.get("image_url")),
                 "region_ko": row.get("region_ko"),
                 "region_en": row.get("region_en"),
                 "event_start_date": row.get("event_start_date"),

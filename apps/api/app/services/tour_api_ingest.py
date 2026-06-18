@@ -6,6 +6,8 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Any, Iterable, Sequence
 
+from apps.api.app.services.official_media import normalize_official_image_url
+
 TOUR_API_BASE_URL = "https://apis.data.go.kr/B551011/KorService2"
 TOUR_API_OPERATION = "areaBasedList2"
 TOUR_API_DETAIL_IMAGE_OPERATION = "detailImage2"
@@ -53,7 +55,7 @@ class TourApiPlace:
             "name_ko": self.title,
             "category": self.category,
             "address_ko": self.address_ko,
-            "image_url": self.first_image,
+            "image_url": normalize_official_image_url(self.first_image),
             "region_name_ko": self.region_name_ko,
             "province_code": self.area_code,
             "city_code": self.sigungu_code,
@@ -202,7 +204,7 @@ def parse_tour_api_place(item: dict[str, Any]) -> TourApiPlace | None:
         sigungu_code=_optional_text(item.get("sigungucode")),
         lat=lat,
         lng=lng,
-        first_image=_optional_text(item.get("firstimage")),
+        first_image=normalize_official_image_url(item.get("firstimage")),
         modified_time=_optional_text(item.get("modifiedtime")),
     )
 
@@ -269,7 +271,7 @@ def _first_detail_image_url(items: Sequence[dict[str, Any]]) -> str | None:
             item.get("smallimageurl")
         )
         if image_url:
-            return image_url
+            return normalize_official_image_url(image_url)
     return None
 
 
