@@ -7,6 +7,8 @@ from importlib.resources import files
 from math import sqrt
 from typing import Any
 
+from apps.api.app.services.public_mvp_snapshot import GYEONGGI_REGION_NAME_EN
+
 SNAPSHOT_PACKAGE = "apps.api.app.data"
 SNAPSHOT_FILE = "public_mvp_places.json"
 SOURCE_NAME = "public_mvp_snapshot"
@@ -122,5 +124,9 @@ def _english_display_address(row: dict[str, Any]) -> str:
 
 
 def _english_region(row: dict[str, Any]) -> str | None:
+    region_ko = str(row.get("region_ko") or "").strip()
+    canonical_region = GYEONGGI_REGION_NAME_EN.get(region_ko)
+    if canonical_region:
+        return canonical_region
     region = str(row.get("region_en") or "").strip()
     return region or None

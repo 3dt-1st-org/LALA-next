@@ -1,7 +1,7 @@
 {
   "snapshot_id": "public-mvp-db-export",
   "description": "Public MVP snapshot exported from the canonical DB read model. It is used only when the public demo API has no DB_DSN.",
-  "generated_at": "2026-06-18T10:18:53.931775+00:00",
+  "generated_at": "2026-06-18T12:23:57.467564+00:00",
   "query": {
     "lat": 37.2636,
     "lng": 127.0286,
@@ -17,7 +17,7 @@
       "lat": 37.3002159808,
       "lng": 126.8377246364,
       "address_ko": "경기도 안산시 상록구 한양대학로 55 (사동) 한양대학교 ERICA 캠퍼스",
-      "address_en": "Hanyang University ERICA Campus, 55 Hanyangdaehak-ro, Sangnok-gu, Ansan-si, Gyeonggi-do",
+      "address_en": "55 Hanyang University Road, Sangnok-gu, Ansan-si, Gyeonggi-do",
       "image_url": "http://tong.visitkorea.or.kr/cms/resource/24/3555824_image2_1.jpg",
       "region_ko": "안산시",
       "region_en": "Ansan-si",
@@ -136,7 +136,7 @@
     {
       "place_id": "tour-api-2733423",
       "name_ko": "호반아트리움",
-      "name_en": "Hoban Artrium",
+      "name_en": "Hoban Atrium",
       "category": "culture_venue",
       "lat": 37.419518946,
       "lng": 127.001159219,
@@ -198,12 +198,12 @@
     {
       "place_id": "tour-api-3346838",
       "name_ko": "렛츠런파크 서울 가을야간축제 별밤마중 Festival",
-      "name_en": "Let's Run Park Seoul Autumn Night Festival",
+      "name_en": "Let’s Run Park Seoul Autumn Night Festival Byeolbam Gathering",
       "category": "event",
       "lat": 37.4440606773,
       "lng": 127.0086578462,
       "address_ko": "경기도 과천시 경마공원대로 107 (주암동)",
-      "address_en": "107 Gyeongmagongwon-daero, Gwacheon-si, Gyeonggi-do",
+      "address_en": "107 Gyeongma-gongwon-daero, Gwacheon-si, Gyeonggi-do",
       "image_url": "http://tong.visitkorea.or.kr/cms/resource/26/3532126_image2_1.jpg",
       "region_ko": "과천시",
       "region_en": "Gwacheon-si",
@@ -260,7 +260,7 @@
     {
       "place_id": "tour-api-1013250",
       "name_ko": "청기와뼈다귀해장국 본점",
-      "name_en": "Cheonggiwa Pork Back-Bone Hangover Soup Main Branch",
+      "name_en": "Cheonggiwa Pyeodagui Haejang-guk Main Branch",
       "category": "restaurant",
       "lat": 37.4978171368,
       "lng": 126.7864376851,
@@ -384,7 +384,7 @@
     {
       "place_id": "tour-api-2773766",
       "name_ko": "한강뮤지엄",
-      "name_en": "Hangang Museum",
+      "name_en": "Han River Museum",
       "category": "culture_venue",
       "lat": 37.5534937521,
       "lng": 127.2366895528,
@@ -513,7 +513,7 @@
       "lat": 37.2802818594,
       "lng": 127.4388706747,
       "address_ko": "경기도 이천시 중리천로 8-1 (중리동)",
-      "address_en": "8-1 Jungnicheon-ro, Icheon-si, Gyeonggi-do",
+      "address_en": "Gyeonggi-do Icheon-si Jungnichun-ro 8-1 (Jungri-dong)",
       "image_url": null,
       "region_ko": "이천시",
       "region_en": "Icheon-si",
@@ -575,7 +575,7 @@
       "lat": 37.5707522226,
       "lng": 127.2015700317,
       "address_ko": "경기도 하남시 미사동로 38 (미사동)",
-      "address_en": "38 Misadong-ro, Hanam-si, Gyeonggi-do",
+      "address_en": "38 Misa-dong Road, Hanam-si, Gyeonggi-do",
       "image_url": "http://tong.visitkorea.or.kr/cms/resource/82/3588282_image2_1.jpg",
       "region_ko": "하남시",
       "region_en": "Hanam-si",
@@ -632,7 +632,7 @@
     {
       "place_id": "tour-api-298101",
       "name_ko": "극락사(경기)",
-      "name_en": "Geungnaksa Temple (Gyeonggi)",
+      "name_en": "Geungnaksa Temple",
       "category": "attraction",
       "lat": 37.3724098311,
       "lng": 127.2717137553,
@@ -699,7 +699,7 @@
       "lat": 37.2016720536,
       "lng": 127.006103756,
       "address_ko": "경기도 화성시 효행로707번길 30 (안녕동)",
-      "address_en": "30 Hyohaeng-ro 707beon-gil, Hwaseong-si, Gyeonggi-do",
+      "address_en": "30 Hyohyeong-ro 707beon-gil, Annyeong-dong, Hwaseong-si, Gyeonggi-do",
       "image_url": "http://tong.visitkorea.or.kr/cms/resource/77/3563177_image2_1.jpg",
       "region_ko": "화성시",
       "region_en": "Hwaseong-si",
@@ -756,12 +756,12 @@
     {
       "place_id": "tour-api-3337617",
       "name_ko": "화성시 도농 어울림축제",
-      "name_en": "Hwaseong Urban-Rural Harmony Festival",
+      "name_en": "Hwaseong City Donong Harmony Festival",
       "category": "event",
       "lat": 37.1995598559,
       "lng": 127.0871853538,
       "address_ko": "경기도 화성시 동부대로 1063-2 (오산동) 동탄여울공원",
-      "address_en": "Dongtan Yeoul Park, 1063-2 Dongbu-daero, Hwaseong-si, Gyeonggi-do",
+      "address_en": "1063-2 Dongbu-daero, Hwaseong-si, Dongtan Yeoul Park, Gyeonggi-do",
       "image_url": "http://tong.visitkorea.or.kr/cms/resource/43/3498243_image2_1.jpg",
       "region_ko": "화성시",
       "region_en": "Hwaseong-si",
@@ -818,12 +818,12 @@
     {
       "place_id": "tour-api-3558562",
       "name_ko": "도시숲 예술치유 <고요한 숨의 정원>",
-      "name_en": "Urban Forest Art Healing: Garden of Quiet Breath",
+      "name_en": "City Forest Art Healing <Garden of Quiet Breath>",
       "category": "event",
       "lat": 37.1669527885,
       "lng": 127.1024487705,
       "address_ko": "경기도 화성시 동탄순환대로 69 (송동)",
-      "address_en": "69 Dongtansunhwan-daero, Hwaseong-si, Gyeonggi-do",
+      "address_en": "69 Dongtan Circular Road, Hwaseong-si, Gyeonggi-do (Songdong)",
       "image_url": "http://tong.visitkorea.or.kr/cms/resource/61/3558561_image2_1.jpg",
       "region_ko": "화성시",
       "region_en": "Hwaseong-si",
@@ -888,7 +888,7 @@
       "address_en": "825 Jeongjo-ro, Paldal-gu, Suwon-si, Gyeonggi-do",
       "image_url": null,
       "region_ko": "수원시",
-      "region_en": "Suwon",
+      "region_en": "Suwon-si",
       "event_start_date": null,
       "event_end_date": null,
       "event_url": null,
@@ -940,12 +940,12 @@
     {
       "place_id": "tour-api-130825",
       "name_ko": "지혜샘어린이도서관",
-      "name_en": "Jihyesaem Children Library",
+      "name_en": "Jihee Sam Children's Library",
       "category": "culture_venue",
       "lat": 37.2481339456,
       "lng": 127.0399243928,
       "address_ko": "경기도 수원시 권선구 동탄원천로 818 (권선동)",
-      "address_en": "818 Dongtanwoncheon-ro, Gwonseon-gu, Suwon-si, Gyeonggi-do",
+      "address_en": "818 Dongtanwoncheon-ro, Gwonseon-gu, Suwon-si (Gwonseon-dong), Gyeonggi-do",
       "image_url": "http://tong.visitkorea.or.kr/cms/resource/35/3584735_image2_1.jpg",
       "region_ko": "수원시",
       "region_en": "Suwon-si",
@@ -1008,7 +1008,7 @@
       "address_en": "Haenggung-dong, Paldal-gu, Suwon-si, Gyeonggi-do",
       "image_url": null,
       "region_ko": "수원시",
-      "region_en": "Suwon",
+      "region_en": "Suwon-si",
       "event_start_date": "2026-06-01",
       "event_end_date": "2026-08-31",
       "event_url": "https://example.invalid/lala-next/dev-seed/suwon-night-walk-2026",
@@ -1065,7 +1065,7 @@
       "lat": 37.2858799237,
       "lng": 127.0594632301,
       "address_ko": "경기도 수원시 영통구 광교중앙로 140 (하동)",
-      "address_en": "140 Gwanggyojungang-ro, Yeongtong-gu, Suwon-si, Gyeonggi-do",
+      "address_en": "140 Gwanggyo Central Road, Yeongtong-gu, Suwon-si, Gyeonggi-do",
       "image_url": "http://tong.visitkorea.or.kr/cms/resource/55/3584755_image2_1.jpg",
       "region_ko": "수원시",
       "region_en": "Suwon-si",
@@ -1120,7 +1120,7 @@
     {
       "place_id": "tour-api-3008671",
       "name_ko": "국립농업박물관 문화제 '쉼(休), 머무르다'",
-      "name_en": "National Agricultural Museum Cultural Festival 'Rest, Stay'",
+      "name_en": "National Agricultural Museum Cultural Festival 'Rest (休), Stay'",
       "category": "event",
       "lat": 37.2746965149,
       "lng": 126.9826871782,
@@ -1180,12 +1180,12 @@
     {
       "place_id": "tour-api-130711",
       "name_ko": "수원시립만석전시관",
-      "name_en": "Suwon Manseok Exhibition Hall",
+      "name_en": "Suwon City Hall Mansuk Exhibition Hall",
       "category": "culture_venue",
       "lat": 37.2970886646,
       "lng": 126.9994711399,
       "address_ko": "경기도 수원시 장안구 송정로 19 (송죽동)",
-      "address_en": "19 Songjeong-ro, Jangan-gu, Suwon-si, Gyeonggi-do",
+      "address_en": "19 Songjeong-ro, Jangan-gu, Suwon-si (Songjuk-dong), Gyeonggi-do",
       "image_url": "http://tong.visitkorea.or.kr/cms/resource/70/3584770_image2_1.jpg",
       "region_ko": "수원시",
       "region_en": "Suwon-si",
@@ -1245,7 +1245,7 @@
       "lat": 37.380033973,
       "lng": 126.9640387032,
       "address_ko": "경기도 안양시 동안구 평촌대로 76 (호계동)",
-      "address_en": "76 Pyeongchon-daero, Dongan-gu, Anyang-si, Gyeonggi-do",
+      "address_en": "76 Pyeongchon-daero, Hogye-dong, Anyang-si, Gyeonggi-do",
       "image_url": "http://tong.visitkorea.or.kr/cms/resource/33/3577733_image2_1.jpg",
       "region_ko": "안양시",
       "region_en": "Anyang-si",
@@ -1302,7 +1302,7 @@
     {
       "place_id": "tour-api-130092",
       "name_ko": "안양아트센터",
-      "name_en": "Anyang Arts Center",
+      "name_en": "Anyang Art Center",
       "category": "culture_venue",
       "lat": 37.3848689535,
       "lng": 126.9321081381,
@@ -1364,7 +1364,7 @@
     {
       "place_id": "tour-api-126618",
       "name_ko": "인계예술공원",
-      "name_en": "Ingye Art Park",
+      "name_en": "Ingye Arts Park",
       "category": "attraction",
       "lat": 37.2586104401,
       "lng": 127.0359939011,
@@ -1424,7 +1424,7 @@
     {
       "place_id": "tour-api-2613664",
       "name_ko": "수원통닭거리",
-      "name_en": "Suwon Chicken Street",
+      "name_en": "Suwon Fried Chicken Street",
       "category": "attraction",
       "lat": 37.2794882505,
       "lng": 127.0176533149,
@@ -1484,12 +1484,12 @@
     {
       "place_id": "tour-api-131032",
       "name_ko": "덕우저수지",
-      "name_en": "Deogu Reservoir",
+      "name_en": "Deokwoo Reservoir",
       "category": "attraction",
       "lat": 37.1701521306,
       "lng": 126.9303142822,
       "address_ko": "경기도 화성시 봉담읍 유리",
-      "address_en": "Yuri, Bongdam-eup, Hwaseong-si, Gyeonggi-do",
+      "address_en": "Gyeonggi-do Hwaseong-si Bongdam-eup Yuri",
       "image_url": "http://tong.visitkorea.or.kr/cms/resource/34/3582534_image2_1.jpg",
       "region_ko": "화성시",
       "region_en": "Hwaseong-si",
@@ -1551,7 +1551,7 @@
       "lat": 37.3836895035,
       "lng": 127.1412336107,
       "address_ko": "경기도 성남시 분당구 새마을로 95 (서현동) 지하 1층",
-      "address_en": "B1, 95 Saemaeul-ro, Bundang-gu, Seongnam-si, Gyeonggi-do",
+      "address_en": "95 Saemaeul-ro, Bundang-gu, Seongnam-si, Gyeonggi-do, B1",
       "image_url": "http://tong.visitkorea.or.kr/cms/resource/30/3581230_image2_1.jpg",
       "region_ko": "성남시",
       "region_en": "Seongnam-si",
@@ -1608,12 +1608,12 @@
     {
       "place_id": "tour-api-130830",
       "name_ko": "경기도교육청성남도서관",
-      "name_en": "Gyeonggi Provincial Office of Education Seongnam Library",
+      "name_en": "Gyeonggi-do Education Office Seongnam Library",
       "category": "culture_venue",
       "lat": 37.4466823581,
       "lng": 127.1500560266,
       "address_ko": "경기도 성남시 수정구 공원로370번길 26 (신흥동)",
-      "address_en": "26 Gongwon-ro 370beon-gil, Sujeong-gu, Seongnam-si, Gyeonggi-do",
+      "address_en": "26 Gongwon-ro 370beon-gil, Sujeong-gu, Seongnam-si (Sinheung-dong), Gyeonggi-do",
       "image_url": "http://tong.visitkorea.or.kr/cms/resource/71/3584771_image2_1.jpg",
       "region_ko": "성남시",
       "region_en": "Seongnam-si",
@@ -1678,7 +1678,7 @@
       "address_en": "Near Paldalmun Gate, Suwon-si, Gyeonggi-do",
       "image_url": null,
       "region_ko": "수원시",
-      "region_en": "Suwon",
+      "region_en": "Suwon-si",
       "event_start_date": null,
       "event_end_date": null,
       "event_url": null,
@@ -1735,7 +1735,7 @@
       "lat": 37.365605231,
       "lng": 127.1269354197,
       "address_ko": "경기도 성남시 분당구 발이봉로 10 (수내동)",
-      "address_en": "10 Baribong-ro, Bundang-gu, Seongnam-si, Gyeonggi-do",
+      "address_en": "10 Balibong-ro, Bundang-gu, Seongnam-si, Gyeonggi-do",
       "image_url": "http://tong.visitkorea.or.kr/cms/resource/15/3350115_image2_1.jpg",
       "region_ko": "성남시",
       "region_en": "Seongnam-si",
@@ -1797,7 +1797,7 @@
       "lat": 37.3923657424,
       "lng": 126.9565307071,
       "address_ko": "경기도 안양시 동안구 시민대로 230 (관양동) 평촌아크로타워 B동 42층",
-      "address_en": "42F, Pyeongchon Acro Tower B, 230 Simin-daero, Dongan-gu, Anyang-si, Gyeonggi-do",
+      "address_en": "230 Simin-daero, Dongan-gu, Anyang-si, Gyeonggi-do, 42nd Floor, B-Dong, Pyeongchon Acro Tower",
       "image_url": null,
       "region_ko": "안양시",
       "region_en": "Anyang-si",
@@ -1854,7 +1854,7 @@
     {
       "place_id": "tour-api-1994200",
       "name_ko": "쌈도둑",
-      "name_en": "Ssamdoduk",
+      "name_en": "Ssam Doduk",
       "category": "restaurant",
       "lat": 37.4255972271,
       "lng": 126.9133475923,
@@ -1916,12 +1916,12 @@
     {
       "place_id": "tour-api-134608",
       "name_ko": "탈리",
-      "name_en": "Talli",
+      "name_en": "Tali",
       "category": "restaurant",
       "lat": 37.3878442752,
       "lng": 127.124432242,
       "address_ko": "경기도 성남시 분당구 서현로 192 (서현동) 2층",
-      "address_en": "2F, 192 Seohyeon-ro, Bundang-gu, Seongnam-si, Gyeonggi-do",
+      "address_en": "Gyeonggi-do Seongnam-si Bundang-gu Seohyeon-ro 192, 2nd Floor (Seohyeon-dong)",
       "image_url": null,
       "region_ko": "성남시",
       "region_en": "Seongnam-si",
@@ -1978,7 +1978,7 @@
     {
       "place_id": "tour-api-1013270",
       "name_ko": "남한산성 일번지",
-      "name_en": "Namhansanseong Ilbeonji",
+      "name_en": "Namhan Mountain Fortress Ilbeonji",
       "category": "restaurant",
       "lat": 37.461930692,
       "lng": 127.1557245235,
@@ -2040,12 +2040,12 @@
     {
       "place_id": "tour-api-3367459",
       "name_ko": "세계꽃 · 문화관광축제 호수야 놀자",
-      "name_en": "World Flower and Culture Tourism Festival: Lake, Let's Play",
+      "name_en": "World Flower and Cultural Tourism Festival Let's Play by the Lake",
       "category": "event",
       "lat": 37.6553373919,
       "lng": 126.7689209714,
       "address_ko": "경기도 고양시 일산동구 호수로 595 (장항동) 고양꽃전시관",
-      "address_en": "Goyang Flower Exhibition Center, 595 Hosu-ro, Ilsandong-gu, Goyang-si, Gyeonggi-do",
+      "address_en": "595 Hosu-ro, Ilsandong-gu, Goyang-si, Gyeonggi-do, Goyang Flower Exhibition Hall",
       "image_url": "http://tong.visitkorea.or.kr/cms/resource/28/3367528_image2_1.jpg",
       "region_ko": "고양시",
       "region_en": "Goyang-si",
@@ -2102,12 +2102,12 @@
     {
       "place_id": "tour-api-3012455",
       "name_ko": "갤러리 위",
-      "name_en": "Gallery We",
+      "name_en": "Gallery Wi",
       "category": "culture_venue",
       "lat": 37.35216408,
       "lng": 127.0688716267,
       "address_ko": "경기도 용인시 수지구 호수로52번길 25-17 (고기동)",
-      "address_en": "25-17 Hosu-ro 52beon-gil, Suji-gu, Yongin-si, Gyeonggi-do",
+      "address_en": "52-17 Hosu-ro 52beon-gil, Suji-gu, Yongin-si, Gyeonggi-do",
       "image_url": "http://tong.visitkorea.or.kr/cms/resource/93/3582593_image2_1.jpg",
       "region_ko": "용인시",
       "region_en": "Yongin-si",
@@ -2296,7 +2296,7 @@
       "address_en": "38 Everland-ro 562beon-gil, Pogok-eup, Cheoin-gu, Yongin-si, Gyeonggi-do",
       "image_url": "http://tong.visitkorea.or.kr/cms/resource/93/3086393_image2_1.jpg",
       "region_ko": "용인시",
-      "region_en": "Yongin",
+      "region_en": "Yongin-si",
       "event_start_date": null,
       "event_end_date": null,
       "event_url": null,
@@ -2350,7 +2350,7 @@
     {
       "place_id": "tour-api-2666913",
       "name_ko": "벗이미술관",
-      "name_en": "Versi Art Museum",
+      "name_en": "Beoti Art Museum",
       "category": "culture_venue",
       "lat": 37.2414644274,
       "lng": 127.3022008122,
@@ -2466,6 +2466,936 @@
           "culture_event_count": 0,
           "region_spend_amount": 2700000.0,
           "region_transaction_count": 210,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-2662397",
+      "name_ko": "용인 곤충테마파크",
+      "name_en": "Yongin Insect Theme Park",
+      "category": "attraction",
+      "lat": 37.1453905459,
+      "lng": 127.3645756591,
+      "address_ko": "경기도 용인시 처인구 백암면 삼백로835번길 38",
+      "address_en": "38 Sambaek-ro 835beon-gil, Baegam-myeon, Cheoin-gu, Yongin-si, Gyeonggi-do",
+      "image_url": "http://tong.visitkorea.or.kr/cms/resource/75/3584975_image2_1.jpg",
+      "region_ko": "용인시",
+      "region_en": "Yongin-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.5525,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.5,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.64
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "attraction",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "용인시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 7,
+          "culture_event_count": 1,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-816289",
+      "name_ko": "아시아아시아",
+      "name_en": "Asia Asia",
+      "category": "restaurant",
+      "lat": 37.6565206379,
+      "lng": 126.7717512351,
+      "address_ko": "경기도 고양시 일산동구 정발산로 24 (장항동)",
+      "address_en": "24 Jeongbalsan-ro, Ilsandong-gu, Goyang-si, Gyeonggi-do",
+      "image_url": null,
+      "region_ko": "고양시",
+      "region_en": "Goyang-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.53,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.5,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.58
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "restaurant",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "고양시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 7,
+          "culture_event_count": 2,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-135291",
+      "name_ko": "귀래정",
+      "name_en": "Gwirajeong",
+      "category": "restaurant",
+      "lat": 37.3589519302,
+      "lng": 127.0548032692,
+      "address_ko": "경기도 용인시 수지구 동천로 635 (고기동)",
+      "address_en": "635 Dongcheon-ro, Gogi-dong, Yongin-si, Gyeonggi-do",
+      "image_url": null,
+      "region_ko": "용인시",
+      "region_en": "Yongin-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.515,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.5,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.54
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "restaurant",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "용인시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 7,
+          "culture_event_count": 1,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-130565",
+      "name_ko": "조병화문학관",
+      "name_en": "Jo Byeong-hwa Literary Museum",
+      "category": "culture_venue",
+      "lat": 37.1120668213,
+      "lng": 127.2215950764,
+      "address_ko": "경기도 안성시 양성면 난실길 14-1",
+      "address_en": "14-1 Nansil-gil, Yangseong-myeon, Anseong-si, Gyeonggi-do",
+      "image_url": "http://tong.visitkorea.or.kr/cms/resource/30/3579730_image2_1.jpg",
+      "region_ko": "안성시",
+      "region_en": "Anseong-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.4963,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.35,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.74
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "culture_venue",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "안성시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 9,
+          "culture_event_count": 1,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-2747170",
+      "name_ko": "안성맞춤아트홀",
+      "name_en": "Anseong Matchum Art Hall",
+      "category": "culture_venue",
+      "lat": 37.0013389726,
+      "lng": 127.2794596084,
+      "address_ko": "경기도 안성시 발화대길 21 (현수동)",
+      "address_en": "21 Balhwadae-gil, Hyunsu-dong, Anseong-si, Gyeonggi-do",
+      "image_url": "http://tong.visitkorea.or.kr/cms/resource/97/3577697_image2_1.jpg",
+      "region_ko": "안성시",
+      "region_en": "Anseong-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.4963,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.35,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.74
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "culture_venue",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "안성시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 9,
+          "culture_event_count": 1,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-3399435",
+      "name_ko": "2025 안성맞춤 상설공연 “톡톡달콤 페스티벌”",
+      "name_en": "2025 Anseong Matchum Permanent Performance 'Toktok Sweet Festival'",
+      "category": "event",
+      "lat": 37.0564357215,
+      "lng": 127.4516758566,
+      "address_ko": "경기도 안성시 죽산면 용설호수길 101",
+      "address_en": "101 Yongseolhosu-gil, Juksan-myeon, Anseong-si, Gyeonggi-do",
+      "image_url": "http://tong.visitkorea.or.kr/cms/resource/01/3558601_image2_1.jpg",
+      "region_ko": "안성시",
+      "region_en": "Anseong-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.4963,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.35,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.74
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "event",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "안성시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 9,
+          "culture_event_count": 1,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-2691469",
+      "name_ko": "한국조리박물관",
+      "name_en": "Korean Culinary Museum",
+      "category": "culture_venue",
+      "lat": 37.0910824246,
+      "lng": 127.4903158375,
+      "address_ko": "경기도 안성시 일죽면 주래본죽로 158-60",
+      "address_en": "158-60 Juraebonjuk-ro, Iljuk-myeon, Anseong-si, Gyeonggi-do",
+      "image_url": "http://tong.visitkorea.or.kr/cms/resource/22/3579722_image2_1.jpg",
+      "region_ko": "안성시",
+      "region_en": "Anseong-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.4963,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.35,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.74
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "culture_venue",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "안성시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 9,
+          "culture_event_count": 1,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-3049823",
+      "name_ko": "겨울엔 양평, 불빛:애",
+      "name_en": "Winter in Yangpyeong, Light: A",
+      "category": "event",
+      "lat": 37.4917499278,
+      "lng": 127.4874296618,
+      "address_ko": "경기도 양평군 양평읍 군청앞길 2",
+      "address_en": "2 Guncheongap-gil, Yangpyeong-eup, Yangpyeong-gun, Gyeonggi-do",
+      "image_url": "http://tong.visitkorea.or.kr/cms/resource/26/3588926_image2_1.png",
+      "region_ko": "양평군",
+      "region_en": "Yangpyeong-gun",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.4813,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.35,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "event",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "양평군",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 9,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-3560787",
+      "name_ko": "양강섬예술축제",
+      "name_en": "Yanggang Island Art Festival",
+      "category": "event",
+      "lat": 37.4831816818,
+      "lng": 127.4986816658,
+      "address_ko": "경기도 양평군 양평읍 양평체육공원길 13",
+      "address_en": "13 Yangpyeong Sports Park Road, Yangpyeong-eup, Yangpyeong-gun, Gyeonggi-do",
+      "image_url": "http://tong.visitkorea.or.kr/cms/resource/80/3560780_image2_1.png",
+      "region_ko": "양평군",
+      "region_en": "Yangpyeong-gun",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.4813,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.35,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "event",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "양평군",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 9,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-2717416",
+      "name_ko": "올드타임",
+      "name_en": "Old Time",
+      "category": "attraction",
+      "lat": 37.0001821348,
+      "lng": 127.2004167769,
+      "address_ko": "경기도 안성시 공도읍 소신두길 52-9",
+      "address_en": "52-9 Soshindoo-gil, Gongdo-eup, Anseong-si, Gyeonggi-do",
+      "image_url": "http://tong.visitkorea.or.kr/cms/resource/50/3588850_image2_1.jpg",
+      "region_ko": "안성시",
+      "region_en": "Anseong-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.4588,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.35,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.64
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "attraction",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "안성시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 9,
+          "culture_event_count": 1,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-125572",
+      "name_ko": "안성향교",
+      "name_en": "Anseong Hyanggyo",
+      "category": "attraction",
+      "lat": 37.0137819386,
+      "lng": 127.2769983722,
+      "address_ko": "경기도 안성시 향교길 90-4 (명륜동)",
+      "address_en": "90-4 Hyanggyo-gil, Anseong-si, Gyeonggi-do",
+      "image_url": "http://tong.visitkorea.or.kr/cms/resource/42/3589242_image2_1.jpg",
+      "region_ko": "안성시",
+      "region_en": "Anseong-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.4588,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.35,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.64
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "attraction",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "안성시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 9,
+          "culture_event_count": 1,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-2674763",
+      "name_ko": "서후리숲",
+      "name_en": "Seohuri Forest",
+      "category": "attraction",
+      "lat": 37.5663707812,
+      "lng": 127.4301771507,
+      "address_ko": "경기도 양평군 서종면 거북바위1길 200",
+      "address_en": "200 Geobukbawi 1-gil, Seojong-myeon, Yangpyeong-gun, Gyeonggi-do",
+      "image_url": "http://tong.visitkorea.or.kr/cms/resource/95/3352495_image2_1.jpg",
+      "region_ko": "양평군",
+      "region_en": "Yangpyeong-gun",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.4438,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.35,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.6
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "attraction",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "양평군",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 9,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-1846815",
+      "name_ko": "맛집막국수",
+      "name_en": "Matjip Makguksu",
+      "category": "restaurant",
+      "lat": 37.1002938013,
+      "lng": 127.2561339499,
+      "address_ko": "경기도 안성시 고삼면 안성대로 2126",
+      "address_en": "2126 Anseong-daero, Goham-myeon, Anseong-si, Gyeonggi-do",
+      "image_url": null,
+      "region_ko": "안성시",
+      "region_en": "Anseong-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.4212,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.35,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.54
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "restaurant",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "안성시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 9,
+          "culture_event_count": 1,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-135047",
+      "name_ko": "천안문",
+      "name_en": "Cheonanmun",
+      "category": "restaurant",
+      "lat": 37.0167369069,
+      "lng": 127.2632745289,
+      "address_ko": "경기도 안성시 남파로 117 (당왕동)",
+      "address_en": "117 Nampa-ro, Dangwang-dong, Anseong-si, Gyeonggi-do",
+      "image_url": null,
+      "region_ko": "안성시",
+      "region_en": "Anseong-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.4212,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.35,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.54
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "restaurant",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "안성시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 9,
+          "culture_event_count": 1,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-2717413",
+      "name_ko": "보개바람",
+      "name_en": "Bogaebaram",
+      "category": "restaurant",
+      "lat": 37.0261112577,
+      "lng": 127.2873943117,
+      "address_ko": "경기도 안성시 보개면 불현길 10",
+      "address_en": "10 Bulhyeon-gil, Bogae-myeon, Anseong-si, Gyeonggi-do",
+      "image_url": "http://tong.visitkorea.or.kr/cms/resource/67/3588867_image2_1.jpg",
+      "region_ko": "안성시",
+      "region_en": "Anseong-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.4212,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.35,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.54
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "restaurant",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "안성시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 9,
+          "culture_event_count": 1,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
           "snapshot_source": "analytics.place_score_snapshots"
         }
       }

@@ -1867,6 +1867,7 @@ class _MapPlaceCarouselOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = _railPlaces(places);
+    final railHeight = compact ? 126.0 : 150.0;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1943,7 +1944,8 @@ class _MapPlaceCarouselOverlay extends StatelessWidget {
                   children: [
                     const SizedBox(height: 8),
                     SizedBox(
-                      height: compact ? 126 : 150,
+                      key: const ValueKey('recommendation-rail-list'),
+                      height: railHeight,
                       child: DecoratedBox(
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.82),
@@ -2015,6 +2017,10 @@ class _MapRailPlaceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = _categoryColor(place.category);
+    final hasImage = _hasOfficialPlaceImage(place);
+    final cardWidth = compact
+        ? (hasImage ? 226.0 : 198.0)
+        : (hasImage ? 252.0 : 222.0);
     return Material(
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(18),
@@ -2023,7 +2029,8 @@ class _MapRailPlaceCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         onTap: onTap,
         child: Container(
-          width: compact ? 226 : 252,
+          key: ValueKey('map-rail-place-card-${place.placeId}'),
+          width: cardWidth,
           padding: selected ? const EdgeInsets.all(3) : EdgeInsets.zero,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
@@ -2110,7 +2117,7 @@ class _MapRailPlaceCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (_hasOfficialPlaceImage(place)) ...[
+                if (hasImage) ...[
                   SizedBox(width: compact ? 8 : 10),
                   _RailPlaceThumb(place: place, compact: compact),
                 ],
@@ -5733,9 +5740,11 @@ class _RecommendedPlaceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final categoryColor = _categoryColor(place.category);
+    final hasImage = _hasOfficialPlaceImage(place);
     return Container(
-      width: 270,
-      padding: const EdgeInsets.all(14),
+      key: ValueKey('recommended-place-card-${place.placeId}'),
+      width: hasImage ? 270 : 232,
+      padding: EdgeInsets.all(hasImage ? 14 : 12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
@@ -5756,6 +5765,7 @@ class _RecommendedPlaceCard extends StatelessWidget {
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Row(
                   children: [
@@ -5792,7 +5802,7 @@ class _RecommendedPlaceCard extends StatelessWidget {
               ],
             ),
           ),
-          if (_hasOfficialPlaceImage(place)) ...[
+          if (hasImage) ...[
             const SizedBox(width: 10),
             _PlaceThumb(place: place),
           ],

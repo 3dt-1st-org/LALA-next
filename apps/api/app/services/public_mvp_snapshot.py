@@ -237,13 +237,12 @@ def _snapshot_address_en(row: dict[str, Any]) -> str | None:
 
 
 def _snapshot_region_en(row: dict[str, Any]) -> str | None:
-    region_en = _optional_text(row.get("region_en"))
-    if region_en:
-        return region_en
     region_ko = _optional_text(row.get("region_ko"))
     if region_ko:
-        return GYEONGGI_REGION_NAME_EN.get(region_ko)
-    return None
+        canonical_region = GYEONGGI_REGION_NAME_EN.get(region_ko)
+        if canonical_region:
+            return canonical_region
+    return _optional_text(row.get("region_en"))
 
 
 def _json_safe(value: Any) -> Any:

@@ -192,7 +192,22 @@ def fetch_candidates(
               OR (region_name_ko IS NOT NULL AND length(trim(coalesce(region_name_en, ''))) = 0)
               OR (category = 'attraction' AND is_indoor IS NULL)
           )
-        ORDER BY updated_at DESC, place_id
+        ORDER BY
+            CASE WHEN name_en IS NULL OR length(trim(name_en)) = 0 THEN 0 ELSE 1 END,
+            CASE
+                WHEN region_name_ko IS NOT NULL
+                 AND length(trim(coalesce(region_name_en, ''))) = 0
+                THEN 0
+                ELSE 1
+            END,
+            CASE
+                WHEN address_ko IS NOT NULL
+                 AND length(trim(coalesce(address_en, ''))) = 0
+                THEN 0
+                ELSE 1
+            END,
+            updated_at DESC,
+            place_id
         LIMIT %s
     """
     with psycopg2.connect(dsn, connect_timeout=connect_timeout) as conn:

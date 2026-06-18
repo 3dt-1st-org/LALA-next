@@ -205,6 +205,22 @@ void main() {
       find.byKey(const ValueKey('rail-place-thumb-haenggung-cafe-street')),
       findsNothing,
     );
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('recommendation-rail-list')))
+          .height,
+      126,
+    );
+    expect(
+      tester
+          .getSize(
+            find.byKey(
+              const ValueKey('map-rail-place-card-haenggung-cafe-street'),
+            ),
+          )
+          .width,
+      198,
+    );
 
     final voiceToggle = find.byKey(const ValueKey('voice-toggle'));
     expect(
@@ -279,6 +295,22 @@ void main() {
     expect(
       find.byKey(const ValueKey('rail-place-thumb-haenggung-cafe-street')),
       findsOneWidget,
+    );
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('recommendation-rail-list')))
+          .height,
+      126,
+    );
+    expect(
+      tester
+          .getSize(
+            find.byKey(
+              const ValueKey('map-rail-place-card-haenggung-cafe-street'),
+            ),
+          )
+          .width,
+      226,
     );
   });
 

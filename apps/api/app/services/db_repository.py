@@ -248,11 +248,14 @@ def _english_display_address(row: dict[str, Any]) -> str:
 
 
 def _english_region(row: dict[str, Any]) -> str | None:
+    region_ko = str(row.get("region_ko") or "").strip()
+    canonical_region = GYEONGGI_REGION_NAME_EN.get(region_ko)
+    if canonical_region:
+        return canonical_region
     region = str(row.get("region_en") or "").strip()
     if region:
         return region
-    region_ko = str(row.get("region_ko") or "").strip()
-    return GYEONGGI_REGION_NAME_EN.get(region_ko)
+    return None
 
 
 def fetch_latest_weather(*, lat: float, lng: float) -> dict[str, Any] | None:
