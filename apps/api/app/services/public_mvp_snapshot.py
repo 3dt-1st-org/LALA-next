@@ -13,6 +13,40 @@ DEFAULT_SNAPSHOT_DESCRIPTION = (
 )
 DEFAULT_OUTPUT_PATH = "apps/api/app/data/public_mvp_places.json"
 
+GYEONGGI_REGION_NAME_EN = {
+    "가평군": "Gapyeong-gun",
+    "고양시": "Goyang-si",
+    "과천시": "Gwacheon-si",
+    "광명시": "Gwangmyeong-si",
+    "광주시": "Gwangju-si",
+    "구리시": "Guri-si",
+    "군포시": "Gunpo-si",
+    "김포시": "Gimpo-si",
+    "남양주시": "Namyangju-si",
+    "동두천시": "Dongducheon-si",
+    "부천시": "Bucheon-si",
+    "성남시": "Seongnam-si",
+    "수원시": "Suwon-si",
+    "시흥시": "Siheung-si",
+    "안산시": "Ansan-si",
+    "안성시": "Anseong-si",
+    "안양시": "Anyang-si",
+    "양주시": "Yangju-si",
+    "양평군": "Yangpyeong-gun",
+    "여주시": "Yeoju-si",
+    "연천군": "Yeoncheon-gun",
+    "오산시": "Osan-si",
+    "용인시": "Yongin-si",
+    "의왕시": "Uiwang-si",
+    "의정부시": "Uijeongbu-si",
+    "이천시": "Icheon-si",
+    "파주시": "Paju-si",
+    "평택시": "Pyeongtaek-si",
+    "포천시": "Pocheon-si",
+    "하남시": "Hanam-si",
+    "화성시": "Hwaseong-si",
+}
+
 
 def build_snapshot_payload(
     places: Sequence[dict[str, Any]],
@@ -158,7 +192,7 @@ def _snapshot_place(row: dict[str, Any]) -> dict[str, Any]:
         "address_en": _snapshot_address_en(row),
         "image_url": _optional_text(row.get("image_url")),
         "region_ko": _optional_text(row.get("region_ko")),
-        "region_en": _optional_text(row.get("region_en")),
+        "region_en": _snapshot_region_en(row),
         "event_start_date": _optional_text(row.get("event_start_date")),
         "event_end_date": _optional_text(row.get("event_end_date")),
         "event_url": _optional_text(row.get("event_url")),
@@ -200,6 +234,16 @@ def _snapshot_address_en(row: dict[str, Any]) -> str | None:
     if "경기도" in address_ko and "gyeonggi" not in address_en.lower():
         return f"{address_en}, Gyeonggi-do"
     return address_en
+
+
+def _snapshot_region_en(row: dict[str, Any]) -> str | None:
+    region_en = _optional_text(row.get("region_en"))
+    if region_en:
+        return region_en
+    region_ko = _optional_text(row.get("region_ko"))
+    if region_ko:
+        return GYEONGGI_REGION_NAME_EN.get(region_ko)
+    return None
 
 
 def _json_safe(value: Any) -> Any:

@@ -113,7 +113,7 @@ void main() {
     expect(find.text('명소'), findsAtLeastNWidgets(1));
     expect(find.text('대시보드'), findsNothing);
     expect(find.text('추천 장소 접기'), findsOneWidget);
-    expect(find.textContaining('카카오 지도 키'), findsOneWidget);
+    expect(find.textContaining('현재 지도를 표시할 수 없습니다'), findsOneWidget);
     expect(find.text('로컬 점수'), findsNothing);
     expect(find.text('내국인 소비'), findsNothing);
     expect(find.text('수요 분산'), findsNothing);
@@ -929,7 +929,7 @@ void main() {
     expect(find.text('공공 데이터 우선'), findsOneWidget);
     expect(find.textContaining('공개 데이터를 우선 사용'), findsOneWidget);
     expect(find.textContaining('스냅샷'), findsNothing);
-    expect(find.text('키 정보 비노출'), findsOneWidget);
+    expect(find.textContaining('개발'), findsNothing);
   });
 
   testWidgets('place detail save control toggles local saved state', (

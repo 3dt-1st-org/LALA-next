@@ -60,10 +60,18 @@ def _load_snapshot() -> dict[str, Any]:
 
 
 def _place_payload(row: dict[str, Any], *, distance_m: float, language: str) -> dict[str, Any]:
-    name = row.get("name_en") if language == "en" and row.get("name_en") else row.get("name_ko")
+    name = (
+        row.get("name_en")
+        if language == "en" and row.get("name_en")
+        else _english_display_name(row)
+        if language == "en"
+        else row.get("name_ko")
+    )
     address = (
         row.get("address_en")
         if language == "en" and row.get("address_en")
+        else _english_display_address(row)
+        if language == "en"
         else row.get("address_ko")
     )
     return {
@@ -94,3 +102,25 @@ def _distance_m(*, lat: float, lng: float, place: dict[str, Any]) -> float:
     place_lat = float(place.get("lat") or 0)
     place_lng = float(place.get("lng") or 0)
     return sqrt(((place_lat - lat) * 111000) ** 2 + ((place_lng - lng) * 88000) ** 2)
+
+
+def _english_display_name(row: dict[str, Any]) -> str:
+    region = _english_region(row)
+    category = str(row.get("category") or "").strip()
+    category_label = {
+        "attraction": "Attraction",
+        "culture_venue": "Culture venue",
+        "event": "Event",
+        "restaurant": "Restaurant",
+    }.get(category, "Local place")
+    return f"{category_label} in {region}" if region else category_label
+
+
+def _english_display_address(row: dict[str, Any]) -> str:
+    region = _english_region(row)
+    return f"{region}, Gyeonggi-do" if region else "Gyeonggi-do"
+
+
+def _english_region(row: dict[str, Any]) -> str | None:
+    region = str(row.get("region_en") or "").strip()
+    return region or None

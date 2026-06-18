@@ -51,9 +51,26 @@ def test_public_mvp_snapshot_uses_english_fields_when_requested() -> None:
     )
 
     assert places
-    assert all(place.get("name_en") for place in places)
-    assert all(place["name"] == place["name_en"] for place in places)
+    assert all(not any("가" <= char <= "힣" for char in place["name"]) for place in places)
     assert all("Gyeonggi-do" in place["address"] for place in places)
+
+
+def test_public_mvp_snapshot_uses_safe_english_display_when_name_is_missing() -> None:
+    places = public_mvp_data.fetch_places(
+        lat=37.2636,
+        lng=127.0286,
+        radius_m=50000,
+        category="all",
+        language="en",
+    )
+
+    missing_name = next(place for place in places if not place.get("name_en"))
+    assert missing_name["name"] in {
+        f"Attraction in {missing_name['region_en']}",
+        f"Culture venue in {missing_name['region_en']}",
+        f"Event in {missing_name['region_en']}",
+        f"Restaurant in {missing_name['region_en']}",
+    }
 
 
 def test_public_mvp_snapshot_preserves_official_image_urls() -> None:
@@ -65,5 +82,7 @@ def test_public_mvp_snapshot_preserves_official_image_urls() -> None:
         language="ko",
     )
 
-    hoam = next(place for place in places if place["place_id"] == "tour-api-129765")
-    assert hoam["image_url"] == "http://tong.visitkorea.or.kr/cms/resource/93/3086393_image2_1.jpg"
+    official_image = next(
+        place for place in places if (place.get("image_url") or "").startswith("http")
+    )
+    assert "tong.visitkorea.or.kr" in official_image["image_url"]

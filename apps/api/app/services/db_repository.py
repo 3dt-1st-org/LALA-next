@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from apps.api.app.core.config import get_settings
+from apps.api.app.services.public_mvp_snapshot import GYEONGGI_REGION_NAME_EN
 
 _REQUIRED_DB_RELATIONS = (
     "travel.public_places",
@@ -161,10 +162,18 @@ def fetch_places(
         distance_m = float(row.get("distance_m") or 0)
         if distance_m > radius_m:
             continue
-        name = row.get("name_en") if language == "en" and row.get("name_en") else row.get("name_ko")
+        name = (
+            row.get("name_en")
+            if language == "en" and row.get("name_en")
+            else _english_display_name(row)
+            if language == "en"
+            else row.get("name_ko")
+        )
         address = (
             row.get("address_en")
             if language == "en" and row.get("address_en")
+            else _english_display_address(row)
+            if language == "en"
             else row.get("address_ko")
         )
         places.append(
@@ -219,6 +228,31 @@ def _optional_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _english_display_name(row: dict[str, Any]) -> str:
+    region = _english_region(row)
+    category = str(row.get("category") or "").strip()
+    category_label = {
+        "attraction": "Attraction",
+        "culture_venue": "Culture venue",
+        "event": "Event",
+        "restaurant": "Restaurant",
+    }.get(category, "Local place")
+    return f"{category_label} in {region}" if region else category_label
+
+
+def _english_display_address(row: dict[str, Any]) -> str:
+    region = _english_region(row)
+    return f"{region}, Gyeonggi-do" if region else "Gyeonggi-do"
+
+
+def _english_region(row: dict[str, Any]) -> str | None:
+    region = str(row.get("region_en") or "").strip()
+    if region:
+        return region
+    region_ko = str(row.get("region_ko") or "").strip()
+    return GYEONGGI_REGION_NAME_EN.get(region_ko)
 
 
 def fetch_latest_weather(*, lat: float, lng: float) -> dict[str, Any] | None:

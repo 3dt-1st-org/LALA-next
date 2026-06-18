@@ -21,8 +21,8 @@ Widget buildKakaoMapView({
   if (normalizedKey.isEmpty) {
     return _KakaoMapNativeUnavailable(
       message: language == 'en'
-          ? 'Set the Kakao map key to show the live map.'
-          : '카카오 지도 키를 설정하면 실제 지도가 표시됩니다.',
+          ? 'The live map is not available right now.'
+          : '현재 지도를 표시할 수 없습니다.',
       language: language,
       centerLat: centerLat,
       centerLng: centerLng,

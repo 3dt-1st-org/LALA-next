@@ -1283,15 +1283,6 @@ class _PrivacyDetailsSheet extends StatelessWidget {
                   en: 'Tourism, culture, weather, and local signals prefer official APIs and public data.',
                 ),
               ),
-              _PrivacyDetailRow(
-                icon: Icons.key_off_outlined,
-                title: _copy(language, ko: '키 정보 비노출', en: 'No key exposure'),
-                body: _copy(
-                  language,
-                  ko: 'API 키나 개발 연결 값은 공개 설정 화면에 표시하지 않습니다.',
-                  en: 'API keys and developer connection values are not shown in public settings.',
-                ),
-              ),
             ],
           ),
         );
