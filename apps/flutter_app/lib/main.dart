@@ -3250,7 +3250,7 @@ class _TourSheetContent extends StatelessWidget {
     final sourceLabel = _copy(
       language,
       ko: '${items.length}개 맛집 · 공공데이터 기반',
-      en: '${items.length} restaurants · Public data based',
+      en: '${items.length} restaurants · Official public data',
     );
 
     return Column(

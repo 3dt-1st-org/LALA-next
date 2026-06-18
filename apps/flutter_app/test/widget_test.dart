@@ -1063,6 +1063,35 @@ void main() {
     expect(find.textContaining('경기도'), findsNothing);
   });
 
+  testWidgets('english food tour sheet keeps tour copy localized', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      LalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(
+          baseUri: 'http://api.test',
+          lang: 'en',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Restaurants').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('tour-pill-hit-target')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Food Tour'), findsAtLeastNWidgets(1));
+    expect(find.textContaining('nearby food stops'), findsOneWidget);
+    expect(find.textContaining('Official public data'), findsOneWidget);
+    expect(find.text('Tour docent script'), findsOneWidget);
+    expect(find.text('Listen as a docent audio guide'), findsOneWidget);
+    expect(find.textContaining('맛집'), findsNothing);
+    expect(find.textContaining('도슨트'), findsNothing);
+    expect(_visibleMixedLanguageTexts(tester), isEmpty);
+  });
+
   testWidgets(
     'event detail shows legacy metadata without opening score signals',
     (tester) async {
