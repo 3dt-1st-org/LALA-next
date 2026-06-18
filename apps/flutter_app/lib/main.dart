@@ -5782,30 +5782,12 @@ class _LegacyPlaceCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  _localReason(place, language),
+                  _placeCardSubtitle(place, language),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: const Color(0xFF475569),
                   ),
-                ),
-                const Spacer(),
-                Row(
-                  children: [
-                    Icon(Icons.auto_graph, size: 16, color: categoryColor),
-                    const SizedBox(width: 5),
-                    Text(
-                      _copy(
-                        language,
-                        ko: '${place.score?.percent ?? '-'} 로컬 점수',
-                        en: '${place.score?.percent ?? '-'} local score',
-                      ),
-                      style: TextStyle(
-                        color: categoryColor,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ],
                 ),
               ],
             ),
@@ -5828,34 +5810,12 @@ class _LegacyPlaceCard extends StatelessWidget {
     };
   }
 
-  String _localReason(LalaPlace place, String language) {
-    final score = place.score;
-    if (score == null) {
-      return _placeRegionLabel(place, language);
+  String _placeCardSubtitle(LalaPlace place, String language) {
+    final address = _singleLanguageText(place.address, language);
+    if (address != null) {
+      return address;
     }
-    final components = score.components;
-    if ((components.demandDispersionScore ?? 0) >= 0.8) {
-      return _copy(
-        language,
-        ko: '관광 수요 분산 효과가 높은 로컬 후보',
-        en: 'Local pick with strong demand-spread value',
-      );
-    }
-    if ((components.cultureRelevanceScore ?? 0) >= 0.7) {
-      return _copy(
-        language,
-        ko: '공식 문화데이터와 연결된 장소',
-        en: 'Connected to official culture data',
-      );
-    }
-    if ((components.localSpendingScore ?? 0) >= 0.6) {
-      return _copy(
-        language,
-        ko: '지역 소비 신호가 살아있는 주변 경험',
-        en: 'Nearby experience with local spending signal',
-      );
-    }
-    return _basisLabel(score.dataBasis, language: language);
+    return _placeRegionLabel(place, language);
   }
 }
 

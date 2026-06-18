@@ -119,6 +119,9 @@ void main() {
     expect(find.text('수요 분산'), findsNothing);
     expect(find.text('문화 연계'), findsNothing);
     expect(find.text('날씨 적합'), findsNothing);
+    expect(find.textContaining('관광 수요 분산'), findsNothing);
+    expect(find.textContaining('공식 문화데이터'), findsNothing);
+    expect(find.textContaining('지역 소비 신호'), findsNothing);
     expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
     expect(find.text('86'), findsNothing);
     expect(find.textContaining('14°C'), findsWidgets);
@@ -189,6 +192,8 @@ void main() {
     );
     expect(find.text('행궁동 카페거리'), findsAtLeastNWidgets(1));
     expect(find.text('행궁동 카페거리 도슨트'), findsOneWidget);
+    expect(find.textContaining('로컬 점수'), findsNothing);
+    expect(find.textContaining('지역 소비 신호'), findsNothing);
     final restaurantRailCard = find.byKey(
       const ValueKey('tour-stop-action-haenggung-cafe-street'),
     );

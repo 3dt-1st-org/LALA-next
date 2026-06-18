@@ -160,7 +160,8 @@ evidence, but they are not the latest MVP acceptance source.
 - Implemented: score and evidence-like context now stay on demand in the detail
   flow. Card-spending, transaction, source, score, and data-basis signals are
   revealed through the score/evidence control instead of competing with the
-  default docent and place context.
+  default docent and place context. Recommended-place cards stay focused on
+  category, distance, region, and address rather than score-derived reasons.
 
 ## Next Acceptance Items
 
