@@ -296,25 +296,38 @@ card-spending evidence.
 {
   "lat": 37.2636,
   "lng": 127.0286,
-  "temp": "",
-  "icon": "unavailable",
+  "location": "기상청 격자",
+  "temp": "22.3",
+  "icon": "partly-cloudy",
   "dust": {
     "pm10": "",
     "pm25": "",
     "grade": "unknown",
     "grade_ko": "확인 중"
   },
-  "forecast": [],
-  "outdoor_status": "unknown",
+  "forecast": [
+    {
+      "time": "2026-06-18T23:00:00+09:00",
+      "temp": "22.3",
+      "icon": "partly-cloudy"
+    }
+  ],
+  "outdoor_status": "good",
   "force": false,
-  "source": "skeleton"
+  "location_match": true,
+  "record_time": "2026-06-18T23:00:00+09:00",
+  "source": "kma_ultra_srt_ncst"
 }
 ```
 
 When `DB_DSN` is configured, weather reads prefer the latest row whose
 `location` matches the nearest canonical place region. If no region match is
 available, the API falls back to the latest weather row and marks
-`location_match: false`.
+`location_match: false`. If DB weather is unavailable, the API uses the public
+data portal `기상청_단기예보 조회서비스` `getUltraSrtNcst` endpoint with
+`PUBLIC_DATA_SERVICE_KEY`, converting the map center to the KMA 5 km forecast
+grid. If both DB and KMA reads are unavailable, the route returns the existing
+`source: skeleton` pending shape.
 
 `POST /api/v1/plans/daily`:
 

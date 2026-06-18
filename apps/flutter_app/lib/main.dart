@@ -7507,6 +7507,7 @@ String _weatherSourceLabel(String? value, {String language = 'ko'}) {
   if (_isEnglish(language)) {
     return switch ((value ?? '').trim()) {
       'db' => 'Live weather',
+      'kma_ultra_srt_ncst' => 'KMA live weather',
       'mixed' => 'Live + official weather',
       'public_mvp_snapshot' => 'Official weather',
       'demo_fallback' => 'Weather pending',
@@ -7518,6 +7519,7 @@ String _weatherSourceLabel(String? value, {String language = 'ko'}) {
   }
   return switch ((value ?? '').trim()) {
     'db' => '실시간 날씨',
+    'kma_ultra_srt_ncst' => '기상청 실황',
     'mixed' => '실시간·공식 날씨',
     'public_mvp_snapshot' => '공식 날씨',
     'demo_fallback' => '날씨 준비 중',

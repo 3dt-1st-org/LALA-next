@@ -117,7 +117,11 @@ AI/API/로컬 변환으로 만든 보강 결과를 저장한다. `travel.places`
 ## `travel.weather_observations`
 
 날씨/대기질 관측값이다. 앱 추천에서 실내/실외 필터, 악천후 회피, 날씨 기반
-도슨트 문구에 사용한다.
+도슨트 문구에 사용한다. API는 이 테이블의 최신 관측값을 먼저 읽고, DB 관측값이
+없으면 공공데이터포털 `기상청_단기예보 조회서비스`의 초단기실황
+`getUltraSrtNcst`를 좌표 기반 KMA 5km 격자로 호출해 임시 라이브 날씨 맥락을
+보강한다. 이 보강값은 `source=kma_ultra_srt_ncst`로 표시하며, 장기 저장과 RAG
+벡터화는 여전히 `travel.weather_observations` 적재 파이프라인이 담당한다.
 
 | Column | Type | Required | Description |
 |---|---:|---:|---|

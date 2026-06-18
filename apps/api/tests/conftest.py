@@ -16,6 +16,7 @@ def isolate_db_env(monkeypatch) -> None:
     monkeypatch.delenv("DB_DSN", raising=False)
     for name in (
         "KEY_VAULT_URL",
+        "PUBLIC_DATA_SERVICE_KEY",
         "API_BEARER_TOKEN",
         "OAUTH_ISSUER",
         "OAUTH_AUDIENCE",
