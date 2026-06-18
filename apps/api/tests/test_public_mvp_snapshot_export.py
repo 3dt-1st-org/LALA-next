@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from decimal import Decimal
+from importlib.resources import files
 
 from apps.api.app.services import public_mvp_snapshot
 from apps.api.app.tools import export_public_mvp_snapshot
@@ -119,6 +120,26 @@ def test_build_snapshot_payload_fills_gyeonggi_region_english_name() -> None:
     )
 
     assert payload["places"][0]["region_en"] == "Yongin-si"
+
+
+def test_bundled_snapshot_covers_all_gyeonggi_regions() -> None:
+    payload = json.loads(
+        files("apps.api.app.data").joinpath("public_mvp_places.json").read_text(encoding="utf-8")
+    )
+    regions = {row.get("region_ko") for row in payload["places"]}
+
+    assert regions == set(public_mvp_snapshot.GYEONGGI_REGION_NAME_EN)
+
+
+def test_bundled_snapshot_uses_https_tour_api_images() -> None:
+    payload = json.loads(
+        files("apps.api.app.data").joinpath("public_mvp_places.json").read_text(encoding="utf-8")
+    )
+    image_urls = [row.get("image_url") for row in payload["places"] if row.get("image_url")]
+
+    assert image_urls
+    assert not any(url.startswith("http://tong.visitkorea.or.kr/") for url in image_urls)
+    assert any(url.startswith("https://tong.visitkorea.or.kr/") for url in image_urls)
 
 
 def test_export_plan_does_not_require_db(capsys) -> None:

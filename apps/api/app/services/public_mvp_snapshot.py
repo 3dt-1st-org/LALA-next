@@ -83,10 +83,12 @@ def fetch_snapshot_places(
     category: str,
     limit: int,
     connect_timeout: int,
+    coverage_region_names: Sequence[str] | None = tuple(GYEONGGI_REGION_NAME_EN),
 ) -> list[dict[str, Any]]:
     import psycopg2
     from psycopg2.extras import RealDictCursor
 
+    coverage_regions = list(coverage_region_names or [])
     sql = """
         WITH ranked_places AS (
             SELECT
@@ -120,61 +122,95 @@ def fetch_snapshot_places(
                 features
             FROM analytics.place_score_snapshots
             ORDER BY place_id, scored_at DESC
+        ),
+        scored_places AS (
+            SELECT
+                ranked_places.*,
+                CASE
+                    WHEN ranked_places.category = 'event' AND linked_event.place_id IS NOT NULL
+                    THEN to_char(linked_event.starts_at AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD')
+                    ELSE NULL
+                END AS event_start_date,
+                CASE
+                    WHEN ranked_places.category = 'event' AND linked_event.place_id IS NOT NULL
+                    THEN to_char(linked_event.ends_at AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD')
+                    ELSE NULL
+                END AS event_end_date,
+                CASE
+                    WHEN ranked_places.category = 'event' AND linked_event.place_id IS NOT NULL
+                    THEN linked_event.url
+                    ELSE NULL
+                END AS event_url,
+                CASE
+                    WHEN ranked_places.category = 'event' AND linked_event.place_id IS NOT NULL
+                    THEN linked_event.ends_at IS NULL OR linked_event.ends_at >= now()
+                    ELSE NULL
+                END AS is_ongoing,
+                false AS is_approximate_location,
+                latest_scores.local_spending_score,
+                latest_scores.demand_dispersion_score,
+                latest_scores.weather_fit_score,
+                latest_scores.review_quality_score,
+                latest_scores.culture_relevance_score,
+                latest_scores.final_score,
+                latest_scores.formula_version,
+                latest_scores.features AS score_features
+            FROM ranked_places
+            LEFT JOIN latest_scores ON latest_scores.place_id = ranked_places.place_id
+            LEFT JOIN LATERAL (
+                SELECT
+                    place_id,
+                    starts_at,
+                    ends_at,
+                    url
+                FROM travel.place_events
+                WHERE place_id = ranked_places.place_id
+                ORDER BY
+                    CASE WHEN ends_at IS NULL OR ends_at >= now() THEN 0 ELSE 1 END,
+                    starts_at DESC NULLS LAST,
+                    updated_at DESC
+                LIMIT 1
+            ) linked_event ON TRUE
+        ),
+        primary_rows AS (
+            SELECT scored_places.*, 0 AS snapshot_row_group
+            FROM scored_places
+            WHERE distance_m <= %s
+            ORDER BY COALESCE(final_score, 0) DESC, distance_m ASC, updated_at DESC
+            LIMIT %s
+        ),
+        coverage_rows AS (
+            SELECT DISTINCT ON (region_ko) scored_places.*, 1 AS snapshot_row_group
+            FROM scored_places
+            WHERE %s = 'all'
+              AND region_ko = ANY(%s)
+            ORDER BY
+                region_ko,
+                COALESCE(final_score, 0) DESC,
+                updated_at DESC,
+                distance_m ASC
+        ),
+        merged_rows AS (
+            SELECT * FROM primary_rows
+            UNION ALL
+            SELECT * FROM coverage_rows
+        ),
+        deduped_rows AS (
+            SELECT DISTINCT ON (place_id) *
+            FROM merged_rows
+            ORDER BY place_id, snapshot_row_group ASC, COALESCE(final_score, 0) DESC
         )
         SELECT
-            ranked_places.*,
-            CASE
-                WHEN ranked_places.category = 'event' AND linked_event.place_id IS NOT NULL
-                THEN to_char(linked_event.starts_at AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD')
-                ELSE NULL
-            END AS event_start_date,
-            CASE
-                WHEN ranked_places.category = 'event' AND linked_event.place_id IS NOT NULL
-                THEN to_char(linked_event.ends_at AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD')
-                ELSE NULL
-            END AS event_end_date,
-            CASE
-                WHEN ranked_places.category = 'event' AND linked_event.place_id IS NOT NULL
-                THEN linked_event.url
-                ELSE NULL
-            END AS event_url,
-            CASE
-                WHEN ranked_places.category = 'event' AND linked_event.place_id IS NOT NULL
-                THEN linked_event.ends_at IS NULL OR linked_event.ends_at >= now()
-                ELSE NULL
-            END AS is_ongoing,
-            false AS is_approximate_location,
-            latest_scores.local_spending_score,
-            latest_scores.demand_dispersion_score,
-            latest_scores.weather_fit_score,
-            latest_scores.review_quality_score,
-            latest_scores.culture_relevance_score,
-            latest_scores.final_score,
-            latest_scores.formula_version,
-            latest_scores.features AS score_features
-        FROM ranked_places
-        LEFT JOIN latest_scores ON latest_scores.place_id = ranked_places.place_id
-        LEFT JOIN LATERAL (
-            SELECT
-                place_id,
-                starts_at,
-                ends_at,
-                url
-            FROM travel.place_events
-            WHERE place_id = ranked_places.place_id
-            ORDER BY
-                CASE WHEN ends_at IS NULL OR ends_at >= now() THEN 0 ELSE 1 END,
-                starts_at DESC NULLS LAST,
-                updated_at DESC
-            LIMIT 1
-        ) linked_event ON TRUE
-        WHERE distance_m <= %s
-        ORDER BY COALESCE(latest_scores.final_score, 0) DESC, distance_m ASC, updated_at DESC
-        LIMIT %s
+            *
+        FROM deduped_rows
+        ORDER BY snapshot_row_group ASC, COALESCE(final_score, 0) DESC, distance_m ASC, updated_at DESC
     """
     with closing(psycopg2.connect(dsn, connect_timeout=connect_timeout)) as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(sql, (lat, lng, category, category, radius_m, limit))
+            cur.execute(
+                sql,
+                (lat, lng, category, category, radius_m, limit, category, coverage_regions),
+            )
             return [dict(row) for row in cur.fetchall()]
 
 

@@ -13,6 +13,7 @@ from apps.api.app.services.public_mvp_snapshot import GYEONGGI_REGION_NAME_EN
 SNAPSHOT_PACKAGE = "apps.api.app.data"
 SNAPSHOT_FILE = "public_mvp_places.json"
 SOURCE_NAME = "public_mvp_snapshot"
+DISTANCE_RANK_PENALTY = 0.30
 
 
 def snapshot_status() -> str:
@@ -39,7 +40,7 @@ def fetch_places(
 
     places.sort(
         key=lambda place: (
-            -float((place.get("score") or {}).get("final_score") or 0),
+            -_rank_score(place, radius_m=radius_m),
             int(place.get("distance_m") or 0),
             str(place.get("name_ko") or place.get("name") or ""),
         )
@@ -105,6 +106,13 @@ def _distance_m(*, lat: float, lng: float, place: dict[str, Any]) -> float:
     place_lat = float(place.get("lat") or 0)
     place_lng = float(place.get("lng") or 0)
     return sqrt(((place_lat - lat) * 111000) ** 2 + ((place_lng - lng) * 88000) ** 2)
+
+
+def _rank_score(place: dict[str, Any], *, radius_m: int) -> float:
+    score = float((place.get("score") or {}).get("final_score") or 0)
+    radius = max(float(radius_m), 1.0)
+    distance_ratio = min(float(place.get("distance_m") or 0) / radius, 1.0)
+    return score - (distance_ratio * DISTANCE_RANK_PENALTY)
 
 
 def _english_display_name(row: dict[str, Any]) -> str:

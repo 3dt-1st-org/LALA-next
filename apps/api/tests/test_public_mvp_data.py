@@ -27,6 +27,18 @@ def test_public_mvp_snapshot_returns_nearby_ranked_places() -> None:
     assert event["is_approximate_location"] is False
 
 
+def test_public_mvp_snapshot_ranking_keeps_map_center_local() -> None:
+    places = public_mvp_data.fetch_places(
+        lat=37.2636,
+        lng=127.0286,
+        radius_m=50000,
+        category="all",
+        language="ko",
+    )
+
+    assert any(place["distance_m"] <= 1000 for place in places[:5])
+
+
 def test_public_mvp_snapshot_filters_culture_venues() -> None:
     places = public_mvp_data.fetch_places(
         lat=37.2636,

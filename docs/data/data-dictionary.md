@@ -470,17 +470,24 @@ URL을 내려주면 API와 snapshot export 단계에서 `https`로 정규화해 
 mixed-content 차단을 피한다. 더 많은 이미지를 채우려면 먼저
 `scripts/unix/plan_tour_api_ingest.sh --preview --rows <N>`으로 공식 이미지 보강률을
 확인하고, 새 장소의 `name_en`, `address_en`, `region_name_en` 보강이 준비된 뒤
-`--apply`와 public snapshot export를 실행한다.
+`--apply`와 public snapshot export를 실행한다. Public snapshot export는 기본 추천
+상위 row에 더해 경기도 31개 시군 대표 row를 최소 1개씩 포함해, 사용자가 지도를
+다른 시군으로 이동했을 때도 bundled fallback이 빈 지역으로 무너지지 않게 한다.
 
 2026-06-18 현재 확인 결과:
 
-- 번들 public MVP snapshot: 53개 장소, 공식 HTTPS 이미지 42개, 영문명/영문주소/영문지역명 53개.
-- 로컬 DB `travel.places`: 84개 장소, 공식 이미지 64개, 영문명/영문주소 84개.
-- TourAPI 경기 `areaCode=31` 160건 preview: 경기도 31개 시군 모두 출현, 공식 이미지 124개.
+- 번들 public MVP snapshot: 43개 장소, 경기도 31개 시군 전체, 공식 HTTPS 이미지 42개,
+  영문명/영문주소/영문지역명 43개.
+- 로컬 DB `travel.places`: 243개 장소, 경기도 31개 시군 전체, 공식 이미지 177개,
+  영문명/영문주소/영문지역명 243개.
+- TourAPI 경기 `areaCode=31` 240건 preview/apply: 239개 장소, 경기도 31개 시군 전체,
+  공식 HTTPS 이미지 176개.
 
-따라서 현재 배포/스냅샷은 경기도 전체 시군을 모두 보여주는 상태가 아니다. 공식 TourAPI
-preview는 31개 시군 전체 커버리지가 가능함을 확인했으므로, 다음 적용 순서는
-TourAPI 확장 수집, AI 영문/실내외 보강, 점수 재계산, public snapshot export다.
+따라서 현재 배포/스냅샷은 경기도 전체 시군을 품는 상태다. 남은 핵심 데이터 품질 과제는
+TourAPI 신규 장소의 로컬 로마자 영문명을 AI/공식 영문명으로 승격하고 `is_indoor`를
+보강하는 것이다. `.env`에 Azure/OpenAI 설정이 없으면 기존 AI 보강 스크립트는 실행할 수
+없으므로, 다음 적용 순서는 AI 또는 공식 영문/영문주소 API 보강, 실내외 분류, 점수 재계산,
+RAG 재색인, public snapshot export다.
 
 ### KOPIS performances
 
