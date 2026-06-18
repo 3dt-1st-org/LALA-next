@@ -858,7 +858,7 @@ void main() {
 
     expect(find.text('수원화성'), findsOneWidget);
     expect(
-      find.byKey(const ValueKey('obang-border-hwaseong-haenggung')),
+      find.byKey(const ValueKey('category-border-hwaseong-haenggung')),
       findsOneWidget,
     );
     expect(
@@ -892,7 +892,7 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('obang-border-suwon-hwaseong')),
+      find.byKey(const ValueKey('category-border-suwon-hwaseong')),
       findsOneWidget,
     );
     expect(find.text('수원화성 도슨트'), findsAtLeastNWidgets(1));

@@ -2053,10 +2053,11 @@ class _MapRailPlaceCard extends StatelessWidget {
           padding: selected ? const EdgeInsets.all(3) : EdgeInsets.zero,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
-            gradient: selected ? _obangGradient() : null,
-            border: selected
-                ? null
-                : Border.all(color: const Color(0xFFE2E8F0)),
+            color: selected ? color : Colors.white.withValues(alpha: 0.93),
+            border: Border.all(
+              color: selected ? color : const Color(0xFFE2E8F0),
+              width: selected ? 1.6 : 1,
+            ),
             boxShadow: selected
                 ? const [
                     BoxShadow(
@@ -2068,7 +2069,7 @@ class _MapRailPlaceCard extends StatelessWidget {
                 : null,
           ),
           child: Container(
-            key: selected ? ValueKey('obang-border-${place.placeId}') : null,
+            key: selected ? ValueKey('category-border-${place.placeId}') : null,
             padding: EdgeInsets.symmetric(
               horizontal: compact ? 8 : 10,
               vertical: compact ? 7 : 8,
@@ -2077,7 +2078,7 @@ class _MapRailPlaceCard extends StatelessWidget {
               color: Colors.white.withValues(alpha: selected ? 0.98 : 0.93),
               borderRadius: BorderRadius.circular(selected ? 15 : 18),
               border: selected
-                  ? Border.all(color: Colors.white.withValues(alpha: 0.72))
+                  ? Border.all(color: color.withValues(alpha: 0.18))
                   : null,
             ),
             child: Row(
@@ -2147,22 +2148,6 @@ class _MapRailPlaceCard extends StatelessWidget {
       ),
     );
   }
-}
-
-LinearGradient _obangGradient() {
-  return const LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: [
-      Color(0xFF1A202C),
-      Color(0xFF2B6CB0),
-      Color(0xFFC53030),
-      Color(0xFFFFFFFF),
-      Color(0xFFF5C842),
-      Color(0xFF1A202C),
-    ],
-    stops: [0, 0.22, 0.44, 0.62, 0.82, 1],
-  );
 }
 
 class _RailCategoryBadge extends StatelessWidget {
@@ -5901,9 +5886,10 @@ class _RecommendedPlaceCard extends StatelessWidget {
 
   Color _categoryColor(String category) {
     return switch (category) {
-      'restaurant' => const Color(0xFFC53030),
-      'event' => const Color(0xFFF5C842),
-      'culture_venue' => const Color(0xFF2B6CB0),
+      'attraction' => const Color(0xFFC53030),
+      'restaurant' => const Color(0xFFF5C842),
+      'event' => const Color(0xFF2B6CB0),
+      'culture_venue' => const Color(0xFF0F766E),
       _ => const Color(0xFF1A202C),
     };
   }
@@ -5993,12 +5979,13 @@ class _CategoryBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = switch (category) {
-      'restaurant' => const Color(0xFFC53030),
-      'event' => const Color(0xFFF5C842),
-      'culture_venue' => const Color(0xFF2B6CB0),
+      'attraction' => const Color(0xFFC53030),
+      'restaurant' => const Color(0xFFF5C842),
+      'event' => const Color(0xFF2B6CB0),
+      'culture_venue' => const Color(0xFF0F766E),
       _ => const Color(0xFF1A202C),
     };
-    final textColor = category == 'event'
+    final textColor = category == 'restaurant'
         ? const Color(0xFF1A202C)
         : Colors.white;
     return Container(
@@ -7132,10 +7119,10 @@ String _planSlotTitle(LalaPlanSlot slot, String language) {
 
 Color _categoryColor(String category) {
   return switch (category) {
-    'restaurant' => const Color(0xFFC53030),
-    'event' => const Color(0xFFF5C842),
-    'culture_venue' => const Color(0xFF2B6CB0),
-    'attraction' => const Color(0xFF1A202C),
+    'attraction' => const Color(0xFFC53030),
+    'restaurant' => const Color(0xFFF5C842),
+    'event' => const Color(0xFF2B6CB0),
+    'culture_venue' => const Color(0xFF0F766E),
     _ => const Color(0xFF1A202C),
   };
 }

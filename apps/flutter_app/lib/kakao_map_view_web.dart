@@ -252,11 +252,19 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
     circle.setMap(map);
 
     function colorFor(category) {
-      if (category === "restaurant") return "#C53030";
-      if (category === "event") return "#F5C842";
-      if (category === "culture_venue") return "#2B6CB0";
-      if (category === "attraction") return "#D73333";
+      if (category === "attraction") return "#C53030";
+      if (category === "restaurant") return "#F5C842";
+      if (category === "event") return "#2B6CB0";
+      if (category === "culture_venue") return "#0F766E";
       return "#1A202C";
+    }
+
+    function markerTextColorFor(category) {
+      return category === "restaurant" ? "#1A202C" : "#ffffff";
+    }
+
+    function clusterTextColorFor(category) {
+      return category === "restaurant" ? "#6B4F0D" : colorFor(category);
     }
 
     function iconSvgFor(category) {
@@ -325,9 +333,9 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
       inner.style.placeItems = "center";
 
       var label = document.createElement("div");
-      label.style.color = place.category === "event" ? "#1A202C" : "#ffffff";
+      label.style.color = markerTextColorFor(place.category);
       if (isCluster) {
-        label.style.color = place.category === "restaurant" ? "#6B4F0D" : colorFor(place.category);
+        label.style.color = clusterTextColorFor(place.category);
       }
       label.style.fontSize = isCluster ? "14px" : (place.selected ? "13px" : "11px");
       label.style.fontWeight = "900";
@@ -517,7 +525,7 @@ void _drawFallbackMap(
           : _fallbackMarkerSymbol(place.category)
       ..style.color = place.isCluster
           ? _fallbackMarkerTextColorHex(place.category)
-          : (place.category == 'event' ? '#1a202c' : '#ffffff')
+          : _fallbackMarkerIconColorHex(place.category)
       ..style.fontSize = place.isCluster ? '14px' : '11px'
       ..style.fontWeight = '900';
     if (place.isCluster) {
@@ -544,10 +552,10 @@ void _drawFallbackMap(
 
 String _fallbackMarkerColor(String category) {
   return switch (category) {
-    'restaurant' => '#C53030',
-    'event' => '#F5C842',
-    'culture_venue' => '#2B6CB0',
-    'attraction' => '#D73333',
+    'attraction' => '#C53030',
+    'restaurant' => '#F5C842',
+    'event' => '#2B6CB0',
+    'culture_venue' => '#0F766E',
     _ => '#1A202C',
   };
 }
@@ -556,10 +564,14 @@ String _fallbackMarkerTextColorHex(String category) {
   return switch (category) {
     'restaurant' => '#6B4F0D',
     'event' => '#2B6CB0',
-    'culture_venue' => '#2B6CB0',
-    'attraction' => '#D73333',
+    'culture_venue' => '#0F766E',
+    'attraction' => '#C53030',
     _ => '#1A202C',
   };
+}
+
+String _fallbackMarkerIconColorHex(String category) {
+  return category == 'restaurant' ? '#1a202c' : '#ffffff';
 }
 
 Color _fallbackMarkerTextColor(String category) {
@@ -825,7 +837,7 @@ class _FallbackFlutterMarker extends StatelessWidget {
                       ),
                       child: Icon(
                         _fallbackMarkerIcon(place.category),
-                        color: place.category == 'event'
+                        color: place.category == 'restaurant'
                             ? const Color(0xFF1A202C)
                             : Colors.white,
                         size: place.selected ? 15 : 13,
