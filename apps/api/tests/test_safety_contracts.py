@@ -155,6 +155,7 @@ def test_azure_dev_deploy_uses_oidc_and_dev_branch_only():
     assert "subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}" in workflow
     assert "AZURE_DEPLOY_PRINCIPAL_OBJECT_ID" in workflow
     assert 'deploymentPrincipalObjectId="$AZURE_DEPLOY_PRINCIPAL_OBJECT_ID"' in workflow
+    assert "enableRoleAssignments=false" in workflow
     assert "ALLOW_CANONICAL_SQL_APPLY=1" in workflow
     assert "secrets.AZURE_POSTGRES_ADMIN_PASSWORD" in workflow
 

@@ -90,6 +90,9 @@ the least privileges needed after provisioning.
 - The app reads `DB_DSN` from Key Vault at runtime through `KEY_VAULT_URL`.
 - `LALA_ALLOWED_KEY_VAULT_HOSTS` is set to the generated LALA vault host so the
   API cannot accidentally read ONMU or unrelated vaults.
+- The first local Azure CLI deployment should use `enableRoleAssignments=true`.
+  The GitHub `dev` workflow uses `enableRoleAssignments=false` after those RBAC
+  bindings exist.
 - The PostgreSQL server currently uses a dev-friendly public endpoint with
   Azure-service access and temporary GitHub runner firewall rules. For staging or
   production, move to private networking before treating it as durable hosting.

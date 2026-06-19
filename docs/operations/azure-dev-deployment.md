@@ -58,6 +58,11 @@ The deploy workflow also receives `AZURE_DEPLOY_PRINCIPAL_OBJECT_ID` so the
 Bicep template can grant the GitHub OIDC service principal `AcrPush` and Key
 Vault secret access without storing broad Azure credentials in GitHub.
 
+For the first local Azure CLI provisioning, `enableRoleAssignments=true` creates
+the runtime RBAC bindings. The GitHub `dev` workflow passes
+`enableRoleAssignments=false` so the deploy principal can redeploy app
+configuration without needing broad role-assignment write permission.
+
 ## Safety Boundary
 
 This deployment lane is for shared dev, not production.

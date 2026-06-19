@@ -1,6 +1,6 @@
 # LALA Azure Migration Deployment Plan
 
-Status: Prepared for review
+Status: Validated
 
 ## Goal
 
@@ -49,7 +49,34 @@ is green.
   variables, the OIDC federated credential, and the dev branch policy are
   confirmed.
 
+## Role Assignment Verification
+
+- Status: Verified for the current dev deployment path.
+- API user-assigned identity: `AcrPull` on the generated container registry and
+  `Key Vault Secrets User` on the generated LALA vault.
+- GitHub OIDC deploy principal: `AcrPush` on the generated container registry
+  and `Key Vault Secrets Officer` on the generated LALA vault during first local
+  provisioning.
+- Workflow boundary: `dev` branch workflow passes
+  `enableRoleAssignments=false` after the first local provisioning because the
+  deploy principal is not delegated broad role-assignment write permission.
+
+## Validation Proof
+
+- 2026-06-20 KST: `az account show` confirmed an authenticated Azure CLI session.
+- 2026-06-20 KST: Required Azure resource providers were registered.
+- 2026-06-20 KST: Existing LALA Key Vault location was confirmed and the dev
+  deployment target was aligned to the same resource group and Azure region.
+- 2026-06-20 KST: `az bicep build --file infra/azure/main.bicep` succeeded.
+- 2026-06-20 KST: `python -m pytest apps/api/tests/test_safety_contracts.py`
+  succeeded.
+- 2026-06-20 KST: `az deployment group validate` succeeded for
+  `infra/azure/main.bicep` with `enableRoleAssignments=true`.
+- 2026-06-20 KST: `az deployment group what-if` succeeded for
+  `infra/azure/main.bicep` with `enableRoleAssignments=true`.
+
 ## Approval
 
-Approval is still required for the first live Azure deployment because it will
-create billable resources and write Key Vault/database state.
+Approved by the user in chat on 2026-06-20 KST for the first live Azure dev
+deployment. Branch protection is intentionally not configured for development
+speed.

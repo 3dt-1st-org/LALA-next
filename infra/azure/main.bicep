@@ -22,6 +22,9 @@ param corsAllowOrigins string = 'https://lala-next.cloud,https://www.lala-next.c
 @description('Object id of the GitHub OIDC service principal. Used for ACR push and Key Vault secret migration access.')
 param deploymentPrincipalObjectId string = ''
 
+@description('Create RBAC role assignments. Use true for the first local deployment by an owner; use false from GitHub OIDC if role assignment write is not delegated.')
+param enableRoleAssignments bool = true
+
 @description('PostgreSQL administrator login. Keep this as an operational account for dev.')
 param postgresAdminLogin string = 'lalaadmin'
 
@@ -133,7 +136,7 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   }
 }
 
-resource kvSecretsUserRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource kvSecretsUserRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (enableRoleAssignments) {
   name: guid(keyVault.id, apiIdentity.id, 'key-vault-secrets-user')
   scope: keyVault
   properties: {
@@ -143,7 +146,7 @@ resource kvSecretsUserRoleAssignment 'Microsoft.Authorization/roleAssignments@20
   }
 }
 
-resource deployKvSecretsOfficerRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(deploymentPrincipalObjectId)) {
+resource deployKvSecretsOfficerRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (enableRoleAssignments && !empty(deploymentPrincipalObjectId)) {
   name: guid(keyVault.id, deploymentPrincipalObjectId, 'deploy-key-vault-secrets-officer')
   scope: keyVault
   properties: {
@@ -231,7 +234,7 @@ resource corsSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   }
 }
 
-resource apiAcrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource apiAcrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (enableRoleAssignments) {
   name: guid(acr.id, apiIdentity.id, 'acr-pull')
   scope: acr
   properties: {
@@ -241,7 +244,7 @@ resource apiAcrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-
   }
 }
 
-resource deployAcrPushRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(deploymentPrincipalObjectId)) {
+resource deployAcrPushRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (enableRoleAssignments && !empty(deploymentPrincipalObjectId)) {
   name: guid(acr.id, deploymentPrincipalObjectId, 'deploy-acr-push')
   scope: acr
   properties: {
