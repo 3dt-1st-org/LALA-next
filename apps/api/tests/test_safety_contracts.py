@@ -26,6 +26,31 @@ TEXT_SUFFIXES = {
     ".yaml",
     ".yml",
 }
+EXPLICIT_TEXT_FILES = {
+    ".dockerignore",
+    ".env.example",
+    ".gitignore",
+}
+
+
+def _tracked_text_files(*, include_tests: bool = True) -> list[Path]:
+    result = subprocess.run(
+        ["git", "ls-files"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    paths: list[Path] = []
+    for rel_path in result.stdout.splitlines():
+        path = ROOT / rel_path
+        if not path.is_file():
+            continue
+        if not include_tests and "tests" in path.parts:
+            continue
+        if path.name in EXPLICIT_TEXT_FILES or path.suffix.lower() in TEXT_SUFFIXES:
+            paths.append(path)
+    return paths
 
 
 def test_canonical_sql_has_no_shared_destructive_statements():
@@ -57,22 +82,9 @@ def test_canonical_sql_declares_compatibility_views():
 
 
 def test_repo_docs_and_scripts_do_not_contain_secret_literals():
-    target_roots = [
-        ROOT / ".azure",
-        ROOT / ".dockerignore",
-        ROOT / ".env.example",
-        ROOT / ".gitignore",
-        ROOT / ".github",
-        ROOT / "scripts",
-        ROOT / "sql",
-        ROOT / "docs",
-        ROOT / "infra" / "azure",
-        ROOT / "clients",
-        ROOT / "apps" / "api" / "app",
-        ROOT / "apps" / "workers" / "app",
-    ]
     patterns = [
         re.compile(r"postgresql://[^\s<>]+:[^\s<>]+@"),
+        re.compile(r"https://[a-z0-9-]+\.vault\.azure\.net/?", re.IGNORECASE),
         re.compile(r"^IOS_API_KEY[ \t]*=[ \t]*[^#\r\n]+", re.MULTILINE),
         re.compile(r"^API_BEARER_TOKEN[ \t]*=[ \t]*[^#\r\n]+", re.MULTILINE),
         re.compile(r"^POSTGRES_PASSWORD[ \t]*=[ \t]*[^#\r\n]+", re.MULTILINE),
@@ -84,36 +96,18 @@ def test_repo_docs_and_scripts_do_not_contain_secret_literals():
         re.compile(r"(?<![A-Za-z])sk-[A-Za-z0-9]{20,}"),
     ]
     findings: list[str] = []
-    for root in target_roots:
-        paths = [root] if root.is_file() else [p for p in root.rglob("*") if p.is_file()]
-        for path in paths:
-            if "__pycache__" in path.parts:
+    for path in _tracked_text_files(include_tests=False):
+        text = path.read_text(encoding="utf-8")
+        for pattern in patterns:
+            match = pattern.search(text)
+            if not match:
                 continue
-            if path.suffix and path.suffix.lower() not in TEXT_SUFFIXES:
-                continue
-            text = path.read_text(encoding="utf-8")
-            for pattern in patterns:
-                if pattern.search(text):
-                    findings.append(f"{path}: {pattern.pattern}")
+            findings.append(f"{path}: {pattern.pattern}")
 
     assert findings == []
 
 
 def test_public_repo_does_not_contain_live_resource_identifiers():
-    target_roots = [
-        ROOT / ".azure",
-        ROOT / ".dockerignore",
-        ROOT / ".env.example",
-        ROOT / ".gitignore",
-        ROOT / ".github",
-        ROOT / "README.md",
-        ROOT / "scripts",
-        ROOT / "docs",
-        ROOT / "infra" / "azure",
-        ROOT / "apps" / "api" / "app",
-        ROOT / "apps" / "workers" / "app",
-        ROOT / "apps" / "api" / "tests",
-    ]
     suffix = "27" + "db5e"
     banned = [
         f"lala-next-kv-{suffix}",
@@ -127,17 +121,11 @@ def test_public_repo_does_not_contain_live_resource_identifiers():
         "3dt-final-" + "team1",
     ]
     findings: list[str] = []
-    for root in target_roots:
-        paths = [root] if root.is_file() else [p for p in root.rglob("*") if p.is_file()]
-        for path in paths:
-            if "__pycache__" in path.parts:
-                continue
-            if path.suffix and path.suffix.lower() not in TEXT_SUFFIXES:
-                continue
-            text = path.read_text(encoding="utf-8")
-            for value in banned:
-                if value in text:
-                    findings.append(f"{path}: {value}")
+    for path in _tracked_text_files():
+        text = path.read_text(encoding="utf-8")
+        for value in banned:
+            if value in text:
+                findings.append(f"{path}: {value}")
 
     assert findings == []
 

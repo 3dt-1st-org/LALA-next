@@ -106,11 +106,12 @@ must allow the deployed web domains, including `https://lala-next.cloud`,
 Gabia currently hosts DNS for `lala-next.cloud`. Vercel is configured in
 external-DNS mode, so changing nameservers is not required for this MVP.
 
-Current public records:
+Expected public record shape. Resolve the exact target values from Vercel,
+Azure, and Gabia rather than copying live values into this repo:
 
 ```text
-@          A      76.76.21.21
-www        A      76.76.21.21
+@          A      <vercel-apex-address>
+www        A      <vercel-www-address>
 api        CNAME  <azure-container-app-fqdn>.
 asuid.api  TXT    <azure-custom-domain-validation-id>
 ```
