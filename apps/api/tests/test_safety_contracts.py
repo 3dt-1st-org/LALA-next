@@ -158,6 +158,9 @@ def test_azure_dev_deploy_uses_oidc_and_dev_branch_only():
     assert "enableRoleAssignments=false" in workflow
     assert "ALLOW_CANONICAL_SQL_APPLY=1" in workflow
     assert "secrets.AZURE_POSTGRES_ADMIN_PASSWORD" in workflow
+    assert '--server-name "$POSTGRES_SERVER_NAME"' in workflow
+    assert '--name "$RULE_NAME"' in workflow
+    assert "--rule-name" not in workflow
 
 
 def test_azure_container_build_excludes_local_secrets():
