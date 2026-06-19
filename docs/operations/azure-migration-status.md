@@ -32,6 +32,24 @@ queries to resolve live names during operations.
 - Canonical SQL was applied manually to the shared dev PostgreSQL target after
   previewing the SQL plan. The schema verifier passed for all canonical schemas,
   tables, views, and required extensions.
+- Tour API place ingestion was applied for Gyeonggi (`areaCode=31`) and Seoul
+  (`areaCode=1`) across attractions, culture venues, events, and restaurants.
+  The current shared dev DB has 2,636 Tour API places: 1,294 Gyeonggi rows and
+  1,342 Seoul rows.
+- Official image coverage after Tour API ingestion is 2,327 rows: 1,135 Gyeonggi
+  rows and 1,192 Seoul rows. Rows without official images should leave the image
+  slot collapsed rather than using mock images.
+- `local-value-v1` score snapshots were generated for all 2,636 places.
+- RAG knowledge chunks were generated for all 2,636 places with the local-hash
+  embedding path.
+- The production Flutter web build at `lala-next.cloud` was redeployed with the
+  shared dev Azure API base URL and the transition bearer token from deployment
+  secrets. Browser network verification showed `/readyz` and `/api/v1/places`
+  returning HTTP 200 from the Azure API, with DB-backed place rows and official
+  image URLs.
+- Gabia login and DNS management access were verified. The current public DNS
+  still points `@`, `www`, and `api` to Vercel. No Azure Container Apps custom
+  hostname is bound yet.
 
 ## Manual Data Rollout Order
 
@@ -107,15 +125,41 @@ ALLOW_RAG_INDEX_APPLY=1 \
     report configured client auth and DB readiness after the runtime has picked
     up the refreshed Key Vault values.
 
+11. Rebuild and redeploy Flutter web after backend URL or client auth changes.
+    Pass `LALA_API_BASE_URL`, `LALA_API_BEARER_TOKEN`, `KAKAO_JAVASCRIPT_KEY`,
+    and `LALA_UI_LANGUAGE` as build-time values from deployment secrets or
+    trusted local shell variables.
+
+12. Move the API vanity domain only after reviewing the DNS change. Ask Azure
+    for the required validation record:
+
+```bash
+az containerapp hostname add \
+  --name "$AZURE_CONTAINER_APP_NAME" \
+  --resource-group "$AZURE_RESOURCE_GROUP" \
+  --hostname api.lala-next.cloud
+```
+
+If Azure reports the `asuid.api.lala-next.cloud` TXT record is missing, add that
+TXT record in Gabia first. Then replace the current `api` A record with a CNAME
+to the Azure Container Apps FQDN, rerun the hostname add/bind command, and verify
+`api.lala-next.cloud` before rebuilding Flutter web with
+`LALA_API_BASE_URL=https://api.lala-next.cloud`.
+
 ## Still Open
 
 - Re-run the Azure dev deployment after any Bicep or GitHub secret change so
   Key Vault secrets and the Container App revision stay aligned.
-- Deploy Flutter web with the same transition bearer token only from deployment
+- Keep Flutter web using the transition bearer token only from deployment
   secrets until OAuth or a backend-for-frontend proxy replaces the static token.
 - Move `api.lala-next.cloud` from the current placeholder target to the Azure
-  Container App custom domain after DNS access is available.
-- Remove the temporary operator PostgreSQL firewall rule after data rollout is
-  complete.
+  Container App custom domain. Gabia access is verified, but the DNS change has
+  not been submitted yet.
+- Remove the temporary operator PostgreSQL firewall rule during the next Azure
+  lock maintenance window. The resource group currently has a `CanNotDelete`
+  lock, so the rule deletion is blocked unless an authorized operator
+  temporarily removes or scopes the lock.
+- Add Culture Info, KOPIS, card-spending files, weather observations, and review
+  attribute signals, then regenerate score snapshots and RAG chunks.
 - Add production-grade identity, private networking, and observability gates
   before treating the environment as durable production hosting.
