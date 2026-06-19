@@ -1,7 +1,7 @@
 {
-  "snapshot_id": "public-mvp-gyeonggi-coverage-2026-06-18",
+  "snapshot_id": "public-mvp-gyeonggi-seoul-tour-api",
   "description": "Public MVP snapshot exported from the canonical DB read model. It is used only when the public demo API has no DB_DSN.",
-  "generated_at": "2026-06-18T15:02:36.856416+00:00",
+  "generated_at": "2026-06-19T02:24:44.557686+00:00",
   "query": {
     "lat": 37.2636,
     "lng": 127.0286,
@@ -9,68 +9,6 @@
     "category": "all"
   },
   "places": [
-    {
-      "place_id": "tour-api-130104",
-      "name_ko": "군포문화원",
-      "name_en": "Gunpo Cultural Center",
-      "category": "culture_venue",
-      "lat": 37.3472764967,
-      "lng": 126.9548487894,
-      "address_ko": "경기도 군포시 한세로56번길 12 (당정동)",
-      "address_en": "Gyeonggi-do Gunpo-si Hanselo56Beongil 12 (Dangjeongdong)",
-      "image_url": "https://tong.visitkorea.or.kr/cms/resource/09/2358209_image2_1.JPG",
-      "region_ko": "군포시",
-      "region_en": "Gunpo-si",
-      "event_start_date": null,
-      "event_end_date": null,
-      "event_url": null,
-      "is_ongoing": null,
-      "is_approximate_location": false,
-      "upstream_source": "tour_api",
-      "score": {
-        "final_score": 0.8375,
-        "formula_version": "local-value-v1",
-        "components": {
-          "local_spending_score": null,
-          "demand_dispersion_score": 0.92,
-          "weather_fit_score": null,
-          "review_quality_score": null,
-          "culture_relevance_score": 0.7
-        },
-        "data_basis": "public_mvp_snapshot",
-        "features": {
-          "category": "culture_venue",
-          "card_month": null,
-          "input_sources": [
-            "travel.places",
-            "economy.card_spending_area_monthly",
-            "culture.events",
-            "travel.place_events",
-            "travel.weather_observations"
-          ],
-          "weather_flags": {
-            "is_bad_dust": null,
-            "is_coldwave": null,
-            "is_heatwave": null,
-            "is_rain_snow": null,
-            "is_strong_wind": null
-          },
-          "primary_source": "tour_api",
-          "region_name_ko": "군포시",
-          "missing_signals": [
-            "card_spending_area_monthly",
-            "review_attribute_analysis",
-            "weather_observations"
-          ],
-          "place_event_count": 0,
-          "region_place_count": 2,
-          "culture_event_count": 0,
-          "region_spend_amount": null,
-          "region_transaction_count": null,
-          "snapshot_source": "analytics.place_score_snapshots"
-        }
-      }
-    },
     {
       "place_id": "tour-api-3555835",
       "name_ko": "안산사이언스밸리(ASV) 과학축제",
@@ -90,11 +28,11 @@
       "is_approximate_location": false,
       "upstream_source": "tour_api",
       "score": {
-        "final_score": 0.8338,
+        "final_score": 0.8538,
         "formula_version": "local-value-v1",
         "components": {
           "local_spending_score": null,
-          "demand_dispersion_score": 0.89,
+          "demand_dispersion_score": 0.9221,
           "weather_fit_score": null,
           "review_quality_score": null,
           "culture_relevance_score": 0.74
@@ -134,141 +72,17 @@
       }
     },
     {
-      "place_id": "tour-api-3551000",
-      "name_ko": "2025 에듀의왕! 어울림축제",
-      "name_en": "2025 Edu Uiwang Harmony Festival",
-      "category": "event",
-      "lat": 37.3056701893,
-      "lng": 126.9537833824,
-      "address_ko": "경기도 의왕시 왕송못동로 307 (월암동)",
-      "address_en": "Gyeonggi-do Uiwang-si Wangsongmosdonglo 307 (Wol-Amdong)",
-      "image_url": "https://tong.visitkorea.or.kr/cms/resource/99/3550999_image2_1.jpg",
-      "region_ko": "의왕시",
-      "region_en": "Uiwang-si",
-      "event_start_date": null,
-      "event_end_date": null,
-      "event_url": null,
-      "is_ongoing": null,
-      "is_approximate_location": false,
-      "upstream_source": "tour_api",
-      "score": {
-        "final_score": 0.8188,
-        "formula_version": "local-value-v1",
-        "components": {
-          "local_spending_score": null,
-          "demand_dispersion_score": 0.89,
-          "weather_fit_score": null,
-          "review_quality_score": null,
-          "culture_relevance_score": 0.7
-        },
-        "data_basis": "public_mvp_snapshot",
-        "features": {
-          "category": "event",
-          "card_month": null,
-          "input_sources": [
-            "travel.places",
-            "economy.card_spending_area_monthly",
-            "culture.events",
-            "travel.place_events",
-            "travel.weather_observations"
-          ],
-          "weather_flags": {
-            "is_bad_dust": null,
-            "is_coldwave": null,
-            "is_heatwave": null,
-            "is_rain_snow": null,
-            "is_strong_wind": null
-          },
-          "primary_source": "tour_api",
-          "region_name_ko": "의왕시",
-          "missing_signals": [
-            "card_spending_area_monthly",
-            "review_attribute_analysis",
-            "weather_observations"
-          ],
-          "place_event_count": 0,
-          "region_place_count": 3,
-          "culture_event_count": 0,
-          "region_spend_amount": null,
-          "region_transaction_count": null,
-          "snapshot_source": "analytics.place_score_snapshots"
-        }
-      }
-    },
-    {
-      "place_id": "tour-api-2851985",
-      "name_ko": "의왕백운호수축제",
-      "name_en": "Uiwang Baegun Lake Festival",
-      "category": "event",
-      "lat": 37.3834399412,
-      "lng": 127.0091872809,
-      "address_ko": "경기도 의왕시 학현로 199-7 (학의동)",
-      "address_en": "Gyeonggi-do Uiwang-si Haghyeonlo 199-7 (Hag-Uidong)",
-      "image_url": "https://tong.visitkorea.or.kr/cms/resource/63/3541063_image2_1.jpg",
-      "region_ko": "의왕시",
-      "region_en": "Uiwang-si",
-      "event_start_date": null,
-      "event_end_date": null,
-      "event_url": null,
-      "is_ongoing": null,
-      "is_approximate_location": false,
-      "upstream_source": "tour_api",
-      "score": {
-        "final_score": 0.8188,
-        "formula_version": "local-value-v1",
-        "components": {
-          "local_spending_score": null,
-          "demand_dispersion_score": 0.89,
-          "weather_fit_score": null,
-          "review_quality_score": null,
-          "culture_relevance_score": 0.7
-        },
-        "data_basis": "public_mvp_snapshot",
-        "features": {
-          "category": "event",
-          "card_month": null,
-          "input_sources": [
-            "travel.places",
-            "economy.card_spending_area_monthly",
-            "culture.events",
-            "travel.place_events",
-            "travel.weather_observations"
-          ],
-          "weather_flags": {
-            "is_bad_dust": null,
-            "is_coldwave": null,
-            "is_heatwave": null,
-            "is_rain_snow": null,
-            "is_strong_wind": null
-          },
-          "primary_source": "tour_api",
-          "region_name_ko": "의왕시",
-          "missing_signals": [
-            "card_spending_area_monthly",
-            "review_attribute_analysis",
-            "weather_observations"
-          ],
-          "place_event_count": 0,
-          "region_place_count": 3,
-          "culture_event_count": 0,
-          "region_spend_amount": null,
-          "region_transaction_count": null,
-          "snapshot_source": "analytics.place_score_snapshots"
-        }
-      }
-    },
-    {
-      "place_id": "tour-api-2648242",
-      "name_ko": "시흥오이도박물관",
-      "name_en": "Siheung Oido Museum",
+      "place_id": "tour-api-130104",
+      "name_ko": "군포문화원",
+      "name_en": "Gunpo Cultural Center",
       "category": "culture_venue",
-      "lat": 37.3347094008,
-      "lng": 126.6917702916,
-      "address_ko": "경기도 시흥시 오이도로 332 (정왕동)",
-      "address_en": "Gyeonggi-do Siheung-si O-Idolo 332 (Jeong-Wangdong)",
-      "image_url": "https://tong.visitkorea.or.kr/cms/resource/08/2947308_image2_1.jpg",
-      "region_ko": "시흥시",
-      "region_en": "Siheung-si",
+      "lat": 37.3472764967,
+      "lng": 126.9548487894,
+      "address_ko": "경기도 군포시 한세로56번길 12 (당정동)",
+      "address_en": "Gyeonggi-do Gunpo-si Hanselo56Beongil 12 (Dangjeongdong)",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/09/2358209_image2_1.JPG",
+      "region_ko": "군포시",
+      "region_en": "Gunpo-si",
       "event_start_date": null,
       "event_end_date": null,
       "event_url": null,
@@ -276,11 +90,11 @@
       "is_approximate_location": false,
       "upstream_source": "tour_api",
       "score": {
-        "final_score": 0.8188,
+        "final_score": 0.8475,
         "formula_version": "local-value-v1",
         "components": {
           "local_spending_score": null,
-          "demand_dispersion_score": 0.89,
+          "demand_dispersion_score": 0.936,
           "weather_fit_score": null,
           "review_quality_score": null,
           "culture_relevance_score": 0.7
@@ -304,697 +118,15 @@
             "is_strong_wind": null
           },
           "primary_source": "tour_api",
-          "region_name_ko": "시흥시",
+          "region_name_ko": "군포시",
           "missing_signals": [
             "card_spending_area_monthly",
             "review_attribute_analysis",
             "weather_observations"
           ],
           "place_event_count": 0,
-          "region_place_count": 3,
+          "region_place_count": 2,
           "culture_event_count": 0,
-          "region_spend_amount": null,
-          "region_transaction_count": null,
-          "snapshot_source": "analytics.place_score_snapshots"
-        }
-      }
-    },
-    {
-      "place_id": "tour-api-3019085",
-      "name_ko": "2025 이천펫축제",
-      "name_en": "2025 Icheon Pet Festival",
-      "category": "event",
-      "lat": 37.2913267465,
-      "lng": 127.3806506302,
-      "address_ko": "경기도 이천시 신둔면 도자예술로62번길 123",
-      "address_en": "Gyeonggi-do Icheon-si Sindunmyeon Doja-Yesullo62Beongil 123",
-      "image_url": "https://tong.visitkorea.or.kr/cms/resource/87/3521787_image2_1.jpg",
-      "region_ko": "이천시",
-      "region_en": "Icheon-si",
-      "event_start_date": null,
-      "event_end_date": null,
-      "event_url": null,
-      "is_ongoing": null,
-      "is_approximate_location": false,
-      "upstream_source": "tour_api",
-      "score": {
-        "final_score": 0.8188,
-        "formula_version": "local-value-v1",
-        "components": {
-          "local_spending_score": null,
-          "demand_dispersion_score": 0.89,
-          "weather_fit_score": null,
-          "review_quality_score": null,
-          "culture_relevance_score": 0.7
-        },
-        "data_basis": "public_mvp_snapshot",
-        "features": {
-          "category": "event",
-          "card_month": null,
-          "input_sources": [
-            "travel.places",
-            "economy.card_spending_area_monthly",
-            "culture.events",
-            "travel.place_events",
-            "travel.weather_observations"
-          ],
-          "weather_flags": {
-            "is_bad_dust": null,
-            "is_coldwave": null,
-            "is_heatwave": null,
-            "is_rain_snow": null,
-            "is_strong_wind": null
-          },
-          "primary_source": "tour_api",
-          "region_name_ko": "이천시",
-          "missing_signals": [
-            "card_spending_area_monthly",
-            "review_attribute_analysis",
-            "weather_observations"
-          ],
-          "place_event_count": 0,
-          "region_place_count": 3,
-          "culture_event_count": 0,
-          "region_spend_amount": null,
-          "region_transaction_count": null,
-          "snapshot_source": "analytics.place_score_snapshots"
-        }
-      }
-    },
-    {
-      "place_id": "tour-api-581040",
-      "name_ko": "전국해양스포츠제전",
-      "name_en": "National Marine Sports Festival",
-      "category": "event",
-      "lat": 37.3267988841,
-      "lng": 126.6734082927,
-      "address_ko": "경기도 시흥시 정왕동 2726-4  거북섬 수변 일원",
-      "address_en": "Gyeonggi-do Siheung-si Jeong-Wangdong 2726-4 Geobugseom Subyeon Il-Won",
-      "image_url": "https://tong.visitkorea.or.kr/cms/resource/41/3489241_image2_1.jpg",
-      "region_ko": "시흥시",
-      "region_en": "Siheung-si",
-      "event_start_date": null,
-      "event_end_date": null,
-      "event_url": null,
-      "is_ongoing": null,
-      "is_approximate_location": false,
-      "upstream_source": "tour_api",
-      "score": {
-        "final_score": 0.8188,
-        "formula_version": "local-value-v1",
-        "components": {
-          "local_spending_score": null,
-          "demand_dispersion_score": 0.89,
-          "weather_fit_score": null,
-          "review_quality_score": null,
-          "culture_relevance_score": 0.7
-        },
-        "data_basis": "public_mvp_snapshot",
-        "features": {
-          "category": "event",
-          "card_month": null,
-          "input_sources": [
-            "travel.places",
-            "economy.card_spending_area_monthly",
-            "culture.events",
-            "travel.place_events",
-            "travel.weather_observations"
-          ],
-          "weather_flags": {
-            "is_bad_dust": null,
-            "is_coldwave": null,
-            "is_heatwave": null,
-            "is_rain_snow": null,
-            "is_strong_wind": null
-          },
-          "primary_source": "tour_api",
-          "region_name_ko": "시흥시",
-          "missing_signals": [
-            "card_spending_area_monthly",
-            "review_attribute_analysis",
-            "weather_observations"
-          ],
-          "place_event_count": 0,
-          "region_place_count": 3,
-          "culture_event_count": 0,
-          "region_spend_amount": null,
-          "region_transaction_count": null,
-          "snapshot_source": "analytics.place_score_snapshots"
-        }
-      }
-    },
-    {
-      "place_id": "tour-api-622946",
-      "name_ko": "구리 코스모스 축제",
-      "name_en": "Guri Cosmos Festival",
-      "category": "event",
-      "lat": 37.5745310968,
-      "lng": 127.1328789538,
-      "address_ko": "경기도 구리시 코스모스길14번길 249 (토평동)",
-      "address_en": "Gyeonggi-do Guri-si Koseumoseugil14Beongil 249 (Topyeongdong)",
-      "image_url": "https://tong.visitkorea.or.kr/cms/resource/33/3378833_image2_1.JPG",
-      "region_ko": "구리시",
-      "region_en": "Guri-si",
-      "event_start_date": null,
-      "event_end_date": null,
-      "event_url": null,
-      "is_ongoing": null,
-      "is_approximate_location": false,
-      "upstream_source": "tour_api",
-      "score": {
-        "final_score": 0.8188,
-        "formula_version": "local-value-v1",
-        "components": {
-          "local_spending_score": null,
-          "demand_dispersion_score": 0.89,
-          "weather_fit_score": null,
-          "review_quality_score": null,
-          "culture_relevance_score": 0.7
-        },
-        "data_basis": "public_mvp_snapshot",
-        "features": {
-          "category": "event",
-          "card_month": null,
-          "input_sources": [
-            "travel.places",
-            "economy.card_spending_area_monthly",
-            "culture.events",
-            "travel.place_events",
-            "travel.weather_observations"
-          ],
-          "weather_flags": {
-            "is_bad_dust": null,
-            "is_coldwave": null,
-            "is_heatwave": null,
-            "is_rain_snow": null,
-            "is_strong_wind": null
-          },
-          "primary_source": "tour_api",
-          "region_name_ko": "구리시",
-          "missing_signals": [
-            "card_spending_area_monthly",
-            "review_attribute_analysis",
-            "weather_observations"
-          ],
-          "place_event_count": 0,
-          "region_place_count": 3,
-          "culture_event_count": 0,
-          "region_spend_amount": null,
-          "region_transaction_count": null,
-          "snapshot_source": "analytics.place_score_snapshots"
-        }
-      }
-    },
-    {
-      "place_id": "tour-api-3563531",
-      "name_ko": "구리 빛 축제",
-      "name_en": "Guri Light Festival",
-      "category": "event",
-      "lat": 37.5825191614,
-      "lng": 127.1386448674,
-      "address_ko": "경기도 구리시 교문동 537 구리 장자호수공원 일원",
-      "address_en": "537 Gyo-mun-dong, Guri-si, Gyeonggi-do, Guri Jangja Lake Park area",
-      "image_url": "https://tong.visitkorea.or.kr/cms/resource/27/3563527_image2_1.JPG",
-      "region_ko": "구리시",
-      "region_en": "Guri-si",
-      "event_start_date": null,
-      "event_end_date": null,
-      "event_url": null,
-      "is_ongoing": null,
-      "is_approximate_location": false,
-      "upstream_source": "tour_api",
-      "score": {
-        "final_score": 0.8188,
-        "formula_version": "local-value-v1",
-        "components": {
-          "local_spending_score": null,
-          "demand_dispersion_score": 0.89,
-          "weather_fit_score": null,
-          "review_quality_score": null,
-          "culture_relevance_score": 0.7
-        },
-        "data_basis": "public_mvp_snapshot",
-        "features": {
-          "category": "event",
-          "card_month": null,
-          "input_sources": [
-            "travel.places",
-            "economy.card_spending_area_monthly",
-            "culture.events",
-            "travel.place_events",
-            "travel.weather_observations"
-          ],
-          "weather_flags": {
-            "is_bad_dust": null,
-            "is_coldwave": null,
-            "is_heatwave": null,
-            "is_rain_snow": null,
-            "is_strong_wind": null
-          },
-          "primary_source": "tour_api",
-          "region_name_ko": "구리시",
-          "missing_signals": [
-            "card_spending_area_monthly",
-            "review_attribute_analysis",
-            "weather_observations"
-          ],
-          "place_event_count": 0,
-          "region_place_count": 3,
-          "culture_event_count": 0,
-          "region_spend_amount": null,
-          "region_transaction_count": null,
-          "snapshot_source": "analytics.place_score_snapshots"
-        }
-      }
-    },
-    {
-      "place_id": "tour-api-129865",
-      "name_ko": "구리문화원",
-      "name_en": "Guri Cultural Center",
-      "category": "culture_venue",
-      "lat": 37.611787996,
-      "lng": 127.1393661883,
-      "address_ko": "경기도 구리시 동구릉로148번길 25 (인창동)",
-      "address_en": "Gyeonggi-do Guri-si Dongguleunglo148Beongil 25 (Inchangdong)",
-      "image_url": "https://tong.visitkorea.or.kr/cms/resource/74/3551574_image2_1.jpg",
-      "region_ko": "구리시",
-      "region_en": "Guri-si",
-      "event_start_date": null,
-      "event_end_date": null,
-      "event_url": null,
-      "is_ongoing": null,
-      "is_approximate_location": false,
-      "upstream_source": "tour_api",
-      "score": {
-        "final_score": 0.8188,
-        "formula_version": "local-value-v1",
-        "components": {
-          "local_spending_score": null,
-          "demand_dispersion_score": 0.89,
-          "weather_fit_score": null,
-          "review_quality_score": null,
-          "culture_relevance_score": 0.7
-        },
-        "data_basis": "public_mvp_snapshot",
-        "features": {
-          "category": "culture_venue",
-          "card_month": null,
-          "input_sources": [
-            "travel.places",
-            "economy.card_spending_area_monthly",
-            "culture.events",
-            "travel.place_events",
-            "travel.weather_observations"
-          ],
-          "weather_flags": {
-            "is_bad_dust": null,
-            "is_coldwave": null,
-            "is_heatwave": null,
-            "is_rain_snow": null,
-            "is_strong_wind": null
-          },
-          "primary_source": "tour_api",
-          "region_name_ko": "구리시",
-          "missing_signals": [
-            "card_spending_area_monthly",
-            "review_attribute_analysis",
-            "weather_observations"
-          ],
-          "place_event_count": 0,
-          "region_place_count": 3,
-          "culture_event_count": 0,
-          "region_spend_amount": null,
-          "region_transaction_count": null,
-          "snapshot_source": "analytics.place_score_snapshots"
-        }
-      }
-    },
-    {
-      "place_id": "tour-api-2733410",
-      "name_ko": "광명에디슨뮤지엄",
-      "name_en": "Gwangmyeong Edison Museum",
-      "category": "culture_venue",
-      "lat": 37.4209138762,
-      "lng": 126.8818561453,
-      "address_ko": "경기도 광명시 일직로12번길 24 (일직동) 클래시아 3층",
-      "address_en": "Gyeonggi-do Gwangmyeong-si Iljiglo12Beongil 24 (Iljigdong) Keullaesi-A 3Cheung",
-      "image_url": "https://tong.visitkorea.or.kr/cms/resource/75/3563475_image2_1.jpg",
-      "region_ko": "광명시",
-      "region_en": "Gwangmyeong-si",
-      "event_start_date": null,
-      "event_end_date": null,
-      "event_url": null,
-      "is_ongoing": null,
-      "is_approximate_location": false,
-      "upstream_source": "tour_api",
-      "score": {
-        "final_score": 0.8,
-        "formula_version": "local-value-v1",
-        "components": {
-          "local_spending_score": null,
-          "demand_dispersion_score": 0.86,
-          "weather_fit_score": null,
-          "review_quality_score": null,
-          "culture_relevance_score": 0.7
-        },
-        "data_basis": "public_mvp_snapshot",
-        "features": {
-          "category": "culture_venue",
-          "card_month": null,
-          "input_sources": [
-            "travel.places",
-            "economy.card_spending_area_monthly",
-            "culture.events",
-            "travel.place_events",
-            "travel.weather_observations"
-          ],
-          "weather_flags": {
-            "is_bad_dust": null,
-            "is_coldwave": null,
-            "is_heatwave": null,
-            "is_rain_snow": null,
-            "is_strong_wind": null
-          },
-          "primary_source": "tour_api",
-          "region_name_ko": "광명시",
-          "missing_signals": [
-            "card_spending_area_monthly",
-            "review_attribute_analysis",
-            "weather_observations"
-          ],
-          "place_event_count": 0,
-          "region_place_count": 4,
-          "culture_event_count": 0,
-          "region_spend_amount": null,
-          "region_transaction_count": null,
-          "snapshot_source": "analytics.place_score_snapshots"
-        }
-      }
-    },
-    {
-      "place_id": "tour-api-3551206",
-      "name_ko": "광명동굴 빛 축제",
-      "name_en": "Gwangmyeong Cave Light Festival",
-      "category": "event",
-      "lat": 37.4243548415,
-      "lng": 126.8648909266,
-      "address_ko": "경기도 광명시 가학로85번길 142 (가학동)",
-      "address_en": "Gyeonggi-do Gwangmyeong-si Gahaglo85Beongil 142 (Gahagdong)",
-      "image_url": "https://tong.visitkorea.or.kr/cms/resource/96/3551196_image2_1.png",
-      "region_ko": "광명시",
-      "region_en": "Gwangmyeong-si",
-      "event_start_date": null,
-      "event_end_date": null,
-      "event_url": null,
-      "is_ongoing": null,
-      "is_approximate_location": false,
-      "upstream_source": "tour_api",
-      "score": {
-        "final_score": 0.8,
-        "formula_version": "local-value-v1",
-        "components": {
-          "local_spending_score": null,
-          "demand_dispersion_score": 0.86,
-          "weather_fit_score": null,
-          "review_quality_score": null,
-          "culture_relevance_score": 0.7
-        },
-        "data_basis": "public_mvp_snapshot",
-        "features": {
-          "category": "event",
-          "card_month": null,
-          "input_sources": [
-            "travel.places",
-            "economy.card_spending_area_monthly",
-            "culture.events",
-            "travel.place_events",
-            "travel.weather_observations"
-          ],
-          "weather_flags": {
-            "is_bad_dust": null,
-            "is_coldwave": null,
-            "is_heatwave": null,
-            "is_rain_snow": null,
-            "is_strong_wind": null
-          },
-          "primary_source": "tour_api",
-          "region_name_ko": "광명시",
-          "missing_signals": [
-            "card_spending_area_monthly",
-            "review_attribute_analysis",
-            "weather_observations"
-          ],
-          "place_event_count": 0,
-          "region_place_count": 4,
-          "culture_event_count": 0,
-          "region_spend_amount": null,
-          "region_transaction_count": null,
-          "snapshot_source": "analytics.place_score_snapshots"
-        }
-      }
-    },
-    {
-      "place_id": "tour-api-130707",
-      "name_ko": "충현박물관",
-      "name_en": "Chunghyeon Museum",
-      "category": "culture_venue",
-      "lat": 37.4335095727,
-      "lng": 126.8782866731,
-      "address_ko": "경기도 광명시 오리로347번길 5-6 (소하동)",
-      "address_en": "Gyeonggi-do Gwangmyeong-si Olilo347Beongil 5-6 (Sohadong)",
-      "image_url": "https://tong.visitkorea.or.kr/cms/resource/10/3563410_image2_1.jpg",
-      "region_ko": "광명시",
-      "region_en": "Gwangmyeong-si",
-      "event_start_date": null,
-      "event_end_date": null,
-      "event_url": null,
-      "is_ongoing": null,
-      "is_approximate_location": false,
-      "upstream_source": "tour_api",
-      "score": {
-        "final_score": 0.8,
-        "formula_version": "local-value-v1",
-        "components": {
-          "local_spending_score": null,
-          "demand_dispersion_score": 0.86,
-          "weather_fit_score": null,
-          "review_quality_score": null,
-          "culture_relevance_score": 0.7
-        },
-        "data_basis": "public_mvp_snapshot",
-        "features": {
-          "category": "culture_venue",
-          "card_month": null,
-          "input_sources": [
-            "travel.places",
-            "economy.card_spending_area_monthly",
-            "culture.events",
-            "travel.place_events",
-            "travel.weather_observations"
-          ],
-          "weather_flags": {
-            "is_bad_dust": null,
-            "is_coldwave": null,
-            "is_heatwave": null,
-            "is_rain_snow": null,
-            "is_strong_wind": null
-          },
-          "primary_source": "tour_api",
-          "region_name_ko": "광명시",
-          "missing_signals": [
-            "card_spending_area_monthly",
-            "review_attribute_analysis",
-            "weather_observations"
-          ],
-          "place_event_count": 0,
-          "region_place_count": 4,
-          "culture_event_count": 0,
-          "region_spend_amount": null,
-          "region_transaction_count": null,
-          "snapshot_source": "analytics.place_score_snapshots"
-        }
-      }
-    },
-    {
-      "place_id": "tour-api-2034106",
-      "name_ko": "광명업사이클아트센터",
-      "name_en": "Gwangmyeong Upcycle Art Center",
-      "category": "culture_venue",
-      "lat": 37.4625588826,
-      "lng": 126.8729446789,
-      "address_ko": "경기도 광명시 오리로 703 (하안동)",
-      "address_en": "Gyeonggi-do Gwangmyeong-si Olilo 703 (Ha-Andong)",
-      "image_url": "https://tong.visitkorea.or.kr/cms/resource/57/3567457_image2_1.jpg",
-      "region_ko": "광명시",
-      "region_en": "Gwangmyeong-si",
-      "event_start_date": null,
-      "event_end_date": null,
-      "event_url": null,
-      "is_ongoing": null,
-      "is_approximate_location": false,
-      "upstream_source": "tour_api",
-      "score": {
-        "final_score": 0.8,
-        "formula_version": "local-value-v1",
-        "components": {
-          "local_spending_score": null,
-          "demand_dispersion_score": 0.86,
-          "weather_fit_score": null,
-          "review_quality_score": null,
-          "culture_relevance_score": 0.7
-        },
-        "data_basis": "public_mvp_snapshot",
-        "features": {
-          "category": "culture_venue",
-          "card_month": null,
-          "input_sources": [
-            "travel.places",
-            "economy.card_spending_area_monthly",
-            "culture.events",
-            "travel.place_events",
-            "travel.weather_observations"
-          ],
-          "weather_flags": {
-            "is_bad_dust": null,
-            "is_coldwave": null,
-            "is_heatwave": null,
-            "is_rain_snow": null,
-            "is_strong_wind": null
-          },
-          "primary_source": "tour_api",
-          "region_name_ko": "광명시",
-          "missing_signals": [
-            "card_spending_area_monthly",
-            "review_attribute_analysis",
-            "weather_observations"
-          ],
-          "place_event_count": 0,
-          "region_place_count": 4,
-          "culture_event_count": 0,
-          "region_spend_amount": null,
-          "region_transaction_count": null,
-          "snapshot_source": "analytics.place_score_snapshots"
-        }
-      }
-    },
-    {
-      "place_id": "tour-api-782884",
-      "name_ko": "안산시행복예절관",
-      "name_en": "Ansan Etiquette Center",
-      "category": "attraction",
-      "lat": 37.3321899449,
-      "lng": 126.8317298482,
-      "address_ko": "경기도 안산시 단원구 보배2길 64-8 (고잔동)",
-      "address_en": "Gyeonggi-do Ansan-si Dan-Wongu Bobae2Gil 64-8 (Gojandong)",
-      "image_url": "https://tong.visitkorea.or.kr/cms/resource/32/3563432_image2_1.jpg",
-      "region_ko": "안산시",
-      "region_en": "Ansan-si",
-      "event_start_date": null,
-      "event_end_date": null,
-      "event_url": null,
-      "is_ongoing": null,
-      "is_approximate_location": false,
-      "upstream_source": "tour_api",
-      "score": {
-        "final_score": 0.7963,
-        "formula_version": "local-value-v1",
-        "components": {
-          "local_spending_score": null,
-          "demand_dispersion_score": 0.89,
-          "weather_fit_score": null,
-          "review_quality_score": null,
-          "culture_relevance_score": 0.64
-        },
-        "data_basis": "public_mvp_snapshot",
-        "features": {
-          "category": "attraction",
-          "card_month": null,
-          "input_sources": [
-            "travel.places",
-            "economy.card_spending_area_monthly",
-            "culture.events",
-            "travel.place_events",
-            "travel.weather_observations"
-          ],
-          "weather_flags": {
-            "is_bad_dust": null,
-            "is_coldwave": null,
-            "is_heatwave": null,
-            "is_rain_snow": null,
-            "is_strong_wind": null
-          },
-          "primary_source": "tour_api",
-          "region_name_ko": "안산시",
-          "missing_signals": [
-            "card_spending_area_monthly",
-            "review_attribute_analysis",
-            "weather_observations"
-          ],
-          "place_event_count": 0,
-          "region_place_count": 3,
-          "culture_event_count": 1,
-          "region_spend_amount": null,
-          "region_transaction_count": null,
-          "snapshot_source": "analytics.place_score_snapshots"
-        }
-      }
-    },
-    {
-      "place_id": "tour-api-2761294",
-      "name_ko": "개미허리아치교",
-      "name_en": "Ant Waist Arch Bridge",
-      "category": "attraction",
-      "lat": 37.2867511488,
-      "lng": 126.5377106391,
-      "address_ko": "경기도 안산시 단원구 대부북동 산24",
-      "address_en": "Gyeonggi-do Ansan-si Dan-Wongu Daebubugdong San24",
-      "image_url": "https://tong.visitkorea.or.kr/cms/resource/88/3563488_image2_1.jpg",
-      "region_ko": "안산시",
-      "region_en": "Ansan-si",
-      "event_start_date": null,
-      "event_end_date": null,
-      "event_url": null,
-      "is_ongoing": null,
-      "is_approximate_location": false,
-      "upstream_source": "tour_api",
-      "score": {
-        "final_score": 0.7963,
-        "formula_version": "local-value-v1",
-        "components": {
-          "local_spending_score": null,
-          "demand_dispersion_score": 0.89,
-          "weather_fit_score": null,
-          "review_quality_score": null,
-          "culture_relevance_score": 0.64
-        },
-        "data_basis": "public_mvp_snapshot",
-        "features": {
-          "category": "attraction",
-          "card_month": null,
-          "input_sources": [
-            "travel.places",
-            "economy.card_spending_area_monthly",
-            "culture.events",
-            "travel.place_events",
-            "travel.weather_observations"
-          ],
-          "weather_flags": {
-            "is_bad_dust": null,
-            "is_coldwave": null,
-            "is_heatwave": null,
-            "is_rain_snow": null,
-            "is_strong_wind": null
-          },
-          "primary_source": "tour_api",
-          "region_name_ko": "안산시",
-          "missing_signals": [
-            "card_spending_area_monthly",
-            "review_attribute_analysis",
-            "weather_observations"
-          ],
-          "place_event_count": 0,
-          "region_place_count": 3,
-          "culture_event_count": 1,
           "region_spend_amount": null,
           "region_transaction_count": null,
           "snapshot_source": "analytics.place_score_snapshots"
@@ -1020,11 +152,11 @@
       "is_approximate_location": false,
       "upstream_source": "tour_api",
       "score": {
-        "final_score": 0.7925,
+        "final_score": 0.8426,
         "formula_version": "local-value-v1",
         "components": {
           "local_spending_score": null,
-          "demand_dispersion_score": 0.8,
+          "demand_dispersion_score": 0.8802,
           "weather_fit_score": null,
           "review_quality_score": null,
           "culture_relevance_score": 0.78
@@ -1082,11 +214,11 @@
       "is_approximate_location": false,
       "upstream_source": "tour_api",
       "score": {
-        "final_score": 0.7925,
+        "final_score": 0.8426,
         "formula_version": "local-value-v1",
         "components": {
           "local_spending_score": null,
-          "demand_dispersion_score": 0.8,
+          "demand_dispersion_score": 0.8802,
           "weather_fit_score": null,
           "review_quality_score": null,
           "culture_relevance_score": 0.78
@@ -1144,11 +276,11 @@
       "is_approximate_location": false,
       "upstream_source": "tour_api",
       "score": {
-        "final_score": 0.7925,
+        "final_score": 0.8426,
         "formula_version": "local-value-v1",
         "components": {
           "local_spending_score": null,
-          "demand_dispersion_score": 0.8,
+          "demand_dispersion_score": 0.8802,
           "weather_fit_score": null,
           "review_quality_score": null,
           "culture_relevance_score": 0.78
@@ -1206,11 +338,11 @@
       "is_approximate_location": false,
       "upstream_source": "tour_api",
       "score": {
-        "final_score": 0.7925,
+        "final_score": 0.8426,
         "formula_version": "local-value-v1",
         "components": {
           "local_spending_score": null,
-          "demand_dispersion_score": 0.8,
+          "demand_dispersion_score": 0.8802,
           "weather_fit_score": null,
           "review_quality_score": null,
           "culture_relevance_score": 0.78
@@ -1243,6 +375,2112 @@
           "place_event_count": 0,
           "region_place_count": 6,
           "culture_event_count": 2,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-3551000",
+      "name_ko": "2025 에듀의왕! 어울림축제",
+      "name_en": "2025 Edu Uiwang Harmony Festival",
+      "category": "event",
+      "lat": 37.3056701893,
+      "lng": 126.9537833824,
+      "address_ko": "경기도 의왕시 왕송못동로 307 (월암동)",
+      "address_en": "Gyeonggi-do Uiwang-si Wangsongmosdonglo 307 (Wol-Amdong)",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/99/3550999_image2_1.jpg",
+      "region_ko": "의왕시",
+      "region_en": "Uiwang-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8388,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.9221,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "event",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "의왕시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 3,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-2851985",
+      "name_ko": "의왕백운호수축제",
+      "name_en": "Uiwang Baegun Lake Festival",
+      "category": "event",
+      "lat": 37.3834399412,
+      "lng": 127.0091872809,
+      "address_ko": "경기도 의왕시 학현로 199-7 (학의동)",
+      "address_en": "Gyeonggi-do Uiwang-si Haghyeonlo 199-7 (Hag-Uidong)",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/63/3541063_image2_1.jpg",
+      "region_ko": "의왕시",
+      "region_en": "Uiwang-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8388,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.9221,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "event",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "의왕시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 3,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-1105871",
+      "name_ko": "금나래아트홀",
+      "name_en": "Geumnalae-Ateuhol",
+      "category": "culture_venue",
+      "lat": 37.4564933229,
+      "lng": 126.8955205706,
+      "address_ko": "서울특별시 금천구 시흥대로73길 70 금천구청종합청사",
+      "address_en": "Seoul Geumcheon-gu Siheungdaelo73Gil 70 Geumcheongucheongjonghabcheongsa",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/45/3563345_image2_1.jpg",
+      "region_ko": "금천구",
+      "region_en": "Geumcheon-gu",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8388,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.9221,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "culture_venue",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "금천구",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 3,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-2761411",
+      "name_ko": "금천하모니축제",
+      "name_en": "Geumcheonhamonichugje Festival",
+      "category": "event",
+      "lat": 37.4564933229,
+      "lng": 126.8955205706,
+      "address_ko": "서울특별시 금천구 시흥대로73길 70 (시흥동) 금천구청광장, 안양천다목적광장 일대",
+      "address_en": "Seoul Geumcheon-gu Siheungdaelo73Gil 70 (Siheungdong) Geumcheongucheonggwangjang, An-Yangcheondamogjeoggwangjang Ildae",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/92/3483192_image2_1.jpg",
+      "region_ko": "금천구",
+      "region_en": "Geumcheon-gu",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8388,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.9221,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "event",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "금천구",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 3,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-2648242",
+      "name_ko": "시흥오이도박물관",
+      "name_en": "Siheung Oido Museum",
+      "category": "culture_venue",
+      "lat": 37.3347094008,
+      "lng": 126.6917702916,
+      "address_ko": "경기도 시흥시 오이도로 332 (정왕동)",
+      "address_en": "Gyeonggi-do Siheung-si O-Idolo 332 (Jeong-Wangdong)",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/08/2947308_image2_1.jpg",
+      "region_ko": "시흥시",
+      "region_en": "Siheung-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8388,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.9221,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "culture_venue",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "시흥시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 3,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-2745602",
+      "name_ko": "에스팩토리",
+      "name_en": "Eseupaegtoli",
+      "category": "culture_venue",
+      "lat": 37.5423085165,
+      "lng": 127.0594809973,
+      "address_ko": "서울특별시 성동구 연무장15길 11 (성수동2가)",
+      "address_en": "Seoul Seongdong-gu Yeonmujang15Gil 11 (Seongsudong2Ga)",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/68/3584568_image2_1.jpg",
+      "region_ko": "성동구",
+      "region_en": "Seongdong-gu",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8388,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.9221,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "culture_venue",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "성동구",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 3,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-3019085",
+      "name_ko": "2025 이천펫축제",
+      "name_en": "2025 Icheon Pet Festival",
+      "category": "event",
+      "lat": 37.2913267465,
+      "lng": 127.3806506302,
+      "address_ko": "경기도 이천시 신둔면 도자예술로62번길 123",
+      "address_en": "Gyeonggi-do Icheon-si Sindunmyeon Doja-Yesullo62Beongil 123",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/87/3521787_image2_1.jpg",
+      "region_ko": "이천시",
+      "region_en": "Icheon-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8388,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.9221,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "event",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "이천시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 3,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-581040",
+      "name_ko": "전국해양스포츠제전",
+      "name_en": "National Marine Sports Festival",
+      "category": "event",
+      "lat": 37.3267988841,
+      "lng": 126.6734082927,
+      "address_ko": "경기도 시흥시 정왕동 2726-4  거북섬 수변 일원",
+      "address_en": "Gyeonggi-do Siheung-si Jeong-Wangdong 2726-4 Geobugseom Subyeon Il-Won",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/41/3489241_image2_1.jpg",
+      "region_ko": "시흥시",
+      "region_en": "Siheung-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8388,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.9221,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "event",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "시흥시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 3,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-2621558",
+      "name_ko": "중랑용마폭포축제",
+      "name_en": "Junglang-Yongmapogpochugje Festival",
+      "category": "event",
+      "lat": 37.5734054382,
+      "lng": 127.0891385242,
+      "address_ko": "서울특별시 중랑구 용마산로 250-12 (면목동)",
+      "address_en": "Seoul Jungnang-gu Yongmasanlo 250-12 (Myeonmogdong)",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/95/3540195_image2_1.JPG",
+      "region_ko": "중랑구",
+      "region_en": "Jungnang-gu",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8388,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.9221,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "event",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "중랑구",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 3,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-2384776",
+      "name_ko": "2025 한강명산트레킹(2차)",
+      "name_en": "2025 Hangangmyeongsanteuleking(2Cha)",
+      "category": "event",
+      "lat": 37.5734054382,
+      "lng": 127.0891385242,
+      "address_ko": "서울특별시 중랑구 용마산로 250-12 (면목동)",
+      "address_en": "Seoul Jungnang-gu Yongmasanlo 250-12 (Myeonmogdong)",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/24/3547824_image2_1.png",
+      "region_ko": "중랑구",
+      "region_en": "Jungnang-gu",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8388,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.9221,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "event",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "중랑구",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 3,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-622946",
+      "name_ko": "구리 코스모스 축제",
+      "name_en": "Guri Cosmos Festival",
+      "category": "event",
+      "lat": 37.5745310968,
+      "lng": 127.1328789538,
+      "address_ko": "경기도 구리시 코스모스길14번길 249 (토평동)",
+      "address_en": "Gyeonggi-do Guri-si Koseumoseugil14Beongil 249 (Topyeongdong)",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/33/3378833_image2_1.JPG",
+      "region_ko": "구리시",
+      "region_en": "Guri-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8388,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.9221,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "event",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "구리시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 3,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-3563531",
+      "name_ko": "구리 빛 축제",
+      "name_en": "Guri Light Festival",
+      "category": "event",
+      "lat": 37.5825191614,
+      "lng": 127.1386448674,
+      "address_ko": "경기도 구리시 교문동 537 구리 장자호수공원 일원",
+      "address_en": "537 Gyo-mun-dong, Guri-si, Gyeonggi-do, Guri Jangja Lake Park area",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/27/3563527_image2_1.JPG",
+      "region_ko": "구리시",
+      "region_en": "Guri-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8388,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.9221,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "event",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "구리시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 3,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-129865",
+      "name_ko": "구리문화원",
+      "name_en": "Guri Cultural Center",
+      "category": "culture_venue",
+      "lat": 37.611787996,
+      "lng": 127.1393661883,
+      "address_ko": "경기도 구리시 동구릉로148번길 25 (인창동)",
+      "address_en": "Gyeonggi-do Guri-si Dongguleunglo148Beongil 25 (Inchangdong)",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/74/3551574_image2_1.jpg",
+      "region_ko": "구리시",
+      "region_en": "Guri-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8388,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.9221,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "culture_venue",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "구리시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 3,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-3537267",
+      "name_ko": "백년시장 백년나이트 오컬트디스코",
+      "name_en": "Baegnyeonsijang Baegnyeonna-Iteu Okeolteudiseuko",
+      "category": "event",
+      "lat": 37.6416074792,
+      "lng": 127.0257562475,
+      "address_ko": "서울특별시 강북구 한천로144길 12 (수유동)",
+      "address_en": "Seoul Gangbuk-gu Hancheonlo144Gil 12 (Su-Yudong)",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/70/3553370_image2_1.png",
+      "region_ko": "강북구",
+      "region_en": "Gangbuk-gu",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8388,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.9221,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "event",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "강북구",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 3,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-2601242",
+      "name_ko": "도봉한글잔치",
+      "name_en": "Dobonghangeuljanchi",
+      "category": "event",
+      "lat": 37.6603441259,
+      "lng": 127.0222810312,
+      "address_ko": "서울특별시 도봉구 해등로32가길 16 (방학동)",
+      "address_en": "Seoul Dobong-gu Haedeunglo32Gagil 16 (Banghagdong)",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/25/3550325_image2_1.JPG",
+      "region_ko": "도봉구",
+      "region_en": "Dobong-gu",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8388,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.9221,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "event",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "도봉구",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 3,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-2733410",
+      "name_ko": "광명에디슨뮤지엄",
+      "name_en": "Gwangmyeong Edison Museum",
+      "category": "culture_venue",
+      "lat": 37.4209138762,
+      "lng": 126.8818561453,
+      "address_ko": "경기도 광명시 일직로12번길 24 (일직동) 클래시아 3층",
+      "address_en": "Gyeonggi-do Gwangmyeong-si Iljiglo12Beongil 24 (Iljigdong) Keullaesi-A 3Cheung",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/75/3563475_image2_1.jpg",
+      "region_ko": "광명시",
+      "region_en": "Gwangmyeong-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8301,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.9081,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "culture_venue",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "광명시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 4,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-3551206",
+      "name_ko": "광명동굴 빛 축제",
+      "name_en": "Gwangmyeong Cave Light Festival",
+      "category": "event",
+      "lat": 37.4243548415,
+      "lng": 126.8648909266,
+      "address_ko": "경기도 광명시 가학로85번길 142 (가학동)",
+      "address_en": "Gyeonggi-do Gwangmyeong-si Gahaglo85Beongil 142 (Gahagdong)",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/96/3551196_image2_1.png",
+      "region_ko": "광명시",
+      "region_en": "Gwangmyeong-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8301,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.9081,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "event",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "광명시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 4,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-130707",
+      "name_ko": "충현박물관",
+      "name_en": "Chunghyeon Museum",
+      "category": "culture_venue",
+      "lat": 37.4335095727,
+      "lng": 126.8782866731,
+      "address_ko": "경기도 광명시 오리로347번길 5-6 (소하동)",
+      "address_en": "Gyeonggi-do Gwangmyeong-si Olilo347Beongil 5-6 (Sohadong)",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/10/3563410_image2_1.jpg",
+      "region_ko": "광명시",
+      "region_en": "Gwangmyeong-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8301,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.9081,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "culture_venue",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "광명시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 4,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-2034106",
+      "name_ko": "광명업사이클아트센터",
+      "name_en": "Gwangmyeong Upcycle Art Center",
+      "category": "culture_venue",
+      "lat": 37.4625588826,
+      "lng": 126.8729446789,
+      "address_ko": "경기도 광명시 오리로 703 (하안동)",
+      "address_en": "Gyeonggi-do Gwangmyeong-si Olilo 703 (Ha-Andong)",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/57/3567457_image2_1.jpg",
+      "region_ko": "광명시",
+      "region_en": "Gwangmyeong-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8301,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.9081,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "culture_venue",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "광명시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 4,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-2764323",
+      "name_ko": "은평역사한옥박물관",
+      "name_en": "Eunpyeong-Yeogsahan-Ogbagmulgwan Museum",
+      "category": "culture_venue",
+      "lat": 37.6403865997,
+      "lng": 126.9380226193,
+      "address_ko": "서울특별시 은평구 연서로50길 8 (진관동)",
+      "address_en": "Seoul Eunpyeong-gu Yeonseolo50Gil 8 (Jingwandong)",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/89/3337389_image2_1.JPG",
+      "region_ko": "은평구",
+      "region_en": "Eunpyeong-gu",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8301,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.9081,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "culture_venue",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "은평구",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 4,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-2867300",
+      "name_ko": "평택 원평나루 억새축제",
+      "name_en": "Pyeongtaek Wonpyeong Naru Silver Grass Festival",
+      "category": "event",
+      "lat": 36.9844984904,
+      "lng": 127.081480734,
+      "address_ko": "경기도 평택시 평택동 219-3",
+      "address_en": "Gyeonggi-do Pyeongtaek-si Pyeongtaegdong 219-3",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/71/3534771_image2_1.jpg",
+      "region_ko": "평택시",
+      "region_en": "Pyeongtaek-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8276,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.8802,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.74
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "event",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "평택시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 6,
+          "culture_event_count": 1,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-2724084",
+      "name_ko": "안정리 예술인광장",
+      "name_en": "Anjeongli Yesul-Ingwangjang",
+      "category": "culture_venue",
+      "lat": 36.9598534521,
+      "lng": 127.0443431037,
+      "address_ko": "경기도 평택시 팽성읍 안정쇼핑로 11",
+      "address_en": "Gyeonggi-do Pyeongtaek-si Paengseong-Eub Anjeongsyopinglo 11",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/99/3558799_image2_1.jpg",
+      "region_ko": "평택시",
+      "region_en": "Pyeongtaek-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8276,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.8802,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.74
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "culture_venue",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "평택시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 6,
+          "culture_event_count": 1,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-2034167",
+      "name_ko": "평택호 물빛축제",
+      "name_en": "Pyeongtaegho Mulbichchugje Festival",
+      "category": "event",
+      "lat": 36.921491829,
+      "lng": 126.9222413036,
+      "address_ko": "경기도 평택시 현덕면 평택호길 159 평택호 관광단지 일원 한국소리터, 모래톱공원",
+      "address_en": "Gyeonggi-do Pyeongtaek-si Hyeondeogmyeon Pyeongtaeghogil 159 Pyeongtaegho Gwangwangdanji Il-Won Hangugsoliteo, Molaetobgong-Won",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/98/3506298_image2_1.jpg",
+      "region_ko": "평택시",
+      "region_en": "Pyeongtaek-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8276,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.8802,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.74
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "event",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "평택시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 6,
+          "culture_event_count": 1,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-2816541",
+      "name_ko": "한국근현대음악관",
+      "name_en": "Hanguggeunhyeondae-Eum-Aggwan",
+      "category": "culture_venue",
+      "lat": 36.9212584984,
+      "lng": 126.9208719893,
+      "address_ko": "경기도 평택시 현덕면 평택호길 147",
+      "address_en": "Gyeonggi-do Pyeongtaek-si Hyeondeogmyeon Pyeongtaeghogil 147",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/35/2816535_image2_1.jpg",
+      "region_ko": "평택시",
+      "region_en": "Pyeongtaek-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8276,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.8802,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.74
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "culture_venue",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "평택시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 6,
+          "culture_event_count": 1,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-126618",
+      "name_ko": "인계예술공원",
+      "name_en": "Ingye Arts Park",
+      "category": "attraction",
+      "lat": 37.2586104401,
+      "lng": 127.0359939011,
+      "address_ko": "경기도 수원시 팔달구 동수원로 335",
+      "address_en": "335 Dongsuwon-ro, Paldal-gu, Suwon-si, Gyeonggi-do",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/79/3400879_image2_1.JPG",
+      "region_ko": "수원시",
+      "region_en": "Suwon-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8238,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": 0.95,
+          "demand_dispersion_score": 0.6709,
+          "weather_fit_score": 0.85,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.8
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "attraction",
+          "card_month": "2026-05-01",
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": false,
+            "is_coldwave": false,
+            "is_heatwave": false,
+            "is_rain_snow": false,
+            "is_strong_wind": false
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "수원시",
+          "missing_signals": [
+            "review_attribute_analysis"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 21,
+          "culture_event_count": 13,
+          "region_spend_amount": 14000000.0,
+          "region_transaction_count": 1700,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-129839",
+      "name_ko": "서울대학교 박물관",
+      "name_en": "Seo-Uldaehaggyo Bagmulgwan Museum",
+      "category": "culture_venue",
+      "lat": 37.4663514558,
+      "lng": 126.9483849253,
+      "address_ko": "서울특별시 관악구 관악로 1 서울대학교 서울대학교박물관",
+      "address_en": "Seoul Gwanak-gu Gwan-Aglo 1 Seo-Uldaehaggyo Seo-Uldaehaggyobagmulgwan",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/99/3574499_image2_1.jpg",
+      "region_ko": "관악구",
+      "region_en": "Gwanak-gu",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8214,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.8942,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "culture_venue",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "관악구",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 5,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-2778088",
+      "name_ko": "관악별빛산책",
+      "name_en": "Gwan-Agbyeolbichsanchaeg",
+      "category": "event",
+      "lat": 37.4827825101,
+      "lng": 126.9276196866,
+      "address_ko": "서울특별시 관악구 신림동 1642-7 별빛내린천 (신림교~봉림교)",
+      "address_en": "Seoul Gwanak-gu Sinlimdong 1642-7 Byeolbichnaelincheon (Sinlimgyo~Bonglimgyo)",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/88/3580588_image2_1.jpg",
+      "region_ko": "관악구",
+      "region_en": "Gwanak-gu",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8214,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.8942,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "event",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "관악구",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 5,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-790211",
+      "name_ko": "장애인문화예술축제 A+ Festival",
+      "name_en": "Jang-Ae-Inmunhwa-Yesulchugje A+ Festival",
+      "category": "event",
+      "lat": 37.4949448412,
+      "lng": 126.9195061947,
+      "address_ko": "서울특별시 동작구 여의대방로20길 33 (신대방동)",
+      "address_en": "Seoul Dongjak-gu Yeo-Uidaebanglo20Gil 33 (Sindaebangdong)",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/98/3550898_image2_1.png",
+      "region_ko": "동작구",
+      "region_en": "Dongjak-gu",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8214,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.8942,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "event",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "동작구",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 5,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-3442973",
+      "name_ko": "김영삼 도서관",
+      "name_en": "Gim-Yeongsam Doseogwan Library",
+      "category": "culture_venue",
+      "lat": 37.5055274904,
+      "lng": 126.9499808987,
+      "address_ko": "서울특별시 동작구 매봉로 1 (상도1동)",
+      "address_en": "Seoul Dongjak-gu Maebonglo 1 (Sangdo1Dong)",
+      "image_url": null,
+      "region_ko": "동작구",
+      "region_en": "Dongjak-gu",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8214,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.8942,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "culture_venue",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "동작구",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 5,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-3370427",
+      "name_ko": "동작댄싱데이 페스티벌",
+      "name_en": "Dongjagdaensingde-I Peseutibeol",
+      "category": "event",
+      "lat": 37.5154094998,
+      "lng": 126.94017318,
+      "address_ko": "서울특별시 동작구 노들로 688 (노량진동) 노량진축구장",
+      "address_en": "Seoul Dongjak-gu Nodeullo 688 (Nolyangjindong) Nolyangjinchuggujang",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/43/3546043_image2_1.jpg",
+      "region_ko": "동작구",
+      "region_en": "Dongjak-gu",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8214,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.8942,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "event",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "동작구",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 5,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-2760301",
+      "name_ko": "한생연 생명과학박물관",
+      "name_en": "Hansaeng-Yeon Saengmyeonggwahagbagmulgwan Museum",
+      "category": "culture_venue",
+      "lat": 37.5239767319,
+      "lng": 126.8720291483,
+      "address_ko": "서울특별시 양천구 목동동로 206-1 (목동)",
+      "address_en": "Seoul Yangcheon-gu Mogdongdonglo 206-1 (Mogdong)",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/81/3589481_image2_1.jpg",
+      "region_ko": "양천구",
+      "region_en": "Yangcheon-gu",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8214,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.8942,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "culture_venue",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "양천구",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 5,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-3384023",
+      "name_ko": "양천가족 거리축제",
+      "name_en": "Yangcheongajog Geolichugje Festival",
+      "category": "event",
+      "lat": 37.5198490944,
+      "lng": 126.8530059985,
+      "address_ko": "서울특별시 양천구 중앙로 지하261 (신정동) 신정네거리역 일대(서울남부지방법원 방향 약 900m 구간)",
+      "address_en": "Seoul Yangcheon-gu Jung-Anglo Jiha261 (Sinjeongdong) Sinjeongnegeoli-Yeog Ildae(Seo-Ulnambujibangbeob-Won Banghyang Yag 900M Gugan)",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/32/3544832_image2_1.jpg",
+      "region_ko": "양천구",
+      "region_en": "Yangcheon-gu",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8214,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.8942,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "event",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "양천구",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 5,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-2611675",
+      "name_ko": "신월음악도서관",
+      "name_en": "Sin-Wol-Eum-Agdoseogwan Library",
+      "category": "culture_venue",
+      "lat": 37.5247705145,
+      "lng": 126.8401042589,
+      "address_ko": "서울특별시 양천구 오목로5길 34 (신월동)",
+      "address_en": "Seoul Yangcheon-gu Omoglo5Gil 34 (Sin-Woldong)",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/72/3568172_image2_1.jpg",
+      "region_ko": "양천구",
+      "region_en": "Yangcheon-gu",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8214,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.8942,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "culture_venue",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "양천구",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 5,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-2773766",
+      "name_ko": "한강뮤지엄",
+      "name_en": "Han River Museum",
+      "category": "culture_venue",
+      "lat": 37.5534937521,
+      "lng": 127.2366895528,
+      "address_ko": "경기도 남양주시 와부읍 경강로926번길 30",
+      "address_en": "30 Gyeonggang-ro 926beon-gil, Wabu-eup, Namyangju-si, Gyeonggi-do",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/16/3584716_image2_1.jpg",
+      "region_ko": "남양주시",
+      "region_en": "Namyangju-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8214,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.8942,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "culture_venue",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "남양주시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 5,
+          "culture_event_count": 0,
           "region_spend_amount": null,
           "region_transaction_count": null,
           "snapshot_source": "analytics.place_score_snapshots"
@@ -1312,6 +2550,68 @@
       }
     },
     {
+      "place_id": "tour-api-1730495",
+      "name_ko": "연천수레울아트홀",
+      "name_en": "Yeoncheon Sureul Art Hall",
+      "category": "culture_venue",
+      "lat": 38.108798432,
+      "lng": 127.0800683593,
+      "address_ko": "경기도 연천군 연천읍 문화로 150",
+      "address_en": "Gyeonggi-do Yeoncheon-gun Yeoncheon-Eub Munhwalo 150",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/95/3564095_image2_1.jpg",
+      "region_ko": "연천군",
+      "region_en": "Yeoncheon-gun",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8625,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.936,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.74
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "culture_venue",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "연천군",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 2,
+          "culture_event_count": 1,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
       "place_id": "tour-api-2948061",
       "name_ko": "동광극장",
       "name_en": "Donggwang Theater",
@@ -1374,68 +2674,6 @@
       }
     },
     {
-      "place_id": "tour-api-1730495",
-      "name_ko": "연천수레울아트홀",
-      "name_en": "Yeoncheon Sureul Art Hall",
-      "category": "culture_venue",
-      "lat": 38.108798432,
-      "lng": 127.0800683593,
-      "address_ko": "경기도 연천군 연천읍 문화로 150",
-      "address_en": "Gyeonggi-do Yeoncheon-gun Yeoncheon-Eub Munhwalo 150",
-      "image_url": "https://tong.visitkorea.or.kr/cms/resource/95/3564095_image2_1.jpg",
-      "region_ko": "연천군",
-      "region_en": "Yeoncheon-gun",
-      "event_start_date": null,
-      "event_end_date": null,
-      "event_url": null,
-      "is_ongoing": null,
-      "is_approximate_location": false,
-      "upstream_source": "tour_api",
-      "score": {
-        "final_score": 0.8525,
-        "formula_version": "local-value-v1",
-        "components": {
-          "local_spending_score": null,
-          "demand_dispersion_score": 0.92,
-          "weather_fit_score": null,
-          "review_quality_score": null,
-          "culture_relevance_score": 0.74
-        },
-        "data_basis": "public_mvp_snapshot",
-        "features": {
-          "category": "culture_venue",
-          "card_month": null,
-          "input_sources": [
-            "travel.places",
-            "economy.card_spending_area_monthly",
-            "culture.events",
-            "travel.place_events",
-            "travel.weather_observations"
-          ],
-          "weather_flags": {
-            "is_bad_dust": null,
-            "is_coldwave": null,
-            "is_heatwave": null,
-            "is_rain_snow": null,
-            "is_strong_wind": null
-          },
-          "primary_source": "tour_api",
-          "region_name_ko": "연천군",
-          "missing_signals": [
-            "card_spending_area_monthly",
-            "review_attribute_analysis",
-            "weather_observations"
-          ],
-          "place_event_count": 0,
-          "region_place_count": 2,
-          "culture_event_count": 1,
-          "region_spend_amount": null,
-          "region_transaction_count": null,
-          "snapshot_source": "analytics.place_score_snapshots"
-        }
-      }
-    },
-    {
       "place_id": "tour-api-2642613",
       "name_ko": "CICA 미술관",
       "name_en": "CICA Art Museum",
@@ -1454,11 +2692,11 @@
       "is_approximate_location": false,
       "upstream_source": "tour_api",
       "score": {
-        "final_score": 0.7963,
+        "final_score": 0.8364,
         "formula_version": "local-value-v1",
         "components": {
           "local_spending_score": null,
-          "demand_dispersion_score": 0.83,
+          "demand_dispersion_score": 0.8942,
           "weather_fit_score": null,
           "review_quality_score": null,
           "culture_relevance_score": 0.74
@@ -1491,6 +2729,998 @@
           "place_event_count": 0,
           "region_place_count": 5,
           "culture_event_count": 1,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-130709",
+      "name_ko": "서호미술관",
+      "name_en": "Seohomi Art Museum",
+      "category": "culture_venue",
+      "lat": 37.6327671912,
+      "lng": 127.3515129409,
+      "address_ko": "경기도 남양주시 화도읍 북한강로 1344",
+      "address_en": "Gyeonggi-do Namyangju-si Hwado-Eub Bughanganglo 1344",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/44/3565444_image2_1.JPG",
+      "region_ko": "남양주시",
+      "region_en": "Namyangju-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8214,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.8942,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "culture_venue",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "남양주시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 5,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-2714751",
+      "name_ko": "가원미술관",
+      "name_en": "Gawon Art Museum",
+      "category": "culture_venue",
+      "lat": 37.4240072797,
+      "lng": 126.9992398229,
+      "address_ko": "경기도 과천시 새빛로 24 (문원동)",
+      "address_en": "Gyeonggi-do Gwacheon-si Saebichlo 24 (Mun-Wondong)",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/86/3565386_image2_1.jpg",
+      "region_ko": "과천시",
+      "region_en": "Gwacheon-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8189,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.8663,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.74
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "culture_venue",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "과천시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 7,
+          "culture_event_count": 1,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-2618971",
+      "name_ko": "구로청소년축제",
+      "name_en": "Gulocheongsonyeonchugje Festival",
+      "category": "event",
+      "lat": 37.4941610735,
+      "lng": 126.8900783422,
+      "address_ko": "서울특별시 구로구 구로중앙로 48 (구로동)",
+      "address_en": "Seoul Guro-gu Gulojung-Anglo 48 (Gulodong)",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/06/3562606_image2_1.jpg",
+      "region_ko": "구로구",
+      "region_en": "Guro-gu",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8126,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.8802,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "event",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "구로구",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 6,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-1806376",
+      "name_ko": "강동북페스티벌",
+      "name_en": "Gangdongbugpeseutibeol",
+      "category": "event",
+      "lat": 37.5244036592,
+      "lng": 127.1369827856,
+      "address_ko": "서울특별시 강동구 양재대로84길 63 (둔촌동) 강동중앙도서관·둔촌 1동 근린공원",
+      "address_en": "Seoul Gangdong-gu Yangjaedaelo84Gil 63 (Dunchondong) Gangdongjung-Angdoseogwan·Dunchon 1Dong Geunlingong-Won",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/89/3567889_image2_1.jpg",
+      "region_ko": "강동구",
+      "region_en": "Gangdong-gu",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8126,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.8802,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "event",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "강동구",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 6,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-2782732",
+      "name_ko": "스페이스K 서울",
+      "name_en": "Seupe-Iseuk Seo-Ul",
+      "category": "culture_venue",
+      "lat": 37.5611466793,
+      "lng": 126.8309874014,
+      "address_ko": "서울특별시 강서구 마곡중앙8로 32 (마곡동)",
+      "address_en": "Seoul Gangseo-gu Magogjung-Ang8Lo 32 (Magogdong)",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/45/3589045_image2_1.jpg",
+      "region_ko": "강서구",
+      "region_en": "Gangseo-gu",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8126,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.8802,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "culture_venue",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "강서구",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 6,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-3379778",
+      "name_ko": "가락옥토버페스트 미식야행",
+      "name_en": "Galag-Ogtobeopeseuteu Misig-Yahaeng",
+      "category": "event",
+      "lat": 37.4960786971,
+      "lng": 127.1107693087,
+      "address_ko": "서울특별시 송파구 양재대로 932 (가락동) (가락동 600) 가락몰3층 하늘공원",
+      "address_en": "Seoul Songpa-gu Yangjaedaelo 932 (Galagdong) (Galagdong 600) Galagmol3Cheung Haneulgong-Won",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/73/3553073_image2_1.png",
+      "region_ko": "송파구",
+      "region_en": "Songpa-gu",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8039,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.8663,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "event",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "송파구",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 7,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-3001045",
+      "name_ko": "한강 종이비행기 축제",
+      "name_en": "Hangang Jong-Ibihaenggi Chugje Festival",
+      "category": "event",
+      "lat": 37.5248000326,
+      "lng": 126.9377509138,
+      "address_ko": "서울특별시 영등포구 여의도동 85",
+      "address_en": "Seoul Yeongdeungpo-gu Yeo-Uidodong 85",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/11/3554311_image2_1.jpg",
+      "region_ko": "영등포구",
+      "region_en": "Yeongdeungpo-gu",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8039,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.8663,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "event",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "영등포구",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 7,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-2434313",
+      "name_ko": "성북 책모꼬지 북페스티벌",
+      "name_en": "Seongbug Chaegmo-Kkoji Bugpeseutibeol",
+      "category": "event",
+      "lat": 37.5894939323,
+      "lng": 127.0167863252,
+      "address_ko": "서울특별시 성북구 보문로 168 (삼선동5가) 성북구청 바람마당 일대",
+      "address_en": "Seoul Seongbuk-gu Bomunlo 168 (Samseondong5Ga) Seongbuggucheong Balammadang Ildae",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/26/3560526_image2_1.jpg",
+      "region_ko": "성북구",
+      "region_en": "Seongbuk-gu",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8039,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.8663,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "event",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "성북구",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 7,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-3372236",
+      "name_ko": "튼튼 펫 페스타",
+      "name_en": "Tuntun Pet Festa",
+      "category": "event",
+      "lat": 37.1992404182,
+      "lng": 127.0855160695,
+      "address_ko": "경기도 화성시 동부대로 1063-3 (오산동)",
+      "address_en": "Gyeonggi-do Hwaseong-si Dongbudaelo 1063-3 (Osandong)",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/76/3536376_image2_1.jpg",
+      "region_ko": "화성시",
+      "region_en": "Hwaseong-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.8015,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.8384,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.74
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "event",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "화성시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 9,
+          "culture_event_count": 1,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-1390147",
+      "name_ko": "안양춤축제",
+      "name_en": "Anyang Dance Festival",
+      "category": "event",
+      "lat": 37.3901883031,
+      "lng": 126.9613442188,
+      "address_ko": "경기도 안양시 동안구 관평로 149 중앙공원관리부속 평촌중앙공원, 삼덕공원",
+      "address_en": "Gyeonggi-do Anyang-si Dong-Angu Gwanpyeonglo 149 Jung-Anggong-Wongwanlibusog Pyeongchonjung-Anggong-Won, Samdeoggong-Won",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/89/3491689_image2_1.jpg",
+      "region_ko": "안양시",
+      "region_en": "Anyang-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.7952,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.8523,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "event",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "안양시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 8,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-130814",
+      "name_ko": "성남시 분당도서관",
+      "name_en": "Seongnam Bundang Library",
+      "category": "culture_venue",
+      "lat": 37.3581559086,
+      "lng": 127.1165949023,
+      "address_ko": "경기도 성남시 분당구 불정로 110 (정자동)",
+      "address_en": "Gyeonggi-do Seongnam-si Bundanggu Buljeonglo 110 (Jeongjadong)",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/10/3053810_image2_1.jpg",
+      "region_ko": "성남시",
+      "region_en": "Seongnam-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.7928,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.8244,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.74
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "culture_venue",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "성남시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 10,
+          "culture_event_count": 1,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-128622",
+      "name_ko": "서대문독립공원",
+      "name_en": "Seodaemundoglibgong-Won Park",
+      "category": "attraction",
+      "lat": 37.5746723659,
+      "lng": 126.9573421635,
+      "address_ko": "서울특별시 서대문구 통일로 251 (현저동)",
+      "address_en": "Seoul Seodaemun-gu Tong-Illo 251 (Hyeonjeodong)",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/05/3590405_image2_1.jpg",
+      "region_ko": "서대문구",
+      "region_en": "Seodaemun-gu",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.7926,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.9081,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.6
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "attraction",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "서대문구",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 4,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-3012095",
+      "name_ko": "서울라이트 한강 빛섬축제",
+      "name_en": "Seo-Ulla-Iteu Hangang Bichseomchugje Festival",
+      "category": "event",
+      "lat": 37.5294186076,
+      "lng": 127.0739939307,
+      "address_ko": "서울특별시 광진구 강변북로 2273 (자양동) 뚝섬한강공원",
+      "address_en": "Seoul Gwangjin-gu Gangbyeonbuglo 2273 (Ja-Yangdong) Ttugseomhanganggong-Won",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/17/3579117_image2_1.jpg",
+      "region_ko": "광진구",
+      "region_en": "Gwangjin-gu",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.7865,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.8384,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "event",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "광진구",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 9,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-2865258",
+      "name_ko": "노원 북 페스티벌",
+      "name_en": "No-Won Bug Peseutibeol",
+      "category": "event",
+      "lat": 37.6320954567,
+      "lng": 127.0679693368,
+      "address_ko": "서울특별시 노원구 공릉로55길 88 (하계동) 하계2동 주민센터 앞 경춘선숲길 일대",
+      "address_en": "Seoul Nowon-gu Gongleunglo55Gil 88 (Hagyedong) Hagye2Dong Juminsenteo Ap Gyeongchunseonsupgil Ildae",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/61/3559561_image2_1.png",
+      "region_ko": "노원구",
+      "region_en": "Nowon-gu",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.7865,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.8384,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "event",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "노원구",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 9,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-3345603",
+      "name_ko": "2025 양주관아지에서 만나는 특별한 주말",
+      "name_en": "2025 Special Weekend at Yangju Gwana Historic Site",
+      "category": "event",
+      "lat": 37.78510751,
+      "lng": 127.0295156915,
+      "address_ko": "경기도 양주시 부흥로1399번길 15 (유양동)",
+      "address_en": "Gyeonggi-do Yangju-si Buheunglo1399Beongil 15 (Yu-Yangdong)",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/99/3546299_image2_1.jpg",
+      "region_ko": "양주시",
+      "region_en": "Yangju-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.7865,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.8384,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "event",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "양주시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 9,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-2815401",
+      "name_ko": "봄솔레씨네",
+      "name_en": "Bomsolle-Ssine",
+      "category": "restaurant",
+      "lat": 37.5839146983,
+      "lng": 127.0541691885,
+      "address_ko": "서울특별시 동대문구 서울시립대로29길 3",
+      "address_en": "Seoul Dongdaemun-gu Seo-Ulsilibdaelo29Gil 3",
+      "image_url": null,
+      "region_ko": "동대문구",
+      "region_en": "Dongdaemun-gu",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.7813,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.95,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.5
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "restaurant",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "동대문구",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 1,
+          "culture_event_count": 0,
           "region_spend_amount": null,
           "region_transaction_count": null,
           "snapshot_source": "analytics.place_score_snapshots"
@@ -1560,562 +3790,6 @@
       }
     },
     {
-      "place_id": "tour-api-130709",
-      "name_ko": "서호미술관",
-      "name_en": "Seohomi Art Museum",
-      "category": "culture_venue",
-      "lat": 37.6327671912,
-      "lng": 127.3515129409,
-      "address_ko": "경기도 남양주시 화도읍 북한강로 1344",
-      "address_en": "Gyeonggi-do Namyangju-si Hwado-Eub Bughanganglo 1344",
-      "image_url": "https://tong.visitkorea.or.kr/cms/resource/44/3565444_image2_1.JPG",
-      "region_ko": "남양주시",
-      "region_en": "Namyangju-si",
-      "event_start_date": null,
-      "event_end_date": null,
-      "event_url": null,
-      "is_ongoing": null,
-      "is_approximate_location": false,
-      "upstream_source": "tour_api",
-      "score": {
-        "final_score": 0.7813,
-        "formula_version": "local-value-v1",
-        "components": {
-          "local_spending_score": null,
-          "demand_dispersion_score": 0.83,
-          "weather_fit_score": null,
-          "review_quality_score": null,
-          "culture_relevance_score": 0.7
-        },
-        "data_basis": "public_mvp_snapshot",
-        "features": {
-          "category": "culture_venue",
-          "card_month": null,
-          "input_sources": [
-            "travel.places",
-            "economy.card_spending_area_monthly",
-            "culture.events",
-            "travel.place_events",
-            "travel.weather_observations"
-          ],
-          "weather_flags": {
-            "is_bad_dust": null,
-            "is_coldwave": null,
-            "is_heatwave": null,
-            "is_rain_snow": null,
-            "is_strong_wind": null
-          },
-          "primary_source": "tour_api",
-          "region_name_ko": "남양주시",
-          "missing_signals": [
-            "card_spending_area_monthly",
-            "review_attribute_analysis",
-            "weather_observations"
-          ],
-          "place_event_count": 0,
-          "region_place_count": 5,
-          "culture_event_count": 0,
-          "region_spend_amount": null,
-          "region_transaction_count": null,
-          "snapshot_source": "analytics.place_score_snapshots"
-        }
-      }
-    },
-    {
-      "place_id": "tour-api-2867300",
-      "name_ko": "평택 원평나루 억새축제",
-      "name_en": "Pyeongtaek Wonpyeong Naru Silver Grass Festival",
-      "category": "event",
-      "lat": 36.9844984904,
-      "lng": 127.081480734,
-      "address_ko": "경기도 평택시 평택동 219-3",
-      "address_en": "Gyeonggi-do Pyeongtaek-si Pyeongtaegdong 219-3",
-      "image_url": "https://tong.visitkorea.or.kr/cms/resource/71/3534771_image2_1.jpg",
-      "region_ko": "평택시",
-      "region_en": "Pyeongtaek-si",
-      "event_start_date": null,
-      "event_end_date": null,
-      "event_url": null,
-      "is_ongoing": null,
-      "is_approximate_location": false,
-      "upstream_source": "tour_api",
-      "score": {
-        "final_score": 0.7775,
-        "formula_version": "local-value-v1",
-        "components": {
-          "local_spending_score": null,
-          "demand_dispersion_score": 0.8,
-          "weather_fit_score": null,
-          "review_quality_score": null,
-          "culture_relevance_score": 0.74
-        },
-        "data_basis": "public_mvp_snapshot",
-        "features": {
-          "category": "event",
-          "card_month": null,
-          "input_sources": [
-            "travel.places",
-            "economy.card_spending_area_monthly",
-            "culture.events",
-            "travel.place_events",
-            "travel.weather_observations"
-          ],
-          "weather_flags": {
-            "is_bad_dust": null,
-            "is_coldwave": null,
-            "is_heatwave": null,
-            "is_rain_snow": null,
-            "is_strong_wind": null
-          },
-          "primary_source": "tour_api",
-          "region_name_ko": "평택시",
-          "missing_signals": [
-            "card_spending_area_monthly",
-            "review_attribute_analysis",
-            "weather_observations"
-          ],
-          "place_event_count": 0,
-          "region_place_count": 6,
-          "culture_event_count": 1,
-          "region_spend_amount": null,
-          "region_transaction_count": null,
-          "snapshot_source": "analytics.place_score_snapshots"
-        }
-      }
-    },
-    {
-      "place_id": "tour-api-134601",
-      "name_ko": "무진장갈비",
-      "name_en": "Mujinjang Galbi",
-      "category": "restaurant",
-      "lat": 37.1810197465,
-      "lng": 127.0542944073,
-      "address_ko": "경기도 오산시 경기대로658번길 19 (내삼미동)",
-      "address_en": "Gyeonggi-do Osan-si Gyeonggidaelo658Beongil 19 (Naesammidong)",
-      "image_url": null,
-      "region_ko": "오산시",
-      "region_en": "Osan-si",
-      "event_start_date": null,
-      "event_end_date": null,
-      "event_url": null,
-      "is_ongoing": null,
-      "is_approximate_location": false,
-      "upstream_source": "tour_api",
-      "score": {
-        "final_score": 0.7625,
-        "formula_version": "local-value-v1",
-        "components": {
-          "local_spending_score": null,
-          "demand_dispersion_score": 0.92,
-          "weather_fit_score": null,
-          "review_quality_score": null,
-          "culture_relevance_score": 0.5
-        },
-        "data_basis": "public_mvp_snapshot",
-        "features": {
-          "category": "restaurant",
-          "card_month": null,
-          "input_sources": [
-            "travel.places",
-            "economy.card_spending_area_monthly",
-            "culture.events",
-            "travel.place_events",
-            "travel.weather_observations"
-          ],
-          "weather_flags": {
-            "is_bad_dust": null,
-            "is_coldwave": null,
-            "is_heatwave": null,
-            "is_rain_snow": null,
-            "is_strong_wind": null
-          },
-          "primary_source": "tour_api",
-          "region_name_ko": "오산시",
-          "missing_signals": [
-            "card_spending_area_monthly",
-            "review_attribute_analysis",
-            "weather_observations"
-          ],
-          "place_event_count": 0,
-          "region_place_count": 2,
-          "culture_event_count": 0,
-          "region_spend_amount": null,
-          "region_transaction_count": null,
-          "snapshot_source": "analytics.place_score_snapshots"
-        }
-      }
-    },
-    {
-      "place_id": "tour-api-2714751",
-      "name_ko": "가원미술관",
-      "name_en": "Gawon Art Museum",
-      "category": "culture_venue",
-      "lat": 37.4240072797,
-      "lng": 126.9992398229,
-      "address_ko": "경기도 과천시 새빛로 24 (문원동)",
-      "address_en": "Gyeonggi-do Gwacheon-si Saebichlo 24 (Mun-Wondong)",
-      "image_url": "https://tong.visitkorea.or.kr/cms/resource/86/3565386_image2_1.jpg",
-      "region_ko": "과천시",
-      "region_en": "Gwacheon-si",
-      "event_start_date": null,
-      "event_end_date": null,
-      "event_url": null,
-      "is_ongoing": null,
-      "is_approximate_location": false,
-      "upstream_source": "tour_api",
-      "score": {
-        "final_score": 0.7587,
-        "formula_version": "local-value-v1",
-        "components": {
-          "local_spending_score": null,
-          "demand_dispersion_score": 0.77,
-          "weather_fit_score": null,
-          "review_quality_score": null,
-          "culture_relevance_score": 0.74
-        },
-        "data_basis": "public_mvp_snapshot",
-        "features": {
-          "category": "culture_venue",
-          "card_month": null,
-          "input_sources": [
-            "travel.places",
-            "economy.card_spending_area_monthly",
-            "culture.events",
-            "travel.place_events",
-            "travel.weather_observations"
-          ],
-          "weather_flags": {
-            "is_bad_dust": null,
-            "is_coldwave": null,
-            "is_heatwave": null,
-            "is_rain_snow": null,
-            "is_strong_wind": null
-          },
-          "primary_source": "tour_api",
-          "region_name_ko": "과천시",
-          "missing_signals": [
-            "card_spending_area_monthly",
-            "review_attribute_analysis",
-            "weather_observations"
-          ],
-          "place_event_count": 0,
-          "region_place_count": 7,
-          "culture_event_count": 1,
-          "region_spend_amount": null,
-          "region_transaction_count": null,
-          "snapshot_source": "analytics.place_score_snapshots"
-        }
-      }
-    },
-    {
-      "place_id": "tour-api-126618",
-      "name_ko": "인계예술공원",
-      "name_en": "Ingye Arts Park",
-      "category": "attraction",
-      "lat": 37.2586104401,
-      "lng": 127.0359939011,
-      "address_ko": "경기도 수원시 팔달구 동수원로 335",
-      "address_en": "335 Dongsuwon-ro, Paldal-gu, Suwon-si, Gyeonggi-do",
-      "image_url": "https://tong.visitkorea.or.kr/cms/resource/79/3400879_image2_1.JPG",
-      "region_ko": "수원시",
-      "region_en": "Suwon-si",
-      "event_start_date": null,
-      "event_end_date": null,
-      "event_url": null,
-      "is_ongoing": null,
-      "is_approximate_location": false,
-      "upstream_source": "tour_api",
-      "score": {
-        "final_score": 0.7294,
-        "formula_version": "local-value-v1",
-        "components": {
-          "local_spending_score": 0.95,
-          "demand_dispersion_score": 0.35,
-          "weather_fit_score": 0.85,
-          "review_quality_score": null,
-          "culture_relevance_score": 0.8
-        },
-        "data_basis": "public_mvp_snapshot",
-        "features": {
-          "category": "attraction",
-          "card_month": "2026-05-01",
-          "input_sources": [
-            "travel.places",
-            "economy.card_spending_area_monthly",
-            "culture.events",
-            "travel.place_events",
-            "travel.weather_observations"
-          ],
-          "weather_flags": {
-            "is_bad_dust": false,
-            "is_coldwave": false,
-            "is_heatwave": false,
-            "is_rain_snow": false,
-            "is_strong_wind": false
-          },
-          "primary_source": "tour_api",
-          "region_name_ko": "수원시",
-          "missing_signals": [
-            "review_attribute_analysis"
-          ],
-          "place_event_count": 0,
-          "region_place_count": 21,
-          "culture_event_count": 13,
-          "region_spend_amount": 14000000.0,
-          "region_transaction_count": 1700,
-          "snapshot_source": "analytics.place_score_snapshots"
-        }
-      }
-    },
-    {
-      "place_id": "tour-api-1390147",
-      "name_ko": "안양춤축제",
-      "name_en": "Anyang Dance Festival",
-      "category": "event",
-      "lat": 37.3901883031,
-      "lng": 126.9613442188,
-      "address_ko": "경기도 안양시 동안구 관평로 149 중앙공원관리부속 평촌중앙공원, 삼덕공원",
-      "address_en": "Gyeonggi-do Anyang-si Dong-Angu Gwanpyeonglo 149 Jung-Anggong-Wongwanlibusog Pyeongchonjung-Anggong-Won, Samdeoggong-Won",
-      "image_url": "https://tong.visitkorea.or.kr/cms/resource/89/3491689_image2_1.jpg",
-      "region_ko": "안양시",
-      "region_en": "Anyang-si",
-      "event_start_date": null,
-      "event_end_date": null,
-      "event_url": null,
-      "is_ongoing": null,
-      "is_approximate_location": false,
-      "upstream_source": "tour_api",
-      "score": {
-        "final_score": 0.725,
-        "formula_version": "local-value-v1",
-        "components": {
-          "local_spending_score": null,
-          "demand_dispersion_score": 0.74,
-          "weather_fit_score": null,
-          "review_quality_score": null,
-          "culture_relevance_score": 0.7
-        },
-        "data_basis": "public_mvp_snapshot",
-        "features": {
-          "category": "event",
-          "card_month": null,
-          "input_sources": [
-            "travel.places",
-            "economy.card_spending_area_monthly",
-            "culture.events",
-            "travel.place_events",
-            "travel.weather_observations"
-          ],
-          "weather_flags": {
-            "is_bad_dust": null,
-            "is_coldwave": null,
-            "is_heatwave": null,
-            "is_rain_snow": null,
-            "is_strong_wind": null
-          },
-          "primary_source": "tour_api",
-          "region_name_ko": "안양시",
-          "missing_signals": [
-            "card_spending_area_monthly",
-            "review_attribute_analysis",
-            "weather_observations"
-          ],
-          "place_event_count": 0,
-          "region_place_count": 8,
-          "culture_event_count": 0,
-          "region_spend_amount": null,
-          "region_transaction_count": null,
-          "snapshot_source": "analytics.place_score_snapshots"
-        }
-      }
-    },
-    {
-      "place_id": "tour-api-3372236",
-      "name_ko": "튼튼 펫 페스타",
-      "name_en": "Tuntun Pet Festa",
-      "category": "event",
-      "lat": 37.1992404182,
-      "lng": 127.0855160695,
-      "address_ko": "경기도 화성시 동부대로 1063-3 (오산동)",
-      "address_en": "Gyeonggi-do Hwaseong-si Dongbudaelo 1063-3 (Osandong)",
-      "image_url": "https://tong.visitkorea.or.kr/cms/resource/76/3536376_image2_1.jpg",
-      "region_ko": "화성시",
-      "region_en": "Hwaseong-si",
-      "event_start_date": null,
-      "event_end_date": null,
-      "event_url": null,
-      "is_ongoing": null,
-      "is_approximate_location": false,
-      "upstream_source": "tour_api",
-      "score": {
-        "final_score": 0.7213,
-        "formula_version": "local-value-v1",
-        "components": {
-          "local_spending_score": null,
-          "demand_dispersion_score": 0.71,
-          "weather_fit_score": null,
-          "review_quality_score": null,
-          "culture_relevance_score": 0.74
-        },
-        "data_basis": "public_mvp_snapshot",
-        "features": {
-          "category": "event",
-          "card_month": null,
-          "input_sources": [
-            "travel.places",
-            "economy.card_spending_area_monthly",
-            "culture.events",
-            "travel.place_events",
-            "travel.weather_observations"
-          ],
-          "weather_flags": {
-            "is_bad_dust": null,
-            "is_coldwave": null,
-            "is_heatwave": null,
-            "is_rain_snow": null,
-            "is_strong_wind": null
-          },
-          "primary_source": "tour_api",
-          "region_name_ko": "화성시",
-          "missing_signals": [
-            "card_spending_area_monthly",
-            "review_attribute_analysis",
-            "weather_observations"
-          ],
-          "place_event_count": 0,
-          "region_place_count": 9,
-          "culture_event_count": 1,
-          "region_spend_amount": null,
-          "region_transaction_count": null,
-          "snapshot_source": "analytics.place_score_snapshots"
-        }
-      }
-    },
-    {
-      "place_id": "tour-api-3000203",
-      "name_ko": "양주국가유산 야행",
-      "name_en": "Yangju National Heritage Night Tour",
-      "category": "event",
-      "lat": 37.78510751,
-      "lng": 127.0295156915,
-      "address_ko": "경기도 양주시 부흥로1399번길 15 (유양동) 양주관아지",
-      "address_en": "Gyeonggi-do Yangju-si Buheunglo1399Beongil 15 (Yu-Yangdong) Yangjugwan-Aji",
-      "image_url": "https://tong.visitkorea.or.kr/cms/resource/68/3527468_image2_1.jpg",
-      "region_ko": "양주시",
-      "region_en": "Yangju-si",
-      "event_start_date": null,
-      "event_end_date": null,
-      "event_url": null,
-      "is_ongoing": null,
-      "is_approximate_location": false,
-      "upstream_source": "tour_api",
-      "score": {
-        "final_score": 0.7062,
-        "formula_version": "local-value-v1",
-        "components": {
-          "local_spending_score": null,
-          "demand_dispersion_score": 0.71,
-          "weather_fit_score": null,
-          "review_quality_score": null,
-          "culture_relevance_score": 0.7
-        },
-        "data_basis": "public_mvp_snapshot",
-        "features": {
-          "category": "event",
-          "card_month": null,
-          "input_sources": [
-            "travel.places",
-            "economy.card_spending_area_monthly",
-            "culture.events",
-            "travel.place_events",
-            "travel.weather_observations"
-          ],
-          "weather_flags": {
-            "is_bad_dust": null,
-            "is_coldwave": null,
-            "is_heatwave": null,
-            "is_rain_snow": null,
-            "is_strong_wind": null
-          },
-          "primary_source": "tour_api",
-          "region_name_ko": "양주시",
-          "missing_signals": [
-            "card_spending_area_monthly",
-            "review_attribute_analysis",
-            "weather_observations"
-          ],
-          "place_event_count": 0,
-          "region_place_count": 9,
-          "culture_event_count": 0,
-          "region_spend_amount": null,
-          "region_transaction_count": null,
-          "snapshot_source": "analytics.place_score_snapshots"
-        }
-      }
-    },
-    {
-      "place_id": "tour-api-130814",
-      "name_ko": "성남시 분당도서관",
-      "name_en": "Seongnam Bundang Library",
-      "category": "culture_venue",
-      "lat": 37.3581559086,
-      "lng": 127.1165949023,
-      "address_ko": "경기도 성남시 분당구 불정로 110 (정자동)",
-      "address_en": "Gyeonggi-do Seongnam-si Bundanggu Buljeonglo 110 (Jeongjadong)",
-      "image_url": "https://tong.visitkorea.or.kr/cms/resource/10/3053810_image2_1.jpg",
-      "region_ko": "성남시",
-      "region_en": "Seongnam-si",
-      "event_start_date": null,
-      "event_end_date": null,
-      "event_url": null,
-      "is_ongoing": null,
-      "is_approximate_location": false,
-      "upstream_source": "tour_api",
-      "score": {
-        "final_score": 0.7025,
-        "formula_version": "local-value-v1",
-        "components": {
-          "local_spending_score": null,
-          "demand_dispersion_score": 0.68,
-          "weather_fit_score": null,
-          "review_quality_score": null,
-          "culture_relevance_score": 0.74
-        },
-        "data_basis": "public_mvp_snapshot",
-        "features": {
-          "category": "culture_venue",
-          "card_month": null,
-          "input_sources": [
-            "travel.places",
-            "economy.card_spending_area_monthly",
-            "culture.events",
-            "travel.place_events",
-            "travel.weather_observations"
-          ],
-          "weather_flags": {
-            "is_bad_dust": null,
-            "is_coldwave": null,
-            "is_heatwave": null,
-            "is_rain_snow": null,
-            "is_strong_wind": null
-          },
-          "primary_source": "tour_api",
-          "region_name_ko": "성남시",
-          "missing_signals": [
-            "card_spending_area_monthly",
-            "review_attribute_analysis",
-            "weather_observations"
-          ],
-          "place_event_count": 0,
-          "region_place_count": 10,
-          "culture_event_count": 1,
-          "region_spend_amount": null,
-          "region_transaction_count": null,
-          "snapshot_source": "analytics.place_score_snapshots"
-        }
-      }
-    },
-    {
       "place_id": "tour-api-1732075",
       "name_ko": "광주시문화재단 광주시문화예술의전당",
       "name_en": "Gwangju Cultural Foundation Arts Center",
@@ -2134,11 +3808,11 @@
       "is_approximate_location": false,
       "upstream_source": "tour_api",
       "score": {
-        "final_score": 0.6875,
+        "final_score": 0.7777,
         "formula_version": "local-value-v1",
         "components": {
           "local_spending_score": null,
-          "demand_dispersion_score": 0.68,
+          "demand_dispersion_score": 0.8244,
           "weather_fit_score": null,
           "review_quality_score": null,
           "culture_relevance_score": 0.7
@@ -2178,68 +3852,6 @@
       }
     },
     {
-      "place_id": "tour-api-130220",
-      "name_ko": "가평문화예술회관",
-      "name_en": "Gapyeong Culture and Arts Center",
-      "category": "culture_venue",
-      "lat": 37.8248171919,
-      "lng": 127.5085736093,
-      "address_ko": "경기도 가평군 가평읍 문화로 131",
-      "address_en": "131 Munhwa-ro, Gapyeong-eup, Gapyeong-gun, Gyeonggi-do",
-      "image_url": "https://tong.visitkorea.or.kr/cms/resource/34/1589034_image2_1.jpg",
-      "region_ko": "가평군",
-      "region_en": "Gapyeong-gun",
-      "event_start_date": null,
-      "event_end_date": null,
-      "event_url": null,
-      "is_ongoing": null,
-      "is_approximate_location": false,
-      "upstream_source": "tour_api",
-      "score": {
-        "final_score": 0.6688,
-        "formula_version": "local-value-v1",
-        "components": {
-          "local_spending_score": null,
-          "demand_dispersion_score": 0.65,
-          "weather_fit_score": null,
-          "review_quality_score": null,
-          "culture_relevance_score": 0.7
-        },
-        "data_basis": "public_mvp_snapshot",
-        "features": {
-          "category": "culture_venue",
-          "card_month": null,
-          "input_sources": [
-            "travel.places",
-            "economy.card_spending_area_monthly",
-            "culture.events",
-            "travel.place_events",
-            "travel.weather_observations"
-          ],
-          "weather_flags": {
-            "is_bad_dust": null,
-            "is_coldwave": null,
-            "is_heatwave": null,
-            "is_rain_snow": null,
-            "is_strong_wind": null
-          },
-          "primary_source": "tour_api",
-          "region_name_ko": "가평군",
-          "missing_signals": [
-            "card_spending_area_monthly",
-            "review_attribute_analysis",
-            "weather_observations"
-          ],
-          "place_event_count": 0,
-          "region_place_count": 11,
-          "culture_event_count": 0,
-          "region_spend_amount": null,
-          "region_transaction_count": null,
-          "snapshot_source": "analytics.place_score_snapshots"
-        }
-      }
-    },
-    {
       "place_id": "tour-api-2946243",
       "name_ko": "경희대학교 국제캠퍼스 노천극장",
       "name_en": "Kyung Hee University Global Campus Outdoor Theater",
@@ -2258,11 +3870,11 @@
       "is_approximate_location": false,
       "upstream_source": "tour_api",
       "score": {
-        "final_score": 0.665,
+        "final_score": 0.7753,
         "formula_version": "local-value-v1",
         "components": {
           "local_spending_score": null,
-          "demand_dispersion_score": 0.62,
+          "demand_dispersion_score": 0.7965,
           "weather_fit_score": null,
           "review_quality_score": null,
           "culture_relevance_score": 0.74
@@ -2302,6 +3914,130 @@
       }
     },
     {
+      "place_id": "tour-api-134601",
+      "name_ko": "무진장갈비",
+      "name_en": "Mujinjang Galbi",
+      "category": "restaurant",
+      "lat": 37.1810197465,
+      "lng": 127.0542944073,
+      "address_ko": "경기도 오산시 경기대로658번길 19 (내삼미동)",
+      "address_en": "Gyeonggi-do Osan-si Gyeonggidaelo658Beongil 19 (Naesammidong)",
+      "image_url": null,
+      "region_ko": "오산시",
+      "region_en": "Osan-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.7725,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.936,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.5
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "restaurant",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "오산시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 2,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-130220",
+      "name_ko": "가평문화예술회관",
+      "name_en": "Gapyeong Culture and Arts Center",
+      "category": "culture_venue",
+      "lat": 37.8248171919,
+      "lng": 127.5085736093,
+      "address_ko": "경기도 가평군 가평읍 문화로 131",
+      "address_en": "131 Munhwa-ro, Gapyeong-eup, Gapyeong-gun, Gyeonggi-do",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/34/1589034_image2_1.jpg",
+      "region_ko": "가평군",
+      "region_en": "Gapyeong-gun",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.7691,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.8105,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "culture_venue",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "가평군",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 11,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
       "place_id": "tour-api-2609320",
       "name_ko": "지혜의 숲",
       "name_en": "Forest of Wisdom",
@@ -2320,11 +4056,11 @@
       "is_approximate_location": false,
       "upstream_source": "tour_api",
       "score": {
-        "final_score": 0.6087,
+        "final_score": 0.7492,
         "formula_version": "local-value-v1",
         "components": {
           "local_spending_score": null,
-          "demand_dispersion_score": 0.53,
+          "demand_dispersion_score": 0.7547,
           "weather_fit_score": null,
           "review_quality_score": null,
           "culture_relevance_score": 0.74
@@ -2364,6 +4100,68 @@
       }
     },
     {
+      "place_id": "tour-api-1413224",
+      "name_ko": "양화진홀 전시관",
+      "name_en": "Yanghwajinhol Jeonsigwan",
+      "category": "culture_venue",
+      "lat": 37.546477603,
+      "lng": 126.911699899,
+      "address_ko": "서울특별시 마포구 양화진길 46",
+      "address_en": "Seoul Mapo-gu Yanghwajingil 46",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/21/3565321_image2_1.jpg",
+      "region_ko": "마포구",
+      "region_en": "Mapo-gu",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.7342,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.7547,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "culture_venue",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "마포구",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 15,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
       "place_id": "tour-api-130901",
       "name_ko": "이경순 소리박물관",
       "name_en": "Lee Kyung-soon Sound Museum",
@@ -2382,11 +4180,11 @@
       "is_approximate_location": false,
       "upstream_source": "tour_api",
       "score": {
-        "final_score": 0.5712,
+        "final_score": 0.7317,
         "formula_version": "local-value-v1",
         "components": {
           "local_spending_score": null,
-          "demand_dispersion_score": 0.47,
+          "demand_dispersion_score": 0.7267,
           "weather_fit_score": null,
           "review_quality_score": null,
           "culture_relevance_score": 0.74
@@ -2444,11 +4242,11 @@
       "is_approximate_location": false,
       "upstream_source": "tour_api",
       "score": {
-        "final_score": 0.5712,
+        "final_score": 0.7317,
         "formula_version": "local-value-v1",
         "components": {
           "local_spending_score": null,
-          "demand_dispersion_score": 0.47,
+          "demand_dispersion_score": 0.7267,
           "weather_fit_score": null,
           "review_quality_score": null,
           "culture_relevance_score": 0.74
@@ -2488,17 +4286,17 @@
       }
     },
     {
-      "place_id": "tour-api-2623238",
-      "name_ko": "세종대왕 역사문화관",
-      "name_en": "King Sejong History and Culture Center",
-      "category": "culture_venue",
-      "lat": 37.304984928,
-      "lng": 127.6113515895,
-      "address_ko": "경기도 여주시 능서면 영릉로 269-10",
-      "address_en": "Gyeonggi-do Yeoju-si Neungseomyeon Yeongleunglo 269-10",
-      "image_url": "https://tong.visitkorea.or.kr/cms/resource/17/3573817_image2_1.jpg",
-      "region_ko": "여주시",
-      "region_en": "Yeoju-si",
+      "place_id": "tour-api-3554794",
+      "name_ko": "2025 대한민국 김장대축제",
+      "name_en": "2025 Daehanmingug Gimjangdaechugje Festival",
+      "category": "event",
+      "lat": 37.467391878,
+      "lng": 127.0407514903,
+      "address_ko": "서울특별시 서초구 강남대로 27 (양재동)",
+      "address_en": "Seoul Seocho-gu Gangnamdaelo 27 (Yangjaedong)",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/85/3562885_image2_1.jpg",
+      "region_ko": "서초구",
+      "region_en": "Seocho-gu",
       "event_start_date": null,
       "event_end_date": null,
       "event_url": null,
@@ -2506,19 +4304,19 @@
       "is_approximate_location": false,
       "upstream_source": "tour_api",
       "score": {
-        "final_score": 0.5643,
+        "final_score": 0.7167,
         "formula_version": "local-value-v1",
         "components": {
-          "local_spending_score": 0.35,
-          "demand_dispersion_score": 0.74,
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.7267,
           "weather_fit_score": null,
           "review_quality_score": null,
           "culture_relevance_score": 0.7
         },
         "data_basis": "public_mvp_snapshot",
         "features": {
-          "category": "culture_venue",
-          "card_month": "2026-05-01",
+          "category": "event",
+          "card_month": null,
           "input_sources": [
             "travel.places",
             "economy.card_spending_area_monthly",
@@ -2534,16 +4332,79 @@
             "is_strong_wind": null
           },
           "primary_source": "tour_api",
-          "region_name_ko": "여주시",
+          "region_name_ko": "서초구",
           "missing_signals": [
+            "card_spending_area_monthly",
             "review_attribute_analysis",
             "weather_observations"
           ],
           "place_event_count": 0,
-          "region_place_count": 8,
+          "region_place_count": 17,
           "culture_event_count": 0,
-          "region_spend_amount": 2700000.0,
-          "region_transaction_count": 210,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-1725993",
+      "name_ko": "고양가을꽃축제",
+      "name_en": "Goyang Autumn Flower Festival",
+      "category": "event",
+      "lat": 37.6538792239,
+      "lng": 126.7686654803,
+      "address_ko": "경기도 고양시 일산동구 호수로 595 고양시 일산호수공원 일원",
+      "address_en": "Gyeonggi-do Goyang-si Ilsandonggu Hosulo 595 Goyang-si Ilsanhosugong-Won Il-Won",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/57/3529657_image2_1.jpg",
+      "region_ko": "고양시",
+      "region_en": "Goyang-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.7118,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.6709,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.78
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "event",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "고양시",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 21,
+          "culture_event_count": 2,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
           "snapshot_source": "analytics.place_score_snapshots"
         }
       }
@@ -2567,11 +4428,11 @@
       "is_approximate_location": false,
       "upstream_source": "tour_api",
       "score": {
-        "final_score": 0.5375,
+        "final_score": 0.708,
         "formula_version": "local-value-v1",
         "components": {
           "local_spending_score": null,
-          "demand_dispersion_score": 0.44,
+          "demand_dispersion_score": 0.7128,
           "weather_fit_score": null,
           "review_quality_score": null,
           "culture_relevance_score": 0.7
@@ -2611,17 +4472,17 @@
       }
     },
     {
-      "place_id": "tour-api-1725993",
-      "name_ko": "고양가을꽃축제",
-      "name_en": "Goyang Autumn Flower Festival",
+      "place_id": "tour-api-3113548",
+      "name_ko": "서울생활예술페스티벌",
+      "name_en": "Seo-Ulsaenghwal-Yesulpeseutibeol",
       "category": "event",
-      "lat": 37.6538792239,
-      "lng": 126.7686654803,
-      "address_ko": "경기도 고양시 일산동구 호수로 595 고양시 일산호수공원 일원",
-      "address_en": "Gyeonggi-do Goyang-si Ilsandonggu Hosulo 595 Goyang-si Ilsanhosugong-Won Il-Won",
-      "image_url": "https://tong.visitkorea.or.kr/cms/resource/57/3529657_image2_1.jpg",
-      "region_ko": "고양시",
-      "region_en": "Goyang-si",
+      "lat": 37.5177178854,
+      "lng": 126.9580520415,
+      "address_ko": "서울특별시 용산구 양녕로 445 (이촌동) 한강 노들섬",
+      "address_en": "Seoul Yongsan-gu Yangnyeonglo 445 (Ichondong) Hangang Nodeulseom",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/52/3542852_image2_1.jpg",
+      "region_ko": "용산구",
+      "region_en": "Yongsan-gu",
       "event_start_date": null,
       "event_end_date": null,
       "event_url": null,
@@ -2629,14 +4490,14 @@
       "is_approximate_location": false,
       "upstream_source": "tour_api",
       "score": {
-        "final_score": 0.5113,
+        "final_score": 0.6992,
         "formula_version": "local-value-v1",
         "components": {
           "local_spending_score": null,
-          "demand_dispersion_score": 0.35,
+          "demand_dispersion_score": 0.6988,
           "weather_fit_score": null,
           "review_quality_score": null,
-          "culture_relevance_score": 0.78
+          "culture_relevance_score": 0.7
         },
         "data_basis": "public_mvp_snapshot",
         "features": {
@@ -2657,15 +4518,262 @@
             "is_strong_wind": null
           },
           "primary_source": "tour_api",
-          "region_name_ko": "고양시",
+          "region_name_ko": "용산구",
           "missing_signals": [
             "card_spending_area_monthly",
             "review_attribute_analysis",
             "weather_observations"
           ],
           "place_event_count": 0,
-          "region_place_count": 21,
-          "culture_event_count": 2,
+          "region_place_count": 19,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-130231",
+      "name_ko": "국립극장",
+      "name_en": "Guglibgeugjang",
+      "category": "culture_venue",
+      "lat": 37.5527228971,
+      "lng": 126.9996333755,
+      "address_ko": "서울특별시 중구 장충단로 59 (장충동2가)",
+      "address_en": "Seoul Jung-gu Jangchungdanlo 59 (Jangchungdong2Ga)",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/10/3083810_image2_1.jpg",
+      "region_ko": "중구",
+      "region_en": "Jung-gu",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.6731,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.657,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "culture_venue",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "중구",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 22,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-130627",
+      "name_ko": "밀알미술관",
+      "name_en": "Mil-Almisulgwan Art Museum",
+      "category": "culture_venue",
+      "lat": 37.4860793454,
+      "lng": 127.0823082922,
+      "address_ko": "서울특별시 강남구 일원로 90",
+      "address_en": "Seoul Gangnam-gu Il-Wonlo 90",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/83/3589983_image2_1.jpg",
+      "region_ko": "강남구",
+      "region_en": "Gangnam-gu",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.6295,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.5872,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "culture_venue",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "강남구",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 27,
+          "culture_event_count": 0,
+          "region_spend_amount": null,
+          "region_transaction_count": null,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-2623238",
+      "name_ko": "세종대왕 역사문화관",
+      "name_en": "King Sejong History and Culture Center",
+      "category": "culture_venue",
+      "lat": 37.304984928,
+      "lng": 127.6113515895,
+      "address_ko": "경기도 여주시 능서면 영릉로 269-10",
+      "address_en": "Gyeonggi-do Yeoju-si Neungseomyeon Yeongleunglo 269-10",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/17/3573817_image2_1.jpg",
+      "region_ko": "여주시",
+      "region_en": "Yeoju-si",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.6044,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": 0.35,
+          "demand_dispersion_score": 0.8523,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "culture_venue",
+          "card_month": "2026-05-01",
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "여주시",
+          "missing_signals": [
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 8,
+          "culture_event_count": 0,
+          "region_spend_amount": 2700000.0,
+          "region_transaction_count": 210,
+          "snapshot_source": "analytics.place_score_snapshots"
+        }
+      }
+    },
+    {
+      "place_id": "tour-api-130418",
+      "name_ko": "신문박물관",
+      "name_en": "Sinmunbagmulgwan Museum",
+      "category": "culture_venue",
+      "lat": 37.5698760651,
+      "lng": 126.9776487818,
+      "address_ko": "서울특별시 종로구 세종대로 152 일민미술관 5, 6층",
+      "address_en": "Seoul Jongno-gu Sejongdaelo 152 Ilminmisulgwan 5, 6Cheung",
+      "image_url": "https://tong.visitkorea.or.kr/cms/resource/15/3556615_image2_1.jpg",
+      "region_ko": "종로구",
+      "region_en": "Jongno-gu",
+      "event_start_date": null,
+      "event_end_date": null,
+      "event_url": null,
+      "is_ongoing": null,
+      "is_approximate_location": false,
+      "upstream_source": "tour_api",
+      "score": {
+        "final_score": 0.4813,
+        "formula_version": "local-value-v1",
+        "components": {
+          "local_spending_score": null,
+          "demand_dispersion_score": 0.35,
+          "weather_fit_score": null,
+          "review_quality_score": null,
+          "culture_relevance_score": 0.7
+        },
+        "data_basis": "public_mvp_snapshot",
+        "features": {
+          "category": "culture_venue",
+          "card_month": null,
+          "input_sources": [
+            "travel.places",
+            "economy.card_spending_area_monthly",
+            "culture.events",
+            "travel.place_events",
+            "travel.weather_observations"
+          ],
+          "weather_flags": {
+            "is_bad_dust": null,
+            "is_coldwave": null,
+            "is_heatwave": null,
+            "is_rain_snow": null,
+            "is_strong_wind": null
+          },
+          "primary_source": "tour_api",
+          "region_name_ko": "종로구",
+          "missing_signals": [
+            "card_spending_area_monthly",
+            "review_attribute_analysis",
+            "weather_observations"
+          ],
+          "place_event_count": 0,
+          "region_place_count": 44,
+          "culture_event_count": 0,
           "region_spend_amount": null,
           "region_transaction_count": null,
           "snapshot_source": "analytics.place_score_snapshots"

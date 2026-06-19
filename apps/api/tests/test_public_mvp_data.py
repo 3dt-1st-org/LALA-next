@@ -37,6 +37,36 @@ GYEONGGI_REGIONS = {
     "화성시",
 }
 
+SEOUL_REGIONS = {
+    "강남구",
+    "강동구",
+    "강북구",
+    "강서구",
+    "관악구",
+    "광진구",
+    "구로구",
+    "금천구",
+    "노원구",
+    "도봉구",
+    "동대문구",
+    "동작구",
+    "마포구",
+    "서대문구",
+    "서초구",
+    "성동구",
+    "성북구",
+    "송파구",
+    "양천구",
+    "영등포구",
+    "용산구",
+    "은평구",
+    "종로구",
+    "중구",
+    "중랑구",
+}
+
+SUPPORTED_REGIONS = GYEONGGI_REGIONS | SEOUL_REGIONS
+
 
 def test_public_mvp_snapshot_is_available() -> None:
     assert public_mvp_data.snapshot_status() == "configured"
@@ -98,7 +128,10 @@ def test_public_mvp_snapshot_uses_english_fields_when_requested() -> None:
 
     assert places
     assert all(not any("가" <= char <= "힣" for char in place["name"]) for place in places)
-    assert all("Gyeonggi-do" in place["address"] for place in places)
+    assert all(
+        "Gyeonggi-do" in place["address"] or "Seoul" in place["address"]
+        for place in places
+    )
 
 
 def test_public_mvp_snapshot_has_publishable_english_labels() -> None:
@@ -110,11 +143,11 @@ def test_public_mvp_snapshot_has_publishable_english_labels() -> None:
     assert all(place.get("region_en") for place in rows)
 
 
-def test_public_mvp_snapshot_covers_all_gyeonggi_regions() -> None:
+def test_public_mvp_snapshot_covers_supported_regions() -> None:
     rows = public_mvp_data._load_snapshot()["places"]
 
     assert rows
-    assert {place.get("region_ko") for place in rows} == GYEONGGI_REGIONS
+    assert {place.get("region_ko") for place in rows} == SUPPORTED_REGIONS
 
 
 def test_public_mvp_snapshot_uses_only_real_official_images() -> None:

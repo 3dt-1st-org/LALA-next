@@ -49,6 +49,39 @@ GYEONGGI_REGION_NAME_EN = {
     "화성시": "Hwaseong-si",
 }
 
+SEOUL_REGION_NAME_EN = {
+    "강남구": "Gangnam-gu",
+    "강동구": "Gangdong-gu",
+    "강북구": "Gangbuk-gu",
+    "강서구": "Gangseo-gu",
+    "관악구": "Gwanak-gu",
+    "광진구": "Gwangjin-gu",
+    "구로구": "Guro-gu",
+    "금천구": "Geumcheon-gu",
+    "노원구": "Nowon-gu",
+    "도봉구": "Dobong-gu",
+    "동대문구": "Dongdaemun-gu",
+    "동작구": "Dongjak-gu",
+    "마포구": "Mapo-gu",
+    "서대문구": "Seodaemun-gu",
+    "서초구": "Seocho-gu",
+    "성동구": "Seongdong-gu",
+    "성북구": "Seongbuk-gu",
+    "송파구": "Songpa-gu",
+    "양천구": "Yangcheon-gu",
+    "영등포구": "Yeongdeungpo-gu",
+    "용산구": "Yongsan-gu",
+    "은평구": "Eunpyeong-gu",
+    "종로구": "Jongno-gu",
+    "중구": "Jung-gu",
+    "중랑구": "Jungnang-gu",
+}
+
+DEFAULT_REGION_NAME_EN = {
+    **GYEONGGI_REGION_NAME_EN,
+    **SEOUL_REGION_NAME_EN,
+}
+
 
 def build_snapshot_payload(
     places: Sequence[dict[str, Any]],
@@ -83,7 +116,7 @@ def fetch_snapshot_places(
     category: str,
     limit: int,
     connect_timeout: int,
-    coverage_region_names: Sequence[str] | None = tuple(GYEONGGI_REGION_NAME_EN),
+    coverage_region_names: Sequence[str] | None = tuple(DEFAULT_REGION_NAME_EN),
 ) -> list[dict[str, Any]]:
     import psycopg2
     from psycopg2.extras import RealDictCursor
@@ -108,6 +141,7 @@ def fetch_snapshot_places(
                 SQRT(POWER((lat - %s) * 111000, 2) + POWER((lng - %s) * 88000, 2)) AS distance_m
             FROM travel.public_places
             WHERE (%s = 'all' OR category = %s)
+              AND COALESCE(source, '') <> 'dev_seed'
         ),
         latest_scores AS (
             SELECT DISTINCT ON (place_id)
@@ -271,13 +305,15 @@ def _snapshot_address_en(row: dict[str, Any]) -> str | None:
     address_ko = _optional_text(row.get("address_ko")) or ""
     if "경기도" in address_ko and "gyeonggi" not in address_en.lower():
         return f"{address_en}, Gyeonggi-do"
+    if "서울특별시" in address_ko and "seoul" not in address_en.lower():
+        return f"{address_en}, Seoul"
     return address_en
 
 
 def _snapshot_region_en(row: dict[str, Any]) -> str | None:
     region_ko = _optional_text(row.get("region_ko"))
     if region_ko:
-        canonical_region = GYEONGGI_REGION_NAME_EN.get(region_ko)
+        canonical_region = DEFAULT_REGION_NAME_EN.get(region_ko)
         if canonical_region:
             return canonical_region
     return _optional_text(row.get("region_en"))

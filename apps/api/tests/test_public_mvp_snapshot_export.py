@@ -122,13 +122,33 @@ def test_build_snapshot_payload_fills_gyeonggi_region_english_name() -> None:
     assert payload["places"][0]["region_en"] == "Yongin-si"
 
 
-def test_bundled_snapshot_covers_all_gyeonggi_regions() -> None:
+def test_build_snapshot_payload_fills_seoul_region_english_name() -> None:
+    rows = _db_rows()
+    rows[0]["address_ko"] = "서울특별시 종로구 세종대로 172"
+    rows[0]["address_en"] = "Sejong-daero 172"
+    rows[0]["region_ko"] = "종로구"
+    rows[0]["region_en"] = None
+
+    payload = public_mvp_snapshot.build_snapshot_payload(
+        rows,
+        snapshot_id="test-seoul-region",
+        lat=37.5665,
+        lng=126.9780,
+        radius_m=50000,
+        category="all",
+    )
+
+    assert payload["places"][0]["address_en"].endswith(", Seoul")
+    assert payload["places"][0]["region_en"] == "Jongno-gu"
+
+
+def test_bundled_snapshot_covers_supported_regions() -> None:
     payload = json.loads(
         files("apps.api.app.data").joinpath("public_mvp_places.json").read_text(encoding="utf-8")
     )
     regions = {row.get("region_ko") for row in payload["places"]}
 
-    assert regions == set(public_mvp_snapshot.GYEONGGI_REGION_NAME_EN)
+    assert regions == set(public_mvp_snapshot.DEFAULT_REGION_NAME_EN)
 
 
 def test_bundled_snapshot_uses_https_tour_api_images() -> None:
