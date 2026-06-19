@@ -16,6 +16,7 @@ ROWS="40"
 PAGE_SIZE="20"
 TIMEOUT="10"
 CONNECT_TIMEOUT="5"
+SKIP_MISSING_IMAGES="false"
 CONTENT_TYPE_ARGS=()
 
 while [[ $# -gt 0 ]]; do
@@ -60,6 +61,10 @@ while [[ $# -gt 0 ]]; do
       CONNECT_TIMEOUT="${2:-}"
       shift 2
       ;;
+    --skip-missing-images)
+      SKIP_MISSING_IMAGES="true"
+      shift
+      ;;
     --python)
       PYTHON_ARG="${2:-}"
       shift 2
@@ -69,7 +74,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     -h|--help)
-      echo "Usage: scripts/unix/plan_tour_api_ingest.sh [--preview|--apply --confirm APPLY_TOUR_API_INGEST] [--area-code CODE] [--content-type-id ID] [--rows N] [--key-vault-url URL] [--json] [--python PATH]"
+      echo "Usage: scripts/unix/plan_tour_api_ingest.sh [--preview|--apply --confirm APPLY_TOUR_API_INGEST] [--area-code CODE] [--content-type-id ID] [--rows N] [--skip-missing-images] [--key-vault-url URL] [--json] [--python PATH]"
       exit 0
       ;;
     *)
@@ -105,6 +110,9 @@ ARGS=(
 )
 if [[ ${#CONTENT_TYPE_ARGS[@]} -gt 0 ]]; then
   ARGS+=("${CONTENT_TYPE_ARGS[@]}")
+fi
+if [[ "$SKIP_MISSING_IMAGES" == "true" ]]; then
+  ARGS+=(--skip-missing-images)
 fi
 if [[ "$JSON_STATUS" == "true" ]]; then
   ARGS+=(--json)

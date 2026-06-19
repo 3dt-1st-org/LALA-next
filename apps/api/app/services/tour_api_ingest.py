@@ -333,7 +333,7 @@ def upsert_tour_api_places(
             name_ko = EXCLUDED.name_ko,
             category = EXCLUDED.category,
             address_ko = EXCLUDED.address_ko,
-            image_url = EXCLUDED.image_url,
+            image_url = COALESCE(EXCLUDED.image_url, travel.places.image_url),
             region_name_ko = EXCLUDED.region_name_ko,
             province_code = EXCLUDED.province_code,
             city_code = EXCLUDED.city_code,

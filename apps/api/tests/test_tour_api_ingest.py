@@ -204,6 +204,56 @@ def test_fetch_result_skips_detail_image_when_firstimage_exists(monkeypatch):
     )
 
 
+def test_fetch_result_can_skip_missing_detail_image_lookup(monkeypatch):
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "response": {
+                    "header": {"resultCode": "0000", "resultMsg": "OK"},
+                    "body": {
+                        "items": {
+                            "item": {
+                                "contentid": "1",
+                                "contenttypeid": "12",
+                                "title": "장소",
+                                "addr1": "경기도 수원시 팔달구",
+                                "areacode": "31",
+                                "sigungucode": "13",
+                                "mapx": "127.0",
+                                "mapy": "37.0",
+                            }
+                        }
+                    },
+                }
+            }
+
+    calls = []
+
+    def get(url, params, timeout):
+        calls.append({"url": url, "params": params, "timeout": timeout})
+        return Response()
+
+    monkeypatch.setitem(sys.modules, "requests", SimpleNamespace(get=get))
+
+    result = tour_api_ingest.fetch_tour_api_places(
+        service_key="secret-key",
+        content_type_ids=("12",),
+        rows=1,
+        page_size=1,
+        fetch_missing_images=False,
+    )
+
+    assert len(calls) == 1
+    assert calls[0]["url"].endswith("/areaBasedList2")
+    assert result.image_request_count == 0
+    assert result.image_error_count == 0
+    assert len(result.places) == 1
+    assert result.places[0].first_image is None
+
+
 def test_fetch_result_keeps_place_when_detail_image_lookup_fails(monkeypatch):
     class Response:
         def raise_for_status(self):
@@ -358,4 +408,5 @@ def test_upsert_tour_api_places_targets_source_files_and_places(monkeypatch):
     assert payload["upserted_rows"] == 1
     assert "INSERT INTO ingest.source_files" in executed[1][0]
     assert "INSERT INTO travel.places" in executed[2][0]
+    assert "COALESCE(EXCLUDED.image_url, travel.places.image_url)" in executed[2][0]
     assert executed[-1] == ("commit", None)

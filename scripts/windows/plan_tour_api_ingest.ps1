@@ -10,6 +10,7 @@ param(
     [int]$PageSize = 20,
     [int]$Timeout = 10,
     [int]$ConnectTimeout = 5,
+    [switch]$SkipMissingImages,
     [switch]$Json
 )
 
@@ -72,6 +73,9 @@ try {
     )
     foreach ($id in $ContentTypeId) {
         $toolArgs += @("--content-type-id", $id)
+    }
+    if ($SkipMissingImages) {
+        $toolArgs += "--skip-missing-images"
     }
     if ($Json) {
         $toolArgs += "--json"

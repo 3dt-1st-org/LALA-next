@@ -44,6 +44,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--page-size", type=int, default=20)
     parser.add_argument("--timeout", type=int, default=10)
     parser.add_argument("--connect-timeout", type=int, default=5)
+    parser.add_argument(
+        "--skip-missing-images",
+        action="store_true",
+        help="Do not call detailImage2 for rows without firstimage.",
+    )
     args = parser.parse_args(argv)
 
     if args.rows <= 0:
@@ -85,6 +90,7 @@ def main(argv: list[str] | None = None) -> int:
             rows=args.rows,
             page_size=args.page_size,
             timeout=args.timeout,
+            fetch_missing_images=not args.skip_missing_images,
         )
         apply_result: dict[str, Any] | None = None
         if args.apply:
