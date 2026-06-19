@@ -45,15 +45,15 @@ the Bicep template to grant ACR push and Key Vault secret migration rights.
 
 Create an Entra app registration or user-assigned identity for GitHub Actions,
 grant it least-privilege deployment rights on the target resource group, then add
-a federated credential for the `dev` branch:
+a federated credential for the GitHub Environment named `dev`:
 
 ```bash
 az ad app federated-credential create \
   --id "<application-client-id-or-object-id>" \
   --parameters '{
-    "name": "lala-dev-branch",
+    "name": "lala-dev-environment",
     "issuer": "https://token.actions.githubusercontent.com",
-    "subject": "repo:3dt-1st-org/LALA-next:ref:refs/heads/dev",
+    "subject": "repo:3dt-1st-org/LALA-next:environment:dev",
     "audiences": ["api://AzureADTokenExchange"]
   }'
 ```

@@ -24,6 +24,9 @@ The workflow at `.github/workflows/azure-dev-deploy.yml` deploys when commits
 land on the `dev` branch. It uses GitHub OIDC with `azure/login@v2`, so no
 long-lived Azure credential JSON should be stored in GitHub.
 
+Because the job uses GitHub Environment `dev`, the Entra federated credential
+subject must be `repo:3dt-1st-org/LALA-next:environment:dev`.
+
 Required GitHub Environment: `dev`
 
 Variables:
