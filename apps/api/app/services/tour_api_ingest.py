@@ -375,7 +375,7 @@ def infer_region_name_ko(address: str | None) -> str | None:
     if not text:
         return None
     parts = text.split()
-    if len(parts) >= 2 and parts[0] in {"경기도", "서울특별시", "인천광역시"}:
+    if len(parts) >= 2 and parts[0] in {"경기도", "서울특별시", "서울시", "인천광역시"}:
         return parts[1]
     if parts:
         return parts[0]

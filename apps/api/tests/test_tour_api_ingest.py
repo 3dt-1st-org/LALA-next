@@ -62,6 +62,10 @@ def test_parse_tour_api_place_maps_fields_to_data_dictionary_names():
     }
 
 
+def test_infer_region_name_accepts_seoul_short_alias():
+    assert tour_api_ingest.infer_region_name_ko("서울시 종로구 익선동") == "종로구"
+
+
 def test_fetch_result_dedupes_content_ids(monkeypatch):
     class Response:
         def __init__(self, payload):

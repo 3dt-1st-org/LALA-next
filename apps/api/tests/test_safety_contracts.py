@@ -138,6 +138,9 @@ def test_paid_smoke_requires_authenticated_api_key():
     place_ai_enrichment_script = (
         ROOT / "scripts" / "windows" / "plan_place_ai_enrichment.ps1"
     ).read_text(encoding="utf-8")
+    place_local_enrichment_script = (
+        ROOT / "scripts" / "windows" / "plan_place_local_enrichment.ps1"
+    ).read_text(encoding="utf-8")
     tour_api_ingest_script = (
         ROOT / "scripts" / "windows" / "plan_tour_api_ingest.ps1"
     ).read_text(encoding="utf-8")
@@ -231,6 +234,11 @@ def test_paid_smoke_requires_authenticated_api_key():
     assert "secret show" not in place_ai_enrichment_script
     assert "Write-Host $env:DB_DSN" not in place_ai_enrichment_script
     assert "Write-Host $env:AZURE_OPENAI_KEY" not in place_ai_enrichment_script
+    assert "apps.api.app.tools.enrich_place_local_columns" in place_local_enrichment_script
+    assert "ALLOW_LOCAL_PLACE_ENRICHMENT_APPLY=1" in place_local_enrichment_script
+    assert "DB_DSN value is never printed by this script." in place_local_enrichment_script
+    assert "secret show" not in place_local_enrichment_script
+    assert "Write-Host $env:DB_DSN" not in place_local_enrichment_script
     assert "apps.api.app.tools.run_tour_api_ingest" in tour_api_ingest_script
     assert "ALLOW_TOUR_API_INGEST_APPLY=1" in tour_api_ingest_script
     assert "PUBLIC_DATA_SERVICE_KEY and DB_DSN values are never printed by this script." in tour_api_ingest_script
@@ -309,6 +317,7 @@ def test_unix_scripts_have_safe_operational_guards():
         "plan_key_vault_reuse.sh",
         "plan_observability.sh",
         "plan_place_ai_enrichment.sh",
+        "plan_place_local_enrichment.sh",
         "plan_rag_index.sh",
         "plan_place_score_batch.sh",
         "plan_card_spending_file_ingest.sh",
@@ -379,6 +388,11 @@ def test_unix_scripts_have_safe_operational_guards():
     assert "ALLOW_AI_PLACE_ENRICHMENT_APPLY=1" in scripts["plan_place_ai_enrichment.sh"]
     assert "--confirm APPLY_AI_PLACE_ENRICHMENT" in scripts["plan_place_ai_enrichment.sh"]
     assert "AZURE_OPENAI_KEY and DB_DSN values are never printed by this script." in scripts["plan_place_ai_enrichment.sh"]
+    assert "enrich_place_local_columns" in scripts["plan_place_local_enrichment.sh"]
+    assert "plan_place_local_enrichment.sh" in scripts["verify_repo.sh"]
+    assert "ALLOW_LOCAL_PLACE_ENRICHMENT_APPLY=1" in scripts["plan_place_local_enrichment.sh"]
+    assert "--confirm APPLY_LOCAL_PLACE_ENRICHMENT" in scripts["plan_place_local_enrichment.sh"]
+    assert "DB_DSN value is never printed by this script." in scripts["plan_place_local_enrichment.sh"]
     assert "export_public_mvp_snapshot" in scripts["export_public_mvp_snapshot.sh"]
     assert "export_public_mvp_snapshot.sh" in scripts["verify_repo.sh"]
     assert "ALLOW_PUBLIC_MVP_SNAPSHOT_WRITE=1" in scripts["export_public_mvp_snapshot.sh"]

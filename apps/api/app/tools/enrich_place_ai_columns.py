@@ -5,7 +5,7 @@ import json
 import os
 import sys
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from typing import Any, Sequence
 
 from apps.api.app.core.config import get_settings
@@ -106,6 +106,31 @@ Rules:
 6. Return the same count as the input and keep each place_id unchanged.
 """
 
+ENGLISH_ONLY_SYSTEM_PROMPT = """\
+You enrich Korean local place records for a local travel app.
+
+Return ONLY a JSON object:
+{
+  "results": [
+    {
+      "place_id": "same id as input",
+      "name_en": "public-facing English name or null",
+      "address_en": "English address/romanization from the supplied address only or null",
+      "region_name_en": "English region name or null",
+      "confidence": 0.0-1.0,
+      "reason": "short reason"
+    }
+  ]
+}
+
+Rules:
+1. Preserve existing English values when they are already present and reasonable.
+2. Replace rough local romanization with concise, natural public-facing English.
+3. Translate or romanize only the supplied Korean text. Do not invent missing address details.
+4. Return the same count as the input and keep each place_id unchanged.
+5. Do not classify indoor/outdoor status in this run.
+"""
+
 
 def parse_ai_response(raw: str, candidates: Sequence[PlaceCandidate]) -> list[PlaceEnrichment]:
     payload = json.loads(_strip_code_fence(raw))
@@ -169,28 +194,56 @@ def fetch_candidates(
     category: str,
     limit: int,
     connect_timeout: int,
+    fields: str = "all",
+    replace_local: bool = False,
 ) -> list[PlaceCandidate]:
     import psycopg2
     from psycopg2.extras import RealDictCursor
 
-    sql = """
-        SELECT
-            place_id,
-            name_ko,
-            name_en,
-            category,
-            address_ko,
-            address_en,
-            region_name_ko,
-            region_name_en,
-            is_indoor
-        FROM travel.places
-        WHERE (%s = 'all' OR category = %s)
-          AND (
+    english_gap_sql = """
               name_en IS NULL OR length(trim(name_en)) = 0
               OR (address_ko IS NOT NULL AND length(trim(coalesce(address_en, ''))) = 0)
               OR (region_name_ko IS NOT NULL AND length(trim(coalesce(region_name_en, ''))) = 0)
+    """
+    needs_ai_sql = english_gap_sql
+    if fields == "all":
+        needs_ai_sql = f"""
+              {english_gap_sql}
               OR (category = 'attraction' AND is_indoor IS NULL)
+        """
+    if replace_local:
+        needs_ai_sql = f"""
+              {needs_ai_sql}
+              OR latest_enrichment.source_method = 'local_romanization'
+        """
+    sql = f"""
+        SELECT
+            places.place_id,
+            places.name_ko,
+            places.name_en,
+            places.category,
+            places.address_ko,
+            places.address_en,
+            places.region_name_ko,
+            places.region_name_en,
+            places.is_indoor
+        FROM travel.places places
+        LEFT JOIN LATERAL (
+            SELECT enrichments.source_method
+            FROM travel.place_enrichments enrichments
+            WHERE enrichments.place_id = places.place_id
+              AND enrichments.enrichment_type IN ('english_text', 'place_profile')
+              AND (
+                  enrichments.name_en IS NOT NULL
+                  OR enrichments.address_en IS NOT NULL
+                  OR enrichments.region_name_en IS NOT NULL
+              )
+            ORDER BY enrichments.generated_at DESC
+            LIMIT 1
+        ) latest_enrichment ON TRUE
+        WHERE (%s = 'all' OR category = %s)
+          AND (
+              {needs_ai_sql}
           )
         ORDER BY
             CASE WHEN name_en IS NULL OR length(trim(name_en)) = 0 THEN 0 ELSE 1 END,
@@ -223,6 +276,7 @@ def generate_enrichments(
     batch_size: int,
     retry_attempts: int,
     retry_delay_sec: float,
+    fields: str = "all",
 ) -> list[PlaceEnrichment]:
     if not candidates:
         return []
@@ -243,13 +297,14 @@ def generate_enrichments(
     )
 
     enrichments: list[PlaceEnrichment] = []
+    system_prompt = ENGLISH_ONLY_SYSTEM_PROMPT if fields == "english" else SYSTEM_PROMPT
     for start in range(0, len(candidates), batch_size):
         batch = list(candidates[start : start + batch_size])
         response = _create_chat_completion_with_retry(
             client=client,
             model=settings.azure_openai_deployment,
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": system_prompt},
                 {
                     "role": "user",
                     "content": json.dumps(
@@ -262,7 +317,10 @@ def generate_enrichments(
             retry_delay_sec=retry_delay_sec,
         )
         raw = response.choices[0].message.content or ""
-        enrichments.extend(parse_ai_response(raw, batch))
+        parsed = parse_ai_response(raw, batch)
+        if fields == "english":
+            parsed = [replace(item, is_indoor=None) for item in parsed]
+        enrichments.extend(parsed)
     return enrichments
 
 
@@ -318,6 +376,8 @@ def apply_enrichments(
     dsn: str,
     enrichments: Sequence[PlaceEnrichment],
     connect_timeout: int,
+    fields: str = "all",
+    replace_local: bool = False,
 ) -> int:
     import psycopg2
 
@@ -325,16 +385,22 @@ def apply_enrichments(
         return 0
 
     settings = get_settings()
-    update_sql = """
-        UPDATE travel.places
-        SET
-            name_en = COALESCE(NULLIF(trim(name_en), ''), %(name_en)s),
-            address_en = COALESCE(NULLIF(trim(address_en), ''), %(address_en)s),
-            region_name_en = COALESCE(NULLIF(trim(region_name_en), ''), %(region_name_en)s),
+    english_set_sql = _english_set_sql(replace_local=replace_local)
+    indoor_set_sql = (
+        """
             is_indoor = CASE
                 WHEN category = 'attraction' AND is_indoor IS NULL THEN %(is_indoor)s
                 ELSE is_indoor
             END,
+        """
+        if fields == "all"
+        else ""
+    )
+    update_sql = f"""
+        UPDATE travel.places AS places
+        SET
+            {english_set_sql}
+            {indoor_set_sql}
             updated_at = now()
         WHERE place_id = %(place_id)s
     """
@@ -378,7 +444,7 @@ def apply_enrichments(
                     "name_en": item.name_en,
                     "address_en": item.address_en,
                     "region_name_en": item.region_name_en,
-                    "is_indoor": item.is_indoor,
+                    "is_indoor": item.is_indoor if fields == "all" else None,
                     "attributes": json.dumps(
                         {
                             "reason": item.reason,
@@ -410,8 +476,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--confirm", default="", help=f"Required with --apply: {CONFIRM_TEXT}")
     parser.add_argument(
         "--category",
-        choices=["all", "attraction", "restaurant", "event"],
+        choices=["all", "attraction", "restaurant", "event", "culture_venue"],
         default="all",
+    )
+    parser.add_argument(
+        "--fields",
+        choices=["all", "english"],
+        default="all",
+        help="all enriches English fields and indoor status; english leaves is_indoor unchanged.",
+    )
+    parser.add_argument(
+        "--replace-local",
+        action="store_true",
+        help="Replace only the latest local_romanization English values with AI English.",
     )
     parser.add_argument("--limit", type=int, default=50)
     parser.add_argument("--batch-size", type=int, default=20)
@@ -451,9 +528,11 @@ def main(argv: list[str] | None = None) -> int:
                     "name_en",
                     "address_en",
                     "region_name_en",
-                    "is_indoor",
+                    *(["is_indoor"] if args.fields == "all" else []),
                     "travel.place_enrichments",
                 ],
+                "fields": args.fields,
+                "replace_local": args.replace_local,
             },
         )
         return 0
@@ -476,12 +555,15 @@ def main(argv: list[str] | None = None) -> int:
             category=args.category,
             limit=args.limit,
             connect_timeout=args.connect_timeout,
+            fields=args.fields,
+            replace_local=args.replace_local,
         )
         enrichments = generate_enrichments(
             candidates=candidates,
             batch_size=args.batch_size,
             retry_attempts=args.retry_attempts,
             retry_delay_sec=args.retry_delay_sec,
+            fields=args.fields,
         )
         updated_rows = 0
         if args.apply:
@@ -489,6 +571,8 @@ def main(argv: list[str] | None = None) -> int:
                 dsn=dsn,
                 enrichments=enrichments,
                 connect_timeout=args.connect_timeout,
+                fields=args.fields,
+                replace_local=args.replace_local,
             )
     except Exception as exc:
         _write(
@@ -517,6 +601,8 @@ def main(argv: list[str] | None = None) -> int:
             "generated_count": len(enrichments),
             "updated_rows": updated_rows,
             "prompt_version": PROMPT_VERSION,
+            "fields": args.fields,
+            "replace_local": args.replace_local,
             "preview": [asdict(item) for item in enrichments[:5]],
         },
     )
@@ -551,6 +637,10 @@ def _write(args: argparse.Namespace, payload: dict[str, Any]) -> None:
     for key in ("candidate_count", "generated_count", "updated_rows"):
         if key in payload:
             print(f"{key}={payload[key]}")
+    if "fields" in payload:
+        print(f"fields={payload['fields']}")
+    if "replace_local" in payload:
+        print(f"replace_local={str(payload['replace_local']).lower()}")
     for item in payload.get("enriched_columns") or []:
         print(f"enriched_column={item}")
     for item in payload.get("preview") or []:
@@ -585,6 +675,49 @@ def _missing_aoai_settings(settings: Any) -> list[str]:
     if not settings.azure_openai_api_version:
         missing.append("AZURE_OPENAI_API_VERSION")
     return missing
+
+
+def _english_set_sql(*, replace_local: bool) -> str:
+    if not replace_local:
+        return """
+            name_en = COALESCE(NULLIF(trim(name_en), ''), %(name_en)s),
+            address_en = COALESCE(NULLIF(trim(address_en), ''), %(address_en)s),
+            region_name_en = COALESCE(NULLIF(trim(region_name_en), ''), %(region_name_en)s),
+        """
+    local_condition = """
+        EXISTS (
+            SELECT 1
+            FROM travel.place_enrichments latest
+            WHERE latest.place_id = places.place_id
+              AND latest.source_method = 'local_romanization'
+              AND latest.enrichment_type IN ('english_text', 'place_profile')
+              AND latest.generated_at = (
+                  SELECT max(candidate.generated_at)
+                  FROM travel.place_enrichments candidate
+                  WHERE candidate.place_id = places.place_id
+                    AND candidate.enrichment_type IN ('english_text', 'place_profile')
+                    AND (
+                        candidate.name_en IS NOT NULL
+                        OR candidate.address_en IS NOT NULL
+                        OR candidate.region_name_en IS NOT NULL
+                    )
+              )
+        )
+    """
+    return f"""
+            name_en = CASE
+                WHEN {local_condition} THEN %(name_en)s
+                ELSE COALESCE(NULLIF(trim(name_en), ''), %(name_en)s)
+            END,
+            address_en = CASE
+                WHEN {local_condition} THEN %(address_en)s
+                ELSE COALESCE(NULLIF(trim(address_en), ''), %(address_en)s)
+            END,
+            region_name_en = CASE
+                WHEN {local_condition} THEN %(region_name_en)s
+                ELSE COALESCE(NULLIF(trim(region_name_en), ''), %(region_name_en)s)
+            END,
+    """
 
 
 def _first_list_value(payload: dict[str, Any]) -> list[Any]:

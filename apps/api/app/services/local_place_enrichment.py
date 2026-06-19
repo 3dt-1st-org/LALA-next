@@ -75,8 +75,11 @@ _NAME_SUFFIXES = (
 _ADDRESS_TOKEN_MAP = {
     "경기도": "Gyeonggi-do",
     "서울특별시": "Seoul",
+    "서울시": "Seoul",
     **DEFAULT_REGION_NAME_EN,
 }
+
+_REGION_PREFIXES = {"경기도", "서울특별시", "서울시", "인천광역시"}
 
 
 @dataclass(frozen=True)
@@ -97,7 +100,9 @@ def build_local_enrichment(
     *,
     replace_existing: bool = False,
 ) -> LocalPlaceEnrichment:
-    region_name_ko = _optional_text(row.get("region_name_ko"))
+    region_name_ko = _optional_text(row.get("region_name_ko")) or _infer_region_name_ko(
+        row.get("address_ko")
+    )
     region_name_en = _optional_text(row.get("region_name_en")) or _region_name_en(region_name_ko)
     name_en = None if replace_existing else _optional_text(row.get("name_en"))
     address_en = None if replace_existing else _optional_text(row.get("address_en"))
@@ -162,7 +167,10 @@ def fetch_candidates(
             AND (
                 name_en IS NULL OR length(trim(name_en)) = 0
                 OR (address_ko IS NOT NULL AND length(trim(coalesce(address_en, ''))) = 0)
-                OR (region_name_ko IS NOT NULL AND length(trim(coalesce(region_name_en, ''))) = 0)
+                OR (
+                    length(trim(coalesce(region_name_en, ''))) = 0
+                    AND (region_name_ko IS NOT NULL OR address_ko IS NOT NULL)
+                )
             )
         ORDER BY updated_at DESC, place_id
         LIMIT %s
@@ -281,6 +289,16 @@ def _region_name_en(region_name_ko: str | None) -> str | None:
     if not region_name_ko:
         return None
     return DEFAULT_REGION_NAME_EN.get(region_name_ko) or _romanize(region_name_ko)
+
+
+def _infer_region_name_ko(address: object) -> str | None:
+    text = _optional_text(address)
+    if not text:
+        return None
+    parts = text.split()
+    if len(parts) >= 2 and parts[0] in _REGION_PREFIXES:
+        return parts[1]
+    return None
 
 
 def _romanize(value: str) -> str | None:

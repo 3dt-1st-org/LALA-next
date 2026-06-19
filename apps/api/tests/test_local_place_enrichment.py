@@ -33,6 +33,13 @@ def test_romanize_address_uses_gyeonggi_region_dictionary() -> None:
     assert not any("가" <= char <= "힣" for char in address)
 
 
+def test_romanize_address_uses_seoul_short_alias() -> None:
+    address = local_place_enrichment.romanize_address("서울시 종로구 익선동")
+
+    assert address == "Seoul Jongno-gu Igseondong"
+    assert "Seoulsi" not in address
+
+
 def test_build_local_enrichment_preserves_existing_values() -> None:
     enrichment = local_place_enrichment.build_local_enrichment(
         {
@@ -50,6 +57,22 @@ def test_build_local_enrichment_preserves_existing_values() -> None:
     assert enrichment.region_name_en == "Suwon-si"
     assert enrichment.address_en
     assert not any("가" <= char <= "힣" for char in enrichment.address_en)
+
+
+def test_build_local_enrichment_infers_region_from_address_when_missing() -> None:
+    enrichment = local_place_enrichment.build_local_enrichment(
+        {
+            "place_id": "tour-api-2946228",
+            "name_ko": "익선동 한옥거리",
+            "name_en": "Ikseon-dong Hanok Street",
+            "address_ko": "서울시 종로구 익선동",
+            "address_en": None,
+            "region_name_ko": None,
+            "region_name_en": None,
+        }
+    )
+
+    assert enrichment.region_name_en == "Jongno-gu"
 
 
 def test_build_local_enrichment_can_refresh_local_values() -> None:

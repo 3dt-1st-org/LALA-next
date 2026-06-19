@@ -430,6 +430,14 @@ DB가 없으면 배포 패키지의 `public_mvp_snapshot`을 사용하고 `data_
 DB 후보를 읽고 Azure OpenAI 결과를 미리 보되 행을 수정하지 않는다. `--apply`는
 `ALLOW_AI_PLACE_ENRICHMENT_APPLY=1`과 `--confirm APPLY_AI_PLACE_ENRICHMENT`가 있을 때만
 `travel.places`와 `travel.place_enrichments`를 갱신한다.
+`apps.api.app.tools.enrich_place_local_columns`는 Azure OpenAI 설정 전에도 쓸 수 있는
+로컬 로마자/사전 기반 영문 fallback 작성기다. 운영 래퍼는
+`scripts/unix/plan_place_local_enrichment.sh`와
+`scripts/windows/plan_place_local_enrichment.ps1`이며, `--apply`는
+`ALLOW_LOCAL_PLACE_ENRICHMENT_APPLY=1`과 `--confirm APPLY_LOCAL_PLACE_ENRICHMENT`가 있을
+때만 DB를 갱신한다. AI 보강은 `--fields english --replace-local`로 실행하면
+`is_indoor`를 건드리지 않고 최신 `local_romanization` 영문값만 자연스러운 공개 영문명으로
+교체한다.
 
 MVP에서 우선 구현할 보강 항목:
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from types import SimpleNamespace
 
 from apps.api.app.tools import enrich_place_ai_columns
@@ -20,6 +21,22 @@ def test_place_ai_enrichment_plan_uses_data_dictionary_names(capsys):
     assert payload["retry_attempts"] == 3
     assert payload["live_ai_call"] is False
     assert payload["db_mutation"] is False
+
+
+def test_place_ai_enrichment_english_only_plan_excludes_indoor(capsys):
+    exit_code = enrich_place_ai_columns.main(
+        ["--json", "--fields", "english", "--replace-local"]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert payload["ok"] is True
+    assert payload["fields"] == "english"
+    assert payload["replace_local"] is True
+    assert "name_en" in payload["enriched_columns"]
+    assert "region_name_en" in payload["enriched_columns"]
+    assert "is_indoor" not in payload["enriched_columns"]
 
 
 def test_place_ai_enrichment_apply_requires_guard_before_settings(monkeypatch, capsys):
@@ -107,3 +124,70 @@ def test_ai_completion_retries_rate_limit(monkeypatch):
 
     assert calls["count"] == 2
     assert response.choices[0].message.content == "{}"
+
+
+def test_apply_english_only_replace_local_leaves_indoor_untouched(monkeypatch):
+    executed = []
+
+    class Cursor:
+        rowcount = 1
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def execute(self, sql, params=None):
+            executed.append((sql, params))
+
+    class Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def cursor(self):
+            return Cursor()
+
+        def commit(self):
+            executed.append(("commit", None))
+
+    def connect(dsn, connect_timeout):
+        executed.append(("connect", {"dsn": dsn, "connect_timeout": connect_timeout}))
+        return Connection()
+
+    monkeypatch.setitem(sys.modules, "psycopg2", SimpleNamespace(connect=connect))
+    monkeypatch.setattr(
+        enrich_place_ai_columns,
+        "get_settings",
+        lambda: SimpleNamespace(azure_openai_deployment="test-model"),
+    )
+
+    updated = enrich_place_ai_columns.apply_enrichments(
+        dsn="postgresql://redacted",
+        enrichments=[
+            enrich_place_ai_columns.PlaceEnrichment(
+                place_id="tour-api-1",
+                name_en="Natural English Name",
+                address_en="Suwon-si, Gyeonggi-do",
+                region_name_en="Suwon-si",
+                is_indoor=True,
+                confidence=0.9,
+            )
+        ],
+        connect_timeout=3,
+        fields="english",
+        replace_local=True,
+    )
+
+    update_sql = next(sql for sql, _ in executed if "UPDATE travel.places" in sql)
+    insert_params = next(
+        params for sql, params in executed if "INSERT INTO travel.place_enrichments" in sql
+    )
+    assert updated == 1
+    assert "UPDATE travel.places AS places" in update_sql
+    assert "local_romanization" in update_sql
+    assert "is_indoor =" not in update_sql
+    assert insert_params["is_indoor"] is None

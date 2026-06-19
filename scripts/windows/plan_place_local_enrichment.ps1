@@ -1,17 +1,11 @@
 param(
     [string]$Python = "",
     [string]$KeyVaultUrl = "",
-    [switch]$DryRunAi,
+    [switch]$Preview,
     [switch]$Apply,
+    [switch]$RefreshLocal,
     [string]$Confirm = "",
-    [string]$Category = "all",
-    [ValidateSet("all", "english")]
-    [string]$Fields = "all",
-    [switch]$ReplaceLocal,
-    [int]$Limit = 50,
-    [int]$BatchSize = 20,
-    [int]$RetryAttempts = 3,
-    [double]$RetryDelaySec = 5.0,
+    [int]$Limit = 500,
     [int]$ConnectTimeout = 5,
     [switch]$Json
 )
@@ -52,42 +46,32 @@ try {
     }
 
     if (-not $Json) {
-        Write-Host "Planning LALA-next place AI enrichment."
-        Write-Host "Default mode is plan only and does not call Azure OpenAI."
-        Write-Host "Dry-run AI mode reads DB and calls Azure OpenAI but does not update rows."
-        Write-Host "Apply mode requires ALLOW_AI_PLACE_ENRICHMENT_APPLY=1."
-        Write-Host "AZURE_OPENAI_KEY and DB_DSN values are never printed by this script."
+        Write-Host "Planning LALA-next local place enrichment."
+        Write-Host "Default mode is plan only and does not read or mutate DB."
+        Write-Host "Preview mode reads DB and shows local romanization candidates."
+        Write-Host "Apply mode requires ALLOW_LOCAL_PLACE_ENRICHMENT_APPLY=1."
+        Write-Host "DB_DSN value is never printed by this script."
     }
 
     $toolArgs = @(
         "-m",
-        "apps.api.app.tools.enrich_place_ai_columns",
-        "--category",
-        $Category,
-        "--fields",
-        $Fields,
+        "apps.api.app.tools.enrich_place_local_columns",
         "--limit",
         "$Limit",
-        "--batch-size",
-        "$BatchSize",
-        "--retry-attempts",
-        "$RetryAttempts",
-        "--retry-delay-sec",
-        "$RetryDelaySec",
         "--connect-timeout",
         "$ConnectTimeout"
     )
     if ($Json) {
         $toolArgs += "--json"
     }
-    if ($DryRunAi) {
-        $toolArgs += "--dry-run-ai"
+    if ($Preview) {
+        $toolArgs += "--preview"
     }
     if ($Apply) {
         $toolArgs += "--apply"
     }
-    if ($ReplaceLocal) {
-        $toolArgs += "--replace-local"
+    if ($RefreshLocal) {
+        $toolArgs += "--refresh-local"
     }
     if ($Confirm) {
         $toolArgs += @("--confirm", $Confirm)
@@ -95,7 +79,7 @@ try {
 
     & $Python @toolArgs
     if ($LASTEXITCODE -ne 0) {
-        throw "Place AI enrichment command failed."
+        throw "Local place enrichment command failed."
     }
 } finally {
     Pop-Location
