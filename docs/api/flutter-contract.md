@@ -258,13 +258,15 @@ Query parameters:
       "lng": 127.1923454131,
       "score": {
         "final_score": 0.8562,
-        "formula_version": "local-value-v1",
+        "formula_version": "local-value-v2",
         "components": {
           "local_spending_score": null,
+          "small_merchant_fit_score": 0.55,
           "demand_dispersion_score": 0.95,
+          "culture_relevance_score": 0.7,
           "weather_fit_score": null,
           "review_quality_score": null,
-          "culture_relevance_score": 0.7
+          "accessibility_fit_score": 0.68
         },
         "data_basis": "public_mvp_snapshot",
         "features": {

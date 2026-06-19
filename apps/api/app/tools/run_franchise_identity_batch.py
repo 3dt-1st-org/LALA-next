@@ -7,32 +7,28 @@ from typing import Any
 
 from apps.api.app.core.config import get_settings
 from apps.api.app.core.redaction import redact_secret_text
-from apps.api.app.services.place_score_batch import (
-    compute_score_snapshots,
-    fetch_place_signals,
-    insert_score_snapshots,
-)
-from apps.api.app.services.recommendation_scoring import (
-    COMPONENT_WEIGHTS,
-    FORMULA_VERSION,
+from apps.api.app.services.franchise_identity import (
+    compute_place_business_identities,
+    fetch_business_identity_inputs,
+    upsert_place_business_identities,
 )
 
-CONFIRM_TEXT = "APPLY_PLACE_SCORE_BATCH"
-ALLOW_ENV = "ALLOW_PLACE_SCORE_BATCH_APPLY"
+CONFIRM_TEXT = "APPLY_FRANCHISE_IDENTITY_BATCH"
+ALLOW_ENV = "ALLOW_FRANCHISE_IDENTITY_BATCH_APPLY"
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Plan, preview, or apply local-value place score snapshots."
+        description="Plan, preview, or apply franchise business identity matching."
     )
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
-    parser.add_argument("--preview", action="store_true", help="Read DB signals and preview scores.")
-    parser.add_argument("--apply", action="store_true", help="Insert analytics.place_score_snapshots rows.")
+    parser.add_argument("--preview", action="store_true", help="Read DB franchise refs and preview matches.")
+    parser.add_argument("--apply", action="store_true", help="Upsert analytics.place_business_identity rows.")
     parser.add_argument("--confirm", default="", help=f"Required with --apply: {CONFIRM_TEXT}")
     parser.add_argument(
         "--category",
         choices=["all", "attraction", "restaurant", "event", "culture_venue"],
-        default="all",
+        default="restaurant",
     )
     parser.add_argument("--limit", type=int, default=500)
     parser.add_argument("--connect-timeout", type=int, default=5)
@@ -44,7 +40,6 @@ def main(argv: list[str] | None = None) -> int:
     if args.apply and args.preview:
         _write(args, {"ok": False, "mode": "plan", "error": "Use either --apply or --preview."})
         return 2
-
     if not args.apply and not args.preview:
         _write(args, _plan_payload())
         return 0
@@ -62,18 +57,22 @@ def main(argv: list[str] | None = None) -> int:
             return 2
 
     try:
-        signals = fetch_place_signals(
+        places, brands, locations = fetch_business_identity_inputs(
             dsn=dsn,
             category=args.category,
             limit=args.limit,
             connect_timeout=args.connect_timeout,
         )
-        snapshots = compute_score_snapshots(signals)
-        inserted_rows = 0
+        identities = compute_place_business_identities(
+            places,
+            brands=brands,
+            locations=locations,
+        )
+        upserted_rows = 0
         if args.apply:
-            inserted_rows = insert_score_snapshots(
+            upserted_rows = upsert_place_business_identities(
                 dsn=dsn,
-                snapshots=snapshots,
+                identities=identities,
                 connect_timeout=args.connect_timeout,
             )
     except Exception as exc:
@@ -93,12 +92,13 @@ def main(argv: list[str] | None = None) -> int:
             "ok": True,
             "mode": _mode(args),
             "db_mutation": bool(args.apply),
-            "target": "analytics.place_score_snapshots",
-            "formula_version": FORMULA_VERSION,
-            "signal_count": len(signals),
-            "snapshot_count": len(snapshots),
-            "inserted_rows": inserted_rows,
-            "preview": [item.to_public_dict() for item in snapshots[:5]],
+            "target": "analytics.place_business_identity",
+            "place_count": len(places),
+            "brand_reference_count": len(brands),
+            "location_reference_count": len(locations),
+            "identity_count": len(identities),
+            "upserted_rows": upserted_rows,
+            "preview": [identity.to_public_dict() for identity in identities[:5]],
         },
     )
     return 0
@@ -109,19 +109,19 @@ def _plan_payload() -> dict[str, Any]:
         "ok": True,
         "mode": "plan",
         "db_mutation": False,
-        "target": "analytics.place_score_snapshots",
-        "formula_version": FORMULA_VERSION,
-        "component_weights": COMPONENT_WEIGHTS,
+        "target": "analytics.place_business_identity",
         "input_relations": [
             "travel.places",
-            "economy.card_spending_area_monthly",
-            "culture.events",
-            "travel.place_events",
-            "analytics.place_business_identity",
-            "travel.weather_observations",
+            "economy.franchise_brands",
+            "economy.franchise_locations",
         ],
-        "review_signal": "pending_review_attribute_analysis",
-        "business_identity_signal": "analytics.place_business_identity.small_merchant_fit_score",
+        "output_relation": "analytics.place_business_identity",
+        "matching_rules": [
+            "normalize names and strip branch suffixes",
+            "prefer franchise location coordinate match within 100m",
+            "fallback to exact/prefix/contains brand name match",
+            "separate national franchise, franchise store, local small chain, and unknown",
+        ],
     }
 
 
@@ -138,17 +138,16 @@ def _write(args: argparse.Namespace, payload: dict[str, Any]) -> None:
         print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
         return
 
-    print("LALA-next place score batch")
+    print("LALA-next franchise identity batch")
     print(f"mode={payload.get('mode')}")
     print(f"status={'ok' if payload.get('ok') else 'degraded'}")
-    print(f"target={payload.get('target', 'analytics.place_score_snapshots')}")
-    print(f"formula_version={payload.get('formula_version', FORMULA_VERSION)}")
+    print(f"target={payload.get('target', 'analytics.place_business_identity')}")
     if "db_mutation" in payload:
         print(f"db_mutation={str(payload.get('db_mutation')).lower()}")
     if payload.get("error"):
         print(f"error={payload['error']}")
         return
-    for key in ("signal_count", "snapshot_count", "inserted_rows"):
+    for key in ("place_count", "brand_reference_count", "location_reference_count", "identity_count", "upserted_rows"):
         if key in payload:
             print(f"{key}={payload[key]}")
     for relation in payload.get("input_relations") or []:
@@ -159,13 +158,11 @@ def _write(args: argparse.Namespace, payload: dict[str, Any]) -> None:
             + json.dumps(
                 {
                     "place_id": item.get("place_id"),
-                    "final_score": item.get("final_score"),
-                    "formula_version": item.get("formula_version"),
-                    "features": {
-                        "region_name_ko": item.get("features", {}).get("region_name_ko"),
-                        "card_month": item.get("features", {}).get("card_month"),
-                        "missing_signals": item.get("features", {}).get("missing_signals"),
-                    },
+                    "business_identity_type": item.get("business_identity_type"),
+                    "is_franchise": item.get("is_franchise"),
+                    "franchise_brand_name": item.get("franchise_brand_name"),
+                    "franchise_match_confidence": item.get("franchise_match_confidence"),
+                    "small_merchant_fit_score": item.get("small_merchant_fit_score"),
                 },
                 ensure_ascii=False,
                 sort_keys=True,

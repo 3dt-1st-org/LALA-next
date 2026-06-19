@@ -111,12 +111,14 @@ def test_fetch_places_uses_radius_bound_ranking_query(monkeypatch):
                     "updated_at": datetime.now(UTC),
                     "distance_m": 125.2,
                     "local_spending_score": 0.81,
+                    "small_merchant_fit_score": 0.57,
                     "demand_dispersion_score": 0.72,
+                    "culture_relevance_score": 0.88,
                     "weather_fit_score": 0.66,
                     "review_quality_score": None,
-                    "culture_relevance_score": 0.88,
+                    "accessibility_fit_score": 0.62,
                     "final_score": 0.775,
-                    "formula_version": "local-value-v1",
+                    "formula_version": "local-value-v2",
                     "score_features": {"source": "unit-test"},
                 }
             ]
@@ -155,18 +157,22 @@ def test_fetch_places_uses_radius_bound_ranking_query(monkeypatch):
     assert places[0]["is_approximate_location"] is False
     assert places[0]["score"] == {
         "final_score": 0.775,
-        "formula_version": "local-value-v1",
+        "formula_version": "local-value-v2",
         "components": {
             "local_spending_score": 0.81,
+            "small_merchant_fit_score": 0.57,
             "demand_dispersion_score": 0.72,
+            "culture_relevance_score": 0.88,
             "weather_fit_score": 0.66,
             "review_quality_score": None,
-            "culture_relevance_score": 0.88,
+            "accessibility_fit_score": 0.62,
         },
         "data_basis": "analytics.place_score_snapshots",
         "features": {"source": "unit-test"},
     }
     assert "FROM analytics.place_score_snapshots" in captured["sql"]
+    assert "to_jsonb(score_snapshot)->>'small_merchant_fit_score'" in captured["sql"]
+    assert "to_jsonb(score_snapshot)->>'accessibility_fit_score'" in captured["sql"]
     assert "FROM travel.place_events" in captured["sql"]
     assert "WHERE distance_m <= %s" in captured["sql"]
     assert "ORDER BY COALESCE(latest_scores.final_score, 0) DESC, distance_m ASC" in captured["sql"]

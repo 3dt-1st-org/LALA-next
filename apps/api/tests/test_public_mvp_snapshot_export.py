@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import sys
+import types
 from decimal import Decimal
 from importlib.resources import files
 
@@ -29,12 +31,14 @@ def _db_rows() -> list[dict]:
             "is_approximate_location": False,
             "upstream_source": "tour_api",
             "local_spending_score": None,
+            "small_merchant_fit_score": Decimal("0.7600"),
             "demand_dispersion_score": Decimal("0.9500"),
+            "culture_relevance_score": Decimal("0.7000"),
             "weather_fit_score": None,
             "review_quality_score": None,
-            "culture_relevance_score": Decimal("0.7000"),
+            "accessibility_fit_score": Decimal("0.6200"),
             "final_score": Decimal("0.8562"),
-            "formula_version": "local-value-v1",
+            "formula_version": "local-value-v2",
             "score_features": {
                 "primary_source": "tour_api",
                 "missing_signals": ["review_attribute_analysis"],
@@ -68,6 +72,8 @@ def test_build_snapshot_payload_marks_public_mvp_basis() -> None:
     assert place["upstream_source"] == "tour_api"
     assert place["score"]["data_basis"] == "public_mvp_snapshot"
     assert place["score"]["final_score"] == 0.8562
+    assert place["score"]["components"]["small_merchant_fit_score"] == 0.76
+    assert place["score"]["components"]["accessibility_fit_score"] == 0.62
     assert place["score"]["features"]["snapshot_source"] == "analytics.place_score_snapshots"
 
 
@@ -160,6 +166,54 @@ def test_bundled_snapshot_uses_https_tour_api_images() -> None:
     assert image_urls
     assert not any(url.startswith("http://tong.visitkorea.or.kr/") for url in image_urls)
     assert any(url.startswith("https://tong.visitkorea.or.kr/") for url in image_urls)
+
+
+def test_fetch_snapshot_places_uses_schema_compatible_score_projection(monkeypatch) -> None:
+    captured = {}
+
+    class FakeCursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def execute(self, sql, params):
+            captured["sql"] = sql
+            captured["params"] = params
+
+        def fetchall(self):
+            return _db_rows()
+
+    class FakeConnection:
+        def cursor(self, cursor_factory=None):
+            captured["cursor_factory"] = cursor_factory
+            return FakeCursor()
+
+        def close(self):
+            return None
+
+    psycopg2_module = types.ModuleType("psycopg2")
+    psycopg2_module.connect = lambda dsn, connect_timeout: FakeConnection()
+    extras_module = types.ModuleType("psycopg2.extras")
+    extras_module.RealDictCursor = object()
+    monkeypatch.setitem(sys.modules, "psycopg2", psycopg2_module)
+    monkeypatch.setitem(sys.modules, "psycopg2.extras", extras_module)
+
+    rows = public_mvp_snapshot.fetch_snapshot_places(
+        dsn="postgresql://db.example/lala",
+        lat=37.2636,
+        lng=127.0286,
+        radius_m=50000,
+        category="all",
+        limit=20,
+        connect_timeout=3,
+    )
+
+    assert rows[0]["place_id"] == "tour-api-129765"
+    assert "to_jsonb(score_snapshot)->>'small_merchant_fit_score'" in captured["sql"]
+    assert "to_jsonb(score_snapshot)->>'accessibility_fit_score'" in captured["sql"]
+    assert captured["params"][:6] == (37.2636, 127.0286, "all", "all", 50000, 20)
 
 
 def test_export_plan_does_not_require_db(capsys) -> None:

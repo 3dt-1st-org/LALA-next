@@ -7,14 +7,16 @@ def test_weighted_score_renormalizes_when_review_signal_is_missing():
     score = recommendation_scoring.weighted_score(
         {
             "local_spending_score": 0.8,
+            "small_merchant_fit_score": 0.7,
             "demand_dispersion_score": 0.6,
+            "culture_relevance_score": 0.9,
             "weather_fit_score": 0.7,
             "review_quality_score": None,
-            "culture_relevance_score": 0.9,
+            "accessibility_fit_score": 0.5,
         }
     )
 
-    assert score == 0.7412
+    assert score == 0.7244
 
 
 def test_demo_place_score_marks_fallback_basis_and_missing_signals():
@@ -25,6 +27,7 @@ def test_demo_place_score_marks_fallback_basis_and_missing_signals():
     assert 0 < score["final_score"] <= 1
     assert score["components"]["review_quality_score"] is None
     assert "card_spending_snapshot" in score["features"]["missing_signals"]
+    assert "franchise_business_identity" in score["features"]["missing_signals"]
 
 
 def test_demo_place_score_keeps_culture_venue_prior():

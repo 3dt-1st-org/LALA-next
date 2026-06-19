@@ -98,8 +98,29 @@ def _place_payload(row: dict[str, Any], *, distance_m: float, language: str) -> 
         "distance_m": int(round(distance_m)),
         "source": SOURCE_NAME,
         "upstream_source": row.get("upstream_source") or "snapshot",
-        "score": deepcopy(row.get("score")),
+        "score": _score_payload(row.get("score")),
     }
+
+
+def _score_payload(score: Any) -> dict[str, Any] | None:
+    if not isinstance(score, dict):
+        return None
+    payload = deepcopy(score)
+    components = payload.get("components")
+    if not isinstance(components, dict):
+        components = {}
+    for name in (
+        "local_spending_score",
+        "small_merchant_fit_score",
+        "demand_dispersion_score",
+        "culture_relevance_score",
+        "weather_fit_score",
+        "review_quality_score",
+        "accessibility_fit_score",
+    ):
+        components.setdefault(name, None)
+    payload["components"] = components
+    return payload
 
 
 def _distance_m(*, lat: float, lng: float, place: dict[str, Any]) -> float:

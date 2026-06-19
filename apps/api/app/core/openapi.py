@@ -451,17 +451,21 @@ def _place_score_components_schema() -> dict[str, Any]:
         "type": "object",
         "required": [
             "local_spending_score",
+            "small_merchant_fit_score",
             "demand_dispersion_score",
+            "culture_relevance_score",
             "weather_fit_score",
             "review_quality_score",
-            "culture_relevance_score",
+            "accessibility_fit_score",
         ],
         "properties": {
             "local_spending_score": nullable_score,
+            "small_merchant_fit_score": nullable_score,
             "demand_dispersion_score": nullable_score,
+            "culture_relevance_score": nullable_score,
             "weather_fit_score": nullable_score,
             "review_quality_score": nullable_score,
-            "culture_relevance_score": nullable_score,
+            "accessibility_fit_score": nullable_score,
         },
         "additionalProperties": False,
     }

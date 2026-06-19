@@ -34,6 +34,12 @@ class PlaceSignal:
     region_place_count: int | None = None
     culture_event_count: int = 0
     place_event_count: int = 0
+    business_identity_type: str | None = None
+    is_franchise: bool | None = None
+    franchise_brand_name: str | None = None
+    franchise_match_confidence: float | None = None
+    chain_scale_score: float | None = None
+    small_merchant_fit_score: float | None = None
     is_rain_snow: bool | None = None
     is_bad_dust: bool | None = None
     is_heatwave: bool | None = None
@@ -55,6 +61,12 @@ class PlaceSignal:
             region_place_count=_optional_int(row.get("region_place_count")),
             culture_event_count=_optional_int(row.get("culture_event_count")) or 0,
             place_event_count=_optional_int(row.get("place_event_count")) or 0,
+            business_identity_type=_optional_text(row.get("business_identity_type")),
+            is_franchise=_optional_bool(row.get("is_franchise")),
+            franchise_brand_name=_optional_text(row.get("franchise_brand_name")),
+            franchise_match_confidence=_optional_float(row.get("franchise_match_confidence")),
+            chain_scale_score=_optional_float(row.get("chain_scale_score")),
+            small_merchant_fit_score=_optional_float(row.get("small_merchant_fit_score")),
             is_rain_snow=_optional_bool(row.get("is_rain_snow")),
             is_bad_dust=_optional_bool(row.get("is_bad_dust")),
             is_heatwave=_optional_bool(row.get("is_heatwave")),
@@ -67,10 +79,12 @@ class PlaceSignal:
 class PlaceScoreSnapshot:
     place_id: str
     local_spending_score: float | None
+    small_merchant_fit_score: float | None
     demand_dispersion_score: float | None
+    culture_relevance_score: float | None
     weather_fit_score: float | None
     review_quality_score: float | None
-    culture_relevance_score: float | None
+    accessibility_fit_score: float | None
     final_score: float
     formula_version: str
     features: dict[str, Any]
@@ -81,10 +95,12 @@ class PlaceScoreSnapshot:
         return cls(
             place_id=place_id,
             local_spending_score=components["local_spending_score"],
+            small_merchant_fit_score=components["small_merchant_fit_score"],
             demand_dispersion_score=components["demand_dispersion_score"],
+            culture_relevance_score=components["culture_relevance_score"],
             weather_fit_score=components["weather_fit_score"],
             review_quality_score=components["review_quality_score"],
-            culture_relevance_score=components["culture_relevance_score"],
+            accessibility_fit_score=components["accessibility_fit_score"],
             final_score=score["final_score"],
             formula_version=score["formula_version"],
             features=score["features"],
@@ -120,10 +136,12 @@ def compute_score_snapshots(signals: Sequence[PlaceSignal]) -> list[PlaceScoreSn
         )
         components = {
             "local_spending_score": local_spending_score,
+            "small_merchant_fit_score": signal.small_merchant_fit_score,
             "demand_dispersion_score": density_score,
+            "culture_relevance_score": _culture_relevance_score(signal),
             "weather_fit_score": _weather_fit_score(signal),
             "review_quality_score": None,
-            "culture_relevance_score": _culture_relevance_score(signal),
+            "accessibility_fit_score": _accessibility_fit_score(signal),
         }
         score = build_place_score(
             components=components,
@@ -144,7 +162,32 @@ def fetch_place_signals(
     import psycopg2
     from psycopg2.extras import RealDictCursor
 
-    sql = """
+    business_identity_select = """
+            business_identity.business_identity_type,
+            business_identity.is_franchise,
+            business_identity.franchise_brand_name,
+            business_identity.franchise_match_confidence,
+            business_identity.chain_scale_score,
+            business_identity.small_merchant_fit_score
+    """
+    business_identity_join = """
+        LEFT JOIN analytics.place_business_identity business_identity
+          ON business_identity.place_id = places.place_id
+    """
+
+    fallback_business_identity_select = """
+            NULL::text AS business_identity_type,
+            NULL::boolean AS is_franchise,
+            NULL::text AS franchise_brand_name,
+            NULL::numeric AS franchise_match_confidence,
+            NULL::numeric AS chain_scale_score,
+            NULL::numeric AS small_merchant_fit_score
+    """
+
+    with psycopg2.connect(dsn, connect_timeout=connect_timeout) as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            has_business_identity = _relation_exists(cur, "analytics.place_business_identity")
+            sql = f"""
         WITH latest_area_month AS (
             SELECT region_name_ko, max(month) AS month
             FROM economy.card_spending_area_monthly
@@ -208,7 +251,8 @@ def fetch_place_signals(
             latest_weather.is_bad_dust,
             latest_weather.is_heatwave,
             latest_weather.is_coldwave,
-            latest_weather.is_strong_wind
+            latest_weather.is_strong_wind,
+{business_identity_select if has_business_identity else fallback_business_identity_select}
         FROM travel.places places
         LEFT JOIN area_spending
           ON area_spending.region_name_ko = places.region_name_ko
@@ -220,12 +264,11 @@ def fetch_place_signals(
           ON place_event_counts.place_id = places.place_id
         LEFT JOIN latest_weather
           ON latest_weather.location_name = places.region_name_ko
+{business_identity_join if has_business_identity else ""}
         WHERE (%s = 'all' OR places.category = %s)
         ORDER BY places.updated_at DESC, places.place_id
         LIMIT %s
     """
-    with psycopg2.connect(dsn, connect_timeout=connect_timeout) as conn:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(sql, (category, category, limit))
             return [PlaceSignal.from_row(dict(row)) for row in cur.fetchall()]
 
@@ -246,10 +289,12 @@ def insert_score_snapshots(
         INSERT INTO analytics.place_score_snapshots (
             place_id,
             local_spending_score,
+            small_merchant_fit_score,
             demand_dispersion_score,
+            culture_relevance_score,
             weather_fit_score,
             review_quality_score,
-            culture_relevance_score,
+            accessibility_fit_score,
             final_score,
             formula_version,
             features
@@ -257,10 +302,12 @@ def insert_score_snapshots(
         VALUES (
             %(place_id)s,
             %(local_spending_score)s,
+            %(small_merchant_fit_score)s,
             %(demand_dispersion_score)s,
+            %(culture_relevance_score)s,
             %(weather_fit_score)s,
             %(review_quality_score)s,
-            %(culture_relevance_score)s,
+            %(accessibility_fit_score)s,
             %(final_score)s,
             %(formula_version)s,
             %(features)s
@@ -282,6 +329,8 @@ def _features(signal: PlaceSignal) -> dict[str, Any]:
     missing_signals: list[str] = []
     if signal.region_spend_amount is None:
         missing_signals.append("card_spending_area_monthly")
+    if signal.small_merchant_fit_score is None:
+        missing_signals.append("place_business_identity")
     missing_signals.append("review_attribute_analysis")
     if not _has_weather(signal):
         missing_signals.append("weather_observations")
@@ -296,6 +345,13 @@ def _features(signal: PlaceSignal) -> dict[str, Any]:
         "region_place_count": signal.region_place_count,
         "culture_event_count": signal.culture_event_count,
         "place_event_count": signal.place_event_count,
+        "business_identity": {
+            "business_identity_type": signal.business_identity_type,
+            "is_franchise": signal.is_franchise,
+            "franchise_brand_name": signal.franchise_brand_name,
+            "franchise_match_confidence": signal.franchise_match_confidence,
+            "chain_scale_score": signal.chain_scale_score,
+        },
         "weather_flags": {
             "is_rain_snow": signal.is_rain_snow,
             "is_bad_dust": signal.is_bad_dust,
@@ -308,6 +364,7 @@ def _features(signal: PlaceSignal) -> dict[str, Any]:
             "economy.card_spending_area_monthly",
             "culture.events",
             "travel.place_events",
+            "analytics.place_business_identity",
             "travel.weather_observations",
         ],
         "missing_signals": missing_signals,
@@ -355,6 +412,21 @@ def _culture_relevance_score(signal: PlaceSignal) -> float:
     return min(score, 1.0)
 
 
+def _accessibility_fit_score(signal: PlaceSignal) -> float | None:
+    if signal.region_place_count is None:
+        return None
+    score = 0.60
+    if signal.category in {"restaurant", "culture_venue"}:
+        score += 0.08
+    if signal.is_indoor is True:
+        score += 0.04
+    if signal.region_place_count >= 8:
+        score += 0.08
+    elif signal.region_place_count <= 2:
+        score -= 0.05
+    return min(max(score, 0.0), 1.0)
+
+
 def _relative_score(
     value: float | None,
     values: Sequence[float],
@@ -395,6 +467,16 @@ def _has_weather(signal: PlaceSignal) -> bool:
             signal.is_strong_wind,
         )
     )
+
+
+def _relation_exists(cur: Any, relation_name: str) -> bool:
+    cur.execute("SELECT to_regclass(%s) IS NOT NULL", (relation_name,))
+    row = cur.fetchone()
+    if isinstance(row, dict):
+        return bool(next(iter(row.values()), False))
+    if isinstance(row, (tuple, list)):
+        return bool(row[0]) if row else False
+    return bool(row)
 
 
 def _optional_text(value: Any) -> str | None:

@@ -228,6 +228,9 @@ def test_paid_smoke_requires_authenticated_api_key():
     place_score_batch_script = (
         ROOT / "scripts" / "windows" / "plan_place_score_batch.ps1"
     ).read_text(encoding="utf-8")
+    franchise_identity_batch_script = (
+        ROOT / "scripts" / "windows" / "plan_franchise_identity_batch.ps1"
+    ).read_text(encoding="utf-8")
     rag_index_unix_script = (ROOT / "scripts" / "unix" / "plan_rag_index.sh").read_text(
         encoding="utf-8"
     )
@@ -322,6 +325,11 @@ def test_paid_smoke_requires_authenticated_api_key():
     assert "DB_DSN value is never printed by this script." in place_score_batch_script
     assert "secret show" not in place_score_batch_script
     assert "Write-Host $env:DB_DSN" not in place_score_batch_script
+    assert "apps.api.app.tools.run_franchise_identity_batch" in franchise_identity_batch_script
+    assert "ALLOW_FRANCHISE_IDENTITY_BATCH_APPLY=1" in franchise_identity_batch_script
+    assert "DB_DSN value is never printed by this script." in franchise_identity_batch_script
+    assert "secret show" not in franchise_identity_batch_script
+    assert "Write-Host $env:DB_DSN" not in franchise_identity_batch_script
     assert "apps.api.app.tools.run_rag_index" in rag_index_unix_script
     assert "ALLOW_RAG_INDEX_APPLY=1" in rag_index_unix_script
     assert "DB_DSN and AZURE_OPENAI_KEY values are never printed by this script." in rag_index_unix_script
@@ -420,6 +428,7 @@ def test_unix_scripts_have_safe_operational_guards():
         "plan_place_local_enrichment.sh",
         "plan_rag_index.sh",
         "plan_place_score_batch.sh",
+        "plan_franchise_identity_batch.sh",
         "plan_card_spending_file_ingest.sh",
         "plan_culture_info_ingest.sh",
         "plan_kopis_ingest.sh",
@@ -480,6 +489,11 @@ def test_unix_scripts_have_safe_operational_guards():
     assert "ALLOW_PLACE_SCORE_BATCH_APPLY=1" in scripts["plan_place_score_batch.sh"]
     assert "--confirm APPLY_PLACE_SCORE_BATCH" in scripts["plan_place_score_batch.sh"]
     assert "DB_DSN value is never printed by this script." in scripts["plan_place_score_batch.sh"]
+    assert "run_franchise_identity_batch" in scripts["plan_franchise_identity_batch.sh"]
+    assert "plan_franchise_identity_batch.sh" in scripts["verify_repo.sh"]
+    assert "ALLOW_FRANCHISE_IDENTITY_BATCH_APPLY=1" in scripts["plan_franchise_identity_batch.sh"]
+    assert "--confirm APPLY_FRANCHISE_IDENTITY_BATCH" in scripts["plan_franchise_identity_batch.sh"]
+    assert "DB_DSN value is never printed by this script." in scripts["plan_franchise_identity_batch.sh"]
     assert "run_rag_index" in scripts["plan_rag_index.sh"]
     assert "plan_rag_index.sh" in scripts["verify_repo.sh"]
     assert "ALLOW_RAG_INDEX_APPLY=1" in scripts["plan_rag_index.sh"]

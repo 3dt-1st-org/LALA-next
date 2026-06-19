@@ -242,7 +242,7 @@ scripts/unix/plan_place_score_batch.sh
 .\scripts\windows\plan_place_score_batch.ps1
 ```
 
-Default mode is plan-only. It reports the `local-value-v1` formula, input
+Default mode is plan-only. It reports the `local-value-v2` formula, input
 relations, and target table without printing `DB_DSN`. When a canonical DB has
 `travel`, `economy`, `culture`, and `analytics` relations loaded, preview the
 rows that would be written:
@@ -270,6 +270,49 @@ $env:ALLOW_PLACE_SCORE_BATCH_APPLY = "1"
 .\scripts\windows\plan_place_score_batch.ps1 `
   -Apply `
   -Confirm APPLY_PLACE_SCORE_BATCH
+```
+
+To review the franchise/small-merchant identity batch without connecting to a
+database:
+
+```bash
+scripts/unix/plan_franchise_identity_batch.sh
+```
+
+```powershell
+.\scripts\windows\plan_franchise_identity_batch.ps1
+```
+
+Default mode is plan-only. It reports the `analytics.place_business_identity`
+target table, the `travel.places` and `economy.franchise_*` inputs, and the
+matching rules without printing `DB_DSN`. When canonical places and Fair Trade
+Commission franchise references are loaded, preview the rows that would be
+upserted:
+
+```bash
+scripts/unix/plan_franchise_identity_batch.sh --preview --limit 20
+```
+
+```powershell
+.\scripts\windows\plan_franchise_identity_batch.ps1 -Preview -Limit 20
+```
+
+Apply upserts rows into `analytics.place_business_identity` and requires the
+exact confirm string plus a process-local allow flag:
+
+```bash
+ALLOW_FRANCHISE_IDENTITY_BATCH_APPLY=1 \
+  scripts/unix/plan_franchise_identity_batch.sh \
+  --apply \
+  --confirm APPLY_FRANCHISE_IDENTITY_BATCH
+```
+
+```powershell
+$env:ALLOW_FRANCHISE_IDENTITY_BATCH_APPLY = "1"
+.\scripts\windows\plan_franchise_identity_batch.ps1 `
+  -Apply `
+  -Confirm APPLY_FRANCHISE_IDENTITY_BATCH
+Remove-Item Env:\ALLOW_FRANCHISE_IDENTITY_BATCH_APPLY
 ```
 
 To review Azure OpenAI place enrichment without connecting to a database or

@@ -83,13 +83,15 @@ def test_places_uses_db_repository_when_rows_exist(client, auth_headers, monkeyp
                 "source": "db",
                 "score": {
                     "final_score": 0.84,
-                    "formula_version": "local-value-v1",
+                    "formula_version": "local-value-v2",
                     "components": {
                         "local_spending_score": 0.9,
+                        "small_merchant_fit_score": 0.7,
                         "demand_dispersion_score": 0.8,
+                        "culture_relevance_score": 0.8,
                         "weather_fit_score": 0.7,
                         "review_quality_score": None,
-                        "culture_relevance_score": 0.8,
+                        "accessibility_fit_score": 0.6,
                     },
                     "data_basis": "analytics.place_score_snapshots",
                     "features": {},

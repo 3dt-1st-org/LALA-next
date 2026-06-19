@@ -39,7 +39,10 @@ queries to resolve live names during operations.
 - Official image coverage after Tour API ingestion is 2,327 rows: 1,135 Gyeonggi
   rows and 1,192 Seoul rows. Rows without official images should leave the image
   slot collapsed rather than using mock images.
-- `local-value-v1` score snapshots were generated for all 2,636 places.
+- `local-value-v1` score snapshots were generated for all 2,636 places before
+  the franchise/small-merchant v2 contract. After the current code is deployed,
+  apply the canonical SQL additions, run franchise identity matching, regenerate
+  `local-value-v2` score snapshots, and rebuild RAG chunks.
 - RAG knowledge chunks were generated for all 2,636 places with the local-hash
   embedding path.
 - The production Flutter web build at `lala-next.cloud` was redeployed with
@@ -175,7 +178,8 @@ After Azure reports the custom hostname binding as `SniEnabled`, verify
   lock maintenance window. The resource group currently has a `CanNotDelete`
   lock, so the rule deletion is blocked unless an authorized operator
   temporarily removes or scopes the lock.
-- Add Culture Info, KOPIS, card-spending files, weather observations, and review
-  attribute signals, then regenerate score snapshots and RAG chunks.
+- Add Culture Info, KOPIS, card-spending files, weather observations, Fair Trade
+  Commission franchise references, and review attribute signals, then regenerate
+  franchise identity rows, `local-value-v2` score snapshots, and RAG chunks.
 - Add production-grade identity, private networking, and observability gates
   before treating the environment as durable production hosting.

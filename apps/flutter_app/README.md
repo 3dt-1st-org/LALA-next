@@ -93,6 +93,7 @@ Optional compile-time defaults:
 ```bash
 flutter run \
   --dart-define LALA_API_BASE_URL=http://127.0.0.1:8080 \
+  --dart-define LALA_API_BEARER_TOKEN="$LALA_API_BEARER_TOKEN" \
   --dart-define KAKAO_JAVASCRIPT_KEY="$KAKAO_JAVASCRIPT_KEY"
 ```
 

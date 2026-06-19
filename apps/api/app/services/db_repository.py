@@ -87,15 +87,17 @@ def fetch_places(
         , latest_scores AS (
             SELECT DISTINCT ON (place_id)
                 place_id,
-                local_spending_score,
-                demand_dispersion_score,
-                weather_fit_score,
-                review_quality_score,
-                culture_relevance_score,
+                (to_jsonb(score_snapshot)->>'local_spending_score')::numeric AS local_spending_score,
+                (to_jsonb(score_snapshot)->>'small_merchant_fit_score')::numeric AS small_merchant_fit_score,
+                (to_jsonb(score_snapshot)->>'demand_dispersion_score')::numeric AS demand_dispersion_score,
+                (to_jsonb(score_snapshot)->>'culture_relevance_score')::numeric AS culture_relevance_score,
+                (to_jsonb(score_snapshot)->>'weather_fit_score')::numeric AS weather_fit_score,
+                (to_jsonb(score_snapshot)->>'review_quality_score')::numeric AS review_quality_score,
+                (to_jsonb(score_snapshot)->>'accessibility_fit_score')::numeric AS accessibility_fit_score,
                 final_score,
                 formula_version,
                 features
-            FROM analytics.place_score_snapshots
+            FROM analytics.place_score_snapshots score_snapshot
             ORDER BY place_id, scored_at DESC
         )
         SELECT
@@ -122,10 +124,12 @@ def fetch_places(
             END AS is_ongoing,
             false AS is_approximate_location,
             latest_scores.local_spending_score,
+            latest_scores.small_merchant_fit_score,
             latest_scores.demand_dispersion_score,
+            latest_scores.culture_relevance_score,
             latest_scores.weather_fit_score,
             latest_scores.review_quality_score,
-            latest_scores.culture_relevance_score,
+            latest_scores.accessibility_fit_score,
             latest_scores.final_score,
             latest_scores.formula_version,
             latest_scores.features AS score_features
@@ -212,10 +216,12 @@ def _place_score_from_row(row: dict[str, Any]) -> dict[str, Any] | None:
         "formula_version": row.get("formula_version") or "unknown",
         "components": {
             "local_spending_score": _optional_float(row.get("local_spending_score")),
+            "small_merchant_fit_score": _optional_float(row.get("small_merchant_fit_score")),
             "demand_dispersion_score": _optional_float(row.get("demand_dispersion_score")),
+            "culture_relevance_score": _optional_float(row.get("culture_relevance_score")),
             "weather_fit_score": _optional_float(row.get("weather_fit_score")),
             "review_quality_score": _optional_float(row.get("review_quality_score")),
-            "culture_relevance_score": _optional_float(row.get("culture_relevance_score")),
+            "accessibility_fit_score": _optional_float(row.get("accessibility_fit_score")),
         },
         "data_basis": "analytics.place_score_snapshots",
         "features": row.get("score_features") or {},

@@ -3,40 +3,50 @@ from __future__ import annotations
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
-FORMULA_VERSION = "local-value-v1"
+FORMULA_VERSION = "local-value-v2"
 
 COMPONENT_WEIGHTS = {
-    "local_spending_score": 0.30,
-    "demand_dispersion_score": 0.25,
-    "weather_fit_score": 0.15,
-    "review_quality_score": 0.15,
+    "local_spending_score": 0.22,
+    "small_merchant_fit_score": 0.18,
+    "demand_dispersion_score": 0.20,
     "culture_relevance_score": 0.15,
+    "weather_fit_score": 0.10,
+    "review_quality_score": 0.10,
+    "accessibility_fit_score": 0.05,
 }
 
 _CATEGORY_PRIORS = {
     "attraction": {
         "local_spending_score": 0.62,
+        "small_merchant_fit_score": 0.58,
         "demand_dispersion_score": 0.70,
-        "weather_fit_score": 0.74,
         "culture_relevance_score": 0.86,
+        "weather_fit_score": 0.74,
+        "accessibility_fit_score": 0.68,
     },
     "restaurant": {
         "local_spending_score": 0.76,
+        "small_merchant_fit_score": 0.64,
         "demand_dispersion_score": 0.66,
-        "weather_fit_score": 0.82,
         "culture_relevance_score": 0.52,
+        "weather_fit_score": 0.82,
+        "accessibility_fit_score": 0.74,
     },
     "event": {
         "local_spending_score": 0.58,
+        "small_merchant_fit_score": 0.60,
         "demand_dispersion_score": 0.73,
-        "weather_fit_score": 0.68,
         "culture_relevance_score": 0.90,
+        "weather_fit_score": 0.68,
+        "accessibility_fit_score": 0.62,
     },
     "culture_venue": {
         "local_spending_score": 0.54,
+        "small_merchant_fit_score": 0.62,
         "demand_dispersion_score": 0.76,
-        "weather_fit_score": 0.86,
         "culture_relevance_score": 0.94,
+        "weather_fit_score": 0.86,
+        "accessibility_fit_score": 0.72,
     },
 }
 
@@ -89,7 +99,11 @@ def demo_place_score(*, category: str, distance_m: int) -> dict[str, Any]:
         features={
             "category_prior": normalized_category,
             "distance_m": distance_m,
-            "missing_signals": ["card_spending_snapshot", "review_attribute_analysis"],
+            "missing_signals": [
+                "card_spending_snapshot",
+                "franchise_business_identity",
+                "review_attribute_analysis",
+            ],
         },
     )
 

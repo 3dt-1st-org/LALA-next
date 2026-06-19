@@ -113,6 +113,12 @@ try {
         throw "Place score batch plan failed."
     }
 
+    Write-Host "Planning franchise business identity batch..."
+    & powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\windows\plan_franchise_identity_batch.ps1" -Python $Python
+    if ($LASTEXITCODE -ne 0) {
+        throw "Franchise identity batch plan failed."
+    }
+
     Write-Host "Planning place AI enrichment..."
     & powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\windows\plan_place_ai_enrichment.ps1" -Python $Python
     if ($LASTEXITCODE -ne 0) {

@@ -74,6 +74,7 @@ Build Flutter web against the custom API domain:
 ```bash
 flutter build web --release \
   --dart-define LALA_API_BASE_URL=https://api.lala-next.cloud \
+  --dart-define LALA_API_BEARER_TOKEN="$LALA_API_BEARER_TOKEN" \
   --dart-define KAKAO_JAVASCRIPT_KEY="$KAKAO_JAVASCRIPT_KEY"
 ```
 
@@ -96,10 +97,11 @@ curl -sS -o /dev/null -w '%{http_code}\n' https://lala-next.cloud
 curl -sS -o /dev/null -w '%{http_code}\n' https://www.lala-next.cloud
 ```
 
-The production Flutter build should use the Azure-backed API base URL, the Kakao
-Maps JavaScript key, and a 50 km default recommendation radius. Kakao Developers
-must allow the deployed web domains, including `https://lala-next.cloud`,
-`https://www.lala-next.cloud`, and any Vercel preview domain used for judging.
+The production Flutter build should use the Azure-backed API base URL, a
+deployment-secret client credential, the Kakao Maps JavaScript key, and a 50 km
+default recommendation radius. Kakao Developers must allow the deployed web
+domains, including `https://lala-next.cloud`, `https://www.lala-next.cloud`, and
+any Vercel preview domain used for judging.
 
 ## DNS
 

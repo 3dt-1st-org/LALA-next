@@ -30,11 +30,13 @@ def test_place_profile_chunk_keeps_public_value_score_context():
             "source_record_id": "123",
             "final_score": 0.82,
             "local_spending_score": 0.7,
+            "small_merchant_fit_score": 0.76,
             "demand_dispersion_score": 0.6,
             "weather_fit_score": 0.9,
             "review_quality_score": None,
             "culture_relevance_score": 0.8,
-            "formula_version": "local-value-v1",
+            "accessibility_fit_score": 0.62,
+            "formula_version": "local-value-v2",
             "features": {"card_month": "2026-05-01"},
         }
     )
