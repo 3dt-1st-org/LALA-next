@@ -24,7 +24,7 @@ env:
 
 jobs:
   deploy:
-    name: Deploy shared dev API and database
+    name: Deploy shared dev API runtime
     runs-on: ubuntu-latest
     environment: dev
 
@@ -96,9 +96,6 @@ jobs:
           jq -r '.containerRegistryLoginServer.value' azure-outputs.json | sed 's/^/ACR_LOGIN_SERVER=/' >> "$GITHUB_ENV"
           jq -r '.apiContainerAppName.value' azure-outputs.json | sed 's/^/CONTAINER_APP_NAME=/' >> "$GITHUB_ENV"
           jq -r '.apiFqdn.value' azure-outputs.json | sed 's/^/API_FQDN=/' >> "$GITHUB_ENV"
-          jq -r '.keyVaultName.value' azure-outputs.json | sed 's/^/KEY_VAULT_NAME=/' >> "$GITHUB_ENV"
-          jq -r '.keyVaultUri.value' azure-outputs.json | sed 's/^/KEY_VAULT_URL=/' >> "$GITHUB_ENV"
-          jq -r '.postgresServerName.value' azure-outputs.json | sed 's/^/POSTGRES_SERVER_NAME=/' >> "$GITHUB_ENV"
 
       - name: Build and push API image
         run: |
@@ -119,42 +116,10 @@ jobs:
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --image "$IMAGE"
 
-      - name: Apply and verify canonical database schema
-        run: |
-          set -euo pipefail
-          RUNNER_IP="$(curl -fsSL https://api.ipify.org)"
-          RULE_NAME="github-actions-${GITHUB_RUN_ID}"
-
-          cleanup() {
-            az postgres flexible-server firewall-rule delete \
-              --resource-group "$AZURE_RESOURCE_GROUP" \
-              --server-name "$POSTGRES_SERVER_NAME" \
-              --name "$RULE_NAME" \
-              --yes >/dev/null 2>&1 || true
-          }
-          trap cleanup EXIT
-
-          az postgres flexible-server firewall-rule create \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --server-name "$POSTGRES_SERVER_NAME" \
-            --name "$RULE_NAME" \
-            --start-ip-address "$RUNNER_IP" \
-            --end-ip-address "$RUNNER_IP"
-
-          DB_DSN="$(az keyvault secret show \
-            --vault-name "$KEY_VAULT_NAME" \
-            --name db-dsn \
-            --query value \
-            --output tsv)"
-          echo "::add-mask::$DB_DSN"
-          export DB_DSN
-          export KEY_VAULT_URL
-          export ALLOW_CANONICAL_SQL_APPLY=1
-          scripts/unix/apply_canonical_sql.sh --apply --confirm APPLY_CANONICAL_SQL --json --python .venv/bin/python
-          scripts/unix/verify_db_schema.sh --json --python .venv/bin/python
-
       - name: Smoke deployed API
         run: |
           set -euo pipefail
           curl -fsS "https://${API_FQDN}/healthz"
-          curl -fsS "https://${API_FQDN}/readyz"
+          if ! curl -fsS "https://${API_FQDN}/readyz"; then
+            echo "readyz probe failed; PostgreSQL schema/data may need a separate manual rollout."
+          fi

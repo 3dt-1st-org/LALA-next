@@ -81,9 +81,11 @@ the least privileges needed after provisioning.
 3. Deploys the Bicep template.
 4. Builds and pushes the API image to ACR.
 5. Updates the Container App revision.
-6. Temporarily opens the PostgreSQL firewall for the GitHub runner.
-7. Applies and verifies canonical SQL without printing `DB_DSN`.
-8. Runs `/healthz` and `/readyz` smoke checks.
+6. Runs a required `/healthz` smoke check and a non-blocking `/readyz` probe.
+
+The dev deployment workflow intentionally does not apply PostgreSQL schema or
+seed data. Shared database changes should be reviewed and run separately with
+SQL tooling or the guarded canonical SQL runbooks.
 
 ## Notes
 
@@ -94,5 +96,5 @@ the least privileges needed after provisioning.
   The GitHub `dev` workflow uses `enableRoleAssignments=false` after those RBAC
   bindings exist.
 - The PostgreSQL server currently uses a dev-friendly public endpoint with
-  Azure-service access and temporary GitHub runner firewall rules. For staging or
-  production, move to private networking before treating it as durable hosting.
+  Azure-service access. For staging or production, move to private networking
+  before treating it as durable hosting.

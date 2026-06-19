@@ -55,7 +55,8 @@ Vault as `db-dsn`. The API container receives only:
 - `AZURE_CLIENT_ID`
 
 The API then loads `DB_DSN` through managed identity. The deployment workflow may
-read the same secret during schema migration, but masks it and never prints it.
+redeploy infrastructure and the API image, but it does not read the database
+secret for schema migration.
 
 The deploy workflow also receives `AZURE_DEPLOY_PRINCIPAL_OBJECT_ID` so the
 Bicep template can grant the GitHub OIDC service principal `AcrPush` and Key
@@ -70,8 +71,9 @@ configuration without needing broad role-assignment write permission.
 
 This deployment lane is for shared dev, not production.
 
-- Public DB access is restricted to Azure services plus a short-lived GitHub
-  runner firewall rule during schema migration.
+- Public DB access is restricted to Azure services. Schema and seed-data changes
+  are applied separately through reviewed SQL or guarded runbooks, not on every
+  `dev` branch push.
 - Production should use private networking, separate staging/prod resource
   groups, stricter database identities, backup policy review, and explicit
   DNS cutover planning.

@@ -156,11 +156,14 @@ def test_azure_dev_deploy_uses_oidc_and_dev_branch_only():
     assert "AZURE_DEPLOY_PRINCIPAL_OBJECT_ID" in workflow
     assert 'deploymentPrincipalObjectId="$AZURE_DEPLOY_PRINCIPAL_OBJECT_ID"' in workflow
     assert "enableRoleAssignments=false" in workflow
-    assert "ALLOW_CANONICAL_SQL_APPLY=1" in workflow
     assert "secrets.AZURE_POSTGRES_ADMIN_PASSWORD" in workflow
-    assert '--server-name "$POSTGRES_SERVER_NAME"' in workflow
-    assert '--name "$RULE_NAME"' in workflow
-    assert "--rule-name" not in workflow
+    assert "ALLOW_CANONICAL_SQL_APPLY" not in workflow
+    assert "apply_canonical_sql" not in workflow
+    assert "verify_db_schema" not in workflow
+    assert "az postgres flexible-server firewall-rule" not in workflow
+    assert "curl -fsS \"https://${API_FQDN}/healthz\"" in workflow
+    assert 'if ! curl -fsS "https://${API_FQDN}/readyz"; then' in workflow
+    assert "PostgreSQL schema/data may need a separate manual rollout" in workflow
 
 
 def test_azure_container_build_excludes_local_secrets():
