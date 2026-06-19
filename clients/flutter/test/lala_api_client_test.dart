@@ -501,7 +501,7 @@ void main() {
     );
   });
 
-  test('/api/v1 routes can be sent without client auth for public demo mode',
+  test('/api/v1 routes can be sent without client auth when caller has no token',
       () async {
     late http.Request captured;
     final client = LalaApiClient(
@@ -522,7 +522,7 @@ void main() {
             },
             'source': 'skeleton',
           },
-          'meta': {'request_id': 'public-demo-request-id'},
+          'meta': {'request_id': 'no-token-request-id'},
           'error': null,
         });
       }),
@@ -533,7 +533,7 @@ void main() {
     expect(captured.headers.containsKey('authorization'), isFalse);
     expect(captured.headers.containsKey('x-api-key'), isFalse);
     expect(envelope.ok, isTrue);
-    expect(envelope.requestId, 'public-demo-request-id');
+    expect(envelope.requestId, 'no-token-request-id');
   });
 }
 

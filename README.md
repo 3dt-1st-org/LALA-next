@@ -58,8 +58,8 @@ scripts/unix/bootstrap_local_mvp_db.sh --all
 
 That starts `compose.local.yml`, applies canonical SQL, loads local demo seed
 data, computes `local-value-v1` score snapshots, and refreshes the bundled
-public MVP snapshot. The script builds a localhost `DB_DSN` internally and never
-prints it.
+read-only snapshot fallback. The script builds a localhost `DB_DSN` internally
+and never prints it.
 
 Run the full local verification pass:
 
@@ -179,7 +179,7 @@ After canonical SQL and local seed data are loaded, preview score snapshots:
 scripts/unix/plan_place_score_batch.sh --preview --limit 20
 ```
 
-Review the public MVP snapshot export without connecting to a database:
+Review the read-only snapshot fallback export without connecting to a database:
 
 ```bash
 scripts/unix/export_public_mvp_snapshot.sh

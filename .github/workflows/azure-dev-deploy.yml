@@ -87,7 +87,7 @@ jobs:
               location="$AZURE_LOCATION" \
               deploymentPrincipalObjectId="$AZURE_DEPLOY_PRINCIPAL_OBJECT_ID" \
               enableRoleAssignments=false \
-              publicDemoMode=true \
+              publicDemoMode=false \
               postgresAdminLogin="$POSTGRES_ADMIN_LOGIN" \
               postgresAdminPassword="$POSTGRES_ADMIN_PASSWORD" \
               corsAllowOrigins="$CORS_ALLOW_ORIGINS" \

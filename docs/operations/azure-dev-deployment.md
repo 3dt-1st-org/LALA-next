@@ -58,9 +58,11 @@ The API then loads `DB_DSN` through managed identity. The deployment workflow ma
 redeploy infrastructure and the API image, but it does not read the database
 secret for schema migration.
 
-The shared dev API enables `LALA_PUBLIC_DEMO_MODE=true` so the login-free MVP
-Flutter surface can keep using `/api/v1/*` while canonical PostgreSQL schema and
-seed-data changes are applied separately.
+Azure dev, production, and review deployments keep `LALA_PUBLIC_DEMO_MODE=false`.
+The normal runtime path is PostgreSQL plus Key Vault, populated by reviewed
+ingest, scoring, and RAG jobs. Bundled static data should be treated only as an
+offline, read-only snapshot fallback for DB outage handling or isolated local
+checks.
 
 The deploy workflow also receives `AZURE_DEPLOY_PRINCIPAL_OBJECT_ID` so the
 Bicep template can grant the GitHub OIDC service principal `AcrPush` and Key

@@ -10,8 +10,8 @@ from apps.api.app.services.official_media import normalize_official_image_url
 
 SNAPSHOT_DATA_BASIS = "public_mvp_snapshot"
 DEFAULT_SNAPSHOT_DESCRIPTION = (
-    "Public MVP snapshot exported from the canonical DB read model. It is used "
-    "only when the public demo API has no DB_DSN."
+    "Read-only static snapshot exported from the canonical DB read model. It is "
+    "reserved for DB outage fallback and isolated local checks."
 )
 DEFAULT_OUTPUT_PATH = "apps/api/app/data/public_mvp_places.json"
 

@@ -11,9 +11,9 @@ inside the future Flutter application and provide runtime configuration for:
 The client can call public `getHealth()` and `getReadiness()` without client
 auth, which is useful when a Flutter developer needs to confirm the backend URL
 and runtime mode before a token is available. `/api/v1/*` methods attach
-`bearerToken` or `apiKey` when provided, but they no longer fail locally when
-credentials are absent because the public MVP can run with
-`LALA_PUBLIC_DEMO_MODE=true`.
+`bearerToken` or `apiKey` when provided. Production, review, and shared dev
+deployments should keep server-side client auth configured; offline static
+snapshot fallback is reserved for DB outage handling or isolated local checks.
 
 JSON routes return the shared `{ ok, data, meta, error }` envelope. The
 reference client parses common API payloads into typed DTOs such as

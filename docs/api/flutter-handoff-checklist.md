@@ -172,8 +172,9 @@ or generated content.
 - Skeleton mode is valid for UI development and deterministic contract tests.
 - `DB_DSN` enables PostgreSQL-backed places, weather, planner, and docent-cache
   reads with fallback to skeleton behavior.
-- `LALA_PUBLIC_DEMO_MODE=true` lets places, daily plan, and intervention use the
-  bundled `public_mvp_snapshot` when a live DB is absent.
+- Production, review, and shared dev deployments should keep
+  `LALA_PUBLIC_DEMO_MODE=false`; bundled static snapshots are limited to
+  offline, read-only DB-outage fallback or isolated local checks.
 - `LALA_ENABLE_LIVE_AI=true` enables Azure OpenAI script generation.
 - `LALA_ENABLE_LIVE_SPEECH=true` enables Azure Speech MP3 generation.
 - `/readyz.data.mode.data` reports `db-backed` only after the canonical DB probe

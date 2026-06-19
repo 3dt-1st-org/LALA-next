@@ -12,16 +12,16 @@ Current app surface:
 - Kakao Maps background map, loaded with `KAKAO_JAVASCRIPT_KEY` at Flutter web
   build time and through the registered `https://lala-next.cloud`
   `kakao-map-embed.html` page for native iOS/Android WebView builds.
-- 50 km default public MVP radius for the Suwon/Gyeonggi demo snapshot.
+- 50 km default recommendation radius for the Suwon/Gyeonggi launch dataset.
 - Bearer token or migration API key input for `/api/v1/*`.
 - Recommendation-first home surface that highlights the top place, local-value
   score, local spending, demand dispersion, weather fit, culture relevance, and
   review-quality readiness from `/api/v1/places`.
 - Places, weather, intervention, daily plan, first-place docent script, and
-  manual docent audio metadata panels for operator handoff and public-demo
+  manual docent audio metadata panels for operator handoff and offline snapshot
   fallback checks.
 - Daily plan and intervention share the same editable radius as places, so the
-  public MVP snapshot remains consistent across panels.
+  selected recommendation dataset remains consistent across panels.
 - Partial-failure handling that keeps public health/readiness visible when an
   authenticated `/api/v1/*` request fails.
 
@@ -96,11 +96,11 @@ flutter run \
   --dart-define KAKAO_JAVASCRIPT_KEY="$KAKAO_JAVASCRIPT_KEY"
 ```
 
-The public MVP backend can run with `LALA_PUBLIC_DEMO_MODE=true`, so the app
-loads places from the bundled public snapshot plus weather, intervention, daily
-plan, and docent script panels even when no bearer token or migration API key is
-entered. If the backend disables public demo mode, the server returns the normal
-JSON auth error and the app keeps readiness visible.
+Production, review, and shared dev backends should keep
+`LALA_PUBLIC_DEMO_MODE=false` and use configured client auth plus the PostgreSQL
+read model. The bundled static snapshot is only an offline, read-only fallback
+for DB outage handling or isolated local checks; if auth is unavailable, the
+server returns the normal JSON auth error and the app keeps readiness visible.
 
 Do not commit client tokens or API keys. For local testing, prefer entering
 short-lived credentials in the app UI or using an operator-owned environment.

@@ -1,1 +1,1 @@
-"""Bundled public MVP data snapshots."""
+"""Bundled read-only snapshot fallback data."""

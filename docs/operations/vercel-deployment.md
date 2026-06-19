@@ -17,20 +17,20 @@ request to that function and uses `.vercelignore` as an allowlist so local docs,
 artifacts, Flutter builds, virtual environments, and legacy imports are not
 uploaded or exposed as static files.
 
-Production environment variables currently required for the public MVP:
+Production environment variables for the legacy Vercel API fallback path:
 
 ```text
-LALA_PUBLIC_DEMO_MODE=true
+LALA_PUBLIC_DEMO_MODE=false
 CORS_ALLOW_ORIGINS=https://lala-next.cloud,https://www.lala-next.cloud,https://lala-next.vercel.app
 LALA_ENABLE_LIVE_AI=false
 LALA_ENABLE_LIVE_SPEECH=false
 ```
 
-The public MVP intentionally leaves live DB, live AI, live speech, and OAuth/JWT
-rollouts disabled. When `LALA_PUBLIC_DEMO_MODE=true`, the API serves the bundled
-`public_mvp_snapshot` if `DB_DSN` is absent, so `/readyz` should report
-`client_auth=public-demo`, `checks.public_data_snapshot=configured`, and
-`mode.overall=public-cache`.
+The primary API runtime now lives on Azure Container Apps. For production,
+review, and shared dev, keep `LALA_PUBLIC_DEMO_MODE=false`; the normal data path
+is PostgreSQL plus Key Vault with reviewed ingest, scoring, and RAG jobs.
+Bundled static data is only an offline, read-only snapshot fallback for DB
+outage handling or isolated local checks.
 
 Refresh the bundled snapshot from a canonical DB before a production demo:
 
@@ -91,10 +91,9 @@ curl -sS -o /dev/null -w '%{http_code}\n' https://lala-next.cloud
 curl -sS -o /dev/null -w '%{http_code}\n' https://www.lala-next.cloud
 ```
 
-The production Flutter build uses `LALA_API_BASE_URL=https://api.lala-next.cloud`,
-the Kakao Maps JavaScript key, and a 50 km default recommendation radius so the
-public Gyeonggi MVP snapshot is visible on first load. Kakao Developers must
-allow the deployed web domains, including `https://lala-next.cloud`,
+The production Flutter build should use the Azure-backed API base URL, the Kakao
+Maps JavaScript key, and a 50 km default recommendation radius. Kakao Developers
+must allow the deployed web domains, including `https://lala-next.cloud`,
 `https://www.lala-next.cloud`, and any Vercel preview domain used for judging.
 
 ## DNS

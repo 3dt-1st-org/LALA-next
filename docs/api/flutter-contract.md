@@ -113,9 +113,10 @@ request `input` values are removed before the response is returned.
 Wave 1 service responses are deterministic when live dependencies are disabled.
 Azure OpenAI and Azure Speech are available as opt-in live paths. DB-backed
 places, weather, planner, and docent-cache reads are also available when
-`DB_DSN` points at the canonical schema. If DB access is absent but
-`LALA_PUBLIC_DEMO_MODE=true`, places use the bundled `public_mvp_snapshot`;
-otherwise the same routes return contract-safe skeleton data.
+`DB_DSN` points at the canonical schema. If DB access is absent, bundled static
+snapshot data may be used only as an offline, read-only fallback for DB outage
+handling or isolated local checks; otherwise the same routes return
+contract-safe skeleton data.
 Flutter can read `/readyz.data.mode.overall` for a compact handoff label:
 `skeleton`, `public-cache`, `db-backed`, `live-azure`, or `degraded`. Component
 labels are also available at `data.mode.data`, `data.mode.ai`,
