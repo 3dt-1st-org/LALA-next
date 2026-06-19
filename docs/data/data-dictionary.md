@@ -228,11 +228,23 @@ AI/API/로컬 변환으로 만든 보강 결과를 저장한다. `travel.places`
 | `normalized_brand_name` | text | Yes | 상호 매칭용 정규화 브랜드명 |
 | `headquarters_name_ko` | text | No | 가맹본부명 |
 | `business_category` | text | No | 원천 업종/분류 |
+| `main_product` | text | No | 원천 주요 품목. 현재 브랜드별 현황 API에는 없으면 null |
 | `franchise_store_count` | integer | No | 가맹점 수 |
+| `average_sales_amount` | numeric | No | 원천 평균 매출액 |
 | `chain_scale_score` | numeric | No | 0~1 체인 규모 점수 |
 | `primary_source` | text | Yes | 기본값 `fair_trade_commission` |
 | `source_record_id` | text | No | 원천 레코드 ID |
 | `updated_at` | timestamptz | Yes | 마지막 갱신 시각 |
+
+`apps.api.app.tools.run_franchise_reference_ingest`는 공공데이터포털
+[`공정거래위원회_가맹정보_브랜드별 가맹점 현황 제공 서비스`](https://www.data.go.kr/data/15110241/openapi.do)를
+호출해 `brandNm`, `corpNm`, `indutyLclasNm`, `indutyMlsfcNm`, `frcsCnt`,
+`avrgSlsAmt`를 위 컬럼으로 정규화한다. 기본 실행은 plan-only이며,
+`--preview`는 API를 호출하지만 DB를 쓰지 않는다. `--apply`는
+`ALLOW_FRANCHISE_REFERENCE_INGEST_APPLY=1`과
+`--confirm APPLY_FRANCHISE_REFERENCE_INGEST`가 있을 때만 브랜드 참조를 upsert한다.
+이 참조 데이터가 채워진 뒤 `run_franchise_identity_batch`가 장소명과 브랜드명을
+매칭해 `analytics.place_business_identity`를 생성한다.
 
 ## `economy.franchise_locations`
 

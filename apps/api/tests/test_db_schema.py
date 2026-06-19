@@ -48,6 +48,10 @@ def install_fake_psycopg2(monkeypatch, present: dict[str, bool], calls: list[dic
 
 
 def test_inspect_canonical_schema_reports_ok_when_all_required_objects_exist(monkeypatch):
+    assert "economy.franchise_brands" in db_schema.REQUIRED_RELATIONS
+    assert "economy.franchise_locations" in db_schema.REQUIRED_RELATIONS
+    assert "analytics.place_business_identity" in db_schema.REQUIRED_RELATIONS
+
     present = {
         name: True
         for name in (

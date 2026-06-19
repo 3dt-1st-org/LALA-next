@@ -88,6 +88,9 @@ echo "Planning local-value place score batch..."
 echo "Planning franchise business identity batch..."
 "$ROOT/scripts/unix/plan_franchise_identity_batch.sh" --python "$PYTHON"
 
+echo "Planning franchise reference ingestion..."
+"$ROOT/scripts/unix/plan_franchise_reference_ingest.sh" --python "$PYTHON"
+
 echo "Planning RAG knowledge index..."
 "$ROOT/scripts/unix/plan_rag_index.sh" --python "$PYTHON"
 

@@ -76,7 +76,7 @@ load_env_file() {
     name="$(trim "${line%%=*}")"
     value="$(trim "${line#*=}")"
     [[ "$name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
-    [[ -z "${!name:-}" ]] || continue
+    [[ -z "${!name+x}" ]] || continue
 
     if [[ "$value" == \"*\" && "$value" == *\" && ${#value} -ge 2 ]]; then
       value="${value:1:${#value}-2}"

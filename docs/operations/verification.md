@@ -315,6 +315,41 @@ $env:ALLOW_FRANCHISE_IDENTITY_BATCH_APPLY = "1"
 Remove-Item Env:\ALLOW_FRANCHISE_IDENTITY_BATCH_APPLY
 ```
 
+To review Fair Trade Commission franchise brand reference ingestion without
+calling the public-data API or mutating the DB:
+
+```bash
+scripts/unix/plan_franchise_reference_ingest.sh
+```
+
+Default mode is plan-only. Preview calls the public-data API
+`공정거래위원회_가맹정보_브랜드별 가맹점 현황 제공 서비스` and maps brand statistics
+into `economy.franchise_brands`, but does not write to PostgreSQL:
+
+```bash
+scripts/unix/plan_franchise_reference_ingest.sh \
+  --preview \
+  --year 2025 \
+  --rows 20
+```
+
+Apply upserts brand reference rows and requires the exact confirm string plus a
+process-local allow flag:
+
+```bash
+ALLOW_FRANCHISE_REFERENCE_INGEST_APPLY=1 \
+  scripts/unix/plan_franchise_reference_ingest.sh \
+  --apply \
+  --confirm APPLY_FRANCHISE_REFERENCE_INGEST \
+  --year 2025 \
+  --rows 0
+```
+
+The wrapper never prints `PUBLIC_DATA_SERVICE_KEY` or `DB_DSN`. After this
+reference ingest succeeds, run the franchise identity batch, then regenerate
+`local-value-v2` score snapshots and RAG chunks so the public API reflects the
+new small-merchant signal.
+
 To review Azure OpenAI place enrichment without connecting to a database or
 calling AI:
 

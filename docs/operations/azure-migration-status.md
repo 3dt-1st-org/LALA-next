@@ -178,8 +178,10 @@ After Azure reports the custom hostname binding as `SniEnabled`, verify
   lock maintenance window. The resource group currently has a `CanNotDelete`
   lock, so the rule deletion is blocked unless an authorized operator
   temporarily removes or scopes the lock.
-- Add Culture Info, KOPIS, card-spending files, weather observations, Fair Trade
-  Commission franchise references, and review attribute signals, then regenerate
-  franchise identity rows, `local-value-v2` score snapshots, and RAG chunks.
+- Add Culture Info, KOPIS, card-spending files, weather observations, and review
+  attribute signals. For Fair Trade Commission franchise references, run
+  `scripts/unix/plan_franchise_reference_ingest.sh --preview` first and guarded
+  `--apply` only after review, then regenerate franchise identity rows,
+  `local-value-v2` score snapshots, and RAG chunks.
 - Add production-grade identity, private networking, and observability gates
   before treating the environment as durable production hosting.

@@ -424,6 +424,7 @@ def test_unix_scripts_have_safe_operational_guards():
         "plan_identity_rollout.sh",
         "plan_key_vault_reuse.sh",
         "plan_observability.sh",
+        "plan_franchise_reference_ingest.sh",
         "plan_place_ai_enrichment.sh",
         "plan_place_local_enrichment.sh",
         "plan_rag_index.sh",
@@ -446,6 +447,7 @@ def test_unix_scripts_have_safe_operational_guards():
 
     assert ".vault.azure.net" in scripts["_common.sh"]
     assert "LALA_ALLOWED_KEY_VAULT_HOSTS" in scripts["_common.sh"]
+    assert '${!name+x}' in scripts["_common.sh"]
     assert '"$vault_name" == *onmu*' in scripts["_common.sh"]
     assert "Unsupported Key Vault URL for LALA-next" in scripts["_common.sh"]
     assert "Worker smoke uses dry-run only" in scripts["smoke_workers.sh"]
@@ -494,6 +496,14 @@ def test_unix_scripts_have_safe_operational_guards():
     assert "ALLOW_FRANCHISE_IDENTITY_BATCH_APPLY=1" in scripts["plan_franchise_identity_batch.sh"]
     assert "--confirm APPLY_FRANCHISE_IDENTITY_BATCH" in scripts["plan_franchise_identity_batch.sh"]
     assert "DB_DSN value is never printed by this script." in scripts["plan_franchise_identity_batch.sh"]
+    assert "run_franchise_reference_ingest" in scripts["plan_franchise_reference_ingest.sh"]
+    assert "plan_franchise_reference_ingest.sh" in scripts["verify_repo.sh"]
+    assert "ALLOW_FRANCHISE_REFERENCE_INGEST_APPLY=1" in scripts["plan_franchise_reference_ingest.sh"]
+    assert "--confirm APPLY_FRANCHISE_REFERENCE_INGEST" in scripts["plan_franchise_reference_ingest.sh"]
+    assert (
+        "PUBLIC_DATA_SERVICE_KEY and DB_DSN values are never printed by this script."
+        in scripts["plan_franchise_reference_ingest.sh"]
+    )
     assert "run_rag_index" in scripts["plan_rag_index.sh"]
     assert "plan_rag_index.sh" in scripts["verify_repo.sh"]
     assert "ALLOW_RAG_INDEX_APPLY=1" in scripts["plan_rag_index.sh"]
