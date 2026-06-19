@@ -58,6 +58,7 @@ jobs:
       - name: Validate deployment settings
         env:
           POSTGRES_ADMIN_PASSWORD: ${{ secrets.AZURE_POSTGRES_ADMIN_PASSWORD }}
+          API_BEARER_TOKEN: ${{ secrets.AZURE_API_BEARER_TOKEN }}
         run: |
           set -euo pipefail
           : "${AZURE_RESOURCE_GROUP:?AZURE_RESOURCE_GROUP GitHub environment variable is required.}"
@@ -66,6 +67,7 @@ jobs:
           : "${LALA_ENVIRONMENT_NAME:?LALA_ENVIRONMENT_NAME GitHub environment variable is required.}"
           : "${POSTGRES_ADMIN_LOGIN:?POSTGRES_ADMIN_LOGIN GitHub environment variable is required.}"
           : "${POSTGRES_ADMIN_PASSWORD:?AZURE_POSTGRES_ADMIN_PASSWORD GitHub environment secret is required.}"
+          : "${API_BEARER_TOKEN:?AZURE_API_BEARER_TOKEN GitHub environment secret is required.}"
 
       - name: Ensure resource group exists
         run: |
@@ -77,6 +79,7 @@ jobs:
       - name: Deploy Azure infrastructure
         env:
           POSTGRES_ADMIN_PASSWORD: ${{ secrets.AZURE_POSTGRES_ADMIN_PASSWORD }}
+          API_BEARER_TOKEN: ${{ secrets.AZURE_API_BEARER_TOKEN }}
         run: |
           set -euo pipefail
           az deployment group create \
@@ -90,6 +93,7 @@ jobs:
               publicDemoMode=false \
               postgresAdminLogin="$POSTGRES_ADMIN_LOGIN" \
               postgresAdminPassword="$POSTGRES_ADMIN_PASSWORD" \
+              apiBearerToken="$API_BEARER_TOKEN" \
               corsAllowOrigins="$CORS_ALLOW_ORIGINS" \
             --query properties.outputs \
             --output json > azure-outputs.json

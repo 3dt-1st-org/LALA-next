@@ -158,6 +158,8 @@ def test_azure_dev_deploy_uses_oidc_and_dev_branch_only():
     assert "enableRoleAssignments=false" in workflow
     assert "publicDemoMode=false" in workflow
     assert "secrets.AZURE_POSTGRES_ADMIN_PASSWORD" in workflow
+    assert "secrets.AZURE_API_BEARER_TOKEN" in workflow
+    assert 'apiBearerToken="$API_BEARER_TOKEN"' in workflow
     assert "ALLOW_CANONICAL_SQL_APPLY" not in workflow
     assert "apply_canonical_sql" not in workflow
     assert "verify_db_schema" not in workflow
@@ -179,6 +181,8 @@ def test_azure_container_build_excludes_local_secrets():
     assert "uvicorn apps.api.app.main:app" in dockerfile
     assert "COPY . ." not in dockerfile
     assert "param publicDemoMode bool = false" in bicep
+    assert "param apiBearerToken string = ''" in bicep
+    assert "name: 'api-bearer-token'" in bicep
     assert "name: 'LALA_PUBLIC_DEMO_MODE'" in bicep
     assert "value: string(publicDemoMode)" in bicep
 

@@ -35,6 +35,10 @@ param postgresAdminLogin string = 'lalaadmin'
 @description('PostgreSQL administrator password. The value is stored only as a secure deployment parameter and Key Vault secret.')
 param postgresAdminPassword string
 
+@secure()
+@description('Static transition bearer token for API client authentication. The value is stored only as a secure deployment parameter and Key Vault secret.')
+param apiBearerToken string = ''
+
 @description('Application database name.')
 param postgresDatabaseName string = 'lala'
 
@@ -234,6 +238,14 @@ resource corsSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   name: 'cors-allow-origins'
   properties: {
     value: corsAllowOrigins
+  }
+}
+
+resource apiBearerTokenSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(apiBearerToken)) {
+  parent: keyVault
+  name: 'api-bearer-token'
+  properties: {
+    value: apiBearerToken
   }
 }
 

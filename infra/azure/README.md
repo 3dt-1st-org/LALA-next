@@ -89,7 +89,8 @@ SQL tooling or the guarded canonical SQL runbooks.
 
 ## Notes
 
-- The app reads `DB_DSN` from Key Vault at runtime through `KEY_VAULT_URL`.
+- The app reads `DB_DSN` and `api-bearer-token` from Key Vault at runtime
+  through `KEY_VAULT_URL`.
 - `LALA_ALLOWED_KEY_VAULT_HOSTS` is set to the generated LALA vault host so the
   API cannot accidentally read ONMU or unrelated vaults.
 - `LALA_PUBLIC_DEMO_MODE` is explicitly disabled for Azure dev, production, and

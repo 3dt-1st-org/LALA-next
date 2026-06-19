@@ -54,15 +54,20 @@ Vault as `db-dsn`. The API container receives only:
 - `LALA_ALLOWED_KEY_VAULT_HOSTS`
 - `AZURE_CLIENT_ID`
 
-The API then loads `DB_DSN` through managed identity. The deployment workflow may
-redeploy infrastructure and the API image, but it does not read the database
-secret for schema migration.
+The API then loads `DB_DSN`, `api-bearer-token`, and other runtime secrets
+through managed identity. The deployment workflow may redeploy infrastructure
+and the API image, but it does not read the database secret for schema
+migration.
 
 Azure dev, production, and review deployments keep `LALA_PUBLIC_DEMO_MODE=false`.
 The normal runtime path is PostgreSQL plus Key Vault, populated by reviewed
 ingest, scoring, and RAG jobs. Bundled static data should be treated only as an
 offline, read-only snapshot fallback for DB outage handling or isolated local
 checks.
+
+The GitHub `dev` environment must provide both `AZURE_POSTGRES_ADMIN_PASSWORD`
+and `AZURE_API_BEARER_TOKEN`. Bicep writes the bearer token to Key Vault as
+`api-bearer-token`; it should not be committed, printed, or copied into docs.
 
 The deploy workflow also receives `AZURE_DEPLOY_PRINCIPAL_OBJECT_ID` so the
 Bicep template can grant the GitHub OIDC service principal `AcrPush` and Key
