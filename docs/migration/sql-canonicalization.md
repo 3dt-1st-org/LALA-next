@@ -82,7 +82,7 @@ $env:ALLOW_CANONICAL_SQL_APPLY = "1"
 .\scripts\windows\apply_canonical_sql.ps1 `
   -Apply `
   -Confirm APPLY_CANONICAL_SQL `
-  -KeyVaultUrl https://lala-next-kv-27db5e.vault.azure.net/
+  -KeyVaultUrl <KEY_VAULT_URL>
 ```
 
 Apply mode runs the canonical files in sorted order inside one transaction with

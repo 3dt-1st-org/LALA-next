@@ -20,7 +20,7 @@ contract checks should set `CORS_ALLOW_ORIGINS` on the API process, for example:
 $env:CORS_ALLOW_ORIGINS = "http://localhost:3000,http://127.0.0.1:3000"
 ```
 
-When the API runs with `KEY_VAULT_URL=https://lala-next-kv-27db5e.vault.azure.net/`,
+When the API runs with `KEY_VAULT_URL=<KEY_VAULT_URL>`,
 it can also load the optional `cors-allow-origins` secret into
 `CORS_ALLOW_ORIGINS`.
 

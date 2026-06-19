@@ -358,21 +358,26 @@ scripts/unix/inspect_access_log.sh runtime/api-access.jsonl --request-id <reques
 
 ## Azure Resources
 
-Wave 1 resources were created in resource group `3dt-final-team1`:
+Live Azure resource names, subscription ids, and service endpoints are not
+recorded in this public repo. Keep them in ignored local environment files,
+deployment settings, or the team-private runbook.
 
-- Key Vault: `lala-next-kv-27db5e`
-- Azure OpenAI account: `lala-next-aoai-27db5e`
-- Azure OpenAI deployment: `gpt-4o-mini`
-- Azure Speech account: `lala-next-speech-27db5e`
+Set `KEY_VAULT_URL` to the LALA-owned Key Vault URL only when the process should
+load secrets from Azure. If the runtime needs a stricter host gate, set
+`LALA_ALLOWED_KEY_VAULT_HOSTS` to a comma-separated list of allowed vault hosts.
+Do not point LALA at ONMU runtime vaults. The only ONMU-derived value currently
+considered reusable is the optional CORS origin list copied into LALA as
+`cors-allow-origins`; ONMU DB, token, OAuth provider, Redis, and MinIO secrets
+are not LALA runtime inputs.
 
-Use `KEY_VAULT_URL=https://lala-next-kv-27db5e.vault.azure.net/` for this repository. The ONMU vault `onmu-dev-kv-27db5e` is in the same resource group, but LALA-next does not use it. The API allowlists the LALA-next vault host and ignores other Key Vault URLs.
-The only ONMU-derived value currently reused is the optional CORS origin list,
-already copied into the LALA-next vault as `cors-allow-origins`; ONMU DB, token,
-OAuth provider, Redis, and MinIO secrets are not wired into LALA-next.
 Use `scripts/unix/plan_key_vault_reuse.sh` or
 `.\scripts\windows\plan_key_vault_reuse.ps1` to review that boundary.
 
-Live Azure calls are opt-in. Start the API with `.\scripts\windows\start_api.ps1 -KeyVaultUrl https://lala-next-kv-27db5e.vault.azure.net/ -EnableLiveAI -EnableLiveSpeech` and run `.\scripts\windows\smoke_api.ps1 -KeyVaultUrl https://lala-next-kv-27db5e.vault.azure.net/ -PaidDependency` when a small paid OpenAI/Speech smoke check is acceptable.
+Live Azure calls are opt-in. Start the API with
+`.\scripts\windows\start_api.ps1 -KeyVaultUrl <KEY_VAULT_URL> -EnableLiveAI -EnableLiveSpeech`
+and run
+`.\scripts\windows\smoke_api.ps1 -KeyVaultUrl <KEY_VAULT_URL> -PaidDependency`
+when a small paid OpenAI/Speech smoke check is acceptable.
 
 See [docs/operations/azure-resources.md](docs/operations/azure-resources.md).
 

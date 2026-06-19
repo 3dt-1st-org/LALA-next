@@ -7,14 +7,14 @@ content.
 ## Scope
 
 The smoke used the LALA-next-only Azure resources in resource group
-`3dt-final-team1`:
+`<LALA_AZURE_RESOURCE_GROUP>`:
 
-- Key Vault: `lala-next-kv-27db5e`
-- Azure OpenAI account: `lala-next-aoai-27db5e`
+- Key Vault: `lala-key-vault`
+- Azure OpenAI account: `lala-openai-account`
 - Azure OpenAI deployment: `gpt-4o-mini`
-- Azure Speech account: `lala-next-speech-27db5e`
+- Azure Speech account: `lala-speech-account`
 
-The ONMU Key Vault `onmu-dev-kv-27db5e` exists in the same resource group, but
+The ONMU Key Vault `onmu-source-vault` exists in the same resource group, but
 was not used.
 
 ## Commands
@@ -25,7 +25,7 @@ preload and live AI/Speech enabled:
 ```powershell
 .\scripts\windows\start_api.ps1 `
   -Port 8093 `
-  -KeyVaultUrl https://lala-next-kv-27db5e.vault.azure.net/ `
+  -KeyVaultUrl <KEY_VAULT_URL> `
   -EnableLiveAI `
   -EnableLiveSpeech
 ```
@@ -35,7 +35,7 @@ The paid smoke was run against the temporary API process:
 ```powershell
 .\scripts\windows\smoke_api.ps1 `
   -BaseUrl http://127.0.0.1:8093 `
-  -KeyVaultUrl https://lala-next-kv-27db5e.vault.azure.net/ `
+  -KeyVaultUrl <KEY_VAULT_URL> `
   -PaidDependency
 ```
 

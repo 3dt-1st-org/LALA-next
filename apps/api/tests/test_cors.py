@@ -61,7 +61,7 @@ def test_cors_origin_list_trims_spaces_and_trailing_slashes(monkeypatch):
 
 def test_cors_origin_list_can_load_from_lala_key_vault(monkeypatch):
     monkeypatch.delenv("CORS_ALLOW_ORIGINS", raising=False)
-    monkeypatch.setenv("KEY_VAULT_URL", "https://lala-next-kv-27db5e.vault.azure.net/")
+    monkeypatch.setenv("KEY_VAULT_URL", "https://lala-key-vault.vault.azure.net/")
 
     def fake_secret(key_vault_url: str, secret_name: str) -> str:
         if secret_name == "cors-allow-origins":

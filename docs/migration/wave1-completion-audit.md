@@ -202,13 +202,13 @@ Live paid dependency smoke was run with:
 ```powershell
 .\scripts\windows\start_api.ps1 `
   -Port 8093 `
-  -KeyVaultUrl https://lala-next-kv-27db5e.vault.azure.net/ `
+  -KeyVaultUrl <KEY_VAULT_URL> `
   -EnableLiveAI `
   -EnableLiveSpeech
 
 .\scripts\windows\smoke_api.ps1 `
   -BaseUrl http://127.0.0.1:8093 `
-  -KeyVaultUrl https://lala-next-kv-27db5e.vault.azure.net/ `
+  -KeyVaultUrl <KEY_VAULT_URL> `
   -PaidDependency
 ```
 

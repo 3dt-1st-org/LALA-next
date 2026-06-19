@@ -31,7 +31,7 @@ for:
 
 ## Key Vault Boundary
 
-OAuth rollout configuration belongs in `lala-next-kv-27db5e`:
+OAuth rollout configuration belongs in `lala-key-vault`:
 
 - `oauth-issuer`
 - `oauth-audience`
@@ -39,7 +39,7 @@ OAuth rollout configuration belongs in `lala-next-kv-27db5e`:
 - `oauth-client-id`
 - `oauth-required-scopes`
 
-Do not point LALA-next runtime at `onmu-dev-kv-27db5e`. The only ONMU value
+Do not point LALA-next runtime at `onmu-source-vault`. The only ONMU value
 currently reused is the optional browser CORS origin list, already copied into
 the LALA vault as `cors-allow-origins` and verified to match by hash on
 2026-06-11. ONMU DB URLs, API tokens, social-provider secrets, Redis, and MinIO

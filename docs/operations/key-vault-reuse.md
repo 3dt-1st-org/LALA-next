@@ -1,7 +1,7 @@
 # Key Vault Reuse Plan
 
-LALA-next must run from `lala-next-kv-27db5e`. The ONMU vault
-`onmu-dev-kv-27db5e` can be used only as a reviewed source for specific values
+LALA-next must run from `lala-key-vault`. The ONMU vault
+`onmu-source-vault` can be used only as a reviewed source for specific values
 that are copied into the LALA-next vault. Do not point `KEY_VAULT_URL` at the
 ONMU vault in LALA-next runtime.
 

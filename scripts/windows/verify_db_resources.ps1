@@ -1,7 +1,7 @@
 param(
-    [string]$SubscriptionId = "27db5ec6-d206-4028-b5e1-6004dca5eeef",
-    [string]$ResourceGroup = "3dt-final-team1",
-    [string]$KeyVaultName = "lala-next-kv-27db5e",
+    [string]$SubscriptionId = $(if ($env:LALA_AZURE_SUBSCRIPTION_ID) { $env:LALA_AZURE_SUBSCRIPTION_ID } else { "00000000-0000-0000-0000-000000000000" }),
+    [string]$ResourceGroup = $(if ($env:LALA_AZURE_RESOURCE_GROUP) { $env:LALA_AZURE_RESOURCE_GROUP } else { "lala-resource-group" }),
+    [string]$KeyVaultName = $(if ($env:LALA_KEY_VAULT_NAME) { $env:LALA_KEY_VAULT_NAME } else { "lala-key-vault" }),
     [string]$PostgresServerName = "",
     [string]$DatabaseName = "lala",
     [switch]$RequireDatabase

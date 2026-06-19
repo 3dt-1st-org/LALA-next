@@ -5,7 +5,7 @@ import shlex
 from dataclasses import dataclass
 from typing import Any
 
-DEFAULT_KEY_VAULT_NAME = "lala-next-kv-27db5e"
+DEFAULT_KEY_VAULT_NAME = "lala-key-vault"
 DEFAULT_API_APP_NAME = "lala-next-api-dev"
 DEFAULT_FLUTTER_APP_NAME = "lala-next-flutter-dev"
 DEFAULT_API_APP_ID_URI = "api://lala-next-dev"

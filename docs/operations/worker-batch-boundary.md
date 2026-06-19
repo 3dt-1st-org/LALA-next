@@ -86,7 +86,7 @@ order, idempotency, poison-message handling, and rollback ownership. It does not
 create Azure resources, bind queues, enable `ALLOW_WORKER_MUTATION`, write
 PostgreSQL rows, or print secret values.
 
-The plan keeps runtime configuration scoped to `lala-next-kv-27db5e`. ONMU Key
+The plan keeps runtime configuration scoped to `lala-key-vault`. ONMU Key
 Vault values are not worker inputs for this repository.
 
 ## Mutation Guard

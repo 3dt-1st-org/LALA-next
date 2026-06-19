@@ -7,13 +7,13 @@ from typing import Any
 
 from apps.workers.app.contracts import list_worker_jobs
 
-DEFAULT_SUBSCRIPTION_ID = "27db5ec6-d206-4028-b5e1-6004dca5eeef"
-DEFAULT_RESOURCE_GROUP = "3dt-final-team1"
+DEFAULT_SUBSCRIPTION_ID = "00000000-0000-0000-0000-000000000000"
+DEFAULT_RESOURCE_GROUP = "lala-resource-group"
 DEFAULT_LOCATION = "koreacentral"
-DEFAULT_KEY_VAULT_NAME = "lala-next-kv-27db5e"
+DEFAULT_KEY_VAULT_NAME = "lala-key-vault"
 DEFAULT_FUNCTION_APP_NAME = "lala-next-workers-dev"
-DEFAULT_STORAGE_ACCOUNT_NAME = "lalanextworker27db5e"
-DEFAULT_EVENT_HUB_NAMESPACE = "lala-next-eh-27db5e"
+DEFAULT_STORAGE_ACCOUNT_NAME = "lalaworkersdev"
+DEFAULT_EVENT_HUB_NAMESPACE = "lala-eventhub-dev"
 DEFAULT_EVENT_HUB_NAME = "community-post-ingest-events"
 DEFAULT_BASE_URL = "http://127.0.0.1:8080"
 
@@ -424,7 +424,7 @@ def _validate_inputs(
 
     if key_vault_name != DEFAULT_KEY_VAULT_NAME:
         warnings.append(
-            "Key Vault target must remain lala-next-kv-27db5e unless the owner approves a LALA-next vault migration."
+            "Key Vault target must remain lala-key-vault unless the owner approves a LALA-next vault migration."
         )
     if "onmu" in key_vault_name.lower():
         warnings.append("ONMU Key Vault values are not worker runtime inputs for LALA-next.")

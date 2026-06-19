@@ -18,8 +18,8 @@ def test_key_vault_reuse_plan_is_non_mutating_and_narrow():
     assert payload["ok"] is True
     assert payload["mode"] == "plan"
     assert payload["applies_changes"] is False
-    assert payload["source_vault_name"] == "onmu-dev-kv-27db5e"
-    assert payload["target_vault_name"] == "lala-next-kv-27db5e"
+    assert payload["source_vault_name"] == "onmu-source-vault"
+    assert payload["target_vault_name"] == "lala-key-vault"
     assert payload["candidate_secret_mappings"] == [
         {
             "source_secret_name": "int-cors-origins",
@@ -50,14 +50,14 @@ def test_key_vault_reuse_plan_is_non_mutating_and_narrow():
 
 def test_key_vault_reuse_plan_rejects_onmu_target():
     plan = build_key_vault_reuse_plan(
-        source_vault_name="onmu-dev-kv-27db5e",
-        target_vault_name="onmu-dev-kv-27db5e",
+        source_vault_name="onmu-source-vault",
+        target_vault_name="onmu-source-vault",
     )
 
     assert plan.ok is False
     assert len(plan.warnings) == 3
     assert any("runtime target" in warning for warning in plan.warnings)
-    assert all("lala-next-kv-27db5e" in gate for gate in plan.risk_gates[:1])
+    assert all("lala-key-vault" in gate for gate in plan.risk_gates[:1])
 
 
 def test_plan_key_vault_reuse_cli_outputs_json_without_secret_values():

@@ -18,7 +18,7 @@ environment variables without printing their values.
 For a live Azure demo:
 
 ```powershell
-.\scripts\windows\start_api.ps1 -Port 8080 -KeyVaultUrl https://lala-next-kv-27db5e.vault.azure.net/ -EnableLiveAI -EnableLiveSpeech
+.\scripts\windows\start_api.ps1 -Port 8080 -KeyVaultUrl <KEY_VAULT_URL> -EnableLiveAI -EnableLiveSpeech
 ```
 
 For Flutter Web or browser-based contract checks, configure explicit browser
@@ -51,7 +51,7 @@ static transition `API_BEARER_TOKEN`, then `IOS_API_KEY`.
 For live Azure OpenAI and Speech validation:
 
 ```powershell
-.\scripts\windows\smoke_api.ps1 -BaseUrl "http://127.0.0.1:8080" -KeyVaultUrl https://lala-next-kv-27db5e.vault.azure.net/ -PaidDependency
+.\scripts\windows\smoke_api.ps1 -BaseUrl "http://127.0.0.1:8080" -KeyVaultUrl <KEY_VAULT_URL> -PaidDependency
 ```
 
 For Flutter Web or browser-based contract checks, add a CORS preflight smoke
@@ -66,7 +66,7 @@ verification before the API handoff:
 
 ```powershell
 .\scripts\windows\verify_db_resources.ps1
-.\scripts\windows\verify_db_schema.ps1 -KeyVaultUrl https://lala-next-kv-27db5e.vault.azure.net/
+.\scripts\windows\verify_db_schema.ps1 -KeyVaultUrl <KEY_VAULT_URL>
 ```
 
 This check confirms the canonical extensions, schemas, tables, and views are
@@ -87,7 +87,7 @@ $env:ALLOW_CANONICAL_SQL_APPLY = "1"
 .\scripts\windows\apply_canonical_sql.ps1 `
   -Apply `
   -Confirm APPLY_CANONICAL_SQL `
-  -KeyVaultUrl https://lala-next-kv-27db5e.vault.azure.net/
+  -KeyVaultUrl <KEY_VAULT_URL>
 ```
 
 After apply mode succeeds, rerun `verify_db_schema.ps1` and then `/readyz`

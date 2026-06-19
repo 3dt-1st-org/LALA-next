@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-import subprocess
+import os
 import shutil
+import subprocess
 from functools import lru_cache
 from urllib.parse import urlparse
 
-ALLOWED_KEY_VAULT_HOSTS = {"lala-next-kv-27db5e.vault.azure.net"}
+KEY_VAULT_HOST_SUFFIX = ".vault.azure.net"
 
 
 @lru_cache(maxsize=64)
@@ -37,13 +38,46 @@ def _get_secret_with_sdk(vault_url: str, secret_name: str) -> str:
 
 def is_allowed_key_vault_url(vault_url: str) -> bool:
     parsed = urlparse(vault_url.strip())
-    return parsed.scheme == "https" and parsed.netloc.lower() in ALLOWED_KEY_VAULT_HOSTS
+    host = (parsed.hostname or "").lower().rstrip(".")
+    if parsed.scheme != "https" or parsed.port is not None:
+        return False
+    if not _looks_like_lala_key_vault_host(host):
+        return False
+    allowed_hosts = _configured_allowed_key_vault_hosts()
+    return not allowed_hosts or host in allowed_hosts
 
 
 def key_vault_name_from_url(vault_url: str) -> str:
     if not is_allowed_key_vault_url(vault_url):
         return ""
-    return urlparse(vault_url.strip()).netloc.split(".")[0]
+    return (urlparse(vault_url.strip()).hostname or "").split(".")[0]
+
+
+def _looks_like_lala_key_vault_host(host: str) -> bool:
+    if not host.endswith(KEY_VAULT_HOST_SUFFIX):
+        return False
+    vault_name = host[: -len(KEY_VAULT_HOST_SUFFIX)]
+    return bool(vault_name) and "onmu" not in vault_name
+
+
+def _configured_allowed_key_vault_hosts() -> set[str]:
+    raw = os.getenv("LALA_ALLOWED_KEY_VAULT_HOSTS", "")
+    hosts = {_normalize_allowed_host(item) for item in raw.split(",")}
+    return {host for host in hosts if host}
+
+
+def _normalize_allowed_host(value: str) -> str:
+    candidate = value.strip()
+    if not candidate:
+        return ""
+    if "://" in candidate:
+        parsed = urlparse(candidate)
+        if parsed.scheme != "https" or parsed.port is not None:
+            return ""
+        candidate = parsed.hostname or ""
+    else:
+        candidate = candidate.split("/", 1)[0]
+    return candidate.lower().rstrip(".")
 
 
 def _get_secret_with_azure_cli(vault_url: str, secret_name: str) -> str:

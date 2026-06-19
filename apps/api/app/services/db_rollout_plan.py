@@ -7,11 +7,11 @@ from typing import Any
 
 from apps.api.app.services.canonical_sql import CanonicalSqlPlan, load_canonical_sql_plan
 
-DEFAULT_SUBSCRIPTION_ID = "27db5ec6-d206-4028-b5e1-6004dca5eeef"
-DEFAULT_RESOURCE_GROUP = "3dt-final-team1"
+DEFAULT_SUBSCRIPTION_ID = "00000000-0000-0000-0000-000000000000"
+DEFAULT_RESOURCE_GROUP = "lala-resource-group"
 DEFAULT_LOCATION = "koreacentral"
-DEFAULT_KEY_VAULT_NAME = "lala-next-kv-27db5e"
-DEFAULT_POSTGRES_SERVER_NAME = "lala-next-pg-27db5e"
+DEFAULT_KEY_VAULT_NAME = "lala-key-vault"
+DEFAULT_POSTGRES_SERVER_NAME = "lala-postgres-server"
 DEFAULT_DATABASE_NAME = "lala"
 DEFAULT_ADMIN_USER = "lalaadmin"
 DEFAULT_POSTGRES_VERSION = "16"

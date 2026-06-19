@@ -18,7 +18,7 @@ def test_identity_rollout_plan_is_secret_safe_and_non_mutating():
     assert payload["ok"] is True
     assert payload["mode"] == "plan"
     assert payload["applies_changes"] is False
-    assert payload["key_vault_name"] == "lala-next-kv-27db5e"
+    assert payload["key_vault_name"] == "lala-key-vault"
     assert payload["api_app_id_uri"] == "api://lala-next-dev"
     assert "oauth-issuer" in payload["key_vault_secret_names"]
     assert "oauth-required-scopes" in payload["key_vault_secret_names"]
@@ -35,7 +35,7 @@ def test_identity_rollout_plan_is_secret_safe_and_non_mutating():
 
 def test_identity_rollout_plan_rejects_onmu_vault_and_bad_scope():
     plan = build_identity_rollout_plan(
-        key_vault_name="onmu-dev-kv-27db5e",
+        key_vault_name="onmu-source-vault",
         required_scopes=("bad scope",),
     )
 
@@ -57,7 +57,7 @@ def test_plan_identity_rollout_cli_outputs_json_without_secret_values():
     payload = json.loads(result.stdout)
     assert payload["ok"] is True
     assert payload["applies_changes"] is False
-    assert payload["key_vault_name"] == "lala-next-kv-27db5e"
+    assert payload["key_vault_name"] == "lala-key-vault"
     assert "oauth-jwks-url" in result.stdout
     assert "onmu-dev-kv" not in result.stdout
     assert "client_secret" not in result.stdout.lower()

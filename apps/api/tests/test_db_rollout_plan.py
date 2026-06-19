@@ -18,8 +18,8 @@ def test_db_rollout_plan_is_secret_safe_and_non_mutating():
     assert payload["ok"] is True
     assert payload["mode"] == "plan"
     assert payload["applies_changes"] is False
-    assert payload["key_vault_name"] == "lala-next-kv-27db5e"
-    assert payload["postgres_server_name"] == "lala-next-pg-27db5e"
+    assert payload["key_vault_name"] == "lala-key-vault"
+    assert payload["postgres_server_name"] == "lala-postgres-server"
     assert payload["canonical_sql"]["file_count"] >= 6
     assert payload["canonical_sql"]["safety_findings"] == []
     assert any(step["approval_required"] for step in payload["steps"])

@@ -53,8 +53,28 @@ function Get-LalaVaultNameFromUrl {
         return ""
     }
     $uri = [Uri]$VaultUrl
-    if ($uri.Scheme -ne "https" -or $uri.Host.ToLowerInvariant() -ne "lala-next-kv-27db5e.vault.azure.net") {
+    $hostName = $uri.Host.ToLowerInvariant().TrimEnd(".")
+    if (
+        $uri.Scheme -ne "https" -or
+        -not $uri.IsDefaultPort -or
+        -not $hostName.EndsWith(".vault.azure.net") -or
+        $hostName.Contains("onmu")
+    ) {
         throw "Unsupported Key Vault URL for LALA-next: $VaultUrl"
+    }
+    $allowedHosts = [Environment]::GetEnvironmentVariable("LALA_ALLOWED_KEY_VAULT_HOSTS", "Process")
+    if ($allowedHosts) {
+        $allowed = $allowedHosts.Split(",") | ForEach-Object {
+            $candidate = $_.Trim()
+            if ($candidate.StartsWith("https://")) {
+                ([Uri]$candidate).Host.ToLowerInvariant().TrimEnd(".")
+            } else {
+                $candidate.Split("/")[0].ToLowerInvariant().TrimEnd(".")
+            }
+        }
+        if ($allowed -notcontains $hostName) {
+            throw "Key Vault host is not in LALA_ALLOWED_KEY_VAULT_HOSTS: $hostName"
+        }
     }
     return $uri.Host.Split(".")[0]
 }

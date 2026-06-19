@@ -1,19 +1,30 @@
-# Azure Resources
+# Azure Resource Boundary
 
-Wave 1 resources are in resource group `3dt-final-team1` in subscription `27db5ec6-d206-4028-b5e1-6004dca5eeef`.
+This repository intentionally does not record live Azure resource names,
+subscription ids, Key Vault URLs, or service endpoints. Keep those identifiers
+in ignored local environment files, deployment settings, or a team-private
+runbook.
 
-LALA-next must use only the LALA-next Key Vault, `lala-next-kv-27db5e`, with `KEY_VAULT_URL=https://lala-next-kv-27db5e.vault.azure.net/`. The existing ONMU vault, `onmu-dev-kv-27db5e`, is in the same resource group but is not used by this repository. The API code allowlists the LALA-next vault host and ignores other Key Vault URLs. Secret loading tries Azure SDK credentials first and then falls back to Azure CLI for Windows dev sessions.
+## Runtime Boundary
 
-Verified on 2026-06-11 with Azure CLI: both `lala-next-kv-27db5e` and `onmu-dev-kv-27db5e` exist in `3dt-final-team1`, but LALA-next runtime still allowlists only the LALA-next vault host. After operator approval, ONMU `int-cors-origins` was copied into the LALA-next vault as `cors-allow-origins` for Flutter Web/browser contract checks. A same-day hash comparison showed the ONMU `int-cors-origins` value and LALA `cors-allow-origins` value are identical. Other ONMU dev/db/oauth/minio/redis/social-provider names were not wired into LALA-next because they belong to ONMU runtime ownership or project-specific identity flows.
+LALA must use a LALA-owned Key Vault when `KEY_VAULT_URL` is configured. Do not
+point the API, workers, or smoke scripts at ONMU runtime vaults.
 
-| Resource | Name | Location | Purpose |
-|---|---|---|---|
-| Key Vault | `lala-next-kv-27db5e` | `koreacentral` | LALA-next secret storage |
-| Azure OpenAI | `lala-next-aoai-27db5e` | `koreacentral` | AI API account |
-| Azure OpenAI deployment | `gpt-4o-mini` | `koreacentral` | Wave 1 text generation deployment |
-| Azure Speech | `lala-next-speech-27db5e` | `koreacentral` | Wave 1 opt-in text-to-speech account |
+The API and helper scripts validate Key Vault URLs with these public rules:
 
-Secrets stored in Key Vault:
+- URL scheme must be `https`.
+- Host must be an Azure Key Vault host.
+- Host must not be an ONMU vault host.
+- If `LALA_ALLOWED_KEY_VAULT_HOSTS` is set, the host must be listed there.
+
+The only ONMU-derived value currently considered reusable is the optional CORS
+origin list copied into LALA as `cors-allow-origins`. ONMU DB URLs, OAuth/social
+provider values, API tokens, Redis, MinIO, Azure OpenAI, and Speech secrets are
+not LALA runtime inputs.
+
+## Secret Names
+
+Expected LALA Key Vault secret names:
 
 - `ios-api-key`
 - `azure-openai-endpoint`
@@ -24,75 +35,53 @@ Secrets stored in Key Vault:
 - `azure-speech-region`
 - `azure-speech-endpoint`
 
-Optional bearer transition secret:
+Optional secret names:
 
 - `api-bearer-token`
-
-Optional live database rollout secret:
-
 - `db-dsn`
-
-Optional Flutter Web/browser CORS secret:
-
 - `cors-allow-origins`
-
-Optional OAuth/Entra identity rollout configuration secrets:
-
 - `oauth-issuer`
 - `oauth-audience`
 - `oauth-jwks-url`
 - `oauth-client-id`
 - `oauth-required-scopes`
+- `kakao-rest-api-key`
+- `kakao-javascript-key`
+- `kakao-redirect-uri`
+- `naver-client-id`
+- `naver-client-secret`
+- `kopis-api-key`
+- `public-data-service-key`
+- `gyeonggi-data-dream-api-key`
 
-The secret values are intentionally not recorded in this repository.
+Secret values are never recorded in this repository.
 
-To review whether any ONMU Key Vault values should be reused, run the
-non-mutating reuse plan:
+## Verification
 
-```bash
-scripts/unix/plan_key_vault_reuse.sh
-```
-
-```powershell
-.\scripts\windows\plan_key_vault_reuse.ps1
-```
-
-The plan currently allows only `int-cors-origins` as a reviewed source for the
-LALA `cors-allow-origins` setting. It rejects ONMU DB, OAuth/social-provider,
-storage, Redis, API token, Azure OpenAI, and Speech values as LALA runtime
-inputs.
-
-Live AI calls are opt-in with `LALA_ENABLE_LIVE_AI=true`. Live text-to-speech calls are opt-in with `LALA_ENABLE_LIVE_SPEECH=true`. This keeps unit tests and basic smoke checks deterministic while still allowing demo runs to use `gpt-4o-mini` and Azure Speech.
-
-## Azure Verification
-
-Use the dedicated Azure check when you need to prove the shared backend is pointed at LALA-next resources rather than ONMU resources:
+Use live Azure verification only after loading the real identifiers from a
+private source:
 
 ```bash
-az login
+export LALA_AZURE_SUBSCRIPTION_ID=<subscription-id>
+export LALA_AZURE_RESOURCE_GROUP=<resource-group>
+export LALA_KEY_VAULT_NAME=<key-vault-name>
+export LALA_AZURE_OPENAI_ACCOUNT_NAME=<azure-openai-account>
+export LALA_AZURE_SPEECH_ACCOUNT_NAME=<azure-speech-account>
+export ONMU_KEY_VAULT_NAME=<onmu-comparison-vault>
 scripts/unix/verify_azure_resources.sh
 ```
 
 ```powershell
-az login
+$env:LALA_AZURE_SUBSCRIPTION_ID = "<subscription-id>"
+$env:LALA_AZURE_RESOURCE_GROUP = "<resource-group>"
+$env:LALA_KEY_VAULT_NAME = "<key-vault-name>"
+$env:LALA_AZURE_OPENAI_ACCOUNT_NAME = "<azure-openai-account>"
+$env:LALA_AZURE_SPEECH_ACCOUNT_NAME = "<azure-speech-account>"
+$env:ONMU_KEY_VAULT_NAME = "<onmu-comparison-vault>"
 .\scripts\windows\verify_azure_resources.ps1
 ```
 
-The script verifies:
-
-- Subscription `27db5ec6-d206-4028-b5e1-6004dca5eeef`.
-- Resource group `3dt-final-team1`.
-- Key Vault `lala-next-kv-27db5e`.
-- Expected LALA-next secret names, without printing values.
-- Optional transition, DB, CORS, and OAuth/Entra configuration secret names,
-  without printing values.
-- Azure OpenAI account `lala-next-aoai-27db5e`.
-- Azure OpenAI deployment `gpt-4o-mini`.
-- Azure Speech account `lala-next-speech-27db5e`.
-- ONMU vault name separation.
-
-To verify PostgreSQL rollout readiness, including the optional `db-dsn` secret
-name and Azure Database for PostgreSQL Flexible Server target, run:
+To verify PostgreSQL rollout readiness:
 
 ```bash
 scripts/unix/verify_db_resources.sh
@@ -102,17 +91,11 @@ scripts/unix/verify_db_resources.sh
 .\scripts\windows\verify_db_resources.ps1
 ```
 
-Use `-RequireDatabase` when the database target is expected to exist and the
-check should fail if any DB rollout prerequisite is missing.
+Use `--require-database` or `-RequireDatabase` only when the database target is
+expected to exist.
 
 ## Local Configuration
 
-`.env.example` includes non-secret resource identifiers and endpoints. For local development, prefer Azure login plus the LALA-next `KEY_VAULT_URL` so the API can load secrets from `lala-next-kv-27db5e`.
-
-```powershell
-az login
-Copy-Item .env.example .env
-python -m uvicorn apps.api.app.main:app --host 0.0.0.0 --port 8080 --no-access-log
-```
-
-If Key Vault access is unavailable, set process-local environment variables instead. Do not commit `.env`.
+Copy `.env.example` to `.env` and fill values locally. The example file keeps
+resource endpoints blank on purpose. If Key Vault access is unavailable, set
+process-local environment variables instead. Do not commit `.env`.

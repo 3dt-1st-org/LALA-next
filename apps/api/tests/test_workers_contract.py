@@ -98,7 +98,7 @@ def test_worker_live_preflight_is_secret_safe_and_blocked_until_implemented():
     env = {
         "ALLOW_WORKER_MUTATION": "1",
         "DB_DSN": marker,
-        "KEY_VAULT_URL": "https://lala-next-kv-27db5e.vault.azure.net/",
+        "KEY_VAULT_URL": "https://lala-key-vault.vault.azure.net/",
         "EVENT_HUB_NAMESPACE": "lala-next-dev-eventhub",
     }
 
@@ -196,7 +196,7 @@ def test_worker_cli_preflight_json_is_secret_safe_and_does_not_enable_live_execu
     env = os.environ.copy()
     env["ALLOW_WORKER_MUTATION"] = "1"
     env["DB_DSN"] = marker
-    env["KEY_VAULT_URL"] = "https://lala-next-kv-27db5e.vault.azure.net/"
+    env["KEY_VAULT_URL"] = "https://lala-key-vault.vault.azure.net/"
     env["EVENT_HUB_NAMESPACE"] = "lala-next-dev-eventhub"
 
     result = subprocess.run(
@@ -224,9 +224,9 @@ def test_worker_rollout_plan_is_secret_safe_and_non_mutating():
     assert payload["ok"] is True
     assert payload["mode"] == "plan"
     assert payload["applies_changes"] is False
-    assert payload["key_vault_name"] == "lala-next-kv-27db5e"
+    assert payload["key_vault_name"] == "lala-key-vault"
     assert payload["function_app_name"] == "lala-next-workers-dev"
-    assert payload["storage_account_name"] == "lalanextworker27db5e"
+    assert payload["storage_account_name"] == "lalaworkersdev"
     assert "db-dsn" in payload["key_vault_secret_names"]
     assert len(payload["worker_jobs"]) == len(list_worker_jobs())
     assert any(step["approval_required"] for step in payload["steps"])
@@ -242,7 +242,7 @@ def test_worker_rollout_plan_is_secret_safe_and_non_mutating():
 
 def test_worker_rollout_plan_rejects_onmu_vault_and_bad_resource_names():
     plan = build_worker_rollout_plan(
-        key_vault_name="onmu-dev-kv-27db5e",
+        key_vault_name="onmu-source-vault",
         function_app_name="bad app!",
         storage_account_name="bad-storage-name",
         event_hub_namespace="bad namespace!",

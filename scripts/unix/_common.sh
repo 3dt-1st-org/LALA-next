@@ -90,18 +90,59 @@ load_env_file() {
 
 vault_name_from_lala_url() {
   local vault_url="${1:-}"
+  [[ -n "$vault_url" ]] || {
+    printf '%s\n' ""
+    return 0
+  }
   case "$vault_url" in
-    "https://lala-next-kv-27db5e.vault.azure.net"|"https://lala-next-kv-27db5e.vault.azure.net/")
-      printf '%s\n' "lala-next-kv-27db5e"
-      ;;
-    "")
-      printf '%s\n' ""
-      ;;
+    https://*) ;;
     *)
       echo "Unsupported Key Vault URL for LALA-next: $vault_url" >&2
       return 1
       ;;
   esac
+
+  local host path_part vault_name
+  path_part="${vault_url#https://}"
+  host="${path_part%%/*}"
+  host="$(printf '%s' "$host" | tr '[:upper:]' '[:lower:]')"
+  case "$host" in
+    *.vault.azure.net) ;;
+    *)
+      echo "Unsupported Key Vault URL for LALA-next: $vault_url" >&2
+      return 1
+      ;;
+  esac
+
+  vault_name="${host%.vault.azure.net}"
+  if [[ -z "$vault_name" || "$vault_name" == *onmu* ]]; then
+    echo "Unsupported Key Vault URL for LALA-next: $vault_url" >&2
+    return 1
+  fi
+  if ! key_vault_host_allowed_by_env "$host"; then
+    echo "Key Vault host is not in LALA_ALLOWED_KEY_VAULT_HOSTS: $host" >&2
+    return 1
+  fi
+  printf '%s\n' "$vault_name"
+}
+
+key_vault_host_allowed_by_env() {
+  local host="$1"
+  local allowed="${LALA_ALLOWED_KEY_VAULT_HOSTS:-}"
+  [[ -n "$allowed" ]] || return 0
+
+  local entry normalized
+  IFS=',' read -r -a entries <<< "$allowed"
+  for entry in "${entries[@]}"; do
+    normalized="$(trim "$entry")"
+    normalized="${normalized#https://}"
+    normalized="${normalized%%/*}"
+    normalized="$(printf '%s' "$normalized" | tr '[:upper:]' '[:lower:]')"
+    if [[ "$normalized" == "$host" ]]; then
+      return 0
+    fi
+  done
+  return 1
 }
 
 set_secret_env_if_missing() {

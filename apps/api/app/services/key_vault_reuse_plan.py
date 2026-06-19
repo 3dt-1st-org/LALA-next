@@ -4,8 +4,8 @@ import shlex
 from dataclasses import dataclass
 from typing import Any
 
-DEFAULT_SOURCE_VAULT_NAME = "onmu-dev-kv-27db5e"
-DEFAULT_TARGET_VAULT_NAME = "lala-next-kv-27db5e"
+DEFAULT_SOURCE_VAULT_NAME = "onmu-source-vault"
+DEFAULT_TARGET_VAULT_NAME = "lala-key-vault"
 
 
 @dataclass(frozen=True)

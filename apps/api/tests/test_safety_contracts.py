@@ -92,6 +92,44 @@ def test_repo_docs_and_scripts_do_not_contain_secret_literals():
     assert findings == []
 
 
+def test_public_repo_does_not_contain_live_resource_identifiers():
+    target_roots = [
+        ROOT / ".env.example",
+        ROOT / "README.md",
+        ROOT / "scripts",
+        ROOT / "docs",
+        ROOT / "apps" / "api" / "app",
+        ROOT / "apps" / "workers" / "app",
+        ROOT / "apps" / "api" / "tests",
+    ]
+    suffix = "27" + "db5e"
+    banned = [
+        f"lala-next-kv-{suffix}",
+        f"onmu-dev-kv-{suffix}",
+        f"lala-next-aoai-{suffix}",
+        f"lala-next-speech-{suffix}",
+        f"lala-next-pg-{suffix}",
+        f"lala-next-eh-{suffix}",
+        f"lalanextworker{suffix}",
+        "27" + "db5ec6-d206-4028-b5e1-6004dca5eeef",
+        "3dt-final-" + "team1",
+    ]
+    findings: list[str] = []
+    for root in target_roots:
+        paths = [root] if root.is_file() else [p for p in root.rglob("*") if p.is_file()]
+        for path in paths:
+            if "__pycache__" in path.parts:
+                continue
+            if path.suffix and path.suffix.lower() not in TEXT_SUFFIXES:
+                continue
+            text = path.read_text(encoding="utf-8")
+            for value in banned:
+                if value in text:
+                    findings.append(f"{path}: {value}")
+
+    assert findings == []
+
+
 def test_kakao_map_bridges_forward_zoom_camera_updates():
     web_bridge = (ROOT / "apps" / "flutter_app" / "lib" / "kakao_map_view_web.dart").read_text(
         encoding="utf-8"
@@ -188,8 +226,12 @@ def test_paid_smoke_requires_authenticated_api_key():
     assert "[string]$CorsOrigin" in script
     assert "[string]$KeyVaultUrl" in start_script
     assert "[string]$AccessLogPath" in start_script
-    assert "lala-next-kv-27db5e.vault.azure.net" in script
-    assert "lala-next-kv-27db5e.vault.azure.net" in start_script
+    assert ".vault.azure.net" in script
+    assert ".vault.azure.net" in start_script
+    assert "LALA_ALLOWED_KEY_VAULT_HOSTS" in script
+    assert "LALA_ALLOWED_KEY_VAULT_HOSTS" in start_script
+    assert "Contains(\"onmu\")" in script
+    assert "Contains(\"onmu\")" in start_script
     assert "cors-allow-origins" in start_script
     assert "LALA_ACCESS_LOG_PATH" in start_script
     assert "if ($PaidDependency)" in script
@@ -335,7 +377,9 @@ def test_unix_scripts_have_safe_operational_guards():
         "verify_repo.sh",
     }.issubset(scripts)
 
-    assert "lala-next-kv-27db5e.vault.azure.net" in scripts["_common.sh"]
+    assert ".vault.azure.net" in scripts["_common.sh"]
+    assert "LALA_ALLOWED_KEY_VAULT_HOSTS" in scripts["_common.sh"]
+    assert '"$vault_name" == *onmu*' in scripts["_common.sh"]
     assert "Unsupported Key Vault URL for LALA-next" in scripts["_common.sh"]
     assert "Worker smoke uses dry-run only" in scripts["smoke_workers.sh"]
     assert "--dry-run" in scripts["smoke_workers.sh"]
@@ -474,9 +518,15 @@ def test_unix_scripts_parse_with_bash():
     assert result.returncode == 0, result.stderr
 
 
-def test_key_vault_url_is_lala_next_only():
-    assert is_allowed_key_vault_url("https://lala-next-kv-27db5e.vault.azure.net/")
-    assert not is_allowed_key_vault_url("https://onmu-dev-kv-27db5e.vault.azure.net/")
-    assert not is_allowed_key_vault_url("http://lala-next-kv-27db5e.vault.azure.net/")
-    assert key_vault_name_from_url("https://lala-next-kv-27db5e.vault.azure.net/") == "lala-next-kv-27db5e"
-    assert key_vault_name_from_url("https://onmu-dev-kv-27db5e.vault.azure.net/") == ""
+def test_key_vault_url_is_lala_owned_and_allowlist_aware(monkeypatch):
+    vault_url = "https://example-lala-vault.vault.azure.net/"
+    assert is_allowed_key_vault_url(vault_url)
+    assert key_vault_name_from_url(vault_url) == "example-lala-vault"
+
+    monkeypatch.setenv("LALA_ALLOWED_KEY_VAULT_HOSTS", "example-lala-vault.vault.azure.net")
+    assert is_allowed_key_vault_url(vault_url)
+    assert not is_allowed_key_vault_url("https://other-lala-vault.vault.azure.net/")
+
+    assert not is_allowed_key_vault_url("https://onmu-source-vault.vault.azure.net/")
+    assert not is_allowed_key_vault_url("http://example-lala-vault.vault.azure.net/")
+    assert key_vault_name_from_url("https://onmu-source-vault.vault.azure.net/") == ""

@@ -185,7 +185,7 @@ ALLOW_CANONICAL_SQL_APPLY=1 \
   scripts/unix/apply_canonical_sql.sh \
   --apply \
   --confirm APPLY_CANONICAL_SQL \
-  --key-vault-url https://lala-next-kv-27db5e.vault.azure.net/
+  --key-vault-url <KEY_VAULT_URL>
 ```
 
 ```powershell
@@ -193,7 +193,7 @@ $env:ALLOW_CANONICAL_SQL_APPLY = "1"
 .\scripts\windows\apply_canonical_sql.ps1 `
   -Apply `
   -Confirm APPLY_CANONICAL_SQL `
-  -KeyVaultUrl https://lala-next-kv-27db5e.vault.azure.net/
+  -KeyVaultUrl <KEY_VAULT_URL>
 ```
 
 The apply path reads `DB_DSN` from the process, `.env`, or LALA-next Key Vault,
@@ -644,7 +644,7 @@ scripts/unix/plan_identity_rollout.sh
 .\scripts\windows\plan_identity_rollout.ps1
 ```
 
-The plan keeps LALA-next pointed at `lala-next-kv-27db5e`, rejects ONMU vault
+The plan keeps LALA-next pointed at `lala-key-vault`, rejects ONMU vault
 targets, and treats static auth retirement as blocked until API JWT validation
 and Flutter token acquisition are verified together. For details, see
 `docs/operations/identity-rollout.md`.
@@ -867,21 +867,21 @@ Live Azure OpenAI and Azure Speech checks are kept opt-in. Use them only when a
 small paid smoke request is acceptable:
 
 ```bash
-scripts/unix/start_api.sh --port 8080 --key-vault-url https://lala-next-kv-27db5e.vault.azure.net/ --enable-live-ai --enable-live-speech
+scripts/unix/start_api.sh --port 8080 --key-vault-url <KEY_VAULT_URL> --enable-live-ai --enable-live-speech
 ```
 
 ```powershell
-.\scripts\windows\start_api.ps1 -Port 8080 -KeyVaultUrl https://lala-next-kv-27db5e.vault.azure.net/ -EnableLiveAI -EnableLiveSpeech
+.\scripts\windows\start_api.ps1 -Port 8080 -KeyVaultUrl <KEY_VAULT_URL> -EnableLiveAI -EnableLiveSpeech
 ```
 
 In another terminal:
 
 ```bash
-scripts/unix/smoke_api.sh --base-url http://127.0.0.1:8080 --key-vault-url https://lala-next-kv-27db5e.vault.azure.net/ --paid-dependency
+scripts/unix/smoke_api.sh --base-url http://127.0.0.1:8080 --key-vault-url <KEY_VAULT_URL> --paid-dependency
 ```
 
 ```powershell
-.\scripts\windows\smoke_api.ps1 -BaseUrl http://127.0.0.1:8080 -KeyVaultUrl https://lala-next-kv-27db5e.vault.azure.net/ -PaidDependency
+.\scripts\windows\smoke_api.ps1 -BaseUrl http://127.0.0.1:8080 -KeyVaultUrl <KEY_VAULT_URL> -PaidDependency
 ```
 
 The paid smoke checks verify that `docents/script` is backed by Azure OpenAI and
