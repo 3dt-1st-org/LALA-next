@@ -21,6 +21,8 @@ env:
   LALA_ENVIRONMENT_NAME: ${{ vars.LALA_ENVIRONMENT_NAME || 'dev' }}
   POSTGRES_ADMIN_LOGIN: ${{ vars.POSTGRES_ADMIN_LOGIN || 'lalaadmin' }}
   CORS_ALLOW_ORIGINS: ${{ vars.CORS_ALLOW_ORIGINS || 'https://lala-next.cloud,https://www.lala-next.cloud' }}
+  API_CUSTOM_DOMAIN_NAME: ${{ vars.AZURE_API_CUSTOM_DOMAIN_NAME || '' }}
+  API_CUSTOM_DOMAIN_CERTIFICATE_ID: ${{ vars.AZURE_API_CUSTOM_DOMAIN_CERTIFICATE_ID || '' }}
 
 jobs:
   deploy:
@@ -94,6 +96,8 @@ jobs:
               postgresAdminLogin="$POSTGRES_ADMIN_LOGIN" \
               postgresAdminPassword="$POSTGRES_ADMIN_PASSWORD" \
               apiBearerToken="$API_BEARER_TOKEN" \
+              apiCustomDomainName="$API_CUSTOM_DOMAIN_NAME" \
+              apiCustomDomainCertificateId="$API_CUSTOM_DOMAIN_CERTIFICATE_ID" \
               corsAllowOrigins="$CORS_ALLOW_ORIGINS" \
             --query properties.outputs \
             --output json > azure-outputs.json
@@ -127,4 +131,7 @@ jobs:
           curl -fsS "https://${API_FQDN}/healthz"
           if ! curl -fsS "https://${API_FQDN}/readyz"; then
             echo "readyz probe failed; PostgreSQL schema/data may need a separate manual rollout."
+          fi
+          if [ -n "${API_CUSTOM_DOMAIN_NAME:-}" ]; then
+            curl -fsS "https://${API_CUSTOM_DOMAIN_NAME}/healthz"
           fi

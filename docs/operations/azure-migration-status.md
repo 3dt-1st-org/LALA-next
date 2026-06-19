@@ -52,6 +52,11 @@ queries to resolve live names during operations.
   `asuid.api` is the Azure custom-domain TXT validation record.
 - Azure Container Apps custom hostname registration, managed certificate
   issuance, and SNI binding are complete for `api.lala-next.cloud`.
+- The `dev` GitHub environment stores `AZURE_API_CUSTOM_DOMAIN_NAME` and
+  `AZURE_API_CUSTOM_DOMAIN_CERTIFICATE_ID` as environment variables. The Azure
+  deploy workflow passes them into Bicep so future dev deployments preserve the
+  `api.lala-next.cloud` custom-domain binding instead of resetting ingress to
+  the default Azure Container Apps FQDN only.
 
 ## Manual Data Rollout Order
 

@@ -39,6 +39,12 @@ param postgresAdminPassword string
 @description('Static transition bearer token for API client authentication. The value is stored only as a secure deployment parameter and Key Vault secret.')
 param apiBearerToken string = ''
 
+@description('Optional API custom domain hostname. Leave empty for local/ephemeral deployments.')
+param apiCustomDomainName string = ''
+
+@description('Optional Azure Container Apps managed certificate resource id for the API custom domain.')
+param apiCustomDomainCertificateId string = ''
+
 @description('Application database name.')
 param postgresDatabaseName string = 'lala'
 
@@ -82,6 +88,27 @@ var acrPullRoleDefinitionId = subscriptionResourceId('Microsoft.Authorization/ro
 var acrPushRoleDefinitionId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '8311e382-0749-4cb8-b61a-304f252e45ec')
 var keyVaultSecretsUserRoleDefinitionId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
 var keyVaultSecretsOfficerRoleDefinitionId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b86a8fe4-44ce-4948-aee5-eccb2c155cd7')
+var apiIngressBase = {
+  external: true
+  allowInsecure: false
+  targetPort: 8000
+  transport: 'auto'
+}
+var apiCustomDomains = empty(apiCustomDomainName) ? [] : (empty(apiCustomDomainCertificateId) ? [
+  {
+    name: apiCustomDomainName
+    bindingType: 'Disabled'
+  }
+] : [
+  {
+    name: apiCustomDomainName
+    bindingType: 'SniEnabled'
+    certificateId: apiCustomDomainCertificateId
+  }
+])
+var apiIngressCustomDomain = empty(apiCustomDomainName) ? {} : {
+  customDomains: apiCustomDomains
+}
 
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   name: logAnalyticsName
@@ -299,12 +326,7 @@ resource apiContainerApp 'Microsoft.App/containerApps@2024-03-01' = {
     managedEnvironmentId: containerAppsEnvironment.id
     configuration: {
       activeRevisionsMode: 'Single'
-      ingress: {
-        external: true
-        allowInsecure: false
-        targetPort: 8000
-        transport: 'auto'
-      }
+      ingress: union(apiIngressBase, apiIngressCustomDomain)
       registries: [
         {
           server: acr.properties.loginServer
