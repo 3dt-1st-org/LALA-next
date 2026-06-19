@@ -501,7 +501,8 @@ void main() {
     );
   });
 
-  test('/api/v1 routes can be sent without client auth when caller has no token',
+  test(
+      '/api/v1 routes can be sent without client auth when caller has no token',
       () async {
     late http.Request captured;
     final client = LalaApiClient(

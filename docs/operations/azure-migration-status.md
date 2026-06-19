@@ -42,14 +42,16 @@ queries to resolve live names during operations.
 - `local-value-v1` score snapshots were generated for all 2,636 places.
 - RAG knowledge chunks were generated for all 2,636 places with the local-hash
   embedding path.
-- The production Flutter web build at `lala-next.cloud` was redeployed with the
-  shared dev Azure API base URL and the transition bearer token from deployment
-  secrets. Browser network verification showed `/readyz` and `/api/v1/places`
-  returning HTTP 200 from the Azure API, with DB-backed place rows and official
-  image URLs.
-- Gabia login and DNS management access were verified. The current public DNS
-  still points `@`, `www`, and `api` to Vercel. No Azure Container Apps custom
-  hostname is bound yet.
+- The production Flutter web build at `lala-next.cloud` was redeployed with
+  `https://api.lala-next.cloud` as the API base URL and the transition bearer
+  token from deployment secrets. Verification showed `healthz`, `readyz`, and
+  `/api/v1/places` returning HTTP 200 from the vanity API domain, with DB-backed
+  place rows and official image URLs.
+- Gabia DNS has been updated for the API vanity domain. `@` and `www` remain on
+  Vercel, while `api` is a CNAME to the Azure Container Apps FQDN and
+  `asuid.api` is the Azure custom-domain TXT validation record.
+- Azure Container Apps custom hostname registration, managed certificate
+  issuance, and SNI binding are complete for `api.lala-next.cloud`.
 
 ## Manual Data Rollout Order
 
@@ -142,8 +144,20 @@ az containerapp hostname add \
 
 If Azure reports the `asuid.api.lala-next.cloud` TXT record is missing, add that
 TXT record in Gabia first. Then replace the current `api` A record with a CNAME
-to the Azure Container Apps FQDN, rerun the hostname add/bind command, and verify
-`api.lala-next.cloud` before rebuilding Flutter web with
+to the Azure Container Apps FQDN, rerun the hostname add/bind command, and wait
+for the managed certificate provisioning state to become `Succeeded`.
+
+The current Gabia record shape is:
+
+```text
+A      @           76.76.21.21
+A      www         76.76.21.21
+CNAME  api         <azure-container-app-fqdn>.
+TXT    asuid.api   <azure-custom-domain-validation-id>
+```
+
+After Azure reports the custom hostname binding as `SniEnabled`, verify
+`https://api.lala-next.cloud` and rebuild Flutter web with
 `LALA_API_BASE_URL=https://api.lala-next.cloud`.
 
 ## Still Open
@@ -152,9 +166,6 @@ to the Azure Container Apps FQDN, rerun the hostname add/bind command, and verif
   Key Vault secrets and the Container App revision stay aligned.
 - Keep Flutter web using the transition bearer token only from deployment
   secrets until OAuth or a backend-for-frontend proxy replaces the static token.
-- Move `api.lala-next.cloud` from the current placeholder target to the Azure
-  Container App custom domain. Gabia access is verified, but the DNS change has
-  not been submitted yet.
 - Remove the temporary operator PostgreSQL firewall rule during the next Azure
   lock maintenance window. The resource group currently has a `CanNotDelete`
   lock, so the rule deletion is blocked unless an authorized operator

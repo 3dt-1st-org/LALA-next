@@ -109,15 +109,20 @@ external-DNS mode, so changing nameservers is not required for this MVP.
 Current public records:
 
 ```text
-@    A    76.76.21.21
-www  A    76.76.21.21
-api  A    76.76.21.21
+@          A      76.76.21.21
+www        A      76.76.21.21
+api        CNAME  <azure-container-app-fqdn>.
+asuid.api  TXT    <azure-custom-domain-validation-id>
 ```
 
-After changing DNS, verify Vercel status:
+`@` and `www` stay on Vercel. `api.lala-next.cloud` belongs to Azure Container
+Apps and should be verified with Azure hostname and certificate status, not
+Vercel domain status.
+
+If `@` or `www` records change, verify Vercel status:
 
 ```bash
-vercel api /v6/domains/api.lala-next.cloud/config --raw
+vercel api /v6/domains/lala-next.cloud/config --raw
 ```
 
 The response should include `misconfigured:false`.
