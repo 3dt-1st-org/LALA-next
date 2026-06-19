@@ -596,25 +596,35 @@ class LalaPlaceScore {
 class LalaPlaceScoreComponents {
   const LalaPlaceScoreComponents({
     required this.localSpendingScore,
+    required this.smallMerchantFitScore,
     required this.demandDispersionScore,
     required this.weatherFitScore,
     required this.reviewQualityScore,
     required this.cultureRelevanceScore,
+    required this.accessibilityFitScore,
   });
 
   final double? localSpendingScore;
+  final double? smallMerchantFitScore;
   final double? demandDispersionScore;
   final double? weatherFitScore;
   final double? reviewQualityScore;
   final double? cultureRelevanceScore;
+  final double? accessibilityFitScore;
 
   factory LalaPlaceScoreComponents.fromJson(Map<String, dynamic> json) {
     return LalaPlaceScoreComponents(
       localSpendingScore: _asOptionalDouble(json['local_spending_score']),
+      smallMerchantFitScore: _asOptionalDouble(
+        json['small_merchant_fit_score'],
+      ),
       demandDispersionScore: _asOptionalDouble(json['demand_dispersion_score']),
       weatherFitScore: _asOptionalDouble(json['weather_fit_score']),
       reviewQualityScore: _asOptionalDouble(json['review_quality_score']),
       cultureRelevanceScore: _asOptionalDouble(json['culture_relevance_score']),
+      accessibilityFitScore: _asOptionalDouble(
+        json['accessibility_fit_score'],
+      ),
     );
   }
 }

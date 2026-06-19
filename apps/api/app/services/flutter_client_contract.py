@@ -81,6 +81,8 @@ def check_flutter_client_contract(
         "LalaDocentScript",
         "LalaDailyPlan",
         "LalaIntervention",
+        "smallMerchantFitScore",
+        "accessibilityFitScore",
         "requestHash",
         "cacheKey",
         "TimeoutException",

@@ -141,13 +141,15 @@ void main() {
                     'is_approximate_location': false,
                     'score': {
                       'final_score': 0.84,
-                      'formula_version': 'local-value-v1',
+                      'formula_version': 'local-value-v2',
                       'components': {
                         'local_spending_score': 0.9,
+                        'small_merchant_fit_score': 0.72,
                         'demand_dispersion_score': 0.8,
                         'weather_fit_score': 0.7,
                         'review_quality_score': null,
                         'culture_relevance_score': 0.8,
+                        'accessibility_fit_score': 0.64,
                       },
                       'data_basis': 'demo_fallback',
                       'features': {
@@ -212,6 +214,14 @@ void main() {
       expect(envelope.data?.places.first.isApproximateLocation, isFalse);
       expect(envelope.data?.places.first.score?.percent, 84);
       expect(envelope.data?.places.first.score?.dataBasis, 'demo_fallback');
+      expect(
+        envelope.data?.places.first.score?.components.smallMerchantFitScore,
+        0.72,
+      );
+      expect(
+        envelope.data?.places.first.score?.components.accessibilityFitScore,
+        0.64,
+      );
       expect(
         envelope.data?.places.first.score?.components.reviewQualityScore,
         isNull,

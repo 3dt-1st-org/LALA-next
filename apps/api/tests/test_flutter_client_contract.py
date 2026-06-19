@@ -35,6 +35,8 @@ def test_flutter_reference_client_tracks_openapi_routes_and_auth_contract():
     assert "LalaWeather" in client_text
     assert "LalaDailyPlan" in client_text
     assert "LalaIntervention" in client_text
+    assert "smallMerchantFitScore" in client_text
+    assert "accessibilityFitScore" in client_text
     assert "REQUEST_TIMEOUT" in client_text
     assert "defaultTimeout" in client_text
     assert "print(" not in client_text

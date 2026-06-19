@@ -1953,13 +1953,15 @@ LalaPlace _place() {
     upstreamSource: 'tour_api',
     score: LalaPlaceScore(
       finalScore: 0.86,
-      formulaVersion: 'local-value-v1',
+      formulaVersion: 'local-value-v2',
       components: LalaPlaceScoreComponents(
         localSpendingScore: 0.82,
+        smallMerchantFitScore: 0.76,
         demandDispersionScore: 0.78,
         weatherFitScore: 0.74,
         reviewQualityScore: null,
         cultureRelevanceScore: 0.91,
+        accessibilityFitScore: 0.62,
       ),
       dataBasis: 'demo_fallback',
       features: {
@@ -1997,13 +1999,15 @@ LalaPlace _culturePlace({int distanceM = 620}) {
     upstreamSource: 'tour_api',
     score: const LalaPlaceScore(
       finalScore: 0.82,
-      formulaVersion: 'local-value-v1',
+      formulaVersion: 'local-value-v2',
       components: LalaPlaceScoreComponents(
         localSpendingScore: 0.68,
+        smallMerchantFitScore: null,
         demandDispersionScore: 0.73,
         weatherFitScore: 0.76,
         reviewQualityScore: null,
         cultureRelevanceScore: 0.96,
+        accessibilityFitScore: 0.70,
       ),
       dataBasis: 'demo_fallback',
       features: {
@@ -2033,13 +2037,15 @@ LalaPlace _restaurantPlace({int distanceM = 780, String? imageUrl}) {
     upstreamSource: 'tour_api',
     score: const LalaPlaceScore(
       finalScore: 0.78,
-      formulaVersion: 'local-value-v1',
+      formulaVersion: 'local-value-v2',
       components: LalaPlaceScoreComponents(
         localSpendingScore: 0.88,
+        smallMerchantFitScore: 0.82,
         demandDispersionScore: 0.54,
         weatherFitScore: 0.70,
         reviewQualityScore: null,
         cultureRelevanceScore: 0.62,
+        accessibilityFitScore: 0.58,
       ),
       dataBasis: 'demo_fallback',
       features: {
@@ -2070,13 +2076,15 @@ LalaPlace _clusterRestaurant(String placeId, String name, int distanceM) {
     upstreamSource: 'tour_api',
     score: const LalaPlaceScore(
       finalScore: 0.77,
-      formulaVersion: 'local-value-v1',
+      formulaVersion: 'local-value-v2',
       components: LalaPlaceScoreComponents(
         localSpendingScore: 0.89,
+        smallMerchantFitScore: 0.80,
         demandDispersionScore: 0.61,
         weatherFitScore: 0.72,
         reviewQualityScore: null,
         cultureRelevanceScore: 0.58,
+        accessibilityFitScore: 0.56,
       ),
       dataBasis: 'demo_fallback',
       features: {
@@ -2109,13 +2117,15 @@ LalaPlace _eventPlace() {
     upstreamSource: 'dev_seed',
     score: LalaPlaceScore(
       finalScore: 0.79,
-      formulaVersion: 'local-value-v1',
+      formulaVersion: 'local-value-v2',
       components: LalaPlaceScoreComponents(
         localSpendingScore: 0.95,
+        smallMerchantFitScore: null,
         demandDispersionScore: 0.59,
         weatherFitScore: 0.72,
         reviewQualityScore: null,
         cultureRelevanceScore: 0.90,
+        accessibilityFitScore: 0.60,
       ),
       dataBasis: 'public_mvp_snapshot',
       features: {

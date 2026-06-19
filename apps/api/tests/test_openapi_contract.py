@@ -196,6 +196,8 @@ def test_openapi_documents_v1_success_data_schemas(client):
         "$ref": "#/components/schemas/PlaceScoreComponents"
     }
     assert schemas["PlaceScoreComponents"]["properties"]["local_spending_score"]["nullable"] is True
+    assert schemas["PlaceScoreComponents"]["properties"]["small_merchant_fit_score"]["nullable"] is True
+    assert schemas["PlaceScoreComponents"]["properties"]["accessibility_fit_score"]["nullable"] is True
     assert schemas["Place"]["properties"]["image_url"]["nullable"] is True
     assert schemas["Place"]["properties"]["event_start_date"] == {
         "type": "string",

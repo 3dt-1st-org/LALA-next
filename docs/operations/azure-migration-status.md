@@ -39,12 +39,18 @@ queries to resolve live names during operations.
 - Official image coverage after Tour API ingestion is 2,327 rows: 1,135 Gyeonggi
   rows and 1,192 Seoul rows. Rows without official images should leave the image
   slot collapsed rather than using mock images.
-- `local-value-v1` score snapshots were generated for all 2,636 places before
-  the franchise/small-merchant v2 contract. After the current code is deployed,
-  apply the canonical SQL additions, run franchise identity matching, regenerate
-  `local-value-v2` score snapshots, and rebuild RAG chunks.
-- RAG knowledge chunks were generated for all 2,636 places with the local-hash
-  embedding path.
+- Fair Trade Commission franchise brand references were ingested from the public
+  data API for 2025 into `economy.franchise_brands`: 11,712 rows after source
+  duplicate collapse.
+- Franchise/small-merchant identity matching was applied for the current
+  restaurant slice: 1,000 rows in `analytics.place_business_identity`
+  (`franchise_store=2`, `local_small_chain=51`, `unknown=947`).
+- `local-value-v2` score snapshots were generated for all 2,636 places.
+  Historical `local-value-v1` snapshots remain in the table for audit/history;
+  API reads select the latest score row and live `/api/v1/places` verified
+  `formula_version=local-value-v2`.
+- RAG knowledge chunks were regenerated for all 2,636 places with the
+  local-hash embedding path, and live query mode returned results.
 - The production Flutter web build at `lala-next.cloud` was redeployed with
   `https://api.lala-next.cloud` as the API base URL and the transition bearer
   token from deployment secrets. Verification showed `healthz`, `readyz`, and
@@ -107,7 +113,35 @@ ALLOW_TOUR_API_INGEST_APPLY=1 \
   --python .venv/bin/python
 ```
 
-8. Recompute local-value score snapshots after places and source signals exist:
+8. Ingest Fair Trade Commission brand-level franchise references, then classify
+   restaurant business identity. Preview first; apply only with guarded process
+   flags from a trusted operator shell.
+
+```bash
+scripts/unix/plan_franchise_reference_ingest.sh \
+  --preview \
+  --year 2025 \
+  --rows 20 \
+  --python .venv/bin/python
+
+ALLOW_FRANCHISE_REFERENCE_INGEST_APPLY=1 \
+  scripts/unix/plan_franchise_reference_ingest.sh \
+  --apply \
+  --confirm APPLY_FRANCHISE_REFERENCE_INGEST \
+  --year 2025 \
+  --rows 0 \
+  --python .venv/bin/python
+
+ALLOW_FRANCHISE_IDENTITY_BATCH_APPLY=1 \
+  scripts/unix/plan_franchise_identity_batch.sh \
+  --apply \
+  --confirm APPLY_FRANCHISE_IDENTITY_BATCH \
+  --category restaurant \
+  --limit 5000 \
+  --python .venv/bin/python
+```
+
+9. Recompute local-value score snapshots after places and source signals exist:
 
 ```bash
 scripts/unix/plan_place_score_batch.sh --preview --limit 20 --python .venv/bin/python
@@ -115,6 +149,20 @@ ALLOW_PLACE_SCORE_BATCH_APPLY=1 \
   scripts/unix/plan_place_score_batch.sh \
   --apply \
   --confirm APPLY_PLACE_SCORE_BATCH \
+  --category all \
+  --limit 3000 \
+  --python .venv/bin/python
+```
+
+10. Rebuild RAG chunks after score regeneration:
+
+```bash
+ALLOW_RAG_INDEX_APPLY=1 \
+  scripts/unix/plan_rag_index.sh \
+  --apply \
+  --confirm APPLY_RAG_INDEX \
+  --source all \
+  --limit 3000 \
   --python .venv/bin/python
 ```
 
@@ -178,10 +226,14 @@ After Azure reports the custom hostname binding as `SniEnabled`, verify
   lock maintenance window. The resource group currently has a `CanNotDelete`
   lock, so the rule deletion is blocked unless an authorized operator
   temporarily removes or scopes the lock.
-- Add Culture Info, KOPIS, card-spending files, weather observations, and review
-  attribute signals. For Fair Trade Commission franchise references, run
-  `scripts/unix/plan_franchise_reference_ingest.sh --preview` first and guarded
-  `--apply` only after review, then regenerate franchise identity rows,
-  `local-value-v2` score snapshots, and RAG chunks.
+- Add Culture Info, KOPIS, card-spending files, persistent weather observations,
+  and review attribute signals, then regenerate scores and RAG chunks.
+- Expand franchise matching with official location-level franchise references
+  when a suitable source with branch addresses or coordinates is available.
+  Current Fair Trade Commission ingestion covers brand-level statistics, so
+  `economy.franchise_locations` intentionally remains empty.
+- Decide retention/cleanup policy for historical `local-value-v1` score
+  snapshots. They are harmless for current reads but should have an explicit
+  audit/archive policy before production.
 - Add production-grade identity, private networking, and observability gates
   before treating the environment as durable production hosting.
