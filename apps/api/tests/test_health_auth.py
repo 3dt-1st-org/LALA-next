@@ -69,7 +69,7 @@ def test_readyz_accepts_bearer_token_as_client_auth(client, monkeypatch):
     assert body["data"]["checks"]["public_data_service_key"] == "skipped"
 
 
-def test_readyz_reports_public_demo_mode(client, monkeypatch):
+def test_readyz_reports_static_snapshot_fallback(client, monkeypatch):
     monkeypatch.delenv("IOS_API_KEY", raising=False)
     monkeypatch.delenv("API_BEARER_TOKEN", raising=False)
     monkeypatch.delenv("OAUTH_ISSUER", raising=False)
@@ -77,15 +77,15 @@ def test_readyz_reports_public_demo_mode(client, monkeypatch):
     monkeypatch.delenv("OAUTH_JWKS_URL", raising=False)
     monkeypatch.delenv("OAUTH_CLIENT_ID", raising=False)
     monkeypatch.delenv("OAUTH_REQUIRED_SCOPES", raising=False)
-    monkeypatch.setenv("LALA_PUBLIC_DEMO_MODE", "true")
+    monkeypatch.setenv("LALA_STATIC_SNAPSHOT_FALLBACK", "true")
 
     response = client.get("/readyz")
 
     assert response.status_code == 200
     checks = response.json()["data"]["checks"]
-    assert checks["client_auth"] == "public-demo"
-    assert checks["client_identity"] == "public-demo"
-    assert checks["public_demo_mode"] == "enabled"
+    assert checks["client_auth"] == "snapshot-fallback"
+    assert checks["client_identity"] == "snapshot-fallback"
+    assert checks["static_snapshot_fallback"] == "enabled"
     assert checks["public_data_snapshot"] == "configured"
     assert response.json()["data"]["mode"] == {
         "overall": "public-cache",
@@ -94,6 +94,21 @@ def test_readyz_reports_public_demo_mode(client, monkeypatch):
         "speech": "skeleton",
         "worker": "dry-run",
     }
+
+
+def test_legacy_snapshot_fallback_env_alias_still_works(client, monkeypatch):
+    monkeypatch.delenv("IOS_API_KEY", raising=False)
+    monkeypatch.delenv("API_BEARER_TOKEN", raising=False)
+    monkeypatch.delenv("LALA_STATIC_SNAPSHOT_FALLBACK", raising=False)
+    monkeypatch.setenv("LALA_PUBLIC_DEMO_MODE", "true")
+
+    response = client.get("/readyz")
+
+    assert response.status_code == 200
+    checks = response.json()["data"]["checks"]
+    assert checks["client_auth"] == "snapshot-fallback"
+    assert checks["client_identity"] == "snapshot-fallback"
+    assert checks["static_snapshot_fallback"] == "enabled"
 
 
 def test_readyz_reports_oauth_identity_rollout_configuration(client, monkeypatch):
@@ -201,7 +216,7 @@ def test_v1_requires_configured_client_auth(client, monkeypatch):
     assert body["error"]["code"] == "CLIENT_AUTH_NOT_CONFIGURED"
 
 
-def test_v1_accepts_unauthenticated_public_demo_request(client, monkeypatch):
+def test_v1_accepts_unauthenticated_static_snapshot_fallback_request(client, monkeypatch):
     monkeypatch.delenv("IOS_API_KEY", raising=False)
     monkeypatch.delenv("API_BEARER_TOKEN", raising=False)
     monkeypatch.delenv("OAUTH_ISSUER", raising=False)
@@ -209,7 +224,7 @@ def test_v1_accepts_unauthenticated_public_demo_request(client, monkeypatch):
     monkeypatch.delenv("OAUTH_JWKS_URL", raising=False)
     monkeypatch.delenv("OAUTH_CLIENT_ID", raising=False)
     monkeypatch.delenv("OAUTH_REQUIRED_SCOPES", raising=False)
-    monkeypatch.setenv("LALA_PUBLIC_DEMO_MODE", "true")
+    monkeypatch.setenv("LALA_STATIC_SNAPSHOT_FALLBACK", "true")
 
     response = client.get("/api/v1/places?lat=37.2636&lng=127.0286&radius_m=50000")
 

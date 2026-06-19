@@ -47,7 +47,7 @@ def list_places(
             "source": "db",
         }
 
-    if get_settings().public_demo_mode:
+    if get_settings().static_snapshot_fallback:
         public_places = public_mvp_data.fetch_places(
             lat=lat,
             lng=lng,

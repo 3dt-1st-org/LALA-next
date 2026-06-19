@@ -142,16 +142,16 @@ def test_openapi_documents_readyz_runtime_mode(client):
     assert readiness_checks["client_auth"]["enum"] == [
         "configured",
         "missing",
-        "public-demo",
+        "snapshot-fallback",
     ]
     assert readiness_checks["client_identity"]["enum"] == [
         "static",
         "transition",
         "oauth-configured",
-        "public-demo",
+        "snapshot-fallback",
         "missing",
     ]
-    assert readiness_checks["public_demo_mode"]["enum"] == ["enabled", "disabled"]
+    assert readiness_checks["static_snapshot_fallback"]["enum"] == ["enabled", "disabled"]
     assert readiness_checks["public_data_snapshot"]["enum"] == ["configured", "missing"]
     assert readiness_checks["public_data_service_key"]["enum"] == ["configured", "skipped"]
     assert readiness_checks["jwt_validation"]["enum"] == ["configured", "skipped"]

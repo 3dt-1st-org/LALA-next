@@ -14,8 +14,8 @@ queries to resolve live names during operations.
   provisioned in the same Azure region.
 - GitHub Actions deploys the API from the `dev` branch with OIDC. No branch
   protection rule was added.
-- `LALA_PUBLIC_DEMO_MODE` is fixed to `false` for shared dev and should remain
-  `false` for production and review deployments.
+- `LALA_STATIC_SNAPSHOT_FALLBACK` is fixed to `false` for shared dev and should
+  remain `false` for production and review deployments.
 - The normal runtime path is PostgreSQL plus Key Vault plus reviewed ingest,
   scoring, and RAG jobs.
 - Bundled static data is documented only as an offline, read-only snapshot

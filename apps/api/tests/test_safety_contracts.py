@@ -156,7 +156,7 @@ def test_azure_dev_deploy_uses_oidc_and_dev_branch_only():
     assert "AZURE_DEPLOY_PRINCIPAL_OBJECT_ID" in workflow
     assert 'deploymentPrincipalObjectId="$AZURE_DEPLOY_PRINCIPAL_OBJECT_ID"' in workflow
     assert "enableRoleAssignments=false" in workflow
-    assert "publicDemoMode=false" in workflow
+    assert "staticSnapshotFallback=false" in workflow
     assert "secrets.AZURE_POSTGRES_ADMIN_PASSWORD" in workflow
     assert "secrets.AZURE_API_BEARER_TOKEN" in workflow
     assert 'apiBearerToken="$API_BEARER_TOKEN"' in workflow
@@ -180,12 +180,12 @@ def test_azure_container_build_excludes_local_secrets():
     assert "COPY apps ./apps" in dockerfile
     assert "uvicorn apps.api.app.main:app" in dockerfile
     assert "COPY . ." not in dockerfile
-    assert "param publicDemoMode bool = false" in bicep
+    assert "param staticSnapshotFallback bool = false" in bicep
     assert "param apiBearerToken string = ''" in bicep
     assert "name: 'api-bearer-token'" in bicep
     assert "uriComponent(postgresAdminPassword)" in bicep
-    assert "name: 'LALA_PUBLIC_DEMO_MODE'" in bicep
-    assert "value: string(publicDemoMode)" in bicep
+    assert "name: 'LALA_STATIC_SNAPSHOT_FALLBACK'" in bicep
+    assert "value: string(staticSnapshotFallback)" in bicep
 
 
 def test_kakao_map_bridges_forward_zoom_camera_updates():

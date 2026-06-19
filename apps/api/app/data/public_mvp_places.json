@@ -1,6 +1,6 @@
 {
   "snapshot_id": "public-mvp-gyeonggi-seoul-tour-api",
-  "description": "Public MVP snapshot exported from the canonical DB read model. It is used only when the public demo API has no DB_DSN.",
+  "description": "Read-only snapshot exported from the canonical DB read model. It is used only as a static fallback when the API has no DB_DSN.",
   "generated_at": "2026-06-19T02:24:44.557686+00:00",
   "query": {
     "lat": 37.2636,

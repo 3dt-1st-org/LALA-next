@@ -98,10 +98,11 @@ flutter run \
 ```
 
 Production, review, and shared dev backends should keep
-`LALA_PUBLIC_DEMO_MODE=false` and use configured client auth plus the PostgreSQL
-read model. The bundled static snapshot is only an offline, read-only fallback
-for DB outage handling or isolated local checks; if auth is unavailable, the
-server returns the normal JSON auth error and the app keeps readiness visible.
+`LALA_STATIC_SNAPSHOT_FALLBACK=false` and use configured client auth plus the
+PostgreSQL read model. The bundled static snapshot is only an offline,
+read-only fallback for DB outage handling or isolated local checks; if auth is
+unavailable, the server returns the normal JSON auth error and the app keeps
+readiness visible.
 
 Do not commit client tokens or API keys. For local testing, prefer entering
 short-lived credentials in the app UI or using an operator-owned environment.

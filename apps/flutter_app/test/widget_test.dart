@@ -172,7 +172,7 @@ void main() {
     expect(find.text('공식 장소'), findsOneWidget);
   });
 
-  testWidgets('loads public demo panels before auth is configured', (
+  testWidgets('loads snapshot fallback panels before auth is configured', (
     tester,
   ) async {
     await tester.pumpWidget(

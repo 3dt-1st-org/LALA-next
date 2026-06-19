@@ -346,7 +346,7 @@ def _readiness_checks_schema() -> dict[str, Any]:
         "required": [
             "client_auth",
             "client_identity",
-            "public_demo_mode",
+            "static_snapshot_fallback",
             "public_data_snapshot",
             "public_data_service_key",
             "api_key",
@@ -372,13 +372,13 @@ def _readiness_checks_schema() -> dict[str, Any]:
         "properties": {
             "client_auth": {
                 "type": "string",
-                "enum": ["configured", "missing", "public-demo"],
+                "enum": ["configured", "missing", "snapshot-fallback"],
             },
             "client_identity": {
                 "type": "string",
-                "enum": ["static", "transition", "oauth-configured", "public-demo", "missing"],
+                "enum": ["static", "transition", "oauth-configured", "snapshot-fallback", "missing"],
             },
-            "public_demo_mode": enabled_or_disabled,
+            "static_snapshot_fallback": enabled_or_disabled,
             "public_data_snapshot": configured_or_missing,
             "public_data_service_key": configured_or_skipped,
             "api_key": configured_or_skipped,

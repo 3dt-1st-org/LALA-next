@@ -20,16 +20,16 @@ uploaded or exposed as static files.
 Production environment variables for the legacy Vercel API fallback path:
 
 ```text
-LALA_PUBLIC_DEMO_MODE=false
+LALA_STATIC_SNAPSHOT_FALLBACK=false
 CORS_ALLOW_ORIGINS=https://lala-next.cloud,https://www.lala-next.cloud,https://lala-next.vercel.app
 LALA_ENABLE_LIVE_AI=false
 LALA_ENABLE_LIVE_SPEECH=false
 ```
 
 The primary API runtime now lives on Azure Container Apps. For production,
-review, and shared dev, keep `LALA_PUBLIC_DEMO_MODE=false`; the normal data path
-is PostgreSQL plus Key Vault with reviewed ingest, scoring, and RAG jobs.
-Bundled static data is only an offline, read-only snapshot fallback for DB
+review, and shared dev, keep `LALA_STATIC_SNAPSHOT_FALLBACK=false`; the normal
+data path is PostgreSQL plus Key Vault with reviewed ingest, scoring, and RAG
+jobs. Bundled static data is only an offline, read-only snapshot fallback for DB
 outage handling or isolated local checks.
 
 Flutter web builds that call Azure directly need a client credential at build

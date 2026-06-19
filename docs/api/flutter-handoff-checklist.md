@@ -173,7 +173,7 @@ or generated content.
 - `DB_DSN` enables PostgreSQL-backed places, weather, planner, and docent-cache
   reads with fallback to skeleton behavior.
 - Production, review, and shared dev deployments should keep
-  `LALA_PUBLIC_DEMO_MODE=false`; bundled static snapshots are limited to
+  `LALA_STATIC_SNAPSHOT_FALLBACK=false`; bundled static snapshots are limited to
   offline, read-only DB-outage fallback or isolated local checks.
 - `LALA_ENABLE_LIVE_AI=true` enables Azure OpenAI script generation.
 - `LALA_ENABLE_LIVE_SPEECH=true` enables Azure Speech MP3 generation.

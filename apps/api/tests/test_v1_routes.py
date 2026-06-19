@@ -41,7 +41,7 @@ def test_places_accepts_legacy_english_language_value(client, auth_headers):
 
 
 def test_places_accepts_language_query_alias(client, auth_headers, monkeypatch):
-    monkeypatch.setenv("LALA_PUBLIC_DEMO_MODE", "true")
+    monkeypatch.setenv("LALA_STATIC_SNAPSHOT_FALLBACK", "true")
     response = client.get(
         "/api/v1/places?lat=37.2636&lng=127.0286&radius_m=50000&language=en",
         headers=auth_headers,
@@ -648,10 +648,10 @@ def test_daily_plan_marks_mixed_source_when_db_places_are_used(client, auth_head
     assert body["data"]["slots"][0]["place"]["place_id"] == "db-plan-place"
 
 
-def test_daily_plan_uses_public_snapshot_radius_in_public_demo(client, monkeypatch):
+def test_daily_plan_uses_public_snapshot_radius_in_snapshot_fallback(client, monkeypatch):
     monkeypatch.delenv("IOS_API_KEY", raising=False)
     monkeypatch.delenv("API_BEARER_TOKEN", raising=False)
-    monkeypatch.setenv("LALA_PUBLIC_DEMO_MODE", "true")
+    monkeypatch.setenv("LALA_STATIC_SNAPSHOT_FALLBACK", "true")
 
     response = client.post(
         "/api/v1/plans/daily",
@@ -685,10 +685,10 @@ def test_intervention_route_returns_envelope(client, auth_headers):
     assert body["data"]["place"]
 
 
-def test_intervention_uses_public_snapshot_candidate_in_public_demo(client, monkeypatch):
+def test_intervention_uses_public_snapshot_candidate_in_snapshot_fallback(client, monkeypatch):
     monkeypatch.delenv("IOS_API_KEY", raising=False)
     monkeypatch.delenv("API_BEARER_TOKEN", raising=False)
-    monkeypatch.setenv("LALA_PUBLIC_DEMO_MODE", "true")
+    monkeypatch.setenv("LALA_STATIC_SNAPSHOT_FALLBACK", "true")
 
     response = client.get(
         "/api/v1/plans/intervention?lat=37.2636&lng=127.0286&radius_m=50000",

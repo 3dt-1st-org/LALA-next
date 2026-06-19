@@ -92,7 +92,7 @@ jobs:
               location="$AZURE_LOCATION" \
               deploymentPrincipalObjectId="$AZURE_DEPLOY_PRINCIPAL_OBJECT_ID" \
               enableRoleAssignments=false \
-              publicDemoMode=false \
+              staticSnapshotFallback=false \
               postgresAdminLogin="$POSTGRES_ADMIN_LOGIN" \
               postgresAdminPassword="$POSTGRES_ADMIN_PASSWORD" \
               apiBearerToken="$API_BEARER_TOKEN" \

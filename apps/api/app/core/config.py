@@ -29,7 +29,7 @@ class Settings:
     kopis_api_key: str = ""
     public_data_service_key: str = ""
     gyeonggi_data_dream_api_key: str = ""
-    public_demo_mode: bool = False
+    static_snapshot_fallback: bool = False
     db_dsn: str = ""
     key_vault_url: str = ""
     azure_openai_endpoint: str = ""
@@ -80,7 +80,7 @@ class Settings:
                 "gyeonggi-data-dream-api-key",
                 key_vault_url,
             ),
-            public_demo_mode=_bool_env("LALA_PUBLIC_DEMO_MODE", default=False),
+            static_snapshot_fallback=_static_snapshot_fallback_enabled(),
             db_dsn=_env_or_secret("DB_DSN", "db-dsn", key_vault_url),
             key_vault_url=key_vault_url,
             azure_openai_endpoint=_env_or_secret(
@@ -145,6 +145,11 @@ def _bool_env(env_name: str, *, default: bool) -> bool:
     if not raw:
         return default
     return raw in {"1", "true", "yes", "on"}
+
+
+def _static_snapshot_fallback_enabled() -> bool:
+    legacy_default = _bool_env("LALA_PUBLIC_DEMO_MODE", default=False)
+    return _bool_env("LALA_STATIC_SNAPSHOT_FALLBACK", default=legacy_default)
 
 
 def _csv_env(env_name: str) -> tuple[str, ...]:

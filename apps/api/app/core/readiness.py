@@ -21,8 +21,8 @@ def _worker_contract_status() -> str:
 
 
 def _client_identity_status(settings: Settings) -> str:
-    if settings.public_demo_mode:
-        return "public-demo"
+    if settings.static_snapshot_fallback:
+        return "snapshot-fallback"
     oauth_configured = all(
         (
             settings.oauth_issuer,
@@ -46,7 +46,7 @@ def _runtime_mode(checks: dict[str, str]) -> dict[str, str]:
     mode = {
         "data": _data_mode(
             db_status=checks.get("db", "skipped"),
-            public_demo_status=checks.get("public_demo_mode", "disabled"),
+            snapshot_fallback_status=checks.get("static_snapshot_fallback", "disabled"),
             public_snapshot_status=checks.get("public_data_snapshot", "missing"),
         ),
         "ai": _live_dependency_mode(
@@ -78,14 +78,14 @@ def _runtime_mode(checks: dict[str, str]) -> dict[str, str]:
 def _data_mode(
     *,
     db_status: str,
-    public_demo_status: str,
+    snapshot_fallback_status: str,
     public_snapshot_status: str,
 ) -> str:
     if db_status == "configured":
         return "db-backed"
     if db_status == "degraded":
         return "degraded"
-    if public_demo_status == "enabled" and public_snapshot_status == "configured":
+    if snapshot_fallback_status == "enabled" and public_snapshot_status == "configured":
         return "public-cache"
     return "skeleton"
 
@@ -124,15 +124,15 @@ def build_readiness(settings: Settings | None = None) -> dict:
     settings = settings or get_settings()
     jwt_validation_configured = is_oauth_jwt_validation_configured(settings)
     client_auth_status = "missing"
-    if settings.public_demo_mode:
-        client_auth_status = "public-demo"
+    if settings.static_snapshot_fallback:
+        client_auth_status = "snapshot-fallback"
     elif settings.ios_api_key or settings.api_bearer_token or jwt_validation_configured:
         client_auth_status = "configured"
 
     checks = {
         "client_auth": client_auth_status,
         "client_identity": _client_identity_status(settings),
-        "public_demo_mode": "enabled" if settings.public_demo_mode else "disabled",
+        "static_snapshot_fallback": "enabled" if settings.static_snapshot_fallback else "disabled",
         "public_data_snapshot": public_mvp_data.snapshot_status(),
         "public_data_service_key": _status(settings.public_data_service_key, required=False),
         "api_key": _status(settings.ios_api_key, required=False),
