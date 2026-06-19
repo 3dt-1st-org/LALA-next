@@ -1,0 +1,159 @@
+name: Azure Dev Deploy
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: azure-dev-deploy
+  cancel-in-progress: false
+
+env:
+  AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+  AZURE_DEPLOY_PRINCIPAL_OBJECT_ID: ${{ vars.AZURE_DEPLOY_PRINCIPAL_OBJECT_ID }}
+  AZURE_LOCATION: ${{ vars.AZURE_LOCATION || 'koreacentral' }}
+  LALA_ENVIRONMENT_NAME: ${{ vars.LALA_ENVIRONMENT_NAME || 'dev' }}
+  POSTGRES_ADMIN_LOGIN: ${{ vars.POSTGRES_ADMIN_LOGIN || 'lalaadmin' }}
+  CORS_ALLOW_ORIGINS: ${{ vars.CORS_ALLOW_ORIGINS || 'https://lala-next.cloud,https://www.lala-next.cloud' }}
+
+jobs:
+  deploy:
+    name: Deploy shared dev API and database
+    runs-on: ubuntu-latest
+    environment: dev
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync Python dependencies
+        run: uv sync --extra dev
+
+      - name: Run API safety contracts
+        run: uv run pytest apps/api/tests/test_safety_contracts.py apps/api/tests/test_health_auth.py apps/api/tests/test_cors.py
+
+      - name: Azure login with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Validate deployment settings
+        env:
+          POSTGRES_ADMIN_PASSWORD: ${{ secrets.AZURE_POSTGRES_ADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          : "${AZURE_RESOURCE_GROUP:?AZURE_RESOURCE_GROUP GitHub environment variable is required.}"
+          : "${AZURE_DEPLOY_PRINCIPAL_OBJECT_ID:?AZURE_DEPLOY_PRINCIPAL_OBJECT_ID GitHub environment variable is required.}"
+          : "${AZURE_LOCATION:?AZURE_LOCATION GitHub environment variable is required.}"
+          : "${LALA_ENVIRONMENT_NAME:?LALA_ENVIRONMENT_NAME GitHub environment variable is required.}"
+          : "${POSTGRES_ADMIN_LOGIN:?POSTGRES_ADMIN_LOGIN GitHub environment variable is required.}"
+          : "${POSTGRES_ADMIN_PASSWORD:?AZURE_POSTGRES_ADMIN_PASSWORD GitHub environment secret is required.}"
+
+      - name: Ensure resource group exists
+        run: |
+          az group create \
+            --name "$AZURE_RESOURCE_GROUP" \
+            --location "$AZURE_LOCATION" \
+            --tags app=lala environment="$LALA_ENVIRONMENT_NAME"
+
+      - name: Deploy Azure infrastructure
+        env:
+          POSTGRES_ADMIN_PASSWORD: ${{ secrets.AZURE_POSTGRES_ADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          az deployment group create \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --template-file infra/azure/main.bicep \
+            --parameters \
+              environmentName="$LALA_ENVIRONMENT_NAME" \
+              location="$AZURE_LOCATION" \
+              deploymentPrincipalObjectId="$AZURE_DEPLOY_PRINCIPAL_OBJECT_ID" \
+              postgresAdminLogin="$POSTGRES_ADMIN_LOGIN" \
+              postgresAdminPassword="$POSTGRES_ADMIN_PASSWORD" \
+              corsAllowOrigins="$CORS_ALLOW_ORIGINS" \
+            --query properties.outputs \
+            --output json > azure-outputs.json
+          jq -r '.containerRegistryName.value' azure-outputs.json | sed 's/^/ACR_NAME=/' >> "$GITHUB_ENV"
+          jq -r '.containerRegistryLoginServer.value' azure-outputs.json | sed 's/^/ACR_LOGIN_SERVER=/' >> "$GITHUB_ENV"
+          jq -r '.apiContainerAppName.value' azure-outputs.json | sed 's/^/CONTAINER_APP_NAME=/' >> "$GITHUB_ENV"
+          jq -r '.apiFqdn.value' azure-outputs.json | sed 's/^/API_FQDN=/' >> "$GITHUB_ENV"
+          jq -r '.keyVaultName.value' azure-outputs.json | sed 's/^/KEY_VAULT_NAME=/' >> "$GITHUB_ENV"
+          jq -r '.keyVaultUri.value' azure-outputs.json | sed 's/^/KEY_VAULT_URL=/' >> "$GITHUB_ENV"
+          jq -r '.postgresServerName.value' azure-outputs.json | sed 's/^/POSTGRES_SERVER_NAME=/' >> "$GITHUB_ENV"
+
+      - name: Build and push API image
+        run: |
+          set -euo pipefail
+          IMAGE="$ACR_LOGIN_SERVER/lala-api:${GITHUB_SHA}"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+          az acr login --name "$ACR_NAME"
+          docker build \
+            --file infra/azure/api.Dockerfile \
+            --tag "$IMAGE" \
+            .
+          docker push "$IMAGE"
+
+      - name: Update API container revision
+        run: |
+          az containerapp update \
+            --name "$CONTAINER_APP_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --image "$IMAGE"
+
+      - name: Apply and verify canonical database schema
+        run: |
+          set -euo pipefail
+          RUNNER_IP="$(curl -fsSL https://api.ipify.org)"
+          RULE_NAME="github-actions-${GITHUB_RUN_ID}"
+
+          cleanup() {
+          az postgres flexible-server firewall-rule delete \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --name "$POSTGRES_SERVER_NAME" \
+              --rule-name "$RULE_NAME" \
+              --yes >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          az postgres flexible-server firewall-rule create \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$POSTGRES_SERVER_NAME" \
+            --rule-name "$RULE_NAME" \
+            --start-ip-address "$RUNNER_IP" \
+            --end-ip-address "$RUNNER_IP"
+
+          DB_DSN="$(az keyvault secret show \
+            --vault-name "$KEY_VAULT_NAME" \
+            --name db-dsn \
+            --query value \
+            --output tsv)"
+          echo "::add-mask::$DB_DSN"
+          export DB_DSN
+          export KEY_VAULT_URL
+          export ALLOW_CANONICAL_SQL_APPLY=1
+          scripts/unix/apply_canonical_sql.sh --apply --confirm APPLY_CANONICAL_SQL --json --python .venv/bin/python
+          scripts/unix/verify_db_schema.sh --json --python .venv/bin/python
+
+      - name: Smoke deployed API
+        run: |
+          set -euo pipefail
+          curl -fsS "https://${API_FQDN}/healthz"
+          curl -fsS "https://${API_FQDN}/readyz"

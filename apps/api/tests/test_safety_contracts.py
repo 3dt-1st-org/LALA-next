@@ -12,6 +12,8 @@ from apps.api.app.core.key_vault import is_allowed_key_vault_url, key_vault_name
 ROOT = Path(__file__).resolve().parents[3]
 TEXT_SUFFIXES = {
     ".dart",
+    ".bicep",
+    ".dockerfile",
     ".env",
     ".example",
     ".md",
@@ -56,10 +58,15 @@ def test_canonical_sql_declares_compatibility_views():
 
 def test_repo_docs_and_scripts_do_not_contain_secret_literals():
     target_roots = [
+        ROOT / ".azure",
+        ROOT / ".dockerignore",
         ROOT / ".env.example",
+        ROOT / ".gitignore",
+        ROOT / ".github",
         ROOT / "scripts",
         ROOT / "sql",
         ROOT / "docs",
+        ROOT / "infra" / "azure",
         ROOT / "clients",
         ROOT / "apps" / "api" / "app",
         ROOT / "apps" / "workers" / "app",
@@ -94,10 +101,15 @@ def test_repo_docs_and_scripts_do_not_contain_secret_literals():
 
 def test_public_repo_does_not_contain_live_resource_identifiers():
     target_roots = [
+        ROOT / ".azure",
+        ROOT / ".dockerignore",
         ROOT / ".env.example",
+        ROOT / ".gitignore",
+        ROOT / ".github",
         ROOT / "README.md",
         ROOT / "scripts",
         ROOT / "docs",
+        ROOT / "infra" / "azure",
         ROOT / "apps" / "api" / "app",
         ROOT / "apps" / "workers" / "app",
         ROOT / "apps" / "api" / "tests",
@@ -128,6 +140,35 @@ def test_public_repo_does_not_contain_live_resource_identifiers():
                     findings.append(f"{path}: {value}")
 
     assert findings == []
+
+
+def test_azure_dev_deploy_uses_oidc_and_dev_branch_only():
+    workflow = (ROOT / ".github" / "workflows" / "azure-dev-deploy.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "branches:\n      - dev" in workflow
+    assert "id-token: write" in workflow
+    assert "uses: azure/login@v2" in workflow
+    assert "AZURE_CREDENTIALS" not in workflow
+    assert "client-id: ${{ vars.AZURE_CLIENT_ID }}" in workflow
+    assert "subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}" in workflow
+    assert "AZURE_DEPLOY_PRINCIPAL_OBJECT_ID" in workflow
+    assert 'deploymentPrincipalObjectId="$AZURE_DEPLOY_PRINCIPAL_OBJECT_ID"' in workflow
+    assert "ALLOW_CANONICAL_SQL_APPLY=1" in workflow
+    assert "secrets.AZURE_POSTGRES_ADMIN_PASSWORD" in workflow
+
+
+def test_azure_container_build_excludes_local_secrets():
+    dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8")
+    dockerfile = (ROOT / "infra" / "azure" / "api.Dockerfile").read_text(encoding="utf-8")
+
+    assert ".env" in dockerignore
+    assert ".env.*" in dockerignore
+    assert "!.env.example" in dockerignore
+    assert "COPY apps ./apps" in dockerfile
+    assert "uvicorn apps.api.app.main:app" in dockerfile
+    assert "COPY . ." not in dockerfile
 
 
 def test_kakao_map_bridges_forward_zoom_camera_updates():
