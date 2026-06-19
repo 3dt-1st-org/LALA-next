@@ -29,6 +29,7 @@ def test_readyz_reports_degraded_without_required_env(client, monkeypatch):
     assert body["data"]["status"] == "degraded"
     assert body["data"]["checks"]["client_auth"] == "missing"
     assert body["data"]["checks"]["client_identity"] == "missing"
+    assert body["data"]["checks"]["public_data_service_key"] == "skipped"
     assert body["data"]["checks"]["worker_contracts"] == "configured"
     assert body["data"]["mode"] == {
         "overall": "skeleton",
@@ -65,6 +66,7 @@ def test_readyz_accepts_bearer_token_as_client_auth(client, monkeypatch):
     assert body["data"]["checks"]["client_identity"] == "static"
     assert body["data"]["checks"]["api_key"] == "skipped"
     assert body["data"]["checks"]["bearer_token"] == "configured"
+    assert body["data"]["checks"]["public_data_service_key"] == "skipped"
 
 
 def test_readyz_reports_public_demo_mode(client, monkeypatch):

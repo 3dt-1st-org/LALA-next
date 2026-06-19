@@ -69,6 +69,13 @@ The GitHub `dev` environment must provide both `AZURE_POSTGRES_ADMIN_PASSWORD`
 and `AZURE_API_BEARER_TOKEN`. Bicep writes the bearer token to Key Vault as
 `api-bearer-token`; it should not be committed, printed, or copied into docs.
 
+Weather fallback depends on the LALA runtime Key Vault secret
+`public-data-service-key`. This is the public-data service key used for the
+KMA ultra-short nowcast request when `travel.weather_observations` has no fresh
+DB row for the map center. If `/api/v1/weather` returns `source=skeleton`,
+check `/readyz` for `public_data_service_key=configured` before investigating
+KMA response quality or worker ingestion.
+
 The deploy workflow also receives `AZURE_DEPLOY_PRINCIPAL_OBJECT_ID` so the
 Bicep template can grant the GitHub OIDC service principal `AcrPush` and Key
 Vault secret access without storing broad Azure credentials in GitHub.

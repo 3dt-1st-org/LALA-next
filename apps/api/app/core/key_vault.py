@@ -3,22 +3,35 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import logging
 from functools import lru_cache
 from urllib.parse import urlparse
 
 KEY_VAULT_HOST_SUFFIX = ".vault.azure.net"
 
 
-@lru_cache(maxsize=64)
 def get_secret_if_configured(vault_url: str, secret_name: str) -> str:
     if not vault_url:
         return ""
     if not is_allowed_key_vault_url(vault_url):
         return ""
+    try:
+        return _get_cached_non_empty_secret(vault_url, secret_name)
+    except LookupError:
+        return ""
+
+
+@lru_cache(maxsize=64)
+def _get_cached_non_empty_secret(vault_url: str, secret_name: str) -> str:
     sdk_value = _get_secret_with_sdk(vault_url, secret_name)
     if sdk_value:
         return sdk_value
-    return _get_secret_with_azure_cli(vault_url, secret_name)
+    cli_value = _get_secret_with_azure_cli(vault_url, secret_name)
+    if cli_value:
+        return cli_value
+    # Do not cache missing or empty secrets. In dev/review Azure environments,
+    # a secret may be added after the API process has already started.
+    raise LookupError(secret_name)
 
 
 def _get_secret_with_sdk(vault_url: str, secret_name: str) -> str:
@@ -28,9 +41,10 @@ def _get_secret_with_sdk(vault_url: str, secret_name: str) -> str:
     except Exception:
         return ""
     try:
+        _suppress_azure_sdk_request_logging()
         credential = DefaultAzureCredential(exclude_interactive_browser_credential=False)
-        client = SecretClient(vault_url=vault_url, credential=credential)
-        secret = client.get_secret(secret_name)
+        client = SecretClient(vault_url=vault_url, credential=credential, logging_enable=False)
+        secret = client.get_secret(secret_name, logging_enable=False)
         return (secret.value or "").strip()
     except Exception:
         return ""
@@ -113,3 +127,11 @@ def _get_secret_with_azure_cli(vault_url: str, secret_name: str) -> str:
     if completed.returncode != 0:
         return ""
     return completed.stdout.strip()
+
+
+def _suppress_azure_sdk_request_logging() -> None:
+    for logger_name in (
+        "azure.core.pipeline.policies.http_logging_policy",
+        "azure.identity",
+    ):
+        logging.getLogger(logger_name).setLevel(logging.WARNING)

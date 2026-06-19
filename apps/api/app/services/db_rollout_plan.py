@@ -20,6 +20,7 @@ DEFAULT_TIER = "Burstable"
 DEFAULT_STORAGE_SIZE_GB = 32
 DEFAULT_PUBLIC_ACCESS = "None"
 REQUIRED_EXTENSIONS = ("POSTGIS", "VECTOR", "PGCRYPTO")
+KEY_VAULT_URL_PLACEHOLDER = "<KEY_VAULT_URL>"
 
 _SERVER_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$")
 _SIMPLE_NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,63}$")
@@ -283,11 +284,14 @@ def build_db_rollout_plan(
                     "--confirm",
                     "APPLY_CANONICAL_SQL",
                     "--key-vault-url",
-                    f"https://{key_vault_name}.vault.azure.net/",
+                    KEY_VAULT_URL_PLACEHOLDER,
                 )
             ),
             approval_required=True,
-            notes=("Runs sql/canonical/*.sql in sorted order inside one transaction.",),
+            notes=(
+                "Runs sql/canonical/*.sql in sorted order inside one transaction.",
+                "Resolve <KEY_VAULT_URL> from a private runbook or environment variable, not tracked docs.",
+            ),
         ),
         DbRolloutPlanStep(
             order=8,
@@ -295,7 +299,7 @@ def build_db_rollout_plan(
             command=_cmd(
                 "scripts/unix/verify_db_schema.sh",
                 "--key-vault-url",
-                f"https://{key_vault_name}.vault.azure.net/",
+                KEY_VAULT_URL_PLACEHOLDER,
             ),
             approval_required=False,
             notes=("Read-only. Confirms required extensions, schemas, tables, and views.",),
@@ -309,7 +313,7 @@ def build_db_rollout_plan(
                     "--port",
                     "8080",
                     "--key-vault-url",
-                    f"https://{key_vault_name}.vault.azure.net/",
+                    KEY_VAULT_URL_PLACEHOLDER,
                 )
                 + "\n"
                 + _cmd(
@@ -317,7 +321,7 @@ def build_db_rollout_plan(
                     "--base-url",
                     "http://127.0.0.1:8080",
                     "--key-vault-url",
-                    f"https://{key_vault_name}.vault.azure.net/",
+                    KEY_VAULT_URL_PLACEHOLDER,
                 )
             ),
             approval_required=False,

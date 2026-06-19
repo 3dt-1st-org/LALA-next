@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import math
 from datetime import UTC, datetime, timedelta, timezone
+import logging
 from typing import Any
 
 from apps.api.app.core.config import get_settings
+from apps.api.app.core.observability import LOGGER_NAME
 from apps.api.app.services import db_repository
 
 KMA_ULTRA_SHORT_NOWCAST_URL = (
@@ -12,6 +14,7 @@ KMA_ULTRA_SHORT_NOWCAST_URL = (
 )
 KMA_SOURCE = "kma_ultra_srt_ncst"
 KST = timezone(timedelta(hours=9))
+logger = logging.getLogger(LOGGER_NAME)
 
 
 def current_weather(*, lat: float, lng: float, force: bool = False) -> dict:
@@ -47,10 +50,12 @@ def current_weather(*, lat: float, lng: float, force: bool = False) -> dict:
 def _fetch_kma_ultra_short_nowcast(*, lat: float, lng: float, force: bool) -> dict[str, Any] | None:
     service_key = get_settings().public_data_service_key
     if not service_key:
+        logger.info("kma_nowcast_skipped reason=missing_public_data_service_key")
         return None
     try:
         import requests
-    except Exception:
+    except Exception as exc:
+        logger.warning("kma_nowcast_skipped reason=requests_unavailable error_type=%s", type(exc).__name__)
         return None
 
     nx, ny = _kma_grid_xy(lat, lng)
@@ -72,11 +77,13 @@ def _fetch_kma_ultra_short_nowcast(*, lat: float, lng: float, force: bool) -> di
         )
         response.raise_for_status()
         payload = response.json()
-    except Exception:
+    except Exception as exc:
+        logger.warning("kma_nowcast_failed error_type=%s", type(exc).__name__)
         return None
 
     items = _kma_items(payload)
     if not items:
+        logger.warning("kma_nowcast_empty_items")
         return None
     values = {
         str(item.get("category") or "").strip(): str(item.get("obsrValue") or "").strip()
@@ -85,6 +92,7 @@ def _fetch_kma_ultra_short_nowcast(*, lat: float, lng: float, force: bool) -> di
     }
     temp = values.get("T1H", "")
     if not temp:
+        logger.warning("kma_nowcast_missing_temperature")
         return None
 
     observed_at = base_time.isoformat()

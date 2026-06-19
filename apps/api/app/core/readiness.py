@@ -134,6 +134,7 @@ def build_readiness(settings: Settings | None = None) -> dict:
         "client_identity": _client_identity_status(settings),
         "public_demo_mode": "enabled" if settings.public_demo_mode else "disabled",
         "public_data_snapshot": public_mvp_data.snapshot_status(),
+        "public_data_service_key": _status(settings.public_data_service_key, required=False),
         "api_key": _status(settings.ios_api_key, required=False),
         "bearer_token": _status(settings.api_bearer_token, required=False),
         "jwt_validation": "configured" if jwt_validation_configured else "skipped",

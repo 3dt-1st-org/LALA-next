@@ -11,6 +11,7 @@ DEFAULT_FLUTTER_APP_NAME = "lala-next-flutter-dev"
 DEFAULT_API_APP_ID_URI = "api://lala-next-dev"
 DEFAULT_REQUIRED_SCOPES = ("access_as_user",)
 DEFAULT_BASE_URL = "http://127.0.0.1:8080"
+KEY_VAULT_URL_PLACEHOLDER = "<KEY_VAULT_URL>"
 
 OAUTH_KEY_VAULT_SECRET_NAMES = (
     "oauth-issuer",
@@ -105,8 +106,6 @@ def build_identity_rollout_plan(
     )
     scope_list = " ".join(required_scopes)
     scope_csv = ",".join(required_scopes)
-    key_vault_url = f"https://{command_key_vault_name}.vault.azure.net/"
-
     steps = (
         IdentityRolloutPlanStep(
             order=1,
@@ -263,11 +262,12 @@ def build_identity_rollout_plan(
             command=_cmd(
                 "scripts/unix/start_api.sh",
                 "--key-vault-url",
-                key_vault_url,
+                KEY_VAULT_URL_PLACEHOLDER,
             ),
             approval_required=False,
             notes=(
                 "Readiness should report client_identity=transition while static bearer/API-key auth still protects /api/v1/*.",
+                "Resolve <KEY_VAULT_URL> from a private runbook or environment variable, not tracked docs.",
             ),
         ),
         IdentityRolloutPlanStep(
@@ -278,7 +278,7 @@ def build_identity_rollout_plan(
                 "--base-url",
                 base_url,
                 "--key-vault-url",
-                key_vault_url,
+                KEY_VAULT_URL_PLACEHOLDER,
             ),
             approval_required=False,
             notes=(

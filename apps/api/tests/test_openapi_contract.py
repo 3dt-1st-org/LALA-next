@@ -153,6 +153,7 @@ def test_openapi_documents_readyz_runtime_mode(client):
     ]
     assert readiness_checks["public_demo_mode"]["enum"] == ["enabled", "disabled"]
     assert readiness_checks["public_data_snapshot"]["enum"] == ["configured", "missing"]
+    assert readiness_checks["public_data_service_key"]["enum"] == ["configured", "skipped"]
     assert readiness_checks["jwt_validation"]["enum"] == ["configured", "skipped"]
     assert readiness_checks["oauth_jwks_url"]["enum"] == ["configured", "skipped"]
 
