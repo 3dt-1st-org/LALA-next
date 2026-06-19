@@ -76,7 +76,8 @@ var keyVaultName = take('${appName}-${environmentName}-kv-${suffix}', 24)
 var postgresServerName = take('${appName}-${environmentName}-pg-${suffix}', 63)
 var keyVaultHost = replace(replace(keyVault.properties.vaultUri, 'https://', ''), '/', '')
 var dbScheme = 'postgresql://'
-var dbDsn = '${dbScheme}${postgresAdminLogin}:${postgresAdminPassword}@${postgres.properties.fullyQualifiedDomainName}:5432/${postgresDatabaseName}?sslmode=require'
+var encodedPostgresAdminPassword = uriComponent(postgresAdminPassword)
+var dbDsn = '${dbScheme}${postgresAdminLogin}:${encodedPostgresAdminPassword}@${postgres.properties.fullyQualifiedDomainName}:5432/${postgresDatabaseName}?sslmode=require'
 var acrPullRoleDefinitionId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')
 var acrPushRoleDefinitionId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '8311e382-0749-4cb8-b61a-304f252e45ec')
 var keyVaultSecretsUserRoleDefinitionId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')

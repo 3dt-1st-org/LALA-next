@@ -183,6 +183,7 @@ def test_azure_container_build_excludes_local_secrets():
     assert "param publicDemoMode bool = false" in bicep
     assert "param apiBearerToken string = ''" in bicep
     assert "name: 'api-bearer-token'" in bicep
+    assert "uriComponent(postgresAdminPassword)" in bicep
     assert "name: 'LALA_PUBLIC_DEMO_MODE'" in bicep
     assert "value: string(publicDemoMode)" in bicep
 
