@@ -19,6 +19,9 @@ param containerImage string = 'mcr.microsoft.com/azuredocs/containerapps-hellowo
 @description('Comma-separated frontend origins allowed by the FastAPI CORS layer.')
 param corsAllowOrigins string = 'https://lala-next.cloud,https://www.lala-next.cloud'
 
+@description('Enable the public demo API mode for the login-free MVP surface.')
+param publicDemoMode bool = true
+
 @description('Object id of the GitHub OIDC service principal. Used for ACR push and Key Vault secret migration access.')
 param deploymentPrincipalObjectId string = ''
 
@@ -324,7 +327,7 @@ resource apiContainerApp 'Microsoft.App/containerApps@2024-03-01' = {
             }
             {
               name: 'LALA_PUBLIC_DEMO_MODE'
-              value: 'false'
+              value: string(publicDemoMode)
             }
             {
               name: 'LALA_ENABLE_LIVE_AI'

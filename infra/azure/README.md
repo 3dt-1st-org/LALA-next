@@ -92,6 +92,9 @@ SQL tooling or the guarded canonical SQL runbooks.
 - The app reads `DB_DSN` from Key Vault at runtime through `KEY_VAULT_URL`.
 - `LALA_ALLOWED_KEY_VAULT_HOSTS` is set to the generated LALA vault host so the
   API cannot accidentally read ONMU or unrelated vaults.
+- `LALA_PUBLIC_DEMO_MODE` is enabled for the dev MVP API so the login-free
+  Flutter surface can call `/api/v1/*` while DB schema/data rollout stays
+  manual.
 - The first local Azure CLI deployment should use `enableRoleAssignments=true`.
   The GitHub `dev` workflow uses `enableRoleAssignments=false` after those RBAC
   bindings exist.

@@ -156,6 +156,7 @@ def test_azure_dev_deploy_uses_oidc_and_dev_branch_only():
     assert "AZURE_DEPLOY_PRINCIPAL_OBJECT_ID" in workflow
     assert 'deploymentPrincipalObjectId="$AZURE_DEPLOY_PRINCIPAL_OBJECT_ID"' in workflow
     assert "enableRoleAssignments=false" in workflow
+    assert "publicDemoMode=true" in workflow
     assert "secrets.AZURE_POSTGRES_ADMIN_PASSWORD" in workflow
     assert "ALLOW_CANONICAL_SQL_APPLY" not in workflow
     assert "apply_canonical_sql" not in workflow
@@ -169,6 +170,7 @@ def test_azure_dev_deploy_uses_oidc_and_dev_branch_only():
 def test_azure_container_build_excludes_local_secrets():
     dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8")
     dockerfile = (ROOT / "infra" / "azure" / "api.Dockerfile").read_text(encoding="utf-8")
+    bicep = (ROOT / "infra" / "azure" / "main.bicep").read_text(encoding="utf-8")
 
     assert ".env" in dockerignore
     assert ".env.*" in dockerignore
@@ -176,6 +178,9 @@ def test_azure_container_build_excludes_local_secrets():
     assert "COPY apps ./apps" in dockerfile
     assert "uvicorn apps.api.app.main:app" in dockerfile
     assert "COPY . ." not in dockerfile
+    assert "param publicDemoMode bool = true" in bicep
+    assert "name: 'LALA_PUBLIC_DEMO_MODE'" in bicep
+    assert "value: string(publicDemoMode)" in bicep
 
 
 def test_kakao_map_bridges_forward_zoom_camera_updates():
