@@ -7,6 +7,19 @@ URLs, database passwords, bearer tokens, or generated Azure resource names.
 Use GitHub environment variables, GitHub environment secrets, and Azure CLI
 queries to resolve live names during operations.
 
+## Current IaC State
+
+- `infra/terraform` is now the modular IaC source of truth for the shared dev
+  Azure stack.
+- PR validation is handled by `.github/workflows/terraform-plan.yml`.
+- Dev apply is handled by `.github/workflows/azure-dev-terraform-apply.yml`.
+- `.github/workflows/azure-dev-deploy.yml` stays in place only as a
+  transitional Bicep fallback while Terraform state backend bootstrap and live
+  resource adoption are completed.
+- The Terraform apply flow writes `db-dsn`, `api-bearer-token`, and
+  `cors-allow-origins` into Key Vault after resource provisioning so those
+  bootstrap runtime secrets do not live in tracked Terraform files.
+
 ## Completed
 
 - Azure Container Apps, Azure Database for PostgreSQL Flexible Server, Key
@@ -57,6 +70,10 @@ queries to resolve live names during operations.
   deploy workflow passes them into Bicep so future dev deployments preserve the
   `api.lala-next.cloud` custom-domain binding instead of resetting ingress to
   the default Azure Container Apps FQDN only.
+- A Terraform module tree modeled after the ONMU layout was added for state
+  backend bootstrap, shared dev, and production-shaped skeleton planning.
+- Terraform plan and dev apply workflows were added without introducing branch
+  protection rules.
 
 ## Manual Data Rollout Order
 
@@ -167,8 +184,13 @@ After Azure reports the custom hostname binding as `SniEnabled`, verify
 
 ## Still Open
 
-- Re-run the Azure dev deployment after any Bicep or GitHub secret change so
-  Key Vault secrets and the Container App revision stay aligned.
+- Bootstrap the Terraform remote state backend, wire `TFSTATE_*` values into
+  the GitHub `dev` environment, and migrate the local Terraform state to Azure
+  Blob before treating Terraform apply as the only active lane.
+- Import or align the currently running Azure dev resources so Terraform plans
+  stay adoptive instead of replacement-oriented.
+- Decide when the Bicep fallback workflow can be retired after repeated
+  Terraform applies prove stable.
 - Keep Flutter web using the transition bearer token only from deployment
   secrets until OAuth or a backend-for-frontend proxy replaces the static token.
 - Remove the temporary operator PostgreSQL firewall rule during the next Azure

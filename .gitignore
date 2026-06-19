@@ -18,6 +18,19 @@ artifacts/openapi/
 infra/azure/main.json
 .playwright-cli/
 output/
+.terraform/
+*.tfplan
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.auto.tfvars
+*.auto.tfvars.json
+backend.hcl
+backend.*.hcl
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
 
 # Local legacy/reference imports from the previous LALA project.
 /lala-macbook-usb-local-artifacts-*.zip
@@ -28,3 +41,4 @@ clients/flutter/.dart_tool/
 clients/flutter/pubspec.lock
 apps/flutter_app/.dart_tool/
 .vercel
+!*.tfvars.example

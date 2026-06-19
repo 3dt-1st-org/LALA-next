@@ -1,0 +1,247 @@
+name: Azure Dev Terraform Apply
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: azure-dev-terraform-apply
+  cancel-in-progress: false
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  AZURE_DEPLOY_PRINCIPAL_OBJECT_ID: ${{ vars.AZURE_DEPLOY_PRINCIPAL_OBJECT_ID || '' }}
+  AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+  AZURE_LOCATION: ${{ vars.AZURE_LOCATION || 'koreacentral' }}
+  LALA_ENVIRONMENT_NAME: ${{ vars.LALA_ENVIRONMENT_NAME || 'dev' }}
+  POSTGRES_ADMIN_LOGIN: ${{ vars.POSTGRES_ADMIN_LOGIN || 'lalaadmin' }}
+  CORS_ALLOW_ORIGINS: ${{ vars.CORS_ALLOW_ORIGINS || 'https://lala-next.cloud,https://www.lala-next.cloud' }}
+  AZURE_API_CUSTOM_DOMAIN_NAME: ${{ vars.AZURE_API_CUSTOM_DOMAIN_NAME || '' }}
+  AZURE_API_CUSTOM_DOMAIN_CERTIFICATE_ID: ${{ vars.AZURE_API_CUSTOM_DOMAIN_CERTIFICATE_ID || '' }}
+  LALA_TF_NAME_SUFFIX: ${{ vars.LALA_TF_NAME_SUFFIX || '' }}
+  LALA_TF_ENABLE_ROLE_ASSIGNMENTS: ${{ vars.LALA_TF_ENABLE_ROLE_ASSIGNMENTS || 'false' }}
+  LALA_TF_RESOURCE_NAME_OVERRIDES_JSON: ${{ vars.LALA_TF_RESOURCE_NAME_OVERRIDES_JSON || '{}' }}
+  LALA_TF_ADDITIONAL_TAGS_JSON: ${{ vars.LALA_TF_ADDITIONAL_TAGS_JSON || '{}' }}
+  TFSTATE_RESOURCE_GROUP: ${{ vars.TFSTATE_RESOURCE_GROUP }}
+  TFSTATE_STORAGE_ACCOUNT: ${{ vars.TFSTATE_STORAGE_ACCOUNT }}
+  TFSTATE_CONTAINER: ${{ vars.TFSTATE_CONTAINER }}
+  TFSTATE_KEY: ${{ vars.TFSTATE_KEY }}
+
+jobs:
+  apply:
+    name: Apply shared dev Terraform runtime
+    runs-on: ubuntu-latest
+    environment: dev
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync Python dependencies
+        run: uv sync --extra dev
+
+      - name: Run API safety contracts
+        run: uv run pytest apps/api/tests/test_safety_contracts.py apps/api/tests/test_health_auth.py apps/api/tests/test_cors.py
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+
+      - name: Azure login with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Validate deployment settings
+        env:
+          AZURE_POSTGRES_ADMIN_PASSWORD: ${{ secrets.AZURE_POSTGRES_ADMIN_PASSWORD }}
+          AZURE_API_BEARER_TOKEN: ${{ secrets.AZURE_API_BEARER_TOKEN }}
+        run: |
+          set -euo pipefail
+          : "${AZURE_CLIENT_ID:?AZURE_CLIENT_ID GitHub environment variable is required.}"
+          : "${AZURE_TENANT_ID:?AZURE_TENANT_ID GitHub environment variable is required.}"
+          : "${AZURE_SUBSCRIPTION_ID:?AZURE_SUBSCRIPTION_ID GitHub environment variable is required.}"
+          : "${AZURE_RESOURCE_GROUP:?AZURE_RESOURCE_GROUP GitHub environment variable is required.}"
+          : "${AZURE_LOCATION:?AZURE_LOCATION GitHub environment variable is required.}"
+          : "${LALA_ENVIRONMENT_NAME:?LALA_ENVIRONMENT_NAME GitHub environment variable is required.}"
+          : "${POSTGRES_ADMIN_LOGIN:?POSTGRES_ADMIN_LOGIN GitHub environment variable is required.}"
+          : "${TFSTATE_RESOURCE_GROUP:?TFSTATE_RESOURCE_GROUP GitHub environment variable is required.}"
+          : "${TFSTATE_STORAGE_ACCOUNT:?TFSTATE_STORAGE_ACCOUNT GitHub environment variable is required.}"
+          : "${TFSTATE_CONTAINER:?TFSTATE_CONTAINER GitHub environment variable is required.}"
+          : "${TFSTATE_KEY:?TFSTATE_KEY GitHub environment variable is required.}"
+          : "${AZURE_POSTGRES_ADMIN_PASSWORD:?AZURE_POSTGRES_ADMIN_PASSWORD GitHub environment secret is required.}"
+          : "${AZURE_API_BEARER_TOKEN:?AZURE_API_BEARER_TOKEN GitHub environment secret is required.}"
+
+      - name: Render Terraform dev tfvars
+        env:
+          AZURE_POSTGRES_ADMIN_PASSWORD: ${{ secrets.AZURE_POSTGRES_ADMIN_PASSWORD }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          def as_bool(value: str) -> bool:
+              return value.strip().lower() in {"1", "true", "yes", "on"}
+
+          overrides = json.loads(os.environ.get("LALA_TF_RESOURCE_NAME_OVERRIDES_JSON", "{}") or "{}")
+          tags = json.loads(os.environ.get("LALA_TF_ADDITIONAL_TAGS_JSON", "{}") or "{}")
+          payload = {
+              "subscription_id": os.environ["AZURE_SUBSCRIPTION_ID"],
+              "tenant_id": os.environ["AZURE_TENANT_ID"],
+              "location": os.environ["AZURE_LOCATION"],
+              "app_name": "lala",
+              "environment_name": os.environ["LALA_ENVIRONMENT_NAME"],
+              "name_suffix": os.environ.get("LALA_TF_NAME_SUFFIX", ""),
+              "resource_group_name": os.environ["AZURE_RESOURCE_GROUP"],
+              "resource_name_overrides": overrides,
+              "additional_tags": tags,
+              "deployment_principal_object_id": os.environ.get("AZURE_DEPLOY_PRINCIPAL_OBJECT_ID") or None,
+              "enable_role_assignments": as_bool(os.environ.get("LALA_TF_ENABLE_ROLE_ASSIGNMENTS", "false")),
+              "postgres_admin_login": os.environ["POSTGRES_ADMIN_LOGIN"],
+              "postgres_admin_password": os.environ["AZURE_POSTGRES_ADMIN_PASSWORD"],
+              "api_custom_domain_name": os.environ.get("AZURE_API_CUSTOM_DOMAIN_NAME", ""),
+              "api_custom_domain_certificate_id": os.environ.get("AZURE_API_CUSTOM_DOMAIN_CERTIFICATE_ID", ""),
+          }
+          path = Path("infra/terraform/environments/dev/ci.auto.tfvars.json")
+          path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+          PY
+
+      - name: Check Terraform formatting
+        run: terraform fmt -check -recursive infra/terraform
+
+      - name: Initialize Terraform backend
+        run: |
+          terraform -chdir=infra/terraform/environments/dev init -reconfigure \
+            -backend-config="resource_group_name=${TFSTATE_RESOURCE_GROUP}" \
+            -backend-config="storage_account_name=${TFSTATE_STORAGE_ACCOUNT}" \
+            -backend-config="container_name=${TFSTATE_CONTAINER}" \
+            -backend-config="key=${TFSTATE_KEY}" \
+            -backend-config="use_azuread_auth=true"
+
+      - name: Validate Terraform dev environment
+        run: terraform -chdir=infra/terraform/environments/dev validate
+
+      - name: Apply Terraform with bootstrap image
+        run: |
+          terraform -chdir=infra/terraform/environments/dev apply \
+            -auto-approve \
+            -input=false \
+            -var-file=ci.auto.tfvars.json
+
+      - name: Capture Terraform outputs
+        run: |
+          terraform -chdir=infra/terraform/environments/dev output -json > infra/terraform/environments/dev/tf-output.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          data = json.loads(Path("infra/terraform/environments/dev/tf-output.json").read_text(encoding="utf-8"))
+          mapping = {
+              "ACR_NAME": data["container_registry_name"]["value"],
+              "ACR_LOGIN_SERVER": data["container_registry_login_server"]["value"],
+              "API_CONTAINER_APP_NAME": data["api_container_app_name"]["value"],
+              "API_FQDN": data["api_fqdn"]["value"],
+              "API_IMAGE_REPOSITORY": data["api_image_repository"]["value"],
+              "KEY_VAULT_NAME": data["key_vault_name"]["value"],
+              "POSTGRES_DATABASE_NAME": data["postgres_database_name"]["value"],
+              "POSTGRES_FQDN": data["postgres_fqdn"]["value"],
+          }
+          env_path = Path("infra/terraform/environments/dev/tf-output.env")
+          with open(env_path, "w", encoding="utf-8") as handle:
+              for key, value in mapping.items():
+                  handle.write(f"{key}={value}\n")
+          PY
+          cat infra/terraform/environments/dev/tf-output.env >> "$GITHUB_ENV"
+
+      - name: Build and push API image
+        run: |
+          set -euo pipefail
+          IMAGE="${API_IMAGE_REPOSITORY}:${GITHUB_SHA}"
+          echo "IMAGE=${IMAGE}" >> "$GITHUB_ENV"
+          az acr login --name "$ACR_NAME"
+          docker build \
+            --file infra/azure/api.Dockerfile \
+            --tag "$IMAGE" \
+            .
+          docker push "$IMAGE"
+
+      - name: Apply Terraform with built API image
+        run: |
+          terraform -chdir=infra/terraform/environments/dev apply \
+            -auto-approve \
+            -input=false \
+            -var-file=ci.auto.tfvars.json \
+            -var="api_image=${IMAGE}"
+
+      - name: Sync Key Vault bootstrap secrets
+        env:
+          AZURE_POSTGRES_ADMIN_PASSWORD: ${{ secrets.AZURE_POSTGRES_ADMIN_PASSWORD }}
+          AZURE_API_BEARER_TOKEN: ${{ secrets.AZURE_API_BEARER_TOKEN }}
+        run: |
+          set -euo pipefail
+          DB_DSN="$(
+            python3 - <<'PY'
+            import os
+            import urllib.parse
+
+            password = urllib.parse.quote(os.environ["AZURE_POSTGRES_ADMIN_PASSWORD"], safe="")
+            print(
+                f"postgresql://{os.environ['POSTGRES_ADMIN_LOGIN']}:{password}"
+                f"@{os.environ['POSTGRES_FQDN']}:5432/{os.environ['POSTGRES_DATABASE_NAME']}?sslmode=require"
+            )
+            PY
+          )"
+          echo "::add-mask::$DB_DSN"
+          az keyvault secret set --vault-name "$KEY_VAULT_NAME" --name db-dsn --value "$DB_DSN" --output none
+          az keyvault secret set --vault-name "$KEY_VAULT_NAME" --name api-bearer-token --value "$AZURE_API_BEARER_TOKEN" --output none
+          az keyvault secret set --vault-name "$KEY_VAULT_NAME" --name cors-allow-origins --value "$CORS_ALLOW_ORIGINS" --output none
+
+      - name: Restart active Container App revision
+        run: |
+          set -euo pipefail
+          ACTIVE_REVISION="$(az containerapp revision list \
+            --name "$API_CONTAINER_APP_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --query "[?properties.active].name | [0]" \
+            --output tsv)"
+          : "${ACTIVE_REVISION:?Failed to resolve an active Container App revision.}"
+          az containerapp revision restart \
+            --name "$API_CONTAINER_APP_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --revision "$ACTIVE_REVISION" \
+            --output none
+
+      - name: Smoke deployed API
+        run: |
+          set -euo pipefail
+          curl -fsS "https://${API_FQDN}/healthz"
+          if ! curl -fsS "https://${API_FQDN}/readyz"; then
+            echo "readyz probe failed; canonical schema or data rollout may still be pending."
+          fi
+          if [ -n "${AZURE_API_CUSTOM_DOMAIN_NAME:-}" ]; then
+            curl -fsS "https://${AZURE_API_CUSTOM_DOMAIN_NAME}/healthz"
+          fi

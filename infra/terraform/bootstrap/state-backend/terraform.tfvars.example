@@ -1,0 +1,28 @@
+subscription_display_name = "LALA shared subscription"
+
+location               = "koreacentral"
+create_resource_group  = true
+resource_group_name    = "rg-lala-shared-tfstate"
+storage_account_name   = "replacewithgloballyuniquesa"
+container_name         = "tfstate"
+create_state_container = true
+replication_type       = "LRS"
+
+enable_storage_account_delete_lock = false
+
+bootstrap_state_key = "lala/bootstrap/tfstate-backend.tfstate"
+dev_state_key       = "lala/dev/terraform.tfstate"
+prod_state_key      = "lala/prod/terraform.tfstate"
+
+# Live Microsoft Entra object ids must stay in protected CI variables or local
+# ignored tfvars only.
+operator_principal_object_ids       = []
+github_actions_principal_object_ids = []
+
+tags = {
+  app        = "lala"
+  env        = "shared"
+  managed_by = "terraform-bootstrap"
+  owner      = "lala-team"
+  service    = "tfstate"
+}

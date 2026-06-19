@@ -1,35 +1,49 @@
 # Azure Dev Deployment
 
-LALA keeps the public Flutter Web app on its existing web hosting path for now,
-while the shared backend and database move to Azure for team development.
+LALA keeps the public Flutter Web site on its existing hosting path while the
+shared backend and database live on Azure for team development.
+
+Terraform under
+[`infra/terraform`](/Users/geondongkim/.codex/worktrees/fd5e/LALA-next/infra/terraform)
+is now the IaC source of truth for that Azure runtime. The Bicep workflow stays
+in the repo as a transitional fallback and rollback rail, not the primary lane
+for new infrastructure changes.
 
 ## What Moves To Azure
 
-- FastAPI backend: Azure Container Apps
-- Shared PostgreSQL database: Azure Database for PostgreSQL Flexible Server
-- Secret source: Azure Key Vault
-- API image registry: Azure Container Registry
-- Logs and telemetry: Log Analytics and Application Insights
+- FastAPI backend on Azure Container Apps
+- Shared PostgreSQL on Azure Database for PostgreSQL Flexible Server
+- Secret source on Azure Key Vault
+- API image registry on Azure Container Registry
+- Logs and telemetry on Log Analytics and Application Insights
 
 ## What Stays Outside Azure For Now
 
-- Flutter Web public site deployment remains separate so the current
-  `lala-next.cloud` flow can keep working while `api.lala-next.cloud` is moved.
+- Flutter Web public deployment remains separate so `lala-next.cloud` keeps
+  working while `api.lala-next.cloud` points at Azure.
 - Mobile simulator and local development keep using local API overrides.
-- Worker jobs remain dry-run contracts until the shared DB/API path is stable.
+- Worker jobs stay dry-run contracts until the shared DB and API path is stable.
 
-## Automatic Dev Deployment
+## Terraform Workflow Lanes
 
-The workflow at `.github/workflows/azure-dev-deploy.yml` deploys when commits
-land on the `dev` branch. It uses GitHub OIDC with `azure/login@v2`, so no
-long-lived Azure credential JSON should be stored in GitHub.
+- PR lane: `.github/workflows/terraform-plan.yml`
+  This runs `terraform fmt`, `terraform validate`, and a `backend=false`
+  `terraform plan` for `infra/terraform/environments/dev`.
+- Dev apply lane: `.github/workflows/azure-dev-terraform-apply.yml`
+  This runs safety tests, applies the dev Terraform environment, builds and
+  pushes the API image, reapplies Terraform with the built image, syncs Key
+  Vault bootstrap secrets, restarts the active revision, and smokes `/healthz`
+  plus `/readyz`.
+- Transitional fallback lane: `.github/workflows/azure-dev-deploy.yml`
+  Keep this only for conservative rollback coverage while Terraform state
+  bootstrap and resource adoption are being finalized.
 
-Because the job uses GitHub Environment `dev`, the Entra federated credential
+Because the GitHub jobs use Environment `dev`, the Entra federated credential
 subject must be `repo:3dt-1st-org/LALA-next:environment:dev`.
 
-Required GitHub Environment: `dev`
+## GitHub Environment `dev`
 
-Variables:
+Variables reused from the current Azure lane:
 
 - `AZURE_CLIENT_ID`
 - `AZURE_DEPLOY_PRINCIPAL_OBJECT_ID`
@@ -40,53 +54,77 @@ Variables:
 - `LALA_ENVIRONMENT_NAME`
 - `POSTGRES_ADMIN_LOGIN`
 - `CORS_ALLOW_ORIGINS`
+- `AZURE_API_CUSTOM_DOMAIN_NAME`
+- `AZURE_API_CUSTOM_DOMAIN_CERTIFICATE_ID`
 
-Secret:
+New Terraform variables:
+
+- `TFSTATE_RESOURCE_GROUP`
+- `TFSTATE_STORAGE_ACCOUNT`
+- `TFSTATE_CONTAINER`
+- `TFSTATE_KEY`
+- `LALA_TF_NAME_SUFFIX`
+- `LALA_TF_RESOURCE_NAME_OVERRIDES_JSON`
+- `LALA_TF_ADDITIONAL_TAGS_JSON`
+- `LALA_TF_ENABLE_ROLE_ASSIGNMENTS`
+
+Secrets:
 
 - `AZURE_POSTGRES_ADMIN_PASSWORD`
+- `AZURE_API_BEARER_TOKEN`
+
+`LALA_TF_RESOURCE_NAME_OVERRIDES_JSON` should stay `{}` unless Terraform must
+adopt already-created Azure resources whose names cannot be derived from the
+shared naming pattern. When it is used, keep only names there, never ids or
+URLs.
 
 ## Runtime Secret Flow
 
-The Bicep deployment writes the generated PostgreSQL connection string to Key
-Vault as `db-dsn`. The API container receives only:
+The API container itself receives only non-secret bootstrap values such as:
 
 - `KEY_VAULT_URL`
 - `LALA_ALLOWED_KEY_VAULT_HOSTS`
 - `AZURE_CLIENT_ID`
+- `APPLICATIONINSIGHTS_CONNECTION_STRING`
 
-The API then loads `DB_DSN`, `api-bearer-token`, and other runtime secrets
-through managed identity. The deployment workflow may redeploy infrastructure
-and the API image, but it does not read the database secret for schema
-migration.
+After Terraform creates or updates the infrastructure, the dev apply workflow
+writes the bootstrap runtime secrets into the LALA-owned Key Vault with Azure
+CLI:
 
-Azure dev, production, and review deployments keep `LALA_PUBLIC_DEMO_MODE=false`.
-The normal runtime path is PostgreSQL plus Key Vault, populated by reviewed
-ingest, scoring, and RAG jobs. Bundled static data should be treated only as an
-offline, read-only snapshot fallback for DB outage handling or isolated local
-checks.
+- `db-dsn`
+- `api-bearer-token`
+- `cors-allow-origins`
 
-The GitHub `dev` environment must provide both `AZURE_POSTGRES_ADMIN_PASSWORD`
-and `AZURE_API_BEARER_TOKEN`. Bicep writes the bearer token to Key Vault as
-`api-bearer-token`; it should not be committed, printed, or copied into docs.
+The workflow then restarts the active Container App revision so the runtime
+reloads the fresh Key Vault values. This keeps those bootstrap secret values out
+of tracked Terraform files and out of GitHub logs.
 
-The deploy workflow also receives `AZURE_DEPLOY_PRINCIPAL_OBJECT_ID` so the
-Bicep template can grant the GitHub OIDC service principal `AcrPush` and Key
-Vault secret access without storing broad Azure credentials in GitHub.
+Terraform still manages sensitive infrastructure inputs such as the PostgreSQL
+administrator password, so protect the remote state backend accordingly.
 
-For the first local Azure CLI provisioning, `enableRoleAssignments=true` creates
-the runtime RBAC bindings. The GitHub `dev` workflow passes
-`enableRoleAssignments=false` so the deploy principal can redeploy app
-configuration without needing broad role-assignment write permission.
+## Apply Order
+
+1. Bootstrap the remote state backend with
+   [`infra/terraform/bootstrap/state-backend`](/Users/geondongkim/.codex/worktrees/fd5e/LALA-next/infra/terraform/bootstrap/state-backend).
+2. Store backend coordinates in the `dev` GitHub environment as `TFSTATE_*`
+   variables.
+3. Let PRs run `terraform-plan.yml` until the dev plan matches the current
+   shared runtime closely enough to adopt.
+4. On `dev` pushes, let `azure-dev-terraform-apply.yml` do:
+   `terraform apply` with a public bootstrap image, ACR build and push, a second
+   `terraform apply` with the real image, Key Vault bootstrap secret sync, then
+   revision restart and smoke tests.
+5. Keep canonical SQL, ingest, scoring, and RAG rollout as separate reviewed
+   operations. They are not part of every infrastructure apply.
 
 ## Safety Boundary
 
-This deployment lane is for shared dev, not production.
+This lane is for shared dev, not durable production.
 
-- Public DB access is restricted to Azure services. Schema and seed-data changes
-  are applied separately through reviewed SQL or guarded runbooks, not on every
-  `dev` branch push.
-- Production should use private networking, separate staging/prod resource
-  groups, stricter database identities, backup policy review, and explicit
-  DNS cutover planning.
-- Live resource names and subscription identifiers must stay out of tracked
-  Markdown. Put them in GitHub environment variables, Azure, or local runbooks.
+- `LALA_PUBLIC_DEMO_MODE` stays `false` for dev, review, and production.
+- The normal deployed path is PostgreSQL plus Key Vault plus reviewed ingest,
+  scoring, and RAG jobs.
+- Bundled static data is only a limited read-only fallback for DB outage
+  handling or isolated local checks.
+- Public DB access, DNS, and identity remain intentionally conservative until a
+  stricter production hardening phase exists.

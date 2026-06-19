@@ -1,7 +1,14 @@
 # LALA Azure Dev Runtime
 
-This folder contains the Azure deployment rail for the shared LALA dev runtime.
-It is intentionally separate from the current public Flutter Web deployment.
+This folder contains the legacy Bicep deployment rail for the shared LALA dev
+runtime. It is intentionally separate from the current public Flutter Web
+deployment.
+
+Terraform under
+[`infra/terraform`](/Users/geondongkim/.codex/worktrees/fd5e/LALA-next/infra/terraform)
+is now the modular IaC source of truth. Keep this Bicep lane only as a
+transitional bootstrap and rollback reference until the shared dev stack has
+been fully imported and stabilized in Terraform state.
 
 ## Target Architecture
 
@@ -27,10 +34,13 @@ Environment variables:
 - `LALA_ENVIRONMENT_NAME` such as `dev`
 - `POSTGRES_ADMIN_LOGIN` such as `lalaadmin`
 - `CORS_ALLOW_ORIGINS` such as `https://lala-next.cloud,https://www.lala-next.cloud`
+- `AZURE_API_CUSTOM_DOMAIN_NAME` such as `api.lala-next.cloud`
+- `AZURE_API_CUSTOM_DOMAIN_CERTIFICATE_ID` when the custom domain is already bound
 
-Environment secret:
+Environment secrets:
 
 - `AZURE_POSTGRES_ADMIN_PASSWORD`
+- `AZURE_API_BEARER_TOKEN`
 
 OIDC removes the need for a long-lived Azure credential secret in GitHub. The
 PostgreSQL admin password is still needed for the initial dev database
@@ -86,6 +96,11 @@ the least privileges needed after provisioning.
 The dev deployment workflow intentionally does not apply PostgreSQL schema or
 seed data. Shared database changes should be reviewed and run separately with
 SQL tooling or the guarded canonical SQL runbooks.
+
+For the Terraform-first lane, use:
+
+- [`docs/operations/azure-dev-deployment.md`](/Users/geondongkim/.codex/worktrees/fd5e/LALA-next/docs/operations/azure-dev-deployment.md)
+- [`docs/operations/azure-terraform-state-backend.md`](/Users/geondongkim/.codex/worktrees/fd5e/LALA-next/docs/operations/azure-terraform-state-backend.md)
 
 ## Notes
 

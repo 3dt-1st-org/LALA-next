@@ -32,6 +32,11 @@ is PostgreSQL plus Key Vault with reviewed ingest, scoring, and RAG jobs.
 Bundled static data is only an offline, read-only snapshot fallback for DB
 outage handling or isolated local checks.
 
+Azure runtime infrastructure should now be changed through
+[`infra/terraform`](/Users/geondongkim/.codex/worktrees/fd5e/LALA-next/infra/terraform)
+first. Treat the Vercel backend as a legacy fallback path, not the primary
+shared runtime.
+
 Flutter web builds that call Azure directly need a client credential at build
 time, such as `LALA_API_BEARER_TOKEN`, until OAuth or a backend-for-frontend
 proxy replaces the static transition credential. Keep that value in deployment

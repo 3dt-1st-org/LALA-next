@@ -73,6 +73,19 @@ Generate a Mac handoff status report:
 scripts/unix/handoff_report.sh
 ```
 
+## Infrastructure as Code
+
+Azure shared-dev infrastructure now uses modular Terraform under
+[`infra/terraform`](/Users/geondongkim/.codex/worktrees/fd5e/LALA-next/infra/terraform).
+The existing Bicep files under
+[`infra/azure`](/Users/geondongkim/.codex/worktrees/fd5e/LALA-next/infra/azure)
+remain as transitional rollback references while the live dev stack is moved
+onto Terraform state.
+
+The normal deployed runtime path is PostgreSQL plus Key Vault plus reviewed
+ingest, scoring, and RAG jobs. The bundled snapshot remains only a limited
+read-only fallback for DB outage handling or isolated local checks.
+
 Windows:
 
 ```powershell

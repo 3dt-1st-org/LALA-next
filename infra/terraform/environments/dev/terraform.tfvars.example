@@ -1,0 +1,54 @@
+subscription_id = "replace-with-subscription-id"
+tenant_id       = "replace-with-tenant-id"
+
+location         = "koreacentral"
+app_name         = "lala"
+environment_name = "dev"
+name_suffix      = "replacewithcurrentsuffix"
+
+resource_group_name = "rg-lala-dev"
+
+resource_name_overrides = {
+  # Use explicit names here when adopting already-created Azure resources.
+  # key_vault_name               = "lala-dev-kv-xxxx"
+  # container_registry_name      = "laladevxxxx"
+  # container_app_environment_name = "lala-dev-xxxx-cae"
+}
+
+additional_tags = {
+  owner = "lala-team"
+}
+
+deployment_principal_object_id = "replace-with-deployment-principal-object-id"
+enable_role_assignments        = false
+
+postgres_admin_login = "lalaadmin"
+postgres_database_name = "lala"
+
+# Keep the real password in protected CI vars or ignored local tfvars only.
+postgres_admin_password = "replace-me"
+
+postgres_version                    = "16"
+postgres_sku_name                   = "B_Standard_B1ms"
+postgres_storage_mb                 = 32768
+postgres_backup_retention_days      = 7
+postgres_public_network_access_enabled = true
+postgres_extensions                 = ["POSTGIS", "VECTOR", "PGCRYPTO"]
+
+api_image = "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
+
+api_image_repository_name   = "lala-api"
+api_target_port             = 8000
+api_min_replicas            = 0
+api_max_replicas            = 2
+api_cpu                     = 0.5
+api_memory                  = "1Gi"
+api_http_concurrent_requests = 25
+api_ingress_transport       = "auto"
+
+api_custom_domain_name           = "api.example.com"
+api_custom_domain_certificate_id = ""
+
+public_demo_mode   = false
+enable_live_ai     = false
+enable_live_speech = false

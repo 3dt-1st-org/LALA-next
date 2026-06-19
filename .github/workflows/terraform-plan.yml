@@ -1,0 +1,148 @@
+name: Terraform Plan
+
+on:
+  pull_request:
+    paths:
+      - "infra/terraform/**"
+      - ".github/workflows/terraform-plan.yml"
+      - ".github/workflows/azure-dev-terraform-apply.yml"
+      - "docs/operations/**"
+      - "infra/azure/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  AZURE_DEPLOY_PRINCIPAL_OBJECT_ID: ${{ vars.AZURE_DEPLOY_PRINCIPAL_OBJECT_ID || '' }}
+  AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+  AZURE_LOCATION: ${{ vars.AZURE_LOCATION || 'koreacentral' }}
+  LALA_ENVIRONMENT_NAME: ${{ vars.LALA_ENVIRONMENT_NAME || 'dev' }}
+  POSTGRES_ADMIN_LOGIN: ${{ vars.POSTGRES_ADMIN_LOGIN || 'lalaadmin' }}
+  AZURE_API_CUSTOM_DOMAIN_NAME: ${{ vars.AZURE_API_CUSTOM_DOMAIN_NAME || '' }}
+  AZURE_API_CUSTOM_DOMAIN_CERTIFICATE_ID: ${{ vars.AZURE_API_CUSTOM_DOMAIN_CERTIFICATE_ID || '' }}
+  LALA_TF_NAME_SUFFIX: ${{ vars.LALA_TF_NAME_SUFFIX || '' }}
+  LALA_TF_ENABLE_ROLE_ASSIGNMENTS: ${{ vars.LALA_TF_ENABLE_ROLE_ASSIGNMENTS || 'false' }}
+  LALA_TF_RESOURCE_NAME_OVERRIDES_JSON: ${{ vars.LALA_TF_RESOURCE_NAME_OVERRIDES_JSON || '{}' }}
+  LALA_TF_ADDITIONAL_TAGS_JSON: ${{ vars.LALA_TF_ADDITIONAL_TAGS_JSON || '{}' }}
+
+jobs:
+  fmt-validate:
+    name: Terraform fmt and validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+
+      - name: Check Terraform formatting
+        run: terraform fmt -check -recursive infra/terraform
+
+      - name: Validate bootstrap and environments
+        run: |
+          set -euo pipefail
+          for dir in \
+            infra/terraform/bootstrap/state-backend \
+            infra/terraform/environments/dev \
+            infra/terraform/environments/prod
+          do
+            terraform -chdir="$dir" init -backend=false
+            terraform -chdir="$dir" validate
+          done
+
+  plan-dev:
+    name: Terraform dev plan
+    needs: fmt-validate
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false
+    runs-on: ubuntu-latest
+    environment: dev
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+
+      - name: Validate plan settings
+        env:
+          AZURE_POSTGRES_ADMIN_PASSWORD: ${{ secrets.AZURE_POSTGRES_ADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          : "${AZURE_CLIENT_ID:?AZURE_CLIENT_ID GitHub environment variable is required.}"
+          : "${AZURE_TENANT_ID:?AZURE_TENANT_ID GitHub environment variable is required.}"
+          : "${AZURE_SUBSCRIPTION_ID:?AZURE_SUBSCRIPTION_ID GitHub environment variable is required.}"
+          : "${AZURE_RESOURCE_GROUP:?AZURE_RESOURCE_GROUP GitHub environment variable is required.}"
+          : "${AZURE_LOCATION:?AZURE_LOCATION GitHub environment variable is required.}"
+          : "${POSTGRES_ADMIN_LOGIN:?POSTGRES_ADMIN_LOGIN GitHub environment variable is required.}"
+          : "${AZURE_POSTGRES_ADMIN_PASSWORD:?AZURE_POSTGRES_ADMIN_PASSWORD GitHub environment secret is required.}"
+
+      - name: Azure login with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Render Terraform dev tfvars
+        env:
+          AZURE_POSTGRES_ADMIN_PASSWORD: ${{ secrets.AZURE_POSTGRES_ADMIN_PASSWORD }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          def as_bool(value: str) -> bool:
+              return value.strip().lower() in {"1", "true", "yes", "on"}
+
+          overrides = json.loads(os.environ.get("LALA_TF_RESOURCE_NAME_OVERRIDES_JSON", "{}") or "{}")
+          tags = json.loads(os.environ.get("LALA_TF_ADDITIONAL_TAGS_JSON", "{}") or "{}")
+          payload = {
+              "subscription_id": os.environ["AZURE_SUBSCRIPTION_ID"],
+              "tenant_id": os.environ["AZURE_TENANT_ID"],
+              "location": os.environ["AZURE_LOCATION"],
+              "app_name": "lala",
+              "environment_name": os.environ["LALA_ENVIRONMENT_NAME"],
+              "name_suffix": os.environ.get("LALA_TF_NAME_SUFFIX", ""),
+              "resource_group_name": os.environ["AZURE_RESOURCE_GROUP"],
+              "resource_name_overrides": overrides,
+              "additional_tags": tags,
+              "deployment_principal_object_id": os.environ.get("AZURE_DEPLOY_PRINCIPAL_OBJECT_ID") or None,
+              "enable_role_assignments": as_bool(os.environ.get("LALA_TF_ENABLE_ROLE_ASSIGNMENTS", "false")),
+              "postgres_admin_login": os.environ["POSTGRES_ADMIN_LOGIN"],
+              "postgres_admin_password": os.environ["AZURE_POSTGRES_ADMIN_PASSWORD"],
+              "api_custom_domain_name": os.environ.get("AZURE_API_CUSTOM_DOMAIN_NAME", ""),
+              "api_custom_domain_certificate_id": os.environ.get("AZURE_API_CUSTOM_DOMAIN_CERTIFICATE_ID", ""),
+          }
+          path = Path("infra/terraform/environments/dev/ci.auto.tfvars.json")
+          path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+          PY
+
+      - name: Plan Terraform dev environment
+        run: |
+          PLAN_ROOT="${RUNNER_TEMP}/terraform-plan"
+          rm -rf "$PLAN_ROOT"
+          mkdir -p "$PLAN_ROOT"
+          rsync -a infra/terraform/ "$PLAN_ROOT/"
+          rm "$PLAN_ROOT/environments/dev/backend.tf"
+          terraform -chdir="$PLAN_ROOT/environments/dev" init -backend=false
+          terraform -chdir="$PLAN_ROOT/environments/dev" plan \
+            -input=false \
+            -lock=false \
+            -refresh=false \
+            -var-file=ci.auto.tfvars.json \
+            -out=terraform.plan
