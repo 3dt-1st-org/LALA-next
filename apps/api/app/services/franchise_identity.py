@@ -117,7 +117,7 @@ def classify_place_business(
         coordinate_threshold_m=coordinate_threshold_m,
     )
     if best_location:
-        location, confidence, distance_m = best_location
+        location, confidence, distance_m, match_type = best_location
         brand = _find_brand(location.normalized_brand(), brands)
         return _identity_from_match(
             place=place,
@@ -127,7 +127,7 @@ def classify_place_business(
             chain_scale_score=_chain_scale_score(brand),
             store_count=brand.franchise_store_count if brand else None,
             matched_source=location.primary_source,
-            match_type="location_coordinate",
+            match_type=match_type,
             distance_m=distance_m,
         )
 
@@ -146,20 +146,15 @@ def classify_place_business(
             distance_m=None,
         )
 
-    return PlaceBusinessIdentity(
-        place_id=place.place_id,
-        business_identity_type="unknown",
-        is_franchise=None,
-        franchise_brand_name=None,
-        franchise_match_confidence=None,
-        chain_scale_score=None,
-        small_merchant_fit_score=0.55 if place.category == "restaurant" else None,
-        matched_source=None,
-        features={
-            "normalized_place_name": normalized_place,
-            "classification_reason": "no_confident_franchise_match",
-        },
-    )
+    if place.category == "restaurant" and (brands or locations):
+        return _identity_from_independent_local(
+            place=place,
+            normalized_place=normalized_place,
+            brands=brands,
+            locations=locations,
+        )
+
+    return _identity_from_unknown(place=place, normalized_place=normalized_place)
 
 
 def compute_place_business_identities(
@@ -353,12 +348,60 @@ def _identity_from_match(
     )
 
 
+def _identity_from_independent_local(
+    *,
+    place: PlaceBusinessCandidate,
+    normalized_place: str,
+    brands: Sequence[FranchiseBrand],
+    locations: Sequence[FranchiseLocation],
+) -> PlaceBusinessIdentity:
+    return PlaceBusinessIdentity(
+        place_id=place.place_id,
+        business_identity_type="independent_local",
+        is_franchise=False,
+        franchise_brand_name=None,
+        franchise_match_confidence=None,
+        chain_scale_score=None,
+        small_merchant_fit_score=_small_merchant_score("independent_local", 1.0),
+        matched_source=None,
+        features={
+            "normalized_place_name": normalized_place,
+            "classification_reason": "no_franchise_match_with_loaded_references",
+            "reference_brand_count": len(brands),
+            "reference_location_count": len(locations),
+        },
+    )
+
+
+def _identity_from_unknown(
+    *,
+    place: PlaceBusinessCandidate,
+    normalized_place: str,
+) -> PlaceBusinessIdentity:
+    return PlaceBusinessIdentity(
+        place_id=place.place_id,
+        business_identity_type="unknown",
+        is_franchise=None,
+        franchise_brand_name=None,
+        franchise_match_confidence=None,
+        chain_scale_score=None,
+        small_merchant_fit_score=0.55 if place.category == "restaurant" else None,
+        matched_source=None,
+        features={
+            "normalized_place_name": normalized_place,
+            "classification_reason": "no_confident_franchise_match",
+        },
+    )
+
+
 def _best_brand_match(
     normalized_place: str,
     brands: Sequence[FranchiseBrand],
 ) -> tuple[FranchiseBrand, float, str] | None:
     best: tuple[FranchiseBrand, float, str] | None = None
     for brand in brands:
+        if brand.franchise_store_count is not None and brand.franchise_store_count <= 0:
+            continue
         normalized_brand = brand.normalized()
         if not normalized_brand:
             continue
@@ -384,30 +427,50 @@ def _best_location_match(
     normalized_place: str,
     locations: Sequence[FranchiseLocation],
     coordinate_threshold_m: float,
-) -> tuple[FranchiseLocation, float, float] | None:
-    best: tuple[FranchiseLocation, float, float] | None = None
+) -> tuple[FranchiseLocation, float, float | None, str] | None:
+    best: tuple[FranchiseLocation, float, float | None, str] | None = None
     for location in locations:
         normalized_brand = location.normalized_brand()
         normalized_store = location.normalized_store()
-        name_matches = (
-            normalized_brand
-            and (
-                normalized_place == normalized_brand
-                or normalized_place.startswith(normalized_brand)
-                or normalized_brand in normalized_place
-            )
-        ) or (normalized_store and normalized_store == normalized_place)
-        if not name_matches:
+        name_match = _location_name_match_type(
+            normalized_place=normalized_place,
+            normalized_brand=normalized_brand,
+            normalized_store=normalized_store,
+        )
+        if name_match is None:
             continue
+        match_type, base_confidence = name_match
         distance_m = _distance_m(place.lat, place.lng, location.lat, location.lng)
         if distance_m is not None and distance_m > coordinate_threshold_m:
             continue
-        confidence = 0.95 if distance_m is not None else 0.86
+        confidence = 0.95 if distance_m is not None else base_confidence
+        resolved_match_type = "location_coordinate" if distance_m is not None else match_type
         if best is None or confidence > best[1] or (
-            confidence == best[1] and (distance_m or 999999) < best[2]
+            confidence == best[1]
+            and (distance_m if distance_m is not None else 999999.0)
+            < (best[2] if best[2] is not None else 999999.0)
         ):
-            best = (location, confidence, distance_m if distance_m is not None else 999999.0)
+            best = (location, confidence, distance_m, resolved_match_type)
     return best
+
+
+def _location_name_match_type(
+    *,
+    normalized_place: str,
+    normalized_brand: str,
+    normalized_store: str,
+) -> tuple[str, float] | None:
+    if normalized_store and normalized_store == normalized_place:
+        return "location_store_exact", 0.90
+    if not normalized_brand:
+        return None
+    if normalized_place == normalized_brand:
+        return "location_brand_exact", 0.86
+    if normalized_place.startswith(normalized_brand):
+        return "location_brand_prefix", 0.84
+    if normalized_brand in normalized_place:
+        return "location_brand_contains", 0.80
+    return None
 
 
 def _find_brand(normalized_brand: str, brands: Sequence[FranchiseBrand]) -> FranchiseBrand | None:

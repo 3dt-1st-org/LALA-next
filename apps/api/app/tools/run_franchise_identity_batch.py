@@ -119,8 +119,10 @@ def _plan_payload() -> dict[str, Any]:
         "matching_rules": [
             "normalize names and strip branch suffixes",
             "prefer franchise location coordinate match within 100m",
+            "use location store-name match when branch coordinates are unavailable",
             "fallback to exact/prefix/contains brand name match",
-            "separate national franchise, franchise store, local small chain, and unknown",
+            "mark unmatched restaurants as independent local only when franchise references are loaded",
+            "separate national franchise, franchise store, local small chain, independent local, and unknown",
         ],
     }
 

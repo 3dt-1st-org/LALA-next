@@ -44,13 +44,16 @@ queries to resolve live names during operations.
   duplicate collapse.
 - Franchise/small-merchant identity matching was applied for the current
   restaurant slice: 1,000 rows in `analytics.place_business_identity`
-  (`franchise_store=2`, `local_small_chain=51`, `unknown=947`).
+  (`franchise_store=2`, `local_small_chain=34`, `independent_local=964`).
+  Brand-level references with zero active franchise stores are excluded from
+  franchise evidence, and restaurants that do not match loaded franchise
+  references are classified as independent local instead of remaining unknown.
 - `local-value-v2` score snapshots were generated for all 2,636 places.
-  Historical `local-value-v1` snapshots remain in the table for audit/history;
-  API reads select the latest score row and live `/api/v1/places` verified
-  `formula_version=local-value-v2`.
+  Historical `local-value-v1` and earlier `local-value-v2` snapshots remain in
+  the table for audit/history; API reads select the latest score row and live
+  `/api/v1/places` verified `formula_version=local-value-v2`.
 - RAG knowledge chunks were regenerated for all 2,636 places with the
-  local-hash embedding path, and live query mode returned results.
+  local-hash embedding path.
 - The production Flutter web build at `lala-next.cloud` was redeployed with
   `https://api.lala-next.cloud` as the API base URL and the transition bearer
   token from deployment secrets. Verification showed `healthz`, `readyz`, and

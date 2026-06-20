@@ -391,6 +391,11 @@ plan-only이며 DB에 연결하지 않는다. `--preview`는 `travel.places`,
 `economy.franchise_brands`, `economy.franchise_locations`를 읽어 후보 판별만
 보여주고, `--apply`는 `ALLOW_FRANCHISE_IDENTITY_BATCH_APPLY=1`과
 `--confirm APPLY_FRANCHISE_IDENTITY_BATCH`가 있을 때만 upsert한다.
+프랜차이즈 참조 데이터가 로드된 상태에서 음식점이 어떤 브랜드/지점과도 신뢰도 있게
+매칭되지 않으면 `independent_local`로 분류한다. 참조 데이터가 비어 있으면 비매칭을
+근거로 독립 소상공인이라고 단정하지 않고 `unknown`으로 둔다. 브랜드 기준 참조에서
+`franchise_store_count=0`인 행은 현재 활성 가맹점 근거로 보지 않으므로 brand-level
+프랜차이즈 매칭에서 제외한다.
 
 ## `analytics.place_score_snapshots`
 
