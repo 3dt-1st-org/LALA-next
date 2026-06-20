@@ -435,6 +435,7 @@ def test_unix_scripts_have_safe_operational_guards():
         "plan_kopis_ingest.sh",
         "plan_tour_api_ingest.sh",
         "smoke_api.sh",
+        "smoke_api_matrix.sh",
         "smoke_oauth_jwt.sh",
         "smoke_workers.sh",
         "start_api.sh",
@@ -576,6 +577,12 @@ def test_unix_scripts_have_safe_operational_guards():
     assert "write_auth_config" in scripts["smoke_api.sh"]
     assert 'CURL_AUTH_ARGS=(-K "$AUTH_CONFIG_FILE")' in scripts["smoke_api.sh"]
     assert "AUTH_HEADER=(-H" not in scripts["smoke_api.sh"]
+    assert "apps.api.app.tools.smoke_api_matrix" in scripts["smoke_api_matrix.sh"]
+    assert "Runs a wider live API matrix without printing client tokens" in scripts["smoke_api_matrix.sh"]
+    assert "load_lala_key_vault_secrets" in scripts["smoke_api_matrix.sh"]
+    assert "LALA_SMOKE_BEARER_TOKEN" not in scripts["smoke_api_matrix.sh"]
+    assert "LALA_SMOKE_API_KEY" not in scripts["smoke_api_matrix.sh"]
+    assert "secret show" not in scripts["smoke_api_matrix.sh"]
     assert "--no-access-log" in scripts["start_api.sh"]
     assert "--access-log-path" in scripts["start_api.sh"]
     assert "LALA_ACCESS_LOG_PATH" in scripts["start_api.sh"]

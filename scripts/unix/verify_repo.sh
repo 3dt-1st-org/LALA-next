@@ -124,4 +124,4 @@ while IFS= read -r script; do
 done < <(find "$ROOT/scripts/unix" -name '*.sh' -type f | sort)
 
 echo "Repository verification completed."
-echo "Live Azure checks are intentionally excluded. Use smoke_api.sh --paid-dependency against a live-enabled API process when needed."
+echo "Live Azure checks are intentionally excluded. Use smoke_api.sh for edge smoke, smoke_api_matrix.sh for broader route variants, and smoke_api.sh --paid-dependency against a live-enabled API process when needed."

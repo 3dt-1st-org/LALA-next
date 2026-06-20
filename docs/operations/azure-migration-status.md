@@ -59,6 +59,10 @@ queries to resolve live names during operations.
   token from deployment secrets. Verification showed `healthz`, `readyz`, and
   `/api/v1/places` returning HTTP 200 from the vanity API domain, with DB-backed
   place rows and official image URLs.
+- The extended API matrix smoke for `https://api.lala-next.cloud` covers 37
+  route variants across place category/language filters, multiple map centers,
+  daily planning, weather intervention, docent script categories, and docent
+  `audio/mpeg` output.
 - Gabia DNS has been updated for the API vanity domain. `@` and `www` remain on
   Vercel, while `api` is a CNAME to the Azure Container Apps FQDN and
   `asuid.api` is the Azure custom-domain TXT validation record.

@@ -116,6 +116,29 @@ def _run_smoke(base_url: str, env_overrides: dict[str, str]) -> subprocess.Compl
     )
 
 
+def _run_matrix_smoke(base_url: str, env_overrides: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy()
+    env.update(
+        {
+            "KEY_VAULT_URL": "",
+            "LALA_ALLOWED_KEY_VAULT_HOSTS": "",
+            "LALA_SMOKE_BEARER_TOKEN": "",
+            "LALA_SMOKE_API_KEY": "",
+            "API_BEARER_TOKEN": "",
+            "IOS_API_KEY": "",
+        }
+    )
+    env.update(env_overrides)
+    return subprocess.run(
+        ["bash", "scripts/unix/smoke_api_matrix.sh", "--base-url", base_url, "--timeout", "3"],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+
 def _start_server() -> tuple[_SmokeServer, threading.Thread, str]:
     server = _SmokeServer(("127.0.0.1", 0), _SmokeHandler)
     server.protected_paths = []
@@ -154,3 +177,24 @@ def test_unix_smoke_uses_bearer_when_readyz_reports_bearer_configured():
     assert "/api/v1/plans/daily" in server.protected_paths
     assert "/api/v1/docents/script" in server.protected_paths
     assert "/api/v1/docents/audio" in server.protected_paths
+
+
+def test_unix_matrix_smoke_covers_route_variants_without_printing_auth():
+    server, thread, base_url = _start_server()
+    try:
+        result = _run_matrix_smoke(base_url, {"API_BEARER_TOKEN": "server-token"})
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+    assert result.returncode == 0, result.stderr
+    assert "LALA-next API matrix smoke" in result.stdout
+    assert "checked=37" in result.stdout
+    assert "server-token" not in result.stdout
+    assert "server-token" not in result.stderr
+    assert server.protected_paths.count("/api/v1/places") == 20
+    assert server.protected_paths.count("/api/v1/weather") == 4
+    assert server.protected_paths.count("/api/v1/plans/intervention") == 4
+    assert server.protected_paths.count("/api/v1/plans/daily") == 4
+    assert server.protected_paths.count("/api/v1/docents/script") == 4
+    assert server.protected_paths.count("/api/v1/docents/audio") == 1

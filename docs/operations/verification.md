@@ -888,6 +888,17 @@ scripts/unix/smoke_api.sh --base-url http://127.0.0.1:8080 --cors-origin http://
 .\scripts\windows\smoke_api.ps1 -BaseUrl http://127.0.0.1:8080 -CorsOrigin http://localhost:3000
 ```
 
+For a broader live API check after Azure deployment, run the Unix matrix smoke.
+It validates category and language variants for `/api/v1/places`, multiple map
+centers for weather/intervention/daily-plan routes, docent categories, and the
+`audio/mpeg` docent audio response. It uses the same secret-safe auth selection
+rules as `smoke_api.sh` and never prints client tokens or Key Vault secret
+values.
+
+```bash
+scripts/unix/smoke_api_matrix.sh --base-url https://api.lala-next.cloud
+```
+
 To smoke an already-issued OAuth/Entra JWT against an API process that has
 `OAUTH_ISSUER`, `OAUTH_AUDIENCE`, `OAUTH_JWKS_URL`, and
 `OAUTH_REQUIRED_SCOPES` configured:
