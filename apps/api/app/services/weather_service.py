@@ -110,7 +110,7 @@ def _fetch_kma_ultra_short_nowcast(*, lat: float, lng: float, force: bool) -> di
                 "nx": nx,
                 "ny": ny,
             },
-            timeout=5,
+            timeout=3,
         )
         response.raise_for_status()
         payload = response.json()
@@ -179,7 +179,7 @@ def _fetch_airkorea_sido_air_quality(*, lat: float, lng: float) -> dict[str, Any
                 "sidoName": sido_name,
                 "ver": "1.0",
             },
-            timeout=5,
+            timeout=3,
         )
         response.raise_for_status()
         payload = response.json()

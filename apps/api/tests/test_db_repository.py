@@ -145,6 +145,7 @@ def test_fetch_places_uses_radius_bound_ranking_query(monkeypatch):
         radius_m=3000,
         category="all",
         language="en",
+        include_scores=True,
     )
 
     assert places[0]["place_id"] == "db-place-1"

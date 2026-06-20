@@ -15,6 +15,7 @@ def list_places(
     radius_m: int,
     category: str,
     language: str,
+    include_scores: bool = False,
 ) -> dict:
     category = (category or "all").strip().lower()
     language = normalize_language(language)
@@ -31,6 +32,7 @@ def list_places(
         radius_m=radius_m,
         category=category,
         language=language,
+        include_scores=include_scores,
     )
     if db_places:
         return {
@@ -42,6 +44,7 @@ def list_places(
                 "radius_m": radius_m,
                 "category": category,
                 "language": language,
+                "include_scores": include_scores,
             },
             "source": "db",
         }
@@ -57,13 +60,14 @@ def list_places(
         if public_places:
             return {
                 "count": len(public_places),
-                "places": public_places,
+                "places": public_places if include_scores else _places_without_scores(public_places),
                 "query": {
                     "lat": lat,
                     "lng": lng,
                     "radius_m": radius_m,
                     "category": category,
                     "language": language,
+                    "include_scores": include_scores,
                 },
                 "source": public_mvp_data.SOURCE_NAME,
             }
@@ -77,6 +81,11 @@ def list_places(
             "radius_m": radius_m,
             "category": category,
             "language": language,
+            "include_scores": include_scores,
         },
         "source": "db",
     }
+
+
+def _places_without_scores(places: list[dict]) -> list[dict]:
+    return [{**place, "score": None} for place in places]

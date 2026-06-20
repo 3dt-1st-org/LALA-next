@@ -101,7 +101,7 @@ def test_current_weather_uses_kma_nowcast_when_db_is_empty(monkeypatch) -> None:
         "nx": 61,
         "ny": 120,
     }
-    assert captured[0]["timeout"] == 5
+    assert captured[0]["timeout"] == 3
     assert captured[1]["url"] == weather_service.AIRKOREA_SIDO_REALTIME_URL
     assert captured[1]["params"]["sidoName"] == "경기"
     assert weather["source"] == f"{weather_service.KMA_SOURCE}+{weather_service.AIRKOREA_SOURCE}"

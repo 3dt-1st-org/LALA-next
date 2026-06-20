@@ -24,6 +24,7 @@ def places(
     category: str = Query("all"),
     lang: str = Query("ko"),
     language: str | None = Query(None),
+    include_scores: bool = Query(False),
 ) -> dict:
     selected_language = language or lang
     payload = places_service.list_places(
@@ -32,6 +33,7 @@ def places(
         radius_m=radius_m,
         category=category,
         language=selected_language,
+        include_scores=include_scores,
     )
     return success_envelope(request=request, data=payload, meta={"source": payload.get("source", "computed")})
 

@@ -55,6 +55,7 @@ def fetch_places(
     radius_m: int,
     category: str,
     language: str,
+    include_scores: bool = False,
 ) -> list[dict[str, Any]]:
     dsn = get_settings().db_dsn
     if not dsn:
@@ -70,7 +71,8 @@ def fetch_places(
         lng=lng,
         radius_m=radius_m,
     )
-    sql = """
+    score_projection = _place_score_projection(include_scores=include_scores)
+    sql = f"""
         WITH query_point AS (
             SELECT ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography AS geog
         )
@@ -106,16 +108,7 @@ def fetch_places(
         , latest_scores AS (
             SELECT DISTINCT ON (score_snapshot.place_id)
                 score_snapshot.place_id,
-                (to_jsonb(score_snapshot)->>'local_spending_score')::numeric AS local_spending_score,
-                (to_jsonb(score_snapshot)->>'small_merchant_fit_score')::numeric AS small_merchant_fit_score,
-                (to_jsonb(score_snapshot)->>'demand_dispersion_score')::numeric AS demand_dispersion_score,
-                (to_jsonb(score_snapshot)->>'culture_relevance_score')::numeric AS culture_relevance_score,
-                (to_jsonb(score_snapshot)->>'weather_fit_score')::numeric AS weather_fit_score,
-                (to_jsonb(score_snapshot)->>'review_quality_score')::numeric AS review_quality_score,
-                (to_jsonb(score_snapshot)->>'accessibility_fit_score')::numeric AS accessibility_fit_score,
-                final_score,
-                formula_version,
-                features
+                {score_projection}
             FROM analytics.place_score_snapshots score_snapshot
             JOIN ranked_places ON ranked_places.place_id = score_snapshot.place_id
             ORDER BY score_snapshot.place_id, scored_at DESC
@@ -221,10 +214,38 @@ def fetch_places(
                 "distance_m": int(round(distance_m)),
                 "source": "db",
                 "upstream_source": row.get("source") or "canonical",
-                "score": _place_score_from_row(row),
+                "score": _place_score_from_row(row) if include_scores else None,
             }
         )
     return places
+
+
+def _place_score_projection(*, include_scores: bool) -> str:
+    if include_scores:
+        return """
+                (to_jsonb(score_snapshot)->>'local_spending_score')::numeric AS local_spending_score,
+                (to_jsonb(score_snapshot)->>'small_merchant_fit_score')::numeric AS small_merchant_fit_score,
+                (to_jsonb(score_snapshot)->>'demand_dispersion_score')::numeric AS demand_dispersion_score,
+                (to_jsonb(score_snapshot)->>'culture_relevance_score')::numeric AS culture_relevance_score,
+                (to_jsonb(score_snapshot)->>'weather_fit_score')::numeric AS weather_fit_score,
+                (to_jsonb(score_snapshot)->>'review_quality_score')::numeric AS review_quality_score,
+                (to_jsonb(score_snapshot)->>'accessibility_fit_score')::numeric AS accessibility_fit_score,
+                final_score,
+                formula_version,
+                features
+        """
+    return """
+                NULL::numeric AS local_spending_score,
+                NULL::numeric AS small_merchant_fit_score,
+                NULL::numeric AS demand_dispersion_score,
+                NULL::numeric AS culture_relevance_score,
+                NULL::numeric AS weather_fit_score,
+                NULL::numeric AS review_quality_score,
+                NULL::numeric AS accessibility_fit_score,
+                final_score,
+                NULL::text AS formula_version,
+                NULL::jsonb AS features
+    """
 
 
 def _place_score_from_row(row: dict[str, Any]) -> dict[str, Any] | None:

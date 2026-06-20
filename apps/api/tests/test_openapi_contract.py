@@ -237,6 +237,8 @@ def test_openapi_documents_v1_success_data_schemas(client):
         "event",
         "culture_venue",
     ]
+    assert schemas["PlacesQuery"]["properties"]["include_scores"] == {"type": "boolean"}
+    assert "include_scores" in schemas["PlacesQuery"]["required"]
     assert schemas["PlacesData"]["properties"]["source"]["enum"] == [
         "public_mvp_snapshot",
         "db",

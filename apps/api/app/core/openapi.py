@@ -553,7 +553,7 @@ def _place_schema() -> dict[str, Any]:
 def _places_query_schema() -> dict[str, Any]:
     return {
         "type": "object",
-        "required": ["lat", "lng", "radius_m", "category", "language"],
+        "required": ["lat", "lng", "radius_m", "category", "language", "include_scores"],
         "properties": {
             "lat": {"type": "number", "format": "double"},
             "lng": {"type": "number", "format": "double"},
@@ -563,6 +563,7 @@ def _places_query_schema() -> dict[str, Any]:
                 "enum": ["all", "attraction", "restaurant", "event", "culture_venue"],
             },
             "language": {"type": "string", "enum": ["ko", "en"]},
+            "include_scores": {"type": "boolean"},
         },
         "additionalProperties": False,
     }

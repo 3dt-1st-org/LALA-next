@@ -95,7 +95,7 @@ def test_places_uses_db_repository_when_rows_exist(client, auth_headers, monkeyp
     )
 
     response = client.get(
-        "/api/v1/places?lat=37.2&lng=127.0&category=event&lang=en",
+        "/api/v1/places?lat=37.2&lng=127.0&category=event&lang=en&include_scores=true",
         headers=auth_headers,
     )
 
@@ -103,6 +103,7 @@ def test_places_uses_db_repository_when_rows_exist(client, auth_headers, monkeyp
     body = response.json()
     assert body["data"]["source"] == "db"
     assert body["data"]["count"] == 1
+    assert body["data"]["query"]["include_scores"] is True
     assert body["data"]["places"][0]["place_id"] == "db-place-1"
     assert body["data"]["places"][0]["score"]["final_score"] == 0.84
 
