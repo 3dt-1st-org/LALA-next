@@ -76,10 +76,10 @@ void main() {
                   'worker_contracts': 'configured',
                 },
                 'mode': {
-                  'overall': 'skeleton',
-                  'data': 'skeleton',
-                  'ai': 'skeleton',
-                  'speech': 'skeleton',
+                  'overall': 'degraded',
+                  'data': 'unavailable',
+                  'ai': 'disabled',
+                  'speech': 'disabled',
                   'worker': 'dry-run',
                 },
               },
@@ -99,9 +99,10 @@ void main() {
       expect(health.data?['status'], 'ok');
       expect(readiness.data?.status, 'degraded');
       expect(readiness.data?.checks['worker_contracts'], 'configured');
-      expect(readiness.data?.mode.overall, 'skeleton');
-      expect(readiness.data?.mode.isSkeleton, isTrue);
+      expect(readiness.data?.mode.overall, 'degraded');
+      expect(readiness.data?.mode.isPublicCache, isFalse);
       expect(readiness.data?.mode.isDbBacked, isFalse);
+      expect(readiness.data?.mode.isDegraded, isTrue);
       expect(readiness.requestId, 'ready-request-id');
     },
   );
@@ -123,7 +124,7 @@ void main() {
                 'count': 1,
                 'places': [
                   {
-                    'place_id': 'skeleton-suwon-hwaseong',
+                    'place_id': 'tour-api-126508',
                     'name': '수원화성',
                     'name_ko': '수원화성',
                     'name_en': 'Suwon Hwaseong',
@@ -132,7 +133,7 @@ void main() {
                     'lng': 127.0,
                     'address': '경기도 수원시',
                     'distance_m': 1000,
-                    'source': 'skeleton',
+                    'source': 'db',
                     'upstream_source': 'tour_api',
                     'event_start_date': '2026-06-01',
                     'event_end_date': '2026-08-31',
@@ -151,7 +152,7 @@ void main() {
                         'culture_relevance_score': 0.8,
                         'accessibility_fit_score': 0.64,
                       },
-                      'data_basis': 'demo_fallback',
+                      'data_basis': 'analytics.place_score_snapshots',
                       'features': {
                         'missing_signals': ['card_spending_snapshot'],
                       },
@@ -165,7 +166,7 @@ void main() {
                   'category': 'event',
                   'language': 'en',
                 },
-                'source': 'skeleton',
+                'source': 'db',
               },
               'meta': {'request_id': 'server-request-id'},
               'error': null,
@@ -200,10 +201,10 @@ void main() {
       expect(captured.headers['x-request-id'], 'client-request-id');
       expect(envelope.ok, isTrue);
       expect(envelope.requestId, 'server-request-id');
-      expect(envelope.data?.source, 'skeleton');
+      expect(envelope.data?.source, 'db');
       expect(envelope.data?.count, 1);
       expect(envelope.data?.query.radiusM, 1200);
-      expect(envelope.data?.places.first.placeId, 'skeleton-suwon-hwaseong');
+      expect(envelope.data?.places.first.placeId, 'tour-api-126508');
       expect(envelope.data?.places.first.nameKo, '수원화성');
       expect(envelope.data?.places.first.upstreamSource, 'tour_api');
       expect(envelope.data?.places.first.eventStartDate, '2026-06-01');
@@ -213,7 +214,10 @@ void main() {
       expect(envelope.data?.places.first.isOngoing, isTrue);
       expect(envelope.data?.places.first.isApproximateLocation, isFalse);
       expect(envelope.data?.places.first.score?.percent, 84);
-      expect(envelope.data?.places.first.score?.dataBasis, 'demo_fallback');
+      expect(
+        envelope.data?.places.first.score?.dataBasis,
+        'analytics.place_score_snapshots',
+      );
       expect(
         envelope.data?.places.first.score?.components.smallMerchantFitScore,
         0.72,
@@ -236,8 +240,8 @@ void main() {
       apiKey: '  migration-key  ',
       httpClient: MockClient((request) async {
         captured = request;
-        expect(jsonDecode(request.body)['place_id'], 'demo-place');
-        expect(jsonDecode(request.body)['place_name'], 'Demo Place');
+        expect(jsonDecode(request.body)['place_id'], 'tour-api-3066000');
+        expect(jsonDecode(request.body)['place_name'], '중랑아트센터');
         expect(jsonDecode(request.body)['address'], 'Seoul test address');
         expect(jsonDecode(request.body)['region_ko'], '중구');
         expect(jsonDecode(request.body)['region_en'], 'Jung-gu');
@@ -248,12 +252,12 @@ void main() {
           jsonEncode({
             'ok': true,
             'data': {
-              'place_id': 'demo-place',
+              'place_id': 'tour-api-3066000',
               'category': 'attraction',
               'language': 'ko',
               'mode': 'brief',
               'script': 'hello',
-              'source': 'skeleton',
+              'source': 'rule_based_curation',
               'generated_at': '2026-06-11T00:00:00+00:00',
               'ttl_sec': 604800,
               'request_hash':
@@ -270,8 +274,8 @@ void main() {
     );
 
     final envelope = await client.createDocentScript(
-      placeId: 'demo-place',
-      placeName: ' Demo Place ',
+      placeId: 'tour-api-3066000',
+      placeName: ' 중랑아트센터 ',
       address: ' Seoul test address ',
       regionKo: ' 중구 ',
       regionEn: ' Jung-gu ',
@@ -288,7 +292,7 @@ void main() {
     expect(captured.headers['x-api-key'], 'migration-key');
     expect(captured.headers.containsKey('authorization'), isFalse);
     expect(captured.headers['content-type'], contains('application/json'));
-    expect(envelope.data?.placeId, 'demo-place');
+    expect(envelope.data?.placeId, 'tour-api-3066000');
     expect(envelope.data?.script, 'hello');
     expect(envelope.data?.ttlSec, 604800);
     expect(envelope.data?.requestHash, startsWith('012345'));
@@ -330,7 +334,7 @@ void main() {
                     'weather_hint': 'unknown',
                   },
                 ],
-                'source': 'skeleton',
+                'source': 'db',
                 'request_hash':
                     'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
                 'cache_key': 'daily_plan:abcdef0123456789abcdef0123456789',
@@ -345,10 +349,10 @@ void main() {
               'center': {'lat': 37.2, 'lng': 127.0},
               'radius_m': 1000,
               'should_intervene': false,
-              'reason': 'Weather-aware placeholder.',
+              'reason': 'Weather is suitable for this local route.',
               'recommended_action': 'Show nearby alternatives.',
               'place': _placePayload(),
-              'source': 'skeleton',
+              'source': 'db',
             },
             'meta': {'request_id': 'intervention-request-id'},
             'error': null,
@@ -371,7 +375,7 @@ void main() {
       expect(plan.data?.cacheKey, startsWith('daily_plan:'));
       expect(intervention.data?.shouldIntervene, isFalse);
       expect(intervention.data?.recommendedAction, 'Show nearby alternatives.');
-      expect(intervention.data?.place?.placeId, 'skeleton-suwon-hwaseong');
+      expect(intervention.data?.place?.placeId, 'tour-api-126508');
     },
   );
 
@@ -390,7 +394,7 @@ void main() {
             'radius_m': 42000,
             'weather': _weatherPayload(),
             'slots': [],
-            'source': 'skeleton',
+            'source': 'db',
             'request_hash':
                 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
             'cache_key': 'daily_plan:abcdef0123456789abcdef0123456789',
@@ -543,7 +547,7 @@ void main() {
               'category': 'all',
               'language': 'ko',
             },
-            'source': 'skeleton',
+            'source': 'db',
           },
           'meta': {'request_id': 'no-token-request-id'},
           'error': null,
@@ -570,7 +574,7 @@ http.Response _jsonResponse(Map<String, Object?> payload) {
 
 Map<String, Object?> _placePayload() {
   return {
-    'place_id': 'skeleton-suwon-hwaseong',
+    'place_id': 'tour-api-126508',
     'name': '수원화성',
     'name_ko': '수원화성',
     'name_en': 'Suwon Hwaseong',
@@ -579,7 +583,7 @@ Map<String, Object?> _placePayload() {
     'lng': 127.0,
     'address': '경기도 수원시',
     'distance_m': 1000,
-    'source': 'skeleton',
+    'source': 'db',
   };
 }
 
@@ -593,6 +597,6 @@ Map<String, Object?> _weatherPayload() {
     'forecast': [],
     'outdoor_status': 'unknown',
     'force': false,
-    'source': 'skeleton',
+    'source': 'kma_ultra_srt_ncst+airkorea_sido_realtime',
   };
 }

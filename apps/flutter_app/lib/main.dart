@@ -7898,6 +7898,8 @@ String _basisLabel(String value, {String language = 'ko'}) {
     return switch (value.trim()) {
       'actual_data' => 'Real data',
       'demo_seed' => 'LALA curation',
+      'analytics.place_score_snapshots' => 'LALA recommendation score',
+      'local_curation' => 'LALA curation',
       'public_mvp_snapshot' => 'Official data',
       'demo_fallback' => 'LALA curation',
       final basis when basis.isEmpty => '-',
@@ -7907,6 +7909,8 @@ String _basisLabel(String value, {String language = 'ko'}) {
   return switch (value.trim()) {
     'actual_data' => '실데이터',
     'demo_seed' => '로컬 큐레이션',
+    'analytics.place_score_snapshots' => 'LALA 추천 점수',
+    'local_curation' => '로컬 큐레이션',
     'public_mvp_snapshot' => '공식 데이터',
     'demo_fallback' => '로컬 큐레이션',
     final basis when basis.isEmpty => '-',

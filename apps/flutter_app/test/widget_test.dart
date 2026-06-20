@@ -466,13 +466,13 @@ void main() {
     expect(find.text('PM10'), findsOneWidget);
   });
 
-  testWidgets('skeleton weather is not shown as real conditions', (
+  testWidgets('unavailable weather is not shown as real conditions', (
     tester,
   ) async {
     await tester.pumpWidget(
       TestLalaApp(
         backendFactory: (config) =>
-            FakeBackend(config, weather: _weather(source: 'skeleton')),
+            FakeBackend(config, weather: _weather(source: 'unavailable')),
         initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
       ),
     );
@@ -1340,6 +1340,7 @@ void main() {
 
     expect(find.text('Card spend KRW 14,000,000'), findsOneWidget);
     expect(find.text('Local score'), findsOneWidget);
+    expect(find.text('LALA recommendation score'), findsOneWidget);
     expect(find.textContaining('화성행궁'), findsNothing);
     expect(find.textContaining('경기도'), findsNothing);
     expect(find.textContaining('snapshot'), findsNothing);
@@ -1771,10 +1772,10 @@ class FakeBackend implements LalaBackend {
           'worker_contracts': 'configured',
         },
         mode: const LalaRuntimeMode(
-          overall: 'skeleton',
-          data: 'skeleton',
-          ai: 'skeleton',
-          speech: 'skeleton',
+          overall: 'degraded',
+          data: 'unavailable',
+          ai: 'disabled',
+          speech: 'disabled',
           worker: 'dry-run',
         ),
       ),
@@ -1826,7 +1827,7 @@ class FakeBackend implements LalaBackend {
         shouldIntervene: shouldIntervene,
         reason: 'Weather is fine.',
         recommendedAction: 'Keep the current route.',
-        source: 'skeleton',
+        source: 'db',
         place: place,
       ),
     );
@@ -1845,7 +1846,7 @@ class FakeBackend implements LalaBackend {
         slots: [
           LalaPlanSlot(period: 'morning', title: '화성행궁 산책 코스', place: place),
         ],
-        source: 'skeleton',
+        source: 'db',
         requestHash:
             'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
         cacheKey: 'daily_plan:abcdef0123456789abcdef0123456789',
@@ -1869,7 +1870,7 @@ class FakeBackend implements LalaBackend {
         language: 'ko',
         mode: mode,
         script: script,
-        source: 'skeleton',
+        source: 'rule_based_curation',
         requestHash:
             '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
         cacheKey: 'docent_script:0123456789abcdef0123456789abcdef',
@@ -1907,7 +1908,7 @@ class BilingualInterventionBackend extends FakeBackend {
         shouldIntervene: true,
         reason: '날씨가 좋아요 Weather is good.',
         recommendedAction: '지금 코스를 유지하세요 Keep walking.',
-        source: 'skeleton',
+        source: 'db',
         place: place,
       ),
     );
@@ -1930,7 +1931,7 @@ class BilingualInterventionBackend extends FakeBackend {
             place: place,
           ),
         ],
-        source: 'skeleton',
+        source: 'db',
         requestHash:
             'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
         cacheKey: 'daily_plan:abcdef0123456789abcdef0123456789',
@@ -1954,7 +1955,7 @@ class BilingualInterventionBackend extends FakeBackend {
         language: config.lang,
         mode: mode,
         script: script,
-        source: 'skeleton',
+        source: 'rule_based_curation',
         requestHash:
             '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
         cacheKey: 'docent_script:0123456789abcdef0123456789abcdef',
@@ -2015,7 +2016,7 @@ LalaPlace _place() {
     regionKo: '수원',
     regionEn: 'Suwon',
     distanceM: 145,
-    source: 'skeleton',
+    source: 'db',
     upstreamSource: 'tour_api',
     score: LalaPlaceScore(
       finalScore: 0.86,
@@ -2029,7 +2030,7 @@ LalaPlace _place() {
         cultureRelevanceScore: 0.91,
         accessibilityFitScore: 0.62,
       ),
-      dataBasis: 'demo_fallback',
+      dataBasis: 'analytics.place_score_snapshots',
       features: {
         'primary_source': 'tour_api',
         'input_sources': <String>[
@@ -2061,7 +2062,7 @@ LalaPlace _culturePlace({int distanceM = 620}) {
     regionKo: '수원',
     regionEn: 'Suwon',
     distanceM: distanceM,
-    source: 'skeleton',
+    source: 'db',
     upstreamSource: 'tour_api',
     score: const LalaPlaceScore(
       finalScore: 0.82,
@@ -2075,7 +2076,7 @@ LalaPlace _culturePlace({int distanceM = 620}) {
         cultureRelevanceScore: 0.96,
         accessibilityFitScore: 0.70,
       ),
-      dataBasis: 'demo_fallback',
+      dataBasis: 'analytics.place_score_snapshots',
       features: {
         'primary_source': 'tour_api',
         'input_sources': <String>['travel.places', 'culture.events'],
@@ -2099,7 +2100,7 @@ LalaPlace _restaurantPlace({int distanceM = 780, String? imageUrl}) {
     regionEn: 'Suwon',
     imageUrl: imageUrl,
     distanceM: distanceM,
-    source: 'skeleton',
+    source: 'db',
     upstreamSource: 'tour_api',
     score: const LalaPlaceScore(
       finalScore: 0.78,
@@ -2113,7 +2114,7 @@ LalaPlace _restaurantPlace({int distanceM = 780, String? imageUrl}) {
         cultureRelevanceScore: 0.62,
         accessibilityFitScore: 0.58,
       ),
-      dataBasis: 'demo_fallback',
+      dataBasis: 'analytics.place_score_snapshots',
       features: {
         'primary_source': 'tour_api',
         'input_sources': <String>[
@@ -2138,7 +2139,7 @@ LalaPlace _clusterRestaurant(String placeId, String name, int distanceM) {
     regionKo: '수원',
     regionEn: 'Suwon',
     distanceM: distanceM,
-    source: 'skeleton',
+    source: 'db',
     upstreamSource: 'tour_api',
     score: const LalaPlaceScore(
       finalScore: 0.77,
@@ -2152,7 +2153,7 @@ LalaPlace _clusterRestaurant(String placeId, String name, int distanceM) {
         cultureRelevanceScore: 0.58,
         accessibilityFitScore: 0.56,
       ),
-      dataBasis: 'demo_fallback',
+      dataBasis: 'analytics.place_score_snapshots',
       features: {
         'primary_source': 'tour_api',
         'input_sources': <String>['travel.places'],
@@ -2163,7 +2164,7 @@ LalaPlace _clusterRestaurant(String placeId, String name, int distanceM) {
 
 LalaPlace _eventPlace() {
   return const LalaPlace(
-    placeId: 'demo-suwon-night-walk',
+    placeId: 'tour-api-suwon-night-walk',
     name: '화성행궁 야간 산책',
     nameKo: '화성행궁 야간 산책',
     nameEn: 'Hwaseong Haenggung Night Walk',

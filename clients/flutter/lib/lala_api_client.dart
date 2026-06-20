@@ -1043,7 +1043,7 @@ class LalaRuntimeMode {
     );
   }
 
-  bool get isSkeleton => overall == 'skeleton';
+  bool get isPublicCache => overall == 'public-cache' || data == 'public-cache';
   bool get isDbBacked => data == 'db-backed';
   bool get usesLiveAzure => ai == 'live-azure' || speech == 'live-azure';
   bool get isDegraded => overall == 'degraded';

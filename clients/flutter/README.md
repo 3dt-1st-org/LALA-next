@@ -20,7 +20,7 @@ reference client parses common API payloads into typed DTOs such as
 `LalaPlacesResponse`, `LalaPlace`, `LalaWeather`, `LalaDocentScript`,
 `LalaDailyPlan`, and `LalaIntervention`. `getReadiness()` parses
 `/readyz.data.mode` into `LalaRuntimeMode` so the app or handoff tooling can
-distinguish skeleton, DB-backed, live Azure, and degraded states.
+distinguish DB-backed, read-only public-cache, live Azure, and degraded states.
 `POST /api/v1/docents/audio` is the success exception and returns `audio/mpeg`
 bytes.
 
