@@ -313,10 +313,14 @@ is available, the places list is empty instead of showing sample or mock rows.
   "temp": "22.3",
   "icon": "partly-cloudy",
   "dust": {
-    "pm10": "",
-    "pm25": "",
-    "grade": "unknown",
-    "grade_ko": "확인 중"
+    "pm10": "31",
+    "pm25": "14",
+    "grade": "normal",
+    "grade_ko": "보통",
+    "pm10_grade": "normal",
+    "pm10_grade_ko": "보통",
+    "pm25_grade": "good",
+    "pm25_grade_ko": "좋음"
   },
   "forecast": [
     {

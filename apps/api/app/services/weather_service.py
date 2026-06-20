@@ -10,6 +10,11 @@ from typing import Any
 from apps.api.app.core.config import get_settings
 from apps.api.app.core.observability import LOGGER_NAME
 from apps.api.app.services import db_repository
+from apps.api.app.services.dust_quality import (
+    build_dust_payload,
+    clean_air_quality_value,
+    unknown_dust_payload,
+)
 
 KMA_ULTRA_SHORT_NOWCAST_URL = (
     "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst"
@@ -43,7 +48,9 @@ def current_weather(*, lat: float, lng: float, force: bool = False) -> dict:
         db_weather["force"] = force
         return db_weather
 
-    official_weather, air_quality = _fetch_official_weather_pair(lat=lat, lng=lng, force=force)
+    official_weather, air_quality = _fetch_official_weather_pair(
+        lat=lat, lng=lng, force=force
+    )
     if official_weather:
         if air_quality:
             official_weather["dust"] = air_quality["dust"]
@@ -75,12 +82,7 @@ def current_weather(*, lat: float, lng: float, force: bool = False) -> dict:
         "lng": lng,
         "temp": "",
         "icon": "unavailable",
-        "dust": {
-            "pm10": "",
-            "pm25": "",
-            "grade": "unknown",
-            "grade_ko": "확인 중",
-        },
+        "dust": unknown_dust_payload(),
         "forecast": [],
         "outdoor_status": "unknown",
         "force": force,
@@ -107,13 +109,19 @@ def _fetch_official_weather_pair(
             _fetch_airkorea_sido_air_quality(lat=lat, lng=lng),
         )
 
-    with ThreadPoolExecutor(max_workers=2, thread_name_prefix="lala-weather") as executor:
-        kma_future = executor.submit(_fetch_kma_ultra_short_nowcast, lat=lat, lng=lng, force=force)
+    with ThreadPoolExecutor(
+        max_workers=2, thread_name_prefix="lala-weather"
+    ) as executor:
+        kma_future = executor.submit(
+            _fetch_kma_ultra_short_nowcast, lat=lat, lng=lng, force=force
+        )
         air_future = executor.submit(_fetch_airkorea_sido_air_quality, lat=lat, lng=lng)
         return kma_future.result(), air_future.result()
 
 
-def _fetch_kma_ultra_short_nowcast(*, lat: float, lng: float, force: bool) -> dict[str, Any] | None:
+def _fetch_kma_ultra_short_nowcast(
+    *, lat: float, lng: float, force: bool
+) -> dict[str, Any] | None:
     service_key = get_settings().public_data_service_key
     if not service_key:
         logger.info("kma_nowcast_skipped reason=missing_public_data_service_key")
@@ -121,7 +129,10 @@ def _fetch_kma_ultra_short_nowcast(*, lat: float, lng: float, force: bool) -> di
     try:
         import requests
     except Exception as exc:
-        logger.warning("kma_nowcast_skipped reason=requests_unavailable error_type=%s", type(exc).__name__)
+        logger.warning(
+            "kma_nowcast_skipped reason=requests_unavailable error_type=%s",
+            type(exc).__name__,
+        )
         return None
 
     nx, ny = _kma_grid_xy(lat, lng)
@@ -157,7 +168,9 @@ def _fetch_kma_ultra_short_nowcast(*, lat: float, lng: float, force: bool) -> di
         logger.warning("kma_nowcast_empty_items")
         return None
     values = {
-        str(item.get("category") or "").strip(): str(item.get("obsrValue") or "").strip()
+        str(item.get("category") or "").strip(): str(
+            item.get("obsrValue") or ""
+        ).strip()
         for item in items
         if item.get("category")
     }
@@ -173,12 +186,7 @@ def _fetch_kma_ultra_short_nowcast(*, lat: float, lng: float, force: bool) -> di
         "location": "기상청 격자",
         "temp": temp,
         "icon": _kma_icon(values.get("PTY")),
-        "dust": {
-            "pm10": "",
-            "pm25": "",
-            "grade": "unknown",
-            "grade_ko": "확인 중",
-        },
+        "dust": unknown_dust_payload(),
         "forecast": [],
         "outdoor_status": _kma_outdoor_status(values),
         "force": force,
@@ -191,7 +199,9 @@ def _fetch_kma_ultra_short_nowcast(*, lat: float, lng: float, force: bool) -> di
     return weather
 
 
-def _fetch_airkorea_sido_air_quality(*, lat: float, lng: float) -> dict[str, Any] | None:
+def _fetch_airkorea_sido_air_quality(
+    *, lat: float, lng: float
+) -> dict[str, Any] | None:
     service_key = get_settings().public_data_service_key
     if not service_key:
         logger.info("airkorea_sido_skipped reason=missing_public_data_service_key")
@@ -199,7 +209,10 @@ def _fetch_airkorea_sido_air_quality(*, lat: float, lng: float) -> dict[str, Any
     try:
         import requests
     except Exception as exc:
-        logger.warning("airkorea_sido_skipped reason=requests_unavailable error_type=%s", type(exc).__name__)
+        logger.warning(
+            "airkorea_sido_skipped reason=requests_unavailable error_type=%s",
+            type(exc).__name__,
+        )
         return None
 
     sido_name = _sido_name_for_coordinate(lat=lat, lng=lng)
@@ -223,7 +236,11 @@ def _fetch_airkorea_sido_air_quality(*, lat: float, lng: float) -> dict[str, Any
         response.raise_for_status()
         payload = response.json()
     except Exception as exc:
-        logger.warning("airkorea_sido_failed sido_name=%s error_type=%s", sido_name, type(exc).__name__)
+        logger.warning(
+            "airkorea_sido_failed sido_name=%s error_type=%s",
+            sido_name,
+            type(exc).__name__,
+        )
         return None
 
     items = _airkorea_items(payload)
@@ -234,20 +251,12 @@ def _fetch_airkorea_sido_air_quality(*, lat: float, lng: float) -> dict[str, Any
     if not selected:
         logger.warning("airkorea_sido_missing_values sido_name=%s", sido_name)
         return None
-    pm10 = _clean_airkorea_value(selected.get("pm10Value"))
-    pm25 = _clean_airkorea_value(selected.get("pm25Value"))
-    dust = {
-        "pm10": pm10,
-        "pm25": pm25,
-        "grade": _airkorea_grade(
-            selected.get("pm10Grade1h") or selected.get("pm10Grade"),
-            selected.get("pm25Grade1h") or selected.get("pm25Grade"),
-        ),
-        "grade_ko": _airkorea_grade_ko(
-            selected.get("pm10Grade1h") or selected.get("pm10Grade"),
-            selected.get("pm25Grade1h") or selected.get("pm25Grade"),
-        ),
-    }
+    dust = build_dust_payload(
+        pm10=selected.get("pm10Value"),
+        pm25=selected.get("pm25Value"),
+        pm10_grade=selected.get("pm10Grade1h") or selected.get("pm10Grade"),
+        pm25_grade=selected.get("pm25Grade1h") or selected.get("pm25Grade"),
+    )
     air_quality = {
         "sido_name": sido_name,
         "location": selected.get("stationName") or sido_name,
@@ -296,52 +305,17 @@ def _airkorea_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _select_airkorea_item(items: list[dict[str, Any]]) -> dict[str, Any] | None:
     for item in items:
-        if _clean_airkorea_value(item.get("pm10Value")) or _clean_airkorea_value(item.get("pm25Value")):
+        if clean_air_quality_value(item.get("pm10Value")) or clean_air_quality_value(
+            item.get("pm25Value")
+        ):
             return item
     return None
 
 
-def _clean_airkorea_value(value: Any) -> str:
-    text = str(value or "").strip()
-    if text in {"", "-", "점검중", "통신장애"}:
-        return ""
-    return text
-
-
-def _airkorea_grade(*grades: Any) -> str:
-    worst = _worst_airkorea_grade(grades)
-    return {
-        1: "good",
-        2: "normal",
-        3: "bad",
-        4: "very_bad",
-    }.get(worst, "unknown")
-
-
-def _airkorea_grade_ko(*grades: Any) -> str:
-    worst = _worst_airkorea_grade(grades)
-    return {
-        1: "좋음",
-        2: "보통",
-        3: "나쁨",
-        4: "매우나쁨",
-    }.get(worst, "확인 중")
-
-
-def _worst_airkorea_grade(grades: tuple[Any, ...]) -> int | None:
-    numeric_grades: list[int] = []
-    for grade in grades:
-        try:
-            numeric = int(str(grade or "").strip())
-        except ValueError:
-            continue
-        if numeric > 0:
-            numeric_grades.append(numeric)
-    return max(numeric_grades) if numeric_grades else None
-
-
 def _dust_outdoor_status(dust: dict[str, Any]) -> str:
-    return "bad" if str(dust.get("grade") or "").strip() in {"bad", "very_bad"} else "good"
+    return (
+        "bad" if str(dust.get("grade") or "").strip() in {"bad", "very_bad"} else "good"
+    )
 
 
 def _sido_name_for_coordinate(*, lat: float, lng: float) -> str:
@@ -434,7 +408,9 @@ def _kma_grid_xy(lat: float, lng: float) -> tuple[int, int]:
     if theta < -math.pi:
         theta += 2.0 * math.pi
     theta *= sn
-    return int(ra * math.sin(theta) + xo + 0.5), int(ro - ra * math.cos(theta) + yo + 0.5)
+    return int(ra * math.sin(theta) + xo + 0.5), int(
+        ro - ra * math.cos(theta) + yo + 0.5
+    )
 
 
 def _kma_icon(precipitation_type: str | None) -> str:

@@ -63,7 +63,9 @@ def _add_client_auth_security(schema: dict[str, Any]) -> None:
     schemas.setdefault("ApiSuccessEnvelope", _api_success_envelope_schema())
     schemas.setdefault("ApiErrorEnvelope", _api_error_envelope_schema())
     schemas.setdefault("HealthzData", _healthz_data_schema())
-    schemas.setdefault("HealthzSuccessEnvelope", _success_envelope_schema("HealthzData"))
+    schemas.setdefault(
+        "HealthzSuccessEnvelope", _success_envelope_schema("HealthzData")
+    )
     schemas.setdefault("ReadinessChecks", _readiness_checks_schema())
     schemas.setdefault("RuntimeMode", _runtime_mode_schema())
     schemas.setdefault("ReadyzData", _readyz_data_schema())
@@ -78,7 +80,9 @@ def _add_client_auth_security(schema: dict[str, Any]) -> None:
     schemas.setdefault("Dust", _dust_schema())
     schemas.setdefault("ForecastItem", _forecast_item_schema())
     schemas.setdefault("WeatherData", _weather_data_schema())
-    schemas.setdefault("WeatherSuccessEnvelope", _success_envelope_schema("WeatherData"))
+    schemas.setdefault(
+        "WeatherSuccessEnvelope", _success_envelope_schema("WeatherData")
+    )
     schemas.setdefault("DocentScriptData", _docent_script_data_schema())
     schemas.setdefault(
         "DocentScriptSuccessEnvelope",
@@ -86,7 +90,9 @@ def _add_client_auth_security(schema: dict[str, Any]) -> None:
     )
     schemas.setdefault("DailyPlanSlot", _daily_plan_slot_schema())
     schemas.setdefault("DailyPlanData", _daily_plan_data_schema())
-    schemas.setdefault("DailyPlanSuccessEnvelope", _success_envelope_schema("DailyPlanData"))
+    schemas.setdefault(
+        "DailyPlanSuccessEnvelope", _success_envelope_schema("DailyPlanData")
+    )
     schemas.setdefault("InterventionData", _intervention_data_schema())
     schemas.setdefault(
         "InterventionSuccessEnvelope",
@@ -164,7 +170,9 @@ def _add_success_envelope_responses(schema: dict[str, Any]) -> None:
             if not isinstance(success_response, dict):
                 continue
             content = success_response.get("content") or {}
-            json_content = content.get("application/json") if isinstance(content, dict) else None
+            json_content = (
+                content.get("application/json") if isinstance(content, dict) else None
+            )
             if isinstance(json_content, dict):
                 json_content["schema"] = _success_response_ref(path)
 
@@ -374,7 +382,12 @@ def _readiness_checks_schema() -> dict[str, Any]:
         "properties": {
             "client_auth": {
                 "type": "string",
-                "enum": ["configured", "missing", "snapshot-fallback", "public-contest"],
+                "enum": [
+                    "configured",
+                    "missing",
+                    "snapshot-fallback",
+                    "public-contest",
+                ],
             },
             "client_identity": {
                 "type": "string",
@@ -433,7 +446,10 @@ def _runtime_mode_schema() -> dict[str, Any]:
                 "enum": ["unavailable", "public-cache", "db-backed", "degraded"],
             },
             "ai": {"type": "string", "enum": ["disabled", "live-azure", "degraded"]},
-            "speech": {"type": "string", "enum": ["disabled", "live-azure", "degraded"]},
+            "speech": {
+                "type": "string",
+                "enum": ["disabled", "live-azure", "degraded"],
+            },
             "worker": {"type": "string", "enum": ["dry-run", "degraded"]},
         },
         "additionalProperties": False,
@@ -487,7 +503,13 @@ def _place_score_components_schema() -> dict[str, Any]:
 def _place_score_schema() -> dict[str, Any]:
     return {
         "type": "object",
-        "required": ["final_score", "formula_version", "components", "data_basis", "features"],
+        "required": [
+            "final_score",
+            "formula_version",
+            "components",
+            "data_basis",
+            "features",
+        ],
         "properties": {
             "final_score": {
                 "type": "number",
@@ -555,7 +577,14 @@ def _place_schema() -> dict[str, Any]:
 def _places_query_schema() -> dict[str, Any]:
     return {
         "type": "object",
-        "required": ["lat", "lng", "radius_m", "category", "language", "include_scores"],
+        "required": [
+            "lat",
+            "lng",
+            "radius_m",
+            "category",
+            "language",
+            "include_scores",
+        ],
         "properties": {
             "lat": {"type": "number", "format": "double"},
             "lng": {"type": "number", "format": "double"},
@@ -591,12 +620,25 @@ def _places_data_schema() -> dict[str, Any]:
 def _dust_schema() -> dict[str, Any]:
     return {
         "type": "object",
-        "required": ["pm10", "pm25", "grade", "grade_ko"],
+        "required": [
+            "pm10",
+            "pm25",
+            "grade",
+            "grade_ko",
+            "pm10_grade",
+            "pm10_grade_ko",
+            "pm25_grade",
+            "pm25_grade_ko",
+        ],
         "properties": {
             "pm10": {"type": "string"},
             "pm25": {"type": "string"},
             "grade": {"type": "string"},
             "grade_ko": {"type": "string"},
+            "pm10_grade": {"type": "string"},
+            "pm10_grade_ko": {"type": "string"},
+            "pm25_grade": {"type": "string"},
+            "pm25_grade_ko": {"type": "string"},
         },
         "additionalProperties": False,
     }

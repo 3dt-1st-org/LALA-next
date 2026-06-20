@@ -379,6 +379,8 @@ void main() {
       final intervention = await client.getIntervention(radiusM: 1000);
 
       expect(weather.data?.dust.gradeKo, '확인 중');
+      expect(weather.data?.dust.pm10Grade, 'unknown');
+      expect(weather.data?.dust.pm25GradeKo, '확인 중');
       expect(weather.data?.forecast, isEmpty);
       expect(plan.data?.center.lat, 37.2);
       expect(plan.data?.radiusM, 50000);
@@ -607,7 +609,16 @@ Map<String, Object?> _weatherPayload() {
     'lng': 127.0,
     'temp': '',
     'icon': 'unavailable',
-    'dust': {'pm10': '', 'pm25': '', 'grade': 'unknown', 'grade_ko': '확인 중'},
+    'dust': {
+      'pm10': '',
+      'pm25': '',
+      'grade': 'unknown',
+      'grade_ko': '확인 중',
+      'pm10_grade': 'unknown',
+      'pm10_grade_ko': '확인 중',
+      'pm25_grade': 'unknown',
+      'pm25_grade_ko': '확인 중',
+    },
     'forecast': [],
     'outdoor_status': 'unknown',
     'force': false,

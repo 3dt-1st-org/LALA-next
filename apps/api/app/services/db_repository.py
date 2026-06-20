@@ -6,6 +6,7 @@ import math
 from typing import Any
 
 from apps.api.app.core.config import get_settings
+from apps.api.app.services.dust_quality import build_dust_payload
 from apps.api.app.services.official_media import normalize_official_image_url
 from apps.api.app.services.public_mvp_snapshot import GYEONGGI_REGION_NAME_EN
 
@@ -194,7 +195,17 @@ def fetch_places(
         ORDER BY COALESCE(latest_scores.final_score, 0) DESC, distance_m ASC, updated_at DESC
         LIMIT 20
     """
-    params = (lng, lat, category, category, min_lat, max_lat, min_lng, max_lng, radius_m)
+    params = (
+        lng,
+        lat,
+        category,
+        category,
+        min_lat,
+        max_lat,
+        min_lng,
+        max_lng,
+        radius_m,
+    )
     try:
         with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -285,12 +296,20 @@ def _place_score_from_row(row: dict[str, Any]) -> dict[str, Any] | None:
         "formula_version": row.get("formula_version") or "unknown",
         "components": {
             "local_spending_score": _optional_float(row.get("local_spending_score")),
-            "small_merchant_fit_score": _optional_float(row.get("small_merchant_fit_score")),
-            "demand_dispersion_score": _optional_float(row.get("demand_dispersion_score")),
-            "culture_relevance_score": _optional_float(row.get("culture_relevance_score")),
+            "small_merchant_fit_score": _optional_float(
+                row.get("small_merchant_fit_score")
+            ),
+            "demand_dispersion_score": _optional_float(
+                row.get("demand_dispersion_score")
+            ),
+            "culture_relevance_score": _optional_float(
+                row.get("culture_relevance_score")
+            ),
             "weather_fit_score": _optional_float(row.get("weather_fit_score")),
             "review_quality_score": _optional_float(row.get("review_quality_score")),
-            "accessibility_fit_score": _optional_float(row.get("accessibility_fit_score")),
+            "accessibility_fit_score": _optional_float(
+                row.get("accessibility_fit_score")
+            ),
         },
         "data_basis": "analytics.place_score_snapshots",
         "features": row.get("score_features") or {},
@@ -423,38 +442,45 @@ def fetch_latest_weather(*, lat: float, lng: float) -> dict[str, Any] | None:
     try:
         with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute(sql, (lng, lat, min_lat, max_lat, min_lng, max_lng, lat, lng))
+                cur.execute(
+                    sql, (lng, lat, min_lat, max_lat, min_lng, max_lng, lat, lng)
+                )
                 row = cur.fetchone()
     except Exception:
         return None
     if not row:
         return None
 
-    outdoor_status = "bad" if any(
-        [
-            row.get("is_rain_snow"),
-            row.get("is_bad_dust"),
-            row.get("is_heatwave"),
-            row.get("is_coldwave"),
-            row.get("is_strong_wind"),
-        ]
-    ) else "good"
+    outdoor_status = (
+        "bad"
+        if any(
+            [
+                row.get("is_rain_snow"),
+                row.get("is_bad_dust"),
+                row.get("is_heatwave"),
+                row.get("is_coldwave"),
+                row.get("is_strong_wind"),
+            ]
+        )
+        else "good"
+    )
     return {
         "lat": lat,
         "lng": lng,
         "location": row.get("location"),
         "temp": str(row.get("temperature") or ""),
         "icon": _weather_icon(row.get("precipitation_type")),
-        "dust": {
-            "pm10": str(row.get("pm10") or ""),
-            "pm25": str(row.get("pm25") or ""),
-            "grade": "bad" if row.get("is_bad_dust") else "normal",
-            "grade_ko": "나쁨" if row.get("is_bad_dust") else "보통",
-        },
+        "dust": build_dust_payload(
+            pm10=row.get("pm10"),
+            pm25=row.get("pm25"),
+            fallback_bad=bool(row.get("is_bad_dust")),
+        ),
         "forecast": [],
         "outdoor_status": outdoor_status,
         "location_match": row.get("location_match_rank") == 0,
-        "record_time": row.get("record_time").isoformat() if row.get("record_time") else None,
+        "record_time": row.get("record_time").isoformat()
+        if row.get("record_time")
+        else None,
         "source": "db",
     }
 
@@ -513,7 +539,9 @@ def fetch_docent_script_cache(
         "script": row["script"],
         "source": "db_cache",
         "upstream_source": row.get("source_method") or "unknown",
-        "generated_at": row.get("generated_at").isoformat() if row.get("generated_at") else None,
+        "generated_at": row.get("generated_at").isoformat()
+        if row.get("generated_at")
+        else None,
         "ttl_sec": _remaining_ttl_sec(row.get("expires_at")),
     }
 

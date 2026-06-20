@@ -500,7 +500,7 @@ void main() {
     final weatherPillText = tester.widget<Text>(
       find.descendant(
         of: find.byKey(const ValueKey('weather-pill-hit-target')),
-        matching: find.text('14°C · 미세먼지 미세 31 · 초미세 14 보통'),
+        matching: find.text('14°C · 미세먼지 미세 보통 · 초미세 좋음'),
       ),
     );
     expect(weatherPillText.maxLines, 2);
@@ -520,7 +520,10 @@ void main() {
     );
     expect(find.text('15시'), findsAtLeastNWidgets(1));
     expect(find.text('22°'), findsOneWidget);
-    expect(find.text('PM10'), findsOneWidget);
+    expect(find.text('미세먼지(PM10)'), findsOneWidget);
+    expect(find.text('초미세먼지(PM2.5)'), findsOneWidget);
+    expect(find.text('31㎍/m³ · 보통'), findsOneWidget);
+    expect(find.text('14㎍/m³ · 좋음'), findsOneWidget);
   });
 
   testWidgets('unavailable weather is not shown as real conditions', (
@@ -2335,7 +2338,16 @@ LalaWeather _weather({String source = 'db'}) {
     lng: 127.0286,
     temp: '14°C',
     icon: 'partly-cloudy',
-    dust: LalaDust(pm10: '31', pm25: '14', grade: 'normal', gradeKo: '보통'),
+    dust: const LalaDust(
+      pm10: '31',
+      pm25: '14',
+      grade: 'normal',
+      gradeKo: '보통',
+      pm10Grade: 'normal',
+      pm10GradeKo: '보통',
+      pm25Grade: 'good',
+      pm25GradeKo: '좋음',
+    ),
     forecast: [
       LalaForecastItem(time: '15:00', temp: '22C', icon: 'partly-cloudy'),
     ],

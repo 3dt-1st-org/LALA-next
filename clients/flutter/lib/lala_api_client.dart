@@ -719,12 +719,20 @@ class LalaDust {
     required this.pm25,
     required this.grade,
     required this.gradeKo,
+    this.pm10Grade = '',
+    this.pm10GradeKo = '',
+    this.pm25Grade = '',
+    this.pm25GradeKo = '',
   });
 
   final String pm10;
   final String pm25;
   final String grade;
   final String gradeKo;
+  final String pm10Grade;
+  final String pm10GradeKo;
+  final String pm25Grade;
+  final String pm25GradeKo;
 
   factory LalaDust.fromJson(Map<String, dynamic> json) {
     return LalaDust(
@@ -732,6 +740,10 @@ class LalaDust {
       pm25: _asString(json['pm25']),
       grade: _asString(json['grade']),
       gradeKo: _asString(json['grade_ko']),
+      pm10Grade: _asString(json['pm10_grade']),
+      pm10GradeKo: _asString(json['pm10_grade_ko']),
+      pm25Grade: _asString(json['pm25_grade']),
+      pm25GradeKo: _asString(json['pm25_grade_ko']),
     );
   }
 }

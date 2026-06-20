@@ -16,8 +16,14 @@ def test_latest_kma_base_time_uses_previous_hour_before_publish_window() -> None
     before_publish = datetime(2026, 6, 19, 0, 22, tzinfo=weather_service.KST)
     after_publish = datetime(2026, 6, 19, 0, 46, tzinfo=weather_service.KST)
 
-    assert weather_service._latest_kma_base_time(before_publish).strftime("%Y%m%d%H%M") == "202606182300"
-    assert weather_service._latest_kma_base_time(after_publish).strftime("%Y%m%d%H%M") == "202606190000"
+    assert (
+        weather_service._latest_kma_base_time(before_publish).strftime("%Y%m%d%H%M")
+        == "202606182300"
+    )
+    assert (
+        weather_service._latest_kma_base_time(after_publish).strftime("%Y%m%d%H%M")
+        == "202606190000"
+    )
 
 
 def test_current_weather_uses_kma_nowcast_when_db_is_empty(monkeypatch) -> None:
@@ -77,7 +83,9 @@ def test_current_weather_uses_kma_nowcast_when_db_is_empty(monkeypatch) -> None:
     fake_requests = types.ModuleType("requests")
     fake_requests.get = fake_get
     monkeypatch.setitem(sys.modules, "requests", fake_requests)
-    monkeypatch.setattr(weather_service.db_repository, "fetch_latest_weather", lambda **kwargs: None)
+    monkeypatch.setattr(
+        weather_service.db_repository, "fetch_latest_weather", lambda **kwargs: None
+    )
     monkeypatch.setattr(
         weather_service,
         "get_settings",
@@ -106,7 +114,10 @@ def test_current_weather_uses_kma_nowcast_when_db_is_empty(monkeypatch) -> None:
     }
     assert kma_request["timeout"] == 3
     assert airkorea_request["params"]["sidoName"] == "경기"
-    assert weather["source"] == f"{weather_service.KMA_SOURCE}+{weather_service.AIRKOREA_SOURCE}"
+    assert (
+        weather["source"]
+        == f"{weather_service.KMA_SOURCE}+{weather_service.AIRKOREA_SOURCE}"
+    )
     assert weather["temp"] == "22.3"
     assert weather["icon"] == "partly-cloudy"
     assert weather["outdoor_status"] == "good"
@@ -115,6 +126,10 @@ def test_current_weather_uses_kma_nowcast_when_db_is_empty(monkeypatch) -> None:
         "pm25": "14",
         "grade": "normal",
         "grade_ko": "보통",
+        "pm10_grade": "normal",
+        "pm10_grade_ko": "보통",
+        "pm25_grade": "normal",
+        "pm25_grade_ko": "보통",
     }
     assert weather["record_time"] == "2026-06-18T23:00:00+09:00"
     assert len(weather["forecast"]) == 4
@@ -126,9 +141,13 @@ def test_current_weather_uses_kma_nowcast_when_db_is_empty(monkeypatch) -> None:
     assert len(captured) == 2
 
 
-def test_current_weather_reports_unavailable_without_public_data_key(monkeypatch) -> None:
+def test_current_weather_reports_unavailable_without_public_data_key(
+    monkeypatch,
+) -> None:
     weather_service.clear_official_weather_cache()
-    monkeypatch.setattr(weather_service.db_repository, "fetch_latest_weather", lambda **kwargs: None)
+    monkeypatch.setattr(
+        weather_service.db_repository, "fetch_latest_weather", lambda **kwargs: None
+    )
     monkeypatch.setattr(
         weather_service,
         "get_settings",
@@ -140,3 +159,5 @@ def test_current_weather_reports_unavailable_without_public_data_key(monkeypatch
     assert weather["source"] == "unavailable"
     assert weather["temp"] == ""
     assert weather["forecast"] == []
+    assert weather["dust"]["pm10_grade"] == "unknown"
+    assert weather["dust"]["pm25_grade_ko"] == "확인 중"

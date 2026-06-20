@@ -154,6 +154,8 @@ def test_weather_route_returns_envelope(client, auth_headers):
     assert body["data"]["forecast"] == []
     assert body["data"]["outdoor_status"] == "unknown"
     assert body["data"]["dust"]["grade"] == "unknown"
+    assert body["data"]["dust"]["pm10_grade"] == "unknown"
+    assert body["data"]["dust"]["pm25_grade_ko"] == "확인 중"
 
 
 def test_weather_uses_db_repository_when_available(client, auth_headers, monkeypatch):
@@ -164,7 +166,16 @@ def test_weather_uses_db_repository_when_available(client, auth_headers, monkeyp
             "lng": kwargs["lng"],
             "temp": "18.5",
             "icon": "rain",
-            "dust": {"pm10": "40", "pm25": "18", "grade": "normal", "grade_ko": "보통"},
+            "dust": {
+                "pm10": "40",
+                "pm25": "18",
+                "grade": "normal",
+                "grade_ko": "보통",
+                "pm10_grade": "normal",
+                "pm10_grade_ko": "보통",
+                "pm25_grade": "normal",
+                "pm25_grade_ko": "보통",
+            },
             "forecast": [],
             "outdoor_status": "bad",
             "record_time": "2026-06-18T00:00:00+09:00",
@@ -184,7 +195,9 @@ def test_weather_uses_db_repository_when_available(client, auth_headers, monkeyp
 
 
 def test_intervention_treats_unknown_weather_as_neutral(client, auth_headers):
-    response = client.get("/api/v1/plans/intervention?lat=37.2&lng=127.0", headers=auth_headers)
+    response = client.get(
+        "/api/v1/plans/intervention?lat=37.2&lng=127.0", headers=auth_headers
+    )
 
     assert response.status_code == 200
     body = response.json()
@@ -256,7 +269,9 @@ def test_docent_script_accepts_culture_venue_category(client, auth_headers):
     assert body["data"]["script"]
 
 
-def test_docent_script_uses_db_cache_before_generation(client, auth_headers, monkeypatch):
+def test_docent_script_uses_db_cache_before_generation(
+    client, auth_headers, monkeypatch
+):
     monkeypatch.setattr(
         "apps.api.app.services.db_repository.fetch_docent_script_cache",
         lambda **kwargs: {
@@ -290,7 +305,9 @@ def test_docent_script_uses_db_cache_before_generation(client, auth_headers, mon
     assert body["data"]["cache_key"].startswith("docent_script:")
 
 
-def test_docent_script_score_context_skips_stale_cache(client, auth_headers, monkeypatch):
+def test_docent_script_score_context_skips_stale_cache(
+    client, auth_headers, monkeypatch
+):
     def fail_if_cache_is_read(**kwargs):
         raise AssertionError("score-aware docent generation must not use stale cache")
 
@@ -324,7 +341,9 @@ def test_docent_script_score_context_skips_stale_cache(client, auth_headers, mon
     assert "관광 수요 분산 효과 보통 이상" in body["data"]["script"]
 
 
-def test_docent_script_accepts_legacy_detail_mode_and_english_language(client, auth_headers):
+def test_docent_script_accepts_legacy_detail_mode_and_english_language(
+    client, auth_headers
+):
     response = client.post(
         "/api/v1/docents/script",
         headers=auth_headers,
@@ -370,7 +389,9 @@ def test_docent_script_generation_identity_is_deterministic(client, auth_headers
     assert first_data["cache_key"] == second_data["cache_key"]
 
 
-def test_docent_script_generation_identity_changes_with_score_context(client, auth_headers):
+def test_docent_script_generation_identity_changes_with_score_context(
+    client, auth_headers
+):
     base_payload = {
         "place_id": "score-identity",
         "category": "event",
@@ -379,7 +400,9 @@ def test_docent_script_generation_identity_changes_with_score_context(client, au
         "final_score": 0.7,
     }
 
-    first = client.post("/api/v1/docents/script", headers=auth_headers, json=base_payload)
+    first = client.post(
+        "/api/v1/docents/script", headers=auth_headers, json=base_payload
+    )
     second = client.post(
         "/api/v1/docents/script",
         headers=auth_headers,
@@ -754,7 +777,9 @@ def test_daily_plan_rejects_out_of_range_coordinates(client, auth_headers):
     assert '"input"' not in response.text
 
 
-def test_daily_plan_marks_mixed_source_when_db_places_are_used(client, auth_headers, monkeypatch):
+def test_daily_plan_marks_mixed_source_when_db_places_are_used(
+    client, auth_headers, monkeypatch
+):
     monkeypatch.setattr(
         "apps.api.app.services.db_repository.fetch_places",
         lambda **kwargs: [
@@ -812,7 +837,9 @@ def test_daily_plan_handles_empty_place_candidates(client, auth_headers, monkeyp
     ]
 
 
-def test_daily_plan_uses_public_snapshot_radius_in_snapshot_fallback(client, monkeypatch):
+def test_daily_plan_uses_public_snapshot_radius_in_snapshot_fallback(
+    client, monkeypatch
+):
     monkeypatch.delenv("IOS_API_KEY", raising=False)
     monkeypatch.delenv("API_BEARER_TOKEN", raising=False)
     monkeypatch.setenv("LALA_STATIC_SNAPSHOT_FALLBACK", "true")
@@ -849,7 +876,9 @@ def test_intervention_route_returns_envelope(client, auth_headers):
     assert body["data"]["place"] is None
 
 
-def test_intervention_uses_public_snapshot_candidate_in_snapshot_fallback(client, monkeypatch):
+def test_intervention_uses_public_snapshot_candidate_in_snapshot_fallback(
+    client, monkeypatch
+):
     monkeypatch.delenv("IOS_API_KEY", raising=False)
     monkeypatch.delenv("API_BEARER_TOKEN", raising=False)
     monkeypatch.setenv("LALA_STATIC_SNAPSHOT_FALLBACK", "true")

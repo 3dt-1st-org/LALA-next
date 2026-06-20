@@ -244,7 +244,10 @@ def test_fetch_places_uses_radius_bound_ranking_query(monkeypatch):
     assert "ST_Distance(" in captured["sql"]
     assert "AND lat BETWEEN %s AND %s" in captured["sql"]
     assert "AND lng BETWEEN %s AND %s" in captured["sql"]
-    assert "ORDER BY COALESCE(latest_scores.final_score, 0) DESC, distance_m ASC" in captured["sql"]
+    assert (
+        "ORDER BY COALESCE(latest_scores.final_score, 0) DESC, distance_m ASC"
+        in captured["sql"]
+    )
     assert captured["params"][:4] == (127.0, 37.2, "all", "all")
     assert captured["params"][-1] == 3000
     assert len(captured["params"]) == 9
@@ -302,6 +305,9 @@ def test_fetch_latest_weather_prefers_nearest_region_match(monkeypatch):
     assert weather["location"] == "수원"
     assert weather["icon"] == "rain"
     assert weather["location_match"] is True
+    assert weather["dust"]["grade"] == "normal"
+    assert weather["dust"]["pm10_grade"] == "normal"
+    assert weather["dust"]["pm25_grade"] == "normal"
     assert "WITH query_point AS" in captured["sql"]
     assert "candidate_places AS" in captured["sql"]
     assert ", nearest_region AS" in captured["sql"]
@@ -361,6 +367,8 @@ def test_fetch_latest_weather_marks_latest_fallback_without_region_match(monkeyp
     assert weather["location"] == "fallback-station"
     assert weather["location_match"] is False
     assert weather["outdoor_status"] == "good"
+    assert weather["dust"]["pm10_grade"] == "good"
+    assert weather["dust"]["pm25_grade"] == "good"
 
 
 def test_remaining_ttl_sec_reports_future_expiry():

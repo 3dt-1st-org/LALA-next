@@ -4230,11 +4230,25 @@ class _WeatherSheetContent extends StatelessWidget {
           runSpacing: 10,
           children: [
             _WeatherFact(
-              label: _copy(language, ko: '미세먼지', en: 'Dust'),
+              label: _copy(language, ko: '통합 대기', en: 'Air quality'),
               value: _dustLabel(data.dust, language),
             ),
-            _WeatherFact(label: 'PM10', value: data.dust.pm10),
-            _WeatherFact(label: 'PM2.5', value: data.dust.pm25),
+            _WeatherFact(
+              label: _copy(language, ko: '미세먼지(PM10)', en: 'PM10'),
+              value: _dustPollutantValueLabel(
+                value: data.dust.pm10,
+                grade: _dustPollutantGradeLabel(data.dust, 'pm10', language),
+                language: language,
+              ),
+            ),
+            _WeatherFact(
+              label: _copy(language, ko: '초미세먼지(PM2.5)', en: 'PM2.5'),
+              value: _dustPollutantValueLabel(
+                value: data.dust.pm25,
+                grade: _dustPollutantGradeLabel(data.dust, 'pm25', language),
+                language: language,
+              ),
+            ),
             _WeatherFact(
               label: _copy(language, ko: '야외 상태', en: 'Outdoor'),
               value: _outdoorLabel(data.outdoorStatus, language: language),
@@ -7726,18 +7740,49 @@ String _outdoorLabel(String status, {String language = 'ko'}) {
 }
 
 String _dustLabel(LalaDust dust, String language) {
+  return _dustGradeLabel(dust.grade, dust.gradeKo, language);
+}
+
+String _dustGradeLabel(String gradeCode, String gradeKo, String language) {
   if (!_isEnglish(language)) {
-    final gradeKo = _singleLanguageText(dust.gradeKo, language);
-    return gradeKo ?? dust.grade;
+    final localizedKo = _singleLanguageText(gradeKo, language);
+    return localizedKo ?? gradeCode;
   }
-  return switch (dust.grade.trim()) {
+  return switch (gradeCode.trim()) {
     'good' => 'Good',
     'normal' => 'Normal',
     'bad' => 'Bad',
     'very_bad' => 'Very bad',
-    final grade when grade.isEmpty => dust.gradeKo,
+    final grade when grade.isEmpty => gradeKo,
     final grade => grade,
   };
+}
+
+String _dustPollutantGradeLabel(
+  LalaDust dust,
+  String pollutant,
+  String language,
+) {
+  final isPm10 = pollutant == 'pm10';
+  final gradeCode = (isPm10 ? dust.pm10Grade : dust.pm25Grade).trim();
+  final gradeKo = (isPm10 ? dust.pm10GradeKo : dust.pm25GradeKo).trim();
+  if (gradeCode.isEmpty && gradeKo.isEmpty) {
+    return _dustLabel(dust, language);
+  }
+  return _dustGradeLabel(gradeCode, gradeKo, language);
+}
+
+String _dustPollutantValueLabel({
+  required String value,
+  required String grade,
+  required String language,
+}) {
+  final normalized = value.trim();
+  if (normalized.isEmpty) {
+    return grade;
+  }
+  final unit = _isEnglish(language) ? 'ug/m3' : '㎍/m³';
+  return '$normalized$unit · $grade';
 }
 
 String _dustSituationLabel(
@@ -7750,26 +7795,23 @@ String _dustSituationLabel(
   final pm25 = dust.pm25.trim();
   final hasPm10 = pm10.isNotEmpty;
   final hasPm25 = pm25.isNotEmpty;
+  final pm10Grade = _dustPollutantGradeLabel(dust, 'pm10', language).trim();
+  final pm25Grade = _dustPollutantGradeLabel(dust, 'pm25', language).trim();
   if (_isEnglish(language)) {
-    final values = [if (hasPm10) 'PM10 $pm10', if (hasPm25) 'PM2.5 $pm25'];
+    final values = [
+      if (hasPm10) 'PM10 $pm10Grade',
+      if (hasPm25) 'PM2.5 $pm25Grade',
+    ];
     if (values.isEmpty) {
       return includePrefix ? 'Dust $grade' : grade;
     }
-    return [
-      if (includePrefix) 'Dust',
-      values.join(' · '),
-      if (grade.isNotEmpty) grade,
-    ].join(' ');
+    return [if (includePrefix) 'Dust', values.join(' · ')].join(' ');
   }
-  final values = [if (hasPm10) '미세 $pm10', if (hasPm25) '초미세 $pm25'];
+  final values = [if (hasPm10) '미세 $pm10Grade', if (hasPm25) '초미세 $pm25Grade'];
   if (values.isEmpty) {
     return includePrefix ? '미세먼지 $grade' : grade;
   }
-  return [
-    if (includePrefix) '미세먼지',
-    values.join(' · '),
-    if (grade.isNotEmpty) grade,
-  ].join(' ');
+  return [if (includePrefix) '미세먼지', values.join(' · ')].join(' ');
 }
 
 List<LalaPlace> _railPlaces(List<LalaPlace> places) {
