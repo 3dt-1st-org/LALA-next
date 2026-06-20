@@ -282,7 +282,15 @@ def test_v1_accepts_unauthenticated_static_snapshot_fallback_request(client, mon
     body = response.json()
     assert body["ok"] is True
     assert body["data"]["source"] == "public_mvp_snapshot"
-    assert body["data"]["places"][0]["score"]["data_basis"] == "public_mvp_snapshot"
+    assert body["data"]["places"][0]["score"] is None
+
+    response_with_scores = client.get(
+        "/api/v1/places?lat=37.2636&lng=127.0286&radius_m=50000&include_scores=true"
+    )
+
+    assert response_with_scores.status_code == 200
+    body_with_scores = response_with_scores.json()
+    assert body_with_scores["data"]["places"][0]["score"]["data_basis"] == "public_mvp_snapshot"
 
 
 def test_v1_accepts_unauthenticated_public_contest_request(client, monkeypatch):
