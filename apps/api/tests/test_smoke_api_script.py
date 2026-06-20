@@ -30,6 +30,7 @@ class _SmokeHandler(BaseHTTPRequestHandler):
                     {
                         "ok": True,
                         "data": {
+                            "status": self.server.ready_status,
                             "checks": {
                                 "client_identity": "public-contest",
                                 "jwt_validation": "skipped",
@@ -52,6 +53,7 @@ class _SmokeHandler(BaseHTTPRequestHandler):
                 {
                     "ok": True,
                     "data": {
+                        "status": self.server.ready_status,
                         "checks": {
                             "client_identity": "static",
                             "jwt_validation": "skipped",
@@ -115,6 +117,7 @@ class _SmokeHandler(BaseHTTPRequestHandler):
 class _SmokeServer(ThreadingHTTPServer):
     protected_paths: list[str]
     public_access: bool
+    ready_status: str
 
 
 def _run_smoke(base_url: str, env_overrides: dict[str, str]) -> subprocess.CompletedProcess[str]:
@@ -177,10 +180,15 @@ def _run_matrix_smoke(
     )
 
 
-def _start_server(*, public_access: bool = False) -> tuple[_SmokeServer, threading.Thread, str]:
+def _start_server(
+    *,
+    public_access: bool = False,
+    ready_status: str = "ok",
+) -> tuple[_SmokeServer, threading.Thread, str]:
     server = _SmokeServer(("127.0.0.1", 0), _SmokeHandler)
     server.protected_paths = []
     server.public_access = public_access
+    server.ready_status = ready_status
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     host, port = server.server_address
@@ -197,6 +205,19 @@ def test_unix_smoke_skips_mismatched_api_key_instead_of_failing_with_401():
 
     assert result.returncode == 0, result.stderr
     assert "Matching client auth is not available" in result.stdout
+    assert server.protected_paths == []
+
+
+def test_unix_smoke_fails_when_readyz_reports_degraded():
+    server, thread, base_url = _start_server(ready_status="degraded")
+    try:
+        result = _run_smoke(base_url, {"API_BEARER_TOKEN": "server-token"})
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+    assert result.returncode != 0
+    assert "/readyz reported non-ok status: degraded" in result.stderr
     assert server.protected_paths == []
 
 

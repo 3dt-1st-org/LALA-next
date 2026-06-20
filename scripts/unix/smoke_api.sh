@@ -59,6 +59,9 @@ import os
 
 payload = json.loads(os.environ["READYZ_PAYLOAD"])
 data = payload.get("data") or {}
+status = data.get("status")
+if status != "ok":
+    raise SystemExit(f"/readyz reported non-ok status: {status or 'missing'}")
 mode = data.get("mode") or {}
 required = ("overall", "data", "ai", "speech", "worker")
 missing = [name for name in required if not mode.get(name)]

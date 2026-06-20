@@ -35,6 +35,12 @@ queries to resolve live names during operations.
 - Canonical SQL was applied manually to the shared dev PostgreSQL target after
   previewing the SQL plan. The schema verifier passed for all canonical schemas,
   tables, views, and required extensions.
+- On 2026-06-21, `/readyz` was tightened so `data=db-backed` requires both
+  `db=configured` and `postgis=configured`. The shared dev DB already had the
+  PostGIS extension, but the `travel.idx_places_geog_expr` spatial index was
+  missing; it was recreated with the canonical `CREATE INDEX IF NOT EXISTS`
+  statement, after which `/readyz` reported `postgis=configured` and
+  `data=db-backed`.
 - Tour API place ingestion was applied for Gyeonggi (`areaCode=31`) and Seoul
   (`areaCode=1`) across attractions, culture venues, events, and restaurants.
   The current shared dev DB has 2,636 Tour API places: 1,294 Gyeonggi rows and
@@ -73,7 +79,8 @@ queries to resolve live names during operations.
 - The Azure dev deploy workflow now runs the same `smoke_api.sh` and
   `smoke_api_matrix.sh` checks after every Container App revision update. The
   scripts understand public contest access as an intentional no-auth route
-  mode, and still support credentialed smoke when that mode is later disabled.
+  mode, fail when `/readyz.data.status` is not `ok`, and still support
+  credentialed smoke when that mode is later disabled.
   The first workflow-gated matrix smoke passed on run `27857289530`; an
   operator-run matrix smoke against `https://api.lala-next.cloud` also passed
   with `checked=37`.
