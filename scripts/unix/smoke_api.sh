@@ -222,7 +222,7 @@ smoke_get "/api/v1/plans/intervention?lat=37.2636&lng=127.0286&radius_m=1000" "$
 PLAN_BODY='{"lat":37.2636,"lng":127.0286,"radius_m":1000,"language":"ko"}'
 smoke_post_json "/api/v1/plans/daily" "$PLAN_BODY" "${CURL_AUTH_ARGS[@]}" >/dev/null
 
-SCRIPT_BODY='{"place_id":"skeleton-suwon-hwaseong","category":"attraction","language":"ko","mode":"brief"}'
+SCRIPT_BODY='{"place_id":"tour-api-3066000","place_name":"중랑아트센터","category":"culture_venue","language":"ko","mode":"brief"}'
 smoke_post_json "/api/v1/docents/script" "$SCRIPT_BODY" "${CURL_AUTH_ARGS[@]}" >/dev/null
 
 AUDIO_BODY='{"script":"LALA smoke audio","language":"ko"}'

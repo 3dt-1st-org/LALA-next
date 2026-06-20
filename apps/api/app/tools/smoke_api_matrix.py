@@ -32,10 +32,16 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run a broader LALA-next API smoke matrix.")
     parser.add_argument("--base-url", default="http://127.0.0.1:8080")
     parser.add_argument("--timeout", type=float, default=20.0)
+    parser.add_argument(
+        "--profile",
+        choices=("deploy", "full"),
+        default="full",
+        help="Use deploy for a bounded CI gate or full for the wider route matrix.",
+    )
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
 
-    result = run_matrix(base_url=args.base_url, timeout=args.timeout)
+    result = run_matrix(base_url=args.base_url, timeout=args.timeout, profile=args.profile)
     if args.json:
         print(json.dumps(result, ensure_ascii=False, sort_keys=True))
     else:
@@ -43,7 +49,7 @@ def main(argv: list[str] | None = None) -> int:
     return 0 if result["ok"] else 1
 
 
-def run_matrix(*, base_url: str, timeout: float) -> dict[str, Any]:
+def run_matrix(*, base_url: str, timeout: float, profile: str = "full") -> dict[str, Any]:
     base_url = base_url.rstrip("/")
     readyz = _request_json(
         SmokeCase("GET", "/readyz"),
@@ -68,7 +74,7 @@ def run_matrix(*, base_url: str, timeout: float) -> dict[str, Any]:
         }
 
     failures: list[SmokeFailure] = []
-    cases = _build_cases()
+    cases = _build_cases(profile=profile)
     for case in cases:
         failure = _run_case(
             case,
@@ -82,6 +88,7 @@ def run_matrix(*, base_url: str, timeout: float) -> dict[str, Any]:
     return {
         "ok": not failures,
         "mode": "api_matrix_smoke",
+        "profile": profile,
         "checked": len(cases),
         "failures": [
             {
@@ -95,7 +102,46 @@ def run_matrix(*, base_url: str, timeout: float) -> dict[str, Any]:
     }
 
 
-def _build_cases() -> list[SmokeCase]:
+def _build_cases(*, profile: str) -> list[SmokeCase]:
+    if profile == "deploy":
+        return _build_deploy_cases()
+    if profile != "full":
+        raise ValueError(f"Unsupported smoke matrix profile: {profile}")
+    return _build_full_cases()
+
+
+def _build_deploy_cases() -> list[SmokeCase]:
+    location = {"lat": 37.5665, "lng": 126.9780, "radius_m": 50000}
+    place_query = parse.urlencode({**location, "category": "all", "language": "ko"})
+    weather_query = parse.urlencode(location)
+    return [
+        SmokeCase("GET", f"/api/v1/places?{place_query}"),
+        SmokeCase("GET", f"/api/v1/weather?{weather_query}"),
+        SmokeCase("GET", f"/api/v1/plans/intervention?{weather_query}"),
+        SmokeCase("POST", "/api/v1/plans/daily", _json_body({**location, "language": "ko"})),
+        SmokeCase(
+            "POST",
+            "/api/v1/docents/script",
+            _json_body(
+                {
+                    "place_id": "tour-api-3066000",
+                    "place_name": "중랑아트센터",
+                    "category": "culture_venue",
+                    "language": "ko",
+                    "mode": "brief",
+                }
+            ),
+        ),
+        SmokeCase(
+            "POST",
+            "/api/v1/docents/audio",
+            _json_body({"script": "스모크 오디오", "language": "ko"}),
+            response_kind="audio",
+        ),
+    ]
+
+
+def _build_full_cases() -> list[SmokeCase]:
     cases: list[SmokeCase] = []
     for category in ("all", "attraction", "restaurant", "event", "culture_venue"):
         for language in ("ko", "en", "English", "kr"):
@@ -245,6 +291,7 @@ def _json_body(payload: dict[str, Any]) -> bytes:
 def _print_human(result: dict[str, Any]) -> None:
     print("LALA-next API matrix smoke")
     print(f"mode={result['mode']}")
+    print(f"profile={result['profile']}")
     print(f"status={'ok' if result['ok'] else 'failed'}")
     print(f"checked={result['checked']}")
     for failure in result.get("failures") or []:

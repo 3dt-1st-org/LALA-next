@@ -169,7 +169,7 @@ def test_azure_dev_deploy_uses_oidc_and_dev_branch_only():
     assert "az postgres flexible-server firewall-rule" not in workflow
     assert "SMOKE_BASE_URL=\"https://${API_FQDN}\"" in workflow
     assert 'scripts/unix/smoke_api.sh --base-url "$SMOKE_BASE_URL"' in workflow
-    assert 'scripts/unix/smoke_api_matrix.sh --base-url "$SMOKE_BASE_URL" --timeout 25' in workflow
+    assert 'scripts/unix/smoke_api_matrix.sh --base-url "$SMOKE_BASE_URL" --timeout 25 --profile deploy' in workflow
 
 
 def test_azure_container_build_excludes_local_secrets():
@@ -581,7 +581,7 @@ def test_unix_scripts_have_safe_operational_guards():
     assert 'CURL_AUTH_ARGS=(-K "$AUTH_CONFIG_FILE")' in scripts["smoke_api.sh"]
     assert "AUTH_HEADER=(-H" not in scripts["smoke_api.sh"]
     assert "apps.api.app.tools.smoke_api_matrix" in scripts["smoke_api_matrix.sh"]
-    assert "Runs a wider live API matrix without printing client tokens" in scripts["smoke_api_matrix.sh"]
+    assert "Runs a bounded deploy or wider live API matrix without printing client tokens" in scripts["smoke_api_matrix.sh"]
     assert "load_lala_key_vault_secrets" in scripts["smoke_api_matrix.sh"]
     assert "LALA_SMOKE_BEARER_TOKEN" not in scripts["smoke_api_matrix.sh"]
     assert "LALA_SMOKE_API_KEY" not in scripts["smoke_api_matrix.sh"]

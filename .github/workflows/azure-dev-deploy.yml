@@ -132,4 +132,4 @@ jobs:
             SMOKE_BASE_URL="https://${API_CUSTOM_DOMAIN_NAME}"
           fi
           scripts/unix/smoke_api.sh --base-url "$SMOKE_BASE_URL"
-          scripts/unix/smoke_api_matrix.sh --base-url "$SMOKE_BASE_URL" --timeout 25
+          scripts/unix/smoke_api_matrix.sh --base-url "$SMOKE_BASE_URL" --timeout 25 --profile deploy

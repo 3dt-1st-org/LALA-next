@@ -10,6 +10,7 @@ KEY_VAULT_URL_ARG=""
 PYTHON_ARG=""
 JSON_STATUS="false"
 TIMEOUT="20"
+PROFILE="full"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -29,13 +30,17 @@ while [[ $# -gt 0 ]]; do
       TIMEOUT="${2:-}"
       shift 2
       ;;
+    --profile)
+      PROFILE="${2:-}"
+      shift 2
+      ;;
     --json)
       JSON_STATUS="true"
       shift
       ;;
     -h|--help)
-      echo "Usage: scripts/unix/smoke_api_matrix.sh [--base-url URL] [--key-vault-url URL] [--timeout SEC] [--json] [--python PATH]"
-      echo "Runs a wider live API matrix without printing client tokens or Key Vault secret values."
+      echo "Usage: scripts/unix/smoke_api_matrix.sh [--base-url URL] [--key-vault-url URL] [--timeout SEC] [--profile deploy|full] [--json] [--python PATH]"
+      echo "Runs a bounded deploy or wider live API matrix without printing client tokens or Key Vault secret values."
       exit 0
       ;;
     *)
@@ -56,7 +61,7 @@ fi
 load_env_file "$ROOT/.env"
 load_lala_key_vault_secrets
 
-ARGS=(-m apps.api.app.tools.smoke_api_matrix --base-url "$BASE_URL" --timeout "$TIMEOUT")
+ARGS=(-m apps.api.app.tools.smoke_api_matrix --base-url "$BASE_URL" --timeout "$TIMEOUT" --profile "$PROFILE")
 if [[ "$JSON_STATUS" == "true" ]]; then
   ARGS+=(--json)
 fi

@@ -140,7 +140,12 @@ def _run_smoke(base_url: str, env_overrides: dict[str, str]) -> subprocess.Compl
     )
 
 
-def _run_matrix_smoke(base_url: str, env_overrides: dict[str, str]) -> subprocess.CompletedProcess[str]:
+def _run_matrix_smoke(
+    base_url: str,
+    env_overrides: dict[str, str],
+    *,
+    profile: str = "full",
+) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env.update(
         {
@@ -154,7 +159,16 @@ def _run_matrix_smoke(base_url: str, env_overrides: dict[str, str]) -> subproces
     )
     env.update(env_overrides)
     return subprocess.run(
-        ["bash", "scripts/unix/smoke_api_matrix.sh", "--base-url", base_url, "--timeout", "3"],
+        [
+            "bash",
+            "scripts/unix/smoke_api_matrix.sh",
+            "--base-url",
+            base_url,
+            "--timeout",
+            "3",
+            "--profile",
+            profile,
+        ],
         cwd=ROOT,
         env=env,
         text=True,
@@ -240,6 +254,26 @@ def test_unix_matrix_smoke_covers_route_variants_without_printing_auth():
     assert server.protected_paths.count("/api/v1/plans/intervention") == 4
     assert server.protected_paths.count("/api/v1/plans/daily") == 4
     assert server.protected_paths.count("/api/v1/docents/script") == 4
+    assert server.protected_paths.count("/api/v1/docents/audio") == 1
+
+
+def test_unix_matrix_smoke_deploy_profile_keeps_ci_gate_bounded():
+    server, thread, base_url = _start_server(public_access=True)
+    try:
+        result = _run_matrix_smoke(base_url, {}, profile="deploy")
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+    assert result.returncode == 0, result.stderr
+    assert "LALA-next API matrix smoke" in result.stdout
+    assert "profile=deploy" in result.stdout
+    assert "checked=6" in result.stdout
+    assert server.protected_paths.count("/api/v1/places") == 1
+    assert server.protected_paths.count("/api/v1/weather") == 1
+    assert server.protected_paths.count("/api/v1/plans/intervention") == 1
+    assert server.protected_paths.count("/api/v1/plans/daily") == 1
+    assert server.protected_paths.count("/api/v1/docents/script") == 1
     assert server.protected_paths.count("/api/v1/docents/audio") == 1
 
 
