@@ -63,6 +63,11 @@ queries to resolve live names during operations.
   route variants across place category/language filters, multiple map centers,
   daily planning, weather intervention, docent script categories, and docent
   `audio/mpeg` output.
+- The Azure dev deploy workflow now runs the same authenticated `smoke_api.sh`
+  and `smoke_api_matrix.sh` checks after every Container App revision update.
+  The first workflow-gated matrix smoke passed on run `27857289530`; an
+  operator-run matrix smoke against `https://api.lala-next.cloud` also passed
+  with `checked=37`.
 - Gabia DNS has been updated for the API vanity domain. `@` and `www` remain on
   Vercel, while `api` is a CNAME to the Azure Container Apps FQDN and
   `asuid.api` is the Azure custom-domain TXT validation record.
@@ -169,33 +174,21 @@ ALLOW_RAG_INDEX_APPLY=1 \
   --apply \
   --confirm APPLY_RAG_INDEX \
   --source all \
+  --embedding-method local-hash \
   --limit 3000 \
   --python .venv/bin/python
 ```
 
-9. Build the RAG index from static and dynamic canonical data:
-
-```bash
-scripts/unix/plan_rag_index.sh --preview --source all --limit 20 --python .venv/bin/python
-ALLOW_RAG_INDEX_APPLY=1 \
-  scripts/unix/plan_rag_index.sh \
-  --apply \
-  --confirm APPLY_RAG_INDEX \
-  --source all \
-  --embedding-method local-hash \
-  --python .venv/bin/python
-```
-
-10. Smoke the deployed API with the transition bearer token. `/readyz` should
+11. Smoke the deployed API with the transition bearer token. `/readyz` should
     report configured client auth and DB readiness after the runtime has picked
     up the refreshed Key Vault values.
 
-11. Rebuild and redeploy Flutter web after backend URL or client auth changes.
+12. Rebuild and redeploy Flutter web after backend URL or client auth changes.
     Pass `LALA_API_BASE_URL`, `LALA_API_BEARER_TOKEN`, `KAKAO_JAVASCRIPT_KEY`,
     and `LALA_UI_LANGUAGE` as build-time values from deployment secrets or
     trusted local shell variables.
 
-12. Move the API vanity domain only after reviewing the DNS change. Ask Azure
+13. Move the API vanity domain only after reviewing the DNS change. Ask Azure
     for the required validation record:
 
 ```bash
