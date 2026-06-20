@@ -278,6 +278,7 @@ class LalaApiBackend implements LalaBackend {
       radiusM: config.radiusM,
       category: config.category,
       lang: config.lang,
+      includeScores: true,
     );
   }
 
@@ -319,6 +320,12 @@ class LalaApiBackend implements LalaBackend {
       distanceM: place.distanceM,
       source: place.source,
       upstreamSource: place.upstreamSource,
+      finalScore: place.score?.finalScore,
+      localSpendingScore: place.score?.components.localSpendingScore,
+      smallMerchantFitScore: place.score?.components.smallMerchantFitScore,
+      demandDispersionScore: place.score?.components.demandDispersionScore,
+      weatherFitScore: place.score?.components.weatherFitScore,
+      cultureRelevanceScore: place.score?.components.cultureRelevanceScore,
       category: place.category,
       language: config.lang,
       mode: mode,

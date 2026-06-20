@@ -14,14 +14,16 @@ logger = logging.getLogger(LOGGER_NAME)
 
 def generate_script(request: DocentScriptRequest) -> dict:
     identity = script_identity(request)
-    cached = db_repository.fetch_docent_script_cache(
-        place_id=request.place_id,
-        category=request.category,
-        language=request.language,
-        mode=request.mode,
-    )
-    if cached:
-        return {**cached, **identity}
+    has_score_context = _has_score_context(request)
+    if not has_score_context:
+        cached = db_repository.fetch_docent_script_cache(
+            place_id=request.place_id,
+            category=request.category,
+            language=request.language,
+            mode=request.mode,
+        )
+        if cached:
+            return {**cached, **identity}
 
     generated_at = datetime.now(UTC).isoformat()
     if ai_service.live_ai_enabled():
@@ -31,7 +33,7 @@ def generate_script(request: DocentScriptRequest) -> dict:
         script = _rule_based_script(request)
         source = "rule_based_curation"
     ttl_sec = 604800
-    if source == "azure_openai":
+    if source == "azure_openai" and not has_score_context:
         cache_saved = db_repository.save_docent_script_cache(
             place_id=request.place_id,
             category=request.category,
@@ -85,16 +87,19 @@ def _rule_based_script(request: DocentScriptRequest) -> str:
             "culture_venue": "전시나 공연 관람 전후의 짧은 이동 반경 안에서 로컬 카페, 식당, 골목 경험을 함께 연결합니다.",
         }.get(request.category, "공식 데이터와 주변 장소를 함께 살펴볼 수 있는 로컬 경험입니다.")
         context = _ko_context_sentence(request)
+        score_context = _ko_score_sentence(request)
         if request.mode == "detail":
             return (
                 f"{place_label}은 LALA가 현재 위치 주변에서 고른 {category_label}입니다. "
                 f"{context} "
+                f"{score_context} "
                 f"{category_context} "
                 "방문 전 운영 시간과 날씨를 확인하고, 가까운 다음 장소까지 무리 없는 동선으로 이어가 보세요."
             )
         return (
             f"{place_label}은 현재 위치와 공식 데이터를 함께 보고 고른 {category_label}입니다. "
             f"{context} "
+            f"{score_context} "
             f"{category_context}"
         )
 
@@ -106,18 +111,95 @@ def _rule_based_script(request: DocentScriptRequest) -> str:
         "culture_venue": "Use it as an anchor for a short route that connects exhibitions, performances, cafes, restaurants, and nearby streets.",
     }.get(request.category, "LALA reads official data together with nearby local context.")
     context = _en_context_sentence(request)
+    score_context = _en_score_sentence(request)
     if request.mode == "detail":
         return (
             f"{place_label} is a {request.category.replace('_', ' ')} recommended by LALA. "
             f"{context} "
+            f"{score_context} "
             f"{category_context} "
             "Before visiting, check opening hours and weather, then continue to the next nearby stop on foot where possible."
         )
     return (
         f"{place_label} is a {language_label} LALA stop selected from official tourism, culture, and local spending signals. "
         f"{context} "
+        f"{score_context} "
         f"{category_context}"
     )
+
+
+def _has_score_context(request: DocentScriptRequest) -> bool:
+    return any(
+        value is not None
+        for value in (
+            request.final_score,
+            request.local_spending_score,
+            request.small_merchant_fit_score,
+            request.demand_dispersion_score,
+            request.weather_fit_score,
+            request.culture_relevance_score,
+        )
+    )
+
+
+def _ko_score_sentence(request: DocentScriptRequest) -> str:
+    parts: list[str] = []
+    if request.final_score is not None:
+        parts.append(f"종합 추천 점수 {_score_percent(request.final_score)}점")
+    if request.local_spending_score is not None:
+        parts.append(f"내국인 소비 신호 {_score_level_ko(request.local_spending_score)}")
+    if request.small_merchant_fit_score is not None:
+        parts.append(f"소상공인 적합도 {_score_level_ko(request.small_merchant_fit_score)}")
+    if request.demand_dispersion_score is not None:
+        parts.append(f"관광 수요 분산 효과 {_score_level_ko(request.demand_dispersion_score)}")
+    if request.weather_fit_score is not None:
+        parts.append(f"날씨 적합도 {_score_level_ko(request.weather_fit_score)}")
+    if request.culture_relevance_score is not None:
+        parts.append(f"문화 연계성 {_score_level_ko(request.culture_relevance_score)}")
+    if not parts:
+        return ""
+    return f"추천 근거는 {', '.join(parts)}입니다."
+
+
+def _en_score_sentence(request: DocentScriptRequest) -> str:
+    parts: list[str] = []
+    if request.final_score is not None:
+        parts.append(f"overall recommendation {_score_percent(request.final_score)}/100")
+    if request.local_spending_score is not None:
+        parts.append(f"domestic spending signal {_score_level_en(request.local_spending_score)}")
+    if request.small_merchant_fit_score is not None:
+        parts.append(f"small-merchant fit {_score_level_en(request.small_merchant_fit_score)}")
+    if request.demand_dispersion_score is not None:
+        parts.append(f"demand-dispersion value {_score_level_en(request.demand_dispersion_score)}")
+    if request.weather_fit_score is not None:
+        parts.append(f"weather fit {_score_level_en(request.weather_fit_score)}")
+    if request.culture_relevance_score is not None:
+        parts.append(f"culture relevance {_score_level_en(request.culture_relevance_score)}")
+    if not parts:
+        return ""
+    return f"The recommendation evidence includes {', '.join(parts)}."
+
+
+def _score_percent(value: float) -> int:
+    return round(max(0.0, min(1.0, value)) * 100)
+
+
+def _score_level_ko(value: float) -> str:
+    score = max(0.0, min(1.0, value))
+    if score >= 0.8:
+        return "강함"
+    if score >= 0.6:
+        return "보통 이상"
+    return "보완 필요"
+
+
+def _score_level_en(value: float) -> str:
+    score = max(0.0, min(1.0, value))
+    if score >= 0.8:
+        return "strong"
+    if score >= 0.6:
+        return "moderate"
+    return "needs support"
 
 
 def _ko_context_sentence(request: DocentScriptRequest) -> str:
@@ -196,15 +278,24 @@ def generate_audio(request: DocentAudioRequest) -> bytes:
 
 
 def script_identity(request: DocentScriptRequest) -> dict[str, str]:
-    return generation_identity(
-        "docent_script",
-        {
-            "place_id": request.place_id,
-            "category": request.category,
-            "language": request.language,
-            "mode": request.mode,
-        },
-    )
+    payload: dict[str, object] = {
+        "place_id": request.place_id,
+        "category": request.category,
+        "language": request.language,
+        "mode": request.mode,
+    }
+    if _has_score_context(request):
+        payload.update(
+            {
+                "final_score": request.final_score,
+                "local_spending_score": request.local_spending_score,
+                "small_merchant_fit_score": request.small_merchant_fit_score,
+                "demand_dispersion_score": request.demand_dispersion_score,
+                "weather_fit_score": request.weather_fit_score,
+                "culture_relevance_score": request.culture_relevance_score,
+            }
+        )
+    return generation_identity("docent_script", payload)
 
 
 def audio_identity(request: DocentAudioRequest) -> dict[str, str]:

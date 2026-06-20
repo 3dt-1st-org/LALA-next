@@ -16,6 +16,12 @@ class DocentScriptRequest(BaseModel):
     distance_m: int | None = Field(default=None, ge=0)
     source: str | None = None
     upstream_source: str | None = None
+    final_score: float | None = Field(default=None, ge=0, le=1)
+    local_spending_score: float | None = Field(default=None, ge=0, le=1)
+    small_merchant_fit_score: float | None = Field(default=None, ge=0, le=1)
+    demand_dispersion_score: float | None = Field(default=None, ge=0, le=1)
+    weather_fit_score: float | None = Field(default=None, ge=0, le=1)
+    culture_relevance_score: float | None = Field(default=None, ge=0, le=1)
     category: Literal["attraction", "restaurant", "event", "culture_venue"]
     language: str = "ko"
     mode: str = "brief"

@@ -205,6 +205,12 @@ def test_docent_script_returns_envelope(client, auth_headers):
             "distance_m": 840,
             "source": "db",
             "upstream_source": "tour_api",
+            "final_score": 0.86,
+            "local_spending_score": 0.82,
+            "small_merchant_fit_score": 0.76,
+            "demand_dispersion_score": 0.78,
+            "weather_fit_score": 0.74,
+            "culture_relevance_score": 0.91,
             "category": "event",
             "language": "ko",
             "mode": "brief",
@@ -220,6 +226,13 @@ def test_docent_script_returns_envelope(client, auth_headers):
     assert "중랑구" in body["data"]["script"]
     assert "840m" in body["data"]["script"]
     assert "한국관광공사" in body["data"]["script"]
+    assert "추천 근거" in body["data"]["script"]
+    assert "종합 추천 점수 86점" in body["data"]["script"]
+    assert "내국인 소비 신호 강함" in body["data"]["script"]
+    assert "소상공인 적합도 보통 이상" in body["data"]["script"]
+    assert "관광 수요 분산 효과 보통 이상" in body["data"]["script"]
+    assert "날씨 적합도 보통 이상" in body["data"]["script"]
+    assert "문화 연계성 강함" in body["data"]["script"]
     assert body["data"]["source"] == "rule_based_curation"
     assert len(body["data"]["request_hash"]) == 64
     assert body["data"]["cache_key"].startswith("docent_script:")
@@ -277,6 +290,40 @@ def test_docent_script_uses_db_cache_before_generation(client, auth_headers, mon
     assert body["data"]["cache_key"].startswith("docent_script:")
 
 
+def test_docent_script_score_context_skips_stale_cache(client, auth_headers, monkeypatch):
+    def fail_if_cache_is_read(**kwargs):
+        raise AssertionError("score-aware docent generation must not use stale cache")
+
+    monkeypatch.setattr(
+        "apps.api.app.services.db_repository.fetch_docent_script_cache",
+        fail_if_cache_is_read,
+    )
+
+    response = client.post(
+        "/api/v1/docents/script",
+        headers=auth_headers,
+        json={
+            "place_id": "tour-api-score-aware",
+            "place_name": "화성행궁",
+            "category": "attraction",
+            "language": "ko",
+            "mode": "brief",
+            "final_score": 0.91,
+            "local_spending_score": 0.84,
+            "demand_dispersion_score": 0.67,
+            "weather_fit_score": 0.83,
+            "culture_relevance_score": 0.96,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["data"]["source"] == "rule_based_curation"
+    assert "종합 추천 점수 91점" in body["data"]["script"]
+    assert "내국인 소비 신호 강함" in body["data"]["script"]
+    assert "관광 수요 분산 효과 보통 이상" in body["data"]["script"]
+
+
 def test_docent_script_accepts_legacy_detail_mode_and_english_language(client, auth_headers):
     response = client.post(
         "/api/v1/docents/script",
@@ -321,6 +368,28 @@ def test_docent_script_generation_identity_is_deterministic(client, auth_headers
     second_data = second.json()["data"]
     assert first_data["request_hash"] == second_data["request_hash"]
     assert first_data["cache_key"] == second_data["cache_key"]
+
+
+def test_docent_script_generation_identity_changes_with_score_context(client, auth_headers):
+    base_payload = {
+        "place_id": "score-identity",
+        "category": "event",
+        "language": "ko",
+        "mode": "brief",
+        "final_score": 0.7,
+    }
+
+    first = client.post("/api/v1/docents/script", headers=auth_headers, json=base_payload)
+    second = client.post(
+        "/api/v1/docents/script",
+        headers=auth_headers,
+        json={**base_payload, "final_score": 0.9},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["data"]["request_hash"] != second.json()["data"]["request_hash"]
+    assert first.json()["data"]["cache_key"] != second.json()["data"]["cache_key"]
 
 
 def test_docent_script_uses_live_ai_when_enabled(client, auth_headers, monkeypatch):
@@ -370,6 +439,60 @@ def test_docent_script_uses_live_ai_when_enabled(client, auth_headers, monkeypat
             "ttl_sec": 604800,
         }
     ]
+
+
+def test_docent_script_live_ai_score_context_does_not_write_generic_cache(
+    client,
+    auth_headers,
+    monkeypatch,
+):
+    monkeypatch.setenv("LALA_ENABLE_LIVE_AI", "true")
+    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.openai.azure.com/")
+    monkeypatch.setenv("AZURE_OPENAI_KEY", "test-key")
+    monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini")
+    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2024-10-21")
+
+    def fail_if_cache_is_read(**kwargs):
+        raise AssertionError("score-aware live AI generation must not use stale cache")
+
+    saved_calls = []
+    prompts = []
+    monkeypatch.setattr(
+        "apps.api.app.services.db_repository.fetch_docent_script_cache",
+        fail_if_cache_is_read,
+    )
+    monkeypatch.setattr(
+        "apps.api.app.services.ai_service.generate_docent_script_text",
+        lambda request: prompts.append(request) or "AI score-aware script",
+    )
+    monkeypatch.setattr(
+        "apps.api.app.services.db_repository.save_docent_script_cache",
+        lambda **kwargs: saved_calls.append(kwargs) or True,
+    )
+
+    response = client.post(
+        "/api/v1/docents/script",
+        headers=auth_headers,
+        json={
+            "place_id": "event-score-aware",
+            "category": "event",
+            "language": "ko",
+            "mode": "brief",
+            "final_score": 0.88,
+            "local_spending_score": 0.81,
+            "small_merchant_fit_score": 0.79,
+            "demand_dispersion_score": 0.73,
+            "weather_fit_score": 0.7,
+            "culture_relevance_score": 0.9,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["data"]["source"] == "azure_openai"
+    assert body["data"]["script"] == "AI score-aware script"
+    assert prompts and prompts[0].final_score == 0.88
+    assert saved_calls == []
 
 
 def test_docent_script_cache_write_failure_keeps_live_ai_response(

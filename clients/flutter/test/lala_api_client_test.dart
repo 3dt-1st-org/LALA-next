@@ -186,6 +186,7 @@ void main() {
         radiusM: 1200,
         category: 'event',
         lang: 'en',
+        includeScores: true,
         requestId: 'client-request-id',
       );
 
@@ -196,6 +197,7 @@ void main() {
       expect(captured.url.queryParameters['radius_m'], '1200');
       expect(captured.url.queryParameters['category'], 'event');
       expect(captured.url.queryParameters['lang'], 'en');
+      expect(captured.url.queryParameters['include_scores'], 'true');
       expect(captured.headers['authorization'], 'Bearer bearer-token');
       expect(captured.headers.containsKey('x-api-key'), isFalse);
       expect(captured.headers['x-request-id'], 'client-request-id');
@@ -248,6 +250,12 @@ void main() {
         expect(jsonDecode(request.body)['distance_m'], 321);
         expect(jsonDecode(request.body)['source'], 'db');
         expect(jsonDecode(request.body)['upstream_source'], 'tour_api');
+        expect(jsonDecode(request.body)['final_score'], 0.86);
+        expect(jsonDecode(request.body)['local_spending_score'], 0.82);
+        expect(jsonDecode(request.body)['small_merchant_fit_score'], 0.76);
+        expect(jsonDecode(request.body)['demand_dispersion_score'], 0.78);
+        expect(jsonDecode(request.body)['weather_fit_score'], 0.74);
+        expect(jsonDecode(request.body)['culture_relevance_score'], 0.91);
         return http.Response(
           jsonEncode({
             'ok': true,
@@ -282,6 +290,12 @@ void main() {
       distanceM: 321,
       source: ' db ',
       upstreamSource: ' tour_api ',
+      finalScore: 0.86,
+      localSpendingScore: 0.82,
+      smallMerchantFitScore: 0.76,
+      demandDispersionScore: 0.78,
+      weatherFitScore: 0.74,
+      cultureRelevanceScore: 0.91,
       category: 'attraction',
       language: 'ko',
       mode: 'brief',

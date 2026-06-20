@@ -99,4 +99,26 @@ def _docent_context_prompt(request: DocentScriptRequest) -> str:
     source = request.upstream_source or request.source
     if source:
         parts.append(f"Data source: {source}.")
+    score_context = _score_context_prompt(request)
+    if score_context:
+        parts.append(score_context)
     return " ".join(parts)
+
+
+def _score_context_prompt(request: DocentScriptRequest) -> str:
+    score_parts: list[str] = []
+    if request.final_score is not None:
+        score_parts.append(f"overall recommendation score {request.final_score:.2f}")
+    if request.local_spending_score is not None:
+        score_parts.append(f"domestic spending score {request.local_spending_score:.2f}")
+    if request.small_merchant_fit_score is not None:
+        score_parts.append(f"small merchant fit {request.small_merchant_fit_score:.2f}")
+    if request.demand_dispersion_score is not None:
+        score_parts.append(f"tourism demand dispersion {request.demand_dispersion_score:.2f}")
+    if request.weather_fit_score is not None:
+        score_parts.append(f"weather fit {request.weather_fit_score:.2f}")
+    if request.culture_relevance_score is not None:
+        score_parts.append(f"culture relevance {request.culture_relevance_score:.2f}")
+    if not score_parts:
+        return ""
+    return "Recommendation evidence: " + "; ".join(score_parts) + "."

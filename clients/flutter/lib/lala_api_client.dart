@@ -60,6 +60,7 @@ class LalaApiClient {
     int radiusM = 1000,
     String category = 'all',
     String lang = 'ko',
+    bool includeScores = false,
     String? requestId,
     Duration? timeout,
   }) {
@@ -72,6 +73,7 @@ class LalaApiClient {
         'radius_m': '$radiusM',
         'category': category,
         'lang': lang,
+        'include_scores': '$includeScores',
       },
       requestId: requestId,
       timeout: timeout ?? readTimeout,
@@ -105,6 +107,12 @@ class LalaApiClient {
     int? distanceM,
     String? source,
     String? upstreamSource,
+    double? finalScore,
+    double? localSpendingScore,
+    double? smallMerchantFitScore,
+    double? demandDispersionScore,
+    double? weatherFitScore,
+    double? cultureRelevanceScore,
     required String category,
     String language = 'ko',
     String mode = 'brief',
@@ -125,6 +133,16 @@ class LalaApiClient {
         if ((source ?? '').trim().isNotEmpty) 'source': source!.trim(),
         if ((upstreamSource ?? '').trim().isNotEmpty)
           'upstream_source': upstreamSource!.trim(),
+        if (_validScore(finalScore)) 'final_score': finalScore,
+        if (_validScore(localSpendingScore))
+          'local_spending_score': localSpendingScore,
+        if (_validScore(smallMerchantFitScore))
+          'small_merchant_fit_score': smallMerchantFitScore,
+        if (_validScore(demandDispersionScore))
+          'demand_dispersion_score': demandDispersionScore,
+        if (_validScore(weatherFitScore)) 'weather_fit_score': weatherFitScore,
+        if (_validScore(cultureRelevanceScore))
+          'culture_relevance_score': cultureRelevanceScore,
         'category': category,
         'language': language,
         'mode': mode,
@@ -1137,4 +1155,8 @@ bool? _asOptionalBool(Object? value) {
     return null;
   }
   return _asBool(value);
+}
+
+bool _validScore(double? value) {
+  return value != null && value >= 0 && value <= 1;
 }
