@@ -1,14 +1,20 @@
 # LALA-next
 
-LALA-next is the migration skeleton for the next LALA backend. Wave 1 focuses on a FastAPI public API edge that Flutter can use later, while keeping Azure OpenAI, Azure Speech, Azure Key Vault, Azure Functions, Event Hub, Stream Analytics, Power BI, and PostgreSQL/PostGIS/pgvector as managed dependencies.
+LALA-next is the refactored LALA backend and Flutter web/app workspace. The
+normal service path is a FastAPI public API, PostgreSQL/PostGIS/pgvector,
+Azure Key Vault, official public-data APIs, and reviewed ingest/scoring/RAG
+pipelines.
 
-This repository intentionally starts as a migration skeleton instead of a full copy of the legacy LALA repository.
+The repository keeps selected legacy LALA behavior and UI/UX patterns, but the
+current implementation should run from real DB/API-backed data by default.
+Bundled static snapshots are limited to read-only outage recovery or isolated
+local checks.
 
 ## Wave 1 Scope
 
 - FastAPI public API edge under `apps/api`.
 - Flutter-facing `/api/v1/*` contract.
-- PostgreSQL-backed read/cache hooks, docent cache write-back, and skeleton fallback.
+- PostgreSQL/PostGIS-backed place, weather, score, RAG, and docent-cache reads.
 - Windows shared backend start and smoke scripts.
 - Canonical SQL, compatibility views, and guarded SQL plan/apply tooling.
 - Worker/batch dry-run contracts for producer boundaries.
@@ -56,10 +62,10 @@ To execute the local DB pipeline, set `LALA_POSTGRES_PASSWORD` in your shell or
 scripts/unix/bootstrap_local_mvp_db.sh --all
 ```
 
-That starts `compose.local.yml`, applies canonical SQL, loads local demo seed
-data, computes `local-value-v1` score snapshots, and refreshes the bundled
-read-only snapshot fallback. The script builds a localhost `DB_DSN` internally
-and never prints it.
+That starts `compose.local.yml`, applies canonical SQL, loads local-only seed
+data for development checks, computes `local-value-v1` score snapshots, and
+refreshes the bundled read-only snapshot fallback. The script builds a
+localhost `DB_DSN` internally and never prints it.
 
 Run the full local verification pass:
 
@@ -341,8 +347,8 @@ During the public contest review window, Azure dev can set
 `LALA_PUBLIC_CONTEST_ACCESS=true` so `/api/v1/*` is reachable without login or a
 bundled static API token while still using the PostgreSQL-backed runtime path.
 `/readyz` includes `data.mode` so Flutter and backend operators can distinguish
-`skeleton`, `db-backed`, and opt-in `live-azure` operation without inferring it
-from individual dependency checks.
+`unavailable`, `db-backed`, `public-cache`, and opt-in `live-azure` operation
+without inferring it from individual dependency checks.
 Set `LALA_ACCESS_LOG_PATH` to an ignored local path such as
 `runtime/api-access.jsonl` when a shared backend operator needs JSONL request
 correlation. Those records contain only bounded method, route path, status,

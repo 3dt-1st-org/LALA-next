@@ -14,17 +14,11 @@ def test_places_route_returns_envelope(client, auth_headers):
     assert response.status_code == 200
     body = response.json()
     assert body["ok"] is True
-    assert body["data"]["count"] == 1
-    assert body["data"]["places"][0]["category"] == "event"
-    assert body["data"]["places"][0]["name"] == "Suwon Hwaseong"
-    assert body["data"]["places"][0]["event_start_date"] == "2026-06-01"
-    assert body["data"]["places"][0]["event_end_date"] == "2026-12-31"
-    assert body["data"]["places"][0]["event_url"].endswith("/suwon-hwaseong-event")
-    assert body["data"]["places"][0]["is_ongoing"] is True
-    assert body["data"]["places"][0]["is_approximate_location"] is False
-    assert body["data"]["places"][0]["score"]["data_basis"] == "demo_fallback"
-    assert body["data"]["places"][0]["score"]["components"]["local_spending_score"] is not None
-    assert body["data"]["places"][0]["score"]["components"]["review_quality_score"] is None
+    assert body["data"]["count"] == 0
+    assert body["data"]["places"] == []
+    assert body["data"]["source"] == "db"
+    assert body["data"]["query"]["category"] == "event"
+    assert body["data"]["query"]["language"] == "en"
     assert body["meta"]["request_id"]
 
 
@@ -37,7 +31,7 @@ def test_places_accepts_legacy_english_language_value(client, auth_headers):
     assert response.status_code == 200
     body = response.json()
     assert body["data"]["query"]["language"] == "en"
-    assert body["data"]["places"][0]["name"] == "Suwon Hwaseong"
+    assert body["data"]["places"] == []
 
 
 def test_places_accepts_language_query_alias(client, auth_headers, monkeypatch):
@@ -154,7 +148,7 @@ def test_weather_route_returns_envelope(client, auth_headers):
     assert response.status_code == 200
     body = response.json()
     assert body["ok"] is True
-    assert body["data"]["source"] == "skeleton"
+    assert body["data"]["source"] == "unavailable"
     assert body["data"]["temp"] == ""
     assert body["data"]["forecast"] == []
     assert body["data"]["outdoor_status"] == "unknown"
@@ -215,7 +209,7 @@ def test_docent_script_returns_envelope(client, auth_headers):
     assert body["ok"] is True
     assert body["data"]["place_id"] == "event-1"
     assert body["data"]["script"]
-    assert body["data"]["source"] == "skeleton"
+    assert body["data"]["source"] == "rule_based_curation"
     assert len(body["data"]["request_hash"]) == 64
     assert body["data"]["cache_key"].startswith("docent_script:")
 
@@ -289,8 +283,9 @@ def test_docent_script_accepts_legacy_detail_mode_and_english_language(client, a
     assert body["data"]["place_id"] == "event-legacy"
     assert body["data"]["language"] == "en"
     assert body["data"]["mode"] == "detail"
-    assert "detail English docent note" in body["data"]["script"]
     assert "event legacy" in body["data"]["script"]
+    assert "official tourism and culture data" in body["data"]["script"]
+    assert "local spending signals" in body["data"]["script"]
     assert "skeleton" not in body["data"]["script"].lower()
 
 
@@ -424,7 +419,7 @@ def test_docent_script_cache_write_failure_keeps_live_ai_response(
     assert "AI script for event-write-fail" not in rendered_logs
 
 
-def test_docent_script_skeleton_fallback_does_not_write_cache(
+def test_docent_script_rule_based_fallback_does_not_write_cache(
     client,
     auth_headers,
     monkeypatch,
@@ -453,7 +448,7 @@ def test_docent_script_skeleton_fallback_does_not_write_cache(
 
     assert response.status_code == 200
     body = response.json()
-    assert body["data"]["source"] == "skeleton"
+    assert body["data"]["source"] == "rule_based_curation"
     assert body["data"]["script"]
     assert "화성행궁" in body["data"]["script"]
     assert "event-public" not in body["data"]["script"]
@@ -567,7 +562,13 @@ def test_daily_plan_normalizes_english_language(client, auth_headers):
     assert response.status_code == 200
     body = response.json()
     assert body["data"]["language"] == "en"
-    assert body["data"]["slots"][0]["place"]["name"] == "Suwon Hwaseong"
+    assert body["data"]["slots"] == [
+        {
+            "period": "afternoon",
+            "title": "Adjust by weather",
+            "weather_hint": "unknown",
+        }
+    ]
 
 
 def test_daily_plan_generation_identity_is_deterministic(client, auth_headers):
@@ -711,7 +712,7 @@ def test_intervention_route_returns_envelope(client, auth_headers):
     body = response.json()
     assert body["ok"] is True
     assert body["data"]["recommended_action"]
-    assert body["data"]["place"]
+    assert body["data"]["place"] is None
 
 
 def test_intervention_uses_public_snapshot_candidate_in_snapshot_fallback(client, monkeypatch):

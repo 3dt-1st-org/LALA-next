@@ -32,10 +32,10 @@ def test_readyz_reports_degraded_without_required_env(client, monkeypatch):
     assert body["data"]["checks"]["public_data_service_key"] == "skipped"
     assert body["data"]["checks"]["worker_contracts"] == "configured"
     assert body["data"]["mode"] == {
-        "overall": "skeleton",
-        "data": "skeleton",
-        "ai": "skeleton",
-        "speech": "skeleton",
+        "overall": "degraded",
+        "data": "unavailable",
+        "ai": "disabled",
+        "speech": "disabled",
         "worker": "dry-run",
     }
 
@@ -92,13 +92,13 @@ def test_readyz_reports_static_snapshot_fallback(client, monkeypatch):
     assert response.json()["data"]["mode"] == {
         "overall": "public-cache",
         "data": "public-cache",
-        "ai": "skeleton",
-        "speech": "skeleton",
+        "ai": "disabled",
+        "speech": "disabled",
         "worker": "dry-run",
     }
 
 
-def test_legacy_snapshot_fallback_env_alias_still_works(client, monkeypatch):
+def test_legacy_public_demo_mode_env_alias_is_ignored(client, monkeypatch):
     monkeypatch.delenv("IOS_API_KEY", raising=False)
     monkeypatch.delenv("API_BEARER_TOKEN", raising=False)
     monkeypatch.delenv("LALA_STATIC_SNAPSHOT_FALLBACK", raising=False)
@@ -108,9 +108,9 @@ def test_legacy_snapshot_fallback_env_alias_still_works(client, monkeypatch):
 
     assert response.status_code == 200
     checks = response.json()["data"]["checks"]
-    assert checks["client_auth"] == "snapshot-fallback"
-    assert checks["client_identity"] == "snapshot-fallback"
-    assert checks["static_snapshot_fallback"] == "enabled"
+    assert checks["client_auth"] == "missing"
+    assert checks["client_identity"] == "missing"
+    assert checks["static_snapshot_fallback"] == "disabled"
 
 
 def test_readyz_reports_public_contest_access(client, monkeypatch):
@@ -134,7 +134,7 @@ def test_readyz_reports_public_contest_access(client, monkeypatch):
     assert checks["public_contest_access"] == "enabled"
     assert checks["static_snapshot_fallback"] == "disabled"
     assert data["status"] == "degraded"
-    assert data["mode"]["data"] == "skeleton"
+    assert data["mode"]["data"] == "unavailable"
 
 
 def test_readyz_reports_oauth_identity_rollout_configuration(client, monkeypatch):
@@ -226,8 +226,8 @@ def test_readyz_reports_ok_for_db_backed_runtime_with_disabled_live_options(clie
     assert body["data"]["mode"] == {
         "overall": "db-backed",
         "data": "db-backed",
-        "ai": "skeleton",
-        "speech": "skeleton",
+        "ai": "disabled",
+        "speech": "disabled",
         "worker": "dry-run",
     }
 

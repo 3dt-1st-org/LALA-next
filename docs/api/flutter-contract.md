@@ -122,10 +122,11 @@ Azure OpenAI and Azure Speech are available as opt-in live paths. DB-backed
 places, weather, planner, and docent-cache reads are also available when
 `DB_DSN` points at the canonical schema. If DB access is absent, bundled static
 snapshot data may be used only as an offline, read-only fallback for DB outage
-handling or isolated local checks; otherwise the same routes return
-contract-safe skeleton data.
+handling or isolated local checks. When neither DB nor an explicit snapshot
+fallback is available, routes return empty or `unavailable` contract-safe
+responses instead of inventing sample places.
 Flutter can read `/readyz.data.mode.overall` for a compact handoff label:
-`skeleton`, `public-cache`, `db-backed`, `live-azure`, or `degraded`. Component
+`public-cache`, `db-backed`, `live-azure`, or `degraded`. Component
 labels are also available at `data.mode.data`, `data.mode.ai`,
 `data.mode.speech`, and `data.mode.worker`.
 The reference Dart client exposes public `getHealth()` and `getReadiness()`
@@ -187,7 +188,7 @@ Request:
 
 ```json
 {
-  "place_id": "skeleton-suwon-hwaseong",
+  "place_id": "tour-api-126508",
   "place_name": "수원화성",
   "category": "attraction",
   "language": "ko",
@@ -196,7 +197,7 @@ Request:
 ```
 
 `category` must be `attraction`, `restaurant`, `event`, or `culture_venue`.
-`place_name` is optional but recommended so fallback docent copy can use the
+`place_name` is optional but recommended so rule-based docent copy can use the
 user-facing localized place name instead of an internal source id.
 `mode` accepts `brief`, `detail`, `standard`, and `deep`.
 Success data includes `request_hash` and `cache_key` for idempotency-aware
@@ -296,9 +297,8 @@ same shape and uses `source: "db"`. DB rows are radius-filtered, joined to the
 latest `analytics.place_score_snapshots` row, then sorted by final score before
 distance. When a DB-backed score is present, `score.data_basis` is
 `analytics.place_score_snapshots`. The public MVP cache uses
-`score.data_basis=public_mvp_snapshot`; final skeleton fallback scores are
-explicitly marked `demo_fallback` and must not be described as real
-card-spending evidence.
+`score.data_basis=public_mvp_snapshot`. If no DB or explicit snapshot fallback
+is available, the places list is empty instead of showing sample or mock rows.
 
 `GET /api/v1/weather`:
 
@@ -336,8 +336,10 @@ available, the API falls back to the latest weather row and marks
 `location_match: false`. If DB weather is unavailable, the API uses the public
 data portal `기상청_단기예보 조회서비스` `getUltraSrtNcst` endpoint with
 `PUBLIC_DATA_SERVICE_KEY`, converting the map center to the KMA 5 km forecast
-grid. If both DB and KMA reads are unavailable, the route returns the existing
-`source: skeleton` pending shape.
+grid. It also merges AirKorea 시도별 실시간 측정정보 from the same public-data
+service key so PM10 and PM2.5 can be shown when DB observations are missing. If
+DB, KMA, and AirKorea reads are unavailable, the route returns
+`source: "unavailable"` with empty weather values.
 
 `POST /api/v1/plans/daily`:
 
@@ -351,7 +353,7 @@ grid. If both DB and KMA reads are unavailable, the route returns the existing
   "radius_m": 50000,
   "weather": {
     "outdoor_status": "good",
-    "source": "skeleton"
+    "source": "db"
   },
   "slots": [
     {
@@ -397,7 +399,10 @@ Azure OpenAI resources exist for LALA-next, but live generation is opt-in:
 $env:LALA_ENABLE_LIVE_AI = "true"
 ```
 
-When live AI is enabled and Key Vault or environment variables provide the OpenAI settings, `POST /api/v1/docents/script` uses the `gpt-4o-mini` deployment and returns `source: "azure_openai"`. Otherwise it returns the deterministic skeleton fallback with `source: "skeleton"`.
+When live AI is enabled and Key Vault or environment variables provide the
+OpenAI settings, `POST /api/v1/docents/script` uses the configured deployment
+and returns `source: "azure_openai"`. Otherwise it returns a deterministic
+rule-based local curation script with `source: "rule_based_curation"`.
 
 If `DB_DSN` is configured and `travel.docent_scripts` has a matching non-expired
 entry, the script route returns the cached script before calling Azure OpenAI.
@@ -415,4 +420,7 @@ Azure Speech resources exist for LALA-next, but live synthesis is opt-in:
 $env:LALA_ENABLE_LIVE_SPEECH = "true"
 ```
 
-When live Speech is enabled and Key Vault or environment variables provide the Speech settings, `POST /api/v1/docents/audio` returns Azure-generated MP3 bytes. Otherwise it returns deterministic skeleton MP3-like bytes for contract testing.
+When live Speech is enabled and Key Vault or environment variables provide the
+Speech settings, `POST /api/v1/docents/audio` returns Azure-generated MP3
+bytes. Otherwise it returns deterministic MP3-like bytes for local contract
+testing only.

@@ -174,9 +174,10 @@ def test_fetch_places_uses_radius_bound_ranking_query(monkeypatch):
     assert "to_jsonb(score_snapshot)->>'small_merchant_fit_score'" in captured["sql"]
     assert "to_jsonb(score_snapshot)->>'accessibility_fit_score'" in captured["sql"]
     assert "FROM travel.place_events" in captured["sql"]
-    assert "WHERE distance_m <= %s" in captured["sql"]
+    assert "ST_DWithin(" in captured["sql"]
+    assert "ST_Distance(" in captured["sql"]
     assert "ORDER BY COALESCE(latest_scores.final_score, 0) DESC, distance_m ASC" in captured["sql"]
-    assert captured["params"] == (37.2, 127.0, "all", "all", 3000)
+    assert captured["params"] == (127.0, 37.2, "all", "all", 3000)
 
 
 def test_fetch_latest_weather_prefers_nearest_region_match(monkeypatch):
@@ -231,9 +232,11 @@ def test_fetch_latest_weather_prefers_nearest_region_match(monkeypatch):
     assert weather["location"] == "수원"
     assert weather["icon"] == "rain"
     assert weather["location_match"] is True
-    assert "WITH nearest_region AS" in captured["sql"]
+    assert "WITH query_point AS" in captured["sql"]
+    assert ", nearest_region AS" in captured["sql"]
+    assert "ST_Distance(" in captured["sql"]
     assert "ORDER BY location_match_rank ASC, w.record_time DESC" in captured["sql"]
-    assert captured["params"] == (37.2, 127.0)
+    assert captured["params"] == (127.0, 37.2)
 
 
 def test_fetch_latest_weather_marks_latest_fallback_without_region_match(monkeypatch):

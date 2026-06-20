@@ -25,9 +25,9 @@ Current app surface:
 - Partial-failure handling that keeps public health/readiness visible when an
   authenticated `/api/v1/*` request fails.
 
-Docent audio fetch is deliberately manual. In skeleton or public-cache mode it
-verifies the binary `audio/mpeg` contract, while a live Speech-enabled backend
-may create a paid Azure Speech request.
+Docent audio fetch is deliberately manual. In local contract or public-cache
+mode it verifies the binary `audio/mpeg` contract, while a live Speech-enabled
+backend may create a paid Azure Speech request.
 
 Run from the repository root:
 
@@ -45,7 +45,7 @@ Optional browser render smoke from the repository root:
 scripts/unix/smoke_flutter_web.sh --require-flutter --require-browser --port 8099
 ```
 
-For a stronger local smoke that also starts the skeleton FastAPI process and
+For a stronger local smoke that also starts the local FastAPI process and
 preloads a temporary migration API key into the web bundle:
 
 ```bash
@@ -73,8 +73,8 @@ Windows equivalent:
 The smoke builds the web bundle, serves it locally, opens it through the
 Playwright CLI, validates the Flutter entrypoint, and captures snapshot,
 screenshot, console, and runtime-state artifacts under `output/playwright/`.
-With `--start-api`, it keeps the API in skeleton mode, avoids Key Vault, DB,
-OpenAI, and Speech, and verifies that the browser hit `/healthz`, `/readyz`,
+With `--start-api`, it keeps the API in local contract mode, avoids Key Vault,
+DB, OpenAI, and Speech, and verifies that the browser hit `/healthz`, `/readyz`,
 places, weather, intervention, daily plan, and docent script routes. Without
 `--start-api`, the app still renders its offline public state when the API is
 not running and the console artifact records the expected `/healthz`

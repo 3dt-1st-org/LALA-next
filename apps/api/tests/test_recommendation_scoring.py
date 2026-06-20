@@ -19,19 +19,19 @@ def test_weighted_score_renormalizes_when_review_signal_is_missing():
     assert score == 0.7244
 
 
-def test_demo_place_score_marks_fallback_basis_and_missing_signals():
-    score = recommendation_scoring.demo_place_score(category="attraction", distance_m=420)
+def test_baseline_place_score_marks_local_curation_basis_and_missing_signals():
+    score = recommendation_scoring.baseline_place_score(category="attraction", distance_m=420)
 
     assert score["formula_version"] == recommendation_scoring.FORMULA_VERSION
-    assert score["data_basis"] == "demo_fallback"
+    assert score["data_basis"] == "local_curation"
     assert 0 < score["final_score"] <= 1
     assert score["components"]["review_quality_score"] is None
     assert "card_spending_snapshot" in score["features"]["missing_signals"]
     assert "franchise_business_identity" in score["features"]["missing_signals"]
 
 
-def test_demo_place_score_keeps_culture_venue_prior():
-    score = recommendation_scoring.demo_place_score(category="culture_venue", distance_m=1200)
+def test_baseline_place_score_keeps_culture_venue_prior():
+    score = recommendation_scoring.baseline_place_score(category="culture_venue", distance_m=1200)
 
     assert score["features"]["category_prior"] == "culture_venue"
     assert score["components"]["culture_relevance_score"] == 0.94

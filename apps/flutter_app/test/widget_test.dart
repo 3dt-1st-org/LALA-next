@@ -176,7 +176,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      LalaApp(
+      TestLalaApp(
         backendFactory: FakeBackend.new,
         initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
       ),
@@ -237,13 +237,42 @@ void main() {
     expect(find.textContaining('데모'), findsNothing);
   });
 
+  testWidgets('requests current location before loading recommendations', (
+    tester,
+  ) async {
+    final configs = <LalaAppConfig>[];
+    final locationProvider = FakeLocationProvider(
+      const LalaLocationResult.found(LalaLocation(lat: 37.5665, lng: 126.9780)),
+    );
+
+    await tester.pumpWidget(
+      TestLalaApp(
+        backendFactory: (config) {
+          configs.add(config);
+          return FakeBackend(config);
+        },
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+        locationProvider: locationProvider,
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(locationProvider.requests, 1);
+    expect(configs, isNotEmpty);
+    expect(configs.last.lat, 37.5665);
+    expect(configs.last.lng, 126.9780);
+    expect(find.text('추천 장소 접기'), findsOneWidget);
+    expect(find.text('날씨 데이터 준비 중'), findsNothing);
+  });
+
   testWidgets('filters places from category chips and toggles map modes', (
     tester,
   ) async {
     final configs = <LalaAppConfig>[];
     final backends = <FakeBackend>[];
     await tester.pumpWidget(
-      LalaApp(
+      TestLalaApp(
         backendFactory: (config) {
           configs.add(config);
           final backend = FakeBackend(config);
@@ -347,7 +376,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      LalaApp(
+      TestLalaApp(
         backendFactory: (config) => FakeBackend(
           config,
           places: [
@@ -403,7 +432,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      LalaApp(
+      TestLalaApp(
         backendFactory: (_) => backend,
         initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
       ),
@@ -414,7 +443,7 @@ void main() {
     final weatherPillText = tester.widget<Text>(
       find.descendant(
         of: find.byKey(const ValueKey('weather-pill-hit-target')),
-        matching: find.text('14°C · 미세먼지 보통'),
+        matching: find.text('14°C · 미세먼지 미세 31 · 초미세 14 보통'),
       ),
     );
     expect(weatherPillText.maxLines, 2);
@@ -441,7 +470,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      LalaApp(
+      TestLalaApp(
         backendFactory: (config) =>
             FakeBackend(config, weather: _weather(source: 'skeleton')),
         initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
@@ -471,7 +500,7 @@ void main() {
       const LalaAppConfig(baseUri: 'http://api.test'),
     );
     await tester.pumpWidget(
-      LalaApp(
+      TestLalaApp(
         backendFactory: (_) => backend,
         initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
       ),
@@ -525,7 +554,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      LalaApp(
+      TestLalaApp(
         backendFactory: FakeBackend.new,
         initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
       ),
@@ -553,7 +582,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      LalaApp(
+      TestLalaApp(
         backendFactory: (config) => FakeBackend(config, shouldIntervene: true),
         initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
       ),
@@ -578,7 +607,7 @@ void main() {
     'weather intervention toast auto-dismisses after legacy timeout',
     (tester) async {
       await tester.pumpWidget(
-        LalaApp(
+        TestLalaApp(
           backendFactory: (config) =>
               FakeBackend(config, shouldIntervene: true),
           initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
@@ -604,7 +633,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      LalaApp(
+      TestLalaApp(
         backendFactory: (_) => backend,
         initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
       ),
@@ -631,7 +660,7 @@ void main() {
 
   testWidgets('planner slot cards select their place detail', (tester) async {
     await tester.pumpWidget(
-      LalaApp(
+      TestLalaApp(
         backendFactory: FakeBackend.new,
         initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
       ),
@@ -654,7 +683,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      LalaApp(
+      TestLalaApp(
         backendFactory: (config) => FakeBackend(
           config,
           places: [_place(), _restaurantPlace(distanceM: 80), _culturePlace()],
@@ -689,7 +718,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      LalaApp(
+      TestLalaApp(
         backendFactory: (config) => FakeBackend(
           config,
           places: [_place(), _restaurantPlace(distanceM: 120), _culturePlace()],
@@ -731,7 +760,7 @@ void main() {
   ) async {
     var backendCreations = 0;
     await tester.pumpWidget(
-      LalaApp(
+      TestLalaApp(
         backendFactory: (config) {
           backendCreations += 1;
           return FakeBackend(
@@ -771,7 +800,7 @@ void main() {
   ) async {
     var backendCreations = 0;
     await tester.pumpWidget(
-      LalaApp(
+      TestLalaApp(
         backendFactory: (config) {
           backendCreations += 1;
           return FakeBackend(
@@ -816,7 +845,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      LalaApp(
+      TestLalaApp(
         backendFactory: FakeBackend.new,
         initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
       ),
@@ -848,7 +877,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      LalaApp(
+      TestLalaApp(
         backendFactory: FakeBackend.new,
         initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
       ),
@@ -916,7 +945,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      LalaApp(
+      TestLalaApp(
         backendFactory: (config) => FakeBackend(
           config,
           places: [
@@ -965,7 +994,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      LalaApp(
+      TestLalaApp(
         backendFactory: FakeBackend.new,
         initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
       ),
@@ -995,7 +1024,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      LalaApp(
+      TestLalaApp(
         backendFactory: FakeBackend.new,
         initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
       ),
@@ -1024,7 +1053,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      LalaApp(
+      TestLalaApp(
         backendFactory: FakeBackend.new,
         initialConfig: const LalaAppConfig(
           baseUri: 'http://api.test',
@@ -1045,7 +1074,7 @@ void main() {
   ) async {
     var backendCreations = 0;
     await tester.pumpWidget(
-      LalaApp(
+      TestLalaApp(
         backendFactory: (config) {
           backendCreations += 1;
           return FakeBackend(
@@ -1090,7 +1119,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      LalaApp(
+      TestLalaApp(
         backendFactory: (config) =>
             FakeBackend(config, failAuthenticatedLoad: true),
         initialConfig: const LalaAppConfig(
@@ -1118,7 +1147,7 @@ void main() {
 
   testWidgets('settings hides developer connection controls', (tester) async {
     await tester.pumpWidget(
-      LalaApp(
+      TestLalaApp(
         backendFactory: (config) => FakeBackend(config),
         initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
       ),
@@ -1163,7 +1192,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
 
     await tester.pumpWidget(
-      LalaApp(
+      TestLalaApp(
         backendFactory: FakeBackend.new,
         initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
       ),
@@ -1189,7 +1218,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      LalaApp(
+      TestLalaApp(
         backendFactory: FakeBackend.new,
         initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
       ),
@@ -1215,7 +1244,7 @@ void main() {
   ) async {
     final configs = <LalaAppConfig>[];
     await tester.pumpWidget(
-      LalaApp(
+      TestLalaApp(
         backendFactory: (config) {
           configs.add(config);
           return FakeBackend(config);
@@ -1244,7 +1273,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      LalaApp(
+      TestLalaApp(
         backendFactory: FakeBackend.new,
         initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
       ),
@@ -1274,7 +1303,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      LalaApp(
+      TestLalaApp(
         backendFactory: FakeBackend.new,
         initialConfig: const LalaAppConfig(
           baseUri: 'http://api.test',
@@ -1320,7 +1349,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      LalaApp(
+      TestLalaApp(
         backendFactory: FakeBackend.new,
         initialConfig: const LalaAppConfig(
           baseUri: 'http://api.test',
@@ -1353,7 +1382,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       await tester.pumpWidget(
-        LalaApp(
+        TestLalaApp(
           backendFactory: (config) =>
               FakeBackend(config, places: [_eventPlace()]),
           initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
@@ -1393,7 +1422,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
-      LalaApp(
+      TestLalaApp(
         backendFactory: (config) =>
             FakeBackend(config, places: [_eventPlace()]),
         initialConfig: const LalaAppConfig(
@@ -1430,7 +1459,7 @@ void main() {
     'english mode uses neutral copy when English place data is absent',
     (tester) async {
       await tester.pumpWidget(
-        LalaApp(
+        TestLalaApp(
           backendFactory: (config) =>
               FakeBackend(config, places: [_koreanOnlyPlace()]),
           initialConfig: const LalaAppConfig(
@@ -1458,7 +1487,7 @@ void main() {
     'korean mode uses neutral copy when Korean place data is absent',
     (tester) async {
       await tester.pumpWidget(
-        LalaApp(
+        TestLalaApp(
           backendFactory: (config) =>
               FakeBackend(config, places: [_englishOnlyPlace()]),
           initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
@@ -1481,7 +1510,7 @@ void main() {
 
   testWidgets('selected language removes bilingual place text', (tester) async {
     await tester.pumpWidget(
-      LalaApp(
+      TestLalaApp(
         backendFactory: (config) =>
             FakeBackend(config, places: [_bilingualPlace()]),
         initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
@@ -1513,7 +1542,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      LalaApp(
+      TestLalaApp(
         backendFactory: BilingualInterventionBackend.new,
         initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
       ),
@@ -1571,7 +1600,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      LalaApp(
+      TestLalaApp(
         backendFactory: BilingualLoadFailureBackend.new,
         initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
       ),
@@ -1598,7 +1627,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      LalaApp(
+      TestLalaApp(
         backendFactory: FakeBackend.new,
         initialConfig: const LalaAppConfig(
           baseUri: 'http://api.test',
@@ -1623,7 +1652,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      LalaApp(
+      TestLalaApp(
         backendFactory: (_) => backend,
         initialConfig: const LalaAppConfig(
           baseUri: 'http://api.test',
@@ -1655,6 +1684,43 @@ void main() {
     expect(find.textContaining('상세 도슨트입니다'), findsAtLeastNWidgets(1));
     expect(find.widgetWithText(FilledButton, '정보 더 듣기'), findsNothing);
   });
+}
+
+class TestLalaApp extends StatelessWidget {
+  const TestLalaApp({
+    required this.backendFactory,
+    required this.initialConfig,
+    this.locationProvider,
+    super.key,
+  });
+
+  final LalaBackendFactory backendFactory;
+  final LalaAppConfig initialConfig;
+  final LalaLocationProvider? locationProvider;
+
+  @override
+  Widget build(BuildContext context) {
+    return LalaApp(
+      backendFactory: backendFactory,
+      initialConfig: initialConfig,
+      locationProvider:
+          locationProvider ??
+          FakeLocationProvider(const LalaLocationResult.unavailable()),
+    );
+  }
+}
+
+class FakeLocationProvider implements LalaLocationProvider {
+  FakeLocationProvider(this.result);
+
+  final LalaLocationResult result;
+  int requests = 0;
+
+  @override
+  Future<LalaLocationResult> requestCurrentLocation() async {
+    requests += 1;
+    return result;
+  }
 }
 
 class FakeBackend implements LalaBackend {

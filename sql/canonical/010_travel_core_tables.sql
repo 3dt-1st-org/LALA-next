@@ -26,6 +26,8 @@ CREATE TABLE IF NOT EXISTS travel.places (
 
 CREATE INDEX IF NOT EXISTS idx_places_category ON travel.places (category);
 CREATE INDEX IF NOT EXISTS idx_places_lat_lng ON travel.places (lat, lng);
+CREATE INDEX IF NOT EXISTS idx_places_geog_expr
+    ON travel.places USING GIST ((ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography));
 CREATE INDEX IF NOT EXISTS idx_places_region_name_ko ON travel.places (region_name_ko);
 
 ALTER TABLE travel.places

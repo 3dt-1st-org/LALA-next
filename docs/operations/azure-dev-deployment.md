@@ -79,10 +79,11 @@ a later non-public transition, Bicep can still write it to Key Vault as
 
 Weather fallback depends on the LALA runtime Key Vault secret
 `public-data-service-key`. This is the public-data service key used for the
-KMA ultra-short nowcast request when `travel.weather_observations` has no fresh
-DB row for the map center. If `/api/v1/weather` returns `source=skeleton`,
-check `/readyz` for `public_data_service_key=configured` before investigating
-KMA response quality or worker ingestion.
+KMA ultra-short nowcast request and AirKorea 시도별 실시간 대기질 request when
+`travel.weather_observations` has no fresh DB row for the map center. If
+`/api/v1/weather` returns `source=unavailable`, check `/readyz` for
+`public_data_service_key=configured` before investigating KMA/AirKorea response
+quality or worker ingestion.
 
 The deploy workflow also receives `AZURE_DEPLOY_PRINCIPAL_OBJECT_ID` so the
 Bicep template can grant the GitHub OIDC service principal `AcrPush` and Key

@@ -126,7 +126,7 @@ def build_observability_plan(*, base_url: str = "http://127.0.0.1:8080") -> Obse
                 signal="lala_next_dependency_ready",
                 condition="Any required dependency gauge remains 0 for client_auth, db, or worker_contracts",
                 window="5m",
-                runbook="Inspect /readyz JSON mode and checks, verify Key Vault/DB/worker registry, keep skeleton fallback if DB is absent.",
+                runbook="Inspect /readyz JSON mode and checks, verify Key Vault/DB/worker registry, and treat offline snapshot fallback as a limited recovery path only.",
                 approval_required=True,
             ),
             AlertRulePlan(
@@ -162,7 +162,7 @@ def build_observability_plan(*, base_url: str = "http://127.0.0.1:8080") -> Obse
                 title="Readiness Overview",
                 source="/metrics",
                 query_or_metric="lala_next_readiness_status, lala_next_dependency_ready, and lala_next_runtime_mode",
-                purpose="Show API readiness, dependency state, and skeleton/db-backed/live Azure runtime mode.",
+                purpose="Show API readiness, dependency state, and unavailable/db-backed/live Azure runtime mode.",
             ),
             DashboardPanelPlan(
                 title="Route Traffic",

@@ -61,7 +61,7 @@ def intervention(*, lat: float, lng: float, radius_m: int) -> dict:
 
 
 def _combined_source(place_source: str | None, weather_source: str | None) -> str:
-    sources = {place_source or "skeleton", weather_source or "skeleton"}
+    sources = {place_source or "unavailable", weather_source or "unavailable"}
     if sources == {"db"}:
         return "db"
     if sources == {"public_mvp_snapshot"}:
@@ -70,7 +70,7 @@ def _combined_source(place_source: str | None, weather_source: str | None) -> st
         return "mixed"
     if "public_mvp_snapshot" in sources:
         return "mixed"
-    return "skeleton"
+    return "unavailable"
 
 
 def _daily_plan_slots(*, place_candidates: list[dict], weather: dict, language: str) -> list[dict]:

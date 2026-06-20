@@ -150,8 +150,7 @@ def _bool_env(env_name: str, *, default: bool) -> bool:
 
 
 def _static_snapshot_fallback_enabled() -> bool:
-    legacy_default = _bool_env("LALA_PUBLIC_DEMO_MODE", default=False)
-    return _bool_env("LALA_STATIC_SNAPSHOT_FALLBACK", default=legacy_default)
+    return _bool_env("LALA_STATIC_SNAPSHOT_FALLBACK", default=False)
 
 
 def _csv_env(env_name: str) -> tuple[str, ...]:

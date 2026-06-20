@@ -424,14 +424,14 @@ def _runtime_mode_schema() -> dict[str, Any]:
         "properties": {
             "overall": {
                 "type": "string",
-                "enum": ["skeleton", "public-cache", "db-backed", "live-azure", "degraded"],
+                "enum": ["public-cache", "db-backed", "live-azure", "degraded"],
             },
             "data": {
                 "type": "string",
-                "enum": ["skeleton", "public-cache", "db-backed", "degraded"],
+                "enum": ["unavailable", "public-cache", "db-backed", "degraded"],
             },
-            "ai": {"type": "string", "enum": ["skeleton", "live-azure", "degraded"]},
-            "speech": {"type": "string", "enum": ["skeleton", "live-azure", "degraded"]},
+            "ai": {"type": "string", "enum": ["disabled", "live-azure", "degraded"]},
+            "speech": {"type": "string", "enum": ["disabled", "live-azure", "degraded"]},
             "worker": {"type": "string", "enum": ["dry-run", "degraded"]},
         },
         "additionalProperties": False,
@@ -500,7 +500,6 @@ def _place_score_schema() -> dict[str, Any]:
                 "enum": [
                     "analytics.place_score_snapshots",
                     "public_mvp_snapshot",
-                    "demo_fallback",
                 ],
             },
             "features": {"type": "object"},
@@ -543,7 +542,7 @@ def _place_schema() -> dict[str, Any]:
             "is_ongoing": {"type": "boolean", "nullable": True},
             "is_approximate_location": {"type": "boolean", "nullable": True},
             "distance_m": {"type": "integer"},
-            "source": {"type": "string", "enum": ["skeleton", "public_mvp_snapshot", "db"]},
+            "source": {"type": "string", "enum": ["public_mvp_snapshot", "db"]},
             "upstream_source": {"type": "string", "nullable": True},
             "score": {"$ref": "#/components/schemas/PlaceScore", "nullable": True},
         },
@@ -580,7 +579,7 @@ def _places_data_schema() -> dict[str, Any]:
                 "items": {"$ref": "#/components/schemas/Place"},
             },
             "query": {"$ref": "#/components/schemas/PlacesQuery"},
-            "source": {"type": "string", "enum": ["skeleton", "public_mvp_snapshot", "db"]},
+            "source": {"type": "string", "enum": ["public_mvp_snapshot", "db"]},
         },
         "additionalProperties": False,
     }
@@ -642,7 +641,16 @@ def _weather_data_schema() -> dict[str, Any]:
             "force": {"type": "boolean"},
             "location_match": {"type": "boolean", "nullable": True},
             "record_time": {"type": "string", "nullable": True},
-            "source": {"type": "string", "enum": ["skeleton", "db"]},
+            "source": {
+                "type": "string",
+                "enum": [
+                    "db",
+                    "kma_ultra_srt_ncst",
+                    "airkorea_sido_realtime",
+                    "kma_ultra_srt_ncst+airkorea_sido_realtime",
+                    "unavailable",
+                ],
+            },
         },
         "additionalProperties": True,
     }
@@ -670,7 +678,10 @@ def _docent_script_data_schema() -> dict[str, Any]:
             "language": {"type": "string", "enum": ["ko", "en"]},
             "mode": {"type": "string", "enum": ["brief", "detail"]},
             "script": {"type": "string"},
-            "source": {"type": "string", "enum": ["skeleton", "db_cache", "azure_openai"]},
+            "source": {
+                "type": "string",
+                "enum": ["rule_based_curation", "db_cache", "azure_openai"],
+            },
             "generated_at": {"type": "string", "nullable": True},
             "ttl_sec": {"type": "integer", "nullable": True},
             "request_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
@@ -718,7 +729,7 @@ def _daily_plan_data_schema() -> dict[str, Any]:
             },
             "source": {
                 "type": "string",
-                "enum": ["skeleton", "public_mvp_snapshot", "db", "mixed"],
+                "enum": ["unavailable", "public_mvp_snapshot", "db", "mixed"],
             },
             "request_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
             "cache_key": {"type": "string"},
@@ -747,7 +758,7 @@ def _intervention_data_schema() -> dict[str, Any]:
             "place": {"$ref": "#/components/schemas/Place", "nullable": True},
             "source": {
                 "type": "string",
-                "enum": ["skeleton", "public_mvp_snapshot", "db", "mixed"],
+                "enum": ["unavailable", "public_mvp_snapshot", "db", "mixed"],
             },
         },
         "additionalProperties": False,

@@ -125,7 +125,7 @@ def test_metrics_endpoint_is_public_and_omits_query_and_auth_values(client, auth
     assert "lala_next_runtime_mode" in body
     assert 'lala_next_dependency_ready{name="client_auth",status="configured"} 1' in body
     assert 'lala_next_dependency_ready{name="worker_contracts",status="configured"} 1' in body
-    assert 'lala_next_runtime_mode{component="overall",mode="skeleton"} 1' in body
+    assert 'lala_next_runtime_mode{component="overall",mode="degraded"} 1' in body
     assert 'method="GET",path="/api/v1/places",status_code="200",status_class="2xx"' in body
     assert 'path="/metrics"' not in body
     assert marker not in body
@@ -193,7 +193,7 @@ def test_metrics_exports_readiness_gauges(client, monkeypatch):
             "mode": {
                 "overall": "degraded",
                 "data": "degraded",
-                "ai": "skeleton",
+                "ai": "disabled",
                 "speech": "live-azure",
             },
         },

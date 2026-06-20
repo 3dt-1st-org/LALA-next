@@ -28,8 +28,8 @@ def generate_script(request: DocentScriptRequest) -> dict:
         script = ai_service.generate_docent_script_text(request)
         source = "azure_openai"
     else:
-        script = _fallback_script(request)
-        source = "skeleton"
+        script = _rule_based_script(request)
+        source = "rule_based_curation"
     ttl_sec = 604800
     if source == "azure_openai":
         cache_saved = db_repository.save_docent_script_cache(
@@ -66,41 +66,53 @@ def generate_script(request: DocentScriptRequest) -> dict:
     }
 
 
-def _fallback_script(request: DocentScriptRequest) -> str:
+def _rule_based_script(request: DocentScriptRequest) -> str:
     place_label = request.place_name or _readable_place_id(
         request.place_id,
         language=request.language,
     )
     if request.language == "ko":
-        mode_label = "자세한" if request.mode == "detail" else "짧은"
         category_label = {
             "attraction": "명소",
             "restaurant": "맛집",
             "event": "행사",
             "culture_venue": "문화공간",
         }.get(request.category, "장소")
-        detail_sentence = (
-            "방문 전 운영 시간과 동선을 확인하고, 주변 골목과 상권을 함께 걸어보세요."
-            if request.mode == "detail"
-            else "지도에서 가까운 장소와 함께 보면 지역의 분위기를 더 잘 느낄 수 있습니다."
-        )
+        category_context = {
+            "attraction": "주변 산책 동선과 생활권 상권을 함께 보면, 대표 명소가 지역 안에서 어떤 역할을 하는지 더 또렷해집니다.",
+            "restaurant": "상호와 주변 소비 흐름을 함께 보며, 프랜차이즈보다 지역 식당의 개성과 골목의 분위기를 우선 살핍니다.",
+            "event": "행사 자체뿐 아니라 방문 전후에 머무를 수 있는 근처 문화공간과 소상공인 상권까지 이어서 보는 코스입니다.",
+            "culture_venue": "전시나 공연 관람 전후의 짧은 이동 반경 안에서 로컬 카페, 식당, 골목 경험을 함께 연결합니다.",
+        }.get(request.category, "공식 데이터와 주변 장소를 함께 살펴볼 수 있는 로컬 경험입니다.")
+        if request.mode == "detail":
+            return (
+                f"{place_label}은 LALA가 추천한 {category_label}입니다. "
+                "공식 관광·문화 데이터, 위치 기반 거리, 지역 소비 신호를 함께 살펴 방문 맥락을 정리했습니다. "
+                f"{category_context} "
+                "방문 전 운영 시간과 날씨를 확인하고, 가까운 다음 장소까지 무리 없는 도보 동선으로 이어가 보세요."
+            )
         return (
-            f"{place_label} {category_label}에 대한 {mode_label} 도슨트입니다. "
-            "공식 관광·문화 데이터와 지역 소비 신호를 바탕으로 로컬 맥락을 정리했습니다. "
-            f"{detail_sentence}"
+            f"{place_label}은 공식 관광·문화 데이터와 지역 소비 신호를 함께 보고 고른 {category_label}입니다. "
+            f"{category_context}"
         )
 
     language_label = display_language(request.language)
-    detail_sentence = (
-        "Check opening hours and nearby walking routes before you go."
-        if request.mode == "detail"
-        else "Pair it with nearby places on the map to read the local rhythm more clearly."
-    )
+    category_context = {
+        "attraction": "Read it together with nearby walking routes and small local businesses to understand its role in the neighborhood.",
+        "restaurant": "LALA looks for local character and neighborhood spending signals instead of treating every food stop as a generic listing.",
+        "event": "The route is designed to connect the event with nearby culture spaces and small local businesses before or after the visit.",
+        "culture_venue": "Use it as an anchor for a short route that connects exhibitions, performances, cafes, restaurants, and nearby streets.",
+    }.get(request.category, "LALA reads official data together with nearby local context.")
+    if request.mode == "detail":
+        return (
+            f"{place_label} is a {request.category.replace('_', ' ')} recommended by LALA. "
+            "The recommendation combines official tourism and culture data, location distance, and local spending signals. "
+            f"{category_context} "
+            "Before visiting, check opening hours and weather, then continue to the next nearby stop on foot where possible."
+        )
     return (
-        f"A {request.mode} {language_label} docent note for "
-        f"{place_label}. "
-        "LALA connects official tourism and culture data with nearby local spending signals. "
-        f"{detail_sentence}"
+        f"{place_label} is a {language_label} LALA stop selected from official tourism, culture, and local spending signals. "
+        f"{category_context}"
     )
 
 

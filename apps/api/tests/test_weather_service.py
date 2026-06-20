@@ -21,9 +21,9 @@ def test_latest_kma_base_time_uses_previous_hour_before_publish_window() -> None
 
 
 def test_current_weather_uses_kma_nowcast_when_db_is_empty(monkeypatch) -> None:
-    captured: dict[str, object] = {}
+    captured: list[dict[str, object]] = []
 
-    class FakeResponse:
+    class FakeKmaResponse:
         def raise_for_status(self) -> None:
             return None
 
@@ -44,11 +44,34 @@ def test_current_weather_uses_kma_nowcast_when_db_is_empty(monkeypatch) -> None:
                 }
             }
 
+    class FakeAirKoreaResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {
+                "response": {
+                    "header": {"resultCode": "00", "resultMsg": "NORMAL_CODE"},
+                    "body": {
+                        "items": [
+                            {
+                                "stationName": "종로구",
+                                "dataTime": "2026-06-18 23:00",
+                                "pm10Value": "31",
+                                "pm25Value": "14",
+                                "pm10Grade": "2",
+                                "pm25Grade": "2",
+                            }
+                        ]
+                    },
+                }
+            }
+
     def fake_get(url, *, params, timeout):
-        captured["url"] = url
-        captured["params"] = params
-        captured["timeout"] = timeout
-        return FakeResponse()
+        captured.append({"url": url, "params": params, "timeout": timeout})
+        if url == weather_service.KMA_ULTRA_SHORT_NOWCAST_URL:
+            return FakeKmaResponse()
+        return FakeAirKoreaResponse()
 
     fake_requests = types.ModuleType("requests")
     fake_requests.get = fake_get
@@ -67,8 +90,8 @@ def test_current_weather_uses_kma_nowcast_when_db_is_empty(monkeypatch) -> None:
 
     weather = weather_service.current_weather(lat=37.2636, lng=127.0286)
 
-    assert captured["url"] == weather_service.KMA_ULTRA_SHORT_NOWCAST_URL
-    assert captured["params"] == {
+    assert captured[0]["url"] == weather_service.KMA_ULTRA_SHORT_NOWCAST_URL
+    assert captured[0]["params"] == {
         "serviceKey": "public-data-secret",
         "pageNo": 1,
         "numOfRows": 100,
@@ -78,16 +101,24 @@ def test_current_weather_uses_kma_nowcast_when_db_is_empty(monkeypatch) -> None:
         "nx": 61,
         "ny": 120,
     }
-    assert captured["timeout"] == 5
-    assert weather["source"] == weather_service.KMA_SOURCE
+    assert captured[0]["timeout"] == 5
+    assert captured[1]["url"] == weather_service.AIRKOREA_SIDO_REALTIME_URL
+    assert captured[1]["params"]["sidoName"] == "경기"
+    assert weather["source"] == f"{weather_service.KMA_SOURCE}+{weather_service.AIRKOREA_SOURCE}"
     assert weather["temp"] == "22.3"
     assert weather["icon"] == "partly-cloudy"
     assert weather["outdoor_status"] == "good"
+    assert weather["dust"] == {
+        "pm10": "31",
+        "pm25": "14",
+        "grade": "normal",
+        "grade_ko": "보통",
+    }
     assert weather["record_time"] == "2026-06-18T23:00:00+09:00"
     assert len(weather["forecast"]) == 4
 
 
-def test_current_weather_falls_back_to_skeleton_without_public_data_key(monkeypatch) -> None:
+def test_current_weather_reports_unavailable_without_public_data_key(monkeypatch) -> None:
     monkeypatch.setattr(weather_service.db_repository, "fetch_latest_weather", lambda **kwargs: None)
     monkeypatch.setattr(
         weather_service,
@@ -97,6 +128,6 @@ def test_current_weather_falls_back_to_skeleton_without_public_data_key(monkeypa
 
     weather = weather_service.current_weather(lat=37.2636, lng=127.0286)
 
-    assert weather["source"] == "skeleton"
+    assert weather["source"] == "unavailable"
     assert weather["temp"] == ""
     assert weather["forecast"] == []

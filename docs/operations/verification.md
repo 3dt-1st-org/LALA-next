@@ -125,12 +125,12 @@ Those dependencies are represented as `configured`, `missing`, `degraded`, or
 `skipped` in `/readyz` and are smoke-tested manually when credentials are
 available.
 `/readyz.data.mode` adds the operator-facing runtime summary:
-`overall=skeleton` when deterministic fallbacks are active, `overall=db-backed`
-when the canonical DB probe is configured and no live Azure dependency is in
-use, `overall=public-cache` when a limited offline snapshot fallback is serving
-read-only data without a live DB, `overall=live-azure` when opt-in AI or Speech
-live calls are configured, and `overall=degraded` when a requested runtime
-dependency is unhealthy.
+`data=unavailable` when no DB or explicit snapshot fallback can serve read
+data, `overall=db-backed` when the canonical DB probe is configured and no live
+Azure dependency is in use, `overall=public-cache` when a limited offline
+snapshot fallback is serving read-only data without a live DB,
+`overall=live-azure` when opt-in AI or Speech live calls are configured, and
+`overall=degraded` when a requested runtime dependency is unhealthy.
 
 When `DB_DSN` is configured, `/readyz` connects to PostgreSQL and verifies the
 canonical relations required by the API:
@@ -140,9 +140,10 @@ canonical relations required by the API:
 - `travel.docent_scripts`
 - `analytics.place_score_snapshots`
 
-Without `DB_DSN`, DB readiness is `skipped` and DB-backed routes use their
-skeleton fallback. If the connection works but those relations are absent,
-DB readiness is `degraded` rather than `configured`.
+Without `DB_DSN`, DB readiness is `skipped`; DB-backed routes return empty or
+`unavailable` contract-safe responses unless the limited static snapshot
+fallback is explicitly enabled. If the connection works but those relations are
+absent, DB readiness is `degraded` rather than `configured`.
 `/readyz` also verifies that the Wave 1 dry-run worker contract registry can be
 loaded. This does not imply live Azure Functions/Event Hub freshness; live worker
 mutation remains behind the worker rollout gate.
@@ -661,7 +662,7 @@ To verify the Flutter app in a real browser on macOS/Linux:
 scripts/unix/smoke_flutter_web.sh --require-flutter --require-browser --port 8099
 ```
 
-To include a temporary local skeleton API and authenticated route checks:
+To include a temporary local API and authenticated route checks:
 
 ```bash
 scripts/unix/smoke_flutter_web.sh \
@@ -692,8 +693,8 @@ snapshot, screenshot, console, and runtime-state artifacts under
 is expected and the smoke still passes because it is a render check. Pass
 `--api-base-url <url>` for a separately running backend, and add
 `--fail-on-console-error` when the backend is expected to satisfy all public
-browser requests. With `--start-api`, the wrapper starts a local skeleton API
-with process-local auth and CORS, avoids Key Vault, DB, OpenAI, and Speech, and
+browser requests. With `--start-api`, the wrapper starts a local API with
+process-local auth and CORS, avoids Key Vault, DB, OpenAI, and Speech, and
 checks the API log for `/healthz`, `/readyz`, and the authenticated `/api/v1/*`
 routes loaded by the app shell.
 

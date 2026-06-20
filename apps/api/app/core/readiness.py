@@ -89,12 +89,12 @@ def _data_mode(
         return "degraded"
     if snapshot_fallback_status == "enabled" and public_snapshot_status == "configured":
         return "public-cache"
-    return "skeleton"
+    return "unavailable"
 
 
 def _live_dependency_mode(*, enabled: bool, required_statuses: tuple[str, ...]) -> str:
     if not enabled:
-        return "skeleton"
+        return "disabled"
     if all(status == "configured" for status in required_statuses):
         return "live-azure"
     return "degraded"
@@ -119,7 +119,7 @@ def _overall_runtime_mode(mode: dict[str, str]) -> str:
         return "public-cache"
     if mode["data"] == "db-backed":
         return "db-backed"
-    return "skeleton"
+    return "degraded"
 
 
 def build_readiness(settings: Settings | None = None) -> dict:
@@ -173,6 +173,6 @@ def _overall_readiness_status(*, checks: dict[str, str], mode: dict[str, str]) -
         return "degraded"
     if mode["overall"] == "degraded":
         return "degraded"
-    if mode["data"] == "skeleton":
+    if mode["data"] == "unavailable":
         return "degraded"
     return "ok"

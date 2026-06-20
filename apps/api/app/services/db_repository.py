@@ -65,7 +65,10 @@ def fetch_places(
         return []
 
     sql = """
-        WITH ranked_places AS (
+        WITH query_point AS (
+            SELECT ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography AS geog
+        )
+        , ranked_places AS (
             SELECT
                 place_id,
                 name_ko,
@@ -80,9 +83,17 @@ def fetch_places(
                 lng,
                 source,
                 updated_at,
-                SQRT(POWER((lat - %s) * 111000, 2) + POWER((lng - %s) * 88000, 2)) AS distance_m
-            FROM travel.public_places
+                ST_Distance(
+                    ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography,
+                    query_point.geog
+                ) AS distance_m
+            FROM travel.public_places, query_point
             WHERE (%s = 'all' OR category = %s)
+              AND ST_DWithin(
+                    ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography,
+                    query_point.geog,
+                    %s
+              )
         )
         , latest_scores AS (
             SELECT DISTINCT ON (place_id)
@@ -149,11 +160,10 @@ def fetch_places(
                 updated_at DESC
             LIMIT 1
         ) linked_event ON TRUE
-        WHERE distance_m <= %s
         ORDER BY COALESCE(latest_scores.final_score, 0) DESC, distance_m ASC, updated_at DESC
         LIMIT 20
     """
-    params = (lat, lng, category, category, radius_m)
+    params = (lng, lat, category, category, radius_m)
     try:
         with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -276,12 +286,18 @@ def fetch_latest_weather(*, lat: float, lng: float) -> dict[str, Any] | None:
         return None
 
     sql = """
-        WITH nearest_region AS (
+        WITH query_point AS (
+            SELECT ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography AS geog
+        )
+        , nearest_region AS (
             SELECT
                 NULLIF(TRIM(region_ko), '') AS region_ko,
                 NULLIF(TRIM(region_en), '') AS region_en
-            FROM travel.public_places
-            ORDER BY SQRT(POWER((lat - %s) * 111000, 2) + POWER((lng - %s) * 88000, 2))
+            FROM travel.public_places, query_point
+            ORDER BY ST_Distance(
+                ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography,
+                query_point.geog
+            )
             LIMIT 1
         )
         SELECT
@@ -314,7 +330,7 @@ def fetch_latest_weather(*, lat: float, lng: float) -> dict[str, Any] | None:
     try:
         with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute(sql, (lat, lng))
+                cur.execute(sql, (lng, lat))
                 row = cur.fetchone()
     except Exception:
         return None

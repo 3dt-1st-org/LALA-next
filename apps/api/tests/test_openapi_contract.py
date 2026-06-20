@@ -125,18 +125,19 @@ def test_openapi_documents_readyz_runtime_mode(client):
     }
     runtime_mode = schemas["RuntimeMode"]["properties"]
     assert runtime_mode["overall"]["enum"] == [
-        "skeleton",
         "public-cache",
         "db-backed",
         "live-azure",
         "degraded",
     ]
     assert runtime_mode["data"]["enum"] == [
-        "skeleton",
+        "unavailable",
         "public-cache",
         "db-backed",
         "degraded",
     ]
+    assert runtime_mode["ai"]["enum"] == ["disabled", "live-azure", "degraded"]
+    assert runtime_mode["speech"]["enum"] == ["disabled", "live-azure", "degraded"]
     assert runtime_mode["worker"]["enum"] == ["dry-run", "degraded"]
     readiness_checks = schemas["ReadinessChecks"]["properties"]
     assert readiness_checks["client_auth"]["enum"] == [
@@ -222,14 +223,12 @@ def test_openapi_documents_v1_success_data_schemas(client):
         "culture_venue",
     ]
     assert schemas["Place"]["properties"]["source"]["enum"] == [
-        "skeleton",
         "public_mvp_snapshot",
         "db",
     ]
     assert schemas["PlaceScore"]["properties"]["data_basis"]["enum"] == [
         "analytics.place_score_snapshots",
         "public_mvp_snapshot",
-        "demo_fallback",
     ]
     assert schemas["PlacesQuery"]["properties"]["category"]["enum"] == [
         "all",
@@ -239,15 +238,21 @@ def test_openapi_documents_v1_success_data_schemas(client):
         "culture_venue",
     ]
     assert schemas["PlacesData"]["properties"]["source"]["enum"] == [
-        "skeleton",
         "public_mvp_snapshot",
         "db",
     ]
     assert schemas["WeatherData"]["properties"]["dust"] == {
         "$ref": "#/components/schemas/Dust"
     }
+    assert schemas["WeatherData"]["properties"]["source"]["enum"] == [
+        "db",
+        "kma_ultra_srt_ncst",
+        "airkorea_sido_realtime",
+        "kma_ultra_srt_ncst+airkorea_sido_realtime",
+        "unavailable",
+    ]
     assert schemas["DocentScriptData"]["properties"]["source"]["enum"] == [
-        "skeleton",
+        "rule_based_curation",
         "db_cache",
         "azure_openai",
     ]
@@ -266,7 +271,7 @@ def test_openapi_documents_v1_success_data_schemas(client):
     }
     assert schemas["DailyPlanData"]["properties"]["radius_m"] == {"type": "integer"}
     assert schemas["DailyPlanData"]["properties"]["source"]["enum"] == [
-        "skeleton",
+        "unavailable",
         "public_mvp_snapshot",
         "db",
         "mixed",
@@ -281,7 +286,7 @@ def test_openapi_documents_v1_success_data_schemas(client):
         "nullable": True,
     }
     assert schemas["InterventionData"]["properties"]["source"]["enum"] == [
-        "skeleton",
+        "unavailable",
         "public_mvp_snapshot",
         "db",
         "mixed",

@@ -9,8 +9,8 @@ developer.
 - Client bearer token for `Authorization: Bearer <token>` (static transition
   token or signed OAuth/Entra JWT), or migration API key value for `X-API-Key`.
 - Current git commit SHA from the backend operator.
-- Backend runtime mode from `/readyz.data.mode.overall`: `skeleton`,
-  `public-cache`, `db-backed`, `live-azure`, or `degraded`.
+- Backend runtime mode from `/readyz.data.mode.overall`: `public-cache`,
+  `db-backed`, `live-azure`, or `degraded`.
 
 ## Public Checks
 
@@ -81,8 +81,8 @@ shell and clear it after the check.
 Expected handoff artifacts:
 
 - Smoke result: `/healthz`, `/readyz`, and `/openapi.json` pass.
-- Runtime mode: `/readyz.data.mode` matches the intended skeleton, public-cache,
-  DB-backed, or live Azure handoff.
+- Runtime mode: `/readyz.data.mode` matches the intended public-cache,
+  DB-backed, live Azure, or degraded handoff.
 - Request correlation: the Flutter app shell shows latest public/API/audio
   request ids from response metadata or headers; use those ids with JSONL access
   logs when debugging a handoff.
@@ -144,7 +144,7 @@ scripts/unix/smoke_flutter_web.sh \
 
 This optional smoke is not part of CI. It uses the Playwright CLI,
 captures artifacts under `output/playwright/`, and validates that the Flutter
-web bundle renders. With `--start-api`, the wrapper starts a skeleton FastAPI
+web bundle renders. With `--start-api`, the wrapper starts a local FastAPI
 process, injects a temporary local migration API key at compile time, and checks
 the API log for `/healthz`, `/readyz`, places, weather, intervention, daily plan,
 and docent script route hits. Without `--start-api`, the app is expected to show
@@ -169,9 +169,9 @@ or generated content.
 
 ## Mode Notes
 
-- Skeleton mode is valid for UI development and deterministic contract tests.
 - `DB_DSN` enables PostgreSQL-backed places, weather, planner, and docent-cache
-  reads with fallback to skeleton behavior.
+  reads. Without DB, routes return empty or `unavailable` contract-safe results
+  unless static snapshot fallback is explicitly enabled.
 - Production, review, and shared dev deployments should keep
   `LALA_STATIC_SNAPSHOT_FALLBACK=false`; bundled static snapshots are limited to
   offline, read-only DB-outage fallback or isolated local checks.

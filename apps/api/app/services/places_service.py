@@ -4,7 +4,6 @@ from apps.api.app.core.config import get_settings
 from apps.api.app.core.errors import ServiceError
 from apps.api.app.services import db_repository, public_mvp_data
 from apps.api.app.services.normalization import normalize_language
-from apps.api.app.services.recommendation_scoring import demo_place_score
 
 _ALLOWED_CATEGORIES = {"all", "attraction", "restaurant", "event", "culture_venue"}
 
@@ -69,37 +68,9 @@ def list_places(
                 "source": public_mvp_data.SOURCE_NAME,
             }
 
-    resolved_category = "attraction" if category == "all" else category
-    name = "Suwon Hwaseong" if language == "en" else "수원화성"
-    address = "Suwon-si, Gyeonggi-do" if language == "en" else "경기도 수원시"
-    distance_m = min(radius_m, 1000)
-    place = {
-        "place_id": "skeleton-suwon-hwaseong",
-        "name": name,
-        "name_ko": "수원화성",
-        "name_en": "Suwon Hwaseong",
-        "category": resolved_category,
-        "lat": lat,
-        "lng": lng,
-        "address": address,
-        "image_url": None,
-        "distance_m": distance_m,
-        "source": "skeleton",
-        "score": demo_place_score(category=resolved_category, distance_m=distance_m),
-    }
-    if resolved_category == "event":
-        place.update(
-            {
-                "event_start_date": "2026-06-01",
-                "event_end_date": "2026-12-31",
-                "event_url": "https://example.invalid/lala-next/skeleton/suwon-hwaseong-event",
-                "is_ongoing": True,
-                "is_approximate_location": False,
-            }
-        )
     return {
-        "count": 1,
-        "places": [place],
+        "count": 0,
+        "places": [],
         "query": {
             "lat": lat,
             "lng": lng,
@@ -107,5 +78,5 @@ def list_places(
             "category": category,
             "language": language,
         },
-        "source": "skeleton",
+        "source": "db",
     }

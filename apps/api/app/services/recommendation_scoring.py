@@ -85,7 +85,7 @@ def weighted_score(components: dict[str, float | None]) -> float:
     return _round_score(weighted_total / active_weight)
 
 
-def demo_place_score(*, category: str, distance_m: int) -> dict[str, Any]:
+def baseline_place_score(*, category: str, distance_m: int) -> dict[str, Any]:
     normalized_category = category if category in _CATEGORY_PRIORS else "attraction"
     components = dict(_CATEGORY_PRIORS[normalized_category])
     components["demand_dispersion_score"] = _distance_dispersion_prior(
@@ -95,7 +95,7 @@ def demo_place_score(*, category: str, distance_m: int) -> dict[str, Any]:
     components["review_quality_score"] = None
     return build_place_score(
         components=components,
-        data_basis="demo_fallback",
+        data_basis="local_curation",
         features={
             "category_prior": normalized_category,
             "distance_m": distance_m,

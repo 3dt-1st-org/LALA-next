@@ -4,9 +4,12 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'browser_location.dart';
 import 'kakao_map_view.dart';
 
 void main() {
@@ -20,10 +23,12 @@ class LalaApp extends StatelessWidget {
     super.key,
     this.backendFactory = LalaApiBackend.new,
     this.initialConfig = const LalaAppConfig.fromEnvironment(),
+    this.locationProvider = const GeolocatorLalaLocationProvider(),
   });
 
   final LalaBackendFactory backendFactory;
   final LalaAppConfig initialConfig;
+  final LalaLocationProvider locationProvider;
 
   @override
   Widget build(BuildContext context) {
@@ -58,6 +63,7 @@ class LalaApp extends StatelessWidget {
       home: LalaHomePage(
         backendFactory: backendFactory,
         initialConfig: initialConfig,
+        locationProvider: locationProvider,
       ),
     );
   }
@@ -132,6 +138,91 @@ class LalaAppConfig {
       category: category ?? this.category,
       lang: lang ?? this.lang,
     );
+  }
+}
+
+class LalaLocation {
+  const LalaLocation({required this.lat, required this.lng});
+
+  final double lat;
+  final double lng;
+}
+
+enum LalaLocationResultStatus { found, denied, unavailable }
+
+class LalaLocationResult {
+  const LalaLocationResult._({required this.status, this.location});
+
+  const LalaLocationResult.found(LalaLocation location)
+    : this._(status: LalaLocationResultStatus.found, location: location);
+
+  const LalaLocationResult.denied()
+    : this._(status: LalaLocationResultStatus.denied);
+
+  const LalaLocationResult.unavailable()
+    : this._(status: LalaLocationResultStatus.unavailable);
+
+  final LalaLocationResultStatus status;
+  final LalaLocation? location;
+}
+
+abstract class LalaLocationProvider {
+  Future<LalaLocationResult> requestCurrentLocation();
+}
+
+class GeolocatorLalaLocationProvider implements LalaLocationProvider {
+  const GeolocatorLalaLocationProvider();
+
+  static const Duration _permissionTimeout = Duration(seconds: 8);
+  static const Duration _positionTimeout = Duration(seconds: 12);
+
+  @override
+  Future<LalaLocationResult> requestCurrentLocation() async {
+    try {
+      final browserLocation = await requestBrowserLocation(_positionTimeout);
+      if (browserLocation.status == BrowserLocationResultStatus.found &&
+          browserLocation.lat != null &&
+          browserLocation.lng != null) {
+        return LalaLocationResult.found(
+          LalaLocation(lat: browserLocation.lat!, lng: browserLocation.lng!),
+        );
+      }
+      if (browserLocation.status == BrowserLocationResultStatus.denied) {
+        return const LalaLocationResult.denied();
+      }
+
+      var permission = await Geolocator.checkPermission().timeout(
+        _permissionTimeout,
+      );
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission().timeout(
+          _permissionTimeout,
+        );
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return const LalaLocationResult.denied();
+      }
+      if (permission == LocationPermission.unableToDetermine) {
+        return const LalaLocationResult.unavailable();
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: _positionTimeout,
+        ),
+      ).timeout(_positionTimeout);
+      return LalaLocationResult.found(
+        LalaLocation(lat: position.latitude, lng: position.longitude),
+      );
+    } on MissingPluginException {
+      return const LalaLocationResult.unavailable();
+    } on TimeoutException {
+      return const LalaLocationResult.unavailable();
+    } on Object {
+      return const LalaLocationResult.unavailable();
+    }
   }
 }
 
@@ -243,11 +334,13 @@ class LalaHomePage extends StatefulWidget {
   const LalaHomePage({
     required this.backendFactory,
     required this.initialConfig,
+    required this.locationProvider,
     super.key,
   });
 
   final LalaBackendFactory backendFactory;
   final LalaAppConfig initialConfig;
+  final LalaLocationProvider locationProvider;
 
   @override
   State<LalaHomePage> createState() => _LalaHomePageState();
@@ -291,6 +384,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
   bool _showEvidence = false;
   bool _interventionToastDismissed = false;
   bool _locationConsentEnabled = true;
+  bool _locationRequestInFlight = false;
   bool _recommendationRailExpanded = true;
   List<String> _focusedClusterMemberIds = const <String>[];
   final Set<String> _savedPlaceIds = <String>{};
@@ -302,6 +396,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
   DateTime? _lastWeatherFetchAt;
   double? _lastWeatherFetchLat;
   double? _lastWeatherFetchLng;
+  LalaLocation? _currentLocation;
   double? _mapFocusLat;
   double? _mapFocusLng;
   int _mapLevel = 4;
@@ -319,7 +414,11 @@ class _LalaHomePageState extends State<LalaHomePage> {
     _queryLng = config.lng;
     _uiLanguage = config.lang;
     _backend = widget.backendFactory(_currentConfig());
-    WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _requestLocationThenRefresh(initial: true);
+      }
+    });
   }
 
   @override
@@ -337,6 +436,73 @@ class _LalaHomePageState extends State<LalaHomePage> {
       category: _selectedCategory,
       lang: _uiLanguage,
     );
+  }
+
+  void _resetMapContext() {
+    _selectedPlaceId = null;
+    _activeSheet = null;
+    _docentAudio = null;
+    _audioError = null;
+    _tourAudio = null;
+    _tourAudioError = null;
+    _tourAudioLoading = false;
+    _showEvidence = false;
+    _focusedClusterMemberIds = const <String>[];
+    _recommendationRailExpanded = true;
+  }
+
+  Future<void> _requestLocationThenRefresh({
+    bool initial = false,
+    bool resetSelection = false,
+  }) async {
+    if (_locationRequestInFlight) {
+      return;
+    }
+    setState(() {
+      _locationRequestInFlight = true;
+      if (resetSelection) {
+        _resetMapContext();
+      }
+    });
+
+    final result = await widget.locationProvider.requestCurrentLocation();
+    if (!mounted) {
+      return;
+    }
+
+    final location = result.location;
+    if (result.status == LalaLocationResultStatus.found && location != null) {
+      setState(() {
+        _locationConsentEnabled = true;
+        _currentLocation = location;
+        _queryLat = location.lat;
+        _queryLng = location.lng;
+        _mapFocusLat = location.lat;
+        _mapFocusLng = location.lng;
+        _mapLevel = 4;
+      });
+      await _refresh(forceWeather: true);
+    } else {
+      final shouldRefreshFallback =
+          result.status == LalaLocationResultStatus.unavailable &&
+          (initial || resetSelection);
+      setState(() {
+        _locationRequestInFlight = false;
+        if (result.status == LalaLocationResultStatus.denied) {
+          _locationConsentEnabled = false;
+        }
+      });
+      if (shouldRefreshFallback) {
+        await _refresh(forceWeather: true);
+      }
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _locationRequestInFlight = false;
+      });
+    }
   }
 
   Future<void> _refresh({bool forceWeather = false}) async {
@@ -382,14 +548,6 @@ class _LalaHomePageState extends State<LalaHomePage> {
       final previousWeather = _weather;
       final previousIntervention = _intervention;
       final places = await loadOptional(_backend.getPlaces);
-      final weather = shouldReloadWeather
-          ? await loadOptional(_backend.getWeather)
-          : previousWeather;
-      final intervention = shouldReloadWeather
-          ? await loadOptional(_backend.getIntervention)
-          : previousIntervention;
-      final dailyPlan = await loadOptional(_backend.createDailyPlan);
-      LalaEnvelope<LalaDocentScript>? docentScript;
       final activePlaces = places ?? previousPlaces;
       final placeItems = activePlaces?.data?.places ?? const <LalaPlace>[];
       final filteredItems = _filterPlaces(placeItems, _selectedCategory);
@@ -400,6 +558,59 @@ class _LalaHomePageState extends State<LalaHomePage> {
       final selectedPlace = _placeById(effectiveItems, _selectedPlaceId);
       final firstPlace =
           autoDocentPlace ?? selectedPlace ?? _featuredPlace(effectiveItems);
+      final coreLoadError = loadErrors.isEmpty
+          ? null
+          : loadErrors.toSet().take(2).join(' / ');
+
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _health = health;
+        _readiness = readiness;
+        _places = places ?? previousPlaces;
+        _docentAudio = null;
+        _tourAudio = null;
+        _audioError = null;
+        _tourAudioError = null;
+        _tourAudioLoading = false;
+        _error = coreLoadError;
+        _loading = false;
+        if (places != null) {
+          _lastPlacesFetchLat = config.lat;
+          _lastPlacesFetchLng = config.lng;
+        }
+        if (autoDocentPlace != null) {
+          _applyAutoDocentPlace(autoDocentPlace, closeActiveSheet: false);
+        }
+      });
+
+      if (shouldReloadWeather) {
+        final weather = await loadOptional(_backend.getWeather);
+        final intervention = await loadOptional(_backend.getIntervention);
+        final loadError = loadErrors.isEmpty
+            ? null
+            : loadErrors.toSet().take(2).join(' / ');
+
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _weather = weather ?? previousWeather;
+          _intervention = intervention ?? previousIntervention;
+          _error = loadError;
+          _interventionToastDismissed = false;
+          if (weather != null) {
+            _lastWeatherFetchAt = DateTime.now();
+            _lastWeatherFetchLat = config.lat;
+            _lastWeatherFetchLng = config.lng;
+          }
+        });
+      }
+      _syncInterventionToastTimer();
+
+      final dailyPlan = await loadOptional(_backend.createDailyPlan);
+      LalaEnvelope<LalaDocentScript>? docentScript;
       if (firstPlace != null) {
         docentScript = await loadOptional(
           () => _backend.createDocentScript(place: firstPlace),
@@ -413,11 +624,6 @@ class _LalaHomePageState extends State<LalaHomePage> {
         return;
       }
       setState(() {
-        _health = health;
-        _readiness = readiness;
-        _places = places ?? previousPlaces;
-        _weather = weather ?? previousWeather;
-        _intervention = intervention ?? previousIntervention;
         _dailyPlan = dailyPlan;
         _docentScript = docentScript;
         _docentAudio = null;
@@ -426,23 +632,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
         _tourAudioError = null;
         _tourAudioLoading = false;
         _error = loadError;
-        if (shouldReloadWeather) {
-          _interventionToastDismissed = false;
-        }
-        if (places != null) {
-          _lastPlacesFetchLat = config.lat;
-          _lastPlacesFetchLng = config.lng;
-        }
-        if (weather != null && shouldReloadWeather) {
-          _lastWeatherFetchAt = DateTime.now();
-          _lastWeatherFetchLat = config.lat;
-          _lastWeatherFetchLng = config.lng;
-        }
-        if (autoDocentPlace != null) {
-          _applyAutoDocentPlace(autoDocentPlace, closeActiveSheet: false);
-        }
       });
-      _syncInterventionToastTimer();
     } on Object catch (error) {
       if (!mounted) {
         return;
@@ -675,25 +865,19 @@ class _LalaHomePageState extends State<LalaHomePage> {
 
   void _returnToCurrentLocation() {
     setState(() {
-      _selectedPlaceId = null;
-      _activeSheet = null;
-      _docentAudio = null;
-      _audioError = null;
-      _tourAudio = null;
-      _tourAudioError = null;
-      _tourAudioLoading = false;
-      _showEvidence = false;
-      _focusedClusterMemberIds = const <String>[];
-      _queryLat = _baseConfig.lat;
-      _queryLng = _baseConfig.lng;
-      _mapFocusLat = _baseConfig.lat;
-      _mapFocusLng = _baseConfig.lng;
+      _resetMapContext();
+      final location = _currentLocation;
+      if (location != null) {
+        _queryLat = location.lat;
+        _queryLng = location.lng;
+        _mapFocusLat = location.lat;
+        _mapFocusLng = location.lng;
+      }
       _mapLevel = 4;
-      _recommendationRailExpanded = true;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        _refresh();
+        _requestLocationThenRefresh(resetSelection: true);
       }
     });
   }
@@ -819,6 +1003,13 @@ class _LalaHomePageState extends State<LalaHomePage> {
     setState(() {
       _locationConsentEnabled = enabled;
     });
+    if (enabled) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _requestLocationThenRefresh(resetSelection: true);
+        }
+      });
+    }
   }
 
   void _retryLocationConsent() {
@@ -827,7 +1018,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        _refresh(forceWeather: true);
+        _requestLocationThenRefresh(resetSelection: true);
       }
     });
   }
@@ -3132,7 +3323,7 @@ class _PlannerOverviewCard extends StatelessWidget {
         : _copy(language, ko: '현재 위치', en: 'Current location');
     final weatherLabel = weather == null
         ? _copy(language, ko: '날씨 확인 중', en: 'Checking weather')
-        : '${_outdoorLabel(weather!.outdoorStatus, language: language)} · ${_temperatureLabel(weather!.temp)} · ${_dustLabel(weather!.dust, language)}';
+        : '${_outdoorLabel(weather!.outdoorStatus, language: language)} · ${_temperatureLabel(weather!.temp)} · ${_dustSituationLabel(weather!.dust, language)}';
     return Container(
       padding: const EdgeInsets.fromLTRB(2, 0, 2, 0),
       decoration: BoxDecoration(
@@ -5053,8 +5244,8 @@ List<String> _proofSourceLabels({
           ? _copy(language, ko: '날씨 관측', en: 'Weather observations')
           : _copy(
               language,
-              ko: '날씨 ${weather.dust.gradeKo}',
-              en: 'Weather ${_dustLabel(weather.dust, language)}',
+              ko: '날씨 ${_dustSituationLabel(weather.dust, language)}',
+              en: 'Weather ${_dustSituationLabel(weather.dust, language, includePrefix: false)}',
             ),
     );
   }
@@ -5202,7 +5393,7 @@ class _RouteAndDocentPanel extends StatelessWidget {
                 label: _copy(language, ko: '날씨', en: 'Weather'),
                 value: weather == null
                     ? _copy(language, ko: '확인 중', en: 'Checking')
-                    : '${_temperatureLabel(weather!.temp)} · ${_dustLabel(weather!.dust, language)}',
+                    : '${_temperatureLabel(weather!.temp)} · ${_dustSituationLabel(weather!.dust, language)}',
               ),
             ),
           ],
@@ -6223,7 +6414,7 @@ class _WeatherMapPill extends StatelessWidget {
     final data = _publicWeatherOrNull(weather);
     final label = data == null
         ? _copy(language, ko: '날씨 데이터 준비 중', en: 'Weather pending')
-        : '${_temperatureLabel(data.temp)} · $dustPrefix ${_dustLabel(data.dust, language)}';
+        : '${_temperatureLabel(data.temp)} · $dustPrefix ${_dustSituationLabel(data.dust, language, includePrefix: false)}';
     return _SmallStatusPill(
       key: const ValueKey('weather-pill-hit-target'),
       icon: Icons.thermostat,
@@ -7237,7 +7428,7 @@ LalaWeather? _publicWeatherOrNull(LalaWeather? weather) {
 
 bool _isPlaceholderWeatherSource(String? source) {
   return switch ((source ?? '').trim()) {
-    '' || 'skeleton' || 'fallback' || 'demo_fallback' => true,
+    '' || 'skeleton' || 'fallback' || 'demo_fallback' || 'unavailable' => true,
     _ => false,
   };
 }
@@ -7386,6 +7577,38 @@ String _dustLabel(LalaDust dust, String language) {
     final grade when grade.isEmpty => dust.gradeKo,
     final grade => grade,
   };
+}
+
+String _dustSituationLabel(
+  LalaDust dust,
+  String language, {
+  bool includePrefix = true,
+}) {
+  final grade = _dustLabel(dust, language).trim();
+  final pm10 = dust.pm10.trim();
+  final pm25 = dust.pm25.trim();
+  final hasPm10 = pm10.isNotEmpty;
+  final hasPm25 = pm25.isNotEmpty;
+  if (_isEnglish(language)) {
+    final values = [if (hasPm10) 'PM10 $pm10', if (hasPm25) 'PM2.5 $pm25'];
+    if (values.isEmpty) {
+      return includePrefix ? 'Dust $grade' : grade;
+    }
+    return [
+      if (includePrefix) 'Dust',
+      values.join(' · '),
+      if (grade.isNotEmpty) grade,
+    ].join(' ');
+  }
+  final values = [if (hasPm10) '미세 $pm10', if (hasPm25) '초미세 $pm25'];
+  if (values.isEmpty) {
+    return includePrefix ? '미세먼지 $grade' : grade;
+  }
+  return [
+    if (includePrefix) '미세먼지',
+    values.join(' · '),
+    if (grade.isNotEmpty) grade,
+  ].join(' ');
 }
 
 List<LalaPlace> _railPlaces(List<LalaPlace> places) {
@@ -7610,11 +7833,15 @@ String _weatherSourceLabel(String? value, {String language = 'ko'}) {
     return switch ((value ?? '').trim()) {
       'db' => 'Live weather',
       'kma_ultra_srt_ncst' => 'KMA live weather',
+      'airkorea_sido_realtime' => 'AirKorea live air quality',
+      'kma_ultra_srt_ncst+airkorea_sido_realtime' =>
+        'KMA weather + AirKorea air quality',
       'mixed' => 'Live + official weather',
       'public_mvp_snapshot' => 'Official weather',
       'demo_fallback' => 'Weather pending',
       'skeleton' => 'Weather pending',
       'fallback' => 'Weather pending',
+      'unavailable' => 'Weather pending',
       '' => '-',
       final source => _sourceLabel(source, language: language),
     };
@@ -7622,11 +7849,14 @@ String _weatherSourceLabel(String? value, {String language = 'ko'}) {
   return switch ((value ?? '').trim()) {
     'db' => '실시간 날씨',
     'kma_ultra_srt_ncst' => '기상청 실황',
+    'airkorea_sido_realtime' => 'AirKorea 대기질',
+    'kma_ultra_srt_ncst+airkorea_sido_realtime' => '기상청·AirKorea 실황',
     'mixed' => '실시간·공식 날씨',
     'public_mvp_snapshot' => '공식 날씨',
     'demo_fallback' => '날씨 준비 중',
     'skeleton' => '날씨 준비 중',
     'fallback' => '날씨 준비 중',
+    'unavailable' => '날씨 준비 중',
     '' => '-',
     final source => _sourceLabel(source, language: language),
   };

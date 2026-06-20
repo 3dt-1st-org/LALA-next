@@ -134,5 +134,6 @@ group `<LALA_AZURE_RESOURCE_GROUP>` and no `db-dsn` secret name in Key Vault
 `lala-key-vault`. ONMU DB URL candidates in `onmu-source-vault` were
 checked without printing values; they point at localhost dev ports from this Mac
 and did not pass the LALA canonical schema verifier. That means live DB rollout
-is not ready yet; the API should continue to use deterministic skeleton fallback
-until the database target is provisioned and approved.
+is not ready yet; the API should return empty or `unavailable` contract-safe
+responses, or an explicitly enabled read-only snapshot fallback, until the
+database target is provisioned and approved.

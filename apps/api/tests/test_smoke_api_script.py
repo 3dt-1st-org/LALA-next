@@ -40,8 +40,8 @@ class _SmokeHandler(BaseHTTPRequestHandler):
                             "mode": {
                                 "overall": "db-backed",
                                 "data": "db-backed",
-                                "ai": "skeleton",
-                                "speech": "skeleton",
+                                "ai": "disabled",
+                                "speech": "disabled",
                                 "worker": "dry-run",
                             },
                         },
@@ -62,8 +62,8 @@ class _SmokeHandler(BaseHTTPRequestHandler):
                         "mode": {
                             "overall": "db-backed",
                             "data": "db-backed",
-                            "ai": "skeleton",
-                            "speech": "skeleton",
+                            "ai": "disabled",
+                            "speech": "disabled",
                             "worker": "dry-run",
                         },
                     },
@@ -92,7 +92,7 @@ class _SmokeHandler(BaseHTTPRequestHandler):
             if path == "/api/v1/docents/audio":
                 self._write_bytes(b"ID3smoke-audio", content_type="audio/mpeg")
                 return
-            self._write_json({"ok": True, "data": {"source": "skeleton", "script": "ok"}})
+            self._write_json({"ok": True, "data": {"source": "rule_based_curation", "script": "ok"}})
             return
         self._write_json({"ok": False}, status=404)
 

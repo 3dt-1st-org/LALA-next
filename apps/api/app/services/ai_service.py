@@ -42,9 +42,12 @@ def generate_docent_script_text(request: DocentScriptRequest) -> str:
         api_version=settings.azure_openai_api_version,
     )
     language = display_language(request.language)
+    place_name = request.place_name or request.place_id
     prompt = (
         f"Write a {request.mode} mobile docent script in {language}. "
-        f"Category: {request.category}. Place id: {request.place_id}. "
+        f"Category: {request.category}. Place: {place_name}. "
+        "Ground the script in official tourism/culture data, local spending context, "
+        "and nearby walking experience. Avoid generic marketing copy. "
         "Keep it concise, friendly, and suitable for a walking travel app."
     )
     try:
@@ -53,7 +56,10 @@ def generate_docent_script_text(request: DocentScriptRequest) -> str:
             messages=[
                 {
                     "role": "system",
-                    "content": "You are LALA, a location-aware travel docent for Gyeonggi-do.",
+                    "content": (
+                        "You are LALA, a location-aware Korean travel docent. "
+                        "You connect official culture/tourism data with local economic context."
+                    ),
                 },
                 {"role": "user", "content": prompt},
             ],

@@ -170,8 +170,8 @@ The API also exposes process-local Prometheus text metrics at `/metrics`.
 Metrics include process uptime, request counts, duration sums, and max duration
 by method, route path, status code, and status class. The same endpoint also
 exports readiness gauges for the overall `/readyz` status and each dependency
-check, plus `lala_next_runtime_mode` labels for `skeleton`, `public-cache`,
-`db-backed`, `live-azure`, or `degraded` operation. They do not include query strings,
+check, plus `lala_next_runtime_mode` labels for `unavailable`, `disabled`,
+`public-cache`, `db-backed`, `live-azure`, or `degraded` operation. They do not include query strings,
 request bodies, auth headers, API keys, bearer tokens, or client IPs. Unmatched
 404 paths are collapsed into the fixed `__unmatched__` label instead of
 exporting arbitrary URL paths.
@@ -192,9 +192,9 @@ Share this format with teammates:
 
 ```text
 Backend URL: http://<host>:8080
-Mode: copy /readyz data.mode.overall (skeleton, public-cache, db-backed, live-azure, or degraded)
+Mode: copy /readyz data.mode.overall (public-cache, db-backed, live-azure, or degraded)
 Branch/build: main or commit SHA
-DB target: skeleton or approved dev DB
+DB target: approved dev DB, public-cache fallback, or unavailable
 Health: /healthz
 Ready: /readyz
 Metrics: /metrics
@@ -205,6 +205,7 @@ If `DB_DSN` is set, `/readyz` connects to PostgreSQL and verifies the canonical
 relations used by places/weather/planner/docent cache routes:
 `travel.public_places`, `travel.weather_observations`, and
 `travel.docent_scripts`. If the DB is absent, missing those relations, or
-otherwise degraded, the API remains usable through deterministic skeleton
-fallbacks. `/readyz.data.mode.data` reports `db-backed` only when that DB probe
-is configured; otherwise it reports `skeleton` or `degraded`.
+otherwise degraded, DB-backed routes return empty or `unavailable`
+contract-safe responses unless static snapshot fallback is explicitly enabled.
+`/readyz.data.mode.data` reports `db-backed` only when that DB probe is
+configured; otherwise it reports `unavailable`, `public-cache`, or `degraded`.
