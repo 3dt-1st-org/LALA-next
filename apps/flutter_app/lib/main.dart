@@ -398,6 +398,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
   bool _interventionToastDismissed = false;
   bool _locationConsentEnabled = true;
   bool _locationRequestInFlight = false;
+  bool _locationFallbackNoticeVisible = false;
   bool _recommendationRailExpanded = true;
   List<String> _focusedClusterMemberIds = const <String>[];
   final Set<String> _savedPlaceIds = <String>{};
@@ -487,6 +488,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
     if (result.status == LalaLocationResultStatus.found && location != null) {
       setState(() {
         _locationConsentEnabled = true;
+        _locationFallbackNoticeVisible = false;
         _currentLocation = location;
         _queryLat = location.lat;
         _queryLng = location.lng;
@@ -503,6 +505,9 @@ class _LalaHomePageState extends State<LalaHomePage> {
         _locationRequestInFlight = false;
         if (result.status == LalaLocationResultStatus.denied) {
           _locationConsentEnabled = false;
+          _locationFallbackNoticeVisible = false;
+        } else if (shouldRefreshFallback) {
+          _locationFallbackNoticeVisible = true;
         }
       });
       if (shouldRefreshFallback) {
@@ -1015,6 +1020,9 @@ class _LalaHomePageState extends State<LalaHomePage> {
   void _setLocationConsent(bool enabled) {
     setState(() {
       _locationConsentEnabled = enabled;
+      if (!enabled) {
+        _locationFallbackNoticeVisible = false;
+      }
     });
     if (enabled) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1028,6 +1036,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
   void _retryLocationConsent() {
     setState(() {
       _locationConsentEnabled = true;
+      _locationFallbackNoticeVisible = false;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -1162,6 +1171,8 @@ class _LalaHomePageState extends State<LalaHomePage> {
               detailDocentPlayedPlaceIds: _detailDocentPlayedPlaceIds,
               interventionToastDismissed: _interventionToastDismissed,
               locationConsentEnabled: _locationConsentEnabled,
+              locationRequestInFlight: _locationRequestInFlight,
+              locationFallbackNoticeVisible: _locationFallbackNoticeVisible,
               recommendationRailExpanded: _recommendationRailExpanded,
               focusedClusterMemberIds: _focusedClusterMemberIds,
               mapFocusLat: _mapFocusLat,
@@ -1627,6 +1638,8 @@ class _Dashboard extends StatelessWidget {
     required this.detailDocentPlayedPlaceIds,
     required this.interventionToastDismissed,
     required this.locationConsentEnabled,
+    required this.locationRequestInFlight,
+    required this.locationFallbackNoticeVisible,
     required this.recommendationRailExpanded,
     required this.focusedClusterMemberIds,
     required this.mapFocusLat,
@@ -1682,6 +1695,8 @@ class _Dashboard extends StatelessWidget {
   final Set<String> detailDocentPlayedPlaceIds;
   final bool interventionToastDismissed;
   final bool locationConsentEnabled;
+  final bool locationRequestInFlight;
+  final bool locationFallbackNoticeVisible;
   final bool recommendationRailExpanded;
   final List<String> focusedClusterMemberIds;
   final double? mapFocusLat;
@@ -1832,6 +1847,35 @@ class _Dashboard extends StatelessWidget {
                 ),
               ),
             if (visibleError == null &&
+                locationFallbackNoticeVisible &&
+                !locationRequestInFlight)
+              Positioned(
+                left: 16,
+                right: isWide ? null : 16,
+                top: isWide ? 232 : 220,
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 520),
+                    child: _MapToast(
+                      actionKey: const ValueKey('location-fallback-retry'),
+                      icon: Icons.my_location_outlined,
+                      label: _copy(
+                        uiLanguage,
+                        ko: '현재 위치를 확인하지 못해 기본 위치 기준으로 보여줘요',
+                        en: 'Using the default area until your location is available',
+                      ),
+                      actionLabel: _copy(
+                        uiLanguage,
+                        ko: '현재 위치 다시 확인',
+                        en: 'Use my location',
+                      ),
+                      onAction: onRetryLocation,
+                      color: Colors.white.withValues(alpha: 0.94),
+                    ),
+                  ),
+                ),
+              ),
+            if (visibleError == null &&
                 activeIntervention?.shouldIntervene == true &&
                 !interventionToastDismissed)
               Positioned(
@@ -1969,9 +2013,111 @@ class _Dashboard extends StatelessWidget {
                   onRetryLocation: onRetryLocation,
                 ),
               ),
+            if (locationRequestInFlight && places == null)
+              Positioned.fill(
+                child: _LocationStartupOverlay(language: uiLanguage),
+              ),
           ],
         );
       },
+    );
+  }
+}
+
+class _LocationStartupOverlay extends StatelessWidget {
+  const _LocationStartupOverlay({required this.language});
+
+  final String language;
+
+  @override
+  Widget build(BuildContext context) {
+    final isEnglish = language == 'en';
+    return ColoredBox(
+      color: Colors.white.withValues(alpha: 0.82),
+      child: SafeArea(
+        child: Center(
+          child: Container(
+            width: double.infinity,
+            constraints: const BoxConstraints(maxWidth: 430),
+            margin: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: const Color(0xFFE1ECF8)),
+              boxShadow: const [
+                BoxShadow(
+                  blurRadius: 34,
+                  offset: Offset(0, 18),
+                  color: Color(0x22000000),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEAF2FB),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: const Icon(
+                    Icons.my_location_outlined,
+                    color: Color(0xFF2B6CB0),
+                    size: 30,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  isEnglish
+                      ? 'Start from your current location'
+                      : '현재 위치로 시작할게요',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: const Color(0xFF111827),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  isEnglish
+                      ? 'Allow location access in your browser and LALA will immediately load nearby culture, weather, and local experience recommendations.'
+                      : '브라우저의 위치 권한을 허용하면 주변 문화·날씨·로컬 경험 추천을 바로 불러옵니다.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xFF4B5563),
+                    height: 1.45,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 3),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        isEnglish
+                            ? 'Waiting for the browser permission prompt'
+                            : '위치 권한 확인 중',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: const Color(0xFF2B6CB0),
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -6591,6 +6737,7 @@ class _MapToast extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.color,
+    this.actionKey = const ValueKey('map-error-retry'),
     this.actionLabel,
     this.onAction,
   });
@@ -6598,6 +6745,7 @@ class _MapToast extends StatelessWidget {
   final IconData icon;
   final String label;
   final Color color;
+  final Key actionKey;
   final String? actionLabel;
   final VoidCallback? onAction;
 
@@ -6640,7 +6788,7 @@ class _MapToast extends StatelessWidget {
             if (actionLabel != null && onAction != null) ...[
               const SizedBox(width: 8),
               TextButton(
-                key: const ValueKey('map-error-retry'),
+                key: actionKey,
                 onPressed: onAction,
                 style: TextButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 12),

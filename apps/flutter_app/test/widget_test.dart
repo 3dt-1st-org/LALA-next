@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -264,6 +265,62 @@ void main() {
     expect(configs.last.lng, 126.9780);
     expect(find.text('추천 장소 접기'), findsOneWidget);
     expect(find.text('날씨 데이터 준비 중'), findsNothing);
+  });
+
+  testWidgets(
+    'shows current location startup state while permission is pending',
+    (tester) async {
+      final locationProvider = PendingLocationProvider();
+
+      await tester.pumpWidget(
+        TestLalaApp(
+          backendFactory: FakeBackend.new,
+          initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+          locationProvider: locationProvider,
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('현재 위치로 시작할게요'), findsOneWidget);
+      expect(find.text('위치 권한 확인 중'), findsOneWidget);
+      expect(locationProvider.requests, 1);
+
+      locationProvider.complete(
+        const LalaLocationResult.found(
+          LalaLocation(lat: 37.5665, lng: 126.9780),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('현재 위치로 시작할게요'), findsNothing);
+      expect(find.text('추천 장소 접기'), findsOneWidget);
+    },
+  );
+
+  testWidgets('surfaces retry when browser location is unavailable', (
+    tester,
+  ) async {
+    final locationProvider = FakeLocationProvider(
+      const LalaLocationResult.unavailable(),
+    );
+
+    await tester.pumpWidget(
+      TestLalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+        locationProvider: locationProvider,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('현재 위치를 확인하지 못해 기본 위치 기준으로 보여줘요'), findsOneWidget);
+    expect(find.text('현재 위치 다시 확인'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('location-fallback-retry')));
+    await tester.pumpAndSettle();
+
+    expect(locationProvider.requests, 2);
   });
 
   testWidgets('filters places from category chips and toggles map modes', (
@@ -1721,6 +1778,22 @@ class FakeLocationProvider implements LalaLocationProvider {
   Future<LalaLocationResult> requestCurrentLocation() async {
     requests += 1;
     return result;
+  }
+}
+
+class PendingLocationProvider implements LalaLocationProvider {
+  final Completer<LalaLocationResult> _completer =
+      Completer<LalaLocationResult>();
+  int requests = 0;
+
+  @override
+  Future<LalaLocationResult> requestCurrentLocation() {
+    requests += 1;
+    return _completer.future;
+  }
+
+  void complete(LalaLocationResult result) {
+    _completer.complete(result);
   }
 }
 
