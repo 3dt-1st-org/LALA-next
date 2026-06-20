@@ -5,6 +5,7 @@ import json
 import sys
 from typing import Any
 
+from apps.api.app.core.redaction import redact_operational_resource_text
 from apps.workers.app.contracts import (
     WorkerExecutionError,
     evaluate_worker_live_preflight,
@@ -159,27 +160,43 @@ def main(argv: list[str] | None = None) -> int:
         if args.json:
             _write_json(payload)
         else:
+            replacements = _rollout_resource_replacements(payload)
             print("LALA-next worker rollout plan")
             print("mode=plan")
             print(f"applies_changes={str(payload['applies_changes']).lower()}")
             print(f"status={'ok' if payload.get('ok') else 'degraded'}")
-            print(f"key_vault={payload.get('key_vault_name')}")
-            print(f"function_app={payload.get('function_app_name')}")
-            print(f"storage_account={payload.get('storage_account_name')}")
-            print(f"event_hub_namespace={payload.get('event_hub_namespace')}")
+            print(f"key_vault={_display(payload.get('key_vault_name'), replacements)}")
+            print(f"function_app={_display(payload.get('function_app_name'), replacements)}")
+            print(f"storage_account={_display(payload.get('storage_account_name'), replacements)}")
+            print(f"event_hub_namespace={_display(payload.get('event_hub_namespace'), replacements)}")
             print(f"worker_job_count={len(payload.get('worker_jobs') or [])}")
             for warning in payload.get("warnings") or []:
-                print(f"warning={warning}")
+                print(f"warning={_display(warning, replacements)}")
             for step in payload.get("steps") or []:
                 print(
                     f"step={step['order']} approval_required="
                     f"{str(step['approval_required']).lower()} {step['title']}"
                 )
-                print(f"command={step['command']}")
+                print(f"command={_display(step['command'], replacements)}")
         return 0 if plan.ok else 2
 
     parser.error("unknown command")
     return 2
+
+
+def _rollout_resource_replacements(payload: dict) -> dict[str, str]:
+    return {
+        str(payload.get("resource_group") or ""): "<resource-group>",
+        str(payload.get("key_vault_name") or ""): "<key-vault>",
+        str(payload.get("function_app_name") or ""): "<function-app>",
+        str(payload.get("storage_account_name") or ""): "<storage-account>",
+        str(payload.get("event_hub_namespace") or ""): "<event-hub-namespace>",
+        str(payload.get("event_hub_name") or ""): "<event-hub-name>",
+    }
+
+
+def _display(value: object, replacements: dict[str, str]) -> str:
+    return redact_operational_resource_text(str(value or ""), replacements)
 
 
 if __name__ == "__main__":

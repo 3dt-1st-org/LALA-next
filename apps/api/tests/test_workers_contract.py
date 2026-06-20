@@ -273,4 +273,23 @@ def test_worker_cli_plan_rollout_json_is_secret_safe_and_non_mutating():
     assert "onmu-dev-kv" not in result.stdout
     assert "postgresql://user:" not in result.stdout
     assert "password=" not in result.stdout.lower()
+
+
+def test_worker_cli_plan_rollout_human_output_redacts_operational_resource_names():
+    result = subprocess.run(
+        [sys.executable, "-m", "apps.workers.app.cli", "plan-rollout"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert "key_vault=<key-vault>" in result.stdout
+    assert "function_app=<function-app>" in result.stdout
+    assert "storage_account=<storage-account>" in result.stdout
+    assert "event_hub_namespace=<event-hub-namespace>" in result.stdout
+    assert "lala-key-vault" not in result.stdout
+    assert "lala-next-workers-dev" not in result.stdout
+    assert "lalaworkersdev" not in result.stdout
+    assert "lala-eventhub-dev" not in result.stdout
     assert "AccountKey=" not in result.stdout

@@ -4,6 +4,7 @@ import argparse
 import json
 import sys
 
+from apps.api.app.core.redaction import redact_operational_resource_text
 from apps.api.app.services.key_vault_reuse_plan import (
     DEFAULT_SOURCE_VAULT_NAME,
     DEFAULT_TARGET_VAULT_NAME,
@@ -38,12 +39,13 @@ def _write(args: argparse.Namespace, payload: dict) -> None:
     print("mode=plan")
     print("applies_changes=false")
     print(f"status={'ok' if payload.get('ok') else 'degraded'}")
-    print(f"source_vault={payload.get('source_vault_name')}")
-    print(f"target_vault={payload.get('target_vault_name')}")
+    replacements = _resource_replacements(payload)
+    print(f"source_vault={_display(payload.get('source_vault_name'), replacements)}")
+    print(f"target_vault={_display(payload.get('target_vault_name'), replacements)}")
     print(f"candidate_count={len(payload.get('candidate_secret_mappings') or [])}")
     print(f"rejected_pattern_count={len(payload.get('rejected_secret_patterns') or [])}")
     for warning in payload.get("warnings") or []:
-        print(f"warning={warning}")
+        print(f"warning={_display(warning, replacements)}")
     for candidate in payload.get("candidate_secret_mappings") or []:
         print(
             "candidate="
@@ -54,7 +56,18 @@ def _write(args: argparse.Namespace, payload: dict) -> None:
     for pattern in payload.get("rejected_secret_patterns") or []:
         print(f"reject_pattern={pattern['pattern']} reason={pattern['reason']}")
     for command in payload.get("verification_commands") or []:
-        print(f"verify={command}")
+        print(f"verify={_display(command, replacements)}")
+
+
+def _resource_replacements(payload: dict) -> dict[str, str]:
+    return {
+        str(payload.get("source_vault_name") or ""): "<source-key-vault>",
+        str(payload.get("target_vault_name") or ""): "<target-key-vault>",
+    }
+
+
+def _display(value: object, replacements: dict[str, str]) -> str:
+    return redact_operational_resource_text(str(value or ""), replacements)
 
 
 if __name__ == "__main__":

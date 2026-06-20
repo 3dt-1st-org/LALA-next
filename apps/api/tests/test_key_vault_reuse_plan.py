@@ -77,3 +77,20 @@ def test_plan_key_vault_reuse_cli_outputs_json_without_secret_values():
     assert "secret show" not in result.stdout
     assert "secret set" not in result.stdout
     assert "password=" not in result.stdout.lower()
+
+
+def test_plan_key_vault_reuse_human_output_redacts_vault_names():
+    result = subprocess.run(
+        [sys.executable, "-m", "apps.api.app.tools.plan_key_vault_reuse"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert "source_vault=<source-key-vault>" in result.stdout
+    assert "target_vault=<target-key-vault>" in result.stdout
+    assert "onmu-source-vault" not in result.stdout
+    assert "lala-key-vault" not in result.stdout
+    assert "secret show" not in result.stdout
+    assert "secret set" not in result.stdout

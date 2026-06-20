@@ -62,3 +62,22 @@ def test_plan_identity_rollout_cli_outputs_json_without_secret_values():
     assert "onmu-dev-kv" not in result.stdout
     assert "client_secret" not in result.stdout.lower()
     assert "password=" not in result.stdout.lower()
+
+
+def test_plan_identity_rollout_human_output_redacts_operational_resource_names():
+    result = subprocess.run(
+        [sys.executable, "-m", "apps.api.app.tools.plan_identity_rollout"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert "key_vault=<key-vault>" in result.stdout
+    assert "api_app_name=<api-app-name>" in result.stdout
+    assert "flutter_app_name=<flutter-app-name>" in result.stdout
+    assert "api_app_id_uri=<api-app-id-uri>" in result.stdout
+    assert "lala-key-vault" not in result.stdout
+    assert "lala-next-api-dev" not in result.stdout
+    assert "lala-next-flutter-dev" not in result.stdout
+    assert "api://lala-next-dev" not in result.stdout

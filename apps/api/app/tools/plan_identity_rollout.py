@@ -4,6 +4,7 @@ import argparse
 import json
 import sys
 
+from apps.api.app.core.redaction import redact_operational_resource_text
 from apps.api.app.services.identity_rollout_plan import (
     DEFAULT_API_APP_ID_URI,
     DEFAULT_API_APP_NAME,
@@ -55,17 +56,31 @@ def _write(args: argparse.Namespace, payload: dict) -> None:
     print("mode=plan")
     print("applies_changes=false")
     print(f"status={'ok' if payload.get('ok') else 'degraded'}")
-    print(f"key_vault={payload.get('key_vault_name')}")
-    print(f"api_app_name={payload.get('api_app_name')}")
-    print(f"flutter_app_name={payload.get('flutter_app_name')}")
-    print(f"api_app_id_uri={payload.get('api_app_id_uri')}")
+    replacements = _resource_replacements(payload)
+    print(f"key_vault={_display(payload.get('key_vault_name'), replacements)}")
+    print(f"api_app_name={_display(payload.get('api_app_name'), replacements)}")
+    print(f"flutter_app_name={_display(payload.get('flutter_app_name'), replacements)}")
+    print(f"api_app_id_uri={_display(payload.get('api_app_id_uri'), replacements)}")
     print(f"required_scope_count={len(payload.get('required_scopes') or [])}")
     print(f"readiness_check_count={len(payload.get('readiness_checks') or [])}")
     for warning in payload.get("warnings") or []:
-        print(f"warning={warning}")
+        print(f"warning={_display(warning, replacements)}")
     for step in payload.get("steps") or []:
         print(f"step={step['order']} approval_required={str(step['approval_required']).lower()} {step['title']}")
-        print(f"command={step['command']}")
+        print(f"command={_display(step['command'], replacements)}")
+
+
+def _resource_replacements(payload: dict) -> dict[str, str]:
+    return {
+        str(payload.get("key_vault_name") or ""): "<key-vault>",
+        str(payload.get("api_app_name") or ""): "<api-app-name>",
+        str(payload.get("flutter_app_name") or ""): "<flutter-app-name>",
+        str(payload.get("api_app_id_uri") or ""): "<api-app-id-uri>",
+    }
+
+
+def _display(value: object, replacements: dict[str, str]) -> str:
+    return redact_operational_resource_text(str(value or ""), replacements)
 
 
 if __name__ == "__main__":

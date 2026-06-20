@@ -62,3 +62,21 @@ def test_plan_db_rollout_cli_outputs_json_without_secret_values():
     assert "onmu-dev-kv" not in result.stdout
     assert "postgresql://user:" not in result.stdout
     assert "password=" not in result.stdout.lower()
+
+
+def test_plan_db_rollout_human_output_redacts_operational_resource_names():
+    result = subprocess.run(
+        [sys.executable, "-m", "apps.api.app.tools.plan_db_rollout"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert "key_vault=<key-vault>" in result.stdout
+    assert "resource_group=<resource-group>" in result.stdout
+    assert "postgres_server=<postgres-server>" in result.stdout
+    assert "lala-key-vault" not in result.stdout
+    assert "lala-resource-group" not in result.stdout
+    assert "lala-postgres-server" not in result.stdout
+    assert "<database>admin" not in result.stdout
