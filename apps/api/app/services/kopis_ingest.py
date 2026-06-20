@@ -9,6 +9,8 @@ from datetime import UTC, date, datetime, timedelta, timezone
 from typing import Any, Iterable
 from xml.etree import ElementTree
 
+from apps.api.app.services.official_media import normalize_official_image_url
+
 KOPIS_BASE_URL = "http://www.kopis.or.kr/openApi/restful"
 KOPIS_OPERATION = "pblprfr"
 DEFAULT_SIGNGUCODE = "41"
@@ -256,7 +258,7 @@ def parse_kopis_performance(item: ElementTree.Element) -> KopisPerformance | Non
         starts_on=_parse_date(_find_text(item, "prfpdfrom")),
         ends_on=_parse_date(_find_text(item, "prfpdto")),
         venue_name_ko=_find_text(item, "fcltynm"),
-        poster_url=_find_text(item, "poster"),
+        poster_url=normalize_official_image_url(_find_text(item, "poster")),
         area=_find_text(item, "area"),
         genre_name=_find_text(item, "genrenm"),
         openrun=_find_text(item, "openrun"),

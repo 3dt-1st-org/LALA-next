@@ -61,6 +61,7 @@ def test_parse_kopis_performance_maps_fields_to_culture_event():
     assert performance.region_name_ko == "고양시"
     assert performance.starts_on and performance.starts_on.isoformat() == "2026-07-11"
     assert performance.ends_on and performance.ends_on.isoformat() == "2026-07-12"
+    assert performance.poster_url == "https://www.kopis.or.kr/upload/pfmPoster/example.gif"
     assert performance.to_event_row() == {
         "event_id": "kopis-PF293603",
         "title_ko": "VERNON X THE 8: V8 LIVE [고양]",

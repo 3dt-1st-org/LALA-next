@@ -41,7 +41,7 @@ def test_parse_culture_info_event_maps_fields_to_data_dictionary_names():
             <realmName>전시</realmName>
             <area>경기</area>
             <sigungu>수원시</sigungu>
-            <thumbnail>http://example.invalid/thumb.jpg</thumbnail>
+            <thumbnail>http://www.culture.go.kr/upload/rdf/thumb.jpg</thumbnail>
             <gpsX>127.025</gpsX>
             <gpsY>37.263</gpsY>
           </item>
@@ -63,6 +63,7 @@ def test_parse_culture_info_event_maps_fields_to_data_dictionary_names():
     assert event.region_name_ko == "수원시"
     assert event.starts_on and event.starts_on.isoformat() == "2025-09-26"
     assert event.ends_on and event.ends_on.isoformat() == "2026-12-31"
+    assert event.thumbnail_url == "https://www.culture.go.kr/upload/rdf/thumb.jpg"
     assert event.to_event_row() == {
         "event_id": "kcisa-culture-info-345071",
         "title_ko": "미디어·아트 융합 전시 DREAM LIGHT",

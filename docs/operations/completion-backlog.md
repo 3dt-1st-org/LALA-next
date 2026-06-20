@@ -14,6 +14,9 @@ Current baseline evidence:
   extended matrix smoke.
 - The deployed API matrix smoke checks 37 route variants across places,
   weather intervention, daily planning, docent scripts, and docent audio.
+- Non-mutating official-data previews pass for TourAPI, KCISA culture info,
+  KOPIS, and Fair Trade franchise references with the currently configured
+  local keys.
 - The shared dev DB has TourAPI Gyeonggi and Seoul places, franchise brand
   references, restaurant business identity rows, `local-value-v2` score
   snapshots, and place-profile RAG chunks.
@@ -42,9 +45,9 @@ baseline stays green.
 
 | Item | Current evidence | Next action | Done evidence |
 |---|---|---|---|
-| Apply KCISA culture information ingestion | Tooling and guarded wrappers exist; Azure status says Culture Info still needs to be added to shared dev. | Preview KCISA rows, apply with guarded env, then recompute scores and RAG. | `culture.events` contains KCISA rows and `culture_relevance_score` changes are visible in latest `local-value-v2` snapshots. |
-| Apply KOPIS performance ingestion | Tooling and guarded wrappers exist; KOPIS is still listed in open rollout work. | Preview KOPIS for the target region/window, apply with guarded env, then recompute scores and RAG. | `culture.events` contains KOPIS rows and RAG has current `culture_event` chunks. |
-| Apply card-spending source files | Parser supports detailed and aggregate CSV/XLSX files, but shared dev rollout still lists card-spending files as open. | Ingest approved source files, verify hash de-duplication, then rerun score batch. | `economy.card_spending_area_monthly` and `economy.card_spending_demographics` have source-file-backed rows; `local_spending_score` is based on real file rows. |
+| Apply KCISA culture information ingestion | Tooling and guarded wrappers exist; live preview returned Suwon culture rows and normalized official `culture.go.kr` thumbnails to HTTPS. Azure status still says Culture Info needs to be added to shared dev. | Apply with guarded env, then recompute scores and RAG. | `culture.events` contains KCISA rows and `culture_relevance_score` changes are visible in latest `local-value-v2` snapshots. |
+| Apply KOPIS performance ingestion | Tooling and guarded wrappers exist; live preview returned Gyeonggi performance rows and normalized official `kopis.or.kr` poster URLs to HTTPS. KOPIS is still listed in open rollout work. | Apply with guarded env for the target region/window, then recompute scores and RAG. | `culture.events` contains KOPIS rows and RAG has current `culture_event` chunks. |
+| Apply card-spending source files | Parser plan supports detailed and aggregate CSV/XLSX files, but no local card-spending source file was confirmed during the latest check. Shared dev rollout still lists card-spending files as open. | Download or provide approved source files, ingest them, verify hash de-duplication, then rerun score batch. | `economy.card_spending_area_monthly` and `economy.card_spending_demographics` have source-file-backed rows; `local_spending_score` is based on real file rows. |
 | Persist weather observations | Runtime can fall back to public-data nowcast, but scheduled persistence is still worker/batch work. | Add or schedule a weather refresh job that writes `travel.weather_observations`. | `/api/v1/weather` returns fresh DB-backed or live-nowcast-backed data, and `weather_fit_score` has recent observation input. |
 | Add review attribute scoring | `review_quality_score` is documented as `pending_review_attribute_analysis`. | Build ad-filtered review attribute/sentiment batch for taste, service, and selected local-experience attributes. | Latest score snapshots contain non-null `review_quality_score` with source metadata and tests for ad-filtering rules. |
 | Expand franchise evidence to branch locations | Brand-level Fair Trade Commission references are loaded; `economy.franchise_locations` is intentionally empty. | Add a suitable official branch-level source only if it provides address or coordinate evidence. | Restaurant identity matching can use branch-level address/coordinate evidence, not only brand-name statistics. |
@@ -78,4 +81,3 @@ scripts/unix/smoke_api_matrix.sh --base-url https://api.lala-next.cloud --timeou
 gh run list --branch dev --limit 5 --json databaseId,headSha,workflowName,status,conclusion,url
 git status --short --branch --untracked-files=all
 ```
-

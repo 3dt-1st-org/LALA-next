@@ -8,6 +8,8 @@ from datetime import UTC, date, datetime
 from typing import Any, Iterable
 from xml.etree import ElementTree
 
+from apps.api.app.services.official_media import normalize_official_image_url
+
 CULTURE_INFO_BASE_URL = "https://apis.data.go.kr/B553457/cultureinfo"
 DEFAULT_OPERATION = "area2"
 DEFAULT_SIDO = "경기"
@@ -200,7 +202,9 @@ def parse_culture_info_event(
         starts_on=_parse_date(_find_text(item, "startDate", "start", "from")),
         ends_on=_parse_date(_find_text(item, "endDate", "end", "to")),
         url=_find_text(item, "url", "link", "placeUrl"),
-        thumbnail_url=_find_text(item, "thumbnail", "imgUrl", "image"),
+        thumbnail_url=normalize_official_image_url(
+            _find_text(item, "thumbnail", "imgUrl", "image")
+        ),
         gps_x=_optional_float(_find_text(item, "gpsX", "mapx", "longitude")),
         gps_y=_optional_float(_find_text(item, "gpsY", "mapy", "latitude")),
         source_name=source_name,

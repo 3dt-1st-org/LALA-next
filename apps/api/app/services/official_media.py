@@ -4,6 +4,8 @@ from urllib.parse import urlsplit, urlunsplit
 
 HTTPS_UPGRADE_IMAGE_HOSTS = frozenset(
     {
+        "www.culture.go.kr",
+        "www.kopis.or.kr",
         "tong.visitkorea.or.kr",
     }
 )

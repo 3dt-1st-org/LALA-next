@@ -42,6 +42,10 @@ queries to resolve live names during operations.
 - Fair Trade Commission franchise brand references were ingested from the public
   data API for 2025 into `economy.franchise_brands`: 11,712 rows after source
   duplicate collapse.
+- Non-mutating live previews now pass for KCISA culture info and KOPIS
+  performance ingestion. Official Culture Portal and KOPIS image URLs returned
+  as `http` are normalized to `https` in preview payloads before any web-facing
+  use.
 - Franchise/small-merchant identity matching was applied for the current
   restaurant slice: 1,000 rows in `analytics.place_business_identity`
   (`franchise_store=2`, `local_small_chain=34`, `independent_local=964`).
