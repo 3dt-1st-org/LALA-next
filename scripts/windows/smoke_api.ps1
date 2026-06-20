@@ -248,8 +248,9 @@ Invoke-SmokeGet "/api/v1/places?lat=37.2636&lng=127.0286&radius_m=1000" -Headers
 Invoke-SmokeGet "/api/v1/weather?lat=37.2636&lng=127.0286" -Headers $headers
 Invoke-SmokeGet "/api/v1/plans/intervention?lat=37.2636&lng=127.0286&radius_m=1000" -Headers $headers
 Invoke-SmokePost "/api/v1/docents/script" -Headers $headers -Body @{
-    place_id = "skeleton-suwon-hwaseong"
-    category = "attraction"
+    place_id = "tour-api-3066000"
+    place_name = "중랑아트센터"
+    category = "culture_venue"
     language = "ko"
     mode = "brief"
 } | Out-Null

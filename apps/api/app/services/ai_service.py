@@ -43,9 +43,11 @@ def generate_docent_script_text(request: DocentScriptRequest) -> str:
     )
     language = display_language(request.language)
     place_name = request.place_name or request.place_id
+    context = _docent_context_prompt(request)
     prompt = (
         f"Write a {request.mode} mobile docent script in {language}. "
         f"Category: {request.category}. Place: {place_name}. "
+        f"{context} "
         "Ground the script in official tourism/culture data, local spending context, "
         "and nearby walking experience. Avoid generic marketing copy. "
         "Keep it concise, friendly, and suitable for a walking travel app."
@@ -83,3 +85,18 @@ def generate_docent_script_text(request: DocentScriptRequest) -> str:
             retryable=True,
         )
     return text
+
+
+def _docent_context_prompt(request: DocentScriptRequest) -> str:
+    parts: list[str] = []
+    if request.address:
+        parts.append(f"Address: {request.address}.")
+    region = request.region_en or request.region_ko
+    if region:
+        parts.append(f"Region: {region}.")
+    if request.distance_m is not None and request.distance_m > 0:
+        parts.append(f"Distance from user: {request.distance_m} meters.")
+    source = request.upstream_source or request.source
+    if source:
+        parts.append(f"Data source: {source}.")
+    return " ".join(parts)

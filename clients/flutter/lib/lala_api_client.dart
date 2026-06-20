@@ -99,6 +99,12 @@ class LalaApiClient {
   Future<LalaEnvelope<LalaDocentScript>> createDocentScript({
     required String placeId,
     String? placeName,
+    String? address,
+    String? regionKo,
+    String? regionEn,
+    int? distanceM,
+    String? source,
+    String? upstreamSource,
     required String category,
     String language = 'ko',
     String mode = 'brief',
@@ -112,6 +118,13 @@ class LalaApiClient {
         'place_id': placeId,
         if ((placeName ?? '').trim().isNotEmpty)
           'place_name': placeName!.trim(),
+        if ((address ?? '').trim().isNotEmpty) 'address': address!.trim(),
+        if ((regionKo ?? '').trim().isNotEmpty) 'region_ko': regionKo!.trim(),
+        if ((regionEn ?? '').trim().isNotEmpty) 'region_en': regionEn!.trim(),
+        if (distanceM != null && distanceM >= 0) 'distance_m': distanceM,
+        if ((source ?? '').trim().isNotEmpty) 'source': source!.trim(),
+        if ((upstreamSource ?? '').trim().isNotEmpty)
+          'upstream_source': upstreamSource!.trim(),
         'category': category,
         'language': language,
         'mode': mode,

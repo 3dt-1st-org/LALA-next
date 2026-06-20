@@ -10,6 +10,12 @@ from apps.api.app.services.normalization import normalize_docent_mode, normalize
 class DocentScriptRequest(BaseModel):
     place_id: str = Field(min_length=1)
     place_name: str | None = None
+    address: str | None = None
+    region_ko: str | None = None
+    region_en: str | None = None
+    distance_m: int | None = Field(default=None, ge=0)
+    source: str | None = None
+    upstream_source: str | None = None
     category: Literal["attraction", "restaurant", "event", "culture_venue"]
     language: str = "ko"
     mode: str = "brief"
@@ -22,9 +28,9 @@ class DocentScriptRequest(BaseModel):
             raise ValueError("place_id is required")
         return value
 
-    @field_validator("place_name")
+    @field_validator("place_name", "address", "region_ko", "region_en", "source", "upstream_source")
     @classmethod
-    def normalize_place_name(cls, value: str | None) -> str | None:
+    def normalize_optional_text(cls, value: str | None) -> str | None:
         if value is None:
             return None
         value = value.strip()

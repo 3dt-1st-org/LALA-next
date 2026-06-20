@@ -198,7 +198,13 @@ def test_docent_script_returns_envelope(client, auth_headers):
         "/api/v1/docents/script",
         headers=auth_headers,
         json={
-            "place_id": "event-1",
+            "place_id": "tour-api-3066000",
+            "place_name": "중랑아트센터",
+            "address": "서울특별시 중랑구 망우로 353",
+            "region_ko": "중랑구",
+            "distance_m": 840,
+            "source": "db",
+            "upstream_source": "tour_api",
             "category": "event",
             "language": "ko",
             "mode": "brief",
@@ -208,8 +214,12 @@ def test_docent_script_returns_envelope(client, auth_headers):
     assert response.status_code == 200
     body = response.json()
     assert body["ok"] is True
-    assert body["data"]["place_id"] == "event-1"
+    assert body["data"]["place_id"] == "tour-api-3066000"
     assert body["data"]["script"]
+    assert "중랑아트센터" in body["data"]["script"]
+    assert "중랑구" in body["data"]["script"]
+    assert "840m" in body["data"]["script"]
+    assert "한국관광공사" in body["data"]["script"]
     assert body["data"]["source"] == "rule_based_curation"
     assert len(body["data"]["request_hash"]) == 64
     assert body["data"]["cache_key"].startswith("docent_script:")

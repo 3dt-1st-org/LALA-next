@@ -313,6 +313,12 @@ class LalaApiBackend implements LalaBackend {
     return _client.createDocentScript(
       placeId: place.placeId,
       placeName: _placeDisplayName(place, config.lang),
+      address: place.address,
+      regionKo: place.regionKo,
+      regionEn: place.regionEn,
+      distanceM: place.distanceM,
+      source: place.source,
+      upstreamSource: place.upstreamSource,
       category: place.category,
       language: config.lang,
       mode: mode,

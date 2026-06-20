@@ -238,6 +238,12 @@ void main() {
         captured = request;
         expect(jsonDecode(request.body)['place_id'], 'demo-place');
         expect(jsonDecode(request.body)['place_name'], 'Demo Place');
+        expect(jsonDecode(request.body)['address'], 'Seoul test address');
+        expect(jsonDecode(request.body)['region_ko'], '중구');
+        expect(jsonDecode(request.body)['region_en'], 'Jung-gu');
+        expect(jsonDecode(request.body)['distance_m'], 321);
+        expect(jsonDecode(request.body)['source'], 'db');
+        expect(jsonDecode(request.body)['upstream_source'], 'tour_api');
         return http.Response(
           jsonEncode({
             'ok': true,
@@ -266,6 +272,12 @@ void main() {
     final envelope = await client.createDocentScript(
       placeId: 'demo-place',
       placeName: ' Demo Place ',
+      address: ' Seoul test address ',
+      regionKo: ' 중구 ',
+      regionEn: ' Jung-gu ',
+      distanceM: 321,
+      source: ' db ',
+      upstreamSource: ' tour_api ',
       category: 'attraction',
       language: 'ko',
       mode: 'brief',

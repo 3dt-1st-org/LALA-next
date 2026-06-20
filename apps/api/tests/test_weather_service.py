@@ -21,6 +21,7 @@ def test_latest_kma_base_time_uses_previous_hour_before_publish_window() -> None
 
 
 def test_current_weather_uses_kma_nowcast_when_db_is_empty(monkeypatch) -> None:
+    weather_service.clear_official_weather_cache()
     captured: list[dict[str, object]] = []
 
     class FakeKmaResponse:
@@ -90,8 +91,10 @@ def test_current_weather_uses_kma_nowcast_when_db_is_empty(monkeypatch) -> None:
 
     weather = weather_service.current_weather(lat=37.2636, lng=127.0286)
 
-    assert captured[0]["url"] == weather_service.KMA_ULTRA_SHORT_NOWCAST_URL
-    assert captured[0]["params"] == {
+    captured_by_url = {item["url"]: item for item in captured}
+    kma_request = captured_by_url[weather_service.KMA_ULTRA_SHORT_NOWCAST_URL]
+    airkorea_request = captured_by_url[weather_service.AIRKOREA_SIDO_REALTIME_URL]
+    assert kma_request["params"] == {
         "serviceKey": "public-data-secret",
         "pageNo": 1,
         "numOfRows": 100,
@@ -101,9 +104,8 @@ def test_current_weather_uses_kma_nowcast_when_db_is_empty(monkeypatch) -> None:
         "nx": 61,
         "ny": 120,
     }
-    assert captured[0]["timeout"] == 3
-    assert captured[1]["url"] == weather_service.AIRKOREA_SIDO_REALTIME_URL
-    assert captured[1]["params"]["sidoName"] == "경기"
+    assert kma_request["timeout"] == 3
+    assert airkorea_request["params"]["sidoName"] == "경기"
     assert weather["source"] == f"{weather_service.KMA_SOURCE}+{weather_service.AIRKOREA_SOURCE}"
     assert weather["temp"] == "22.3"
     assert weather["icon"] == "partly-cloudy"
@@ -117,8 +119,15 @@ def test_current_weather_uses_kma_nowcast_when_db_is_empty(monkeypatch) -> None:
     assert weather["record_time"] == "2026-06-18T23:00:00+09:00"
     assert len(weather["forecast"]) == 4
 
+    cached_weather = weather_service.current_weather(lat=37.2636, lng=127.0286)
+
+    assert cached_weather["source"] == weather["source"]
+    assert cached_weather["dust"] == weather["dust"]
+    assert len(captured) == 2
+
 
 def test_current_weather_reports_unavailable_without_public_data_key(monkeypatch) -> None:
+    weather_service.clear_official_weather_cache()
     monkeypatch.setattr(weather_service.db_repository, "fetch_latest_weather", lambda **kwargs: None)
     monkeypatch.setattr(
         weather_service,

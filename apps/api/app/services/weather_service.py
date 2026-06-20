@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import math
 from datetime import UTC, datetime, timedelta, timezone
 import logging
+from threading import Lock
 from typing import Any
 
 from apps.api.app.core.config import get_settings
@@ -19,6 +21,9 @@ KMA_SOURCE = "kma_ultra_srt_ncst"
 AIRKOREA_SOURCE = "airkorea_sido_realtime"
 UNAVAILABLE_SOURCE = "unavailable"
 KST = timezone(timedelta(hours=9))
+_OFFICIAL_CACHE_TTL = timedelta(minutes=20)
+_official_cache_lock = Lock()
+_official_weather_cache: dict[str, tuple[datetime, dict[str, Any]]] = {}
 logger = logging.getLogger(LOGGER_NAME)
 
 
@@ -38,8 +43,7 @@ def current_weather(*, lat: float, lng: float, force: bool = False) -> dict:
         db_weather["force"] = force
         return db_weather
 
-    official_weather = _fetch_kma_ultra_short_nowcast(lat=lat, lng=lng, force=force)
-    air_quality = _fetch_airkorea_sido_air_quality(lat=lat, lng=lng)
+    official_weather, air_quality = _fetch_official_weather_pair(lat=lat, lng=lng, force=force)
     if official_weather:
         if air_quality:
             official_weather["dust"] = air_quality["dust"]
@@ -84,6 +88,31 @@ def current_weather(*, lat: float, lng: float, force: bool = False) -> dict:
     }
 
 
+def clear_official_weather_cache() -> None:
+    with _official_cache_lock:
+        _official_weather_cache.clear()
+
+
+def _fetch_official_weather_pair(
+    *,
+    lat: float,
+    lng: float,
+    force: bool,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    try:
+        from concurrent.futures import ThreadPoolExecutor
+    except Exception:
+        return (
+            _fetch_kma_ultra_short_nowcast(lat=lat, lng=lng, force=force),
+            _fetch_airkorea_sido_air_quality(lat=lat, lng=lng),
+        )
+
+    with ThreadPoolExecutor(max_workers=2, thread_name_prefix="lala-weather") as executor:
+        kma_future = executor.submit(_fetch_kma_ultra_short_nowcast, lat=lat, lng=lng, force=force)
+        air_future = executor.submit(_fetch_airkorea_sido_air_quality, lat=lat, lng=lng)
+        return kma_future.result(), air_future.result()
+
+
 def _fetch_kma_ultra_short_nowcast(*, lat: float, lng: float, force: bool) -> dict[str, Any] | None:
     service_key = get_settings().public_data_service_key
     if not service_key:
@@ -97,6 +126,11 @@ def _fetch_kma_ultra_short_nowcast(*, lat: float, lng: float, force: bool) -> di
 
     nx, ny = _kma_grid_xy(lat, lng)
     base_time = _latest_kma_base_time()
+    cache_key = f"kma:{nx}:{ny}:{base_time.strftime('%Y%m%d%H%M')}"
+    cached = _cache_get(cache_key)
+    if cached:
+        cached["force"] = force
+        return cached
     try:
         response = requests.get(
             KMA_ULTRA_SHORT_NOWCAST_URL,
@@ -153,6 +187,7 @@ def _fetch_kma_ultra_short_nowcast(*, lat: float, lng: float, force: bool) -> di
         "source": KMA_SOURCE,
     }
     weather["forecast"] = _derived_forecast_from_observation(weather)
+    _cache_set(cache_key, weather)
     return weather
 
 
@@ -168,6 +203,10 @@ def _fetch_airkorea_sido_air_quality(*, lat: float, lng: float) -> dict[str, Any
         return None
 
     sido_name = _sido_name_for_coordinate(lat=lat, lng=lng)
+    cache_key = f"airkorea:{sido_name}:{datetime.now(KST).strftime('%Y%m%d%H')}"
+    cached = _cache_get(cache_key)
+    if cached:
+        return cached
     try:
         response = requests.get(
             AIRKOREA_SIDO_REALTIME_URL,
@@ -209,12 +248,32 @@ def _fetch_airkorea_sido_air_quality(*, lat: float, lng: float) -> dict[str, Any
             selected.get("pm25Grade1h") or selected.get("pm25Grade"),
         ),
     }
-    return {
+    air_quality = {
         "sido_name": sido_name,
         "location": selected.get("stationName") or sido_name,
         "record_time": selected.get("dataTime"),
         "dust": dust,
     }
+    _cache_set(cache_key, air_quality)
+    return air_quality
+
+
+def _cache_get(key: str) -> dict[str, Any] | None:
+    now = datetime.now(UTC)
+    with _official_cache_lock:
+        cached = _official_weather_cache.get(key)
+        if cached is None:
+            return None
+        stored_at, payload = cached
+        if now - stored_at > _OFFICIAL_CACHE_TTL:
+            _official_weather_cache.pop(key, None)
+            return None
+        return deepcopy(payload)
+
+
+def _cache_set(key: str, payload: dict[str, Any]) -> None:
+    with _official_cache_lock:
+        _official_weather_cache[key] = (datetime.now(UTC), deepcopy(payload))
 
 
 def _airkorea_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
