@@ -164,9 +164,10 @@ def test_azure_dev_deploy_uses_oidc_and_dev_branch_only():
     assert "apply_canonical_sql" not in workflow
     assert "verify_db_schema" not in workflow
     assert "az postgres flexible-server firewall-rule" not in workflow
-    assert "curl -fsS \"https://${API_FQDN}/healthz\"" in workflow
-    assert 'if ! curl -fsS "https://${API_FQDN}/readyz"; then' in workflow
-    assert "PostgreSQL schema/data may need a separate manual rollout" in workflow
+    assert "SMOKE_BASE_URL=\"https://${API_FQDN}\"" in workflow
+    assert 'API_BEARER_TOKEN: ${{ secrets.AZURE_API_BEARER_TOKEN }}' in workflow
+    assert 'scripts/unix/smoke_api.sh --base-url "$SMOKE_BASE_URL"' in workflow
+    assert 'scripts/unix/smoke_api_matrix.sh --base-url "$SMOKE_BASE_URL" --timeout 25' in workflow
 
 
 def test_azure_container_build_excludes_local_secrets():

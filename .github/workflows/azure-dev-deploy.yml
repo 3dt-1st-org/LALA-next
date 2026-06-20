@@ -126,12 +126,14 @@ jobs:
             --image "$IMAGE"
 
       - name: Smoke deployed API
+        env:
+          API_BEARER_TOKEN: ${{ secrets.AZURE_API_BEARER_TOKEN }}
         run: |
           set -euo pipefail
-          curl -fsS "https://${API_FQDN}/healthz"
-          if ! curl -fsS "https://${API_FQDN}/readyz"; then
-            echo "readyz probe failed; PostgreSQL schema/data may need a separate manual rollout."
-          fi
+          SMOKE_BASE_URL="https://${API_FQDN}"
           if [ -n "${API_CUSTOM_DOMAIN_NAME:-}" ]; then
             curl -fsS "https://${API_CUSTOM_DOMAIN_NAME}/healthz"
+            SMOKE_BASE_URL="https://${API_CUSTOM_DOMAIN_NAME}"
           fi
+          scripts/unix/smoke_api.sh --base-url "$SMOKE_BASE_URL"
+          scripts/unix/smoke_api_matrix.sh --base-url "$SMOKE_BASE_URL" --timeout 25

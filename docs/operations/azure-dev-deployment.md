@@ -80,6 +80,14 @@ The deploy workflow also receives `AZURE_DEPLOY_PRINCIPAL_OBJECT_ID` so the
 Bicep template can grant the GitHub OIDC service principal `AcrPush` and Key
 Vault secret access without storing broad Azure credentials in GitHub.
 
+After the Container App revision is updated, the workflow runs the same
+secret-safe authenticated smoke scripts used by operators. `smoke_api.sh`
+checks readiness and the primary authenticated route family, and
+`smoke_api_matrix.sh` checks broader category, language, coordinate, planner,
+docent script, and docent audio variants against the custom API domain when it
+is configured. The workflow passes `AZURE_API_BEARER_TOKEN` only as a step
+environment value and the scripts do not print the token.
+
 For the first local Azure CLI provisioning, `enableRoleAssignments=true` creates
 the runtime RBAC bindings. The GitHub `dev` workflow passes
 `enableRoleAssignments=false` so the deploy principal can redeploy app
