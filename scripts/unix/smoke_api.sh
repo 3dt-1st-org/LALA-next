@@ -104,6 +104,32 @@ smoke_post_json() {
     "$BASE_URL$path"
 }
 
+smoke_post_audio() {
+  local body="$1"
+  shift
+  local headers_file audio_file
+  headers_file="$(mktemp)"
+  audio_file="$(mktemp)"
+  echo "POST /api/v1/docents/audio" >&2
+  curl -fsS "$@" \
+    -H "Content-Type: application/json; charset=utf-8" \
+    --data "$body" \
+    -D "$headers_file" \
+    -o "$audio_file" \
+    "$BASE_URL/api/v1/docents/audio"
+  if ! grep -i '^content-type: audio/mpeg' "$headers_file" >/dev/null; then
+    rm -f "$headers_file" "$audio_file"
+    echo "Audio smoke returned unexpected content type." >&2
+    exit 1
+  fi
+  if [[ ! -s "$audio_file" ]]; then
+    rm -f "$headers_file" "$audio_file"
+    echo "Audio smoke returned an empty audio response." >&2
+    exit 1
+  fi
+  rm -f "$headers_file" "$audio_file"
+}
+
 smoke_cors_preflight() {
   local origin="$1"
   local headers_file allow_origin
@@ -181,14 +207,20 @@ fi
 
 CURL_AUTH_ARGS=()
 CURL_AUTH_ARGS=(-K "$AUTH_CONFIG_FILE")
-trap 'rm -f "$AUTH_CONFIG_FILE" "${HEADERS_FILE:-}" "${AUDIO_FILE:-}"' EXIT
+trap 'rm -f "$AUTH_CONFIG_FILE"' EXIT
 
 smoke_get "/api/v1/places?lat=37.2636&lng=127.0286&radius_m=1000" "${CURL_AUTH_ARGS[@]}"
 smoke_get "/api/v1/weather?lat=37.2636&lng=127.0286" "${CURL_AUTH_ARGS[@]}"
 smoke_get "/api/v1/plans/intervention?lat=37.2636&lng=127.0286&radius_m=1000" "${CURL_AUTH_ARGS[@]}"
 
+PLAN_BODY='{"lat":37.2636,"lng":127.0286,"radius_m":1000,"language":"ko"}'
+smoke_post_json "/api/v1/plans/daily" "$PLAN_BODY" "${CURL_AUTH_ARGS[@]}" >/dev/null
+
 SCRIPT_BODY='{"place_id":"skeleton-suwon-hwaseong","category":"attraction","language":"ko","mode":"brief"}'
 smoke_post_json "/api/v1/docents/script" "$SCRIPT_BODY" "${CURL_AUTH_ARGS[@]}" >/dev/null
+
+AUDIO_BODY='{"script":"LALA smoke audio","language":"ko"}'
+smoke_post_audio "$AUDIO_BODY" "${CURL_AUTH_ARGS[@]}"
 
 if [[ "$PAID_DEPENDENCY" == "true" ]]; then
   echo "Paid dependency smoke requested. Start the API with --enable-live-ai and --enable-live-speech before running this check."
@@ -215,23 +247,7 @@ import os
 print(json.dumps({"script": os.environ["SCRIPT_TEXT"], "language": "ko"}, ensure_ascii=False))
 PY
 )"
-  HEADERS_FILE="$(mktemp)"
-  AUDIO_FILE="$(mktemp)"
-  echo "POST /api/v1/docents/audio"
-  curl -fsS "${CURL_AUTH_ARGS[@]}" \
-    -H "Content-Type: application/json; charset=utf-8" \
-    --data "$AUDIO_BODY" \
-    -D "$HEADERS_FILE" \
-    -o "$AUDIO_FILE" \
-    "$BASE_URL/api/v1/docents/audio"
-  if ! grep -i '^content-type: audio/mpeg' "$HEADERS_FILE" >/dev/null; then
-    echo "Audio smoke returned unexpected content type." >&2
-    exit 1
-  fi
-  if [[ ! -s "$AUDIO_FILE" ]]; then
-    echo "Audio smoke returned an empty audio response." >&2
-    exit 1
-  fi
+  smoke_post_audio "$AUDIO_BODY" "${CURL_AUTH_ARGS[@]}"
   echo "Audio smoke returned audio/mpeg bytes."
 fi
 

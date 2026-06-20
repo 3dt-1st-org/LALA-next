@@ -18,23 +18,13 @@ def daily_plan(request: DailyPlanRequest) -> dict:
         language=language,
     )
     source = _combined_source(places.get("source"), weather.get("source"))
+    place_candidates = places.get("places") or []
     return {
         "language": language,
         "center": {"lat": request.lat, "lng": request.lng},
         "radius_m": request.radius_m,
         "weather": weather,
-        "slots": [
-            {
-                "period": "morning",
-                "title": "Start near a landmark",
-                "place": places["places"][0],
-            },
-            {
-                "period": "afternoon",
-                "title": "Adjust by weather",
-                "weather_hint": weather["outdoor_status"],
-            },
-        ],
+        "slots": _daily_plan_slots(place_candidates=place_candidates, weather=weather, language=language),
         "source": source,
         **daily_plan_identity(request, language=language),
     }
@@ -81,6 +71,26 @@ def _combined_source(place_source: str | None, weather_source: str | None) -> st
     if "public_mvp_snapshot" in sources:
         return "mixed"
     return "skeleton"
+
+
+def _daily_plan_slots(*, place_candidates: list[dict], weather: dict, language: str) -> list[dict]:
+    weather_title = "날씨에 맞춰 조정" if language == "ko" else "Adjust by weather"
+    weather_slot = {
+        "period": "afternoon",
+        "title": weather_title,
+        "weather_hint": weather["outdoor_status"],
+    }
+    if not place_candidates:
+        return [weather_slot]
+    place_title = "첫 장소 추천" if language == "ko" else "Start near a landmark"
+    return [
+        {
+            "period": "morning",
+            "title": place_title,
+            "place": place_candidates[0],
+        },
+        weather_slot,
+    ]
 
 
 def _intervention_reason(*, weather_status: str, candidate_name: str) -> str:

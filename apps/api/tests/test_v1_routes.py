@@ -648,6 +648,35 @@ def test_daily_plan_marks_mixed_source_when_db_places_are_used(client, auth_head
     assert body["data"]["slots"][0]["place"]["place_id"] == "db-plan-place"
 
 
+def test_daily_plan_handles_empty_place_candidates(client, auth_headers, monkeypatch):
+    monkeypatch.setattr(
+        "apps.api.app.services.planner_service.list_places",
+        lambda **kwargs: {
+            "count": 0,
+            "places": [],
+            "query": kwargs,
+            "source": "db",
+        },
+    )
+
+    response = client.post(
+        "/api/v1/plans/daily",
+        headers=auth_headers,
+        json={"lat": 0, "lng": 0, "radius_m": 1000, "language": "ko"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is True
+    assert body["data"]["slots"] == [
+        {
+            "period": "afternoon",
+            "title": "날씨에 맞춰 조정",
+            "weather_hint": "unknown",
+        }
+    ]
+
+
 def test_daily_plan_uses_public_snapshot_radius_in_snapshot_fallback(client, monkeypatch):
     monkeypatch.delenv("IOS_API_KEY", raising=False)
     monkeypatch.delenv("API_BEARER_TOKEN", raising=False)

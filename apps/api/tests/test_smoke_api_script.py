@@ -66,9 +66,19 @@ class _SmokeHandler(BaseHTTPRequestHandler):
             if self.headers.get("Authorization") != "Bearer server-token":
                 self._write_json({"ok": False}, status=401)
                 return
+            if path == "/api/v1/docents/audio":
+                self._write_bytes(b"ID3smoke-audio", content_type="audio/mpeg")
+                return
             self._write_json({"ok": True, "data": {"source": "skeleton", "script": "ok"}})
             return
         self._write_json({"ok": False}, status=404)
+
+    def _write_bytes(self, body: bytes, *, content_type: str, status: int = 200) -> None:
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def _write_json(self, payload: dict[str, Any], status: int = 200) -> None:
         body = json.dumps(payload).encode("utf-8")
@@ -141,4 +151,6 @@ def test_unix_smoke_uses_bearer_when_readyz_reports_bearer_configured():
     assert "/api/v1/places" in server.protected_paths
     assert "/api/v1/weather" in server.protected_paths
     assert "/api/v1/plans/intervention" in server.protected_paths
+    assert "/api/v1/plans/daily" in server.protected_paths
     assert "/api/v1/docents/script" in server.protected_paths
+    assert "/api/v1/docents/audio" in server.protected_paths
