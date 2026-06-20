@@ -176,8 +176,12 @@ def test_fetch_places_uses_radius_bound_ranking_query(monkeypatch):
     assert "FROM travel.place_events" in captured["sql"]
     assert "ST_DWithin(" in captured["sql"]
     assert "ST_Distance(" in captured["sql"]
+    assert "AND lat BETWEEN %s AND %s" in captured["sql"]
+    assert "AND lng BETWEEN %s AND %s" in captured["sql"]
     assert "ORDER BY COALESCE(latest_scores.final_score, 0) DESC, distance_m ASC" in captured["sql"]
-    assert captured["params"] == (127.0, 37.2, "all", "all", 3000)
+    assert captured["params"][:4] == (127.0, 37.2, "all", "all")
+    assert captured["params"][-1] == 3000
+    assert len(captured["params"]) == 9
 
 
 def test_fetch_latest_weather_prefers_nearest_region_match(monkeypatch):

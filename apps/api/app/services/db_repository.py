@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import closing
 from datetime import UTC, datetime
+import math
 from typing import Any
 
 from apps.api.app.core.config import get_settings
@@ -64,6 +65,11 @@ def fetch_places(
     except Exception:
         return []
 
+    min_lat, max_lat, min_lng, max_lng = _coordinate_radius_bounds(
+        lat=lat,
+        lng=lng,
+        radius_m=radius_m,
+    )
     sql = """
         WITH query_point AS (
             SELECT ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography AS geog
@@ -89,6 +95,8 @@ def fetch_places(
                 ) AS distance_m
             FROM travel.public_places, query_point
             WHERE (%s = 'all' OR category = %s)
+              AND lat BETWEEN %s AND %s
+              AND lng BETWEEN %s AND %s
               AND ST_DWithin(
                     ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography,
                     query_point.geog,
@@ -163,7 +171,7 @@ def fetch_places(
         ORDER BY COALESCE(latest_scores.final_score, 0) DESC, distance_m ASC, updated_at DESC
         LIMIT 20
     """
-    params = (lng, lat, category, category, radius_m)
+    params = (lng, lat, category, category, min_lat, max_lat, min_lng, max_lng, radius_m)
     try:
         with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -245,6 +253,23 @@ def _optional_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _coordinate_radius_bounds(
+    *,
+    lat: float,
+    lng: float,
+    radius_m: int,
+) -> tuple[float, float, float, float]:
+    lat_delta = radius_m / 111_320
+    lng_scale = max(0.1, abs(math.cos(math.radians(lat))))
+    lng_delta = radius_m / (111_320 * lng_scale)
+    return (
+        max(-90.0, lat - lat_delta),
+        min(90.0, lat + lat_delta),
+        max(-180.0, lng - lng_delta),
+        min(180.0, lng + lng_delta),
+    )
 
 
 def _english_display_name(row: dict[str, Any]) -> str:
