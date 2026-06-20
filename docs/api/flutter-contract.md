@@ -150,7 +150,7 @@ success response exposes the same information through `X-LALA-Request-Hash` and
 `X-LALA-Cache-Key` headers. Hashes are derived from normalized request fields
 and do not expose raw credentials.
 Client-side timeout expectations are bounded in the reference client:
-health/readiness 3s, places/weather/intervention reads 5s, daily plan 20s, and
+health/readiness 3s, places/weather/intervention reads 12s, daily plan 20s, and
 docent script/audio generation 30s. Each method accepts a `timeout:` override;
 timeouts are reported as retryable `LalaApiException(code: REQUEST_TIMEOUT)`
 without exposing response bodies or credentials. The generated OpenAPI schema

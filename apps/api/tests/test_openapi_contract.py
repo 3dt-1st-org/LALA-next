@@ -49,12 +49,12 @@ def test_openapi_documents_public_route_timeout_expectations(client):
         "/healthz": ("get", 3, False),
         "/readyz": ("get", 3, False),
         "/metrics": ("get", 3, False),
-        "/api/v1/places": ("get", 5, True),
-        "/api/v1/weather": ("get", 5, True),
+        "/api/v1/places": ("get", 12, True),
+        "/api/v1/weather": ("get", 12, True),
         "/api/v1/docents/script": ("post", 30, True),
         "/api/v1/docents/audio": ("post", 30, True),
         "/api/v1/plans/daily": ("post", 20, True),
-        "/api/v1/plans/intervention": ("get", 5, True),
+        "/api/v1/plans/intervention": ("get", 12, True),
     }
 
     for path, (method, timeout_seconds, auth_required) in route_contracts.items():
