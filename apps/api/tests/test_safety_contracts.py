@@ -302,7 +302,7 @@ def test_paid_smoke_requires_authenticated_api_key():
     assert "LALA_SMOKE_BEARER_TOKEN" in script
     assert "LALA_SMOKE_API_KEY" in script
     assert "Invoke-SmokeCorsPreflight" in script
-    assert "Client auth is required for paid dependency smoke" in script
+    assert "Matching client auth is required for paid dependency smoke" in script
     assert "--no-access-log" in start_script
     assert "DB_DSN value is never printed by this script." in db_schema_script
     assert "Write-Host $env:DB_DSN" not in db_schema_script
@@ -572,7 +572,7 @@ def test_unix_scripts_have_safe_operational_guards():
     assert "identity=" in scripts["smoke_api.sh"]
     assert "LALA_SMOKE_BEARER_TOKEN" in scripts["smoke_api.sh"]
     assert "LALA_SMOKE_API_KEY" in scripts["smoke_api.sh"]
-    assert "Client auth is required for paid dependency smoke" in scripts["smoke_api.sh"]
+    assert "Matching client auth is required for paid dependency smoke" in scripts["smoke_api.sh"]
     assert "write_auth_config" in scripts["smoke_api.sh"]
     assert 'CURL_AUTH_ARGS=(-K "$AUTH_CONFIG_FILE")' in scripts["smoke_api.sh"]
     assert "AUTH_HEADER=(-H" not in scripts["smoke_api.sh"]

@@ -75,6 +75,7 @@ function Invoke-SmokeReadyz {
     $url = "$BaseUrl/readyz"
     Write-Host "GET /readyz"
     $payload = Invoke-RestMethod -Method Get -Uri $url
+    $script:ReadyzChecks = $payload.data.checks
     if (-not $payload.data -or -not $payload.data.mode) {
         throw "/readyz is missing runtime mode."
     }
@@ -225,20 +226,22 @@ if (-not $clientApiKey -and -not $clientBearerToken) {
             }
         }
     }
-    if (-not $clientApiKey -and -not $clientBearerToken) {
-        if ($PaidDependency) {
-            throw "Client auth is required for paid dependency smoke. Set LALA_SMOKE_BEARER_TOKEN, LALA_SMOKE_API_KEY, IOS_API_KEY, API_BEARER_TOKEN, or KEY_VAULT_URL with an authenticated Azure CLI session."
-        }
-        Write-Host "Client auth is not available; authenticated /api/v1 smoke checks skipped."
-        exit 0
-    }
 }
 
 $headers = @{}
-if ($clientBearerToken) {
+$serverApiKeyStatus = if ($script:ReadyzChecks -and ($script:ReadyzChecks.PSObject.Properties.Name -contains "api_key")) { $script:ReadyzChecks.api_key } else { "" }
+$serverBearerStatus = if ($script:ReadyzChecks -and ($script:ReadyzChecks.PSObject.Properties.Name -contains "bearer_token")) { $script:ReadyzChecks.bearer_token } else { "" }
+
+if ($serverBearerStatus -eq "configured" -and $clientBearerToken) {
     $headers["Authorization"] = "Bearer $clientBearerToken"
-} else {
+} elseif ($serverApiKeyStatus -eq "configured" -and $clientApiKey) {
     $headers["X-API-Key"] = $clientApiKey
+} else {
+    if ($PaidDependency) {
+        throw "Matching client auth is required for paid dependency smoke. Set LALA_SMOKE_BEARER_TOKEN, LALA_SMOKE_API_KEY, IOS_API_KEY, API_BEARER_TOKEN, or KEY_VAULT_URL with credentials that match /readyz."
+    }
+    Write-Host "Matching client auth is not available; authenticated /api/v1 smoke checks skipped."
+    exit 0
 }
 
 Invoke-SmokeGet "/api/v1/places?lat=37.2636&lng=127.0286&radius_m=1000" -Headers $headers

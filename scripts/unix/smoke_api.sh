@@ -52,6 +52,7 @@ smoke_readyz() {
   local payload
   echo "GET /readyz" >&2
   payload="$(curl -fsS "$BASE_URL/readyz")"
+  READYZ_PAYLOAD_CACHE="$payload"
   READYZ_PAYLOAD="$payload" "$PYTHON" - <<'PY'
 import json
 import os
@@ -76,6 +77,19 @@ print(
     "identity="
     f"{checks['client_identity']} jwt_validation={checks['jwt_validation']}"
 )
+PY
+}
+
+readyz_check() {
+  local name="$1"
+  READYZ_PAYLOAD="$READYZ_PAYLOAD_CACHE" "$PYTHON" - "$name" <<'PY'
+import json
+import os
+import sys
+
+payload = json.loads(os.environ["READYZ_PAYLOAD"])
+checks = (payload.get("data") or {}).get("checks") or {}
+print(checks.get(sys.argv[1]) or "")
 PY
 }
 
@@ -143,23 +157,29 @@ fi
 
 CLIENT_BEARER_TOKEN="${LALA_SMOKE_BEARER_TOKEN:-${API_BEARER_TOKEN:-}}"
 CLIENT_API_KEY="${LALA_SMOKE_API_KEY:-${IOS_API_KEY:-}}"
+SERVER_API_KEY_STATUS="$(readyz_check api_key)"
+SERVER_BEARER_STATUS="$(readyz_check bearer_token)"
 
-if [[ -z "$CLIENT_API_KEY" && -z "$CLIENT_BEARER_TOKEN" ]]; then
+AUTH_CONFIG_FILE=""
+AUTH_KIND=""
+if [[ "$SERVER_BEARER_STATUS" == "configured" && -n "$CLIENT_BEARER_TOKEN" ]]; then
+  AUTH_CONFIG_FILE="$(write_auth_config "Authorization" "Bearer $CLIENT_BEARER_TOKEN")"
+  AUTH_KIND="bearer"
+elif [[ "$SERVER_API_KEY_STATUS" == "configured" && -n "$CLIENT_API_KEY" ]]; then
+  AUTH_CONFIG_FILE="$(write_auth_config "X-API-Key" "$CLIENT_API_KEY")"
+  AUTH_KIND="api-key"
+fi
+
+if [[ -z "$AUTH_KIND" ]]; then
   if [[ "$PAID_DEPENDENCY" == "true" ]]; then
-    echo "Client auth is required for paid dependency smoke. Set LALA_SMOKE_BEARER_TOKEN, LALA_SMOKE_API_KEY, IOS_API_KEY, API_BEARER_TOKEN, or KEY_VAULT_URL with an authenticated Azure CLI session." >&2
+    echo "Matching client auth is required for paid dependency smoke. Set LALA_SMOKE_BEARER_TOKEN, LALA_SMOKE_API_KEY, IOS_API_KEY, API_BEARER_TOKEN, or KEY_VAULT_URL with credentials that match /readyz." >&2
     exit 1
   fi
-  echo "Client auth is not available; authenticated /api/v1 smoke checks skipped."
+  echo "Matching client auth is not available; authenticated /api/v1 smoke checks skipped."
   exit 0
 fi
 
 CURL_AUTH_ARGS=()
-AUTH_CONFIG_FILE=""
-if [[ -n "$CLIENT_BEARER_TOKEN" ]]; then
-  AUTH_CONFIG_FILE="$(write_auth_config "Authorization" "Bearer $CLIENT_BEARER_TOKEN")"
-else
-  AUTH_CONFIG_FILE="$(write_auth_config "X-API-Key" "$CLIENT_API_KEY")"
-fi
 CURL_AUTH_ARGS=(-K "$AUTH_CONFIG_FILE")
 trap 'rm -f "$AUTH_CONFIG_FILE" "${HEADERS_FILE:-}" "${AUDIO_FILE:-}"' EXIT
 
