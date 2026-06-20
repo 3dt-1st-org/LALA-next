@@ -218,6 +218,10 @@ After Azure reports the custom hostname binding as `SniEnabled`, verify
 
 ## Still Open
 
+Detailed remaining implementation and refactor candidates are tracked in
+[`completion-backlog.md`](completion-backlog.md). The short list below is the
+operator-facing rollout summary.
+
 - Re-run the Azure dev deployment after any Bicep or GitHub secret change so
   Key Vault secrets and the Container App revision stay aligned.
 - Keep Flutter web using the transition bearer token only from deployment
