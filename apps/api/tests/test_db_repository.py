@@ -237,10 +237,14 @@ def test_fetch_latest_weather_prefers_nearest_region_match(monkeypatch):
     assert weather["icon"] == "rain"
     assert weather["location_match"] is True
     assert "WITH query_point AS" in captured["sql"]
+    assert "candidate_places AS" in captured["sql"]
     assert ", nearest_region AS" in captured["sql"]
     assert "ST_Distance(" in captured["sql"]
+    assert "WHERE lat BETWEEN %s AND %s" in captured["sql"]
     assert "ORDER BY location_match_rank ASC, w.record_time DESC" in captured["sql"]
-    assert captured["params"] == (127.0, 37.2)
+    assert captured["params"][:2] == (127.0, 37.2)
+    assert captured["params"][-2:] == (37.2, 127.0)
+    assert len(captured["params"]) == 8
 
 
 def test_fetch_latest_weather_marks_latest_fallback_without_region_match(monkeypatch):

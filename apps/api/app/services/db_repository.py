@@ -104,8 +104,8 @@ def fetch_places(
               )
         )
         , latest_scores AS (
-            SELECT DISTINCT ON (place_id)
-                place_id,
+            SELECT DISTINCT ON (score_snapshot.place_id)
+                score_snapshot.place_id,
                 (to_jsonb(score_snapshot)->>'local_spending_score')::numeric AS local_spending_score,
                 (to_jsonb(score_snapshot)->>'small_merchant_fit_score')::numeric AS small_merchant_fit_score,
                 (to_jsonb(score_snapshot)->>'demand_dispersion_score')::numeric AS demand_dispersion_score,
@@ -117,7 +117,8 @@ def fetch_places(
                 formula_version,
                 features
             FROM analytics.place_score_snapshots score_snapshot
-            ORDER BY place_id, scored_at DESC
+            JOIN ranked_places ON ranked_places.place_id = score_snapshot.place_id
+            ORDER BY score_snapshot.place_id, scored_at DESC
         )
         SELECT
             ranked_places.*,
@@ -310,15 +311,32 @@ def fetch_latest_weather(*, lat: float, lng: float) -> dict[str, Any] | None:
     except Exception:
         return None
 
+    min_lat, max_lat, min_lng, max_lng = _coordinate_radius_bounds(
+        lat=lat,
+        lng=lng,
+        radius_m=100_000,
+    )
     sql = """
         WITH query_point AS (
             SELECT ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography AS geog
+        )
+        , candidate_places AS (
+            SELECT
+                region_ko,
+                region_en,
+                lat,
+                lng
+            FROM travel.public_places
+            WHERE lat BETWEEN %s AND %s
+              AND lng BETWEEN %s AND %s
+            ORDER BY ABS(lat - %s) + ABS(lng - %s)
+            LIMIT 500
         )
         , nearest_region AS (
             SELECT
                 NULLIF(TRIM(region_ko), '') AS region_ko,
                 NULLIF(TRIM(region_en), '') AS region_en
-            FROM travel.public_places, query_point
+            FROM candidate_places, query_point
             ORDER BY ST_Distance(
                 ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography,
                 query_point.geog
@@ -355,7 +373,7 @@ def fetch_latest_weather(*, lat: float, lng: float) -> dict[str, Any] | None:
     try:
         with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute(sql, (lng, lat))
+                cur.execute(sql, (lng, lat, min_lat, max_lat, min_lng, max_lng, lat, lng))
                 row = cur.fetchone()
     except Exception:
         return None
