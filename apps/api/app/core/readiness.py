@@ -155,18 +155,19 @@ def build_readiness(settings: Settings | None = None) -> dict:
         "live_speech": "enabled" if settings.enable_live_speech else "disabled",
         "worker_contracts": _worker_contract_status(),
     }
-    if checks["client_auth"] == "missing":
-        overall = "degraded"
-    elif any(value == "degraded" for value in checks.values()):
-        overall = "degraded"
-    elif any(value == "missing" for value in checks.values()):
-        overall = "degraded"
-    elif any(value == "skipped" for value in checks.values()):
-        overall = "degraded"
-    else:
-        overall = "ok"
+    mode = _runtime_mode(checks)
     return {
-        "status": overall,
+        "status": _overall_readiness_status(checks=checks, mode=mode),
         "checks": checks,
-        "mode": _runtime_mode(checks),
+        "mode": mode,
     }
+
+
+def _overall_readiness_status(*, checks: dict[str, str], mode: dict[str, str]) -> str:
+    if checks["client_auth"] == "missing":
+        return "degraded"
+    if mode["overall"] == "degraded":
+        return "degraded"
+    if mode["data"] == "skeleton":
+        return "degraded"
+    return "ok"
