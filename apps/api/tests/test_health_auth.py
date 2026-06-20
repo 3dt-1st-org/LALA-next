@@ -113,6 +113,30 @@ def test_legacy_snapshot_fallback_env_alias_still_works(client, monkeypatch):
     assert checks["static_snapshot_fallback"] == "enabled"
 
 
+def test_readyz_reports_public_contest_access(client, monkeypatch):
+    monkeypatch.delenv("IOS_API_KEY", raising=False)
+    monkeypatch.delenv("API_BEARER_TOKEN", raising=False)
+    monkeypatch.delenv("OAUTH_ISSUER", raising=False)
+    monkeypatch.delenv("OAUTH_AUDIENCE", raising=False)
+    monkeypatch.delenv("OAUTH_JWKS_URL", raising=False)
+    monkeypatch.delenv("OAUTH_CLIENT_ID", raising=False)
+    monkeypatch.delenv("OAUTH_REQUIRED_SCOPES", raising=False)
+    monkeypatch.delenv("DB_DSN", raising=False)
+    monkeypatch.setenv("LALA_PUBLIC_CONTEST_ACCESS", "true")
+
+    response = client.get("/readyz")
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    checks = data["checks"]
+    assert checks["client_auth"] == "public-contest"
+    assert checks["client_identity"] == "public-contest"
+    assert checks["public_contest_access"] == "enabled"
+    assert checks["static_snapshot_fallback"] == "disabled"
+    assert data["status"] == "degraded"
+    assert data["mode"]["data"] == "skeleton"
+
+
 def test_readyz_reports_oauth_identity_rollout_configuration(client, monkeypatch):
     monkeypatch.setenv("API_BEARER_TOKEN", "test-bearer-token")
     monkeypatch.setenv("OAUTH_ISSUER", "https://login.microsoftonline.com/tenant/v2.0")
@@ -259,6 +283,23 @@ def test_v1_accepts_unauthenticated_static_snapshot_fallback_request(client, mon
     assert body["ok"] is True
     assert body["data"]["source"] == "public_mvp_snapshot"
     assert body["data"]["places"][0]["score"]["data_basis"] == "public_mvp_snapshot"
+
+
+def test_v1_accepts_unauthenticated_public_contest_request(client, monkeypatch):
+    monkeypatch.delenv("IOS_API_KEY", raising=False)
+    monkeypatch.delenv("API_BEARER_TOKEN", raising=False)
+    monkeypatch.delenv("OAUTH_ISSUER", raising=False)
+    monkeypatch.delenv("OAUTH_AUDIENCE", raising=False)
+    monkeypatch.delenv("OAUTH_JWKS_URL", raising=False)
+    monkeypatch.delenv("OAUTH_CLIENT_ID", raising=False)
+    monkeypatch.delenv("OAUTH_REQUIRED_SCOPES", raising=False)
+    monkeypatch.setenv("LALA_PUBLIC_CONTEST_ACCESS", "true")
+
+    response = client.get("/api/v1/places?lat=37.2636&lng=127.0286&radius_m=50000")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is True
 
 
 def test_v1_requires_present_credentials_when_oauth_is_configured(client, monkeypatch):

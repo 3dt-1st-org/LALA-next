@@ -156,16 +156,18 @@ def test_azure_dev_deploy_uses_oidc_and_dev_branch_only():
     assert "AZURE_DEPLOY_PRINCIPAL_OBJECT_ID" in workflow
     assert 'deploymentPrincipalObjectId="$AZURE_DEPLOY_PRINCIPAL_OBJECT_ID"' in workflow
     assert "enableRoleAssignments=false" in workflow
+    assert "LALA_PUBLIC_CONTEST_ACCESS" in workflow
+    assert "vars.LALA_PUBLIC_CONTEST_ACCESS || 'true'" in workflow
+    assert 'publicContestAccess="$LALA_PUBLIC_CONTEST_ACCESS"' in workflow
     assert "staticSnapshotFallback=false" in workflow
     assert "secrets.AZURE_POSTGRES_ADMIN_PASSWORD" in workflow
-    assert "secrets.AZURE_API_BEARER_TOKEN" in workflow
-    assert 'apiBearerToken="$API_BEARER_TOKEN"' in workflow
+    assert "secrets.AZURE_API_BEARER_TOKEN" not in workflow
+    assert 'apiBearerToken="$API_BEARER_TOKEN"' not in workflow
     assert "ALLOW_CANONICAL_SQL_APPLY" not in workflow
     assert "apply_canonical_sql" not in workflow
     assert "verify_db_schema" not in workflow
     assert "az postgres flexible-server firewall-rule" not in workflow
     assert "SMOKE_BASE_URL=\"https://${API_FQDN}\"" in workflow
-    assert 'API_BEARER_TOKEN: ${{ secrets.AZURE_API_BEARER_TOKEN }}' in workflow
     assert 'scripts/unix/smoke_api.sh --base-url "$SMOKE_BASE_URL"' in workflow
     assert 'scripts/unix/smoke_api_matrix.sh --base-url "$SMOKE_BASE_URL" --timeout 25' in workflow
 

@@ -7,7 +7,15 @@ from time import monotonic
 
 
 READY_STATUSES = frozenset(
-    {"ok", "configured", "enabled", "static", "transition", "oauth-configured"}
+    {
+        "ok",
+        "configured",
+        "enabled",
+        "static",
+        "transition",
+        "oauth-configured",
+        "public-contest",
+    }
 )
 
 

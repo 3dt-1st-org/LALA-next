@@ -25,6 +25,29 @@ class _SmokeHandler(BaseHTTPRequestHandler):
             self._write_json({"ok": True, "data": {"status": "ok"}})
             return
         if path == "/readyz":
+            if self.server.public_access:
+                self._write_json(
+                    {
+                        "ok": True,
+                        "data": {
+                            "checks": {
+                                "client_identity": "public-contest",
+                                "jwt_validation": "skipped",
+                                "client_auth": "public-contest",
+                                "api_key": "skipped",
+                                "bearer_token": "skipped",
+                            },
+                            "mode": {
+                                "overall": "db-backed",
+                                "data": "db-backed",
+                                "ai": "skeleton",
+                                "speech": "skeleton",
+                                "worker": "dry-run",
+                            },
+                        },
+                    }
+                )
+                return
             self._write_json(
                 {
                     "ok": True,
@@ -52,7 +75,7 @@ class _SmokeHandler(BaseHTTPRequestHandler):
             return
         if path.startswith("/api/v1/"):
             self.server.protected_paths.append(path)
-            if self.headers.get("Authorization") != "Bearer server-token":
+            if not self.server.public_access and self.headers.get("Authorization") != "Bearer server-token":
                 self._write_json({"ok": False}, status=401)
                 return
             self._write_json({"ok": True, "data": {}})
@@ -63,7 +86,7 @@ class _SmokeHandler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path.startswith("/api/v1/"):
             self.server.protected_paths.append(path)
-            if self.headers.get("Authorization") != "Bearer server-token":
+            if not self.server.public_access and self.headers.get("Authorization") != "Bearer server-token":
                 self._write_json({"ok": False}, status=401)
                 return
             if path == "/api/v1/docents/audio":
@@ -91,6 +114,7 @@ class _SmokeHandler(BaseHTTPRequestHandler):
 
 class _SmokeServer(ThreadingHTTPServer):
     protected_paths: list[str]
+    public_access: bool
 
 
 def _run_smoke(base_url: str, env_overrides: dict[str, str]) -> subprocess.CompletedProcess[str]:
@@ -139,9 +163,10 @@ def _run_matrix_smoke(base_url: str, env_overrides: dict[str, str]) -> subproces
     )
 
 
-def _start_server() -> tuple[_SmokeServer, threading.Thread, str]:
+def _start_server(*, public_access: bool = False) -> tuple[_SmokeServer, threading.Thread, str]:
     server = _SmokeServer(("127.0.0.1", 0), _SmokeHandler)
     server.protected_paths = []
+    server.public_access = public_access
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     host, port = server.server_address
@@ -179,6 +204,24 @@ def test_unix_smoke_uses_bearer_when_readyz_reports_bearer_configured():
     assert "/api/v1/docents/audio" in server.protected_paths
 
 
+def test_unix_smoke_uses_public_contest_access_without_auth_headers():
+    server, thread, base_url = _start_server(public_access=True)
+    try:
+        result = _run_smoke(base_url, {})
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+    assert result.returncode == 0, result.stderr
+    assert "LALA-next API smoke completed." in result.stdout
+    assert "/api/v1/places" in server.protected_paths
+    assert "/api/v1/weather" in server.protected_paths
+    assert "/api/v1/plans/intervention" in server.protected_paths
+    assert "/api/v1/plans/daily" in server.protected_paths
+    assert "/api/v1/docents/script" in server.protected_paths
+    assert "/api/v1/docents/audio" in server.protected_paths
+
+
 def test_unix_matrix_smoke_covers_route_variants_without_printing_auth():
     server, thread, base_url = _start_server()
     try:
@@ -192,6 +235,25 @@ def test_unix_matrix_smoke_covers_route_variants_without_printing_auth():
     assert "checked=37" in result.stdout
     assert "server-token" not in result.stdout
     assert "server-token" not in result.stderr
+    assert server.protected_paths.count("/api/v1/places") == 20
+    assert server.protected_paths.count("/api/v1/weather") == 4
+    assert server.protected_paths.count("/api/v1/plans/intervention") == 4
+    assert server.protected_paths.count("/api/v1/plans/daily") == 4
+    assert server.protected_paths.count("/api/v1/docents/script") == 4
+    assert server.protected_paths.count("/api/v1/docents/audio") == 1
+
+
+def test_unix_matrix_smoke_uses_public_contest_access_without_auth_headers():
+    server, thread, base_url = _start_server(public_access=True)
+    try:
+        result = _run_matrix_smoke(base_url, {})
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+    assert result.returncode == 0, result.stderr
+    assert "LALA-next API matrix smoke" in result.stdout
+    assert "checked=37" in result.stdout
     assert server.protected_paths.count("/api/v1/places") == 20
     assert server.protected_paths.count("/api/v1/weather") == 4
     assert server.protected_paths.count("/api/v1/plans/intervention") == 4

@@ -28,6 +28,9 @@ def require_client_auth(
     authorization_value = _normalize_header_value(authorization)
     bearer_token = _parse_bearer_token(authorization_value)
 
+    if settings.public_contest_access:
+        return
+
     if settings.static_snapshot_fallback and not api_key and not authorization_value:
         return
 

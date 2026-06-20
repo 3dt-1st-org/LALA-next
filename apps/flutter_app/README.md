@@ -93,18 +93,19 @@ Optional compile-time defaults:
 ```bash
 flutter run \
   --dart-define LALA_API_BASE_URL=http://127.0.0.1:8080 \
-  --dart-define LALA_API_BEARER_TOKEN="$LALA_API_BEARER_TOKEN" \
   --dart-define KAKAO_JAVASCRIPT_KEY="$KAKAO_JAVASCRIPT_KEY"
 ```
 
-Production, review, and shared dev backends should keep
-`LALA_STATIC_SNAPSHOT_FALLBACK=false` and use configured client auth plus the
-PostgreSQL read model. The bundled static snapshot is only an offline,
-read-only fallback for DB outage handling or isolated local checks; if auth is
-unavailable, the server returns the normal JSON auth error and the app keeps
-readiness visible.
+During the public contest review window, shared dev can set
+`LALA_PUBLIC_CONTEST_ACCESS=true`; in that case web and simulator builds should
+call the Azure API without bundling `LALA_API_BEARER_TOKEN`. Production,
+review, and shared dev backends should still keep
+`LALA_STATIC_SNAPSHOT_FALLBACK=false` and use the PostgreSQL read model. The
+bundled static snapshot is only an offline, read-only fallback for DB outage
+handling or isolated local checks.
 
-Do not commit client tokens or API keys. For local testing, prefer entering
-short-lived credentials in the app UI or using an operator-owned environment.
+Do not commit client tokens or API keys. After the contest window, replace
+public contest access with OAuth or a backend-for-frontend proxy rather than
+shipping static credentials in the web bundle.
 The Kakao JavaScript key is embedded in web and native WebView map loads by
 design and must be protected by Kakao's JavaScript SDK domain allowlist.

@@ -185,10 +185,14 @@ CLIENT_BEARER_TOKEN="${LALA_SMOKE_BEARER_TOKEN:-${API_BEARER_TOKEN:-}}"
 CLIENT_API_KEY="${LALA_SMOKE_API_KEY:-${IOS_API_KEY:-}}"
 SERVER_API_KEY_STATUS="$(readyz_check api_key)"
 SERVER_BEARER_STATUS="$(readyz_check bearer_token)"
+SERVER_CLIENT_AUTH_STATUS="$(readyz_check client_auth)"
+SERVER_CLIENT_IDENTITY_STATUS="$(readyz_check client_identity)"
 
 AUTH_CONFIG_FILE=""
 AUTH_KIND=""
-if [[ "$SERVER_BEARER_STATUS" == "configured" && -n "$CLIENT_BEARER_TOKEN" ]]; then
+if [[ "$SERVER_CLIENT_AUTH_STATUS" == "public-contest" || "$SERVER_CLIENT_IDENTITY_STATUS" == "public-contest" ]]; then
+  AUTH_KIND="public-contest"
+elif [[ "$SERVER_BEARER_STATUS" == "configured" && -n "$CLIENT_BEARER_TOKEN" ]]; then
   AUTH_CONFIG_FILE="$(write_auth_config "Authorization" "Bearer $CLIENT_BEARER_TOKEN")"
   AUTH_KIND="bearer"
 elif [[ "$SERVER_API_KEY_STATUS" == "configured" && -n "$CLIENT_API_KEY" ]]; then
@@ -206,8 +210,10 @@ if [[ -z "$AUTH_KIND" ]]; then
 fi
 
 CURL_AUTH_ARGS=()
-CURL_AUTH_ARGS=(-K "$AUTH_CONFIG_FILE")
-trap 'rm -f "$AUTH_CONFIG_FILE"' EXIT
+if [[ -n "$AUTH_CONFIG_FILE" ]]; then
+  CURL_AUTH_ARGS=(-K "$AUTH_CONFIG_FILE")
+  trap 'rm -f "$AUTH_CONFIG_FILE"' EXIT
+fi
 
 smoke_get "/api/v1/places?lat=37.2636&lng=127.0286&radius_m=1000" "${CURL_AUTH_ARGS[@]}"
 smoke_get "/api/v1/weather?lat=37.2636&lng=127.0286" "${CURL_AUTH_ARGS[@]}"

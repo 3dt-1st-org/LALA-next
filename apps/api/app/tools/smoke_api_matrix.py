@@ -52,7 +52,7 @@ def run_matrix(*, base_url: str, timeout: float) -> dict[str, Any]:
         timeout=timeout,
     )
     auth_headers = _matching_auth_headers(readyz)
-    if not auth_headers:
+    if auth_headers is None:
         return {
             "ok": False,
             "mode": "api_matrix_smoke",
@@ -225,15 +225,17 @@ def _request_raw(
         )
 
 
-def _matching_auth_headers(readyz_payload: dict[str, Any]) -> dict[str, str]:
+def _matching_auth_headers(readyz_payload: dict[str, Any]) -> dict[str, str] | None:
     checks = (readyz_payload.get("data") or {}).get("checks") or {}
     bearer = os.getenv("LALA_SMOKE_BEARER_TOKEN") or os.getenv("API_BEARER_TOKEN")
     api_key = os.getenv("LALA_SMOKE_API_KEY") or os.getenv("IOS_API_KEY")
+    if checks.get("client_auth") == "public-contest" or checks.get("client_identity") == "public-contest":
+        return {}
     if checks.get("bearer_token") == "configured" and bearer:
         return {"Authorization": f"Bearer {bearer}"}
     if checks.get("api_key") == "configured" and api_key:
         return {"X-API-Key": api_key}
-    return {}
+    return None
 
 
 def _json_body(payload: dict[str, Any]) -> bytes:

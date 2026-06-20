@@ -1,6 +1,6 @@
 # Azure Migration Status
 
-Last updated: 2026-06-20 KST
+Last updated: 2026-06-21 KST
 
 This note records the shared dev migration path without exposing live Key Vault
 URLs, database passwords, bearer tokens, or generated Azure resource names.
@@ -16,13 +16,16 @@ queries to resolve live names during operations.
   protection rule was added.
 - `LALA_STATIC_SNAPSHOT_FALLBACK` is fixed to `false` for shared dev and should
   remain `false` for production and review deployments.
+- `LALA_PUBLIC_CONTEST_ACCESS` is enabled for the public contest review window
+  so `lala-next.cloud` can exercise `/api/v1/*` without login or a bundled
+  static API token.
 - The normal runtime path is PostgreSQL plus Key Vault plus reviewed ingest,
   scoring, and RAG jobs.
 - Bundled static data is documented only as an offline, read-only snapshot
   fallback for DB outage handling or isolated local checks.
-- The API client transition token is stored as the GitHub `dev` environment
-  secret `AZURE_API_BEARER_TOKEN`, then written by Bicep into Key Vault as
-  `api-bearer-token`.
+- The API client transition token path remains available, but it is not
+  required for the public contest review deployment while
+  `LALA_PUBLIC_CONTEST_ACCESS=true`.
 - The PostgreSQL administrator password is stored as the GitHub `dev`
   environment secret `AZURE_POSTGRES_ADMIN_PASSWORD`, then used by Bicep to
   create the Key Vault `db-dsn` secret.
@@ -58,17 +61,19 @@ queries to resolve live names during operations.
   `/api/v1/places` verified `formula_version=local-value-v2`.
 - RAG knowledge chunks were regenerated for all 2,636 places with the
   local-hash embedding path.
-- The production Flutter web build at `lala-next.cloud` was redeployed with
-  `https://api.lala-next.cloud` as the API base URL and the transition bearer
-  token from deployment secrets. Verification showed `healthz`, `readyz`, and
-  `/api/v1/places` returning HTTP 200 from the vanity API domain, with DB-backed
-  place rows and official image URLs.
+- The production Flutter web build at `lala-next.cloud` uses
+  `https://api.lala-next.cloud` as the API base URL. For the public contest
+  review window it should not bundle a static API bearer token; the Azure API
+  grants temporary public contest access while still serving DB-backed place
+  rows and official image URLs.
 - The extended API matrix smoke for `https://api.lala-next.cloud` covers 37
   route variants across place category/language filters, multiple map centers,
   daily planning, weather intervention, docent script categories, and docent
   `audio/mpeg` output.
-- The Azure dev deploy workflow now runs the same authenticated `smoke_api.sh`
-  and `smoke_api_matrix.sh` checks after every Container App revision update.
+- The Azure dev deploy workflow now runs the same `smoke_api.sh` and
+  `smoke_api_matrix.sh` checks after every Container App revision update. The
+  scripts understand public contest access as an intentional no-auth route
+  mode, and still support credentialed smoke when that mode is later disabled.
   The first workflow-gated matrix smoke passed on run `27857289530`; an
   operator-run matrix smoke against `https://api.lala-next.cloud` also passed
   with `checked=37`.
@@ -183,14 +188,14 @@ ALLOW_RAG_INDEX_APPLY=1 \
   --python .venv/bin/python
 ```
 
-11. Smoke the deployed API with the transition bearer token. `/readyz` should
-    report configured client auth and DB readiness after the runtime has picked
-    up the refreshed Key Vault values.
+11. Smoke the deployed API. During the public contest review window, `/readyz`
+    should report `client_auth=public-contest` and DB readiness after the
+    runtime has picked up the refreshed Key Vault values.
 
 12. Rebuild and redeploy Flutter web after backend URL or client auth changes.
-    Pass `LALA_API_BASE_URL`, `LALA_API_BEARER_TOKEN`, `KAKAO_JAVASCRIPT_KEY`,
-    and `LALA_UI_LANGUAGE` as build-time values from deployment secrets or
-    trusted local shell variables.
+    Pass `LALA_API_BASE_URL`, `KAKAO_JAVASCRIPT_KEY`, and `LALA_UI_LANGUAGE` as
+    build-time values from deployment secrets or trusted local shell variables.
+    Do not pass `LALA_API_BEARER_TOKEN` while public contest access is enabled.
 
 13. Move the API vanity domain only after reviewing the DNS change. Ask Azure
     for the required validation record:
@@ -228,8 +233,9 @@ operator-facing rollout summary.
 
 - Re-run the Azure dev deployment after any Bicep or GitHub secret change so
   Key Vault secrets and the Container App revision stay aligned.
-- Keep Flutter web using the transition bearer token only from deployment
-  secrets until OAuth or a backend-for-frontend proxy replaces the static token.
+- Keep `LALA_PUBLIC_CONTEST_ACCESS=true` only for the contest review window,
+  then replace it with OAuth or a backend-for-frontend proxy before moving to a
+  durable public service posture.
 - Remove the temporary operator PostgreSQL firewall rule during the next Azure
   lock maintenance window. The resource group currently has a `CanNotDelete`
   lock, so the rule deletion is blocked unless an authorized operator

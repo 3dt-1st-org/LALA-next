@@ -21,6 +21,8 @@ def _worker_contract_status() -> str:
 
 
 def _client_identity_status(settings: Settings) -> str:
+    if settings.public_contest_access:
+        return "public-contest"
     if settings.static_snapshot_fallback:
         return "snapshot-fallback"
     oauth_configured = all(
@@ -124,7 +126,9 @@ def build_readiness(settings: Settings | None = None) -> dict:
     settings = settings or get_settings()
     jwt_validation_configured = is_oauth_jwt_validation_configured(settings)
     client_auth_status = "missing"
-    if settings.static_snapshot_fallback:
+    if settings.public_contest_access:
+        client_auth_status = "public-contest"
+    elif settings.static_snapshot_fallback:
         client_auth_status = "snapshot-fallback"
     elif settings.ios_api_key or settings.api_bearer_token or jwt_validation_configured:
         client_auth_status = "configured"
@@ -132,6 +136,7 @@ def build_readiness(settings: Settings | None = None) -> dict:
     checks = {
         "client_auth": client_auth_status,
         "client_identity": _client_identity_status(settings),
+        "public_contest_access": "enabled" if settings.public_contest_access else "disabled",
         "static_snapshot_fallback": "enabled" if settings.static_snapshot_fallback else "disabled",
         "public_data_snapshot": public_mvp_data.snapshot_status(),
         "public_data_service_key": _status(settings.public_data_service_key, required=False),

@@ -40,6 +40,8 @@ Variables:
 - `LALA_ENVIRONMENT_NAME`
 - `POSTGRES_ADMIN_LOGIN`
 - `CORS_ALLOW_ORIGINS`
+- `LALA_PUBLIC_CONTEST_ACCESS` (defaults to `true` in the dev workflow during
+  the public contest review window)
 
 Secret:
 
@@ -59,15 +61,21 @@ through managed identity. The deployment workflow may redeploy infrastructure
 and the API image, but it does not read the database secret for schema
 migration.
 
+During the public contest review window, Azure dev sets
+`LALA_PUBLIC_CONTEST_ACCESS=true` so reviewers can use the web app without
+login or bundled static client credentials. This only opens the client-facing
+API route family; the normal data path remains PostgreSQL plus Key Vault.
+
 Azure dev, production, and review deployments keep
 `LALA_STATIC_SNAPSHOT_FALLBACK=false`. The normal runtime path is PostgreSQL
 plus Key Vault, populated by reviewed ingest, scoring, and RAG jobs. Bundled
 static data should be treated only as an offline, read-only snapshot fallback
 for DB outage handling or isolated local checks.
 
-The GitHub `dev` environment must provide both `AZURE_POSTGRES_ADMIN_PASSWORD`
-and `AZURE_API_BEARER_TOKEN`. Bicep writes the bearer token to Key Vault as
-`api-bearer-token`; it should not be committed, printed, or copied into docs.
+The GitHub `dev` environment must provide `AZURE_POSTGRES_ADMIN_PASSWORD`.
+`AZURE_API_BEARER_TOKEN` is now optional for the contest window; if provided in
+a later non-public transition, Bicep can still write it to Key Vault as
+`api-bearer-token`. It should not be committed, printed, or copied into docs.
 
 Weather fallback depends on the LALA runtime Key Vault secret
 `public-data-service-key`. This is the public-data service key used for the
@@ -81,12 +89,13 @@ Bicep template can grant the GitHub OIDC service principal `AcrPush` and Key
 Vault secret access without storing broad Azure credentials in GitHub.
 
 After the Container App revision is updated, the workflow runs the same
-secret-safe authenticated smoke scripts used by operators. `smoke_api.sh`
-checks readiness and the primary authenticated route family, and
+secret-safe smoke scripts used by operators. `smoke_api.sh`
+checks readiness and the primary client route family, and
 `smoke_api_matrix.sh` checks broader category, language, coordinate, planner,
 docent script, and docent audio variants against the custom API domain when it
-is configured. The workflow passes `AZURE_API_BEARER_TOKEN` only as a step
-environment value and the scripts do not print the token.
+is configured. In public contest mode these checks intentionally run without
+auth headers; in a later credentialed mode they can still use process-local
+smoke credentials without printing them.
 
 For the first local Azure CLI provisioning, `enableRoleAssignments=true` creates
 the runtime RBAC bindings. The GitHub `dev` workflow passes

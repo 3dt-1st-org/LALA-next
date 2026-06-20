@@ -93,6 +93,10 @@ SQL tooling or the guarded canonical SQL runbooks.
   through `KEY_VAULT_URL`.
 - `LALA_ALLOWED_KEY_VAULT_HOSTS` is set to the generated LALA vault host so the
   API cannot accidentally read ONMU or unrelated vaults.
+- `LALA_PUBLIC_CONTEST_ACCESS` is enabled by the dev workflow during the public
+  contest review window so the web app can call `/api/v1/*` without login or a
+  bundled static token. Disable it after the contest window when OAuth or a BFF
+  is ready.
 - `LALA_STATIC_SNAPSHOT_FALLBACK` is explicitly disabled for Azure dev,
   production, and review runtimes. The normal data path is PostgreSQL plus Key
   Vault backed by the official ingest, scoring, and RAG pipeline.

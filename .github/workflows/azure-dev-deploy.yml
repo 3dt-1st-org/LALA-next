@@ -21,6 +21,7 @@ env:
   LALA_ENVIRONMENT_NAME: ${{ vars.LALA_ENVIRONMENT_NAME || 'dev' }}
   POSTGRES_ADMIN_LOGIN: ${{ vars.POSTGRES_ADMIN_LOGIN || 'lalaadmin' }}
   CORS_ALLOW_ORIGINS: ${{ vars.CORS_ALLOW_ORIGINS || 'https://lala-next.cloud,https://www.lala-next.cloud' }}
+  LALA_PUBLIC_CONTEST_ACCESS: ${{ vars.LALA_PUBLIC_CONTEST_ACCESS || 'true' }}
   API_CUSTOM_DOMAIN_NAME: ${{ vars.AZURE_API_CUSTOM_DOMAIN_NAME || '' }}
   API_CUSTOM_DOMAIN_CERTIFICATE_ID: ${{ vars.AZURE_API_CUSTOM_DOMAIN_CERTIFICATE_ID || '' }}
 
@@ -60,7 +61,6 @@ jobs:
       - name: Validate deployment settings
         env:
           POSTGRES_ADMIN_PASSWORD: ${{ secrets.AZURE_POSTGRES_ADMIN_PASSWORD }}
-          API_BEARER_TOKEN: ${{ secrets.AZURE_API_BEARER_TOKEN }}
         run: |
           set -euo pipefail
           : "${AZURE_RESOURCE_GROUP:?AZURE_RESOURCE_GROUP GitHub environment variable is required.}"
@@ -69,7 +69,6 @@ jobs:
           : "${LALA_ENVIRONMENT_NAME:?LALA_ENVIRONMENT_NAME GitHub environment variable is required.}"
           : "${POSTGRES_ADMIN_LOGIN:?POSTGRES_ADMIN_LOGIN GitHub environment variable is required.}"
           : "${POSTGRES_ADMIN_PASSWORD:?AZURE_POSTGRES_ADMIN_PASSWORD GitHub environment secret is required.}"
-          : "${API_BEARER_TOKEN:?AZURE_API_BEARER_TOKEN GitHub environment secret is required.}"
 
       - name: Ensure resource group exists
         run: |
@@ -81,7 +80,6 @@ jobs:
       - name: Deploy Azure infrastructure
         env:
           POSTGRES_ADMIN_PASSWORD: ${{ secrets.AZURE_POSTGRES_ADMIN_PASSWORD }}
-          API_BEARER_TOKEN: ${{ secrets.AZURE_API_BEARER_TOKEN }}
         run: |
           set -euo pipefail
           az deployment group create \
@@ -92,10 +90,10 @@ jobs:
               location="$AZURE_LOCATION" \
               deploymentPrincipalObjectId="$AZURE_DEPLOY_PRINCIPAL_OBJECT_ID" \
               enableRoleAssignments=false \
+              publicContestAccess="$LALA_PUBLIC_CONTEST_ACCESS" \
               staticSnapshotFallback=false \
               postgresAdminLogin="$POSTGRES_ADMIN_LOGIN" \
               postgresAdminPassword="$POSTGRES_ADMIN_PASSWORD" \
-              apiBearerToken="$API_BEARER_TOKEN" \
               apiCustomDomainName="$API_CUSTOM_DOMAIN_NAME" \
               apiCustomDomainCertificateId="$API_CUSTOM_DOMAIN_CERTIFICATE_ID" \
               corsAllowOrigins="$CORS_ALLOW_ORIGINS" \
@@ -126,8 +124,6 @@ jobs:
             --image "$IMAGE"
 
       - name: Smoke deployed API
-        env:
-          API_BEARER_TOKEN: ${{ secrets.AZURE_API_BEARER_TOKEN }}
         run: |
           set -euo pipefail
           SMOKE_BASE_URL="https://${API_FQDN}"

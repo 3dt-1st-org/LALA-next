@@ -143,14 +143,17 @@ def test_openapi_documents_readyz_runtime_mode(client):
         "configured",
         "missing",
         "snapshot-fallback",
+        "public-contest",
     ]
     assert readiness_checks["client_identity"]["enum"] == [
         "static",
         "transition",
         "oauth-configured",
         "snapshot-fallback",
+        "public-contest",
         "missing",
     ]
+    assert readiness_checks["public_contest_access"]["enum"] == ["enabled", "disabled"]
     assert readiness_checks["static_snapshot_fallback"]["enum"] == ["enabled", "disabled"]
     assert readiness_checks["public_data_snapshot"]["enum"] == ["configured", "missing"]
     assert readiness_checks["public_data_service_key"]["enum"] == ["configured", "skipped"]

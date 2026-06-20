@@ -29,6 +29,7 @@ class Settings:
     kopis_api_key: str = ""
     public_data_service_key: str = ""
     gyeonggi_data_dream_api_key: str = ""
+    public_contest_access: bool = False
     static_snapshot_fallback: bool = False
     db_dsn: str = ""
     key_vault_url: str = ""
@@ -80,6 +81,7 @@ class Settings:
                 "gyeonggi-data-dream-api-key",
                 key_vault_url,
             ),
+            public_contest_access=_bool_env("LALA_PUBLIC_CONTEST_ACCESS", default=False),
             static_snapshot_fallback=_static_snapshot_fallback_enabled(),
             db_dsn=_env_or_secret("DB_DSN", "db-dsn", key_vault_url),
             key_vault_url=key_vault_url,

@@ -337,6 +337,9 @@ transition token from `API_BEARER_TOKEN` or a signed OAuth/Entra JWT when
 `IOS_API_KEY` remains accepted during the transition window. For local smoke
 with an already-issued OAuth JWT, set `LALA_SMOKE_BEARER_TOKEN` in the smoke
 shell instead of changing the server-side `API_BEARER_TOKEN`.
+During the public contest review window, Azure dev can set
+`LALA_PUBLIC_CONTEST_ACCESS=true` so `/api/v1/*` is reachable without login or a
+bundled static API token while still using the PostgreSQL-backed runtime path.
 `/readyz` includes `data.mode` so Flutter and backend operators can distinguish
 `skeleton`, `db-backed`, and opt-in `live-azure` operation without inferring it
 from individual dependency checks.

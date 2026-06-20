@@ -53,6 +53,13 @@ digest comparison, and rejected when the header value is oversized or when a
 bearer token contains internal whitespace. Auth values and JWT validation
 errors are never logged into response bodies.
 
+For the public contest review window, Azure dev can set
+`LALA_PUBLIC_CONTEST_ACCESS=true`. In that mode `/api/v1/*` is intentionally
+reachable without a client credential, while `/readyz.data.mode` should still
+show the normal PostgreSQL-backed data path when the shared DB is healthy. This
+is separate from `LALA_STATIC_SNAPSHOT_FALLBACK`, which remains only an
+offline, read-only fallback for DB outage handling or isolated local checks.
+
 ## Response Envelope
 
 Clients may send `X-Request-ID` for correlation. The server preserves only

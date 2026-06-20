@@ -19,6 +19,9 @@ param containerImage string = 'mcr.microsoft.com/azuredocs/containerapps-hellowo
 @description('Comma-separated frontend origins allowed by the FastAPI CORS layer.')
 param corsAllowOrigins string = 'https://lala-next.cloud,https://www.lala-next.cloud'
 
+@description('Temporary contest access switch for public API reads without client auth. Keep true only while the contest review build must be accessible without login.')
+param publicContestAccess bool = false
+
 @description('Switch for unauthenticated static snapshot fallback. Keep false for Azure dev/prod/review runtimes.')
 param staticSnapshotFallback bool = false
 
@@ -359,6 +362,10 @@ resource apiContainerApp 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
               value: appInsights.properties.ConnectionString
+            }
+            {
+              name: 'LALA_PUBLIC_CONTEST_ACCESS'
+              value: string(publicContestAccess)
             }
             {
               name: 'LALA_STATIC_SNAPSHOT_FALLBACK'

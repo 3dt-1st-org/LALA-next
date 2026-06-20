@@ -21,6 +21,7 @@ Production environment variables for the legacy Vercel API fallback path:
 
 ```text
 LALA_STATIC_SNAPSHOT_FALLBACK=false
+LALA_PUBLIC_CONTEST_ACCESS=true
 CORS_ALLOW_ORIGINS=https://lala-next.cloud,https://www.lala-next.cloud,https://lala-next.vercel.app
 LALA_ENABLE_LIVE_AI=false
 LALA_ENABLE_LIVE_SPEECH=false
@@ -32,10 +33,11 @@ data path is PostgreSQL plus Key Vault with reviewed ingest, scoring, and RAG
 jobs. Bundled static data is only an offline, read-only snapshot fallback for DB
 outage handling or isolated local checks.
 
-Flutter web builds that call Azure directly need a client credential at build
-time, such as `LALA_API_BEARER_TOKEN`, until OAuth or a backend-for-frontend
-proxy replaces the static transition credential. Keep that value in deployment
-secrets only; never place it in repo docs or examples.
+During the public contest review window, Azure dev uses
+`LALA_PUBLIC_CONTEST_ACCESS=true`, so Flutter web builds should call Azure
+without bundling a static API bearer token. After the contest window, switch
+back to OAuth or a backend-for-frontend proxy before disabling public contest
+access.
 
 Refresh the bundled snapshot from a canonical DB before a production demo:
 
@@ -74,7 +76,6 @@ Build Flutter web against the custom API domain:
 ```bash
 flutter build web --release \
   --dart-define LALA_API_BASE_URL=https://api.lala-next.cloud \
-  --dart-define LALA_API_BEARER_TOKEN="$LALA_API_BEARER_TOKEN" \
   --dart-define KAKAO_JAVASCRIPT_KEY="$KAKAO_JAVASCRIPT_KEY"
 ```
 
@@ -97,9 +98,9 @@ curl -sS -o /dev/null -w '%{http_code}\n' https://lala-next.cloud
 curl -sS -o /dev/null -w '%{http_code}\n' https://www.lala-next.cloud
 ```
 
-The production Flutter build should use the Azure-backed API base URL, a
-deployment-secret client credential, the Kakao Maps JavaScript key, and a 50 km
-default recommendation radius. Kakao Developers must allow the deployed web
+The production Flutter build for the contest window should use the Azure-backed
+API base URL, no bundled API bearer token, the Kakao Maps JavaScript key, and a
+50 km default recommendation radius. Kakao Developers must allow the deployed web
 domains, including `https://lala-next.cloud`, `https://www.lala-next.cloud`, and
 any Vercel preview domain used for judging.
 
