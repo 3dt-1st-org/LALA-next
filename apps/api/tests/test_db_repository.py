@@ -75,6 +75,71 @@ def test_check_db_status_degrades_when_canonical_relation_is_missing(monkeypatch
     assert status == "degraded"
 
 
+def test_check_postgis_status_requires_extension_and_spatial_index(monkeypatch):
+    captured = {}
+
+    class FakeCursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def execute(self, sql):
+            captured["sql"] = sql
+
+        def fetchone(self):
+            return (True, True)
+
+    class FakeConnection:
+        def cursor(self):
+            return FakeCursor()
+
+        def close(self):
+            return None
+
+    psycopg2_module = types.ModuleType("psycopg2")
+    psycopg2_module.connect = lambda dsn, connect_timeout: FakeConnection()
+    monkeypatch.setitem(sys.modules, "psycopg2", psycopg2_module)
+
+    status = db_repository.check_postgis_status("postgresql://db.example/lala")
+
+    assert status == "configured"
+    assert "FROM pg_extension" in captured["sql"]
+    assert "extname = 'postgis'" in captured["sql"]
+    assert "to_regclass('travel.idx_places_geog_expr')" in captured["sql"]
+
+
+def test_check_postgis_status_degrades_without_spatial_index(monkeypatch):
+    class FakeCursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def execute(self, sql):
+            return None
+
+        def fetchone(self):
+            return (True, False)
+
+    class FakeConnection:
+        def cursor(self):
+            return FakeCursor()
+
+        def close(self):
+            return None
+
+    psycopg2_module = types.ModuleType("psycopg2")
+    psycopg2_module.connect = lambda dsn, connect_timeout: FakeConnection()
+    monkeypatch.setitem(sys.modules, "psycopg2", psycopg2_module)
+
+    status = db_repository.check_postgis_status("postgresql://db.example/lala")
+
+    assert status == "degraded"
+
+
 def test_fetch_places_uses_radius_bound_ranking_query(monkeypatch):
     captured = {}
 

@@ -171,6 +171,30 @@ def test_readyz_reports_db_degraded_when_probe_fails(client, monkeypatch):
     body = response.json()
     assert body["data"]["status"] == "degraded"
     assert body["data"]["checks"]["db"] == "degraded"
+    assert body["data"]["checks"]["postgis"] == "degraded"
+    assert body["data"]["mode"]["data"] == "degraded"
+    assert body["data"]["mode"]["overall"] == "degraded"
+
+
+def test_readyz_reports_degraded_when_postgis_probe_fails(client, monkeypatch):
+    monkeypatch.setenv("API_BEARER_TOKEN", "test-bearer-token")
+    monkeypatch.setenv("DB_DSN", "postgresql://db.example/lala")
+    monkeypatch.setattr(
+        "apps.api.app.core.readiness.db_repository.check_db_status",
+        lambda dsn: "configured",
+    )
+    monkeypatch.setattr(
+        "apps.api.app.core.readiness.db_repository.check_postgis_status",
+        lambda dsn: "degraded",
+    )
+
+    response = client.get("/readyz")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["data"]["status"] == "degraded"
+    assert body["data"]["checks"]["db"] == "configured"
+    assert body["data"]["checks"]["postgis"] == "degraded"
     assert body["data"]["mode"]["data"] == "degraded"
     assert body["data"]["mode"]["overall"] == "degraded"
 
@@ -189,6 +213,10 @@ def test_readyz_reports_db_backed_and_live_azure_runtime_modes(client, monkeypat
         "apps.api.app.core.readiness.db_repository.check_db_status",
         lambda dsn: "configured",
     )
+    monkeypatch.setattr(
+        "apps.api.app.core.readiness.db_repository.check_postgis_status",
+        lambda dsn: "configured",
+    )
 
     response = client.get("/readyz")
 
@@ -196,6 +224,7 @@ def test_readyz_reports_db_backed_and_live_azure_runtime_modes(client, monkeypat
     body = response.json()
     assert body["data"]["status"] == "ok"
     assert body["data"]["checks"]["db"] == "configured"
+    assert body["data"]["checks"]["postgis"] == "configured"
     assert body["data"]["checks"]["client_identity"] == "static"
     assert body["data"]["checks"]["live_ai"] == "enabled"
     assert body["data"]["checks"]["live_speech"] == "enabled"
@@ -215,12 +244,17 @@ def test_readyz_reports_ok_for_db_backed_runtime_with_disabled_live_options(clie
         "apps.api.app.core.readiness.db_repository.check_db_status",
         lambda dsn: "configured",
     )
+    monkeypatch.setattr(
+        "apps.api.app.core.readiness.db_repository.check_postgis_status",
+        lambda dsn: "configured",
+    )
 
     response = client.get("/readyz")
 
     assert response.status_code == 200
     body = response.json()
     assert body["data"]["status"] == "ok"
+    assert body["data"]["checks"]["postgis"] == "configured"
     assert body["data"]["checks"]["live_ai"] == "disabled"
     assert body["data"]["checks"]["live_speech"] == "disabled"
     assert body["data"]["mode"] == {

@@ -85,6 +85,12 @@ KMA ultra-short nowcast request and AirKorea 시도별 실시간 대기질 reque
 `public_data_service_key=configured` before investigating KMA/AirKorea response
 quality or worker ingestion.
 
+Current-location place recommendations require both `db=configured` and
+`postgis=configured` in `/readyz`. `postgis=degraded` means the PostgreSQL
+connection may exist, but the PostGIS extension or `travel.idx_places_geog_expr`
+spatial index is missing, so the API should not be treated as a healthy
+DB-backed runtime for radius-ranked map recommendations.
+
 The deploy workflow also receives `AZURE_DEPLOY_PRINCIPAL_OBJECT_ID` so the
 Bicep template can grant the GitHub OIDC service principal `AcrPush` and Key
 Vault secret access without storing broad Azure credentials in GitHub.

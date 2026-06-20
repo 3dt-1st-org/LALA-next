@@ -48,6 +48,35 @@ def check_db_status(dsn: str) -> str:
     return "configured"
 
 
+def check_postgis_status(dsn: str) -> str:
+    if not dsn:
+        return "skipped"
+    try:
+        import psycopg2
+    except Exception:
+        return "degraded"
+    try:
+        with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        EXISTS (
+                            SELECT 1
+                            FROM pg_extension
+                            WHERE extname = 'postgis'
+                        ),
+                        to_regclass('travel.idx_places_geog_expr') IS NOT NULL
+                    """
+                )
+                row = cur.fetchone()
+    except Exception:
+        return "degraded"
+    if not row or not all(bool(value) for value in row):
+        return "degraded"
+    return "configured"
+
+
 def fetch_places(
     *,
     lat: float,

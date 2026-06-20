@@ -48,6 +48,7 @@ def _runtime_mode(checks: dict[str, str]) -> dict[str, str]:
     mode = {
         "data": _data_mode(
             db_status=checks.get("db", "skipped"),
+            postgis_status=checks.get("postgis", "skipped"),
             snapshot_fallback_status=checks.get("static_snapshot_fallback", "disabled"),
             public_snapshot_status=checks.get("public_data_snapshot", "missing"),
         ),
@@ -80,12 +81,13 @@ def _runtime_mode(checks: dict[str, str]) -> dict[str, str]:
 def _data_mode(
     *,
     db_status: str,
+    postgis_status: str,
     snapshot_fallback_status: str,
     public_snapshot_status: str,
 ) -> str:
-    if db_status == "configured":
+    if db_status == "configured" and postgis_status == "configured":
         return "db-backed"
-    if db_status == "degraded":
+    if db_status == "degraded" or postgis_status == "degraded":
         return "degraded"
     if snapshot_fallback_status == "enabled" and public_snapshot_status == "configured":
         return "public-cache"
@@ -133,6 +135,12 @@ def build_readiness(settings: Settings | None = None) -> dict:
     elif settings.ios_api_key or settings.api_bearer_token or jwt_validation_configured:
         client_auth_status = "configured"
 
+    db_status = db_repository.check_db_status(settings.db_dsn)
+    postgis_status = (
+        db_repository.check_postgis_status(settings.db_dsn)
+        if db_status == "configured"
+        else db_status
+    )
     checks = {
         "client_auth": client_auth_status,
         "client_identity": _client_identity_status(settings),
@@ -148,7 +156,8 @@ def build_readiness(settings: Settings | None = None) -> dict:
         "oauth_jwks_url": _status(settings.oauth_jwks_url, required=False),
         "oauth_client_id": _status(settings.oauth_client_id, required=False),
         "oauth_required_scopes": "configured" if settings.oauth_required_scopes else "skipped",
-        "db": db_repository.check_db_status(settings.db_dsn),
+        "db": db_status,
+        "postgis": postgis_status,
         "key_vault": _status(settings.key_vault_url, required=False),
         "azure_openai_endpoint": _status(settings.azure_openai_endpoint, required=False),
         "azure_openai_deployment": _status(settings.azure_openai_deployment, required=False),

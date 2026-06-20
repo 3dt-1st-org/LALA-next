@@ -160,6 +160,8 @@ def test_openapi_documents_readyz_runtime_mode(client):
     assert readiness_checks["public_data_service_key"]["enum"] == ["configured", "skipped"]
     assert readiness_checks["jwt_validation"]["enum"] == ["configured", "skipped"]
     assert readiness_checks["oauth_jwks_url"]["enum"] == ["configured", "skipped"]
+    assert readiness_checks["db"]["enum"] == ["configured", "skipped", "degraded"]
+    assert readiness_checks["postgis"]["enum"] == ["configured", "skipped", "degraded"]
 
 
 def test_openapi_documents_v1_success_data_schemas(client):

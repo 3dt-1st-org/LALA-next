@@ -136,14 +136,21 @@ When `DB_DSN` is configured, `/readyz` connects to PostgreSQL and verifies the
 canonical relations required by the API:
 
 - `travel.public_places`
+- `travel.place_events`
 - `travel.weather_observations`
 - `travel.docent_scripts`
 - `analytics.place_score_snapshots`
+- `rag.knowledge_chunks`
 
 Without `DB_DSN`, DB readiness is `skipped`; DB-backed routes return empty or
 `unavailable` contract-safe responses unless the limited static snapshot
 fallback is explicitly enabled. If the connection works but those relations are
-absent, DB readiness is `degraded` rather than `configured`.
+absent, DB readiness is `degraded` rather than `configured`. `/readyz` also
+reports `postgis`: it is `configured` only when the PostGIS extension and the
+`travel.idx_places_geog_expr` GiST expression index are present. The data mode is
+`db-backed` only when both `db=configured` and `postgis=configured`, because
+current-location recommendations rely on `ST_DWithin` and `ST_Distance` rather
+than approximate client-side/mock distance sorting.
 `/readyz` also verifies that the Wave 1 dry-run worker contract registry can be
 loaded. This does not imply live Azure Functions/Event Hub freshness; live worker
 mutation remains behind the worker rollout gate.

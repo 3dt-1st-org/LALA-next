@@ -204,8 +204,10 @@ Known degraded features: DB/Azure live calls are not required in Wave 1
 If `DB_DSN` is set, `/readyz` connects to PostgreSQL and verifies the canonical
 relations used by places/weather/planner/docent cache routes:
 `travel.public_places`, `travel.weather_observations`, and
-`travel.docent_scripts`. If the DB is absent, missing those relations, or
-otherwise degraded, DB-backed routes return empty or `unavailable`
-contract-safe responses unless static snapshot fallback is explicitly enabled.
-`/readyz.data.mode.data` reports `db-backed` only when that DB probe is
-configured; otherwise it reports `unavailable`, `public-cache`, or `degraded`.
+`travel.docent_scripts`. It also reports `postgis=configured` only when the
+PostGIS extension and `travel.idx_places_geog_expr` spatial index exist. If the
+DB is absent, missing those relations, missing PostGIS support, or otherwise
+degraded, DB-backed routes return empty or `unavailable` contract-safe responses
+unless static snapshot fallback is explicitly enabled. `/readyz.data.mode.data`
+reports `db-backed` only when both `db=configured` and `postgis=configured`;
+otherwise it reports `unavailable`, `public-cache`, or `degraded`.
