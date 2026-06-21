@@ -257,23 +257,16 @@ void main() {
         },
         initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
         locationProvider: locationProvider,
-        requireLocationStartConfirmation: true,
       ),
     );
 
-    await tester.pump();
-
-    expect(find.text('현재 위치에서 시작할게요'), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('location-start-confirm')),
-      findsOneWidget,
-    );
-    expect(locationProvider.requests, 0);
-    expect(backends.first.placesRequestConfigs, isEmpty);
-
-    await tester.tap(find.byKey(const ValueKey('location-start-confirm')));
     await tester.pumpAndSettle();
 
+    expect(find.text('현재 위치에서 시작할게요'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('location-start-confirm')),
+      findsNothing,
+    );
     expect(locationProvider.requests, 1);
     expect(configs, isNotEmpty);
     expect(configs.last.lat, 37.5665);
@@ -291,6 +284,38 @@ void main() {
     expect(find.text('날씨 데이터 준비 중'), findsNothing);
   });
 
+  testWidgets('can keep the explicit location start prompt when configured', (
+    tester,
+  ) async {
+    final locationProvider = FakeLocationProvider(
+      const LalaLocationResult.found(LalaLocation(lat: 37.5665, lng: 126.9780)),
+    );
+
+    await tester.pumpWidget(
+      TestLalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+        locationProvider: locationProvider,
+        requireLocationStartConfirmation: true,
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.text('현재 위치에서 시작할게요'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('location-start-confirm')),
+      findsOneWidget,
+    );
+    expect(locationProvider.requests, 0);
+
+    await tester.tap(find.byKey(const ValueKey('location-start-confirm')));
+    await tester.pumpAndSettle();
+
+    expect(locationProvider.requests, 1);
+    expect(find.text('추천 장소 접기'), findsOneWidget);
+  });
+
   testWidgets(
     'shows current location startup state while permission is pending',
     (tester) async {
@@ -301,16 +326,8 @@ void main() {
           backendFactory: FakeBackend.new,
           initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
           locationProvider: locationProvider,
-          requireLocationStartConfirmation: true,
         ),
       );
-      await tester.pump();
-      await tester.pump();
-
-      expect(find.text('현재 위치에서 시작할게요'), findsOneWidget);
-      expect(locationProvider.requests, 0);
-
-      await tester.tap(find.byKey(const ValueKey('location-start-confirm')));
       await tester.pump();
       await tester.pump();
 

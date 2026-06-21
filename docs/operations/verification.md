@@ -701,9 +701,11 @@ is expected and the smoke still passes because it is a render check. Pass
 `--api-base-url <url>` for a separately running backend, and add
 `--fail-on-console-error` when the backend is expected to satisfy all public
 browser requests. With `--api-base-url` or `--start-api`, the smoke grants a
-fixed test browser geolocation, taps through the location consent flow, captures
-`flutter-web-requests.txt`, and verifies places, weather, intervention, daily
-plan, and docent script requests with the granted latitude and longitude. The
+fixed test browser geolocation, reloads into the first-run location request
+flow, captures `flutter-web-requests.txt`, and verifies places, weather,
+intervention, and daily plan requests with the granted latitude and longitude.
+When the smoke targets `--api-base-url` or the deployed `--web-url`, it also
+requires the first-place docent script request. The
 `--api-base-url` backend must allow the selected local web origin. Use
 `--web-url https://lala-next.cloud/?qa=<label>` when verifying the deployed
 contest site so Kakao Maps and API CORS run from the registered production

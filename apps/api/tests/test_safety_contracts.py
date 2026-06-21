@@ -224,6 +224,8 @@ def test_flutter_web_smoke_drives_location_flow_and_route_requests():
     for script in (unix_script, windows_script):
         assert "grantPermissions(['geolocation']" in script
         assert "setGeolocation" in script
+        assert "page.reload" in script
+        assert "page.mouse.click" not in script
         assert "37.5665" in script
         assert "126.978" in script
         assert "flutter-web-requests.txt" in script

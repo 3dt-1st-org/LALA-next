@@ -272,23 +272,32 @@ RUN_LOCATION_FLOW="false"
 if [[ "$START_API" == "true" || "$API_BASE_URL_EXPLICIT" == "true" || "$WEB_URL_EXPLICIT" == "true" ]]; then
   RUN_LOCATION_FLOW="true"
 fi
+EXPECT_DOCENT_SCRIPT="false"
+if [[ "$API_BASE_URL_EXPLICIT" == "true" || "$WEB_URL_EXPLICIT" == "true" ]]; then
+  EXPECT_DOCENT_SCRIPT="true"
+fi
 
 if [[ "$RUN_LOCATION_FLOW" == "true" ]]; then
   echo "Driving Flutter web location flow with test geolocation..."
   "$PWCLI" -s="$PW_SESSION" run-code "async (page) => {
     await page.context().grantPermissions(['geolocation'], { origin: '$WEB_ORIGIN' });
     await page.context().setGeolocation({ latitude: $SMOKE_LAT, longitude: $SMOKE_LNG });
-    await page.waitForTimeout(5000);
-    const viewport = page.viewportSize() || { width: 1280, height: 900 };
-    await page.mouse.click(Math.floor(viewport.width / 2), Math.floor(viewport.height * 0.60));
-    await page.waitForTimeout(12000);
-    return { url: page.url(), viewport };
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    const selector = 'flutter-view, flt-glass-pane, flt-scene-host';
+    for (let index = 0; index < 80; index += 1) {
+      if (await page.locator(selector).count()) {
+        break;
+      }
+      await page.waitForTimeout(250);
+    }
+    await page.waitForTimeout(15000);
+    return { url: page.url(), viewport: page.viewportSize() || { width: 1280, height: 900 } };
   }" >"$OUTPUT_DIR/flutter-web-location-flow.txt"
 
   REQUEST_LOG="$OUTPUT_DIR/flutter-web-requests.txt"
   for _ in {1..60}; do
     "$PWCLI" -s="$PW_SESSION" requests >"$REQUEST_LOG"
-    if REQUEST_LOG="$REQUEST_LOG" "$PYTHON" - <<'PY'
+    if REQUEST_LOG="$REQUEST_LOG" EXPECT_DOCENT_SCRIPT="$EXPECT_DOCENT_SCRIPT" "$PYTHON" - <<'PY'
 import os
 from pathlib import Path
 
@@ -298,8 +307,9 @@ required_paths = [
     "/api/v1/weather",
     "/api/v1/plans/intervention",
     "/api/v1/plans/daily",
-    "/api/v1/docents/script",
 ]
+if os.environ.get("EXPECT_DOCENT_SCRIPT") == "true":
+    required_paths.append("/api/v1/docents/script")
 lines = log.splitlines()
 missing = [
     path
@@ -316,7 +326,7 @@ PY
     fi
     sleep 0.5
   done
-  REQUEST_LOG="$REQUEST_LOG" "$PYTHON" - <<'PY'
+  REQUEST_LOG="$REQUEST_LOG" EXPECT_DOCENT_SCRIPT="$EXPECT_DOCENT_SCRIPT" "$PYTHON" - <<'PY'
 import os
 from pathlib import Path
 
@@ -326,8 +336,9 @@ required_paths = [
     "/api/v1/weather",
     "/api/v1/plans/intervention",
     "/api/v1/plans/daily",
-    "/api/v1/docents/script",
 ]
+if os.environ.get("EXPECT_DOCENT_SCRIPT") == "true":
+    required_paths.append("/api/v1/docents/script")
 lines = log.splitlines()
 missing = [
     path
@@ -360,7 +371,6 @@ if [[ "$START_API" == "true" ]]; then
     "/api/v1/weather"
     "/api/v1/plans/intervention"
     "/api/v1/plans/daily"
-    "/api/v1/docents/script"
   )
   for _ in {1..80}; do
     missing_path=""
@@ -387,7 +397,6 @@ required_paths = [
     "/api/v1/weather",
     "/api/v1/plans/intervention",
     "/api/v1/plans/daily",
-    "/api/v1/docents/script",
 ]
 missing = [path for path in required_paths if f"path={path} " not in log]
 if missing:

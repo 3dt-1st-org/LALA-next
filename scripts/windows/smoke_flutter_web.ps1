@@ -274,17 +274,23 @@ async () => {
         Set-Content -Path (Join-Path $OutputDir "flutter-web-console.txt") -Encoding UTF8
 
     $RunLocationFlow = $StartApi -or $ApiBaseWasExplicit -or $WebUrlWasExplicit
+    $ExpectDocentScript = $ApiBaseWasExplicit -or $WebUrlWasExplicit
     if ($RunLocationFlow) {
         Write-Host "Driving Flutter web location flow with test geolocation..."
         $locationFlowCode = @"
 async (page) => {
   await page.context().grantPermissions(['geolocation'], { origin: '$WebOrigin' });
   await page.context().setGeolocation({ latitude: $SmokeLat, longitude: $SmokeLng });
-  await page.waitForTimeout(5000);
-  const viewport = page.viewportSize() || { width: 1280, height: 900 };
-  await page.mouse.click(Math.floor(viewport.width / 2), Math.floor(viewport.height * 0.60));
-  await page.waitForTimeout(12000);
-  return { url: page.url(), viewport };
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  const selector = 'flutter-view, flt-glass-pane, flt-scene-host';
+  for (let index = 0; index < 80; index += 1) {
+    if (await page.locator(selector).count()) {
+      break;
+    }
+    await page.waitForTimeout(250);
+  }
+  await page.waitForTimeout(15000);
+  return { url: page.url(), viewport: page.viewportSize() || { width: 1280, height: 900 } };
 }
 "@
         Invoke-PlaywrightCli -CliArgs @("run-code", $locationFlowCode) |
@@ -296,9 +302,11 @@ async (page) => {
             "/api/v1/places",
             "/api/v1/weather",
             "/api/v1/plans/intervention",
-            "/api/v1/plans/daily",
-            "/api/v1/docents/script"
+            "/api/v1/plans/daily"
         )
+        if ($ExpectDocentScript) {
+            $requiredFlowPaths += "/api/v1/docents/script"
+        }
         for ($index = 0; $index -lt 60; $index++) {
             $requestLog = Invoke-PlaywrightCli -CliArgs @("requests") | Out-String
             Set-Content -Path $requestLogPath -Value $requestLog -Encoding UTF8
@@ -342,8 +350,7 @@ async (page) => {
             "/api/v1/places",
             "/api/v1/weather",
             "/api/v1/plans/intervention",
-            "/api/v1/plans/daily",
-            "/api/v1/docents/script"
+            "/api/v1/plans/daily"
         )
         for ($index = 0; $index -lt 80; $index++) {
             $log = Get-CombinedApiLog

@@ -80,7 +80,7 @@ class LalaAppConfig {
     this.radiusM = 50000,
     this.category = 'all',
     this.lang = 'ko',
-    this.requireLocationStartConfirmation = true,
+    this.requireLocationStartConfirmation = false,
   });
 
   const LalaAppConfig.fromEnvironment()
@@ -104,7 +104,7 @@ class LalaAppConfig {
       ),
       requireLocationStartConfirmation = const bool.fromEnvironment(
         'LALA_REQUIRE_LOCATION_START_CONFIRMATION',
-        defaultValue: true,
+        defaultValue: false,
       );
 
   final String baseUri;
