@@ -278,6 +278,7 @@ def test_flutter_web_smoke_drives_location_flow_and_route_requests():
     assert "Flutter docent script did not include the captured PM2.5 value." in unix_script
     assert "Flutter location flow rendered no real map pins." in unix_script
     assert "Flutter location flow rendered only clusters without place pins." in unix_script
+    assert "Flutter initial location map clustered places before the user zoomed out." in unix_script
 
 
 def test_paid_smoke_requires_authenticated_api_key():

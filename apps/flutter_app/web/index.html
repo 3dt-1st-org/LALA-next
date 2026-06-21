@@ -41,6 +41,31 @@
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
+  <script>
+    // The public contest build should always use the freshly deployed bundle.
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations()
+        .then(function (registrations) {
+          registrations.forEach(function (registration) {
+            registration.unregister();
+          });
+        })
+        .catch(function () {});
+    }
+    if (window.caches && window.caches.keys) {
+      window.caches.keys()
+        .then(function (keys) {
+          keys.forEach(function (key) {
+            if (String(key).indexOf('flutter-app-cache') !== -1 ||
+                String(key).indexOf('flutter-temp-cache') !== -1 ||
+                String(key).indexOf('lala') !== -1) {
+              window.caches.delete(key);
+            }
+          });
+        })
+        .catch(function () {});
+    }
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

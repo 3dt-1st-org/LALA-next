@@ -27,33 +27,50 @@
     }
 
     .lala-marker {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      pointer-events: auto;
+    }
+
+    .lala-marker-name {
+      max-width: 132px;
+      padding: 5px 10px;
+      border-radius: 12px;
+      background: rgba(17, 24, 39, .72);
+      color: #ffffff;
+      font-size: 10px;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      box-shadow: 0 6px 18px rgba(15, 23, 42, .18);
+    }
+
+    .lala-marker-circle {
       display: grid;
       place-items: center;
-      border: 3px solid #fff;
-      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.26);
+      border-radius: 50%;
+      background: #ffffff;
+      box-shadow: 0 4px 14px rgba(15, 23, 42, .22);
       box-sizing: border-box;
-      cursor: pointer;
-      font-weight: 900;
     }
 
-    .lala-marker-pin {
-      border-radius: 50% 50% 50% 8px;
-      transform: rotate(-45deg);
-    }
-
-    .lala-marker-cluster {
+    .lala-marker-inner {
+      display: grid;
+      place-items: center;
       border-radius: 50%;
     }
 
     .lala-marker-label {
-      color: #fff;
-      font-size: 13px;
+      display: grid;
+      place-items: center;
+      font-weight: 900;
       line-height: 1;
       pointer-events: none;
-    }
-
-    .lala-marker-pin .lala-marker-label {
-      transform: rotate(45deg);
     }
   </style>
 </head>
@@ -123,8 +140,19 @@
           });
           circle.setMap(map);
 
+          let renderedPins = 0;
+          let renderedClusters = 0;
           places.forEach(function (place) {
+            const isCluster = Number(place.clusterCount || 0) > 1;
             const marker = buildMarker(place);
+            marker.setAttribute("data-lala-place-id", String(place.id || ""));
+            marker.setAttribute("data-lala-category", String(place.category || ""));
+            if (isCluster) {
+              marker.setAttribute("data-lala-cluster-count", String(place.clusterCount || ""));
+              renderedClusters += 1;
+            } else {
+              renderedPins += 1;
+            }
             marker.addEventListener("click", function () {
               if (window.LalaMap && window.LalaMap.postMessage) {
                 window.LalaMap.postMessage(String(place.id || ""));
@@ -133,11 +161,20 @@
             const overlay = new kakao.maps.CustomOverlay({
               position: new kakao.maps.LatLng(Number(place.lat), Number(place.lng)),
               content: marker,
-              yAnchor: 1.08,
+              yAnchor: place.selected && !isCluster ? 1.0 : 0.5,
               zIndex: place.selected ? 12 : (place.clusterCount > 1 ? 9 : 6)
             });
             overlay.setMap(map);
           });
+          mapElement.setAttribute("data-lala-marker-pins", String(renderedPins));
+          mapElement.setAttribute("data-lala-marker-clusters", String(renderedClusters));
+          mapElement.setAttribute("data-lala-map-level", String(map.getLevel()));
+          window.__lalaLastMapMarkerStats = {
+            pins: renderedPins,
+            clusters: renderedClusters,
+            total: places.length,
+            level: map.getLevel()
+          };
 
           function postCameraIdle() {
             const nextCenter = map.getCenter();
@@ -163,40 +200,79 @@
 
       function buildMarker(place) {
         const isCluster = Number(place.clusterCount || 0) > 1;
-        const size = isCluster
-          ? Math.min(66, 38 + Number(place.clusterCount || 0) * 4)
-          : (place.selected ? 58 : 42);
+        const size = isCluster ? 42 : (place.selected ? 34 : 28);
         const marker = document.createElement("div");
         marker.className = "lala-marker " + (isCluster ? "lala-marker-cluster" : "lala-marker-pin");
         marker.title = place.name || "";
-        marker.style.width = size + "px";
-        marker.style.height = size + "px";
-        marker.style.background = colorFor(place.category);
-        marker.style.borderWidth = place.selected ? "5px" : "3px";
+
+        if (place.selected && !isCluster) {
+          const namePill = document.createElement("div");
+          namePill.className = "lala-marker-name";
+          namePill.textContent = shortName(place.name);
+          marker.appendChild(namePill);
+        }
+
+        const circle = document.createElement("div");
+        circle.className = "lala-marker-circle";
+        circle.style.width = size + "px";
+        circle.style.height = size + "px";
+        if (isCluster) {
+          circle.style.border = "2.2px solid " + colorFor(place.category);
+        }
+
+        const inner = document.createElement("div");
+        inner.className = "lala-marker-inner";
+        inner.style.width = Math.round(size * 0.64) + "px";
+        inner.style.height = Math.round(size * 0.64) + "px";
+        inner.style.background = colorFor(place.category);
 
         const label = document.createElement("div");
         label.className = "lala-marker-label";
-        label.style.color = place.category === "event" ? "#1A202C" : "#ffffff";
-        label.style.fontSize = isCluster ? "16px" : (place.selected ? "15px" : "13px");
-        label.textContent = isCluster ? String(place.clusterCount) : glyphFor(place.category);
-        marker.appendChild(label);
+        label.style.color = isCluster
+          ? clusterTextColorFor(place.category)
+          : markerTextColorFor(place.category);
+        label.style.fontSize = isCluster ? "14px" : (place.selected ? "13px" : "11px");
+        if (isCluster) {
+          label.textContent = String(place.clusterCount);
+          circle.appendChild(label);
+        } else {
+          label.innerHTML = iconSvgFor(place.category);
+          inner.appendChild(label);
+          circle.appendChild(inner);
+        }
+        marker.appendChild(circle);
         return marker;
       }
 
       function colorFor(category) {
-        if (category === "restaurant") return "#C53030";
-        if (category === "event") return "#F5C842";
-        if (category === "culture_venue") return "#2B6CB0";
-        if (category === "attraction") return "#D73333";
+        if (category === "attraction") return "#C53030";
+        if (category === "restaurant") return "#F5C842";
+        if (category === "event") return "#2B6CB0";
+        if (category === "culture_venue") return "#0F766E";
         return "#1A202C";
       }
 
-      function glyphFor(category) {
-        if (category === "restaurant") return "맛";
-        if (category === "event") return "행";
-        if (category === "culture_venue") return "문";
-        if (category === "attraction") return "명";
-        return "L";
+      function markerTextColorFor(category) {
+        return category === "restaurant" ? "#1A202C" : "#ffffff";
+      }
+
+      function clusterTextColorFor(category) {
+        return category === "restaurant" ? "#6B4F0D" : colorFor(category);
+      }
+
+      function shortName(name) {
+        name = String(name || "장소");
+        return name.length > 14 ? name.slice(0, 14) + "..." : name;
+      }
+
+      function iconSvgFor(category) {
+        if (category === "restaurant") {
+          return '<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M7 3v8M5 3v8M9 3v8M5 11h4v10M16 3v18M16 3c3 2 4 5 3 9h-3" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        }
+        if (category === "event") {
+          return '<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M8 3v4M16 3v4M4 10h16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
+        }
+        return '<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M4 10h16L12 4 4 10ZM6 10v8M10 10v8M14 10v8M18 10v8M4 20h16" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>';
       }
     })();
   </script>

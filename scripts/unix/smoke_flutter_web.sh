@@ -226,6 +226,7 @@ else
     build
     web
     --release
+    --pwa-strategy=none
     --no-wasm-dry-run
     --dart-define
     "LALA_API_BASE_URL=$API_BASE_URL"
@@ -803,6 +804,7 @@ PY
       pinCount: state.pinCount,
       clusterCount: state.clusterCount,
       stats: state.stats,
+      mapLevel: state.container ? state.container.getAttribute("data-lala-map-level") : null,
       containerPins: state.container ? state.container.getAttribute("data-lala-marker-pins") : null,
       containerClusters: state.container ? state.container.getAttribute("data-lala-marker-clusters") : null,
       sampleMarkers
@@ -827,12 +829,17 @@ cluster_count = int(state.get("clusterCount") or 0)
 stat_pins = int(stats.get("pins") or 0)
 stat_clusters = int(stats.get("clusters") or 0)
 stat_total = int(stats.get("total") or 0)
+map_level = int(stats.get("level") or state.get("mapLevel") or 0)
 if max(pin_count, stat_pins) <= 0:
     raise SystemExit("Flutter location flow rendered no real map pins.")
 if stat_total <= 0:
     raise SystemExit("Flutter location flow did not pass live places into the map.")
 if max(cluster_count, stat_clusters) > 0 and max(pin_count, stat_pins) <= 0:
     raise SystemExit("Flutter location flow rendered only clusters without place pins.")
+if map_level and map_level <= 8 and max(cluster_count, stat_clusters) > 0:
+    raise SystemExit(
+        "Flutter initial location map clustered places before the user zoomed out."
+    )
 if not state.get("sampleMarkers"):
     raise SystemExit("Flutter location flow marker sample was empty.")
 PY

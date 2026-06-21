@@ -198,6 +198,7 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
             places: widget.places,
             centerLat: widget.centerLat,
             centerLng: widget.centerLng,
+            level: widget.level,
           );
         });
   }
@@ -380,10 +381,12 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
     });
     container.setAttribute("data-lala-marker-pins", String(renderedPins));
     container.setAttribute("data-lala-marker-clusters", String(renderedClusters));
+    container.setAttribute("data-lala-map-level", String(map.getLevel()));
     window.__lalaLastMapMarkerStats = {
       pins: renderedPins,
       clusters: renderedClusters,
-      total: places.length
+      total: places.length,
+      level: map.getLevel()
     };
 
     function dispatchCameraIdle() {
@@ -419,6 +422,7 @@ void _drawFallbackMap(
   required List<KakaoMapPlace> places,
   required double centerLat,
   required double centerLng,
+  required int level,
 }) {
   container.children.clear();
   container.text = '';
@@ -474,6 +478,8 @@ void _drawFallbackMap(
     ..style.fontFamily = 'system-ui, -apple-system, sans-serif';
   container.append(notice);
 
+  var renderedPins = 0;
+  var renderedClusters = 0;
   for (final place in places.take(40)) {
     final point = _fallbackPosition(
       lat: place.lat,
@@ -502,6 +508,9 @@ void _drawFallbackMap(
     marker.dataset['lalaCategory'] = place.category;
     if (place.isCluster) {
       marker.dataset['lalaClusterCount'] = '${place.clusterCount}';
+      renderedClusters += 1;
+    } else {
+      renderedPins += 1;
     }
 
     if (place.selected && !place.isCluster) {
@@ -564,6 +573,20 @@ void _drawFallbackMap(
     marker.append(circle);
     container.append(marker);
   }
+  container.setAttribute('data-lala-marker-pins', '$renderedPins');
+  container.setAttribute('data-lala-marker-clusters', '$renderedClusters');
+  container.setAttribute('data-lala-map-level', '$level');
+  final statsPayload = jsonEncode({
+    'pins': renderedPins,
+    'clusters': renderedClusters,
+    'total': places.length,
+    'level': level,
+  });
+  final statsScript = html.ScriptElement()
+    ..type = 'text/javascript'
+    ..text = 'window.__lalaLastMapMarkerStats = $statsPayload;';
+  html.document.body?.append(statsScript);
+  statsScript.remove();
 }
 
 ({double x, double y}) _fallbackPosition({

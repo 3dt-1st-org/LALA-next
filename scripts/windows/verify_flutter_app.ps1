@@ -44,7 +44,7 @@ try {
     }
 
     Write-Host "Building Flutter web release bundle..."
-    $buildArgs = @("build", "web", "--release")
+    $buildArgs = @("build", "web", "--release", "--pwa-strategy=none")
     $KakaoJavascriptKey = [Environment]::GetEnvironmentVariable("KAKAO_JAVASCRIPT_KEY", "Process")
     if ($KakaoJavascriptKey) {
         $buildArgs += @("--dart-define", "KAKAO_JAVASCRIPT_KEY=$KakaoJavascriptKey")

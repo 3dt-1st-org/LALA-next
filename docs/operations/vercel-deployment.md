@@ -80,6 +80,7 @@ Build Flutter web against the custom API domain:
 
 ```bash
 flutter build web --release \
+  --pwa-strategy=none \
   --dart-define LALA_API_BASE_URL=https://api.lala-next.cloud \
   --dart-define KAKAO_JAVASCRIPT_KEY="$KAKAO_JAVASCRIPT_KEY"
 ```
@@ -105,7 +106,9 @@ curl -sS -o /dev/null -w '%{http_code}\n' https://www.lala-next.cloud
 
 The production Flutter build for the contest window should use the Azure-backed
 API base URL, no bundled API bearer token, the Kakao Maps JavaScript key, and a
-3 km current-location recommendation radius. Kakao Developers must allow the deployed web
+3 km current-location recommendation radius. Build with `--pwa-strategy=none`
+so reviewer browsers do not keep an older Flutter service-worker bundle after a
+new release. Kakao Developers must allow the deployed web
 domains, including `https://lala-next.cloud`, `https://www.lala-next.cloud`, and
 any Vercel preview domain used for judging.
 

@@ -295,10 +295,10 @@ class _FallbackMapPainter extends CustomPainter {
 
 Color _markerColor(String category) {
   return switch (category) {
-    'restaurant' => const Color(0xFFC53030),
-    'event' => const Color(0xFFF5C842),
-    'culture_venue' => const Color(0xFF2B6CB0),
-    'attraction' => const Color(0xFFD73333),
+    'attraction' => const Color(0xFFC53030),
+    'restaurant' => const Color(0xFFF5C842),
+    'event' => const Color(0xFF2B6CB0),
+    'culture_venue' => const Color(0xFF0F766E),
     _ => const Color(0xFF1A202C),
   };
 }
@@ -309,8 +309,8 @@ Color _markerTextColor(String category) {
   }
   return switch (category) {
     'event' => const Color(0xFF2B6CB0),
-    'culture_venue' => const Color(0xFF2B6CB0),
-    'attraction' => const Color(0xFFD73333),
+    'culture_venue' => const Color(0xFF0F766E),
+    'attraction' => const Color(0xFFC53030),
     _ => const Color(0xFF1A202C),
   };
 }

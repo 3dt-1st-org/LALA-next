@@ -53,7 +53,7 @@ echo "Running Flutter app widget tests..."
 flutter test
 
 echo "Building Flutter web release bundle..."
-FLUTTER_BUILD_ARGS=(build web --release)
+FLUTTER_BUILD_ARGS=(build web --release --pwa-strategy=none)
 if [[ -n "${KAKAO_JAVASCRIPT_KEY:-}" ]]; then
   FLUTTER_BUILD_ARGS+=(--dart-define "KAKAO_JAVASCRIPT_KEY=$KAKAO_JAVASCRIPT_KEY")
 fi

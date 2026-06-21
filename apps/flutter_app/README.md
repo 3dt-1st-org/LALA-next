@@ -113,7 +113,10 @@ flutter run \
 During the public contest review window, shared dev can set
 `LALA_PUBLIC_CONTEST_ACCESS=true`; in that case web and simulator builds should
 call the Azure API without bundling `LALA_API_BEARER_TOKEN`. Production,
-review, and shared dev backends should still keep
+contest, and reviewer-facing Flutter web builds should use
+`flutter build web --release --pwa-strategy=none` so a browser does not keep an
+older service-worker cached app shell after deployment.
+Production, review, and shared dev backends should still keep
 `LALA_STATIC_SNAPSHOT_FALLBACK=false` and use the PostgreSQL read model. The
 bundled static snapshot is only an offline, read-only fallback for DB outage
 handling or isolated local checks.

@@ -194,6 +194,7 @@ try {
             "build",
             "web",
             "--release",
+            "--pwa-strategy=none",
             "--no-wasm-dry-run",
             "--dart-define",
             "LALA_API_BASE_URL=$ApiBaseUrl"
@@ -384,6 +385,7 @@ async () => {
     pinCount: state.pinCount,
     clusterCount: state.clusterCount,
     stats: state.stats,
+    mapLevel: state.container ? state.container.getAttribute("data-lala-map-level") : null,
     containerPins: state.container ? state.container.getAttribute("data-lala-marker-pins") : null,
     containerClusters: state.container ? state.container.getAttribute("data-lala-marker-clusters") : null,
     sampleMarkers
@@ -404,6 +406,7 @@ async () => {
         $statPins = 0
         $statClusters = 0
         $statTotal = 0
+        $mapLevel = 0
         if ($null -ne $markerState.pinCount) {
             $pinCount = [int]$markerState.pinCount
         }
@@ -420,6 +423,12 @@ async () => {
             if ($null -ne $stats.total) {
                 $statTotal = [int]$stats.total
             }
+            if ($null -ne $stats.level) {
+                $mapLevel = [int]$stats.level
+            }
+        }
+        if ($mapLevel -le 0 -and $null -ne $markerState.mapLevel) {
+            $mapLevel = [int]$markerState.mapLevel
         }
         if ([Math]::Max($pinCount, $statPins) -le 0) {
             throw "Flutter location flow rendered no real map pins."
@@ -430,6 +439,10 @@ async () => {
         if ([Math]::Max($clusterCount, $statClusters) -gt 0 -and
             [Math]::Max($pinCount, $statPins) -le 0) {
             throw "Flutter location flow rendered only clusters without place pins."
+        }
+        if ($mapLevel -gt 0 -and $mapLevel -le 8 -and
+            [Math]::Max($clusterCount, $statClusters) -gt 0) {
+            throw "Flutter initial location map clustered places before the user zoomed out."
         }
         if (-not $markerState.sampleMarkers -or $markerState.sampleMarkers.Count -eq 0) {
             throw "Flutter location flow marker sample was empty."

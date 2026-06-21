@@ -153,18 +153,39 @@ void main() {
       mapLevel: 8,
       language: 'ko',
     );
+    expect(zoomedOutMarkers.where((marker) => marker.isCluster), isEmpty);
+
+    final veryDensePlaces = List<LalaPlace>.generate(
+      40,
+      (index) => _clusterRestaurant(
+        'very-dense-food-$index',
+        '클러스터 맛집 ${index + 1}',
+        210 + index,
+      ),
+    );
+    final zoomedFarOutMarkers = clusterMapPlacesForMap(
+      places: veryDensePlaces,
+      selected: null,
+      mapLevel: 9,
+      language: 'ko',
+    );
     expect(
-      zoomedOutMarkers
+      zoomedFarOutMarkers
           .where((marker) => !marker.isCluster)
           .map((marker) => marker.id),
-      densePlaces.take(8).map((place) => place.placeId),
+      veryDensePlaces.take(18).map((place) => place.placeId),
     );
-    expect(zoomedOutMarkers.where((marker) => marker.isCluster), hasLength(1));
-    final cluster = zoomedOutMarkers.singleWhere((marker) => marker.isCluster);
+    expect(
+      zoomedFarOutMarkers.where((marker) => marker.isCluster),
+      hasLength(1),
+    );
+    final cluster = zoomedFarOutMarkers.singleWhere(
+      (marker) => marker.isCluster,
+    );
     expect(cluster.clusterCount, 22);
     expect(
       cluster.clusterMemberIds,
-      densePlaces.skip(8).map((place) => place.placeId).toList(),
+      veryDensePlaces.skip(18).map((place) => place.placeId).toList(),
     );
   });
 
