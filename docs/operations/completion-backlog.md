@@ -14,6 +14,9 @@ Current baseline evidence:
   extended matrix smoke.
 - The deployed API matrix smoke checks 37 route variants across places,
   weather intervention, daily planning, docent scripts, and docent audio.
+- Docent audio no longer has a local fake-byte fallback: live Speech returns
+  `audio/mpeg`, while disabled Speech returns `SPEECH_NOT_CONFIGURED` and the
+  Flutter UI hides audio controls.
 - Non-mutating official-data previews pass for TourAPI, KCISA culture info,
   KOPIS, and Fair Trade franchise references with the currently configured
   local keys.

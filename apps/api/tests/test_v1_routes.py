@@ -790,21 +790,29 @@ def test_docent_script_rule_based_fallback_does_not_write_cache(
     assert saved_calls == []
 
 
-def test_docent_audio_success_returns_mpeg(client, auth_headers):
+def test_docent_audio_requires_live_speech(client, auth_headers):
     response = client.post(
         "/api/v1/docents/audio",
         headers=auth_headers,
         json={"script": "hello", "language": "en"},
     )
 
-    assert response.status_code == 200
-    assert response.headers["content-type"].startswith("audio/mpeg")
-    assert response.content.startswith(b"ID3")
-    assert len(response.headers["x-lala-request-hash"]) == 64
-    assert response.headers["x-lala-cache-key"].startswith("docent_audio:")
+    assert response.status_code == 503
+    body = response.json()
+    assert body["ok"] is False
+    assert body["error"]["code"] == "SPEECH_NOT_CONFIGURED"
+    assert b"LALA docent audio" not in response.content
 
 
-def test_docent_audio_accepts_korean_language_alias(client, auth_headers):
+def test_docent_audio_accepts_korean_language_alias(client, auth_headers, monkeypatch):
+    monkeypatch.setenv("LALA_ENABLE_LIVE_SPEECH", "true")
+    monkeypatch.setenv("AZURE_SPEECH_REGION", "koreacentral")
+    monkeypatch.setenv("AZURE_SPEECH_KEY", "test-key")
+    monkeypatch.setattr(
+        "apps.api.app.services.speech_service.synthesize_docent_audio",
+        lambda request: f"{request.language}: {request.script}".encode(),
+    )
+
     response = client.post(
         "/api/v1/docents/audio",
         headers=auth_headers,
@@ -816,7 +824,17 @@ def test_docent_audio_accepts_korean_language_alias(client, auth_headers):
     assert b"ko: hello" in response.content
 
 
-def test_docent_audio_generation_identity_uses_normalized_request(client, auth_headers):
+def test_docent_audio_generation_identity_uses_normalized_request(
+    client, auth_headers, monkeypatch
+):
+    monkeypatch.setenv("LALA_ENABLE_LIVE_SPEECH", "true")
+    monkeypatch.setenv("AZURE_SPEECH_REGION", "koreacentral")
+    monkeypatch.setenv("AZURE_SPEECH_KEY", "test-key")
+    monkeypatch.setattr(
+        "apps.api.app.services.speech_service.synthesize_docent_audio",
+        lambda request: b"live-mpeg-bytes",
+    )
+
     first = client.post(
         "/api/v1/docents/audio",
         headers=auth_headers,

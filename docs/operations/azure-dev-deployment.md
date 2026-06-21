@@ -103,6 +103,9 @@ docent script, and docent audio variants against the custom API domain when it
 is configured. In public contest mode these checks intentionally run without
 auth headers; in a later credentialed mode they can still use process-local
 smoke credentials without printing them.
+If live Speech is disabled, the smoke expects `docents/audio` to return
+`SPEECH_NOT_CONFIGURED` rather than fake audio bytes. When live Speech is
+enabled, the same smoke requires an `audio/mpeg` response.
 
 For the first local Azure CLI provisioning, `enableRoleAssignments=true` creates
 the runtime RBAC bindings. The GitHub `dev` workflow passes

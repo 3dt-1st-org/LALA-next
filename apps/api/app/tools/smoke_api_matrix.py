@@ -93,7 +93,10 @@ def run_matrix(
         }
 
     failures: list[SmokeFailure] = []
-    cases = _build_cases(profile=profile)
+    cases = _build_cases(
+        profile=profile,
+        live_speech_enabled=_live_speech_enabled(readyz),
+    )
     for case in cases:
         failure = _run_case(
             case,
@@ -149,15 +152,15 @@ def _readyz_failure(reason: str) -> dict[str, Any]:
     }
 
 
-def _build_cases(*, profile: str) -> list[SmokeCase]:
+def _build_cases(*, profile: str, live_speech_enabled: bool) -> list[SmokeCase]:
     if profile == "deploy":
-        return _build_deploy_cases()
+        return _build_deploy_cases(live_speech_enabled=live_speech_enabled)
     if profile != "full":
         raise ValueError(f"Unsupported smoke matrix profile: {profile}")
-    return _build_full_cases()
+    return _build_full_cases(live_speech_enabled=live_speech_enabled)
 
 
-def _build_deploy_cases() -> list[SmokeCase]:
+def _build_deploy_cases(*, live_speech_enabled: bool) -> list[SmokeCase]:
     location = {"lat": 37.5665, "lng": 126.9780, "radius_m": 50000}
     nearby_location = {**location, "radius_m": 1000}
     place_query = parse.urlencode(
@@ -222,12 +225,12 @@ def _build_deploy_cases() -> list[SmokeCase]:
             "POST",
             "/api/v1/docents/audio",
             _json_body({"script": "스모크 오디오", "language": "ko"}),
-            response_kind="audio",
+            response_kind="audio" if live_speech_enabled else "speech_disabled",
         ),
     ]
 
 
-def _build_full_cases() -> list[SmokeCase]:
+def _build_full_cases(*, live_speech_enabled: bool) -> list[SmokeCase]:
     cases: list[SmokeCase] = []
     for category in ("all", "attraction", "restaurant", "event", "culture_venue"):
         for language in ("ko", "en", "English", "kr"):
@@ -283,7 +286,7 @@ def _build_full_cases() -> list[SmokeCase]:
             "POST",
             "/api/v1/docents/audio",
             _json_body({"script": "스모크 오디오", "language": "ko"}),
-            response_kind="audio",
+            response_kind="audio" if live_speech_enabled else "speech_disabled",
         )
     )
     return cases
@@ -303,10 +306,28 @@ def _run_case(
             headers=headers,
             timeout=timeout,
         )
-    except error.HTTPError as exc:
-        return SmokeFailure(case=case, status=exc.code, reason="http_error")
     except Exception as exc:
         return SmokeFailure(case=case, status="exception", reason=type(exc).__name__)
+
+    if case.response_kind == "speech_disabled":
+        if status != 503:
+            return SmokeFailure(case=case, status=status, reason="speech_not_disabled")
+        try:
+            payload = json.loads(body.decode("utf-8"))
+        except Exception:
+            return SmokeFailure(case=case, status=status, reason="invalid_json")
+        error_payload = payload.get("error")
+        if not isinstance(error_payload, dict):
+            return SmokeFailure(case=case, status=status, reason="missing_error_object")
+        if error_payload.get("code") != "SPEECH_NOT_CONFIGURED":
+            return SmokeFailure(
+                case=case,
+                status=status,
+                reason="unexpected_speech_disabled_error",
+            )
+        if b"LALA docent audio" in body:
+            return SmokeFailure(case=case, status=status, reason="fake_audio_body")
+        return None
 
     if status >= 500:
         return SmokeFailure(case=case, status=status, reason="server_error")
@@ -537,12 +558,15 @@ def _request_raw(
         headers=request_headers,
         method=case.method,
     )
-    with request.urlopen(req, timeout=timeout) as response:
-        return (
-            response.status,
-            response.headers.get("content-type", ""),
-            response.read(),
-        )
+    try:
+        with request.urlopen(req, timeout=timeout) as response:
+            return (
+                response.status,
+                response.headers.get("content-type", ""),
+                response.read(),
+            )
+    except error.HTTPError as exc:
+        return exc.code, exc.headers.get("content-type", ""), exc.read()
 
 
 def _matching_auth_headers(readyz_payload: dict[str, Any]) -> dict[str, str] | None:
@@ -559,6 +583,13 @@ def _matching_auth_headers(readyz_payload: dict[str, Any]) -> dict[str, str] | N
     if checks.get("api_key") == "configured" and api_key:
         return {"X-API-Key": api_key}
     return None
+
+
+def _live_speech_enabled(readyz_payload: dict[str, Any]) -> bool:
+    data = readyz_payload.get("data") or {}
+    checks = data.get("checks") or {}
+    mode = data.get("mode") or {}
+    return mode.get("speech") == "live-azure" or checks.get("live_speech") == "enabled"
 
 
 def _json_body(payload: dict[str, Any]) -> bytes:

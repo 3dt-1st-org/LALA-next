@@ -1740,6 +1740,7 @@ class _Dashboard extends StatelessWidget {
     final activeDailyPlan = dailyPlan?.data;
     final currentWeather = _publicWeatherOrNull(weather?.data);
     final activeIntervention = intervention?.data;
+    final liveSpeechEnabled = _liveSpeechEnabled(readiness?.data);
     final visibleError = _localizedUiMessage(error, uiLanguage);
     void selectPlaceById(String placeId) {
       final place = _placeById(topPlaces, placeId);
@@ -1919,6 +1920,7 @@ class _Dashboard extends StatelessWidget {
                     audioLoading: audioLoading,
                     audioError: _localizedUiMessage(audioError, uiLanguage),
                     canFetchAudio:
+                        liveSpeechEnabled &&
                         activeDocent?.placeId == topPlace?.placeId &&
                         _hasUsableDocentScript(
                           activeDocent?.script,
@@ -1994,6 +1996,7 @@ class _Dashboard extends StatelessWidget {
                     tourAudioError,
                     uiLanguage,
                   ),
+                  liveSpeechEnabled: liveSpeechEnabled,
                   source: effectiveSource,
                   showEvidence: showEvidence,
                   savedPlaceIds: savedPlaceIds,
@@ -3092,6 +3095,7 @@ class _MapDraggableSheet extends StatelessWidget {
     required this.audioError,
     required this.tourAudioLoading,
     required this.tourAudioError,
+    required this.liveSpeechEnabled,
     required this.source,
     required this.showEvidence,
     required this.savedPlaceIds,
@@ -3121,6 +3125,7 @@ class _MapDraggableSheet extends StatelessWidget {
   final String? audioError;
   final bool tourAudioLoading;
   final String? tourAudioError;
+  final bool liveSpeechEnabled;
   final String? source;
   final bool showEvidence;
   final Set<String> savedPlaceIds;
@@ -3229,6 +3234,7 @@ class _MapDraggableSheet extends StatelessWidget {
                       docentAudio: docentAudio,
                       audioLoading: audioLoading,
                       audioError: audioError,
+                      liveSpeechEnabled: liveSpeechEnabled,
                       source: source,
                       showEvidence: showEvidence,
                       savedPlaceIds: savedPlaceIds,
@@ -3257,6 +3263,7 @@ class _MapDraggableSheet extends StatelessWidget {
                       tourAudio: tourAudio,
                       audioLoading: tourAudioLoading,
                       audioError: tourAudioError,
+                      liveSpeechEnabled: liveSpeechEnabled,
                       onFetchAudio: onFetchTourAudio,
                       onSelectPlace: onSelectPlace,
                     ),
@@ -3738,6 +3745,7 @@ class _TourSheetContent extends StatelessWidget {
     required this.tourAudio,
     required this.audioLoading,
     required this.audioError,
+    required this.liveSpeechEnabled,
     required this.onFetchAudio,
     required this.onSelectPlace,
   });
@@ -3747,6 +3755,7 @@ class _TourSheetContent extends StatelessWidget {
   final LalaAudioResponse? tourAudio;
   final bool audioLoading;
   final String? audioError;
+  final bool liveSpeechEnabled;
   final VoidCallback onFetchAudio;
   final ValueChanged<LalaPlace> onSelectPlace;
 
@@ -3850,14 +3859,16 @@ class _TourSheetContent extends StatelessWidget {
           language: language,
         ),
         const SizedBox(height: 12),
-        _TourAudioBar(
-          language: language,
-          audio: tourAudio,
-          loading: audioLoading,
-          error: audioError,
-          onFetchAudio: onFetchAudio,
-        ),
-        const SizedBox(height: 14),
+        if (liveSpeechEnabled) ...[
+          _TourAudioBar(
+            language: language,
+            audio: tourAudio,
+            loading: audioLoading,
+            error: audioError,
+            onFetchAudio: onFetchAudio,
+          ),
+          const SizedBox(height: 14),
+        ],
         ...items.indexed.map(
           (entry) => Padding(
             padding: const EdgeInsets.only(bottom: 10),
@@ -4678,6 +4689,7 @@ class _FeaturedPlacePanel extends StatelessWidget {
     required this.docentAudio,
     required this.audioLoading,
     required this.audioError,
+    required this.liveSpeechEnabled,
     required this.source,
     required this.showEvidence,
     required this.savedPlaceIds,
@@ -4697,6 +4709,7 @@ class _FeaturedPlacePanel extends StatelessWidget {
   final LalaAudioResponse? docentAudio;
   final bool audioLoading;
   final String? audioError;
+  final bool liveSpeechEnabled;
   final String? source;
   final bool showEvidence;
   final Set<String> savedPlaceIds;
@@ -4787,6 +4800,7 @@ class _FeaturedPlacePanel extends StatelessWidget {
           audioError: audioError,
           docentAudio: docentAudio,
           canFetchAudio:
+              liveSpeechEnabled &&
               _hasUsableDocentScript(effectiveDocent?.script, language) &&
               !audioLoading &&
               !detailDocentPlayedPlaceIds.contains(currentPlace.placeId),
@@ -5524,6 +5538,7 @@ class _RouteAndDocentPanel extends StatelessWidget {
     required this.docentAudio,
     required this.audioLoading,
     required this.audioError,
+    required this.liveSpeechEnabled,
     required this.onFetchAudio,
   });
 
@@ -5536,13 +5551,16 @@ class _RouteAndDocentPanel extends StatelessWidget {
   final LalaAudioResponse? docentAudio;
   final bool audioLoading;
   final String? audioError;
+  final bool liveSpeechEnabled;
   final VoidCallback onFetchAudio;
 
   @override
   Widget build(BuildContext context) {
     final script = docentScript?.script;
     final canFetchAudio =
-        _hasUsableDocentScript(script, language) && !audioLoading;
+        liveSpeechEnabled &&
+        _hasUsableDocentScript(script, language) &&
+        !audioLoading;
     final slots = dailyPlan?.slots ?? const <LalaPlanSlot>[];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -7867,6 +7885,11 @@ String _docentBody({
 
 bool _hasUsableDocentScript(String? script, String language) {
   return _usableDocentScript(script, language) != null;
+}
+
+bool _liveSpeechEnabled(LalaReadiness? readiness) {
+  return readiness?.mode.speech == 'live-azure' ||
+      readiness?.checks['live_speech'] == 'enabled';
 }
 
 String? _usableDocentScript(String? script, String language) {

@@ -39,13 +39,18 @@ class _SmokeHandler(BaseHTTPRequestHandler):
                                 "bearer_token": "skipped",
                                 "db": "configured",
                                 "postgis": "configured",
+                                "live_speech": "enabled"
+                                if self.server.live_speech
+                                else "disabled",
                                 "static_snapshot_fallback": self.server.static_snapshot_fallback,
                             },
                             "mode": {
                                 "overall": self.server.data_mode,
                                 "data": self.server.data_mode,
                                 "ai": "disabled",
-                                "speech": "disabled",
+                                "speech": "live-azure"
+                                if self.server.live_speech
+                                else "disabled",
                                 "worker": "dry-run",
                             },
                         },
@@ -65,13 +70,18 @@ class _SmokeHandler(BaseHTTPRequestHandler):
                             "bearer_token": "configured",
                             "db": "configured",
                             "postgis": "configured",
+                            "live_speech": "enabled"
+                            if self.server.live_speech
+                            else "disabled",
                             "static_snapshot_fallback": self.server.static_snapshot_fallback,
                         },
                         "mode": {
                             "overall": self.server.data_mode,
                             "data": self.server.data_mode,
                             "ai": "disabled",
-                            "speech": "disabled",
+                            "speech": "live-azure"
+                            if self.server.live_speech
+                            else "disabled",
                             "worker": "dry-run",
                         },
                     },
@@ -113,7 +123,20 @@ class _SmokeHandler(BaseHTTPRequestHandler):
                 self._write_json({"ok": False}, status=401)
                 return
             if path == "/api/v1/docents/audio":
-                self._write_bytes(b"ID3smoke-audio", content_type="audio/mpeg")
+                if self.server.live_speech:
+                    self._write_bytes(b"ID3smoke-audio", content_type="audio/mpeg")
+                    return
+                self._write_json(
+                    {
+                        "ok": False,
+                        "error": {
+                            "code": "SPEECH_NOT_CONFIGURED",
+                            "message": "Azure Speech live synthesis is not enabled.",
+                            "retryable": False,
+                        },
+                    },
+                    status=503,
+                )
                 return
             if path == "/api/v1/plans/daily":
                 self._write_json(self.server.daily_plan_payload)
@@ -149,6 +172,7 @@ class _SmokeServer(ThreadingHTTPServer):
     ready_status: str
     data_mode: str
     static_snapshot_fallback: str
+    live_speech: bool
     places_payload: dict[str, Any]
     weather_payload: dict[str, Any]
     intervention_payload: dict[str, Any]
@@ -224,6 +248,7 @@ def _start_server(
     ready_status: str = "ok",
     data_mode: str = "db-backed",
     static_snapshot_fallback: str = "disabled",
+    live_speech: bool = False,
     places_payload: dict[str, Any] | None = None,
     weather_payload: dict[str, Any] | None = None,
     intervention_payload: dict[str, Any] | None = None,
@@ -236,6 +261,7 @@ def _start_server(
     server.ready_status = ready_status
     server.data_mode = data_mode
     server.static_snapshot_fallback = static_snapshot_fallback
+    server.live_speech = live_speech
     server.places_payload = places_payload or _live_places_payload()
     server.weather_payload = weather_payload or _live_weather_payload()
     server.intervention_payload = intervention_payload or _live_intervention_payload()
@@ -435,6 +461,19 @@ def test_unix_matrix_smoke_deploy_profile_keeps_ci_gate_bounded():
     assert server.protected_paths.count("/api/v1/plans/intervention") == 1
     assert server.protected_paths.count("/api/v1/plans/daily") == 1
     assert server.protected_paths.count("/api/v1/docents/script") == 1
+    assert server.protected_paths.count("/api/v1/docents/audio") == 1
+
+
+def test_unix_matrix_smoke_deploy_profile_accepts_live_speech_audio():
+    server, thread, base_url = _start_server(public_access=True, live_speech=True)
+    try:
+        result = _run_matrix_smoke(base_url, {}, profile="deploy")
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+    assert result.returncode == 0, result.stderr
+    assert "checked=7" in result.stdout
     assert server.protected_paths.count("/api/v1/docents/audio") == 1
 
 

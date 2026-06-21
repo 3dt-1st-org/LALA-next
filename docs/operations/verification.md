@@ -986,5 +986,11 @@ that `docents/audio` returns `audio/mpeg` bytes. They do not print secret values
 or generated audio content. With `-PaidDependency`, missing client auth is a
 failure rather than a skipped check.
 
+When live Speech is disabled, the normal smoke expects
+`POST /api/v1/docents/audio` to return a `SPEECH_NOT_CONFIGURED` JSON envelope
+instead of synthesized-looking fallback bytes. Do not reintroduce local ID3 or
+text-byte audio fallbacks; the frontend hides audio controls unless `/readyz`
+reports live Speech.
+
 The latest controller-session live smoke evidence is recorded in
 [live-azure-smoke-2026-06-11.md](live-azure-smoke-2026-06-11.md).

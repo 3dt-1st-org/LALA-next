@@ -402,12 +402,7 @@ def _readable_place_id(place_id: str, *, language: str) -> str:
 
 
 def generate_audio(request: DocentAudioRequest) -> bytes:
-    script = request.script.strip()
-    if speech_service.live_speech_enabled():
-        return speech_service.synthesize_docent_audio(request)
-    header = b"ID3\x04\x00\x00\x00\x00\x00!"
-    body = f"LALA docent audio: {request.language}: {script[:128]}".encode("utf-8")
-    return header + body
+    return speech_service.synthesize_docent_audio(request)
 
 
 def script_identity(

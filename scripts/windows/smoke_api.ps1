@@ -80,6 +80,7 @@ function Invoke-SmokeReadyz {
         throw "/readyz is missing runtime mode."
     }
     $mode = $payload.data.mode
+    $script:ReadyzMode = $mode
     foreach ($name in @("overall", "data", "ai", "speech", "worker")) {
         if (-not ($mode.PSObject.Properties.Name -contains $name) -or -not $mode.$name) {
             throw "/readyz is missing runtime mode field: $name"
@@ -106,6 +107,53 @@ function Invoke-SmokePost {
     $json = $Body | ConvertTo-Json -Depth 8
     $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
     Invoke-RestMethod -Method Post -Uri $url -Headers $Headers -Body $bytes -ContentType "application/json; charset=utf-8"
+}
+
+function Invoke-SmokeAudioDisabledPost {
+    param(
+        [string]$Path,
+        [object]$Body,
+        [hashtable]$Headers = @{}
+    )
+    $url = "$BaseUrl$Path"
+    Write-Host "POST $Path (speech disabled)"
+    $json = $Body | ConvertTo-Json -Depth 8
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
+    try {
+        Invoke-RestMethod `
+            -Method Post `
+            -Uri $url `
+            -Headers $Headers `
+            -Body $bytes `
+            -ContentType "application/json; charset=utf-8" | Out-Null
+        throw "Expected speech-disabled audio smoke to return HTTP 503."
+    } catch [System.Net.WebException] {
+        if (-not $_.Exception.Response) {
+            throw
+        }
+        $response = [System.Net.HttpWebResponse]$_.Exception.Response
+        try {
+            $statusCode = [int]$response.StatusCode
+            if ($statusCode -ne 503) {
+                throw "Expected speech-disabled audio smoke to return HTTP 503, got $statusCode."
+            }
+            $reader = New-Object System.IO.StreamReader($response.GetResponseStream())
+            try {
+                $bodyText = $reader.ReadToEnd()
+            } finally {
+                $reader.Dispose()
+            }
+            $payload = $bodyText | ConvertFrom-Json
+            if (-not $payload.error -or $payload.error.code -ne "SPEECH_NOT_CONFIGURED") {
+                throw "Expected SPEECH_NOT_CONFIGURED, got $($payload.error.code)."
+            }
+            if ($bodyText.Contains("LALA docent audio")) {
+                throw "Speech-disabled response contains fake audio text."
+            }
+        } finally {
+            $response.Dispose()
+        }
+    }
 }
 
 function Invoke-SmokeAudioPost {
@@ -254,6 +302,20 @@ Invoke-SmokePost "/api/v1/docents/script" -Headers $headers -Body @{
     language = "ko"
     mode = "brief"
 } | Out-Null
+
+$speechMode = if ($script:ReadyzMode -and ($script:ReadyzMode.PSObject.Properties.Name -contains "speech")) { $script:ReadyzMode.speech } else { "" }
+$liveSpeechStatus = if ($script:ReadyzChecks -and ($script:ReadyzChecks.PSObject.Properties.Name -contains "live_speech")) { $script:ReadyzChecks.live_speech } else { "" }
+if ($speechMode -eq "live-azure" -or $liveSpeechStatus -eq "enabled") {
+    Invoke-SmokeAudioPost "/api/v1/docents/audio" -Headers $headers -Body @{
+        script = "LALA smoke audio"
+        language = "ko"
+    }
+} else {
+    Invoke-SmokeAudioDisabledPost "/api/v1/docents/audio" -Headers $headers -Body @{
+        script = "LALA smoke audio"
+        language = "ko"
+    }
+}
 
 if ($PaidDependency) {
     Write-Host "Paid dependency smoke requested. Start the API with -EnableLiveAI and -EnableLiveSpeech before running this check."

@@ -61,6 +61,10 @@ def docent_script(request: Request, body: DocentScriptRequest) -> dict:
         200: {
             "description": "Successful MP3 audio response",
             "content": {"audio/mpeg": {"schema": {"type": "string", "format": "binary"}}},
+        },
+        503: {
+            "description": "Live speech synthesis is not configured",
+            "content": {"application/json": {"schema": {"type": "object"}}},
         }
     },
 )

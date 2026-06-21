@@ -1797,6 +1797,36 @@ void main() {
     expect(find.textContaining('상세 도슨트입니다'), findsAtLeastNWidgets(1));
     expect(find.widgetWithText(FilledButton, '정보 더 듣기'), findsNothing);
   });
+
+  testWidgets('speech disabled readiness hides docent audio controls', (
+    tester,
+  ) async {
+    final backend = FakeBackend(
+      const LalaAppConfig(baseUri: 'http://api.test'),
+      liveSpeech: false,
+    );
+
+    await tester.pumpWidget(
+      TestLalaApp(
+        backendFactory: (_) => backend,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('조선 왕실'), findsAtLeastNWidgets(1));
+    expect(find.widgetWithText(FilledButton, '정보 더 듣기'), findsNothing);
+
+    await tester.tap(find.text('맛집').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('tour-pill-hit-target')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('투어 도슨트 스크립트'), findsOneWidget);
+    expect(find.text('도슨트 음성으로 듣기'), findsNothing);
+    expect(find.widgetWithText(FilledButton, '오디오 준비'), findsNothing);
+    expect(backend.audioRequests, isEmpty);
+  });
 }
 
 class TestLalaApp extends StatelessWidget {
@@ -1857,6 +1887,7 @@ class FakeBackend implements LalaBackend {
     this.config, {
     this.failAuthenticatedLoad = false,
     this.shouldIntervene = false,
+    this.liveSpeech = true,
     this.places,
     this.weather,
   });
@@ -1864,6 +1895,7 @@ class FakeBackend implements LalaBackend {
   final LalaAppConfig config;
   final bool failAuthenticatedLoad;
   final bool shouldIntervene;
+  final bool liveSpeech;
   final List<LalaPlace>? places;
   final LalaWeather? weather;
   final List<String> docentScriptRequests = <String>[];
@@ -1903,13 +1935,14 @@ class FakeBackend implements LalaBackend {
           'db': 'configured',
           'postgis': 'configured',
           'static_snapshot_fallback': 'disabled',
+          'live_speech': liveSpeech ? 'enabled' : 'disabled',
           'worker_contracts': 'configured',
         },
-        mode: const LalaRuntimeMode(
+        mode: LalaRuntimeMode(
           overall: 'ok',
           data: 'db-backed',
           ai: 'disabled',
-          speech: 'disabled',
+          speech: liveSpeech ? 'live-azure' : 'disabled',
           worker: 'dry-run',
         ),
       ),

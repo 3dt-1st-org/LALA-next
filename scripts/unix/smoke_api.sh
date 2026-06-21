@@ -96,6 +96,19 @@ print(checks.get(sys.argv[1]) or "")
 PY
 }
 
+readyz_mode() {
+  local name="$1"
+  READYZ_PAYLOAD="$READYZ_PAYLOAD_CACHE" "$PYTHON" - "$name" <<'PY'
+import json
+import os
+import sys
+
+payload = json.loads(os.environ["READYZ_PAYLOAD"])
+mode = (payload.get("data") or {}).get("mode") or {}
+print(mode.get(sys.argv[1]) or "")
+PY
+}
+
 smoke_post_json() {
   local path="$1"
   local body="$2"
@@ -131,6 +144,43 @@ smoke_post_audio() {
     exit 1
   fi
   rm -f "$headers_file" "$audio_file"
+}
+
+smoke_post_audio_disabled() {
+  local body="$1"
+  shift
+  local headers_file body_file status_code
+  headers_file="$(mktemp)"
+  body_file="$(mktemp)"
+  echo "POST /api/v1/docents/audio (speech disabled)" >&2
+  status_code="$(
+    curl -sS "$@" \
+      -H "Content-Type: application/json; charset=utf-8" \
+      --data "$body" \
+      -D "$headers_file" \
+      -o "$body_file" \
+      -w "%{http_code}" \
+      "$BASE_URL/api/v1/docents/audio"
+  )"
+  if [[ "$status_code" != "503" ]]; then
+    rm -f "$headers_file" "$body_file"
+    echo "Expected speech-disabled audio smoke to return 503, got $status_code." >&2
+    exit 1
+  fi
+  RESPONSE_BODY_PATH="$body_file" "$PYTHON" - <<'PY'
+import json
+import os
+from pathlib import Path
+
+body = Path(os.environ["RESPONSE_BODY_PATH"]).read_text(encoding="utf-8")
+payload = json.loads(body)
+error = payload.get("error") or {}
+if error.get("code") != "SPEECH_NOT_CONFIGURED":
+    raise SystemExit(f"Expected SPEECH_NOT_CONFIGURED, got {error.get('code')}.")
+if "LALA docent audio" in body:
+    raise SystemExit("Speech-disabled response contains fake audio text.")
+PY
+  rm -f "$headers_file" "$body_file"
 }
 
 smoke_cors_preflight() {
@@ -229,7 +279,13 @@ SCRIPT_BODY='{"place_id":"tour-api-3066000","place_name":"중랑아트센터","c
 smoke_post_json "/api/v1/docents/script" "$SCRIPT_BODY" "${CURL_AUTH_ARGS[@]}" >/dev/null
 
 AUDIO_BODY='{"script":"LALA smoke audio","language":"ko"}'
-smoke_post_audio "$AUDIO_BODY" "${CURL_AUTH_ARGS[@]}"
+SERVER_SPEECH_MODE="$(readyz_mode speech)"
+SERVER_LIVE_SPEECH_STATUS="$(readyz_check live_speech)"
+if [[ "$SERVER_SPEECH_MODE" == "live-azure" || "$SERVER_LIVE_SPEECH_STATUS" == "enabled" ]]; then
+  smoke_post_audio "$AUDIO_BODY" "${CURL_AUTH_ARGS[@]}"
+else
+  smoke_post_audio_disabled "$AUDIO_BODY" "${CURL_AUTH_ARGS[@]}"
+fi
 
 if [[ "$PAID_DEPENDENCY" == "true" ]]; then
   echo "Paid dependency smoke requested. Start the API with --enable-live-ai and --enable-live-speech before running this check."
