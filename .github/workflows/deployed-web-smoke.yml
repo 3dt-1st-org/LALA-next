@@ -1,0 +1,54 @@
+name: Deployed Web Smoke
+
+on:
+  push:
+    branches:
+      - dev
+    paths:
+      - ".github/workflows/deployed-web-smoke.yml"
+      - "apps/flutter_app/**"
+      - "apps/api/app/**"
+      - "scripts/unix/smoke_flutter_web.sh"
+      - "scripts/unix/_common.sh"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deployed-web-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: Browser location flow against deployed web
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Smoke deployed Flutter web location flow
+        run: |
+          set -euo pipefail
+          scripts/unix/smoke_flutter_web.sh \
+            --web-url "https://lala-next.cloud/?qa=deployed-web-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --require-browser \
+            --fail-on-console-error
+
+      - name: Upload browser smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployed-web-smoke-artifacts
+          path: output/playwright/

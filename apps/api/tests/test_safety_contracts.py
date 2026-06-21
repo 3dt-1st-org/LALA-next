@@ -172,6 +172,25 @@ def test_azure_dev_deploy_uses_oidc_and_dev_branch_only():
     assert 'scripts/unix/smoke_api_matrix.sh --base-url "$SMOKE_BASE_URL" --timeout 25 --profile deploy' in workflow
 
 
+def test_deployed_web_smoke_runs_public_location_flow():
+    workflow = (ROOT / ".github" / "workflows" / "deployed-web-smoke.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "name: Deployed Web Smoke" in workflow
+    assert "branches:\n      - dev" in workflow
+    assert '"apps/flutter_app/**"' in workflow
+    assert '"apps/api/app/**"' in workflow
+    assert '"scripts/unix/smoke_flutter_web.sh"' in workflow
+    assert "uses: actions/setup-node@v4" in workflow
+    assert 'node-version: "24"' in workflow
+    assert "--web-url \"https://lala-next.cloud/?qa=deployed-web-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}\"" in workflow
+    assert "--require-browser" in workflow
+    assert "--fail-on-console-error" in workflow
+    assert "Upload browser smoke artifacts" in workflow
+    assert "output/playwright/" in workflow
+
+
 def test_azure_container_build_excludes_local_secrets():
     dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8")
     dockerfile = (ROOT / "infra" / "azure" / "api.Dockerfile").read_text(encoding="utf-8")
@@ -240,6 +259,9 @@ def test_flutter_web_smoke_drives_location_flow_and_route_requests():
         assert "/api/v1/docents/script" in script
     assert "--web-url" in unix_script
     assert "-WebUrl" in windows_script
+    assert "CODEX_PWCLI" in unix_script
+    assert "playwright_cli_npx_wrapper.sh" in unix_script
+    assert "npx --yes --package @playwright/cli playwright-cli" in unix_script
     assert "flutter-web-api-responses.json" in unix_script
     assert "Flutter places response was not DB-backed." in unix_script
     assert "Flutter places response did not use PostGIS." in unix_script

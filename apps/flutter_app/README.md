@@ -17,7 +17,7 @@ Current app surface:
 - Recommendation-first home surface that highlights the top place, local-value
   score, local spending, demand dispersion, weather fit, culture relevance, and
   review-quality readiness from `/api/v1/places`.
-- Places, weather, intervention, daily plan, first-place docent script, and
+- Places, weather, intervention, daily plan, live-context docent script, and
   manual docent audio metadata panels for operator handoff and offline snapshot
   fallback checks.
 - Daily plan and intervention share the same editable radius as places, so the
@@ -80,11 +80,10 @@ weather, intervention, and daily plan routes with the granted latitude and longi
 The route check requires places, weather, and intervention to each use the granted
 location, and fails if the old default Suwon coordinate appears in those API logs.
 With `--api-base-url <url>`, the same location-flow request check runs against a
-separately running backend that allows the selected local web origin and also
-expects a docent script route when place data exists. For the deployed contest site, use
+separately running backend that allows the selected local web origin. For the deployed contest site, use
 `--web-url https://lala-next.cloud/?qa=<label>` so the smoke opens the registered
 Kakao/CORS origin directly and verifies the same location-driven API requests,
-including the first-place docent script. The macOS/Linux smoke also captures
+then verifies a live-context docent script from the same place/weather data. The macOS/Linux smoke also captures
 `flutter-web-api-responses.json` and fails if the browser received non-DB
 places, a non-PostGIS location engine, weather without AirKorea PM10/PM2.5
 values, a docent script that omits the captured PM10/PM2.5 context, or a map

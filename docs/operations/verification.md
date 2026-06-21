@@ -691,13 +691,14 @@ scripts/unix/smoke_flutter_web.sh \
   -ApiPort 18080
 ```
 
-This optional smoke requires Flutter, `npx`, and the local Playwright CLI
-wrapper. It is intentionally outside CI. The script builds the web bundle with
-`--no-wasm-dry-run`, serves it on the selected loopback port, opens it in a
-named Playwright session, validates the Flutter runtime entrypoint, and writes
-snapshot, screenshot, console, and runtime-state artifacts under
-`output/playwright/`. When no API is running, a refused `/healthz` console entry
-is expected and the smoke still passes because it is a render check. Pass
+This smoke requires `npx` plus either the local Codex Playwright CLI wrapper or
+the script's npx-backed Playwright CLI fallback. Local bundle verification also
+requires Flutter. The local mode builds the web bundle with `--no-wasm-dry-run`,
+serves it on the selected loopback port, opens it in a named Playwright
+session, validates the Flutter runtime entrypoint, and writes snapshot,
+screenshot, console, and runtime-state artifacts under `output/playwright/`.
+When no API is running, a refused `/healthz` console entry is expected and the
+smoke still passes because it is a render check. Pass
 `--api-base-url <url>` for a separately running backend, and add
 `--fail-on-console-error` when the backend is expected to satisfy all public
 browser requests. With `--api-base-url` or `--start-api`, the smoke grants a
@@ -705,19 +706,28 @@ fixed test browser geolocation, reloads into the first-run location request
 flow, captures `flutter-web-requests.txt`, and verifies places, weather,
 intervention, and daily plan requests with the granted latitude and longitude.
 When the smoke targets `--api-base-url` or the deployed `--web-url`, it also
-requires the first-place docent script request. On macOS/Linux, the same smoke
-captures API JSON responses in `flutter-web-api-responses.json` and fails if
-the browser received non-DB places, a non-PostGIS location engine, weather
-without AirKorea PM10/PM2.5 values, or a docent script that omits the captured
-PM10/PM2.5 context. It also records `flutter-web-marker-state.json` and fails
-when the map renders no real place pins or only clusters without pins. The
-`--api-base-url` backend must allow the selected local web origin. Use
+verifies a live-context docent script from the same place/weather data. On
+macOS/Linux, the same smoke captures or refetches API JSON responses in
+`flutter-web-api-responses.json` and fails if the browser received non-DB
+places, a non-PostGIS location engine, weather without AirKorea PM10/PM2.5
+values, or a docent script that omits the captured PM10/PM2.5 context. It also
+records `flutter-web-marker-state.json` and fails when the map renders no real
+place pins or only clusters without pins. The `--api-base-url` backend must
+allow the selected local web origin. Use
 `--web-url https://lala-next.cloud/?qa=<label>` when verifying the deployed
 contest site so Kakao Maps and API CORS run from the registered production
 origin. With `--start-api`, the wrapper also starts a local API with
 process-local auth and CORS, avoids Key Vault, DB, OpenAI, and Speech, and
 checks the API log for `/healthz`, `/readyz`, and the authenticated `/api/v1/*`
 routes loaded by the app shell.
+
+The deployed public site flow is part of CI through
+`.github/workflows/deployed-web-smoke.yml`. On `dev` pushes that change Flutter,
+API app code, or the browser smoke wrapper, the workflow opens
+`https://lala-next.cloud`, grants a fixed test geolocation, and fails if the
+browser receives snapshot/fallback places, non-PostGIS place ordering, missing
+AirKorea PM10/PM2.5 values, a docent script without the captured PM context, or
+a map state that renders only clusters without pins.
 
 To review alert and dashboard candidates without creating observability
 resources:

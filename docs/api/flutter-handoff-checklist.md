@@ -142,23 +142,24 @@ scripts/unix/smoke_flutter_web.sh \
   -ApiPort 18080
 ```
 
-This optional smoke is not part of CI. It uses the Playwright CLI,
-captures artifacts under `output/playwright/`, and validates that the Flutter
-web bundle renders. With `--start-api`, the wrapper starts a local FastAPI
-process, injects a temporary local migration API key at compile time, and checks
-the API log for `/healthz`, `/readyz`, places, weather, intervention, and daily
-plan route hits. It also grants a fixed test browser geolocation,
-reloads into the first-run location request flow, and checks
+Local Flutter bundle smoke remains optional outside CI. It uses the Playwright
+CLI, captures artifacts under `output/playwright/`, and validates that the
+Flutter web bundle renders. With `--start-api`, the wrapper starts a local
+FastAPI process, injects a temporary local migration API key at compile time,
+and checks the API log for `/healthz`, `/readyz`, places, weather,
+intervention, and daily plan route hits. It also grants a fixed test browser
+geolocation, reloads into the first-run location request flow, and checks
 `flutter-web-requests.txt` for the expected API requests with that latitude and
-longitude. Without
-`--start-api`, the app is expected to show the offline public state when the API
-is not running and the console artifact can include a refused `/healthz`
-request. Use `--api-base-url <url>` to point the bundle at a separately running
-backend that allows the selected local web origin and run the same
-location-flow request check against it. Use
+longitude. Without `--start-api`, the app is expected to show the offline public
+state when the API is not running and the console artifact can include a
+refused `/healthz` request. Use `--api-base-url <url>` to point the bundle at a
+separately running backend that allows the selected local web origin and run the
+same location-flow request check against it. Use
 `--web-url https://lala-next.cloud/?qa=<label>` for the deployed contest site so
 the browser opens the registered Kakao/CORS origin directly; deployed and
-DB-backed checks also require the first-place docent script route.
+DB-backed checks also verify a live-context docent script from the same
+place/weather data. The deployed public site version is CI-gated by
+`.github/workflows/deployed-web-smoke.yml` on relevant `dev` pushes.
 
 The app shell loads public readiness before auth, shows whether the current
 client credential shape is public-only, migration API-key, static bearer-token,

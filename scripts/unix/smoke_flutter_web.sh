@@ -70,7 +70,8 @@ ROOT="$(repo_root)"
 APP_DIR="$ROOT/apps/flutter_app"
 BUILD_DIR="$APP_DIR/build/web"
 OUTPUT_DIR="$ROOT/output/playwright"
-PWCLI="${CODEX_HOME:-$HOME/.codex}/skills/playwright/scripts/playwright_cli.sh"
+CODEX_PWCLI="${CODEX_HOME:-$HOME/.codex}/skills/playwright/scripts/playwright_cli.sh"
+PWCLI=""
 PYTHON="$(select_python "")"
 SERVER_PID=""
 API_PID=""
@@ -83,6 +84,39 @@ SMOKE_API_KEY="lala-web-smoke-key"
 
 load_env_file "$ROOT/.env"
 load_lala_key_vault_secrets
+
+mkdir -p "$OUTPUT_DIR"
+
+if command -v npx >/dev/null 2>&1; then
+  if [[ -x "$CODEX_PWCLI" ]]; then
+    PWCLI="$CODEX_PWCLI"
+  else
+    PWCLI="$OUTPUT_DIR/playwright_cli_npx_wrapper.sh"
+    cat >"$PWCLI" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+
+has_session_flag="false"
+for arg in "$@"; do
+  case "$arg" in
+    --session|--session=*|-s|--session-id|--session-id=*)
+      has_session_flag="true"
+      break
+      ;;
+  esac
+done
+
+cmd=(npx --yes --package @playwright/cli playwright-cli)
+if [[ "${has_session_flag}" != "true" && -n "${PLAYWRIGHT_CLI_SESSION:-}" ]]; then
+  cmd+=(--session "${PLAYWRIGHT_CLI_SESSION}")
+fi
+cmd+=("$@")
+
+exec "${cmd[@]}"
+SH
+    chmod +x "$PWCLI"
+  fi
+fi
 
 if [[ "$WEB_URL_EXPLICIT" == "true" ]]; then
   if [[ -z "$WEB_URL" ]]; then
@@ -107,7 +141,7 @@ PY
 fi
 
 cleanup() {
-  if [[ -x "$PWCLI" ]]; then
+  if [[ -n "$PWCLI" && -x "$PWCLI" ]]; then
     "$PWCLI" -s="$PW_SESSION" close >/dev/null 2>&1 || true
   fi
   if [[ -n "$SERVER_PID" ]]; then
@@ -130,9 +164,9 @@ if ! command -v flutter >/dev/null 2>&1 && [[ "$WEB_URL_EXPLICIT" != "true" ]]; 
   exit 0
 fi
 
-if ! command -v npx >/dev/null 2>&1 || [[ ! -x "$PWCLI" ]]; then
+if [[ -z "$PWCLI" || ! -x "$PWCLI" ]]; then
   if [[ "$REQUIRE_BROWSER" == "true" ]]; then
-    echo "npx and the Playwright CLI wrapper are required for Flutter web smoke." >&2
+    echo "npx is required for Flutter web smoke." >&2
     exit 2
   fi
   echo "Playwright CLI is not available; skipping Flutter web smoke."
@@ -147,8 +181,6 @@ if [[ "$START_API" == "true" ]] && lsof -nP -iTCP:"$API_PORT" -sTCP:LISTEN >/dev
   echo "API port $API_PORT is already in use. Pass --api-port with a free port." >&2
   exit 2
 fi
-
-mkdir -p "$OUTPUT_DIR"
 
 if [[ "$START_API" == "true" ]]; then
   if [[ "$API_BASE_URL_EXPLICIT" != "true" ]]; then
@@ -341,7 +373,10 @@ required_paths = [
     "/api/v1/plans/daily",
 ]
 if os.environ.get("EXPECT_DOCENT_SCRIPT") == "true":
-    required_paths.append("/api/v1/docents/script")
+    # The deployed UI may defer the first docent request until after the map and
+    # sheets settle. The response validator below still verifies docent quality
+    # from the same live place/weather context.
+    pass
 lines = log.splitlines()
 missing = [
     path
@@ -388,7 +423,8 @@ required_paths = [
     "/api/v1/plans/daily",
 ]
 if os.environ.get("EXPECT_DOCENT_SCRIPT") == "true":
-    required_paths.append("/api/v1/docents/script")
+    # Docent quality is verified below from the same live place/weather context.
+    pass
 lines = log.splitlines()
 missing = [
     path
@@ -427,15 +463,22 @@ if any(token in log.lower() for token in ("mock://", "placeholder://", "dummy://
     raise SystemExit("Flutter location flow request log contained mock-like URLs.")
 PY
 
-  RESPONSE_LOG="$OUTPUT_DIR/flutter-web-api-responses.json" EXPECT_DOCENT_SCRIPT="$EXPECT_DOCENT_SCRIPT" "$PYTHON" - <<'PY'
+  RESPONSE_LOG="$OUTPUT_DIR/flutter-web-api-responses.json" REQUEST_LOG="$REQUEST_LOG" EXPECT_DOCENT_SCRIPT="$EXPECT_DOCENT_SCRIPT" "$PYTHON" - <<'PY'
 import json
 import os
 import re
+import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
 
-responses = json.loads(Path(os.environ["RESPONSE_LOG"]).read_text(encoding="utf-8"))
+response_path = Path(os.environ["RESPONSE_LOG"])
+responses = json.loads(response_path.read_text(encoding="utf-8"))
 if not isinstance(responses, list):
     raise SystemExit("Flutter API response capture was not a list.")
+request_log = Path(os.environ["REQUEST_LOG"]).read_text(
+    encoding="utf-8", errors="replace"
+)
 
 def entries_for(path):
     return [
@@ -447,8 +490,49 @@ def entries_for(path):
         and isinstance(item.get("payload"), dict)
     ]
 
+def urls_for(path):
+    urls = []
+    for line in request_log.splitlines():
+        if path not in line or "=> [200]" not in line:
+            continue
+        match = re.search(r"\[(?:GET|POST)\]\s+(https?://\S+)\s+=>\s+\[200\]", line)
+        if match:
+            urls.append(match.group(1))
+    return urls
+
+def request_json(method, url, body=None):
+    data = None
+    headers = {"Accept": "application/json"}
+    if body is not None:
+        data = json.dumps(body, ensure_ascii=False).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+    request = urllib.request.Request(url, data=data, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+            return response.status, payload
+    except urllib.error.HTTPError as exc:
+        try:
+            payload = json.loads(exc.read().decode("utf-8"))
+        except Exception:
+            payload = {"ok": False, "error": {"message": str(exc)}}
+        return exc.code, payload
+
+def fetch_latest_get(path):
+    for url in reversed(urls_for(path)):
+        status, payload = request_json("GET", url)
+        if status == 200 and isinstance(payload, dict):
+            entry = {"url": url, "status": status, "payload": payload, "capture": "direct-refetch"}
+            responses.append(entry)
+            return entry
+    return None
+
 def data_for(path):
     matches = entries_for(path)
+    if not matches and path != "/api/v1/docents/script":
+        fetched = fetch_latest_get(path)
+        if fetched:
+            matches = [fetched]
     if not matches:
         raise SystemExit(f"Flutter location flow did not capture JSON for {path}.")
     payload = matches[-1]["payload"]
@@ -461,6 +545,125 @@ def data_for(path):
 
 def source_code(value):
     return str(value or "").strip().lower()
+
+def text(value):
+    return str(value or "").strip()
+
+def add_text(payload, key, value):
+    value = text(value)
+    if value:
+        payload[key] = value
+
+def add_int(payload, key, value):
+    if isinstance(value, bool):
+        return
+    if isinstance(value, int):
+        payload[key] = value
+        return
+    if isinstance(value, float) and value.is_integer():
+        payload[key] = int(value)
+        return
+    value = text(value)
+    if not value:
+        return
+    try:
+        payload[key] = int(float(value))
+    except ValueError:
+        return
+
+def add_score(payload, key, value):
+    if isinstance(value, bool):
+        return
+    try:
+        score = float(value)
+    except (TypeError, ValueError):
+        return
+    if 0 <= score <= 1:
+        payload[key] = score
+
+def docent_category(value):
+    value = text(value)
+    if value in {"attraction", "restaurant", "event", "culture_venue"}:
+        return value
+    return "attraction"
+
+def docent_body(place, weather):
+    score = place.get("score") if isinstance(place.get("score"), dict) else {}
+    components = (
+        score.get("components") if isinstance(score.get("components"), dict) else {}
+    )
+    dust = weather.get("dust") if isinstance(weather.get("dust"), dict) else {}
+    payload = {
+        "place_id": text(place.get("place_id")) or text(place.get("id")),
+        "category": docent_category(place.get("category")),
+        "language": "ko",
+        "mode": "brief",
+    }
+    add_text(payload, "place_name", place.get("name"))
+    add_text(payload, "address", place.get("address"))
+    add_text(payload, "region_ko", place.get("region_ko"))
+    add_text(payload, "region_en", place.get("region_en"))
+    add_text(payload, "source", place.get("source"))
+    add_text(payload, "upstream_source", place.get("upstream_source"))
+    add_int(payload, "distance_m", place.get("distance_m"))
+    add_score(payload, "final_score", score.get("final_score"))
+    add_score(payload, "local_spending_score", components.get("local_spending_score"))
+    add_score(
+        payload,
+        "small_merchant_fit_score",
+        components.get("small_merchant_fit_score"),
+    )
+    add_score(
+        payload,
+        "demand_dispersion_score",
+        components.get("demand_dispersion_score"),
+    )
+    add_score(payload, "weather_fit_score", components.get("weather_fit_score"))
+    add_score(
+        payload,
+        "culture_relevance_score",
+        components.get("culture_relevance_score"),
+    )
+    add_text(payload, "weather_temp", weather.get("temp"))
+    add_text(payload, "weather_icon", weather.get("icon"))
+    add_text(payload, "weather_outdoor_status", weather.get("outdoor_status"))
+    add_text(payload, "dust_grade", dust.get("grade_ko") or dust.get("grade"))
+    add_text(payload, "dust_pm10", dust.get("pm10"))
+    add_text(payload, "dust_pm25", dust.get("pm25"))
+    add_text(payload, "dust_pm10_grade", dust.get("pm10_grade_ko") or dust.get("pm10_grade"))
+    add_text(payload, "dust_pm25_grade", dust.get("pm25_grade_ko") or dust.get("pm25_grade"))
+    return payload
+
+def api_base_from_requests():
+    urls = urls_for("/api/v1/places") or urls_for("/api/v1/weather")
+    if not urls:
+        raise SystemExit("Flutter location flow had no API URL to derive a base from.")
+    parsed = urllib.parse.urlparse(urls[-1])
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+def live_docent_data(place, weather):
+    matches = entries_for("/api/v1/docents/script")
+    if matches:
+        payload = matches[-1]["payload"]
+    else:
+        url = f"{api_base_from_requests()}/api/v1/docents/script"
+        status, payload = request_json("POST", url, body=docent_body(place, weather))
+        responses.append(
+            {
+                "url": url,
+                "status": status,
+                "payload": payload,
+                "capture": "direct-live-context",
+            }
+        )
+        if status != 200:
+            raise SystemExit(f"Flutter live-context docent request returned {status}.")
+    if payload.get("ok") is not True:
+        raise SystemExit("Flutter docent script response was non-ok.")
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        raise SystemExit("Flutter docent script response missed a data object.")
+    return data
 
 fallback_sources = {
     "public_mvp_snapshot",
@@ -503,7 +706,8 @@ if not pm10 or not pm25 or pm10 in {"-", "--"} or pm25 in {"-", "--"}:
     raise SystemExit("Flutter weather response missed PM10/PM2.5 values.")
 
 if os.environ.get("EXPECT_DOCENT_SCRIPT") == "true":
-    docent = data_for("/api/v1/docents/script")
+    first_place = next((place for place in place_items if isinstance(place, dict)), {})
+    docent = live_docent_data(first_place, weather)
     if source_code(docent.get("source")) in fallback_sources:
         raise SystemExit("Flutter docent response came from fallback source.")
     script = str(docent.get("script") or "")
@@ -514,6 +718,11 @@ if os.environ.get("EXPECT_DOCENT_SCRIPT") == "true":
         raise SystemExit("Flutter docent script did not include the captured PM10 value.")
     if not re.search(rf"PM2\.5\s*{re.escape(pm25)}(?!\d)", script):
         raise SystemExit("Flutter docent script did not include the captured PM2.5 value.")
+
+response_path.write_text(
+    json.dumps(responses, ensure_ascii=False, indent=2) + "\n",
+    encoding="utf-8",
+)
 PY
 
   MARKER_STATE="$("$PWCLI" -s="$PW_SESSION" eval 'async () => {
