@@ -123,6 +123,8 @@ def test_current_weather_uses_kma_nowcast_when_db_is_empty(monkeypatch) -> None:
         weather["source"]
         == f"{weather_service.KMA_SOURCE}+{weather_service.AIRKOREA_SOURCE}"
     )
+    assert weather["location"] == "종로구"
+    assert weather["air_quality_location"] == "종로구"
     assert weather["temp"] == "22.3"
     assert weather["icon"] == "partly-cloudy"
     assert weather["outdoor_status"] == "good"
@@ -210,6 +212,7 @@ def test_current_weather_marks_bad_when_air_quality_is_bad(monkeypatch) -> None:
     assert weather["source"] == (
         f"{weather_service.KMA_SOURCE}+{weather_service.AIRKOREA_SOURCE}"
     )
+    assert weather["location"] == "중랑구"
     assert weather["dust"]["pm10_grade"] == "bad"
     assert weather["dust"]["pm25_grade"] == "bad"
     assert weather["outdoor_status"] == "bad"

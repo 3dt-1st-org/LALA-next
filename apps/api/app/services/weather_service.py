@@ -43,6 +43,11 @@ def current_weather(*, lat: float, lng: float, force: bool = False) -> dict:
             db_weather["dust"] = air_quality["dust"]
             db_weather["air_quality_location"] = air_quality.get("location")
             db_weather["air_quality_record_time"] = air_quality.get("record_time")
+            if _is_internal_weather_location(db_weather.get("location")):
+                db_weather["location"] = _weather_observation_location(
+                    air_quality=air_quality,
+                    fallback=db_weather.get("location"),
+                )
             db_weather["outdoor_status"] = _merge_outdoor_status_with_dust(
                 db_weather.get("outdoor_status"),
                 air_quality["dust"],
@@ -60,6 +65,10 @@ def current_weather(*, lat: float, lng: float, force: bool = False) -> dict:
             official_weather["dust"] = air_quality["dust"]
             official_weather["air_quality_location"] = air_quality.get("location")
             official_weather["air_quality_record_time"] = air_quality.get("record_time")
+            official_weather["location"] = _weather_observation_location(
+                air_quality=air_quality,
+                fallback=official_weather.get("location"),
+            )
             official_weather["source"] = f"{KMA_SOURCE}+{AIRKOREA_SOURCE}"
             official_weather["outdoor_status"] = _merge_outdoor_status_with_dust(
                 official_weather.get("outdoor_status"),
@@ -70,7 +79,10 @@ def current_weather(*, lat: float, lng: float, force: bool = False) -> dict:
         weather = {
             "lat": lat,
             "lng": lng,
-            "location": air_quality.get("sido_name"),
+            "location": _weather_observation_location(
+                air_quality=air_quality,
+                fallback=air_quality.get("sido_name"),
+            ),
             "temp": "",
             "icon": "unavailable",
             "dust": air_quality["dust"],
@@ -191,7 +203,7 @@ def _fetch_kma_ultra_short_nowcast(
     weather = {
         "lat": lat,
         "lng": lng,
-        "location": "기상청 격자",
+        "location": _sido_name_for_coordinate(lat=lat, lng=lng),
         "temp": temp,
         "icon": _kma_icon(values.get("PTY")),
         "dust": unknown_dust_payload(),
@@ -405,6 +417,23 @@ def _normalize_station_name(value: Any) -> str:
 
 def _coordinate_cache_bucket(lat: float, lng: float) -> str:
     return f"{lat:.2f}:{lng:.2f}"
+
+
+def _weather_observation_location(
+    *,
+    air_quality: dict[str, Any],
+    fallback: Any,
+) -> str:
+    for key in ("location", "sido_name"):
+        value = str(air_quality.get(key) or "").strip()
+        if value:
+            return value
+    return str(fallback or "").strip() or "현재 위치"
+
+
+def _is_internal_weather_location(value: Any) -> bool:
+    normalized = str(value or "").strip().lower().replace(" ", "")
+    return normalized in {"", "기상청격자", "kmagrid"}
 
 
 def _dust_outdoor_status(dust: dict[str, Any]) -> str:

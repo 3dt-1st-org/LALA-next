@@ -437,6 +437,9 @@ def _validate_places_location_data(data: dict[str, Any]) -> str | None:
 def _validate_weather_live_data(data: dict[str, Any]) -> str | None:
     if _is_fallback_source(data.get("source")):
         return "weather_source_not_live"
+    location = str(data.get("location") or "").strip().lower().replace(" ", "")
+    if location in {"", "기상청격자", "kmagrid"}:
+        return "weather_internal_location_label"
     if not str(data.get("temp") or "").strip():
         return "weather_missing_temperature"
     dust = data.get("dust")

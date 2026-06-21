@@ -310,6 +310,7 @@ def _live_weather_payload() -> dict[str, Any]:
         "ok": True,
         "data": {
             "source": "kma_ultra_srt_ncst+airkorea_sido_realtime",
+            "location": "중구",
             "temp": "23.4",
             "dust": {
                 "pm10": "6",
@@ -566,6 +567,24 @@ def test_unix_matrix_smoke_deploy_profile_rejects_unknown_dust_split():
 
     assert result.returncode != 0
     assert "weather_missing_dust_split" in result.stderr
+    assert "/api/v1/weather" in server.protected_paths
+
+
+def test_unix_matrix_smoke_deploy_profile_rejects_internal_weather_location():
+    weather_payload = _live_weather_payload()
+    weather_payload["data"]["location"] = "기상청 격자"
+
+    server, thread, base_url = _start_server(
+        public_access=True, weather_payload=weather_payload
+    )
+    try:
+        result = _run_matrix_smoke(base_url, {}, profile="deploy")
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+    assert result.returncode != 0
+    assert "weather_internal_location_label" in result.stderr
     assert "/api/v1/weather" in server.protected_paths
 
 
