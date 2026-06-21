@@ -216,6 +216,7 @@ def _build_deploy_cases(*, live_speech_enabled: bool) -> list[SmokeCase]:
                     "weather_fit_score": 0.74,
                     "culture_relevance_score": 0.91,
                     "weather_temp": "21.6",
+                    "weather_icon": "partly-cloudy",
                     "weather_outdoor_status": "good",
                     "dust_grade": "good",
                     "dust_pm10": "6",

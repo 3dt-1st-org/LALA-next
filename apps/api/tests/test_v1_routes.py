@@ -263,6 +263,7 @@ def test_docent_script_returns_envelope(client, auth_headers):
             "weather_fit_score": 0.74,
             "culture_relevance_score": 0.91,
             "weather_temp": "21.6°C",
+            "weather_icon": "partly-cloudy",
             "weather_outdoor_status": "good",
             "dust_pm10": "6",
             "dust_pm25": "2",
@@ -289,6 +290,8 @@ def test_docent_script_returns_envelope(client, auth_headers):
     assert "소상공인 상권" in body["data"]["script"]
     assert "분산 동선" in body["data"]["script"]
     assert "문화 경험" in body["data"]["script"]
+    assert "구름 조금" in body["data"]["script"]
+    assert "맑고" not in body["data"]["script"]
     assert "PM10" in body["data"]["script"]
     assert "PM2.5" in body["data"]["script"]
     assert "방문 전" in body["data"]["script"]
@@ -312,6 +315,7 @@ def test_docent_script_accepts_culture_venue_category(client, auth_headers):
             "distance_m": 1478,
             "upstream_source": "tour_api",
             "weather_temp": "21.6°C",
+            "weather_icon": "rain",
             "weather_outdoor_status": "good",
             "dust_grade": "normal",
             "dust_pm10": "31",
@@ -331,6 +335,7 @@ def test_docent_script_accepts_culture_venue_category(client, auth_headers):
     assert "문화공간" in body["data"]["script"]
     assert "현재 날씨" in body["data"]["script"]
     assert "21.6°C" in body["data"]["script"]
+    assert "하늘 상태 비" in body["data"]["script"]
     assert "°C°C" not in body["data"]["script"]
     assert "미세먼지 보통" in body["data"]["script"]
     assert "초미세먼지 좋음" in body["data"]["script"]
@@ -698,6 +703,66 @@ def test_docent_script_uses_live_ai_when_enabled(client, auth_headers, monkeypat
     assert saved_calls == []
 
 
+def test_docent_script_live_ai_placeholder_falls_back_to_curated_script(
+    client,
+    auth_headers,
+    monkeypatch,
+):
+    monkeypatch.setenv("LALA_ENABLE_LIVE_AI", "true")
+    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.openai.azure.com/")
+    monkeypatch.setenv("AZURE_OPENAI_KEY", "test-key")
+    monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini")
+    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2024-10-21")
+    monkeypatch.setattr(
+        "apps.api.app.services.db_repository.fetch_docent_script_cache",
+        lambda **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "apps.api.app.services.ai_service.generate_docent_script_text",
+        lambda request, **kwargs: "demo placeholder mock docent script",
+    )
+
+    response = client.post(
+        "/api/v1/docents/script",
+        headers=auth_headers,
+        json={
+            "place_id": "placeholder-guard",
+            "place_name": "서울도서관",
+            "region_ko": "중구",
+            "distance_m": 35,
+            "source": "db",
+            "upstream_source": "tour_api",
+            "final_score": 0.82,
+            "local_spending_score": 0.78,
+            "small_merchant_fit_score": 0.72,
+            "demand_dispersion_score": 0.7,
+            "weather_fit_score": 0.74,
+            "weather_temp": "24.1",
+            "weather_icon": "partly-cloudy",
+            "weather_outdoor_status": "good",
+            "dust_pm10": "16",
+            "dust_pm25": "7",
+            "dust_pm10_grade": "좋음",
+            "dust_pm25_grade": "좋음",
+            "category": "culture_venue",
+            "language": "ko",
+            "mode": "brief",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    script = body["data"]["script"]
+    assert body["data"]["source"] == "rule_based_curation"
+    assert "서울도서관" in script
+    assert "구름 조금" in script
+    assert "PM10" in script
+    assert "PM2.5" in script
+    assert "demo" not in script.lower()
+    assert "placeholder" not in script.lower()
+    assert "mock" not in script.lower()
+
+
 def test_docent_script_live_ai_score_context_does_not_write_generic_cache(
     client,
     auth_headers,
@@ -791,6 +856,7 @@ def test_docent_script_live_ai_adds_route_action_when_ai_only_mentions_next_plac
             "small_merchant_fit_score": 0.79,
             "weather_fit_score": 0.7,
             "weather_temp": "21.6",
+            "weather_icon": "partly-cloudy",
             "dust_pm10": "6",
             "dust_pm25": "2",
             "dust_pm10_grade": "좋음",
@@ -803,6 +869,7 @@ def test_docent_script_live_ai_adds_route_action_when_ai_only_mentions_next_plac
     assert "다음 장소" in script
     assert "동선" in script
     assert "관람 전후" in script
+    assert "구름 조금" in script
 
 
 def test_docent_script_live_ai_requires_grounded_context(

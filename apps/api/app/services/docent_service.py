@@ -52,6 +52,11 @@ def generate_script(request: DocentScriptRequest) -> dict:
         source = "rule_based_curation"
     script = _sanitize_docent_output(script, language=request.language)
     script = _ensure_docent_quality_context(script, request)
+    if source == "azure_openai" and _docent_output_needs_rule_fallback(script):
+        script = _rule_based_script(request, grounding_context=grounding_context)
+        script = _sanitize_docent_output(script, language=request.language)
+        script = _ensure_docent_quality_context(script, request)
+        source = "rule_based_curation"
     ttl_sec = 604800
     return {
         "place_id": request.place_id,
@@ -197,6 +202,7 @@ def _has_weather_context(request: DocentScriptRequest) -> bool:
         value is not None
         for value in (
             request.weather_temp,
+            request.weather_icon,
             request.weather_outdoor_status,
             request.dust_grade,
             request.dust_pm10,
@@ -274,6 +280,8 @@ def _ko_weather_sentence(request: DocentScriptRequest) -> str:
     parts: list[str] = []
     if temperature := format_celsius_label(request.weather_temp):
         parts.append(f"기온 {temperature}")
+    if sky := _ko_weather_icon_label(request.weather_icon):
+        parts.append(f"하늘 상태 {sky}")
     dust_parts: list[str] = []
     if request.dust_pm10_grade and request.dust_pm10:
         dust_parts.append(f"미세먼지 {request.dust_pm10_grade}(PM10 {request.dust_pm10})")
@@ -301,6 +309,8 @@ def _en_weather_sentence(request: DocentScriptRequest) -> str:
     parts: list[str] = []
     if temperature := format_celsius_label(request.weather_temp):
         parts.append(temperature)
+    if sky := _en_weather_icon_label(request.weather_icon):
+        parts.append(f"sky {sky}")
     dust_parts: list[str] = []
     if request.dust_pm10_grade and request.dust_pm10:
         dust_parts.append(f"PM10 {request.dust_pm10_grade} ({request.dust_pm10})")
@@ -536,8 +546,14 @@ def _ensure_ko_docent_quality_context(
     if _has_weather_context(request):
         if not _contains_any(script, ("날씨", "미세먼지", "초미세먼지", "PM10", "PM2.5")):
             parts.append(_ko_weather_sentence(request))
-        elif "PM10" not in script or not _contains_any(script, ("PM2.5", "초미세먼지")):
-            parts.append(_ko_dust_split_sentence(request))
+        else:
+            if request.weather_icon and not _contains_any(
+                script,
+                ("하늘", "구름", "맑", "강수", "눈", "비가", "비 소식"),
+            ):
+                parts.append(_ko_weather_icon_sentence(request))
+            if "PM10" not in script or not _contains_any(script, ("PM2.5", "초미세먼지")):
+                parts.append(_ko_dust_split_sentence(request))
     source = _ko_source_label(request.upstream_source or request.source)
     if source and not _contains_any(script, ("공식", "한국관광공사", "문화정보원", "공연예술통합전산망", "운영 DB")):
         parts.append(f"{source}로 확인한 공식 데이터를 바탕으로 소개합니다.")
@@ -571,8 +587,22 @@ def _ensure_en_docent_quality_context(
     if _has_weather_context(request):
         if not _contains_any(script, ("weather", "PM10", "PM2.5", "dust")):
             parts.append(_en_weather_sentence(request))
-        elif "PM10" not in script or "PM2.5" not in script:
-            parts.append(_en_dust_split_sentence(request))
+        else:
+            if request.weather_icon and not _contains_any(
+                script.lower(),
+                (
+                    "sky",
+                    "cloud",
+                    "clear",
+                    "rain",
+                    "snow",
+                    "sleet",
+                    "precipitation",
+                ),
+            ):
+                parts.append(_en_weather_icon_sentence(request))
+            if "PM10" not in script or "PM2.5" not in script:
+                parts.append(_en_dust_split_sentence(request))
     source = _en_source_label(request.upstream_source or request.source)
     if source and not _contains_any(
         script.lower(),
@@ -615,6 +645,65 @@ def _en_dust_split_sentence(request: DocentScriptRequest) -> str:
     if not dust_parts:
         return ""
     return "Current air quality: " + "; ".join(dust_parts) + "."
+
+
+def _ko_weather_icon_sentence(request: DocentScriptRequest) -> str:
+    label = _ko_weather_icon_label(request.weather_icon)
+    if not label:
+        return ""
+    return f"현재 하늘 상태는 {label}로 확인됩니다."
+
+
+def _en_weather_icon_sentence(request: DocentScriptRequest) -> str:
+    label = _en_weather_icon_label(request.weather_icon)
+    if not label:
+        return ""
+    return f"The current sky condition is {label}."
+
+
+def _ko_weather_icon_label(icon: str | None) -> str | None:
+    return {
+        "partly-cloudy": "구름 조금",
+        "partly_cloudy": "구름 조금",
+        "partly cloudy": "구름 조금",
+        "cloudy": "흐림",
+        "clear": "맑음",
+        "sunny": "맑음",
+        "rain": "비",
+        "sleet": "비 또는 눈",
+        "snow": "눈",
+    }.get((icon or "").strip().lower())
+
+
+def _en_weather_icon_label(icon: str | None) -> str | None:
+    return {
+        "partly-cloudy": "partly cloudy",
+        "partly_cloudy": "partly cloudy",
+        "partly cloudy": "partly cloudy",
+        "cloudy": "cloudy",
+        "clear": "clear",
+        "sunny": "sunny",
+        "rain": "rainy",
+        "sleet": "mixed rain and snow",
+        "snow": "snowy",
+    }.get((icon or "").strip().lower())
+
+
+def _docent_output_needs_rule_fallback(script: str) -> bool:
+    lowered = script.lower()
+    return any(
+        term in lowered
+        for term in (
+            "skeleton",
+            "placeholder",
+            "mock",
+            "demo",
+            "준비하고 있습니다",
+            "준비 중입니다",
+            "데모",
+            "목데이터",
+        )
+    )
 
 
 def _ko_route_action_sentence(category: str) -> str:
@@ -805,6 +894,7 @@ def script_identity(
                 "source": request.source,
                 "upstream_source": request.upstream_source,
                 "weather_temp": request.weather_temp,
+                "weather_icon": request.weather_icon,
                 "weather_outdoor_status": request.weather_outdoor_status,
                 "dust_grade": request.dust_grade,
                 "dust_pm10": request.dust_pm10,

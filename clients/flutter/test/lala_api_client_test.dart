@@ -263,6 +263,7 @@ void main() {
         expect(jsonDecode(request.body)['weather_fit_score'], 0.74);
         expect(jsonDecode(request.body)['culture_relevance_score'], 0.91);
         expect(jsonDecode(request.body)['weather_temp'], '21.6');
+        expect(jsonDecode(request.body)['weather_icon'], 'partly-cloudy');
         expect(jsonDecode(request.body)['weather_outdoor_status'], 'good');
         expect(jsonDecode(request.body)['dust_grade'], 'normal');
         expect(jsonDecode(request.body)['dust_pm10'], '31');
@@ -310,6 +311,7 @@ void main() {
       weatherFitScore: 0.74,
       cultureRelevanceScore: 0.91,
       weatherTemp: ' 21.6 ',
+      weatherIcon: ' partly-cloudy ',
       weatherOutdoorStatus: ' good ',
       dustGrade: ' normal ',
       dustPm10: ' 31 ',

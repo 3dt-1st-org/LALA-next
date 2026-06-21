@@ -66,6 +66,9 @@ def generate_docent_script_text(
         "context is provided, mention those signals naturally without exposing "
         "private numeric recommendation scores. Include one practical route action "
         "for what to do before or after this stop. "
+        "Do not infer sunny, clear, rainy, snowy, or sky conditions unless a "
+        "weather condition/icon is provided; when it is provided, use only that "
+        "condition. "
         "Use recommendation scores only as private reasoning: do not quote numeric "
         "scores, score labels, internal table names, cache names, or raw source codes "
         "in the user-facing docent script. "
@@ -161,6 +164,10 @@ def _weather_context_prompt(request: DocentScriptRequest) -> str:
     weather_parts: list[str] = []
     if temperature := format_celsius_label(request.weather_temp):
         weather_parts.append(f"temperature {temperature}")
+    if condition := _weather_condition_label(request.weather_icon):
+        weather_parts.append(
+            f"weather condition {condition} (icon {request.weather_icon})"
+        )
     if request.weather_outdoor_status:
         weather_parts.append(f"outdoor status {request.weather_outdoor_status}")
     if request.dust_grade:
@@ -176,6 +183,20 @@ def _weather_context_prompt(request: DocentScriptRequest) -> str:
     if not weather_parts:
         return ""
     return "Current weather and air quality: " + "; ".join(weather_parts) + "."
+
+
+def _weather_condition_label(icon: str | None) -> str | None:
+    return {
+        "partly-cloudy": "partly cloudy",
+        "partly_cloudy": "partly cloudy",
+        "partly cloudy": "partly cloudy",
+        "cloudy": "cloudy",
+        "clear": "clear",
+        "sunny": "sunny",
+        "rain": "rainy",
+        "sleet": "mixed rain and snow",
+        "snow": "snowy",
+    }.get((icon or "").strip().lower())
 
 
 def _grounding_context_prompt(grounding_context: list[dict]) -> str:

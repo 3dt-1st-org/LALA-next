@@ -23,6 +23,7 @@ class DocentScriptRequest(BaseModel):
     weather_fit_score: float | None = Field(default=None, ge=0, le=1)
     culture_relevance_score: float | None = Field(default=None, ge=0, le=1)
     weather_temp: str | None = None
+    weather_icon: str | None = None
     weather_outdoor_status: str | None = None
     dust_grade: str | None = None
     dust_pm10: str | None = None
@@ -49,6 +50,7 @@ class DocentScriptRequest(BaseModel):
         "source",
         "upstream_source",
         "weather_temp",
+        "weather_icon",
         "weather_outdoor_status",
         "dust_grade",
         "dust_pm10",

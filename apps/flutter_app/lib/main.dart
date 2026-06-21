@@ -408,6 +408,7 @@ class LalaApiBackend implements LalaBackend {
       weatherFitScore: place.score?.components.weatherFitScore,
       cultureRelevanceScore: place.score?.components.cultureRelevanceScore,
       weatherTemp: weather?.temp,
+      weatherIcon: weather?.icon,
       weatherOutdoorStatus: weather?.outdoorStatus,
       dustGrade: weather?.dust.grade,
       dustPm10: weather?.dust.pm10,

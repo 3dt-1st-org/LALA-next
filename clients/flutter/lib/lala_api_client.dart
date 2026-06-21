@@ -116,6 +116,7 @@ class LalaApiClient {
     double? weatherFitScore,
     double? cultureRelevanceScore,
     String? weatherTemp,
+    String? weatherIcon,
     String? weatherOutdoorStatus,
     String? dustGrade,
     String? dustPm10,
@@ -154,6 +155,8 @@ class LalaApiClient {
           'culture_relevance_score': cultureRelevanceScore,
         if ((weatherTemp ?? '').trim().isNotEmpty)
           'weather_temp': weatherTemp!.trim(),
+        if ((weatherIcon ?? '').trim().isNotEmpty)
+          'weather_icon': weatherIcon!.trim(),
         if ((weatherOutdoorStatus ?? '').trim().isNotEmpty)
           'weather_outdoor_status': weatherOutdoorStatus!.trim(),
         if ((dustGrade ?? '').trim().isNotEmpty)
