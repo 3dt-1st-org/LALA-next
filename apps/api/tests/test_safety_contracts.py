@@ -228,6 +228,9 @@ def test_flutter_web_smoke_drives_location_flow_and_route_requests():
         assert "page.mouse.click" not in script
         assert "37.5665" in script
         assert "126.978" in script
+        assert "37.2636" in script
+        assert "127.0286" in script
+        assert "default location" in script
         assert "flutter-web-requests.txt" in script
         assert "=> [200]" in script or r"=> \[200\]" in script
         assert "/api/v1/places" in script

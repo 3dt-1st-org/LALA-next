@@ -313,8 +313,16 @@ async (page) => {
             $missingFlowPaths = @($requiredFlowPaths | Where-Object {
                 $requestLog -notmatch ([regex]::Escape($_) + ".*=> \[200\]")
             })
-            $hasGrantedLocation = $requestLog -like "*lat=37.5665*" -and $requestLog -like "*lng=126.978*"
-            if ($missingFlowPaths.Count -eq 0 -and $hasGrantedLocation) {
+            $locationFlowPaths = @(
+                "/api/v1/places",
+                "/api/v1/weather",
+                "/api/v1/plans/intervention"
+            )
+            $missingLocationPaths = @($locationFlowPaths | Where-Object {
+                $requestLog -notmatch ([regex]::Escape($_) + ".*lat=37\.5665.*lng=126\.978.*=> \[200\]")
+            })
+            $usedDefaultLocation = $requestLog -like "*lat=37.2636*" -or $requestLog -like "*lng=127.0286*"
+            if ($missingFlowPaths.Count -eq 0 -and $missingLocationPaths.Count -eq 0 -and -not $usedDefaultLocation) {
                 break
             }
             Start-Sleep -Milliseconds 500
@@ -325,8 +333,19 @@ async (page) => {
         if ($missingFlowPaths.Count -gt 0) {
             throw "Flutter location flow did not observe successful expected API requests: $($missingFlowPaths -join ', ')"
         }
-        if (-not ($requestLog -like "*lat=37.5665*" -and $requestLog -like "*lng=126.978*")) {
-            throw "Flutter location flow did not use the granted test geolocation."
+        $locationFlowPaths = @(
+            "/api/v1/places",
+            "/api/v1/weather",
+            "/api/v1/plans/intervention"
+        )
+        $missingLocationPaths = @($locationFlowPaths | Where-Object {
+            $requestLog -notmatch ([regex]::Escape($_) + ".*lat=37\.5665.*lng=126\.978.*=> \[200\]")
+        })
+        if ($missingLocationPaths.Count -gt 0) {
+            throw "Flutter location flow did not use the granted test geolocation for: $($missingLocationPaths -join ', ')"
+        }
+        if ($requestLog -like "*lat=37.2636*" -or $requestLog -like "*lng=127.0286*") {
+            throw "Flutter location flow still used the default location."
         }
         $lowerRequestLog = $requestLog.ToLowerInvariant()
         if ($lowerRequestLog.Contains("mock://") -or

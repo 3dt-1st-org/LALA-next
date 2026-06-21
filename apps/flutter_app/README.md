@@ -77,6 +77,8 @@ With `--start-api`, it keeps the API in local contract mode, avoids Key Vault,
 DB, OpenAI, and Speech, grants a test browser geolocation, reloads into the
 first-run location request flow, and verifies that the browser requested places,
 weather, intervention, and daily plan routes with the granted latitude and longitude.
+The route check requires places, weather, and intervention to each use the granted
+location, and fails if the old default Suwon coordinate appears in those API logs.
 With `--api-base-url <url>`, the same location-flow request check runs against a
 separately running backend that allows the selected local web origin and also
 expects a docent script route when place data exists. For the deployed contest site, use

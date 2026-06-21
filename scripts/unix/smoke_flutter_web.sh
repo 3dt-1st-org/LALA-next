@@ -318,7 +318,25 @@ missing = [
 ]
 if missing:
     raise SystemExit(1)
-if "lat=37.5665" not in log or "lng=126.978" not in log:
+location_paths = [
+    "/api/v1/places",
+    "/api/v1/weather",
+    "/api/v1/plans/intervention",
+]
+missing_location = [
+    path
+    for path in location_paths
+    if not any(
+        path in line
+        and "=> [200]" in line
+        and "lat=37.5665" in line
+        and "lng=126.978" in line
+        for line in lines
+    )
+]
+if missing_location:
+    raise SystemExit(1)
+if "lat=37.2636" in log or "lng=127.0286" in log:
     raise SystemExit(1)
 PY
     then
@@ -350,8 +368,29 @@ if missing:
         "Flutter location flow did not observe successful expected API requests: "
         + ", ".join(missing)
     )
-if "lat=37.5665" not in log or "lng=126.978" not in log:
-    raise SystemExit("Flutter location flow did not use the granted test geolocation.")
+location_paths = [
+    "/api/v1/places",
+    "/api/v1/weather",
+    "/api/v1/plans/intervention",
+]
+missing_location = [
+    path
+    for path in location_paths
+    if not any(
+        path in line
+        and "=> [200]" in line
+        and "lat=37.5665" in line
+        and "lng=126.978" in line
+        for line in lines
+    )
+]
+if missing_location:
+    raise SystemExit(
+        "Flutter location flow did not use the granted test geolocation for: "
+        + ", ".join(missing_location)
+    )
+if "lat=37.2636" in log or "lng=127.0286" in log:
+    raise SystemExit("Flutter location flow still used the default location.")
 if any(token in log.lower() for token in ("mock://", "placeholder://", "dummy://")):
     raise SystemExit("Flutter location flow request log contained mock-like URLs.")
 PY
