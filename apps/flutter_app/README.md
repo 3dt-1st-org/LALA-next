@@ -84,7 +84,11 @@ separately running backend that allows the selected local web origin and also
 expects a docent script route when place data exists. For the deployed contest site, use
 `--web-url https://lala-next.cloud/?qa=<label>` so the smoke opens the registered
 Kakao/CORS origin directly and verifies the same location-driven API requests,
-including the first-place docent script.
+including the first-place docent script. The macOS/Linux smoke also captures
+`flutter-web-api-responses.json` and fails if the browser received non-DB
+places, a non-PostGIS location engine, weather without AirKorea PM10/PM2.5
+values, a docent script that omits the captured PM10/PM2.5 context, or a map
+state that renders only clusters without real place pins.
 Without
 `--start-api`, the app still renders its offline public state when the API is
 not running and the console artifact records the expected `/healthz`

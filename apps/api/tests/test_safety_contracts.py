@@ -240,6 +240,14 @@ def test_flutter_web_smoke_drives_location_flow_and_route_requests():
         assert "/api/v1/docents/script" in script
     assert "--web-url" in unix_script
     assert "-WebUrl" in windows_script
+    assert "flutter-web-api-responses.json" in unix_script
+    assert "Flutter places response was not DB-backed." in unix_script
+    assert "Flutter places response did not use PostGIS." in unix_script
+    assert "Flutter weather response did not include AirKorea source." in unix_script
+    assert "Flutter docent script did not include the captured PM10 value." in unix_script
+    assert "Flutter docent script did not include the captured PM2.5 value." in unix_script
+    assert "Flutter location flow rendered no real map pins." in unix_script
+    assert "Flutter location flow rendered only clusters without place pins." in unix_script
 
 
 def test_paid_smoke_requires_authenticated_api_key():

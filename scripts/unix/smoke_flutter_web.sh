@@ -280,6 +280,28 @@ fi
 if [[ "$RUN_LOCATION_FLOW" == "true" ]]; then
   echo "Driving Flutter web location flow with test geolocation..."
   "$PWCLI" -s="$PW_SESSION" run-code "async (page) => {
+    const capturedResponses = [];
+    await page.addInitScript(() => {
+      window.__lalaSmokeApiResponses = [];
+    });
+    page.on('response', async (response) => {
+      const url = response.url();
+      if (!url.includes('/api/v1/')) {
+        return;
+      }
+      let payload = null;
+      try {
+        payload = await response.json();
+      } catch (_) {
+        return;
+      }
+      const entry = {
+        url,
+        status: response.status(),
+        payload,
+      };
+      capturedResponses.push(entry);
+    });
     await page.context().grantPermissions(['geolocation'], { origin: '$WEB_ORIGIN' });
     await page.context().setGeolocation({ latitude: $SMOKE_LAT, longitude: $SMOKE_LNG });
     await page.reload({ waitUntil: 'domcontentloaded' });
@@ -291,8 +313,18 @@ if [[ "$RUN_LOCATION_FLOW" == "true" ]]; then
       await page.waitForTimeout(250);
     }
     await page.waitForTimeout(15000);
-    return { url: page.url(), viewport: page.viewportSize() || { width: 1280, height: 900 } };
+    await page.evaluate((items) => {
+      window.__lalaSmokeApiResponses = items;
+    }, capturedResponses);
+    return {
+      url: page.url(),
+      viewport: page.viewportSize() || { width: 1280, height: 900 },
+      capturedResponseCount: capturedResponses.length
+    };
   }" >"$OUTPUT_DIR/flutter-web-location-flow.txt"
+
+  API_RESPONSE_STATE="$("$PWCLI" -s="$PW_SESSION" eval '() => window.__lalaSmokeApiResponses || []' --raw)"
+  printf '%s\n' "$API_RESPONSE_STATE" >"$OUTPUT_DIR/flutter-web-api-responses.json"
 
   REQUEST_LOG="$OUTPUT_DIR/flutter-web-requests.txt"
   for _ in {1..120}; do
@@ -393,6 +425,95 @@ if "lat=37.2636" in log or "lng=127.0286" in log:
     raise SystemExit("Flutter location flow still used the default location.")
 if any(token in log.lower() for token in ("mock://", "placeholder://", "dummy://")):
     raise SystemExit("Flutter location flow request log contained mock-like URLs.")
+PY
+
+  RESPONSE_LOG="$OUTPUT_DIR/flutter-web-api-responses.json" EXPECT_DOCENT_SCRIPT="$EXPECT_DOCENT_SCRIPT" "$PYTHON" - <<'PY'
+import json
+import os
+import re
+from pathlib import Path
+
+responses = json.loads(Path(os.environ["RESPONSE_LOG"]).read_text(encoding="utf-8"))
+if not isinstance(responses, list):
+    raise SystemExit("Flutter API response capture was not a list.")
+
+def entries_for(path):
+    return [
+        item
+        for item in responses
+        if isinstance(item, dict)
+        and path in str(item.get("url") or "")
+        and int(item.get("status") or 0) == 200
+        and isinstance(item.get("payload"), dict)
+    ]
+
+def data_for(path):
+    matches = entries_for(path)
+    if not matches:
+        raise SystemExit(f"Flutter location flow did not capture JSON for {path}.")
+    payload = matches[-1]["payload"]
+    if payload.get("ok") is not True:
+        raise SystemExit(f"Flutter location flow captured non-ok JSON for {path}.")
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        raise SystemExit(f"Flutter location flow captured no data object for {path}.")
+    return data
+
+def source_code(value):
+    return str(value or "").strip().lower()
+
+fallback_sources = {
+    "public_mvp_snapshot",
+    "demo_fallback",
+    "demo_seed",
+    "dev_seed",
+    "fallback",
+    "local_fixture",
+    "skeleton",
+    "unavailable",
+}
+
+places = data_for("/api/v1/places")
+if places.get("source") != "db":
+    raise SystemExit("Flutter places response was not DB-backed.")
+if places.get("location_engine") != "postgis":
+    raise SystemExit("Flutter places response did not use PostGIS.")
+place_items = places.get("places")
+if not isinstance(place_items, list) or not place_items:
+    raise SystemExit("Flutter places response was empty.")
+for place in place_items:
+    if not isinstance(place, dict):
+        continue
+    if source_code(place.get("source")) in fallback_sources:
+        raise SystemExit("Flutter places response contained fallback place rows.")
+    if source_code(place.get("upstream_source")) in {"dev_seed", "local_fixture"}:
+        raise SystemExit("Flutter places response contained fixture upstream rows.")
+
+weather = data_for("/api/v1/weather")
+if "airkorea" not in source_code(weather.get("source")):
+    raise SystemExit("Flutter weather response did not include AirKorea source.")
+if not str(weather.get("air_quality_location") or "").strip():
+    raise SystemExit("Flutter weather response missed an air quality station label.")
+dust = weather.get("dust")
+if not isinstance(dust, dict):
+    raise SystemExit("Flutter weather response missed dust data.")
+pm10 = str(dust.get("pm10") or "").strip()
+pm25 = str(dust.get("pm25") or "").strip()
+if not pm10 or not pm25 or pm10 in {"-", "--"} or pm25 in {"-", "--"}:
+    raise SystemExit("Flutter weather response missed PM10/PM2.5 values.")
+
+if os.environ.get("EXPECT_DOCENT_SCRIPT") == "true":
+    docent = data_for("/api/v1/docents/script")
+    if source_code(docent.get("source")) in fallback_sources:
+        raise SystemExit("Flutter docent response came from fallback source.")
+    script = str(docent.get("script") or "")
+    lowered = script.lower()
+    if any(token in lowered for token in ("mock", "demo", "placeholder", "skeleton")):
+        raise SystemExit("Flutter docent script contained placeholder wording.")
+    if not re.search(rf"PM10\s*{re.escape(pm10)}(?!\d)", script):
+        raise SystemExit("Flutter docent script did not include the captured PM10 value.")
+    if not re.search(rf"PM2\.5\s*{re.escape(pm25)}(?!\d)", script):
+        raise SystemExit("Flutter docent script did not include the captured PM2.5 value.")
 PY
 
   MARKER_STATE="$("$PWCLI" -s="$PW_SESSION" eval 'async () => {
@@ -511,7 +632,7 @@ fi
 
 echo "Flutter web browser smoke completed."
 if [[ "$RUN_LOCATION_FLOW" == "true" ]]; then
-  echo "Artifacts: $OUTPUT_DIR/flutter-web-snapshot.txt, flutter-web-screenshot.txt, flutter-web-console.txt, flutter-web-requests.txt, flutter-web-marker-state.json"
+  echo "Artifacts: $OUTPUT_DIR/flutter-web-snapshot.txt, flutter-web-screenshot.txt, flutter-web-console.txt, flutter-web-requests.txt, flutter-web-api-responses.json, flutter-web-marker-state.json"
 else
   echo "Artifacts: $OUTPUT_DIR/flutter-web-snapshot.txt, flutter-web-screenshot.txt, flutter-web-console.txt"
 fi

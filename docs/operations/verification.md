@@ -705,7 +705,12 @@ fixed test browser geolocation, reloads into the first-run location request
 flow, captures `flutter-web-requests.txt`, and verifies places, weather,
 intervention, and daily plan requests with the granted latitude and longitude.
 When the smoke targets `--api-base-url` or the deployed `--web-url`, it also
-requires the first-place docent script request. The
+requires the first-place docent script request. On macOS/Linux, the same smoke
+captures API JSON responses in `flutter-web-api-responses.json` and fails if
+the browser received non-DB places, a non-PostGIS location engine, weather
+without AirKorea PM10/PM2.5 values, or a docent script that omits the captured
+PM10/PM2.5 context. It also records `flutter-web-marker-state.json` and fails
+when the map renders no real place pins or only clusters without pins. The
 `--api-base-url` backend must allow the selected local web origin. Use
 `--web-url https://lala-next.cloud/?qa=<label>` when verifying the deployed
 contest site so Kakao Maps and API CORS run from the registered production
