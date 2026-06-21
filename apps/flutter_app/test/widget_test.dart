@@ -263,10 +263,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('현재 위치에서 시작할게요'), findsNothing);
-    expect(
-      find.byKey(const ValueKey('location-start-confirm')),
-      findsNothing,
-    );
+    expect(find.byKey(const ValueKey('location-start-confirm')), findsNothing);
     expect(locationProvider.requests, 1);
     expect(configs, isNotEmpty);
     expect(configs.last.lat, 37.5665);
@@ -280,6 +277,10 @@ void main() {
     expect(backends.last.interventionRequestConfigs.single.lng, 126.9780);
     expect(backends.last.dailyPlanRequestConfigs.single.lat, 37.5665);
     expect(backends.last.dailyPlanRequestConfigs.single.lng, 126.9780);
+    expect(
+      backends.last.docentScriptRequests.single,
+      'brief:hwaseong-haenggung',
+    );
     expect(find.text('추천 장소 접기'), findsOneWidget);
     expect(find.text('날씨 데이터 준비 중'), findsNothing);
   });
@@ -579,7 +580,7 @@ void main() {
     final weatherPillText = tester.widget<Text>(
       find.descendant(
         of: find.byKey(const ValueKey('weather-pill-hit-target')),
-        matching: find.text('14°C · 미세먼지 미세 31 보통 · 초미세 14 좋음'),
+        matching: find.text('14°C · PM10 31 보통 · PM2.5 14 좋음'),
       ),
     );
     expect(weatherPillText.maxLines, 2);
@@ -2058,6 +2059,7 @@ class FakeBackend implements LalaBackend {
           language: config.lang,
         ),
         source: 'db',
+        locationEngine: 'postgis',
       ),
     );
   }

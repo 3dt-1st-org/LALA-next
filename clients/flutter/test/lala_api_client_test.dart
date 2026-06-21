@@ -167,6 +167,7 @@ void main() {
                   'language': 'en',
                 },
                 'source': 'db',
+                'location_engine': 'postgis',
               },
               'meta': {'request_id': 'server-request-id'},
               'error': null,
@@ -204,6 +205,7 @@ void main() {
       expect(envelope.ok, isTrue);
       expect(envelope.requestId, 'server-request-id');
       expect(envelope.data?.source, 'db');
+      expect(envelope.data?.locationEngine, 'postgis');
       expect(envelope.data?.count, 1);
       expect(envelope.data?.query.radiusM, 1200);
       expect(envelope.data?.places.first.placeId, 'tour-api-126508');

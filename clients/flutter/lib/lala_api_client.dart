@@ -491,12 +491,14 @@ class LalaPlacesResponse {
     required this.places,
     required this.query,
     required this.source,
+    required this.locationEngine,
   });
 
   final int count;
   final List<LalaPlace> places;
   final LalaPlacesQuery query;
   final String source;
+  final String locationEngine;
 
   static LalaPlacesResponse fromJsonObject(Object? value) {
     return LalaPlacesResponse.fromJson(_asMap(value));
@@ -508,6 +510,7 @@ class LalaPlacesResponse {
       places: _asList(json['places']).map(LalaPlace.fromJsonObject).toList(),
       query: LalaPlacesQuery.fromJson(_asMap(json['query'])),
       source: _asString(json['source']),
+      locationEngine: _asString(json['location_engine']),
     );
   }
 }

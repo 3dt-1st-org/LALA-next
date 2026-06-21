@@ -662,17 +662,20 @@ class _LalaHomePageState extends State<LalaHomePage> {
       }
       _syncInterventionToastTimer();
 
-      final dailyPlan = await loadOptional(_backend.createDailyPlan);
-      LalaEnvelope<LalaDocentScript>? docentScript;
+      final dailyPlanFuture = loadOptional(_backend.createDailyPlan);
+      Future<LalaEnvelope<LalaDocentScript>?> docentScriptFuture =
+          Future<LalaEnvelope<LalaDocentScript>?>.value();
       if (firstPlace != null) {
         final weatherContext = _publicWeatherOrNull(_weather?.data);
-        docentScript = await loadOptional(
+        docentScriptFuture = loadOptional(
           () => _backend.createDocentScript(
             place: firstPlace,
             weather: weatherContext,
           ),
         );
       }
+      final dailyPlan = await dailyPlanFuture;
+      final docentScript = await docentScriptFuture;
       final loadError = loadErrors.isEmpty
           ? null
           : loadErrors.toSet().take(2).join(' / ');
@@ -6761,11 +6764,10 @@ class _WeatherMapPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dustPrefix = language == 'en' ? 'Dust' : '미세먼지';
     final data = _publicWeatherOrNull(weather);
     final label = data == null
         ? _copy(language, ko: '날씨 데이터 준비 중', en: 'Weather pending')
-        : '${_temperatureLabel(data.temp)} · $dustPrefix ${_dustSituationLabel(data.dust, language, includePrefix: false)}';
+        : '${_temperatureLabel(data.temp)} · ${_weatherPillDustLabel(data.dust, language)}';
     return _SmallStatusPill(
       key: const ValueKey('weather-pill-hit-target'),
       icon: Icons.thermostat,
@@ -7917,6 +7919,23 @@ String _outdoorLabel(String status, {String language = 'ko'}) {
     'bad' => '주의',
     _ => status,
   };
+}
+
+String _weatherPillDustLabel(LalaDust dust, String language) {
+  final pm10 = dust.pm10.trim();
+  final pm25 = dust.pm25.trim();
+  final pm10Grade = _dustPollutantGradeLabel(dust, 'pm10', language).trim();
+  final pm25Grade = _dustPollutantGradeLabel(dust, 'pm25', language).trim();
+  final values = [
+    if (pm10.isNotEmpty)
+      _compactDustPart(label: 'PM10', value: pm10, grade: pm10Grade),
+    if (pm25.isNotEmpty)
+      _compactDustPart(label: 'PM2.5', value: pm25, grade: pm25Grade),
+  ];
+  if (values.isNotEmpty) {
+    return values.join(' · ');
+  }
+  return _dustSituationLabel(dust, language, includePrefix: false);
 }
 
 String _dustLabel(LalaDust dust, String language) {
