@@ -19,6 +19,11 @@ infra/azure/main.json
 .playwright-cli/
 output/
 
+# Local handoff/runbook notes may contain machine paths or live cloud identifiers.
+/macbook-codex-handoff.md
+/local-runbook*.md
+/operator-notes*.md
+
 # Local legacy/reference imports from the previous LALA project.
 /lala-macbook-usb-local-artifacts-*.zip
 /lala-legacy-*/

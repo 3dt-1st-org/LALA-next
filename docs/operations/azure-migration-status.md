@@ -219,11 +219,12 @@ TXT record in Gabia first. Then replace the current `api` A record with a CNAME
 to the Azure Container Apps FQDN, rerun the hostname add/bind command, and wait
 for the managed certificate provisioning state to become `Succeeded`.
 
-The current Gabia record shape is:
+Expected Gabia record shape. Fill the exact DNS targets from the provider
+consoles during the change window; do not record live validation values here:
 
 ```text
-A      @           76.76.21.21
-A      www         76.76.21.21
+A      @           <vercel-apex-address>
+A      www         <vercel-www-address>
 CNAME  api         <azure-container-app-fqdn>.
 TXT    asuid.api   <azure-custom-domain-validation-id>
 ```
