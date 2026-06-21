@@ -715,6 +715,40 @@ def test_unix_matrix_smoke_deploy_profile_rejects_docent_internal_evidence():
     assert "docent_script_contains_internal_evidence" in result.stderr
 
 
+def test_unix_matrix_smoke_deploy_profile_rejects_docent_score_values():
+    docent_payload = _live_docent_payload()
+    docent_payload["data"]["script"] += " 관광 수요 분산는 0.941입니다."
+
+    server, thread, base_url = _start_server(
+        public_access=True, docent_payload=docent_payload
+    )
+    try:
+        result = _run_matrix_smoke(base_url, {}, profile="deploy")
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+    assert result.returncode != 0
+    assert "docent_script_contains_score_value" in result.stderr
+
+
+def test_unix_matrix_smoke_deploy_profile_rejects_docent_orphan_score_decimal():
+    docent_payload = _live_docent_payload()
+    docent_payload["data"]["script"] += " 828입니다."
+
+    server, thread, base_url = _start_server(
+        public_access=True, docent_payload=docent_payload
+    )
+    try:
+        result = _run_matrix_smoke(base_url, {}, profile="deploy")
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+    assert result.returncode != 0
+    assert "docent_script_contains_orphan_score_decimal" in result.stderr
+
+
 def test_unix_matrix_smoke_deploy_profile_rejects_docent_without_dust_split():
     docent_payload = _live_docent_payload()
     docent_payload["data"]["script"] = (

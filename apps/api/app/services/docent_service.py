@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 import hashlib
+import re
 from typing import Any
 
 from apps.api.app.core.errors import ServiceError
@@ -49,6 +50,7 @@ def generate_script(request: DocentScriptRequest) -> dict:
     else:
         script = _rule_based_script(request, grounding_context=grounding_context)
         source = "rule_based_curation"
+    script = _sanitize_docent_output(script, language=request.language)
     ttl_sec = 604800
     return {
         "place_id": request.place_id,
@@ -421,29 +423,124 @@ def _grounding_summaries(
 
 def _compact_grounding_text(text: str, *, language: str) -> str:
     cleaned = _localize_internal_terms(" ".join(text.split()), language=language)
+    cleaned = _polish_grounding_phrases(cleaned, language=language)
     cleaned = _remove_internal_grounding_fragments(cleaned, language=language)
     if not cleaned:
         return ""
-    if len(cleaned) <= 120:
+    if len(cleaned) <= 180:
         return cleaned
-    return cleaned[:117].rstrip() + "..."
+    sentences = _public_sentences(cleaned)
+    selected: list[str] = []
+    for sentence in sentences:
+        candidate = " ".join([*selected, sentence]).strip()
+        if len(candidate) > 180:
+            break
+        selected.append(sentence)
+    if selected:
+        return " ".join(selected)
+    return cleaned[:177].rstrip() + "..."
 
 
 def _remove_internal_grounding_fragments(text: str, *, language: str) -> str:
+    text = _strip_score_metric_fragments(text, language=language)
     banned_terms = (
         ("final score", "recommendation score", "score is", "weather filter")
         if language == "en"
-        else ("최종 추천 점수", "추천 점수", "점수는", "날씨 필터 기준")
+        else (
+            "최종 추천 점수",
+            "종합 추천 점수",
+            "추천 점수",
+            "점수는",
+            "날씨 필터 기준",
+        )
     )
-    pieces = [piece.strip() for piece in text.split(".")]
+    pieces = _public_sentences(text)
     kept = [
         piece
         for piece in pieces
-        if piece and not any(term in piece for term in banned_terms)
+        if piece
+        and not any(term.lower() in piece.lower() for term in banned_terms)
+        and not _looks_like_orphan_score_sentence(piece)
     ]
     if not kept:
         return ""
-    return ". ".join(kept) + "."
+    return " ".join(kept)
+
+
+_KO_SCORE_LABELS = (
+    "최종 추천 점수",
+    "종합 추천 점수",
+    "추천 점수",
+    "내국인 소비",
+    "관광 수요 분산",
+    "날씨 적합도",
+    "리뷰 품질",
+    "문화 연계",
+    "소상공인 상권",
+)
+
+_EN_SCORE_LABELS = (
+    "overall recommendation score",
+    "final score",
+    "recommendation score",
+    "domestic spending score",
+    "tourism demand dispersion",
+    "weather fit",
+    "review quality",
+    "culture relevance",
+    "small merchant fit",
+)
+
+
+def _sanitize_docent_output(text: str, *, language: str) -> str:
+    cleaned = _localize_internal_terms(" ".join(text.split()), language=language)
+    cleaned = _strip_score_metric_fragments(cleaned, language=language)
+    sentences = [
+        sentence
+        for sentence in _public_sentences(cleaned)
+        if not _looks_like_orphan_score_sentence(sentence)
+    ]
+    return " ".join(sentences).strip() or cleaned.strip()
+
+
+def _strip_score_metric_fragments(text: str, *, language: str) -> str:
+    cleaned = text
+    if language == "en":
+        for label in _EN_SCORE_LABELS:
+            cleaned = re.sub(
+                rf"{re.escape(label)}\s*(?:is|:)?\s*"
+                r"\d+(?:\s*\.\s*\d+)?(?:\s*/\s*100|%)?\.?",
+                "",
+                cleaned,
+                flags=re.IGNORECASE,
+            )
+    else:
+        for label in _KO_SCORE_LABELS:
+            cleaned = re.sub(
+                rf"{re.escape(label)}(?:는|은|:)?\s*"
+                r"\d+(?:\s*\.\s*\d+)?\s*(?:입니다|점입니다|점|%)?\.?",
+                "",
+                cleaned,
+            )
+    return re.sub(r"\s{2,}", " ", cleaned).strip()
+
+
+def _public_sentences(text: str) -> list[str]:
+    return [
+        sentence.strip()
+        for sentence in re.split(r"(?<=[.!?])\s+", text)
+        if sentence.strip()
+    ]
+
+
+def _looks_like_orphan_score_sentence(text: str) -> bool:
+    normalized = text.strip()
+    return bool(
+        re.fullmatch(
+            r"\d{1,3}(?:\s*\.\s*\d{1,3})?\s*(?:입니다|점입니다|점)?\.?",
+            normalized,
+        )
+    )
 
 
 def _localize_internal_terms(text: str, *, language: str) -> str:
@@ -466,6 +563,31 @@ def _localize_internal_terms(text: str, *, language: str) -> str:
             "tour_api": "한국관광공사 데이터",
             "kcisa": "문화정보원 데이터",
             "kopis": "공연예술통합전산망 데이터",
+        }
+    for source, replacement in replacements.items():
+        text = re.sub(
+            rf"(?<![A-Za-z0-9_-]){re.escape(source)}(?![A-Za-z0-9_-])",
+            replacement,
+            text,
+        )
+    return text
+
+
+def _polish_grounding_phrases(text: str, *, language: str) -> str:
+    if language == "en":
+        replacements = {
+            "Source is Korea Tourism Organization data.": (
+                "Confirmed through Korea Tourism Organization data."
+            ),
+            "source is Korea Tourism Organization data.": (
+                "confirmed through Korea Tourism Organization data."
+            ),
+        }
+    else:
+        replacements = {
+            "대표 원천은 한국관광공사 데이터입니다.": "한국관광공사 데이터로 확인됩니다.",
+            "대표 원천은 문화정보원 데이터입니다.": "문화정보원 데이터로 확인됩니다.",
+            "대표 원천은 공연예술통합전산망 데이터입니다.": "공연예술통합전산망 데이터로 확인됩니다.",
         }
     for source, replacement in replacements.items():
         text = text.replace(source, replacement)

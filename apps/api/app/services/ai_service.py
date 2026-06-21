@@ -62,6 +62,9 @@ def generate_docent_script_text(
         f"{context} "
         "Ground the script in official tourism/culture data, local spending context, "
         "and nearby walking experience. Avoid generic marketing copy. "
+        "Use recommendation scores only as private reasoning: do not quote numeric "
+        "scores, score labels, internal table names, cache names, or raw source codes "
+        "in the user-facing docent script. "
         "Keep it concise, friendly, and suitable for a walking travel app."
     )
     try:

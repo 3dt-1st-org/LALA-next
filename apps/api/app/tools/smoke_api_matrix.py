@@ -4,6 +4,7 @@ import argparse
 from dataclasses import dataclass
 import json
 import os
+import re
 import sys
 from typing import Any
 from urllib import error, parse, request
@@ -506,6 +507,21 @@ def _validate_docent_quality(data: dict[str, Any]) -> str | None:
         for term in ("종합 추천 점수", "최종 추천 점수", "장소 지식 인덱스", "°C°C")
     ):
         return "docent_script_contains_internal_evidence"
+    if re.search(
+        r"(추천 점수|내국인 소비|관광 수요 분산|날씨 적합도|리뷰 품질|문화 연계)"
+        r"(?:는|은|:)?\s*\d",
+        script,
+    ) or re.search(
+        r"(recommendation score|domestic spending score|tourism demand dispersion|"
+        r"weather fit|review quality|culture relevance)\s*(?:is|:)?\s*\d",
+        lowered,
+    ):
+        return "docent_script_contains_score_value"
+    if re.search(
+        r"(?:^|[.!?]\s*)\d{1,3}(?:\s*\.\s*\d{1,3})?\s*입니다",
+        script,
+    ):
+        return "docent_script_contains_orphan_score_decimal"
     if any(
         term in lowered
         for term in ("culture_venue", "tour_api", "dev_seed", "public_mvp_snapshot")

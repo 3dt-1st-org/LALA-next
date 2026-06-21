@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "lala-next"
 version = "0.1.0"
-description = "FastAPI migration skeleton for LALA-next"
+description = "FastAPI backend for the LALA local-experience platform"
 requires-python = ">=3.11"
 dependencies = [
     "azure-identity>=1.16",

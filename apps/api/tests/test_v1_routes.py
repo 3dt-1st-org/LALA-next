@@ -362,7 +362,9 @@ def test_docent_script_uses_rag_grounding_before_generic_cache(
                 "title_ko": "화성행궁",
                 "body_ko": (
                     "장소명은 화성행궁입니다. 카테고리는 culture_venue이고 "
-                    "대표 원천은 tour_api입니다. 지역 소비와 야간 산책 동선이 함께 묶이는 명소입니다."
+                    "대표 원천은 tour_api입니다. 최종 추천 점수는 0.828입니다. "
+                    "관광 수요 분산는 0.941입니다. 문화 연계는 0.700입니다. "
+                    "지역 소비와 야간 산책 동선이 함께 묶이는 명소입니다."
                 ),
                 "body_en": "Hwaseong Haenggung connects local spending with a night walk route.",
                 "metadata": {},
@@ -396,6 +398,11 @@ def test_docent_script_uses_rag_grounding_before_generic_cache(
     assert "한국관광공사 데이터" in body["data"]["script"]
     assert "culture_venue" not in body["data"]["script"]
     assert "tour_api" not in body["data"]["script"]
+    assert "0.828" not in body["data"]["script"]
+    assert "0.941" not in body["data"]["script"]
+    assert "828입니다" not in body["data"]["script"]
+    assert "관광 수요 분산는" not in body["data"]["script"]
+    assert "문화 연계는" not in body["data"]["script"]
     assert body["data"]["cache_key"].startswith("docent_script:")
 
 
