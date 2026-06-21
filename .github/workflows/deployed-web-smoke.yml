@@ -45,6 +45,12 @@ jobs:
             --web-url "https://lala-next.cloud/?qa=deployed-web-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
             --require-browser \
             --fail-on-console-error
+          scripts/unix/smoke_flutter_web.sh \
+            --web-url "https://lala-next.cloud/?qa=deployed-web-smoke-suwon-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --smoke-lat 37.2636 \
+            --smoke-lng 127.0286 \
+            --require-browser \
+            --fail-on-console-error
 
       - name: Upload browser smoke artifacts
         if: always()

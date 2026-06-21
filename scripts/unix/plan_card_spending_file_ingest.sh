@@ -17,6 +17,7 @@ SOURCE_NAME="data_portal"
 DATASET_NAME="경기도_카드 소비 데이터"
 VISITOR_TYPE="domestic"
 ROW_LIMIT="0"
+SKIP_DEMOGRAPHICS="false"
 CONNECT_TIMEOUT="5"
 
 while [[ $# -gt 0 ]]; do
@@ -61,6 +62,10 @@ while [[ $# -gt 0 ]]; do
       ROW_LIMIT="${2:-}"
       shift 2
       ;;
+    --skip-demographics)
+      SKIP_DEMOGRAPHICS="true"
+      shift
+      ;;
     --connect-timeout)
       CONNECT_TIMEOUT="${2:-}"
       shift 2
@@ -74,7 +79,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     -h|--help)
-      echo "Usage: scripts/unix/plan_card_spending_file_ingest.sh [--preview|--apply --confirm APPLY_CARD_SPENDING_FILE_INGEST] [--file-path PATH] [--region-map PATH] [--dataset-name NAME] [--row-limit N] [--json] [--python PATH]"
+      echo "Usage: scripts/unix/plan_card_spending_file_ingest.sh [--preview|--apply --confirm APPLY_CARD_SPENDING_FILE_INGEST] [--file-path PATH] [--region-map PATH] [--dataset-name NAME] [--row-limit N] [--skip-demographics] [--json] [--python PATH]"
       exit 0
       ;;
     *)
@@ -116,6 +121,9 @@ if [[ -n "$REGION_MAP" ]]; then
 fi
 if [[ "$JSON_STATUS" == "true" ]]; then
   ARGS+=(--json)
+fi
+if [[ "$SKIP_DEMOGRAPHICS" == "true" ]]; then
+  ARGS+=(--skip-demographics)
 fi
 if [[ "$PREVIEW" == "true" ]]; then
   ARGS+=(--preview)

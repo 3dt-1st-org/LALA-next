@@ -625,6 +625,32 @@ The wrapper never prints `DB_DSN`. If the source file only has unmapped region
 codes, pass `--region-map <path>` or `-RegionMap <path>` with a CSV/XLSX mapping
 that contains code/name columns.
 
+The parser also accepts ZIP archives that contain CSV/XLSX files. For the
+Gyeonggi aggregate file `경기도_데이터분석 카드매출 시군구 성연령별 집계`, use
+`--dataset-name "경기도_데이터분석 카드매출 시군구 성연령별 집계"`. When the first
+rollout only needs the local-value score input, pass `--skip-demographics` to
+load `economy.card_spending_area_monthly` without the much larger
+`economy.card_spending_demographics` table:
+
+```bash
+ALLOW_CARD_SPENDING_FILE_INGEST_APPLY=1 \
+  scripts/unix/plan_card_spending_file_ingest.sh \
+  --apply \
+  --confirm APPLY_CARD_SPENDING_FILE_INGEST \
+  --skip-demographics \
+  --dataset-name "경기도_데이터분석 카드매출 시군구 성연령별 집계" \
+  --file-path artifacts/tmp/raw/gyeonggi-card/카드매출_시군구_성연령별_집계.zip
+```
+
+As of 2026-06-22, the shared dev database has the Gyeonggi aggregate source
+applied area-only: 3,104,700 parsed source rows produced 149,341
+`economy.card_spending_area_monthly` rows across 31 regions. The subsequent
+place-score batch refreshed 2,636 `analytics.place_score_snapshots`; 1,294
+Gyeonggi places now have `local_spending_score` sourced from actual card sales
+aggregates. Regions without an approved card-spending source, such as current
+Seoul coverage, must keep `local_spending_score` null rather than infer or mock
+the signal.
+
 To export the Flutter handoff schema without running a server, run:
 
 ```bash

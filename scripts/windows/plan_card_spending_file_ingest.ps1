@@ -11,6 +11,7 @@ param(
     [string]$DatasetName = "경기도_카드 소비 데이터",
     [string]$VisitorType = "domestic",
     [int]$RowLimit = 0,
+    [switch]$SkipDemographics,
     [int]$ConnectTimeout = 5,
     [switch]$Json
 )
@@ -53,7 +54,7 @@ try {
     if (-not $Json) {
         Write-Host "Planning LALA-next card spending file ingestion."
         Write-Host "Default mode is dry-run plan only."
-        Write-Host "Preview mode parses a local CSV/XLSX file but does not mutate DB."
+        Write-Host "Preview mode parses a local CSV/XLSX/ZIP file but does not mutate DB."
         Write-Host "Apply mode requires ALLOW_CARD_SPENDING_FILE_INGEST_APPLY=1."
         Write-Host "DB_DSN value is never printed by this script."
     }
@@ -85,6 +86,9 @@ try {
     }
     if ($Json) {
         $toolArgs += "--json"
+    }
+    if ($SkipDemographics) {
+        $toolArgs += "--skip-demographics"
     }
     if ($Preview) {
         $toolArgs += "--preview"

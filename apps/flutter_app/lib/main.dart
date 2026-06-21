@@ -6382,12 +6382,30 @@ List<KakaoMapPlace> clusterMapPlacesForMap({
   required String language,
 }) {
   final selectedId = selected?.placeId;
-  const expandedPinFloor = 18;
+  final expandedPinFloor = mapLevel >= 10 ? 18 : 24;
   final selectedMarkers = <KakaoMapPlace>[];
   final expandedMarkers = <KakaoMapPlace>[];
   final buckets = <String, List<LalaPlace>>{};
   final shouldUseClusters = places.length >= 40 && mapLevel >= 9;
   var expandedPinCount = 0;
+  final orderedPlaces = [...places]
+    ..sort((a, b) {
+      final selectedCompare = _selectedPlaceSortValue(
+        a.placeId,
+        selectedId,
+      ).compareTo(_selectedPlaceSortValue(b.placeId, selectedId));
+      if (selectedCompare != 0) {
+        return selectedCompare;
+      }
+      final distanceCompare = a.distanceM.compareTo(b.distanceM);
+      if (distanceCompare != 0) {
+        return distanceCompare;
+      }
+      return _placeDisplayName(
+        a,
+        language,
+      ).compareTo(_placeDisplayName(b, language));
+    });
 
   KakaoMapPlace toMapPlace(LalaPlace place, {bool selected = false}) {
     return KakaoMapPlace(
@@ -6400,7 +6418,7 @@ List<KakaoMapPlace> clusterMapPlacesForMap({
     );
   }
 
-  for (final place in places.take(48)) {
+  for (final place in orderedPlaces.take(60)) {
     if (place.placeId == selectedId) {
       selectedMarkers.add(toMapPlace(place, selected: true));
       continue;
@@ -6451,6 +6469,13 @@ List<KakaoMapPlace> clusterMapPlacesForMap({
   }
 
   return [...clustered, ...expandedMarkers, ...selectedMarkers];
+}
+
+int _selectedPlaceSortValue(String placeId, String? selectedId) {
+  if (selectedId == null) {
+    return 1;
+  }
+  return placeId == selectedId ? 0 : 1;
 }
 
 class _MapRoundButton extends StatelessWidget {

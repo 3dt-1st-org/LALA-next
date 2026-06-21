@@ -40,6 +40,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dataset-name", default=DETAIL_DATASET_NAME)
     parser.add_argument("--visitor-type", default=DEFAULT_VISITOR_TYPE)
     parser.add_argument("--row-limit", type=int, default=0)
+    parser.add_argument(
+        "--skip-demographics",
+        action="store_true",
+        help="Parse and insert only area-month aggregates needed by local-value scoring.",
+    )
     parser.add_argument("--connect-timeout", type=int, default=5)
     args = parser.parse_args(argv)
 
@@ -78,6 +83,7 @@ def main(argv: list[str] | None = None) -> int:
             visitor_type=args.visitor_type,
             region_code_map=region_code_map,
             row_limit=args.row_limit or None,
+            include_demographics=not args.skip_demographics,
         )
         apply_result: dict[str, Any] | None = None
         if args.apply:
@@ -122,7 +128,7 @@ def _plan_payload(args: argparse.Namespace) -> dict[str, Any]:
         "db_mutation": False,
         "source_name": args.source_name,
         "dataset_name": args.dataset_name,
-        "supported_file_types": ["csv", "xlsx"],
+        "supported_file_types": ["csv", "xlsx", "zip"],
         "source_urls": [
             "https://www.data.go.kr/data/15128475/fileData.do",
             "https://www.data.go.kr/data/15151646/fileData.do",
@@ -133,6 +139,9 @@ def _plan_payload(args: argparse.Namespace) -> dict[str, Any]:
         ],
         "required_env": [],
         "apply_required_env": ["DB_DSN"],
+        "options": {
+            "skip_demographics": "Area-month aggregates only; useful for the first local-value score rollout.",
+        },
     }
 
 

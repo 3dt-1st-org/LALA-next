@@ -55,8 +55,16 @@ while [[ $# -gt 0 ]]; do
       PORT="${2:-}"
       shift 2
       ;;
+    --smoke-lat)
+      SMOKE_LAT="${2:-}"
+      shift 2
+      ;;
+    --smoke-lng)
+      SMOKE_LNG="${2:-}"
+      shift 2
+      ;;
     -h|--help)
-      echo "Usage: scripts/unix/smoke_flutter_web.sh [--require-flutter] [--require-browser] [--fail-on-console-error] [--start-api] [--api-base-url URL] [--web-url URL] [--api-port PORT] [--port PORT]"
+      echo "Usage: scripts/unix/smoke_flutter_web.sh [--require-flutter] [--require-browser] [--fail-on-console-error] [--start-api] [--api-base-url URL] [--web-url URL] [--api-port PORT] [--port PORT] [--smoke-lat LAT] [--smoke-lng LNG]"
       exit 0
       ;;
     *)
@@ -252,11 +260,31 @@ else
   curl -fsS "$WEB_ORIGIN/" >/dev/null
 fi
 
-"$PWCLI" -s="$PW_SESSION" open "$TARGET_URL" >/dev/null
+RUN_LOCATION_FLOW="false"
+if [[ "$START_API" == "true" || "$API_BASE_URL_EXPLICIT" == "true" || "$WEB_URL_EXPLICIT" == "true" ]]; then
+  RUN_LOCATION_FLOW="true"
+fi
+EXPECT_DOCENT_SCRIPT="false"
+if [[ "$API_BASE_URL_EXPLICIT" == "true" || "$WEB_URL_EXPLICIT" == "true" ]]; then
+  EXPECT_DOCENT_SCRIPT="true"
+fi
+
+if [[ "$RUN_LOCATION_FLOW" == "true" ]]; then
+  "$PWCLI" -s="$PW_SESSION" open "about:blank" >/dev/null
+else
+  "$PWCLI" -s="$PW_SESSION" open "$TARGET_URL" >/dev/null
+fi
 if [[ "$WEB_URL_EXPLICIT" == "true" ]]; then
   "$PWCLI" -s="$PW_SESSION" resize 390 844 >/dev/null
 else
   "$PWCLI" -s="$PW_SESSION" resize 1280 900 >/dev/null
+fi
+if [[ "$RUN_LOCATION_FLOW" == "true" ]]; then
+  "$PWCLI" -s="$PW_SESSION" run-code "async (page) => {
+    await page.context().grantPermissions(['geolocation'], { origin: '$WEB_ORIGIN' });
+    await page.context().setGeolocation({ latitude: $SMOKE_LAT, longitude: $SMOKE_LNG });
+    await page.goto('$TARGET_URL', { waitUntil: 'domcontentloaded' });
+  }" >/dev/null
 fi
 
 RUNTIME_STATE="$("$PWCLI" -s="$PW_SESSION" eval 'async () => {
@@ -300,15 +328,6 @@ PY
 "$PWCLI" -s="$PW_SESSION" snapshot >"$OUTPUT_DIR/flutter-web-snapshot.txt"
 "$PWCLI" -s="$PW_SESSION" screenshot >"$OUTPUT_DIR/flutter-web-screenshot.txt"
 "$PWCLI" -s="$PW_SESSION" console >"$OUTPUT_DIR/flutter-web-console.txt"
-
-RUN_LOCATION_FLOW="false"
-if [[ "$START_API" == "true" || "$API_BASE_URL_EXPLICIT" == "true" || "$WEB_URL_EXPLICIT" == "true" ]]; then
-  RUN_LOCATION_FLOW="true"
-fi
-EXPECT_DOCENT_SCRIPT="false"
-if [[ "$API_BASE_URL_EXPLICIT" == "true" || "$WEB_URL_EXPLICIT" == "true" ]]; then
-  EXPECT_DOCENT_SCRIPT="true"
-fi
 
 if [[ "$RUN_LOCATION_FLOW" == "true" ]]; then
   echo "Driving Flutter web location flow with test geolocation..."
@@ -362,11 +381,17 @@ if [[ "$RUN_LOCATION_FLOW" == "true" ]]; then
   REQUEST_LOG="$OUTPUT_DIR/flutter-web-requests.txt"
   for _ in {1..120}; do
     "$PWCLI" -s="$PW_SESSION" requests >"$REQUEST_LOG"
-    if REQUEST_LOG="$REQUEST_LOG" EXPECT_DOCENT_SCRIPT="$EXPECT_DOCENT_SCRIPT" "$PYTHON" - <<'PY'
+    if REQUEST_LOG="$REQUEST_LOG" EXPECT_DOCENT_SCRIPT="$EXPECT_DOCENT_SCRIPT" SMOKE_LAT="$SMOKE_LAT" SMOKE_LNG="$SMOKE_LNG" "$PYTHON" - <<'PY'
 import os
 from pathlib import Path
 
 log = Path(os.environ["REQUEST_LOG"]).read_text(encoding="utf-8", errors="replace")
+
+def compact_coord(value: str) -> str:
+    return f"{float(value):.6f}".rstrip("0").rstrip(".")
+
+smoke_lat = compact_coord(os.environ["SMOKE_LAT"])
+smoke_lng = compact_coord(os.environ["SMOKE_LNG"])
 required_paths = [
     "/api/v1/places",
     "/api/v1/weather",
@@ -397,14 +422,16 @@ missing_location = [
     if not any(
         path in line
         and "=> [200]" in line
-        and "lat=37.5665" in line
-        and "lng=126.978" in line
+        and f"lat={smoke_lat}" in line
+        and f"lng={smoke_lng}" in line
         for line in lines
     )
 ]
 if missing_location:
     raise SystemExit(1)
-if "lat=37.2636" in log or "lng=127.0286" in log:
+if smoke_lat != "37.2636" and "lat=37.2636" in log:
+    raise SystemExit(1)
+if smoke_lng != "127.0286" and "lng=127.0286" in log:
     raise SystemExit(1)
 PY
     then
@@ -412,11 +439,17 @@ PY
     fi
     sleep 0.5
   done
-  REQUEST_LOG="$REQUEST_LOG" EXPECT_DOCENT_SCRIPT="$EXPECT_DOCENT_SCRIPT" "$PYTHON" - <<'PY'
+  REQUEST_LOG="$REQUEST_LOG" EXPECT_DOCENT_SCRIPT="$EXPECT_DOCENT_SCRIPT" SMOKE_LAT="$SMOKE_LAT" SMOKE_LNG="$SMOKE_LNG" "$PYTHON" - <<'PY'
 import os
 from pathlib import Path
 
 log = Path(os.environ["REQUEST_LOG"]).read_text(encoding="utf-8", errors="replace")
+
+def compact_coord(value: str) -> str:
+    return f"{float(value):.6f}".rstrip("0").rstrip(".")
+
+smoke_lat = compact_coord(os.environ["SMOKE_LAT"])
+smoke_lng = compact_coord(os.environ["SMOKE_LNG"])
 required_paths = [
     "/api/v1/places",
     "/api/v1/weather",
@@ -448,8 +481,8 @@ missing_location = [
     if not any(
         path in line
         and "=> [200]" in line
-        and "lat=37.5665" in line
-        and "lng=126.978" in line
+        and f"lat={smoke_lat}" in line
+        and f"lng={smoke_lng}" in line
         for line in lines
     )
 ]
@@ -458,8 +491,10 @@ if missing_location:
         "Flutter location flow did not use the granted test geolocation for: "
         + ", ".join(missing_location)
     )
-if "lat=37.2636" in log or "lng=127.0286" in log:
-    raise SystemExit("Flutter location flow still used the default location.")
+if smoke_lat != "37.2636" and "lat=37.2636" in log:
+    raise SystemExit("Flutter location flow still used the default location latitude.")
+if smoke_lng != "127.0286" and "lng=127.0286" in log:
+    raise SystemExit("Flutter location flow still used the default location longitude.")
 if any(token in log.lower() for token in ("mock://", "placeholder://", "dummy://")):
     raise SystemExit("Flutter location flow request log contained mock-like URLs.")
 PY

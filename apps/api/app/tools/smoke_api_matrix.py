@@ -206,7 +206,7 @@ def _build_deploy_cases(*, live_speech_enabled: bool) -> list[SmokeCase]:
         SmokeCase(
             "GET",
             f"/api/v1/places?{gyeonggi_place_query}",
-            validator="places_live_data",
+            validator="places_local_value_data",
         ),
         SmokeCase(
             "GET", f"/api/v1/weather?{weather_query}", validator="weather_live_data"
@@ -644,6 +644,7 @@ def _validate_payload(validator: str | None, payload: dict[str, Any]) -> str | N
         return "missing_data_object"
     return {
         "places_live_data": _validate_places_live_data,
+        "places_local_value_data": _validate_places_local_value_data,
         "places_location_data": _validate_places_location_data,
         "weather_live_data": _validate_weather_live_data,
         "intervention_live_data": _validate_intervention_live_data,
@@ -685,6 +686,22 @@ def _validate_places_live_data(data: dict[str, Any]) -> str | None:
         if isinstance(place, dict)
     ):
         return "places_missing_live_score"
+    return None
+
+
+def _validate_places_local_value_data(data: dict[str, Any]) -> str | None:
+    live_failure = _validate_places_live_data(data)
+    if live_failure:
+        return live_failure
+    places = data.get("places")
+    if not isinstance(places, list) or not places:
+        return "places_empty"
+    if not any(
+        _has_actual_local_spending_signal(place.get("score"))
+        for place in places
+        if isinstance(place, dict)
+    ):
+        return "places_missing_actual_local_spending_signal"
     return None
 
 
@@ -883,6 +900,27 @@ def _has_live_score(value: Any) -> bool:
     return (
         data_basis == "analytics.place_score_snapshots"
         and value.get("final_score") is not None
+    )
+
+
+def _has_actual_local_spending_signal(value: Any) -> bool:
+    if not isinstance(value, dict):
+        return False
+    if str(value.get("data_basis") or "").strip() != "analytics.place_score_snapshots":
+        return False
+    components = value.get("components")
+    features = value.get("features")
+    if not isinstance(components, dict) or not isinstance(features, dict):
+        return False
+    missing = {
+        str(item).strip()
+        for item in (features.get("missing_signals") or [])
+        if str(item).strip()
+    }
+    return (
+        components.get("local_spending_score") is not None
+        and bool(str(features.get("card_month") or "").strip())
+        and "card_spending_area_monthly" not in missing
     )
 
 

@@ -173,7 +173,7 @@ void main() {
       zoomedFarOutMarkers
           .where((marker) => !marker.isCluster)
           .map((marker) => marker.id),
-      veryDensePlaces.take(18).map((place) => place.placeId),
+      veryDensePlaces.take(24).map((place) => place.placeId),
     );
     expect(
       zoomedFarOutMarkers.where((marker) => marker.isCluster),
@@ -182,12 +182,46 @@ void main() {
     final cluster = zoomedFarOutMarkers.singleWhere(
       (marker) => marker.isCluster,
     );
-    expect(cluster.clusterCount, 22);
+    expect(cluster.clusterCount, 16);
     expect(
       cluster.clusterMemberIds,
-      veryDensePlaces.skip(18).map((place) => place.placeId).toList(),
+      veryDensePlaces.skip(24).map((place) => place.placeId).toList(),
     );
   });
+
+  test(
+    'map clustering keeps nearest places expanded when API order shifts',
+    () {
+      final places = List<LalaPlace>.generate(
+        45,
+        (index) => _clusterRestaurant(
+          'distance-sorted-food-$index',
+          '거리 맛집 ${index + 1}',
+          200 + index,
+        ),
+      ).reversed.toList(growable: false);
+
+      final markers = clusterMapPlacesForMap(
+        places: places,
+        selected: null,
+        mapLevel: 9,
+        language: 'ko',
+      );
+
+      final pinIds = markers
+          .where((marker) => !marker.isCluster)
+          .map((marker) => marker.id)
+          .toList();
+
+      expect(
+        pinIds,
+        containsAll(
+          List.generate(24, (index) => 'distance-sorted-food-$index'),
+        ),
+      );
+      expect(markers.where((marker) => marker.isCluster), hasLength(1));
+    },
+  );
 
   testWidgets('map fallback does not invent places when data is empty', (
     tester,

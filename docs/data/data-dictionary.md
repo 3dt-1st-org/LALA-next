@@ -196,6 +196,14 @@ AI/API/로컬 변환으로 만든 보강 결과를 저장한다. `travel.places`
 | `primary_source` | text | Yes | 예: `gyeonggi_data_dream`, `data_portal` |
 | `source_file_id` | uuid | No | `ingest.source_files.id` |
 
+Operational note: the Gyeonggi public aggregate file
+`경기도_데이터분석 카드매출 시군구 성연령별 집계` is accepted as a ZIP containing
+CSV data with source columns such as `std_ym`, `signgu_cd`, `sex_age_cd`,
+`mdclass_indutype_cd`, and `sales_amt`. The first shared-dev rollout used the
+area-only path so `analytics.place_score_snapshots.local_spending_score` can be
+grounded in actual card sales aggregates without waiting for the larger
+gender/age table.
+
 ## `economy.card_spending_demographics`
 
 성별/연령대별 카드 소비 집계다. 맛집/장소 추천의 과밀 회피, 생활권별 선호,
@@ -213,6 +221,12 @@ AI/API/로컬 변환으로 만든 보강 결과를 저장한다. `travel.places`
 | `transaction_count` | integer | No | 결제 건수 |
 | `primary_source` | text | Yes | 원천명 |
 | `source_file_id` | uuid | No | 원천 파일 |
+
+The same Gyeonggi aggregate source can populate this table when the ingestion is
+run without `--skip-demographics`. That larger load is intentionally separated
+from the first score rollout because the area-level table is sufficient for
+`local_spending_score`, while gender/age analysis is a later preference and
+review-quality enhancement.
 
 ## `economy.franchise_brands`
 

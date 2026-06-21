@@ -300,6 +300,15 @@ def _live_place(
         "score": {
             "final_score": 0.83,
             "data_basis": "analytics.place_score_snapshots",
+            "components": {
+                "local_spending_score": 0.72,
+                "small_merchant_fit_score": 0.76,
+                "demand_dispersion_score": 0.78,
+            },
+            "features": {
+                "card_month": "2025-01-01",
+                "missing_signals": ["review_attribute_analysis"],
+            },
         },
     }
 
@@ -560,6 +569,28 @@ def test_unix_matrix_smoke_deploy_profile_rejects_local_fixture_place_payload():
     assert result.returncode != 0
     assert "place_contains_local_fixture_source" in result.stderr
     assert "/api/v1/places" in server.protected_paths
+
+
+def test_unix_matrix_smoke_deploy_profile_rejects_gyeonggi_without_local_value():
+    places_payload = _live_places_payload()
+    for place in places_payload["data"]["places"]:
+        place["score"]["components"]["local_spending_score"] = None
+        place["score"]["features"]["card_month"] = None
+        place["score"]["features"]["missing_signals"] = [
+            "card_spending_area_monthly"
+        ]
+
+    server, thread, base_url = _start_server(
+        public_access=True, places_payload=places_payload
+    )
+    try:
+        result = _run_matrix_smoke(base_url, {}, profile="deploy")
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+    assert result.returncode != 0
+    assert "places_missing_actual_local_spending_signal" in result.stderr
 
 
 def test_unix_matrix_smoke_deploy_profile_rejects_missing_postgis_distance():

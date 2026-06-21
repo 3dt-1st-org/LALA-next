@@ -2,19 +2,21 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import io
 import re
+import zipfile
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Iterable, Sequence
 
 DEFAULT_SOURCE_NAME = "data_portal"
 DETAIL_DATASET_NAME = "경기도_카드 소비 데이터"
 AGGREGATE_DATASET_NAME = "경기도_데이터분석 카드매출 시군구 성연령별 집계"
 DEFAULT_VISITOR_TYPE = "domestic"
-SUPPORTED_SUFFIXES = {".csv", ".xlsx"}
+SUPPORTED_SUFFIXES = {".csv", ".xlsx", ".zip"}
 
 GYEONGGI_SIGUNGU_CODE_TO_NAME = {
     "41110": "수원시",
@@ -70,7 +72,7 @@ GYEONGGI_SIGUNGU_CODE_TO_NAME = {
     "41830": "양평군",
 }
 
-MONTH_ALIASES = ("month", "base_month", "base_ym", "기준년월", "년월")
+MONTH_ALIASES = ("month", "base_month", "base_ym", "std_ym", "기준년월", "년월")
 DATE_ALIASES = ("date", "base_date", "base_ymd", "기준년월일", "기준일자", "일자")
 REGION_NAME_ALIASES = (
     "region_name_ko",
@@ -87,6 +89,7 @@ REGION_CODE_ALIASES = (
     "region_code",
     "sigungu_code",
     "sgg_cd",
+    "signgu_cd",
     "adm_cd",
     "시군구코드",
     "시군코드",
@@ -98,6 +101,7 @@ INDUSTRY_CODE_ALIASES = (
     "카드사업종분류코드",
     "카드사 업종분류코드",
     "중분류업종코드",
+    "mdclass_indutype_cd",
 )
 INDUSTRY_NAME_ALIASES = (
     "industry_name_ko",
@@ -109,11 +113,17 @@ INDUSTRY_NAME_ALIASES = (
 )
 GENDER_ALIASES = ("gender", "sex", "성별")
 AGE_GROUP_ALIASES = ("age_group", "age", "연령별", "연령대")
-GENDER_AGE_CODE_ALIASES = ("성연령코드", "gender_age_code", "sex_age_code")
+GENDER_AGE_CODE_ALIASES = (
+    "성연령코드",
+    "gender_age_code",
+    "sex_age_code",
+    "sex_age_cd",
+)
 SPEND_AMOUNT_ALIASES = (
     "spend_amount",
     "sales_amount",
     "amount",
+    "sales_amt",
     "매출금액",
     "카드매출금액",
 )
@@ -219,22 +229,19 @@ def parse_card_spending_file(
     visitor_type: str = DEFAULT_VISITOR_TYPE,
     region_code_map: dict[str, str] | None = None,
     row_limit: int | None = None,
+    include_demographics: bool = True,
 ) -> CardSpendingParseResult:
     source_path = Path(path)
     if not source_path.exists():
         raise FileNotFoundError(f"Card spending file does not exist: {source_path}")
     if source_path.suffix.lower() not in SUPPORTED_SUFFIXES:
-        raise ValueError("Card spending file must be CSV or XLSX.")
+        raise ValueError("Card spending file must be CSV, XLSX, or ZIP.")
     if row_limit is not None and row_limit <= 0:
         raise ValueError("row_limit must be positive when provided.")
 
     mapping = dict(GYEONGGI_SIGUNGU_CODE_TO_NAME)
     if region_code_map:
         mapping.update({_normalize_region_code(k): v for k, v in region_code_map.items()})
-
-    rows = _read_rows(source_path)
-    if row_limit is not None:
-        rows = rows[:row_limit]
 
     area_groups: dict[tuple[Any, ...], dict[str, Any]] = defaultdict(
         lambda: {"spend_amount": None, "transaction_count": None}
@@ -245,8 +252,12 @@ def parse_card_spending_file(
     warning_messages: list[str] = []
     skipped = 0
     parsed = 0
+    input_row_count = 0
 
-    for row in rows:
+    for row in _iter_rows(source_path):
+        if row_limit is not None and input_row_count >= row_limit:
+            break
+        input_row_count += 1
         normalized = _normalize_row(row)
         parsed_row = _parse_row(
             normalized=normalized,
@@ -275,7 +286,7 @@ def parse_card_spending_file(
             parsed_row["transaction_count"],
         )
 
-        if parsed_row["gender"] or parsed_row["age_group"]:
+        if include_demographics and (parsed_row["gender"] or parsed_row["age_group"]):
             _merge_group(
                 demo_groups[
                     (
@@ -324,7 +335,7 @@ def parse_card_spending_file(
         file_name=source_path.name,
         file_sha256=_sha256_file(source_path),
         local_path=str(source_path),
-        input_row_count=len(rows),
+        input_row_count=input_row_count,
         parsed_row_count=parsed,
         skipped_row_count=skipped,
         area_monthly_rows=area_rows,
@@ -339,7 +350,7 @@ def load_region_code_map(path: Path | str) -> dict[str, str]:
         raise FileNotFoundError(f"Region map file does not exist: {mapping_path}")
 
     result: dict[str, str] = {}
-    for row in _read_rows(mapping_path):
+    for row in _iter_rows(mapping_path):
         normalized = _normalize_row(row)
         code = _pick(normalized, REGION_CODE_ALIASES + ("code",))
         name = _pick(normalized, REGION_NAME_ALIASES + ("name",))
@@ -355,6 +366,7 @@ def insert_card_spending_result(
     connect_timeout: int,
 ) -> dict[str, Any]:
     import psycopg2
+    from psycopg2.extras import execute_values
 
     source_sql = """
         INSERT INTO ingest.source_files (
@@ -388,17 +400,7 @@ def insert_card_spending_result(
             primary_source,
             source_file_id
         )
-        VALUES (
-            %(month)s,
-            %(region_name_ko)s,
-            %(industry_code)s,
-            %(industry_name_ko)s,
-            %(spend_amount)s,
-            %(transaction_count)s,
-            %(visitor_type)s,
-            %(primary_source)s,
-            %(source_file_id)s
-        )
+        VALUES %s
     """
     demographic_sql = """
         INSERT INTO economy.card_spending_demographics (
@@ -412,17 +414,7 @@ def insert_card_spending_result(
             primary_source,
             source_file_id
         )
-        VALUES (
-            %(month)s,
-            %(region_name_ko)s,
-            %(industry_code)s,
-            %(gender)s,
-            %(age_group)s,
-            %(spend_amount)s,
-            %(transaction_count)s,
-            %(primary_source)s,
-            %(source_file_id)s
-        )
+        VALUES %s
     """
 
     with psycopg2.connect(dsn, connect_timeout=connect_timeout) as conn:
@@ -453,23 +445,20 @@ def insert_card_spending_result(
             )
             source_file_id = str(cur.fetchone()[0])
 
-            inserted_area = 0
-            for row in result.area_monthly_rows:
-                params = row.to_public_dict()
-                params["month"] = row.month
-                params["spend_amount"] = row.spend_amount
-                params["source_file_id"] = source_file_id
-                cur.execute(area_sql, params)
-                inserted_area += cur.rowcount
-
-            inserted_demographics = 0
-            for row in result.demographic_rows:
-                params = row.to_public_dict()
-                params["month"] = row.month
-                params["spend_amount"] = row.spend_amount
-                params["source_file_id"] = source_file_id
-                cur.execute(demographic_sql, params)
-                inserted_demographics += cur.rowcount
+            inserted_area = _bulk_insert_area_rows(
+                cur=cur,
+                execute_values_func=execute_values,
+                sql=area_sql,
+                rows=result.area_monthly_rows,
+                source_file_id=source_file_id,
+            )
+            inserted_demographics = _bulk_insert_demographic_rows(
+                cur=cur,
+                execute_values_func=execute_values,
+                sql=demographic_sql,
+                rows=result.demographic_rows,
+                source_file_id=source_file_id,
+            )
         conn.commit()
 
     return {
@@ -479,6 +468,108 @@ def insert_card_spending_result(
         "inserted_area_monthly_rows": inserted_area,
         "inserted_demographic_rows": inserted_demographics,
     }
+
+
+def _bulk_insert_area_rows(
+    *,
+    cur: Any,
+    execute_values_func: Any,
+    sql: str,
+    rows: Sequence[CardSpendingAreaMonthly],
+    source_file_id: str,
+    page_size: int = 5000,
+) -> int:
+    inserted = 0
+    batch: list[tuple[Any, ...]] = []
+    for row in rows:
+        batch.append(
+            (
+                row.month,
+                row.region_name_ko,
+                row.industry_code,
+                row.industry_name_ko,
+                row.spend_amount,
+                row.transaction_count,
+                row.visitor_type,
+                row.primary_source,
+                source_file_id,
+            )
+        )
+        if len(batch) >= page_size:
+            inserted += _execute_batch_values(
+                cur=cur,
+                execute_values_func=execute_values_func,
+                sql=sql,
+                batch=batch,
+                page_size=page_size,
+            )
+            batch = []
+    if batch:
+        inserted += _execute_batch_values(
+            cur=cur,
+            execute_values_func=execute_values_func,
+            sql=sql,
+            batch=batch,
+            page_size=page_size,
+        )
+    return inserted
+
+
+def _bulk_insert_demographic_rows(
+    *,
+    cur: Any,
+    execute_values_func: Any,
+    sql: str,
+    rows: Sequence[CardSpendingDemographic],
+    source_file_id: str,
+    page_size: int = 5000,
+) -> int:
+    inserted = 0
+    batch: list[tuple[Any, ...]] = []
+    for row in rows:
+        batch.append(
+            (
+                row.month,
+                row.region_name_ko,
+                row.industry_code,
+                row.gender,
+                row.age_group,
+                row.spend_amount,
+                row.transaction_count,
+                row.primary_source,
+                source_file_id,
+            )
+        )
+        if len(batch) >= page_size:
+            inserted += _execute_batch_values(
+                cur=cur,
+                execute_values_func=execute_values_func,
+                sql=sql,
+                batch=batch,
+                page_size=page_size,
+            )
+            batch = []
+    if batch:
+        inserted += _execute_batch_values(
+            cur=cur,
+            execute_values_func=execute_values_func,
+            sql=sql,
+            batch=batch,
+            page_size=page_size,
+        )
+    return inserted
+
+
+def _execute_batch_values(
+    *,
+    cur: Any,
+    execute_values_func: Any,
+    sql: str,
+    batch: Sequence[tuple[Any, ...]],
+    page_size: int,
+) -> int:
+    execute_values_func(cur, sql, batch, page_size=page_size)
+    return len(batch)
 
 
 def _parse_row(
@@ -525,29 +616,31 @@ def _parse_row(
     }
 
 
-def _read_rows(path: Path) -> list[dict[str, Any]]:
+def _iter_rows(path: Path) -> Iterable[dict[str, Any]]:
     suffix = path.suffix.lower()
     if suffix == ".csv":
-        return _read_csv_rows(path)
+        return _iter_csv_rows(path)
     if suffix == ".xlsx":
-        return _read_xlsx_rows(path)
+        return _iter_xlsx_rows(path)
+    if suffix == ".zip":
+        return _iter_zip_rows(path)
     raise ValueError("Unsupported file suffix.")
 
 
-def _read_csv_rows(path: Path) -> list[dict[str, Any]]:
+def _iter_csv_rows(path: Path) -> Iterable[dict[str, Any]]:
     last_error: UnicodeDecodeError | None = None
     for encoding in ("utf-8-sig", "cp949", "euc-kr"):
         try:
             with path.open("r", encoding=encoding, newline="") as handle:
-                return [dict(row) for row in csv.DictReader(handle)]
+                yield from (dict(row) for row in csv.DictReader(handle))
+                return
         except UnicodeDecodeError as exc:
             last_error = exc
     if last_error:
         raise last_error
-    return []
 
 
-def _read_xlsx_rows(path: Path) -> list[dict[str, Any]]:
+def _iter_xlsx_rows(path: Path) -> Iterable[dict[str, Any]]:
     from openpyxl import load_workbook
 
     workbook = load_workbook(path, read_only=True, data_only=True)
@@ -559,21 +652,91 @@ def _read_xlsx_rows(path: Path) -> list[dict[str, Any]]:
             header = raw
             break
     if header is None:
-        return []
+        return
 
     headers = [str(cell).strip() if cell is not None else "" for cell in header]
-    result: list[dict[str, Any]] = []
     for raw in rows:
         if not raw or not any(cell is not None and str(cell).strip() for cell in raw):
             continue
-        result.append(
-            {
-                headers[index]: value
-                for index, value in enumerate(raw[: len(headers)])
-                if headers[index]
-            }
-        )
-    return result
+        yield {
+            headers[index]: value
+            for index, value in enumerate(raw[: len(headers)])
+            if headers[index]
+        }
+
+
+def _iter_zip_rows(path: Path) -> Iterable[dict[str, Any]]:
+    with zipfile.ZipFile(path) as archive:
+        members = [
+            member
+            for member in archive.infolist()
+            if not member.is_dir()
+            and Path(member.filename).suffix.lower() in {".csv", ".xlsx"}
+        ]
+        if not members:
+            raise ValueError("ZIP file must contain at least one CSV or XLSX file.")
+        for member in sorted(members, key=lambda item: item.filename):
+            suffix = Path(member.filename).suffix.lower()
+            if suffix == ".csv":
+                yield from _iter_zip_csv_rows(archive, member)
+            elif suffix == ".xlsx":
+                yield from _iter_zip_xlsx_rows(archive, member)
+
+
+def _iter_zip_csv_rows(
+    archive: zipfile.ZipFile,
+    member: zipfile.ZipInfo,
+) -> Iterable[dict[str, Any]]:
+    encoding = _detect_zip_csv_encoding(archive, member)
+    with archive.open(member) as raw:
+        with io.TextIOWrapper(raw, encoding=encoding, newline="") as handle:
+            yield from (dict(row) for row in csv.DictReader(handle))
+
+
+def _detect_zip_csv_encoding(
+    archive: zipfile.ZipFile,
+    member: zipfile.ZipInfo,
+) -> str:
+    with archive.open(member) as raw:
+        sample = raw.read(65536)
+    last_error: UnicodeDecodeError | None = None
+    for encoding in ("utf-8-sig", "cp949", "euc-kr"):
+        try:
+            sample.decode(encoding)
+            return encoding
+        except UnicodeDecodeError as exc:
+            last_error = exc
+    if last_error:
+        raise last_error
+    return "utf-8-sig"
+
+
+def _iter_zip_xlsx_rows(
+    archive: zipfile.ZipFile,
+    member: zipfile.ZipInfo,
+) -> Iterable[dict[str, Any]]:
+    from openpyxl import load_workbook
+
+    with archive.open(member) as handle:
+        workbook = load_workbook(io.BytesIO(handle.read()), read_only=True, data_only=True)
+    worksheet = workbook.active
+    rows = worksheet.iter_rows(values_only=True)
+    header: tuple[Any, ...] | None = None
+    for raw in rows:
+        if raw and any(cell is not None and str(cell).strip() for cell in raw):
+            header = raw
+            break
+    if header is None:
+        return
+    headers = [str(cell).strip() if cell is not None else "" for cell in header]
+    for raw in rows:
+        if not raw or not any(cell is not None and str(cell).strip() for cell in raw):
+            continue
+        yield {
+            headers[index]: value
+            for index, value in enumerate(raw[: len(headers)])
+            if headers[index]
+        }
 
 
 def _normalize_row(row: dict[str, Any]) -> dict[str, str]:
