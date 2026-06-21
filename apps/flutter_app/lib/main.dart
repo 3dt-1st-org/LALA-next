@@ -6386,7 +6386,7 @@ List<KakaoMapPlace> clusterMapPlacesForMap({
   final selectedMarkers = <KakaoMapPlace>[];
   final expandedMarkers = <KakaoMapPlace>[];
   final buckets = <String, List<LalaPlace>>{};
-  final shouldUseClusters = places.length >= 30 && mapLevel >= 7;
+  final shouldUseClusters = places.length >= 30 && mapLevel >= 8;
   var expandedPinCount = 0;
 
   KakaoMapPlace toMapPlace(LalaPlace place, {bool selected = false}) {

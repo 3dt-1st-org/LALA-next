@@ -135,10 +135,22 @@ void main() {
         210 + index,
       ),
     );
-    final zoomedOutMarkers = clusterMapPlacesForMap(
+    final defaultDenseMarkers = clusterMapPlacesForMap(
       places: densePlaces,
       selected: null,
       mapLevel: 7,
+      language: 'ko',
+    );
+    expect(defaultDenseMarkers.where((marker) => marker.isCluster), isEmpty);
+    expect(
+      defaultDenseMarkers.map((marker) => marker.id),
+      containsAll(densePlaces.map((place) => place.placeId)),
+    );
+
+    final zoomedOutMarkers = clusterMapPlacesForMap(
+      places: densePlaces,
+      selected: null,
+      mapLevel: 8,
       language: 'ko',
     );
     expect(
