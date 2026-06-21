@@ -257,9 +257,21 @@ void main() {
         },
         initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
         locationProvider: locationProvider,
+        requireLocationStartConfirmation: true,
       ),
     );
 
+    await tester.pump();
+
+    expect(find.text('현재 위치에서 시작할게요'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('location-start-confirm')),
+      findsOneWidget,
+    );
+    expect(locationProvider.requests, 0);
+    expect(backends.first.placesRequestConfigs, isEmpty);
+
+    await tester.tap(find.byKey(const ValueKey('location-start-confirm')));
     await tester.pumpAndSettle();
 
     expect(locationProvider.requests, 1);
@@ -289,8 +301,16 @@ void main() {
           backendFactory: FakeBackend.new,
           initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
           locationProvider: locationProvider,
+          requireLocationStartConfirmation: true,
         ),
       );
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('현재 위치에서 시작할게요'), findsOneWidget);
+      expect(locationProvider.requests, 0);
+
+      await tester.tap(find.byKey(const ValueKey('location-start-confirm')));
       await tester.pump();
       await tester.pump();
 
@@ -1834,18 +1854,22 @@ class TestLalaApp extends StatelessWidget {
     required this.backendFactory,
     required this.initialConfig,
     this.locationProvider,
+    this.requireLocationStartConfirmation = false,
     super.key,
   });
 
   final LalaBackendFactory backendFactory;
   final LalaAppConfig initialConfig;
   final LalaLocationProvider? locationProvider;
+  final bool requireLocationStartConfirmation;
 
   @override
   Widget build(BuildContext context) {
     return LalaApp(
       backendFactory: backendFactory,
-      initialConfig: initialConfig,
+      initialConfig: initialConfig.copyWith(
+        requireLocationStartConfirmation: requireLocationStartConfirmation,
+      ),
       locationProvider:
           locationProvider ??
           FakeLocationProvider(const LalaLocationResult.unavailable()),

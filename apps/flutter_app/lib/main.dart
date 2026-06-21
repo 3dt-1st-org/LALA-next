@@ -80,6 +80,7 @@ class LalaAppConfig {
     this.radiusM = 50000,
     this.category = 'all',
     this.lang = 'ko',
+    this.requireLocationStartConfirmation = true,
   });
 
   const LalaAppConfig.fromEnvironment()
@@ -100,6 +101,10 @@ class LalaAppConfig {
       lang = const String.fromEnvironment(
         'LALA_UI_LANGUAGE',
         defaultValue: 'ko',
+      ),
+      requireLocationStartConfirmation = const bool.fromEnvironment(
+        'LALA_REQUIRE_LOCATION_START_CONFIRMATION',
+        defaultValue: true,
       );
 
   final String baseUri;
@@ -111,6 +116,7 @@ class LalaAppConfig {
   final int radiusM;
   final String category;
   final String lang;
+  final bool requireLocationStartConfirmation;
 
   bool get hasAuth => bearerToken.trim().isNotEmpty || apiKey.trim().isNotEmpty;
   LalaAuthMode get authMode =>
@@ -126,6 +132,7 @@ class LalaAppConfig {
     int? radiusM,
     String? category,
     String? lang,
+    bool? requireLocationStartConfirmation,
   }) {
     return LalaAppConfig(
       baseUri: baseUri ?? this.baseUri,
@@ -137,6 +144,9 @@ class LalaAppConfig {
       radiusM: radiusM ?? this.radiusM,
       category: category ?? this.category,
       lang: lang ?? this.lang,
+      requireLocationStartConfirmation:
+          requireLocationStartConfirmation ??
+          this.requireLocationStartConfirmation,
     );
   }
 }
@@ -399,6 +409,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
   bool _locationConsentEnabled = true;
   bool _locationRequestInFlight = false;
   bool _locationFallbackNoticeVisible = false;
+  bool _locationStartPromptVisible = false;
   bool _recommendationRailExpanded = true;
   List<String> _focusedClusterMemberIds = const <String>[];
   final Set<String> _savedPlaceIds = <String>{};
@@ -427,12 +438,15 @@ class _LalaHomePageState extends State<LalaHomePage> {
     _queryLat = config.lat;
     _queryLng = config.lng;
     _uiLanguage = config.lang;
+    _locationStartPromptVisible = config.requireLocationStartConfirmation;
     _backend = widget.backendFactory(_currentConfig());
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _requestLocationThenRefresh(initial: true);
-      }
-    });
+    if (!config.requireLocationStartConfirmation) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _requestLocationThenRefresh(initial: true);
+        }
+      });
+    }
   }
 
   @override
@@ -474,6 +488,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
     }
     setState(() {
       _locationRequestInFlight = true;
+      _locationStartPromptVisible = false;
       if (resetSelection) {
         _resetMapContext();
       }
@@ -1037,10 +1052,24 @@ class _LalaHomePageState extends State<LalaHomePage> {
     setState(() {
       _locationConsentEnabled = true;
       _locationFallbackNoticeVisible = false;
+      _locationStartPromptVisible = false;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _requestLocationThenRefresh(resetSelection: true);
+      }
+    });
+  }
+
+  void _startFromCurrentLocation() {
+    setState(() {
+      _locationConsentEnabled = true;
+      _locationFallbackNoticeVisible = false;
+      _locationStartPromptVisible = false;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _requestLocationThenRefresh(initial: true, resetSelection: true);
       }
     });
   }
@@ -1173,6 +1202,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
               locationConsentEnabled: _locationConsentEnabled,
               locationRequestInFlight: _locationRequestInFlight,
               locationFallbackNoticeVisible: _locationFallbackNoticeVisible,
+              locationStartPromptVisible: _locationStartPromptVisible,
               recommendationRailExpanded: _recommendationRailExpanded,
               focusedClusterMemberIds: _focusedClusterMemberIds,
               mapFocusLat: _mapFocusLat,
@@ -1198,6 +1228,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
               onReturnToLocation: _returnToCurrentLocation,
               onOpenSettings: () => _openSettingsSheet(context),
               onRetryLocation: _retryLocationConsent,
+              onStartLocation: _startFromCurrentLocation,
             ),
           ),
         ),
@@ -1640,6 +1671,7 @@ class _Dashboard extends StatelessWidget {
     required this.locationConsentEnabled,
     required this.locationRequestInFlight,
     required this.locationFallbackNoticeVisible,
+    required this.locationStartPromptVisible,
     required this.recommendationRailExpanded,
     required this.focusedClusterMemberIds,
     required this.mapFocusLat,
@@ -1665,6 +1697,7 @@ class _Dashboard extends StatelessWidget {
     required this.onReturnToLocation,
     required this.onOpenSettings,
     required this.onRetryLocation,
+    required this.onStartLocation,
   });
 
   final bool loading;
@@ -1697,6 +1730,7 @@ class _Dashboard extends StatelessWidget {
   final bool locationConsentEnabled;
   final bool locationRequestInFlight;
   final bool locationFallbackNoticeVisible;
+  final bool locationStartPromptVisible;
   final bool recommendationRailExpanded;
   final List<String> focusedClusterMemberIds;
   final double? mapFocusLat;
@@ -1722,6 +1756,7 @@ class _Dashboard extends StatelessWidget {
   final VoidCallback onReturnToLocation;
   final VoidCallback onOpenSettings;
   final VoidCallback onRetryLocation;
+  final VoidCallback onStartLocation;
 
   @override
   Widget build(BuildContext context) {
@@ -2011,7 +2046,14 @@ class _Dashboard extends StatelessWidget {
                   onClose: onCloseSheet,
                 ),
               ),
-            if (!locationConsentEnabled)
+            if (locationStartPromptVisible)
+              Positioned.fill(
+                child: _LocationStartPromptOverlay(
+                  language: uiLanguage,
+                  onStartLocation: onStartLocation,
+                ),
+              ),
+            if (!locationStartPromptVisible && !locationConsentEnabled)
               Positioned.fill(
                 child: _LocationConsentOverlay(
                   language: uiLanguage,
@@ -2026,6 +2068,96 @@ class _Dashboard extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _LocationStartPromptOverlay extends StatelessWidget {
+  const _LocationStartPromptOverlay({
+    required this.language,
+    required this.onStartLocation,
+  });
+
+  final String language;
+  final VoidCallback onStartLocation;
+
+  @override
+  Widget build(BuildContext context) {
+    final isEnglish = language == 'en';
+    return ColoredBox(
+      color: Colors.white.withValues(alpha: 0.86),
+      child: SafeArea(
+        child: Center(
+          child: Container(
+            width: double.infinity,
+            constraints: const BoxConstraints(maxWidth: 430),
+            margin: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: const Color(0xFFE1ECF8)),
+              boxShadow: const [
+                BoxShadow(
+                  blurRadius: 34,
+                  offset: Offset(0, 18),
+                  color: Color(0x22000000),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEAF2FB),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: const Icon(
+                    Icons.my_location_outlined,
+                    color: Color(0xFF2B6CB0),
+                    size: 30,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  isEnglish ? 'Start from here' : '현재 위치에서 시작할게요',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: const Color(0xFF111827),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  isEnglish
+                      ? 'LALA uses your approximate location to load nearby places, weather, and local routes.'
+                      : '주변 장소와 날씨, 로컬 동선을 불러오기 위해 대략적인 위치를 확인합니다.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xFF4B5563),
+                    height: 1.45,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                FilledButton.icon(
+                  key: const ValueKey('location-start-confirm'),
+                  onPressed: onStartLocation,
+                  icon: const Icon(Icons.my_location),
+                  label: Text(isEnglish ? 'Use my location' : '현재 위치 사용'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(50),
+                    backgroundColor: const Color(0xFF2B6CB0),
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
