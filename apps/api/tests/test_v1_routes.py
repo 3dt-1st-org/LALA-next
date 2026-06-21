@@ -110,12 +110,40 @@ def test_places_uses_db_repository_when_rows_exist(client, auth_headers, monkeyp
 
 
 def test_places_invalid_category_returns_json_error(client, auth_headers):
-    response = client.get("/api/v1/places?category=bad", headers=auth_headers)
+    response = client.get(
+        "/api/v1/places?lat=37.2&lng=127.0&category=bad",
+        headers=auth_headers,
+    )
 
     assert response.status_code == 400
     body = response.json()
     assert body["ok"] is False
     assert body["error"]["code"] == "INVALID_CATEGORY"
+
+
+def test_location_based_routes_require_explicit_coordinates(client, auth_headers):
+    places_response = client.get("/api/v1/places?radius_m=1000", headers=auth_headers)
+    weather_response = client.get("/api/v1/weather", headers=auth_headers)
+    intervention_response = client.get(
+        "/api/v1/plans/intervention?radius_m=1000",
+        headers=auth_headers,
+    )
+    daily_plan_response = client.post(
+        "/api/v1/plans/daily",
+        headers=auth_headers,
+        json={"radius_m": 3000, "language": "ko"},
+    )
+
+    for response in (
+        places_response,
+        weather_response,
+        intervention_response,
+        daily_plan_response,
+    ):
+        assert response.status_code == 422
+        body = response.json()
+        assert body["ok"] is False
+        assert body["error"]["code"] == "VALIDATION_ERROR"
 
 
 def test_places_rejects_out_of_range_coordinates(client, auth_headers):

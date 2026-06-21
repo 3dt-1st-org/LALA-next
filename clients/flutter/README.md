@@ -24,10 +24,15 @@ distinguish DB-backed, read-only public-cache, live Azure, and degraded states.
 `POST /api/v1/docents/audio` is the success exception and returns `audio/mpeg`
 bytes.
 
+Location-based methods require explicit `lat` and `lng` arguments. Production
+and review clients should pass the browser/device location after user consent,
+or an explicit user-selected coordinate; the API no longer carries a default
+recommendation location.
+
 Default client-side timeouts are intentionally bounded:
 
 - Health/readiness: 3 seconds.
-- Places/weather/intervention reads: 5 seconds.
+- Places/weather/intervention reads: 12 seconds.
 - Daily plan: 20 seconds.
 - Docent script/audio generation: 30 seconds.
 

@@ -420,26 +420,36 @@ void main() {
   testWidgets('surfaces retry when browser location is unavailable', (
     tester,
   ) async {
+    final backends = <FakeBackend>[];
     final locationProvider = FakeLocationProvider(
       const LalaLocationResult.unavailable(),
     );
 
     await tester.pumpWidget(
       TestLalaApp(
-        backendFactory: FakeBackend.new,
+        backendFactory: (config) {
+          final backend = FakeBackend(config);
+          backends.add(backend);
+          return backend;
+        },
         initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
         locationProvider: locationProvider,
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('현재 위치를 확인하지 못해 기본 위치 기준으로 보여줘요'), findsOneWidget);
+    expect(find.text('현재 위치를 확인해야 추천을 볼 수 있어요'), findsOneWidget);
     expect(find.text('현재 위치 다시 확인'), findsOneWidget);
+    expect(backends.single.placesRequestConfigs, isEmpty);
+    expect(backends.single.weatherRequestConfigs, isEmpty);
+    expect(backends.single.interventionRequestConfigs, isEmpty);
+    expect(backends.single.dailyPlanRequestConfigs, isEmpty);
 
     await tester.tap(find.byKey(const ValueKey('location-fallback-retry')));
     await tester.pumpAndSettle();
 
     expect(locationProvider.requests, 2);
+    expect(backends.single.placesRequestConfigs, isEmpty);
   });
 
   testWidgets('filters places from category chips and toggles map modes', (
@@ -913,7 +923,7 @@ void main() {
 
     expect(find.text('장소 상세'), findsNothing);
     expect(
-      find.byKey(const ValueKey('kakao-map-fallback-center-37.2819-127.0142')),
+      find.byKey(const ValueKey('kakao-map-fallback-center-37.2636-127.0286')),
       findsOneWidget,
     );
     expect(
@@ -1070,7 +1080,7 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('kakao-map-fallback-center-37.2819-127.0142')),
+      find.byKey(const ValueKey('kakao-map-fallback-center-37.2636-127.0286')),
       findsOneWidget,
     );
 
@@ -1953,7 +1963,11 @@ class TestLalaApp extends StatelessWidget {
       ),
       locationProvider:
           locationProvider ??
-          FakeLocationProvider(const LalaLocationResult.unavailable()),
+          FakeLocationProvider(
+            LalaLocationResult.found(
+              LalaLocation(lat: initialConfig.lat, lng: initialConfig.lng),
+            ),
+          ),
     );
   }
 }

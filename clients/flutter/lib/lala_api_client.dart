@@ -55,8 +55,8 @@ class LalaApiClient {
   }
 
   Future<LalaEnvelope<LalaPlacesResponse>> getPlaces({
-    double lat = 37.2636,
-    double lng = 127.0286,
+    required double lat,
+    required double lng,
     int radiusM = 1000,
     String category = 'all',
     String lang = 'ko',
@@ -82,8 +82,8 @@ class LalaApiClient {
   }
 
   Future<LalaEnvelope<LalaWeather>> getWeather({
-    double lat = 37.2636,
-    double lng = 127.0286,
+    required double lat,
+    required double lng,
     bool force = false,
     String? requestId,
     Duration? timeout,
@@ -209,8 +209,8 @@ class LalaApiClient {
   }
 
   Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({
-    double lat = 37.2636,
-    double lng = 127.0286,
+    required double lat,
+    required double lng,
     int radiusM = 3000,
     String language = 'ko',
     String? requestId,
@@ -227,8 +227,8 @@ class LalaApiClient {
   }
 
   Future<LalaEnvelope<LalaIntervention>> getIntervention({
-    double lat = 37.2636,
-    double lng = 127.0286,
+    required double lat,
+    required double lng,
     int radiusM = 10000,
     String? requestId,
     Duration? timeout,

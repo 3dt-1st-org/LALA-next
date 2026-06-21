@@ -522,21 +522,15 @@ class _LalaHomePageState extends State<LalaHomePage> {
       });
       await _refresh(forceWeather: true);
     } else {
-      final shouldRefreshFallback =
-          result.status == LalaLocationResultStatus.unavailable &&
-          (initial || resetSelection);
       setState(() {
         _locationRequestInFlight = false;
         if (result.status == LalaLocationResultStatus.denied) {
           _locationConsentEnabled = false;
-          _locationFallbackNoticeVisible = false;
-        } else if (shouldRefreshFallback) {
+          _locationFallbackNoticeVisible = true;
+        } else if (initial || resetSelection) {
           _locationFallbackNoticeVisible = true;
         }
       });
-      if (shouldRefreshFallback) {
-        await _refresh(forceWeather: true);
-      }
       return;
     }
 
@@ -1925,8 +1919,8 @@ class _Dashboard extends StatelessWidget {
                       icon: Icons.my_location_outlined,
                       label: _copy(
                         uiLanguage,
-                        ko: '현재 위치를 확인하지 못해 기본 위치 기준으로 보여줘요',
-                        en: 'Using the default area until your location is available',
+                        ko: '현재 위치를 확인해야 추천을 볼 수 있어요',
+                        en: 'Location permission is needed for recommendations',
                       ),
                       actionLabel: _copy(
                         uiLanguage,

@@ -169,8 +169,8 @@ Query parameters:
 
 | Name | Type | Default | Notes |
 |---|---|---|---|
-| `lat` | number | `37.2636` | `-90` to `90` |
-| `lng` | number | `127.0286` | `-180` to `180` |
+| `lat` | number | Required | Current or explicitly selected user latitude, `-90` to `90` |
+| `lng` | number | Required | Current or explicitly selected user longitude, `-180` to `180` |
 | `radius_m` | integer | `1000` | `1` to `50000` |
 | `category` | string | `all` | `all`, `attraction`, `restaurant`, `event`, `culture_venue` |
 | `lang` | string | `ko` | `ko`, `kr`, `kor`, `korean`, `en`, `eng`, `english` |
@@ -181,8 +181,8 @@ Query parameters:
 
 | Name | Type | Default | Notes |
 |---|---|---|---|
-| `lat` | number | `37.2636` | `-90` to `90` |
-| `lng` | number | `127.0286` | `-180` to `180` |
+| `lat` | number | Required | Current or explicitly selected user latitude, `-90` to `90` |
+| `lng` | number | Required | Current or explicitly selected user longitude, `-180` to `180` |
 | `force` | boolean | `false` | Reserved for bypassing cached weather later |
 
 ### `POST /api/v1/docents/script`
@@ -259,7 +259,8 @@ Request:
 ```
 
 Success data includes `request_hash` and `cache_key` for idempotency-aware
-client flows.
+client flows. `lat` and `lng` are required; clients must not rely on a server
+default location for itinerary generation.
 
 ### `GET /api/v1/plans/intervention`
 
@@ -267,8 +268,8 @@ Query parameters:
 
 | Name | Type | Default | Notes |
 |---|---|---|---|
-| `lat` | number | `37.2636` | `-90` to `90` |
-| `lng` | number | `127.0286` | `-180` to `180` |
+| `lat` | number | Required | Current or explicitly selected user latitude, `-90` to `90` |
+| `lng` | number | Required | Current or explicitly selected user longitude, `-180` to `180` |
 | `radius_m` | integer | `10000` | `1` to `50000` |
 
 ## Response Data Examples

@@ -390,9 +390,13 @@ void main() {
         }),
       );
 
-      final weather = await client.getWeather();
-      final plan = await client.createDailyPlan();
-      final intervention = await client.getIntervention(radiusM: 1000);
+      final weather = await client.getWeather(lat: 37.2, lng: 127.0);
+      final plan = await client.createDailyPlan(lat: 37.2, lng: 127.0);
+      final intervention = await client.getIntervention(
+        lat: 37.2,
+        lng: 127.0,
+        radiusM: 1000,
+      );
 
       expect(weather.data?.dust.gradeKo, '확인 중');
       expect(weather.data?.dust.pm10Grade, 'unknown');
@@ -509,7 +513,7 @@ void main() {
       );
 
       await expectLater(
-        client.getWeather(),
+        client.getWeather(lat: 37.2, lng: 127.0),
         throwsA(
           isA<LalaApiException>()
               .having((error) => error.code, 'code', 'UNAUTHORIZED')
@@ -542,6 +546,8 @@ void main() {
 
     await expectLater(
       client.getWeather(
+        lat: 37.2,
+        lng: 127.0,
         requestId: 'client-timeout-id',
         timeout: const Duration(milliseconds: 1),
       ),
@@ -573,8 +579,8 @@ void main() {
             'count': 0,
             'places': <Object?>[],
             'query': {
-              'lat': 37.2636,
-              'lng': 127.0286,
+              'lat': 37.5665,
+              'lng': 126.978,
               'radius_m': 1000,
               'category': 'all',
               'language': 'ko',
@@ -587,7 +593,7 @@ void main() {
       }),
     );
 
-    final envelope = await client.getPlaces();
+    final envelope = await client.getPlaces(lat: 37.5665, lng: 126.978);
 
     expect(captured.headers.containsKey('authorization'), isFalse);
     expect(captured.headers.containsKey('x-api-key'), isFalse);

@@ -34,7 +34,7 @@ def test_cors_allows_configured_flutter_web_origin(monkeypatch):
     )
 
     response = client.get(
-        "/api/v1/places",
+        "/api/v1/places?lat=37.2&lng=127.0",
         headers={
             "Origin": "http://localhost:3000",
             "X-API-Key": "cors-test-key",

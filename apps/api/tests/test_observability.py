@@ -21,7 +21,7 @@ def test_request_logging_omits_auth_headers_and_query_string(client, auth_header
     caplog.set_level(logging.INFO, logger="lala_next.api")
 
     response = client.get(
-        "/api/v1/places?token=should-not-be-logged",
+        "/api/v1/places?lat=37.2&lng=127.0&token=should-not-be-logged",
         headers={
             **auth_headers,
             "Authorization": "Bearer should-not-be-logged",
@@ -56,7 +56,7 @@ def test_optional_jsonl_access_log_is_secret_safe(tmp_path, monkeypatch, api_key
     client = TestClient(create_app())
 
     response = client.get(
-        "/api/v1/places?token=should-not-be-written",
+        "/api/v1/places?lat=37.2&lng=127.0&token=should-not-be-written",
         headers={
             "X-API-Key": api_key,
             "X-Request-ID": "jsonl-log-test",
@@ -104,7 +104,7 @@ def test_unsafe_request_id_header_is_not_logged_or_echoed(client, caplog):
 def test_metrics_endpoint_is_public_and_omits_query_and_auth_values(client, auth_headers):
     marker = "should-not-be-exported"
     response = client.get(
-        f"/api/v1/places?token={marker}",
+        f"/api/v1/places?lat=37.2&lng=127.0&token={marker}",
         headers={
             **auth_headers,
             "Authorization": f"Bearer {marker}",

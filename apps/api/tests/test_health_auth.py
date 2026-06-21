@@ -371,14 +371,20 @@ def test_v1_rejects_invalid_api_key(client, api_key):
 
 
 def test_v1_accepts_valid_api_key(client, auth_headers):
-    response = client.get("/api/v1/places", headers=auth_headers)
+    response = client.get(
+        "/api/v1/places?lat=37.2&lng=127.0",
+        headers=auth_headers,
+    )
 
     assert response.status_code == 200
     assert response.json()["ok"] is True
 
 
 def test_v1_accepts_valid_api_key_with_edge_whitespace(client, api_key):
-    response = client.get("/api/v1/places", headers={"X-API-Key": f"  {api_key}  "})
+    response = client.get(
+        "/api/v1/places?lat=37.2&lng=127.0",
+        headers={"X-API-Key": f"  {api_key}  "},
+    )
 
     assert response.status_code == 200
     assert response.json()["ok"] is True
@@ -398,7 +404,7 @@ def test_v1_accepts_valid_bearer_token(client, monkeypatch):
     monkeypatch.setenv("API_BEARER_TOKEN", "test-bearer-token")
 
     response = client.get(
-        "/api/v1/places",
+        "/api/v1/places?lat=37.2&lng=127.0",
         headers={"Authorization": "Bearer test-bearer-token"},
     )
 
@@ -411,7 +417,7 @@ def test_v1_accepts_valid_bearer_token_with_edge_whitespace(client, monkeypatch)
     monkeypatch.setenv("API_BEARER_TOKEN", "test-bearer-token")
 
     response = client.get(
-        "/api/v1/places",
+        "/api/v1/places?lat=37.2&lng=127.0",
         headers={"Authorization": "  Bearer   test-bearer-token  "},
     )
 

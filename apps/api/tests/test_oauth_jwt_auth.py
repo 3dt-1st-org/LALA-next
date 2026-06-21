@@ -34,7 +34,10 @@ def test_v1_accepts_valid_oauth_jwt_without_static_credentials(client, monkeypat
     )
 
     token = _signed_token(key, scopes="access_as_user lala.read")
-    response = client.get("/api/v1/places", headers={"Authorization": f"Bearer {token}"})
+    response = client.get(
+        "/api/v1/places?lat=37.2&lng=127.0",
+        headers={"Authorization": f"Bearer {token}"},
+    )
 
     assert response.status_code == 200
     assert response.json()["ok"] is True
@@ -49,7 +52,10 @@ def test_v1_rejects_oauth_jwt_missing_required_scope(client, monkeypatch):
     )
 
     token = _signed_token(key, scopes="weather.read")
-    response = client.get("/api/v1/places", headers={"Authorization": f"Bearer {token}"})
+    response = client.get(
+        "/api/v1/places?lat=37.2&lng=127.0",
+        headers={"Authorization": f"Bearer {token}"},
+    )
 
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "UNAUTHORIZED"
@@ -65,7 +71,10 @@ def test_v1_reports_oauth_jwks_unavailable_as_retryable_auth_dependency(client, 
     monkeypatch.setattr("apps.api.app.core.jwt_auth._get_signing_key", fail_get_signing_key)
 
     token = _signed_token(key)
-    response = client.get("/api/v1/places", headers={"Authorization": f"Bearer {token}"})
+    response = client.get(
+        "/api/v1/places?lat=37.2&lng=127.0",
+        headers={"Authorization": f"Bearer {token}"},
+    )
 
     assert response.status_code == 503
     body = response.json()
@@ -83,7 +92,7 @@ def test_static_bearer_token_still_works_when_oauth_jwks_is_unavailable(client, 
     )
 
     response = client.get(
-        "/api/v1/places",
+        "/api/v1/places?lat=37.2&lng=127.0",
         headers={"Authorization": "Bearer static-transition-token"},
     )
 
