@@ -1387,7 +1387,11 @@ void main() {
 
     expect(find.text('Hwaseong Haenggung'), findsAtLeastNWidgets(1));
     expect(find.text('Daily Plan'), findsOneWidget);
-    expect(find.text('Listen'), findsOneWidget);
+    expect(
+      find.text('Loading the docent script. Please check again shortly.'),
+      findsAtLeastNWidgets(1),
+    );
+    expect(find.text('Listen'), findsNothing);
     expect(find.textContaining('화성행궁'), findsNothing);
     expect(find.textContaining('경기도'), findsNothing);
 
@@ -1667,6 +1671,42 @@ void main() {
     expect(find.textContaining('Hwaseong walk'), findsAtLeastNWidgets(1));
     expect(find.textContaining('화성행궁 산책'), findsNothing);
     expect(_visibleMixedLanguageTexts(tester), isEmpty);
+  });
+
+  testWidgets('placeholder docent scripts are not shown as real guidance', (
+    tester,
+  ) async {
+    final backend = PlaceholderDocentBackend(
+      const LalaAppConfig(baseUri: 'http://api.test'),
+    );
+    await tester.pumpWidget(
+      TestLalaApp(
+        backendFactory: (_) => backend,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(backend.docentScriptRequests, ['brief:hwaseong-haenggung']);
+    expect(find.textContaining('도슨트 스크립트를 불러오는 중입니다'), findsAtLeastNWidgets(1));
+    expect(find.textContaining('migration skeleton'), findsNothing);
+    expect(find.textContaining('공식 관광·문화 데이터'), findsNothing);
+    expect(find.textContaining('로컬 코스입니다'), findsNothing);
+    expect(find.widgetWithText(FilledButton, '정보 더 듣기'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('settings-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('영어'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.arrow_back_ios_new));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('Loading the docent script'),
+      findsAtLeastNWidgets(1),
+    );
+    expect(find.textContaining('connects official tourism'), findsNothing);
+    expect(find.widgetWithText(FilledButton, 'Listen'), findsNothing);
   });
 
   testWidgets('localized API errors follow the selected language only', (
@@ -2053,6 +2093,31 @@ class BilingualInterventionBackend extends FakeBackend {
         language: config.lang,
         mode: mode,
         script: script,
+        source: 'rule_based_curation',
+        requestHash:
+            '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+        cacheKey: 'docent_script:0123456789abcdef0123456789abcdef',
+      ),
+    );
+  }
+}
+
+class PlaceholderDocentBackend extends FakeBackend {
+  PlaceholderDocentBackend(super.config);
+
+  @override
+  Future<LalaEnvelope<LalaDocentScript>> createDocentScript({
+    required LalaPlace place,
+    String mode = 'brief',
+  }) async {
+    docentScriptRequests.add('$mode:${place.placeId}');
+    return _envelope(
+      LalaDocentScript(
+        placeId: place.placeId,
+        category: place.category,
+        language: config.lang,
+        mode: mode,
+        script: 'This is a migration skeleton docent script.',
         source: 'rule_based_curation',
         requestHash:
             '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',

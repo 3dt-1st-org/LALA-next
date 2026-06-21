@@ -1920,7 +1920,10 @@ class _Dashboard extends StatelessWidget {
                     audioError: _localizedUiMessage(audioError, uiLanguage),
                     canFetchAudio:
                         activeDocent?.placeId == topPlace?.placeId &&
-                        activeDocent?.script.trim().isNotEmpty == true &&
+                        _hasUsableDocentScript(
+                          activeDocent?.script,
+                          uiLanguage,
+                        ) &&
                         !audioLoading &&
                         topPlace != null &&
                         !detailDocentPlayedPlaceIds.contains(topPlace.placeId),
@@ -4784,7 +4787,7 @@ class _FeaturedPlacePanel extends StatelessWidget {
           audioError: audioError,
           docentAudio: docentAudio,
           canFetchAudio:
-              effectiveDocent?.script.trim().isNotEmpty == true &&
+              _hasUsableDocentScript(effectiveDocent?.script, language) &&
               !audioLoading &&
               !detailDocentPlayedPlaceIds.contains(currentPlace.placeId),
           onFetchAudio: onFetchAudio,
@@ -5539,7 +5542,7 @@ class _RouteAndDocentPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final script = docentScript?.script;
     final canFetchAudio =
-        script != null && script.trim().isNotEmpty && !audioLoading;
+        _hasUsableDocentScript(script, language) && !audioLoading;
     final slots = dailyPlan?.slots ?? const <LalaPlanSlot>[];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -7855,45 +7858,47 @@ String _docentBody({
   required String? script,
   required String language,
 }) {
-  final trimmed = script?.trim();
-  final placeName = place == null ? null : _placeDisplayName(place, language);
-  if (trimmed == null || trimmed.isEmpty) {
-    if (_isEnglish(language)) {
-      return placeName == null
-          ? 'Move the map to prepare nearby local experiences and docent notes.'
-          : 'Preparing the cultural context and nearby local experience for $placeName.';
-    }
-    return placeName == null
-        ? '지도를 움직이면 가까운 로컬 경험과 도슨트가 준비됩니다.'
-        : '$placeName의 문화 맥락과 주변 로컬 경험을 도슨트로 준비하고 있습니다.';
-  }
-
-  final lower = trimmed.toLowerCase();
-  if (lower.contains('migration skeleton') ||
-      lower.contains('azure openai') ||
-      RegExp(r'^this is a .+ docent script').hasMatch(lower)) {
-    return _fallbackDocentBody(placeName: placeName, language: language);
-  }
-
-  final localized = _singleLanguageText(trimmed, language);
-  if (localized != null && localized.isNotEmpty) {
+  final localized = _usableDocentScript(script, language);
+  if (localized != null) {
     return localized;
   }
-  return _fallbackDocentBody(placeName: placeName, language: language);
+  return _unavailableDocentBody(place: place, language: language);
 }
 
-String _fallbackDocentBody({
-  required String? placeName,
+bool _hasUsableDocentScript(String? script, String language) {
+  return _usableDocentScript(script, language) != null;
+}
+
+String? _usableDocentScript(String? script, String language) {
+  final trimmed = script?.trim();
+  if (trimmed == null || trimmed.isEmpty) {
+    return null;
+  }
+  if (_isPlaceholderDocentScript(trimmed)) {
+    return null;
+  }
+  return _singleLanguageText(trimmed, language);
+}
+
+bool _isPlaceholderDocentScript(String value) {
+  final lower = value.toLowerCase().trim();
+  return lower.contains('migration skeleton') ||
+      lower.contains('azure openai') ||
+      RegExp(r'^this is a .+ docent script\.?$').hasMatch(lower);
+}
+
+String _unavailableDocentBody({
+  required LalaPlace? place,
   required String language,
 }) {
   if (_isEnglish(language)) {
-    return placeName == null
-        ? 'Preparing a local story from official tourism, culture, and spending signals.'
-        : '$placeName connects official tourism and culture data with nearby local spending signals.';
+    return place == null
+        ? 'Select a place to load a docent script.'
+        : 'Loading the docent script. Please check again shortly.';
   }
-  return placeName == null
-      ? '공식 관광·문화 데이터와 지역 소비 신호를 바탕으로 로컬 이야기를 준비하고 있습니다.'
-      : '$placeName은 공식 관광·문화 데이터와 지역 소비 신호를 함께 살펴볼 수 있는 로컬 코스입니다.';
+  return place == null
+      ? '추천 장소가 선택되면 도슨트 스크립트를 불러옵니다.'
+      : '도슨트 스크립트를 불러오는 중입니다. 잠시 뒤 다시 확인해 주세요.';
 }
 
 String _docentSummary({
