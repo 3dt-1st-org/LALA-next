@@ -305,9 +305,15 @@ def _airkorea_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _select_airkorea_item(items: list[dict[str, Any]]) -> dict[str, Any] | None:
     for item in items:
-        if clean_air_quality_value(item.get("pm10Value")) or clean_air_quality_value(
+        if clean_air_quality_value(item.get("pm10Value")) and clean_air_quality_value(
             item.get("pm25Value")
         ):
+            return item
+    for item in items:
+        if clean_air_quality_value(item.get("pm10Value")):
+            return item
+    for item in items:
+        if clean_air_quality_value(item.get("pm25Value")):
             return item
     return None
 

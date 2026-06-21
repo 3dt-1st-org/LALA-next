@@ -161,3 +161,28 @@ def test_current_weather_reports_unavailable_without_public_data_key(
     assert weather["forecast"] == []
     assert weather["dust"]["pm10_grade"] == "unknown"
     assert weather["dust"]["pm25_grade_ko"] == "확인 중"
+
+
+def test_airkorea_selection_prefers_station_with_pm10_and_pm25() -> None:
+    selected = weather_service._select_airkorea_item(
+        [
+            {
+                "stationName": "중구",
+                "pm10Value": "5",
+                "pm25Value": "-",
+            },
+            {
+                "stationName": "종로구",
+                "pm10Value": "7",
+                "pm25Value": "2",
+            },
+            {
+                "stationName": "용산구",
+                "pm10Value": "-",
+                "pm25Value": "3",
+            },
+        ]
+    )
+
+    assert selected is not None
+    assert selected["stationName"] == "종로구"
