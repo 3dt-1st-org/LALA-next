@@ -29,7 +29,7 @@ baseline stays green.
 | Area | Current status | Why it is not a blocker |
 |---|---|---|
 | Static snapshot fallback | Disabled for shared dev. Kept only as DB-outage or isolated local fallback. | Normal path is PostgreSQL plus Key Vault plus ingest/scoring/RAG jobs. |
-| Skeleton fallback labels | Still exist in code and tests for offline/local safety paths. | They are explicitly marked as fallback/demo data and are not the shared dev happy path. |
+| Offline fallback labels | Limited offline/local safety labels exist only for recovery paths. | They are explicitly kept out of the shared dev happy path, whose normal route is DB-backed. |
 | Score explanation visibility | API returns score details; Flutter hides heavy score/reason detail unless the user opens it. | This is a UX decision, not a data-path failure. |
 | Official image gaps | Some TourAPI rows have no official image. | The app collapses the image slot rather than inventing mock images. |
 

@@ -55,8 +55,9 @@ ALLOW_DEV_RESET_APPLY=1 \
 ```
 
 The apply guard rejects non-local hosts before connecting and still does not
-print `DB_DSN`. Current seed files insert public/demo Suwon data for local DB
-experiments after the canonical schema exists.
+print `DB_DSN`. Current seed files insert public, local-review Suwon data for
+local DB experiments after the canonical schema exists. Shared dev and review
+deployments still use the live PostgreSQL-backed ingest/scoring/RAG path.
 
 ## Plan and Apply Guard
 

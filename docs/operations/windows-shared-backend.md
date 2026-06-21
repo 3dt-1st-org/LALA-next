@@ -15,7 +15,7 @@ to set the LALA-next Key Vault URL for the started API process. When a Key Vault
 URL is provided, the script loads known LALA-next secrets into process
 environment variables without printing their values.
 
-For a live Azure demo:
+For a live Azure review run:
 
 ```powershell
 .\scripts\windows\start_api.ps1 -Port 8080 -KeyVaultUrl <KEY_VAULT_URL> -EnableLiveAI -EnableLiveSpeech
@@ -109,7 +109,7 @@ Do not ask mobile clients to use `localhost`.
 
 ## Logs and Restart
 
-For a short demo, a foreground `start_api.ps1` terminal is enough. For a longer
+For a short local review run, a foreground `start_api.ps1` terminal is enough. For a longer
 shared session, assign one operator who owns the process and captures logs:
 
 ```powershell

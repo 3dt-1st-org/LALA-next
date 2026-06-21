@@ -144,7 +144,7 @@ print_plan() {
   echo "secret_printing=false"
   echo "step=1 start local PostgreSQL: scripts/unix/bootstrap_local_mvp_db.sh --start-compose"
   echo "step=2 apply canonical SQL: scripts/unix/bootstrap_local_mvp_db.sh --apply-canonical"
-  echo "step=3 seed demo data: scripts/unix/bootstrap_local_mvp_db.sh --apply-dev-reset"
+  echo "step=3 seed local review data: scripts/unix/bootstrap_local_mvp_db.sh --apply-dev-reset"
   echo "step=4 compute scores: scripts/unix/bootstrap_local_mvp_db.sh --score-apply"
   echo "step=5 build RAG vectors: scripts/unix/bootstrap_local_mvp_db.sh --rag-apply"
   echo "step=6 write bundled public snapshot: scripts/unix/bootstrap_local_mvp_db.sh --snapshot-write"

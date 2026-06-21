@@ -39,7 +39,8 @@ without bundling a static API bearer token. After the contest window, switch
 back to OAuth or a backend-for-frontend proxy before disabling public contest
 access.
 
-Refresh the bundled snapshot from a canonical DB before a production demo:
+Refresh the bundled snapshot from a canonical DB only when preparing an
+offline review fallback:
 
 ```bash
 scripts/unix/plan_place_ai_enrichment.sh --dry-run-ai --limit 20
