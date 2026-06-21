@@ -7968,19 +7968,40 @@ String _dustSituationLabel(
   final pm25Grade = _dustPollutantGradeLabel(dust, 'pm25', language).trim();
   if (_isEnglish(language)) {
     final values = [
-      if (hasPm10) 'PM10 $pm10Grade',
-      if (hasPm25) 'PM2.5 $pm25Grade',
+      if (hasPm10)
+        _compactDustPart(label: 'PM10', value: pm10, grade: pm10Grade),
+      if (hasPm25)
+        _compactDustPart(label: 'PM2.5', value: pm25, grade: pm25Grade),
     ];
     if (values.isEmpty) {
       return includePrefix ? 'Dust $grade' : grade;
     }
     return [if (includePrefix) 'Dust', values.join(' · ')].join(' ');
   }
-  final values = [if (hasPm10) '미세 $pm10Grade', if (hasPm25) '초미세 $pm25Grade'];
+  final values = [
+    if (hasPm10) _compactDustPart(label: '미세', value: pm10, grade: pm10Grade),
+    if (hasPm25) _compactDustPart(label: '초미세', value: pm25, grade: pm25Grade),
+  ];
   if (values.isEmpty) {
     return includePrefix ? '미세먼지 $grade' : grade;
   }
   return [if (includePrefix) '미세먼지', values.join(' · ')].join(' ');
+}
+
+String _compactDustPart({
+  required String label,
+  required String value,
+  required String grade,
+}) {
+  final cleanedValue = value.trim();
+  final cleanedGrade = grade.trim();
+  if (cleanedValue.isEmpty) {
+    return '$label $cleanedGrade'.trim();
+  }
+  if (cleanedGrade.isEmpty) {
+    return '$label $cleanedValue';
+  }
+  return '$label $cleanedValue $cleanedGrade';
 }
 
 List<LalaPlace> _railPlaces(List<LalaPlace> places) {
