@@ -2,16 +2,13 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 import hashlib
-import logging
 from typing import Any
 
-from apps.api.app.core.observability import LOGGER_NAME
+from apps.api.app.core.errors import ServiceError
 from apps.api.app.schemas.docent import DocentAudioRequest, DocentScriptRequest
 from apps.api.app.services import ai_service, db_repository, speech_service
 from apps.api.app.services.normalization import display_language
 from apps.api.app.services.request_identity import generation_identity
-
-logger = logging.getLogger(LOGGER_NAME)
 
 
 def generate_script(request: DocentScriptRequest) -> dict:
@@ -22,7 +19,8 @@ def generate_script(request: DocentScriptRequest) -> dict:
     identity = script_identity(request, grounding_context=grounding_context)
     has_score_context = _has_score_context(request)
     has_grounding_context = bool(grounding_context)
-    if not has_score_context and not has_grounding_context:
+    has_request_context = _has_request_context(request)
+    if not has_score_context and not has_grounding_context and not has_request_context:
         cached = db_repository.fetch_docent_script_cache(
             place_id=request.place_id,
             category=request.category,
@@ -31,6 +29,15 @@ def generate_script(request: DocentScriptRequest) -> dict:
         )
         if cached:
             return {**cached, **_grounding_meta([]), **identity}
+        raise ServiceError(
+            status_code=422,
+            code="DOCENT_CONTEXT_REQUIRED",
+            message=(
+                "Docent script generation requires score context, "
+                "location/source context, or RAG grounding."
+            ),
+            retryable=False,
+        )
 
     generated_at = datetime.now(UTC).isoformat()
     if ai_service.live_ai_enabled():
@@ -43,28 +50,6 @@ def generate_script(request: DocentScriptRequest) -> dict:
         script = _rule_based_script(request, grounding_context=grounding_context)
         source = "rule_based_curation"
     ttl_sec = 604800
-    if source == "azure_openai" and not has_score_context and not has_grounding_context:
-        cache_saved = db_repository.save_docent_script_cache(
-            place_id=request.place_id,
-            category=request.category,
-            language=request.language,
-            mode=request.mode,
-            script=script,
-            source=source,
-            ttl_sec=ttl_sec,
-        )
-        if not cache_saved:
-            logger.warning(
-                (
-                    "docent_script_write_failed place_id=%s category=%s "
-                    "language=%s mode=%s source=%s"
-                ),
-                request.place_id,
-                request.category,
-                request.language,
-                request.mode,
-                source,
-            )
     return {
         "place_id": request.place_id,
         "category": request.category,
@@ -166,6 +151,19 @@ def _has_score_context(request: DocentScriptRequest) -> bool:
             request.demand_dispersion_score,
             request.weather_fit_score,
             request.culture_relevance_score,
+        )
+    )
+
+
+def _has_request_context(request: DocentScriptRequest) -> bool:
+    return any(
+        value is not None
+        for value in (
+            request.address,
+            request.region_ko,
+            request.region_en,
+            request.distance_m,
+            request.upstream_source,
         )
     )
 
@@ -429,6 +427,18 @@ def script_identity(
         )
     if grounding_context:
         payload["grounding_hash"] = _grounding_hash(grounding_context)
+    if _has_request_context(request):
+        payload.update(
+            {
+                "place_name": request.place_name,
+                "address": request.address,
+                "region_ko": request.region_ko,
+                "region_en": request.region_en,
+                "distance_m": request.distance_m,
+                "source": request.source,
+                "upstream_source": request.upstream_source,
+            }
+        )
     return generation_identity("docent_script", payload)
 
 

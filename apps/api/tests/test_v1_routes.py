@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import logging
-
 from apps.api.app.services import public_mvp_data
 
 
@@ -259,6 +257,10 @@ def test_docent_script_accepts_culture_venue_category(client, auth_headers):
         headers=auth_headers,
         json={
             "place_id": "culture-venue-1",
+            "place_name": "호암미술관",
+            "region_ko": "용인시",
+            "distance_m": 1478,
+            "upstream_source": "tour_api",
             "category": "culture_venue",
             "language": "ko",
             "mode": "brief",
@@ -455,6 +457,10 @@ def test_docent_script_accepts_legacy_detail_mode_and_english_language(
         headers=auth_headers,
         json={
             "place_id": " event-legacy ",
+            "place_name": "Legacy Event",
+            "region_en": "Suwon",
+            "distance_m": 640,
+            "upstream_source": "tour_api",
             "category": "event",
             "language": "English",
             "mode": "detail",
@@ -466,15 +472,19 @@ def test_docent_script_accepts_legacy_detail_mode_and_english_language(
     assert body["data"]["place_id"] == "event-legacy"
     assert body["data"]["language"] == "en"
     assert body["data"]["mode"] == "detail"
-    assert "event legacy" in body["data"]["script"]
-    assert "official tourism and culture data" in body["data"]["script"]
-    assert "local spending signals" in body["data"]["script"]
+    assert "Legacy Event" in body["data"]["script"]
+    assert "Suwon" in body["data"]["script"]
+    assert "640m from your current location" in body["data"]["script"]
     assert "skeleton" not in body["data"]["script"].lower()
 
 
 def test_docent_script_generation_identity_is_deterministic(client, auth_headers):
     payload = {
         "place_id": " event-identity ",
+        "place_name": "Identity Event",
+        "region_en": "Suwon",
+        "distance_m": 500,
+        "upstream_source": "tour_api",
         "category": "event",
         "language": "English",
         "mode": "detail",
@@ -546,6 +556,10 @@ def test_docent_script_uses_live_ai_when_enabled(client, auth_headers, monkeypat
         headers=auth_headers,
         json={
             "place_id": "event-2",
+            "place_name": "수원 야행",
+            "region_ko": "수원시",
+            "distance_m": 820,
+            "upstream_source": "kcisa",
             "category": "event",
             "language": "ko",
             "mode": "brief",
@@ -557,17 +571,7 @@ def test_docent_script_uses_live_ai_when_enabled(client, auth_headers, monkeypat
     assert body["ok"] is True
     assert body["data"]["source"] == "azure_openai"
     assert body["data"]["script"] == "AI script for event-2"
-    assert saved_calls == [
-        {
-            "place_id": "event-2",
-            "category": "event",
-            "language": "ko",
-            "mode": "brief",
-            "script": "AI script for event-2",
-            "source": "azure_openai",
-            "ttl_sec": 604800,
-        }
-    ]
+    assert saved_calls == []
 
 
 def test_docent_script_live_ai_score_context_does_not_write_generic_cache(
@@ -624,35 +628,25 @@ def test_docent_script_live_ai_score_context_does_not_write_generic_cache(
     assert saved_calls == []
 
 
-def test_docent_script_cache_write_failure_keeps_live_ai_response(
+def test_docent_script_live_ai_requires_grounded_context(
     client,
     auth_headers,
     monkeypatch,
-    caplog,
 ):
-    caplog.set_level(logging.WARNING, logger="lala_next.api")
     monkeypatch.setenv("LALA_ENABLE_LIVE_AI", "true")
     monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.openai.azure.com/")
     monkeypatch.setenv("AZURE_OPENAI_KEY", "test-key")
     monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini")
     monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2024-10-21")
-    saved_calls = []
     monkeypatch.setattr(
         "apps.api.app.services.db_repository.fetch_docent_script_cache",
         lambda **kwargs: None,
     )
     monkeypatch.setattr(
         "apps.api.app.services.ai_service.generate_docent_script_text",
-        lambda request, **kwargs: f"AI script for {request.place_id}",
-    )
-
-    def fail_write(**kwargs):
-        saved_calls.append(kwargs)
-        return False
-
-    monkeypatch.setattr(
-        "apps.api.app.services.db_repository.save_docent_script_cache",
-        fail_write,
+        lambda request, **kwargs: (_ for _ in ()).throw(
+            AssertionError("Live AI must not run without grounded context")
+        ),
     )
 
     response = client.post(
@@ -666,20 +660,10 @@ def test_docent_script_cache_write_failure_keeps_live_ai_response(
         },
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 422
     body = response.json()
-    assert body["ok"] is True
-    assert body["data"]["source"] == "azure_openai"
-    assert body["data"]["script"] == "AI script for event-write-fail"
-    assert len(saved_calls) == 1
-    rendered_logs = " ".join(
-        record.getMessage()
-        for record in caplog.records
-        if record.name == "lala_next.api"
-    )
-    assert "docent_script_write_failed" in rendered_logs
-    assert "event-write-fail" in rendered_logs
-    assert "AI script for event-write-fail" not in rendered_logs
+    assert body["ok"] is False
+    assert body["error"]["code"] == "DOCENT_CONTEXT_REQUIRED"
 
 
 def test_docent_script_live_ai_receives_rag_grounding_without_cache_write(
@@ -750,7 +734,7 @@ def test_docent_script_live_ai_receives_rag_grounding_without_cache_write(
     assert saved_calls == []
 
 
-def test_docent_script_rule_based_fallback_does_not_write_cache(
+def test_docent_script_requires_context_without_cache(
     client,
     auth_headers,
     monkeypatch,
@@ -777,16 +761,10 @@ def test_docent_script_rule_based_fallback_does_not_write_cache(
         },
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 422
     body = response.json()
-    assert body["data"]["source"] == "rule_based_curation"
-    assert body["data"]["script"]
-    assert "화성행궁" in body["data"]["script"]
-    assert "event-public" not in body["data"]["script"]
-    assert "인공지능" not in body["data"]["script"]
-    assert "대체됩니다" not in body["data"]["script"]
-    assert "skeleton" not in body["data"]["script"].lower()
-    assert "azure openai" not in body["data"]["script"].lower()
+    assert body["ok"] is False
+    assert body["error"]["code"] == "DOCENT_CONTEXT_REQUIRED"
     assert saved_calls == []
 
 
