@@ -15,6 +15,7 @@ class SmokeCase:
     path: str
     body: bytes | None = None
     response_kind: str = "json"
+    validator: str | None = None
 
     @property
     def route_label(self) -> str:
@@ -158,14 +159,25 @@ def _build_cases(*, profile: str) -> list[SmokeCase]:
 
 def _build_deploy_cases() -> list[SmokeCase]:
     location = {"lat": 37.5665, "lng": 126.9780, "radius_m": 50000}
-    place_query = parse.urlencode({**location, "category": "all", "language": "ko"})
+    place_query = parse.urlencode(
+        {**location, "category": "all", "language": "ko", "include_scores": "true"}
+    )
     weather_query = parse.urlencode(location)
     return [
-        SmokeCase("GET", f"/api/v1/places?{place_query}"),
-        SmokeCase("GET", f"/api/v1/weather?{weather_query}"),
-        SmokeCase("GET", f"/api/v1/plans/intervention?{weather_query}"),
+        SmokeCase("GET", f"/api/v1/places?{place_query}", validator="places_live_data"),
         SmokeCase(
-            "POST", "/api/v1/plans/daily", _json_body({**location, "language": "ko"})
+            "GET", f"/api/v1/weather?{weather_query}", validator="weather_live_data"
+        ),
+        SmokeCase(
+            "GET",
+            f"/api/v1/plans/intervention?{weather_query}",
+            validator="intervention_live_data",
+        ),
+        SmokeCase(
+            "POST",
+            "/api/v1/plans/daily",
+            _json_body({**location, "language": "ko"}),
+            validator="daily_plan_live_data",
         ),
         SmokeCase(
             "POST",
@@ -179,6 +191,7 @@ def _build_deploy_cases() -> list[SmokeCase]:
                     "mode": "brief",
                 }
             ),
+            validator="docent_quality",
         ),
         SmokeCase(
             "POST",
@@ -287,7 +300,140 @@ def _run_case(
         return SmokeFailure(case=case, status=status, reason="invalid_json")
     if payload.get("ok") is not True:
         return SmokeFailure(case=case, status=status, reason="ok_false")
+    validation_failure = _validate_payload(case.validator, payload)
+    if validation_failure:
+        return SmokeFailure(case=case, status=status, reason=validation_failure)
     return None
+
+
+def _validate_payload(validator: str | None, payload: dict[str, Any]) -> str | None:
+    if not validator:
+        return None
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        return "missing_data_object"
+    return {
+        "places_live_data": _validate_places_live_data,
+        "weather_live_data": _validate_weather_live_data,
+        "intervention_live_data": _validate_intervention_live_data,
+        "daily_plan_live_data": _validate_daily_plan_live_data,
+        "docent_quality": _validate_docent_quality,
+    }[validator](data)
+
+
+def _validate_places_live_data(data: dict[str, Any]) -> str | None:
+    if _is_fallback_source(data.get("source")):
+        return "places_source_not_live_db"
+    places = data.get("places")
+    if not isinstance(places, list) or not places:
+        return "places_empty"
+    if any(
+        _is_fallback_source(place.get("source"))
+        for place in places
+        if isinstance(place, dict)
+    ):
+        return "place_contains_fallback_source"
+    if any(
+        str(place.get("upstream_source") or "").strip() == "dev_seed"
+        for place in places
+        if isinstance(place, dict)
+    ):
+        return "place_contains_dev_seed"
+    if any(
+        _looks_synthetic_image_url(place.get("image_url"))
+        for place in places
+        if isinstance(place, dict)
+    ):
+        return "place_contains_synthetic_image"
+    if not any(
+        _has_live_score(place.get("score"))
+        for place in places
+        if isinstance(place, dict)
+    ):
+        return "places_missing_live_score"
+    return None
+
+
+def _validate_weather_live_data(data: dict[str, Any]) -> str | None:
+    if _is_fallback_source(data.get("source")):
+        return "weather_source_not_live"
+    if not str(data.get("temp") or "").strip():
+        return "weather_missing_temperature"
+    dust = data.get("dust")
+    if not isinstance(dust, dict):
+        return "weather_missing_dust"
+    pm10_grade = str(dust.get("pm10_grade") or "").strip()
+    pm25_grade = str(dust.get("pm25_grade") or "").strip()
+    if pm10_grade in {"", "unknown"} or pm25_grade in {"", "unknown"}:
+        return "weather_missing_dust_split"
+    return None
+
+
+def _validate_intervention_live_data(data: dict[str, Any]) -> str | None:
+    if _is_fallback_source(data.get("source")):
+        return "intervention_source_not_live"
+    place = data.get("place")
+    if isinstance(place, dict) and _is_fallback_source(place.get("source")):
+        return "intervention_place_not_live"
+    return None
+
+
+def _validate_daily_plan_live_data(data: dict[str, Any]) -> str | None:
+    if _is_fallback_source(data.get("source")):
+        return "daily_plan_source_not_live"
+    slots = data.get("slots")
+    if not isinstance(slots, list) or not slots:
+        return "daily_plan_empty_slots"
+    for slot in slots:
+        if not isinstance(slot, dict):
+            continue
+        place = slot.get("place")
+        if isinstance(place, dict) and _is_fallback_source(place.get("source")):
+            return "daily_plan_place_not_live"
+    return None
+
+
+def _validate_docent_quality(data: dict[str, Any]) -> str | None:
+    if _is_fallback_source(data.get("source")):
+        return "docent_source_not_live"
+    script = str(data.get("script") or "").strip()
+    if len(script) < 40:
+        return "docent_script_too_short"
+    lowered = script.lower()
+    if any(term in lowered for term in ("skeleton", "placeholder", "mock", "demo")):
+        return "docent_script_contains_placeholder"
+    return None
+
+
+def _is_fallback_source(value: Any) -> bool:
+    source = str(value or "").strip()
+    if not source:
+        return False
+    lowered = source.lower()
+    return lowered in {
+        "public_mvp_snapshot",
+        "demo_fallback",
+        "demo_seed",
+        "dev_seed",
+        "fallback",
+        "skeleton",
+        "unavailable",
+    } or lowered.endswith("_fallback")
+
+
+def _looks_synthetic_image_url(value: Any) -> bool:
+    url = str(value or "").strip().lower()
+    return any(token in url for token in ("mock", "placeholder", "lorem", "dummy"))
+
+
+def _has_live_score(value: Any) -> bool:
+    if not isinstance(value, dict):
+        return False
+    data_basis = str(value.get("data_basis") or "").strip()
+    return (
+        data_basis == "analytics.place_score_snapshots"
+        and value.get("final_score") is not None
+    )
 
 
 def _request_json(

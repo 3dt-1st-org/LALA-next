@@ -89,6 +89,15 @@ class _SmokeHandler(BaseHTTPRequestHandler):
             ):
                 self._write_json({"ok": False}, status=401)
                 return
+            if path == "/api/v1/places":
+                self._write_json(self.server.places_payload)
+                return
+            if path == "/api/v1/weather":
+                self._write_json(self.server.weather_payload)
+                return
+            if path == "/api/v1/plans/intervention":
+                self._write_json(self.server.intervention_payload)
+                return
             self._write_json({"ok": True, "data": {}})
             return
         self._write_json({"ok": False}, status=404)
@@ -106,9 +115,13 @@ class _SmokeHandler(BaseHTTPRequestHandler):
             if path == "/api/v1/docents/audio":
                 self._write_bytes(b"ID3smoke-audio", content_type="audio/mpeg")
                 return
-            self._write_json(
-                {"ok": True, "data": {"source": "rule_based_curation", "script": "ok"}}
-            )
+            if path == "/api/v1/plans/daily":
+                self._write_json(self.server.daily_plan_payload)
+                return
+            if path == "/api/v1/docents/script":
+                self._write_json(self.server.docent_payload)
+                return
+            self._write_json({"ok": True, "data": {}})
             return
         self._write_json({"ok": False}, status=404)
 
@@ -136,6 +149,11 @@ class _SmokeServer(ThreadingHTTPServer):
     ready_status: str
     data_mode: str
     static_snapshot_fallback: str
+    places_payload: dict[str, Any]
+    weather_payload: dict[str, Any]
+    intervention_payload: dict[str, Any]
+    daily_plan_payload: dict[str, Any]
+    docent_payload: dict[str, Any]
 
 
 def _run_smoke(
@@ -206,6 +224,11 @@ def _start_server(
     ready_status: str = "ok",
     data_mode: str = "db-backed",
     static_snapshot_fallback: str = "disabled",
+    places_payload: dict[str, Any] | None = None,
+    weather_payload: dict[str, Any] | None = None,
+    intervention_payload: dict[str, Any] | None = None,
+    daily_plan_payload: dict[str, Any] | None = None,
+    docent_payload: dict[str, Any] | None = None,
 ) -> tuple[_SmokeServer, threading.Thread, str]:
     server = _SmokeServer(("127.0.0.1", 0), _SmokeHandler)
     server.protected_paths = []
@@ -213,10 +236,93 @@ def _start_server(
     server.ready_status = ready_status
     server.data_mode = data_mode
     server.static_snapshot_fallback = static_snapshot_fallback
+    server.places_payload = places_payload or _live_places_payload()
+    server.weather_payload = weather_payload or _live_weather_payload()
+    server.intervention_payload = intervention_payload or _live_intervention_payload()
+    server.daily_plan_payload = daily_plan_payload or _live_daily_plan_payload()
+    server.docent_payload = docent_payload or _live_docent_payload()
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     host, port = server.server_address
     return server, thread, f"http://{host}:{port}"
+
+
+def _live_place() -> dict[str, Any]:
+    return {
+        "place_id": "tour-api-1",
+        "name": "중랑아트센터",
+        "category": "culture_venue",
+        "source": "db",
+        "upstream_source": "tour_api",
+        "image_url": "https://tong.visitkorea.or.kr/cms/resource/01/1_image2_1.jpg",
+        "score": {
+            "final_score": 0.83,
+            "data_basis": "analytics.place_score_snapshots",
+        },
+    }
+
+
+def _live_places_payload() -> dict[str, Any]:
+    return {
+        "ok": True,
+        "data": {
+            "source": "db",
+            "count": 1,
+            "places": [_live_place()],
+        },
+    }
+
+
+def _live_weather_payload() -> dict[str, Any]:
+    return {
+        "ok": True,
+        "data": {
+            "source": "kma_ultra_srt_ncst+airkorea_sido_realtime",
+            "temp": "23.4",
+            "dust": {
+                "pm10": "6",
+                "pm25": "1",
+                "grade": "good",
+                "pm10_grade": "good",
+                "pm25_grade": "good",
+            },
+        },
+    }
+
+
+def _live_intervention_payload() -> dict[str, Any]:
+    return {
+        "ok": True,
+        "data": {
+            "source": "db",
+            "should_intervene": False,
+            "place": _live_place(),
+        },
+    }
+
+
+def _live_daily_plan_payload() -> dict[str, Any]:
+    return {
+        "ok": True,
+        "data": {
+            "source": "db",
+            "slots": [
+                {"period": "morning", "title": "문화 산책", "place": _live_place()}
+            ],
+        },
+    }
+
+
+def _live_docent_payload() -> dict[str, Any]:
+    return {
+        "ok": True,
+        "data": {
+            "source": "rule_based_curation",
+            "script": "중랑아트센터의 문화 맥락과 주변 로컬 경험을 함께 설명하는 도슨트 스크립트입니다.",
+            "grounding_count": 1,
+            "grounding_sources": ["place_profile"],
+        },
+    }
 
 
 def test_unix_smoke_skips_mismatched_api_key_instead_of_failing_with_401():
@@ -339,6 +445,62 @@ def test_unix_matrix_smoke_deploy_profile_rejects_snapshot_fallback_mode():
     assert "checked=0" in result.stdout
     assert "data_mode_not_db_backed" in result.stderr
     assert server.protected_paths == []
+
+
+def test_unix_matrix_smoke_deploy_profile_rejects_snapshot_place_payload():
+    snapshot_payload = _live_places_payload()
+    snapshot_payload["data"]["source"] = "public_mvp_snapshot"
+    snapshot_payload["data"]["places"][0]["source"] = "public_mvp_snapshot"
+
+    server, thread, base_url = _start_server(
+        public_access=True, places_payload=snapshot_payload
+    )
+    try:
+        result = _run_matrix_smoke(base_url, {}, profile="deploy")
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+    assert result.returncode != 0
+    assert "profile=deploy" in result.stdout
+    assert "places_source_not_live_db" in result.stderr
+    assert "/api/v1/places" in server.protected_paths
+
+
+def test_unix_matrix_smoke_deploy_profile_rejects_unknown_dust_split():
+    weather_payload = _live_weather_payload()
+    weather_payload["data"]["dust"]["pm25_grade"] = "unknown"
+
+    server, thread, base_url = _start_server(
+        public_access=True, weather_payload=weather_payload
+    )
+    try:
+        result = _run_matrix_smoke(base_url, {}, profile="deploy")
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+    assert result.returncode != 0
+    assert "weather_missing_dust_split" in result.stderr
+    assert "/api/v1/weather" in server.protected_paths
+
+
+def test_unix_matrix_smoke_deploy_profile_rejects_placeholder_docent():
+    docent_payload = _live_docent_payload()
+    docent_payload["data"]["script"] = "placeholder"
+
+    server, thread, base_url = _start_server(
+        public_access=True, docent_payload=docent_payload
+    )
+    try:
+        result = _run_matrix_smoke(base_url, {}, profile="deploy")
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+    assert result.returncode != 0
+    assert "docent_script_too_short" in result.stderr
+    assert "/api/v1/docents/script" in server.protected_paths
 
 
 def test_unix_matrix_smoke_uses_public_contest_access_without_auth_headers():
