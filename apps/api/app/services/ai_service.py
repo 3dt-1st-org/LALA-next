@@ -17,7 +17,11 @@ def live_ai_enabled() -> bool:
     )
 
 
-def generate_docent_script_text(request: DocentScriptRequest) -> str:
+def generate_docent_script_text(
+    request: DocentScriptRequest,
+    *,
+    grounding_context: list[dict] | None = None,
+) -> str:
     settings = get_settings()
     if not live_ai_enabled():
         raise ServiceError(
@@ -43,7 +47,10 @@ def generate_docent_script_text(request: DocentScriptRequest) -> str:
     )
     language = display_language(request.language)
     place_name = request.place_name or request.place_id
-    context = _docent_context_prompt(request)
+    context = _docent_context_prompt(
+        request,
+        grounding_context=grounding_context or [],
+    )
     prompt = (
         f"Write a {request.mode} mobile docent script in {language}. "
         f"Category: {request.category}. Place: {place_name}. "
@@ -87,7 +94,11 @@ def generate_docent_script_text(request: DocentScriptRequest) -> str:
     return text
 
 
-def _docent_context_prompt(request: DocentScriptRequest) -> str:
+def _docent_context_prompt(
+    request: DocentScriptRequest,
+    *,
+    grounding_context: list[dict] | None = None,
+) -> str:
     parts: list[str] = []
     if request.address:
         parts.append(f"Address: {request.address}.")
@@ -102,6 +113,9 @@ def _docent_context_prompt(request: DocentScriptRequest) -> str:
     score_context = _score_context_prompt(request)
     if score_context:
         parts.append(score_context)
+    grounding_prompt = _grounding_context_prompt(grounding_context or [])
+    if grounding_prompt:
+        parts.append(grounding_prompt)
     return " ".join(parts)
 
 
@@ -110,11 +124,15 @@ def _score_context_prompt(request: DocentScriptRequest) -> str:
     if request.final_score is not None:
         score_parts.append(f"overall recommendation score {request.final_score:.2f}")
     if request.local_spending_score is not None:
-        score_parts.append(f"domestic spending score {request.local_spending_score:.2f}")
+        score_parts.append(
+            f"domestic spending score {request.local_spending_score:.2f}"
+        )
     if request.small_merchant_fit_score is not None:
         score_parts.append(f"small merchant fit {request.small_merchant_fit_score:.2f}")
     if request.demand_dispersion_score is not None:
-        score_parts.append(f"tourism demand dispersion {request.demand_dispersion_score:.2f}")
+        score_parts.append(
+            f"tourism demand dispersion {request.demand_dispersion_score:.2f}"
+        )
     if request.weather_fit_score is not None:
         score_parts.append(f"weather fit {request.weather_fit_score:.2f}")
     if request.culture_relevance_score is not None:
@@ -122,3 +140,26 @@ def _score_context_prompt(request: DocentScriptRequest) -> str:
     if not score_parts:
         return ""
     return "Recommendation evidence: " + "; ".join(score_parts) + "."
+
+
+def _grounding_context_prompt(grounding_context: list[dict]) -> str:
+    snippets: list[str] = []
+    for item in grounding_context[:3]:
+        source_type = str(item.get("source_type") or "unknown").strip()
+        title = str(item.get("title_ko") or "").strip()
+        body = str(item.get("body_ko") or item.get("body_en") or "").strip()
+        body = " ".join(body.split())
+        if not body:
+            continue
+        if len(body) > 260:
+            body = body[:257].rstrip() + "..."
+        label = source_type
+        if title:
+            label += f" / {title}"
+        snippets.append(f"- {label}: {body}")
+    if not snippets:
+        return ""
+    return (
+        "Grounding snippets from LALA RAG knowledge index. Use them when relevant, "
+        "and do not invent facts beyond them:\n" + "\n".join(snippets)
+    )

@@ -729,6 +729,8 @@ def _docent_script_data_schema() -> dict[str, Any]:
             },
             "generated_at": {"type": "string", "nullable": True},
             "ttl_sec": {"type": "integer", "nullable": True},
+            "grounding_count": {"type": "integer"},
+            "grounding_sources": {"type": "array", "items": {"type": "string"}},
             "request_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
             "cache_key": {"type": "string"},
         },

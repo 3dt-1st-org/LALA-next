@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import closing
 from datetime import UTC, datetime
+import json
 import math
 from typing import Any
 
@@ -546,6 +547,73 @@ def fetch_docent_script_cache(
     }
 
 
+def fetch_docent_knowledge_context(
+    *,
+    place_id: str,
+    limit: int = 3,
+) -> list[dict[str, Any]]:
+    dsn = get_settings().db_dsn
+    if not dsn or not place_id.strip() or limit <= 0:
+        return []
+    try:
+        import psycopg2
+        from psycopg2.extras import RealDictCursor
+    except Exception:
+        return []
+
+    sql = """
+        SELECT
+            source_type,
+            source_id,
+            source_table,
+            title_ko,
+            body_ko,
+            body_en,
+            metadata,
+            content_sha256,
+            updated_at
+        FROM rag.knowledge_chunks
+        WHERE place_id = %s
+          AND NULLIF(TRIM(body_ko), '') IS NOT NULL
+        ORDER BY
+            CASE source_type
+                WHEN 'place_profile' THEN 0
+                WHEN 'culture_event' THEN 1
+                WHEN 'place_mention' THEN 2
+                WHEN 'weather_context' THEN 3
+                ELSE 4
+            END,
+            updated_at DESC,
+            source_id
+        LIMIT %s
+    """
+    try:
+        with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(sql, (place_id.strip(), limit))
+                rows = cur.fetchall()
+    except Exception:
+        return []
+
+    return [
+        {
+            "source_type": str(row.get("source_type") or ""),
+            "source_id": str(row.get("source_id") or ""),
+            "source_table": str(row.get("source_table") or ""),
+            "title_ko": _optional_text(row.get("title_ko")),
+            "body_ko": str(row.get("body_ko") or "").strip(),
+            "body_en": _optional_text(row.get("body_en")),
+            "metadata": _json_object(row.get("metadata")),
+            "content_sha256": _optional_text(row.get("content_sha256")),
+            "updated_at": row.get("updated_at").isoformat()
+            if row.get("updated_at")
+            else None,
+        }
+        for row in rows
+        if str(row.get("body_ko") or "").strip()
+    ]
+
+
 def save_docent_script_cache(
     *,
     place_id: str,
@@ -622,3 +690,26 @@ def _remaining_ttl_sec(expires_at: Any) -> int:
         now = datetime.now(expires_at_aware.tzinfo)
         return max(0, int((expires_at_aware - now).total_seconds()))
     return 0
+
+
+def _optional_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _json_object(value: Any) -> dict[str, Any]:
+    if not value:
+        return {}
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return {"value": value}
+        if isinstance(parsed, dict):
+            return parsed
+        return {"value": parsed}
+    return {"value": value}

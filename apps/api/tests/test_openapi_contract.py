@@ -296,6 +296,13 @@ def test_openapi_documents_v1_success_data_schemas(client):
         "db_cache",
         "azure_openai",
     ]
+    assert schemas["DocentScriptData"]["properties"]["grounding_count"] == {
+        "type": "integer"
+    }
+    assert schemas["DocentScriptData"]["properties"]["grounding_sources"] == {
+        "type": "array",
+        "items": {"type": "string"},
+    }
     assert schemas["DocentScriptData"]["properties"]["category"]["enum"] == [
         "attraction",
         "restaurant",

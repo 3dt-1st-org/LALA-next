@@ -371,6 +371,62 @@ def test_fetch_latest_weather_marks_latest_fallback_without_region_match(monkeyp
     assert weather["dust"]["pm25_grade"] == "good"
 
 
+def test_fetch_docent_knowledge_context_reads_place_rag_chunks(monkeypatch):
+    captured = {}
+
+    class FakeCursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def execute(self, sql, params):
+            captured["sql"] = sql
+            captured["params"] = params
+
+        def fetchall(self):
+            return [
+                {
+                    "source_type": "place_profile",
+                    "source_id": "place:tour-1",
+                    "source_table": "rag.knowledge_chunks",
+                    "title_ko": "수원화성",
+                    "body_ko": "장소명은 수원화성입니다. 지역 소비와 산책 동선이 함께 연결됩니다.",
+                    "body_en": "Suwon Hwaseong connects local spending and a walking route.",
+                    "metadata": '{"category":"attraction"}',
+                    "content_sha256": "abc123",
+                    "updated_at": datetime.now(UTC),
+                }
+            ]
+
+    class FakeConnection:
+        def cursor(self, cursor_factory=None):
+            captured["cursor_factory"] = cursor_factory
+            return FakeCursor()
+
+        def close(self):
+            return None
+
+    psycopg2_module = types.ModuleType("psycopg2")
+    psycopg2_module.connect = lambda dsn, connect_timeout: FakeConnection()
+    extras_module = types.ModuleType("psycopg2.extras")
+    extras_module.RealDictCursor = object()
+    monkeypatch.setitem(sys.modules, "psycopg2", psycopg2_module)
+    monkeypatch.setitem(sys.modules, "psycopg2.extras", extras_module)
+    monkeypatch.setenv("DB_DSN", "postgresql://db.example/lala")
+
+    context = db_repository.fetch_docent_knowledge_context(place_id=" tour-1 ")
+
+    assert len(context) == 1
+    assert context[0]["source_type"] == "place_profile"
+    assert context[0]["title_ko"] == "수원화성"
+    assert context[0]["metadata"] == {"category": "attraction"}
+    assert "FROM rag.knowledge_chunks" in captured["sql"]
+    assert "ORDER BY" in captured["sql"]
+    assert captured["params"] == ("tour-1", 3)
+
+
 def test_remaining_ttl_sec_reports_future_expiry():
     ttl = db_repository._remaining_ttl_sec(datetime.now(UTC) + timedelta(seconds=90))
 

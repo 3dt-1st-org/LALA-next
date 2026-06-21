@@ -305,6 +305,59 @@ def test_docent_script_uses_db_cache_before_generation(
     assert body["data"]["cache_key"].startswith("docent_script:")
 
 
+def test_docent_script_uses_rag_grounding_before_generic_cache(
+    client,
+    auth_headers,
+    monkeypatch,
+):
+    def fail_if_cache_is_read(**kwargs):
+        raise AssertionError(
+            "RAG-grounded docent generation must not use generic cache"
+        )
+
+    monkeypatch.setattr(
+        "apps.api.app.services.db_repository.fetch_docent_script_cache",
+        fail_if_cache_is_read,
+    )
+    monkeypatch.setattr(
+        "apps.api.app.services.db_repository.fetch_docent_knowledge_context",
+        lambda **kwargs: [
+            {
+                "source_type": "place_profile",
+                "source_id": "place:rag-place",
+                "source_table": "rag.knowledge_chunks",
+                "title_ko": "화성행궁",
+                "body_ko": "장소명은 화성행궁입니다. 지역 소비와 야간 산책 동선이 함께 묶이는 명소입니다.",
+                "body_en": "Hwaseong Haenggung connects local spending with a night walk route.",
+                "metadata": {},
+                "content_sha256": "rag-sha",
+                "updated_at": "2026-06-21T00:00:00+00:00",
+            }
+        ],
+    )
+
+    response = client.post(
+        "/api/v1/docents/script",
+        headers=auth_headers,
+        json={
+            "place_id": "rag-place",
+            "place_name": "화성행궁",
+            "category": "attraction",
+            "language": "ko",
+            "mode": "brief",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["data"]["source"] == "rule_based_curation"
+    assert body["data"]["grounding_count"] == 1
+    assert body["data"]["grounding_sources"] == ["place_profile"]
+    assert "장소 지식 인덱스" in body["data"]["script"]
+    assert "야간 산책 동선" in body["data"]["script"]
+    assert body["data"]["cache_key"].startswith("docent_script:")
+
+
 def test_docent_script_score_context_skips_stale_cache(
     client, auth_headers, monkeypatch
 ):
@@ -428,7 +481,7 @@ def test_docent_script_uses_live_ai_when_enabled(client, auth_headers, monkeypat
     )
     monkeypatch.setattr(
         "apps.api.app.services.ai_service.generate_docent_script_text",
-        lambda request: f"AI script for {request.place_id}",
+        lambda request, **kwargs: f"AI script for {request.place_id}",
     )
     monkeypatch.setattr(
         "apps.api.app.services.db_repository.save_docent_script_cache",
@@ -486,7 +539,7 @@ def test_docent_script_live_ai_score_context_does_not_write_generic_cache(
     )
     monkeypatch.setattr(
         "apps.api.app.services.ai_service.generate_docent_script_text",
-        lambda request: prompts.append(request) or "AI score-aware script",
+        lambda request, **kwargs: prompts.append(request) or "AI score-aware script",
     )
     monkeypatch.setattr(
         "apps.api.app.services.db_repository.save_docent_script_cache",
@@ -537,7 +590,7 @@ def test_docent_script_cache_write_failure_keeps_live_ai_response(
     )
     monkeypatch.setattr(
         "apps.api.app.services.ai_service.generate_docent_script_text",
-        lambda request: f"AI script for {request.place_id}",
+        lambda request, **kwargs: f"AI script for {request.place_id}",
     )
 
     def fail_write(**kwargs):
@@ -574,6 +627,74 @@ def test_docent_script_cache_write_failure_keeps_live_ai_response(
     assert "docent_script_write_failed" in rendered_logs
     assert "event-write-fail" in rendered_logs
     assert "AI script for event-write-fail" not in rendered_logs
+
+
+def test_docent_script_live_ai_receives_rag_grounding_without_cache_write(
+    client,
+    auth_headers,
+    monkeypatch,
+):
+    monkeypatch.setenv("LALA_ENABLE_LIVE_AI", "true")
+    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.openai.azure.com/")
+    monkeypatch.setenv("AZURE_OPENAI_KEY", "test-key")
+    monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini")
+    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2024-10-21")
+    grounding_calls = []
+    saved_calls = []
+
+    def fail_if_cache_is_read(**kwargs):
+        raise AssertionError(
+            "RAG-grounded live AI generation must not use generic cache"
+        )
+
+    monkeypatch.setattr(
+        "apps.api.app.services.db_repository.fetch_docent_script_cache",
+        fail_if_cache_is_read,
+    )
+    monkeypatch.setattr(
+        "apps.api.app.services.db_repository.fetch_docent_knowledge_context",
+        lambda **kwargs: [
+            {
+                "source_type": "culture_event",
+                "source_id": "event:1",
+                "source_table": "rag.knowledge_chunks",
+                "title_ko": "수원 야행",
+                "body_ko": "야간 문화행사와 주변 골목 소비를 연결하는 행사입니다.",
+                "metadata": {},
+                "content_sha256": "event-sha",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        "apps.api.app.services.ai_service.generate_docent_script_text",
+        lambda request, **kwargs: (
+            grounding_calls.append(kwargs["grounding_context"]) or "AI grounded script"
+        ),
+    )
+    monkeypatch.setattr(
+        "apps.api.app.services.db_repository.save_docent_script_cache",
+        lambda **kwargs: saved_calls.append(kwargs) or True,
+    )
+
+    response = client.post(
+        "/api/v1/docents/script",
+        headers=auth_headers,
+        json={
+            "place_id": "event-grounded",
+            "category": "event",
+            "language": "ko",
+            "mode": "brief",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["data"]["source"] == "azure_openai"
+    assert body["data"]["script"] == "AI grounded script"
+    assert body["data"]["grounding_count"] == 1
+    assert body["data"]["grounding_sources"] == ["culture_event"]
+    assert grounding_calls[0][0]["source_id"] == "event:1"
+    assert saved_calls == []
 
 
 def test_docent_script_rule_based_fallback_does_not_write_cache(

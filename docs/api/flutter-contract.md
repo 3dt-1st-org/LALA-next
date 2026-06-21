@@ -204,7 +204,22 @@ Request:
 user-facing localized place name instead of an internal source id.
 `mode` accepts `brief`, `detail`, `standard`, and `deep`.
 Success data includes `request_hash` and `cache_key` for idempotency-aware
-client flows.
+client flows. When `DB_DSN` is configured, the API also reads
+`rag.knowledge_chunks` for the same `place_id` and includes relevant place,
+event, mention, or weather context in the generated script. The response exposes
+only non-sensitive grounding metadata:
+
+```json
+{
+  "grounding_count": 2,
+  "grounding_sources": ["place_profile", "culture_event"]
+}
+```
+
+If grounding context exists, the route skips generic `travel.docent_scripts`
+cache reads and writes so an older ungrounded script cannot hide fresh RAG
+context. If no grounding context exists, the route can still use the non-expired
+script cache described below.
 
 ### `POST /api/v1/docents/audio`
 
@@ -411,13 +426,16 @@ OpenAI settings, `POST /api/v1/docents/script` uses the configured deployment
 and returns `source: "azure_openai"`. Otherwise it returns a deterministic
 rule-based local curation script with `source: "rule_based_curation"`.
 
-If `DB_DSN` is configured and `travel.docent_scripts` has a matching non-expired
-entry, the script route returns the cached script before calling Azure OpenAI.
-Those cache hits return `source: "db_cache"` and `ttl_sec` as the approximate
-remaining seconds until `expires_at`.
+If `DB_DSN` is configured, `rag.knowledge_chunks` is checked before generation
+for same-place grounding snippets. If no score or RAG grounding context is
+present and `travel.docent_scripts` has a matching non-expired entry, the script
+route returns the cached script before calling Azure OpenAI. Those cache hits
+return `source: "db_cache"` and `ttl_sec` as the approximate remaining seconds
+until `expires_at`.
 When live Azure OpenAI generation succeeds and `DB_DSN` is configured, the route
-best-effort writes the generated script back to `travel.docent_scripts`.
-Database write failures do not fail the API response.
+best-effort writes the generated script back to `travel.docent_scripts` only for
+generic, non-score, non-RAG requests. Database write failures do not fail the API
+response.
 
 ## Live Speech
 
