@@ -316,6 +316,36 @@ void main() {
     expect(find.text('추천 장소 접기'), findsOneWidget);
   });
 
+  testWidgets('continues location recommendations when readiness is slow', (
+    tester,
+  ) async {
+    final backends = <FakeBackend>[];
+    final locationProvider = FakeLocationProvider(
+      const LalaLocationResult.found(LalaLocation(lat: 37.5665, lng: 126.9780)),
+    );
+
+    await tester.pumpWidget(
+      TestLalaApp(
+        backendFactory: (config) {
+          final backend = FakeBackend(config, failReadinessLoad: true);
+          backends.add(backend);
+          return backend;
+        },
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+        locationProvider: locationProvider,
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(locationProvider.requests, 1);
+    expect(backends.last.placesRequestConfigs.single.lat, 37.5665);
+    expect(backends.last.weatherRequestConfigs.single.lat, 37.5665);
+    expect(backends.last.dailyPlanRequests, 1);
+    expect(find.text('추천 장소 접기'), findsOneWidget);
+    expect(find.textContaining('요청을 처리하지 못했습니다'), findsNothing);
+  });
+
   testWidgets(
     'shows current location startup state while permission is pending',
     (tester) async {
@@ -1928,6 +1958,7 @@ class FakeBackend implements LalaBackend {
   FakeBackend(
     this.config, {
     this.failAuthenticatedLoad = false,
+    this.failReadinessLoad = false,
     this.shouldIntervene = false,
     this.liveSpeech = true,
     this.places,
@@ -1936,6 +1967,7 @@ class FakeBackend implements LalaBackend {
 
   final LalaAppConfig config;
   final bool failAuthenticatedLoad;
+  final bool failReadinessLoad;
   final bool shouldIntervene;
   final bool liveSpeech;
   final List<LalaPlace>? places;
@@ -1960,6 +1992,15 @@ class FakeBackend implements LalaBackend {
 
   @override
   Future<LalaEnvelope<LalaReadiness>> getReadiness() async {
+    if (failReadinessLoad) {
+      throw const LalaApiException(
+        code: 'UPSTREAM_TIMEOUT',
+        message: 'Readiness route timed out.',
+        statusCode: 504,
+        retryable: true,
+        requestId: 'slow-readyz',
+      );
+    }
     final authMode = config.authMode;
     return _envelope(
       LalaReadiness(

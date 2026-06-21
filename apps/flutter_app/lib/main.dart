@@ -563,18 +563,29 @@ class _LalaHomePageState extends State<LalaHomePage> {
     _backend = widget.backendFactory(config);
 
     try {
-      final health = await _backend.getHealth();
-      final readiness = await _backend.getReadiness();
       final loadErrors = <String>[];
-      Future<T?> loadOptional<T>(Future<T> Function() loader) async {
+      Future<T?> loadOptional<T>(
+        Future<T> Function() loader, {
+        bool reportError = true,
+      }) async {
         try {
           return await loader();
         } on Object catch (error) {
-          loadErrors.add(_safeErrorMessage(error));
+          if (reportError) {
+            loadErrors.add(_safeErrorMessage(error));
+          }
           return null;
         }
       }
 
+      final previousHealth = _health;
+      final previousReadiness = _readiness;
+      final health =
+          await loadOptional(_backend.getHealth, reportError: false) ??
+          previousHealth;
+      final readiness =
+          await loadOptional(_backend.getReadiness, reportError: false) ??
+          previousReadiness;
       final shouldReloadWeather = shouldReloadWeatherForMapMove(
         force: forceWeather,
         hasWeather: _weather?.data != null,
