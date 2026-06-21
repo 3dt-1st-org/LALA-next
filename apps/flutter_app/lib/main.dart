@@ -78,6 +78,7 @@ class LalaAppConfig {
     this.lat = 37.2636,
     this.lng = 127.0286,
     this.radiusM = 3000,
+    this.placeLimit = 60,
     this.category = 'all',
     this.lang = 'ko',
     this.requireLocationStartConfirmation = false,
@@ -94,6 +95,7 @@ class LalaAppConfig {
       lat = 37.2636,
       lng = 127.0286,
       radiusM = 3000,
+      placeLimit = 60,
       category = const String.fromEnvironment(
         'LALA_PLACE_CATEGORY',
         defaultValue: 'all',
@@ -114,6 +116,7 @@ class LalaAppConfig {
   final double lat;
   final double lng;
   final int radiusM;
+  final int placeLimit;
   final String category;
   final String lang;
   final bool requireLocationStartConfirmation;
@@ -130,6 +133,7 @@ class LalaAppConfig {
     double? lat,
     double? lng,
     int? radiusM,
+    int? placeLimit,
     String? category,
     String? lang,
     bool? requireLocationStartConfirmation,
@@ -142,6 +146,7 @@ class LalaAppConfig {
       lat: lat ?? this.lat,
       lng: lng ?? this.lng,
       radiusM: radiusM ?? this.radiusM,
+      placeLimit: placeLimit ?? this.placeLimit,
       category: category ?? this.category,
       lang: lang ?? this.lang,
       requireLocationStartConfirmation:
@@ -350,6 +355,7 @@ class LalaApiBackend implements LalaBackend {
       lat: config.lat,
       lng: config.lng,
       radiusM: config.radiusM,
+      limit: config.placeLimit,
       category: config.category,
       lang: config.lang,
       includeScores: true,
@@ -6350,7 +6356,7 @@ List<KakaoMapPlace> clusterMapPlacesForMap({
   final selectedId = selected?.placeId;
   final selectedMarkers = <KakaoMapPlace>[];
   final buckets = <String, List<LalaPlace>>{};
-  final shouldUseClusters = places.length >= 12 && mapLevel >= 7;
+  final shouldUseClusters = places.length >= 30 && mapLevel >= 7;
 
   KakaoMapPlace toMapPlace(LalaPlace place, {bool selected = false}) {
     return KakaoMapPlace(

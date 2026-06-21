@@ -584,6 +584,7 @@ def _places_query_schema() -> dict[str, Any]:
             "category",
             "language",
             "include_scores",
+            "limit",
         ],
         "properties": {
             "lat": {"type": "number", "format": "double"},
@@ -595,6 +596,7 @@ def _places_query_schema() -> dict[str, Any]:
             },
             "language": {"type": "string", "enum": ["ko", "en"]},
             "include_scores": {"type": "boolean"},
+            "limit": {"type": "integer", "minimum": 1, "maximum": 100},
         },
         "additionalProperties": False,
     }

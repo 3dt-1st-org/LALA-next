@@ -18,6 +18,7 @@ def test_places_route_returns_envelope(client, auth_headers):
     assert body["data"]["location_engine"] == "none"
     assert body["data"]["query"]["category"] == "event"
     assert body["data"]["query"]["language"] == "en"
+    assert body["data"]["query"]["limit"] == 60
     assert body["meta"]["request_id"]
 
 
@@ -61,9 +62,11 @@ def test_places_normalizes_kr_language_alias(client, auth_headers):
 
 
 def test_places_uses_db_repository_when_rows_exist(client, auth_headers, monkeypatch):
-    monkeypatch.setattr(
-        "apps.api.app.services.db_repository.fetch_places",
-        lambda **kwargs: [
+    captured = {}
+
+    def fake_fetch_places(**kwargs):
+        captured.update(kwargs)
+        return [
             {
                 "place_id": "db-place-1",
                 "name": "DB Place",
@@ -91,11 +94,15 @@ def test_places_uses_db_repository_when_rows_exist(client, auth_headers, monkeyp
                     "features": {},
                 },
             }
-        ],
+        ]
+
+    monkeypatch.setattr(
+        "apps.api.app.services.db_repository.fetch_places",
+        fake_fetch_places,
     )
 
     response = client.get(
-        "/api/v1/places?lat=37.2&lng=127.0&category=event&lang=en&include_scores=true",
+        "/api/v1/places?lat=37.2&lng=127.0&category=event&lang=en&include_scores=true&limit=80",
         headers=auth_headers,
     )
 
@@ -105,6 +112,8 @@ def test_places_uses_db_repository_when_rows_exist(client, auth_headers, monkeyp
     assert body["data"]["location_engine"] == "postgis"
     assert body["data"]["count"] == 1
     assert body["data"]["query"]["include_scores"] is True
+    assert body["data"]["query"]["limit"] == 80
+    assert captured["limit"] == 80
     assert body["data"]["places"][0]["place_id"] == "db-place-1"
     assert body["data"]["places"][0]["score"]["final_score"] == 0.84
 

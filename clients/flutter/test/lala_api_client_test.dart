@@ -163,6 +163,7 @@ void main() {
                   'lat': 37.2,
                   'lng': 127.0,
                   'radius_m': 1200,
+                  'limit': 80,
                   'category': 'event',
                   'language': 'en',
                 },
@@ -185,6 +186,7 @@ void main() {
         lat: 37.2,
         lng: 127.0,
         radiusM: 1200,
+        limit: 80,
         category: 'event',
         lang: 'en',
         includeScores: true,
@@ -196,6 +198,7 @@ void main() {
       expect(captured.url.queryParameters['lat'], '37.2');
       expect(captured.url.queryParameters['lng'], '127.0');
       expect(captured.url.queryParameters['radius_m'], '1200');
+      expect(captured.url.queryParameters['limit'], '80');
       expect(captured.url.queryParameters['category'], 'event');
       expect(captured.url.queryParameters['lang'], 'en');
       expect(captured.url.queryParameters['include_scores'], 'true');
@@ -208,6 +211,7 @@ void main() {
       expect(envelope.data?.locationEngine, 'postgis');
       expect(envelope.data?.count, 1);
       expect(envelope.data?.query.radiusM, 1200);
+      expect(envelope.data?.query.limit, 80);
       expect(envelope.data?.places.first.placeId, 'tour-api-126508');
       expect(envelope.data?.places.first.nameKo, '수원화성');
       expect(envelope.data?.places.first.upstreamSource, 'tour_api');

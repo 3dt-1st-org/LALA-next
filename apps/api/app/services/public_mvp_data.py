@@ -27,6 +27,7 @@ def fetch_places(
     radius_m: int,
     category: str,
     language: str,
+    limit: int = 60,
 ) -> list[dict[str, Any]]:
     rows = _load_snapshot().get("places") or []
     places: list[dict[str, Any]] = []
@@ -45,7 +46,7 @@ def fetch_places(
             str(place.get("name_ko") or place.get("name") or ""),
         )
     )
-    return places[:20]
+    return places[: max(1, min(limit, 100))]
 
 
 @lru_cache(maxsize=1)

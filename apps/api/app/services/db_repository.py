@@ -87,6 +87,7 @@ def fetch_places(
     category: str,
     language: str,
     include_scores: bool = False,
+    limit: int = 60,
 ) -> list[dict[str, Any]]:
     dsn = get_settings().db_dsn
     if not dsn:
@@ -194,7 +195,7 @@ def fetch_places(
             LIMIT 1
         ) linked_event ON TRUE
         ORDER BY FLOOR(distance_m / 500.0) ASC, COALESCE(latest_scores.final_score, 0) DESC, distance_m ASC, updated_at DESC
-        LIMIT 20
+        LIMIT %s
     """
     params = (
         lng,
@@ -206,6 +207,7 @@ def fetch_places(
         min_lng,
         max_lng,
         radius_m,
+        max(1, min(limit, 100)),
     )
     try:
         with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:

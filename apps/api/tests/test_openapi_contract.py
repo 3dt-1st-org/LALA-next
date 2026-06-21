@@ -204,6 +204,12 @@ def test_openapi_documents_v1_success_data_schemas(client):
     assert schemas["PlacesData"]["properties"]["places"]["items"] == {
         "$ref": "#/components/schemas/Place"
     }
+    assert "limit" in schemas["PlacesQuery"]["required"]
+    assert schemas["PlacesQuery"]["properties"]["limit"] == {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100,
+    }
     assert "distance_m" in schemas["Place"]["required"]
     assert schemas["Place"]["properties"]["score"] == {
         "$ref": "#/components/schemas/PlaceScore",

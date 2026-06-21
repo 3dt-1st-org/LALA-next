@@ -211,6 +211,7 @@ def test_fetch_places_uses_radius_bound_ranking_query(monkeypatch):
         category="all",
         language="en",
         include_scores=True,
+        limit=80,
     )
 
     assert places[0]["place_id"] == "db-place-1"
@@ -249,8 +250,8 @@ def test_fetch_places_uses_radius_bound_ranking_query(monkeypatch):
         in captured["sql"]
     )
     assert captured["params"][:4] == (127.0, 37.2, "all", "all")
-    assert captured["params"][-1] == 3000
-    assert len(captured["params"]) == 9
+    assert captured["params"][-2:] == (3000, 80)
+    assert len(captured["params"]) == 10
 
 
 def test_fetch_latest_weather_prefers_nearest_region_match(monkeypatch):

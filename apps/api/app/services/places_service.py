@@ -16,6 +16,7 @@ def list_places(
     category: str,
     language: str,
     include_scores: bool = False,
+    limit: int = 60,
 ) -> dict:
     category = (category or "all").strip().lower()
     language = normalize_language(language)
@@ -33,6 +34,7 @@ def list_places(
         category=category,
         language=language,
         include_scores=include_scores,
+        limit=limit,
     )
     if db_places:
         return {
@@ -45,6 +47,7 @@ def list_places(
                 "category": category,
                 "language": language,
                 "include_scores": include_scores,
+                "limit": limit,
             },
             "source": "db",
             "location_engine": "postgis",
@@ -57,6 +60,7 @@ def list_places(
             radius_m=radius_m,
             category=category,
             language=language,
+            limit=limit,
         )
         if public_places:
             return {
@@ -69,6 +73,7 @@ def list_places(
                     "category": category,
                     "language": language,
                     "include_scores": include_scores,
+                    "limit": limit,
                 },
                 "source": public_mvp_data.SOURCE_NAME,
                 "location_engine": "static_snapshot",
@@ -84,6 +89,7 @@ def list_places(
             "category": category,
             "language": language,
             "include_scores": include_scores,
+            "limit": limit,
         },
         "source": "db",
         "location_engine": "none",

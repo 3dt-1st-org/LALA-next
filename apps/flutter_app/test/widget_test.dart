@@ -100,7 +100,7 @@ void main() {
     );
   });
 
-  test('map clustering follows legacy point count and zoom threshold', () {
+  test('map clustering waits for dense point count and zoom threshold', () {
     final places = [
       _clusterRestaurant('cluster-food-a', '클러스터 맛집 A', 210),
       _clusterRestaurant('cluster-food-b', '클러스터 맛집 B', 260),
@@ -128,7 +128,7 @@ void main() {
     expect(mediumZoomMarkers.where((marker) => marker.isCluster), isEmpty);
 
     final densePlaces = List<LalaPlace>.generate(
-      12,
+      30,
       (index) => _clusterRestaurant(
         'cluster-food-$index',
         '클러스터 맛집 ${index + 1}',
@@ -142,7 +142,7 @@ void main() {
       language: 'ko',
     );
     expect(zoomedOutMarkers.where((marker) => marker.isCluster), hasLength(1));
-    expect(zoomedOutMarkers.single.clusterCount, 12);
+    expect(zoomedOutMarkers.single.clusterCount, 30);
     expect(
       zoomedOutMarkers.single.clusterMemberIds,
       densePlaces.map((place) => place.placeId).toList(),
@@ -2155,6 +2155,7 @@ class FakeBackend implements LalaBackend {
           lat: config.lat,
           lng: config.lng,
           radiusM: config.radiusM,
+          limit: config.placeLimit,
           category: config.category,
           language: config.lang,
         ),

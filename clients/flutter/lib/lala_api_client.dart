@@ -58,6 +58,7 @@ class LalaApiClient {
     required double lat,
     required double lng,
     int radiusM = 1000,
+    int limit = 60,
     String category = 'all',
     String lang = 'ko',
     bool includeScores = false,
@@ -71,6 +72,7 @@ class LalaApiClient {
         'lat': '$lat',
         'lng': '$lng',
         'radius_m': '$radiusM',
+        'limit': '$limit',
         'category': category,
         'lang': lang,
         'include_scores': '$includeScores',
@@ -520,6 +522,7 @@ class LalaPlacesQuery {
     required this.lat,
     required this.lng,
     required this.radiusM,
+    required this.limit,
     required this.category,
     required this.language,
   });
@@ -527,6 +530,7 @@ class LalaPlacesQuery {
   final double lat;
   final double lng;
   final int radiusM;
+  final int limit;
   final String category;
   final String language;
 
@@ -535,6 +539,7 @@ class LalaPlacesQuery {
       lat: _asDouble(json['lat']),
       lng: _asDouble(json['lng']),
       radiusM: _asInt(json['radius_m']),
+      limit: _asInt(json['limit']),
       category: _asString(json['category']),
       language: _asString(json['language']),
     );
