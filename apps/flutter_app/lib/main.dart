@@ -18,6 +18,9 @@ void main() {
 
 typedef LalaBackendFactory = LalaBackend Function(LalaAppConfig config);
 
+const int _defaultMapLevel = 6;
+const int _focusedPlaceMapLevel = 4;
+
 class LalaApp extends StatelessWidget {
   const LalaApp({
     super.key,
@@ -503,7 +506,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
   LalaLocation? _currentLocation;
   double? _mapFocusLat;
   double? _mapFocusLng;
-  int _mapLevel = 4;
+  int _mapLevel = _defaultMapLevel;
   Timer? _mapCameraDebounce;
   Timer? _interventionToastTimer;
   String _uiLanguage = 'ko';
@@ -588,7 +591,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
         _queryLng = location.lng;
         _mapFocusLat = location.lat;
         _mapFocusLng = location.lng;
-        _mapLevel = 4;
+        _mapLevel = _defaultMapLevel;
         _locationRequestInFlight = false;
       });
       await _refresh(forceWeather: true);
@@ -902,7 +905,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _focusedClusterMemberIds = const <String>[];
       _mapFocusLat = null;
       _mapFocusLng = null;
-      _mapLevel = 4;
+      _mapLevel = _defaultMapLevel;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -920,7 +923,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _focusedClusterMemberIds = const <String>[];
       _mapFocusLat = place.lat;
       _mapFocusLng = place.lng;
-      _mapLevel = 4;
+      _mapLevel = _focusedPlaceMapLevel;
     });
   }
 
@@ -999,7 +1002,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
         _mapFocusLat = location.lat;
         _mapFocusLng = location.lng;
       }
-      _mapLevel = 4;
+      _mapLevel = _defaultMapLevel;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -1220,7 +1223,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
     _focusedClusterMemberIds = const <String>[];
     _mapFocusLat = place.lat;
     _mapFocusLng = place.lng;
-    _mapLevel = 4;
+    _mapLevel = _focusedPlaceMapLevel;
   }
 
   Future<void> _openSettingsSheet(BuildContext context) async {
@@ -1276,7 +1279,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _queryLng = selected.lng;
       _mapFocusLat = selected.lat;
       _mapFocusLng = selected.lng;
-      _mapLevel = 4;
+      _mapLevel = _defaultMapLevel;
     });
     await _refresh(forceWeather: true);
   }
@@ -6382,11 +6385,11 @@ List<KakaoMapPlace> clusterMapPlacesForMap({
   required String language,
 }) {
   final selectedId = selected?.placeId;
-  final expandedPinFloor = mapLevel >= 10 ? 18 : 24;
+  final expandedPinFloor = mapLevel >= 10 ? 36 : 48;
   final selectedMarkers = <KakaoMapPlace>[];
   final expandedMarkers = <KakaoMapPlace>[];
   final buckets = <String, List<LalaPlace>>{};
-  final shouldUseClusters = places.length >= 40 && mapLevel >= 9;
+  final shouldUseClusters = places.length >= 80 && mapLevel >= 10;
   var expandedPinCount = 0;
   final orderedPlaces = [...places]
     ..sort((a, b) {

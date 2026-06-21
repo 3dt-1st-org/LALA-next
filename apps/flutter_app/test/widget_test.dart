@@ -156,7 +156,7 @@ void main() {
     expect(zoomedOutMarkers.where((marker) => marker.isCluster), isEmpty);
 
     final veryDensePlaces = List<LalaPlace>.generate(
-      40,
+      90,
       (index) => _clusterRestaurant(
         'very-dense-food-$index',
         '클러스터 맛집 ${index + 1}',
@@ -169,23 +169,35 @@ void main() {
       mapLevel: 9,
       language: 'ko',
     );
+    expect(zoomedFarOutMarkers.where((marker) => marker.isCluster), isEmpty);
     expect(
-      zoomedFarOutMarkers
+      zoomedFarOutMarkers.map((marker) => marker.id),
+      veryDensePlaces.take(60).map((place) => place.placeId),
+    );
+
+    final fullyZoomedOutMarkers = clusterMapPlacesForMap(
+      places: veryDensePlaces,
+      selected: null,
+      mapLevel: 10,
+      language: 'ko',
+    );
+    expect(
+      fullyZoomedOutMarkers
           .where((marker) => !marker.isCluster)
           .map((marker) => marker.id),
-      veryDensePlaces.take(24).map((place) => place.placeId),
+      veryDensePlaces.take(36).map((place) => place.placeId),
     );
     expect(
-      zoomedFarOutMarkers.where((marker) => marker.isCluster),
+      fullyZoomedOutMarkers.where((marker) => marker.isCluster),
       hasLength(1),
     );
-    final cluster = zoomedFarOutMarkers.singleWhere(
+    final cluster = fullyZoomedOutMarkers.singleWhere(
       (marker) => marker.isCluster,
     );
-    expect(cluster.clusterCount, 16);
+    expect(cluster.clusterCount, 24);
     expect(
       cluster.clusterMemberIds,
-      veryDensePlaces.skip(24).map((place) => place.placeId).toList(),
+      veryDensePlaces.skip(36).take(24).map((place) => place.placeId).toList(),
     );
   });
 
@@ -193,7 +205,7 @@ void main() {
     'map clustering keeps nearest places expanded when API order shifts',
     () {
       final places = List<LalaPlace>.generate(
-        45,
+        90,
         (index) => _clusterRestaurant(
           'distance-sorted-food-$index',
           '거리 맛집 ${index + 1}',
@@ -204,7 +216,7 @@ void main() {
       final markers = clusterMapPlacesForMap(
         places: places,
         selected: null,
-        mapLevel: 9,
+        mapLevel: 10,
         language: 'ko',
       );
 
@@ -216,7 +228,7 @@ void main() {
       expect(
         pinIds,
         containsAll(
-          List.generate(24, (index) => 'distance-sorted-food-$index'),
+          List.generate(36, (index) => 'distance-sorted-food-$index'),
         ),
       );
       expect(markers.where((marker) => marker.isCluster), hasLength(1));

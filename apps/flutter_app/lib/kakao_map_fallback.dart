@@ -98,7 +98,8 @@ class _FallbackMarker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final size = place.isCluster ? 48.0 : (place.selected ? 42.0 : 34.0);
+    final size = place.isCluster ? 50.0 : (place.selected ? 48.0 : 40.0);
+    final markerColor = _markerColor(place.category);
     final screenSize = MediaQuery.sizeOf(context);
     final marker = Column(
       mainAxisSize: MainAxisSize.min,
@@ -131,50 +132,87 @@ class _FallbackMarker extends StatelessWidget {
           ),
           const SizedBox(height: 5),
         ],
-        Container(
-          width: size,
-          height: size,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(999),
-            border: place.isCluster
-                ? Border.all(color: _markerColor(place.category), width: 2.2)
-                : null,
-            boxShadow: const [
-              BoxShadow(
-                blurRadius: 14,
-                offset: Offset(0, 4),
-                color: Color(0x380F172A),
+        if (place.isCluster)
+          Container(
+            width: size,
+            height: size,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: markerColor, width: 3),
+              boxShadow: const [
+                BoxShadow(
+                  blurRadius: 20,
+                  offset: Offset(0, 8),
+                  color: Color(0x470F172A),
+                ),
+              ],
+            ),
+            child: Text(
+              '${place.clusterCount}',
+              style: TextStyle(
+                color: _markerTextColor(place.category),
+                fontSize: 15,
+                fontWeight: FontWeight.w900,
               ),
-            ],
-          ),
-          child: place.isCluster
-              ? Text(
-                  '${place.clusterCount}',
-                  style: TextStyle(
-                    color: _markerTextColor(place.category),
-                    fontSize: 15,
-                    fontWeight: FontWeight.w900,
+            ),
+          )
+        else
+          SizedBox(
+            width: size,
+            height: size + 12,
+            child: Stack(
+              alignment: Alignment.topCenter,
+              children: [
+                Positioned(
+                  bottom: 4,
+                  child: Transform.rotate(
+                    angle: 0.7853981633974483,
+                    child: Container(
+                      width: 15,
+                      height: 15,
+                      decoration: BoxDecoration(
+                        color: markerColor,
+                        border: const Border(
+                          right: BorderSide(color: Colors.white, width: 3),
+                          bottom: BorderSide(color: Colors.white, width: 3),
+                        ),
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(2),
+                          bottomRight: Radius.circular(5),
+                        ),
+                      ),
+                    ),
                   ),
-                )
-              : Container(
-                  width: size * 0.64,
-                  height: size * 0.64,
+                ),
+                Container(
+                  width: size,
+                  height: size,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: _markerColor(place.category),
+                    color: markerColor,
                     borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: Colors.white, width: 3),
+                    boxShadow: const [
+                      BoxShadow(
+                        blurRadius: 18,
+                        offset: Offset(0, 8),
+                        color: Color(0x420F172A),
+                      ),
+                    ],
                   ),
                   child: Icon(
                     _markerIcon(place.category),
-                    color: place.category == 'event'
+                    color: place.category == 'restaurant'
                         ? const Color(0xFF1A202C)
                         : Colors.white,
-                    size: place.selected ? 15 : 13,
+                    size: place.selected ? 18 : 16,
                   ),
                 ),
-        ),
+              ],
+            ),
+          ),
       ],
     );
 
@@ -182,7 +220,9 @@ class _FallbackMarker extends StatelessWidget {
       left: screenSize.width * position.x / 100,
       top: screenSize.height * position.y / 100,
       child: Transform.translate(
-        offset: Offset(-size / 2, place.selected ? -size - 34 : -size / 2),
+        offset: place.isCluster
+            ? Offset(-size / 2, -size / 2)
+            : Offset(-size / 2, place.selected ? -size - 48 : -size - 12),
         child: Semantics(
           button: onTap != null,
           label: place.isCluster

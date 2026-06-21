@@ -271,27 +271,31 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
     }
 
     function iconSvgFor(category) {
-      if (category === "restaurant") {
-        return '<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M7 3v8M5 3v8M9 3v8M5 11h4v10M16 3v18M16 3c3 2 4 5 3 9h-3" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-      }
-      if (category === "event") {
-        return '<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M8 3v4M16 3v4M4 10h16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
-      }
-      return '<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M4 10h16L12 4 4 10ZM6 10v8M10 10v8M14 10v8M18 10v8M4 20h16" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-    }
+	      if (category === "restaurant") {
+	        return '<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M7 3v8M5 3v8M9 3v8M5 11h4v10M16 3v18M16 3c3 2 4 5 3 9h-3" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+	      }
+	      if (category === "event") {
+	        return '<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M8 3v4M16 3v4M4 10h16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
+	      }
+	      return '<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M4 10h16L12 4 4 10ZM6 10v8M10 10v8M14 10v8M18 10v8M4 20h16" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+	    }
 
     function shortName(name) {
       name = String(name || (${jsonEncode(isEnglish ? 'Local place' : '장소')}));
       return name.length > 14 ? name.slice(0, 14) + "..." : name;
     }
 
-    places.forEach(function (place) {
-      var isCluster = place.clusterCount != null && place.clusterCount > 1;
-      var size = isCluster ? 42 : (place.selected ? 34 : 28);
-      var marker = document.createElement("div");
-      marker.className = isCluster ? "lala-marker lala-marker-cluster" : "lala-marker lala-marker-pin";
-      marker.setAttribute("data-lala-place-id", String(place.id || ""));
-      marker.setAttribute("data-lala-category", String(place.category || ""));
+	    places.forEach(function (place) {
+	      var isCluster = place.clusterCount != null && place.clusterCount > 1;
+	      var size = isCluster ? 48 : (place.selected ? 48 : 40);
+	      var categoryColor = colorFor(place.category);
+	      var marker = document.createElement("div");
+	      marker.className = isCluster ? "lala-marker lala-marker-cluster" : "lala-marker lala-marker-pin";
+	      marker.setAttribute("data-lala-place-id", String(place.id || ""));
+	      marker.setAttribute("data-lala-category", String(place.category || ""));
+	      if (!isCluster) {
+	        marker.setAttribute("data-lala-marker-shape", "pin");
+	      }
       if (isCluster) {
         marker.setAttribute("data-lala-cluster-count", String(place.clusterCount));
         renderedClusters += 1;
@@ -304,65 +308,87 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
       marker.style.alignItems = "center";
       marker.style.gap = "5px";
       marker.style.pointerEvents = "auto";
-      marker.style.cursor = "pointer";
-      marker.style.fontFamily = "system-ui, -apple-system, sans-serif";
+	      marker.style.cursor = "pointer";
+	      marker.style.fontFamily = "system-ui, -apple-system, sans-serif";
+	      marker.style.filter = "drop-shadow(0 8px 18px rgba(15, 23, 42, 0.26))";
 
-      if (place.selected && !isCluster) {
-        var namePill = document.createElement("div");
-        namePill.textContent = shortName(place.name);
-        namePill.style.maxWidth = "132px";
-        namePill.style.padding = "5px 10px";
-        namePill.style.borderRadius = "12px";
-        namePill.style.background = "rgba(17, 24, 39, .72)";
-        namePill.style.color = "#ffffff";
-        namePill.style.fontSize = "10px";
+	      if (place.selected && !isCluster) {
+	        var namePill = document.createElement("div");
+	        namePill.textContent = shortName(place.name);
+	        namePill.style.maxWidth = "132px";
+	        namePill.style.padding = "5px 10px";
+	        namePill.style.borderRadius = "12px";
+	        namePill.style.background = "rgba(17, 24, 39, .82)";
+	        namePill.style.color = "#ffffff";
+	        namePill.style.fontSize = "10px";
         namePill.style.fontWeight = "800";
         namePill.style.whiteSpace = "nowrap";
         namePill.style.overflow = "hidden";
         namePill.style.textOverflow = "ellipsis";
         namePill.style.boxShadow = "0 6px 18px rgba(15, 23, 42, 0.18)";
-        marker.appendChild(namePill);
-      }
+	        marker.appendChild(namePill);
+	      }
 
-      var circle = document.createElement("div");
-      circle.style.width = size + "px";
-      circle.style.height = size + "px";
-      circle.style.borderRadius = "50%";
-      circle.style.background = "#ffffff";
-      circle.style.boxShadow = "0 4px 14px rgba(15, 23, 42, 0.22)";
-      circle.style.display = "grid";
-      circle.style.placeItems = "center";
-      if (isCluster) {
-        circle.style.border = "2.2px solid " + colorFor(place.category);
-      }
-
-      var inner = document.createElement("div");
-      inner.style.width = Math.round(size * 0.64) + "px";
-      inner.style.height = Math.round(size * 0.64) + "px";
-      inner.style.borderRadius = "50%";
-      inner.style.background = colorFor(place.category);
-      inner.style.display = "grid";
-      inner.style.placeItems = "center";
-
-      var label = document.createElement("div");
-      label.style.color = markerTextColorFor(place.category);
-      if (isCluster) {
-        label.style.color = clusterTextColorFor(place.category);
-      }
-      label.style.fontSize = isCluster ? "14px" : (place.selected ? "13px" : "11px");
-      label.style.fontWeight = "900";
-      label.style.display = "grid";
-      label.style.placeItems = "center";
-      if (isCluster) {
-        label.textContent = String(place.clusterCount);
-        circle.appendChild(label);
-      } else {
-        label.innerHTML = iconSvgFor(place.category);
-        inner.appendChild(label);
-        circle.appendChild(inner);
-      }
-      marker.appendChild(circle);
-      marker.addEventListener("click", function (event) {
+	      if (isCluster) {
+	        var clusterBubble = document.createElement("div");
+	        clusterBubble.style.width = size + "px";
+	        clusterBubble.style.height = size + "px";
+	        clusterBubble.style.borderRadius = "50%";
+	        clusterBubble.style.background = "#ffffff";
+	        clusterBubble.style.border = "3px solid " + categoryColor;
+	        clusterBubble.style.boxShadow = "0 8px 20px rgba(15, 23, 42, 0.28)";
+	        clusterBubble.style.display = "grid";
+	        clusterBubble.style.placeItems = "center";
+	        var label = document.createElement("div");
+	        label.style.color = clusterTextColorFor(place.category);
+	        label.style.fontSize = "14px";
+	        label.style.fontWeight = "900";
+	        label.style.display = "grid";
+	        label.style.placeItems = "center";
+	        label.textContent = String(place.clusterCount);
+	        clusterBubble.appendChild(label);
+	        marker.appendChild(clusterBubble);
+	      } else {
+	        var pin = document.createElement("div");
+	        pin.style.position = "relative";
+	        pin.style.width = size + "px";
+	        pin.style.height = (size + 12) + "px";
+	        pin.style.display = "grid";
+	        pin.style.placeItems = "start center";
+	        var tail = document.createElement("div");
+	        tail.style.position = "absolute";
+	        tail.style.left = "50%";
+	        tail.style.bottom = "4px";
+	        tail.style.width = "15px";
+	        tail.style.height = "15px";
+	        tail.style.background = categoryColor;
+	        tail.style.borderRight = "3px solid #ffffff";
+	        tail.style.borderBottom = "3px solid #ffffff";
+	        tail.style.borderRadius = "2px 0 5px 0";
+	        tail.style.transform = "translateX(-50%) rotate(45deg)";
+	        var circle = document.createElement("div");
+	        circle.style.position = "relative";
+	        circle.style.width = size + "px";
+	        circle.style.height = size + "px";
+	        circle.style.borderRadius = "50%";
+	        circle.style.background = categoryColor;
+	        circle.style.border = "3px solid #ffffff";
+	        circle.style.boxShadow = "inset 0 -8px 16px rgba(15, 23, 42, 0.12)";
+	        circle.style.display = "grid";
+	        circle.style.placeItems = "center";
+	        var label = document.createElement("div");
+	        label.style.color = markerTextColorFor(place.category);
+	        label.style.fontSize = place.selected ? "14px" : "12px";
+	        label.style.fontWeight = "900";
+	        label.style.display = "grid";
+	        label.style.placeItems = "center";
+	        label.innerHTML = iconSvgFor(place.category);
+	        circle.appendChild(label);
+	        pin.appendChild(tail);
+	        pin.appendChild(circle);
+	        marker.appendChild(pin);
+	      }
+	      marker.addEventListener("click", function (event) {
         event.stopPropagation();
         if (place.id) {
           window.dispatchEvent(new CustomEvent("lala-map-place-tap", {
@@ -372,11 +398,11 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
       });
 
       var overlay = new kakao.maps.CustomOverlay({
-        position: new kakao.maps.LatLng(place.lat, place.lng),
-        content: marker,
-        yAnchor: place.selected && !isCluster ? 1.0 : 0.5,
-        zIndex: place.selected ? 12 : (isCluster ? 9 : 6)
-      });
+	        position: new kakao.maps.LatLng(place.lat, place.lng),
+	        content: marker,
+	        yAnchor: isCluster ? 0.5 : 1.0,
+	        zIndex: place.selected ? 40 : (isCluster ? 20 : 30)
+	      });
       overlay.setMap(map);
     });
     container.setAttribute("data-lala-marker-pins", String(renderedPins));
@@ -496,7 +522,7 @@ void _drawFallbackMap(
       ..style.position = 'absolute'
       ..style.left = '${point.x}%'
       ..style.top = '${point.y}%'
-      ..style.transform = place.selected && !place.isCluster
+      ..style.transform = !place.isCluster
           ? 'translate(-50%, -100%)'
           : 'translate(-50%, -50%)'
       ..style.display = 'flex'
@@ -504,12 +530,17 @@ void _drawFallbackMap(
       ..style.alignItems = 'center'
       ..style.gap = '5px'
       ..style.fontFamily = 'system-ui, -apple-system, sans-serif';
+    marker.style.setProperty(
+      'filter',
+      'drop-shadow(0 8px 18px rgba(15, 23, 42, 0.26))',
+    );
     marker.dataset['lalaPlaceId'] = place.id;
     marker.dataset['lalaCategory'] = place.category;
     if (place.isCluster) {
       marker.dataset['lalaClusterCount'] = '${place.clusterCount}';
       renderedClusters += 1;
     } else {
+      marker.dataset['lalaMarkerShape'] = 'pin';
       renderedPins += 1;
     }
 
@@ -532,28 +563,8 @@ void _drawFallbackMap(
       marker.append(namePill);
     }
 
-    final size = place.isCluster ? 42 : (place.selected ? 34 : 28);
-    final circle = html.DivElement()
-      ..style.width = '${size}px'
-      ..style.height = '${size}px'
-      ..style.borderRadius = '50%'
-      ..style.backgroundColor = '#ffffff'
-      ..style.boxShadow = '0 4px 14px rgba(15, 23, 42, .22)'
-      ..style.display = 'grid'
-      ..style.setProperty('place-items', 'center');
-    if (place.isCluster) {
-      circle.style.border =
-          '2.2px solid ${_fallbackMarkerColor(place.category)}';
-    }
-
-    final innerSize = (size * 0.64).round();
-    final inner = html.DivElement()
-      ..style.width = '${innerSize}px'
-      ..style.height = '${innerSize}px'
-      ..style.borderRadius = '50%'
-      ..style.backgroundColor = _fallbackMarkerColor(place.category)
-      ..style.display = 'grid'
-      ..style.setProperty('place-items', 'center');
+    final size = place.isCluster ? 48 : (place.selected ? 48 : 40);
+    final categoryColor = _fallbackMarkerColor(place.category);
 
     final label = html.DivElement()
       ..text = place.isCluster
@@ -562,15 +573,55 @@ void _drawFallbackMap(
       ..style.color = place.isCluster
           ? _fallbackMarkerTextColorHex(place.category)
           : _fallbackMarkerIconColorHex(place.category)
-      ..style.fontSize = place.isCluster ? '14px' : '11px'
+      ..style.fontSize = place.isCluster
+          ? '14px'
+          : (place.selected ? '14px' : '12px')
       ..style.fontWeight = '900';
     if (place.isCluster) {
-      circle.append(label);
+      final clusterBubble = html.DivElement()
+        ..style.width = '${size}px'
+        ..style.height = '${size}px'
+        ..style.borderRadius = '50%'
+        ..style.backgroundColor = '#ffffff'
+        ..style.border = '3px solid $categoryColor'
+        ..style.boxShadow = '0 8px 20px rgba(15, 23, 42, .28)'
+        ..style.display = 'grid'
+        ..style.setProperty('place-items', 'center');
+      clusterBubble.append(label);
+      marker.append(clusterBubble);
     } else {
-      inner.append(label);
-      circle.append(inner);
+      final pin = html.DivElement()
+        ..style.position = 'relative'
+        ..style.width = '${size}px'
+        ..style.height = '${size + 12}px'
+        ..style.display = 'grid'
+        ..style.setProperty('place-items', 'start center');
+      final tail = html.DivElement()
+        ..style.position = 'absolute'
+        ..style.left = '50%'
+        ..style.bottom = '4px'
+        ..style.width = '15px'
+        ..style.height = '15px'
+        ..style.backgroundColor = categoryColor
+        ..style.borderRight = '3px solid #ffffff'
+        ..style.borderBottom = '3px solid #ffffff'
+        ..style.borderRadius = '2px 0 5px 0'
+        ..style.transform = 'translateX(-50%) rotate(45deg)';
+      final circle = html.DivElement()
+        ..style.position = 'relative'
+        ..style.width = '${size}px'
+        ..style.height = '${size}px'
+        ..style.borderRadius = '50%'
+        ..style.backgroundColor = categoryColor
+        ..style.border = '3px solid #ffffff'
+        ..style.boxShadow = 'inset 0 -8px 16px rgba(15, 23, 42, .12)'
+        ..style.display = 'grid'
+        ..style.setProperty('place-items', 'center');
+      circle.append(label);
+      pin.append(tail);
+      pin.append(circle);
+      marker.append(pin);
     }
-    marker.append(circle);
     container.append(marker);
   }
   container.setAttribute('data-lala-marker-pins', '$renderedPins');
@@ -806,7 +857,7 @@ class _FallbackFlutterMarker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final size = place.isCluster ? 48.0 : (place.selected ? 42.0 : 34.0);
+    final size = place.isCluster ? 50.0 : (place.selected ? 48.0 : 40.0);
     final color = Color(
       int.parse(_fallbackMarkerColor(place.category).replaceFirst('#', '0xFF')),
     );
@@ -815,7 +866,9 @@ class _FallbackFlutterMarker extends StatelessWidget {
       left: screenSize.width * position.x / 100,
       top: screenSize.height * position.y / 100,
       child: Transform.translate(
-        offset: Offset(-size / 2, place.selected ? -size - 34 : -size / 2),
+        offset: place.isCluster
+            ? Offset(-size / 2, -size / 2)
+            : Offset(-size / 2, place.selected ? -size - 48 : -size - 12),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -850,50 +903,87 @@ class _FallbackFlutterMarker extends StatelessWidget {
               ),
               const SizedBox(height: 5),
             ],
-            Container(
-              width: size,
-              height: size,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(999),
-                border: place.isCluster
-                    ? Border.all(color: color, width: 2.2)
-                    : null,
-                boxShadow: const [
-                  BoxShadow(
-                    blurRadius: 14,
-                    offset: Offset(0, 4),
-                    color: Color(0x380F172A),
+            if (place.isCluster)
+              Container(
+                width: size,
+                height: size,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: color, width: 3),
+                  boxShadow: const [
+                    BoxShadow(
+                      blurRadius: 20,
+                      offset: Offset(0, 8),
+                      color: Color(0x470F172A),
+                    ),
+                  ],
+                ),
+                child: Text(
+                  '${place.clusterCount}',
+                  style: TextStyle(
+                    color: _fallbackMarkerTextColor(place.category),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
                   ),
-                ],
-              ),
-              child: place.isCluster
-                  ? Text(
-                      '${place.clusterCount}',
-                      style: TextStyle(
-                        color: _fallbackMarkerTextColor(place.category),
-                        fontSize: 15,
-                        fontWeight: FontWeight.w900,
+                ),
+              )
+            else
+              SizedBox(
+                width: size,
+                height: size + 12,
+                child: Stack(
+                  alignment: Alignment.topCenter,
+                  children: [
+                    Positioned(
+                      bottom: 4,
+                      child: Transform.rotate(
+                        angle: 0.7853981633974483,
+                        child: Container(
+                          width: 15,
+                          height: 15,
+                          decoration: BoxDecoration(
+                            color: color,
+                            border: const Border(
+                              right: BorderSide(color: Colors.white, width: 3),
+                              bottom: BorderSide(color: Colors.white, width: 3),
+                            ),
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(2),
+                              bottomRight: Radius.circular(5),
+                            ),
+                          ),
+                        ),
                       ),
-                    )
-                  : Container(
-                      width: size * 0.64,
-                      height: size * 0.64,
+                    ),
+                    Container(
+                      width: size,
+                      height: size,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color: color,
                         borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: Colors.white, width: 3),
+                        boxShadow: const [
+                          BoxShadow(
+                            blurRadius: 18,
+                            offset: Offset(0, 8),
+                            color: Color(0x420F172A),
+                          ),
+                        ],
                       ),
                       child: Icon(
                         _fallbackMarkerIcon(place.category),
                         color: place.category == 'restaurant'
                             ? const Color(0xFF1A202C)
                             : Colors.white,
-                        size: place.selected ? 15 : 13,
+                        size: place.selected ? 18 : 16,
                       ),
                     ),
-            ),
+                  ],
+                ),
+              ),
           ],
         ),
       ),
