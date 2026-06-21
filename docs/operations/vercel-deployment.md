@@ -101,7 +101,7 @@ curl -sS -o /dev/null -w '%{http_code}\n' https://www.lala-next.cloud
 
 The production Flutter build for the contest window should use the Azure-backed
 API base URL, no bundled API bearer token, the Kakao Maps JavaScript key, and a
-50 km default recommendation radius. Kakao Developers must allow the deployed web
+3 km current-location recommendation radius. Kakao Developers must allow the deployed web
 domains, including `https://lala-next.cloud`, `https://www.lala-next.cloud`, and
 any Vercel preview domain used for judging.
 

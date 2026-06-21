@@ -369,7 +369,7 @@ def test_openapi_documents_daily_plan_coordinate_bounds(client):
     assert daily_plan["lat"]["maximum"] == 90
     assert daily_plan["lng"]["minimum"] == -180
     assert daily_plan["lng"]["maximum"] == 180
-    assert daily_plan["radius_m"]["default"] == 50000
+    assert daily_plan["radius_m"]["default"] == 3000
     assert daily_plan["radius_m"]["exclusiveMinimum"] == 0
     assert daily_plan["radius_m"]["maximum"] == 50000
 

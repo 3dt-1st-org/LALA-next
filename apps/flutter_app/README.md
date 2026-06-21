@@ -12,7 +12,7 @@ Current app surface:
 - Kakao Maps background map, loaded with `KAKAO_JAVASCRIPT_KEY` at Flutter web
   build time and through the registered `https://lala-next.cloud`
   `kakao-map-embed.html` page for native iOS/Android WebView builds.
-- 50 km default recommendation radius for the Suwon/Gyeonggi launch dataset.
+- 3 km current-location recommendation radius for the Seoul/Gyeonggi launch dataset.
 - Bearer token or migration API key input for `/api/v1/*`.
 - Recommendation-first home surface that highlights the top place, local-value
   score, local spending, demand dispersion, weather fit, culture relevance, and

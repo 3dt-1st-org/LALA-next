@@ -162,7 +162,7 @@ def _build_cases(*, profile: str, live_speech_enabled: bool) -> list[SmokeCase]:
 
 
 def _build_deploy_cases(*, live_speech_enabled: bool) -> list[SmokeCase]:
-    location = {"lat": 37.5665, "lng": 126.9780, "radius_m": 50000}
+    location = {"lat": 37.5665, "lng": 126.9780, "radius_m": 3000}
     nearby_location = {**location, "radius_m": 1000}
     place_query = parse.urlencode(
         {**location, "category": "all", "language": "ko", "include_scores": "true"}

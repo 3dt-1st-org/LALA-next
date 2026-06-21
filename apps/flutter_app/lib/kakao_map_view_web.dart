@@ -250,6 +250,8 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
       fillOpacity: 0.12
     });
     circle.setMap(map);
+    var renderedPins = 0;
+    var renderedClusters = 0;
 
     function colorFor(category) {
       if (category === "attraction") return "#C53030";
@@ -286,6 +288,15 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
       var isCluster = place.clusterCount != null && place.clusterCount > 1;
       var size = isCluster ? 42 : (place.selected ? 34 : 28);
       var marker = document.createElement("div");
+      marker.className = isCluster ? "lala-marker lala-marker-cluster" : "lala-marker lala-marker-pin";
+      marker.setAttribute("data-lala-place-id", String(place.id || ""));
+      marker.setAttribute("data-lala-category", String(place.category || ""));
+      if (isCluster) {
+        marker.setAttribute("data-lala-cluster-count", String(place.clusterCount));
+        renderedClusters += 1;
+      } else {
+        renderedPins += 1;
+      }
       marker.title = place.name;
       marker.style.display = "flex";
       marker.style.flexDirection = "column";
@@ -367,6 +378,13 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
       });
       overlay.setMap(map);
     });
+    container.setAttribute("data-lala-marker-pins", String(renderedPins));
+    container.setAttribute("data-lala-marker-clusters", String(renderedClusters));
+    window.__lalaLastMapMarkerStats = {
+      pins: renderedPins,
+      clusters: renderedClusters,
+      total: places.length
+    };
 
     function dispatchCameraIdle() {
       var nextCenter = map.getCenter();
@@ -464,6 +482,10 @@ void _drawFallbackMap(
       centerLng: centerLng,
     );
     final marker = html.DivElement()
+      ..classes.addAll([
+        'lala-marker',
+        place.isCluster ? 'lala-marker-cluster' : 'lala-marker-pin',
+      ])
       ..title = place.name
       ..style.position = 'absolute'
       ..style.left = '${point.x}%'
@@ -476,6 +498,11 @@ void _drawFallbackMap(
       ..style.alignItems = 'center'
       ..style.gap = '5px'
       ..style.fontFamily = 'system-ui, -apple-system, sans-serif';
+    marker.dataset['lalaPlaceId'] = place.id;
+    marker.dataset['lalaCategory'] = place.category;
+    if (place.isCluster) {
+      marker.dataset['lalaClusterCount'] = '${place.clusterCount}';
+    }
 
     if (place.selected && !place.isCluster) {
       final namePill = html.DivElement()
