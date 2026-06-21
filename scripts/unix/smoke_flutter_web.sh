@@ -295,7 +295,7 @@ if [[ "$RUN_LOCATION_FLOW" == "true" ]]; then
   }" >"$OUTPUT_DIR/flutter-web-location-flow.txt"
 
   REQUEST_LOG="$OUTPUT_DIR/flutter-web-requests.txt"
-  for _ in {1..60}; do
+  for _ in {1..120}; do
     "$PWCLI" -s="$PW_SESSION" requests >"$REQUEST_LOG"
     if REQUEST_LOG="$REQUEST_LOG" EXPECT_DOCENT_SCRIPT="$EXPECT_DOCENT_SCRIPT" "$PYTHON" - <<'PY'
 import os
@@ -394,6 +394,69 @@ if "lat=37.2636" in log or "lng=127.0286" in log:
 if any(token in log.lower() for token in ("mock://", "placeholder://", "dummy://")):
     raise SystemExit("Flutter location flow request log contained mock-like URLs.")
 PY
+
+  MARKER_STATE="$("$PWCLI" -s="$PW_SESSION" eval 'async () => {
+    function currentState() {
+      const container = document.getElementById("lala-kakao-background-map");
+      const pinCount = document.querySelectorAll(".lala-marker-pin").length;
+      const clusterCount = document.querySelectorAll(".lala-marker-cluster").length;
+      const stats = window.__lalaLastMapMarkerStats || {};
+      return { container, pinCount, clusterCount, stats };
+    }
+    let state = currentState();
+    for (let index = 0; index < 80; index += 1) {
+      const statPins = Number(state.stats.pins || 0);
+      if (Math.max(state.pinCount, statPins) > 0) {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      state = currentState();
+    }
+    const sampleMarkers = Array.from(document.querySelectorAll(".lala-marker"))
+      .slice(0, 8)
+      .map((marker) => ({
+        id: marker.getAttribute("data-lala-place-id") || marker.dataset.lalaPlaceId || "",
+        category: marker.getAttribute("data-lala-category") || marker.dataset.lalaCategory || "",
+        clusterCount: marker.getAttribute("data-lala-cluster-count") || marker.dataset.lalaClusterCount || "",
+        title: marker.getAttribute("title") || ""
+      }));
+    return {
+      pinCount: state.pinCount,
+      clusterCount: state.clusterCount,
+      stats: state.stats,
+      containerPins: state.container ? state.container.getAttribute("data-lala-marker-pins") : null,
+      containerClusters: state.container ? state.container.getAttribute("data-lala-marker-clusters") : null,
+      sampleMarkers
+    };
+  }' --raw)"
+  printf '%s\n' "$MARKER_STATE" >"$OUTPUT_DIR/flutter-web-marker-state.json"
+  MARKER_STATE="$MARKER_STATE" "$PYTHON" - <<'PY'
+import json
+import os
+
+try:
+    state = json.loads(os.environ["MARKER_STATE"])
+except Exception as exc:
+    raw = os.environ.get("MARKER_STATE", "")
+    raise SystemExit(
+        f"Could not parse Flutter marker state: {exc}; raw={raw[:200]!r}"
+    ) from exc
+
+stats = state.get("stats") if isinstance(state.get("stats"), dict) else {}
+pin_count = int(state.get("pinCount") or 0)
+cluster_count = int(state.get("clusterCount") or 0)
+stat_pins = int(stats.get("pins") or 0)
+stat_clusters = int(stats.get("clusters") or 0)
+stat_total = int(stats.get("total") or 0)
+if max(pin_count, stat_pins) <= 0:
+    raise SystemExit("Flutter location flow rendered no real map pins.")
+if stat_total <= 0:
+    raise SystemExit("Flutter location flow did not pass live places into the map.")
+if max(cluster_count, stat_clusters) > 0 and max(pin_count, stat_pins) <= 0:
+    raise SystemExit("Flutter location flow rendered only clusters without place pins.")
+if not state.get("sampleMarkers"):
+    raise SystemExit("Flutter location flow marker sample was empty.")
+PY
   "$PWCLI" -s="$PW_SESSION" console >"$OUTPUT_DIR/flutter-web-console.txt"
 fi
 
@@ -448,7 +511,7 @@ fi
 
 echo "Flutter web browser smoke completed."
 if [[ "$RUN_LOCATION_FLOW" == "true" ]]; then
-  echo "Artifacts: $OUTPUT_DIR/flutter-web-snapshot.txt, flutter-web-screenshot.txt, flutter-web-console.txt, flutter-web-requests.txt"
+  echo "Artifacts: $OUTPUT_DIR/flutter-web-snapshot.txt, flutter-web-screenshot.txt, flutter-web-console.txt, flutter-web-requests.txt, flutter-web-marker-state.json"
 else
   echo "Artifacts: $OUTPUT_DIR/flutter-web-snapshot.txt, flutter-web-screenshot.txt, flutter-web-console.txt"
 fi

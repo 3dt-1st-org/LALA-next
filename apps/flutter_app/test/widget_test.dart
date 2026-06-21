@@ -141,11 +141,18 @@ void main() {
       mapLevel: 7,
       language: 'ko',
     );
-    expect(zoomedOutMarkers.where((marker) => marker.isCluster), hasLength(1));
-    expect(zoomedOutMarkers.single.clusterCount, 30);
     expect(
-      zoomedOutMarkers.single.clusterMemberIds,
-      densePlaces.map((place) => place.placeId).toList(),
+      zoomedOutMarkers
+          .where((marker) => !marker.isCluster)
+          .map((marker) => marker.id),
+      densePlaces.take(8).map((place) => place.placeId),
+    );
+    expect(zoomedOutMarkers.where((marker) => marker.isCluster), hasLength(1));
+    final cluster = zoomedOutMarkers.singleWhere((marker) => marker.isCluster);
+    expect(cluster.clusterCount, 22);
+    expect(
+      cluster.clusterMemberIds,
+      densePlaces.skip(8).map((place) => place.placeId).toList(),
     );
   });
 

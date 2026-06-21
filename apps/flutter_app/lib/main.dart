@@ -588,6 +588,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
         _mapFocusLat = location.lat;
         _mapFocusLng = location.lng;
         _mapLevel = 4;
+        _locationRequestInFlight = false;
       });
       await _refresh(forceWeather: true);
     } else {
@@ -6354,9 +6355,12 @@ List<KakaoMapPlace> clusterMapPlacesForMap({
   required String language,
 }) {
   final selectedId = selected?.placeId;
+  const expandedPinFloor = 8;
   final selectedMarkers = <KakaoMapPlace>[];
+  final expandedMarkers = <KakaoMapPlace>[];
   final buckets = <String, List<LalaPlace>>{};
   final shouldUseClusters = places.length >= 30 && mapLevel >= 7;
+  var expandedPinCount = 0;
 
   KakaoMapPlace toMapPlace(LalaPlace place, {bool selected = false}) {
     return KakaoMapPlace(
@@ -6378,6 +6382,11 @@ List<KakaoMapPlace> clusterMapPlacesForMap({
       selectedMarkers.add(toMapPlace(place));
       continue;
     }
+    if (expandedPinCount < expandedPinFloor) {
+      expandedMarkers.add(toMapPlace(place));
+      expandedPinCount += 1;
+      continue;
+    }
     final latBucket = (place.lat * 180).round();
     final lngBucket = (place.lng * 180).round();
     final key = '${place.category}:$latBucket:$lngBucket';
@@ -6387,7 +6396,7 @@ List<KakaoMapPlace> clusterMapPlacesForMap({
   final clustered = <KakaoMapPlace>[];
   for (final entry in buckets.entries) {
     final group = entry.value;
-    if (group.length >= 2) {
+    if (group.length >= 3) {
       final lat =
           group.fold<double>(0, (sum, place) => sum + place.lat) / group.length;
       final lng =
@@ -6414,7 +6423,7 @@ List<KakaoMapPlace> clusterMapPlacesForMap({
     }
   }
 
-  return [...clustered, ...selectedMarkers];
+  return [...clustered, ...expandedMarkers, ...selectedMarkers];
 }
 
 class _MapRoundButton extends StatelessWidget {
