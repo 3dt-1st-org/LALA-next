@@ -159,12 +159,26 @@ def _build_cases(*, profile: str) -> list[SmokeCase]:
 
 def _build_deploy_cases() -> list[SmokeCase]:
     location = {"lat": 37.5665, "lng": 126.9780, "radius_m": 50000}
+    nearby_location = {**location, "radius_m": 1000}
     place_query = parse.urlencode(
         {**location, "category": "all", "language": "ko", "include_scores": "true"}
+    )
+    nearby_place_query = parse.urlencode(
+        {
+            **nearby_location,
+            "category": "all",
+            "language": "ko",
+            "include_scores": "true",
+        }
     )
     weather_query = parse.urlencode(location)
     return [
         SmokeCase("GET", f"/api/v1/places?{place_query}", validator="places_live_data"),
+        SmokeCase(
+            "GET",
+            f"/api/v1/places?{nearby_place_query}",
+            validator="places_location_data",
+        ),
         SmokeCase(
             "GET", f"/api/v1/weather?{weather_query}", validator="weather_live_data"
         ),
@@ -325,6 +339,7 @@ def _validate_payload(validator: str | None, payload: dict[str, Any]) -> str | N
         return "missing_data_object"
     return {
         "places_live_data": _validate_places_live_data,
+        "places_location_data": _validate_places_location_data,
         "weather_live_data": _validate_weather_live_data,
         "intervention_live_data": _validate_intervention_live_data,
         "daily_plan_live_data": _validate_daily_plan_live_data,
@@ -362,6 +377,32 @@ def _validate_places_live_data(data: dict[str, Any]) -> str | None:
         if isinstance(place, dict)
     ):
         return "places_missing_live_score"
+    return None
+
+
+def _validate_places_location_data(data: dict[str, Any]) -> str | None:
+    live_failure = _validate_places_live_data(data)
+    if live_failure:
+        return live_failure
+    places = data.get("places")
+    if not isinstance(places, list) or not places:
+        return "places_empty"
+    distances: list[float] = []
+    for place in places:
+        if not isinstance(place, dict):
+            continue
+        distance = place.get("distance_m")
+        if isinstance(distance, bool) or not isinstance(distance, (int, float)):
+            return "place_missing_postgis_distance"
+        if distance < 0 or distance > 1000:
+            return "place_distance_outside_radius"
+        distances.append(float(distance))
+    if not distances:
+        return "places_missing_postgis_distances"
+    if max(distances) <= 0:
+        return "places_distance_not_location_specific"
+    if len(distances) > 1 and len({round(distance) for distance in distances}) < 2:
+        return "places_distance_not_varied"
     return None
 
 

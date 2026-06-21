@@ -247,11 +247,14 @@ def _start_server(
     return server, thread, f"http://{host}:{port}"
 
 
-def _live_place() -> dict[str, Any]:
+def _live_place(
+    *, place_id: str = "tour-api-1", distance_m: int = 212
+) -> dict[str, Any]:
     return {
-        "place_id": "tour-api-1",
+        "place_id": place_id,
         "name": "중랑아트센터",
         "category": "culture_venue",
+        "distance_m": distance_m,
         "source": "db",
         "upstream_source": "tour_api",
         "image_url": "https://tong.visitkorea.or.kr/cms/resource/01/1_image2_1.jpg",
@@ -267,8 +270,11 @@ def _live_places_payload() -> dict[str, Any]:
         "ok": True,
         "data": {
             "source": "db",
-            "count": 1,
-            "places": [_live_place()],
+            "count": 2,
+            "places": [
+                _live_place(place_id="tour-api-1", distance_m=212),
+                _live_place(place_id="tour-api-2", distance_m=470),
+            ],
         },
     }
 
@@ -423,8 +429,8 @@ def test_unix_matrix_smoke_deploy_profile_keeps_ci_gate_bounded():
     assert result.returncode == 0, result.stderr
     assert "LALA-next API matrix smoke" in result.stdout
     assert "profile=deploy" in result.stdout
-    assert "checked=6" in result.stdout
-    assert server.protected_paths.count("/api/v1/places") == 1
+    assert "checked=7" in result.stdout
+    assert server.protected_paths.count("/api/v1/places") == 2
     assert server.protected_paths.count("/api/v1/weather") == 1
     assert server.protected_paths.count("/api/v1/plans/intervention") == 1
     assert server.protected_paths.count("/api/v1/plans/daily") == 1
@@ -469,6 +475,40 @@ def test_unix_matrix_smoke_deploy_profile_rejects_snapshot_place_payload():
     assert "profile=deploy" in result.stdout
     assert "places_source_not_live_db" in result.stderr
     assert "/api/v1/places" in server.protected_paths
+
+
+def test_unix_matrix_smoke_deploy_profile_rejects_missing_postgis_distance():
+    places_payload = _live_places_payload()
+    places_payload["data"]["places"][0].pop("distance_m")
+
+    server, thread, base_url = _start_server(
+        public_access=True, places_payload=places_payload
+    )
+    try:
+        result = _run_matrix_smoke(base_url, {}, profile="deploy")
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+    assert result.returncode != 0
+    assert "place_missing_postgis_distance" in result.stderr
+
+
+def test_unix_matrix_smoke_deploy_profile_rejects_place_outside_radius():
+    places_payload = _live_places_payload()
+    places_payload["data"]["places"][0]["distance_m"] = 1200
+
+    server, thread, base_url = _start_server(
+        public_access=True, places_payload=places_payload
+    )
+    try:
+        result = _run_matrix_smoke(base_url, {}, profile="deploy")
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+    assert result.returncode != 0
+    assert "place_distance_outside_radius" in result.stderr
 
 
 def test_unix_matrix_smoke_deploy_profile_rejects_unknown_dust_split():
