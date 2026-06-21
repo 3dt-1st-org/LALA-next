@@ -142,6 +142,7 @@ class _SmokeHandler(BaseHTTPRequestHandler):
                 self._write_json(self.server.daily_plan_payload)
                 return
             if path == "/api/v1/docents/script":
+                self.server.docent_request_bodies.append(self._read_json_body())
                 self._write_json(self.server.docent_payload)
                 return
             self._write_json({"ok": True, "data": {}})
@@ -165,6 +166,16 @@ class _SmokeHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _read_json_body(self) -> dict[str, Any]:
+        length = int(self.headers.get("Content-Length") or "0")
+        if length <= 0:
+            return {}
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+        except Exception:
+            return {}
+        return payload if isinstance(payload, dict) else {}
+
 
 class _SmokeServer(ThreadingHTTPServer):
     protected_paths: list[str]
@@ -178,6 +189,7 @@ class _SmokeServer(ThreadingHTTPServer):
     intervention_payload: dict[str, Any]
     daily_plan_payload: dict[str, Any]
     docent_payload: dict[str, Any]
+    docent_request_bodies: list[dict[str, Any]]
 
 
 def _run_smoke(
@@ -267,6 +279,7 @@ def _start_server(
     server.intervention_payload = intervention_payload or _live_intervention_payload()
     server.daily_plan_payload = daily_plan_payload or _live_daily_plan_payload()
     server.docent_payload = docent_payload or _live_docent_payload()
+    server.docent_request_bodies = []
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     host, port = server.server_address
@@ -357,7 +370,7 @@ def _live_docent_payload() -> dict[str, Any]:
             "script": (
                 "중랑아트센터는 현재 위치에서 약 840m 거리의 문화공간입니다. "
                 "LALA는 실제 내국인 소비 흐름, 소상공인 상권과의 연결성, 문화 경험 맥락을 함께 보고 이 장소를 고릅니다. "
-                "현재 날씨는 기온 21.6°C, 미세먼지 좋음(PM10 6) · 초미세먼지 좋음(PM2.5 2)입니다. "
+                "현재 날씨는 기온 21.6°C, 미세먼지 좋음(PM10 6) · 초미세먼지 좋음(PM2.5 1)입니다. "
                 "공식 한국관광공사 데이터와 장소 맥락을 함께 확인했고, 방문 전후 가까운 로컬 카페와 식당까지 이어지는 동선으로 연결합니다."
             ),
             "grounding_count": 1,
@@ -460,13 +473,23 @@ def test_unix_matrix_smoke_deploy_profile_keeps_ci_gate_bounded():
     assert result.returncode == 0, result.stderr
     assert "LALA-next API matrix smoke" in result.stdout
     assert "profile=deploy" in result.stdout
-    assert "checked=9" in result.stdout
-    assert server.protected_paths.count("/api/v1/places") == 3
-    assert server.protected_paths.count("/api/v1/weather") == 2
+    assert "checked=10" in result.stdout
+    assert server.protected_paths.count("/api/v1/places") == 4
+    assert server.protected_paths.count("/api/v1/weather") == 3
     assert server.protected_paths.count("/api/v1/plans/intervention") == 1
     assert server.protected_paths.count("/api/v1/plans/daily") == 1
-    assert server.protected_paths.count("/api/v1/docents/script") == 1
+    assert server.protected_paths.count("/api/v1/docents/script") == 2
     assert server.protected_paths.count("/api/v1/docents/audio") == 1
+    assert len(server.docent_request_bodies) == 2
+    live_docent_body = server.docent_request_bodies[-1]
+    assert live_docent_body["place_id"] == "tour-api-1"
+    assert live_docent_body["source"] == "db"
+    assert live_docent_body["upstream_source"] == "tour_api"
+    assert live_docent_body["weather_temp"] == "23.4"
+    assert live_docent_body["dust_pm10"] == "6"
+    assert live_docent_body["dust_pm25"] == "1"
+    assert live_docent_body["dust_pm10_grade"] == "good"
+    assert live_docent_body["dust_pm25_grade"] == "good"
 
 
 def test_unix_matrix_smoke_deploy_profile_accepts_live_speech_audio():
@@ -478,7 +501,7 @@ def test_unix_matrix_smoke_deploy_profile_accepts_live_speech_audio():
         thread.join(timeout=5)
 
     assert result.returncode == 0, result.stderr
-    assert "checked=9" in result.stdout
+    assert "checked=10" in result.stdout
     assert server.protected_paths.count("/api/v1/docents/audio") == 1
 
 

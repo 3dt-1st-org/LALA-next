@@ -107,12 +107,22 @@ def run_matrix(
         )
         if failure:
             failures.append(failure)
+    checked = len(cases)
+    if profile == "deploy":
+        checked += 1
+        live_docent_failure = _run_live_docent_context_case(
+            base_url=base_url,
+            headers=auth_headers,
+            timeout=timeout,
+        )
+        if live_docent_failure:
+            failures.append(live_docent_failure)
 
     return {
         "ok": not failures,
         "mode": "api_matrix_smoke",
         "profile": profile,
-        "checked": len(cases),
+        "checked": checked,
         "failures": [
             {
                 "method": failure.case.method,
@@ -381,6 +391,251 @@ def _run_case(
     return None
 
 
+def _run_live_docent_context_case(
+    *,
+    base_url: str,
+    headers: dict[str, str],
+    timeout: float,
+) -> SmokeFailure | None:
+    chain_case = SmokeCase("CHAIN", "/api/v1/docents/script:live-context")
+    location = {"lat": 37.5665, "lng": 126.9780, "radius_m": 3000}
+    place_query = parse.urlencode(
+        {
+            **location,
+            "category": "all",
+            "language": "ko",
+            "include_scores": "true",
+        }
+    )
+    weather_query = parse.urlencode(
+        {"lat": location["lat"], "lng": location["lng"], "force": "false"}
+    )
+    try:
+        places_status, places_payload = _request_json_with_status(
+            SmokeCase("GET", f"/api/v1/places?{place_query}"),
+            base_url=base_url,
+            headers=headers,
+            timeout=timeout,
+        )
+        if places_status >= 500:
+            return SmokeFailure(
+                case=chain_case, status=places_status, reason="live_places_server_error"
+            )
+        places_failure = _validate_payload("places_live_data", places_payload)
+        if places_failure:
+            return SmokeFailure(
+                case=chain_case, status=places_status, reason=places_failure
+            )
+        places_data = places_payload.get("data") or {}
+        places = places_data.get("places")
+        if (
+            not isinstance(places, list)
+            or not places
+            or not isinstance(places[0], dict)
+        ):
+            return SmokeFailure(
+                case=chain_case, status=places_status, reason="live_places_empty"
+            )
+        place = places[0]
+
+        weather_status, weather_payload = _request_json_with_status(
+            SmokeCase("GET", f"/api/v1/weather?{weather_query}"),
+            base_url=base_url,
+            headers=headers,
+            timeout=timeout,
+        )
+        if weather_status >= 500:
+            return SmokeFailure(
+                case=chain_case,
+                status=weather_status,
+                reason="live_weather_server_error",
+            )
+        weather_failure = _validate_payload("weather_live_data", weather_payload)
+        if weather_failure:
+            return SmokeFailure(
+                case=chain_case, status=weather_status, reason=weather_failure
+            )
+        weather = weather_payload.get("data") or {}
+
+        docent_body = _live_docent_body(place=place, weather=weather)
+        docent_status, docent_payload = _request_json_with_status(
+            SmokeCase(
+                "POST",
+                "/api/v1/docents/script",
+                _json_body(docent_body),
+                validator="docent_quality",
+            ),
+            base_url=base_url,
+            headers=headers,
+            timeout=timeout,
+        )
+        if docent_status >= 500:
+            return SmokeFailure(
+                case=chain_case,
+                status=docent_status,
+                reason="live_docent_server_error",
+            )
+        docent_failure = _validate_payload("docent_quality", docent_payload)
+        if docent_failure:
+            return SmokeFailure(
+                case=chain_case, status=docent_status, reason=docent_failure
+            )
+        context_failure = _validate_live_docent_context(
+            docent_payload.get("data") or {},
+            place=place,
+            weather=weather,
+        )
+        if context_failure:
+            return SmokeFailure(
+                case=chain_case, status=docent_status, reason=context_failure
+            )
+    except Exception as exc:
+        return SmokeFailure(
+            case=chain_case,
+            status="exception",
+            reason=type(exc).__name__,
+        )
+    return None
+
+
+def _live_docent_body(
+    *,
+    place: dict[str, Any],
+    weather: dict[str, Any],
+) -> dict[str, Any]:
+    score = place.get("score")
+    if not isinstance(score, dict):
+        score = {}
+    components = score.get("components")
+    if not isinstance(components, dict):
+        components = {}
+    dust = weather.get("dust")
+    if not isinstance(dust, dict):
+        dust = {}
+    payload: dict[str, Any] = {
+        "place_id": _text(place.get("place_id")) or _text(place.get("id")),
+        "category": _docent_category(place.get("category")),
+        "language": "ko",
+        "mode": "brief",
+    }
+    _add_text(payload, "place_name", place.get("name"))
+    _add_text(payload, "address", place.get("address"))
+    _add_text(payload, "region_ko", place.get("region_ko"))
+    _add_text(payload, "region_en", place.get("region_en"))
+    _add_text(payload, "source", place.get("source"))
+    _add_text(payload, "upstream_source", place.get("upstream_source"))
+    _add_int(payload, "distance_m", place.get("distance_m"))
+    _add_score(payload, "final_score", score.get("final_score"))
+    _add_score(payload, "local_spending_score", components.get("local_spending_score"))
+    _add_score(
+        payload,
+        "small_merchant_fit_score",
+        components.get("small_merchant_fit_score"),
+    )
+    _add_score(
+        payload,
+        "demand_dispersion_score",
+        components.get("demand_dispersion_score"),
+    )
+    _add_score(payload, "weather_fit_score", components.get("weather_fit_score"))
+    _add_score(
+        payload,
+        "culture_relevance_score",
+        components.get("culture_relevance_score"),
+    )
+    _add_text(payload, "weather_temp", weather.get("temp"))
+    _add_text(payload, "weather_icon", weather.get("icon"))
+    _add_text(payload, "weather_outdoor_status", weather.get("outdoor_status"))
+    _add_text(payload, "dust_grade", dust.get("grade_ko") or dust.get("grade"))
+    _add_text(payload, "dust_pm10", dust.get("pm10"))
+    _add_text(payload, "dust_pm25", dust.get("pm25"))
+    _add_text(
+        payload,
+        "dust_pm10_grade",
+        dust.get("pm10_grade_ko") or dust.get("pm10_grade"),
+    )
+    _add_text(
+        payload,
+        "dust_pm25_grade",
+        dust.get("pm25_grade_ko") or dust.get("pm25_grade"),
+    )
+    return payload
+
+
+def _validate_live_docent_context(
+    data: dict[str, Any],
+    *,
+    place: dict[str, Any],
+    weather: dict[str, Any],
+) -> str | None:
+    script = str(data.get("script") or "")
+    place_name = _text(place.get("name"))
+    if place_name and place_name not in script:
+        return "docent_missing_live_place_name"
+    dust = weather.get("dust")
+    if not isinstance(dust, dict):
+        return "docent_missing_live_dust_payload"
+    pm10 = _text(dust.get("pm10"))
+    pm25 = _text(dust.get("pm25"))
+    if pm10 and not re.search(rf"PM10\s*{re.escape(pm10)}(?!\d)", script):
+        return "docent_missing_live_pm10_value"
+    if pm25 and not re.search(rf"PM2\.5\s*{re.escape(pm25)}(?!\d)", script):
+        return "docent_missing_live_pm25_value"
+    return None
+
+
+def _docent_category(value: Any) -> str:
+    category = _text(value)
+    if category in {"attraction", "restaurant", "event", "culture_venue"}:
+        return category
+    return "attraction"
+
+
+def _add_text(payload: dict[str, Any], key: str, value: Any) -> None:
+    text = _text(value)
+    if text:
+        payload[key] = text
+
+
+def _add_int(payload: dict[str, Any], key: str, value: Any) -> None:
+    if isinstance(value, bool):
+        return
+    if isinstance(value, int):
+        payload[key] = value
+        return
+    if isinstance(value, float) and value.is_integer():
+        payload[key] = int(value)
+        return
+    text = _text(value)
+    if not text:
+        return
+    try:
+        payload[key] = int(float(text))
+    except ValueError:
+        return
+
+
+def _add_score(payload: dict[str, Any], key: str, value: Any) -> None:
+    if isinstance(value, bool):
+        return
+    if isinstance(value, (int, float)):
+        score = float(value)
+    else:
+        text = _text(value)
+        if not text:
+            return
+        try:
+            score = float(text)
+        except ValueError:
+            return
+    if 0 <= score <= 1:
+        payload[key] = score
+
+
+def _text(value: Any) -> str:
+    return str(value or "").strip()
+
+
 def _validate_payload(validator: str | None, payload: dict[str, Any]) -> str | None:
     if not validator:
         return None
@@ -643,6 +898,24 @@ def _request_json(
     if not isinstance(payload, dict):
         raise RuntimeError("Unexpected JSON response.")
     return payload
+
+
+def _request_json_with_status(
+    case: SmokeCase,
+    *,
+    base_url: str,
+    headers: dict[str, str],
+    timeout: float,
+) -> tuple[int, dict[str, Any]]:
+    status, _, body = _request_raw(
+        case, base_url=base_url, headers=headers, timeout=timeout
+    )
+    payload = json.loads(body.decode("utf-8"))
+    if not isinstance(payload, dict):
+        raise RuntimeError("Unexpected JSON response.")
+    if payload.get("ok") is not True:
+        raise RuntimeError("Unexpected non-ok JSON response.")
+    return status, payload
 
 
 def _request_raw(
