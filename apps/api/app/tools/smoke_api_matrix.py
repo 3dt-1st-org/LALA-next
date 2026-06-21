@@ -29,7 +29,9 @@ class SmokeFailure:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Run a broader LALA-next API smoke matrix.")
+    parser = argparse.ArgumentParser(
+        description="Run a broader LALA-next API smoke matrix."
+    )
     parser.add_argument("--base-url", default="http://127.0.0.1:8080")
     parser.add_argument("--timeout", type=float, default=20.0)
     parser.add_argument(
@@ -41,7 +43,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
 
-    result = run_matrix(base_url=args.base_url, timeout=args.timeout, profile=args.profile)
+    result = run_matrix(
+        base_url=args.base_url, timeout=args.timeout, profile=args.profile
+    )
     if args.json:
         print(json.dumps(result, ensure_ascii=False, sort_keys=True))
     else:
@@ -49,7 +53,9 @@ def main(argv: list[str] | None = None) -> int:
     return 0 if result["ok"] else 1
 
 
-def run_matrix(*, base_url: str, timeout: float, profile: str = "full") -> dict[str, Any]:
+def run_matrix(
+    *, base_url: str, timeout: float, profile: str = "full"
+) -> dict[str, Any]:
     base_url = base_url.rstrip("/")
     readyz = _request_json(
         SmokeCase("GET", "/readyz"),
@@ -57,11 +63,23 @@ def run_matrix(*, base_url: str, timeout: float, profile: str = "full") -> dict[
         headers={},
         timeout=timeout,
     )
+    deploy_readyz_failure = (
+        _deploy_readyz_failure(readyz) if profile == "deploy" else None
+    )
+    if deploy_readyz_failure:
+        return {
+            "ok": False,
+            "mode": "api_matrix_smoke",
+            "profile": profile,
+            "checked": 0,
+            "failures": [deploy_readyz_failure],
+        }
     auth_headers = _matching_auth_headers(readyz)
     if auth_headers is None:
         return {
             "ok": False,
             "mode": "api_matrix_smoke",
+            "profile": profile,
             "checked": 0,
             "failures": [
                 {
@@ -102,6 +120,34 @@ def run_matrix(*, base_url: str, timeout: float, profile: str = "full") -> dict[
     }
 
 
+def _deploy_readyz_failure(readyz_payload: dict[str, Any]) -> dict[str, Any] | None:
+    data = readyz_payload.get("data") or {}
+    if data.get("status") != "ok":
+        return _readyz_failure("readyz_not_ok")
+    mode = data.get("mode") or {}
+    checks = data.get("checks") or {}
+    if mode.get("data") != "db-backed":
+        return _readyz_failure("data_mode_not_db_backed")
+    if checks.get("db") != "configured":
+        return _readyz_failure("db_not_configured")
+    if checks.get("postgis") != "configured":
+        return _readyz_failure("postgis_not_configured")
+    if checks.get("static_snapshot_fallback") == "enabled":
+        return _readyz_failure("static_snapshot_fallback_enabled")
+    if checks.get("client_auth") == "snapshot-fallback":
+        return _readyz_failure("snapshot_fallback_auth_enabled")
+    return None
+
+
+def _readyz_failure(reason: str) -> dict[str, Any]:
+    return {
+        "method": "READYZ",
+        "path": "/readyz",
+        "status": "failed",
+        "reason": reason,
+    }
+
+
 def _build_cases(*, profile: str) -> list[SmokeCase]:
     if profile == "deploy":
         return _build_deploy_cases()
@@ -118,7 +164,9 @@ def _build_deploy_cases() -> list[SmokeCase]:
         SmokeCase("GET", f"/api/v1/places?{place_query}"),
         SmokeCase("GET", f"/api/v1/weather?{weather_query}"),
         SmokeCase("GET", f"/api/v1/plans/intervention?{weather_query}"),
-        SmokeCase("POST", "/api/v1/plans/daily", _json_body({**location, "language": "ko"})),
+        SmokeCase(
+            "POST", "/api/v1/plans/daily", _json_body({**location, "language": "ko"})
+        ),
         SmokeCase(
             "POST",
             "/api/v1/docents/script",
@@ -156,7 +204,12 @@ def _build_full_cases() -> list[SmokeCase]:
             )
             cases.append(SmokeCase("GET", f"/api/v1/places?{query}"))
 
-    for lat, lng in ((37.2636, 127.0286), (37.5665, 126.9780), (0, 0), (33.4996, 126.5312)):
+    for lat, lng in (
+        (37.2636, 127.0286),
+        (37.5665, 126.9780),
+        (0, 0),
+        (33.4996, 126.5312),
+    ):
         query = parse.urlencode({"lat": lat, "lng": lng, "radius_m": 50000})
         cases.append(SmokeCase("GET", f"/api/v1/weather?{query}"))
         cases.append(SmokeCase("GET", f"/api/v1/plans/intervention?{query}"))
@@ -164,7 +217,9 @@ def _build_full_cases() -> list[SmokeCase]:
             SmokeCase(
                 "POST",
                 "/api/v1/plans/daily",
-                _json_body({"lat": lat, "lng": lng, "radius_m": 50000, "language": "ko"}),
+                _json_body(
+                    {"lat": lat, "lng": lng, "radius_m": 50000, "language": "ko"}
+                ),
             )
         )
 
@@ -219,7 +274,9 @@ def _run_case(
         return SmokeFailure(case=case, status=status, reason="server_error")
     if case.response_kind == "audio":
         if not content_type.startswith("audio/mpeg"):
-            return SmokeFailure(case=case, status=status, reason="unexpected_audio_content_type")
+            return SmokeFailure(
+                case=case, status=status, reason="unexpected_audio_content_type"
+            )
         if not body:
             return SmokeFailure(case=case, status=status, reason="empty_audio_body")
         return None
@@ -275,7 +332,10 @@ def _matching_auth_headers(readyz_payload: dict[str, Any]) -> dict[str, str] | N
     checks = (readyz_payload.get("data") or {}).get("checks") or {}
     bearer = os.getenv("LALA_SMOKE_BEARER_TOKEN") or os.getenv("API_BEARER_TOKEN")
     api_key = os.getenv("LALA_SMOKE_API_KEY") or os.getenv("IOS_API_KEY")
-    if checks.get("client_auth") == "public-contest" or checks.get("client_identity") == "public-contest":
+    if (
+        checks.get("client_auth") == "public-contest"
+        or checks.get("client_identity") == "public-contest"
+    ):
         return {}
     if checks.get("bearer_token") == "configured" and bearer:
         return {"Authorization": f"Bearer {bearer}"}

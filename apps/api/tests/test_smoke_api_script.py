@@ -37,10 +37,13 @@ class _SmokeHandler(BaseHTTPRequestHandler):
                                 "client_auth": "public-contest",
                                 "api_key": "skipped",
                                 "bearer_token": "skipped",
+                                "db": "configured",
+                                "postgis": "configured",
+                                "static_snapshot_fallback": self.server.static_snapshot_fallback,
                             },
                             "mode": {
-                                "overall": "db-backed",
-                                "data": "db-backed",
+                                "overall": self.server.data_mode,
+                                "data": self.server.data_mode,
                                 "ai": "disabled",
                                 "speech": "disabled",
                                 "worker": "dry-run",
@@ -60,10 +63,13 @@ class _SmokeHandler(BaseHTTPRequestHandler):
                             "client_auth": "configured",
                             "api_key": "skipped",
                             "bearer_token": "configured",
+                            "db": "configured",
+                            "postgis": "configured",
+                            "static_snapshot_fallback": self.server.static_snapshot_fallback,
                         },
                         "mode": {
-                            "overall": "db-backed",
-                            "data": "db-backed",
+                            "overall": self.server.data_mode,
+                            "data": self.server.data_mode,
                             "ai": "disabled",
                             "speech": "disabled",
                             "worker": "dry-run",
@@ -77,7 +83,10 @@ class _SmokeHandler(BaseHTTPRequestHandler):
             return
         if path.startswith("/api/v1/"):
             self.server.protected_paths.append(path)
-            if not self.server.public_access and self.headers.get("Authorization") != "Bearer server-token":
+            if (
+                not self.server.public_access
+                and self.headers.get("Authorization") != "Bearer server-token"
+            ):
                 self._write_json({"ok": False}, status=401)
                 return
             self._write_json({"ok": True, "data": {}})
@@ -88,17 +97,24 @@ class _SmokeHandler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path.startswith("/api/v1/"):
             self.server.protected_paths.append(path)
-            if not self.server.public_access and self.headers.get("Authorization") != "Bearer server-token":
+            if (
+                not self.server.public_access
+                and self.headers.get("Authorization") != "Bearer server-token"
+            ):
                 self._write_json({"ok": False}, status=401)
                 return
             if path == "/api/v1/docents/audio":
                 self._write_bytes(b"ID3smoke-audio", content_type="audio/mpeg")
                 return
-            self._write_json({"ok": True, "data": {"source": "rule_based_curation", "script": "ok"}})
+            self._write_json(
+                {"ok": True, "data": {"source": "rule_based_curation", "script": "ok"}}
+            )
             return
         self._write_json({"ok": False}, status=404)
 
-    def _write_bytes(self, body: bytes, *, content_type: str, status: int = 200) -> None:
+    def _write_bytes(
+        self, body: bytes, *, content_type: str, status: int = 200
+    ) -> None:
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
@@ -118,9 +134,13 @@ class _SmokeServer(ThreadingHTTPServer):
     protected_paths: list[str]
     public_access: bool
     ready_status: str
+    data_mode: str
+    static_snapshot_fallback: str
 
 
-def _run_smoke(base_url: str, env_overrides: dict[str, str]) -> subprocess.CompletedProcess[str]:
+def _run_smoke(
+    base_url: str, env_overrides: dict[str, str]
+) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env.update(
         {
@@ -184,11 +204,15 @@ def _start_server(
     *,
     public_access: bool = False,
     ready_status: str = "ok",
+    data_mode: str = "db-backed",
+    static_snapshot_fallback: str = "disabled",
 ) -> tuple[_SmokeServer, threading.Thread, str]:
     server = _SmokeServer(("127.0.0.1", 0), _SmokeHandler)
     server.protected_paths = []
     server.public_access = public_access
     server.ready_status = ready_status
+    server.data_mode = data_mode
+    server.static_snapshot_fallback = static_snapshot_fallback
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     host, port = server.server_address
@@ -296,6 +320,25 @@ def test_unix_matrix_smoke_deploy_profile_keeps_ci_gate_bounded():
     assert server.protected_paths.count("/api/v1/plans/daily") == 1
     assert server.protected_paths.count("/api/v1/docents/script") == 1
     assert server.protected_paths.count("/api/v1/docents/audio") == 1
+
+
+def test_unix_matrix_smoke_deploy_profile_rejects_snapshot_fallback_mode():
+    server, thread, base_url = _start_server(
+        public_access=True,
+        data_mode="public-cache",
+        static_snapshot_fallback="enabled",
+    )
+    try:
+        result = _run_matrix_smoke(base_url, {}, profile="deploy")
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+    assert result.returncode != 0
+    assert "profile=deploy" in result.stdout
+    assert "checked=0" in result.stdout
+    assert "data_mode_not_db_backed" in result.stderr
+    assert server.protected_paths == []
 
 
 def test_unix_matrix_smoke_uses_public_contest_access_without_auth_headers():
