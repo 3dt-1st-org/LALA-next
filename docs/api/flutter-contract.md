@@ -226,6 +226,10 @@ current-location distance, official data, local spending, weather, PM10, and
 PM2.5 signals, but it must not speak raw recommendation scores, internal RAG
 index labels, or source codes such as `tour_api`. Heavy score and reason details
 belong in the explicit score/reason UI, not the default docent script.
+The deploy smoke contract requires the script to mention the PM10 and PM2.5
+signals separately when weather context is supplied, include local
+small-merchant or neighborhood-business context, and give a lightweight route
+action such as how to continue before or after the visit.
 
 ### `POST /api/v1/docents/audio`
 

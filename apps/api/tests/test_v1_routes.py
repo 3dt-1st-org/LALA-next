@@ -222,6 +222,12 @@ def test_docent_script_returns_envelope(client, auth_headers):
             "demand_dispersion_score": 0.78,
             "weather_fit_score": 0.74,
             "culture_relevance_score": 0.91,
+            "weather_temp": "21.6°C",
+            "weather_outdoor_status": "good",
+            "dust_pm10": "6",
+            "dust_pm25": "2",
+            "dust_pm10_grade": "좋음",
+            "dust_pm25_grade": "좋음",
             "category": "event",
             "language": "ko",
             "mode": "brief",
@@ -243,6 +249,10 @@ def test_docent_script_returns_envelope(client, auth_headers):
     assert "소상공인 상권" in body["data"]["script"]
     assert "분산 동선" in body["data"]["script"]
     assert "문화 경험" in body["data"]["script"]
+    assert "PM10" in body["data"]["script"]
+    assert "PM2.5" in body["data"]["script"]
+    assert "방문 전" in body["data"]["script"]
+    assert "준비하고 있습니다" not in body["data"]["script"]
     assert "추천 근거" not in body["data"]["script"]
     assert "종합 추천 점수" not in body["data"]["script"]
     assert "장소 지식 인덱스" not in body["data"]["script"]
@@ -284,6 +294,9 @@ def test_docent_script_accepts_culture_venue_category(client, auth_headers):
     assert "°C°C" not in body["data"]["script"]
     assert "미세먼지 보통" in body["data"]["script"]
     assert "초미세먼지 좋음" in body["data"]["script"]
+    assert "PM10" in body["data"]["script"]
+    assert "PM2.5" in body["data"]["script"]
+    assert "로컬 카페" in body["data"]["script"]
 
 
 def test_docent_script_uses_db_cache_before_generation(

@@ -355,9 +355,9 @@ def _live_docent_payload() -> dict[str, Any]:
             "source": "rule_based_curation",
             "script": (
                 "중랑아트센터는 현재 위치에서 약 840m 거리의 문화공간입니다. "
-                "LALA는 실제 내국인 소비 흐름과 문화 경험 맥락을 함께 보고 이 장소를 고릅니다. "
+                "LALA는 실제 내국인 소비 흐름, 소상공인 상권과의 연결성, 문화 경험 맥락을 함께 보고 이 장소를 고릅니다. "
                 "현재 날씨는 기온 21.6°C, 미세먼지 좋음(PM10 6) · 초미세먼지 좋음(PM2.5 2)입니다. "
-                "공식 한국관광공사 데이터와 장소 맥락을 함께 확인했습니다."
+                "공식 한국관광공사 데이터와 장소 맥락을 함께 확인했고, 방문 전후 가까운 로컬 카페와 식당까지 이어지는 동선으로 연결합니다."
             ),
             "grounding_count": 1,
             "grounding_sources": ["place_profile"],
@@ -712,6 +712,89 @@ def test_unix_matrix_smoke_deploy_profile_rejects_docent_internal_evidence():
 
     assert result.returncode != 0
     assert "docent_script_contains_internal_evidence" in result.stderr
+
+
+def test_unix_matrix_smoke_deploy_profile_rejects_docent_without_dust_split():
+    docent_payload = _live_docent_payload()
+    docent_payload["data"]["script"] = (
+        "중랑아트센터는 현재 위치에서 약 840m 거리의 문화공간입니다. "
+        "LALA는 실제 내국인 소비 흐름, 소상공인 상권과의 연결성, 문화 경험 맥락을 함께 보고 이 장소를 고릅니다. "
+        "현재 날씨는 기온 21.6°C이고 외부 활동에 무리가 적은 편입니다. "
+        "공식 한국관광공사 데이터와 장소 맥락을 함께 확인했고, 방문 전후 가까운 로컬 카페와 식당까지 이어지는 동선으로 연결합니다."
+    )
+
+    server, thread, base_url = _start_server(
+        public_access=True, docent_payload=docent_payload
+    )
+    try:
+        result = _run_matrix_smoke(base_url, {}, profile="deploy")
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+    assert result.returncode != 0
+    assert "docent_missing_dust_split_context" in result.stderr
+
+
+def test_unix_matrix_smoke_deploy_profile_rejects_docent_without_small_merchant_context():
+    docent_payload = _live_docent_payload()
+    docent_payload["data"]["script"] = (
+        "중랑아트센터는 현재 위치에서 약 840m 거리의 문화공간입니다. "
+        "LALA는 실제 내국인 소비 흐름과 문화 경험 맥락을 함께 보고 이 장소를 고릅니다. "
+        "현재 날씨는 기온 21.6°C, 미세먼지 좋음(PM10 6) · 초미세먼지 좋음(PM2.5 2)입니다. "
+        "공식 한국관광공사 데이터와 장소 맥락을 함께 확인했고, 방문 전후 가까운 다음 장소까지 이어지는 동선으로 연결합니다."
+    )
+
+    server, thread, base_url = _start_server(
+        public_access=True, docent_payload=docent_payload
+    )
+    try:
+        result = _run_matrix_smoke(base_url, {}, profile="deploy")
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+    assert result.returncode != 0
+    assert "docent_missing_small_merchant_context" in result.stderr
+
+
+def test_unix_matrix_smoke_deploy_profile_rejects_generic_docent_waiting_copy():
+    docent_payload = _live_docent_payload()
+    docent_payload["data"]["script"] += " 도슨트를 준비하고 있습니다."
+
+    server, thread, base_url = _start_server(
+        public_access=True, docent_payload=docent_payload
+    )
+    try:
+        result = _run_matrix_smoke(base_url, {}, profile="deploy")
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+    assert result.returncode != 0
+    assert "docent_script_too_generic" in result.stderr
+
+
+def test_unix_matrix_smoke_deploy_profile_rejects_docent_without_route_action():
+    docent_payload = _live_docent_payload()
+    docent_payload["data"]["script"] = (
+        "중랑아트센터는 현재 위치에서 약 840m 거리의 문화공간입니다. "
+        "LALA는 실제 내국인 소비 흐름, 소상공인 상권과의 연결성, 문화 경험 맥락을 함께 보고 이 장소를 고릅니다. "
+        "현재 날씨는 기온 21.6°C, 미세먼지 좋음(PM10 6) · 초미세먼지 좋음(PM2.5 2)입니다. "
+        "공식 한국관광공사 데이터와 장소 맥락을 확인했습니다."
+    )
+
+    server, thread, base_url = _start_server(
+        public_access=True, docent_payload=docent_payload
+    )
+    try:
+        result = _run_matrix_smoke(base_url, {}, profile="deploy")
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+    assert result.returncode != 0
+    assert "docent_missing_route_action_context" in result.stderr
 
 
 def test_unix_matrix_smoke_uses_public_contest_access_without_auth_headers():

@@ -519,8 +519,16 @@ def _validate_docent_quality(data: dict[str, Any]) -> str | None:
         return "docent_missing_location_context"
     if not any(term in script for term in ("내국인 소비", "로컬 소비", "지역 소비")):
         return "docent_missing_local_value_context"
+    if not any(term in script for term in ("소상공인", "상권", "골목", "로컬 카페", "local business")):
+        return "docent_missing_small_merchant_context"
+    if any(term in script for term in ("준비하고 있습니다", "준비 중입니다")):
+        return "docent_script_too_generic"
     if not any(term in script for term in ("날씨", "미세먼지", "초미세먼지", "PM10")):
         return "docent_missing_weather_context"
+    if "PM10" not in script or not any(term in script for term in ("PM2.5", "초미세먼지")):
+        return "docent_missing_dust_split_context"
+    if not any(term in script for term in ("방문 전후", "동선", "이어", "함께 연결", "continue to the next")):
+        return "docent_missing_route_action_context"
     if not any(term in script for term in ("공식", "한국관광공사")):
         return "docent_missing_official_grounding"
     return None
