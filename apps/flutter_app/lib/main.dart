@@ -7602,10 +7602,12 @@ LalaWeather? _publicWeatherOrNull(LalaWeather? weather) {
 }
 
 bool _isPlaceholderWeatherSource(String? source) {
-  return switch ((source ?? '').trim()) {
-    '' || 'skeleton' || 'fallback' || 'demo_fallback' || 'unavailable' => true,
-    _ => false,
-  };
+  final normalized = (source ?? '').trim();
+  return normalized.isEmpty ||
+      normalized == 'skeleton' ||
+      normalized == 'fallback' ||
+      normalized == 'unavailable' ||
+      normalized.endsWith('_fallback');
 }
 
 String _temperatureLabel(String value) {
@@ -8009,12 +8011,14 @@ class _MiniChip extends StatelessWidget {
 }
 
 String _sourceLabel(String? value, {String language = 'ko'}) {
+  if (_isFallbackSourceCode(value)) {
+    return _isEnglish(language) ? 'Limited offline data' : '제한적 오프라인 데이터';
+  }
   if (_isEnglish(language)) {
     return switch ((value ?? '').trim()) {
       'db' => 'Live recommendations',
       'mixed' => 'Live + official data',
       'public_mvp_snapshot' => 'Official data',
-      'demo_fallback' => 'LALA curation',
       'skeleton' => 'LALA curation',
       '' => '-',
       final source => source,
@@ -8024,7 +8028,6 @@ String _sourceLabel(String? value, {String language = 'ko'}) {
     'db' => '실시간 추천',
     'mixed' => '실시간·공식 데이터',
     'public_mvp_snapshot' => '공식 데이터',
-    'demo_fallback' => '로컬 큐레이션',
     'skeleton' => '로컬 큐레이션',
     '' => '-',
     final source => source,
@@ -8032,6 +8035,9 @@ String _sourceLabel(String? value, {String language = 'ko'}) {
 }
 
 String _weatherSourceLabel(String? value, {String language = 'ko'}) {
+  if (_isPlaceholderWeatherSource(value)) {
+    return _isEnglish(language) ? 'Weather pending' : '날씨 준비 중';
+  }
   if (_isEnglish(language)) {
     return switch ((value ?? '').trim()) {
       'db' => 'Live weather',
@@ -8041,10 +8047,6 @@ String _weatherSourceLabel(String? value, {String language = 'ko'}) {
         'KMA weather + AirKorea air quality',
       'mixed' => 'Live + official weather',
       'public_mvp_snapshot' => 'Official weather',
-      'demo_fallback' => 'Weather pending',
-      'skeleton' => 'Weather pending',
-      'fallback' => 'Weather pending',
-      'unavailable' => 'Weather pending',
       '' => '-',
       final source => _sourceLabel(source, language: language),
     };
@@ -8056,10 +8058,6 @@ String _weatherSourceLabel(String? value, {String language = 'ko'}) {
     'kma_ultra_srt_ncst+airkorea_sido_realtime' => '기상청·AirKorea 실황',
     'mixed' => '실시간·공식 날씨',
     'public_mvp_snapshot' => '공식 날씨',
-    'demo_fallback' => '날씨 준비 중',
-    'skeleton' => '날씨 준비 중',
-    'fallback' => '날씨 준비 중',
-    'unavailable' => '날씨 준비 중',
     '' => '-',
     final source => _sourceLabel(source, language: language),
   };
@@ -8091,28 +8089,36 @@ String? _externalSourceLabel(Object? value, {String language = 'ko'}) {
 }
 
 String _basisLabel(String value, {String language = 'ko'}) {
+  if (_isFallbackSourceCode(value)) {
+    return _isEnglish(language) ? 'Offline snapshot' : '오프라인 스냅샷';
+  }
   if (_isEnglish(language)) {
     return switch (value.trim()) {
       'actual_data' => 'Real data',
-      'demo_seed' => 'LALA curation',
+      'dev_seed' => 'LALA curation',
       'analytics.place_score_snapshots' => 'LALA recommendation score',
       'local_curation' => 'LALA curation',
       'public_mvp_snapshot' => 'Official data',
-      'demo_fallback' => 'LALA curation',
       final basis when basis.isEmpty => '-',
       final basis => basis,
     };
   }
   return switch (value.trim()) {
     'actual_data' => '실데이터',
-    'demo_seed' => '로컬 큐레이션',
+    'dev_seed' => '로컬 큐레이션',
     'analytics.place_score_snapshots' => 'LALA 추천 점수',
     'local_curation' => '로컬 큐레이션',
     'public_mvp_snapshot' => '공식 데이터',
-    'demo_fallback' => '로컬 큐레이션',
     final basis when basis.isEmpty => '-',
     final basis => basis,
   };
+}
+
+bool _isFallbackSourceCode(String? value) {
+  final normalized = (value ?? '').trim();
+  return normalized == 'fallback' ||
+      normalized.endsWith('_fallback') ||
+      normalized.contains('snapshot_fallback');
 }
 
 List<String> _stringList(Object? value) {

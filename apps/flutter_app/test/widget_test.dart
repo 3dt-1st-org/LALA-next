@@ -173,7 +173,7 @@ void main() {
     expect(find.text('공식 장소'), findsOneWidget);
   });
 
-  testWidgets('loads snapshot fallback panels before auth is configured', (
+  testWidgets('loads live db-backed panels without authentication', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -242,6 +242,7 @@ void main() {
     tester,
   ) async {
     final configs = <LalaAppConfig>[];
+    final backends = <FakeBackend>[];
     final locationProvider = FakeLocationProvider(
       const LalaLocationResult.found(LalaLocation(lat: 37.5665, lng: 126.9780)),
     );
@@ -250,7 +251,9 @@ void main() {
       TestLalaApp(
         backendFactory: (config) {
           configs.add(config);
-          return FakeBackend(config);
+          final backend = FakeBackend(config);
+          backends.add(backend);
+          return backend;
         },
         initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
         locationProvider: locationProvider,
@@ -263,6 +266,15 @@ void main() {
     expect(configs, isNotEmpty);
     expect(configs.last.lat, 37.5665);
     expect(configs.last.lng, 126.9780);
+    expect(backends.first.placesRequestConfigs, isEmpty);
+    expect(backends.last.placesRequestConfigs.single.lat, 37.5665);
+    expect(backends.last.placesRequestConfigs.single.lng, 126.9780);
+    expect(backends.last.weatherRequestConfigs.single.lat, 37.5665);
+    expect(backends.last.weatherRequestConfigs.single.lng, 126.9780);
+    expect(backends.last.interventionRequestConfigs.single.lat, 37.5665);
+    expect(backends.last.interventionRequestConfigs.single.lng, 126.9780);
+    expect(backends.last.dailyPlanRequestConfigs.single.lat, 37.5665);
+    expect(backends.last.dailyPlanRequestConfigs.single.lng, 126.9780);
     expect(find.text('추천 장소 접기'), findsOneWidget);
     expect(find.text('날씨 데이터 준비 중'), findsNothing);
   });
@@ -1472,7 +1484,7 @@ void main() {
       await tester.tap(evidenceButton);
       await tester.pumpAndSettle();
 
-      expect(find.text('공식 데이터'), findsWidgets);
+      expect(find.text('실시간 추천'), findsWidgets);
       expect(find.textContaining('스냅샷'), findsNothing);
     },
   );
@@ -1512,7 +1524,7 @@ void main() {
     await tester.tap(evidenceButton);
     await tester.pumpAndSettle();
 
-    expect(find.text('Official data'), findsWidgets);
+    expect(find.text('Live recommendations'), findsWidgets);
     expect(find.textContaining('snapshot'), findsNothing);
   });
 
@@ -1816,6 +1828,10 @@ class FakeBackend implements LalaBackend {
   final LalaWeather? weather;
   final List<String> docentScriptRequests = <String>[];
   final List<String> audioRequests = <String>[];
+  final List<LalaAppConfig> placesRequestConfigs = <LalaAppConfig>[];
+  final List<LalaAppConfig> weatherRequestConfigs = <LalaAppConfig>[];
+  final List<LalaAppConfig> interventionRequestConfigs = <LalaAppConfig>[];
+  final List<LalaAppConfig> dailyPlanRequestConfigs = <LalaAppConfig>[];
   int weatherRequests = 0;
   int dailyPlanRequests = 0;
 
@@ -1844,12 +1860,14 @@ class FakeBackend implements LalaBackend {
           'jwt_validation': authMode == LalaAuthMode.oauthJwt
               ? 'configured'
               : 'skipped',
-          'db': 'skipped',
+          'db': 'configured',
+          'postgis': 'configured',
+          'static_snapshot_fallback': 'disabled',
           'worker_contracts': 'configured',
         },
         mode: const LalaRuntimeMode(
-          overall: 'degraded',
-          data: 'unavailable',
+          overall: 'ok',
+          data: 'db-backed',
           ai: 'disabled',
           speech: 'disabled',
           worker: 'dry-run',
@@ -1860,6 +1878,7 @@ class FakeBackend implements LalaBackend {
 
   @override
   Future<LalaEnvelope<LalaPlacesResponse>> getPlaces() async {
+    placesRequestConfigs.add(config);
     if (failAuthenticatedLoad) {
       throw const LalaApiException(
         code: 'UPSTREAM_UNAVAILABLE',
@@ -1882,7 +1901,7 @@ class FakeBackend implements LalaBackend {
           category: config.category,
           language: config.lang,
         ),
-        source: 'public_mvp_snapshot',
+        source: 'db',
       ),
     );
   }
@@ -1890,11 +1909,13 @@ class FakeBackend implements LalaBackend {
   @override
   Future<LalaEnvelope<LalaWeather>> getWeather() async {
     weatherRequests += 1;
+    weatherRequestConfigs.add(config);
     return _envelope(weather ?? _weather());
   }
 
   @override
   Future<LalaEnvelope<LalaIntervention>> getIntervention() async {
+    interventionRequestConfigs.add(config);
     final place = (places ?? [_place()]).first;
     return _envelope(
       LalaIntervention(
@@ -1912,6 +1933,7 @@ class FakeBackend implements LalaBackend {
   @override
   Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan() async {
     dailyPlanRequests += 1;
+    dailyPlanRequestConfigs.add(config);
     final place = (places ?? [_place()]).first;
     return _envelope(
       LalaDailyPlan(
@@ -2256,8 +2278,8 @@ LalaPlace _eventPlace() {
     isOngoing: true,
     isApproximateLocation: false,
     distanceM: 180,
-    source: 'public_mvp_snapshot',
-    upstreamSource: 'dev_seed',
+    source: 'db',
+    upstreamSource: 'tour_api',
     score: LalaPlaceScore(
       finalScore: 0.79,
       formulaVersion: 'local-value-v2',
@@ -2270,9 +2292,9 @@ LalaPlace _eventPlace() {
         cultureRelevanceScore: 0.90,
         accessibilityFitScore: 0.60,
       ),
-      dataBasis: 'public_mvp_snapshot',
+      dataBasis: 'analytics.place_score_snapshots',
       features: {
-        'primary_source': 'dev_seed',
+        'primary_source': 'tour_api',
         'input_sources': <String>[
           'travel.places',
           'travel.place_events',
@@ -2297,7 +2319,7 @@ LalaPlace _koreanOnlyPlace() {
     address: '경기도 과천시 사기막길 71-7',
     regionKo: '과천시',
     distanceM: 320,
-    source: 'public_mvp_snapshot',
+    source: 'db',
     upstreamSource: 'tour_api',
   );
 }
@@ -2313,7 +2335,7 @@ LalaPlace _englishOnlyPlace() {
     address: '38 Everland-ro 562beon-gil, Yongin-si, Gyeonggi-do',
     regionEn: 'Yongin',
     distanceM: 620,
-    source: 'public_mvp_snapshot',
+    source: 'db',
     upstreamSource: 'tour_api',
   );
 }
@@ -2327,7 +2349,7 @@ LalaPlace _bilingualPlace() {
     lng: 127.0142,
     address: '경기도 수원시 팔달구 Suwon-si, Gyeonggi-do',
     distanceM: 145,
-    source: 'public_mvp_snapshot',
+    source: 'db',
     upstreamSource: 'tour_api',
   );
 }
