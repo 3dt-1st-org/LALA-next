@@ -353,9 +353,9 @@ def _live_docent_payload() -> dict[str, Any]:
             "source": "rule_based_curation",
             "script": (
                 "중랑아트센터는 현재 위치에서 약 840m 거리의 문화공간입니다. "
-                "추천 근거는 종합 추천 점수 86점, 내국인 소비 신호 강함입니다. "
+                "LALA는 실제 내국인 소비 흐름과 문화 경험 맥락을 함께 보고 이 장소를 고릅니다. "
                 "현재 날씨는 기온 21.6°C, 미세먼지 좋음(PM10 6) · 초미세먼지 좋음(PM2.5 2)입니다. "
-                "공식 한국관광공사 데이터와 장소 지식 인덱스를 함께 확인했습니다."
+                "공식 한국관광공사 데이터와 장소 맥락을 함께 확인했습니다."
             ),
             "grounding_count": 1,
             "grounding_sources": ["place_profile"],
@@ -639,6 +639,23 @@ def test_unix_matrix_smoke_deploy_profile_rejects_docent_internal_codes():
 
     assert result.returncode != 0
     assert "docent_script_contains_internal_code" in result.stderr
+
+
+def test_unix_matrix_smoke_deploy_profile_rejects_docent_internal_evidence():
+    docent_payload = _live_docent_payload()
+    docent_payload["data"]["script"] += " 종합 추천 점수는 86점입니다."
+
+    server, thread, base_url = _start_server(
+        public_access=True, docent_payload=docent_payload
+    )
+    try:
+        result = _run_matrix_smoke(base_url, {}, profile="deploy")
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+    assert result.returncode != 0
+    assert "docent_script_contains_internal_evidence" in result.stderr
 
 
 def test_unix_matrix_smoke_uses_public_contest_access_without_auth_headers():

@@ -221,6 +221,12 @@ cache reads and writes so an older ungrounded script cannot hide fresh RAG
 context. If no grounding context exists, the route can still use the non-expired
 script cache described below.
 
+Docent copy should read like a local guide, not a score report. It may use
+current-location distance, official data, local spending, weather, PM10, and
+PM2.5 signals, but it must not speak raw recommendation scores, internal RAG
+index labels, or source codes such as `tour_api`. Heavy score and reason details
+belong in the explicit score/reason UI, not the default docent script.
+
 ### `POST /api/v1/docents/audio`
 
 Request:

@@ -486,6 +486,11 @@ def _validate_docent_quality(data: dict[str, Any]) -> str | None:
     if any(term in lowered for term in ("skeleton", "placeholder", "mock", "demo")):
         return "docent_script_contains_placeholder"
     if any(
+        term in script
+        for term in ("종합 추천 점수", "최종 추천 점수", "장소 지식 인덱스", "°C°C")
+    ):
+        return "docent_script_contains_internal_evidence"
+    if any(
         term in lowered
         for term in ("culture_venue", "tour_api", "dev_seed", "public_mvp_snapshot")
     ):
@@ -498,13 +503,11 @@ def _validate_docent_quality(data: dict[str, Any]) -> str | None:
         return "docent_missing_grounding_sources"
     if not any(term in script for term in ("현재 위치", "840m", "거리")):
         return "docent_missing_location_context"
-    if not any(
-        term in script for term in ("추천 근거", "종합 추천 점수", "내국인 소비")
-    ):
-        return "docent_missing_score_context"
+    if not any(term in script for term in ("내국인 소비", "로컬 소비", "지역 소비")):
+        return "docent_missing_local_value_context"
     if not any(term in script for term in ("날씨", "미세먼지", "초미세먼지", "PM10")):
         return "docent_missing_weather_context"
-    if not any(term in script for term in ("공식", "한국관광공사", "장소 지식 인덱스")):
+    if not any(term in script for term in ("공식", "한국관광공사")):
         return "docent_missing_official_grounding"
     return None
 

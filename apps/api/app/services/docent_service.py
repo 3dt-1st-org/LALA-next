@@ -99,22 +99,26 @@ def _rule_based_script(
         grounding_sentence = _ko_grounding_sentence(grounding_context)
         place_subject = _ko_topic(place_label)
         if request.mode == "detail":
-            return (
-                f"{place_subject} LALA가 현재 위치 주변에서 고른 {category_label}입니다. "
-                f"{context} "
-                f"{score_context} "
-                f"{weather_context} "
-                f"{grounding_sentence} "
-                f"{category_context} "
-                "방문 전 운영 시간과 날씨를 확인하고, 가까운 다음 장소까지 무리 없는 동선으로 이어가 보세요."
+            return _join_script_parts(
+                [
+                    f"{place_subject} LALA가 현재 위치 주변에서 고른 {category_label}입니다.",
+                    context,
+                    score_context,
+                    weather_context,
+                    grounding_sentence,
+                    category_context,
+                    "방문 전 운영 시간과 날씨를 확인하고, 가까운 다음 장소까지 무리 없는 동선으로 이어가 보세요.",
+                ]
             )
-        return (
-            f"{place_subject} 현재 위치와 공식 데이터를 함께 보고 고른 {category_label}입니다. "
-            f"{context} "
-            f"{score_context} "
-            f"{weather_context} "
-            f"{grounding_sentence} "
-            f"{category_context}"
+        return _join_script_parts(
+            [
+                f"{place_subject} 현재 위치와 공식 데이터를 함께 보고 고른 {category_label}입니다.",
+                context,
+                score_context,
+                weather_context,
+                grounding_sentence,
+                category_context,
+            ]
         )
 
     language_label = display_language(request.language)
@@ -131,23 +135,31 @@ def _rule_based_script(
     weather_context = _en_weather_sentence(request)
     grounding_sentence = _en_grounding_sentence(grounding_context)
     if request.mode == "detail":
-        return (
-            f"{place_label} is a {request.category.replace('_', ' ')} recommended by LALA. "
-            f"{context} "
-            f"{score_context} "
-            f"{weather_context} "
-            f"{grounding_sentence} "
-            f"{category_context} "
-            "Before visiting, check opening hours and weather, then continue to the next nearby stop on foot where possible."
+        return _join_script_parts(
+            [
+                f"{place_label} is a {request.category.replace('_', ' ')} recommended by LALA.",
+                context,
+                score_context,
+                weather_context,
+                grounding_sentence,
+                category_context,
+                "Before visiting, check opening hours and weather, then continue to the next nearby stop on foot where possible.",
+            ]
         )
-    return (
-        f"{place_label} is a {language_label} LALA stop selected from official tourism, culture, and local spending signals. "
-        f"{context} "
-        f"{score_context} "
-        f"{weather_context} "
-        f"{grounding_sentence} "
-        f"{category_context}"
+    return _join_script_parts(
+        [
+            f"{place_label} is a {language_label} LALA stop selected from official tourism, culture, and local spending signals.",
+            context,
+            score_context,
+            weather_context,
+            grounding_sentence,
+            category_context,
+        ]
     )
+
+
+def _join_script_parts(parts: list[str]) -> str:
+    return " ".join(part.strip() for part in parts if part and part.strip())
 
 
 def _has_score_context(request: DocentScriptRequest) -> bool:
@@ -218,57 +230,41 @@ def _canonical_grounding_title(grounding_context: list[dict[str, Any]]) -> str |
 
 
 def _ko_score_sentence(request: DocentScriptRequest) -> str:
-    parts: list[str] = []
-    if request.final_score is not None:
-        parts.append(f"종합 추천 점수 {_score_percent(request.final_score)}점")
-    if request.local_spending_score is not None:
-        parts.append(
-            f"내국인 소비 신호 {_score_level_ko(request.local_spending_score)}"
-        )
-    if request.small_merchant_fit_score is not None:
-        parts.append(
-            f"소상공인 적합도 {_score_level_ko(request.small_merchant_fit_score)}"
-        )
-    if request.demand_dispersion_score is not None:
-        parts.append(
-            f"관광 수요 분산 효과 {_score_level_ko(request.demand_dispersion_score)}"
-        )
-    if request.weather_fit_score is not None:
-        parts.append(f"날씨 적합도 {_score_level_ko(request.weather_fit_score)}")
-    if request.culture_relevance_score is not None:
-        parts.append(f"문화 연계성 {_score_level_ko(request.culture_relevance_score)}")
-    if not parts:
+    highlights: list[str] = []
+    if _score_at_least(request.local_spending_score, 0.6):
+        highlights.append("실제 내국인 소비 흐름")
+    if _score_at_least(request.small_merchant_fit_score, 0.6):
+        highlights.append("소상공인 상권과의 연결성")
+    if _score_at_least(request.demand_dispersion_score, 0.6):
+        highlights.append("붐비는 관광지에만 몰리지 않는 관광 수요 분산 동선")
+    if _score_at_least(request.weather_fit_score, 0.6):
+        highlights.append("오늘 날씨와 무리 없는 이동성")
+    if _score_at_least(request.culture_relevance_score, 0.6):
+        highlights.append("문화 경험과 이어지는 맥락")
+    if not highlights and request.final_score is not None:
+        highlights.append("공식 데이터와 현재 위치 조건의 균형")
+    if not highlights:
         return ""
-    return f"추천 근거는 {', '.join(parts)}입니다."
+    return f"LALA는 {_join_natural_ko(highlights)}을 함께 보고 이 장소를 고릅니다."
 
 
 def _en_score_sentence(request: DocentScriptRequest) -> str:
-    parts: list[str] = []
-    if request.final_score is not None:
-        parts.append(
-            f"overall recommendation {_score_percent(request.final_score)}/100"
-        )
-    if request.local_spending_score is not None:
-        parts.append(
-            f"domestic spending signal {_score_level_en(request.local_spending_score)}"
-        )
-    if request.small_merchant_fit_score is not None:
-        parts.append(
-            f"small-merchant fit {_score_level_en(request.small_merchant_fit_score)}"
-        )
-    if request.demand_dispersion_score is not None:
-        parts.append(
-            f"demand-dispersion value {_score_level_en(request.demand_dispersion_score)}"
-        )
-    if request.weather_fit_score is not None:
-        parts.append(f"weather fit {_score_level_en(request.weather_fit_score)}")
-    if request.culture_relevance_score is not None:
-        parts.append(
-            f"culture relevance {_score_level_en(request.culture_relevance_score)}"
-        )
-    if not parts:
+    highlights: list[str] = []
+    if _score_at_least(request.local_spending_score, 0.6):
+        highlights.append("real domestic spending patterns")
+    if _score_at_least(request.small_merchant_fit_score, 0.6):
+        highlights.append("small local business fit")
+    if _score_at_least(request.demand_dispersion_score, 0.6):
+        highlights.append("a route that disperses demand beyond crowded spots")
+    if _score_at_least(request.weather_fit_score, 0.6):
+        highlights.append("weather-friendly movement")
+    if _score_at_least(request.culture_relevance_score, 0.6):
+        highlights.append("clear culture relevance")
+    if not highlights and request.final_score is not None:
+        highlights.append("a balanced match between official data and your location")
+    if not highlights:
         return ""
-    return f"The recommendation evidence includes {', '.join(parts)}."
+    return f"LALA selected this stop by reading {_join_natural_en(highlights)} together."
 
 
 def _ko_weather_sentence(request: DocentScriptRequest) -> str:
@@ -325,26 +321,20 @@ def _en_weather_sentence(request: DocentScriptRequest) -> str:
     return f"Current weather is {', '.join(parts)}, so this stop is {status}."
 
 
-def _score_percent(value: float) -> int:
-    return round(max(0.0, min(1.0, value)) * 100)
+def _score_at_least(value: float | None, threshold: float) -> bool:
+    return value is not None and max(0.0, min(1.0, value)) >= threshold
 
 
-def _score_level_ko(value: float) -> str:
-    score = max(0.0, min(1.0, value))
-    if score >= 0.8:
-        return "강함"
-    if score >= 0.6:
-        return "보통 이상"
-    return "보완 필요"
+def _join_natural_ko(items: list[str]) -> str:
+    if len(items) <= 1:
+        return "".join(items)
+    return ", ".join(items[:-1]) + f", 그리고 {items[-1]}"
 
 
-def _score_level_en(value: float) -> str:
-    score = max(0.0, min(1.0, value))
-    if score >= 0.8:
-        return "strong"
-    if score >= 0.6:
-        return "moderate"
-    return "needs support"
+def _join_natural_en(items: list[str]) -> str:
+    if len(items) <= 1:
+        return "".join(items)
+    return ", ".join(items[:-1]) + f", and {items[-1]}"
 
 
 def _ko_topic(value: str) -> str:
@@ -400,16 +390,14 @@ def _ko_grounding_sentence(grounding_context: list[dict[str, Any]]) -> str:
     summaries = _grounding_summaries(grounding_context, language="ko")
     if not summaries:
         return ""
-    return (
-        "장소 지식 인덱스에서는 " + " ".join(summaries) + " 맥락을 함께 확인했습니다."
-    )
+    return "공식 데이터와 장소 맥락에서는 " + " ".join(summaries)
 
 
 def _en_grounding_sentence(grounding_context: list[dict[str, Any]]) -> str:
     summaries = _grounding_summaries(grounding_context, language="en")
     if not summaries:
         return ""
-    return "LALA's place context notes " + " ".join(summaries)
+    return "Official place context notes " + " ".join(summaries)
 
 
 def _grounding_summaries(
@@ -433,11 +421,29 @@ def _grounding_summaries(
 
 def _compact_grounding_text(text: str, *, language: str) -> str:
     cleaned = _localize_internal_terms(" ".join(text.split()), language=language)
+    cleaned = _remove_internal_grounding_fragments(cleaned, language=language)
     if not cleaned:
         return ""
     if len(cleaned) <= 120:
         return cleaned
     return cleaned[:117].rstrip() + "..."
+
+
+def _remove_internal_grounding_fragments(text: str, *, language: str) -> str:
+    banned_terms = (
+        ("final score", "recommendation score", "score is", "weather filter")
+        if language == "en"
+        else ("최종 추천 점수", "추천 점수", "점수는", "날씨 필터 기준")
+    )
+    pieces = [piece.strip() for piece in text.split(".")]
+    kept = [
+        piece
+        for piece in pieces
+        if piece and not any(term in piece for term in banned_terms)
+    ]
+    if not kept:
+        return ""
+    return ". ".join(kept) + "."
 
 
 def _localize_internal_terms(text: str, *, language: str) -> str:

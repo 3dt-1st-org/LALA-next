@@ -239,13 +239,13 @@ def test_docent_script_returns_envelope(client, auth_headers):
     assert "중랑구" in body["data"]["script"]
     assert "840m" in body["data"]["script"]
     assert "한국관광공사" in body["data"]["script"]
-    assert "추천 근거" in body["data"]["script"]
-    assert "종합 추천 점수 86점" in body["data"]["script"]
-    assert "내국인 소비 신호 강함" in body["data"]["script"]
-    assert "소상공인 적합도 보통 이상" in body["data"]["script"]
-    assert "관광 수요 분산 효과 보통 이상" in body["data"]["script"]
-    assert "날씨 적합도 보통 이상" in body["data"]["script"]
-    assert "문화 연계성 강함" in body["data"]["script"]
+    assert "내국인 소비 흐름" in body["data"]["script"]
+    assert "소상공인 상권" in body["data"]["script"]
+    assert "분산 동선" in body["data"]["script"]
+    assert "문화 경험" in body["data"]["script"]
+    assert "추천 근거" not in body["data"]["script"]
+    assert "종합 추천 점수" not in body["data"]["script"]
+    assert "장소 지식 인덱스" not in body["data"]["script"]
     assert body["data"]["source"] == "rule_based_curation"
     assert len(body["data"]["request_hash"]) == 64
     assert body["data"]["cache_key"].startswith("docent_script:")
@@ -373,7 +373,8 @@ def test_docent_script_uses_rag_grounding_before_generic_cache(
     assert body["data"]["source"] == "rule_based_curation"
     assert body["data"]["grounding_count"] == 1
     assert body["data"]["grounding_sources"] == ["place_profile"]
-    assert "장소 지식 인덱스" in body["data"]["script"]
+    assert "공식 데이터와 장소 맥락" in body["data"]["script"]
+    assert "장소 지식 인덱스" not in body["data"]["script"]
     assert "야간 산책 동선" in body["data"]["script"]
     assert "문화공간" in body["data"]["script"]
     assert "한국관광공사 데이터" in body["data"]["script"]
@@ -425,6 +426,7 @@ def test_docent_script_prefers_rag_place_title_over_client_name(
     assert script.startswith("중랑아트센터는")
     assert "중랑아트센터입니다" in script
     assert "호암미술관" not in script
+    assert "장소 지식 인덱스" not in script
 
 
 def test_docent_script_localizes_grounding_codes_in_english(
@@ -501,9 +503,11 @@ def test_docent_script_score_context_skips_stale_cache(
     assert response.status_code == 200
     body = response.json()
     assert body["data"]["source"] == "rule_based_curation"
-    assert "종합 추천 점수 91점" in body["data"]["script"]
-    assert "내국인 소비 신호 강함" in body["data"]["script"]
-    assert "관광 수요 분산 효과 보통 이상" in body["data"]["script"]
+    assert "내국인 소비 흐름" in body["data"]["script"]
+    assert "관광 수요 분산" in body["data"]["script"]
+    assert "문화 경험" in body["data"]["script"]
+    assert "종합 추천 점수" not in body["data"]["script"]
+    assert "추천 근거" not in body["data"]["script"]
 
 
 def test_docent_script_accepts_legacy_detail_mode_and_english_language(
