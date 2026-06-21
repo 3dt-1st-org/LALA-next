@@ -1664,6 +1664,43 @@ void main() {
     },
   );
 
+  testWidgets('snapshot fallback is not presented as official live data', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      TestLalaApp(
+        backendFactory: SnapshotFallbackBackend.new,
+        initialConfig: const LalaAppConfig(
+          baseUri: 'http://api.test',
+          lang: 'en',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Limited offline data'), findsWidgets);
+    expect(find.textContaining('Official data'), findsNothing);
+    expect(find.textContaining('snapshot'), findsNothing);
+
+    await tester.tap(find.widgetWithText(TextButton, 'Details'));
+    await tester.pumpAndSettle();
+    final showSignalsButton = find.widgetWithText(
+      OutlinedButton,
+      'Show signals',
+    );
+    await tester.scrollUntilVisible(
+      showSignalsButton,
+      180,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(showSignalsButton);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Limited offline data'), findsWidgets);
+    expect(find.textContaining('Official data'), findsNothing);
+    expect(find.textContaining('snapshot'), findsNothing);
+  });
+
   testWidgets('event detail follows English language setting', (tester) async {
     tester.view.physicalSize = const Size(800, 1200);
     tester.view.devicePixelRatio = 1;
@@ -2260,6 +2297,103 @@ class FakeBackend implements LalaBackend {
   void close() {}
 }
 
+class SnapshotFallbackBackend extends FakeBackend {
+  SnapshotFallbackBackend(super.config);
+
+  @override
+  Future<LalaEnvelope<LalaReadiness>> getReadiness() async {
+    return _envelope(
+      const LalaReadiness(
+        status: 'ok',
+        checks: {
+          'client_auth': 'snapshot-fallback',
+          'client_identity': 'snapshot-fallback',
+          'db': 'skipped',
+          'postgis': 'skipped',
+          'static_snapshot_fallback': 'enabled',
+          'public_data_snapshot': 'configured',
+          'live_speech': 'disabled',
+          'worker_contracts': 'configured',
+        },
+        mode: LalaRuntimeMode(
+          overall: 'public-cache',
+          data: 'public-cache',
+          ai: 'disabled',
+          speech: 'disabled',
+          worker: 'dry-run',
+        ),
+      ),
+    );
+  }
+
+  @override
+  Future<LalaEnvelope<LalaPlacesResponse>> getPlaces() async {
+    placesRequestConfigs.add(config);
+    final responsePlaces = [_offlineFallbackPlace()];
+    return _envelope(
+      LalaPlacesResponse(
+        count: responsePlaces.length,
+        places: responsePlaces,
+        query: LalaPlacesQuery(
+          lat: config.lat,
+          lng: config.lng,
+          radiusM: config.radiusM,
+          limit: config.placeLimit,
+          category: config.category,
+          language: config.lang,
+        ),
+        source: 'public_mvp_snapshot',
+        locationEngine: 'static_snapshot',
+      ),
+    );
+  }
+
+  @override
+  Future<LalaEnvelope<LalaWeather>> getWeather() async {
+    return _envelope(_weather(source: 'public_mvp_snapshot'));
+  }
+
+  @override
+  Future<LalaEnvelope<LalaIntervention>> getIntervention() async {
+    final place = _offlineFallbackPlace();
+    return _envelope(
+      LalaIntervention(
+        center: LalaCoordinate(lat: config.lat, lng: config.lng),
+        radiusM: config.radiusM,
+        shouldIntervene: false,
+        reason: 'Limited offline context.',
+        recommendedAction: 'Review live data before routing.',
+        source: 'public_mvp_snapshot',
+        place: place,
+      ),
+    );
+  }
+
+  @override
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan() async {
+    final place = _offlineFallbackPlace();
+    return _envelope(
+      LalaDailyPlan(
+        language: config.lang,
+        center: LalaCoordinate(lat: config.lat, lng: config.lng),
+        radiusM: config.radiusM,
+        weather: _weather(source: 'public_mvp_snapshot'),
+        slots: [
+          LalaPlanSlot(
+            period: 'morning',
+            title: 'Offline review route',
+            place: place,
+          ),
+        ],
+        source: 'public_mvp_snapshot',
+        requestHash:
+            'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
+        cacheKey: 'daily_plan:snapshot-fallback',
+      ),
+    );
+  }
+}
+
 class BilingualInterventionBackend extends FakeBackend {
   BilingualInterventionBackend(super.config) : super(shouldIntervene: true);
 
@@ -2436,6 +2570,42 @@ LalaPlace _place() {
         'region_spend_amount': 14000000.0,
         'region_transaction_count': 1700,
         'missing_signals': <String>['review_attribute_analysis'],
+      },
+    ),
+  );
+}
+
+LalaPlace _offlineFallbackPlace() {
+  return const LalaPlace(
+    placeId: 'offline-review-place',
+    name: 'Offline Review Place',
+    nameKo: '오프라인 검토 장소',
+    nameEn: 'Offline Review Place',
+    category: 'attraction',
+    lat: 37.5665,
+    lng: 126.9780,
+    address: 'Seoul Jung-gu',
+    regionKo: '서울 중구',
+    regionEn: 'Seoul Jung-gu',
+    distanceM: 180,
+    source: 'public_mvp_snapshot',
+    upstreamSource: 'public_mvp_snapshot',
+    score: LalaPlaceScore(
+      finalScore: 0.62,
+      formulaVersion: 'local-value-v2',
+      components: LalaPlaceScoreComponents(
+        localSpendingScore: 0.48,
+        smallMerchantFitScore: null,
+        demandDispersionScore: 0.52,
+        weatherFitScore: 0.50,
+        reviewQualityScore: null,
+        cultureRelevanceScore: 0.64,
+        accessibilityFitScore: 0.50,
+      ),
+      dataBasis: 'public_mvp_snapshot',
+      features: {
+        'primary_source': 'public_mvp_snapshot',
+        'input_sources': <String>['public_mvp_snapshot'],
       },
     ),
   );

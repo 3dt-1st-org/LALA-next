@@ -5766,6 +5766,15 @@ class _PublicDataProofRow extends StatelessWidget {
       weather: weather,
       score: score,
     );
+    final title =
+        _hasFallbackProofSource(
+          place: place,
+          source: source,
+          weather: weather,
+          score: score,
+        )
+        ? _copy(language, ko: '제한적 데이터 근거', en: 'Limited data evidence')
+        : _copy(language, ko: '공식 데이터 근거', en: 'Official data evidence');
     return Container(
       padding: const EdgeInsets.all(11),
       decoration: BoxDecoration(
@@ -5779,7 +5788,7 @@ class _PublicDataProofRow extends StatelessWidget {
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           Text(
-            _copy(language, ko: '공식 데이터 근거', en: 'Official data evidence'),
+            title,
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
               color: const Color(0xFF64748B),
               fontWeight: FontWeight.w900,
@@ -5790,6 +5799,23 @@ class _PublicDataProofRow extends StatelessWidget {
       ),
     );
   }
+}
+
+bool _hasFallbackProofSource({
+  required LalaPlace place,
+  required String? source,
+  required LalaWeather? weather,
+  required LalaPlaceScore? score,
+}) {
+  final features = score?.features ?? const <String, dynamic>{};
+  final inputSources = _stringList(features['input_sources']);
+  return _isFallbackSourceCode(source) ||
+      _isFallbackSourceCode(place.source) ||
+      _isFallbackSourceCode(place.upstreamSource) ||
+      _isFallbackSourceCode(weather?.source) ||
+      _isFallbackSourceCode(score?.dataBasis) ||
+      _isFallbackSourceCode(features['primary_source']?.toString()) ||
+      inputSources.any(_isFallbackSourceCode);
 }
 
 List<String> _proofSourceLabels({
@@ -8528,7 +8554,6 @@ String _sourceLabel(String? value, {String language = 'ko'}) {
     return switch ((value ?? '').trim()) {
       'db' => 'Live recommendations',
       'mixed' => 'Live + official data',
-      'public_mvp_snapshot' => 'Official data',
       'skeleton' => 'LALA curation',
       '' => '-',
       final source => source,
@@ -8537,7 +8562,6 @@ String _sourceLabel(String? value, {String language = 'ko'}) {
   return switch ((value ?? '').trim()) {
     'db' => '실시간 추천',
     'mixed' => '실시간·공식 데이터',
-    'public_mvp_snapshot' => '공식 데이터',
     'skeleton' => '로컬 큐레이션',
     '' => '-',
     final source => source,
@@ -8545,7 +8569,7 @@ String _sourceLabel(String? value, {String language = 'ko'}) {
 }
 
 String _weatherSourceLabel(String? value, {String language = 'ko'}) {
-  if (_isPlaceholderWeatherSource(value)) {
+  if (_isPlaceholderWeatherSource(value) || _isFallbackSourceCode(value)) {
     return _isEnglish(language) ? 'Weather pending' : '날씨 준비 중';
   }
   if (_isEnglish(language)) {
@@ -8557,7 +8581,6 @@ String _weatherSourceLabel(String? value, {String language = 'ko'}) {
       'kma_ultra_srt_ncst+airkorea_sido_realtime' =>
         'KMA weather + AirKorea air quality',
       'mixed' => 'Live + official weather',
-      'public_mvp_snapshot' => 'Official weather',
       '' => '-',
       final source => _sourceLabel(source, language: language),
     };
@@ -8569,33 +8592,34 @@ String _weatherSourceLabel(String? value, {String language = 'ko'}) {
     'airkorea_sido_realtime' => 'AirKorea 대기질',
     'kma_ultra_srt_ncst+airkorea_sido_realtime' => '기상청·AirKorea 실황',
     'mixed' => '실시간·공식 날씨',
-    'public_mvp_snapshot' => '공식 날씨',
     '' => '-',
     final source => _sourceLabel(source, language: language),
   };
 }
 
 String? _externalSourceLabel(Object? value, {String language = 'ko'}) {
+  final normalized = (value?.toString() ?? '').trim();
+  if (_isFallbackSourceCode(normalized)) {
+    return _sourceLabel(normalized, language: language);
+  }
   if (_isEnglish(language)) {
-    return switch ((value?.toString() ?? '').trim()) {
+    return switch (normalized) {
       'tour_api' => 'Korea Tourism data',
       'kcisa' => 'Culture information data',
       'kopis' => 'Performing arts data',
       'dev_seed' => 'LALA curation',
       'local_fixture' => 'LALA local data',
-      'public_mvp_snapshot' => 'Official data',
       'canonical' => 'Official places',
       '' => null,
       final source => source,
     };
   }
-  return switch ((value?.toString() ?? '').trim()) {
+  return switch (normalized) {
     'tour_api' => '한국관광공사',
     'kcisa' => '문화정보원',
     'kopis' => '공연예술통합전산망',
     'dev_seed' => '로컬 큐레이션',
     'local_fixture' => '로컬 데이터',
-    'public_mvp_snapshot' => '공식 데이터',
     'canonical' => '공식 장소',
     '' => null,
     final source => source,
@@ -8604,7 +8628,7 @@ String? _externalSourceLabel(Object? value, {String language = 'ko'}) {
 
 String _basisLabel(String value, {String language = 'ko'}) {
   if (_isFallbackSourceCode(value)) {
-    return _isEnglish(language) ? 'Offline snapshot' : '오프라인 스냅샷';
+    return _isEnglish(language) ? 'Limited offline data' : '제한적 오프라인 데이터';
   }
   if (_isEnglish(language)) {
     return switch (value.trim()) {
@@ -8613,7 +8637,6 @@ String _basisLabel(String value, {String language = 'ko'}) {
       'local_fixture' => 'LALA local data',
       'analytics.place_score_snapshots' => 'LALA recommendation score',
       'local_curation' => 'LALA curation',
-      'public_mvp_snapshot' => 'Official data',
       final basis when basis.isEmpty => '-',
       final basis => basis,
     };
@@ -8624,7 +8647,6 @@ String _basisLabel(String value, {String language = 'ko'}) {
     'local_fixture' => '로컬 데이터',
     'analytics.place_score_snapshots' => 'LALA 추천 점수',
     'local_curation' => '로컬 큐레이션',
-    'public_mvp_snapshot' => '공식 데이터',
     final basis when basis.isEmpty => '-',
     final basis => basis,
   };
@@ -8632,7 +8654,8 @@ String _basisLabel(String value, {String language = 'ko'}) {
 
 bool _isFallbackSourceCode(String? value) {
   final normalized = (value ?? '').trim();
-  return normalized == 'fallback' ||
+  return normalized == 'public_mvp_snapshot' ||
+      normalized == 'fallback' ||
       normalized.endsWith('_fallback') ||
       normalized.contains('snapshot_fallback');
 }

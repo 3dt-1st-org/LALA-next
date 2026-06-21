@@ -353,6 +353,88 @@ async (page) => {
             $lowerRequestLog.Contains("dummy://")) {
             throw "Flutter location flow request log contained mock-like URLs."
         }
+
+        $markerEval = @'
+async () => {
+  function currentState() {
+    const container = document.getElementById("lala-kakao-background-map");
+    const pinCount = document.querySelectorAll(".lala-marker-pin").length;
+    const clusterCount = document.querySelectorAll(".lala-marker-cluster").length;
+    const stats = window.__lalaLastMapMarkerStats || {};
+    return { container, pinCount, clusterCount, stats };
+  }
+  let state = currentState();
+  for (let index = 0; index < 80; index += 1) {
+    const statPins = Number(state.stats.pins || 0);
+    if (Math.max(state.pinCount, statPins) > 0) {
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    state = currentState();
+  }
+  const sampleMarkers = Array.from(document.querySelectorAll(".lala-marker"))
+    .slice(0, 8)
+    .map((marker) => ({
+      id: marker.getAttribute("data-lala-place-id") || marker.dataset.lalaPlaceId || "",
+      category: marker.getAttribute("data-lala-category") || marker.dataset.lalaCategory || "",
+      clusterCount: marker.getAttribute("data-lala-cluster-count") || marker.dataset.lalaClusterCount || "",
+      title: marker.getAttribute("title") || ""
+    }));
+  return {
+    pinCount: state.pinCount,
+    clusterCount: state.clusterCount,
+    stats: state.stats,
+    containerPins: state.container ? state.container.getAttribute("data-lala-marker-pins") : null,
+    containerClusters: state.container ? state.container.getAttribute("data-lala-marker-clusters") : null,
+    sampleMarkers
+  };
+}
+'@
+        $markerStatePath = Join-Path $OutputDir "flutter-web-marker-state.json"
+        $markerStateRaw = Invoke-PlaywrightCli -CliArgs @("eval", $markerEval, "--raw")
+        $markerStateRaw | Set-Content -Path $markerStatePath -Encoding UTF8
+        try {
+            $markerState = $markerStateRaw | ConvertFrom-Json
+        } catch {
+            throw "Could not parse Flutter marker state. See $markerStatePath"
+        }
+        $stats = $markerState.stats
+        $pinCount = 0
+        $clusterCount = 0
+        $statPins = 0
+        $statClusters = 0
+        $statTotal = 0
+        if ($null -ne $markerState.pinCount) {
+            $pinCount = [int]$markerState.pinCount
+        }
+        if ($null -ne $markerState.clusterCount) {
+            $clusterCount = [int]$markerState.clusterCount
+        }
+        if ($null -ne $stats) {
+            if ($null -ne $stats.pins) {
+                $statPins = [int]$stats.pins
+            }
+            if ($null -ne $stats.clusters) {
+                $statClusters = [int]$stats.clusters
+            }
+            if ($null -ne $stats.total) {
+                $statTotal = [int]$stats.total
+            }
+        }
+        if ([Math]::Max($pinCount, $statPins) -le 0) {
+            throw "Flutter location flow rendered no real map pins."
+        }
+        if ($statTotal -le 0) {
+            throw "Flutter location flow did not pass live places into the map."
+        }
+        if ([Math]::Max($clusterCount, $statClusters) -gt 0 -and
+            [Math]::Max($pinCount, $statPins) -le 0) {
+            throw "Flutter location flow rendered only clusters without place pins."
+        }
+        if (-not $markerState.sampleMarkers -or $markerState.sampleMarkers.Count -eq 0) {
+            throw "Flutter location flow marker sample was empty."
+        }
+
         Invoke-PlaywrightCli -CliArgs @("console") |
             Set-Content -Path (Join-Path $OutputDir "flutter-web-console.txt") -Encoding UTF8
     }
@@ -388,7 +470,7 @@ async (page) => {
 
     Write-Host "Flutter web browser smoke completed."
     if ($RunLocationFlow) {
-        Write-Host "Artifacts: $OutputDir\flutter-web-snapshot.txt, flutter-web-screenshot.txt, flutter-web-console.txt, flutter-web-requests.txt"
+        Write-Host "Artifacts: $OutputDir\flutter-web-snapshot.txt, flutter-web-screenshot.txt, flutter-web-console.txt, flutter-web-requests.txt, flutter-web-marker-state.json"
     } else {
         Write-Host "Artifacts: $OutputDir\flutter-web-snapshot.txt, flutter-web-screenshot.txt, flutter-web-console.txt"
     }
