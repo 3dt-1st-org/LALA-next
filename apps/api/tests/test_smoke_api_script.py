@@ -296,6 +296,7 @@ def _live_places_payload() -> dict[str, Any]:
         "ok": True,
         "data": {
             "source": "db",
+            "location_engine": "postgis",
             "count": 2,
             "places": [
                 _live_place(place_id="tour-api-1", distance_m=212),

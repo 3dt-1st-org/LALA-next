@@ -277,12 +277,14 @@ Query parameters:
 
 ```json
 {
+  "count": 1,
   "query": {
     "lat": 37.2636,
     "lng": 127.0286,
     "radius_m": 50000,
     "category": "all",
-    "language": "ko"
+    "language": "ko",
+    "include_scores": true
   },
   "places": [
     {
@@ -316,17 +318,21 @@ Query parameters:
       }
     }
   ],
-  "source": "public_mvp_snapshot"
+  "source": "public_mvp_snapshot",
+  "location_engine": "static_snapshot"
 }
 ```
 
 When the canonical PostgreSQL read model returns rows, this payload keeps the
-same shape and uses `source: "db"`. DB rows are radius-filtered, joined to the
-latest `analytics.place_score_snapshots` row, then sorted by final score before
+same shape and uses `source: "db"` plus `location_engine: "postgis"`. DB rows
+are radius-filtered with PostGIS `ST_DWithin`, joined to the latest
+`analytics.place_score_snapshots` row, then sorted by final score before
 distance. When a DB-backed score is present, `score.data_basis` is
 `analytics.place_score_snapshots`. The public MVP cache uses
-`score.data_basis=public_mvp_snapshot`. If no DB or explicit snapshot fallback
-is available, the places list is empty instead of showing sample or mock rows.
+`source: "public_mvp_snapshot"` and `location_engine: "static_snapshot"` only
+for the limited read-only fallback path. If no DB or explicit snapshot fallback
+is available, the places list is empty with `location_engine: "none"` instead of
+showing sample or mock rows.
 
 `GET /api/v1/weather`:
 

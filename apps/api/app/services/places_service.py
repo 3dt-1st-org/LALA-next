@@ -47,6 +47,7 @@ def list_places(
                 "include_scores": include_scores,
             },
             "source": "db",
+            "location_engine": "postgis",
         }
 
     if get_settings().static_snapshot_fallback:
@@ -70,6 +71,7 @@ def list_places(
                     "include_scores": include_scores,
                 },
                 "source": public_mvp_data.SOURCE_NAME,
+                "location_engine": "static_snapshot",
             }
 
     return {
@@ -84,6 +86,7 @@ def list_places(
             "include_scores": include_scores,
         },
         "source": "db",
+        "location_engine": "none",
     }
 
 

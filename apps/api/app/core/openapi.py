@@ -603,7 +603,7 @@ def _places_query_schema() -> dict[str, Any]:
 def _places_data_schema() -> dict[str, Any]:
     return {
         "type": "object",
-        "required": ["count", "places", "query", "source"],
+        "required": ["count", "places", "query", "source", "location_engine"],
         "properties": {
             "count": {"type": "integer"},
             "places": {
@@ -612,6 +612,10 @@ def _places_data_schema() -> dict[str, Any]:
             },
             "query": {"$ref": "#/components/schemas/PlacesQuery"},
             "source": {"type": "string", "enum": ["public_mvp_snapshot", "db"]},
+            "location_engine": {
+                "type": "string",
+                "enum": ["postgis", "static_snapshot", "none"],
+            },
         },
         "additionalProperties": False,
     }

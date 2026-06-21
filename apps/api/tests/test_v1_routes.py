@@ -15,6 +15,7 @@ def test_places_route_returns_envelope(client, auth_headers):
     assert body["data"]["count"] == 0
     assert body["data"]["places"] == []
     assert body["data"]["source"] == "db"
+    assert body["data"]["location_engine"] == "none"
     assert body["data"]["query"]["category"] == "event"
     assert body["data"]["query"]["language"] == "en"
     assert body["meta"]["request_id"]
@@ -42,6 +43,7 @@ def test_places_accepts_language_query_alias(client, auth_headers, monkeypatch):
     assert response.status_code == 200
     body = response.json()
     assert body["data"]["query"]["language"] == "en"
+    assert body["data"]["location_engine"] == "static_snapshot"
     enriched = next(place for place in body["data"]["places"] if place.get("name_en"))
     assert enriched["name"] == enriched["name_en"]
     assert "Gyeonggi-do" in enriched["address"]
@@ -100,6 +102,7 @@ def test_places_uses_db_repository_when_rows_exist(client, auth_headers, monkeyp
     assert response.status_code == 200
     body = response.json()
     assert body["data"]["source"] == "db"
+    assert body["data"]["location_engine"] == "postgis"
     assert body["data"]["count"] == 1
     assert body["data"]["query"]["include_scores"] is True
     assert body["data"]["places"][0]["place_id"] == "db-place-1"

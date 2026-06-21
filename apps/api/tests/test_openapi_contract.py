@@ -271,6 +271,12 @@ def test_openapi_documents_v1_success_data_schemas(client):
         "public_mvp_snapshot",
         "db",
     ]
+    assert "location_engine" in schemas["PlacesData"]["required"]
+    assert schemas["PlacesData"]["properties"]["location_engine"]["enum"] == [
+        "postgis",
+        "static_snapshot",
+        "none",
+    ]
     assert schemas["WeatherData"]["properties"]["dust"] == {
         "$ref": "#/components/schemas/Dust"
     }

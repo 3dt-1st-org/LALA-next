@@ -378,6 +378,8 @@ def _validate_payload(validator: str | None, payload: dict[str, Any]) -> str | N
 def _validate_places_live_data(data: dict[str, Any]) -> str | None:
     if _is_fallback_source(data.get("source")):
         return "places_source_not_live_db"
+    if str(data.get("location_engine") or "").strip() != "postgis":
+        return "places_location_engine_not_postgis"
     places = data.get("places")
     if not isinstance(places, list) or not places:
         return "places_empty"
