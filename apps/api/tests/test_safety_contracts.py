@@ -266,6 +266,14 @@ def test_flutter_web_smoke_drives_location_flow_and_route_requests():
     assert "Flutter places response was not DB-backed." in unix_script
     assert "Flutter places response did not use PostGIS." in unix_script
     assert "Flutter weather response did not include AirKorea source." in unix_script
+    assert "Flutter docent script did not include the live place name." in unix_script
+    assert "Flutter docent response missed live grounding context." in unix_script
+    assert "Flutter docent script exposed internal evidence labels." in unix_script
+    assert "Flutter docent script exposed raw score values." in unix_script
+    assert "Flutter docent script missed local spending context." in unix_script
+    assert "Flutter docent script missed small merchant route context." in unix_script
+    assert "Flutter docent script missed official data grounding." in unix_script
+    assert "Flutter docent script missed route action context." in unix_script
     assert "Flutter docent script did not include the captured PM10 value." in unix_script
     assert "Flutter docent script did not include the captured PM2.5 value." in unix_script
     assert "Flutter location flow rendered no real map pins." in unix_script

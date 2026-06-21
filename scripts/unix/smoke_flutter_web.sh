@@ -714,6 +714,55 @@ if os.environ.get("EXPECT_DOCENT_SCRIPT") == "true":
     lowered = script.lower()
     if any(token in lowered for token in ("mock", "demo", "placeholder", "skeleton")):
         raise SystemExit("Flutter docent script contained placeholder wording.")
+    docent_place_id = text(docent.get("place_id"))
+    docent_place = first_place
+    if docent_place_id:
+        for place in place_items:
+            if not isinstance(place, dict):
+                continue
+            if docent_place_id in {
+                text(place.get("place_id")),
+                text(place.get("id")),
+            }:
+                docent_place = place
+                break
+    place_name = text(docent_place.get("name"))
+    if place_name and place_name not in script:
+        raise SystemExit("Flutter docent script did not include the live place name.")
+    grounding_count = docent.get("grounding_count")
+    if not isinstance(grounding_count, int) or grounding_count < 1:
+        raise SystemExit("Flutter docent response missed live grounding context.")
+    grounding_sources = docent.get("grounding_sources")
+    if not isinstance(grounding_sources, list) or not grounding_sources:
+        raise SystemExit("Flutter docent response missed grounding source labels.")
+    internal_terms = (
+        "종합 추천 점수",
+        "최종 추천 점수",
+        "장소 지식 인덱스",
+        "°C°C",
+        "culture_venue",
+        "tour_api",
+        "dev_seed",
+        "local_fixture",
+        "public_mvp_snapshot",
+        "snapshot",
+    )
+    if any(term in script for term in internal_terms) or "스냅샷" in script:
+        raise SystemExit("Flutter docent script exposed internal evidence labels.")
+    if re.search(
+        r"(추천 점수|내국인 소비|관광 수요 분산|날씨 적합도|리뷰 품질|문화 연계)"
+        r"(?:는|은|:)?\s*\d",
+        script,
+    ):
+        raise SystemExit("Flutter docent script exposed raw score values.")
+    if not any(term in script for term in ("내국인 소비", "로컬 소비", "지역 소비")):
+        raise SystemExit("Flutter docent script missed local spending context.")
+    if not any(term in script for term in ("소상공인", "상권", "골목", "로컬 카페", "카페", "식당")):
+        raise SystemExit("Flutter docent script missed small merchant route context.")
+    if not any(term in script for term in ("공식", "한국관광공사", "문화정보원", "공연예술통합전산망", "운영 DB")):
+        raise SystemExit("Flutter docent script missed official data grounding.")
+    if not any(term in script for term in ("방문 전후", "동선", "이어", "함께 연결")):
+        raise SystemExit("Flutter docent script missed route action context.")
     if not re.search(rf"PM10\s*{re.escape(pm10)}(?!\d)", script):
         raise SystemExit("Flutter docent script did not include the captured PM10 value.")
     if not re.search(rf"PM2\.5\s*{re.escape(pm25)}(?!\d)", script):

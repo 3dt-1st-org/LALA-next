@@ -158,7 +158,8 @@ same location-flow request check against it. Use
 `--web-url https://lala-next.cloud/?qa=<label>` for the deployed contest site so
 the browser opens the registered Kakao/CORS origin directly; deployed and
 DB-backed checks also verify a live-context docent script from the same
-place/weather data. The deployed public site version is CI-gated by
+place/weather data, including live place/local value/official grounding without
+raw score leakage. The deployed public site version is CI-gated by
 `.github/workflows/deployed-web-smoke.yml` on relevant `dev` pushes.
 
 The app shell loads public readiness before auth, shows whether the current

@@ -86,8 +86,9 @@ Kakao/CORS origin directly and verifies the same location-driven API requests,
 then verifies a live-context docent script from the same place/weather data. The macOS/Linux smoke also captures
 `flutter-web-api-responses.json` and fails if the browser received non-DB
 places, a non-PostGIS location engine, weather without AirKorea PM10/PM2.5
-values, a docent script that omits the captured PM10/PM2.5 context, or a map
-state that renders only clusters without real place pins.
+values, a docent script that omits live place/local value/official grounding or
+the captured PM10/PM2.5 context, raw score/internal labels in docent copy, or a
+map state that renders only clusters without real place pins.
 Without
 `--start-api`, the app still renders its offline public state when the API is
 not running and the console artifact records the expected `/healthz`
