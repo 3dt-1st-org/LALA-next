@@ -44,9 +44,37 @@ def test_place_profile_chunk_keeps_public_value_score_context():
     assert chunk.source_type == "place_profile"
     assert chunk.source_table == "travel.places"
     assert chunk.place_id == "place-1"
+    assert "카테고리는 명소" in chunk.body_ko
+    assert "attraction" not in chunk.body_ko
     assert "내국인 소비" in chunk.body_ko
     assert "관광 수요 분산" in chunk.body_ko
     assert chunk.metadata["score"]["features"]["card_month"] == "2026-05-01"
+
+
+def test_place_profile_chunk_localizes_culture_venue_category():
+    chunk = rag_index._place_profile_chunk(
+        {
+            "place_id": "place-2",
+            "name_ko": "중랑아트센터",
+            "category": "culture_venue",
+            "address_ko": "서울특별시 중랑구",
+            "region_name_ko": "중랑구",
+            "is_indoor": True,
+            "primary_source": "tour_api",
+            "source_record_id": "3066000",
+            "final_score": None,
+            "local_spending_score": None,
+            "demand_dispersion_score": None,
+            "weather_fit_score": None,
+            "review_quality_score": None,
+            "culture_relevance_score": None,
+            "formula_version": "local-value-v2",
+            "features": {},
+        }
+    )
+
+    assert "카테고리는 문화공간" in chunk.body_ko
+    assert "culture_venue" not in chunk.body_ko
 
 
 def test_rag_index_plan_uses_intuitive_table_names(capsys):
@@ -101,7 +129,9 @@ def test_rag_query_prints_bounded_result_summary(monkeypatch, capsys):
             )
         ]
 
-    monkeypatch.setattr(run_rag_index, "query_knowledge_chunks", fake_query_knowledge_chunks)
+    monkeypatch.setattr(
+        run_rag_index, "query_knowledge_chunks", fake_query_knowledge_chunks
+    )
 
     exit_code = run_rag_index.main(["--query", "수원 문화 행사", "--source", "dynamic"])
 

@@ -108,9 +108,10 @@ def _rule_based_script(
         context = _ko_context_sentence(request)
         score_context = _ko_score_sentence(request)
         grounding_sentence = _ko_grounding_sentence(grounding_context)
+        place_subject = _ko_topic(place_label)
         if request.mode == "detail":
             return (
-                f"{place_label}은 LALA가 현재 위치 주변에서 고른 {category_label}입니다. "
+                f"{place_subject} LALA가 현재 위치 주변에서 고른 {category_label}입니다. "
                 f"{context} "
                 f"{score_context} "
                 f"{grounding_sentence} "
@@ -118,7 +119,7 @@ def _rule_based_script(
                 "방문 전 운영 시간과 날씨를 확인하고, 가까운 다음 장소까지 무리 없는 동선으로 이어가 보세요."
             )
         return (
-            f"{place_label}은 현재 위치와 공식 데이터를 함께 보고 고른 {category_label}입니다. "
+            f"{place_subject} 현재 위치와 공식 데이터를 함께 보고 고른 {category_label}입니다. "
             f"{context} "
             f"{score_context} "
             f"{grounding_sentence} "
@@ -245,6 +246,21 @@ def _score_level_en(value: float) -> str:
     return "needs support"
 
 
+def _ko_topic(value: str) -> str:
+    suffix = "은" if _has_final_consonant(value) else "는"
+    return f"{value}{suffix}"
+
+
+def _has_final_consonant(value: str) -> bool:
+    for char in reversed(value.strip()):
+        codepoint = ord(char)
+        if 0xAC00 <= codepoint <= 0xD7A3:
+            return (codepoint - 0xAC00) % 28 != 0
+        if char.isalnum():
+            return False
+    return False
+
+
 def _ko_context_sentence(request: DocentScriptRequest) -> str:
     parts: list[str] = []
     region = request.region_ko or request.address
@@ -305,7 +321,7 @@ def _grounding_summaries(
         body_key = "body_en" if language == "en" else "body_ko"
         body = str(item.get(body_key) or item.get("body_ko") or "").strip()
         title = str(item.get("title_ko") or "").strip()
-        summary = _compact_grounding_text(body)
+        summary = _compact_grounding_text(body, language=language)
         if not summary:
             continue
         if title and title not in summary:
@@ -314,13 +330,39 @@ def _grounding_summaries(
     return summaries
 
 
-def _compact_grounding_text(text: str) -> str:
-    cleaned = " ".join(text.split())
+def _compact_grounding_text(text: str, *, language: str) -> str:
+    cleaned = _localize_internal_terms(" ".join(text.split()), language=language)
     if not cleaned:
         return ""
     if len(cleaned) <= 120:
         return cleaned
     return cleaned[:117].rstrip() + "..."
+
+
+def _localize_internal_terms(text: str, *, language: str) -> str:
+    if language == "en":
+        replacements = {
+            "culture_venue": "culture venue",
+            "attraction": "attraction",
+            "restaurant": "restaurant",
+            "event": "event",
+            "tour_api": "Korea Tourism Organization data",
+            "kcisa": "Korea Culture Information Service data",
+            "kopis": "KOPIS performing arts data",
+        }
+    else:
+        replacements = {
+            "culture_venue": "문화공간",
+            "attraction": "명소",
+            "restaurant": "맛집",
+            "event": "행사",
+            "tour_api": "한국관광공사 데이터",
+            "kcisa": "문화정보원 데이터",
+            "kopis": "공연예술통합전산망 데이터",
+        }
+    for source, replacement in replacements.items():
+        text = text.replace(source, replacement)
+    return text
 
 
 def _format_distance(distance_m: int) -> str:

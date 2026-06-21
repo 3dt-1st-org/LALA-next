@@ -186,6 +186,17 @@ def _build_deploy_cases() -> list[SmokeCase]:
                 {
                     "place_id": "tour-api-3066000",
                     "place_name": "중랑아트센터",
+                    "address": "서울특별시 중랑구 망우로 353",
+                    "region_ko": "중랑구",
+                    "distance_m": 840,
+                    "source": "db",
+                    "upstream_source": "tour_api",
+                    "final_score": 0.86,
+                    "local_spending_score": 0.82,
+                    "small_merchant_fit_score": 0.76,
+                    "demand_dispersion_score": 0.78,
+                    "weather_fit_score": 0.74,
+                    "culture_relevance_score": 0.91,
                     "category": "culture_venue",
                     "language": "ko",
                     "mode": "brief",
@@ -402,6 +413,25 @@ def _validate_docent_quality(data: dict[str, Any]) -> str | None:
     lowered = script.lower()
     if any(term in lowered for term in ("skeleton", "placeholder", "mock", "demo")):
         return "docent_script_contains_placeholder"
+    if any(
+        term in lowered
+        for term in ("culture_venue", "tour_api", "dev_seed", "public_mvp_snapshot")
+    ):
+        return "docent_script_contains_internal_code"
+    grounding_count = data.get("grounding_count")
+    if not isinstance(grounding_count, int) or grounding_count < 1:
+        return "docent_missing_grounding"
+    grounding_sources = data.get("grounding_sources")
+    if not isinstance(grounding_sources, list) or not grounding_sources:
+        return "docent_missing_grounding_sources"
+    if not any(term in script for term in ("현재 위치", "840m", "거리")):
+        return "docent_missing_location_context"
+    if not any(
+        term in script for term in ("추천 근거", "종합 추천 점수", "내국인 소비")
+    ):
+        return "docent_missing_score_context"
+    if not any(term in script for term in ("공식", "한국관광공사", "장소 지식 인덱스")):
+        return "docent_missing_official_grounding"
     return None
 
 

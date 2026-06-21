@@ -236,6 +236,8 @@ def test_docent_script_returns_envelope(client, auth_headers):
     assert body["data"]["place_id"] == "tour-api-3066000"
     assert body["data"]["script"]
     assert "중랑아트센터" in body["data"]["script"]
+    assert "중랑아트센터는" in body["data"]["script"]
+    assert "중랑아트센터은" not in body["data"]["script"]
     assert "중랑구" in body["data"]["script"]
     assert "840m" in body["data"]["script"]
     assert "한국관광공사" in body["data"]["script"]
@@ -267,6 +269,7 @@ def test_docent_script_accepts_culture_venue_category(client, auth_headers):
     body = response.json()
     assert body["data"]["category"] == "culture_venue"
     assert body["data"]["script"]
+    assert "문화공간" in body["data"]["script"]
 
 
 def test_docent_script_uses_db_cache_before_generation(
@@ -327,7 +330,10 @@ def test_docent_script_uses_rag_grounding_before_generic_cache(
                 "source_id": "place:rag-place",
                 "source_table": "rag.knowledge_chunks",
                 "title_ko": "화성행궁",
-                "body_ko": "장소명은 화성행궁입니다. 지역 소비와 야간 산책 동선이 함께 묶이는 명소입니다.",
+                "body_ko": (
+                    "장소명은 화성행궁입니다. 카테고리는 culture_venue이고 "
+                    "대표 원천은 tour_api입니다. 지역 소비와 야간 산책 동선이 함께 묶이는 명소입니다."
+                ),
                 "body_en": "Hwaseong Haenggung connects local spending with a night walk route.",
                 "metadata": {},
                 "content_sha256": "rag-sha",
@@ -355,7 +361,54 @@ def test_docent_script_uses_rag_grounding_before_generic_cache(
     assert body["data"]["grounding_sources"] == ["place_profile"]
     assert "장소 지식 인덱스" in body["data"]["script"]
     assert "야간 산책 동선" in body["data"]["script"]
+    assert "문화공간" in body["data"]["script"]
+    assert "한국관광공사 데이터" in body["data"]["script"]
+    assert "culture_venue" not in body["data"]["script"]
+    assert "tour_api" not in body["data"]["script"]
     assert body["data"]["cache_key"].startswith("docent_script:")
+
+
+def test_docent_script_localizes_grounding_codes_in_english(
+    client,
+    auth_headers,
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        "apps.api.app.services.db_repository.fetch_docent_knowledge_context",
+        lambda **kwargs: [
+            {
+                "source_type": "place_profile",
+                "source_id": "place:rag-place",
+                "source_table": "rag.knowledge_chunks",
+                "title_ko": "Jungnang Art Center",
+                "body_ko": "카테고리는 culture_venue이고 대표 원천은 tour_api입니다.",
+                "body_en": "Category is culture_venue and source is tour_api.",
+                "metadata": {},
+                "content_sha256": "rag-sha-en",
+                "updated_at": "2026-06-21T00:00:00+00:00",
+            }
+        ],
+    )
+
+    response = client.post(
+        "/api/v1/docents/script",
+        headers=auth_headers,
+        json={
+            "place_id": "rag-place-en",
+            "place_name": "Jungnang Art Center",
+            "category": "culture_venue",
+            "language": "en",
+            "mode": "brief",
+        },
+    )
+
+    assert response.status_code == 200
+    script = response.json()["data"]["script"]
+    assert "culture venue" in script
+    assert "Korea Tourism Organization data" in script
+    assert "culture_venue" not in script
+    assert "tour_api" not in script
+    assert "문화공간" not in script
 
 
 def test_docent_script_score_context_skips_stale_cache(

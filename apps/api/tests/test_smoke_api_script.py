@@ -318,7 +318,11 @@ def _live_docent_payload() -> dict[str, Any]:
         "ok": True,
         "data": {
             "source": "rule_based_curation",
-            "script": "중랑아트센터의 문화 맥락과 주변 로컬 경험을 함께 설명하는 도슨트 스크립트입니다.",
+            "script": (
+                "중랑아트센터는 현재 위치에서 약 840m 거리의 문화공간입니다. "
+                "추천 근거는 종합 추천 점수 86점, 내국인 소비 신호 강함입니다. "
+                "공식 한국관광공사 데이터와 장소 지식 인덱스를 함께 확인했습니다."
+            ),
             "grounding_count": 1,
             "grounding_sources": ["place_profile"],
         },
@@ -501,6 +505,41 @@ def test_unix_matrix_smoke_deploy_profile_rejects_placeholder_docent():
     assert result.returncode != 0
     assert "docent_script_too_short" in result.stderr
     assert "/api/v1/docents/script" in server.protected_paths
+
+
+def test_unix_matrix_smoke_deploy_profile_rejects_docent_without_grounding():
+    docent_payload = _live_docent_payload()
+    docent_payload["data"]["grounding_count"] = 0
+    docent_payload["data"]["grounding_sources"] = []
+
+    server, thread, base_url = _start_server(
+        public_access=True, docent_payload=docent_payload
+    )
+    try:
+        result = _run_matrix_smoke(base_url, {}, profile="deploy")
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+    assert result.returncode != 0
+    assert "docent_missing_grounding" in result.stderr
+
+
+def test_unix_matrix_smoke_deploy_profile_rejects_docent_internal_codes():
+    docent_payload = _live_docent_payload()
+    docent_payload["data"]["script"] += " category culture_venue source tour_api"
+
+    server, thread, base_url = _start_server(
+        public_access=True, docent_payload=docent_payload
+    )
+    try:
+        result = _run_matrix_smoke(base_url, {}, profile="deploy")
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+    assert result.returncode != 0
+    assert "docent_script_contains_internal_code" in result.stderr
 
 
 def test_unix_matrix_smoke_uses_public_contest_access_without_auth_headers():

@@ -93,7 +93,9 @@ class RagSearchResult:
         return asdict(self)
 
 
-def build_local_embedding(text: str, *, dimensions: int = VECTOR_DIMENSIONS) -> list[float]:
+def build_local_embedding(
+    text: str, *, dimensions: int = VECTOR_DIMENSIONS
+) -> list[float]:
     if dimensions <= 0:
         raise ValueError("dimensions must be positive.")
 
@@ -131,19 +133,24 @@ def build_azure_openai_embedding(text: str) -> list[float]:
     settings = get_settings()
     missing = _missing_azure_embedding_settings(settings)
     if missing:
-        raise RuntimeError("Azure OpenAI embedding config is missing: " + ", ".join(missing))
+        raise RuntimeError(
+            "Azure OpenAI embedding config is missing: " + ", ".join(missing)
+        )
     if not settings.enable_live_ai:
         raise RuntimeError("Azure OpenAI embedding requires LALA_ENABLE_LIVE_AI=true.")
 
     try:
         from openai import AzureOpenAI
     except Exception as exc:
-        raise RuntimeError("openai package is required for Azure OpenAI embeddings.") from exc
+        raise RuntimeError(
+            "openai package is required for Azure OpenAI embeddings."
+        ) from exc
 
     client = AzureOpenAI(
         azure_endpoint=settings.azure_openai_endpoint,
         api_key=settings.azure_openai_key,
-        api_version=settings.azure_openai_embedding_api_version or settings.azure_openai_api_version,
+        api_version=settings.azure_openai_embedding_api_version
+        or settings.azure_openai_api_version,
     )
     response = client.embeddings.create(
         model=settings.azure_openai_embedding_deployment,
@@ -418,7 +425,9 @@ def upsert_knowledge_chunks(
     """
     rows = []
     for chunk in chunk_list:
-        embedding, model_name = build_embedding(chunk.text_for_embedding, method=embedding_method)
+        embedding, model_name = build_embedding(
+            chunk.text_for_embedding, method=embedding_method
+        )
         rows.append(
             {
                 "source_type": chunk.source_type,
@@ -504,6 +513,7 @@ def query_knowledge_chunks(
 
 
 def _place_profile_chunk(row: dict[str, Any]) -> KnowledgeChunk:
+    category_label = _category_label_ko(row.get("category"))
     score_parts = [
         _score_phrase("최종 추천 점수", row.get("final_score")),
         _score_phrase("내국인 소비", row.get("local_spending_score")),
@@ -513,11 +523,17 @@ def _place_profile_chunk(row: dict[str, Any]) -> KnowledgeChunk:
         _score_phrase("문화 연계", row.get("culture_relevance_score")),
     ]
     score_text = " ".join(part for part in score_parts if part)
-    indoor_text = "실내" if row.get("is_indoor") is True else "야외" if row.get("is_indoor") is False else "실내외 미분류"
+    indoor_text = (
+        "실내"
+        if row.get("is_indoor") is True
+        else "야외"
+        if row.get("is_indoor") is False
+        else "실내외 미분류"
+    )
     body = _join_sentences(
         [
             f"장소명은 {row.get('name_ko')}입니다.",
-            f"카테고리는 {row.get('category')}이고 지역은 {row.get('region_name_ko') or '미분류'}입니다.",
+            f"카테고리는 {category_label}이고 지역은 {row.get('region_name_ko') or '미분류'}입니다.",
             f"주소는 {row.get('address_ko') or '주소 미상'}입니다.",
             f"날씨 필터 기준은 {indoor_text}입니다.",
             score_text,
@@ -537,11 +553,19 @@ def _place_profile_chunk(row: dict[str, Any]) -> KnowledgeChunk:
             "final_score": _optional_float(row.get("final_score")),
             "formula_version": row.get("formula_version"),
             "components": {
-                "local_spending_score": _optional_float(row.get("local_spending_score")),
-                "demand_dispersion_score": _optional_float(row.get("demand_dispersion_score")),
+                "local_spending_score": _optional_float(
+                    row.get("local_spending_score")
+                ),
+                "demand_dispersion_score": _optional_float(
+                    row.get("demand_dispersion_score")
+                ),
                 "weather_fit_score": _optional_float(row.get("weather_fit_score")),
-                "review_quality_score": _optional_float(row.get("review_quality_score")),
-                "culture_relevance_score": _optional_float(row.get("culture_relevance_score")),
+                "review_quality_score": _optional_float(
+                    row.get("review_quality_score")
+                ),
+                "culture_relevance_score": _optional_float(
+                    row.get("culture_relevance_score")
+                ),
             },
             "features": _json_safe(row.get("features") or {}),
         },
@@ -556,6 +580,15 @@ def _place_profile_chunk(row: dict[str, Any]) -> KnowledgeChunk:
         body_en=_optional_text(row.get("name_en")),
         metadata=_json_object(metadata),
     )
+
+
+def _category_label_ko(value: Any) -> str:
+    return {
+        "attraction": "명소",
+        "restaurant": "맛집",
+        "event": "행사",
+        "culture_venue": "문화공간",
+    }.get(str(value or "").strip(), "장소")
 
 
 def _culture_event_chunk(row: dict[str, Any]) -> KnowledgeChunk:
@@ -594,7 +627,11 @@ def _culture_event_chunk(row: dict[str, Any]) -> KnowledgeChunk:
 
 
 def _community_post_chunk(row: dict[str, Any]) -> KnowledgeChunk:
-    title = _optional_text(row.get("title")) or _optional_text(row.get("keyword")) or "지역 커뮤니티 글"
+    title = (
+        _optional_text(row.get("title"))
+        or _optional_text(row.get("keyword"))
+        or "지역 커뮤니티 글"
+    )
     body_text = _optional_text(row.get("body")) or "본문 요약이 없습니다."
     body = _join_sentences(
         [
@@ -717,10 +754,10 @@ def _text_features(text: str) -> Iterable[str]:
         yield f"token:{token}"
         if len(token) >= 3:
             for start in range(0, len(token) - 1):
-                yield f"char:{token[start:start + 2]}"
+                yield f"char:{token[start : start + 2]}"
         if len(token) >= 4:
             for start in range(0, len(token) - 2):
-                yield f"pair:{token[start:start + 3]}"
+                yield f"pair:{token[start : start + 3]}"
 
 
 def _missing_azure_embedding_settings(settings: Any) -> list[str]:
@@ -731,7 +768,9 @@ def _missing_azure_embedding_settings(settings: Any) -> list[str]:
         missing.append("AZURE_OPENAI_KEY")
     if not settings.azure_openai_embedding_deployment:
         missing.append("AZURE_OPENAI_EMBEDDING_DEPLOYMENT")
-    if not (settings.azure_openai_embedding_api_version or settings.azure_openai_api_version):
+    if not (
+        settings.azure_openai_embedding_api_version or settings.azure_openai_api_version
+    ):
         missing.append("AZURE_OPENAI_EMBEDDING_API_VERSION")
     return missing
 
