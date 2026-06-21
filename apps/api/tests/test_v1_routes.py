@@ -718,6 +718,56 @@ def test_docent_script_live_ai_score_context_does_not_write_generic_cache(
     assert saved_calls == []
 
 
+def test_docent_script_live_ai_adds_route_action_when_ai_only_mentions_next_place(
+    client,
+    auth_headers,
+    monkeypatch,
+):
+    monkeypatch.setenv("LALA_ENABLE_LIVE_AI", "true")
+    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.openai.azure.com/")
+    monkeypatch.setenv("AZURE_OPENAI_KEY", "test-key")
+    monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini")
+    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2024-10-21")
+    monkeypatch.setattr(
+        "apps.api.app.services.ai_service.generate_docent_script_text",
+        lambda request, **kwargs: (
+            "AI script. 현재 위치에서 약 840m 거리입니다. "
+            "LALA는 실제 내국인 소비 흐름과 소상공인 상권을 함께 봅니다. "
+            "현재 날씨는 좋고 미세먼지는 좋음(PM10 6), 초미세먼지는 좋음(PM2.5 2)입니다. "
+            "공식 한국관광공사 데이터로 확인했습니다. 다음 장소도 가까운 곳을 고르면 좋습니다."
+        ),
+    )
+
+    response = client.post(
+        "/api/v1/docents/script",
+        headers=auth_headers,
+        json={
+            "place_id": "route-action-guard",
+            "category": "culture_venue",
+            "language": "ko",
+            "mode": "brief",
+            "distance_m": 840,
+            "source": "db",
+            "upstream_source": "tour_api",
+            "final_score": 0.88,
+            "local_spending_score": 0.81,
+            "small_merchant_fit_score": 0.79,
+            "weather_fit_score": 0.7,
+            "weather_temp": "21.6",
+            "dust_pm10": "6",
+            "dust_pm25": "2",
+            "dust_pm10_grade": "좋음",
+            "dust_pm25_grade": "좋음",
+        },
+    )
+
+    assert response.status_code == 200
+    script = response.json()["data"]["script"]
+    assert "다음 장소" in script
+    assert "동선" in script
+    assert "관람 전후" in script
+
+
 def test_docent_script_live_ai_requires_grounded_context(
     client,
     auth_headers,

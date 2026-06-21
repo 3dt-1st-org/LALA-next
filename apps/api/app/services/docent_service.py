@@ -541,7 +541,7 @@ def _ensure_ko_docent_quality_context(
     source = _ko_source_label(request.upstream_source or request.source)
     if source and not _contains_any(script, ("공식", "한국관광공사", "문화정보원", "공연예술통합전산망", "운영 DB")):
         parts.append(f"{source}로 확인한 공식 데이터를 바탕으로 소개합니다.")
-    if not _contains_any(script, ("방문 전후", "동선", "이어", "함께 연결", "다음 장소", "산책")):
+    if not _contains_any(script, ("방문 전후", "동선", "이어", "함께 연결")):
         parts.append(_ko_route_action_sentence(request.category))
     return _sanitize_docent_output(_join_script_parts(parts), language=language)
 
@@ -581,7 +581,7 @@ def _ensure_en_docent_quality_context(
         parts.append(f"It is grounded in official context from {source}.")
     if not _contains_any(
         script.lower(),
-        ("before or after", "route", "continue", "nearby", "walk"),
+        ("before or after", "route", "continue to the next"),
     ):
         parts.append(_en_route_action_sentence(request.category))
     return _sanitize_docent_output(_join_script_parts(parts), language=language)
