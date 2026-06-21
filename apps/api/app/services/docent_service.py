@@ -69,11 +69,14 @@ def _rule_based_script(
     *,
     grounding_context: list[dict[str, Any]] | None = None,
 ) -> str:
-    place_label = request.place_name or _readable_place_id(
+    grounding_context = grounding_context or []
+    place_label = _grounded_place_label(
+        request,
+        grounding_context=grounding_context,
+    ) or _readable_place_id(
         request.place_id,
         language=request.language,
     )
-    grounding_context = grounding_context or []
     if request.language == "ko":
         category_label = {
             "attraction": "명소",
@@ -187,6 +190,31 @@ def _has_weather_context(request: DocentScriptRequest) -> bool:
             request.dust_pm25_grade,
         )
     )
+
+
+def _grounded_place_label(
+    request: DocentScriptRequest,
+    *,
+    grounding_context: list[dict[str, Any]],
+) -> str | None:
+    canonical = _canonical_grounding_title(grounding_context)
+    if canonical:
+        return canonical
+    return request.place_name
+
+
+def _canonical_grounding_title(grounding_context: list[dict[str, Any]]) -> str | None:
+    for item in grounding_context:
+        if str(item.get("source_type") or "").strip() != "place_profile":
+            continue
+        title = str(item.get("title_ko") or "").strip()
+        if title:
+            return title
+    for item in grounding_context:
+        title = str(item.get("title_ko") or "").strip()
+        if title:
+            return title
+    return None
 
 
 def _ko_score_sentence(request: DocentScriptRequest) -> str:

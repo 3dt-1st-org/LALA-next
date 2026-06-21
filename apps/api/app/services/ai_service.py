@@ -46,10 +46,15 @@ def generate_docent_script_text(
         api_version=settings.azure_openai_api_version,
     )
     language = display_language(request.language)
-    place_name = request.place_name or request.place_id
+    grounding_context = grounding_context or []
+    place_name = (
+        _canonical_grounding_title(grounding_context)
+        or request.place_name
+        or request.place_id
+    )
     context = _docent_context_prompt(
         request,
-        grounding_context=grounding_context or [],
+        grounding_context=grounding_context,
     )
     prompt = (
         f"Write a {request.mode} mobile docent script in {language}. "
@@ -187,3 +192,17 @@ def _grounding_context_prompt(grounding_context: list[dict]) -> str:
         "Grounding snippets from LALA RAG knowledge index. Use them when relevant, "
         "and do not invent facts beyond them:\n" + "\n".join(snippets)
     )
+
+
+def _canonical_grounding_title(grounding_context: list[dict]) -> str | None:
+    for item in grounding_context:
+        if str(item.get("source_type") or "").strip() != "place_profile":
+            continue
+        title = str(item.get("title_ko") or "").strip()
+        if title:
+            return title
+    for item in grounding_context:
+        title = str(item.get("title_ko") or "").strip()
+        if title:
+            return title
+    return None

@@ -176,10 +176,13 @@ def test_azure_container_build_excludes_local_secrets():
     dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8")
     dockerfile = (ROOT / "infra" / "azure" / "api.Dockerfile").read_text(encoding="utf-8")
     bicep = (ROOT / "infra" / "azure" / "main.bicep").read_text(encoding="utf-8")
+    env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
 
     assert ".env" in dockerignore
     assert ".env.*" in dockerignore
     assert "!.env.example" in dockerignore
+    assert "LALA_PUBLIC_CONTEST_ACCESS=false" in env_example
+    assert "LALA_PUBLIC_DEMO_MODE" not in env_example
     assert "COPY apps ./apps" in dockerfile
     assert "uvicorn apps.api.app.main:app" in dockerfile
     assert "COPY . ." not in dockerfile

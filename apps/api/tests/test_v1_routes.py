@@ -380,6 +380,51 @@ def test_docent_script_uses_rag_grounding_before_generic_cache(
     assert body["data"]["cache_key"].startswith("docent_script:")
 
 
+def test_docent_script_prefers_rag_place_title_over_client_name(
+    client,
+    auth_headers,
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        "apps.api.app.services.db_repository.fetch_docent_knowledge_context",
+        lambda **kwargs: [
+            {
+                "source_type": "place_profile",
+                "source_id": "place:canonical-place",
+                "source_table": "rag.knowledge_chunks",
+                "title_ko": "중랑아트센터",
+                "body_ko": (
+                    "장소명은 중랑아트센터입니다. 카테고리는 culture_venue이고 "
+                    "대표 원천은 tour_api입니다."
+                ),
+                "body_en": "Jungnang Art Center is a culture venue.",
+                "metadata": {},
+                "content_sha256": "canonical-place-sha",
+                "updated_at": "2026-06-21T00:00:00+00:00",
+            }
+        ],
+    )
+
+    response = client.post(
+        "/api/v1/docents/script",
+        headers=auth_headers,
+        json={
+            "place_id": "canonical-place",
+            "place_name": "호암미술관",
+            "distance_m": 840,
+            "category": "culture_venue",
+            "language": "ko",
+            "mode": "brief",
+        },
+    )
+
+    assert response.status_code == 200
+    script = response.json()["data"]["script"]
+    assert script.startswith("중랑아트센터는")
+    assert "중랑아트센터입니다" in script
+    assert "호암미술관" not in script
+
+
 def test_docent_script_localizes_grounding_codes_in_english(
     client,
     auth_headers,
