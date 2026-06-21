@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from apps.api.tests._bash import usable_bash
+
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -208,7 +210,7 @@ def _run_smoke(
     )
     env.update(env_overrides)
     return subprocess.run(
-        ["bash", "scripts/unix/smoke_api.sh", "--base-url", base_url],
+        [usable_bash(), "scripts/unix/smoke_api.sh", "--base-url", base_url],
         cwd=ROOT,
         env=env,
         text=True,
@@ -237,7 +239,7 @@ def _run_matrix_smoke(
     env.update(env_overrides)
     return subprocess.run(
         [
-            "bash",
+            usable_bash(),
             "scripts/unix/smoke_api_matrix.sh",
             "--base-url",
             base_url,

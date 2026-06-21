@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import re
-import shutil
 import subprocess
 from pathlib import Path
 
-import pytest
+from apps.api.tests._bash import usable_bash
 
 from apps.api.app.core.key_vault import is_allowed_key_vault_url, key_vault_name_from_url
 
@@ -654,13 +653,9 @@ def test_unix_scripts_have_safe_operational_guards():
 
 
 def test_unix_scripts_parse_with_bash():
-    bash = shutil.which("bash")
-    if not bash:
-        pytest.skip("bash is not available")
-
     scripts = sorted((ROOT / "scripts" / "unix").glob("*.sh"))
     result = subprocess.run(
-        [bash, "-n", *[str(path) for path in scripts]],
+        [usable_bash(), "-n", *[str(path) for path in scripts]],
         cwd=ROOT,
         text=True,
         capture_output=True,
