@@ -486,6 +486,65 @@ def fetch_latest_weather(*, lat: float, lng: float) -> dict[str, Any] | None:
     }
 
 
+def fetch_nearest_region_labels(
+    *,
+    lat: float,
+    lng: float,
+    limit: int = 8,
+) -> list[str]:
+    dsn = get_settings().db_dsn
+    if not dsn or limit <= 0:
+        return []
+    try:
+        import psycopg2
+        from psycopg2.extras import RealDictCursor
+    except Exception:
+        return []
+
+    min_lat, max_lat, min_lng, max_lng = _coordinate_radius_bounds(
+        lat=lat,
+        lng=lng,
+        radius_m=100_000,
+    )
+    sql = """
+        WITH query_point AS (
+            SELECT ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography AS geog
+        )
+        SELECT
+            NULLIF(TRIM(region_ko), '') AS region_ko,
+            NULLIF(TRIM(region_en), '') AS region_en
+        FROM travel.public_places, query_point
+        WHERE lat BETWEEN %s AND %s
+          AND lng BETWEEN %s AND %s
+        ORDER BY ST_Distance(
+            ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography,
+            query_point.geog
+        )
+        LIMIT %s
+    """
+    try:
+        with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(sql, (lng, lat, min_lat, max_lat, min_lng, max_lng, limit))
+                rows = list(cur.fetchall())
+    except Exception:
+        return []
+
+    labels: list[str] = []
+    seen: set[str] = set()
+    for row in rows:
+        for key in ("region_ko", "region_en"):
+            label = str(row.get(key) or "").strip()
+            if not label:
+                continue
+            normalized = label.lower().replace(" ", "")
+            if normalized in seen:
+                continue
+            labels.append(label)
+            seen.add(normalized)
+    return labels
+
+
 def fetch_docent_script_cache(
     *,
     place_id: str,

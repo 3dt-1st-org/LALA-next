@@ -43,6 +43,10 @@ def current_weather(*, lat: float, lng: float, force: bool = False) -> dict:
             db_weather["dust"] = air_quality["dust"]
             db_weather["air_quality_location"] = air_quality.get("location")
             db_weather["air_quality_record_time"] = air_quality.get("record_time")
+            db_weather["outdoor_status"] = _merge_outdoor_status_with_dust(
+                db_weather.get("outdoor_status"),
+                air_quality["dust"],
+            )
         if not db_weather.get("forecast"):
             db_weather["forecast"] = _derived_forecast_from_observation(db_weather)
         db_weather["force"] = force
@@ -57,6 +61,10 @@ def current_weather(*, lat: float, lng: float, force: bool = False) -> dict:
             official_weather["air_quality_location"] = air_quality.get("location")
             official_weather["air_quality_record_time"] = air_quality.get("record_time")
             official_weather["source"] = f"{KMA_SOURCE}+{AIRKOREA_SOURCE}"
+            official_weather["outdoor_status"] = _merge_outdoor_status_with_dust(
+                official_weather.get("outdoor_status"),
+                air_quality["dust"],
+            )
         return official_weather
     if air_quality:
         weather = {
@@ -216,7 +224,15 @@ def _fetch_airkorea_sido_air_quality(
         return None
 
     sido_name = _sido_name_for_coordinate(lat=lat, lng=lng)
-    cache_key = f"airkorea:{sido_name}:{datetime.now(KST).strftime('%Y%m%d%H')}"
+    preferred_station_names = db_repository.fetch_nearest_region_labels(
+        lat=lat,
+        lng=lng,
+        limit=8,
+    )
+    cache_key = (
+        f"airkorea:{sido_name}:{_coordinate_cache_bucket(lat, lng)}:"
+        f"{datetime.now(KST).strftime('%Y%m%d%H')}"
+    )
     cached = _cache_get(cache_key)
     if cached:
         return cached
@@ -247,7 +263,10 @@ def _fetch_airkorea_sido_air_quality(
     if not items:
         logger.warning("airkorea_sido_empty_items sido_name=%s", sido_name)
         return None
-    selected = _select_airkorea_item(items)
+    selected = _select_airkorea_item(
+        items,
+        preferred_station_names=preferred_station_names,
+    )
     if not selected:
         logger.warning("airkorea_sido_missing_values sido_name=%s", sido_name)
         return None
@@ -260,6 +279,11 @@ def _fetch_airkorea_sido_air_quality(
     air_quality = {
         "sido_name": sido_name,
         "location": selected.get("stationName") or sido_name,
+        "location_match": _station_matches_preferred(
+            selected.get("stationName"),
+            preferred_station_names,
+        ),
+        "preferred_locations": preferred_station_names[:5],
         "record_time": selected.get("dataTime"),
         "dust": dust,
     }
@@ -303,25 +327,96 @@ def _airkorea_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return []
 
 
-def _select_airkorea_item(items: list[dict[str, Any]]) -> dict[str, Any] | None:
-    for item in items:
-        if clean_air_quality_value(item.get("pm10Value")) and clean_air_quality_value(
-            item.get("pm25Value")
-        ):
-            return item
-    for item in items:
-        if clean_air_quality_value(item.get("pm10Value")):
-            return item
-    for item in items:
-        if clean_air_quality_value(item.get("pm25Value")):
-            return item
-    return None
+def _select_airkorea_item(
+    items: list[dict[str, Any]],
+    *,
+    preferred_station_names: list[str] | None = None,
+) -> dict[str, Any] | None:
+    candidates = [
+        item
+        for item in items
+        if clean_air_quality_value(item.get("pm10Value"))
+        or clean_air_quality_value(item.get("pm25Value"))
+    ]
+    if not candidates:
+        return None
+    indexed = list(enumerate(candidates))
+    indexed.sort(
+        key=lambda pair: _airkorea_item_rank(
+            pair[1],
+            preferred_station_names=preferred_station_names or [],
+            original_index=pair[0],
+        )
+    )
+    return indexed[0][1]
+
+
+def _airkorea_item_rank(
+    item: dict[str, Any],
+    *,
+    preferred_station_names: list[str],
+    original_index: int,
+) -> tuple[int, int]:
+    has_pm10 = bool(clean_air_quality_value(item.get("pm10Value")))
+    has_pm25 = bool(clean_air_quality_value(item.get("pm25Value")))
+    has_both = has_pm10 and has_pm25
+    station_matches = _station_matches_preferred(
+        item.get("stationName"),
+        preferred_station_names,
+    )
+    if station_matches and has_both:
+        group = 0
+    elif has_both:
+        group = 1
+    elif station_matches:
+        group = 2
+    else:
+        group = 3
+    return group, original_index
+
+
+def _station_matches_preferred(
+    station_name: Any,
+    preferred_station_names: list[str] | None,
+) -> bool:
+    station = _normalize_station_name(station_name)
+    if not station:
+        return False
+    for preferred_name in preferred_station_names or []:
+        preferred = _normalize_station_name(preferred_name)
+        if not preferred:
+            continue
+        if station == preferred or station in preferred or preferred in station:
+            return True
+    return False
+
+
+def _normalize_station_name(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    for suffix in ("특별시", "광역시", "특별자치시", "특별자치도", "자치구"):
+        text = text.replace(suffix, "")
+    text = text.replace(" ", "")
+    for suffix in ("시", "군", "구", "읍", "면", "동"):
+        if len(text) > len(suffix) + 1 and text.endswith(suffix):
+            text = text[: -len(suffix)]
+            break
+    return text
+
+
+def _coordinate_cache_bucket(lat: float, lng: float) -> str:
+    return f"{lat:.2f}:{lng:.2f}"
 
 
 def _dust_outdoor_status(dust: dict[str, Any]) -> str:
     return (
         "bad" if str(dust.get("grade") or "").strip() in {"bad", "very_bad"} else "good"
     )
+
+
+def _merge_outdoor_status_with_dust(status: Any, dust: dict[str, Any]) -> str:
+    if str(status or "").strip() == "bad" or _dust_outdoor_status(dust) == "bad":
+        return "bad"
+    return "good"
 
 
 def _sido_name_for_coordinate(*, lat: float, lng: float) -> str:

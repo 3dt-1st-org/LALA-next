@@ -371,6 +371,56 @@ def test_fetch_latest_weather_marks_latest_fallback_without_region_match(monkeyp
     assert weather["dust"]["pm25_grade"] == "good"
 
 
+def test_fetch_nearest_region_labels_uses_postgis_distance_order(monkeypatch):
+    captured = {}
+
+    class FakeCursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def execute(self, sql, params):
+            captured["sql"] = sql
+            captured["params"] = params
+
+        def fetchall(self):
+            return [
+                {"region_ko": "중랑구", "region_en": "Jungnang-gu"},
+                {"region_ko": "중랑구", "region_en": "Jungnang-gu"},
+                {"region_ko": "성북구", "region_en": "Seongbuk-gu"},
+            ]
+
+    class FakeConnection:
+        def cursor(self, cursor_factory=None):
+            captured["cursor_factory"] = cursor_factory
+            return FakeCursor()
+
+        def close(self):
+            return None
+
+    psycopg2_module = types.ModuleType("psycopg2")
+    psycopg2_module.connect = lambda dsn, connect_timeout: FakeConnection()
+    extras_module = types.ModuleType("psycopg2.extras")
+    extras_module.RealDictCursor = object()
+    monkeypatch.setitem(sys.modules, "psycopg2", psycopg2_module)
+    monkeypatch.setitem(sys.modules, "psycopg2.extras", extras_module)
+    monkeypatch.setenv("DB_DSN", "postgresql://db.example/lala")
+
+    labels = db_repository.fetch_nearest_region_labels(
+        lat=37.5665,
+        lng=126.9780,
+    )
+
+    assert labels == ["중랑구", "Jungnang-gu", "성북구", "Seongbuk-gu"]
+    assert "FROM travel.public_places" in captured["sql"]
+    assert "ST_Distance(" in captured["sql"]
+    assert "ORDER BY ST_Distance(" in captured["sql"]
+    assert captured["params"][:2] == (126.978, 37.5665)
+    assert captured["params"][-1] == 8
+
+
 def test_fetch_docent_knowledge_context_reads_place_rag_chunks(monkeypatch):
     captured = {}
 

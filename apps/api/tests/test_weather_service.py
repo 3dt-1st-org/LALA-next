@@ -87,6 +87,11 @@ def test_current_weather_uses_kma_nowcast_when_db_is_empty(monkeypatch) -> None:
         weather_service.db_repository, "fetch_latest_weather", lambda **kwargs: None
     )
     monkeypatch.setattr(
+        weather_service.db_repository,
+        "fetch_nearest_region_labels",
+        lambda **kwargs: ["수원시", "Suwon"],
+    )
+    monkeypatch.setattr(
         weather_service,
         "get_settings",
         lambda: SimpleNamespace(public_data_service_key="public-data-secret"),
@@ -149,6 +154,11 @@ def test_current_weather_reports_unavailable_without_public_data_key(
         weather_service.db_repository, "fetch_latest_weather", lambda **kwargs: None
     )
     monkeypatch.setattr(
+        weather_service.db_repository,
+        "fetch_nearest_region_labels",
+        lambda **kwargs: [],
+    )
+    monkeypatch.setattr(
         weather_service,
         "get_settings",
         lambda: SimpleNamespace(public_data_service_key=""),
@@ -161,6 +171,48 @@ def test_current_weather_reports_unavailable_without_public_data_key(
     assert weather["forecast"] == []
     assert weather["dust"]["pm10_grade"] == "unknown"
     assert weather["dust"]["pm25_grade_ko"] == "확인 중"
+
+
+def test_current_weather_marks_bad_when_air_quality_is_bad(monkeypatch) -> None:
+    official_weather = {
+        "lat": 37.5665,
+        "lng": 126.9780,
+        "location": "기상청 격자",
+        "temp": "21.4",
+        "icon": "partly-cloudy",
+        "dust": weather_service.unknown_dust_payload(),
+        "forecast": [],
+        "outdoor_status": "good",
+        "force": False,
+        "location_match": True,
+        "record_time": "2026-06-21T12:00:00+09:00",
+        "source": weather_service.KMA_SOURCE,
+    }
+    air_quality = {
+        "sido_name": "서울",
+        "location": "중랑구",
+        "record_time": "2026-06-21 12:00",
+        "dust": weather_service.build_dust_payload(pm10="121", pm25="48"),
+    }
+    monkeypatch.setattr(
+        weather_service.db_repository,
+        "fetch_latest_weather",
+        lambda **kwargs: None,
+    )
+    monkeypatch.setattr(
+        weather_service,
+        "_fetch_official_weather_pair",
+        lambda **kwargs: (official_weather, air_quality),
+    )
+
+    weather = weather_service.current_weather(lat=37.5665, lng=126.9780)
+
+    assert weather["source"] == (
+        f"{weather_service.KMA_SOURCE}+{weather_service.AIRKOREA_SOURCE}"
+    )
+    assert weather["dust"]["pm10_grade"] == "bad"
+    assert weather["dust"]["pm25_grade"] == "bad"
+    assert weather["outdoor_status"] == "bad"
 
 
 def test_airkorea_selection_prefers_station_with_pm10_and_pm25() -> None:
@@ -182,6 +234,48 @@ def test_airkorea_selection_prefers_station_with_pm10_and_pm25() -> None:
                 "pm25Value": "3",
             },
         ]
+    )
+
+    assert selected is not None
+    assert selected["stationName"] == "종로구"
+
+
+def test_airkorea_selection_prefers_matching_nearby_station_when_complete() -> None:
+    selected = weather_service._select_airkorea_item(
+        [
+            {
+                "stationName": "종로구",
+                "pm10Value": "7",
+                "pm25Value": "2",
+            },
+            {
+                "stationName": "중랑구",
+                "pm10Value": "31",
+                "pm25Value": "14",
+            },
+        ],
+        preferred_station_names=["중랑구", "Jungnang-gu"],
+    )
+
+    assert selected is not None
+    assert selected["stationName"] == "중랑구"
+
+
+def test_airkorea_selection_keeps_split_dust_before_matching_partial() -> None:
+    selected = weather_service._select_airkorea_item(
+        [
+            {
+                "stationName": "중랑구",
+                "pm10Value": "31",
+                "pm25Value": "-",
+            },
+            {
+                "stationName": "종로구",
+                "pm10Value": "7",
+                "pm25Value": "2",
+            },
+        ],
+        preferred_station_names=["중랑구"],
     )
 
     assert selected is not None
