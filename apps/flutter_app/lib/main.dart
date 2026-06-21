@@ -158,6 +158,69 @@ class LalaLocation {
   final double lng;
 }
 
+class _ManualLocationOption {
+  const _ManualLocationOption({
+    required this.id,
+    required this.labelKo,
+    required this.labelEn,
+    required this.lat,
+    required this.lng,
+  });
+
+  final String id;
+  final String labelKo;
+  final String labelEn;
+  final double lat;
+  final double lng;
+
+  String label(String language) => _copy(language, ko: labelKo, en: labelEn);
+}
+
+const List<_ManualLocationOption> _manualLocationOptions = [
+  _ManualLocationOption(
+    id: 'seoul-jung',
+    labelKo: '서울 중구',
+    labelEn: 'Seoul Jung-gu',
+    lat: 37.5665,
+    lng: 126.9780,
+  ),
+  _ManualLocationOption(
+    id: 'suwon',
+    labelKo: '수원시',
+    labelEn: 'Suwon',
+    lat: 37.2819,
+    lng: 127.0142,
+  ),
+  _ManualLocationOption(
+    id: 'yongin',
+    labelKo: '용인시',
+    labelEn: 'Yongin',
+    lat: 37.2930,
+    lng: 127.2020,
+  ),
+  _ManualLocationOption(
+    id: 'uiwang',
+    labelKo: '의왕시',
+    labelEn: 'Uiwang',
+    lat: 37.3446,
+    lng: 126.9680,
+  ),
+  _ManualLocationOption(
+    id: 'goyang',
+    labelKo: '고양시',
+    labelEn: 'Goyang',
+    lat: 37.6584,
+    lng: 126.8320,
+  ),
+  _ManualLocationOption(
+    id: 'gapyeong',
+    labelKo: '가평군',
+    labelEn: 'Gapyeong',
+    lat: 37.8315,
+    lng: 127.5099,
+  ),
+];
+
 enum LalaLocationResultStatus { found, denied, unavailable }
 
 class LalaLocationResult {
@@ -1183,6 +1246,33 @@ class _LalaHomePageState extends State<LalaHomePage> {
     );
   }
 
+  Future<void> _openManualLocationSheet(BuildContext context) async {
+    final selected = await showModalBottomSheet<_ManualLocationOption>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _ManualLocationSheet(language: _uiLanguage),
+    );
+    if (!mounted || selected == null) {
+      return;
+    }
+    setState(() {
+      _resetMapContext();
+      _locationConsentEnabled = true;
+      _locationRequestInFlight = false;
+      _locationFallbackNoticeVisible = false;
+      _locationStartPromptVisible = false;
+      _currentLocation = null;
+      _queryLat = selected.lat;
+      _queryLng = selected.lng;
+      _mapFocusLat = selected.lat;
+      _mapFocusLng = selected.lng;
+      _mapLevel = 4;
+    });
+    await _refresh(forceWeather: true);
+  }
+
   @override
   Widget build(BuildContext context) {
     final config = _currentConfig();
@@ -1249,6 +1339,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
               onRefreshWeather: () => _refresh(forceWeather: true),
               onReturnToLocation: _returnToCurrentLocation,
               onOpenSettings: () => _openSettingsSheet(context),
+              onOpenManualLocation: () => _openManualLocationSheet(context),
               onRetryLocation: _retryLocationConsent,
               onStartLocation: _startFromCurrentLocation,
             ),
@@ -1445,6 +1536,150 @@ class _UserSettingsSheet extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _ManualLocationSheet extends StatelessWidget {
+  const _ManualLocationSheet({required this.language});
+
+  final String language;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = _copy(language, ko: '지역 선택', en: 'Choose area');
+    final closeLabel = _copy(language, ko: '닫기', en: 'Close');
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.58,
+      minChildSize: 0.42,
+      maxChildSize: 0.9,
+      builder: (context, scrollController) {
+        return DecoratedBox(
+          decoration: const BoxDecoration(
+            color: Color(0xFFF5F5F5),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            boxShadow: [
+              BoxShadow(
+                blurRadius: 28,
+                offset: Offset(0, -10),
+                color: Color(0x26000000),
+              ),
+            ],
+          ),
+          child: ListView(
+            controller: scrollController,
+            padding: const EdgeInsets.fromLTRB(18, 10, 18, 28),
+            children: [
+              Center(
+                child: Container(
+                  width: 46,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFC8D0D9),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  IconButton.filledTonal(
+                    tooltip: closeLabel,
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.arrow_back_ios_new),
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF1A202C),
+                    ),
+                  ),
+                  Expanded(
+                    child: Center(
+                      child: Text(
+                        title,
+                        style: const TextStyle(
+                          color: Color(0xFF111827),
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 48),
+                ],
+              ),
+              const SizedBox(height: 16),
+              for (final option in _manualLocationOptions) ...[
+                _ManualLocationTile(
+                  option: option,
+                  language: language,
+                  onSelected: () => Navigator.of(context).pop(option),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ManualLocationTile extends StatelessWidget {
+  const _ManualLocationTile({
+    required this.option,
+    required this.language,
+    required this.onSelected,
+  });
+
+  final _ManualLocationOption option;
+  final String language;
+  final VoidCallback onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        key: ValueKey('manual-location-option-${option.id}'),
+        borderRadius: BorderRadius.circular(8),
+        onTap: onSelected,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE6F0FB),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: const Icon(
+                  Icons.location_on_outlined,
+                  color: Color(0xFF2B6CB0),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  option.label(language),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF111827),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: Color(0xFF64748B)),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1718,6 +1953,7 @@ class _Dashboard extends StatelessWidget {
     required this.onRefreshWeather,
     required this.onReturnToLocation,
     required this.onOpenSettings,
+    required this.onOpenManualLocation,
     required this.onRetryLocation,
     required this.onStartLocation,
   });
@@ -1777,6 +2013,7 @@ class _Dashboard extends StatelessWidget {
   final VoidCallback onRefreshWeather;
   final VoidCallback onReturnToLocation;
   final VoidCallback onOpenSettings;
+  final VoidCallback onOpenManualLocation;
   final VoidCallback onRetryLocation;
   final VoidCallback onStartLocation;
 
@@ -1916,18 +2153,23 @@ class _Dashboard extends StatelessWidget {
                     constraints: const BoxConstraints(maxWidth: 520),
                     child: _MapToast(
                       actionKey: const ValueKey('location-fallback-retry'),
+                      secondaryActionKey: const ValueKey(
+                        'location-manual-select',
+                      ),
                       icon: Icons.my_location_outlined,
                       label: _copy(
                         uiLanguage,
                         ko: '현재 위치를 확인해야 추천을 볼 수 있어요',
                         en: 'Location permission is needed for recommendations',
                       ),
-                      actionLabel: _copy(
-                        uiLanguage,
-                        ko: '현재 위치 다시 확인',
-                        en: 'Use my location',
-                      ),
+                      actionLabel: _copy(uiLanguage, ko: '재시도', en: 'Retry'),
                       onAction: onRetryLocation,
+                      secondaryActionLabel: _copy(
+                        uiLanguage,
+                        ko: '지역 선택',
+                        en: 'Choose area',
+                      ),
+                      onSecondaryAction: onOpenManualLocation,
                       color: Colors.white.withValues(alpha: 0.94),
                     ),
                   ),
@@ -6108,7 +6350,7 @@ List<KakaoMapPlace> clusterMapPlacesForMap({
   final selectedId = selected?.placeId;
   final selectedMarkers = <KakaoMapPlace>[];
   final buckets = <String, List<LalaPlace>>{};
-  final shouldExpandClusters = mapLevel <= 5;
+  final shouldUseClusters = places.length >= 12 && mapLevel >= 7;
 
   KakaoMapPlace toMapPlace(LalaPlace place, {bool selected = false}) {
     return KakaoMapPlace(
@@ -6126,7 +6368,7 @@ List<KakaoMapPlace> clusterMapPlacesForMap({
       selectedMarkers.add(toMapPlace(place, selected: true));
       continue;
     }
-    if (shouldExpandClusters) {
+    if (!shouldUseClusters) {
       selectedMarkers.add(toMapPlace(place));
       continue;
     }
@@ -6139,7 +6381,7 @@ List<KakaoMapPlace> clusterMapPlacesForMap({
   final clustered = <KakaoMapPlace>[];
   for (final entry in buckets.entries) {
     final group = entry.value;
-    if (group.length >= 3) {
+    if (group.length >= 2) {
       final lat =
           group.fold<double>(0, (sum, place) => sum + place.lat) / group.length;
       final lng =
@@ -6931,16 +7173,22 @@ class _MapToast extends StatelessWidget {
     required this.label,
     required this.color,
     this.actionKey = const ValueKey('map-error-retry'),
+    this.secondaryActionKey = const ValueKey('map-secondary-action'),
     this.actionLabel,
     this.onAction,
+    this.secondaryActionLabel,
+    this.onSecondaryAction,
   });
 
   final IconData icon;
   final String label;
   final Color color;
   final Key actionKey;
+  final Key secondaryActionKey;
   final String? actionLabel;
   final VoidCallback? onAction;
+  final String? secondaryActionLabel;
+  final VoidCallback? onSecondaryAction;
 
   @override
   Widget build(BuildContext context) {
@@ -6998,6 +7246,28 @@ class _MapToast extends StatelessWidget {
                   ),
                 ),
                 child: Text(actionLabel!),
+              ),
+            ],
+            if (secondaryActionLabel != null && onSecondaryAction != null) ...[
+              const SizedBox(width: 4),
+              TextButton(
+                key: secondaryActionKey,
+                onPressed: onSecondaryAction,
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  minimumSize: const Size(0, 32),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  foregroundColor: const Color(0xFF2B6CB0),
+                  backgroundColor: const Color(0xFFE6F0FB),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  textStyle: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 12,
+                  ),
+                ),
+                child: Text(secondaryActionLabel!),
               ),
             ],
           ],

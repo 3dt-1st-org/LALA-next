@@ -100,44 +100,54 @@ void main() {
     );
   });
 
-  test(
-    'map clustering expands markers at default level and clusters on zoom out',
-    () {
-      final places = [
-        _clusterRestaurant('cluster-food-a', '클러스터 맛집 A', 210),
-        _clusterRestaurant('cluster-food-b', '클러스터 맛집 B', 260),
-        _clusterRestaurant('cluster-food-c', '클러스터 맛집 C', 310),
-      ];
+  test('map clustering follows legacy point count and zoom threshold', () {
+    final places = [
+      _clusterRestaurant('cluster-food-a', '클러스터 맛집 A', 210),
+      _clusterRestaurant('cluster-food-b', '클러스터 맛집 B', 260),
+      _clusterRestaurant('cluster-food-c', '클러스터 맛집 C', 310),
+    ];
 
-      final defaultLevelMarkers = clusterMapPlacesForMap(
-        places: places,
-        selected: null,
-        mapLevel: 4,
-        language: 'ko',
-      );
-      expect(defaultLevelMarkers.where((marker) => marker.isCluster), isEmpty);
-      expect(
-        defaultLevelMarkers.map((marker) => marker.id),
-        containsAll(['cluster-food-a', 'cluster-food-b', 'cluster-food-c']),
-      );
+    final defaultLevelMarkers = clusterMapPlacesForMap(
+      places: places,
+      selected: null,
+      mapLevel: 4,
+      language: 'ko',
+    );
+    expect(defaultLevelMarkers.where((marker) => marker.isCluster), isEmpty);
+    expect(
+      defaultLevelMarkers.map((marker) => marker.id),
+      containsAll(['cluster-food-a', 'cluster-food-b', 'cluster-food-c']),
+    );
 
-      final zoomedOutMarkers = clusterMapPlacesForMap(
-        places: places,
-        selected: null,
-        mapLevel: 6,
-        language: 'ko',
-      );
-      expect(
-        zoomedOutMarkers.where((marker) => marker.isCluster),
-        hasLength(1),
-      );
-      expect(zoomedOutMarkers.single.clusterMemberIds, [
-        'cluster-food-a',
-        'cluster-food-b',
-        'cluster-food-c',
-      ]);
-    },
-  );
+    final mediumZoomMarkers = clusterMapPlacesForMap(
+      places: places,
+      selected: null,
+      mapLevel: 7,
+      language: 'ko',
+    );
+    expect(mediumZoomMarkers.where((marker) => marker.isCluster), isEmpty);
+
+    final densePlaces = List<LalaPlace>.generate(
+      12,
+      (index) => _clusterRestaurant(
+        'cluster-food-$index',
+        '클러스터 맛집 ${index + 1}',
+        210 + index,
+      ),
+    );
+    final zoomedOutMarkers = clusterMapPlacesForMap(
+      places: densePlaces,
+      selected: null,
+      mapLevel: 7,
+      language: 'ko',
+    );
+    expect(zoomedOutMarkers.where((marker) => marker.isCluster), hasLength(1));
+    expect(zoomedOutMarkers.single.clusterCount, 12);
+    expect(
+      zoomedOutMarkers.single.clusterMemberIds,
+      densePlaces.map((place) => place.placeId).toList(),
+    );
+  });
 
   testWidgets('map fallback does not invent places when data is empty', (
     tester,
@@ -439,7 +449,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('현재 위치를 확인해야 추천을 볼 수 있어요'), findsOneWidget);
-    expect(find.text('현재 위치 다시 확인'), findsOneWidget);
+    expect(find.text('재시도'), findsOneWidget);
+    expect(find.text('지역 선택'), findsOneWidget);
     expect(backends.single.placesRequestConfigs, isEmpty);
     expect(backends.single.weatherRequestConfigs, isEmpty);
     expect(backends.single.interventionRequestConfigs, isEmpty);
@@ -450,6 +461,49 @@ void main() {
 
     expect(locationProvider.requests, 2);
     expect(backends.single.placesRequestConfigs, isEmpty);
+  });
+
+  testWidgets('manual location selection loads recommendations explicitly', (
+    tester,
+  ) async {
+    final backends = <FakeBackend>[];
+    final locationProvider = FakeLocationProvider(
+      const LalaLocationResult.unavailable(),
+    );
+
+    await tester.pumpWidget(
+      TestLalaApp(
+        backendFactory: (config) {
+          final backend = FakeBackend(config);
+          backends.add(backend);
+          return backend;
+        },
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+        locationProvider: locationProvider,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(backends.single.placesRequestConfigs, isEmpty);
+    await tester.tap(find.byKey(const ValueKey('location-manual-select')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('지역 선택'), findsWidgets);
+    await tester.tap(
+      find.byKey(const ValueKey('manual-location-option-seoul-jung')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(locationProvider.requests, 1);
+    expect(backends.length, 2);
+    expect(backends.first.placesRequestConfigs, isEmpty);
+    expect(backends.last.placesRequestConfigs.single.lat, 37.5665);
+    expect(backends.last.placesRequestConfigs.single.lng, 126.9780);
+    expect(backends.last.weatherRequestConfigs.single.lat, 37.5665);
+    expect(backends.last.interventionRequestConfigs.single.lng, 126.9780);
+    expect(backends.last.dailyPlanRequestConfigs.single.lat, 37.5665);
+    expect(find.text('현재 위치를 확인해야 추천을 볼 수 있어요'), findsNothing);
+    expect(find.text('추천 장소 접기'), findsOneWidget);
   });
 
   testWidgets('filters places from category chips and toggles map modes', (
