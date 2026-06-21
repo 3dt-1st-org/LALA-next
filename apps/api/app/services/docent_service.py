@@ -92,6 +92,7 @@ def _rule_based_script(
         )
         context = _ko_context_sentence(request)
         score_context = _ko_score_sentence(request)
+        weather_context = _ko_weather_sentence(request)
         grounding_sentence = _ko_grounding_sentence(grounding_context)
         place_subject = _ko_topic(place_label)
         if request.mode == "detail":
@@ -99,6 +100,7 @@ def _rule_based_script(
                 f"{place_subject} LALA가 현재 위치 주변에서 고른 {category_label}입니다. "
                 f"{context} "
                 f"{score_context} "
+                f"{weather_context} "
                 f"{grounding_sentence} "
                 f"{category_context} "
                 "방문 전 운영 시간과 날씨를 확인하고, 가까운 다음 장소까지 무리 없는 동선으로 이어가 보세요."
@@ -107,6 +109,7 @@ def _rule_based_script(
             f"{place_subject} 현재 위치와 공식 데이터를 함께 보고 고른 {category_label}입니다. "
             f"{context} "
             f"{score_context} "
+            f"{weather_context} "
             f"{grounding_sentence} "
             f"{category_context}"
         )
@@ -122,12 +125,14 @@ def _rule_based_script(
     )
     context = _en_context_sentence(request)
     score_context = _en_score_sentence(request)
+    weather_context = _en_weather_sentence(request)
     grounding_sentence = _en_grounding_sentence(grounding_context)
     if request.mode == "detail":
         return (
             f"{place_label} is a {request.category.replace('_', ' ')} recommended by LALA. "
             f"{context} "
             f"{score_context} "
+            f"{weather_context} "
             f"{grounding_sentence} "
             f"{category_context} "
             "Before visiting, check opening hours and weather, then continue to the next nearby stop on foot where possible."
@@ -136,6 +141,7 @@ def _rule_based_script(
         f"{place_label} is a {language_label} LALA stop selected from official tourism, culture, and local spending signals. "
         f"{context} "
         f"{score_context} "
+        f"{weather_context} "
         f"{grounding_sentence} "
         f"{category_context}"
     )
@@ -164,6 +170,21 @@ def _has_request_context(request: DocentScriptRequest) -> bool:
             request.region_en,
             request.distance_m,
             request.upstream_source,
+        )
+    )
+
+
+def _has_weather_context(request: DocentScriptRequest) -> bool:
+    return any(
+        value is not None
+        for value in (
+            request.weather_temp,
+            request.weather_outdoor_status,
+            request.dust_grade,
+            request.dust_pm10,
+            request.dust_pm25,
+            request.dust_pm10_grade,
+            request.dust_pm25_grade,
         )
     )
 
@@ -220,6 +241,60 @@ def _en_score_sentence(request: DocentScriptRequest) -> str:
     if not parts:
         return ""
     return f"The recommendation evidence includes {', '.join(parts)}."
+
+
+def _ko_weather_sentence(request: DocentScriptRequest) -> str:
+    parts: list[str] = []
+    if request.weather_temp:
+        parts.append(f"기온 {request.weather_temp}°C")
+    dust_parts: list[str] = []
+    if request.dust_pm10_grade and request.dust_pm10:
+        dust_parts.append(f"미세먼지 {request.dust_pm10_grade}(PM10 {request.dust_pm10})")
+    elif request.dust_pm10_grade:
+        dust_parts.append(f"미세먼지 {request.dust_pm10_grade}")
+    if request.dust_pm25_grade and request.dust_pm25:
+        dust_parts.append(f"초미세먼지 {request.dust_pm25_grade}(PM2.5 {request.dust_pm25})")
+    elif request.dust_pm25_grade:
+        dust_parts.append(f"초미세먼지 {request.dust_pm25_grade}")
+    if dust_parts:
+        parts.append(" · ".join(dust_parts))
+    elif request.dust_grade:
+        parts.append(f"미세먼지 {request.dust_grade}")
+    if not parts:
+        return ""
+    status = (
+        "외부 활동에 무리가 적은 편입니다."
+        if request.weather_outdoor_status == "good"
+        else "날씨와 대기 상황을 보며 동선을 짧게 조정하는 편이 좋습니다."
+    )
+    return f"현재 날씨는 {', '.join(parts)}입니다. {status}"
+
+
+def _en_weather_sentence(request: DocentScriptRequest) -> str:
+    parts: list[str] = []
+    if request.weather_temp:
+        parts.append(f"{request.weather_temp}°C")
+    dust_parts: list[str] = []
+    if request.dust_pm10_grade and request.dust_pm10:
+        dust_parts.append(f"PM10 {request.dust_pm10_grade} ({request.dust_pm10})")
+    elif request.dust_pm10_grade:
+        dust_parts.append(f"PM10 {request.dust_pm10_grade}")
+    if request.dust_pm25_grade and request.dust_pm25:
+        dust_parts.append(f"PM2.5 {request.dust_pm25_grade} ({request.dust_pm25})")
+    elif request.dust_pm25_grade:
+        dust_parts.append(f"PM2.5 {request.dust_pm25_grade}")
+    if dust_parts:
+        parts.append(" / ".join(dust_parts))
+    elif request.dust_grade:
+        parts.append(f"dust {request.dust_grade}")
+    if not parts:
+        return ""
+    status = (
+        "suitable for walking"
+        if request.weather_outdoor_status == "good"
+        else "better for a shorter route"
+    )
+    return f"Current weather is {', '.join(parts)}, so this stop is {status}."
 
 
 def _score_percent(value: float) -> int:
@@ -427,7 +502,7 @@ def script_identity(
         )
     if grounding_context:
         payload["grounding_hash"] = _grounding_hash(grounding_context)
-    if _has_request_context(request):
+    if _has_request_context(request) or _has_weather_context(request):
         payload.update(
             {
                 "place_name": request.place_name,
@@ -437,6 +512,13 @@ def script_identity(
                 "distance_m": request.distance_m,
                 "source": request.source,
                 "upstream_source": request.upstream_source,
+                "weather_temp": request.weather_temp,
+                "weather_outdoor_status": request.weather_outdoor_status,
+                "dust_grade": request.dust_grade,
+                "dust_pm10": request.dust_pm10,
+                "dust_pm25": request.dust_pm25,
+                "dust_pm10_grade": request.dust_pm10_grade,
+                "dust_pm25_grade": request.dust_pm25_grade,
             }
         )
     return generation_identity("docent_script", payload)

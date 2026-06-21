@@ -251,6 +251,7 @@ abstract class LalaBackend {
 
   Future<LalaEnvelope<LalaDocentScript>> createDocentScript({
     required LalaPlace place,
+    LalaWeather? weather,
     String mode = 'brief',
   });
 
@@ -319,6 +320,7 @@ class LalaApiBackend implements LalaBackend {
   @override
   Future<LalaEnvelope<LalaDocentScript>> createDocentScript({
     required LalaPlace place,
+    LalaWeather? weather,
     String mode = 'brief',
   }) {
     return _client.createDocentScript(
@@ -336,6 +338,13 @@ class LalaApiBackend implements LalaBackend {
       demandDispersionScore: place.score?.components.demandDispersionScore,
       weatherFitScore: place.score?.components.weatherFitScore,
       cultureRelevanceScore: place.score?.components.cultureRelevanceScore,
+      weatherTemp: weather?.temp,
+      weatherOutdoorStatus: weather?.outdoorStatus,
+      dustGrade: weather?.dust.grade,
+      dustPm10: weather?.dust.pm10,
+      dustPm25: weather?.dust.pm25,
+      dustPm10Grade: weather?.dust.pm10Grade,
+      dustPm25Grade: weather?.dust.pm25Grade,
       category: place.category,
       language: config.lang,
       mode: mode,
@@ -645,8 +654,12 @@ class _LalaHomePageState extends State<LalaHomePage> {
       final dailyPlan = await loadOptional(_backend.createDailyPlan);
       LalaEnvelope<LalaDocentScript>? docentScript;
       if (firstPlace != null) {
+        final weatherContext = _publicWeatherOrNull(_weather?.data);
         docentScript = await loadOptional(
-          () => _backend.createDocentScript(place: firstPlace),
+          () => _backend.createDocentScript(
+            place: firstPlace,
+            weather: weatherContext,
+          ),
         );
       }
       final loadError = loadErrors.isEmpty
@@ -713,6 +726,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
     try {
       final detailScript = await _backend.createDocentScript(
         place: place,
+        weather: _publicWeatherOrNull(_weather?.data),
         mode: 'detail',
       );
       final script = detailScript.data?.script.trim();

@@ -2052,6 +2052,7 @@ class FakeBackend implements LalaBackend {
   @override
   Future<LalaEnvelope<LalaDocentScript>> createDocentScript({
     required LalaPlace place,
+    LalaWeather? weather,
     String mode = 'brief',
   }) async {
     docentScriptRequests.add('$mode:${place.placeId}');
@@ -2137,6 +2138,7 @@ class BilingualInterventionBackend extends FakeBackend {
   @override
   Future<LalaEnvelope<LalaDocentScript>> createDocentScript({
     required LalaPlace place,
+    LalaWeather? weather,
     String mode = 'brief',
   }) async {
     docentScriptRequests.add('$mode:${place.placeId}');
@@ -2165,6 +2167,7 @@ class PlaceholderDocentBackend extends FakeBackend {
   @override
   Future<LalaEnvelope<LalaDocentScript>> createDocentScript({
     required LalaPlace place,
+    LalaWeather? weather,
     String mode = 'brief',
   }) async {
     docentScriptRequests.add('$mode:${place.placeId}');

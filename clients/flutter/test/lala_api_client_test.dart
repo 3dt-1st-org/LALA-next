@@ -256,6 +256,13 @@ void main() {
         expect(jsonDecode(request.body)['demand_dispersion_score'], 0.78);
         expect(jsonDecode(request.body)['weather_fit_score'], 0.74);
         expect(jsonDecode(request.body)['culture_relevance_score'], 0.91);
+        expect(jsonDecode(request.body)['weather_temp'], '21.6');
+        expect(jsonDecode(request.body)['weather_outdoor_status'], 'good');
+        expect(jsonDecode(request.body)['dust_grade'], 'normal');
+        expect(jsonDecode(request.body)['dust_pm10'], '31');
+        expect(jsonDecode(request.body)['dust_pm25'], '14');
+        expect(jsonDecode(request.body)['dust_pm10_grade'], 'normal');
+        expect(jsonDecode(request.body)['dust_pm25_grade'], 'good');
         return http.Response(
           jsonEncode({
             'ok': true,
@@ -296,6 +303,13 @@ void main() {
       demandDispersionScore: 0.78,
       weatherFitScore: 0.74,
       cultureRelevanceScore: 0.91,
+      weatherTemp: ' 21.6 ',
+      weatherOutdoorStatus: ' good ',
+      dustGrade: ' normal ',
+      dustPm10: ' 31 ',
+      dustPm25: ' 14 ',
+      dustPm10Grade: ' normal ',
+      dustPm25Grade: ' good ',
       category: 'attraction',
       language: 'ko',
       mode: 'brief',

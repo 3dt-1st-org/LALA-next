@@ -113,6 +113,13 @@ class LalaApiClient {
     double? demandDispersionScore,
     double? weatherFitScore,
     double? cultureRelevanceScore,
+    String? weatherTemp,
+    String? weatherOutdoorStatus,
+    String? dustGrade,
+    String? dustPm10,
+    String? dustPm25,
+    String? dustPm10Grade,
+    String? dustPm25Grade,
     required String category,
     String language = 'ko',
     String mode = 'brief',
@@ -143,6 +150,18 @@ class LalaApiClient {
         if (_validScore(weatherFitScore)) 'weather_fit_score': weatherFitScore,
         if (_validScore(cultureRelevanceScore))
           'culture_relevance_score': cultureRelevanceScore,
+        if ((weatherTemp ?? '').trim().isNotEmpty)
+          'weather_temp': weatherTemp!.trim(),
+        if ((weatherOutdoorStatus ?? '').trim().isNotEmpty)
+          'weather_outdoor_status': weatherOutdoorStatus!.trim(),
+        if ((dustGrade ?? '').trim().isNotEmpty)
+          'dust_grade': dustGrade!.trim(),
+        if ((dustPm10 ?? '').trim().isNotEmpty) 'dust_pm10': dustPm10!.trim(),
+        if ((dustPm25 ?? '').trim().isNotEmpty) 'dust_pm25': dustPm25!.trim(),
+        if ((dustPm10Grade ?? '').trim().isNotEmpty)
+          'dust_pm10_grade': dustPm10Grade!.trim(),
+        if ((dustPm25Grade ?? '').trim().isNotEmpty)
+          'dust_pm25_grade': dustPm25Grade!.trim(),
         'category': category,
         'language': language,
         'mode': mode,

@@ -261,6 +261,13 @@ def test_docent_script_accepts_culture_venue_category(client, auth_headers):
             "region_ko": "용인시",
             "distance_m": 1478,
             "upstream_source": "tour_api",
+            "weather_temp": "21.6",
+            "weather_outdoor_status": "good",
+            "dust_grade": "normal",
+            "dust_pm10": "31",
+            "dust_pm25": "14",
+            "dust_pm10_grade": "보통",
+            "dust_pm25_grade": "좋음",
             "category": "culture_venue",
             "language": "ko",
             "mode": "brief",
@@ -272,6 +279,9 @@ def test_docent_script_accepts_culture_venue_category(client, auth_headers):
     assert body["data"]["category"] == "culture_venue"
     assert body["data"]["script"]
     assert "문화공간" in body["data"]["script"]
+    assert "현재 날씨" in body["data"]["script"]
+    assert "미세먼지 보통" in body["data"]["script"]
+    assert "초미세먼지 좋음" in body["data"]["script"]
 
 
 def test_docent_script_uses_db_cache_before_generation(

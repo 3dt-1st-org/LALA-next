@@ -214,6 +214,13 @@ def _build_deploy_cases(*, live_speech_enabled: bool) -> list[SmokeCase]:
                     "demand_dispersion_score": 0.78,
                     "weather_fit_score": 0.74,
                     "culture_relevance_score": 0.91,
+                    "weather_temp": "21.6",
+                    "weather_outdoor_status": "good",
+                    "dust_grade": "good",
+                    "dust_pm10": "6",
+                    "dust_pm25": "2",
+                    "dust_pm10_grade": "좋음",
+                    "dust_pm25_grade": "좋음",
                     "category": "culture_venue",
                     "language": "ko",
                     "mode": "brief",
@@ -492,6 +499,8 @@ def _validate_docent_quality(data: dict[str, Any]) -> str | None:
         term in script for term in ("추천 근거", "종합 추천 점수", "내국인 소비")
     ):
         return "docent_missing_score_context"
+    if not any(term in script for term in ("날씨", "미세먼지", "초미세먼지", "PM10")):
+        return "docent_missing_weather_context"
     if not any(term in script for term in ("공식", "한국관광공사", "장소 지식 인덱스")):
         return "docent_missing_official_grounding"
     return None

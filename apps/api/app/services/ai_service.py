@@ -113,6 +113,9 @@ def _docent_context_prompt(
     score_context = _score_context_prompt(request)
     if score_context:
         parts.append(score_context)
+    weather_context = _weather_context_prompt(request)
+    if weather_context:
+        parts.append(weather_context)
     grounding_prompt = _grounding_context_prompt(grounding_context or [])
     if grounding_prompt:
         parts.append(grounding_prompt)
@@ -140,6 +143,27 @@ def _score_context_prompt(request: DocentScriptRequest) -> str:
     if not score_parts:
         return ""
     return "Recommendation evidence: " + "; ".join(score_parts) + "."
+
+
+def _weather_context_prompt(request: DocentScriptRequest) -> str:
+    weather_parts: list[str] = []
+    if request.weather_temp:
+        weather_parts.append(f"temperature {request.weather_temp}C")
+    if request.weather_outdoor_status:
+        weather_parts.append(f"outdoor status {request.weather_outdoor_status}")
+    if request.dust_grade:
+        weather_parts.append(f"overall dust {request.dust_grade}")
+    if request.dust_pm10:
+        weather_parts.append(f"PM10 value {request.dust_pm10}")
+    if request.dust_pm25:
+        weather_parts.append(f"PM2.5 value {request.dust_pm25}")
+    if request.dust_pm10_grade:
+        weather_parts.append(f"PM10 grade {request.dust_pm10_grade}")
+    if request.dust_pm25_grade:
+        weather_parts.append(f"PM2.5 grade {request.dust_pm25_grade}")
+    if not weather_parts:
+        return ""
+    return "Current weather and air quality: " + "; ".join(weather_parts) + "."
 
 
 def _grounding_context_prompt(grounding_context: list[dict]) -> str:

@@ -22,6 +22,13 @@ class DocentScriptRequest(BaseModel):
     demand_dispersion_score: float | None = Field(default=None, ge=0, le=1)
     weather_fit_score: float | None = Field(default=None, ge=0, le=1)
     culture_relevance_score: float | None = Field(default=None, ge=0, le=1)
+    weather_temp: str | None = None
+    weather_outdoor_status: str | None = None
+    dust_grade: str | None = None
+    dust_pm10: str | None = None
+    dust_pm25: str | None = None
+    dust_pm10_grade: str | None = None
+    dust_pm25_grade: str | None = None
     category: Literal["attraction", "restaurant", "event", "culture_venue"]
     language: str = "ko"
     mode: str = "brief"
@@ -34,7 +41,21 @@ class DocentScriptRequest(BaseModel):
             raise ValueError("place_id is required")
         return value
 
-    @field_validator("place_name", "address", "region_ko", "region_en", "source", "upstream_source")
+    @field_validator(
+        "place_name",
+        "address",
+        "region_ko",
+        "region_en",
+        "source",
+        "upstream_source",
+        "weather_temp",
+        "weather_outdoor_status",
+        "dust_grade",
+        "dust_pm10",
+        "dust_pm25",
+        "dust_pm10_grade",
+        "dust_pm25_grade",
+    )
     @classmethod
     def normalize_optional_text(cls, value: str | None) -> str | None:
         if value is None:
