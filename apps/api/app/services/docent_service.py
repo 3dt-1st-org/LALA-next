@@ -651,7 +651,7 @@ def _ko_weather_icon_sentence(request: DocentScriptRequest) -> str:
     label = _ko_weather_icon_label(request.weather_icon)
     if not label:
         return ""
-    return f"현재 하늘 상태는 {label}로 확인됩니다."
+    return f"현재 하늘 상태는 {label}입니다."
 
 
 def _en_weather_icon_sentence(request: DocentScriptRequest) -> str:
