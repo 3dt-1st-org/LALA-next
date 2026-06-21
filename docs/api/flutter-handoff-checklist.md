@@ -147,10 +147,16 @@ captures artifacts under `output/playwright/`, and validates that the Flutter
 web bundle renders. With `--start-api`, the wrapper starts a local FastAPI
 process, injects a temporary local migration API key at compile time, and checks
 the API log for `/healthz`, `/readyz`, places, weather, intervention, daily plan,
-and docent script route hits. Without `--start-api`, the app is expected to show
-the offline public state when the API is not running and the console artifact
-can include a refused `/healthz` request. Use `--api-base-url <url>` to point
-the bundle at a separately running backend.
+and docent script route hits. It also grants a fixed test browser geolocation,
+taps through the location consent flow, and checks `flutter-web-requests.txt`
+for the expected API requests with that latitude and longitude. Without
+`--start-api`, the app is expected to show the offline public state when the API
+is not running and the console artifact can include a refused `/healthz`
+request. Use `--api-base-url <url>` to point the bundle at a separately running
+backend that allows the selected local web origin and run the same
+location-flow request check against it. Use
+`--web-url https://lala-next.cloud/?qa=<label>` for the deployed contest site so
+the browser opens the registered Kakao/CORS origin directly.
 
 The app shell loads public readiness before auth, shows whether the current
 client credential shape is public-only, migration API-key, static bearer-token,

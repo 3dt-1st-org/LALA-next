@@ -6,6 +6,7 @@ param(
     [int]$Port = 8099,
     [int]$ApiPort = 18080,
     [string]$ApiBaseUrl = "http://127.0.0.1:8080",
+    [string]$WebUrl = "",
     [string]$Python = ""
 )
 
@@ -18,8 +19,12 @@ $BuildDir = Join-Path $AppDir "build\web"
 $OutputDir = Join-Path $RepoRoot "output\playwright"
 $HostName = "127.0.0.1"
 $WebOrigin = "http://$HostName`:$Port"
+$TargetUrl = "$WebOrigin/"
 $ApiBaseWasExplicit = $PSBoundParameters.ContainsKey("ApiBaseUrl")
+$WebUrlWasExplicit = $PSBoundParameters.ContainsKey("WebUrl") -and $WebUrl
 $SmokeApiKey = "lala-web-smoke-key"
+$SmokeLat = "37.5665"
+$SmokeLng = "126.9780"
 $SessionName = "lala-flutter-web-smoke-$PID"
 $TempDir = [System.IO.Path]::GetTempPath()
 $ApiOutLog = Join-Path $TempDir "lala-next-flutter-web-api-smoke-$Port-$ApiPort.out.log"
@@ -113,8 +118,20 @@ function Set-ProcessEnvironmentForApiSmoke {
 }
 
 try {
+    if ($WebUrlWasExplicit) {
+        if ($StartApi -or $ApiBaseWasExplicit) {
+            throw "-WebUrl opens an already-built site; do not combine it with -StartApi or -ApiBaseUrl."
+        }
+        $parsedWebUrl = [System.Uri]::new($WebUrl)
+        if (-not $parsedWebUrl.IsAbsoluteUri) {
+            throw "-WebUrl must be an absolute URL."
+        }
+        $WebOrigin = "$($parsedWebUrl.Scheme)://$($parsedWebUrl.Authority)"
+        $TargetUrl = $WebUrl
+    }
+
     $FlutterCommand = Get-Command flutter -ErrorAction SilentlyContinue
-    if (-not $FlutterCommand) {
+    if (-not $FlutterCommand -and -not $WebUrlWasExplicit) {
         if ($RequireFlutter) {
             throw "Flutter SDK is required for Flutter web smoke."
         }
@@ -131,7 +148,7 @@ try {
         exit 0
     }
 
-    if (Test-LoopbackPortInUse $Port) {
+    if (-not $WebUrlWasExplicit -and (Test-LoopbackPortInUse $Port)) {
         throw "Port $Port is already in use. Pass -Port with a free port."
     }
     if ($StartApi -and (Test-LoopbackPortInUse $ApiPort)) {
@@ -169,46 +186,54 @@ try {
         Wait-HttpOk "$ApiBaseUrl/healthz"
     }
 
-    Write-Host "Building Flutter web release bundle for browser smoke..."
-    $buildArgs = @(
-        "build",
-        "web",
-        "--release",
-        "--no-wasm-dry-run",
-        "--dart-define",
-        "LALA_API_BASE_URL=$ApiBaseUrl"
-    )
-    if ($StartApi) {
-        $buildArgs += @("--dart-define", "LALA_IOS_API_KEY=$SmokeApiKey")
-    }
-    $KakaoJavascriptKey = [Environment]::GetEnvironmentVariable("KAKAO_JAVASCRIPT_KEY", "Process")
-    if ($KakaoJavascriptKey) {
-        $buildArgs += @("--dart-define", "KAKAO_JAVASCRIPT_KEY=$KakaoJavascriptKey")
-    }
-    Push-Location $AppDir
-    try {
-        & flutter @buildArgs
-        if ($LASTEXITCODE -ne 0) {
-            throw "flutter build web failed."
+    if ($WebUrlWasExplicit) {
+        Write-Host "Opening deployed Flutter web site at $TargetUrl ..."
+    } else {
+        Write-Host "Building Flutter web release bundle for browser smoke..."
+        $buildArgs = @(
+            "build",
+            "web",
+            "--release",
+            "--no-wasm-dry-run",
+            "--dart-define",
+            "LALA_API_BASE_URL=$ApiBaseUrl"
+        )
+        if ($StartApi) {
+            $buildArgs += @("--dart-define", "LALA_IOS_API_KEY=$SmokeApiKey")
         }
-    } finally {
-        Pop-Location
+        $KakaoJavascriptKey = [Environment]::GetEnvironmentVariable("KAKAO_JAVASCRIPT_KEY", "Process")
+        if ($KakaoJavascriptKey) {
+            $buildArgs += @("--dart-define", "KAKAO_JAVASCRIPT_KEY=$KakaoJavascriptKey")
+        }
+        Push-Location $AppDir
+        try {
+            & flutter @buildArgs
+            if ($LASTEXITCODE -ne 0) {
+                throw "flutter build web failed."
+            }
+        } finally {
+            Pop-Location
+        }
+
+        Write-Host "Serving Flutter web bundle on $WebOrigin ..."
+        $webArgs = @("-m", "http.server", "$Port", "--bind", $HostName)
+        $WebProcess = Start-Process `
+            -FilePath $Python `
+            -ArgumentList $webArgs `
+            -WorkingDirectory $BuildDir `
+            -RedirectStandardOutput $WebOutLog `
+            -RedirectStandardError $WebErrLog `
+            -NoNewWindow `
+            -PassThru
+        Wait-HttpOk "$WebOrigin/"
     }
 
-    Write-Host "Serving Flutter web bundle on $WebOrigin ..."
-    $webArgs = @("-m", "http.server", "$Port", "--bind", $HostName)
-    $WebProcess = Start-Process `
-        -FilePath $Python `
-        -ArgumentList $webArgs `
-        -WorkingDirectory $BuildDir `
-        -RedirectStandardOutput $WebOutLog `
-        -RedirectStandardError $WebErrLog `
-        -NoNewWindow `
-        -PassThru
-    Wait-HttpOk "$WebOrigin/"
-
-    Invoke-PlaywrightCli -CliArgs @("open", "$WebOrigin/")
-    Invoke-PlaywrightCli -CliArgs @("resize", "1280", "900")
+    Invoke-PlaywrightCli -CliArgs @("open", "$TargetUrl")
+    if ($WebUrlWasExplicit) {
+        Invoke-PlaywrightCli -CliArgs @("resize", "390", "844")
+    } else {
+        Invoke-PlaywrightCli -CliArgs @("resize", "1280", "900")
+    }
 
     $runtimeEval = @'
 async () => {
@@ -248,6 +273,63 @@ async () => {
     Invoke-PlaywrightCli -CliArgs @("console") |
         Set-Content -Path (Join-Path $OutputDir "flutter-web-console.txt") -Encoding UTF8
 
+    $RunLocationFlow = $StartApi -or $ApiBaseWasExplicit -or $WebUrlWasExplicit
+    if ($RunLocationFlow) {
+        Write-Host "Driving Flutter web location flow with test geolocation..."
+        $locationFlowCode = @"
+async (page) => {
+  await page.context().grantPermissions(['geolocation'], { origin: '$WebOrigin' });
+  await page.context().setGeolocation({ latitude: $SmokeLat, longitude: $SmokeLng });
+  await page.waitForTimeout(5000);
+  const viewport = page.viewportSize() || { width: 1280, height: 900 };
+  await page.mouse.click(Math.floor(viewport.width / 2), Math.floor(viewport.height * 0.60));
+  await page.waitForTimeout(12000);
+  return { url: page.url(), viewport };
+}
+"@
+        Invoke-PlaywrightCli -CliArgs @("run-code", $locationFlowCode) |
+            Set-Content -Path (Join-Path $OutputDir "flutter-web-location-flow.txt") -Encoding UTF8
+
+        $requestLogPath = Join-Path $OutputDir "flutter-web-requests.txt"
+        $requestLog = ""
+        $requiredFlowPaths = @(
+            "/api/v1/places",
+            "/api/v1/weather",
+            "/api/v1/plans/intervention",
+            "/api/v1/plans/daily",
+            "/api/v1/docents/script"
+        )
+        for ($index = 0; $index -lt 60; $index++) {
+            $requestLog = Invoke-PlaywrightCli -CliArgs @("requests") | Out-String
+            Set-Content -Path $requestLogPath -Value $requestLog -Encoding UTF8
+            $missingFlowPaths = @($requiredFlowPaths | Where-Object {
+                $requestLog -notmatch ([regex]::Escape($_) + ".*=> \[200\]")
+            })
+            $hasGrantedLocation = $requestLog -like "*lat=37.5665*" -and $requestLog -like "*lng=126.978*"
+            if ($missingFlowPaths.Count -eq 0 -and $hasGrantedLocation) {
+                break
+            }
+            Start-Sleep -Milliseconds 500
+        }
+        $missingFlowPaths = @($requiredFlowPaths | Where-Object {
+            $requestLog -notmatch ([regex]::Escape($_) + ".*=> \[200\]")
+        })
+        if ($missingFlowPaths.Count -gt 0) {
+            throw "Flutter location flow did not observe successful expected API requests: $($missingFlowPaths -join ', ')"
+        }
+        if (-not ($requestLog -like "*lat=37.5665*" -and $requestLog -like "*lng=126.978*")) {
+            throw "Flutter location flow did not use the granted test geolocation."
+        }
+        $lowerRequestLog = $requestLog.ToLowerInvariant()
+        if ($lowerRequestLog.Contains("mock://") -or
+            $lowerRequestLog.Contains("placeholder://") -or
+            $lowerRequestLog.Contains("dummy://")) {
+            throw "Flutter location flow request log contained mock-like URLs."
+        }
+        Invoke-PlaywrightCli -CliArgs @("console") |
+            Set-Content -Path (Join-Path $OutputDir "flutter-web-console.txt") -Encoding UTF8
+    }
+
     $consolePath = Join-Path $OutputDir "flutter-web-console.txt"
     if ($FailOnConsoleError -and (Select-String -Path $consolePath -Pattern "^(\[ERROR\]|error|pageerror|exception)" -Quiet)) {
         throw "Flutter web console reported an error. See $consolePath"
@@ -279,7 +361,11 @@ async () => {
     }
 
     Write-Host "Flutter web browser smoke completed."
-    Write-Host "Artifacts: $OutputDir\flutter-web-snapshot.txt, flutter-web-screenshot.txt, flutter-web-console.txt"
+    if ($RunLocationFlow) {
+        Write-Host "Artifacts: $OutputDir\flutter-web-snapshot.txt, flutter-web-screenshot.txt, flutter-web-console.txt, flutter-web-requests.txt"
+    } else {
+        Write-Host "Artifacts: $OutputDir\flutter-web-snapshot.txt, flutter-web-screenshot.txt, flutter-web-console.txt"
+    }
     if ($StartApi) {
         Write-Host "Local API logs: $ApiOutLog, $ApiErrLog"
     }

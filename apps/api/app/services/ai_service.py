@@ -3,7 +3,7 @@ from __future__ import annotations
 from apps.api.app.core.config import get_settings
 from apps.api.app.core.errors import ServiceError
 from apps.api.app.schemas.docent import DocentScriptRequest
-from apps.api.app.services.normalization import display_language
+from apps.api.app.services.normalization import display_language, format_celsius_label
 
 
 def live_ai_enabled() -> bool:
@@ -152,8 +152,8 @@ def _score_context_prompt(request: DocentScriptRequest) -> str:
 
 def _weather_context_prompt(request: DocentScriptRequest) -> str:
     weather_parts: list[str] = []
-    if request.weather_temp:
-        weather_parts.append(f"temperature {request.weather_temp}C")
+    if temperature := format_celsius_label(request.weather_temp):
+        weather_parts.append(f"temperature {temperature}")
     if request.weather_outdoor_status:
         weather_parts.append(f"outdoor status {request.weather_outdoor_status}")
     if request.dust_grade:

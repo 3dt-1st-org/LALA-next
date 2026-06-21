@@ -700,7 +700,14 @@ snapshot, screenshot, console, and runtime-state artifacts under
 is expected and the smoke still passes because it is a render check. Pass
 `--api-base-url <url>` for a separately running backend, and add
 `--fail-on-console-error` when the backend is expected to satisfy all public
-browser requests. With `--start-api`, the wrapper starts a local API with
+browser requests. With `--api-base-url` or `--start-api`, the smoke grants a
+fixed test browser geolocation, taps through the location consent flow, captures
+`flutter-web-requests.txt`, and verifies places, weather, intervention, daily
+plan, and docent script requests with the granted latitude and longitude. The
+`--api-base-url` backend must allow the selected local web origin. Use
+`--web-url https://lala-next.cloud/?qa=<label>` when verifying the deployed
+contest site so Kakao Maps and API CORS run from the registered production
+origin. With `--start-api`, the wrapper also starts a local API with
 process-local auth and CORS, avoids Key Vault, DB, OpenAI, and Speech, and
 checks the API log for `/healthz`, `/readyz`, and the authenticated `/api/v1/*`
 routes loaded by the app shell.

@@ -213,6 +213,30 @@ def test_kakao_map_bridges_forward_zoom_camera_updates():
     assert 'level: map.getLevel()' in native_embed
 
 
+def test_flutter_web_smoke_drives_location_flow_and_route_requests():
+    unix_script = (ROOT / "scripts" / "unix" / "smoke_flutter_web.sh").read_text(
+        encoding="utf-8"
+    )
+    windows_script = (
+        ROOT / "scripts" / "windows" / "smoke_flutter_web.ps1"
+    ).read_text(encoding="utf-8")
+
+    for script in (unix_script, windows_script):
+        assert "grantPermissions(['geolocation']" in script
+        assert "setGeolocation" in script
+        assert "37.5665" in script
+        assert "126.978" in script
+        assert "flutter-web-requests.txt" in script
+        assert "=> [200]" in script or r"=> \[200\]" in script
+        assert "/api/v1/places" in script
+        assert "/api/v1/weather" in script
+        assert "/api/v1/plans/intervention" in script
+        assert "/api/v1/plans/daily" in script
+        assert "/api/v1/docents/script" in script
+    assert "--web-url" in unix_script
+    assert "-WebUrl" in windows_script
+
+
 def test_paid_smoke_requires_authenticated_api_key():
     script = (ROOT / "scripts" / "windows" / "smoke_api.ps1").read_text(encoding="utf-8")
     start_script = (ROOT / "scripts" / "windows" / "start_api.ps1").read_text(encoding="utf-8")

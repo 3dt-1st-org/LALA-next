@@ -14,6 +14,10 @@ API_PORT="18080"
 HOST="127.0.0.1"
 API_BASE_URL="http://127.0.0.1:8080"
 API_BASE_URL_EXPLICIT="false"
+WEB_URL=""
+WEB_URL_EXPLICIT="false"
+SMOKE_LAT="37.5665"
+SMOKE_LNG="126.9780"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -38,6 +42,11 @@ while [[ $# -gt 0 ]]; do
       API_BASE_URL_EXPLICIT="true"
       shift 2
       ;;
+    --web-url)
+      WEB_URL="${2:-}"
+      WEB_URL_EXPLICIT="true"
+      shift 2
+      ;;
     --api-port)
       API_PORT="${2:-}"
       shift 2
@@ -47,7 +56,7 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     -h|--help)
-      echo "Usage: scripts/unix/smoke_flutter_web.sh [--require-flutter] [--require-browser] [--fail-on-console-error] [--start-api] [--api-base-url URL] [--api-port PORT] [--port PORT]"
+      echo "Usage: scripts/unix/smoke_flutter_web.sh [--require-flutter] [--require-browser] [--fail-on-console-error] [--start-api] [--api-base-url URL] [--web-url URL] [--api-port PORT] [--port PORT]"
       exit 0
       ;;
     *)
@@ -67,12 +76,35 @@ SERVER_PID=""
 API_PID=""
 PW_SESSION="lala-flutter-web-smoke-$$"
 WEB_ORIGIN="http://$HOST:$PORT"
+TARGET_URL="$WEB_ORIGIN/"
 API_LOG="/tmp/lala-next-flutter-web-api-smoke-$PORT-$API_PORT.log"
 WEB_LOG="/tmp/lala-next-flutter-web-smoke-$PORT.log"
 SMOKE_API_KEY="lala-web-smoke-key"
 
 load_env_file "$ROOT/.env"
 load_lala_key_vault_secrets
+
+if [[ "$WEB_URL_EXPLICIT" == "true" ]]; then
+  if [[ -z "$WEB_URL" ]]; then
+    echo "--web-url requires a URL." >&2
+    exit 2
+  fi
+  if [[ "$START_API" == "true" || "$API_BASE_URL_EXPLICIT" == "true" ]]; then
+    echo "--web-url opens an already-built site; do not combine it with --start-api or --api-base-url." >&2
+    exit 2
+  fi
+  WEB_ORIGIN="$("$PYTHON" - "$WEB_URL" <<'PY'
+import sys
+from urllib.parse import urlparse
+
+url = urlparse(sys.argv[1])
+if not url.scheme or not url.netloc:
+    raise SystemExit("--web-url must be an absolute URL")
+print(f"{url.scheme}://{url.netloc}")
+PY
+)"
+  TARGET_URL="$WEB_URL"
+fi
 
 cleanup() {
   if [[ -x "$PWCLI" ]]; then
@@ -89,7 +121,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-if ! command -v flutter >/dev/null 2>&1; then
+if ! command -v flutter >/dev/null 2>&1 && [[ "$WEB_URL_EXPLICIT" != "true" ]]; then
   if [[ "$REQUIRE_FLUTTER" == "true" ]]; then
     echo "Flutter SDK is required for Flutter web smoke." >&2
     exit 2
@@ -107,7 +139,7 @@ if ! command -v npx >/dev/null 2>&1 || [[ ! -x "$PWCLI" ]]; then
   exit 0
 fi
 
-if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+if [[ "$WEB_URL_EXPLICIT" != "true" ]] && lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
   echo "Port $PORT is already in use. Pass --port with a free port." >&2
   exit 2
 fi
@@ -154,37 +186,45 @@ if [[ "$START_API" == "true" ]]; then
   fi
 fi
 
-echo "Building Flutter web release bundle for browser smoke..."
-FLUTTER_BUILD_ARGS=(
-  build
-  web
-  --release
-  --no-wasm-dry-run
-  --dart-define
-  "LALA_API_BASE_URL=$API_BASE_URL"
-)
-if [[ "$START_API" == "true" ]]; then
-  FLUTTER_BUILD_ARGS+=(--dart-define "LALA_IOS_API_KEY=$SMOKE_API_KEY")
-fi
-if [[ -n "${KAKAO_JAVASCRIPT_KEY:-}" ]]; then
-  FLUTTER_BUILD_ARGS+=(--dart-define "KAKAO_JAVASCRIPT_KEY=$KAKAO_JAVASCRIPT_KEY")
-fi
-(cd "$APP_DIR" && flutter "${FLUTTER_BUILD_ARGS[@]}")
-
-echo "Serving Flutter web bundle on $WEB_ORIGIN ..."
-(cd "$BUILD_DIR" && "$PYTHON" -m http.server "$PORT" --bind "$HOST" >"$WEB_LOG" 2>&1) &
-SERVER_PID="$!"
-
-for _ in {1..40}; do
-  if curl -fsS "$WEB_ORIGIN/" >/dev/null 2>&1; then
-    break
+if [[ "$WEB_URL_EXPLICIT" == "true" ]]; then
+  echo "Opening deployed Flutter web site at $TARGET_URL ..."
+else
+  echo "Building Flutter web release bundle for browser smoke..."
+  FLUTTER_BUILD_ARGS=(
+    build
+    web
+    --release
+    --no-wasm-dry-run
+    --dart-define
+    "LALA_API_BASE_URL=$API_BASE_URL"
+  )
+  if [[ "$START_API" == "true" ]]; then
+    FLUTTER_BUILD_ARGS+=(--dart-define "LALA_IOS_API_KEY=$SMOKE_API_KEY")
   fi
-  sleep 0.25
-done
-curl -fsS "$WEB_ORIGIN/" >/dev/null
+  if [[ -n "${KAKAO_JAVASCRIPT_KEY:-}" ]]; then
+    FLUTTER_BUILD_ARGS+=(--dart-define "KAKAO_JAVASCRIPT_KEY=$KAKAO_JAVASCRIPT_KEY")
+  fi
+  (cd "$APP_DIR" && flutter "${FLUTTER_BUILD_ARGS[@]}")
 
-"$PWCLI" -s="$PW_SESSION" open "$WEB_ORIGIN/" >/dev/null
-"$PWCLI" -s="$PW_SESSION" resize 1280 900 >/dev/null
+  echo "Serving Flutter web bundle on $WEB_ORIGIN ..."
+  (cd "$BUILD_DIR" && "$PYTHON" -m http.server "$PORT" --bind "$HOST" >"$WEB_LOG" 2>&1) &
+  SERVER_PID="$!"
+
+  for _ in {1..40}; do
+    if curl -fsS "$WEB_ORIGIN/" >/dev/null 2>&1; then
+      break
+    fi
+    sleep 0.25
+  done
+  curl -fsS "$WEB_ORIGIN/" >/dev/null
+fi
+
+"$PWCLI" -s="$PW_SESSION" open "$TARGET_URL" >/dev/null
+if [[ "$WEB_URL_EXPLICIT" == "true" ]]; then
+  "$PWCLI" -s="$PW_SESSION" resize 390 844 >/dev/null
+else
+  "$PWCLI" -s="$PW_SESSION" resize 1280 900 >/dev/null
+fi
 
 RUNTIME_STATE="$("$PWCLI" -s="$PW_SESSION" eval 'async () => {
   const selector = "flutter-view, flt-glass-pane, flt-scene-host";
@@ -227,6 +267,85 @@ PY
 "$PWCLI" -s="$PW_SESSION" snapshot >"$OUTPUT_DIR/flutter-web-snapshot.txt"
 "$PWCLI" -s="$PW_SESSION" screenshot >"$OUTPUT_DIR/flutter-web-screenshot.txt"
 "$PWCLI" -s="$PW_SESSION" console >"$OUTPUT_DIR/flutter-web-console.txt"
+
+RUN_LOCATION_FLOW="false"
+if [[ "$START_API" == "true" || "$API_BASE_URL_EXPLICIT" == "true" || "$WEB_URL_EXPLICIT" == "true" ]]; then
+  RUN_LOCATION_FLOW="true"
+fi
+
+if [[ "$RUN_LOCATION_FLOW" == "true" ]]; then
+  echo "Driving Flutter web location flow with test geolocation..."
+  "$PWCLI" -s="$PW_SESSION" run-code "async (page) => {
+    await page.context().grantPermissions(['geolocation'], { origin: '$WEB_ORIGIN' });
+    await page.context().setGeolocation({ latitude: $SMOKE_LAT, longitude: $SMOKE_LNG });
+    await page.waitForTimeout(5000);
+    const viewport = page.viewportSize() || { width: 1280, height: 900 };
+    await page.mouse.click(Math.floor(viewport.width / 2), Math.floor(viewport.height * 0.60));
+    await page.waitForTimeout(12000);
+    return { url: page.url(), viewport };
+  }" >"$OUTPUT_DIR/flutter-web-location-flow.txt"
+
+  REQUEST_LOG="$OUTPUT_DIR/flutter-web-requests.txt"
+  for _ in {1..60}; do
+    "$PWCLI" -s="$PW_SESSION" requests >"$REQUEST_LOG"
+    if REQUEST_LOG="$REQUEST_LOG" "$PYTHON" - <<'PY'
+import os
+from pathlib import Path
+
+log = Path(os.environ["REQUEST_LOG"]).read_text(encoding="utf-8", errors="replace")
+required_paths = [
+    "/api/v1/places",
+    "/api/v1/weather",
+    "/api/v1/plans/intervention",
+    "/api/v1/plans/daily",
+    "/api/v1/docents/script",
+]
+lines = log.splitlines()
+missing = [
+    path
+    for path in required_paths
+    if not any(path in line and "=> [200]" in line for line in lines)
+]
+if missing:
+    raise SystemExit(1)
+if "lat=37.5665" not in log or "lng=126.978" not in log:
+    raise SystemExit(1)
+PY
+    then
+      break
+    fi
+    sleep 0.5
+  done
+  REQUEST_LOG="$REQUEST_LOG" "$PYTHON" - <<'PY'
+import os
+from pathlib import Path
+
+log = Path(os.environ["REQUEST_LOG"]).read_text(encoding="utf-8", errors="replace")
+required_paths = [
+    "/api/v1/places",
+    "/api/v1/weather",
+    "/api/v1/plans/intervention",
+    "/api/v1/plans/daily",
+    "/api/v1/docents/script",
+]
+lines = log.splitlines()
+missing = [
+    path
+    for path in required_paths
+    if not any(path in line and "=> [200]" in line for line in lines)
+]
+if missing:
+    raise SystemExit(
+        "Flutter location flow did not observe successful expected API requests: "
+        + ", ".join(missing)
+    )
+if "lat=37.5665" not in log or "lng=126.978" not in log:
+    raise SystemExit("Flutter location flow did not use the granted test geolocation.")
+if any(token in log.lower() for token in ("mock://", "placeholder://", "dummy://")):
+    raise SystemExit("Flutter location flow request log contained mock-like URLs.")
+PY
+  "$PWCLI" -s="$PW_SESSION" console >"$OUTPUT_DIR/flutter-web-console.txt"
+fi
 
 if [[ "$FAIL_ON_CONSOLE_ERROR" == "true" ]] && grep -Eiq "^(\[error\]|error|pageerror|exception)" "$OUTPUT_DIR/flutter-web-console.txt"; then
   echo "Flutter web console reported an error. See $OUTPUT_DIR/flutter-web-console.txt" >&2
@@ -280,7 +399,11 @@ PY
 fi
 
 echo "Flutter web browser smoke completed."
-echo "Artifacts: $OUTPUT_DIR/flutter-web-snapshot.txt, flutter-web-screenshot.txt, flutter-web-console.txt"
+if [[ "$RUN_LOCATION_FLOW" == "true" ]]; then
+  echo "Artifacts: $OUTPUT_DIR/flutter-web-snapshot.txt, flutter-web-screenshot.txt, flutter-web-console.txt, flutter-web-requests.txt"
+else
+  echo "Artifacts: $OUTPUT_DIR/flutter-web-snapshot.txt, flutter-web-screenshot.txt, flutter-web-console.txt"
+fi
 if [[ "$START_API" == "true" ]]; then
   echo "Local API log: $API_LOG"
 fi

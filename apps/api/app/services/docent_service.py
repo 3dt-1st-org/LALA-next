@@ -7,7 +7,7 @@ from typing import Any
 from apps.api.app.core.errors import ServiceError
 from apps.api.app.schemas.docent import DocentAudioRequest, DocentScriptRequest
 from apps.api.app.services import ai_service, db_repository, speech_service
-from apps.api.app.services.normalization import display_language
+from apps.api.app.services.normalization import display_language, format_celsius_label
 from apps.api.app.services.request_identity import generation_identity
 
 
@@ -273,8 +273,8 @@ def _en_score_sentence(request: DocentScriptRequest) -> str:
 
 def _ko_weather_sentence(request: DocentScriptRequest) -> str:
     parts: list[str] = []
-    if request.weather_temp:
-        parts.append(f"기온 {request.weather_temp}°C")
+    if temperature := format_celsius_label(request.weather_temp):
+        parts.append(f"기온 {temperature}")
     dust_parts: list[str] = []
     if request.dust_pm10_grade and request.dust_pm10:
         dust_parts.append(f"미세먼지 {request.dust_pm10_grade}(PM10 {request.dust_pm10})")
@@ -300,8 +300,8 @@ def _ko_weather_sentence(request: DocentScriptRequest) -> str:
 
 def _en_weather_sentence(request: DocentScriptRequest) -> str:
     parts: list[str] = []
-    if request.weather_temp:
-        parts.append(f"{request.weather_temp}°C")
+    if temperature := format_celsius_label(request.weather_temp):
+        parts.append(temperature)
     dust_parts: list[str] = []
     if request.dust_pm10_grade and request.dust_pm10:
         dust_parts.append(f"PM10 {request.dust_pm10_grade} ({request.dust_pm10})")

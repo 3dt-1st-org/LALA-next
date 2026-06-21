@@ -74,8 +74,15 @@ The smoke builds the web bundle, serves it locally, opens it through the
 Playwright CLI, validates the Flutter entrypoint, and captures snapshot,
 screenshot, console, and runtime-state artifacts under `output/playwright/`.
 With `--start-api`, it keeps the API in local contract mode, avoids Key Vault,
-DB, OpenAI, and Speech, and verifies that the browser hit `/healthz`, `/readyz`,
-places, weather, intervention, daily plan, and docent script routes. Without
+DB, OpenAI, and Speech, grants a test browser geolocation, taps through the
+location consent flow, and verifies that the browser requested places, weather,
+intervention, daily plan, and docent script routes with the granted latitude and
+longitude. With `--api-base-url <url>`, the same location-flow request check runs
+against a separately running backend that allows the selected local web origin
+and writes `flutter-web-requests.txt`. For the deployed contest site, use
+`--web-url https://lala-next.cloud/?qa=<label>` so the smoke opens the registered
+Kakao/CORS origin directly and verifies the same location-driven API requests.
+Without
 `--start-api`, the app still renders its offline public state when the API is
 not running and the console artifact records the expected `/healthz`
 connection refusal.

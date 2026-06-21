@@ -19,3 +19,16 @@ def normalize_docent_mode(value: str | None) -> str:
     if raw in {"brief", "detail", "standard", "deep"}:
         return raw
     return "brief"
+
+
+def format_celsius_label(value: str | None) -> str | None:
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    compact = raw.replace("℃", "°C").replace(" ", "")
+    lower = compact.lower()
+    if lower.endswith("°c"):
+        return f"{compact[:-2]}°C"
+    if lower.endswith("c"):
+        return f"{compact[:-1].rstrip('°')}°C"
+    return f"{raw}°C"
