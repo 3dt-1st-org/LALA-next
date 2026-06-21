@@ -431,7 +431,9 @@ DB, KMA, and AirKorea reads are unavailable, the route returns
 
 ## Live AI
 
-Azure OpenAI resources exist for LALA-next, but live generation is opt-in:
+Azure OpenAI resources exist for LALA. In shared Azure dev/review, live
+generation is enabled when the LALA Key Vault contains the OpenAI endpoint,
+deployment, API version, and key. Local and isolated runs can opt in with:
 
 ```powershell
 $env:LALA_ENABLE_LIVE_AI = "true"
@@ -441,6 +443,10 @@ When live AI is enabled and Key Vault or environment variables provide the
 OpenAI settings, `POST /api/v1/docents/script` uses the configured deployment
 and returns `source: "azure_openai"`. Otherwise it returns a deterministic
 rule-based local curation script with `source: "rule_based_curation"`.
+Both live and rule-based scripts pass through the same quality guard so current
+location distance, official data grounding, local spending or small-merchant
+context, PM10/PM2.5 context, and a practical route action are added when the
+request provides those signals.
 
 If `DB_DSN` is configured, `rag.knowledge_chunks` is checked before generation
 for same-place grounding snippets. If no score or RAG grounding context is
@@ -463,5 +469,5 @@ $env:LALA_ENABLE_LIVE_SPEECH = "true"
 
 When live Speech is enabled and Key Vault or environment variables provide the
 Speech settings, `POST /api/v1/docents/audio` returns Azure-generated MP3
-bytes. Otherwise it returns deterministic MP3-like bytes for local contract
-testing only.
+bytes. Otherwise it returns a JSON `SPEECH_NOT_CONFIGURED` error rather than
+fake audio bytes.

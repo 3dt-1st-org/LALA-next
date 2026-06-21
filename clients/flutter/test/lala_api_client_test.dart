@@ -350,7 +350,7 @@ void main() {
               'data': {
                 'language': 'ko',
                 'center': {'lat': 37.2, 'lng': 127.0},
-                'radius_m': 50000,
+                'radius_m': 3000,
                 'weather': _weatherPayload(),
                 'slots': [
                   {
@@ -399,7 +399,7 @@ void main() {
       expect(weather.data?.dust.pm25GradeKo, '확인 중');
       expect(weather.data?.forecast, isEmpty);
       expect(plan.data?.center.lat, 37.2);
-      expect(plan.data?.radiusM, 50000);
+      expect(plan.data?.radiusM, 3000);
       expect(plan.data?.weather.outdoorStatus, 'unknown');
       expect(plan.data?.slots.first.place?.name, '수원화성');
       expect(plan.data?.slots.last.weatherHint, 'unknown');

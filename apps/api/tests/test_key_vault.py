@@ -5,19 +5,17 @@ import logging
 from apps.api.app.core import key_vault
 
 
-def test_key_vault_does_not_cache_empty_secret(monkeypatch):
+def test_key_vault_caches_empty_secret_for_process_lifetime(monkeypatch):
     vault_url = "https://example-lala-vault.vault.azure.net/"
     values = iter(("", "public-data-secret"))
 
     key_vault._get_cached_non_empty_secret.cache_clear()
+    monkeypatch.setattr(key_vault, "_prefer_cli_secret_lookup", lambda: False)
     monkeypatch.setattr(key_vault, "_get_secret_with_sdk", lambda *_args: next(values))
     monkeypatch.setattr(key_vault, "_get_secret_with_azure_cli", lambda *_args: "")
 
     assert key_vault.get_secret_if_configured(vault_url, "public-data-service-key") == ""
-    assert (
-        key_vault.get_secret_if_configured(vault_url, "public-data-service-key")
-        == "public-data-secret"
-    )
+    assert key_vault.get_secret_if_configured(vault_url, "public-data-service-key") == ""
 
 
 def test_key_vault_caches_non_empty_secret(monkeypatch):
@@ -29,12 +27,34 @@ def test_key_vault_caches_non_empty_secret(monkeypatch):
         return "cached-secret"
 
     key_vault._get_cached_non_empty_secret.cache_clear()
+    monkeypatch.setattr(key_vault, "_prefer_cli_secret_lookup", lambda: False)
     monkeypatch.setattr(key_vault, "_get_secret_with_sdk", fake_sdk)
     monkeypatch.setattr(key_vault, "_get_secret_with_azure_cli", lambda *_args: "")
 
     assert key_vault.get_secret_if_configured(vault_url, "db-dsn") == "cached-secret"
     assert key_vault.get_secret_if_configured(vault_url, "db-dsn") == "cached-secret"
     assert calls["sdk"] == 1
+
+
+def test_key_vault_prefers_cli_lookup_when_available(monkeypatch):
+    vault_url = "https://example-lala-vault.vault.azure.net/"
+    calls = {"sdk": 0, "cli": 0}
+
+    def fake_sdk(*_args: object) -> str:
+        calls["sdk"] += 1
+        return "sdk-secret"
+
+    def fake_cli(*_args: object) -> str:
+        calls["cli"] += 1
+        return "cli-secret"
+
+    key_vault._get_cached_non_empty_secret.cache_clear()
+    monkeypatch.setattr(key_vault, "_prefer_cli_secret_lookup", lambda: True)
+    monkeypatch.setattr(key_vault, "_get_secret_with_sdk", fake_sdk)
+    monkeypatch.setattr(key_vault, "_get_secret_with_azure_cli", fake_cli)
+
+    assert key_vault.get_secret_if_configured(vault_url, "db-dsn") == "cli-secret"
+    assert calls == {"sdk": 0, "cli": 1}
 
 
 def test_key_vault_suppresses_azure_sdk_request_logging():

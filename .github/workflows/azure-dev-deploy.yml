@@ -22,6 +22,8 @@ env:
   POSTGRES_ADMIN_LOGIN: ${{ vars.POSTGRES_ADMIN_LOGIN || 'lalaadmin' }}
   CORS_ALLOW_ORIGINS: ${{ vars.CORS_ALLOW_ORIGINS || 'https://lala-next.cloud,https://www.lala-next.cloud' }}
   LALA_PUBLIC_CONTEST_ACCESS: ${{ vars.LALA_PUBLIC_CONTEST_ACCESS || 'true' }}
+  LALA_ENABLE_LIVE_AI: ${{ vars.LALA_ENABLE_LIVE_AI || 'true' }}
+  LALA_ENABLE_LIVE_SPEECH: ${{ vars.LALA_ENABLE_LIVE_SPEECH || 'false' }}
   API_CUSTOM_DOMAIN_NAME: ${{ vars.AZURE_API_CUSTOM_DOMAIN_NAME || '' }}
   API_CUSTOM_DOMAIN_CERTIFICATE_ID: ${{ vars.AZURE_API_CUSTOM_DOMAIN_CERTIFICATE_ID || '' }}
 
@@ -92,6 +94,8 @@ jobs:
               enableRoleAssignments=false \
               publicContestAccess="$LALA_PUBLIC_CONTEST_ACCESS" \
               staticSnapshotFallback=false \
+              enableLiveAI="$LALA_ENABLE_LIVE_AI" \
+              enableLiveSpeech="$LALA_ENABLE_LIVE_SPEECH" \
               postgresAdminLogin="$POSTGRES_ADMIN_LOGIN" \
               postgresAdminPassword="$POSTGRES_ADMIN_PASSWORD" \
               apiCustomDomainName="$API_CUSTOM_DOMAIN_NAME" \

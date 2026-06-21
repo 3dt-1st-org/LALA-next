@@ -51,6 +51,7 @@ def generate_script(request: DocentScriptRequest) -> dict:
         script = _rule_based_script(request, grounding_context=grounding_context)
         source = "rule_based_curation"
     script = _sanitize_docent_output(script, language=request.language)
+    script = _ensure_docent_quality_context(script, request)
     ttl_sec = 604800
     return {
         "place_id": request.place_id,
@@ -501,6 +502,141 @@ def _sanitize_docent_output(text: str, *, language: str) -> str:
         if not _looks_like_orphan_score_sentence(sentence)
     ]
     return " ".join(sentences).strip() or cleaned.strip()
+
+
+def _ensure_docent_quality_context(
+    script: str,
+    request: DocentScriptRequest,
+) -> str:
+    language = request.language
+    if language == "en":
+        return _ensure_en_docent_quality_context(script, request)
+    return _ensure_ko_docent_quality_context(script, request)
+
+
+def _ensure_ko_docent_quality_context(
+    script: str,
+    request: DocentScriptRequest,
+) -> str:
+    language = request.language
+    parts = [script.strip()] if script.strip() else []
+    if (
+        request.distance_m is not None
+        and request.distance_m > 0
+        and not _contains_any(script, ("현재 위치", "거리", _format_distance(request.distance_m)))
+    ):
+        parts.append(f"현재 위치에서 약 {_format_distance(request.distance_m)} 거리라 짧은 이동으로 연결하기 좋습니다.")
+    if _has_score_context(request) and not _contains_any(script, ("내국인 소비", "지역 소비", "로컬 소비")):
+        parts.append("LALA는 실제 내국인 소비 흐름과 지역 소비 신호를 함께 보고 이 장소를 고릅니다.")
+    if _score_at_least(request.small_merchant_fit_score, 0.5) and not _contains_any(
+        script,
+        ("소상공인", "상권", "골목", "로컬 카페"),
+    ):
+        parts.append("방문 전후에는 주변 소상공인 상권과 골목 경험으로 동선을 이어갈 수 있습니다.")
+    if _has_weather_context(request):
+        if not _contains_any(script, ("날씨", "미세먼지", "초미세먼지", "PM10", "PM2.5")):
+            parts.append(_ko_weather_sentence(request))
+        elif "PM10" not in script or not _contains_any(script, ("PM2.5", "초미세먼지")):
+            parts.append(_ko_dust_split_sentence(request))
+    source = _ko_source_label(request.upstream_source or request.source)
+    if source and not _contains_any(script, ("공식", "한국관광공사", "문화정보원", "공연예술통합전산망", "운영 DB")):
+        parts.append(f"{source}로 확인한 공식 데이터를 바탕으로 소개합니다.")
+    if not _contains_any(script, ("방문 전후", "동선", "이어", "함께 연결", "다음 장소", "산책")):
+        parts.append(_ko_route_action_sentence(request.category))
+    return _sanitize_docent_output(_join_script_parts(parts), language=language)
+
+
+def _ensure_en_docent_quality_context(
+    script: str,
+    request: DocentScriptRequest,
+) -> str:
+    language = request.language
+    parts = [script.strip()] if script.strip() else []
+    if (
+        request.distance_m is not None
+        and request.distance_m > 0
+        and not _contains_any(script.lower(), ("current location", "distance", _format_distance(request.distance_m).lower()))
+    ):
+        parts.append(f"It is about {_format_distance(request.distance_m)} from your current location, so it can fit into a short nearby route.")
+    if _has_score_context(request) and not _contains_any(
+        script.lower(),
+        ("domestic spending", "local spending", "local consumption"),
+    ):
+        parts.append("LALA reads real domestic spending patterns together with neighborhood route signals.")
+    if _score_at_least(request.small_merchant_fit_score, 0.5) and not _contains_any(
+        script.lower(),
+        ("small local business", "local business", "neighborhood business", "nearby streets"),
+    ):
+        parts.append("Before or after the stop, connect it with nearby small local businesses and streets.")
+    if _has_weather_context(request):
+        if not _contains_any(script, ("weather", "PM10", "PM2.5", "dust")):
+            parts.append(_en_weather_sentence(request))
+        elif "PM10" not in script or "PM2.5" not in script:
+            parts.append(_en_dust_split_sentence(request))
+    source = _en_source_label(request.upstream_source or request.source)
+    if source and not _contains_any(
+        script.lower(),
+        ("official", "korea tourism", "culture information", "kopis", "live lala database"),
+    ):
+        parts.append(f"It is grounded in official context from {source}.")
+    if not _contains_any(
+        script.lower(),
+        ("before or after", "route", "continue", "nearby", "walk"),
+    ):
+        parts.append(_en_route_action_sentence(request.category))
+    return _sanitize_docent_output(_join_script_parts(parts), language=language)
+
+
+def _ko_dust_split_sentence(request: DocentScriptRequest) -> str:
+    dust_parts: list[str] = []
+    if request.dust_pm10_grade and request.dust_pm10:
+        dust_parts.append(f"미세먼지는 {request.dust_pm10_grade}(PM10 {request.dust_pm10})")
+    elif request.dust_pm10_grade:
+        dust_parts.append(f"미세먼지는 {request.dust_pm10_grade}")
+    if request.dust_pm25_grade and request.dust_pm25:
+        dust_parts.append(f"초미세먼지는 {request.dust_pm25_grade}(PM2.5 {request.dust_pm25})")
+    elif request.dust_pm25_grade:
+        dust_parts.append(f"초미세먼지는 {request.dust_pm25_grade}")
+    if not dust_parts:
+        return ""
+    return f"현재 대기 상황은 {' · '.join(dust_parts)}입니다."
+
+
+def _en_dust_split_sentence(request: DocentScriptRequest) -> str:
+    dust_parts: list[str] = []
+    if request.dust_pm10_grade and request.dust_pm10:
+        dust_parts.append(f"PM10 is {request.dust_pm10_grade} ({request.dust_pm10})")
+    elif request.dust_pm10_grade:
+        dust_parts.append(f"PM10 is {request.dust_pm10_grade}")
+    if request.dust_pm25_grade and request.dust_pm25:
+        dust_parts.append(f"PM2.5 is {request.dust_pm25_grade} ({request.dust_pm25})")
+    elif request.dust_pm25_grade:
+        dust_parts.append(f"PM2.5 is {request.dust_pm25_grade}")
+    if not dust_parts:
+        return ""
+    return "Current air quality: " + "; ".join(dust_parts) + "."
+
+
+def _ko_route_action_sentence(category: str) -> str:
+    return {
+        "restaurant": "식사 전후에는 가까운 문화공간이나 골목 산책으로 다음 장소를 이어가 보세요.",
+        "event": "행사 방문 전후에는 주변 상권과 가까운 문화공간을 하나의 동선으로 함께 연결해 보세요.",
+        "culture_venue": "관람 전후에는 가까운 카페, 식당, 골목 산책을 하나의 동선으로 이어가 보세요.",
+        "attraction": "방문 전후에는 주변 산책길과 로컬 상권을 함께 묶어 다음 장소로 이어가 보세요.",
+    }.get(category, "방문 전후에는 가까운 다음 장소와 로컬 상권을 함께 이어가 보세요.")
+
+
+def _en_route_action_sentence(category: str) -> str:
+    return {
+        "restaurant": "Before or after eating, continue to a nearby culture space or short neighborhood walk.",
+        "event": "Before or after the event, connect it with nearby local businesses and culture spaces.",
+        "culture_venue": "Before or after the visit, continue through nearby cafes, restaurants, and walkable streets.",
+        "attraction": "Before or after the stop, connect it with nearby walking paths and local businesses.",
+    }.get(category, "Before or after the stop, continue to a nearby place and local business area.")
+
+
+def _contains_any(text: str, terms: tuple[str, ...]) -> bool:
+    return any(term and term in text for term in terms)
 
 
 def _strip_score_metric_fragments(text: str, *, language: str) -> str:

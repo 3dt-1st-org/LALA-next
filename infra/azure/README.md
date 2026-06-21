@@ -100,6 +100,12 @@ SQL tooling or the guarded canonical SQL runbooks.
 - `LALA_STATIC_SNAPSHOT_FALLBACK` is explicitly disabled for Azure dev,
   production, and review runtimes. The normal data path is PostgreSQL plus Key
   Vault backed by the official ingest, scoring, and RAG pipeline.
+- `LALA_ENABLE_LIVE_AI` is enabled for shared dev during the contest window
+  when the LALA Key Vault contains Azure OpenAI settings, so docent scripts use
+  live generation plus API-side quality guards.
+- `LALA_ENABLE_LIVE_SPEECH` stays disabled by default because automated deploy
+  smokes would otherwise perform paid TTS calls. Enable it only for an explicit
+  audio verification pass.
 - Bundled static data is only an offline, read-only snapshot fallback for DB
   outage handling or isolated local checks. Do not present it as the deployed
   service's primary data path.

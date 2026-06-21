@@ -15,23 +15,23 @@ def get_secret_if_configured(vault_url: str, secret_name: str) -> str:
         return ""
     if not is_allowed_key_vault_url(vault_url):
         return ""
-    try:
-        return _get_cached_non_empty_secret(vault_url, secret_name)
-    except LookupError:
-        return ""
+    return _get_cached_non_empty_secret(vault_url, secret_name)
 
 
 @lru_cache(maxsize=64)
 def _get_cached_non_empty_secret(vault_url: str, secret_name: str) -> str:
+    if _prefer_cli_secret_lookup():
+        return _get_secret_with_azure_cli(vault_url, secret_name)
     sdk_value = _get_secret_with_sdk(vault_url, secret_name)
     if sdk_value:
         return sdk_value
-    cli_value = _get_secret_with_azure_cli(vault_url, secret_name)
-    if cli_value:
-        return cli_value
-    # Do not cache missing or empty secrets. In dev/review Azure environments,
-    # a secret may be added after the API process has already started.
-    raise LookupError(secret_name)
+    return _get_secret_with_azure_cli(vault_url, secret_name)
+
+
+def _prefer_cli_secret_lookup() -> bool:
+    return not os.getenv("AZURE_CLIENT_ID") and bool(
+        shutil.which("az.cmd") or shutil.which("az.exe") or shutil.which("az")
+    )
 
 
 def _get_secret_with_sdk(vault_url: str, secret_name: str) -> str:

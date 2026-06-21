@@ -211,7 +211,7 @@ class LalaApiClient {
   Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({
     double lat = 37.2636,
     double lng = 127.0286,
-    int radiusM = 50000,
+    int radiusM = 3000,
     String language = 'ko',
     String? requestId,
     Duration? timeout,

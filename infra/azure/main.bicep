@@ -25,6 +25,12 @@ param publicContestAccess bool = false
 @description('Switch for unauthenticated static snapshot fallback. Keep false for Azure dev/prod/review runtimes.')
 param staticSnapshotFallback bool = false
 
+@description('Enable Azure OpenAI-backed docent script generation when OpenAI secrets are present in the LALA Key Vault.')
+param enableLiveAI bool = false
+
+@description('Enable Azure Speech MP3 generation when Speech secrets are present in the LALA Key Vault. Keep false unless paid speech smoke is intended.')
+param enableLiveSpeech bool = false
+
 @description('Object id of the GitHub OIDC service principal. Used for ACR push and Key Vault secret migration access.')
 param deploymentPrincipalObjectId string = ''
 
@@ -373,11 +379,11 @@ resource apiContainerApp 'Microsoft.App/containerApps@2024-03-01' = {
             }
             {
               name: 'LALA_ENABLE_LIVE_AI'
-              value: 'false'
+              value: string(enableLiveAI)
             }
             {
               name: 'LALA_ENABLE_LIVE_SPEECH'
-              value: 'false'
+              value: string(enableLiveSpeech)
             }
           ]
           resources: {

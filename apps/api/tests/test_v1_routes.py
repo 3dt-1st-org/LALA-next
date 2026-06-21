@@ -654,7 +654,10 @@ def test_docent_script_uses_live_ai_when_enabled(client, auth_headers, monkeypat
     body = response.json()
     assert body["ok"] is True
     assert body["data"]["source"] == "azure_openai"
-    assert body["data"]["script"] == "AI script for event-2"
+    assert body["data"]["script"].startswith("AI script for event-2")
+    assert "현재 위치에서 약 820m" in body["data"]["script"]
+    assert "문화정보원 데이터" in body["data"]["script"]
+    assert "방문 전후" in body["data"]["script"]
     assert saved_calls == []
 
 
@@ -707,7 +710,10 @@ def test_docent_script_live_ai_score_context_does_not_write_generic_cache(
     assert response.status_code == 200
     body = response.json()
     assert body["data"]["source"] == "azure_openai"
-    assert body["data"]["script"] == "AI score-aware script"
+    assert body["data"]["script"].startswith("AI score-aware script")
+    assert "내국인 소비" in body["data"]["script"]
+    assert "소상공인" in body["data"]["script"]
+    assert "동선" in body["data"]["script"]
     assert prompts and prompts[0].final_score == 0.88
     assert saved_calls == []
 
@@ -811,7 +817,8 @@ def test_docent_script_live_ai_receives_rag_grounding_without_cache_write(
     assert response.status_code == 200
     body = response.json()
     assert body["data"]["source"] == "azure_openai"
-    assert body["data"]["script"] == "AI grounded script"
+    assert body["data"]["script"].startswith("AI grounded script")
+    assert "동선" in body["data"]["script"]
     assert body["data"]["grounding_count"] == 1
     assert body["data"]["grounding_sources"] == ["culture_event"]
     assert grounding_calls[0][0]["source_id"] == "event:1"

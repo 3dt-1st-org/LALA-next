@@ -23,7 +23,7 @@ Production environment variables for the legacy Vercel API fallback path:
 LALA_STATIC_SNAPSHOT_FALLBACK=false
 LALA_PUBLIC_CONTEST_ACCESS=true
 CORS_ALLOW_ORIGINS=https://lala-next.cloud,https://www.lala-next.cloud,https://lala-next.vercel.app
-LALA_ENABLE_LIVE_AI=false
+LALA_ENABLE_LIVE_AI=true
 LALA_ENABLE_LIVE_SPEECH=false
 ```
 
@@ -32,6 +32,10 @@ review, and shared dev, keep `LALA_STATIC_SNAPSHOT_FALLBACK=false`; the normal
 data path is PostgreSQL plus Key Vault with reviewed ingest, scoring, and RAG
 jobs. Bundled static data is only an offline, read-only snapshot fallback for DB
 outage handling or isolated local checks.
+During the public contest review window, shared dev enables Azure OpenAI-backed
+docent scripts when the LALA Key Vault contains the OpenAI endpoint, deployment,
+API version, and key. Live Speech remains disabled by default to avoid paid audio
+generation during automated deploy smokes.
 
 During the public contest review window, Azure dev uses
 `LALA_PUBLIC_CONTEST_ACCESS=true`, so Flutter web builds should call Azure
