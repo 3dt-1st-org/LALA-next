@@ -245,7 +245,7 @@ def test_fetch_places_uses_radius_bound_ranking_query(monkeypatch):
     assert "AND lat BETWEEN %s AND %s" in captured["sql"]
     assert "AND lng BETWEEN %s AND %s" in captured["sql"]
     assert (
-        "ORDER BY COALESCE(latest_scores.final_score, 0) DESC, distance_m ASC"
+        "ORDER BY FLOOR(distance_m / 500.0) ASC, COALESCE(latest_scores.final_score, 0) DESC, distance_m ASC"
         in captured["sql"]
     )
     assert captured["params"][:4] == (127.0, 37.2, "all", "all")

@@ -77,7 +77,7 @@ class LalaAppConfig {
     this.kakaoJavascriptKey = '',
     this.lat = 37.2636,
     this.lng = 127.0286,
-    this.radiusM = 50000,
+    this.radiusM = 3000,
     this.category = 'all',
     this.lang = 'ko',
     this.requireLocationStartConfirmation = false,
@@ -93,7 +93,7 @@ class LalaAppConfig {
       kakaoJavascriptKey = const String.fromEnvironment('KAKAO_JAVASCRIPT_KEY'),
       lat = 37.2636,
       lng = 127.0286,
-      radiusM = 50000,
+      radiusM = 3000,
       category = const String.fromEnvironment(
         'LALA_PLACE_CATEGORY',
         defaultValue: 'all',
@@ -6047,7 +6047,12 @@ class _LegacyMapCanvas extends StatelessWidget {
     final selected = selectedPlace;
     final centerLat = mapFocusLat ?? selected?.lat ?? 37.2823;
     final centerLng = mapFocusLng ?? selected?.lng ?? 127.0179;
-    final mapPlaces = _clusterMapPlaces(places, selected, mapLevel);
+    final mapPlaces = clusterMapPlacesForMap(
+      places: places,
+      selected: selected,
+      mapLevel: mapLevel,
+      language: language,
+    );
 
     void handleMapFeatureTap(String featureId) {
       for (final marker in mapPlaces) {
@@ -6097,68 +6102,21 @@ class _LegacyMapCanvas extends StatelessWidget {
       ],
     );
   }
+}
 
-  List<KakaoMapPlace> _clusterMapPlaces(
-    List<LalaPlace> places,
-    LalaPlace? selected,
-    int mapLevel,
-  ) {
-    final selectedId = selected?.placeId;
-    final selectedMarkers = <KakaoMapPlace>[];
-    final buckets = <String, List<LalaPlace>>{};
-    final shouldExpandClusters = mapLevel <= 3;
+@visibleForTesting
+List<KakaoMapPlace> clusterMapPlacesForMap({
+  required List<LalaPlace> places,
+  required LalaPlace? selected,
+  required int mapLevel,
+  required String language,
+}) {
+  final selectedId = selected?.placeId;
+  final selectedMarkers = <KakaoMapPlace>[];
+  final buckets = <String, List<LalaPlace>>{};
+  final shouldExpandClusters = mapLevel <= 5;
 
-    for (final place in places.take(48)) {
-      if (place.placeId == selectedId) {
-        selectedMarkers.add(_toMapPlace(place, selected: true));
-        continue;
-      }
-      if (shouldExpandClusters) {
-        selectedMarkers.add(_toMapPlace(place));
-        continue;
-      }
-      final latBucket = (place.lat * 180).round();
-      final lngBucket = (place.lng * 180).round();
-      final key = '${place.category}:$latBucket:$lngBucket';
-      buckets.putIfAbsent(key, () => <LalaPlace>[]).add(place);
-    }
-
-    final clustered = <KakaoMapPlace>[];
-    for (final entry in buckets.entries) {
-      final group = entry.value;
-      if (group.length >= 3) {
-        final lat =
-            group.fold<double>(0, (sum, place) => sum + place.lat) /
-            group.length;
-        final lng =
-            group.fold<double>(0, (sum, place) => sum + place.lng) /
-            group.length;
-        clustered.add(
-          KakaoMapPlace(
-            id: 'cluster-${entry.key}',
-            name: _copy(
-              language,
-              ko: '${group.length}곳',
-              en: '${group.length} places',
-            ),
-            category: group.first.category,
-            lat: lat,
-            lng: lng,
-            clusterCount: group.length,
-            clusterMemberIds: group
-                .map((place) => place.placeId)
-                .toList(growable: false),
-          ),
-        );
-      } else {
-        clustered.addAll(group.map(_toMapPlace));
-      }
-    }
-
-    return [...clustered, ...selectedMarkers];
-  }
-
-  KakaoMapPlace _toMapPlace(LalaPlace place, {bool selected = false}) {
+  KakaoMapPlace toMapPlace(LalaPlace place, {bool selected = false}) {
     return KakaoMapPlace(
       id: place.placeId,
       name: _placeDisplayName(place, language),
@@ -6168,6 +6126,53 @@ class _LegacyMapCanvas extends StatelessWidget {
       selected: selected,
     );
   }
+
+  for (final place in places.take(48)) {
+    if (place.placeId == selectedId) {
+      selectedMarkers.add(toMapPlace(place, selected: true));
+      continue;
+    }
+    if (shouldExpandClusters) {
+      selectedMarkers.add(toMapPlace(place));
+      continue;
+    }
+    final latBucket = (place.lat * 180).round();
+    final lngBucket = (place.lng * 180).round();
+    final key = '${place.category}:$latBucket:$lngBucket';
+    buckets.putIfAbsent(key, () => <LalaPlace>[]).add(place);
+  }
+
+  final clustered = <KakaoMapPlace>[];
+  for (final entry in buckets.entries) {
+    final group = entry.value;
+    if (group.length >= 3) {
+      final lat =
+          group.fold<double>(0, (sum, place) => sum + place.lat) / group.length;
+      final lng =
+          group.fold<double>(0, (sum, place) => sum + place.lng) / group.length;
+      clustered.add(
+        KakaoMapPlace(
+          id: 'cluster-${entry.key}',
+          name: _copy(
+            language,
+            ko: '${group.length}곳',
+            en: '${group.length} places',
+          ),
+          category: group.first.category,
+          lat: lat,
+          lng: lng,
+          clusterCount: group.length,
+          clusterMemberIds: group
+              .map((place) => place.placeId)
+              .toList(growable: false),
+        ),
+      );
+    } else {
+      clustered.addAll(group.map(toMapPlace));
+    }
+  }
+
+  return [...clustered, ...selectedMarkers];
 }
 
 class _MapRoundButton extends StatelessWidget {

@@ -100,6 +100,45 @@ void main() {
     );
   });
 
+  test(
+    'map clustering expands markers at default level and clusters on zoom out',
+    () {
+      final places = [
+        _clusterRestaurant('cluster-food-a', '클러스터 맛집 A', 210),
+        _clusterRestaurant('cluster-food-b', '클러스터 맛집 B', 260),
+        _clusterRestaurant('cluster-food-c', '클러스터 맛집 C', 310),
+      ];
+
+      final defaultLevelMarkers = clusterMapPlacesForMap(
+        places: places,
+        selected: null,
+        mapLevel: 4,
+        language: 'ko',
+      );
+      expect(defaultLevelMarkers.where((marker) => marker.isCluster), isEmpty);
+      expect(
+        defaultLevelMarkers.map((marker) => marker.id),
+        containsAll(['cluster-food-a', 'cluster-food-b', 'cluster-food-c']),
+      );
+
+      final zoomedOutMarkers = clusterMapPlacesForMap(
+        places: places,
+        selected: null,
+        mapLevel: 6,
+        language: 'ko',
+      );
+      expect(
+        zoomedOutMarkers.where((marker) => marker.isCluster),
+        hasLength(1),
+      );
+      expect(zoomedOutMarkers.single.clusterMemberIds, [
+        'cluster-food-a',
+        'cluster-food-b',
+        'cluster-food-c',
+      ]);
+    },
+  );
+
   testWidgets('map fallback does not invent places when data is empty', (
     tester,
   ) async {
@@ -1081,54 +1120,47 @@ void main() {
     expect(find.text('수원화성 도슨트'), findsNothing);
   });
 
-  testWidgets('cluster marker focuses its member recommendations', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      TestLalaApp(
-        backendFactory: (config) => FakeBackend(
-          config,
-          places: [
-            _place(),
-            _clusterRestaurant('cluster-food-a', '클러스터 맛집 A', 210),
-            _clusterRestaurant('cluster-food-b', '클러스터 맛집 B', 260),
-            _clusterRestaurant('cluster-food-c', '클러스터 맛집 C', 310),
-          ],
+  testWidgets(
+    'default map level keeps nearby recommendation markers expanded',
+    (tester) async {
+      await tester.pumpWidget(
+        TestLalaApp(
+          backendFactory: (config) => FakeBackend(
+            config,
+            places: [
+              _place(),
+              _clusterRestaurant('cluster-food-a', '클러스터 맛집 A', 210),
+              _clusterRestaurant('cluster-food-b', '클러스터 맛집 B', 260),
+              _clusterRestaurant('cluster-food-c', '클러스터 맛집 C', 310),
+            ],
+          ),
+          initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
         ),
-        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
-      ),
-    );
+      );
 
-    await tester.pumpAndSettle();
+      await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(
-        const ValueKey('kakao-map-marker-cluster-restaurant:6710:22862'),
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(
-        of: find.byKey(
+      expect(
+        find.byKey(const ValueKey('kakao-map-marker-cluster-food-a')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('kakao-map-marker-cluster-food-b')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('kakao-map-marker-cluster-food-c')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
           const ValueKey('kakao-map-marker-cluster-restaurant:6710:22862'),
         ),
-        matching: find.text('맛'),
-      ),
-      findsNothing,
-    );
-    expect(find.text('화성행궁 도슨트'), findsOneWidget);
-
-    await tester.tap(
-      find.byKey(
-        const ValueKey('kakao-map-marker-cluster-restaurant:6710:22862'),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('클러스터 맛집 A 도슨트'), findsOneWidget);
-    expect(find.text('화성행궁 도슨트'), findsNothing);
-    expect(find.text('클러스터 맛집 A'), findsAtLeastNWidgets(1));
-  });
+        findsNothing,
+      );
+      expect(find.text('화성행궁 도슨트'), findsOneWidget);
+    },
+  );
 
   testWidgets('location consent off surfaces the map permission overlay', (
     tester,

@@ -193,7 +193,7 @@ def fetch_places(
                 updated_at DESC
             LIMIT 1
         ) linked_event ON TRUE
-        ORDER BY COALESCE(latest_scores.final_score, 0) DESC, distance_m ASC, updated_at DESC
+        ORDER BY FLOOR(distance_m / 500.0) ASC, COALESCE(latest_scores.final_score, 0) DESC, distance_m ASC, updated_at DESC
         LIMIT 20
     """
     params = (

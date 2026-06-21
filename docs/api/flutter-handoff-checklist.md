@@ -50,12 +50,12 @@ X-API-Key: <client api key>
 Wave 1 Flutter routes:
 
 ```text
-GET  /api/v1/places?lat=37.2636&lng=127.0286&radius_m=50000
+GET  /api/v1/places?lat=37.2636&lng=127.0286&radius_m=3000
 GET  /api/v1/weather?lat=37.2636&lng=127.0286
 POST /api/v1/docents/script
 POST /api/v1/docents/audio
 POST /api/v1/plans/daily
-GET  /api/v1/plans/intervention?lat=37.2636&lng=127.0286&radius_m=50000
+GET  /api/v1/plans/intervention?lat=37.2636&lng=127.0286&radius_m=3000
 ```
 
 JSON routes return `{ ok, data, meta, error }`. Audio success from

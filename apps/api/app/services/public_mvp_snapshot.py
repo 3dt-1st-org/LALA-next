@@ -214,7 +214,7 @@ def fetch_snapshot_places(
             SELECT scored_places.*, 0 AS snapshot_row_group
             FROM scored_places
             WHERE distance_m <= %s
-            ORDER BY COALESCE(final_score, 0) DESC, distance_m ASC, updated_at DESC
+            ORDER BY FLOOR(distance_m / 500.0) ASC, COALESCE(final_score, 0) DESC, distance_m ASC, updated_at DESC
             LIMIT %s
         ),
         coverage_rows AS (
@@ -241,7 +241,7 @@ def fetch_snapshot_places(
         SELECT
             *
         FROM deduped_rows
-        ORDER BY snapshot_row_group ASC, COALESCE(final_score, 0) DESC, distance_m ASC, updated_at DESC
+        ORDER BY snapshot_row_group ASC, FLOOR(distance_m / 500.0) ASC, COALESCE(final_score, 0) DESC, distance_m ASC, updated_at DESC
     """
     with closing(psycopg2.connect(dsn, connect_timeout=connect_timeout)) as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:

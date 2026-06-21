@@ -67,7 +67,7 @@ Smoke the API:
 ```bash
 curl -fsS https://api.lala-next.cloud/healthz
 curl -fsS https://api.lala-next.cloud/readyz
-curl -fsS 'https://api.lala-next.cloud/api/v1/places?lat=37.2636&lng=127.0286&radius_m=50000'
+curl -fsS 'https://api.lala-next.cloud/api/v1/places?lat=37.2636&lng=127.0286&radius_m=3000'
 ```
 
 ## Frontend

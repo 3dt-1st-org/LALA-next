@@ -253,7 +253,7 @@ Request:
 {
   "lat": 37.2636,
   "lng": 127.0286,
-  "radius_m": 50000,
+  "radius_m": 3000,
   "language": "ko"
 }
 ```
@@ -281,7 +281,7 @@ Query parameters:
   "query": {
     "lat": 37.2636,
     "lng": 127.0286,
-    "radius_m": 50000,
+    "radius_m": 3000,
     "category": "all",
     "language": "ko",
     "include_scores": true
@@ -388,7 +388,7 @@ DB, KMA, and AirKorea reads are unavailable, the route returns
     "lat": 37.2636,
     "lng": 127.0286
   },
-  "radius_m": 50000,
+  "radius_m": 3000,
   "weather": {
     "outdoor_status": "good",
     "source": "db"
@@ -416,7 +416,7 @@ DB, KMA, and AirKorea reads are unavailable, the route returns
     "lat": 37.2636,
     "lng": 127.0286
   },
-  "radius_m": 50000,
+  "radius_m": 3000,
   "should_intervene": false,
   "reason": "Weather is suitable, so keep the current route toward 호암미술관.",
   "recommended_action": "Keep 호암미술관 as the primary local stop.",
