@@ -164,6 +164,7 @@ def _build_cases(*, profile: str, live_speech_enabled: bool) -> list[SmokeCase]:
 def _build_deploy_cases(*, live_speech_enabled: bool) -> list[SmokeCase]:
     location = {"lat": 37.5665, "lng": 126.9780, "radius_m": 3000}
     nearby_location = {**location, "radius_m": 1000}
+    gyeonggi_location = {"lat": 37.2819, "lng": 127.0142, "radius_m": 3000}
     place_query = parse.urlencode(
         {**location, "category": "all", "language": "ko", "include_scores": "true"}
     )
@@ -175,7 +176,16 @@ def _build_deploy_cases(*, live_speech_enabled: bool) -> list[SmokeCase]:
             "include_scores": "true",
         }
     )
+    gyeonggi_place_query = parse.urlencode(
+        {
+            **gyeonggi_location,
+            "category": "all",
+            "language": "ko",
+            "include_scores": "true",
+        }
+    )
     weather_query = parse.urlencode(location)
+    gyeonggi_weather_query = parse.urlencode(gyeonggi_location)
     return [
         SmokeCase("GET", f"/api/v1/places?{place_query}", validator="places_live_data"),
         SmokeCase(
@@ -184,7 +194,17 @@ def _build_deploy_cases(*, live_speech_enabled: bool) -> list[SmokeCase]:
             validator="places_location_data",
         ),
         SmokeCase(
+            "GET",
+            f"/api/v1/places?{gyeonggi_place_query}",
+            validator="places_live_data",
+        ),
+        SmokeCase(
             "GET", f"/api/v1/weather?{weather_query}", validator="weather_live_data"
+        ),
+        SmokeCase(
+            "GET",
+            f"/api/v1/weather?{gyeonggi_weather_query}",
+            validator="weather_live_data",
         ),
         SmokeCase(
             "GET",

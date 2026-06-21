@@ -460,9 +460,9 @@ def test_unix_matrix_smoke_deploy_profile_keeps_ci_gate_bounded():
     assert result.returncode == 0, result.stderr
     assert "LALA-next API matrix smoke" in result.stdout
     assert "profile=deploy" in result.stdout
-    assert "checked=7" in result.stdout
-    assert server.protected_paths.count("/api/v1/places") == 2
-    assert server.protected_paths.count("/api/v1/weather") == 1
+    assert "checked=9" in result.stdout
+    assert server.protected_paths.count("/api/v1/places") == 3
+    assert server.protected_paths.count("/api/v1/weather") == 2
     assert server.protected_paths.count("/api/v1/plans/intervention") == 1
     assert server.protected_paths.count("/api/v1/plans/daily") == 1
     assert server.protected_paths.count("/api/v1/docents/script") == 1
@@ -478,7 +478,7 @@ def test_unix_matrix_smoke_deploy_profile_accepts_live_speech_audio():
         thread.join(timeout=5)
 
     assert result.returncode == 0, result.stderr
-    assert "checked=7" in result.stdout
+    assert "checked=9" in result.stdout
     assert server.protected_paths.count("/api/v1/docents/audio") == 1
 
 
