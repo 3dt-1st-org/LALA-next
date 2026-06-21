@@ -377,6 +377,8 @@ def _ko_context_sentence(request: DocentScriptRequest) -> str:
         parts.append(f"{source} 기반")
     if not parts:
         return "공식 관광·문화 데이터와 위치 기반 거리, 지역 소비 신호를 함께 살펴 방문 맥락을 정리했습니다."
+    if _is_limited_offline_source(request.upstream_source or request.source):
+        return f"{', '.join(parts)}으로 확인 가능한 범위의 위치 조건과 지역 소비 신호를 함께 해석했습니다."
     return f"{', '.join(parts)}으로 공식 관광·문화 데이터와 지역 소비 신호를 함께 해석했습니다."
 
 
@@ -394,6 +396,11 @@ def _en_context_sentence(request: DocentScriptRequest) -> str:
         parts.append(f"grounded in {source}")
     if not parts:
         return "The recommendation combines official tourism and culture data, location distance, and local spending signals."
+    if _is_limited_offline_source(request.upstream_source or request.source):
+        return (
+            f"It reads {', '.join(parts)} together with available location and "
+            "local spending signals."
+        )
     return (
         f"It reads {', '.join(parts)} together with local spending and route signals."
     )
@@ -556,7 +563,10 @@ def _ensure_ko_docent_quality_context(
                 parts.append(_ko_dust_split_sentence(request))
     source = _ko_source_label(request.upstream_source or request.source)
     if source and not _contains_any(script, ("공식", "한국관광공사", "문화정보원", "공연예술통합전산망", "운영 DB")):
-        parts.append(f"{source}로 확인한 공식 데이터를 바탕으로 소개합니다.")
+        if _is_limited_offline_source(request.upstream_source or request.source):
+            parts.append(f"{source}로 확인 가능한 범위만 바탕으로 소개합니다.")
+        else:
+            parts.append(f"{source}로 확인한 공식 데이터를 바탕으로 소개합니다.")
     if not _contains_any(script, ("방문 전후", "동선", "이어", "함께 연결")):
         parts.append(_ko_route_action_sentence(request.category))
     return _sanitize_docent_output(_join_script_parts(parts), language=language)
@@ -608,7 +618,10 @@ def _ensure_en_docent_quality_context(
         script.lower(),
         ("official", "korea tourism", "culture information", "kopis", "live lala database"),
     ):
-        parts.append(f"It is grounded in official context from {source}.")
+        if _is_limited_offline_source(request.upstream_source or request.source):
+            parts.append(f"It is grounded only in the available limited offline context.")
+        else:
+            parts.append(f"It is grounded in official context from {source}.")
     if not _contains_any(
         script.lower(),
         ("before or after", "route", "continue to the next"),
@@ -831,7 +844,7 @@ def _ko_source_label(source: str | None) -> str | None:
         "kcisa": "문화정보원 데이터",
         "kopis": "공연예술통합전산망 데이터",
         "db": "운영 DB",
-        "public_mvp_snapshot": "공식 스냅샷",
+        "public_mvp_snapshot": "제한적 오프라인 데이터",
     }.get((source or "").strip())
 
 
@@ -841,8 +854,13 @@ def _en_source_label(source: str | None) -> str | None:
         "kcisa": "Korea Culture Information Service data",
         "kopis": "KOPIS performing arts data",
         "db": "the live LALA database",
-        "public_mvp_snapshot": "official snapshot data",
+        "public_mvp_snapshot": "limited offline data",
     }.get((source or "").strip())
+
+
+def _is_limited_offline_source(source: str | None) -> bool:
+    normalized = (source or "").strip().lower()
+    return normalized == "public_mvp_snapshot" or normalized.endswith("_fallback")
 
 
 def _readable_place_id(place_id: str, *, language: str) -> str:

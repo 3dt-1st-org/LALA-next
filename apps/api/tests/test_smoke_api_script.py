@@ -701,7 +701,9 @@ def test_unix_matrix_smoke_deploy_profile_rejects_docent_without_grounding():
 
 def test_unix_matrix_smoke_deploy_profile_rejects_docent_internal_codes():
     docent_payload = _live_docent_payload()
-    docent_payload["data"]["script"] += " category culture_venue source tour_api"
+    docent_payload["data"]["script"] += (
+        " category culture_venue source tour_api official snapshot data"
+    )
 
     server, thread, base_url = _start_server(
         public_access=True, docent_payload=docent_payload

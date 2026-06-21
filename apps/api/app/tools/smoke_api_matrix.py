@@ -532,8 +532,9 @@ def _validate_docent_quality(data: dict[str, Any]) -> str | None:
             "dev_seed",
             "local_fixture",
             "public_mvp_snapshot",
+            "snapshot",
         )
-    ):
+    ) or "스냅샷" in script:
         return "docent_script_contains_internal_code"
     grounding_count = data.get("grounding_count")
     if not isinstance(grounding_count, int) or grounding_count < 1:

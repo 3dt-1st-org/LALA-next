@@ -304,6 +304,71 @@ def test_docent_script_returns_envelope(client, auth_headers):
     assert body["data"]["cache_key"].startswith("docent_script:")
 
 
+def test_docent_script_does_not_present_snapshot_fallback_as_official_live_data(
+    client, auth_headers
+):
+    ko_response = client.post(
+        "/api/v1/docents/script",
+        headers=auth_headers,
+        json={
+            "place_id": "offline-review-place",
+            "place_name": "오프라인 검토 장소",
+            "region_ko": "서울 중구",
+            "distance_m": 180,
+            "source": "public_mvp_snapshot",
+            "upstream_source": "public_mvp_snapshot",
+            "weather_temp": "23.6",
+            "weather_icon": "partly-cloudy",
+            "weather_outdoor_status": "good",
+            "dust_pm10": "16",
+            "dust_pm25": "7",
+            "dust_pm10_grade": "좋음",
+            "dust_pm25_grade": "좋음",
+            "category": "attraction",
+            "language": "ko",
+            "mode": "brief",
+        },
+    )
+    en_response = client.post(
+        "/api/v1/docents/script",
+        headers=auth_headers,
+        json={
+            "place_id": "offline-review-place",
+            "place_name": "Offline Review Place",
+            "region_en": "Seoul Jung-gu",
+            "distance_m": 180,
+            "source": "public_mvp_snapshot",
+            "upstream_source": "public_mvp_snapshot",
+            "weather_temp": "23.6",
+            "weather_icon": "partly-cloudy",
+            "weather_outdoor_status": "good",
+            "dust_pm10": "16",
+            "dust_pm25": "7",
+            "dust_pm10_grade": "good",
+            "dust_pm25_grade": "good",
+            "category": "attraction",
+            "language": "en",
+            "mode": "brief",
+        },
+    )
+
+    assert ko_response.status_code == 200
+    assert en_response.status_code == 200
+    ko_script = ko_response.json()["data"]["script"]
+    en_script = en_response.json()["data"]["script"]
+    assert "제한적 오프라인 데이터" in ko_script
+    assert "limited offline" in en_script
+    for script in (ko_script, en_script):
+        lowered = script.lower()
+        assert "public_mvp_snapshot" not in lowered
+        assert "snapshot" not in lowered
+        assert "official snapshot" not in lowered
+        assert "demo" not in lowered
+        assert "mock" not in lowered
+    assert "공식 스냅샷" not in ko_script
+    assert "공식 데이터를 바탕" not in ko_script
+
+
 def test_docent_script_accepts_culture_venue_category(client, auth_headers):
     response = client.post(
         "/api/v1/docents/script",
