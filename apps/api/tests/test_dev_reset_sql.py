@@ -21,10 +21,10 @@ def test_load_dev_reset_sql_plan_is_local_only_and_secret_safe():
     assert payload["apply_scope"] == "local_only_guarded"
     assert "explicit localhost DB_DSN" in payload["apply_requires"]
     assert [item["name"] for item in payload["files"]] == [
-        "010_seed_demo_travel.sql",
-        "020_seed_demo_weather_docent.sql",
-        "025_seed_demo_economy_culture.sql",
-        "030_seed_demo_worker_ops.sql",
+        "010_seed_local_fixture_travel.sql",
+        "020_seed_local_fixture_weather_docent.sql",
+        "025_seed_local_fixture_economy_culture.sql",
+        "030_seed_local_fixture_worker_ops.sql",
     ]
     assert payload["statement_count"] >= 3
     assert payload["safety_findings"] == []
@@ -65,16 +65,16 @@ def test_plan_dev_reset_cli_is_plan_only_and_secret_safe():
 def test_dev_reset_dsn_host_guard_accepts_only_explicit_local_hosts():
     assert dev_reset_sql.extract_local_dsn_host("postgresql://user:pass@localhost:5432/lala")
     assert dev_reset_sql.extract_local_dsn_host("postgres://user:pass@127.0.0.1/lala")
-    assert dev_reset_sql.extract_local_dsn_host("host=::1 dbname=lala user=demo")
-    assert dev_reset_sql.extract_local_dsn_host("hostaddr=127.0.0.1 dbname=lala user=demo")
+    assert dev_reset_sql.extract_local_dsn_host("host=::1 dbname=lala user=lala")
+    assert dev_reset_sql.extract_local_dsn_host("hostaddr=127.0.0.1 dbname=lala user=lala")
 
     assert dev_reset_sql.extract_local_dsn_host("postgresql://user:pass@example.com/lala") == ""
     assert dev_reset_sql.extract_local_dsn_host("host=lala-next-db.postgres.database.azure.com dbname=lala") == ""
-    assert dev_reset_sql.extract_local_dsn_host("dbname=lala user=demo") == ""
+    assert dev_reset_sql.extract_local_dsn_host("dbname=lala user=lala") == ""
 
 
 def test_dev_reset_apply_requires_explicit_guards_and_redacts_dsn(monkeypatch):
-    dsn = "host=lala-next-db.postgres.database.azure.com dbname=lala user=demo password=sensitive"
+    dsn = "host=lala-next-db.postgres.database.azure.com dbname=lala user=lala password=sensitive"
     env = {
         **os.environ,
         "ALLOW_DEV_RESET_APPLY": "1",

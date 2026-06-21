@@ -154,7 +154,7 @@ if [[ "$START_API" == "true" ]]; then
   if [[ "$API_BASE_URL_EXPLICIT" != "true" ]]; then
     API_BASE_URL="http://$HOST:$API_PORT"
   fi
-  echo "Starting local skeleton API on $API_BASE_URL for Flutter browser smoke..."
+  echo "Starting local API on $API_BASE_URL for Flutter browser smoke..."
   (
     cd "$ROOT"
     env \

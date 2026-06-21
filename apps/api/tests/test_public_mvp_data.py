@@ -161,11 +161,12 @@ def test_public_mvp_snapshot_uses_only_real_official_images() -> None:
     assert all("mock" not in url.lower() for url in image_urls)
 
 
-def test_public_mvp_snapshot_does_not_include_dev_seed_rows() -> None:
+def test_public_mvp_snapshot_does_not_include_local_fixture_rows() -> None:
     rows = public_mvp_data._load_snapshot()["places"]
 
     assert rows
     assert all(place.get("upstream_source") != "dev_seed" for place in rows)
+    assert all(place.get("upstream_source") != "local_fixture" for place in rows)
 
 
 def test_public_mvp_snapshot_does_not_show_generic_english_names() -> None:

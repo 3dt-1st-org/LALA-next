@@ -105,7 +105,7 @@ _JOB_DEFINITIONS: tuple[WorkerJobDefinition, ...] = (
         poison_policy=PoisonPolicy(
             threshold=3,
             destination="ops.dependency_checks with status=failed",
-            operator_action="record dependency failure and leave API on skeleton/latest-cache fallback",
+            operator_action="record dependency failure and leave API on offline/latest-cache fallback",
         ),
         dependencies=("DB_DSN", "KEY_VAULT_URL"),
         source_systems=("legacy weather_air_func", "Azure Function candidate"),

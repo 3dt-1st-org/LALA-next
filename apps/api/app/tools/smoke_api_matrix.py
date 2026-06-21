@@ -391,11 +391,12 @@ def _validate_places_live_data(data: dict[str, Any]) -> str | None:
     ):
         return "place_contains_fallback_source"
     if any(
-        str(place.get("upstream_source") or "").strip() == "dev_seed"
+        str(place.get("upstream_source") or "").strip()
+        in {"dev_seed", "local_fixture"}
         for place in places
         if isinstance(place, dict)
     ):
-        return "place_contains_dev_seed"
+        return "place_contains_local_fixture_source"
     if any(
         _looks_synthetic_image_url(place.get("image_url"))
         for place in places
@@ -524,7 +525,13 @@ def _validate_docent_quality(data: dict[str, Any]) -> str | None:
         return "docent_script_contains_orphan_score_decimal"
     if any(
         term in lowered
-        for term in ("culture_venue", "tour_api", "dev_seed", "public_mvp_snapshot")
+        for term in (
+            "culture_venue",
+            "tour_api",
+            "dev_seed",
+            "local_fixture",
+            "public_mvp_snapshot",
+        )
     ):
         return "docent_script_contains_internal_code"
     grounding_count = data.get("grounding_count")
@@ -563,6 +570,7 @@ def _is_fallback_source(value: Any) -> bool:
         "demo_seed",
         "dev_seed",
         "fallback",
+        "local_fixture",
         "skeleton",
         "unavailable",
     } or lowered.endswith("_fallback")

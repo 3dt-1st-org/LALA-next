@@ -16,7 +16,7 @@ INSERT INTO travel.places (
     primary_source
 ) VALUES
     (
-        'demo-suwon-hwaseong',
+        'local-suwon-hwaseong',
         '수원화성',
         'Suwon Hwaseong',
         'attraction',
@@ -27,10 +27,10 @@ INSERT INTO travel.places (
         'Suwon',
         37.2879,
         127.0116,
-        'dev_seed'
+        'local_fixture'
     ),
     (
-        'demo-suwon-market-food',
+        'local-suwon-market-food',
         '수원 통닭거리',
         'Suwon Chicken Street',
         'restaurant',
@@ -41,10 +41,10 @@ INSERT INTO travel.places (
         'Suwon',
         37.2777,
         127.0171,
-        'dev_seed'
+        'local_fixture'
     ),
     (
-        'demo-suwon-night-walk',
+        'local-suwon-night-walk',
         '화성행궁 야간 산책',
         'Hwaseong Haenggung Night Walk',
         'event',
@@ -55,7 +55,7 @@ INSERT INTO travel.places (
         'Suwon',
         37.2819,
         127.0142,
-        'dev_seed'
+        'local_fixture'
     )
 ON CONFLICT (place_id) DO UPDATE SET
     name_ko = EXCLUDED.name_ko,

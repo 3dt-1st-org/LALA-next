@@ -141,7 +141,7 @@ def fetch_snapshot_places(
                 SQRT(POWER((lat - %s) * 111000, 2) + POWER((lng - %s) * 88000, 2)) AS distance_m
             FROM travel.public_places
             WHERE (%s = 'all' OR category = %s)
-              AND COALESCE(source, '') <> 'dev_seed'
+              AND COALESCE(source, '') NOT IN ('dev_seed', 'local_fixture')
         ),
         latest_scores AS (
             SELECT DISTINCT ON (place_id)

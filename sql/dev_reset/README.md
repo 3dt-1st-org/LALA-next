@@ -7,7 +7,7 @@ Rules:
 
 - Do not run scripts from this folder against shared or production-like databases.
 - Destructive statements belong here, not in `sql/canonical`.
-- Seed scripts must use fake or public demo data only.
+- Seed scripts must use public or synthetic local fixture data only.
 - Keep real credentials out of SQL files.
 - Every SQL file must include the `local-only dev seed/reset SQL` marker.
 - Default tooling is dry-run plan only:
@@ -38,7 +38,7 @@ $env:ALLOW_DEV_RESET_APPLY = "1"
   -Confirm APPLY_DEV_RESET_SQL
 ```
 
-The current files seed public/demo Suwon place, weather, docent-cache,
+The current files seed public or synthetic Suwon fixture place, weather, docent-cache,
 economy/card-spending, culture event, community, and ops rows for local DB
 experiments after the canonical schema exists. They use `ON CONFLICT` or
 `WHERE NOT EXISTS` guards where the schema has a suitable key. Live DB rollout

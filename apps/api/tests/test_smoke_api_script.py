@@ -521,6 +521,24 @@ def test_unix_matrix_smoke_deploy_profile_rejects_snapshot_place_payload():
     assert "/api/v1/places" in server.protected_paths
 
 
+def test_unix_matrix_smoke_deploy_profile_rejects_local_fixture_place_payload():
+    places_payload = _live_places_payload()
+    places_payload["data"]["places"][0]["upstream_source"] = "local_fixture"
+
+    server, thread, base_url = _start_server(
+        public_access=True, places_payload=places_payload
+    )
+    try:
+        result = _run_matrix_smoke(base_url, {}, profile="deploy")
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+    assert result.returncode != 0
+    assert "place_contains_local_fixture_source" in result.stderr
+    assert "/api/v1/places" in server.protected_paths
+
+
 def test_unix_matrix_smoke_deploy_profile_rejects_missing_postgis_distance():
     places_payload = _live_places_payload()
     places_payload["data"]["places"][0].pop("distance_m")

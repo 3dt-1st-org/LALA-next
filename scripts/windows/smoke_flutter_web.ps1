@@ -163,7 +163,7 @@ try {
             $ApiBaseUrl = "http://$HostName`:$ApiPort"
         }
 
-        Write-Host "Starting local skeleton API on $ApiBaseUrl for Flutter browser smoke..."
+        Write-Host "Starting local API on $ApiBaseUrl for Flutter browser smoke..."
         Set-ProcessEnvironmentForApiSmoke
         $apiArgs = @(
             "-m",

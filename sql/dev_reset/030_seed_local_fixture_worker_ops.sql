@@ -22,13 +22,13 @@ INSERT INTO community.posts (
     post_url,
     created_at_source
 ) VALUES (
-    'manual_seed',
-    'dev-seed-suwon-hwaseong-001',
+    'local_fixture',
+    'local-fixture-suwon-hwaseong-001',
     '수원화성 산책',
     'suwon-haenggung',
     '주말 수원화성 산책 코스 추천',
     '가족과 함께 걷기 좋은 짧은 성곽 코스를 찾는다는 공개 예시 게시글입니다.',
-    'https://example.invalid/lala-next/dev-seed/suwon-hwaseong-001',
+    'https://example.invalid/lala-next/local-fixture/suwon-hwaseong-001',
     TIMESTAMPTZ '2026-06-11 10:00:00+09'
 )
 ON CONFLICT (external_key) DO UPDATE SET
@@ -49,7 +49,7 @@ INSERT INTO community.place_mentions_weekly (
 ) VALUES (
     DATE '2026-06-08',
     '수원화성',
-    'manual_seed',
+    'local_fixture',
     'attraction',
     12
 )
@@ -64,13 +64,13 @@ INSERT INTO ops.dependency_checks (
     checked_at
 )
 SELECT
-    'dev-seed-api-readyz',
+    'local-fixture-api-readyz',
     'degraded-safe',
     12,
     TIMESTAMPTZ '2026-06-11 12:00:00+09'
 WHERE NOT EXISTS (
     SELECT 1
     FROM ops.dependency_checks
-    WHERE dependency_name = 'dev-seed-api-readyz'
+    WHERE dependency_name = 'local-fixture-api-readyz'
       AND checked_at = TIMESTAMPTZ '2026-06-11 12:00:00+09'
 );

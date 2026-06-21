@@ -213,6 +213,7 @@ def test_fetch_snapshot_places_uses_schema_compatible_score_projection(monkeypat
     assert rows[0]["place_id"] == "tour-api-129765"
     assert "to_jsonb(score_snapshot)->>'small_merchant_fit_score'" in captured["sql"]
     assert "to_jsonb(score_snapshot)->>'accessibility_fit_score'" in captured["sql"]
+    assert "NOT IN ('dev_seed', 'local_fixture')" in captured["sql"]
     assert captured["params"][:6] == (37.2636, 127.0286, "all", "all", 50000, 20)
 
 

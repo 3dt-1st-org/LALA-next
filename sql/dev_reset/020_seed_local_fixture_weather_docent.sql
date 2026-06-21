@@ -43,12 +43,12 @@ INSERT INTO travel.docent_scripts (
     generated_at,
     expires_at
 ) VALUES (
-    'demo-suwon-hwaseong',
+    'local-suwon-hwaseong',
     'attraction',
     'ko',
     'brief',
     '수원화성은 조선 정조의 도시 비전과 축성 기술을 함께 보여주는 대표적인 역사 관광지입니다. 성곽을 따라 걸으며 팔달문, 장안문, 화서문을 연결해 보는 짧은 동선을 추천합니다.',
-    'dev_seed',
+    'local_fixture',
     TIMESTAMPTZ '2026-06-11 12:00:00+09',
     TIMESTAMPTZ '2026-06-18 12:00:00+09'
 )

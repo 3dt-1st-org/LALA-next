@@ -22,9 +22,9 @@ SELECT
     seed.primary_source
 FROM (
     VALUES
-        (DATE '2026-05-01', '수원시', 'I561', '음식점업', 9800000.00, 1280, 'domestic', 'dev_seed'),
-        (DATE '2026-05-01', '수원시', 'R902', '문화서비스', 4200000.00, 420, 'domestic', 'dev_seed'),
-        (DATE '2026-05-01', '여주시', 'R902', '문화서비스', 2700000.00, 210, 'domestic', 'dev_seed')
+        (DATE '2026-05-01', '수원시', 'I561', '음식점업', 9800000.00, 1280, 'domestic', 'local_fixture'),
+        (DATE '2026-05-01', '수원시', 'R902', '문화서비스', 4200000.00, 420, 'domestic', 'local_fixture'),
+        (DATE '2026-05-01', '여주시', 'R902', '문화서비스', 2700000.00, 210, 'domestic', 'local_fixture')
 ) AS seed(
     month,
     region_name_ko,
@@ -66,9 +66,9 @@ SELECT
     seed.primary_source
 FROM (
     VALUES
-        (DATE '2026-05-01', '수원시', 'I561', 'all', '20-39', 3200000.00, 460, 'dev_seed'),
-        (DATE '2026-05-01', '수원시', 'R902', 'all', '40-59', 2300000.00, 220, 'dev_seed'),
-        (DATE '2026-05-01', '여주시', 'R902', 'all', '40-59', 1600000.00, 150, 'dev_seed')
+        (DATE '2026-05-01', '수원시', 'I561', 'all', '20-39', 3200000.00, 460, 'local_fixture'),
+        (DATE '2026-05-01', '수원시', 'R902', 'all', '40-59', 2300000.00, 220, 'local_fixture'),
+        (DATE '2026-05-01', '여주시', 'R902', 'all', '40-59', 1600000.00, 150, 'local_fixture')
 ) AS seed(
     month,
     region_name_ko,
@@ -105,32 +105,32 @@ INSERT INTO culture.events (
     source_record_id
 ) VALUES
     (
-        'dev-seed-suwon-night-walk-2026',
+        'local-fixture-suwon-night-walk-2026',
         '화성행궁 야간 산책',
         'Hwaseong Haenggung Night Walk',
         'walking_program',
         '화성행궁',
-        'demo-suwon-night-walk',
+        'local-suwon-night-walk',
         '수원시',
         DATE '2026-06-01',
         DATE '2026-08-31',
-        'https://example.invalid/lala-next/dev-seed/suwon-night-walk-2026',
-        'dev_seed',
-        'dev-seed-suwon-night-walk-2026'
+        'https://example.invalid/lala-next/local-fixture/suwon-night-walk-2026',
+        'local_fixture',
+        'local-fixture-suwon-night-walk-2026'
     ),
     (
-        'dev-seed-suwon-fortress-culture-2026',
+        'local-fixture-suwon-fortress-culture-2026',
         '수원화성 문화 해설',
         'Suwon Hwaseong Culture Walk',
         'docent_program',
         '수원화성',
-        'demo-suwon-hwaseong',
+        'local-suwon-hwaseong',
         '수원시',
         DATE '2026-06-01',
         DATE '2026-12-31',
-        'https://example.invalid/lala-next/dev-seed/suwon-fortress-culture-2026',
-        'dev_seed',
-        'dev-seed-suwon-fortress-culture-2026'
+        'https://example.invalid/lala-next/local-fixture/suwon-fortress-culture-2026',
+        'local_fixture',
+        'local-fixture-suwon-fortress-culture-2026'
     )
 ON CONFLICT (event_id) DO UPDATE SET
     title_ko = EXCLUDED.title_ko,
@@ -162,18 +162,18 @@ SELECT
 FROM (
     VALUES
         (
-            'demo-suwon-hwaseong',
+            'local-suwon-hwaseong',
             '수원화성 문화 해설',
             TIMESTAMPTZ '2026-06-01 10:00:00+09',
             TIMESTAMPTZ '2026-12-31 18:00:00+09',
-            'https://example.invalid/lala-next/dev-seed/suwon-fortress-culture-2026'
+            'https://example.invalid/lala-next/local-fixture/suwon-fortress-culture-2026'
         ),
         (
-            'demo-suwon-night-walk',
+            'local-suwon-night-walk',
             '화성행궁 야간 산책',
             TIMESTAMPTZ '2026-06-01 19:00:00+09',
             TIMESTAMPTZ '2026-08-31 22:00:00+09',
-            'https://example.invalid/lala-next/dev-seed/suwon-night-walk-2026'
+            'https://example.invalid/lala-next/local-fixture/suwon-night-walk-2026'
         )
 ) AS seed(place_id, title, starts_at, ends_at, url)
 WHERE NOT EXISTS (
