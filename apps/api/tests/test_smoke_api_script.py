@@ -311,6 +311,8 @@ def _live_weather_payload() -> dict[str, Any]:
         "data": {
             "source": "kma_ultra_srt_ncst+airkorea_sido_realtime",
             "location": "중구",
+            "air_quality_location": "중구",
+            "air_quality_record_time": "2026-06-21 15:00",
             "temp": "23.4",
             "dust": {
                 "pm10": "6",
@@ -567,6 +569,60 @@ def test_unix_matrix_smoke_deploy_profile_rejects_unknown_dust_split():
 
     assert result.returncode != 0
     assert "weather_missing_dust_split" in result.stderr
+    assert "/api/v1/weather" in server.protected_paths
+
+
+def test_unix_matrix_smoke_deploy_profile_rejects_missing_dust_values():
+    weather_payload = _live_weather_payload()
+    weather_payload["data"]["dust"]["pm10"] = "-"
+
+    server, thread, base_url = _start_server(
+        public_access=True, weather_payload=weather_payload
+    )
+    try:
+        result = _run_matrix_smoke(base_url, {}, profile="deploy")
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+    assert result.returncode != 0
+    assert "weather_missing_dust_values" in result.stderr
+    assert "/api/v1/weather" in server.protected_paths
+
+
+def test_unix_matrix_smoke_deploy_profile_rejects_weather_without_airkorea():
+    weather_payload = _live_weather_payload()
+    weather_payload["data"]["source"] = "kma_ultra_srt_ncst"
+
+    server, thread, base_url = _start_server(
+        public_access=True, weather_payload=weather_payload
+    )
+    try:
+        result = _run_matrix_smoke(base_url, {}, profile="deploy")
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+    assert result.returncode != 0
+    assert "weather_missing_airkorea_source" in result.stderr
+    assert "/api/v1/weather" in server.protected_paths
+
+
+def test_unix_matrix_smoke_deploy_profile_rejects_missing_air_quality_station():
+    weather_payload = _live_weather_payload()
+    weather_payload["data"]["air_quality_location"] = ""
+
+    server, thread, base_url = _start_server(
+        public_access=True, weather_payload=weather_payload
+    )
+    try:
+        result = _run_matrix_smoke(base_url, {}, profile="deploy")
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+    assert result.returncode != 0
+    assert "weather_missing_air_quality_location" in result.stderr
     assert "/api/v1/weather" in server.protected_paths
 
 

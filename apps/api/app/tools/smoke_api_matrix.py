@@ -437,14 +437,28 @@ def _validate_places_location_data(data: dict[str, Any]) -> str | None:
 def _validate_weather_live_data(data: dict[str, Any]) -> str | None:
     if _is_fallback_source(data.get("source")):
         return "weather_source_not_live"
+    source = str(data.get("source") or "").strip().lower()
+    if "airkorea" not in source:
+        return "weather_missing_airkorea_source"
     location = str(data.get("location") or "").strip().lower().replace(" ", "")
     if location in {"", "기상청격자", "kmagrid"}:
         return "weather_internal_location_label"
+    air_quality_location = (
+        str(data.get("air_quality_location") or "").strip().lower().replace(" ", "")
+    )
+    if air_quality_location in {"", "기상청격자", "kmagrid"}:
+        return "weather_missing_air_quality_location"
+    if not str(data.get("air_quality_record_time") or "").strip():
+        return "weather_missing_air_quality_record_time"
     if not str(data.get("temp") or "").strip():
         return "weather_missing_temperature"
     dust = data.get("dust")
     if not isinstance(dust, dict):
         return "weather_missing_dust"
+    pm10_value = _parse_non_negative_number(dust.get("pm10"))
+    pm25_value = _parse_non_negative_number(dust.get("pm25"))
+    if pm10_value is None or pm25_value is None:
+        return "weather_missing_dust_values"
     pm10_grade = str(dust.get("pm10_grade") or "").strip()
     pm25_grade = str(dust.get("pm25_grade") or "").strip()
     if pm10_grade in {"", "unknown"} or pm25_grade in {"", "unknown"}:
@@ -531,6 +545,24 @@ def _is_fallback_source(value: Any) -> bool:
 def _looks_synthetic_image_url(value: Any) -> bool:
     url = str(value or "").strip().lower()
     return any(token in url for token in ("mock", "placeholder", "lorem", "dummy"))
+
+
+def _parse_non_negative_number(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        parsed = float(value)
+    else:
+        text = str(value or "").strip()
+        if not text or text in {"-", "--"}:
+            return None
+        try:
+            parsed = float(text)
+        except ValueError:
+            return None
+    if parsed < 0:
+        return None
+    return parsed
 
 
 def _has_live_score(value: Any) -> bool:
