@@ -292,6 +292,7 @@ def test_openapi_documents_v1_success_data_schemas(client):
     ]
     assert schemas["WeatherData"]["properties"]["source"]["enum"] == [
         "db",
+        "db+airkorea_sido_realtime",
         "kma_ultra_srt_ncst",
         "airkorea_sido_realtime",
         "kma_ultra_srt_ncst+airkorea_sido_realtime",

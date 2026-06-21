@@ -8535,6 +8535,7 @@ String _weatherSourceLabel(String? value, {String language = 'ko'}) {
   if (_isEnglish(language)) {
     return switch ((value ?? '').trim()) {
       'db' => 'Live weather',
+      'db+airkorea_sido_realtime' => 'Live weather + AirKorea air quality',
       'kma_ultra_srt_ncst' => 'KMA live weather',
       'airkorea_sido_realtime' => 'AirKorea live air quality',
       'kma_ultra_srt_ncst+airkorea_sido_realtime' =>
@@ -8547,6 +8548,7 @@ String _weatherSourceLabel(String? value, {String language = 'ko'}) {
   }
   return switch ((value ?? '').trim()) {
     'db' => '실시간 날씨',
+    'db+airkorea_sido_realtime' => '실시간 날씨·AirKorea 대기질',
     'kma_ultra_srt_ncst' => '기상청 실황',
     'airkorea_sido_realtime' => 'AirKorea 대기질',
     'kma_ultra_srt_ncst+airkorea_sido_realtime' => '기상청·AirKorea 실황',

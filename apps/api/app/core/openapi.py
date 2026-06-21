@@ -694,6 +694,7 @@ def _weather_data_schema() -> dict[str, Any]:
                 "type": "string",
                 "enum": [
                     "db",
+                    "db+airkorea_sido_realtime",
                     "kma_ultra_srt_ncst",
                     "airkorea_sido_realtime",
                     "kma_ultra_srt_ncst+airkorea_sido_realtime",

@@ -26,6 +26,8 @@ KMA_SOURCE = "kma_ultra_srt_ncst"
 AIRKOREA_SOURCE = "airkorea_sido_realtime"
 UNAVAILABLE_SOURCE = "unavailable"
 KST = timezone(timedelta(hours=9))
+KMA_REQUEST_TIMEOUT_SECONDS = 3
+AIRKOREA_REQUEST_TIMEOUT_SECONDS = 8
 _OFFICIAL_CACHE_TTL = timedelta(minutes=20)
 _official_cache_lock = Lock()
 _official_weather_cache: dict[str, tuple[datetime, dict[str, Any]]] = {}
@@ -43,6 +45,7 @@ def current_weather(*, lat: float, lng: float, force: bool = False) -> dict:
             db_weather["dust"] = air_quality["dust"]
             db_weather["air_quality_location"] = air_quality.get("location")
             db_weather["air_quality_record_time"] = air_quality.get("record_time")
+            db_weather["source"] = _source_with_air_quality(db_weather.get("source"))
             if _is_internal_weather_location(db_weather.get("location")):
                 db_weather["location"] = _weather_observation_location(
                     air_quality=air_quality,
@@ -175,7 +178,7 @@ def _fetch_kma_ultra_short_nowcast(
                 "nx": nx,
                 "ny": ny,
             },
-            timeout=3,
+            timeout=KMA_REQUEST_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
         payload = response.json()
@@ -259,7 +262,7 @@ def _fetch_airkorea_sido_air_quality(
                 "sidoName": sido_name,
                 "ver": "1.0",
             },
-            timeout=3,
+            timeout=AIRKOREA_REQUEST_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
         payload = response.json()
@@ -319,6 +322,15 @@ def _cache_get(key: str) -> dict[str, Any] | None:
 def _cache_set(key: str, payload: dict[str, Any]) -> None:
     with _official_cache_lock:
         _official_weather_cache[key] = (datetime.now(UTC), deepcopy(payload))
+
+
+def _source_with_air_quality(source: Any) -> str:
+    normalized = str(source or "").strip()
+    if not normalized:
+        return AIRKOREA_SOURCE
+    if AIRKOREA_SOURCE in normalized:
+        return normalized
+    return f"{normalized}+{AIRKOREA_SOURCE}"
 
 
 def _airkorea_items(payload: dict[str, Any]) -> list[dict[str, Any]]:

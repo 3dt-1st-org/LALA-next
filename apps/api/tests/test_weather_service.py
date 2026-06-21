@@ -117,7 +117,11 @@ def test_current_weather_uses_kma_nowcast_when_db_is_empty(monkeypatch) -> None:
         "nx": 61,
         "ny": 120,
     }
-    assert kma_request["timeout"] == 3
+    assert kma_request["timeout"] == weather_service.KMA_REQUEST_TIMEOUT_SECONDS
+    assert (
+        airkorea_request["timeout"]
+        == weather_service.AIRKOREA_REQUEST_TIMEOUT_SECONDS
+    )
     assert airkorea_request["params"]["sidoName"] == "경기"
     assert (
         weather["source"]
@@ -216,6 +220,56 @@ def test_current_weather_marks_bad_when_air_quality_is_bad(monkeypatch) -> None:
     assert weather["dust"]["pm10_grade"] == "bad"
     assert weather["dust"]["pm25_grade"] == "bad"
     assert weather["outdoor_status"] == "bad"
+
+
+def test_current_weather_merges_airkorea_into_db_weather(monkeypatch) -> None:
+    weather_service.clear_official_weather_cache()
+    db_weather = {
+        "lat": 37.5665,
+        "lng": 126.9780,
+        "location": "기상청 격자",
+        "temp": "24.8",
+        "icon": "partly-cloudy",
+        "dust": weather_service.unknown_dust_payload(),
+        "forecast": [],
+        "outdoor_status": "good",
+        "force": False,
+        "location_match": True,
+        "record_time": "2026-06-21T20:00:00+09:00",
+        "source": "db",
+    }
+    air_quality = {
+        "sido_name": "서울",
+        "location": "중구",
+        "record_time": "2026-06-21 21:00",
+        "dust": weather_service.build_dust_payload(
+            pm10="9",
+            pm25="3",
+            pm10_grade="1",
+            pm25_grade="1",
+        ),
+    }
+    monkeypatch.setattr(
+        weather_service.db_repository,
+        "fetch_latest_weather",
+        lambda **kwargs: dict(db_weather),
+    )
+    monkeypatch.setattr(
+        weather_service,
+        "_fetch_airkorea_sido_air_quality",
+        lambda **kwargs: dict(air_quality),
+    )
+
+    weather = weather_service.current_weather(lat=37.5665, lng=126.9780)
+
+    assert weather["source"] == f"db+{weather_service.AIRKOREA_SOURCE}"
+    assert weather["location"] == "중구"
+    assert weather["air_quality_location"] == "중구"
+    assert weather["air_quality_record_time"] == "2026-06-21 21:00"
+    assert weather["dust"]["pm10"] == "9"
+    assert weather["dust"]["pm25"] == "3"
+    assert weather["dust"]["pm10_grade"] == "good"
+    assert weather["dust"]["pm25_grade"] == "good"
 
 
 def test_airkorea_selection_prefers_station_with_pm10_and_pm25() -> None:
