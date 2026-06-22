@@ -96,9 +96,71 @@ def test_rag_index_plan_uses_intuitive_table_names(capsys):
     assert "culture_event" in payload["dynamic_source_types"]
 
 
+def test_dynamic_source_limit_is_balanced_across_source_types():
+    assert rag_index._dynamic_per_source_limit(20) == 5
+    assert rag_index._dynamic_per_source_limit(21) == 6
+
+
+def test_place_mention_chunk_summarizes_review_attributes():
+    chunk = rag_index._place_mention_chunk(
+        {
+            "id": "mention-1",
+            "week_start": "2026-06-15",
+            "place_id": "place-1",
+            "place_name_ko": "도심속 바다축제",
+            "provider": "naver_blog",
+            "category": "event",
+            "mention_count": 6,
+            "organic_mention_count": 5,
+            "sentiment_score": 0.3,
+            "attributes": {
+                "top_terms": ["축제", "공연", "동선"],
+                "review_attributes": {
+                    "schema_version": "review-attributes-v1",
+                    "prompt_version": "review-attributes-rule-v1",
+                    "source_method": "rule_based_review_terms",
+                    "sentiment_score": 0.3,
+                    "sentiment_confidence": 0.64,
+                    "attributes": {
+                        "program_quality": {
+                            "score": 0.72,
+                            "count": 2,
+                            "confidence": 0.66,
+                            "evidence_terms": ["축제", "공연"],
+                        },
+                        "access": {
+                            "score": 0.66,
+                            "count": 1,
+                            "confidence": 0.58,
+                            "evidence_terms": ["동선"],
+                        },
+                    },
+                    "top_terms": ["축제", "공연", "동선"],
+                },
+                "review_quality": {
+                    "score": 0.6474,
+                    "confidence": 0.65,
+                    "organic_review_count": 5,
+                    "filtered_ad_count": 1,
+                },
+            },
+            "updated_at": "2026-06-22T00:00:00+09:00",
+        }
+    )
+
+    assert chunk.source_type == "place_mention"
+    assert chunk.place_id == "place-1"
+    assert "긍정적인 편" in chunk.body_ko
+    assert "보통 이상의" in chunk.body_ko
+    assert "프로그램 품질" in chunk.body_ko
+    assert "program_quality" not in chunk.body_ko
+    assert chunk.metadata["review_summary"]["review_quality_score"] == 0.6474
+    assert chunk.metadata["review_summary"]["top_attributes"][0]["label_ko"] == "프로그램 품질"
+
+
 def test_rag_index_apply_requires_guard(monkeypatch, capsys):
     monkeypatch.delenv(run_rag_index.ALLOW_ENV, raising=False)
-    monkeypatch.setenv("DB_DSN", "postgresql://redacted")
+    monkeypatch.setenv("DB_DSN", "host=redacted dbname=lala")
 
     exit_code = run_rag_index.main(["--apply", "--confirm", run_rag_index.CONFIRM_TEXT])
 
@@ -109,7 +171,7 @@ def test_rag_index_apply_requires_guard(monkeypatch, capsys):
 
 
 def test_rag_query_prints_bounded_result_summary(monkeypatch, capsys):
-    monkeypatch.setenv("DB_DSN", "postgresql://redacted")
+    monkeypatch.setenv("DB_DSN", "host=redacted dbname=lala")
 
     def fake_query_knowledge_chunks(**kwargs):
         assert kwargs["query"] == "수원 문화 행사"

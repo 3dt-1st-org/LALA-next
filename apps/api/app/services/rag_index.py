@@ -266,7 +266,7 @@ def fetch_dynamic_context_chunks(
     import psycopg2
     from psycopg2.extras import RealDictCursor
 
-    per_source_limit = max(1, limit)
+    per_source_limit = _dynamic_per_source_limit(limit)
     chunks: list[KnowledgeChunk] = []
     with psycopg2.connect(dsn, connect_timeout=connect_timeout) as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -663,12 +663,13 @@ def _community_post_chunk(row: dict[str, Any]) -> KnowledgeChunk:
 
 def _place_mention_chunk(row: dict[str, Any]) -> KnowledgeChunk:
     attributes = _json_object(row.get("attributes"))
+    review_metadata = _review_mention_metadata(attributes)
     body = _join_sentences(
         [
             f"{row.get('place_name_ko')}의 주간 로컬 언급 신호입니다.",
             f"전체 언급은 {row.get('mention_count')}회, 광고 필터 후 유기적 언급은 {row.get('organic_mention_count') or '미집계'}회입니다.",
-            f"감성 점수는 {row.get('sentiment_score') if row.get('sentiment_score') is not None else '미집계'}입니다.",
-            f"속성 점수는 {_attributes_text(attributes)}입니다.",
+            _sentiment_text(row.get("sentiment_score")),
+            _attributes_text(attributes),
             f"공급자는 {row.get('provider') or 'unknown'}입니다.",
         ]
     )
@@ -688,6 +689,7 @@ def _place_mention_chunk(row: dict[str, Any]) -> KnowledgeChunk:
                 "organic_mention_count": row.get("organic_mention_count"),
                 "sentiment_score": _optional_float(row.get("sentiment_score")),
                 "attributes": attributes,
+                "review_summary": review_metadata,
                 "updated_at": _isoformat(row.get("updated_at")),
             }
         ),
@@ -744,6 +746,10 @@ def _source_types_for_scope(source: SourceScope) -> tuple[str, ...]:
     if source == "dynamic":
         return DYNAMIC_SOURCE_TYPES
     return ()
+
+
+def _dynamic_per_source_limit(limit: int) -> int:
+    return max(1, math.ceil(limit / len(DYNAMIC_SOURCE_TYPES)))
 
 
 def _text_features(text: str) -> Iterable[str]:
@@ -806,8 +812,118 @@ def _date_range_text(starts_on: Any, ends_on: Any) -> str:
 def _attributes_text(attributes: dict[str, Any]) -> str:
     if not attributes:
         return "미집계"
+    review = _review_mention_metadata(attributes)
+    if review:
+        parts = []
+        quality_label = review.get("review_quality_label")
+        if quality_label:
+            parts.append(f"리뷰 품질 근거는 {quality_label} 수준입니다.")
+        top_attributes = review.get("top_attributes") or []
+        if top_attributes:
+            labels = [
+                item["label_ko"]
+                for item in top_attributes
+                if isinstance(item, dict) and item.get("label_ko")
+            ]
+            if labels:
+                parts.append("핵심 속성은 " + ", ".join(labels[:4]) + "입니다.")
+        top_terms = review.get("top_terms") or []
+        if top_terms:
+            parts.append("주요 언급어는 " + ", ".join(str(term) for term in top_terms[:6]) + "입니다.")
+        if parts:
+            return " ".join(parts)
     items = [f"{key}={value}" for key, value in sorted(attributes.items())[:6]]
-    return ", ".join(items)
+    return "속성 요약은 " + ", ".join(items)
+
+
+def _sentiment_text(value: Any) -> str:
+    score = _optional_float(value)
+    if score is None:
+        return "감성 흐름은 아직 미집계입니다."
+    if score >= 0.25:
+        return "감성 흐름은 긍정적인 편입니다."
+    if score <= -0.15:
+        return "감성 흐름에는 주의가 필요한 신호가 있습니다."
+    return "감성 흐름은 중립에 가깝습니다."
+
+
+def _review_mention_metadata(attributes: dict[str, Any]) -> dict[str, Any]:
+    review_attributes = _json_object(attributes.get("review_attributes"))
+    review_quality = _json_object(attributes.get("review_quality"))
+    if not review_attributes and not review_quality:
+        return {}
+
+    nested_attributes = _json_object(review_attributes.get("attributes"))
+    top_attributes = []
+    for name, value in nested_attributes.items():
+        item = _json_object(value)
+        count = _optional_float(item.get("count")) or 0.0
+        if count <= 0:
+            continue
+        top_attributes.append(
+            {
+                "name": name,
+                "label_ko": _attribute_label_ko(name),
+                "score": _optional_float(item.get("score")),
+                "confidence": _optional_float(item.get("confidence")),
+                "evidence_terms": item.get("evidence_terms") or [],
+            }
+        )
+    top_attributes.sort(
+        key=lambda item: (
+            item.get("score") or 0.0,
+            item.get("confidence") or 0.0,
+        ),
+        reverse=True,
+    )
+    review_quality_score = _optional_float(review_quality.get("score"))
+    return {
+        "schema_version": review_attributes.get("schema_version"),
+        "prompt_version": review_attributes.get("prompt_version"),
+        "source_method": review_attributes.get("source_method"),
+        "review_quality_score": review_quality_score,
+        "review_quality_label": _quality_label_ko(review_quality_score),
+        "review_quality_confidence": _optional_float(review_quality.get("confidence")),
+        "organic_review_count": review_quality.get("organic_review_count"),
+        "filtered_ad_count": review_quality.get("filtered_ad_count"),
+        "sentiment_score": _optional_float(review_attributes.get("sentiment_score")),
+        "sentiment_confidence": _optional_float(
+            review_attributes.get("sentiment_confidence")
+        ),
+        "top_terms": review_attributes.get("top_terms") or attributes.get("top_terms") or [],
+        "top_attributes": top_attributes[:6],
+    }
+
+
+def _attribute_label_ko(name: str) -> str:
+    return {
+        "taste": "맛",
+        "service": "서비스",
+        "price": "가격 만족도",
+        "atmosphere": "분위기",
+        "cleanliness": "청결",
+        "wait_crowding": "대기/혼잡",
+        "cultural_story": "문화 스토리",
+        "walking_comfort": "동선 편안함",
+        "photo_view": "사진/전망",
+        "practical_tip": "방문 팁",
+        "crowding": "혼잡도",
+        "program_quality": "프로그램 품질",
+        "family_friendliness": "가족 친화",
+        "foreign_visitor_fit": "외국인 방문 적합성",
+        "access": "접근성",
+        "weather_indoor_fit": "날씨 대응",
+    }.get(name, name)
+
+
+def _quality_label_ko(score: float | None) -> str | None:
+    if score is None:
+        return None
+    if score >= 0.75:
+        return "높은"
+    if score >= 0.55:
+        return "보통 이상의"
+    return "보강이 필요한"
 
 
 def _optional_text(value: Any) -> str | None:

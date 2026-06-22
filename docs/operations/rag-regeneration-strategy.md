@@ -24,11 +24,29 @@ explanations. A completed RAG pipeline must:
 
 | Gap | Current Evidence | Risk |
 |---|---|---|
-| Place-profile chunks exist, but dynamic chunks need richer review attributes | RAG input includes `community.place_mentions_weekly`, but review attributes are not complete. | Docents may be grounded but less vivid than legacy LALA. |
+| Azure embedding rollout is still environment-dependent | `local-hash` regeneration is deterministic and safe; Azure OpenAI embeddings need runtime readiness. | Retrieval quality can improve once shared environments enable Azure embeddings. |
 | Regeneration is manual | `plan_rag_index.sh` exists and is guarded, but worker scheduling is still future work. | Scores and RAG can drift after data refreshes. |
-| Embedding method needs environment-specific policy | Local hash is safe for reproducibility; Azure embeddings are needed for better retrieval quality. | Search quality can lag behind production expectations. |
 | Freshness checks are incomplete | Smoke checks grounding exists, but not full source freshness by table. | Old chunks could survive after new score/review batches. |
 | Manual QA loop is not formalized | Deployed smoke checks one live path; representative place QA is separate. | A green smoke can miss category-specific quality gaps. |
+
+## Current Implementation Snapshot
+
+As of 2026-06-22, PR D fixes dynamic chunk coverage and review-attribute
+grounding:
+
+- `fetch_dynamic_context_chunks` allocates the requested dynamic limit across
+  `culture_event`, `community_post`, `place_mention`, and `weather_context`
+  instead of letting culture events consume the whole limit first.
+- `place_mention` chunks now summarize
+  `community.place_mentions_weekly.attributes.review_attributes` and
+  `attributes.review_quality` with Korean attribute labels such as
+  `프로그램 품질`, `문화 스토리`, `동선 편안함`, `맛`, and `서비스`.
+- Review scores remain in metadata; chunk bodies use qualitative language such
+  as `긍정적인 편` or `보통 이상의` so docents can use the signal without
+  exposing raw internal score labels to users.
+- Azure dev has regenerated dynamic chunks with `local-hash` after PR B/C data
+  apply. Azure OpenAI embedding regeneration remains the next environment
+  upgrade once embedding deployment readiness is confirmed.
 
 ## Legacy LALA Touchpoints
 
