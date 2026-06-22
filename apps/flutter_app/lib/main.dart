@@ -3175,7 +3175,7 @@ class _MapBottomDock extends StatelessWidget {
                         onOpenDetail();
                       },
                       child: Text(
-                        uiLanguage == 'en' ? 'Signals' : '점수/근거',
+                        uiLanguage == 'en' ? 'Why here' : '추천 기준',
                         style: const TextStyle(fontWeight: FontWeight.w900),
                       ),
                     ),
@@ -5176,8 +5176,8 @@ class _FeaturedPlacePanel extends StatelessWidget {
             ),
             label: Text(
               showEvidence
-                  ? _copy(language, ko: '점수/근거 숨기기', en: 'Hide signals')
-                  : _copy(language, ko: '점수/근거 보기', en: 'Show signals'),
+                  ? _copy(language, ko: '추천 기준 접기', en: 'Hide basis')
+                  : _copy(language, ko: '추천 기준 보기', en: 'Show basis'),
             ),
             style: OutlinedButton.styleFrom(
               foregroundColor: const Color(0xFF1A202C),

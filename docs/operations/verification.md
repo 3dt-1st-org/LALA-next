@@ -53,11 +53,17 @@ If dependencies are already installed:
 .\scripts\windows\verify_repo.ps1 -SkipInstall
 ```
 
-## Local MVP DB Bootstrap
+## Optional Local Postgres Sandbox
 
-The local PostgreSQL container is defined in `compose.local.yml` and uses
-PostGIS plus pgvector from `infra/local-postgres/Dockerfile`. Review the
-bootstrap plan without starting Docker or touching a database:
+Team development, deployed API verification, ingest evidence, scoring, and RAG
+readiness use the shared Azure PostgreSQL database. The local PostgreSQL
+container is only an optional sandbox for isolated schema/tooling rehearsal or
+offline experiments. Do not use local DB results as proof that the deployed app
+is production-ready.
+
+The optional local container is defined in `compose.local.yml` and uses PostGIS
+plus pgvector from `infra/local-postgres/Dockerfile`. Review the bootstrap plan
+without starting Docker or touching a database:
 
 ```bash
 scripts/unix/bootstrap_local_mvp_db.sh
@@ -75,7 +81,7 @@ scripts/unix/bootstrap_local_mvp_db.sh --score-apply
 scripts/unix/bootstrap_local_mvp_db.sh --snapshot-write
 ```
 
-For a full local MVP data refresh:
+For a full optional local-only data refresh:
 
 ```bash
 scripts/unix/bootstrap_local_mvp_db.sh --all

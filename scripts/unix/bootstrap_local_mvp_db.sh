@@ -55,7 +55,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     -h|--help)
       echo "Usage: scripts/unix/bootstrap_local_mvp_db.sh [--all] [--start-compose] [--apply-canonical] [--apply-dev-reset] [--score-apply] [--rag-apply] [--snapshot-write] [--python PATH]"
-      echo "Default mode is plan only. Execution uses compose.local.yml and a localhost-only DB_DSN built from LALA_POSTGRES_* env values."
+      echo "Default mode is plan only. Execution uses compose.local.yml for an optional localhost-only Postgres sandbox."
       exit 0
       ;;
     *)
@@ -133,8 +133,10 @@ for flag in "$START_COMPOSE" "$APPLY_CANONICAL" "$APPLY_DEV_RESET" "$SCORE_APPLY
 done
 
 print_plan() {
-  echo "LALA-next local MVP DB bootstrap"
+  echo "LALA-next optional local Postgres sandbox"
   echo "mode=plan"
+  echo "team_db_source=azure_postgresql"
+  echo "local_db_role=optional_schema_tooling_sandbox"
   echo "uses_docker_compose=true"
   echo "compose_file=compose.local.yml"
   echo "db_host=localhost"
@@ -142,13 +144,13 @@ print_plan() {
   echo "db_name=${LALA_POSTGRES_DB:-lala}"
   echo "db_user=${LALA_POSTGRES_USER:-lala}"
   echo "secret_printing=false"
-  echo "step=1 start local PostgreSQL: scripts/unix/bootstrap_local_mvp_db.sh --start-compose"
+  echo "step=1 start optional local PostgreSQL: scripts/unix/bootstrap_local_mvp_db.sh --start-compose"
   echo "step=2 apply canonical SQL: scripts/unix/bootstrap_local_mvp_db.sh --apply-canonical"
   echo "step=3 seed local review data: scripts/unix/bootstrap_local_mvp_db.sh --apply-dev-reset"
   echo "step=4 compute scores: scripts/unix/bootstrap_local_mvp_db.sh --score-apply"
   echo "step=5 build RAG vectors: scripts/unix/bootstrap_local_mvp_db.sh --rag-apply"
   echo "step=6 write bundled public snapshot: scripts/unix/bootstrap_local_mvp_db.sh --snapshot-write"
-  echo "step=all run the local pipeline: scripts/unix/bootstrap_local_mvp_db.sh --all"
+  echo "step=all run the optional local-only pipeline: scripts/unix/bootstrap_local_mvp_db.sh --all"
   echo "DB_DSN and LALA_POSTGRES_PASSWORD values are never printed by this script."
 }
 
@@ -200,8 +202,10 @@ fi
 LOCAL_DSN="$(build_local_dsn)"
 export DB_DSN="$LOCAL_DSN"
 
-echo "LALA-next local MVP DB bootstrap"
+echo "LALA-next optional local Postgres sandbox"
 echo "mode=execute"
+echo "team_db_source=azure_postgresql"
+echo "local_db_role=optional_schema_tooling_sandbox"
 echo "secret_printing=false"
 echo "DB_DSN and LALA_POSTGRES_PASSWORD values are never printed by this script."
 

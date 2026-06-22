@@ -353,7 +353,7 @@ void main() {
     await tester.tap(find.byTooltip('닫기').first);
     await tester.pumpAndSettle();
 
-    final evidenceButton = find.widgetWithText(TextButton, '점수/근거');
+    final evidenceButton = find.widgetWithText(TextButton, '추천 기준');
     await tester.ensureVisible(evidenceButton);
     await tester.tap(evidenceButton);
     await tester.pumpAndSettle();
@@ -1655,10 +1655,7 @@ void main() {
     expect(find.text('1 linked events'), findsOneWidget);
     expect(find.text('Card spend KRW 14,000,000'), findsNothing);
 
-    final showSignalsButton = find.widgetWithText(
-      OutlinedButton,
-      'Show signals',
-    );
+    final showSignalsButton = find.widgetWithText(OutlinedButton, 'Show basis');
     await tester.ensureVisible(showSignalsButton);
     await tester.pumpAndSettle();
     await tester.tap(showSignalsButton);
@@ -1729,7 +1726,7 @@ void main() {
       expect(find.text('로컬 점수'), findsNothing);
       expect(find.text('내국인 소비'), findsNothing);
 
-      final evidenceButton = find.widgetWithText(OutlinedButton, '점수/근거 보기');
+      final evidenceButton = find.widgetWithText(OutlinedButton, '추천 기준 보기');
       await tester.scrollUntilVisible(
         evidenceButton,
         180,
@@ -1763,10 +1760,7 @@ void main() {
 
     await tester.tap(find.widgetWithText(TextButton, 'Details'));
     await tester.pumpAndSettle();
-    final showSignalsButton = find.widgetWithText(
-      OutlinedButton,
-      'Show signals',
-    );
+    final showSignalsButton = find.widgetWithText(OutlinedButton, 'Show basis');
     await tester.scrollUntilVisible(
       showSignalsButton,
       180,
@@ -1806,7 +1800,7 @@ void main() {
     expect(find.text('Open event details'), findsOneWidget);
     expect(find.textContaining('행사'), findsNothing);
 
-    final evidenceButton = find.widgetWithText(OutlinedButton, 'Show signals');
+    final evidenceButton = find.widgetWithText(OutlinedButton, 'Show basis');
     await tester.scrollUntilVisible(
       evidenceButton,
       180,
