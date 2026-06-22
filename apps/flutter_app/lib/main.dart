@@ -635,12 +635,15 @@ class _LalaHomePageState extends State<LalaHomePage> {
       Future<T?> loadOptional<T>(
         Future<T> Function() loader, {
         bool reportError = true,
+        String? Function(Object error)? fallbackMessage,
       }) async {
         try {
           return await loader();
         } on Object catch (error) {
           if (reportError) {
-            loadErrors.add(_safeErrorMessage(error));
+            loadErrors.add(
+              _safeErrorMessage(error, fallbackMessage: fallbackMessage),
+            );
           }
           return null;
         }
@@ -668,7 +671,10 @@ class _LalaHomePageState extends State<LalaHomePage> {
       final previousPlaces = _places;
       final previousWeather = _weather;
       final previousIntervention = _intervention;
-      final places = await loadOptional(_backend.getPlaces);
+      final places = await loadOptional(
+        _backend.getPlaces,
+        fallbackMessage: (_) => _recommendationLoadFailureMessage(),
+      );
       final activePlaces = places ?? previousPlaces;
       final placeItems = activePlaces?.data?.places ?? const <LalaPlace>[];
       final filteredItems = _filterPlaces(placeItems, _selectedCategory);
@@ -708,8 +714,14 @@ class _LalaHomePageState extends State<LalaHomePage> {
       });
 
       if (shouldReloadWeather) {
-        final weather = await loadOptional(_backend.getWeather);
-        final intervention = await loadOptional(_backend.getIntervention);
+        final weather = await loadOptional(
+          _backend.getWeather,
+          reportError: false,
+        );
+        final intervention = await loadOptional(
+          _backend.getIntervention,
+          reportError: false,
+        );
         final loadError = loadErrors.isEmpty
             ? null
             : loadErrors.toSet().take(2).join(' / ');
@@ -771,7 +783,10 @@ class _LalaHomePageState extends State<LalaHomePage> {
         return;
       }
       setState(() {
-        _error = _safeErrorMessage(error);
+        _error = _safeErrorMessage(
+          error,
+          fallbackMessage: (_) => _recommendationLoadFailureMessage(),
+        );
       });
       _cancelInterventionToastTimer();
     } finally {
@@ -783,14 +798,23 @@ class _LalaHomePageState extends State<LalaHomePage> {
     }
   }
 
-  String _safeErrorMessage(Object error) {
+  String _safeErrorMessage(
+    Object error, {
+    String? Function(Object error)? fallbackMessage,
+  }) {
     if (error is LalaApiException) {
-      return _safeUiErrorMessage(error.message);
+      return _safeUiErrorMessage(
+        error.message,
+        fallbackMessage: fallbackMessage?.call(error),
+      );
     }
     if (error is FormatException) {
-      return _safeUiErrorMessage(error.message);
+      return _safeUiErrorMessage(
+        error.message,
+        fallbackMessage: fallbackMessage?.call(error),
+      );
     }
-    return _requestFailureMessage();
+    return fallbackMessage?.call(error) ?? _requestFailureMessage();
   }
 
   Future<void> _fetchMoreInfo() async {
@@ -836,7 +860,10 @@ class _LalaHomePageState extends State<LalaHomePage> {
       }
       setState(() {
         _detailDocentPlayedPlaceIds.remove(place.placeId);
-        _audioError = _safeErrorMessage(error);
+        _audioError = _safeErrorMessage(
+          error,
+          fallbackMessage: (_) => _docentAudioFailureMessage(),
+        );
       });
     } finally {
       if (mounted) {
@@ -877,7 +904,10 @@ class _LalaHomePageState extends State<LalaHomePage> {
         return;
       }
       setState(() {
-        _tourAudioError = _safeErrorMessage(error);
+        _tourAudioError = _safeErrorMessage(
+          error,
+          fallbackMessage: (_) => _tourAudioFailureMessage(),
+        );
       });
     } finally {
       if (mounted) {
@@ -7566,24 +7596,36 @@ String? _localizedUiMessage(String? value, String language) {
   }
   return _copy(
     language,
-    ko: '요청을 처리하지 못했습니다.',
-    en: 'Unable to complete the request.',
+    ko: '지금 정보를 불러오지 못했어요.',
+    en: 'Could not load the information right now.',
   );
 }
 
-String _safeUiErrorMessage(String? value) {
+String _safeUiErrorMessage(String? value, {String? fallbackMessage}) {
   final trimmed = value?.trim();
   if (trimmed == null || trimmed.isEmpty) {
-    return _requestFailureMessage();
+    return fallbackMessage ?? _requestFailureMessage();
   }
   if (_containsKorean(trimmed)) {
     return trimmed;
   }
-  return _requestFailureMessage();
+  return fallbackMessage ?? _requestFailureMessage();
+}
+
+String _recommendationLoadFailureMessage() {
+  return '추천 장소를 불러오지 못했어요. 잠시 후 다시 시도해 주세요. Could not load recommendations. Please try again shortly.';
+}
+
+String _docentAudioFailureMessage() {
+  return '도슨트 음성을 준비하지 못했어요. 스크립트는 계속 볼 수 있습니다. Could not prepare docent audio. The script is still available.';
+}
+
+String _tourAudioFailureMessage() {
+  return '투어 음성을 준비하지 못했어요. 추천 코스는 계속 볼 수 있습니다. Could not prepare tour audio. The route is still available.';
 }
 
 String _requestFailureMessage() {
-  return '요청을 처리하지 못했습니다. Unable to complete the request.';
+  return '지금 정보를 불러오지 못했어요.';
 }
 
 String _languageOptionLabel(String optionLanguage, String uiLanguage) {

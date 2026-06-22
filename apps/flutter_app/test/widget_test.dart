@@ -1413,7 +1413,8 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('요청을 처리하지 못했습니다'), findsOneWidget);
+    expect(find.textContaining('추천 장소를 불러오지 못했어요'), findsOneWidget);
+    expect(find.textContaining('요청을 처리하지 못했습니다'), findsNothing);
     expect(
       find.text('UPSTREAM_UNAVAILABLE: Authenticated route failed.'),
       findsNothing,
@@ -1455,9 +1456,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.textContaining('Unable to complete the request'),
+      find.textContaining('Could not load recommendations'),
       findsOneWidget,
     );
+    expect(find.textContaining('Unable to complete the request'), findsNothing);
     expect(find.textContaining('UPSTREAM_UNAVAILABLE'), findsNothing);
     expect(find.textContaining('Authenticated route failed'), findsNothing);
     expect(find.text('Preparing recommendations'), findsOneWidget);
@@ -2159,6 +2161,31 @@ void main() {
     expect(backend.dailyPlanRequests, 1);
     expect(backend.docentScriptRequests, ['brief:hwaseong-haenggung']);
   });
+
+  testWidgets('weather and intervention failures do not cover the map', (
+    tester,
+  ) async {
+    final backend = FakeBackend(
+      const LalaAppConfig(baseUri: 'http://api.test'),
+      failWeatherLoad: true,
+      failInterventionLoad: true,
+    );
+
+    await tester.pumpWidget(
+      TestLalaApp(
+        backendFactory: (_) => backend,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
+    expect(find.textContaining('요청을 처리하지 못했습니다'), findsNothing);
+    expect(find.textContaining('추천 장소를 불러오지 못했어요'), findsNothing);
+    expect(find.text('날씨 데이터 준비 중'), findsAtLeastNWidgets(1));
+    expect(backend.weatherRequests, 1);
+    expect(backend.interventionRequestConfigs, hasLength(1));
+  });
 }
 
 class TestLalaApp extends StatelessWidget {
@@ -2227,6 +2254,8 @@ class FakeBackend implements LalaBackend {
     this.config, {
     this.failAuthenticatedLoad = false,
     this.failReadinessLoad = false,
+    this.failWeatherLoad = false,
+    this.failInterventionLoad = false,
     this.failDailyPlanLoad = false,
     this.failDocentScriptLoad = false,
     this.shouldIntervene = false,
@@ -2238,6 +2267,8 @@ class FakeBackend implements LalaBackend {
   final LalaAppConfig config;
   final bool failAuthenticatedLoad;
   final bool failReadinessLoad;
+  final bool failWeatherLoad;
+  final bool failInterventionLoad;
   final bool failDailyPlanLoad;
   final bool failDocentScriptLoad;
   final bool shouldIntervene;
@@ -2340,12 +2371,30 @@ class FakeBackend implements LalaBackend {
   Future<LalaEnvelope<LalaWeather>> getWeather() async {
     weatherRequests += 1;
     weatherRequestConfigs.add(config);
+    if (failWeatherLoad) {
+      throw const LalaApiException(
+        code: 'WEATHER_UNAVAILABLE',
+        message: 'Weather route failed.',
+        statusCode: 503,
+        retryable: true,
+        requestId: 'failed-weather-route',
+      );
+    }
     return _envelope(weather ?? _weather());
   }
 
   @override
   Future<LalaEnvelope<LalaIntervention>> getIntervention() async {
     interventionRequestConfigs.add(config);
+    if (failInterventionLoad) {
+      throw const LalaApiException(
+        code: 'INTERVENTION_UNAVAILABLE',
+        message: 'Intervention route failed.',
+        statusCode: 503,
+        retryable: true,
+        requestId: 'failed-intervention-route',
+      );
+    }
     final place = (places ?? [_place()]).first;
     return _envelope(
       LalaIntervention(
