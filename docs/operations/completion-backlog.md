@@ -51,6 +51,14 @@ baseline stays green.
 
 ## P1: Data and Scoring Completion
 
+The following strategy docs define the 100% target for the remaining review,
+RAG, and docent-quality gaps:
+
+- [Review and Mention Preprocessing Strategy](review-mention-preprocessing-strategy.md)
+- [Sentiment and Attribute Scoring Strategy](sentiment-attribute-scoring-strategy.md)
+- [RAG Regeneration Strategy](rag-regeneration-strategy.md)
+- [Docent Quality Manual QA Strategy](docent-quality-manual-qa-strategy.md)
+
 | Item | Current evidence | Next action | Done evidence |
 |---|---|---|---|
 | Apply KCISA culture information ingestion | Tooling and guarded wrappers exist; live preview returned Suwon culture rows and normalized official `culture.go.kr` thumbnails to HTTPS. Azure status still says Culture Info needs to be added to shared dev. | Apply with guarded env, then recompute scores and RAG. | `culture.events` contains KCISA rows and `culture_relevance_score` changes are visible in latest `local-value-v2` snapshots. |
