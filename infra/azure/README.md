@@ -103,9 +103,10 @@ SQL tooling or the guarded canonical SQL runbooks.
 - `LALA_ENABLE_LIVE_AI` is enabled for shared dev during the contest window
   when the LALA Key Vault contains Azure OpenAI settings, so docent scripts use
   live generation plus API-side quality guards.
-- `LALA_ENABLE_LIVE_SPEECH` stays disabled by default because automated deploy
-  smokes would otherwise perform paid TTS calls. Enable it only for an explicit
-  audio verification pass.
+- `LALA_ENABLE_LIVE_SPEECH` is enabled for shared dev/review when Azure Speech
+  secrets are present in the LALA Key Vault. The deploy smoke then verifies that
+  `/api/v1/docents/audio` returns `audio/mpeg` instead of the
+  `SPEECH_NOT_CONFIGURED` fallback.
 - Bundled static data is only an offline, read-only snapshot fallback for DB
   outage handling or isolated local checks. Do not present it as the deployed
   service's primary data path.

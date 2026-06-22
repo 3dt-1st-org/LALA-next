@@ -24,7 +24,7 @@ LALA_STATIC_SNAPSHOT_FALLBACK=false
 LALA_PUBLIC_CONTEST_ACCESS=true
 CORS_ALLOW_ORIGINS=https://lala-next.cloud,https://www.lala-next.cloud,https://lala-next.vercel.app
 LALA_ENABLE_LIVE_AI=true
-LALA_ENABLE_LIVE_SPEECH=false
+LALA_ENABLE_LIVE_SPEECH=true
 ```
 
 The primary API runtime now lives on Azure Container Apps. For production,
