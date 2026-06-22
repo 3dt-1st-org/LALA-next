@@ -350,41 +350,30 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
 	        marker.appendChild(clusterBubble);
 	      } else {
 	        var pin = document.createElement("div");
-	        pin.style.position = "relative";
 	        pin.style.width = size + "px";
-	        pin.style.height = (size + 12) + "px";
+	        pin.style.height = size + "px";
+	        pin.style.borderRadius = "50%";
+	        pin.style.background = "#ffffff";
+	        pin.style.boxShadow = "0 6px 14px rgba(15, 23, 42, 0.22)";
 	        pin.style.display = "grid";
-	        pin.style.placeItems = "start center";
-	        var tail = document.createElement("div");
-	        tail.style.position = "absolute";
-	        tail.style.left = "50%";
-	        tail.style.bottom = "4px";
-	        tail.style.width = "15px";
-	        tail.style.height = "15px";
-	        tail.style.background = categoryColor;
-	        tail.style.borderRight = "3px solid #ffffff";
-	        tail.style.borderBottom = "3px solid #ffffff";
-	        tail.style.borderRadius = "2px 0 5px 0";
-	        tail.style.transform = "translateX(-50%) rotate(45deg)";
+	        pin.style.placeItems = "center";
 	        var circle = document.createElement("div");
-	        circle.style.position = "relative";
-	        circle.style.width = size + "px";
-	        circle.style.height = size + "px";
+	        var innerSize = Math.round(size * 0.64);
+	        circle.style.width = innerSize + "px";
+	        circle.style.height = innerSize + "px";
 	        circle.style.borderRadius = "50%";
 	        circle.style.background = categoryColor;
-	        circle.style.border = "3px solid #ffffff";
-	        circle.style.boxShadow = "inset 0 -8px 16px rgba(15, 23, 42, 0.12)";
+	        circle.style.boxShadow = "inset 0 -5px 10px rgba(15, 23, 42, 0.12)";
 	        circle.style.display = "grid";
 	        circle.style.placeItems = "center";
 	        var label = document.createElement("div");
 	        label.style.color = markerTextColorFor(place.category);
-	        label.style.fontSize = place.selected ? "14px" : "12px";
+	        label.style.fontSize = place.selected ? "14px" : "13px";
 	        label.style.fontWeight = "900";
 	        label.style.display = "grid";
 	        label.style.placeItems = "center";
 	        label.innerHTML = iconSvgFor(place.category);
 	        circle.appendChild(label);
-	        pin.appendChild(tail);
 	        pin.appendChild(circle);
 	        marker.appendChild(pin);
 	      }
@@ -400,8 +389,8 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
       var overlay = new kakao.maps.CustomOverlay({
 	        position: new kakao.maps.LatLng(place.lat, place.lng),
 	        content: marker,
-	        yAnchor: isCluster ? 0.5 : 1.0,
-	        zIndex: place.selected ? 40 : (isCluster ? 20 : 30)
+	        yAnchor: isCluster ? 0.5 : (place.selected ? 0.68 : 0.5),
+	        zIndex: place.selected ? 1000 : (isCluster ? 850 : 900)
 	      });
       overlay.setMap(map);
     });
@@ -522,9 +511,9 @@ void _drawFallbackMap(
       ..style.position = 'absolute'
       ..style.left = '${point.x}%'
       ..style.top = '${point.y}%'
-      ..style.transform = !place.isCluster
-          ? 'translate(-50%, -100%)'
-          : 'translate(-50%, -50%)'
+      ..style.transform = place.isCluster
+          ? 'translate(-50%, -50%)'
+          : (place.selected ? 'translate(-50%, -68%)' : 'translate(-50%, -50%)')
       ..style.display = 'flex'
       ..style.flexDirection = 'column'
       ..style.alignItems = 'center'
@@ -591,34 +580,23 @@ void _drawFallbackMap(
       marker.append(clusterBubble);
     } else {
       final pin = html.DivElement()
-        ..style.position = 'relative'
-        ..style.width = '${size}px'
-        ..style.height = '${size + 12}px'
-        ..style.display = 'grid'
-        ..style.setProperty('place-items', 'start center');
-      final tail = html.DivElement()
-        ..style.position = 'absolute'
-        ..style.left = '50%'
-        ..style.bottom = '4px'
-        ..style.width = '15px'
-        ..style.height = '15px'
-        ..style.backgroundColor = categoryColor
-        ..style.borderRight = '3px solid #ffffff'
-        ..style.borderBottom = '3px solid #ffffff'
-        ..style.borderRadius = '2px 0 5px 0'
-        ..style.transform = 'translateX(-50%) rotate(45deg)';
-      final circle = html.DivElement()
-        ..style.position = 'relative'
         ..style.width = '${size}px'
         ..style.height = '${size}px'
         ..style.borderRadius = '50%'
+        ..style.backgroundColor = '#ffffff'
+        ..style.boxShadow = '0 6px 14px rgba(15, 23, 42, .22)'
+        ..style.display = 'grid'
+        ..style.setProperty('place-items', 'center');
+      final innerSize = (size * 0.64).round();
+      final circle = html.DivElement()
+        ..style.width = '${innerSize}px'
+        ..style.height = '${innerSize}px'
+        ..style.borderRadius = '50%'
         ..style.backgroundColor = categoryColor
-        ..style.border = '3px solid #ffffff'
-        ..style.boxShadow = 'inset 0 -8px 16px rgba(15, 23, 42, .12)'
+        ..style.boxShadow = 'inset 0 -5px 10px rgba(15, 23, 42, .12)'
         ..style.display = 'grid'
         ..style.setProperty('place-items', 'center');
       circle.append(label);
-      pin.append(tail);
       pin.append(circle);
       marker.append(pin);
     }
@@ -693,10 +671,10 @@ IconData _fallbackMarkerIcon(String category) {
 
 String _fallbackMarkerSymbol(String category) {
   return switch (category) {
-    'restaurant' => '♨',
-    'event' => '□',
-    'culture_venue' => '▥',
-    'attraction' => '▥',
+    'restaurant' => '🍴',
+    'event' => '🗓',
+    'culture_venue' => '🏛',
+    'attraction' => '🏛',
     _ => '•',
   };
 }
@@ -862,13 +840,14 @@ class _FallbackFlutterMarker extends StatelessWidget {
       int.parse(_fallbackMarkerColor(place.category).replaceFirst('#', '0xFF')),
     );
     final screenSize = MediaQuery.sizeOf(context);
+    final yOffset = place.selected && !place.isCluster
+        ? -(size / 2 + 28)
+        : -size / 2;
     return Positioned(
       left: screenSize.width * position.x / 100,
       top: screenSize.height * position.y / 100,
       child: Transform.translate(
-        offset: place.isCluster
-            ? Offset(-size / 2, -size / 2)
-            : Offset(-size / 2, place.selected ? -size - 48 : -size - 12),
+        offset: Offset(-size / 2, yOffset),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -930,58 +909,43 @@ class _FallbackFlutterMarker extends StatelessWidget {
                 ),
               )
             else
-              SizedBox(
+              Container(
                 width: size,
-                height: size + 12,
-                child: Stack(
-                  alignment: Alignment.topCenter,
-                  children: [
-                    Positioned(
-                      bottom: 4,
-                      child: Transform.rotate(
-                        angle: 0.7853981633974483,
-                        child: Container(
-                          width: 15,
-                          height: 15,
-                          decoration: BoxDecoration(
-                            color: color,
-                            border: const Border(
-                              right: BorderSide(color: Colors.white, width: 3),
-                              bottom: BorderSide(color: Colors.white, width: 3),
-                            ),
-                            borderRadius: const BorderRadius.only(
-                              topLeft: Radius.circular(2),
-                              bottomRight: Radius.circular(5),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    Container(
-                      width: size,
-                      height: size,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: color,
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(color: Colors.white, width: 3),
-                        boxShadow: const [
-                          BoxShadow(
-                            blurRadius: 18,
-                            offset: Offset(0, 8),
-                            color: Color(0x420F172A),
-                          ),
-                        ],
-                      ),
-                      child: Icon(
-                        _fallbackMarkerIcon(place.category),
-                        color: place.category == 'restaurant'
-                            ? const Color(0xFF1A202C)
-                            : Colors.white,
-                        size: place.selected ? 18 : 16,
-                      ),
+                height: size,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(999),
+                  boxShadow: const [
+                    BoxShadow(
+                      blurRadius: 14,
+                      offset: Offset(0, 6),
+                      color: Color(0x380F172A),
                     ),
                   ],
+                ),
+                child: Container(
+                  width: (size * 0.64).roundToDouble(),
+                  height: (size * 0.64).roundToDouble(),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(999),
+                    boxShadow: const [
+                      BoxShadow(
+                        blurRadius: 10,
+                        offset: Offset(0, 5),
+                        color: Color(0x1F0F172A),
+                      ),
+                    ],
+                  ),
+                  child: Icon(
+                    _fallbackMarkerIcon(place.category),
+                    color: place.category == 'restaurant'
+                        ? const Color(0xFF1A202C)
+                        : Colors.white,
+                    size: place.selected ? 18 : 16,
+                  ),
                 ),
               ),
           ],
