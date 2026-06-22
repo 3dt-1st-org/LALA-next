@@ -119,6 +119,12 @@ try {
         throw "Franchise identity batch plan failed."
     }
 
+    Write-Host "Planning representative docent QA..."
+    & powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\windows\plan_docent_qa.ps1" -Python $Python
+    if ($LASTEXITCODE -ne 0) {
+        throw "Representative docent QA plan failed."
+    }
+
     Write-Host "Planning place AI enrichment..."
     & powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\windows\plan_place_ai_enrichment.ps1" -Python $Python
     if ($LASTEXITCODE -ne 0) {

@@ -23,10 +23,30 @@ must go further and judge whether the generated docent script is actually good:
 | Gap | Current Evidence | Risk |
 |---|---|---|
 | Automated smoke covers representative flows, not broad content quality | Deployed web smoke verifies live-context docent quality on selected smoke places. | A few good paths can hide weak scripts for other categories/regions. |
-| No fixed 30 to 50 place QA set | Places exist across Gyeonggi and Seoul, but sample selection is not frozen. | QA can cherry-pick easy places. |
-| No manual rubric threshold | Tests reject placeholder/raw scores, but not prose quality. | Script can pass technically while feeling bland. |
-| No reviewer record template | Docs do not yet define how to record human judgment. | Team feedback becomes scattered and hard to fix. |
+| QA set needs reviewer approval | `plan_docent_qa` can select balanced DB/RAG candidates, but humans still need to freeze the final set. | QA can drift unless the selected candidate list is approved. |
 | No re-test loop tied to RAG and scoring | RAG regeneration and score updates are separate. | QA fixes may not survive the next batch. |
+
+## Current Implementation Snapshot
+
+As of 2026-06-22, PR E adds representative docent QA tooling:
+
+- `apps.api.app.tools.plan_docent_qa`
+- `apps.api.app.services.docent_qa`
+- `scripts/unix/plan_docent_qa.sh`
+- `scripts/windows/plan_docent_qa.ps1`
+
+The tool has no apply mode and never generates scripts by itself. Plan mode
+prints the rubric and required DB signal sources. Preview mode reads
+`travel.places`, latest `analytics.place_score_snapshots`,
+`rag.knowledge_chunks`, and `travel.weather_observations` to select a
+sanitized 30 to 50 place QA set. It balances category, Seoul/Gyeonggi coverage,
+image state, review/RAG richness, weather presence, and missing-signal cases.
+
+The service also exposes `evaluate_docent_script()` for consistent reviewer
+triage. It flags blockers such as mock/demo wording, fallback source, raw score
+leakage, missing grounding, and language mismatch. Human reviewers still score
+the qualitative rubric; the function is a guardrail, not a replacement for
+manual review.
 
 ## Legacy LALA Touchpoints
 
@@ -178,6 +198,12 @@ Use one row per script:
 Store QA records as a local spreadsheet or markdown table under an approved
 local-only path while reviewing. Commit only sanitized summaries and aggregate
 findings unless the team approves a public QA artifact.
+
+Candidate selection command:
+
+```bash
+scripts/unix/plan_docent_qa.sh --preview --limit 40 --python .venv/bin/python
+```
 
 ## Pass Thresholds
 

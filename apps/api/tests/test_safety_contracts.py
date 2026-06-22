@@ -301,6 +301,9 @@ def test_paid_smoke_requires_authenticated_api_key():
     place_local_enrichment_script = (
         ROOT / "scripts" / "windows" / "plan_place_local_enrichment.ps1"
     ).read_text(encoding="utf-8")
+    docent_qa_script = (
+        ROOT / "scripts" / "windows" / "plan_docent_qa.ps1"
+    ).read_text(encoding="utf-8")
     tour_api_ingest_script = (
         ROOT / "scripts" / "windows" / "plan_tour_api_ingest.ps1"
     ).read_text(encoding="utf-8")
@@ -417,6 +420,10 @@ def test_paid_smoke_requires_authenticated_api_key():
     assert "DB_DSN value is never printed by this script." in place_local_enrichment_script
     assert "secret show" not in place_local_enrichment_script
     assert "Write-Host $env:DB_DSN" not in place_local_enrichment_script
+    assert "apps.api.app.tools.plan_docent_qa" in docent_qa_script
+    assert "DB_DSN value is never printed by this script." in docent_qa_script
+    assert "secret show" not in docent_qa_script
+    assert "Write-Host $env:DB_DSN" not in docent_qa_script
     assert "apps.api.app.tools.run_tour_api_ingest" in tour_api_ingest_script
     assert "ALLOW_TOUR_API_INGEST_APPLY=1" in tour_api_ingest_script
     assert "PUBLIC_DATA_SERVICE_KEY and DB_DSN values are never printed by this script." in tour_api_ingest_script
@@ -513,6 +520,7 @@ def test_unix_scripts_have_safe_operational_guards():
         "plan_key_vault_reuse.sh",
         "plan_observability.sh",
         "plan_franchise_reference_ingest.sh",
+        "plan_docent_qa.sh",
         "plan_place_ai_enrichment.sh",
         "plan_place_local_enrichment.sh",
         "plan_rag_index.sh",
@@ -601,6 +609,9 @@ def test_unix_scripts_have_safe_operational_guards():
     assert "ALLOW_RAG_INDEX_APPLY=1" in scripts["plan_rag_index.sh"]
     assert "--confirm APPLY_RAG_INDEX" in scripts["plan_rag_index.sh"]
     assert "DB_DSN and AZURE_OPENAI_KEY values are never printed by this script." in scripts["plan_rag_index.sh"]
+    assert "plan_docent_qa" in scripts["plan_docent_qa.sh"]
+    assert "plan_docent_qa.sh" in scripts["verify_repo.sh"]
+    assert "DB_DSN value is never printed by this script." in scripts["plan_docent_qa.sh"]
     assert "enrich_place_ai_columns" in scripts["plan_place_ai_enrichment.sh"]
     assert "plan_place_ai_enrichment.sh" in scripts["verify_repo.sh"]
     assert "ALLOW_AI_PLACE_ENRICHMENT_APPLY=1" in scripts["plan_place_ai_enrichment.sh"]
