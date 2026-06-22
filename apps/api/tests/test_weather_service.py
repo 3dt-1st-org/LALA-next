@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import types
+from concurrent.futures import TimeoutError
 from datetime import datetime
 from types import SimpleNamespace
 
@@ -177,6 +178,20 @@ def test_current_weather_reports_unavailable_without_public_data_key(
     assert weather["forecast"] == []
     assert weather["dust"]["pm10_grade"] == "unknown"
     assert weather["dust"]["pm25_grade_ko"] == "확인 중"
+
+
+def test_weather_provider_timeout_returns_none() -> None:
+    class TimeoutFuture:
+        def result(self, timeout):
+            raise TimeoutError()
+
+    result = weather_service._future_result_or_none(
+        TimeoutFuture(),
+        timeout=1,
+        source=weather_service.AIRKOREA_SOURCE,
+    )
+
+    assert result is None
 
 
 def test_current_weather_marks_bad_when_air_quality_is_bad(monkeypatch) -> None:

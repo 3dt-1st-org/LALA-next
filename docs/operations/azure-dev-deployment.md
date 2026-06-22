@@ -11,6 +11,10 @@ while the shared backend and database move to Azure for team development.
 - API image registry: Azure Container Registry
 - Logs and telemetry: Log Analytics and Application Insights
 
+For team development, the Azure PostgreSQL database is the canonical shared DB.
+Local PostgreSQL is an optional sandbox for schema and tool validation; do not
+claim ingest, scoring, RAG, or deployed UI readiness from local DB results alone.
+
 ## What Stays Outside Azure For Now
 
 - Flutter Web public site deployment remains separate so the current

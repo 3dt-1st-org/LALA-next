@@ -310,6 +310,9 @@ def test_paid_smoke_requires_authenticated_api_key():
     kopis_ingest_script = (ROOT / "scripts" / "windows" / "plan_kopis_ingest.ps1").read_text(
         encoding="utf-8"
     )
+    weather_refresh_script = (
+        ROOT / "scripts" / "windows" / "plan_weather_observation_refresh.ps1"
+    ).read_text(encoding="utf-8")
     card_spending_ingest_script = (
         ROOT / "scripts" / "windows" / "plan_card_spending_file_ingest.ps1"
     ).read_text(encoding="utf-8")
@@ -426,6 +429,12 @@ def test_paid_smoke_requires_authenticated_api_key():
     assert "secret show" not in kopis_ingest_script
     assert "Write-Host $env:DB_DSN" not in kopis_ingest_script
     assert "Write-Host $env:KOPIS_API_KEY" not in kopis_ingest_script
+    assert "apps.api.app.tools.run_weather_observation_refresh" in weather_refresh_script
+    assert "ALLOW_WEATHER_OBSERVATION_REFRESH_APPLY=1" in weather_refresh_script
+    assert "PUBLIC_DATA_SERVICE_KEY and DB_DSN values are never printed by this script." in weather_refresh_script
+    assert "secret show" not in weather_refresh_script
+    assert "Write-Host $env:DB_DSN" not in weather_refresh_script
+    assert "Write-Host $env:PUBLIC_DATA_SERVICE_KEY" not in weather_refresh_script
     assert "apps.api.app.tools.run_card_spending_file_ingest" in card_spending_ingest_script
     assert "ALLOW_CARD_SPENDING_FILE_INGEST_APPLY=1" in card_spending_ingest_script
     assert "DB_DSN value is never printed by this script." in card_spending_ingest_script
@@ -494,6 +503,7 @@ def test_unix_scripts_have_safe_operational_guards():
         "plan_card_spending_file_ingest.sh",
         "plan_culture_info_ingest.sh",
         "plan_kopis_ingest.sh",
+        "plan_weather_observation_refresh.sh",
         "plan_tour_api_ingest.sh",
         "smoke_api.sh",
         "smoke_api_matrix.sh",
@@ -601,6 +611,11 @@ def test_unix_scripts_have_safe_operational_guards():
     assert "ALLOW_KOPIS_INGEST_APPLY=1" in scripts["plan_kopis_ingest.sh"]
     assert "--confirm APPLY_KOPIS_INGEST" in scripts["plan_kopis_ingest.sh"]
     assert "KOPIS_API_KEY and DB_DSN values are never printed by this script." in scripts["plan_kopis_ingest.sh"]
+    assert "run_weather_observation_refresh" in scripts["plan_weather_observation_refresh.sh"]
+    assert "plan_weather_observation_refresh.sh" in scripts["verify_repo.sh"]
+    assert "ALLOW_WEATHER_OBSERVATION_REFRESH_APPLY=1" in scripts["plan_weather_observation_refresh.sh"]
+    assert "--confirm APPLY_WEATHER_OBSERVATION_REFRESH" in scripts["plan_weather_observation_refresh.sh"]
+    assert "PUBLIC_DATA_SERVICE_KEY and DB_DSN values are never printed by this script." in scripts["plan_weather_observation_refresh.sh"]
     assert "run_card_spending_file_ingest" in scripts["plan_card_spending_file_ingest.sh"]
     assert "plan_card_spending_file_ingest.sh" in scripts["verify_repo.sh"]
     assert "ALLOW_CARD_SPENDING_FILE_INGEST_APPLY=1" in scripts["plan_card_spending_file_ingest.sh"]

@@ -21,12 +21,13 @@ Current baseline evidence:
 - Docent audio no longer has a local fake-byte fallback: live Speech returns
   `audio/mpeg`, while disabled Speech returns `SPEECH_NOT_CONFIGURED` and the
   Flutter UI hides audio controls.
-- Non-mutating official-data previews pass for TourAPI, KCISA culture info,
-  KOPIS, and Fair Trade franchise references with the currently configured
-  local keys.
+- Official-data ingestion has been applied to shared Azure dev for TourAPI,
+  KCISA culture info, KOPIS, Fair Trade franchise references, card-spending
+  area-month aggregates, and representative public weather observations.
 - The shared dev DB has TourAPI Gyeonggi and Seoul places, franchise brand
-  references, restaurant business identity rows, `local-value-v2` score
-  snapshots, and place-profile RAG chunks.
+  references, restaurant business identity rows, KCISA/KOPIS culture events,
+  card-spending aggregates, public-weather observations, refreshed
+  `local-value-v2` score snapshots, and place/culture-event RAG chunks.
 
 ## Not Current Blockers
 
@@ -61,10 +62,9 @@ RAG, and docent-quality gaps:
 
 | Item | Current evidence | Next action | Done evidence |
 |---|---|---|---|
-| Apply KCISA culture information ingestion | Tooling and guarded wrappers exist; live preview returned Suwon culture rows and normalized official `culture.go.kr` thumbnails to HTTPS. Azure status still says Culture Info needs to be added to shared dev. | Apply with guarded env, then recompute scores and RAG. | `culture.events` contains KCISA rows and `culture_relevance_score` changes are visible in latest `local-value-v2` snapshots. |
-| Apply KOPIS performance ingestion | Tooling and guarded wrappers exist; live preview returned Gyeonggi performance rows and normalized official `kopis.or.kr` poster URLs to HTTPS. KOPIS is still listed in open rollout work. | Apply with guarded env for the target region/window, then recompute scores and RAG. | `culture.events` contains KOPIS rows and RAG has current `culture_event` chunks. |
-| Apply card-spending source files | Parser plan supports detailed and aggregate CSV/XLSX files, but no local card-spending source file was confirmed during the latest check. Shared dev rollout still lists card-spending files as open. | Download or provide approved source files, ingest them, verify hash de-duplication, then rerun score batch. | `economy.card_spending_area_monthly` and `economy.card_spending_demographics` have source-file-backed rows; `local_spending_score` is based on real file rows. |
-| Persist weather observations | Runtime can fall back to public-data nowcast, but scheduled persistence is still worker/batch work. | Add or schedule a weather refresh job that writes `travel.weather_observations`. | `/api/v1/weather` returns fresh DB-backed or live-nowcast-backed data, and `weather_fit_score` has recent observation input. |
+| Keep KCISA/KOPIS culture ingestion current | Shared dev now has 383 `culture.events` rows: 183 KCISA and 200 KOPIS, followed by score and RAG regeneration. | Turn the guarded operator commands into a scheduled worker job after the batch runtime is approved. | Culture-event counts refresh on schedule and failures are visible in `ops.job_runs` or equivalent worker telemetry. |
+| Keep card-spending source files current | Shared dev has 149,341 `economy.card_spending_area_monthly` rows. Demographic detail is intentionally not part of the current scoring path. | Add an incremental file-ingest runbook for new approved CSV/XLSX drops and decide whether demographics are needed for later personalization. | New source files are hash-deduplicated and latest score snapshots show non-null `local_spending_score` where regional/industry rows match. |
+| Persist weather observations on schedule | Shared dev now has 20 representative `travel.weather_observations` rows, and runtime weather still has live KMA/AirKorea fallback for uncovered coordinates. | Schedule smaller incremental refreshes instead of one large all-region call. | Recent observations exist for the active regions and `/api/v1/weather` remains healthy when one provider is slow. |
 | Add review attribute scoring | `review_quality_score` is documented as `pending_review_attribute_analysis`. | Build ad-filtered review attribute/sentiment batch for taste, service, and selected local-experience attributes. | Latest score snapshots contain non-null `review_quality_score` with source metadata and tests for ad-filtering rules. |
 | Expand franchise evidence to branch locations | Brand-level Fair Trade Commission references are loaded; `economy.franchise_locations` is intentionally empty. | Add a suitable official branch-level source only if it provides address or coordinate evidence. | Restaurant identity matching can use branch-level address/coordinate evidence, not only brand-name statistics. |
 

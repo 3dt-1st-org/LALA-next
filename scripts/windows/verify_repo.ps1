@@ -143,6 +143,12 @@ try {
         throw "KOPIS performance ingest plan failed."
     }
 
+    Write-Host "Planning weather observation refresh..."
+    & powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\windows\plan_weather_observation_refresh.ps1" -Python $Python
+    if ($LASTEXITCODE -ne 0) {
+        throw "Weather observation refresh plan failed."
+    }
+
     Write-Host "Planning card spending file ingestion..."
     & powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\windows\plan_card_spending_file_ingest.ps1" -Python $Python
     if ($LASTEXITCODE -ne 0) {

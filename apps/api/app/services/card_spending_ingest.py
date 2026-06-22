@@ -9,6 +9,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
@@ -254,11 +255,10 @@ def parse_card_spending_file(
     parsed = 0
     input_row_count = 0
 
-    for row in _iter_rows(source_path):
+    for normalized in _iter_rows(source_path):
         if row_limit is not None and input_row_count >= row_limit:
             break
         input_row_count += 1
-        normalized = _normalize_row(row)
         parsed_row = _parse_row(
             normalized=normalized,
             source_name=source_name,
@@ -350,8 +350,7 @@ def load_region_code_map(path: Path | str) -> dict[str, str]:
         raise FileNotFoundError(f"Region map file does not exist: {mapping_path}")
 
     result: dict[str, str] = {}
-    for row in _iter_rows(mapping_path):
-        normalized = _normalize_row(row)
+    for normalized in _iter_rows(mapping_path):
         code = _pick(normalized, REGION_CODE_ALIASES + ("code",))
         name = _pick(normalized, REGION_NAME_ALIASES + ("name",))
         if code and name:
@@ -632,7 +631,7 @@ def _iter_csv_rows(path: Path) -> Iterable[dict[str, Any]]:
     for encoding in ("utf-8-sig", "cp949", "euc-kr"):
         try:
             with path.open("r", encoding=encoding, newline="") as handle:
-                yield from (dict(row) for row in csv.DictReader(handle))
+                yield from _iter_normalized_csv_rows(handle)
                 return
         except UnicodeDecodeError as exc:
             last_error = exc
@@ -654,12 +653,12 @@ def _iter_xlsx_rows(path: Path) -> Iterable[dict[str, Any]]:
     if header is None:
         return
 
-    headers = [str(cell).strip() if cell is not None else "" for cell in header]
+    headers = [_normalize_key(cell) if cell is not None else "" for cell in header]
     for raw in rows:
         if not raw or not any(cell is not None and str(cell).strip() for cell in raw):
             continue
         yield {
-            headers[index]: value
+            headers[index]: "" if value is None else str(value).strip()
             for index, value in enumerate(raw[: len(headers)])
             if headers[index]
         }
@@ -690,7 +689,26 @@ def _iter_zip_csv_rows(
     encoding = _detect_zip_csv_encoding(archive, member)
     with archive.open(member) as raw:
         with io.TextIOWrapper(raw, encoding=encoding, newline="") as handle:
-            yield from (dict(row) for row in csv.DictReader(handle))
+            yield from _iter_normalized_csv_rows(handle)
+
+
+def _iter_normalized_csv_rows(handle: Any) -> Iterable[dict[str, str]]:
+    reader = csv.reader(handle)
+    headers: list[str] | None = None
+    for raw in reader:
+        if raw and any(str(cell or "").strip() for cell in raw):
+            headers = [_normalize_key(cell) for cell in raw]
+            break
+    if not headers:
+        return
+    for raw in reader:
+        if not raw or not any(str(cell or "").strip() for cell in raw):
+            continue
+        yield {
+            headers[index]: "" if value is None else str(value).strip()
+            for index, value in enumerate(raw[: len(headers)])
+            if headers[index]
+        }
 
 
 def _detect_zip_csv_encoding(
@@ -728,12 +746,12 @@ def _iter_zip_xlsx_rows(
             break
     if header is None:
         return
-    headers = [str(cell).strip() if cell is not None else "" for cell in header]
+    headers = [_normalize_key(cell) if cell is not None else "" for cell in header]
     for raw in rows:
         if not raw or not any(cell is not None and str(cell).strip() for cell in raw):
             continue
         yield {
-            headers[index]: value
+            headers[index]: "" if value is None else str(value).strip()
             for index, value in enumerate(raw[: len(headers)])
             if headers[index]
         }
@@ -752,11 +770,16 @@ def _normalize_key(value: Any) -> str:
 
 
 def _pick(row: dict[str, str], aliases: Sequence[str]) -> str | None:
-    for alias in aliases:
-        value = row.get(_normalize_key(alias))
+    for alias in _normalized_aliases(tuple(aliases)):
+        value = row.get(alias)
         if value:
             return value
     return None
+
+
+@lru_cache(maxsize=128)
+def _normalized_aliases(aliases: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(_normalize_key(alias) for alias in aliases)
 
 
 def _parse_month(value: Any) -> date | None:

@@ -1,6 +1,6 @@
 # Azure Migration Status
 
-Last updated: 2026-06-21 KST
+Last updated: 2026-06-22 KST
 
 This note records the shared dev migration path without exposing live Key Vault
 URLs, database passwords, bearer tokens, or generated Azure resource names.
@@ -51,22 +51,35 @@ queries to resolve live names during operations.
 - Fair Trade Commission franchise brand references were ingested from the public
   data API for 2025 into `economy.franchise_brands`: 11,712 rows after source
   duplicate collapse.
-- Non-mutating live previews now pass for KCISA culture info and KOPIS
-  performance ingestion. Official Culture Portal and KOPIS image URLs returned
-  as `http` are normalized to `https` in preview payloads before any web-facing
-  use.
+- The shared dev PostgreSQL database is the team baseline for data rollout and
+  deployed API verification. Local PostgreSQL remains useful for isolated
+  schema/tool tests, but shared ingest, scoring, RAG, and browser smoke evidence
+  should be taken from Azure dev unless a task explicitly says otherwise.
+- KCISA culture information and KOPIS performance ingestion were applied to
+  `culture.events` on 2026-06-22. The shared dev DB now has 383 culture-event
+  rows: 183 from KCISA and 200 from KOPIS. Official Culture Portal and KOPIS
+  image URLs returned as `http` are normalized to `https` before web-facing use.
+- Public weather observation refresh was applied for the top 20 representative
+  regions from `travel.public_places`. `travel.weather_observations` now has
+  current KMA ultra-short nowcast plus AirKorea PM10/PM2.5 observations for
+  score and planner use. Runtime `/api/v1/weather` still keeps live public-data
+  fallback for coordinates without a fresh persisted observation.
 - Franchise/small-merchant identity matching was applied for the current
   restaurant slice: 1,000 rows in `analytics.place_business_identity`
   (`franchise_store=2`, `local_small_chain=34`, `independent_local=964`).
   Brand-level references with zero active franchise stores are excluded from
   franchise evidence, and restaurants that do not match loaded franchise
   references are classified as independent local instead of remaining unknown.
-- `local-value-v2` score snapshots were generated for all 2,636 places.
+- `local-value-v2` score snapshots were regenerated for all 2,636 places after
+  KCISA, KOPIS, and weather observation refresh. The score table now has 13,180
+  historical snapshots in total: 2,636 `local-value-v1` rows and 10,544
+  `local-value-v2` rows.
   Historical `local-value-v1` and earlier `local-value-v2` snapshots remain in
   the table for audit/history; API reads select the latest score row and live
   `/api/v1/places` verified `formula_version=local-value-v2`.
-- RAG knowledge chunks were regenerated for all 2,636 places with the
-  local-hash embedding path.
+- RAG knowledge chunks were regenerated with the local-hash embedding path.
+  The shared dev DB now has 3,000 chunks: 2,636 `place_profile` chunks and 364
+  `culture_event` chunks.
 - The production Flutter web build at `lala-next.cloud` uses
   `https://api.lala-next.cloud` as the API base URL. For the public contest
   review window it should not bundle a static API bearer token; the Azure API

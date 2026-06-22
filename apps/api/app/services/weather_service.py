@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from concurrent.futures import TimeoutError
 import math
 from datetime import UTC, datetime, timedelta, timezone
 import logging
@@ -28,6 +29,7 @@ UNAVAILABLE_SOURCE = "unavailable"
 KST = timezone(timedelta(hours=9))
 KMA_REQUEST_TIMEOUT_SECONDS = 3
 AIRKOREA_REQUEST_TIMEOUT_SECONDS = 8
+FUTURE_TIMEOUT_BUFFER_SECONDS = 2
 _OFFICIAL_CACHE_TTL = timedelta(minutes=20)
 _official_cache_lock = Lock()
 _official_weather_cache: dict[str, tuple[datetime, dict[str, Any]]] = {}
@@ -56,6 +58,26 @@ def current_weather(*, lat: float, lng: float, force: bool = False) -> dict:
             db_weather["forecast"] = _derived_forecast_from_observation(db_weather)
         db_weather["force"] = force
         return db_weather
+
+    live_weather = fetch_live_weather(lat=lat, lng=lng, force=force)
+    if live_weather.get("source") != UNAVAILABLE_SOURCE:
+        return live_weather
+
+    return {
+        "lat": lat,
+        "lng": lng,
+        "temp": "",
+        "icon": "unavailable",
+        "dust": unknown_dust_payload(),
+        "forecast": [],
+        "outdoor_status": "unknown",
+        "force": force,
+        "source": UNAVAILABLE_SOURCE,
+    }
+
+
+def fetch_live_weather(*, lat: float, lng: float, force: bool = False) -> dict:
+    """Fetch public-data weather directly, bypassing persisted DB observations."""
 
     official_weather, air_quality = _fetch_official_weather_pair(
         lat=lat, lng=lng, force=force
@@ -129,14 +151,39 @@ def _fetch_official_weather_pair(
             _fetch_airkorea_sido_air_quality(lat=lat, lng=lng),
         )
 
-    with ThreadPoolExecutor(
-        max_workers=2, thread_name_prefix="lala-weather"
-    ) as executor:
+    executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="lala-weather")
+    try:
         kma_future = executor.submit(
             _fetch_kma_ultra_short_nowcast, lat=lat, lng=lng, force=force
         )
         air_future = executor.submit(_fetch_airkorea_sido_air_quality, lat=lat, lng=lng)
-        return kma_future.result(), air_future.result()
+        return (
+            _future_result_or_none(
+                kma_future,
+                timeout=KMA_REQUEST_TIMEOUT_SECONDS + FUTURE_TIMEOUT_BUFFER_SECONDS,
+                source=KMA_SOURCE,
+            ),
+            _future_result_or_none(
+                air_future,
+                timeout=AIRKOREA_REQUEST_TIMEOUT_SECONDS + FUTURE_TIMEOUT_BUFFER_SECONDS,
+                source=AIRKOREA_SOURCE,
+            ),
+        )
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
+
+
+def _future_result_or_none(
+    future: Any,
+    *,
+    timeout: int,
+    source: str,
+) -> dict[str, Any] | None:
+    try:
+        return future.result(timeout=timeout)
+    except TimeoutError:
+        logger.warning("weather_provider_timeout source=%s timeout=%s", source, timeout)
+        return None
 
 
 def _fetch_kma_ultra_short_nowcast(
