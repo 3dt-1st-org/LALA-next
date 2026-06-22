@@ -32,6 +32,45 @@ to paste into a docent prompt. The completed pipeline must:
 | Review source provenance is too thin | `ingest.source_files` handles file provenance; API/search/community provenance needs the same discipline. | We cannot prove a score came from approved sources. |
 | No human review lane for ambiguous matches | Existing plan tools are guarded, but ambiguous review matches need a manual queue. | Bad matches become hidden RAG/docent evidence. |
 
+## Legacy LALA Touchpoints
+
+This is a refactor, so the new pipeline should start from the existing LALA
+review guardrails instead of inventing a separate behavior.
+
+| Legacy File | Behavior to Carry Forward | LALA-next Refactor Note |
+|---|---|---|
+| `legacy-lala-reference/src/collectors/process_attractions.py` | `clean_and_filter_text()` stripped HTML/entities and rejected attraction reviews containing food-only terms such as `맛집`, `카페`, `식당`, `디저트`, `메뉴판`, and `존맛`. | Keep this deterministic category guard, but persist rejection metadata instead of silently dropping the signal. |
+| `legacy-lala-reference/src/collectors/load_review_pipeline.py` | `is_valid_attraction_review()` and `extract_attraction_content_batch()` separated actual attraction impressions from ads, shopping, eating, or unrelated comparison text. | Reuse the two-stage idea: deterministic cleanup first, JSON AI extraction second, with confidence and prompt version stored. |
+| `legacy-lala-reference/src/collectors/process_restaurants.py` | Restaurant review discovery searched `"{name} 맛집"` and retained food, taste, menu, service, and atmosphere evidence. | Do not apply attraction food-noise filters to restaurants. Food terms are the product evidence for this category. |
+| `legacy-lala-reference/src/collectors/load_restaurant_review.py` | Restaurant keywords were extracted from multiple review snippets and embedded for later retrieval. | Move keyword extraction into the same guarded review/mention batch so restaurant docents and scoring share one source of truth. |
+| `legacy-lala-reference/README.md` | The reliability note explicitly called out review filtering to keep food reviews from contaminating attraction docents. | Preserve that as a refactor acceptance criterion, not just a nice-to-have test. |
+| `legacy-lala-reference/src/frontend/web/services/docent_service.py` | Docent context loaded visitor summaries, atmosphere, tips, keywords, and review excerpts from persisted tables. | The new preprocessing pipeline must write durable DB/RAG evidence before the API generates public scripts. |
+
+One legacy behavior should not be copied as-is: when an LLM extraction failed,
+some paths could fall back to original review text. LALA-next should instead
+mark the row as low confidence, send it to manual review, or exclude it from
+scoring/RAG until a guarded retry succeeds.
+
+## LALA-next Refactor Mapping
+
+| Legacy Concept | Current Repository Landing Point |
+|---|---|
+| `locallink.attraction_reviews` retained snippets | Approved snippets become `community.posts` only when storage rights allow it; weekly aggregates always land in `community.place_mentions_weekly`. |
+| `locallink.attraction_details` and `locallink.restaurant_details` summaries | `travel.place_enrichments` with `enrichment_type='review_attributes'`, `sentiment`, or `place_profile`, plus `prompt_version` and confidence. |
+| Attraction food-noise exclusion | Shared filter module used by the proposed `run_review_mention_ingest` tool and by `apps/api/app/services/docent_service.py` as a runtime safety net. |
+| Restaurant keyword extraction | `community.place_mentions_weekly.attributes.top_terms` and later `travel.place_enrichments.attributes` for category-specific scoring. |
+| Review embeddings | `rag.knowledge_chunks` with `source_type='place_mention'` after the aggregate has passed ad filtering, place matching, and confidence thresholds. |
+| Legacy direct DB writes | Guarded plan/preview/apply command style used by `run_place_score_batch` and `run_rag_index`, with `ops.job_runs` provenance. |
+
+The immediate implementation path is:
+
+1. Add shared text cleanup and category-policy helpers under `apps/api/app/services`.
+2. Add `apps.api.app.tools.run_review_mention_ingest` with plan, preview, and
+   guarded apply modes.
+3. Feed approved aggregates to `community.place_mentions_weekly`.
+4. Leave user-facing docents on current RAG/place-profile grounding until the
+   review-derived rows are persisted and indexed.
+
 ## Source Policy
 
 Preferred sources:

@@ -30,6 +30,40 @@ explanations. A completed RAG pipeline must:
 | Freshness checks are incomplete | Smoke checks grounding exists, but not full source freshness by table. | Old chunks could survive after new score/review batches. |
 | Manual QA loop is not formalized | Deployed smoke checks one live path; representative place QA is separate. | A green smoke can miss category-specific quality gaps. |
 
+## Legacy LALA Touchpoints
+
+Legacy LALA used review analysis and embeddings as docent grounding, not just as
+display text. The RAG refactor should preserve that intent with the new schema.
+
+| Legacy File | Behavior to Carry Forward | LALA-next Refactor Note |
+|---|---|---|
+| `legacy-lala-reference/src/collectors/process_attractions.py` | `save_analysis_result()` wrote visitor summary, atmosphere, tips, and an embedding to `locallink.attraction_details`. | Convert this to `travel.place_enrichments` plus `rag.knowledge_chunks(source_type='place_mention' or 'place_profile')`. |
+| `legacy-lala-reference/src/collectors/process_restaurants.py` | Restaurant summaries/tips were embedded after review analysis. | Restaurant review attributes and summaries should become dynamic chunks, while preserving food/taste/service evidence. |
+| `legacy-lala-reference/src/collectors/load_review_pipeline.py` | Extracted attraction-only review content and generated embeddings per retained snippet. | Use approved snippets or aggregates as `place_mention` chunks only after ad filtering and place-match confidence pass. |
+| `legacy-lala-reference/src/frontend/web/services/docent_service.py` | `_load_attraction_context()` assembled official context plus `방문객 요약`, `분위기`, and `팁`. | `apps/api/app/services/rag_index.py` should create chunks that carry the same roles as metadata and user-safe text. |
+| `legacy-lala-reference/src/frontend/web/services/docent_service.py` | `_load_restaurant_context()` mixed keywords and short review evidence into the prompt. | `community.place_mentions_weekly.attributes` should drive restaurant chunks and docent grounding. |
+| `legacy-lala-reference/src/frontend/web/services/docent_service.py` | `pick_story_reviews()` prioritized history, origin, legend, hidden-story, and anecdote keywords. | Keep story-priority selection in `docent_service` and also expose story-bearing chunks through RAG metadata. |
+
+The old `locallink.*` detail tables were effectively a category-specific RAG
+cache. In LALA-next, `rag.knowledge_chunks` is the unified cache, and the
+source tables remain the auditable source of truth.
+
+## LALA-next Refactor Mapping
+
+| Legacy Grounding Role | Current Chunk Strategy |
+|---|---|
+| Official attraction description | `place_profile` chunks from `travel.places`, official public-data fields, and latest score snapshot context. |
+| Visitor summary and atmosphere | `place_mention` chunks from `travel.place_enrichments` and `community.place_mentions_weekly`. |
+| Restaurant keywords/reviews | `place_mention` or `community_post` chunks only when source rights and matching confidence are sufficient. |
+| Event date and URL context | `culture_event` chunks from `culture.events` and `travel.place_events`. |
+| Weather-sensitive guidance | `weather_context` chunks from `travel.weather_observations`, refreshed separately from long-lived place profiles. |
+| Legacy embedding calls | `run_rag_index --embedding-method azure-openai` in shared environments, `local-hash` for local deterministic validation. |
+
+Implementation should extend `apps/api/app/services/rag_index.py` rather than
+building a second retrieval path. The source builder order should stay:
+official profile first, then current event/weather context, then review/mention
+attributes. That keeps docents grounded even when review data is sparse.
+
 ## Regeneration DAG
 
 RAG must run after these upstream jobs, in this order:

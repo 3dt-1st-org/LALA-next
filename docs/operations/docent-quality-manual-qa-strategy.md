@@ -28,6 +28,37 @@ must go further and judge whether the generated docent script is actually good:
 | No reviewer record template | Docs do not yet define how to record human judgment. | Team feedback becomes scattered and hard to fix. |
 | No re-test loop tied to RAG and scoring | RAG regeneration and score updates are separate. | QA fixes may not survive the next batch. |
 
+## Legacy LALA Touchpoints
+
+Manual QA should judge whether LALA-next has refactored the old product quality,
+not merely whether the new API returns a non-empty script.
+
+| Legacy File | Behavior to Carry Forward | LALA-next Refactor Note |
+|---|---|---|
+| `legacy-lala-reference/src/frontend/web/services/docent_service.py` | Attraction scripts with review evidence used an energetic LALA chief-docent persona. | Verify `apps/api/app/services/ai_service.py` keeps that voice when visitor/RAG evidence exists. |
+| `legacy-lala-reference/src/frontend/web/services/docent_service.py` | Attraction scripts without review evidence used a calmer space-curator persona from official data. | QA should confirm official-only places still sound grounded, not empty or generic. |
+| `legacy-lala-reference/src/frontend/web/services/docent_service.py` | Restaurant scripts used a food-guide persona and converted keywords/reviews into listenable guidance. | Restaurant QA must fail scripts that lose taste/menu/service detail. |
+| `legacy-lala-reference/src/frontend/web/services/docent_service.py` | Event scripts focused on practical route context and local mobile-app usefulness. | Event QA must check date, place, weather, crowd, and route usefulness. |
+| `legacy-lala-reference/src/frontend/web/services/docent_service.py` | Fallback cache rows were deleted/ignored so fallback was never reused as if it were real script quality. | LALA-next smoke and QA must continue rejecting fallback/demo/mock source as a blocker. |
+| `legacy-lala-reference/src/frontend/web/services/docent_service.py` | Story keywords such as history, origin, legend, hidden story, rumor, and anecdote were prioritized. | QA should reward scripts that surface story-bearing facts when the grounding supports them. |
+
+## LALA-next Refactor Mapping
+
+| Legacy Quality Contract | Current Repository Landing Point |
+|---|---|
+| Category-specific persona prompts | `apps/api/app/services/ai_service.py::_docent_system_prompt`. |
+| Grounding assembly and food-noise filtering | `apps/api/app/services/docent_service.py::_prepare_docent_grounding_context`. |
+| RAG context lookup | `apps/api/app/services/db_repository.py::fetch_docent_knowledge_context`. |
+| Verified place-profile fallback, not mock text | `apps/api/app/services/db_repository.py::fetch_docent_place_profile_context`. |
+| Public smoke rejection of fallback/mock wording | `scripts/unix/smoke_flutter_web.sh` and `scripts/unix/smoke_api_matrix.sh`. |
+| Unit coverage for review category rules | `apps/api/tests/test_v1_routes.py` and `apps/api/tests/test_ai_service.py`. |
+
+The manual QA sheet should include a `legacy_parity` field with one of:
+`stronger_than_legacy`, `legacy_equivalent`, `weaker_than_legacy`, or
+`not_comparable`. Any `weaker_than_legacy` row must link to the layer that needs
+work: source data, review preprocessing, attribute scoring, RAG chunking, AI
+prompting, or UI presentation.
+
 ## Sample Selection
 
 Use 30 to 50 places, selected from DB-backed places only. Do not use static

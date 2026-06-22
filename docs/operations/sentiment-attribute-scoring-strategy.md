@@ -35,6 +35,39 @@ The result should feed:
 | Confidence and sample-size rules are absent | Mention table supports counts, but score confidence is not defined. | A few noisy reviews could over-influence scores. |
 | Manual QA thresholds are not connected to scoring | Deployed smoke checks script quality, but not attribute scoring quality. | Good smoke can still hide weak review scoring. |
 
+## Legacy LALA Touchpoints
+
+Legacy LALA already had a useful review-analysis shape. The refactor should
+preserve the category intent while making the output scoreable and auditable.
+
+| Legacy File | Behavior to Carry Forward | LALA-next Refactor Note |
+|---|---|---|
+| `legacy-lala-reference/src/collectors/process_attractions.py` | `analyze_reviews_with_llm()` required at least 3 retained reviews, combined the top review sample, and returned JSON fields such as `summary_ko`, `summary_en`, `atmosphere`, `atmosphere_en`, `tips`, and `tips_en`. | Convert the same evidence into explicit attribute objects, not only prose summaries. |
+| `legacy-lala-reference/src/collectors/load_review_pipeline.py` | `extract_keywords_with_llm()` produced compact adjective/noun signals from attraction review batches. | Store top terms under `community.place_mentions_weekly.attributes` and use them as evidence phrases for attribute scoring. |
+| `legacy-lala-reference/src/collectors/process_restaurants.py` | Restaurant analysis used a food-guide persona and preserved menu/taste/service content. | Restaurant attribute schema must prioritize `taste`, `service`, `price`, `atmosphere`, `cleanliness`, and `wait_crowding`. |
+| `legacy-lala-reference/src/collectors/process_restaurants.py` | `get_ranked_restaurants()` combined card spending and local community mention summaries after IQR capping and normalization. | Keep the principle that local consumption and organic mention quality affect recommendations, but route it through `local-value-v2` instead of copying old fixed weights. |
+| `legacy-lala-reference/src/collectors/*` | Review summaries were embedded after analysis. | In LALA-next, scoreable attributes and prose summaries should both feed RAG metadata/chunks after the batch is committed. |
+
+Legacy summaries were good for docent voice, but they were not enough for the
+current product goal. The new output must explain which attribute was scored,
+how much evidence supported it, and why the score is safe to use.
+
+## LALA-next Refactor Mapping
+
+| Legacy Output | Current Repository Landing Point |
+|---|---|
+| `summary_ko`, `summary_en` | `travel.place_enrichments.attributes.summary_ko` and `summary_en`, then selected `rag.knowledge_chunks` text. |
+| `atmosphere`, `tips` | Category-specific attributes such as `atmosphere`, `practical_tip`, `walking_comfort`, or `program_quality`. |
+| Extracted keywords | `community.place_mentions_weekly.attributes.top_terms` with source count and confidence. |
+| Old restaurant ranking signal | `analytics.place_score_snapshots.review_quality_score` and existing local-value components, not a standalone ranking table. |
+| LLM analysis temperature/prompt assumptions | Versioned prompt metadata in `travel.place_enrichments.prompt_version` and `attributes.schema_version`. |
+
+The first implementation should update `apps/api/app/services/place_score_batch.py`
+so `review_quality_score` is read from the new versioned review attributes
+instead of remaining `pending_review_attribute_analysis`. The UI/API should
+continue to hide score details unless the user explicitly opens the
+score/reason view.
+
 ## Attribute Schema
 
 All attributes should be stored on a 0 to 1 scale with count and confidence:
