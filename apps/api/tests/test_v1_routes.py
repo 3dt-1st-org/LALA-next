@@ -1306,7 +1306,6 @@ def test_docent_script_requires_context_without_cache(
         headers=auth_headers,
         json={
             "place_id": "event-public",
-            "place_name": "화성행궁",
             "category": "event",
             "language": "ko",
             "mode": "brief",
@@ -1318,6 +1317,40 @@ def test_docent_script_requires_context_without_cache(
     assert body["ok"] is False
     assert body["error"]["code"] == "DOCENT_CONTEXT_REQUIRED"
     assert saved_calls == []
+
+
+def test_docent_script_accepts_place_name_as_minimum_context(
+    client,
+    auth_headers,
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        "apps.api.app.services.db_repository.fetch_docent_script_cache",
+        lambda **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "apps.api.app.services.db_repository.save_docent_script_cache",
+        lambda **kwargs: True,
+    )
+
+    response = client.post(
+        "/api/v1/docents/script",
+        headers=auth_headers,
+        json={
+            "place_id": "smoke-event",
+            "place_name": "스모크 행사",
+            "category": "event",
+            "language": "ko",
+            "mode": "brief",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is True
+    assert body["data"]["place_id"] == "smoke-event"
+    assert "스모크 행사" in body["data"]["script"]
+    assert body["data"]["source"] == "rule_based_curation"
 
 
 def test_docent_audio_requires_live_speech(client, auth_headers):
