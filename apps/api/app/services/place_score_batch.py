@@ -45,6 +45,11 @@ class PlaceSignal:
     is_heatwave: bool | None = None
     is_coldwave: bool | None = None
     is_strong_wind: bool | None = None
+    review_quality_score: float | None = None
+    review_sentiment_score: float | None = None
+    review_organic_mention_count: int | None = None
+    review_attribute_schema_version: str | None = None
+    review_attribute_prompt_version: str | None = None
 
     @classmethod
     def from_row(cls, row: dict[str, Any]) -> "PlaceSignal":
@@ -72,6 +77,15 @@ class PlaceSignal:
             is_heatwave=_optional_bool(row.get("is_heatwave")),
             is_coldwave=_optional_bool(row.get("is_coldwave")),
             is_strong_wind=_optional_bool(row.get("is_strong_wind")),
+            review_quality_score=_optional_float(row.get("review_quality_score")),
+            review_sentiment_score=_optional_float(row.get("review_sentiment_score")),
+            review_organic_mention_count=_optional_int(row.get("review_organic_mention_count")),
+            review_attribute_schema_version=_optional_text(
+                row.get("review_attribute_schema_version")
+            ),
+            review_attribute_prompt_version=_optional_text(
+                row.get("review_attribute_prompt_version")
+            ),
         )
 
 
@@ -140,7 +154,7 @@ def compute_score_snapshots(signals: Sequence[PlaceSignal]) -> list[PlaceScoreSn
             "demand_dispersion_score": density_score,
             "culture_relevance_score": _culture_relevance_score(signal),
             "weather_fit_score": _weather_fit_score(signal),
-            "review_quality_score": None,
+            "review_quality_score": signal.review_quality_score,
             "accessibility_fit_score": _accessibility_fit_score(signal),
         }
         score = build_place_score(
@@ -183,10 +197,47 @@ def fetch_place_signals(
             NULL::numeric AS chain_scale_score,
             NULL::numeric AS small_merchant_fit_score
     """
+    review_signal_select = """
+            latest_review.review_quality_score,
+            latest_review.review_sentiment_score,
+            latest_review.review_organic_mention_count,
+            latest_review.review_attribute_schema_version,
+            latest_review.review_attribute_prompt_version
+    """
+    review_signal_join = """
+        LEFT JOIN latest_review
+          ON latest_review.place_id = places.place_id
+    """
+    fallback_review_signal_select = """
+            NULL::numeric AS review_quality_score,
+            NULL::numeric AS review_sentiment_score,
+            NULL::integer AS review_organic_mention_count,
+            NULL::text AS review_attribute_schema_version,
+            NULL::text AS review_attribute_prompt_version
+    """
+    latest_review_cte = """
+        latest_review AS (
+            SELECT DISTINCT ON (place_id)
+                place_id,
+                sentiment_score AS review_sentiment_score,
+                organic_mention_count AS review_organic_mention_count,
+                (attributes->'review_quality'->>'score')::numeric AS review_quality_score,
+                attributes->'review_attributes'->>'schema_version'
+                    AS review_attribute_schema_version,
+                attributes->'review_attributes'->>'prompt_version'
+                    AS review_attribute_prompt_version
+            FROM community.place_mentions_weekly
+            WHERE place_id IS NOT NULL
+              AND attributes ? 'review_quality'
+              AND attributes->'review_quality'->>'score' IS NOT NULL
+            ORDER BY place_id, week_start DESC, updated_at DESC
+        )
+    """
 
     with psycopg2.connect(dsn, connect_timeout=connect_timeout) as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             has_business_identity = _relation_exists(cur, "analytics.place_business_identity")
+            has_review_mentions = _relation_exists(cur, "community.place_mentions_weekly")
             sql = f"""
         WITH latest_area_month AS (
             SELECT region_name_ko, max(month) AS month
@@ -233,7 +284,8 @@ def fetch_place_signals(
                 is_strong_wind
             FROM travel.weather_observations
             ORDER BY location_name, observed_at DESC
-        )
+        ){"," if has_review_mentions else ""}
+{latest_review_cte if has_review_mentions else ""}
         SELECT
             places.place_id,
             places.name_ko,
@@ -252,7 +304,8 @@ def fetch_place_signals(
             latest_weather.is_heatwave,
             latest_weather.is_coldwave,
             latest_weather.is_strong_wind,
-{business_identity_select if has_business_identity else fallback_business_identity_select}
+{business_identity_select if has_business_identity else fallback_business_identity_select},
+{review_signal_select if has_review_mentions else fallback_review_signal_select}
         FROM travel.places places
         LEFT JOIN area_spending
           ON area_spending.region_name_ko = places.region_name_ko
@@ -265,6 +318,7 @@ def fetch_place_signals(
         LEFT JOIN latest_weather
           ON latest_weather.location_name = places.region_name_ko
 {business_identity_join if has_business_identity else ""}
+{review_signal_join if has_review_mentions else ""}
         WHERE (%s = 'all' OR places.category = %s)
         ORDER BY places.updated_at DESC, places.place_id
         LIMIT %s
@@ -331,7 +385,8 @@ def _features(signal: PlaceSignal) -> dict[str, Any]:
         missing_signals.append("card_spending_area_monthly")
     if signal.small_merchant_fit_score is None:
         missing_signals.append("place_business_identity")
-    missing_signals.append("review_attribute_analysis")
+    if signal.review_quality_score is None:
+        missing_signals.append("review_attribute_analysis")
     if not _has_weather(signal):
         missing_signals.append("weather_observations")
 
@@ -359,6 +414,13 @@ def _features(signal: PlaceSignal) -> dict[str, Any]:
             "is_coldwave": signal.is_coldwave,
             "is_strong_wind": signal.is_strong_wind,
         },
+        "review_signal": {
+            "review_quality_score": signal.review_quality_score,
+            "sentiment_score": signal.review_sentiment_score,
+            "organic_mention_count": signal.review_organic_mention_count,
+            "schema_version": signal.review_attribute_schema_version,
+            "prompt_version": signal.review_attribute_prompt_version,
+        },
         "input_sources": [
             "travel.places",
             "economy.card_spending_area_monthly",
@@ -366,6 +428,7 @@ def _features(signal: PlaceSignal) -> dict[str, Any]:
             "travel.place_events",
             "analytics.place_business_identity",
             "travel.weather_observations",
+            "community.place_mentions_weekly",
         ],
         "missing_signals": missing_signals,
     }

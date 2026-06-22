@@ -29,11 +29,32 @@ The result should feed:
 
 | Gap | Current Evidence | Risk |
 |---|---|---|
-| `review_quality_score` is pending | Data dictionary marks it as `pending_review_attribute_analysis`. | The final recommendation score lacks review quality evidence. |
-| Attribute extraction is not a guarded batch | AI enrichment exists for place fields, but review attributes need a separate contract. | Reviews can affect docents but not scoring rigorously. |
-| Category-specific attribute schemas are not fixed | Existing schemas allow generic JSON attributes. | Taste/service rules could leak into attractions or be lost for restaurants. |
-| Confidence and sample-size rules are absent | Mention table supports counts, but score confidence is not defined. | A few noisy reviews could over-influence scores. |
+| Azure OpenAI review extraction is not yet enabled | PR C adds a deterministic, versioned scoring batch from filtered mention aggregates. | Nuanced sentiment can still be improved by a later JSON-only AI classifier. |
 | Manual QA thresholds are not connected to scoring | Deployed smoke checks script quality, but not attribute scoring quality. | Good smoke can still hide weak review scoring. |
+
+## Current Implementation Snapshot
+
+As of 2026-06-22, PR C adds the first guarded review attribute scoring path:
+
+- `apps.api.app.tools.run_review_attribute_batch`
+- `apps.api.app.services.review_attribute_scoring`
+- `scripts/unix/plan_review_attribute_batch.sh`
+- `scripts/windows/plan_review_attribute_batch.ps1`
+
+The batch supports `plan`, `--preview`, and guarded
+`--apply --confirm APPLY_REVIEW_ATTRIBUTE_BATCH`. Apply also requires
+`ALLOW_REVIEW_ATTRIBUTE_BATCH_APPLY=1`. The implementation reads only
+preprocessed rows from `community.place_mentions_weekly`, writes
+`sentiment_score`, `attributes.review_attributes`, and
+`attributes.review_quality`, and inserts scoreable review attribute enrichments
+into `travel.place_enrichments`.
+
+`apps.api.app.services.place_score_batch` now reads
+`community.place_mentions_weekly.attributes.review_quality.score` and writes it
+to `analytics.place_score_snapshots.review_quality_score`. Places with fewer
+than three organic mentions, missing attribute terms, or no approved review
+aggregate still keep `review_quality_score=null`; this prevents fake review
+confidence.
 
 ## Legacy LALA Touchpoints
 
@@ -151,7 +172,7 @@ Minimum evidence rule:
 
 ## Batch Design
 
-Proposed tool:
+Implemented tool:
 
 - `apps.api.app.tools.run_review_attribute_batch`
 - `scripts/unix/plan_review_attribute_batch.sh`
@@ -161,12 +182,15 @@ Modes:
 
 - `plan`: prints target tables and schema versions only;
 - `--preview`: reads preprocessed mentions and returns candidate attributes;
-- `--dry-run-ai`: calls Azure OpenAI for JSON extraction without DB mutation;
 - `--apply --confirm APPLY_REVIEW_ATTRIBUTE_BATCH`: writes enrichments and
   weekly aggregate attributes;
 - apply guard: `ALLOW_REVIEW_ATTRIBUTE_BATCH_APPLY=1`.
 
 The batch should never run inside user-facing API requests.
+
+The first implementation uses `source_method='rule_based_review_terms'` and
+`prompt_version='review-attributes-rule-v1'`. Azure OpenAI JSON extraction can
+be added later as a second source method without changing the DB contract.
 
 ## AI Extraction Contract
 
@@ -216,7 +240,6 @@ Planned command shape:
 ```bash
 scripts/unix/plan_review_attribute_batch.sh
 scripts/unix/plan_review_attribute_batch.sh --preview --limit 50
-scripts/unix/plan_review_attribute_batch.sh --dry-run-ai --limit 20
 ALLOW_REVIEW_ATTRIBUTE_BATCH_APPLY=1 \
   scripts/unix/plan_review_attribute_batch.sh \
   --apply \

@@ -155,6 +155,12 @@ try {
         throw "Review/mention preprocessing plan failed."
     }
 
+    Write-Host "Planning review attribute scoring..."
+    & powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\windows\plan_review_attribute_batch.ps1" -Python $Python
+    if ($LASTEXITCODE -ne 0) {
+        throw "Review attribute scoring plan failed."
+    }
+
     Write-Host "Planning card spending file ingestion..."
     & powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\windows\plan_card_spending_file_ingest.ps1" -Python $Python
     if ($LASTEXITCODE -ne 0) {

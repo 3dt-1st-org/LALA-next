@@ -45,6 +45,11 @@ def test_compute_score_snapshots_combines_card_weather_and_culture_signals():
             is_heatwave=False,
             is_coldwave=False,
             is_strong_wind=False,
+            review_quality_score=0.78,
+            review_sentiment_score=0.34,
+            review_organic_mention_count=7,
+            review_attribute_schema_version="review-attributes-v1",
+            review_attribute_prompt_version="review-attributes-rule-v1",
         ),
         place_score_batch.PlaceSignal(
             place_id="quiet-indoor",
@@ -79,9 +84,17 @@ def test_compute_score_snapshots_combines_card_weather_and_culture_signals():
     assert attraction.local_spending_score == 0.95
     assert attraction.small_merchant_fit_score == 0.55
     assert attraction.weather_fit_score == 0.85
-    assert attraction.review_quality_score is None
+    assert attraction.review_quality_score == 0.78
     assert attraction.culture_relevance_score == 0.91
     assert attraction.accessibility_fit_score == 0.68
+    assert "review_attribute_analysis" not in attraction.features["missing_signals"]
+    assert attraction.features["review_signal"] == {
+        "review_quality_score": 0.78,
+        "sentiment_score": 0.34,
+        "organic_mention_count": 7,
+        "schema_version": "review-attributes-v1",
+        "prompt_version": "review-attributes-rule-v1",
+    }
     assert attraction.features["input_sources"] == [
         "travel.places",
         "economy.card_spending_area_monthly",
@@ -89,11 +102,14 @@ def test_compute_score_snapshots_combines_card_weather_and_culture_signals():
         "travel.place_events",
         "analytics.place_business_identity",
         "travel.weather_observations",
+        "community.place_mentions_weekly",
     ]
     assert indoor.local_spending_score == 0.35
     assert indoor.demand_dispersion_score > attraction.demand_dispersion_score
     assert indoor.weather_fit_score == 0.9
     assert indoor.small_merchant_fit_score == 0.76
+    assert indoor.review_quality_score is None
+    assert "review_attribute_analysis" in indoor.features["missing_signals"]
     assert 0 < indoor.final_score <= 1
 
 
@@ -125,6 +141,7 @@ def test_fetch_place_signals_joins_identity_when_relation_exists(monkeypatch):
     assert signals[0].business_identity_type == "local_small_chain"
     assert signals[0].small_merchant_fit_score == 0.76
     assert "LEFT JOIN analytics.place_business_identity" in captured["sql"]
+    assert "community.place_mentions_weekly" in captured["sql"]
 
 
 def test_apply_requires_guard_before_reading_db(monkeypatch, capsys):
