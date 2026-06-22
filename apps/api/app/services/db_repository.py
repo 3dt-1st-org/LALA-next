@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import closing
 from datetime import UTC, datetime
+import hashlib
 import json
 import math
 from typing import Any
@@ -679,6 +680,73 @@ def fetch_docent_knowledge_context(
     ]
 
 
+def fetch_docent_place_profile_context(*, place_id: str) -> list[dict[str, Any]]:
+    dsn = get_settings().db_dsn
+    normalized_place_id = place_id.strip()
+    if not dsn or not normalized_place_id:
+        return []
+    try:
+        import psycopg2
+        from psycopg2.extras import RealDictCursor
+    except Exception:
+        return []
+
+    sql = """
+        SELECT
+            place_id,
+            name_ko,
+            name_en,
+            category,
+            address_ko,
+            address_en,
+            region_ko,
+            region_en,
+            source,
+            updated_at
+        FROM travel.public_places
+        WHERE place_id = %s
+        LIMIT 1
+    """
+    try:
+        with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(sql, (normalized_place_id,))
+                row = cur.fetchone()
+    except Exception:
+        return []
+    if not row:
+        return []
+
+    name_ko = str(row.get("name_ko") or normalized_place_id).strip()
+    body_ko = _docent_profile_body_ko(row, name_ko=name_ko)
+    body_en = _docent_profile_body_en(row)
+    metadata = {
+        "category": _optional_text(row.get("category")),
+        "name_en": _optional_text(row.get("name_en")),
+        "address_en": _optional_text(row.get("address_en")),
+        "region_ko": _optional_text(row.get("region_ko")),
+        "region_en": _optional_text(row.get("region_en")),
+        "primary_source": _optional_text(row.get("source")),
+    }
+    return [
+        {
+            "source_type": "place_profile",
+            "source_id": f"place:{normalized_place_id}",
+            "source_table": "travel.public_places",
+            "title_ko": name_ko,
+            "body_ko": body_ko,
+            "body_en": body_en,
+            "metadata": _json_object(metadata),
+            "content_sha256": hashlib.sha256(
+                body_ko.encode("utf-8")
+            ).hexdigest(),
+            "updated_at": row.get("updated_at").isoformat()
+            if row.get("updated_at")
+            else None,
+        }
+    ]
+
+
 def save_docent_script_cache(
     *,
     place_id: str,
@@ -762,6 +830,63 @@ def _optional_text(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _docent_profile_body_ko(row: dict[str, Any], *, name_ko: str) -> str:
+    category = _category_label_ko(row.get("category"))
+    return _join_sentences(
+        [
+            f"장소명은 {name_ko}입니다.",
+            f"카테고리는 {category}입니다." if category else "",
+            f"지역은 {row.get('region_ko')}입니다." if row.get("region_ko") else "",
+            f"주소는 {row.get('address_ko')}입니다." if row.get("address_ko") else "",
+            f"대표 원천은 {row.get('source')}입니다." if row.get("source") else "",
+        ]
+    )
+
+
+def _docent_profile_body_en(row: dict[str, Any]) -> str | None:
+    name = _optional_text(row.get("name_en")) or _optional_text(row.get("name_ko"))
+    if not name:
+        return None
+    category = _category_label_en(row.get("category"))
+    return _join_sentences(
+        [
+            f"The place name is {name}.",
+            f"The category is {category}." if category else "",
+            f"The region is {row.get('region_en')}." if row.get("region_en") else "",
+            f"The address is {row.get('address_en')}." if row.get("address_en") else "",
+            f"The primary source is {row.get('source')}." if row.get("source") else "",
+        ]
+    )
+
+
+def _join_sentences(parts: list[str]) -> str:
+    sentences = []
+    for part in parts:
+        text = str(part or "").strip()
+        if not text:
+            continue
+        sentences.append(text if text.endswith(".") else f"{text}.")
+    return " ".join(sentences)
+
+
+def _category_label_ko(value: Any) -> str:
+    return {
+        "attraction": "명소",
+        "restaurant": "맛집",
+        "event": "행사",
+        "culture_venue": "문화공간",
+    }.get(str(value or "").strip(), "")
+
+
+def _category_label_en(value: Any) -> str:
+    return {
+        "attraction": "local attraction",
+        "restaurant": "local restaurant",
+        "event": "local event",
+        "culture_venue": "culture venue",
+    }.get(str(value or "").strip(), "")
 
 
 def _json_object(value: Any) -> dict[str, Any]:

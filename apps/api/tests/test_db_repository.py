@@ -503,6 +503,68 @@ def test_fetch_docent_knowledge_context_reads_place_rag_chunks(monkeypatch):
     assert captured["params"] == ("tour-1", 3)
 
 
+def test_fetch_docent_place_profile_context_reads_public_place_profile(monkeypatch):
+    captured = {}
+
+    class FakeCursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def execute(self, sql, params):
+            captured["sql"] = sql
+            captured["params"] = params
+
+        def fetchone(self):
+            return {
+                "place_id": "tour-1",
+                "name_ko": "서울도서관",
+                "name_en": "Seoul Library",
+                "category": "culture_venue",
+                "address_ko": "서울특별시 중구 세종대로 110",
+                "address_en": "110 Sejong-daero, Jung-gu, Seoul",
+                "region_ko": "중구",
+                "region_en": "Jung-gu",
+                "source": "tour_api",
+                "updated_at": datetime.now(UTC),
+            }
+
+    class FakeConnection:
+        def cursor(self, cursor_factory=None):
+            captured["cursor_factory"] = cursor_factory
+            return FakeCursor()
+
+        def close(self):
+            return None
+
+    psycopg2_module = types.ModuleType("psycopg2")
+    psycopg2_module.connect = lambda dsn, connect_timeout: FakeConnection()
+    extras_module = types.ModuleType("psycopg2.extras")
+    extras_module.RealDictCursor = object()
+    monkeypatch.setitem(sys.modules, "psycopg2", psycopg2_module)
+    monkeypatch.setitem(sys.modules, "psycopg2.extras", extras_module)
+    monkeypatch.setenv("DB_DSN", "postgresql://db.example/lala")
+
+    context = db_repository.fetch_docent_place_profile_context(place_id=" tour-1 ")
+
+    assert len(context) == 1
+    profile = context[0]
+    assert profile["source_type"] == "place_profile"
+    assert profile["source_id"] == "place:tour-1"
+    assert profile["source_table"] == "travel.public_places"
+    assert profile["title_ko"] == "서울도서관"
+    assert "장소명은 서울도서관입니다" in profile["body_ko"]
+    assert "카테고리는 문화공간입니다" in profile["body_ko"]
+    assert "대표 원천은 tour_api입니다" in profile["body_ko"]
+    assert "The place name is Seoul Library." in profile["body_en"]
+    assert profile["metadata"]["primary_source"] == "tour_api"
+    assert len(profile["content_sha256"]) == 64
+    assert "FROM travel.public_places" in captured["sql"]
+    assert captured["params"] == ("tour-1",)
+
+
 def test_remaining_ttl_sec_reports_future_expiry():
     ttl = db_repository._remaining_ttl_sec(datetime.now(UTC) + timedelta(seconds=90))
 

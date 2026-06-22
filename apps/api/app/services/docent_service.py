@@ -5,6 +5,7 @@ import hashlib
 import re
 from typing import Any
 
+from apps.api.app.core.config import get_settings
 from apps.api.app.core.errors import ServiceError
 from apps.api.app.schemas.docent import DocentAudioRequest, DocentScriptRequest
 from apps.api.app.services import ai_service, db_repository, speech_service
@@ -12,15 +13,78 @@ from apps.api.app.services.normalization import display_language, format_celsius
 from apps.api.app.services.request_identity import generation_identity
 
 
+_STORY_KEYWORDS_KO = (
+    "역사",
+    "유래",
+    "전설",
+    "설화",
+    "옛날",
+    "과거",
+    "조선",
+    "고려",
+    "비화",
+    "숨겨진",
+    "알려지지",
+    "사연",
+    "전해",
+    "스토리",
+)
+_ATTRACTION_REVIEW_NOISE_KEYWORDS_KO = (
+    "맛집",
+    "카페",
+    "식당",
+    "디저트",
+    "메뉴판",
+    "존맛",
+    "내돈내산 맛집",
+    "음식",
+    "맛있",
+    "맛없",
+)
+_ATTRACTION_PLACE_HINTS_KO = (
+    "명소",
+    "문화",
+    "전시",
+    "공원",
+    "산책",
+    "풍경",
+    "포토",
+    "건축",
+    "역사",
+    "유래",
+    "행사",
+    "공연",
+    "체험",
+    "방문객",
+)
+_REVIEW_SOURCE_HINTS = ("review", "blog", "naver", "mention", "community")
+_ATTRACTION_REVIEW_GUARD_CATEGORIES = {"attraction", "culture_venue"}
+
+
 def generate_script(request: DocentScriptRequest) -> dict:
     grounding_context = db_repository.fetch_docent_knowledge_context(
         place_id=request.place_id,
         limit=3,
     )
+    if not grounding_context:
+        grounding_context = db_repository.fetch_docent_place_profile_context(
+            place_id=request.place_id,
+        )
+    grounding_context = _prepare_docent_grounding_context(
+        request,
+        grounding_context=grounding_context,
+    )
     identity = script_identity(request, grounding_context=grounding_context)
     has_score_context = _has_score_context(request)
     has_grounding_context = bool(grounding_context)
     has_request_context = _has_request_context(request)
+    if _requires_live_db_grounding(request) and not has_grounding_context:
+        raise ServiceError(
+            status_code=422,
+            code="DOCENT_GROUNDING_REQUIRED",
+            message="Live DB docent scripts require verified place grounding.",
+            retryable=False,
+        )
     if not has_score_context and not has_grounding_context and not has_request_context:
         cached = db_repository.fetch_docent_script_cache(
             place_id=request.place_id,
@@ -211,6 +275,70 @@ def _has_weather_context(request: DocentScriptRequest) -> bool:
             request.dust_pm25_grade,
         )
     )
+
+
+def _requires_live_db_grounding(request: DocentScriptRequest) -> bool:
+    if not get_settings().db_dsn:
+        return False
+    return (request.source or "").strip().lower() == "db"
+
+
+def _prepare_docent_grounding_context(
+    request: DocentScriptRequest,
+    *,
+    grounding_context: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if not grounding_context:
+        return []
+    filtered = [
+        item
+        for item in grounding_context
+        if not _is_noisy_attraction_review_context(request, item)
+    ]
+    return sorted(filtered, key=_grounding_priority_key)
+
+
+def _is_noisy_attraction_review_context(
+    request: DocentScriptRequest,
+    item: dict[str, Any],
+) -> bool:
+    if request.category not in _ATTRACTION_REVIEW_GUARD_CATEGORIES:
+        return False
+    source_type = str(item.get("source_type") or "").strip().lower()
+    if not any(hint in source_type for hint in _REVIEW_SOURCE_HINTS):
+        return False
+    body = " ".join(
+        str(item.get(key) or "")
+        for key in ("title_ko", "body_ko", "body_en")
+    )
+    if not any(keyword in body for keyword in _ATTRACTION_REVIEW_NOISE_KEYWORDS_KO):
+        return False
+    return not any(hint in body for hint in _ATTRACTION_PLACE_HINTS_KO)
+
+
+def _grounding_priority_key(item: dict[str, Any]) -> tuple[int, str]:
+    source_type = str(item.get("source_type") or "").strip()
+    if source_type == "place_profile":
+        priority = 0
+    elif _contains_story_hint(item):
+        priority = 1
+    elif any(hint in source_type.lower() for hint in _REVIEW_SOURCE_HINTS):
+        priority = 2
+    elif source_type == "culture_event":
+        priority = 3
+    elif source_type == "weather_context":
+        priority = 4
+    else:
+        priority = 5
+    return (priority, str(item.get("source_id") or ""))
+
+
+def _contains_story_hint(item: dict[str, Any]) -> bool:
+    body = " ".join(
+        str(item.get(key) or "")
+        for key in ("title_ko", "body_ko", "body_en")
+    )
+    return any(keyword in body for keyword in _STORY_KEYWORDS_KO)
 
 
 def _grounded_place_label(

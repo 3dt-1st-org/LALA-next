@@ -611,6 +611,196 @@ def test_docent_script_prefers_rag_place_title_over_client_name(
     assert "장소 지식 인덱스" not in script
 
 
+def test_docent_script_uses_db_place_profile_when_rag_is_empty(
+    client,
+    auth_headers,
+    monkeypatch,
+):
+    monkeypatch.setenv("DB_DSN", "postgresql://db.example/lala")
+    monkeypatch.setattr(
+        "apps.api.app.services.db_repository.fetch_docent_knowledge_context",
+        lambda **kwargs: [],
+    )
+    monkeypatch.setattr(
+        "apps.api.app.services.db_repository.fetch_docent_place_profile_context",
+        lambda **kwargs: [
+            {
+                "source_type": "place_profile",
+                "source_id": "place:tour-api-profile",
+                "source_table": "travel.public_places",
+                "title_ko": "운영 DB 장소",
+                "body_ko": (
+                    "장소명은 운영 DB 장소입니다. 카테고리는 문화공간입니다. "
+                    "대표 원천은 tour_api입니다. 지역 소비와 방문 전후 동선이 연결됩니다."
+                ),
+                "body_en": "The place is grounded in the live LALA database.",
+                "metadata": {"primary_source": "tour_api"},
+                "content_sha256": "profile-sha",
+                "updated_at": "2026-06-21T00:00:00+00:00",
+            }
+        ],
+    )
+
+    response = client.post(
+        "/api/v1/docents/script",
+        headers=auth_headers,
+        json={
+            "place_id": "tour-api-profile",
+            "place_name": "클라이언트가 보낸 다른 이름",
+            "distance_m": 580,
+            "source": "db",
+            "upstream_source": "tour_api",
+            "category": "culture_venue",
+            "language": "ko",
+            "mode": "brief",
+            "local_spending_score": 0.82,
+            "small_merchant_fit_score": 0.65,
+            "demand_dispersion_score": 0.71,
+            "culture_relevance_score": 0.77,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    script = body["data"]["script"]
+    assert script.startswith("운영 DB 장소는")
+    assert "운영 DB 장소입니다" in script
+    assert "클라이언트가 보낸 다른 이름" not in script
+    assert body["data"]["grounding_count"] == 1
+    assert body["data"]["grounding_sources"] == ["place_profile"]
+    assert body["data"]["cache_key"].startswith("docent_script:")
+
+
+def test_docent_script_filters_food_only_reviews_for_attractions(
+    client,
+    auth_headers,
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        "apps.api.app.services.db_repository.fetch_docent_knowledge_context",
+        lambda **kwargs: [
+            {
+                "source_type": "place_mention",
+                "source_id": "review:food-only",
+                "source_table": "rag.knowledge_chunks",
+                "title_ko": "호암미술관",
+                "body_ko": "근처 카페 디저트가 맛있고 메뉴판 구성이 좋아요.",
+                "metadata": {},
+                "content_sha256": "food-only-sha",
+            },
+            {
+                "source_type": "place_mention",
+                "source_id": "review:story",
+                "source_table": "rag.knowledge_chunks",
+                "title_ko": "호암미술관",
+                "body_ko": "방문객 후기에서는 전시 동선과 건축 분위기, 숨겨진 산책 스토리가 좋다고 언급됩니다.",
+                "metadata": {},
+                "content_sha256": "story-sha",
+            },
+        ],
+    )
+
+    response = client.post(
+        "/api/v1/docents/script",
+        headers=auth_headers,
+        json={
+            "place_id": "attraction-review-guard",
+            "place_name": "호암미술관",
+            "category": "attraction",
+            "language": "ko",
+            "mode": "brief",
+        },
+    )
+
+    assert response.status_code == 200
+    script = response.json()["data"]["script"]
+    assert "숨겨진 산책 스토리" in script
+    assert "전시 동선" in script
+    assert "카페 디저트" not in script
+    assert "메뉴판" not in script
+
+
+def test_docent_script_keeps_food_reviews_for_restaurants(
+    client,
+    auth_headers,
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        "apps.api.app.services.db_repository.fetch_docent_knowledge_context",
+        lambda **kwargs: [
+            {
+                "source_type": "place_mention",
+                "source_id": "review:restaurant-food",
+                "source_table": "rag.knowledge_chunks",
+                "title_ko": "김고집숯불갈비",
+                "body_ko": "리뷰에서는 숯불 향과 고기 맛, 반찬 구성이 좋은 로컬 맛집으로 언급됩니다.",
+                "metadata": {},
+                "content_sha256": "restaurant-food-sha",
+            }
+        ],
+    )
+
+    response = client.post(
+        "/api/v1/docents/script",
+        headers=auth_headers,
+        json={
+            "place_id": "restaurant-review-guard",
+            "place_name": "김고집숯불갈비",
+            "category": "restaurant",
+            "language": "ko",
+            "mode": "brief",
+        },
+    )
+
+    assert response.status_code == 200
+    script = response.json()["data"]["script"]
+    assert "숯불 향" in script
+    assert "고기 맛" in script
+    assert "로컬 맛집" in script
+
+
+def test_docent_script_rejects_live_db_request_without_verified_grounding(
+    client,
+    auth_headers,
+    monkeypatch,
+):
+    monkeypatch.setenv("DB_DSN", "postgresql://db.example/lala")
+    monkeypatch.setattr(
+        "apps.api.app.services.db_repository.fetch_docent_knowledge_context",
+        lambda **kwargs: [],
+    )
+    monkeypatch.setattr(
+        "apps.api.app.services.db_repository.fetch_docent_place_profile_context",
+        lambda **kwargs: [],
+    )
+
+    response = client.post(
+        "/api/v1/docents/script",
+        headers=auth_headers,
+        json={
+            "place_id": "tour-api-missing-grounding",
+            "place_name": "검증되지 않은 장소명",
+            "distance_m": 580,
+            "source": "db",
+            "upstream_source": "tour_api",
+            "category": "culture_venue",
+            "language": "ko",
+            "mode": "brief",
+            "local_spending_score": 0.82,
+            "small_merchant_fit_score": 0.65,
+            "demand_dispersion_score": 0.71,
+            "culture_relevance_score": 0.77,
+        },
+    )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert body["ok"] is False
+    assert body["error"]["code"] == "DOCENT_GROUNDING_REQUIRED"
+    assert "postgresql://db.example" not in response.text
+    assert "검증되지 않은 장소명" not in response.text
+
+
 def test_docent_script_localizes_grounding_codes_in_english(
     client,
     auth_headers,

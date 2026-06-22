@@ -218,14 +218,24 @@ only non-sensitive grounding metadata:
 
 If grounding context exists, the route skips generic `travel.docent_scripts`
 cache reads and writes so an older ungrounded script cannot hide fresh RAG
-context. If no grounding context exists, the route can still use the non-expired
-script cache described below.
+context. If no RAG chunk is available for a live DB place, the route falls back
+to the verified `travel.public_places` profile for that `place_id`; live
+DB-backed docent generation is rejected when neither RAG nor a verified place
+profile exists. If no grounding context exists outside the live DB path, the
+route can still use the non-expired script cache described below.
 
 Docent copy should read like a local guide, not a score report. It may use
 current-location distance, official data, local spending, weather, PM10, and
 PM2.5 signals, but it must not speak raw recommendation scores, internal RAG
 index labels, or source codes such as `tour_api`. Heavy score and reason details
 belong in the explicit score/reason UI, not the default docent script.
+Live AI generation follows the legacy LALA docent split: attractions and culture
+venues use either a lively chief-docent voice when visitor-review context exists
+or a calmer space-curator voice when only official/place-profile context exists;
+restaurants keep food, menu, and atmosphere review signals as first-class
+evidence; events use concise local route guidance. Attraction/culture grounding
+also guards against food-only blog snippets being promoted into place facts, but
+that food-review guard is intentionally not applied to restaurants.
 The deploy smoke contract requires the script to mention the PM10 and PM2.5
 signals separately when weather context is supplied, include local
 small-merchant or neighborhood-business context, and give a lightweight route
