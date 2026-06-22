@@ -112,6 +112,9 @@ echo "Planning KOPIS performance ingestion..."
 echo "Planning weather observation refresh..."
 "$ROOT/scripts/unix/plan_weather_observation_refresh.sh" --python "$PYTHON"
 
+echo "Planning review/mention preprocessing..."
+"$ROOT/scripts/unix/plan_review_mention_ingest.sh" --python "$PYTHON"
+
 echo "Planning card spending file ingestion..."
 "$ROOT/scripts/unix/plan_card_spending_file_ingest.sh" --python "$PYTHON"
 

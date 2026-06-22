@@ -26,11 +26,38 @@ to paste into a docent prompt. The completed pipeline must:
 
 | Gap | Current Evidence | Risk |
 |---|---|---|
-| No dedicated guarded batch for review/mention ingestion | `community.place_mentions_weekly` is defined, but no `run_review_mention_*` tool exists yet. | Review quality stays `pending_review_attribute_analysis`. |
-| Ad filtering is not a reusable persisted pipeline | Legacy filtering logic has been reflected in docent guards, but not yet applied to stored review rows. | Promotional content can inflate mention counts and docent tone. |
-| Place matching is not fully audited | Place IDs exist in `travel.places`, but mention matching needs confidence and failure buckets. | Same-name places or franchise branches can be assigned incorrectly. |
+| AI sentiment/attribute scoring is not yet applied | `run_review_mention_ingest` now writes filtered weekly aggregates, but `sentiment_score` remains `null` until PR C. | Review quality stays `pending_review_attribute_analysis` for scoring. |
+| Manual review lane is not yet materialized | Low-confidence and rejected candidates are summarized in preview/apply metadata, but no operator queue table exists. | Ambiguous matches are excluded, but operators cannot yet review them in-product. |
 | Review source provenance is too thin | `ingest.source_files` handles file provenance; API/search/community provenance needs the same discipline. | We cannot prove a score came from approved sources. |
-| No human review lane for ambiguous matches | Existing plan tools are guarded, but ambiguous review matches need a manual queue. | Bad matches become hidden RAG/docent evidence. |
+
+## Current Implementation Snapshot
+
+As of 2026-06-22, PR B added the first guarded preprocessing path:
+
+- `apps.api.app.tools.run_review_mention_ingest`
+- `apps.api.app.services.review_mention_ingest`
+- `scripts/unix/plan_review_mention_ingest.sh`
+- `scripts/windows/plan_review_mention_ingest.ps1`
+
+The batch supports `plan`, `--preview`, and guarded
+`--apply --confirm APPLY_REVIEW_MENTION_INGEST`. Apply also requires
+`ALLOW_REVIEW_MENTION_INGEST_APPLY=1`. The first Azure dev representative run
+used Naver Blog Search for 20 places across restaurant, attraction,
+culture-venue, and event categories. It inserted 155 organic posts and 161
+weekly aggregates into `community.posts` and
+`community.place_mentions_weekly`.
+
+The implemented deterministic policy now:
+
+- strips HTML/entities and normalizes whitespace;
+- deduplicates by normalized content hash;
+- filters deterministic ad/sponsor phrases;
+- rejects food-only snippets for non-restaurant categories;
+- retains food, taste, menu, service, and atmosphere terms for restaurants;
+- matches targeted search results to places by normalized name, compact name,
+  and reordered name tokens;
+- stores top terms, rejection counts, sample URLs, category policy, and match
+  confidence metadata in `community.place_mentions_weekly.attributes`.
 
 ## Legacy LALA Touchpoints
 
@@ -190,11 +217,11 @@ For attractions/culture venues, keep the rejection evidence:
 
 | Milestone | Scope | Done Evidence |
 |---|---|---|
-| M1. Plan and preview tool | Add the tool and wrappers with no DB mutation by default. | `scripts/unix/plan_review_mention_ingest.sh` prints plan output and no secrets. |
-| M2. Deterministic filters | HTML cleanup, dedup, ad phrases, category-specific food noise policy. | Unit tests for attraction food-only rejection and restaurant food-term retention. |
+| M1. Plan and preview tool | Done: tool and wrappers exist with no DB mutation by default. | `scripts/unix/plan_review_mention_ingest.sh` prints plan output and no secrets. |
+| M2. Deterministic filters | Done: HTML cleanup, dedup, ad phrases, category-specific food noise policy. | Unit tests cover attraction food-only rejection, restaurant food-term retention, and reordered place-name matching. |
 | M3. AI classifier | JSON-only ad/relevance classifier with prompt versioning. | Preview output includes classifier decisions and confidence. |
-| M4. Place matching | Confidence-ranked matching against `travel.places`. | Ambiguous rows do not enter `community.place_mentions_weekly`. |
-| M5. Apply path | Guarded upsert to weekly aggregate table. | Apply inserts rows and logs an `ops.job_runs` record. |
+| M4. Place matching | Partially done: targeted query plus normalized name/token matching. | Ambiguous rows do not enter `community.place_mentions_weekly`; manual review queue remains future work. |
+| M5. Apply path | Done for `community.posts` and weekly aggregates. | Guarded apply inserts organic post rows and upserts aggregate rows without printing secrets. |
 | M6. Integration | Feed sentiment/attribute scoring and RAG regeneration. | Score/RAG preview shows new review-derived inputs. |
 
 ## Verification Commands
