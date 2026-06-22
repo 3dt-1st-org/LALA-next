@@ -66,6 +66,7 @@ def generate_docent_script_text(
         azure_endpoint=settings.azure_openai_endpoint,
         api_key=settings.azure_openai_key,
         api_version=settings.azure_openai_api_version,
+        timeout=8.0,
     )
     language = display_language(request.language)
     grounding_context = grounding_context or []

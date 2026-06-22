@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from apps.api.app.core.errors import ServiceError
 from apps.api.app.services import db_repository, public_mvp_data
 
 
@@ -1068,6 +1069,57 @@ def test_docent_script_live_ai_placeholder_falls_back_to_curated_script(
     assert "demo" not in script.lower()
     assert "placeholder" not in script.lower()
     assert "mock" not in script.lower()
+
+
+def test_docent_script_live_ai_retryable_failure_falls_back_to_curated_script(
+    client,
+    auth_headers,
+    monkeypatch,
+):
+    monkeypatch.setenv("LALA_ENABLE_LIVE_AI", "true")
+    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.openai.azure.com/")
+    monkeypatch.setenv("AZURE_OPENAI_KEY", "test-key")
+    monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini")
+    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2024-10-21")
+    monkeypatch.setattr(
+        "apps.api.app.services.db_repository.fetch_docent_script_cache",
+        lambda **kwargs: None,
+    )
+
+    def fail_generation(*args, **kwargs):
+        raise ServiceError(
+            status_code=502,
+            code="AI_GENERATION_FAILED",
+            message="Azure OpenAI generation failed.",
+            retryable=True,
+        )
+
+    monkeypatch.setattr(
+        "apps.api.app.services.ai_service.generate_docent_script_text",
+        fail_generation,
+    )
+
+    response = client.post(
+        "/api/v1/docents/script",
+        headers=auth_headers,
+        json={
+            "place_id": "ai-timeout-fallback",
+            "place_name": "수원 야행",
+            "region_ko": "수원시",
+            "distance_m": 820,
+            "upstream_source": "kcisa",
+            "category": "event",
+            "language": "ko",
+            "mode": "brief",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is True
+    assert body["data"]["source"] == "rule_based_curation"
+    assert "수원 야행" in body["data"]["script"]
+    assert "방문 전후" in body["data"]["script"]
 
 
 def test_docent_script_live_ai_score_context_does_not_write_generic_cache(
