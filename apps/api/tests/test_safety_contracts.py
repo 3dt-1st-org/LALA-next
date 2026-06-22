@@ -212,11 +212,13 @@ def test_kakao_map_bridges_forward_zoom_camera_updates():
     assert 'kakao.maps.event.addListener(map, "zoom_changed"' in web_bridge
     assert '"lala-map-camera-idle"' in web_bridge
     assert 'level: map.getLevel()' in web_bridge
+    assert "new kakao.maps.Circle" not in web_bridge
 
     assert 'kakao.maps.event.addListener(map, "dragend"' in native_embed
     assert 'kakao.maps.event.addListener(map, "zoom_changed"' in native_embed
     assert 'type: "cameraIdle"' in native_embed
     assert 'level: map.getLevel()' in native_embed
+    assert "new kakao.maps.Circle" not in native_embed
 
 
 def test_flutter_web_smoke_drives_location_flow_and_route_requests():

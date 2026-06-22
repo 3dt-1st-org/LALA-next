@@ -689,6 +689,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
       setState(() {
         _health = health;
         _readiness = readiness;
+        _syncSpeechCapabilityFromReadiness(readiness);
         _places = places ?? previousPlaces;
         _docentAudio = null;
         _tourAudio = null;
@@ -730,7 +731,10 @@ class _LalaHomePageState extends State<LalaHomePage> {
       }
       _syncInterventionToastTimer();
 
-      final dailyPlanFuture = loadOptional(_backend.createDailyPlan);
+      final dailyPlanFuture = loadOptional(
+        _backend.createDailyPlan,
+        reportError: false,
+      );
       Future<LalaEnvelope<LalaDocentScript>?> docentScriptFuture =
           Future<LalaEnvelope<LalaDocentScript>?>.value();
       if (firstPlace != null) {
@@ -740,6 +744,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
             place: firstPlace,
             weather: weatherContext,
           ),
+          reportError: false,
         );
       }
       final dailyPlan = await dailyPlanFuture;
@@ -1052,7 +1057,28 @@ class _LalaHomePageState extends State<LalaHomePage> {
     _interventionToastTimer = null;
   }
 
+  void _syncSpeechCapabilityFromReadiness(
+    LalaEnvelope<LalaReadiness>? readiness,
+  ) {
+    if (_liveSpeechEnabled(readiness?.data) || !_voiceEnabled) {
+      return;
+    }
+    _voiceEnabled = false;
+    _docentAudio = null;
+    _audioError = null;
+    _audioLoading = false;
+    _tourAudio = null;
+    _tourAudioError = null;
+    _tourAudioLoading = false;
+  }
+
   void _toggleVoice() {
+    if (!_liveSpeechEnabled(_readiness?.data)) {
+      setState(() {
+        _syncSpeechCapabilityFromReadiness(_readiness);
+      });
+      return;
+    }
     final willEnable = !_voiceEnabled;
     setState(() {
       _voiceEnabled = willEnable;

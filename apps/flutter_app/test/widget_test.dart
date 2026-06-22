@@ -2103,7 +2103,24 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('조선 왕실'), findsAtLeastNWidgets(1));
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('voice-toggle')),
+        matching: find.text('끔'),
+      ),
+      findsOneWidget,
+    );
     expect(find.widgetWithText(FilledButton, '정보 더 듣기'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('voice-toggle')));
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('voice-toggle')),
+        matching: find.text('끔'),
+      ),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('맛집').first);
     await tester.pumpAndSettle();
@@ -2114,6 +2131,33 @@ void main() {
     expect(find.text('도슨트 음성으로 듣기'), findsNothing);
     expect(find.widgetWithText(FilledButton, '오디오 준비'), findsNothing);
     expect(backend.audioRequests, isEmpty);
+  });
+
+  testWidgets('auxiliary plan and docent failures do not cover the map', (
+    tester,
+  ) async {
+    final backend = FakeBackend(
+      const LalaAppConfig(baseUri: 'http://api.test'),
+      failDailyPlanLoad: true,
+      failDocentScriptLoad: true,
+    );
+
+    await tester.pumpWidget(
+      TestLalaApp(
+        backendFactory: (_) => backend,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
+    expect(find.text('요청을 처리하지 못했습니다.'), findsNothing);
+    expect(
+      find.text('요청을 처리하지 못했습니다. Unable to complete the request.'),
+      findsNothing,
+    );
+    expect(backend.dailyPlanRequests, 1);
+    expect(backend.docentScriptRequests, ['brief:hwaseong-haenggung']);
   });
 }
 
@@ -2183,6 +2227,8 @@ class FakeBackend implements LalaBackend {
     this.config, {
     this.failAuthenticatedLoad = false,
     this.failReadinessLoad = false,
+    this.failDailyPlanLoad = false,
+    this.failDocentScriptLoad = false,
     this.shouldIntervene = false,
     this.liveSpeech = true,
     this.places,
@@ -2192,6 +2238,8 @@ class FakeBackend implements LalaBackend {
   final LalaAppConfig config;
   final bool failAuthenticatedLoad;
   final bool failReadinessLoad;
+  final bool failDailyPlanLoad;
+  final bool failDocentScriptLoad;
   final bool shouldIntervene;
   final bool liveSpeech;
   final List<LalaPlace>? places;
@@ -2316,6 +2364,15 @@ class FakeBackend implements LalaBackend {
   Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan() async {
     dailyPlanRequests += 1;
     dailyPlanRequestConfigs.add(config);
+    if (failDailyPlanLoad) {
+      throw const LalaApiException(
+        code: 'DAILY_PLAN_UNAVAILABLE',
+        message: 'Daily plan is temporarily unavailable.',
+        statusCode: 503,
+        retryable: true,
+        requestId: 'failed-daily-plan',
+      );
+    }
     final place = (places ?? [_place()]).first;
     return _envelope(
       LalaDailyPlan(
@@ -2341,6 +2398,15 @@ class FakeBackend implements LalaBackend {
     String mode = 'brief',
   }) async {
     docentScriptRequests.add('$mode:${place.placeId}');
+    if (failDocentScriptLoad) {
+      throw const LalaApiException(
+        code: 'DOCENT_UNAVAILABLE',
+        message: 'Docent script is temporarily unavailable.',
+        statusCode: 503,
+        retryable: true,
+        requestId: 'failed-docent-script',
+      );
+    }
     final script = mode == 'detail'
         ? '화성행궁 상세 도슨트입니다. 행궁동 골목, 수원화성 성곽, 주변 로컬 상권을 이어서 천천히 걸어보세요.'
         : '화성행궁은 조선 왕실의 이동 궁궐로, 수원화성과 함께 걷기 좋은 코스입니다.';

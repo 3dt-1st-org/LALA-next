@@ -241,16 +241,6 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
     container.innerHTML = "";
     var center = new kakao.maps.LatLng(${widget.centerLat}, ${widget.centerLng});
     var map = new kakao.maps.Map(container, { center: center, level: ${widget.level} });
-    var circle = new kakao.maps.Circle({
-      center: center,
-      radius: 95,
-      strokeWeight: 2,
-      strokeColor: "#2B6CB0",
-      strokeOpacity: 0.75,
-      fillColor: "#2B6CB0",
-      fillOpacity: 0.12
-    });
-    circle.setMap(map);
     var renderedPins = 0;
     var renderedClusters = 0;
 
