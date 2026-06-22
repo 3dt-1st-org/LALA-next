@@ -106,11 +106,17 @@ def generate_script(request: DocentScriptRequest) -> dict:
 
     generated_at = datetime.now(UTC).isoformat()
     if ai_service.live_ai_enabled():
-        script = ai_service.generate_docent_script_text(
-            request,
-            grounding_context=grounding_context,
-        )
-        source = "azure_openai"
+        try:
+            script = ai_service.generate_docent_script_text(
+                request,
+                grounding_context=grounding_context,
+            )
+            source = "azure_openai"
+        except ServiceError as exc:
+            if not exc.retryable:
+                raise
+            script = _rule_based_script(request, grounding_context=grounding_context)
+            source = "rule_based_curation"
     else:
         script = _rule_based_script(request, grounding_context=grounding_context)
         source = "rule_based_curation"
@@ -252,6 +258,7 @@ def _has_request_context(request: DocentScriptRequest) -> bool:
     return any(
         value is not None
         for value in (
+            request.place_name,
             request.address,
             request.region_ko,
             request.region_en,
