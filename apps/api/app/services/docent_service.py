@@ -252,6 +252,7 @@ def _has_request_context(request: DocentScriptRequest) -> bool:
     return any(
         value is not None
         for value in (
+            request.place_name,
             request.address,
             request.region_ko,
             request.region_en,
