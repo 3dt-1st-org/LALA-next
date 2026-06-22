@@ -37,10 +37,7 @@ logger = logging.getLogger(LOGGER_NAME)
 def current_weather(*, lat: float, lng: float, force: bool = False) -> dict:
     db_weather = db_repository.fetch_latest_weather(lat=lat, lng=lng)
     if db_weather:
-        air_quality = None
-        dust = db_weather.get("dust")
-        if not isinstance(dust, dict) or not (dust.get("pm10") or dust.get("pm25")):
-            air_quality = _fetch_airkorea_sido_air_quality(lat=lat, lng=lng)
+        air_quality = _fetch_airkorea_sido_air_quality(lat=lat, lng=lng)
         if air_quality:
             db_weather["dust"] = air_quality["dust"]
             db_weather["air_quality_location"] = air_quality.get("location")

@@ -254,6 +254,31 @@ def test_fetch_places_uses_radius_bound_ranking_query(monkeypatch):
     assert len(captured["params"]) == 10
 
 
+def test_fetch_places_raises_when_configured_db_read_fails(monkeypatch):
+    psycopg2_module = types.ModuleType("psycopg2")
+    psycopg2_module.connect = lambda dsn, connect_timeout: (_ for _ in ()).throw(
+        RuntimeError("connection failed")
+    )
+    extras_module = types.ModuleType("psycopg2.extras")
+    extras_module.RealDictCursor = object()
+    monkeypatch.setitem(sys.modules, "psycopg2", psycopg2_module)
+    monkeypatch.setitem(sys.modules, "psycopg2.extras", extras_module)
+    monkeypatch.setenv("DB_DSN", "postgresql://db.example/lala")
+
+    try:
+        db_repository.fetch_places(
+            lat=37.2,
+            lng=127.0,
+            radius_m=3000,
+            category="all",
+            language="ko",
+        )
+    except db_repository.DatabaseReadError as exc:
+        assert str(exc) == "places_query_failed"
+    else:
+        raise AssertionError("configured DB read failure must not be returned as []")
+
+
 def test_fetch_latest_weather_prefers_nearest_region_match(monkeypatch):
     captured = {}
 

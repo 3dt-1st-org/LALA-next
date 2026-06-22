@@ -20,6 +20,7 @@ def list_places(
 ) -> dict:
     category = (category or "all").strip().lower()
     language = normalize_language(language)
+    settings = get_settings()
     if category not in _ALLOWED_CATEGORIES:
         raise ServiceError(
             status_code=400,
@@ -27,15 +28,25 @@ def list_places(
             message="category must be all|attraction|restaurant|event|culture_venue.",
             retryable=False,
         )
-    db_places = db_repository.fetch_places(
-        lat=lat,
-        lng=lng,
-        radius_m=radius_m,
-        category=category,
-        language=language,
-        include_scores=include_scores,
-        limit=limit,
-    )
+    try:
+        db_places = db_repository.fetch_places(
+            lat=lat,
+            lng=lng,
+            radius_m=radius_m,
+            category=category,
+            language=language,
+            include_scores=include_scores,
+            limit=limit,
+        )
+    except db_repository.DatabaseReadError as exc:
+        if not settings.static_snapshot_fallback:
+            raise ServiceError(
+                status_code=503,
+                code="PLACES_DB_UNAVAILABLE",
+                message="Place recommendations are temporarily unavailable.",
+                retryable=True,
+            ) from exc
+        db_places = []
     if db_places:
         return {
             "count": len(db_places),
@@ -53,7 +64,7 @@ def list_places(
             "location_engine": "postgis",
         }
 
-    if get_settings().static_snapshot_fallback:
+    if settings.static_snapshot_fallback:
         public_places = public_mvp_data.fetch_places(
             lat=lat,
             lng=lng,
@@ -92,7 +103,7 @@ def list_places(
             "limit": limit,
         },
         "source": "db",
-        "location_engine": "none",
+        "location_engine": "postgis" if settings.db_dsn else "none",
     }
 
 

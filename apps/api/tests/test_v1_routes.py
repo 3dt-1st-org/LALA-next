@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from apps.api.app.services import public_mvp_data
+from apps.api.app.services import db_repository, public_mvp_data
 
 
 def test_places_route_returns_envelope(client, auth_headers):
@@ -116,6 +116,58 @@ def test_places_uses_db_repository_when_rows_exist(client, auth_headers, monkeyp
     assert captured["limit"] == 80
     assert body["data"]["places"][0]["place_id"] == "db-place-1"
     assert body["data"]["places"][0]["score"]["final_score"] == 0.84
+
+
+def test_places_reports_postgis_engine_when_configured_db_returns_no_rows(
+    client,
+    auth_headers,
+    monkeypatch,
+):
+    monkeypatch.setenv("DB_DSN", "postgresql://db.example/lala")
+    monkeypatch.setattr(
+        "apps.api.app.services.db_repository.fetch_places",
+        lambda **kwargs: [],
+    )
+
+    response = client.get(
+        "/api/v1/places?lat=37.2&lng=127.0&category=all",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["data"]["source"] == "db"
+    assert body["data"]["location_engine"] == "postgis"
+    assert body["data"]["count"] == 0
+    assert body["data"]["places"] == []
+
+
+def test_places_db_read_error_returns_retryable_503_without_snapshot_fallback(
+    client,
+    auth_headers,
+    monkeypatch,
+):
+    monkeypatch.setenv("DB_DSN", "postgresql://db.example/lala")
+
+    def fail_fetch_places(**kwargs):
+        raise db_repository.DatabaseReadError("places_query_failed")
+
+    monkeypatch.setattr(
+        "apps.api.app.services.db_repository.fetch_places",
+        fail_fetch_places,
+    )
+
+    response = client.get(
+        "/api/v1/places?lat=37.2&lng=127.0&category=all",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 503
+    body = response.json()
+    assert body["ok"] is False
+    assert body["error"]["code"] == "PLACES_DB_UNAVAILABLE"
+    assert body["error"]["retryable"] is True
+    assert "postgresql://" not in response.text
 
 
 def test_places_invalid_category_returns_json_error(client, auth_headers):

@@ -21,6 +21,10 @@ _REQUIRED_DB_RELATIONS = (
 )
 
 
+class DatabaseReadError(RuntimeError):
+    """Raised when a configured database cannot serve a live read."""
+
+
 def check_db_status(dsn: str) -> str:
     if not dsn:
         return "skipped"
@@ -96,7 +100,7 @@ def fetch_places(
         import psycopg2
         from psycopg2.extras import RealDictCursor
     except Exception:
-        return []
+        raise DatabaseReadError("psycopg2_unavailable")
 
     min_lat, max_lat, min_lng, max_lng = _coordinate_radius_bounds(
         lat=lat,
@@ -215,7 +219,7 @@ def fetch_places(
                 cur.execute(sql, params)
                 rows = list(cur.fetchall())
     except Exception:
-        return []
+        raise DatabaseReadError("places_query_failed")
 
     places: list[dict[str, Any]] = []
     for row in rows:
