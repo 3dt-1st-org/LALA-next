@@ -84,6 +84,7 @@ def test_rag_index_plan_uses_intuitive_table_names(capsys):
     payload = json.loads(output)
     assert exit_code == 0
     assert payload["target"] == "rag.knowledge_chunks"
+    assert payload["job_name"] == run_rag_index.JOB_NAME
     assert payload["input_relations"] == [
         "travel.places",
         "analytics.place_score_snapshots",
@@ -106,6 +107,87 @@ def test_rag_index_apply_requires_guard(monkeypatch, capsys):
     assert exit_code == 2
     assert run_rag_index.ALLOW_ENV in output
     assert "postgresql://" not in output
+
+
+def test_rag_index_apply_records_succeeded_job_run(monkeypatch, capsys):
+    monkeypatch.setenv("DB_DSN", "postgresql://redacted")
+    monkeypatch.setenv(run_rag_index.ALLOW_ENV, "1")
+    recorded_runs = []
+
+    def fake_fetch_candidate_chunks(**kwargs):
+        return [
+            rag_index.KnowledgeChunk(
+                source_type="place_profile",
+                source_id="place:place-1",
+                source_table="travel.places",
+                place_id="place-1",
+                title_ko="수원 화성행궁",
+                body_ko="수원 화성행궁 장소 맥락입니다.",
+                metadata={"formula_version": "local-value-v2"},
+            )
+        ]
+
+    def fake_upsert_knowledge_chunks(**kwargs):
+        assert kwargs["dsn"] == "postgresql://redacted"
+        assert list(kwargs["chunks"])[0].source_id == "place:place-1"
+        assert kwargs["embedding_method"] == "local-hash"
+        return 1
+
+    monkeypatch.setattr(run_rag_index, "fetch_candidate_chunks", fake_fetch_candidate_chunks)
+    monkeypatch.setattr(run_rag_index, "upsert_knowledge_chunks", fake_upsert_knowledge_chunks)
+    monkeypatch.setattr(
+        run_rag_index,
+        "record_job_run",
+        lambda **kwargs: recorded_runs.append(kwargs),
+    )
+
+    exit_code = run_rag_index.main(
+        ["--apply", "--confirm", run_rag_index.CONFIRM_TEXT, "--json"]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert payload["upserted_rows"] == 1
+    assert payload["job_name"] == run_rag_index.JOB_NAME
+    assert len(recorded_runs) == 1
+    assert recorded_runs[0]["job_name"] == run_rag_index.JOB_NAME
+    assert recorded_runs[0]["status"] == "succeeded"
+    assert recorded_runs[0]["error_message"] is None
+
+
+def test_rag_index_apply_failure_records_redacted_job_run(monkeypatch, capsys):
+    password = "example" + "-password"
+    dsn = "postgresql://user:" + password + "@example.postgres.database.azure.com/db"
+    monkeypatch.setenv("DB_DSN", dsn)
+    monkeypatch.setenv(run_rag_index.ALLOW_ENV, "1")
+    recorded_runs = []
+
+    def fail(**kwargs):
+        raise RuntimeError(f"connection failed for {dsn} password={password}")
+
+    monkeypatch.setattr(run_rag_index, "fetch_candidate_chunks", fail)
+    monkeypatch.setattr(
+        run_rag_index,
+        "record_job_run",
+        lambda **kwargs: recorded_runs.append(kwargs),
+    )
+
+    exit_code = run_rag_index.main(
+        ["--apply", "--confirm", run_rag_index.CONFIRM_TEXT, "--json"]
+    )
+
+    output = capsys.readouterr().out
+    payload = json.loads(output)
+    assert exit_code == 2
+    assert "[redacted]" in payload["error"]
+    assert dsn not in output
+    assert password not in output
+    assert len(recorded_runs) == 1
+    assert recorded_runs[0]["job_name"] == run_rag_index.JOB_NAME
+    assert recorded_runs[0]["status"] == "failed"
+    assert "[redacted]" in recorded_runs[0]["error_message"]
+    assert dsn not in recorded_runs[0]["error_message"]
+    assert password not in recorded_runs[0]["error_message"]
 
 
 def test_rag_query_prints_bounded_result_summary(monkeypatch, capsys):

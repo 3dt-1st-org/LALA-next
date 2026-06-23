@@ -3,10 +3,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from datetime import UTC, datetime
 from typing import Any
 
 from apps.api.app.core.config import get_settings
 from apps.api.app.core.redaction import redact_secret_text
+from apps.api.app.services.job_runs import duration_ms, record_job_run
 from apps.api.app.services.place_score_batch import (
     compute_score_snapshots,
     fetch_place_signals,
@@ -19,6 +21,7 @@ from apps.api.app.services.recommendation_scoring import (
 
 CONFIRM_TEXT = "APPLY_PLACE_SCORE_BATCH"
 ALLOW_ENV = "ALLOW_PLACE_SCORE_BATCH_APPLY"
+JOB_NAME = "place-score-batch"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -61,6 +64,7 @@ def main(argv: list[str] | None = None) -> int:
             _write(args, {"ok": False, "mode": "apply", "error": guard_error})
             return 2
 
+    started_at = datetime.now(UTC)
     try:
         signals = fetch_place_signals(
             dsn=dsn,
@@ -76,7 +80,36 @@ def main(argv: list[str] | None = None) -> int:
                 snapshots=snapshots,
                 connect_timeout=args.connect_timeout,
             )
+            finished_at = datetime.now(UTC)
+            record_job_run(
+                dsn=dsn,
+                job_name=JOB_NAME,
+                status="succeeded",
+                started_at=started_at,
+                finished_at=finished_at,
+                duration_ms=duration_ms(started_at, finished_at),
+                error_message=None,
+                connect_timeout=args.connect_timeout,
+            )
     except Exception as exc:
+        if args.apply:
+            finished_at = datetime.now(UTC)
+            try:
+                record_job_run(
+                    dsn=dsn,
+                    job_name=JOB_NAME,
+                    status="failed",
+                    started_at=started_at,
+                    finished_at=finished_at,
+                    duration_ms=duration_ms(started_at, finished_at),
+                    error_message=redact_secret_text(
+                        str(exc) or exc.__class__.__name__,
+                        (dsn,),
+                    ),
+                    connect_timeout=args.connect_timeout,
+                )
+            except Exception:
+                pass
         _write(
             args,
             {
@@ -94,6 +127,7 @@ def main(argv: list[str] | None = None) -> int:
             "mode": _mode(args),
             "db_mutation": bool(args.apply),
             "target": "analytics.place_score_snapshots",
+            "job_name": JOB_NAME,
             "formula_version": FORMULA_VERSION,
             "signal_count": len(signals),
             "snapshot_count": len(snapshots),
@@ -110,6 +144,7 @@ def _plan_payload() -> dict[str, Any]:
         "mode": "plan",
         "db_mutation": False,
         "target": "analytics.place_score_snapshots",
+        "job_name": JOB_NAME,
         "formula_version": FORMULA_VERSION,
         "component_weights": COMPONENT_WEIGHTS,
         "input_relations": [

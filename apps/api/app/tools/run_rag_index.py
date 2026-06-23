@@ -4,10 +4,12 @@ import argparse
 import json
 import os
 from dataclasses import asdict
+from datetime import UTC, datetime
 from typing import Any
 
 from apps.api.app.core.config import get_settings
 from apps.api.app.core.redaction import redact_secret_text
+from apps.api.app.services.job_runs import duration_ms, record_job_run
 from apps.api.app.services.rag_index import (
     DYNAMIC_SOURCE_TYPES,
     STATIC_SOURCE_TYPES,
@@ -18,6 +20,7 @@ from apps.api.app.services.rag_index import (
 
 CONFIRM_TEXT = "APPLY_RAG_INDEX"
 ALLOW_ENV = "ALLOW_RAG_INDEX_APPLY"
+JOB_NAME = "rag-index"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -80,6 +83,7 @@ def main(argv: list[str] | None = None) -> int:
             _write(args, {"ok": False, "mode": "apply", "error": guard_error})
             return 2
 
+    started_at = datetime.now(UTC)
     try:
         if args.query.strip():
             results = query_knowledge_chunks(
@@ -120,7 +124,36 @@ def main(argv: list[str] | None = None) -> int:
                 embedding_method=args.embedding_method,
                 connect_timeout=args.connect_timeout,
             )
+            finished_at = datetime.now(UTC)
+            record_job_run(
+                dsn=dsn,
+                job_name=JOB_NAME,
+                status="succeeded",
+                started_at=started_at,
+                finished_at=finished_at,
+                duration_ms=duration_ms(started_at, finished_at),
+                error_message=None,
+                connect_timeout=args.connect_timeout,
+            )
     except Exception as exc:
+        if args.apply:
+            finished_at = datetime.now(UTC)
+            try:
+                record_job_run(
+                    dsn=dsn,
+                    job_name=JOB_NAME,
+                    status="failed",
+                    started_at=started_at,
+                    finished_at=finished_at,
+                    duration_ms=duration_ms(started_at, finished_at),
+                    error_message=redact_secret_text(
+                        str(exc) or exc.__class__.__name__,
+                        (dsn, settings.azure_openai_key),
+                    ),
+                    connect_timeout=args.connect_timeout,
+                )
+            except Exception:
+                pass
         _write(
             args,
             {
@@ -141,6 +174,7 @@ def main(argv: list[str] | None = None) -> int:
             "mode": _mode(args),
             "db_mutation": bool(args.apply),
             "target": "rag.knowledge_chunks",
+            "job_name": JOB_NAME,
             "source": args.source,
             "embedding_method": args.embedding_method,
             "candidate_count": len(chunks),
@@ -157,6 +191,7 @@ def _plan_payload(args: argparse.Namespace) -> dict[str, Any]:
         "mode": "plan",
         "db_mutation": False,
         "target": "rag.knowledge_chunks",
+        "job_name": JOB_NAME,
         "source": args.source,
         "embedding_method": args.embedding_method,
         "static_source_types": STATIC_SOURCE_TYPES,

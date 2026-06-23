@@ -24,6 +24,7 @@ def test_place_score_batch_plan_uses_data_dictionary_names(capsys):
     assert payload["review_signal"] == (
         "community.place_mentions_weekly.attributes.review_quality.score"
     )
+    assert payload["job_name"] == run_place_score_batch.JOB_NAME
     assert payload["db_mutation"] is False
 
 
@@ -225,6 +226,61 @@ def test_apply_requires_guard_before_reading_db(monkeypatch, capsys):
     assert password not in output
 
 
+def test_apply_records_succeeded_job_run(monkeypatch, capsys):
+    monkeypatch.setenv("DB_DSN", "postgresql://redacted")
+    monkeypatch.setenv(run_place_score_batch.ALLOW_ENV, "1")
+    recorded_runs = []
+
+    def fake_fetch_place_signals(**kwargs):
+        return [
+            place_score_batch.PlaceSignal(
+                place_id="place-1",
+                name_ko="수원 화성행궁",
+                category="attraction",
+                region_name_ko="수원시",
+                is_indoor=False,
+                primary_source="tour_api",
+                region_spend_amount=100_000,
+                region_transaction_count=10,
+                region_place_count=5,
+                culture_event_count=1,
+                is_rain_snow=False,
+                is_bad_dust=False,
+                is_heatwave=False,
+                is_coldwave=False,
+                is_strong_wind=False,
+            )
+        ]
+
+    def fake_insert_score_snapshots(**kwargs):
+        assert kwargs["dsn"] == "postgresql://redacted"
+        assert len(kwargs["snapshots"]) == 1
+        return 1
+
+    monkeypatch.setattr(run_place_score_batch, "fetch_place_signals", fake_fetch_place_signals)
+    monkeypatch.setattr(
+        run_place_score_batch, "insert_score_snapshots", fake_insert_score_snapshots
+    )
+    monkeypatch.setattr(
+        run_place_score_batch,
+        "record_job_run",
+        lambda **kwargs: recorded_runs.append(kwargs),
+    )
+
+    exit_code = run_place_score_batch.main(
+        ["--apply", "--confirm", run_place_score_batch.CONFIRM_TEXT, "--json"]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert payload["inserted_rows"] == 1
+    assert payload["job_name"] == run_place_score_batch.JOB_NAME
+    assert len(recorded_runs) == 1
+    assert recorded_runs[0]["job_name"] == run_place_score_batch.JOB_NAME
+    assert recorded_runs[0]["status"] == "succeeded"
+    assert recorded_runs[0]["error_message"] is None
+
+
 def _install_fake_signal_db(monkeypatch, *, business_identity_exists: bool) -> dict:
     captured: dict[str, object] = {}
 
@@ -315,3 +371,38 @@ def test_preview_redacts_dsn_on_execution_error(monkeypatch, capsys):
     assert "[redacted]" in output
     assert dsn not in output
     assert password not in output
+
+
+def test_apply_failure_records_redacted_job_run(monkeypatch, capsys):
+    password = "example" + "-password"
+    dsn = "postgresql://user:" + password + "@example.postgres.database.azure.com/db"
+    monkeypatch.setenv("DB_DSN", dsn)
+    monkeypatch.setenv(run_place_score_batch.ALLOW_ENV, "1")
+    recorded_runs = []
+
+    def fail(**kwargs):
+        raise RuntimeError(f"connection failed for {dsn} password={password}")
+
+    monkeypatch.setattr(run_place_score_batch, "fetch_place_signals", fail)
+    monkeypatch.setattr(
+        run_place_score_batch,
+        "record_job_run",
+        lambda **kwargs: recorded_runs.append(kwargs),
+    )
+
+    exit_code = run_place_score_batch.main(
+        ["--apply", "--confirm", run_place_score_batch.CONFIRM_TEXT, "--json"]
+    )
+
+    output = capsys.readouterr().out
+    payload = json.loads(output)
+    assert exit_code == 2
+    assert "[redacted]" in payload["error"]
+    assert dsn not in output
+    assert password not in output
+    assert len(recorded_runs) == 1
+    assert recorded_runs[0]["job_name"] == run_place_score_batch.JOB_NAME
+    assert recorded_runs[0]["status"] == "failed"
+    assert "[redacted]" in recorded_runs[0]["error_message"]
+    assert dsn not in recorded_runs[0]["error_message"]
+    assert password not in recorded_runs[0]["error_message"]

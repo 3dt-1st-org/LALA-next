@@ -263,8 +263,9 @@ scripts/unix/plan_place_score_batch.sh --preview --limit 20
 .\scripts\windows\plan_place_score_batch.ps1 -Preview -Limit 20
 ```
 
-Apply inserts new rows into `analytics.place_score_snapshots` and requires the
-exact confirm string plus a process-local allow flag:
+Apply inserts new rows into `analytics.place_score_snapshots`, records the
+`place-score-batch` run in `ops.job_runs`, and requires the exact confirm string
+plus a process-local allow flag:
 
 ```bash
 ALLOW_PLACE_SCORE_BATCH_APPLY=1 \
@@ -785,9 +786,11 @@ sources applied. The aggregate source remains the 31-region baseline through
 `economy.card_spending_demographics` rows. Card area coverage is now 152,991
 rows across 31 regions with a max month of 2026-03, and demographic coverage is
 57,832 rows across 15 regions. The subsequent place-score batch inserted 2,636
-`analytics.place_score_snapshots`; 1,294 latest scores have
+`analytics.place_score_snapshots` and recorded a batch run in `ops.job_runs`;
+1,294 latest scores have
 `local_spending_score` sourced from actual card sales rows. Dynamic RAG then
-upserted 821 chunks into `rag.knowledge_chunks`. Regions without an approved
+upserted 821 chunks into `rag.knowledge_chunks` with the same guarded apply
+contract. Regions without an approved
 card-spending source, such as current Seoul coverage, must keep
 `local_spending_score` null rather than infer or mock the signal.
 
