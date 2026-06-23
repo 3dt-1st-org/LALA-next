@@ -599,12 +599,12 @@ class _LalaHomePageState extends State<LalaHomePage> {
       setState(() {
         _locationRequestInFlight = false;
         if (result.status == LalaLocationResultStatus.denied) {
-          _locationConsentEnabled = false;
           _locationFallbackNoticeVisible = true;
         } else if (initial || resetSelection) {
           _locationFallbackNoticeVisible = true;
         }
       });
+      await _refresh(forceWeather: true);
       return;
     }
 
@@ -2121,6 +2121,16 @@ class _Dashboard extends StatelessWidget {
             : compactMapChrome
             ? 242.0
             : 266.0;
+        final locationFallbackTop =
+            topPlaces.isNotEmpty && recommendationRailExpanded
+            ? isWide
+                  ? 286.0
+                  : compactMapChrome
+                  ? 246.0
+                  : 282.0
+            : isWide
+            ? 232.0
+            : 220.0;
         final bottomDockHeight = isWide
             ? 218.0
             : constraints.maxHeight < 700
@@ -2214,7 +2224,7 @@ class _Dashboard extends StatelessWidget {
               Positioned(
                 left: 16,
                 right: isWide ? null : 16,
-                top: isWide ? 232 : 220,
+                top: locationFallbackTop,
                 child: Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 520),

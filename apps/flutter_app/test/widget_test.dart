@@ -537,16 +537,47 @@ void main() {
     expect(find.text('현재 위치를 확인해야 추천을 볼 수 있어요'), findsOneWidget);
     expect(find.text('재시도'), findsOneWidget);
     expect(find.text('지역 선택'), findsOneWidget);
-    expect(backends.single.placesRequestConfigs, isEmpty);
-    expect(backends.single.weatherRequestConfigs, isEmpty);
-    expect(backends.single.interventionRequestConfigs, isEmpty);
-    expect(backends.single.dailyPlanRequestConfigs, isEmpty);
+    expect(backends.length, 2);
+    expect(backends.first.placesRequestConfigs, isEmpty);
+    expect(backends.last.placesRequestConfigs.single.lat, 37.2636);
+    expect(backends.last.placesRequestConfigs.single.lng, 127.0286);
+    expect(backends.last.weatherRequestConfigs.single.lat, 37.2636);
+    expect(backends.last.interventionRequestConfigs.single.lng, 127.0286);
+    expect(backends.last.dailyPlanRequestConfigs.single.lat, 37.2636);
 
     await tester.tap(find.byKey(const ValueKey('location-fallback-retry')));
     await tester.pumpAndSettle();
 
     expect(locationProvider.requests, 2);
-    expect(backends.single.placesRequestConfigs, isEmpty);
+    expect(backends.last.placesRequestConfigs.single.lat, 37.2636);
+  });
+
+  testWidgets('browser location denial still loads public map data', (
+    tester,
+  ) async {
+    final backends = <FakeBackend>[];
+    final locationProvider = FakeLocationProvider(
+      const LalaLocationResult.denied(),
+    );
+
+    await tester.pumpWidget(
+      TestLalaApp(
+        backendFactory: (config) {
+          final backend = FakeBackend(config);
+          backends.add(backend);
+          return backend;
+        },
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+        locationProvider: locationProvider,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('현재 위치를 확인해야 추천을 볼 수 있어요'), findsOneWidget);
+    expect(find.text('위치기반 추천이 꺼져 있어요'), findsNothing);
+    expect(backends.length, 2);
+    expect(backends.last.placesRequestConfigs.single.lat, 37.2636);
+    expect(backends.last.weatherRequestConfigs.single.lng, 127.0286);
   });
 
   testWidgets('manual location selection loads recommendations explicitly', (
@@ -570,8 +601,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(backends.single.placesRequestConfigs, isEmpty);
-    await tester.tap(find.byKey(const ValueKey('location-manual-select')));
+    expect(backends.length, 2);
+    expect(backends.first.placesRequestConfigs, isEmpty);
+    expect(backends.last.placesRequestConfigs.single.lat, 37.2636);
+    tester
+        .widget<TextButton>(find.byKey(const ValueKey('location-manual-select')))
+        .onPressed
+        ?.call();
     await tester.pumpAndSettle();
 
     expect(find.text('지역 선택'), findsWidgets);
@@ -581,7 +617,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(locationProvider.requests, 1);
-    expect(backends.length, 2);
+    expect(backends.length, 3);
     expect(backends.first.placesRequestConfigs, isEmpty);
     expect(backends.last.placesRequestConfigs.single.lat, 37.5665);
     expect(backends.last.placesRequestConfigs.single.lng, 126.9780);

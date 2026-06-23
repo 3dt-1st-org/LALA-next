@@ -28,9 +28,9 @@ Future<BrowserLocationResult> requestBrowserLocation(Duration timeout) {
       }
     }).toJS,
     web.PositionOptions(
-      enableHighAccuracy: true,
+      enableHighAccuracy: false,
       timeout: timeout.inMilliseconds,
-      maximumAge: 0,
+      maximumAge: const Duration(minutes: 2).inMilliseconds,
     ),
   );
 
