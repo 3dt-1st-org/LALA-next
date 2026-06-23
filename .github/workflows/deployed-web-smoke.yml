@@ -27,6 +27,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -38,23 +40,52 @@ jobs:
         with:
           node-version: "24"
 
+      - name: Detect Flutter bundle changes
+        id: bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          before="${{ github.event.before }}"
+          after="${GITHUB_SHA}"
+          if [[ -z "$before" || "$before" =~ ^0+$ ]]; then
+            before="${after}^"
+          fi
+
+          if git rev-parse --verify "$before" >/dev/null 2>&1; then
+            changed_files="$(git diff --name-only "$before" "$after")"
+          else
+            changed_files="$(git diff --name-only "${after}^" "$after" 2>/dev/null || true)"
+          fi
+
+          printf '%s\n' "$changed_files"
+          require_build_sha=false
+          if printf '%s\n' "$changed_files" | grep -Eq '^apps/flutter_app/'; then
+            require_build_sha=true
+          fi
+          echo "require_build_sha=$require_build_sha" >> "$GITHUB_OUTPUT"
+
       - name: Smoke deployed Flutter web location flow
         run: |
           set -euo pipefail
-          scripts/unix/smoke_flutter_web.sh \
+          primary_args=(
             --web-url "https://lala-next.cloud/?qa=deployed-web-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
             --require-browser \
             --fail-on-console-error \
-            --expect-build-sha "${GITHUB_SHA}" \
-            --wait-for-build-sha \
             --check-location-denial-fallback
-          scripts/unix/smoke_flutter_web.sh \
+          )
+          suwon_args=(
             --web-url "https://lala-next.cloud/?qa=deployed-web-smoke-suwon-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
             --smoke-lat 37.2636 \
             --smoke-lng 127.0286 \
             --require-browser \
-            --fail-on-console-error \
-            --expect-build-sha "${GITHUB_SHA}"
+            --fail-on-console-error
+          )
+          if [[ "${{ steps.bundle.outputs.require_build_sha }}" == "true" ]]; then
+            primary_args+=(--expect-build-sha "${GITHUB_SHA}" --wait-for-build-sha)
+            suwon_args+=(--expect-build-sha "${GITHUB_SHA}")
+          fi
+          scripts/unix/smoke_flutter_web.sh "${primary_args[@]}"
+          scripts/unix/smoke_flutter_web.sh "${suwon_args[@]}"
 
       - name: Upload browser smoke artifacts
         if: always()

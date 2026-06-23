@@ -795,15 +795,18 @@ routes loaded by the app shell.
 The deployed public site flow is part of CI through
 `.github/workflows/deployed-web-smoke.yml`. On `dev` pushes that change Flutter,
 API app code, or the browser smoke wrapper, the workflow opens
-`https://lala-next.cloud`, waits for the deployed Flutter smoke state to expose
-the pushed commit SHA, grants a fixed test geolocation, and fails if the browser
-receives snapshot/fallback places, non-PostGIS place ordering, missing AirKorea
-PM10/PM2.5 values, a docent script without live place/local value/official
-grounding and captured PM context, raw score leakage, or a map state that
-renders only clusters without pins. The first deployed run also simulates a
-denied geolocation request and verifies that the user can still continue
-through the nationwide manual location fallback instead of seeing a generic
-request failure.
+`https://lala-next.cloud`, grants a fixed test geolocation, and fails if the
+browser receives snapshot/fallback places, non-PostGIS place ordering, missing
+AirKorea PM10/PM2.5 values, a docent script without live place/local
+value/official grounding and captured PM context, raw score leakage, or a map
+state that renders only clusters without pins. If the pushed diff changes the
+Flutter app bundle, the workflow first waits for the deployed Flutter smoke
+state to expose the pushed commit SHA. Backend-only, workflow-only, and smoke
+wrapper-only pushes reuse the currently deployed web bundle and verify the live
+API/browser contract without waiting for a frontend redeploy. The first
+deployed run also simulates a denied geolocation request and verifies that the
+user can still continue through the nationwide manual location fallback instead
+of seeing a generic request failure.
 
 To review alert and dashboard candidates without creating observability
 resources:

@@ -174,6 +174,11 @@ def test_deployed_web_smoke_runs_public_location_flow():
     assert "--web-url \"https://lala-next.cloud/?qa=deployed-web-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}\"" in workflow
     assert "--require-browser" in workflow
     assert "--fail-on-console-error" in workflow
+    assert "Detect Flutter bundle changes" in workflow
+    assert "grep -Eq '^apps/flutter_app/'" in workflow
+    assert "require_build_sha=true" in workflow
+    assert "primary_args+=(--expect-build-sha" in workflow
+    assert "suwon_args+=(--expect-build-sha" in workflow
     assert "Upload browser smoke artifacts" in workflow
     assert "output/playwright/" in workflow
 
