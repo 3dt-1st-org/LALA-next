@@ -21,12 +21,16 @@ Current baseline evidence:
 - Docent audio no longer has a local fake-byte fallback: live Speech returns
   `audio/mpeg`, while disabled Speech returns `SPEECH_NOT_CONFIGURED` and the
   Flutter UI hides audio controls.
-- Non-mutating official-data previews pass for TourAPI, KCISA culture info,
-  KOPIS, and Fair Trade franchise references with the currently configured
-  local keys.
+- Official-data ingest now has applied shared-dev evidence for TourAPI, KCISA
+  culture info, KOPIS, and Fair Trade franchise references with the currently
+  configured local keys.
 - The shared dev DB has TourAPI Gyeonggi and Seoul places, franchise brand
   references, restaurant business identity rows, `local-value-v2` score
   snapshots, and place-profile RAG chunks.
+- KCISA and KOPIS culture data were refreshed on 2026-06-23 UTC. The shared dev
+  DB has 185 KCISA rows and 280 KOPIS rows in `culture.events`; the latest
+  `local-value-v2` pass wrote 2,636 score rows with non-null
+  `culture_relevance_score`, and dynamic RAG has 465 `culture_event` chunks.
 - Weather refresh now has a guarded public-data batch path. On 2026-06-23 UTC,
   it inserted fresh KMA/AirKorea-backed observations, recorded a succeeded
   `weather-refresh` row in `ops.job_runs`, regenerated `local-value-v2` score
@@ -75,8 +79,8 @@ RAG, and docent-quality gaps:
 
 | Item | Current evidence | Next action | Done evidence |
 |---|---|---|---|
-| Apply KCISA culture information ingestion | Tooling and guarded wrappers exist; live preview returned Suwon culture rows and normalized official `culture.go.kr` thumbnails to HTTPS. Azure status still says Culture Info needs to be added to shared dev. | Apply with guarded env, then recompute scores and RAG. | `culture.events` contains KCISA rows and `culture_relevance_score` changes are visible in latest `local-value-v2` snapshots. |
-| Apply KOPIS performance ingestion | Tooling and guarded wrappers exist; live preview returned Gyeonggi performance rows and normalized official `kopis.or.kr` poster URLs to HTTPS. KOPIS is still listed in open rollout work. | Apply with guarded env for the target region/window, then recompute scores and RAG. | `culture.events` contains KOPIS rows and RAG has current `culture_event` chunks. |
+| Maintain KCISA culture information ingestion | KCISA was applied to shared dev on 2026-06-23 UTC. `culture.events` now has 185 KCISA rows, latest score rows all have culture relevance values, and RAG has current `culture_event` chunks. | Repeat the guarded ingest before judge/demo windows and widen regions only when row quality is reviewed. | KCISA refresh has a current `ingest.source_files` record, score batch has been rerun, and RAG reflects the latest rows. |
+| Maintain KOPIS performance ingestion | KOPIS was applied to shared dev on 2026-06-23 UTC. `culture.events` now has 280 KOPIS rows across Gyeonggi and Seoul refreshes, with HTTPS-normalized official poster URLs flowing into RAG. | Repeat the guarded ingest for the target date window before judge/demo windows. | KOPIS refresh has a current `ingest.source_files` record, score batch has been rerun, and RAG reflects the latest rows. |
 | Apply card-spending source files | Parser plan supports detailed and aggregate CSV/XLSX files, but no local card-spending source file was confirmed during the latest check. Shared dev rollout still lists card-spending files as open. | Download or provide approved source files, ingest them, verify hash de-duplication, then rerun score batch. | `economy.card_spending_area_monthly` and `economy.card_spending_demographics` have source-file-backed rows; `local_spending_score` is based on real file rows. |
 | Persist weather observations | Guarded `plan_weather_observation_refresh.sh` tooling exists, is connected to repo verification, and has been applied once against shared dev. The latest check showed 40 weather rows, 20 rows from the last 6 hours, 35 rows with temperature, 40 PM10 rows, 40 PM2.5 rows, a succeeded `weather-refresh` job run, 2636 new score snapshots, and 3375 refreshed RAG chunks. | Schedule or manually repeat the refresh before judging/demo windows, and extend the `ops.job_runs` pattern to score/RAG jobs. | `/api/v1/weather` returns fresh DB-backed or live-nowcast-backed data, `ops.job_runs` has a `weather-refresh` run, and `weather_fit_score` has recent observation input. |
 | Add review attribute scoring | `run_place_score_batch` reads versioned review quality from `community.place_mentions_weekly`, and the latest shared-dev score pass has 4 non-null review-quality places. | Expand approved review/mention ingestion coverage and add the full guarded AI attribute batch for richer taste, service, and local-experience attributes. | Latest score snapshots contain non-null `review_quality_score` for eligible places with source metadata and tests for ad-filtering rules. |

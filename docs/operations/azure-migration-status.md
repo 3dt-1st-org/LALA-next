@@ -51,22 +51,26 @@ queries to resolve live names during operations.
 - Fair Trade Commission franchise brand references were ingested from the public
   data API for 2025 into `economy.franchise_brands`: 11,712 rows after source
   duplicate collapse.
-- Non-mutating live previews now pass for KCISA culture info and KOPIS
-  performance ingestion. Official Culture Portal and KOPIS image URLs returned
-  as `http` are normalized to `https` in preview payloads before any web-facing
-  use.
+- KCISA culture info and KOPIS performance ingestion have shared-dev apply
+  evidence. On 2026-06-23 UTC, the refresh left `culture.events` with 185 KCISA
+  rows and 280 KOPIS rows. Official Culture Portal and KOPIS image URLs returned
+  as `http` are normalized to `https` before any web-facing use.
 - Franchise/small-merchant identity matching was applied for the current
   restaurant slice: 1,000 rows in `analytics.place_business_identity`
   (`franchise_store=2`, `local_small_chain=34`, `independent_local=964`).
   Brand-level references with zero active franchise stores are excluded from
   franchise evidence, and restaurants that do not match loaded franchise
   references are classified as independent local instead of remaining unknown.
-- `local-value-v2` score snapshots were generated for all 2,636 places.
+- `local-value-v2` score snapshots were generated for all 2,636 places. After
+  the KCISA/KOPIS refresh, the latest score pass again wrote 2,636 rows with
+  non-null `culture_relevance_score`.
   Historical `local-value-v1` and earlier `local-value-v2` snapshots remain in
   the table for audit/history; API reads select the latest score row and live
   `/api/v1/places` verified `formula_version=local-value-v2`.
-- RAG knowledge chunks were regenerated for all 2,636 places with the
-  local-hash embedding path.
+- RAG knowledge chunks were regenerated with the local-hash embedding path.
+  The latest dynamic refresh upserted 821 rows and left 465 `culture_event`
+  chunks alongside place profile, weather, community post, and place mention
+  chunks.
 - The production Flutter web build at `lala-next.cloud` uses
   `https://api.lala-next.cloud` as the API base URL. For the public contest
   review window it should not bundle a static API bearer token; the Azure API
@@ -261,8 +265,9 @@ operator-facing rollout summary.
   lock maintenance window. The resource group currently has a `CanNotDelete`
   lock, so the rule deletion is blocked unless an authorized operator
   temporarily removes or scopes the lock.
-- Add Culture Info, KOPIS, card-spending files, persistent weather observations,
-  and review attribute signals, then regenerate scores and RAG chunks.
+- Add card-spending files and review attribute signals, then regenerate scores
+  and RAG chunks. KCISA, KOPIS, and weather observations already have
+  shared-dev apply evidence, but should be refreshed before judge/demo windows.
 - Expand franchise matching with official location-level franchise references
   when a suitable source with branch addresses or coordinates is available.
   Current Fair Trade Commission ingestion covers brand-level statistics, so
