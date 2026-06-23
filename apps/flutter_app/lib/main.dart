@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'browser_location.dart';
 import 'kakao_map_view.dart';
 import 'manual_location_options.dart';
+import 'smoke_state.dart';
 
 void main() {
   runApp(const LalaApp());
@@ -2302,6 +2303,23 @@ class _Dashboard extends StatelessWidget {
     final activeIntervention = intervention?.data;
     final liveSpeechEnabled = _liveSpeechEnabled(readiness?.data);
     final visibleError = _localizedUiMessage(error, uiLanguage);
+    publishLalaSmokeState({
+      'apiPlacesCount': apiPlaces.length,
+      'topPlacesCount': topPlaces.length,
+      'selectedCategory': selectedCategory,
+      'locationFallbackNoticeVisible': locationFallbackNoticeVisible,
+      'locationManualSelectAvailable':
+          locationFallbackNoticeVisible && !locationRequestInFlight,
+      'locationRequestInFlight': locationRequestInFlight,
+      'locationStartPromptVisible': locationStartPromptVisible,
+      'manualLocationOptionCount': manualLocationOptions.length,
+      'weatherVisible': currentWeather != null,
+      'weatherSource': currentWeather?.source ?? '',
+      'weatherHasPm10': currentWeather?.dust.pm10 != null,
+      'weatherHasPm25': currentWeather?.dust.pm25 != null,
+      'visibleError': visibleError ?? '',
+      'mapLevel': mapLevel,
+    });
     void selectPlaceById(String placeId) {
       final place = _placeById(topPlaces, placeId);
       if (place != null) {

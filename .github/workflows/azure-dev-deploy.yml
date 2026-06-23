@@ -4,6 +4,19 @@ on:
   push:
     branches:
       - dev
+    paths:
+      - ".github/workflows/azure-dev-deploy.yml"
+      - "api/**"
+      - "app.py"
+      - "apps/api/**"
+      - "apps/workers/**"
+      - "infra/azure/**"
+      - "pyproject.toml"
+      - "scripts/unix/_common.sh"
+      - "scripts/unix/smoke_api.sh"
+      - "scripts/unix/smoke_api_matrix.sh"
+      - "sql/**"
+      - "uv.lock"
   workflow_dispatch:
 
 permissions:

@@ -45,7 +45,7 @@ baseline stays green.
 | Item | Current evidence | Done evidence |
 |---|---|---|
 | Preserve deployed API matrix smoke in CI | `.github/workflows/azure-dev-deploy.yml` runs `smoke_api.sh` and `smoke_api_matrix.sh` after revision update. | Every `dev` push that changes backend/runtime still passes Azure Dev Deploy and the matrix smoke. |
-| Preserve deployed web location smoke in CI | `.github/workflows/deployed-web-smoke.yml` runs `smoke_flutter_web.sh --web-url https://lala-next.cloud/... --fail-on-console-error` for relevant `dev` pushes. | The public browser path still proves DB/PostGIS places, AirKorea dust values, live place/local value/official-grounded docent scripts without raw score leakage, and real map pins. |
+| Preserve deployed web location smoke in CI | `.github/workflows/deployed-web-smoke.yml` runs `smoke_flutter_web.sh --web-url https://lala-next.cloud/... --fail-on-console-error --check-location-denial-fallback` for the primary deployed run, then repeats the live-location smoke from Suwon coordinates. | The public browser path still proves DB/PostGIS places, AirKorea dust values, live place/local value/official-grounded docent scripts without raw score leakage, real map pins, and a nationwide manual-location fallback when geolocation is denied. |
 | Keep worktree and dev branch clean | `dev` is aligned with `origin/dev` after the latest commits. | `git status --short --branch` is clean before handoff. |
 | Keep secret-safe docs | Operations docs refer to GitHub/Azure stores, not live secret values. | `rg` finds no committed DSN, token, Key Vault URL, subscription ID, or generated resource name in public docs. |
 
@@ -81,7 +81,7 @@ RAG, and docent-quality gaps:
 
 | Item | Current evidence | Next action | Done evidence |
 |---|---|---|---|
-| Avoid docs-only Azure redeploys | Azure Dev Deploy currently runs on every `dev` push, including docs-only updates. | Add path filters or split docs CI from runtime deploy once team workflow stabilizes. | Markdown-only changes do not rebuild/push the API image or update Container Apps. |
+| Avoid docs-only Azure redeploys | Azure Dev Deploy has path filters for API runtime, workers, Azure infra, SQL, smoke scripts, and dependency files. | Keep the filter list aligned when a new runtime entrypoint or deployment script is added. | Markdown-only changes do not rebuild/push the API image or update Container Apps. |
 | Score snapshot retention | Historical `local-value-v1` and older `local-value-v2` rows remain for audit. | Decide archive/delete/partition policy. | A documented retention job or query policy exists and current reads still select the latest score. |
 | Live worker/batch execution | Worker contracts and plans exist; live producer wiring is still a later rollout. | Implement approved worker runtime for weather, culture refresh, card ingest, score/RAG jobs. | Worker runs are observable in `ops.job_runs` and failure paths do not break API serving. |
 | Legacy Flask retirement | A non-mutating plan exists; actual removal waits for consumer inventory. | Inventory remaining legacy route users and define rollback. | Legacy routes are either rebuilt, owner-approved as retained, or removed after a monitored deprecation window. |

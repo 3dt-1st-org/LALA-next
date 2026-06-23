@@ -8,6 +8,7 @@ source "$SCRIPT_DIR/_common.sh"
 REQUIRE_FLUTTER="false"
 REQUIRE_BROWSER="false"
 FAIL_ON_CONSOLE_ERROR="false"
+CHECK_LOCATION_DENIAL_FALLBACK="false"
 START_API="false"
 PORT="8099"
 API_PORT="18080"
@@ -31,6 +32,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --fail-on-console-error)
       FAIL_ON_CONSOLE_ERROR="true"
+      shift
+      ;;
+    --check-location-denial-fallback)
+      CHECK_LOCATION_DENIAL_FALLBACK="true"
       shift
       ;;
     --start-api)
@@ -64,7 +69,7 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     -h|--help)
-      echo "Usage: scripts/unix/smoke_flutter_web.sh [--require-flutter] [--require-browser] [--fail-on-console-error] [--start-api] [--api-base-url URL] [--web-url URL] [--api-port PORT] [--port PORT] [--smoke-lat LAT] [--smoke-lng LNG]"
+      echo "Usage: scripts/unix/smoke_flutter_web.sh [--require-flutter] [--require-browser] [--fail-on-console-error] [--check-location-denial-fallback] [--start-api] [--api-base-url URL] [--web-url URL] [--api-port PORT] [--port PORT] [--smoke-lat LAT] [--smoke-lng LNG]"
       exit 0
       ;;
     *)
@@ -887,6 +892,164 @@ if map_level and map_level <= 8 and max(cluster_count, stat_clusters) > 0:
 if not state.get("sampleMarkers"):
     raise SystemExit("Flutter location flow marker sample was empty.")
 PY
+
+  if [[ "$CHECK_LOCATION_DENIAL_FALLBACK" == "true" ]]; then
+    echo "Driving Flutter web denied-location fallback flow..."
+    "$PWCLI" -s="$PW_SESSION" run-code "async (page) => {
+      const capturedResponses = [];
+      await page.context().clearPermissions();
+      await page.addInitScript(() => {
+        const denied = { code: 1, message: 'Location denied by LALA smoke test' };
+        const geolocation = {
+          getCurrentPosition(success, error) {
+            setTimeout(() => {
+              if (typeof error === 'function') {
+                error(denied);
+              }
+            }, 0);
+          },
+          watchPosition(success, error) {
+            setTimeout(() => {
+              if (typeof error === 'function') {
+                error(denied);
+              }
+            }, 0);
+            return 1;
+          },
+          clearWatch() {}
+        };
+        try {
+          Object.defineProperty(window.navigator, 'geolocation', {
+            configurable: true,
+            value: geolocation
+          });
+        } catch (_) {
+          Object.defineProperty(Navigator.prototype, 'geolocation', {
+            configurable: true,
+            value: geolocation
+          });
+        }
+      });
+      page.on('response', async (response) => {
+        const url = response.url();
+        if (!url.includes('/api/v1/')) {
+          return;
+        }
+        let payload = null;
+        try {
+          payload = await response.json();
+        } catch (_) {
+          return;
+        }
+        capturedResponses.push({
+          url,
+          status: response.status(),
+          payload,
+        });
+      });
+      const target = '$TARGET_URL';
+      const separator = target.includes('?') ? '&' : '?';
+      await page.goto(
+        target + separator + 'location-denied-smoke=$PORT-$API_PORT',
+        { waitUntil: 'domcontentloaded' }
+      );
+      const selector = 'flutter-view, flt-glass-pane, flt-scene-host';
+      for (let index = 0; index < 80; index += 1) {
+        if (await page.locator(selector).count()) {
+          break;
+        }
+        await page.waitForTimeout(250);
+      }
+      let state = {};
+      for (let index = 0; index < 80; index += 1) {
+        state = await page.evaluate(() => window.__lalaAppState || {});
+        if (state.locationManualSelectAvailable && Number(state.apiPlacesCount || 0) > 0) {
+          break;
+        }
+        await page.waitForTimeout(250);
+      }
+      return {
+        url: page.url(),
+        state,
+        capturedResponses,
+      };
+    }" >"$OUTPUT_DIR/flutter-web-location-denied-flow.json"
+
+    DENIED_FLOW="$OUTPUT_DIR/flutter-web-location-denied-flow.json" "$PYTHON" - <<'PY'
+import json
+import os
+from pathlib import Path
+from urllib.parse import parse_qs, urlparse
+
+raw = Path(os.environ["DENIED_FLOW"]).read_text(encoding="utf-8")
+try:
+    payload = json.loads(raw)
+except json.JSONDecodeError:
+    marker = "### Result"
+    marker_index = raw.find(marker)
+    start = raw.find("{", marker_index if marker_index >= 0 else 0)
+    if start < 0:
+        raise SystemExit(
+            "Denied-location smoke produced no JSON result. Raw output starts: "
+            + raw[:200].replace("\n", "\\n")
+        )
+    payload, _ = json.JSONDecoder().raw_decode(raw[start:])
+state = payload.get("state") if isinstance(payload.get("state"), dict) else {}
+responses = payload.get("capturedResponses")
+if not isinstance(responses, list):
+    raise SystemExit("Denied-location smoke did not capture API responses.")
+
+if state.get("locationRequestInFlight"):
+    raise SystemExit("Denied-location smoke was still waiting for location permission.")
+if not state.get("locationFallbackNoticeVisible"):
+    raise SystemExit("Denied-location smoke did not expose the location fallback notice.")
+if not state.get("locationManualSelectAvailable"):
+    raise SystemExit("Denied-location smoke did not expose manual location selection.")
+if int(state.get("manualLocationOptionCount") or 0) < 200:
+    raise SystemExit("Denied-location smoke did not expose nationwide manual locations.")
+if int(state.get("apiPlacesCount") or 0) <= 0:
+    raise SystemExit("Denied-location smoke did not continue with public map data.")
+visible_error = str(state.get("visibleError") or "")
+if "요청을 처리하지 못했습니다" in visible_error:
+    raise SystemExit("Denied-location smoke exposed the generic request failure message.")
+
+def compact(value: float) -> str:
+    return f"{value:.6f}".rstrip("0").rstrip(".")
+
+default_lat = compact(37.2636)
+default_lng = compact(127.0286)
+required_paths = {
+    "/api/v1/places",
+    "/api/v1/weather",
+    "/api/v1/plans/intervention",
+}
+seen = set()
+for response in responses:
+    if not isinstance(response, dict) or int(response.get("status") or 0) != 200:
+        continue
+    url = str(response.get("url") or "")
+    parsed = urlparse(url)
+    if parsed.path not in required_paths:
+        continue
+    query = parse_qs(parsed.query)
+    lat = query.get("lat", [""])[0]
+    lng = query.get("lng", [""])[0]
+    try:
+        normalized_lat = compact(float(lat))
+        normalized_lng = compact(float(lng))
+    except ValueError:
+        continue
+    if normalized_lat == default_lat and normalized_lng == default_lng:
+        seen.add(parsed.path)
+
+missing = sorted(required_paths - seen)
+if missing:
+    raise SystemExit(
+        "Denied-location smoke did not continue with default public-data coordinates for: "
+        + ", ".join(missing)
+    )
+PY
+  fi
   "$PWCLI" -s="$PW_SESSION" console >"$OUTPUT_DIR/flutter-web-console.txt"
 fi
 

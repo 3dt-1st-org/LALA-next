@@ -741,8 +741,12 @@ official-source wording, local-spending context, small-merchant route context,
 route action context, or the captured PM10/PM2.5 context. It also rejects raw
 score values and internal source labels in the user-facing docent copy. The
 smoke records `flutter-web-marker-state.json` and fails when the map renders no
-real place pins or only clusters without pins. The `--api-base-url` backend must
-allow the selected local web origin. Use
+real place pins or only clusters without pins. Add
+`--check-location-denial-fallback` to simulate a browser geolocation denial; the
+smoke then fails unless the app exposes the location fallback notice, keeps
+public map data loading from the default public-data coordinates, and exposes a
+nationwide manual location selector with at least 200 choices. The
+`--api-base-url` backend must allow the selected local web origin. Use
 `--web-url https://lala-next.cloud/?qa=<label>` when verifying the deployed
 contest site so Kakao Maps and API CORS run from the registered production
 origin. With `--start-api`, the wrapper also starts a local API with
@@ -757,7 +761,10 @@ API app code, or the browser smoke wrapper, the workflow opens
 browser receives snapshot/fallback places, non-PostGIS place ordering, missing
 AirKorea PM10/PM2.5 values, a docent script without live place/local
 value/official grounding and captured PM context, raw score leakage, or a map
-state that renders only clusters without pins.
+state that renders only clusters without pins. The first deployed run also
+simulates a denied geolocation request and verifies that the user can still
+continue through the nationwide manual location fallback instead of seeing a
+generic request failure.
 
 To review alert and dashboard candidates without creating observability
 resources:
