@@ -18,6 +18,11 @@ must go further and judge whether the generated docent script is actually good:
 - free of demo/mock/fallback wording;
 - better than a generic tourism summary.
 
+The docent generation and QA lane should use
+`AZURE_OPENAI_DOCENT_DEPLOYMENT` first, with `gpt-5.4-mini` as the recommended
+backing model. Bulk review-classification deployments are not the default for
+this lane.
+
 ## Current Gaps
 
 | Gap | Current Evidence | Risk |
@@ -112,6 +117,8 @@ For each selected place:
 1. Freeze the representative sample with the QA tool.
 2. Generate missing Korean brief scripts into a local-only QA artifact:
    `scripts/unix/plan_docent_quality_qa.sh --write --generate-scripts --limit 50`.
+   The preferred AI lane for this generation step is
+   `AZURE_OPENAI_DOCENT_DEPLOYMENT` (`gpt-5.4-mini` recommended).
 3. For targeted rows, fetch the place through the public API with a real test
    coordinate and fetch weather/PM10/PM2.5 for the same coordinate.
 4. Generate detail scripts or English scripts only when that review lane is
@@ -197,7 +204,8 @@ Default plan mode does not read DB. Preview mode reads the canonical DB through
 `output/local/docent-qa/` and never writes DB rows. `--generate-scripts`
 hydrates missing scripts in that local QA sample through
 `apps/api/app/services/docent_service.py`; it does not warm or update the
-generic `travel.docent_scripts` cache.
+generic `travel.docent_scripts` cache. The tooling now reports the docent model
+role and the environment-variable precedence used for that lane.
 
 Latest local QA artifact from the 2026-06-23 shared-dev run:
 

@@ -38,6 +38,8 @@ Expected LALA Key Vault secret names:
 Optional secret names:
 
 - `api-bearer-token`
+- `azure-openai-docent-deployment`
+- `azure-openai-review-batch-deployment`
 - `db-dsn`
 - `cors-allow-origins`
 - `oauth-issuer`

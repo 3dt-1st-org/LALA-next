@@ -22,6 +22,7 @@ def test_kopis_ingest_plan_uses_kopis_key_without_live_call(capsys):
     assert payload["source_name"] == "kopis"
     assert payload["operation"] == "pblprfr"
     assert payload["target"] == "culture.events"
+    assert payload["job_name"] == run_kopis_ingest.JOB_NAME
     assert payload["required_env"] == ["KOPIS_API_KEY"]
     assert payload["signgucode"] == "41"
     assert payload["live_api_call"] is False
@@ -184,6 +185,86 @@ def test_kopis_preview_redacts_service_key_on_execution_error(monkeypatch, capsy
     assert exit_code == 2
     assert "[redacted]" in output
     assert "kopis-secret" not in output
+
+
+def test_kopis_apply_records_succeeded_job_run(monkeypatch, capsys):
+    monkeypatch.setenv("KOPIS_API_KEY", "kopis-secret")
+    monkeypatch.setenv("DB_DSN", "postgresql://redacted")
+    monkeypatch.setenv(run_kopis_ingest.ALLOW_ENV, "1")
+    recorded_runs = []
+
+    result = kopis_ingest.KopisFetchResult(
+        performances=(),
+        request_count=1,
+        raw_count=0,
+        stdate="20260615",
+        eddate="20260715",
+        signgucode="41",
+        signgucodesub=None,
+        prfstate=None,
+    )
+
+    monkeypatch.setattr(run_kopis_ingest, "fetch_kopis_performances", lambda **kwargs: result)
+    monkeypatch.setattr(
+        run_kopis_ingest,
+        "upsert_kopis_performances",
+        lambda **kwargs: {"upserted_rows": 0},
+    )
+    monkeypatch.setattr(
+        run_kopis_ingest,
+        "record_job_run",
+        lambda **kwargs: recorded_runs.append(kwargs),
+    )
+
+    exit_code = run_kopis_ingest.main(
+        ["--apply", "--confirm", run_kopis_ingest.CONFIRM_TEXT, "--json"]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert payload["job_name"] == run_kopis_ingest.JOB_NAME
+    assert len(recorded_runs) == 1
+    assert recorded_runs[0]["job_name"] == run_kopis_ingest.JOB_NAME
+    assert recorded_runs[0]["status"] == "succeeded"
+    assert recorded_runs[0]["error_message"] is None
+
+
+def test_kopis_apply_failure_records_redacted_job_run(monkeypatch, capsys):
+    password = "example" + "-password"
+    dsn = "postgresql://user:" + password + "@example.postgres.database.azure.com/db"
+    monkeypatch.setenv("KOPIS_API_KEY", "kopis-secret")
+    monkeypatch.setenv("DB_DSN", dsn)
+    monkeypatch.setenv(run_kopis_ingest.ALLOW_ENV, "1")
+    recorded_runs = []
+
+    def fail(**kwargs):
+        raise RuntimeError(f"bad service key kopis-secret dsn={dsn} password={password}")
+
+    monkeypatch.setattr(run_kopis_ingest, "fetch_kopis_performances", fail)
+    monkeypatch.setattr(
+        run_kopis_ingest,
+        "record_job_run",
+        lambda **kwargs: recorded_runs.append(kwargs),
+    )
+
+    exit_code = run_kopis_ingest.main(
+        ["--apply", "--confirm", run_kopis_ingest.CONFIRM_TEXT, "--json"]
+    )
+
+    output = capsys.readouterr().out
+    payload = json.loads(output)
+    assert exit_code == 2
+    assert "[redacted]" in payload["error"]
+    assert "kopis-secret" not in output
+    assert dsn not in output
+    assert password not in output
+    assert len(recorded_runs) == 1
+    assert recorded_runs[0]["job_name"] == run_kopis_ingest.JOB_NAME
+    assert recorded_runs[0]["status"] == "failed"
+    assert "[redacted]" in recorded_runs[0]["error_message"]
+    assert "kopis-secret" not in recorded_runs[0]["error_message"]
+    assert dsn not in recorded_runs[0]["error_message"]
+    assert password not in recorded_runs[0]["error_message"]
 
 
 def test_upsert_kopis_performances_targets_source_files_and_culture_events(monkeypatch):

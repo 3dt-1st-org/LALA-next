@@ -84,6 +84,18 @@ The first implementation slice is now in place:
 The next slice is to add broader source ingestion and AI attribute extraction
 before score/RAG regeneration.
 
+## Model Role Split
+
+The review pipeline now follows the repo-wide AI routing rule:
+
+- bulk review attribute extraction, ad suspicion first-pass, mention
+  normalization, and strict JSON batch work should use
+  `AZURE_OPENAI_REVIEW_BATCH_DEPLOYMENT` first, then fall back to
+  `AZURE_OPENAI_DEPLOYMENT` only when the role-specific deployment is absent;
+- the recommended backing model for that bulk lane is `gpt-5.4-nano`;
+- low-confidence or judge-facing rechecks should be escalated into the
+  docent/QA lane rather than silently trusted as bulk output.
+
 ## Source Policy
 
 Preferred sources:
@@ -132,6 +144,8 @@ Rejected sources:
      markers, unnatural call-to-action density, and duplicated merchant copy.
    - Use an AI classifier only after deterministic filters, with JSON output:
      `is_ad`, `ad_confidence`, `reason`, `organic_excerpt`.
+   - The bulk AI classifier should target the review-batch deployment lane
+     (`gpt-5.4-nano` recommended), not the docent-quality lane.
    - Attraction/culture venue rule:
      food-only snippets are rejected unless they also contain place-specific
      museum, culture, park, architecture, performance, history, exhibition, or
@@ -205,7 +219,7 @@ For attractions/culture venues, keep the rejection evidence:
 |---|---|---|
 | M1. Plan and preview tool | Add the tool and wrappers with no DB mutation by default. | Implemented. `scripts/unix/plan_review_mention_ingest.sh` is included in repo verification and prints no secrets. |
 | M2. Deterministic filters | HTML cleanup, dedup, ad phrases, category-specific food noise policy. | Implemented. Unit tests cover ad filtering, attraction food-only rejection, and restaurant food-term retention. |
-| M3. AI classifier | JSON-only ad/relevance classifier with prompt versioning. | Pending. Deterministic `review-mention-preprocess-v1` metadata is stored first. |
+| M3. AI classifier | JSON-only ad/relevance classifier with prompt versioning and bulk-model routing. | Pending. Deterministic `review-mention-preprocess-v1` metadata is stored first; the preferred bulk lane is `AZURE_OPENAI_REVIEW_BATCH_DEPLOYMENT` backed by `gpt-5.4-nano`. |
 | M4. Place matching | Confidence-ranked matching against `travel.places`. | Partially implemented. Exact-name matches are scored; ambiguous rows keep `organic_mention_count=0`. |
 | M5. Apply path | Guarded upsert to weekly aggregate table. | Implemented. Apply requires `ALLOW_REVIEW_MENTION_INGEST_APPLY=1` and logs `ops.job_runs`. |
 | M6. Integration | Feed sentiment/attribute scoring and RAG regeneration. | Score/RAG preview shows new review-derived inputs. |

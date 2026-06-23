@@ -3,12 +3,14 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from datetime import UTC, datetime
 from typing import Any
 
 from dotenv import load_dotenv
 
 from apps.api.app.core.key_vault import get_secret_if_configured
 from apps.api.app.core.redaction import redact_secret_text
+from apps.api.app.services.job_runs import duration_ms, record_job_run
 from apps.api.app.services.culture_info_ingest import (
     CULTURE_INFO_BASE_URL,
     DEFAULT_DATASET_NAME,
@@ -21,6 +23,7 @@ from apps.api.app.services.culture_info_ingest import (
 
 CONFIRM_TEXT = "APPLY_CULTURE_INFO_INGEST"
 ALLOW_ENV = "ALLOW_CULTURE_INFO_INGEST_APPLY"
+JOB_NAME = "kcisa-culture-info-ingest"
 
 load_dotenv()
 
@@ -73,6 +76,7 @@ def main(argv: list[str] | None = None) -> int:
             _write(args, {"ok": False, "mode": "apply", "error": guard_error})
             return 2
 
+    started_at = datetime.now(UTC)
     try:
         result = fetch_culture_info_events(
             service_key=service_key,
@@ -90,7 +94,36 @@ def main(argv: list[str] | None = None) -> int:
                 result=result,
                 connect_timeout=args.connect_timeout,
             )
+            finished_at = datetime.now(UTC)
+            record_job_run(
+                dsn=dsn,
+                job_name=JOB_NAME,
+                status="succeeded",
+                started_at=started_at,
+                finished_at=finished_at,
+                duration_ms=duration_ms(started_at, finished_at),
+                error_message=None,
+                connect_timeout=args.connect_timeout,
+            )
     except Exception as exc:
+        if args.apply:
+            finished_at = datetime.now(UTC)
+            try:
+                record_job_run(
+                    dsn=dsn,
+                    job_name=JOB_NAME,
+                    status="failed",
+                    started_at=started_at,
+                    finished_at=finished_at,
+                    duration_ms=duration_ms(started_at, finished_at),
+                    error_message=redact_secret_text(
+                        str(exc) or exc.__class__.__name__,
+                        (service_key, dsn),
+                    ),
+                    connect_timeout=args.connect_timeout,
+                )
+            except Exception:
+                pass
         _write(
             args,
             {
@@ -110,6 +143,7 @@ def main(argv: list[str] | None = None) -> int:
         "live_api_call": True,
         "db_mutation": bool(args.apply),
         "target": "culture.events",
+        "job_name": JOB_NAME,
         "result": result.to_public_dict(),
     }
     if apply_result is not None:
@@ -128,6 +162,7 @@ def _plan_payload(args: argparse.Namespace, sigungu: str | None) -> dict[str, An
         "dataset_name": DEFAULT_DATASET_NAME,
         "operation": args.operation,
         "base_url": CULTURE_INFO_BASE_URL,
+        "job_name": JOB_NAME,
         "sido": args.sido,
         "sigungu": sigungu,
         "target": "culture.events",
@@ -159,6 +194,8 @@ def _write(args: argparse.Namespace, payload: dict[str, Any]) -> None:
     print(f"mode={payload.get('mode')}")
     print(f"status={'ok' if payload.get('ok') else 'degraded'}")
     print(f"target={payload.get('target', 'culture.events')}")
+    if payload.get("job_name"):
+        print(f"job_name={payload['job_name']}")
     if "live_api_call" in payload:
         print(f"live_api_call={str(payload.get('live_api_call')).lower()}")
     if "db_mutation" in payload:

@@ -12,7 +12,7 @@ def live_ai_enabled() -> bool:
         settings.enable_live_ai
         and settings.azure_openai_endpoint
         and settings.azure_openai_key
-        and settings.azure_openai_deployment
+        and selected_docent_model(settings)
         and settings.azure_openai_api_version
     )
 
@@ -38,6 +38,14 @@ _ATTRACTION_NOISE_GUARD_KO = (
     "주변 동선 팁으로만 다루고, 장소 자체의 매력이나 근거로 둔갑시키지 마세요."
 )
 DOCENT_AI_TIMEOUT_SECONDS = 5.0
+
+
+def selected_docent_model(settings: object | None = None) -> str:
+    if settings is None:
+        settings = get_settings()
+    role_specific = getattr(settings, "azure_openai_docent_deployment", "") or ""
+    generic = getattr(settings, "azure_openai_deployment", "") or ""
+    return str(role_specific or generic).strip()
 
 
 def generate_docent_script_text(
@@ -111,7 +119,7 @@ def generate_docent_script_text(
     )
     try:
         completion = client.chat.completions.create(
-            model=settings.azure_openai_deployment,
+            model=selected_docent_model(settings),
             messages=[
                 {
                     "role": "system",

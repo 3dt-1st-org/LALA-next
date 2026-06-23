@@ -17,6 +17,7 @@ from apps.api.app.services.review_attribute_batch import (
     fetch_review_attribute_candidates,
     generate_ai_enrichments,
     record_job_run,
+    selected_review_batch_model,
 )
 
 CONFIRM_TEXT = "APPLY_REVIEW_ATTRIBUTE_BATCH"
@@ -75,6 +76,7 @@ def main(argv: list[str] | None = None) -> int:
 
     settings = get_settings()
     dsn = os.getenv("DB_DSN") or settings.db_dsn
+    model_deployment = selected_review_batch_model(settings)
     if not dsn:
         _write(args, {"ok": False, "mode": _mode(args), "error": "DB_DSN is not configured."})
         return 2
@@ -164,6 +166,7 @@ def main(argv: list[str] | None = None) -> int:
             "target": "community.place_mentions_weekly",
             "job_name": JOB_NAME,
             "prompt_version": PROMPT_VERSION,
+            "model_deployment": model_deployment,
             "source_method": source_method,
             "candidate_count": len(candidates),
             "generated_count": len(enrichments),
@@ -184,6 +187,11 @@ def _plan_payload(args: argparse.Namespace) -> dict[str, Any]:
         "target": "community.place_mentions_weekly",
         "job_name": JOB_NAME,
         "prompt_version": PROMPT_VERSION,
+        "model_role": "bulk_review_batch",
+        "model_deployment_envs": [
+            "AZURE_OPENAI_REVIEW_BATCH_DEPLOYMENT",
+            "AZURE_OPENAI_DEPLOYMENT",
+        ],
         "input_relations": [
             "community.place_mentions_weekly",
             "community.posts",
@@ -230,6 +238,10 @@ def _write(args: argparse.Namespace, payload: dict[str, Any]) -> None:
     print(f"status={'ok' if payload.get('ok') else 'degraded'}")
     print(f"target={payload.get('target', 'community.place_mentions_weekly')}")
     print(f"prompt_version={payload.get('prompt_version', PROMPT_VERSION)}")
+    if payload.get("model_role"):
+        print(f"model_role={payload['model_role']}")
+    if payload.get("model_deployment"):
+        print(f"model_deployment={payload['model_deployment']}")
     if "live_ai_call" in payload:
         print(f"live_ai_call={str(payload.get('live_ai_call')).lower()}")
     if "db_mutation" in payload:

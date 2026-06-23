@@ -19,6 +19,7 @@ def test_culture_info_ingest_plan_uses_public_data_key_without_live_call(capsys)
     assert payload["source_name"] == "kcisa"
     assert payload["operation"] == "area2"
     assert payload["target"] == "culture.events"
+    assert payload["job_name"] == run_culture_info_ingest.JOB_NAME
     assert payload["required_env"] == ["PUBLIC_DATA_SERVICE_KEY"]
     assert payload["live_api_call"] is False
     assert payload["db_mutation"] is False
@@ -163,6 +164,89 @@ def test_preview_redacts_service_key_on_execution_error(monkeypatch, capsys):
     assert exit_code == 2
     assert "[redacted]" in output
     assert "public-data-secret" not in output
+
+
+def test_apply_records_succeeded_job_run(monkeypatch, capsys):
+    monkeypatch.setenv("PUBLIC_DATA_SERVICE_KEY", "public-data-secret")
+    monkeypatch.setenv("DB_DSN", "postgresql://redacted")
+    monkeypatch.setenv(run_culture_info_ingest.ALLOW_ENV, "1")
+    recorded_runs = []
+
+    result = culture_info_ingest.CultureInfoFetchResult(
+        events=(),
+        request_count=1,
+        raw_count=0,
+        total_count=0,
+        operation="area2",
+        sido="경기",
+        sigungu="수원시",
+    )
+
+    monkeypatch.setattr(
+        run_culture_info_ingest,
+        "fetch_culture_info_events",
+        lambda **kwargs: result,
+    )
+    monkeypatch.setattr(
+        run_culture_info_ingest,
+        "upsert_culture_info_events",
+        lambda **kwargs: {"upserted_rows": 0},
+    )
+    monkeypatch.setattr(
+        run_culture_info_ingest,
+        "record_job_run",
+        lambda **kwargs: recorded_runs.append(kwargs),
+    )
+
+    exit_code = run_culture_info_ingest.main(
+        ["--apply", "--confirm", run_culture_info_ingest.CONFIRM_TEXT, "--json"]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert payload["job_name"] == run_culture_info_ingest.JOB_NAME
+    assert len(recorded_runs) == 1
+    assert recorded_runs[0]["job_name"] == run_culture_info_ingest.JOB_NAME
+    assert recorded_runs[0]["status"] == "succeeded"
+    assert recorded_runs[0]["error_message"] is None
+
+
+def test_apply_failure_records_redacted_job_run(monkeypatch, capsys):
+    password = "example" + "-password"
+    dsn = "postgresql://user:" + password + "@example.postgres.database.azure.com/db"
+    monkeypatch.setenv("PUBLIC_DATA_SERVICE_KEY", "public-data-secret")
+    monkeypatch.setenv("DB_DSN", dsn)
+    monkeypatch.setenv(run_culture_info_ingest.ALLOW_ENV, "1")
+    recorded_runs = []
+
+    def fail(**kwargs):
+        raise RuntimeError(f"bad service key public-data-secret dsn={dsn} password={password}")
+
+    monkeypatch.setattr(run_culture_info_ingest, "fetch_culture_info_events", fail)
+    monkeypatch.setattr(
+        run_culture_info_ingest,
+        "record_job_run",
+        lambda **kwargs: recorded_runs.append(kwargs),
+    )
+
+    exit_code = run_culture_info_ingest.main(
+        ["--apply", "--confirm", run_culture_info_ingest.CONFIRM_TEXT, "--json"]
+    )
+
+    output = capsys.readouterr().out
+    payload = json.loads(output)
+    assert exit_code == 2
+    assert "[redacted]" in payload["error"]
+    assert "public-data-secret" not in output
+    assert dsn not in output
+    assert password not in output
+    assert len(recorded_runs) == 1
+    assert recorded_runs[0]["job_name"] == run_culture_info_ingest.JOB_NAME
+    assert recorded_runs[0]["status"] == "failed"
+    assert "[redacted]" in recorded_runs[0]["error_message"]
+    assert "public-data-secret" not in recorded_runs[0]["error_message"]
+    assert dsn not in recorded_runs[0]["error_message"]
+    assert password not in recorded_runs[0]["error_message"]
 
 
 def test_upsert_culture_info_events_targets_source_files_and_events(monkeypatch):

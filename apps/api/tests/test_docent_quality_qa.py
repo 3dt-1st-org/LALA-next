@@ -16,6 +16,8 @@ def test_docent_quality_qa_plan_names_canonical_inputs(capsys):
     assert payload["ok"] is True
     assert payload["mode"] == "plan"
     assert payload["target"] == "output/local/docent-qa"
+    assert payload["model_role"] == "docent_generation_and_qa"
+    assert "AZURE_OPENAI_DOCENT_DEPLOYMENT" in payload["model_deployment_envs"]
     assert payload["db_mutation"] is False
     assert payload["file_write"] is False
     assert "travel.places" in payload["input_relations"]

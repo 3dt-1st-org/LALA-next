@@ -21,6 +21,7 @@ def test_card_spending_ingest_plan_is_file_based_without_live_call(capsys):
     assert payload["mode"] == "plan"
     assert payload["live_api_call"] is False
     assert payload["db_mutation"] is False
+    assert payload["job_name"] == run_card_spending_file_ingest.JOB_NAME
     assert payload["supported_file_types"] == ["csv", "xlsx", "zip"]
     assert payload["target"] == [
         "economy.card_spending_area_monthly",
@@ -263,6 +264,111 @@ def test_apply_requires_guard_before_parsing_file(monkeypatch, tmp_path, capsys)
     assert run_card_spending_file_ingest.ALLOW_ENV in output
     assert dsn not in output
     assert password not in output
+
+
+def test_apply_records_succeeded_job_run(monkeypatch, tmp_path, capsys):
+    source = tmp_path / "detail.csv"
+    source.write_text("ignored\n", encoding="utf-8")
+    monkeypatch.setenv("DB_DSN", "postgresql://redacted")
+    monkeypatch.setenv(run_card_spending_file_ingest.ALLOW_ENV, "1")
+    recorded_runs = []
+
+    result = card_spending_ingest.CardSpendingParseResult(
+        source_name="gyeonggi_data_dream",
+        dataset_name=card_spending_ingest.DETAIL_DATASET_NAME,
+        file_name="detail.csv",
+        file_sha256="deadbeef",
+        local_path=str(source),
+        input_row_count=1,
+        parsed_row_count=1,
+        skipped_row_count=0,
+        area_monthly_rows=(),
+        demographic_rows=(),
+        warnings=(),
+    )
+
+    monkeypatch.setattr(
+        run_card_spending_file_ingest,
+        "parse_card_spending_file",
+        lambda **kwargs: result,
+    )
+    monkeypatch.setattr(
+        run_card_spending_file_ingest,
+        "insert_card_spending_result",
+        lambda **kwargs: {
+            "skipped_duplicate": True,
+            "inserted_area_monthly_rows": 0,
+            "inserted_demographic_rows": 0,
+        },
+    )
+    monkeypatch.setattr(
+        run_card_spending_file_ingest,
+        "record_job_run",
+        lambda **kwargs: recorded_runs.append(kwargs),
+    )
+
+    exit_code = run_card_spending_file_ingest.main(
+        [
+            "--apply",
+            "--confirm",
+            run_card_spending_file_ingest.CONFIRM_TEXT,
+            "--file-path",
+            str(source),
+            "--json",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert payload["job_name"] == run_card_spending_file_ingest.JOB_NAME
+    assert len(recorded_runs) == 1
+    assert recorded_runs[0]["job_name"] == run_card_spending_file_ingest.JOB_NAME
+    assert recorded_runs[0]["status"] == "succeeded"
+    assert recorded_runs[0]["error_message"] is None
+
+
+def test_apply_failure_records_redacted_job_run(monkeypatch, tmp_path, capsys):
+    source = tmp_path / "detail.csv"
+    source.write_text("ignored\n", encoding="utf-8")
+    password = "example" + "-password"
+    dsn = "postgresql://user:" + password + "@example.postgres.database.azure.com/db"
+    monkeypatch.setenv("DB_DSN", dsn)
+    monkeypatch.setenv(run_card_spending_file_ingest.ALLOW_ENV, "1")
+    recorded_runs = []
+
+    def fail(**kwargs):
+        raise RuntimeError(f"failed to parse for {dsn} password={password}")
+
+    monkeypatch.setattr(run_card_spending_file_ingest, "parse_card_spending_file", fail)
+    monkeypatch.setattr(
+        run_card_spending_file_ingest,
+        "record_job_run",
+        lambda **kwargs: recorded_runs.append(kwargs),
+    )
+
+    exit_code = run_card_spending_file_ingest.main(
+        [
+            "--apply",
+            "--confirm",
+            run_card_spending_file_ingest.CONFIRM_TEXT,
+            "--file-path",
+            str(source),
+            "--json",
+        ]
+    )
+
+    output = capsys.readouterr().out
+    payload = json.loads(output)
+    assert exit_code == 2
+    assert "[redacted]" in payload["error"]
+    assert dsn not in output
+    assert password not in output
+    assert len(recorded_runs) == 1
+    assert recorded_runs[0]["job_name"] == run_card_spending_file_ingest.JOB_NAME
+    assert recorded_runs[0]["status"] == "failed"
+    assert "[redacted]" in recorded_runs[0]["error_message"]
+    assert dsn not in recorded_runs[0]["error_message"]
+    assert password not in recorded_runs[0]["error_message"]
 
 
 def test_insert_card_spending_result_targets_source_and_economy_tables(monkeypatch, tmp_path):

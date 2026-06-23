@@ -8,6 +8,7 @@ from typing import Any
 
 from apps.api.app.core.config import get_settings
 from apps.api.app.core.redaction import redact_secret_text
+from apps.api.app.services.ai_service import selected_docent_model
 from apps.api.app.services.docent_quality_qa import (
     build_docent_qa_records,
     fetch_docent_qa_candidates,
@@ -66,6 +67,7 @@ def main(argv: list[str] | None = None) -> int:
 
     settings = get_settings()
     dsn = os.getenv("DB_DSN") or settings.db_dsn
+    model_deployment = selected_docent_model(settings)
     if not dsn:
         _write(args, {"ok": False, "mode": _mode(args), "error": "DB_DSN is not configured."})
         return 2
@@ -119,6 +121,7 @@ def main(argv: list[str] | None = None) -> int:
             "file_write": bool(args.write),
             "script_generation": bool(args.generate_scripts),
             "target": "output/local/docent-qa",
+            "model_deployment": model_deployment,
             "input_relations": _input_relations(),
             "candidate_count": len(candidates),
             "sample_count": len(sample),
@@ -138,6 +141,11 @@ def _plan_payload(args: argparse.Namespace) -> dict[str, Any]:
         "file_write": False,
         "script_generation": bool(args.generate_scripts),
         "target": "output/local/docent-qa",
+        "model_role": "docent_generation_and_qa",
+        "model_deployment_envs": [
+            "AZURE_OPENAI_DOCENT_DEPLOYMENT",
+            "AZURE_OPENAI_DEPLOYMENT",
+        ],
         "category": args.category,
         "language": args.language,
         "mode_to_review": args.mode,
@@ -183,6 +191,10 @@ def _write(args: argparse.Namespace, payload: dict[str, Any]) -> None:
     print(f"mode={payload.get('mode')}")
     print(f"status={'ok' if payload.get('ok') else 'degraded'}")
     print(f"target={payload.get('target', 'output/local/docent-qa')}")
+    if payload.get("model_role"):
+        print(f"model_role={payload['model_role']}")
+    if payload.get("model_deployment"):
+        print(f"model_deployment={payload['model_deployment']}")
     if "db_mutation" in payload:
         print(f"db_mutation={str(payload.get('db_mutation')).lower()}")
     if "file_write" in payload:

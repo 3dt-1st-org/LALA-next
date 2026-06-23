@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +11,7 @@ from dotenv import load_dotenv
 
 from apps.api.app.core.key_vault import get_secret_if_configured
 from apps.api.app.core.redaction import redact_secret_text
+from apps.api.app.services.job_runs import duration_ms, record_job_run
 from apps.api.app.services.card_spending_ingest import (
     DEFAULT_SOURCE_NAME,
     DEFAULT_VISITOR_TYPE,
@@ -21,6 +23,7 @@ from apps.api.app.services.card_spending_ingest import (
 
 CONFIRM_TEXT = "APPLY_CARD_SPENDING_FILE_INGEST"
 ALLOW_ENV = "ALLOW_CARD_SPENDING_FILE_INGEST_APPLY"
+JOB_NAME = "card-spending-file-ingest"
 
 load_dotenv()
 
@@ -74,6 +77,7 @@ def main(argv: list[str] | None = None) -> int:
             _write(args, {"ok": False, "mode": "apply", "error": guard_error})
             return 2
 
+    started_at = datetime.now(UTC)
     try:
         region_code_map = load_region_code_map(args.region_map) if args.region_map else None
         result = parse_card_spending_file(
@@ -92,7 +96,33 @@ def main(argv: list[str] | None = None) -> int:
                 result=result,
                 connect_timeout=args.connect_timeout,
             )
+            finished_at = datetime.now(UTC)
+            record_job_run(
+                dsn=dsn,
+                job_name=JOB_NAME,
+                status="succeeded",
+                started_at=started_at,
+                finished_at=finished_at,
+                duration_ms=duration_ms(started_at, finished_at),
+                error_message=None,
+                connect_timeout=args.connect_timeout,
+            )
     except Exception as exc:
+        if args.apply:
+            finished_at = datetime.now(UTC)
+            try:
+                record_job_run(
+                    dsn=dsn,
+                    job_name=JOB_NAME,
+                    status="failed",
+                    started_at=started_at,
+                    finished_at=finished_at,
+                    duration_ms=duration_ms(started_at, finished_at),
+                    error_message=redact_secret_text(str(exc) or exc.__class__.__name__, (dsn,)),
+                    connect_timeout=args.connect_timeout,
+                )
+            except Exception:
+                pass
         _write(
             args,
             {
@@ -108,6 +138,7 @@ def main(argv: list[str] | None = None) -> int:
         "mode": _mode(args),
         "live_api_call": False,
         "db_mutation": bool(args.apply),
+        "job_name": JOB_NAME,
         "target": [
             "economy.card_spending_area_monthly",
             "economy.card_spending_demographics",
@@ -128,6 +159,7 @@ def _plan_payload(args: argparse.Namespace) -> dict[str, Any]:
         "db_mutation": False,
         "source_name": args.source_name,
         "dataset_name": args.dataset_name,
+        "job_name": JOB_NAME,
         "supported_file_types": ["csv", "xlsx", "zip"],
         "source_urls": [
             "https://www.data.go.kr/data/15128475/fileData.do",
@@ -169,6 +201,8 @@ def _write(args: argparse.Namespace, payload: dict[str, Any]) -> None:
     print(f"mode={payload.get('mode')}")
     print(f"status={'ok' if payload.get('ok') else 'degraded'}")
     print(f"target={payload.get('target')}")
+    if payload.get("job_name"):
+        print(f"job_name={payload['job_name']}")
     if "live_api_call" in payload:
         print(f"live_api_call={str(payload.get('live_api_call')).lower()}")
     if "db_mutation" in payload:

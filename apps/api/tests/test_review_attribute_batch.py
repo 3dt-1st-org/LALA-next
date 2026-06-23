@@ -20,6 +20,8 @@ def test_review_attribute_batch_plan_is_safe(capsys):
     assert payload["live_ai_call"] is False
     assert payload["db_mutation"] is False
     assert payload["target"] == "community.place_mentions_weekly"
+    assert payload["model_role"] == "bulk_review_batch"
+    assert "AZURE_OPENAI_REVIEW_BATCH_DEPLOYMENT" in payload["model_deployment_envs"]
     assert "community.posts" in payload["input_relations"]
     assert "attributes.review_attributes" in payload["output_attributes"]
     assert run_review_attribute_batch.ALLOW_ENV in payload["apply_required_env"]
@@ -166,6 +168,75 @@ def test_apply_review_attribute_enrichments_targets_mentions_and_quality(monkeyp
         review_attribute_batch.QUALITY_VERSION
     )
     assert executed[-1] == ("commit", None)
+
+
+def test_generate_ai_enrichments_prefers_review_batch_specific_deployment(monkeypatch):
+    captured: dict[str, object] = {}
+    candidate = _candidate(category="restaurant", organic=3)
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            captured["completion"] = kwargs
+            return SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(
+                            content=json.dumps(
+                                {
+                                    "results": [
+                                        {
+                                            "mention_id": candidate.mention_id,
+                                            "schema_version": review_attribute_batch.PROMPT_VERSION,
+                                            "sentiment_score": 0.6,
+                                            "sentiment_confidence": 0.8,
+                                            "attribute_scores": {
+                                                "taste": 0.9,
+                                                "service": 0.7,
+                                            },
+                                            "attribute_confidence_avg": 0.75,
+                                            "evidence_terms": {
+                                                "taste": ["숯불 향"],
+                                                "service": ["친절"],
+                                            },
+                                            "summary_ko": "맛과 서비스가 좋습니다.",
+                                            "reason": "organic review evidence",
+                                        }
+                                    ]
+                                },
+                                ensure_ascii=False,
+                            )
+                        )
+                    )
+                ]
+            )
+
+    class FakeAzureOpenAI:
+        def __init__(self, **kwargs):
+            self.chat = SimpleNamespace(completions=FakeCompletions())
+
+    fake_openai = SimpleNamespace(AzureOpenAI=FakeAzureOpenAI)
+    monkeypatch.setitem(sys.modules, "openai", fake_openai)
+    monkeypatch.setattr(
+        review_attribute_batch,
+        "get_settings",
+        lambda: SimpleNamespace(
+            azure_openai_endpoint="https://example.openai.azure.com",
+            azure_openai_key="secret",
+            azure_openai_api_version="2024-02-15-preview",
+            azure_openai_deployment="generic-deployment",
+            azure_openai_review_batch_deployment="review-nano-deployment",
+        ),
+    )
+
+    enrichments = review_attribute_batch.generate_ai_enrichments(
+        candidates=[candidate],
+        batch_size=10,
+        retry_attempts=1,
+        retry_delay_sec=0.0,
+    )
+
+    assert len(enrichments) == 1
+    assert captured["completion"]["model"] == "review-nano-deployment"
 
 
 def _candidate(

@@ -341,7 +341,7 @@ def generate_ai_enrichments(
         batch = list(candidates[start : start + batch_size])
         response = _create_chat_completion_with_retry(
             client=client,
-            model=settings.azure_openai_deployment,
+            model=selected_review_batch_model(settings),
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {
@@ -709,11 +709,19 @@ def _missing_aoai_settings(settings: Any) -> list[str]:
         missing.append("AZURE_OPENAI_ENDPOINT")
     if not settings.azure_openai_key:
         missing.append("AZURE_OPENAI_KEY")
-    if not settings.azure_openai_deployment:
-        missing.append("AZURE_OPENAI_DEPLOYMENT")
+    if not selected_review_batch_model(settings):
+        missing.append("AZURE_OPENAI_REVIEW_BATCH_DEPLOYMENT or AZURE_OPENAI_DEPLOYMENT")
     if not settings.azure_openai_api_version:
         missing.append("AZURE_OPENAI_API_VERSION")
     return missing
+
+
+def selected_review_batch_model(settings: Any | None = None) -> str:
+    if settings is None:
+        settings = get_settings()
+    role_specific = getattr(settings, "azure_openai_review_batch_deployment", "") or ""
+    generic = getattr(settings, "azure_openai_deployment", "") or ""
+    return str(role_specific or generic).strip()
 
 
 def _post_sample(value: dict[str, Any]) -> dict[str, str | None]:

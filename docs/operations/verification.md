@@ -340,7 +340,9 @@ scripts/unix/plan_review_attribute_batch.sh
 Default mode is plan-only. It reports the
 `community.place_mentions_weekly` target, the `community.posts` input, and the
 `review-attributes-v1` schema without printing `DB_DSN` or
-`AZURE_OPENAI_KEY`. Preview reads already-preprocessed organic mention rows and
+`AZURE_OPENAI_KEY`. The bulk review lane should prefer
+`AZURE_OPENAI_REVIEW_BATCH_DEPLOYMENT` (`gpt-5.4-nano` recommended) before the
+generic deployment. Preview reads already-preprocessed organic mention rows and
 computes deterministic attributes without mutation:
 
 ```bash
@@ -635,8 +637,9 @@ scripts/unix/plan_culture_info_ingest.sh --preview --sido 경기 --sigungu 수�
 .\scripts\windows\plan_culture_info_ingest.ps1 -Preview -Sido 경기 -Sigungu 수원시 -Rows 20
 ```
 
-Apply upserts KCISA rows into `culture.events` and records an ingest hash in
-`ingest.source_files`. It requires the exact confirm string plus a process-local
+Apply upserts KCISA rows into `culture.events`, records an ingest hash in
+`ingest.source_files`, records a `kcisa-culture-info-ingest` run in
+`ops.job_runs`, and requires the exact confirm string plus a process-local
 allow flag:
 
 ```bash
@@ -686,9 +689,9 @@ scripts/unix/plan_kopis_ingest.sh --preview --rows 20
 .\scripts\windows\plan_kopis_ingest.ps1 -Preview -Rows 20
 ```
 
-Apply upserts KOPIS rows into `culture.events` and records an ingest hash in
-`ingest.source_files`. It requires the exact confirm string plus a process-local
-allow flag:
+Apply upserts KOPIS rows into `culture.events`, records an ingest hash in
+`ingest.source_files`, records a `kopis-ingest` run in `ops.job_runs`, and
+requires the exact confirm string plus a process-local allow flag:
 
 ```bash
 ALLOW_KOPIS_INGEST_APPLY=1 \
@@ -737,8 +740,9 @@ scripts/unix/plan_card_spending_file_ingest.sh \
 ```
 
 Apply inserts rows into `economy.card_spending_area_monthly` and
-`economy.card_spending_demographics`, after recording the source file in
-`ingest.source_files`. It requires the exact confirm string plus a process-local
+`economy.card_spending_demographics`, records the source file in
+`ingest.source_files`, records a `card-spending-file-ingest` run in
+`ops.job_runs`, and requires the exact confirm string plus a process-local
 allow flag:
 
 ```bash
@@ -1040,7 +1044,9 @@ Server, database, required extension allowlist, or Key Vault `db-dsn` secret
 name is missing.
 
 `docents/script` reads non-expired rows from `travel.docent_scripts` before
-calling Azure OpenAI. Successful live Azure OpenAI scripts are written back to
+calling Azure OpenAI. The docent generation and QA lane should prefer
+`AZURE_OPENAI_DOCENT_DEPLOYMENT` (`gpt-5.4-mini` recommended) before the
+generic deployment. Successful live Azure OpenAI scripts are written back to
 that cache on a best-effort basis. A cache write failure emits a warning log
 without logging the generated script body, but it does not fail the Wave 1 API
 contract.

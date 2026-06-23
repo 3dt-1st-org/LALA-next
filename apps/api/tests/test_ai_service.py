@@ -145,3 +145,46 @@ def test_generate_docent_script_uses_short_timeout_without_sdk_retries(monkeypat
     assert captured["client"]["timeout"] == ai_service.DOCENT_AI_TIMEOUT_SECONDS
     assert captured["client"]["max_retries"] == 0
     assert captured["completion"]["model"] == "deployment"
+
+
+def test_generate_docent_script_prefers_docent_specific_deployment(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            captured["completion"] = kwargs
+            return SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(content="도슨트 스크립트"))]
+            )
+
+    class FakeAzureOpenAI:
+        def __init__(self, **kwargs):
+            self.chat = SimpleNamespace(completions=FakeCompletions())
+
+    fake_openai = types.ModuleType("openai")
+    fake_openai.AzureOpenAI = FakeAzureOpenAI
+    monkeypatch.setitem(sys.modules, "openai", fake_openai)
+    monkeypatch.setattr(
+        ai_service,
+        "get_settings",
+        lambda: SimpleNamespace(
+            enable_live_ai=True,
+            azure_openai_endpoint="https://example.openai.azure.com",
+            azure_openai_key="secret",
+            azure_openai_deployment="generic-deployment",
+            azure_openai_docent_deployment="docent-mini-deployment",
+            azure_openai_api_version="2024-02-15-preview",
+        ),
+    )
+
+    request = DocentScriptRequest(
+        place_id="place-1",
+        place_name="화성행궁",
+        category="attraction",
+        language="ko",
+        mode="brief",
+    )
+
+    ai_service.generate_docent_script_text(request)
+
+    assert captured["completion"]["model"] == "docent-mini-deployment"

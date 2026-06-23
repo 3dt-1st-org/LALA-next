@@ -70,6 +70,18 @@ that signal into `analytics.place_score_snapshots.review_quality_score` when
 the organic evidence threshold is met. The UI/API should continue to hide score
 details unless the user explicitly opens the score/reason view.
 
+## Model Role Split
+
+The scoring pipeline now uses an explicit model-role boundary:
+
+- `AZURE_OPENAI_REVIEW_BATCH_DEPLOYMENT` is the first-choice deployment for the
+  bulk review lane, with `gpt-5.4-nano` as the recommended backing model;
+- `AZURE_OPENAI_DOCENT_DEPLOYMENT` is reserved for docent generation, docent QA,
+  and judge-facing wording polish, with `gpt-5.4-mini` as the recommended
+  backing model;
+- the default generic fallback remains `AZURE_OPENAI_DEPLOYMENT`, but future
+  shared-dev and production wiring should prefer the role-specific variables.
+
 ## Attribute Schema
 
 All attributes should be stored on a 0 to 1 scale with count and confidence:
@@ -177,7 +189,8 @@ Current implementation notes:
   `community.posts`, then computes deterministic category-aware attributes
   without mutation.
 - `--dry-run-ai` calls Azure OpenAI and validates the JSON contract without DB
-  mutation.
+  mutation. It should prefer `AZURE_OPENAI_REVIEW_BATCH_DEPLOYMENT`
+  (`gpt-5.4-nano` recommended) before falling back to the generic deployment.
 - `--apply` calls Azure OpenAI, writes `attributes.review_attributes`,
   `attributes.review_quality`, and `sentiment_score`, and records
   `review-attribute-batch` in `ops.job_runs`.

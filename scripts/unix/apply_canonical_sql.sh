@@ -55,6 +55,11 @@ cd "$ROOT"
 
 if [[ -n "$KEY_VAULT_URL_ARG" ]]; then
   export KEY_VAULT_URL="$KEY_VAULT_URL_ARG"
+else
+  load_env_names_from_file "$ROOT/.env" KEY_VAULT_URL LALA_ALLOWED_KEY_VAULT_HOSTS
+fi
+if [[ "$APPLY" == "true" ]]; then
+  load_lala_key_vault_secrets
 fi
 
 echo "Planning LALA-next canonical SQL."

@@ -35,6 +35,8 @@ class Settings:
     key_vault_url: str = ""
     azure_openai_endpoint: str = ""
     azure_openai_deployment: str = ""
+    azure_openai_docent_deployment: str = ""
+    azure_openai_review_batch_deployment: str = ""
     azure_openai_embedding_deployment: str = ""
     azure_openai_api_version: str = ""
     azure_openai_embedding_api_version: str = ""
@@ -51,6 +53,27 @@ class Settings:
     @classmethod
     def from_env(cls) -> "Settings":
         key_vault_url = (os.getenv("KEY_VAULT_URL") or "").strip()
+        azure_openai_deployment = _env_or_secret(
+            "AZURE_OPENAI_DEPLOYMENT",
+            "azure-openai-deployment",
+            key_vault_url,
+        )
+        azure_openai_docent_deployment = (
+            _env_or_secret(
+                "AZURE_OPENAI_DOCENT_DEPLOYMENT",
+                "azure-openai-docent-deployment",
+                key_vault_url,
+            )
+            or azure_openai_deployment
+        )
+        azure_openai_review_batch_deployment = (
+            _env_or_secret(
+                "AZURE_OPENAI_REVIEW_BATCH_DEPLOYMENT",
+                "azure-openai-review-batch-deployment",
+                key_vault_url,
+            )
+            or azure_openai_deployment
+        )
         return cls(
             ios_api_key=_env_or_secret("IOS_API_KEY", "ios-api-key", key_vault_url),
             api_bearer_token=_env_or_secret("API_BEARER_TOKEN", "api-bearer-token", key_vault_url),
@@ -90,11 +113,9 @@ class Settings:
                 "azure-openai-endpoint",
                 key_vault_url,
             ),
-            azure_openai_deployment=_env_or_secret(
-                "AZURE_OPENAI_DEPLOYMENT",
-                "azure-openai-deployment",
-                key_vault_url,
-            ),
+            azure_openai_deployment=azure_openai_deployment,
+            azure_openai_docent_deployment=azure_openai_docent_deployment,
+            azure_openai_review_batch_deployment=azure_openai_review_batch_deployment,
             azure_openai_embedding_deployment=_env_or_secret(
                 "AZURE_OPENAI_EMBEDDING_DEPLOYMENT",
                 "azure-openai-embedding-deployment",
