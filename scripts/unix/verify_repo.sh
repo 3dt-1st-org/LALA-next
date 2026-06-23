@@ -97,6 +97,9 @@ echo "Planning franchise reference ingestion..."
 echo "Planning RAG knowledge index..."
 "$ROOT/scripts/unix/plan_rag_index.sh" --python "$PYTHON"
 
+echo "Planning docent quality QA..."
+"$ROOT/scripts/unix/plan_docent_quality_qa.sh" --python "$PYTHON"
+
 echo "Planning place AI enrichment..."
 "$ROOT/scripts/unix/plan_place_ai_enrichment.sh" --python "$PYTHON"
 

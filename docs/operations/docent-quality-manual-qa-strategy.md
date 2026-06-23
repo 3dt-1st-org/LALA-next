@@ -23,9 +23,9 @@ must go further and judge whether the generated docent script is actually good:
 | Gap | Current Evidence | Risk |
 |---|---|---|
 | Automated smoke covers representative flows, not broad content quality | Deployed web smoke verifies live-context docent quality on selected smoke places. | A few good paths can hide weak scripts for other categories/regions. |
-| No fixed 30 to 50 place QA set | Places exist across Gyeonggi and Seoul, but sample selection is not frozen. | QA can cherry-pick easy places. |
-| No manual rubric threshold | Tests reject placeholder/raw scores, but not prose quality. | Script can pass technically while feeling bland. |
-| No reviewer record template | Docs do not yet define how to record human judgment. | Team feedback becomes scattered and hard to fix. |
+| Representative QA tooling now exists, but script generation is still pending | `scripts/unix/plan_docent_quality_qa.sh` selects a balanced DB-backed sample and writes local-only QA seed files. The first shared-dev run produced 50 records: 13 attractions, 13 restaurants, 11 events, and 13 culture venues. All 50 were marked `needs_script_generation` because the representative set had no cached `travel.docent_scripts` rows. | QA can start from a fixed sample, but content quality cannot be scored until representative scripts are generated or warmed through the API. |
+| Manual rubric threshold is encoded as plan metadata, not yet completed by reviewers | The QA tool exposes 100-point rubric weights and pass thresholds, and tests reject placeholder/raw scores/PM omissions. | Script can pass technical checks while still needing human tone and legacy-parity review. |
+| Reviewer record template is executable | The local-only writer creates JSON and Markdown rows with reviewer, manual score, issue tags, fix owner, retest status, and `legacy_parity` fields. | Team feedback is structured, but completion depends on filling the rows after generation. |
 | No re-test loop tied to RAG and scoring | RAG regeneration and score updates are separate. | QA fixes may not survive the next batch. |
 
 ## Legacy LALA Touchpoints
@@ -178,6 +178,19 @@ Use one row per script:
 Store QA records as a local spreadsheet or markdown table under an approved
 local-only path while reviewing. Commit only sanitized summaries and aggregate
 findings unless the team approves a public QA artifact.
+
+Executable tooling:
+
+```bash
+scripts/unix/plan_docent_quality_qa.sh --preview --limit 50
+scripts/unix/plan_docent_quality_qa.sh --write --limit 50
+```
+
+Default plan mode does not read DB. Preview mode reads the canonical DB through
+`travel.places`, `travel.docent_scripts`, `travel.weather_observations`,
+`analytics.place_score_snapshots`, `community.place_mentions_weekly`, and
+`rag.knowledge_chunks`. Write mode creates ignored local files under
+`output/local/docent-qa/` and never writes DB rows.
 
 ## Pass Thresholds
 

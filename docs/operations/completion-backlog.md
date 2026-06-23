@@ -35,6 +35,11 @@ Current baseline evidence:
   `community.place_mentions_weekly.attributes.review_quality.score`; the latest
   shared-dev scoring pass produced non-null `review_quality_score` for 4
   sufficient-evidence places and kept low-evidence places null.
+- Docent QA seed tooling now exists. The latest shared-dev preview selected 50
+  DB-backed representative records with category coverage of 13 attractions, 13
+  restaurants, 11 events, and 13 culture venues. All 50 are currently marked
+  `needs_script_generation`, so the next quality step is representative script
+  generation/warm-up before manual scoring.
 
 ## Not Current Blockers
 
@@ -74,6 +79,7 @@ RAG, and docent-quality gaps:
 | Apply card-spending source files | Parser plan supports detailed and aggregate CSV/XLSX files, but no local card-spending source file was confirmed during the latest check. Shared dev rollout still lists card-spending files as open. | Download or provide approved source files, ingest them, verify hash de-duplication, then rerun score batch. | `economy.card_spending_area_monthly` and `economy.card_spending_demographics` have source-file-backed rows; `local_spending_score` is based on real file rows. |
 | Persist weather observations | Guarded `plan_weather_observation_refresh.sh` tooling exists, is connected to repo verification, and has been applied once against shared dev. The latest check showed 40 weather rows, 20 rows from the last 6 hours, 35 rows with temperature, 40 PM10 rows, 40 PM2.5 rows, a succeeded `weather-refresh` job run, 2636 new score snapshots, and 3375 refreshed RAG chunks. | Schedule or manually repeat the refresh before judging/demo windows, and extend the `ops.job_runs` pattern to score/RAG jobs. | `/api/v1/weather` returns fresh DB-backed or live-nowcast-backed data, `ops.job_runs` has a `weather-refresh` run, and `weather_fit_score` has recent observation input. |
 | Add review attribute scoring | `run_place_score_batch` reads versioned review quality from `community.place_mentions_weekly`, and the latest shared-dev score pass has 4 non-null review-quality places. | Expand approved review/mention ingestion coverage and add the full guarded AI attribute batch for richer taste, service, and local-experience attributes. | Latest score snapshots contain non-null `review_quality_score` for eligible places with source metadata and tests for ad-filtering rules. |
+| Complete docent QA scoring | `plan_docent_quality_qa.sh` selects and writes balanced local-only QA seed records. The first shared-dev 50-place sample has no cached representative scripts yet. | Add a guarded generation/warm-up path, run scripts for the frozen representative set, then fill manual scores and legacy parity fields. | 30-50 representative scripts have zero blockers, average manual score >= 90, every category average >= 85, and local-only QA evidence is available for team review. |
 | Expand franchise evidence to branch locations | Brand-level Fair Trade Commission references are loaded; `economy.franchise_locations` is intentionally empty. | Add a suitable official branch-level source only if it provides address or coordinate evidence. | Restaurant identity matching can use branch-level address/coordinate evidence, not only brand-name statistics. |
 
 ## P1: Production Readiness
