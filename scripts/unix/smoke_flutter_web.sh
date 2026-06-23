@@ -1048,10 +1048,28 @@ PY
         }
         await page.waitForTimeout(250);
       }
+      const hasDefaultPublicDataResponses = () => {
+        const requiredPaths = [
+          '/api/v1/places',
+          '/api/v1/weather',
+          '/api/v1/plans/intervention',
+        ];
+        return requiredPaths.every((path) => capturedResponses.some((item) => {
+          const url = String(item.url || '');
+          return Number(item.status || 0) === 200
+            && url.includes(path)
+            && url.includes('lat=37.2636')
+            && url.includes('lng=127.0286');
+        }));
+      };
       let state = {};
-      for (let index = 0; index < 80; index += 1) {
+      for (let index = 0; index < 160; index += 1) {
         state = await page.evaluate(() => window.__lalaAppState || {});
-        if (state.locationManualSelectAvailable && Number(state.apiPlacesCount || 0) > 0) {
+        if (
+          state.locationManualSelectAvailable
+          && Number(state.apiPlacesCount || 0) > 0
+          && hasDefaultPublicDataResponses()
+        ) {
           break;
         }
         await page.waitForTimeout(250);
