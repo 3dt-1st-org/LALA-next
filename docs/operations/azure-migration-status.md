@@ -169,7 +169,20 @@ ALLOW_FRANCHISE_IDENTITY_BATCH_APPLY=1 \
   --python .venv/bin/python
 ```
 
-9. Recompute local-value score snapshots after places and source signals exist:
+9. Refresh official weather observations after places and source signals exist:
+
+```bash
+scripts/unix/plan_weather_observation_refresh.sh --preview --limit 20 --python .venv/bin/python
+ALLOW_WEATHER_OBSERVATION_REFRESH_APPLY=1 \
+  scripts/unix/plan_weather_observation_refresh.sh \
+  --apply \
+  --confirm APPLY_WEATHER_OBSERVATION_REFRESH \
+  --limit 20 \
+  --python .venv/bin/python
+```
+
+10. Recompute local-value score snapshots after places, local-economic signals,
+    business identity, culture events, and weather observations exist:
 
 ```bash
 scripts/unix/plan_place_score_batch.sh --preview --limit 20 --python .venv/bin/python
@@ -182,7 +195,7 @@ ALLOW_PLACE_SCORE_BATCH_APPLY=1 \
   --python .venv/bin/python
 ```
 
-10. Rebuild RAG chunks after score regeneration:
+11. Rebuild RAG chunks after score regeneration:
 
 ```bash
 ALLOW_RAG_INDEX_APPLY=1 \

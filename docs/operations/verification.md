@@ -323,6 +323,41 @@ $env:ALLOW_FRANCHISE_IDENTITY_BATCH_APPLY = "1"
 Remove-Item Env:\ALLOW_FRANCHISE_IDENTITY_BATCH_APPLY
 ```
 
+To review the weather observation refresh without mutating the database:
+
+```bash
+scripts/unix/plan_weather_observation_refresh.sh
+```
+
+Default mode is plan-only. Preview reads canonical place regions from
+PostgreSQL, calls the official KMA ultra-short nowcast and AirKorea realtime
+air-quality APIs through the public-data service key, and shows the rows that
+would feed `travel.weather_observations`:
+
+```bash
+scripts/unix/plan_weather_observation_refresh.sh \
+  --preview \
+  --limit 20 \
+  --python .venv/bin/python
+```
+
+Apply inserts new observations into `travel.weather_observations`, records the
+`weather-refresh` run in `ops.job_runs`, and requires the exact confirm string
+plus a process-local allow flag:
+
+```bash
+ALLOW_WEATHER_OBSERVATION_REFRESH_APPLY=1 \
+  scripts/unix/plan_weather_observation_refresh.sh \
+  --apply \
+  --confirm APPLY_WEATHER_OBSERVATION_REFRESH \
+  --limit 20 \
+  --python .venv/bin/python
+```
+
+After a successful weather refresh, regenerate local-value score snapshots and
+dynamic RAG chunks so `weather_fit_score` and `weather_context` reflect the
+latest official observations.
+
 To review Fair Trade Commission franchise brand reference ingestion without
 calling the public-data API or mutating the DB:
 

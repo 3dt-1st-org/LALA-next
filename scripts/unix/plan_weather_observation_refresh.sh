@@ -10,13 +10,8 @@ JSON_STATUS="false"
 PREVIEW="false"
 APPLY="false"
 CONFIRM=""
-QUERY=""
 KEY_VAULT_URL_ARG=""
-SOURCE="all"
-EMBEDDING_METHOD="local-hash"
-PLACE_ID=""
-LIMIT="500"
-TOP_K="5"
+LIMIT="20"
 CONNECT_TIMEOUT="5"
 
 while [[ $# -gt 0 ]]; do
@@ -33,32 +28,12 @@ while [[ $# -gt 0 ]]; do
       CONFIRM="${2:-}"
       shift 2
       ;;
-    --query)
-      QUERY="${2:-}"
-      shift 2
-      ;;
     --key-vault-url)
       KEY_VAULT_URL_ARG="${2:-}"
       shift 2
       ;;
-    --source)
-      SOURCE="${2:-}"
-      shift 2
-      ;;
-    --embedding-method)
-      EMBEDDING_METHOD="${2:-}"
-      shift 2
-      ;;
-    --place-id)
-      PLACE_ID="${2:-}"
-      shift 2
-      ;;
     --limit)
       LIMIT="${2:-}"
-      shift 2
-      ;;
-    --top-k)
-      TOP_K="${2:-}"
       shift 2
       ;;
     --connect-timeout)
@@ -74,7 +49,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     -h|--help)
-      echo "Usage: scripts/unix/plan_rag_index.sh [--preview|--apply --confirm APPLY_RAG_INDEX|--query TEXT] [--source all|static|dynamic] [--embedding-method local-hash|azure-openai] [--limit N] [--top-k N] [--json] [--connect-timeout SECONDS] [--python PATH]"
+      echo "Usage: scripts/unix/plan_weather_observation_refresh.sh [--preview|--apply --confirm APPLY_WEATHER_OBSERVATION_REFRESH] [--limit N] [--key-vault-url URL] [--json] [--connect-timeout SECONDS] [--python PATH]"
       exit 0
       ;;
     *)
@@ -93,23 +68,22 @@ if [[ -n "$KEY_VAULT_URL_ARG" ]]; then
 else
   load_env_names_from_file "$ROOT/.env" KEY_VAULT_URL LALA_ALLOWED_KEY_VAULT_HOSTS
 fi
-if [[ "$PREVIEW" == "true" || "$APPLY" == "true" || -n "$QUERY" ]]; then
+
+if [[ "$PREVIEW" == "true" || "$APPLY" == "true" ]]; then
   load_lala_key_vault_secrets
 fi
 
 if [[ "$JSON_STATUS" != "true" ]]; then
-  echo "Planning LALA-next RAG knowledge index."
+  echo "Planning LALA-next weather observation refresh."
   echo "Default mode is dry-run plan only."
-  echo "Apply mode requires ALLOW_RAG_INDEX_APPLY=1."
-  echo "DB_DSN and AZURE_OPENAI_KEY values are never printed by this script."
+  echo "Preview mode reads DB targets and calls KMA/AirKorea but does not mutate DB."
+  echo "Apply mode requires ALLOW_WEATHER_OBSERVATION_REFRESH_APPLY=1."
+  echo "PUBLIC_DATA_SERVICE_KEY and DB_DSN values are never printed by this script."
 fi
 
 ARGS=(
-  -m apps.api.app.tools.run_rag_index
-  --source "$SOURCE"
-  --embedding-method "$EMBEDDING_METHOD"
+  -m apps.api.app.tools.run_weather_observation_refresh
   --limit "$LIMIT"
-  --top-k "$TOP_K"
   --connect-timeout "$CONNECT_TIMEOUT"
 )
 if [[ "$JSON_STATUS" == "true" ]]; then
@@ -120,11 +94,5 @@ if [[ "$PREVIEW" == "true" ]]; then
 fi
 if [[ "$APPLY" == "true" ]]; then
   ARGS+=(--apply --confirm "$CONFIRM")
-fi
-if [[ -n "$QUERY" ]]; then
-  ARGS+=(--query "$QUERY")
-fi
-if [[ -n "$PLACE_ID" ]]; then
-  ARGS+=(--place-id "$PLACE_ID")
 fi
 "$PYTHON" "${ARGS[@]}"

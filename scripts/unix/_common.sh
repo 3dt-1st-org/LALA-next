@@ -88,6 +88,43 @@ load_env_file() {
   done < "$env_file"
 }
 
+load_env_names_from_file() {
+  local env_file="$1"
+  shift
+  [[ -f "$env_file" ]] || return 0
+  [[ $# -gt 0 ]] || return 0
+
+  local raw line name value requested
+  while IFS= read -r raw || [[ -n "$raw" ]]; do
+    line="$(trim "$raw")"
+    [[ -n "$line" ]] || continue
+    [[ "$line" != \#* ]] || continue
+    [[ "$line" == *=* ]] || continue
+
+    name="$(trim "${line%%=*}")"
+    value="$(trim "${line#*=}")"
+    [[ "$name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+
+    local matched="false"
+    for requested in "$@"; do
+      if [[ "$name" == "$requested" ]]; then
+        matched="true"
+        break
+      fi
+    done
+    [[ "$matched" == "true" ]] || continue
+    [[ -z "${!name+x}" ]] || continue
+
+    if [[ "$value" == \"*\" && "$value" == *\" && ${#value} -ge 2 ]]; then
+      value="${value:1:${#value}-2}"
+    elif [[ "$value" == \'*\' && "$value" == *\' && ${#value} -ge 2 ]]; then
+      value="${value:1:${#value}-2}"
+    fi
+
+    export "$name=$value"
+  done < "$env_file"
+}
+
 vault_name_from_lala_url() {
   local vault_url="${1:-}"
   [[ -n "$vault_url" ]] || {
@@ -181,6 +218,7 @@ load_lala_key_vault_secrets() {
   [[ -n "$vault_name" ]] || return 0
 
   set_secret_env_if_missing "$vault_name" "IOS_API_KEY" "ios-api-key"
+  set_secret_env_if_missing "$vault_name" "DB_DSN" "db-dsn"
   set_secret_env_if_missing "$vault_name" "API_BEARER_TOKEN" "api-bearer-token"
   set_secret_env_if_missing "$vault_name" "OAUTH_ISSUER" "oauth-issuer"
   set_secret_env_if_missing "$vault_name" "OAUTH_AUDIENCE" "oauth-audience"

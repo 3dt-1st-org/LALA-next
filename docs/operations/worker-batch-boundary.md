@@ -68,6 +68,23 @@ registry can be loaded, and `/metrics` exports the same state as a dependency
 gauge. This is registry readiness only; it is not a live Azure Functions or Event
 Hub freshness check.
 
+The first approved live producer path is the guarded weather observation
+refresh CLI. It keeps the same separation from request handlers: the API reads
+weather, while the operator-run batch writes observations and job evidence.
+
+```bash
+scripts/unix/plan_weather_observation_refresh.sh --preview --limit 20
+ALLOW_WEATHER_OBSERVATION_REFRESH_APPLY=1 \
+  scripts/unix/plan_weather_observation_refresh.sh \
+  --apply \
+  --confirm APPLY_WEATHER_OBSERVATION_REFRESH \
+  --limit 20
+```
+
+The apply path inserts `travel.weather_observations` rows and records
+`weather-refresh` in `ops.job_runs`. It does not print `PUBLIC_DATA_SERVICE_KEY`
+or `DB_DSN`.
+
 ## Rollout Plan
 
 Generate the non-mutating live rollout plan:
@@ -91,16 +108,18 @@ Vault values are not worker inputs for this repository.
 
 ## Mutation Guard
 
-Live execution is blocked in Wave 1. Calling:
+Generic worker CLI live execution is blocked in Wave 1. Calling:
 
 ```powershell
 python -m apps.workers.app.cli run weather-refresh --execute --json
 ```
 
 returns a structured JSON error unless mutation has been explicitly enabled.
-Even with `ALLOW_WORKER_MUTATION=1`, the current implementation returns
-`not_implemented`. That is deliberate. The next wave should add actual worker
-entrypoints only after these decisions are made:
+Even with `ALLOW_WORKER_MUTATION=1`, the generic worker implementation returns
+`not_implemented`. That is deliberate. Dedicated guarded producer CLIs, such as
+weather refresh, may be promoted one by one after they define idempotency,
+target tables, and `ops.job_runs` evidence. The next wave should add remaining
+worker entrypoints only after these decisions are made:
 
 - Azure Function versus Windows scheduled task ownership per job.
 - Queue/Event Hub binding and poison-message policy for ingest jobs.

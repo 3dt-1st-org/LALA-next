@@ -1,6 +1,6 @@
 # LALA Completion Backlog
 
-Last updated: 2026-06-22 KST
+Last updated: 2026-06-23 KST
 
 This backlog tracks remaining work found during the Azure migration and
 franchise/local-value implementation pass. It is intentionally secret-safe:
@@ -27,6 +27,10 @@ Current baseline evidence:
 - The shared dev DB has TourAPI Gyeonggi and Seoul places, franchise brand
   references, restaurant business identity rows, `local-value-v2` score
   snapshots, and place-profile RAG chunks.
+- Weather refresh now has a guarded public-data batch path. On 2026-06-23 UTC,
+  it inserted fresh KMA/AirKorea-backed observations, recorded a succeeded
+  `weather-refresh` row in `ops.job_runs`, regenerated `local-value-v2` score
+  snapshots, and refreshed dynamic RAG chunks.
 
 ## Not Current Blockers
 
@@ -64,7 +68,7 @@ RAG, and docent-quality gaps:
 | Apply KCISA culture information ingestion | Tooling and guarded wrappers exist; live preview returned Suwon culture rows and normalized official `culture.go.kr` thumbnails to HTTPS. Azure status still says Culture Info needs to be added to shared dev. | Apply with guarded env, then recompute scores and RAG. | `culture.events` contains KCISA rows and `culture_relevance_score` changes are visible in latest `local-value-v2` snapshots. |
 | Apply KOPIS performance ingestion | Tooling and guarded wrappers exist; live preview returned Gyeonggi performance rows and normalized official `kopis.or.kr` poster URLs to HTTPS. KOPIS is still listed in open rollout work. | Apply with guarded env for the target region/window, then recompute scores and RAG. | `culture.events` contains KOPIS rows and RAG has current `culture_event` chunks. |
 | Apply card-spending source files | Parser plan supports detailed and aggregate CSV/XLSX files, but no local card-spending source file was confirmed during the latest check. Shared dev rollout still lists card-spending files as open. | Download or provide approved source files, ingest them, verify hash de-duplication, then rerun score batch. | `economy.card_spending_area_monthly` and `economy.card_spending_demographics` have source-file-backed rows; `local_spending_score` is based on real file rows. |
-| Persist weather observations | Runtime can fall back to public-data nowcast, but scheduled persistence is still worker/batch work. | Add or schedule a weather refresh job that writes `travel.weather_observations`. | `/api/v1/weather` returns fresh DB-backed or live-nowcast-backed data, and `weather_fit_score` has recent observation input. |
+| Persist weather observations | Guarded `plan_weather_observation_refresh.sh` tooling exists, is connected to repo verification, and has been applied once against shared dev. The latest check showed 40 weather rows, 20 rows from the last 6 hours, 35 rows with temperature, 40 PM10 rows, 40 PM2.5 rows, a succeeded `weather-refresh` job run, 2636 new score snapshots, and 739 refreshed dynamic RAG chunks. | Schedule or manually repeat the refresh before judging/demo windows, and extend the `ops.job_runs` pattern to score/RAG jobs. | `/api/v1/weather` returns fresh DB-backed or live-nowcast-backed data, `ops.job_runs` has a `weather-refresh` run, and `weather_fit_score` has recent observation input. |
 | Add review attribute scoring | `review_quality_score` is documented as `pending_review_attribute_analysis`. | Build ad-filtered review attribute/sentiment batch for taste, service, and selected local-experience attributes. | Latest score snapshots contain non-null `review_quality_score` with source metadata and tests for ad-filtering rules. |
 | Expand franchise evidence to branch locations | Brand-level Fair Trade Commission references are loaded; `economy.franchise_locations` is intentionally empty. | Add a suitable official branch-level source only if it provides address or coordinate evidence. | Restaurant identity matching can use branch-level address/coordinate evidence, not only brand-name statistics. |
 
@@ -83,7 +87,7 @@ RAG, and docent-quality gaps:
 |---|---|---|---|
 | Avoid docs-only Azure redeploys | Azure Dev Deploy has path filters for API runtime, workers, Azure infra, SQL, smoke scripts, and dependency files. | Keep the filter list aligned when a new runtime entrypoint or deployment script is added. | Markdown-only changes do not rebuild/push the API image or update Container Apps. |
 | Score snapshot retention | Historical `local-value-v1` and older `local-value-v2` rows remain for audit. | Decide archive/delete/partition policy. | A documented retention job or query policy exists and current reads still select the latest score. |
-| Live worker/batch execution | Worker contracts and plans exist; live producer wiring is still a later rollout. | Implement approved worker runtime for weather, culture refresh, card ingest, score/RAG jobs. | Worker runs are observable in `ops.job_runs` and failure paths do not break API serving. |
+| Live worker/batch execution | Worker contracts and plans exist; weather refresh now has a guarded CLI producer path. | Extend the same `ops.job_runs` pattern to culture refresh, card ingest, score/RAG jobs, then schedule the approved producers. | Worker runs are observable in `ops.job_runs` and failure paths do not break API serving. |
 | Legacy Flask retirement | A non-mutating plan exists; actual removal waits for consumer inventory. | Inventory remaining legacy route users and define rollback. | Legacy routes are either rebuilt, owner-approved as retained, or removed after a monitored deprecation window. |
 | Flutter release hardening | Web app is deployed; production token storage, packaging, and platform distribution remain outside this backend wave. | Add platform-specific release checks after auth direction is final. | Web/mobile builds pass release-mode QA without exposing static credentials. |
 
