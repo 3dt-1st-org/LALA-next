@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'browser_location.dart';
 import 'kakao_map_view.dart';
+import 'manual_location_options.dart';
 
 void main() {
   runApp(const LalaApp());
@@ -165,69 +166,6 @@ class LalaLocation {
   final double lat;
   final double lng;
 }
-
-class _ManualLocationOption {
-  const _ManualLocationOption({
-    required this.id,
-    required this.labelKo,
-    required this.labelEn,
-    required this.lat,
-    required this.lng,
-  });
-
-  final String id;
-  final String labelKo;
-  final String labelEn;
-  final double lat;
-  final double lng;
-
-  String label(String language) => _copy(language, ko: labelKo, en: labelEn);
-}
-
-const List<_ManualLocationOption> _manualLocationOptions = [
-  _ManualLocationOption(
-    id: 'seoul-jung',
-    labelKo: '서울 중구',
-    labelEn: 'Seoul Jung-gu',
-    lat: 37.5665,
-    lng: 126.9780,
-  ),
-  _ManualLocationOption(
-    id: 'suwon',
-    labelKo: '수원시',
-    labelEn: 'Suwon',
-    lat: 37.2819,
-    lng: 127.0142,
-  ),
-  _ManualLocationOption(
-    id: 'yongin',
-    labelKo: '용인시',
-    labelEn: 'Yongin',
-    lat: 37.2930,
-    lng: 127.2020,
-  ),
-  _ManualLocationOption(
-    id: 'uiwang',
-    labelKo: '의왕시',
-    labelEn: 'Uiwang',
-    lat: 37.3446,
-    lng: 126.9680,
-  ),
-  _ManualLocationOption(
-    id: 'goyang',
-    labelKo: '고양시',
-    labelEn: 'Goyang',
-    lat: 37.6584,
-    lng: 126.8320,
-  ),
-  _ManualLocationOption(
-    id: 'gapyeong',
-    labelKo: '가평군',
-    labelEn: 'Gapyeong',
-    lat: 37.8315,
-    lng: 127.5099,
-  ),
-];
 
 enum LalaLocationResultStatus { found, denied, unavailable }
 
@@ -1314,7 +1252,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
   }
 
   Future<void> _openManualLocationSheet(BuildContext context) async {
-    final selected = await showModalBottomSheet<_ManualLocationOption>(
+    final selected = await showModalBottomSheet<ManualLocationOption>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -1457,6 +1395,7 @@ class _UserSettingsSheet extends StatelessWidget {
             ],
           ),
           child: ListView(
+            key: const ValueKey('manual-location-scroll'),
             controller: scrollController,
             padding: const EdgeInsets.fromLTRB(18, 10, 18, 28),
             children: [
@@ -1607,20 +1546,77 @@ class _UserSettingsSheet extends StatelessWidget {
   }
 }
 
-class _ManualLocationSheet extends StatelessWidget {
+class _ManualLocationSheet extends StatefulWidget {
   const _ManualLocationSheet({required this.language});
 
   final String language;
 
   @override
+  State<_ManualLocationSheet> createState() => _ManualLocationSheetState();
+}
+
+class _ManualLocationSheetState extends State<_ManualLocationSheet> {
+  final TextEditingController _searchController = TextEditingController();
+  String _selectedProvinceId = 'all';
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final language = widget.language;
     final title = _copy(language, ko: '지역 선택', en: 'Choose area');
     final closeLabel = _copy(language, ko: '닫기', en: 'Close');
+    final allLabel = _copy(language, ko: '전국', en: 'All');
+    final searchHint = _copy(
+      language,
+      ko: '시군구 또는 시도 검색',
+      en: 'Search city or province',
+    );
+    final quickLabel = _copy(language, ko: '빠른 선택', en: 'Quick picks');
+    final resultLabel = _copy(language, ko: '선택 가능한 지역', en: 'Available areas');
+    final normalizedQuery = _query.trim();
+    ManualLocationProvince? selectedProvince;
+    for (final province in manualLocationProvinces) {
+      if (province.id == _selectedProvinceId) {
+        selectedProvince = province;
+        break;
+      }
+    }
+    final featuredIds = featuredManualLocationOptions
+        .map((option) => option.id)
+        .toSet();
+    final showFeatured =
+        normalizedQuery.isEmpty && _selectedProvinceId == 'all';
+    final filteredOptions = manualLocationOptions
+        .where((option) {
+          if (showFeatured && featuredIds.contains(option.id)) {
+            return false;
+          }
+          if (_selectedProvinceId != 'all' &&
+              option.provinceId != _selectedProvinceId) {
+            return false;
+          }
+          return option.matches(normalizedQuery);
+        })
+        .toList(growable: false);
+    final headerCount = _selectedProvinceId == 'all'
+        ? manualLocationOptions.length
+        : selectedProvince?.options.length ?? filteredOptions.length;
+    final countText = _copy(
+      language,
+      ko: '$headerCount개 지역',
+      en: '$headerCount areas',
+    );
     return DraggableScrollableSheet(
       expand: false,
-      initialChildSize: 0.58,
-      minChildSize: 0.42,
-      maxChildSize: 0.9,
+      initialChildSize: 0.74,
+      minChildSize: 0.48,
+      maxChildSize: 0.94,
       builder: (context, scrollController) {
         return DecoratedBox(
           decoration: const BoxDecoration(
@@ -1661,33 +1657,220 @@ class _ManualLocationSheet extends StatelessWidget {
                     ),
                   ),
                   Expanded(
-                    child: Center(
-                      child: Text(
-                        title,
-                        style: const TextStyle(
-                          color: Color(0xFF111827),
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
+                    child: Column(
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            color: Color(0xFF111827),
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                          ),
                         ),
-                      ),
+                        const SizedBox(height: 2),
+                        Text(
+                          countText,
+                          style: const TextStyle(
+                            color: Color(0xFF64748B),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(width: 48),
                 ],
               ),
               const SizedBox(height: 16),
-              for (final option in _manualLocationOptions) ...[
-                _ManualLocationTile(
-                  option: option,
-                  language: language,
-                  onSelected: () => Navigator.of(context).pop(option),
+              TextField(
+                key: const ValueKey('manual-location-search'),
+                controller: _searchController,
+                textInputAction: TextInputAction.search,
+                onChanged: (value) => setState(() => _query = value),
+                decoration: InputDecoration(
+                  hintText: searchHint,
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _query.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: _copy(language, ko: '검색어 지우기', en: 'Clear'),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _query = '');
+                          },
+                          icon: const Icon(Icons.close),
+                        ),
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(
+                      color: Color(0xFF2B6CB0),
+                      width: 1.4,
+                    ),
+                  ),
                 ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 42,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: manualLocationProvinces.length + 1,
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
+                  itemBuilder: (context, index) {
+                    if (index == 0) {
+                      return _ManualLocationProvinceChip(
+                        key: const ValueKey('manual-location-province-all'),
+                        label: allLabel,
+                        selected: _selectedProvinceId == 'all',
+                        onSelected: () =>
+                            setState(() => _selectedProvinceId = 'all'),
+                      );
+                    }
+                    final province = manualLocationProvinces[index - 1];
+                    return _ManualLocationProvinceChip(
+                      key: ValueKey('manual-location-province-${province.id}'),
+                      label: province.shortLabel(language),
+                      selected: _selectedProvinceId == province.id,
+                      onSelected: () =>
+                          setState(() => _selectedProvinceId = province.id),
+                    );
+                  },
+                ),
+              ),
+              if (showFeatured) ...[
+                const SizedBox(height: 18),
+                _ManualLocationSectionLabel(quickLabel),
                 const SizedBox(height: 8),
+                for (final option in featuredManualLocationOptions) ...[
+                  _ManualLocationTile(
+                    option: option,
+                    language: language,
+                    onSelected: () => Navigator.of(context).pop(option),
+                  ),
+                  const SizedBox(height: 8),
+                ],
               ],
+              const SizedBox(height: 10),
+              _ManualLocationSectionLabel(
+                selectedProvince?.label(language) ?? resultLabel,
+              ),
+              const SizedBox(height: 8),
+              if (filteredOptions.isEmpty)
+                _ManualLocationEmptyState(language: language)
+              else
+                for (final option in filteredOptions) ...[
+                  _ManualLocationTile(
+                    option: option,
+                    language: language,
+                    onSelected: () => Navigator.of(context).pop(option),
+                  ),
+                  const SizedBox(height: 8),
+                ],
             ],
           ),
         );
       },
+    );
+  }
+}
+
+class _ManualLocationProvinceChip extends StatelessWidget {
+  const _ManualLocationProvinceChip({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return ChoiceChip(
+      label: Text(
+        label,
+        style: TextStyle(
+          color: selected ? Colors.white : const Color(0xFF111827),
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+      selected: selected,
+      showCheckmark: false,
+      onSelected: (_) => onSelected(),
+      selectedColor: const Color(0xFF111827),
+      backgroundColor: Colors.white,
+      side: BorderSide(
+        color: selected ? const Color(0xFF111827) : const Color(0xFFE2E8F0),
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    );
+  }
+}
+
+class _ManualLocationSectionLabel extends StatelessWidget {
+  const _ManualLocationSectionLabel(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: const TextStyle(
+        color: Color(0xFF64748B),
+        fontSize: 13,
+        fontWeight: FontWeight.w900,
+      ),
+    );
+  }
+}
+
+class _ManualLocationEmptyState extends StatelessWidget {
+  const _ManualLocationEmptyState({required this.language});
+
+  final String language;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.search_off, color: Color(0xFF64748B), size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              _copy(language, ko: '검색 결과가 없습니다', en: 'No matching area found'),
+              style: const TextStyle(
+                color: Color(0xFF64748B),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1699,7 +1882,7 @@ class _ManualLocationTile extends StatelessWidget {
     required this.onSelected,
   });
 
-  final _ManualLocationOption option;
+  final ManualLocationOption option;
   final String language;
   final VoidCallback onSelected;
 
@@ -1731,15 +1914,31 @@ class _ManualLocationTile extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  option.label(language),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFF111827),
-                    fontSize: 15,
-                    fontWeight: FontWeight.w900,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      option.label(language),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF111827),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      option.provinceLabel(language),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF64748B),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const Icon(Icons.chevron_right, color: Color(0xFF64748B)),
@@ -2329,28 +2528,29 @@ class _Dashboard extends StatelessWidget {
                 ),
               ),
             ),
-            Positioned(
-              left: 16,
-              right: 16,
-              top: floatingPillTop,
-              child: Center(
-                child: SizedBox(
-                  width: isWide
-                      ? math.min(760.0, constraints.maxWidth - 32)
-                      : constraints.maxWidth - 32,
-                  child: _MapUtilityControlRow(
-                    dailyPlan: activeDailyPlan,
-                    weather: currentWeather,
-                    language: uiLanguage,
-                    onOpenPlanner: () => onOpenSheet(_ActiveMapSheet.planner),
-                    onOpenWeather: () {
-                      onOpenSheet(_ActiveMapSheet.weather);
-                      onRefreshWeather();
-                    },
+            if (!locationFallbackNoticeVisible)
+              Positioned(
+                left: 16,
+                right: 16,
+                top: floatingPillTop,
+                child: Center(
+                  child: SizedBox(
+                    width: isWide
+                        ? math.min(760.0, constraints.maxWidth - 32)
+                        : constraints.maxWidth - 32,
+                    child: _MapUtilityControlRow(
+                      dailyPlan: activeDailyPlan,
+                      weather: currentWeather,
+                      language: uiLanguage,
+                      onOpenPlanner: () => onOpenSheet(_ActiveMapSheet.planner),
+                      onOpenWeather: () {
+                        onOpenSheet(_ActiveMapSheet.weather);
+                        onRefreshWeather();
+                      },
+                    ),
                   ),
                 ),
               ),
-            ),
             if (activeSheet != null)
               Positioned.fill(
                 child: _MapDraggableSheet(
@@ -7330,85 +7530,128 @@ class _MapToast extends StatelessWidget {
   Widget build(BuildContext context) {
     final foreground = Theme.of(context).colorScheme.onErrorContainer;
     final accent = Theme.of(context).colorScheme.error;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.94),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.78)),
-        boxShadow: const [
-          BoxShadow(
-            blurRadius: 14,
-            offset: Offset(0, 5),
-            color: Color(0x16000000),
+    final actions = <Widget>[
+      if (actionLabel != null && onAction != null)
+        TextButton(
+          key: actionKey,
+          onPressed: onAction,
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            minimumSize: const Size(0, 32),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            foregroundColor: accent,
+            backgroundColor: color.withValues(alpha: 0.42),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(999),
+            ),
+            textStyle: const TextStyle(
+              fontWeight: FontWeight.w900,
+              fontSize: 12,
+            ),
           ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 18, color: accent),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: foreground,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                ),
+          child: Text(actionLabel!),
+        ),
+      if (secondaryActionLabel != null && onSecondaryAction != null)
+        TextButton(
+          key: secondaryActionKey,
+          onPressed: onSecondaryAction,
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            minimumSize: const Size(0, 32),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            foregroundColor: const Color(0xFF2B6CB0),
+            backgroundColor: const Color(0xFFE6F0FB),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(999),
+            ),
+            textStyle: const TextStyle(
+              fontWeight: FontWeight.w900,
+              fontSize: 12,
+            ),
+          ),
+          child: Text(secondaryActionLabel!),
+        ),
+    ];
+
+    Widget message() {
+      return Row(
+        children: [
+          Icon(icon, size: 18, color: accent),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: foreground,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
               ),
             ),
-            if (actionLabel != null && onAction != null) ...[
-              const SizedBox(width: 8),
-              TextButton(
-                key: actionKey,
-                onPressed: onAction,
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  minimumSize: const Size(0, 32),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  foregroundColor: accent,
-                  backgroundColor: color.withValues(alpha: 0.42),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  textStyle: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 12,
-                  ),
+          ),
+        ],
+      );
+    }
+
+    Widget actionWrap() {
+      return Wrap(spacing: 4, runSpacing: 4, children: actions);
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final fallbackWidth = math.max(
+          0.0,
+          MediaQuery.sizeOf(context).width - 32,
+        );
+        final availableWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : fallbackWidth;
+        final toastWidth = math.min(520.0, availableWidth);
+        final compact = actions.length > 1 && toastWidth < 440;
+        return SizedBox(
+          width: toastWidth,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.94),
+              borderRadius: BorderRadius.circular(compact ? 18 : 999),
+              border: Border.all(color: color.withValues(alpha: 0.78)),
+              boxShadow: const [
+                BoxShadow(
+                  blurRadius: 14,
+                  offset: Offset(0, 5),
+                  color: Color(0x16000000),
                 ),
-                child: Text(actionLabel!),
-              ),
-            ],
-            if (secondaryActionLabel != null && onSecondaryAction != null) ...[
-              const SizedBox(width: 4),
-              TextButton(
-                key: secondaryActionKey,
-                onPressed: onSecondaryAction,
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  minimumSize: const Size(0, 32),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  foregroundColor: const Color(0xFF2B6CB0),
-                  backgroundColor: const Color(0xFFE6F0FB),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  textStyle: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 12,
-                  ),
-                ),
-                child: Text(secondaryActionLabel!),
-              ),
-            ],
-          ],
-        ),
-      ),
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+              child: compact
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        message(),
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: actionWrap(),
+                        ),
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        Expanded(child: message()),
+                        if (actions.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          actionWrap(),
+                        ],
+                      ],
+                    ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

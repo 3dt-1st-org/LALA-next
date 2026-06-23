@@ -605,7 +605,9 @@ void main() {
     expect(backends.first.placesRequestConfigs, isEmpty);
     expect(backends.last.placesRequestConfigs.single.lat, 37.2636);
     tester
-        .widget<TextButton>(find.byKey(const ValueKey('location-manual-select')))
+        .widget<TextButton>(
+          find.byKey(const ValueKey('location-manual-select')),
+        )
         .onPressed
         ?.call();
     await tester.pumpAndSettle();
@@ -619,14 +621,76 @@ void main() {
     expect(locationProvider.requests, 1);
     expect(backends.length, 3);
     expect(backends.first.placesRequestConfigs, isEmpty);
-    expect(backends.last.placesRequestConfigs.single.lat, 37.5665);
-    expect(backends.last.placesRequestConfigs.single.lng, 126.9780);
-    expect(backends.last.weatherRequestConfigs.single.lat, 37.5665);
-    expect(backends.last.interventionRequestConfigs.single.lng, 126.9780);
-    expect(backends.last.dailyPlanRequestConfigs.single.lat, 37.5665);
+    expect(backends.last.placesRequestConfigs.single.lat, 37.55986);
+    expect(backends.last.placesRequestConfigs.single.lng, 126.99398);
+    expect(backends.last.weatherRequestConfigs.single.lat, 37.55986);
+    expect(backends.last.interventionRequestConfigs.single.lng, 126.99398);
+    expect(backends.last.dailyPlanRequestConfigs.single.lat, 37.55986);
     expect(find.text('현재 위치를 확인해야 추천을 볼 수 있어요'), findsNothing);
     expect(find.text('추천 장소 접기'), findsOneWidget);
   });
+
+  testWidgets(
+    'manual location sheet supports nationwide search and province filter',
+    (tester) async {
+      final backends = <FakeBackend>[];
+      final locationProvider = FakeLocationProvider(
+        const LalaLocationResult.unavailable(),
+      );
+
+      await tester.pumpWidget(
+        TestLalaApp(
+          backendFactory: (config) {
+            final backend = FakeBackend(config);
+            backends.add(backend);
+            return backend;
+          },
+          initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+          locationProvider: locationProvider,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      tester
+          .widget<TextButton>(
+            find.byKey(const ValueKey('location-manual-select')),
+          )
+          .onPressed
+          ?.call();
+      await tester.pumpAndSettle();
+
+      expect(find.text('229개 지역'), findsOneWidget);
+      await tester.enterText(
+        find.byKey(const ValueKey('manual-location-search')),
+        '세종',
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('manual-location-option-sejong-sejong')),
+        findsOneWidget,
+      );
+
+      await tester.enterText(
+        find.byKey(const ValueKey('manual-location-search')),
+        '',
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('manual-location-province-busan')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('16개 지역'), findsOneWidget);
+      await tester.tap(
+        find.byKey(const ValueKey('manual-location-option-busan-gangseo')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(backends.length, 3);
+      expect(backends.last.placesRequestConfigs.single.lat, 35.15930);
+      expect(backends.last.placesRequestConfigs.single.lng, 128.93300);
+      expect(backends.last.weatherRequestConfigs.single.lat, 35.15930);
+      expect(backends.last.dailyPlanRequestConfigs.single.lng, 128.93300);
+    },
+  );
 
   testWidgets('filters places from category chips and toggles map modes', (
     tester,
