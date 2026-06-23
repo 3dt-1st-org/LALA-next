@@ -303,6 +303,14 @@ review-quality enhancement.
 장소별 주간 언급량과 리뷰 신호를 저장한다. 광고 필터링, 감성 분석, 맛/서비스/분위기
 속성 점수는 `attributes`에 남긴다.
 
+`scripts/unix/plan_review_mention_ingest.sh` and
+`scripts/windows/plan_review_mention_ingest.ps1` provide the guarded ingestion
+path for approved rows in `community.posts`. Plan mode does not connect to the
+database. Preview reads `community.posts` and `travel.places` without mutation.
+Apply requires `ALLOW_REVIEW_MENTION_INGEST_APPLY=1` plus
+`--confirm APPLY_REVIEW_MENTION_INGEST`, upserts this table, and records the run
+in `ops.job_runs`.
+
 | Column | Type | Required | Description |
 |---|---:|---:|---|
 | `id` | uuid | Yes | 내부 PK |
@@ -313,7 +321,7 @@ review-quality enhancement.
 | `mention_count` | integer | Yes | 전체 언급 수 |
 | `organic_mention_count` | integer | No | 광고/홍보 필터 후 언급 수 |
 | `sentiment_score` | numeric | No | -1 to 1 |
-| `attributes` | jsonb | No | `taste`, `service`, `price`, `atmosphere` 등 |
+| `attributes` | jsonb | No | `prompt_version`, `organic_review_count`, `filtered_ad_count`, `filtered_irrelevant_count`, `match_confidence_avg`, `top_terms`, `source_mix`, `category_policy`, `preprocess` 등 |
 | `updated_at` | timestamptz | Yes | 갱신 시각 |
 
 ## `ingest.source_files`

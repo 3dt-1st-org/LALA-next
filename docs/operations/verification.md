@@ -280,6 +280,51 @@ $env:ALLOW_PLACE_SCORE_BATCH_APPLY = "1"
   -Confirm APPLY_PLACE_SCORE_BATCH
 ```
 
+To review approved review/mention preprocessing without connecting to a
+database:
+
+```bash
+scripts/unix/plan_review_mention_ingest.sh
+```
+
+```powershell
+.\scripts\windows\plan_review_mention_ingest.ps1
+```
+
+Default mode is plan-only. It reports the
+`community.place_mentions_weekly` target, the `community.posts` and
+`travel.places` inputs, and the `review-mention-preprocess-v1` prompt/schema
+version without printing `DB_DSN`. When approved community/search/export rows
+are loaded, preview the deterministic cleanup, ad filtering, category policy,
+place matching, and aggregate rows:
+
+```bash
+scripts/unix/plan_review_mention_ingest.sh --preview --limit 50
+```
+
+```powershell
+.\scripts\windows\plan_review_mention_ingest.ps1 -Preview -Limit 50
+```
+
+Apply upserts rows into `community.place_mentions_weekly`, records an
+`ops.job_runs` row, and requires the exact confirm string plus a process-local
+allow flag:
+
+```bash
+ALLOW_REVIEW_MENTION_INGEST_APPLY=1 \
+  scripts/unix/plan_review_mention_ingest.sh \
+  --apply \
+  --confirm APPLY_REVIEW_MENTION_INGEST
+```
+
+```powershell
+$env:ALLOW_REVIEW_MENTION_INGEST_APPLY = "1"
+.\scripts\windows\plan_review_mention_ingest.ps1 `
+  -Apply `
+  -Confirm APPLY_REVIEW_MENTION_INGEST
+Remove-Item Env:\ALLOW_REVIEW_MENTION_INGEST_APPLY
+```
+
 To review the franchise/small-merchant identity batch without connecting to a
 database:
 

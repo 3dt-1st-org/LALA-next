@@ -1,6 +1,6 @@
 # Review and Mention Preprocessing Strategy
 
-Last updated: 2026-06-22 KST
+Last updated: 2026-06-23 KST
 
 This document defines how LALA reaches the target state for review and mention
 preprocessing without falling back to demo, mock, or crawler-only behavior.
@@ -26,9 +26,9 @@ to paste into a docent prompt. The completed pipeline must:
 
 | Gap | Current Evidence | Risk |
 |---|---|---|
-| No dedicated guarded batch for review/mention ingestion | `community.place_mentions_weekly` is defined, but no `run_review_mention_*` tool exists yet. | Review quality stays `pending_review_attribute_analysis`. |
-| Ad filtering is not a reusable persisted pipeline | Legacy filtering logic has been reflected in docent guards, but not yet applied to stored review rows. | Promotional content can inflate mention counts and docent tone. |
-| Place matching is not fully audited | Place IDs exist in `travel.places`, but mention matching needs confidence and failure buckets. | Same-name places or franchise branches can be assigned incorrectly. |
+| AI attribute extraction is not complete | `run_review_mention_ingest` now provides deterministic cleanup, ad filtering, category policy, matching, and weekly aggregate upsert; the JSON-only AI attribute batch is still separate work. | Taste/service/local-experience scores remain thinner than the final target. |
+| Source coverage is still narrow | The first guarded source reads approved rows from `community.posts`; Naver Search/API or contracted exports still need a reviewed ingestion lane. | Representative places may lack enough organic evidence for `review_quality_score`. |
+| Place matching needs human audit for ambiguous cases | Exact-name matching now records `ambiguous_match` and keeps those rows out of organic counts, but no manual queue UI exists yet. | Same-name places or franchise branches can wait for review rather than silently entering scoring/RAG. |
 | Review source provenance is too thin | `ingest.source_files` handles file provenance; API/search/community provenance needs the same discipline. | We cannot prove a score came from approved sources. |
 | No human review lane for ambiguous matches | Existing plan tools are guarded, but ambiguous review matches need a manual queue. | Bad matches become hidden RAG/docent evidence. |
 
@@ -62,14 +62,27 @@ scoring/RAG until a guarded retry succeeds.
 | Review embeddings | `rag.knowledge_chunks` with `source_type='place_mention'` after the aggregate has passed ad filtering, place matching, and confidence thresholds. |
 | Legacy direct DB writes | Guarded plan/preview/apply command style used by `run_place_score_batch` and `run_rag_index`, with `ops.job_runs` provenance. |
 
-The immediate implementation path is:
+The first implementation slice is now in place:
 
-1. Add shared text cleanup and category-policy helpers under `apps/api/app/services`.
-2. Add `apps.api.app.tools.run_review_mention_ingest` with plan, preview, and
+1. `apps/api/app/services/review_mention_ingest.py` owns shared text cleanup,
+   duplicate detection, ad phrases, category policy, exact place matching,
+   weekly aggregation, and `ops.job_runs` recording.
+2. `apps.api.app.tools.run_review_mention_ingest` provides plan, preview, and
    guarded apply modes.
-3. Feed approved aggregates to `community.place_mentions_weekly`.
-4. Leave user-facing docents on current RAG/place-profile grounding until the
-   review-derived rows are persisted and indexed.
+3. `scripts/unix/plan_review_mention_ingest.sh` and
+   `scripts/windows/plan_review_mention_ingest.ps1` follow the same guarded
+   wrapper style as place scoring and RAG.
+4. Unit tests cover ad filtering, attraction/culture food-noise rejection,
+   restaurant food-term retention, ambiguous matching, text normalization, and
+   guarded apply behavior.
+5. The 2026-06-23 shared-dev apply processed 155 `community.posts` rows,
+   upserted 139 weekly aggregates, left 12 ambiguous matches out of organic
+   counts, and refreshed score/RAG. The table now has 168
+   `review-mention-preprocess-v1` rows, 132 rows with deterministic
+   `review_attributes`, and 10 rows with `review_quality`.
+
+The next slice is to add broader source ingestion and AI attribute extraction
+before score/RAG regeneration.
 
 ## Source Policy
 
@@ -190,11 +203,11 @@ For attractions/culture venues, keep the rejection evidence:
 
 | Milestone | Scope | Done Evidence |
 |---|---|---|
-| M1. Plan and preview tool | Add the tool and wrappers with no DB mutation by default. | `scripts/unix/plan_review_mention_ingest.sh` prints plan output and no secrets. |
-| M2. Deterministic filters | HTML cleanup, dedup, ad phrases, category-specific food noise policy. | Unit tests for attraction food-only rejection and restaurant food-term retention. |
-| M3. AI classifier | JSON-only ad/relevance classifier with prompt versioning. | Preview output includes classifier decisions and confidence. |
-| M4. Place matching | Confidence-ranked matching against `travel.places`. | Ambiguous rows do not enter `community.place_mentions_weekly`. |
-| M5. Apply path | Guarded upsert to weekly aggregate table. | Apply inserts rows and logs an `ops.job_runs` record. |
+| M1. Plan and preview tool | Add the tool and wrappers with no DB mutation by default. | Implemented. `scripts/unix/plan_review_mention_ingest.sh` is included in repo verification and prints no secrets. |
+| M2. Deterministic filters | HTML cleanup, dedup, ad phrases, category-specific food noise policy. | Implemented. Unit tests cover ad filtering, attraction food-only rejection, and restaurant food-term retention. |
+| M3. AI classifier | JSON-only ad/relevance classifier with prompt versioning. | Pending. Deterministic `review-mention-preprocess-v1` metadata is stored first. |
+| M4. Place matching | Confidence-ranked matching against `travel.places`. | Partially implemented. Exact-name matches are scored; ambiguous rows keep `organic_mention_count=0`. |
+| M5. Apply path | Guarded upsert to weekly aggregate table. | Implemented. Apply requires `ALLOW_REVIEW_MENTION_INGEST_APPLY=1` and logs `ops.job_runs`. |
 | M6. Integration | Feed sentiment/attribute scoring and RAG regeneration. | Score/RAG preview shows new review-derived inputs. |
 
 ## Verification Commands
@@ -216,6 +229,13 @@ Existing follow-up commands after apply:
 ```bash
 scripts/unix/plan_place_score_batch.sh --preview --limit 20 --python .venv/bin/python
 scripts/unix/plan_rag_index.sh --preview --source dynamic --limit 20 --python .venv/bin/python
+```
+
+The tool is also covered by:
+
+```bash
+python -m pytest apps/api/tests/test_review_mention_ingest.py apps/api/tests/test_safety_contracts.py -q
+scripts/unix/verify_repo.sh --skip-install --python .venv/bin/python
 ```
 
 ## 100% Completion Definition

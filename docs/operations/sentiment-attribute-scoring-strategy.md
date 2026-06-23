@@ -1,6 +1,6 @@
 # Sentiment and Attribute Scoring Strategy
 
-Last updated: 2026-06-22 KST
+Last updated: 2026-06-23 KST
 
 This document defines the path from preprocessed reviews and mentions to
 category-aware sentiment, attribute scores, and `review_quality_score`.
@@ -29,8 +29,8 @@ The result should feed:
 
 | Gap | Current Evidence | Risk |
 |---|---|---|
-| `review_quality_score` coverage is narrow | `run_place_score_batch` now reads `community.place_mentions_weekly.attributes.review_quality.score`, but only places with enough organic evidence become non-null. | Review quality is real but still sparse until more approved review/mention sources are ingested. |
-| Attribute extraction is not a full guarded AI batch | Rule-based review attributes and weekly mention aggregates exist; a separate AI extraction contract is still needed for broader coverage. | Reviews can affect some scores, but not enough places for final-quality coverage. |
+| `review_quality_score` coverage is narrow | `run_place_score_batch` reads `community.place_mentions_weekly.attributes.review_quality.score`. After the 2026-06-23 review/mention apply, shared dev has 168 mention rows, 132 rows with deterministic `review_attributes`, 10 rows with `review_quality`, and the latest 2,636 score snapshots include 4 non-null `review_quality_score` rows. | Review quality is real but still sparse until more approved review/mention sources are ingested. |
+| Attribute extraction is not a full guarded AI batch | Deterministic review attributes and weekly mention aggregates exist via `run_review_mention_ingest`; a separate AI extraction contract is still needed for richer taste, service, atmosphere, and local-experience detail. | Reviews can affect eligible scores, but not enough places for final-quality coverage. |
 | Category-specific attribute schemas need stronger test coverage | Existing JSON uses category policies and `review-attributes-v1`, but more category edge cases are needed. | Taste/service rules could still leak into attractions or be lost for restaurants if new sources are added carelessly. |
 | Confidence and sample-size rules need operational monitoring | `review_quality_score` stays null below 3 organic reviews, and low evidence keeps `review_attribute_analysis` in missing signals. | A sparse source pool can make the review score look absent for many otherwise valid places. |
 | Manual QA thresholds are not connected to scoring | Deployed smoke checks script quality, but not attribute scoring quality. | Good smoke can still hide weak review scoring. |
@@ -62,11 +62,13 @@ how much evidence supported it, and why the score is safe to use.
 | Old restaurant ranking signal | `analytics.place_score_snapshots.review_quality_score` and existing local-value components, not a standalone ranking table. |
 | LLM analysis temperature/prompt assumptions | Versioned prompt metadata in `travel.place_enrichments.prompt_version` and `attributes.schema_version`. |
 
-The first implementation should update `apps/api/app/services/place_score_batch.py`
-so `review_quality_score` is read from the new versioned review attributes
-instead of remaining `pending_review_attribute_analysis`. The UI/API should
-continue to hide score details unless the user explicitly opens the
-score/reason view.
+The first implementation is now split across `run_review_mention_ingest` and
+`place_score_batch`: deterministic preprocessing writes
+`review-attributes-deterministic-v1` and `review-quality-deterministic-v1` into
+`community.place_mentions_weekly.attributes`, and `place_score_batch` reads
+that signal into `analytics.place_score_snapshots.review_quality_score` when
+the organic evidence threshold is met. The UI/API should continue to hide score
+details unless the user explicitly opens the score/reason view.
 
 ## Attribute Schema
 
