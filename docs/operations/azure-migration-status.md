@@ -265,9 +265,11 @@ operator-facing rollout summary.
   lock maintenance window. The resource group currently has a `CanNotDelete`
   lock, so the rule deletion is blocked unless an authorized operator
   temporarily removes or scopes the lock.
-- Add card-spending files and review attribute signals, then regenerate scores
-  and RAG chunks. KCISA, KOPIS, and weather observations already have
-  shared-dev apply evidence, but should be refreshed before judge/demo windows.
+- Maintain card-spending, KCISA, KOPIS, and weather refreshes before
+  judge/demo windows. Shared dev has current apply evidence for both Gyeonggi
+  card sources, KCISA, KOPIS, weather observations, score regeneration, and
+  dynamic RAG regeneration. The remaining data-quality gap is review attribute
+  signal expansion.
 - Expand franchise matching with official location-level franchise references
   when a suitable source with branch addresses or coordinates is available.
   Current Fair Trade Commission ingestion covers brand-level statistics, so

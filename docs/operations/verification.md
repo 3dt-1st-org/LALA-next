@@ -677,14 +677,19 @@ ALLOW_CARD_SPENDING_FILE_INGEST_APPLY=1 \
   --file-path artifacts/tmp/raw/gyeonggi-card/카드매출_시군구_성연령별_집계.zip
 ```
 
-As of 2026-06-22, the shared dev database has the Gyeonggi aggregate source
-applied area-only: 3,104,700 parsed source rows produced 149,341
-`economy.card_spending_area_monthly` rows across 31 regions. The subsequent
-place-score batch refreshed 2,636 `analytics.place_score_snapshots`; 1,294
-Gyeonggi places now have `local_spending_score` sourced from actual card sales
-aggregates. Regions without an approved card-spending source, such as current
-Seoul coverage, must keep `local_spending_score` null rather than infer or mock
-the signal.
+As of 2026-06-23 UTC, the shared dev database has both approved Gyeonggi card
+sources applied. The aggregate source remains the 31-region baseline through
+2025-01. The detailed `카드소비 데이터_202601-202603.zip` source then parsed
+47,002,332 of 51,328,357 raw rows and inserted 3,650
+`economy.card_spending_area_monthly` rows plus 57,832
+`economy.card_spending_demographics` rows. Card area coverage is now 152,991
+rows across 31 regions with a max month of 2026-03, and demographic coverage is
+57,832 rows across 15 regions. The subsequent place-score batch inserted 2,636
+`analytics.place_score_snapshots`; 1,294 latest scores have
+`local_spending_score` sourced from actual card sales rows. Dynamic RAG then
+upserted 821 chunks into `rag.knowledge_chunks`. Regions without an approved
+card-spending source, such as current Seoul coverage, must keep
+`local_spending_score` null rather than infer or mock the signal.
 
 To export the Flutter handoff schema without running a server, run:
 

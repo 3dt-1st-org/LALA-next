@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import codecs
 import csv
 import hashlib
 import io
@@ -9,6 +10,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
@@ -17,6 +19,7 @@ DETAIL_DATASET_NAME = "경기도_카드 소비 데이터"
 AGGREGATE_DATASET_NAME = "경기도_데이터분석 카드매출 시군구 성연령별 집계"
 DEFAULT_VISITOR_TYPE = "domestic"
 SUPPORTED_SUFFIXES = {".csv", ".xlsx", ".zip"}
+NORMALIZE_KEY_PATTERN = re.compile(r"[\s_\-./()·:]+")
 
 GYEONGGI_SIGUNGU_CODE_TO_NAME = {
     "41110": "수원시",
@@ -73,7 +76,15 @@ GYEONGGI_SIGUNGU_CODE_TO_NAME = {
 }
 
 MONTH_ALIASES = ("month", "base_month", "base_ym", "std_ym", "기준년월", "년월")
-DATE_ALIASES = ("date", "base_date", "base_ymd", "기준년월일", "기준일자", "일자")
+DATE_ALIASES = (
+    "date",
+    "base_date",
+    "base_ymd",
+    "ta_ymd",
+    "기준년월일",
+    "기준일자",
+    "일자",
+)
 REGION_NAME_ALIASES = (
     "region_name_ko",
     "region_name",
@@ -91,6 +102,8 @@ REGION_CODE_ALIASES = (
     "sgg_cd",
     "signgu_cd",
     "adm_cd",
+    "cty_rgn_no",
+    "admi_cty_no",
     "시군구코드",
     "시군코드",
     "행정동코드",
@@ -102,6 +115,7 @@ INDUSTRY_CODE_ALIASES = (
     "카드사 업종분류코드",
     "중분류업종코드",
     "mdclass_indutype_cd",
+    "card_tpbuz_cd",
 )
 INDUSTRY_NAME_ALIASES = (
     "industry_name_ko",
@@ -110,6 +124,8 @@ INDUSTRY_NAME_ALIASES = (
     "카드사업종중분류명",
     "카드사 업종중분류명",
     "중분류업종명",
+    "card_tpbuz_nm_2",
+    "card_tpbuz_nm_1",
 )
 GENDER_ALIASES = ("gender", "sex", "성별")
 AGE_GROUP_ALIASES = ("age_group", "age", "연령별", "연령대")
@@ -124,6 +140,7 @@ SPEND_AMOUNT_ALIASES = (
     "sales_amount",
     "amount",
     "sales_amt",
+    "amt",
     "매출금액",
     "카드매출금액",
 )
@@ -131,6 +148,7 @@ TRANSACTION_COUNT_ALIASES = (
     "transaction_count",
     "sales_count",
     "count",
+    "cnt",
     "매출건수",
     "결제건수",
 )
@@ -702,7 +720,10 @@ def _detect_zip_csv_encoding(
     last_error: UnicodeDecodeError | None = None
     for encoding in ("utf-8-sig", "cp949", "euc-kr"):
         try:
-            sample.decode(encoding)
+            codecs.getincrementaldecoder(encoding)(errors="strict").decode(
+                sample,
+                final=False,
+            )
             return encoding
         except UnicodeDecodeError as exc:
             last_error = exc
@@ -740,20 +761,39 @@ def _iter_zip_xlsx_rows(
 
 
 def _normalize_row(row: dict[str, Any]) -> dict[str, str]:
+    key_map = _normalized_row_key_map(tuple(row.keys()))
     return {
-        _normalize_key(key): "" if value is None else str(value).strip()
-        for key, value in row.items()
-        if key is not None and str(key).strip()
+        normalized_key: "" if row[original_key] is None else str(row[original_key]).strip()
+        for original_key, normalized_key in key_map
     }
 
 
 def _normalize_key(value: Any) -> str:
-    return re.sub(r"[\s_\-./()·:]+", "", str(value).strip()).lower()
+    return _normalize_key_text(str(value))
+
+
+@lru_cache(maxsize=512)
+def _normalize_key_text(value: str) -> str:
+    return NORMALIZE_KEY_PATTERN.sub("", value.strip()).lower()
+
+
+@lru_cache(maxsize=128)
+def _normalized_row_key_map(keys: tuple[Any, ...]) -> tuple[tuple[Any, str], ...]:
+    return tuple(
+        (key, _normalize_key(key))
+        for key in keys
+        if key is not None and str(key).strip()
+    )
+
+
+@lru_cache(maxsize=128)
+def _normalized_alias_keys(aliases: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(_normalize_key(alias) for alias in aliases)
 
 
 def _pick(row: dict[str, str], aliases: Sequence[str]) -> str | None:
-    for alias in aliases:
-        value = row.get(_normalize_key(alias))
+    for key in _normalized_alias_keys(tuple(aliases)):
+        value = row.get(key)
         if value:
             return value
     return None
@@ -812,6 +852,9 @@ def _normalize_age_group(value: Any) -> str | None:
         return None
     digits = re.sub(r"\D", "", text)
     if digits:
+        if len(digits) == 2 and digits.startswith("0"):
+            age_bucket = int(digits) * 10
+            return "90s+" if age_bucket >= 90 else f"{age_bucket}s"
         return f"{int(digits)}s"
     return text
 

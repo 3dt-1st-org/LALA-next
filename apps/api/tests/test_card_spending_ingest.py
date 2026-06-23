@@ -121,6 +121,36 @@ def test_parse_real_gyeonggi_aggregate_column_names(tmp_path):
     assert {row.age_group for row in result.demographic_rows} == {"20s", "60s"}
 
 
+def test_parse_real_gyeonggi_detail_column_names(tmp_path):
+    source = tmp_path / "detail-real.csv"
+    source.write_text(
+        "\n".join(
+            [
+                "ta_ymd,cty_rgn_no,admi_cty_no,card_tpbuz_cd,card_tpbuz_nm_1,card_tpbuz_nm_2,hour,sex,age,day,amt,cnt",
+                "20260101,41111,41111560,D02,소매/유통,건강/기호식품,04,F,05,04,48837,2",
+                "20260102,41111,41111560,D02,소매/유통,건강/기호식품,05,M,07,05,98110,3",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = card_spending_ingest.parse_card_spending_file(path=source)
+
+    assert result.input_row_count == 2
+    assert result.parsed_row_count == 2
+    assert result.skipped_row_count == 0
+    assert len(result.area_monthly_rows) == 1
+    area = result.area_monthly_rows[0]
+    assert area.month.isoformat() == "2026-01-01"
+    assert area.region_name_ko == "수원시"
+    assert area.industry_code == "D02"
+    assert area.industry_name_ko == "건강/기호식품"
+    assert str(area.spend_amount) == "146947"
+    assert area.transaction_count == 5
+    assert {row.gender for row in result.demographic_rows} == {"female", "male"}
+    assert {row.age_group for row in result.demographic_rows} == {"50s", "70s"}
+
+
 def test_parse_zip_csv_without_loading_external_extraction_step(tmp_path):
     source = tmp_path / "aggregate.zip"
     with zipfile.ZipFile(source, "w") as archive:
@@ -147,6 +177,27 @@ def test_parse_zip_csv_without_loading_external_extraction_step(tmp_path):
     assert result.area_monthly_rows[0].region_name_ko == "화성시"
     assert str(result.area_monthly_rows[0].spend_amount) == "32000"
     assert len(result.demographic_rows) == 2
+
+
+def test_parse_zip_csv_detects_utf8_when_sample_ends_inside_korean_bytes(tmp_path):
+    source = tmp_path / "detail-truncated-sample.zip"
+    header = "ta_ymd,cty_rgn_no,card_tpbuz_cd,card_tpbuz_nm_2,sex,age,amt,cnt\n"
+    row_prefix = "20260101,41111,D02,"
+    filler = ""
+    while (65536 - len((header + row_prefix + filler).encode("utf-8"))) % 3 == 0:
+        filler += "x"
+    long_name = filler + ("가" * 30000)
+    csv_text = f"{header}{row_prefix}{long_name},F,05,1000,2\n"
+    with zipfile.ZipFile(source, "w") as archive:
+        archive.writestr("detail.csv", csv_text.encode("utf-8"))
+
+    result = card_spending_ingest.parse_card_spending_file(path=source)
+
+    assert result.input_row_count == 1
+    assert result.parsed_row_count == 1
+    assert len(result.area_monthly_rows) == 1
+    assert result.area_monthly_rows[0].region_name_ko == "수원시"
+    assert result.demographic_rows[0].age_group == "50s"
 
 
 def test_parse_can_skip_demographics_for_area_score_rollout(tmp_path):
