@@ -20,6 +20,10 @@ def test_place_score_batch_plan_uses_data_dictionary_names(capsys):
     assert "economy.card_spending_area_monthly" in payload["input_relations"]
     assert "culture.events" in payload["input_relations"]
     assert "analytics.place_business_identity" in payload["input_relations"]
+    assert "community.place_mentions_weekly" in payload["input_relations"]
+    assert payload["review_signal"] == (
+        "community.place_mentions_weekly.attributes.review_quality.score"
+    )
     assert payload["db_mutation"] is False
 
 
@@ -89,12 +93,89 @@ def test_compute_score_snapshots_combines_card_weather_and_culture_signals():
         "travel.place_events",
         "analytics.place_business_identity",
         "travel.weather_observations",
+        "community.place_mentions_weekly",
     ]
     assert indoor.local_spending_score == 0.35
     assert indoor.demand_dispersion_score > attraction.demand_dispersion_score
     assert indoor.weather_fit_score == 0.9
     assert indoor.small_merchant_fit_score == 0.76
     assert 0 < indoor.final_score <= 1
+
+
+def test_compute_score_snapshots_uses_review_quality_when_evidence_is_sufficient():
+    signal = place_score_batch.PlaceSignal(
+        place_id="event-with-review",
+        name_ko="동네 축제",
+        category="event",
+        region_name_ko="수원시",
+        is_indoor=False,
+        primary_source="tour_api",
+        region_place_count=10,
+        culture_event_count=1,
+        review_mention_count=5,
+        review_organic_mention_count=5,
+        review_sentiment_score=0.3,
+        review_provider="naver_blog",
+        review_week_start="2026-06-08",
+        review_attributes={
+            "organic_review_count": 5,
+            "filtered_ad_count": 0,
+            "review_attributes": {
+                "schema_version": "review-attributes-v1",
+                "attribute_mean": 0.6698,
+                "attribute_confidence_avg": 0.505,
+                "sentiment_score": 0.3,
+                "sentiment_confidence": 0.665,
+            },
+            "review_quality": {
+                "score": 0.6474,
+                "organic_review_count": 5,
+                "mention_count": 5,
+                "confidence": 0.505,
+            },
+        },
+    )
+
+    snapshot = place_score_batch.compute_score_snapshots([signal])[0]
+
+    assert snapshot.review_quality_score == 0.6474
+    assert "review_attribute_analysis" not in snapshot.features["missing_signals"]
+    assert snapshot.features["review_signal"] == {
+        "provider": "naver_blog",
+        "week_start": "2026-06-08",
+        "mention_count": 5,
+        "organic_mention_count": 5,
+        "sentiment_score": 0.3,
+        "schema_version": "review-attributes-v1",
+    }
+
+
+def test_compute_score_snapshots_keeps_review_quality_null_for_low_evidence():
+    signal = place_score_batch.PlaceSignal(
+        place_id="low-evidence-review",
+        name_ko="리뷰 적은 장소",
+        category="restaurant",
+        region_name_ko="수원시",
+        is_indoor=True,
+        primary_source="tour_api",
+        region_place_count=10,
+        review_mention_count=2,
+        review_organic_mention_count=2,
+        review_attributes={
+            "organic_review_count": 2,
+            "review_attributes": {
+                "attribute_mean": 0.9,
+                "attribute_confidence_avg": 0.8,
+                "sentiment_score": 0.7,
+                "sentiment_confidence": 0.8,
+            },
+        },
+    )
+
+    snapshot = place_score_batch.compute_score_snapshots([signal])[0]
+
+    assert snapshot.review_quality_score is None
+    assert "review_attribute_analysis" in snapshot.features["missing_signals"]
 
 
 def test_fetch_place_signals_uses_null_identity_when_relation_is_missing(monkeypatch):

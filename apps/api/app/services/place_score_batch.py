@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Sequence
 
 from apps.api.app.services.recommendation_scoring import (
@@ -45,6 +45,12 @@ class PlaceSignal:
     is_heatwave: bool | None = None
     is_coldwave: bool | None = None
     is_strong_wind: bool | None = None
+    review_mention_count: int | None = None
+    review_organic_mention_count: int | None = None
+    review_sentiment_score: float | None = None
+    review_attributes: dict[str, Any] | None = None
+    review_week_start: str | None = None
+    review_provider: str | None = None
 
     @classmethod
     def from_row(cls, row: dict[str, Any]) -> "PlaceSignal":
@@ -72,6 +78,14 @@ class PlaceSignal:
             is_heatwave=_optional_bool(row.get("is_heatwave")),
             is_coldwave=_optional_bool(row.get("is_coldwave")),
             is_strong_wind=_optional_bool(row.get("is_strong_wind")),
+            review_mention_count=_optional_int(row.get("review_mention_count")),
+            review_organic_mention_count=_optional_int(
+                row.get("review_organic_mention_count")
+            ),
+            review_sentiment_score=_optional_float(row.get("review_sentiment_score")),
+            review_attributes=_optional_json_object(row.get("review_attributes")),
+            review_week_start=_optional_date_text(row.get("review_week_start")),
+            review_provider=_optional_text(row.get("review_provider")),
         )
 
 
@@ -140,7 +154,7 @@ def compute_score_snapshots(signals: Sequence[PlaceSignal]) -> list[PlaceScoreSn
             "demand_dispersion_score": density_score,
             "culture_relevance_score": _culture_relevance_score(signal),
             "weather_fit_score": _weather_fit_score(signal),
-            "review_quality_score": None,
+            "review_quality_score": _review_quality_score(signal),
             "accessibility_fit_score": _accessibility_fit_score(signal),
         }
         score = build_place_score(
@@ -252,6 +266,12 @@ def fetch_place_signals(
             latest_weather.is_heatwave,
             latest_weather.is_coldwave,
             latest_weather.is_strong_wind,
+            latest_mentions.mention_count AS review_mention_count,
+            latest_mentions.organic_mention_count AS review_organic_mention_count,
+            latest_mentions.sentiment_score AS review_sentiment_score,
+            latest_mentions.attributes AS review_attributes,
+            latest_mentions.week_start AS review_week_start,
+            latest_mentions.provider AS review_provider,
 {business_identity_select if has_business_identity else fallback_business_identity_select}
         FROM travel.places places
         LEFT JOIN area_spending
@@ -264,6 +284,32 @@ def fetch_place_signals(
           ON place_event_counts.place_id = places.place_id
         LEFT JOIN latest_weather
           ON latest_weather.location_name = places.region_name_ko
+        LEFT JOIN LATERAL (
+            SELECT
+                mentions.week_start,
+                mentions.provider,
+                mentions.mention_count,
+                mentions.organic_mention_count,
+                mentions.sentiment_score,
+                mentions.attributes
+            FROM community.place_mentions_weekly mentions
+            WHERE mentions.place_id = places.place_id
+               OR (
+                    NULLIF(TRIM(mentions.place_id), '') IS NULL
+                AND mentions.place_name_ko = places.name_ko
+                AND mentions.category = places.category
+               )
+            ORDER BY
+                CASE WHEN mentions.place_id = places.place_id THEN 0 ELSE 1 END,
+                CASE
+                    WHEN (mentions.attributes->'review_quality'->>'score') IS NOT NULL
+                    THEN 0
+                    ELSE 1
+                END,
+                mentions.week_start DESC,
+                mentions.updated_at DESC
+            LIMIT 1
+        ) latest_mentions ON true
 {business_identity_join if has_business_identity else ""}
         WHERE (%s = 'all' OR places.category = %s)
         ORDER BY places.updated_at DESC, places.place_id
@@ -331,7 +377,9 @@ def _features(signal: PlaceSignal) -> dict[str, Any]:
         missing_signals.append("card_spending_area_monthly")
     if signal.small_merchant_fit_score is None:
         missing_signals.append("place_business_identity")
-    missing_signals.append("review_attribute_analysis")
+    review_quality_score = _review_quality_score(signal)
+    if review_quality_score is None:
+        missing_signals.append("review_attribute_analysis")
     if not _has_weather(signal):
         missing_signals.append("weather_observations")
 
@@ -359,6 +407,14 @@ def _features(signal: PlaceSignal) -> dict[str, Any]:
             "is_coldwave": signal.is_coldwave,
             "is_strong_wind": signal.is_strong_wind,
         },
+        "review_signal": {
+            "provider": signal.review_provider,
+            "week_start": signal.review_week_start,
+            "mention_count": signal.review_mention_count,
+            "organic_mention_count": signal.review_organic_mention_count,
+            "sentiment_score": signal.review_sentiment_score,
+            "schema_version": _review_schema_version(signal.review_attributes),
+        },
         "input_sources": [
             "travel.places",
             "economy.card_spending_area_monthly",
@@ -366,6 +422,7 @@ def _features(signal: PlaceSignal) -> dict[str, Any]:
             "travel.place_events",
             "analytics.place_business_identity",
             "travel.weather_observations",
+            "community.place_mentions_weekly",
         ],
         "missing_signals": missing_signals,
     }
@@ -425,6 +482,92 @@ def _accessibility_fit_score(signal: PlaceSignal) -> float | None:
     elif signal.region_place_count <= 2:
         score -= 0.05
     return min(max(score, 0.0), 1.0)
+
+
+def _review_quality_score(signal: PlaceSignal) -> float | None:
+    attributes = signal.review_attributes or {}
+    review_quality = attributes.get("review_quality")
+    if isinstance(review_quality, dict):
+        score = _optional_float(review_quality.get("score"))
+        if score is not None:
+            return _round_score(score)
+
+    organic_count = (
+        signal.review_organic_mention_count
+        or _optional_int(attributes.get("organic_review_count"))
+        or 0
+    )
+    if organic_count < 3:
+        return None
+
+    review_attributes = attributes.get("review_attributes")
+    if not isinstance(review_attributes, dict):
+        return None
+
+    attribute_mean = _optional_float(review_attributes.get("attribute_mean"))
+    sentiment_score = (
+        signal.review_sentiment_score
+        if signal.review_sentiment_score is not None
+        else _optional_float(review_attributes.get("sentiment_score"))
+    )
+    if attribute_mean is None or sentiment_score is None:
+        return None
+
+    sentiment_confidence = _optional_float(review_attributes.get("sentiment_confidence"))
+    attribute_confidence = _optional_float(
+        review_attributes.get("attribute_confidence_avg")
+    )
+    raw_count = (
+        signal.review_mention_count
+        or _optional_int(attributes.get("mention_count"))
+        or organic_count
+    )
+    filtered_ad_count = _optional_int(attributes.get("filtered_ad_count")) or max(
+        raw_count - organic_count,
+        0,
+    )
+    organic_coverage = min(1.0, organic_count / _review_category_target(signal.category))
+    ad_quality = 1.0 - min(1.0, filtered_ad_count / max(raw_count, 1))
+    confidence_values = [
+        value
+        for value in (sentiment_confidence, attribute_confidence)
+        if value is not None
+    ]
+    confidence = min(confidence_values) if confidence_values else 0.5
+    if organic_count < 10:
+        confidence = min(confidence, 0.65)
+    sentiment_norm = (max(-1.0, min(1.0, sentiment_score)) + 1.0) / 2.0
+    score = (
+        0.35 * attribute_mean
+        + 0.25 * sentiment_norm
+        + 0.20 * organic_coverage
+        + 0.10 * ad_quality
+        + 0.10 * confidence
+    )
+    if filtered_ad_count / max(raw_count, 1) > 0.50:
+        score = min(score, 0.60)
+    return _round_score(score)
+
+
+def _review_schema_version(attributes: dict[str, Any] | None) -> str | None:
+    if not isinstance(attributes, dict):
+        return None
+    review_attributes = attributes.get("review_attributes")
+    if isinstance(review_attributes, dict):
+        return _optional_text(review_attributes.get("schema_version"))
+    return None
+
+
+def _review_category_target(category: str) -> float:
+    if category == "restaurant":
+        return 30.0
+    if category == "event":
+        return 15.0
+    return 20.0
+
+
+def _round_score(value: float) -> float:
+    return float(Decimal(str(value)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP))
 
 
 def _relative_score(
@@ -524,6 +667,19 @@ def _optional_date_text(value: Any) -> str | None:
         return value.isoformat()
     text = str(value).strip()
     return text or None
+
+
+def _optional_json_object(value: Any) -> dict[str, Any] | None:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            parsed = json.loads(value)
+        except ValueError:
+            return None
+        if isinstance(parsed, dict):
+            return parsed
+    return None
 
 
 def _json_dumps(value: Any) -> str:

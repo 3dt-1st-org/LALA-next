@@ -119,8 +119,9 @@ def _plan_payload() -> dict[str, Any]:
             "travel.place_events",
             "analytics.place_business_identity",
             "travel.weather_observations",
+            "community.place_mentions_weekly",
         ],
-        "review_signal": "pending_review_attribute_analysis",
+        "review_signal": "community.place_mentions_weekly.attributes.review_quality.score",
         "business_identity_signal": "analytics.place_business_identity.small_merchant_fit_score",
     }
 

@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import sys
+import types
+from types import SimpleNamespace
+
 from apps.api.app.schemas.docent import DocentScriptRequest
 from apps.api.app.services import ai_service
 
@@ -95,3 +99,49 @@ def test_grounding_prompt_uses_verified_place_context_label():
 
     assert "LALA verified place context" in prompt
     assert "RAG knowledge index" not in prompt
+
+
+def test_generate_docent_script_uses_short_timeout_without_sdk_retries(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            captured["completion"] = kwargs
+            return SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(content="검증된 도슨트 문장입니다."))]
+            )
+
+    class FakeAzureOpenAI:
+        def __init__(self, **kwargs):
+            captured["client"] = kwargs
+            self.chat = SimpleNamespace(completions=FakeCompletions())
+
+    fake_openai = types.ModuleType("openai")
+    fake_openai.AzureOpenAI = FakeAzureOpenAI
+    monkeypatch.setitem(sys.modules, "openai", fake_openai)
+    monkeypatch.setattr(
+        ai_service,
+        "get_settings",
+        lambda: SimpleNamespace(
+            enable_live_ai=True,
+            azure_openai_endpoint="https://example.openai.azure.com",
+            azure_openai_key="secret",
+            azure_openai_deployment="deployment",
+            azure_openai_api_version="2024-02-15-preview",
+        ),
+    )
+
+    request = DocentScriptRequest(
+        place_id="place-1",
+        place_name="화성행궁",
+        category="attraction",
+        language="ko",
+        mode="brief",
+    )
+
+    text = ai_service.generate_docent_script_text(request)
+
+    assert text == "검증된 도슨트 문장입니다."
+    assert captured["client"]["timeout"] == ai_service.DOCENT_AI_TIMEOUT_SECONDS
+    assert captured["client"]["max_retries"] == 0
+    assert captured["completion"]["model"] == "deployment"

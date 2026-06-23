@@ -29,10 +29,10 @@ The result should feed:
 
 | Gap | Current Evidence | Risk |
 |---|---|---|
-| `review_quality_score` is pending | Data dictionary marks it as `pending_review_attribute_analysis`. | The final recommendation score lacks review quality evidence. |
-| Attribute extraction is not a guarded batch | AI enrichment exists for place fields, but review attributes need a separate contract. | Reviews can affect docents but not scoring rigorously. |
-| Category-specific attribute schemas are not fixed | Existing schemas allow generic JSON attributes. | Taste/service rules could leak into attractions or be lost for restaurants. |
-| Confidence and sample-size rules are absent | Mention table supports counts, but score confidence is not defined. | A few noisy reviews could over-influence scores. |
+| `review_quality_score` coverage is narrow | `run_place_score_batch` now reads `community.place_mentions_weekly.attributes.review_quality.score`, but only places with enough organic evidence become non-null. | Review quality is real but still sparse until more approved review/mention sources are ingested. |
+| Attribute extraction is not a full guarded AI batch | Rule-based review attributes and weekly mention aggregates exist; a separate AI extraction contract is still needed for broader coverage. | Reviews can affect some scores, but not enough places for final-quality coverage. |
+| Category-specific attribute schemas need stronger test coverage | Existing JSON uses category policies and `review-attributes-v1`, but more category edge cases are needed. | Taste/service rules could still leak into attractions or be lost for restaurants if new sources are added carelessly. |
+| Confidence and sample-size rules need operational monitoring | `review_quality_score` stays null below 3 organic reviews, and low evidence keeps `review_attribute_analysis` in missing signals. | A sparse source pool can make the review score look absent for many otherwise valid places. |
 | Manual QA thresholds are not connected to scoring | Deployed smoke checks script quality, but not attribute scoring quality. | Good smoke can still hide weak review scoring. |
 
 ## Legacy LALA Touchpoints

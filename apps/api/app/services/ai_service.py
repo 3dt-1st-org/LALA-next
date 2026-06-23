@@ -37,6 +37,7 @@ _ATTRACTION_NOISE_GUARD_KO = (
     "명소나 문화공간을 식당/카페 리뷰처럼 쓰지 마세요. 음식, 카페, 맛집은 "
     "주변 동선 팁으로만 다루고, 장소 자체의 매력이나 근거로 둔갑시키지 마세요."
 )
+DOCENT_AI_TIMEOUT_SECONDS = 5.0
 
 
 def generate_docent_script_text(
@@ -66,7 +67,8 @@ def generate_docent_script_text(
         azure_endpoint=settings.azure_openai_endpoint,
         api_key=settings.azure_openai_key,
         api_version=settings.azure_openai_api_version,
-        timeout=8.0,
+        timeout=DOCENT_AI_TIMEOUT_SECONDS,
+        max_retries=0,
     )
     language = display_language(request.language)
     grounding_context = grounding_context or []
