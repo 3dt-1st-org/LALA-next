@@ -14,6 +14,7 @@ CATEGORY="all"
 LANGUAGE="ko"
 MODE="brief"
 LIMIT="40"
+GENERATE_SCRIPTS="false"
 CONNECT_TIMEOUT="5"
 OUTPUT_DIR="output/local/docent-qa"
 LABEL="docent-quality-qa"
@@ -48,6 +49,10 @@ while [[ $# -gt 0 ]]; do
       LIMIT="${2:-}"
       shift 2
       ;;
+    --generate-scripts)
+      GENERATE_SCRIPTS="true"
+      shift
+      ;;
     --connect-timeout)
       CONNECT_TIMEOUT="${2:-}"
       shift 2
@@ -69,7 +74,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     -h|--help)
-      echo "Usage: scripts/unix/plan_docent_quality_qa.sh [--preview|--write] [--category all|attraction|restaurant|event|culture_venue] [--language ko|en] [--mode brief|detail] [--limit N] [--output-dir PATH] [--key-vault-url URL] [--json] [--connect-timeout SECONDS] [--python PATH]"
+      echo "Usage: scripts/unix/plan_docent_quality_qa.sh [--preview|--write] [--category all|attraction|restaurant|event|culture_venue] [--language ko|en] [--mode brief|detail] [--limit N] [--generate-scripts] [--output-dir PATH] [--key-vault-url URL] [--json] [--connect-timeout SECONDS] [--python PATH]"
       exit 0
       ;;
     *)
@@ -97,6 +102,7 @@ if [[ "$JSON_STATUS" != "true" ]]; then
   echo "Default mode is dry-run plan only and does not read DB."
   echo "Preview mode reads DB and prints sanitized aggregate QA seed data."
   echo "Write mode creates local-only files under output/local."
+  echo "Script generation, when requested, populates only the local QA sample."
   echo "DB_DSN value is never printed by this script."
 fi
 
@@ -110,6 +116,9 @@ ARGS=(
   --output-dir "$OUTPUT_DIR"
   --label "$LABEL"
 )
+if [[ "$GENERATE_SCRIPTS" == "true" ]]; then
+  ARGS+=(--generate-scripts)
+fi
 if [[ "$JSON_STATUS" == "true" ]]; then
   ARGS+=(--json)
 fi

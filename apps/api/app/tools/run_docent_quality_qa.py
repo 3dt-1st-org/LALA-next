@@ -11,6 +11,7 @@ from apps.api.app.core.redaction import redact_secret_text
 from apps.api.app.services.docent_quality_qa import (
     build_docent_qa_records,
     fetch_docent_qa_candidates,
+    generate_docent_scripts_for_qa,
     select_representative_candidates,
     summarize_qa_records,
     write_local_qa_artifacts,
@@ -36,6 +37,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--language", choices=["ko", "en"], default="ko")
     parser.add_argument("--mode", choices=["brief", "detail"], default="brief")
     parser.add_argument("--limit", type=int, default=40)
+    parser.add_argument(
+        "--generate-scripts",
+        action="store_true",
+        help=(
+            "Generate missing docent scripts into the local QA sample before "
+            "precheck. This does not write travel.docent_scripts."
+        ),
+    )
     parser.add_argument("--connect-timeout", type=int, default=5)
     parser.add_argument(
         "--output-dir",
@@ -71,6 +80,12 @@ def main(argv: list[str] | None = None) -> int:
             connect_timeout=args.connect_timeout,
         )
         sample = select_representative_candidates(candidates, limit=args.limit)
+        if args.generate_scripts:
+            sample = generate_docent_scripts_for_qa(
+                sample,
+                language=args.language,
+                mode=args.mode,
+            )
         records = build_docent_qa_records(
             sample,
             language=args.language,
@@ -102,6 +117,7 @@ def main(argv: list[str] | None = None) -> int:
             "mode": _mode(args),
             "db_mutation": False,
             "file_write": bool(args.write),
+            "script_generation": bool(args.generate_scripts),
             "target": "output/local/docent-qa",
             "input_relations": _input_relations(),
             "candidate_count": len(candidates),
@@ -120,6 +136,7 @@ def _plan_payload(args: argparse.Namespace) -> dict[str, Any]:
         "mode": "plan",
         "db_mutation": False,
         "file_write": False,
+        "script_generation": bool(args.generate_scripts),
         "target": "output/local/docent-qa",
         "category": args.category,
         "language": args.language,
@@ -170,6 +187,8 @@ def _write(args: argparse.Namespace, payload: dict[str, Any]) -> None:
         print(f"db_mutation={str(payload.get('db_mutation')).lower()}")
     if "file_write" in payload:
         print(f"file_write={str(payload.get('file_write')).lower()}")
+    if "script_generation" in payload:
+        print(f"script_generation={str(payload.get('script_generation')).lower()}")
     if payload.get("error"):
         print(f"error={payload['error']}")
         return
@@ -183,6 +202,7 @@ def _write(args: argparse.Namespace, payload: dict[str, Any]) -> None:
         "record_count",
         "scored_count",
         "pending_generation_count",
+        "generation_error_count",
         "blocker_count",
         "average_auto_precheck_score",
     ):

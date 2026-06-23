@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Sequence
@@ -59,6 +59,7 @@ class DocentQaCandidate:
     script: str | None = None
     script_source_method: str | None = None
     script_generated_at: str | None = None
+    script_generation_error: str | None = None
 
     @classmethod
     def from_row(cls, row: dict[str, Any]) -> "DocentQaCandidate":
@@ -85,6 +86,7 @@ class DocentQaCandidate:
             script=_text(row.get("script")),
             script_source_method=_text(row.get("script_source_method")),
             script_generated_at=_datetime_text(row.get("script_generated_at")),
+            script_generation_error=_text(row.get("script_generation_error")),
         )
 
     def to_public_dict(self) -> dict[str, Any]:
@@ -338,6 +340,7 @@ def build_docent_qa_records(
             "weather_context": _weather_context(candidate),
             "script_source_method": candidate.script_source_method,
             "script_generated_at": candidate.script_generated_at,
+            "script_generation_error": candidate.script_generation_error,
             "auto_precheck": evaluate_docent_script(candidate, language=language).to_public_dict(),
             "manual_score_total": None,
             "manual_blocker": None,
@@ -351,6 +354,71 @@ def build_docent_qa_records(
         }
         for candidate in candidates
     ]
+
+
+def generate_docent_scripts_for_qa(
+    candidates: Sequence[DocentQaCandidate],
+    *,
+    language: str,
+    mode: str,
+) -> list[DocentQaCandidate]:
+    from apps.api.app.core.errors import ServiceError
+    from apps.api.app.schemas.docent import DocentScriptRequest
+    from apps.api.app.services import docent_service
+
+    hydrated: list[DocentQaCandidate] = []
+    for candidate in candidates:
+        if (candidate.script or "").strip():
+            hydrated.append(candidate)
+            continue
+        request = DocentScriptRequest(
+            place_id=candidate.place_id,
+            place_name=candidate.name_ko,
+            region_ko=candidate.region_name_ko,
+            source="db",
+            upstream_source=candidate.primary_source,
+            final_score=candidate.final_score,
+            local_spending_score=candidate.local_spending_score,
+            small_merchant_fit_score=candidate.small_merchant_fit_score,
+            weather_temp=_number_text(candidate.weather_temperature_c),
+            weather_outdoor_status=_weather_outdoor_status(candidate),
+            dust_pm10=_number_text(candidate.weather_pm10),
+            dust_pm25=_number_text(candidate.weather_pm25),
+            dust_pm10_grade=_pm_grade(candidate.weather_pm10, pollutant="pm10"),
+            dust_pm25_grade=_pm_grade(candidate.weather_pm25, pollutant="pm25"),
+            category=candidate.category,  # type: ignore[arg-type]
+            language=language,
+            mode=mode,
+        )
+        try:
+            payload = docent_service.generate_script(request)
+        except ServiceError as exc:
+            hydrated.append(
+                replace(
+                    candidate,
+                    script_generation_error=f"{exc.code}:{exc.message}",
+                )
+            )
+            continue
+        except Exception as exc:
+            hydrated.append(
+                replace(
+                    candidate,
+                    script_generation_error=exc.__class__.__name__,
+                )
+            )
+            continue
+
+        hydrated.append(
+            replace(
+                candidate,
+                script=_text(payload.get("script")),
+                script_source_method=_text(payload.get("source")),
+                script_generated_at=_text(payload.get("generated_at")),
+                script_generation_error=None,
+            )
+        )
+    return hydrated
 
 
 def evaluate_docent_script(
@@ -436,6 +504,9 @@ def summarize_qa_records(records: Sequence[dict[str, Any]]) -> dict[str, Any]:
         if "needs_script_generation"
         in (record.get("auto_precheck", {}).get("issue_tags") or [])
     ]
+    generation_errors = [
+        record for record in records if record.get("script_generation_error")
+    ]
     category_counts: dict[str, int] = {}
     category_scores: dict[str, list[int]] = {}
     for record in records:
@@ -448,6 +519,7 @@ def summarize_qa_records(records: Sequence[dict[str, Any]]) -> dict[str, Any]:
         "record_count": len(records),
         "scored_count": len(scored),
         "pending_generation_count": len(pending),
+        "generation_error_count": len(generation_errors),
         "blocker_count": len(blockers),
         "average_auto_precheck_score": round(sum(scored) / len(scored), 2)
         if scored
@@ -685,6 +757,7 @@ def _records_to_markdown(payload: dict[str, Any]) -> str:
         f"- Records: `{summary['record_count']}`",
         f"- Scored: `{summary['scored_count']}`",
         f"- Pending generation: `{summary['pending_generation_count']}`",
+        f"- Generation errors: `{summary['generation_error_count']}`",
         f"- Blockers: `{summary['blocker_count']}`",
         f"- Average auto precheck: `{summary['average_auto_precheck_score']}`",
         "",
@@ -725,6 +798,37 @@ def _script_excerpt(value: str | None, limit: int = 160) -> str:
     if len(text) <= limit:
         return text
     return text[: limit - 1].rstrip() + "..."
+
+
+def _number_text(value: float | None) -> str | None:
+    if value is None:
+        return None
+    if float(value).is_integer():
+        return str(int(value))
+    return f"{value:.1f}".rstrip("0").rstrip(".")
+
+
+def _pm_grade(value: float | None, *, pollutant: str) -> str | None:
+    if value is None:
+        return None
+    thresholds = (30, 80, 150) if pollutant == "pm10" else (15, 35, 75)
+    if value <= thresholds[0]:
+        return "좋음"
+    if value <= thresholds[1]:
+        return "보통"
+    if value <= thresholds[2]:
+        return "나쁨"
+    return "매우 나쁨"
+
+
+def _weather_outdoor_status(candidate: DocentQaCandidate) -> str | None:
+    values = [candidate.weather_pm10, candidate.weather_pm25]
+    known = [value for value in values if value is not None]
+    if not known:
+        return None
+    pm10_ok = candidate.weather_pm10 is None or candidate.weather_pm10 <= 80
+    pm25_ok = candidate.weather_pm25 is None or candidate.weather_pm25 <= 35
+    return "good" if pm10_ok and pm25_ok else "caution"
 
 
 def _safe_label(value: str) -> str:

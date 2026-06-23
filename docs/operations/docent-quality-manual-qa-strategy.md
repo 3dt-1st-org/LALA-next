@@ -1,6 +1,6 @@
 # Docent Quality Manual QA Strategy
 
-Last updated: 2026-06-22 KST
+Last updated: 2026-06-23 KST
 
 This document defines how LALA manually evaluates 30 to 50 representative
 places so docent quality reaches legacy LALA level or better.
@@ -23,7 +23,7 @@ must go further and judge whether the generated docent script is actually good:
 | Gap | Current Evidence | Risk |
 |---|---|---|
 | Automated smoke covers representative flows, not broad content quality | Deployed web smoke verifies live-context docent quality on selected smoke places. | A few good paths can hide weak scripts for other categories/regions. |
-| Representative QA tooling now exists, but script generation is still pending | `scripts/unix/plan_docent_quality_qa.sh` selects a balanced DB-backed sample and writes local-only QA seed files. The first shared-dev run produced 50 records: 13 attractions, 13 restaurants, 11 events, and 13 culture venues. All 50 were marked `needs_script_generation` because the representative set had no cached `travel.docent_scripts` rows. | QA can start from a fixed sample, but content quality cannot be scored until representative scripts are generated or warmed through the API. |
+| Representative QA tooling can now generate local review scripts | `scripts/unix/plan_docent_quality_qa.sh --write --generate-scripts --limit 50` selects a balanced DB-backed sample, calls the same docent service path, and writes local-only QA artifacts without mutating `travel.docent_scripts`. The 2026-06-23 shared-dev run produced 50 generated rows: 13 attractions, 13 restaurants, 11 events, and 13 culture venues; pending generation 0; generation errors 0; blocker count 0; average auto precheck 96.04. | Manual tone, factual, and legacy-parity review is still required because automated precheck cannot fully judge whether scripts feel as strong as legacy LALA. |
 | Manual rubric threshold is encoded as plan metadata, not yet completed by reviewers | The QA tool exposes 100-point rubric weights and pass thresholds, and tests reject placeholder/raw scores/PM omissions. | Script can pass technical checks while still needing human tone and legacy-parity review. |
 | Reviewer record template is executable | The local-only writer creates JSON and Markdown rows with reviewer, manual score, issue tags, fix owner, retest status, and `legacy_parity` fields. | Team feedback is structured, but completion depends on filling the rows after generation. |
 | No re-test loop tied to RAG and scoring | RAG regeneration and score updates are separate. | QA fixes may not survive the next batch. |
@@ -109,11 +109,14 @@ ORDER BY p.region_name_ko, p.category, latest_scores.final_score DESC NULLS LAST
 
 For each selected place:
 
-1. Fetch the place through the public API with a real test coordinate.
-2. Fetch weather and PM10/PM2.5 for the same coordinate.
-3. Generate Korean brief and detail scripts.
-4. Generate English brief script when English place data exists.
-5. Save request payload, response metadata, and reviewer score.
+1. Freeze the representative sample with the QA tool.
+2. Generate missing Korean brief scripts into a local-only QA artifact:
+   `scripts/unix/plan_docent_quality_qa.sh --write --generate-scripts --limit 50`.
+3. For targeted rows, fetch the place through the public API with a real test
+   coordinate and fetch weather/PM10/PM2.5 for the same coordinate.
+4. Generate detail scripts or English scripts only when that review lane is
+   explicitly in scope.
+5. Save request metadata and reviewer score in local-only QA rows.
 6. Do not store API keys, bearer tokens, Key Vault URLs, or DB DSNs.
 
 Required API checks:
@@ -184,13 +187,24 @@ Executable tooling:
 ```bash
 scripts/unix/plan_docent_quality_qa.sh --preview --limit 50
 scripts/unix/plan_docent_quality_qa.sh --write --limit 50
+scripts/unix/plan_docent_quality_qa.sh --write --generate-scripts --limit 50
 ```
 
 Default plan mode does not read DB. Preview mode reads the canonical DB through
 `travel.places`, `travel.docent_scripts`, `travel.weather_observations`,
 `analytics.place_score_snapshots`, `community.place_mentions_weekly`, and
 `rag.knowledge_chunks`. Write mode creates ignored local files under
-`output/local/docent-qa/` and never writes DB rows.
+`output/local/docent-qa/` and never writes DB rows. `--generate-scripts`
+hydrates missing scripts in that local QA sample through
+`apps/api/app/services/docent_service.py`; it does not warm or update the
+generic `travel.docent_scripts` cache.
+
+Latest local QA artifact from the 2026-06-23 shared-dev run:
+
+- `output/local/docent-qa/docent-quality-qa-20260623T111528Z.json`
+- `output/local/docent-qa/docent-quality-qa-20260623T111528Z.md`
+- Summary: 50 records, 50 scored, pending generation 0, generation errors 0,
+  blocker count 0, average auto precheck 96.04.
 
 ## Pass Thresholds
 
