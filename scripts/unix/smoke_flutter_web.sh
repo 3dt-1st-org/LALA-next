@@ -503,6 +503,7 @@ PY
 import json
 import os
 import re
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -543,16 +544,24 @@ def request_json(method, url, body=None):
         data = json.dumps(body, ensure_ascii=False).encode("utf-8")
         headers["Content-Type"] = "application/json"
     request = urllib.request.Request(url, data=data, headers=headers, method=method)
-    try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-            return response.status, payload
-    except urllib.error.HTTPError as exc:
+    last_error = None
+    for attempt in range(3):
         try:
-            payload = json.loads(exc.read().decode("utf-8"))
-        except Exception:
-            payload = {"ok": False, "error": {"message": str(exc)}}
-        return exc.code, payload
+            with urllib.request.urlopen(request, timeout=60) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+                return response.status, payload
+        except urllib.error.HTTPError as exc:
+            try:
+                payload = json.loads(exc.read().decode("utf-8"))
+            except Exception:
+                payload = {"ok": False, "error": {"message": str(exc)}}
+            return exc.code, payload
+        except (TimeoutError, urllib.error.URLError) as exc:
+            last_error = exc
+            if attempt < 2:
+                time.sleep(2 * (attempt + 1))
+                continue
+    raise TimeoutError(f"{method} {url} did not complete after retries: {last_error}")
 
 def fetch_latest_get(path):
     for url in reversed(urls_for(path)):
