@@ -311,6 +311,16 @@ Apply requires `ALLOW_REVIEW_MENTION_INGEST_APPLY=1` plus
 `--confirm APPLY_REVIEW_MENTION_INGEST`, upserts this table, and records the run
 in `ops.job_runs`.
 
+`scripts/unix/plan_review_attribute_batch.sh` and
+`scripts/windows/plan_review_attribute_batch.ps1` provide the guarded attribute
+scoring path. Plan mode does not connect to the database. Preview reads
+preprocessed mention rows and computes deterministic attributes without mutation.
+`--dry-run-ai` calls Azure OpenAI for JSON extraction but does not write rows.
+Apply requires `ALLOW_REVIEW_ATTRIBUTE_BATCH_APPLY=1` plus
+`--confirm APPLY_REVIEW_ATTRIBUTE_BATCH`, writes `review_attributes` and
+`review_quality` under `attributes`, updates `sentiment_score`, and records the
+run in `ops.job_runs`.
+
 | Column | Type | Required | Description |
 |---|---:|---:|---|
 | `id` | uuid | Yes | 내부 PK |
@@ -321,7 +331,7 @@ in `ops.job_runs`.
 | `mention_count` | integer | Yes | 전체 언급 수 |
 | `organic_mention_count` | integer | No | 광고/홍보 필터 후 언급 수 |
 | `sentiment_score` | numeric | No | -1 to 1 |
-| `attributes` | jsonb | No | `prompt_version`, `organic_review_count`, `filtered_ad_count`, `filtered_irrelevant_count`, `match_confidence_avg`, `top_terms`, `source_mix`, `category_policy`, `preprocess` 등 |
+| `attributes` | jsonb | No | `prompt_version`, `organic_review_count`, `filtered_ad_count`, `filtered_irrelevant_count`, `match_confidence_avg`, `top_terms`, `source_mix`, `category_policy`, `preprocess`, `review_attributes`, `review_quality`, `review_attribute_batch` 등 |
 | `updated_at` | timestamptz | Yes | 갱신 시각 |
 
 ## `ingest.source_files`

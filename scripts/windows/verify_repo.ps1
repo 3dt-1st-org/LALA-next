@@ -119,6 +119,12 @@ try {
         throw "Review/mention preprocessing plan failed."
     }
 
+    Write-Host "Planning review attribute batch..."
+    & powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\windows\plan_review_attribute_batch.ps1" -Python $Python
+    if ($LASTEXITCODE -ne 0) {
+        throw "Review attribute batch plan failed."
+    }
+
     Write-Host "Planning franchise business identity batch..."
     & powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\windows\plan_franchise_identity_batch.ps1" -Python $Python
     if ($LASTEXITCODE -ne 0) {

@@ -325,6 +325,61 @@ $env:ALLOW_REVIEW_MENTION_INGEST_APPLY = "1"
 Remove-Item Env:\ALLOW_REVIEW_MENTION_INGEST_APPLY
 ```
 
+To review category-aware review attribute scoring without connecting to a
+database:
+
+```bash
+scripts/unix/plan_review_attribute_batch.sh
+```
+
+```powershell
+.\scripts\windows\plan_review_attribute_batch.ps1
+```
+
+Default mode is plan-only. It reports the
+`community.place_mentions_weekly` target, the `community.posts` input, and the
+`review-attributes-v1` schema without printing `DB_DSN` or
+`AZURE_OPENAI_KEY`. Preview reads already-preprocessed organic mention rows and
+computes deterministic attributes without mutation:
+
+```bash
+scripts/unix/plan_review_attribute_batch.sh --preview --limit 50
+```
+
+```powershell
+.\scripts\windows\plan_review_attribute_batch.ps1 -Preview -Limit 50
+```
+
+Dry-run AI calls Azure OpenAI for JSON attribute extraction but does not write
+rows:
+
+```bash
+scripts/unix/plan_review_attribute_batch.sh --dry-run-ai --limit 20
+```
+
+```powershell
+.\scripts\windows\plan_review_attribute_batch.ps1 -DryRunAi -Limit 20
+```
+
+Apply writes `attributes.review_attributes`, `attributes.review_quality`, and
+`sentiment_score`, records an `ops.job_runs` row, and requires the exact confirm
+string plus a process-local allow flag:
+
+```bash
+ALLOW_REVIEW_ATTRIBUTE_BATCH_APPLY=1 \
+  scripts/unix/plan_review_attribute_batch.sh \
+  --apply \
+  --confirm APPLY_REVIEW_ATTRIBUTE_BATCH
+```
+
+```powershell
+$env:ALLOW_REVIEW_ATTRIBUTE_BATCH_APPLY = "1"
+.\scripts\windows\plan_review_attribute_batch.ps1 `
+  -Apply `
+  -Confirm APPLY_REVIEW_ATTRIBUTE_BATCH
+Remove-Item Env:\ALLOW_REVIEW_ATTRIBUTE_BATCH_APPLY
+```
+
 To review the franchise/small-merchant identity batch without connecting to a
 database:
 

@@ -30,7 +30,7 @@ The result should feed:
 | Gap | Current Evidence | Risk |
 |---|---|---|
 | `review_quality_score` coverage is narrow | `run_place_score_batch` reads `community.place_mentions_weekly.attributes.review_quality.score`. After the 2026-06-23 review/mention apply, shared dev has 168 mention rows, 132 rows with deterministic `review_attributes`, 10 rows with `review_quality`, and the latest 2,636 score snapshots include 4 non-null `review_quality_score` rows. | Review quality is real but still sparse until more approved review/mention sources are ingested. |
-| Attribute extraction is not a full guarded AI batch | Deterministic review attributes and weekly mention aggregates exist via `run_review_mention_ingest`; a separate AI extraction contract is still needed for richer taste, service, atmosphere, and local-experience detail. | Reviews can affect eligible scores, but not enough places for final-quality coverage. |
+| Attribute extraction coverage is still narrow | `run_review_attribute_batch` now provides plan, deterministic preview, dry-run AI, and guarded apply paths. The 2026-06-23 preview found 4 sufficient-evidence candidates from current approved mention rows. Live AI dry-run is wired but can be throttled by provider quota/rate limits and should be retried before judging windows. | Reviews can affect eligible scores, but the current approved source pool is still small. |
 | Category-specific attribute schemas need stronger test coverage | Existing JSON uses category policies and `review-attributes-v1`, but more category edge cases are needed. | Taste/service rules could still leak into attractions or be lost for restaurants if new sources are added carelessly. |
 | Confidence and sample-size rules need operational monitoring | `review_quality_score` stays null below 3 organic reviews, and low evidence keeps `review_attribute_analysis` in missing signals. | A sparse source pool can make the review score look absent for many otherwise valid places. |
 | Manual QA thresholds are not connected to scoring | Deployed smoke checks script quality, but not attribute scoring quality. | Good smoke can still hide weak review scoring. |
@@ -153,7 +153,7 @@ Minimum evidence rule:
 
 ## Batch Design
 
-Proposed tool:
+Current tool:
 
 - `apps.api.app.tools.run_review_attribute_batch`
 - `scripts/unix/plan_review_attribute_batch.sh`
@@ -169,6 +169,21 @@ Modes:
 - apply guard: `ALLOW_REVIEW_ATTRIBUTE_BATCH_APPLY=1`.
 
 The batch should never run inside user-facing API requests.
+
+Current implementation notes:
+
+- `plan` is CI-safe and does not connect to DB or call AI.
+- `--preview` reads `community.place_mentions_weekly` and linked
+  `community.posts`, then computes deterministic category-aware attributes
+  without mutation.
+- `--dry-run-ai` calls Azure OpenAI and validates the JSON contract without DB
+  mutation.
+- `--apply` calls Azure OpenAI, writes `attributes.review_attributes`,
+  `attributes.review_quality`, and `sentiment_score`, and records
+  `review-attribute-batch` in `ops.job_runs`.
+- The 2026-06-23 shared-dev preview produced 4 sufficient-evidence candidates.
+  A live AI dry-run hit provider `429 Too Many Requests`; this is an external
+  capacity condition, not a secret/config failure.
 
 ## AI Extraction Contract
 

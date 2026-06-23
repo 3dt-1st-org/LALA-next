@@ -88,6 +88,9 @@ echo "Planning local-value place score batch..."
 echo "Planning review/mention preprocessing..."
 "$ROOT/scripts/unix/plan_review_mention_ingest.sh" --python "$PYTHON"
 
+echo "Planning review attribute batch..."
+"$ROOT/scripts/unix/plan_review_attribute_batch.sh" --python "$PYTHON"
+
 echo "Planning franchise business identity batch..."
 "$ROOT/scripts/unix/plan_franchise_identity_batch.sh" --python "$PYTHON"
 
