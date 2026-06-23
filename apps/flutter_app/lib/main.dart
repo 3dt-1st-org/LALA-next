@@ -22,6 +22,7 @@ typedef LalaBackendFactory = LalaBackend Function(LalaAppConfig config);
 
 const int _defaultMapLevel = 6;
 const int _focusedPlaceMapLevel = 4;
+const String _buildSha = String.fromEnvironment('LALA_BUILD_SHA');
 
 class LalaApp extends StatelessWidget {
   const LalaApp({
@@ -2304,6 +2305,7 @@ class _Dashboard extends StatelessWidget {
     final liveSpeechEnabled = _liveSpeechEnabled(readiness?.data);
     final visibleError = _localizedUiMessage(error, uiLanguage);
     publishLalaSmokeState({
+      'buildSha': _buildSha,
       'apiPlacesCount': apiPlaces.length,
       'topPlacesCount': topPlaces.length,
       'selectedCategory': selectedCategory,

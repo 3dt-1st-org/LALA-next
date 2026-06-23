@@ -749,7 +749,10 @@ nationwide manual location selector with at least 200 choices. The
 `--api-base-url` backend must allow the selected local web origin. Use
 `--web-url https://lala-next.cloud/?qa=<label>` when verifying the deployed
 contest site so Kakao Maps and API CORS run from the registered production
-origin. With `--start-api`, the wrapper also starts a local API with
+origin. Add `--expect-build-sha <sha> --wait-for-build-sha` when the check must
+wait until the deployed Flutter bundle exposes the expected build SHA before
+running the location, weather, marker, and docent assertions. With
+`--start-api`, the wrapper also starts a local API with
 process-local auth and CORS, avoids Key Vault, DB, OpenAI, and Speech, and
 checks the API log for `/healthz`, `/readyz`, and the authenticated `/api/v1/*`
 routes loaded by the app shell.
@@ -757,14 +760,15 @@ routes loaded by the app shell.
 The deployed public site flow is part of CI through
 `.github/workflows/deployed-web-smoke.yml`. On `dev` pushes that change Flutter,
 API app code, or the browser smoke wrapper, the workflow opens
-`https://lala-next.cloud`, grants a fixed test geolocation, and fails if the
-browser receives snapshot/fallback places, non-PostGIS place ordering, missing
-AirKorea PM10/PM2.5 values, a docent script without live place/local
-value/official grounding and captured PM context, raw score leakage, or a map
-state that renders only clusters without pins. The first deployed run also
-simulates a denied geolocation request and verifies that the user can still
-continue through the nationwide manual location fallback instead of seeing a
-generic request failure.
+`https://lala-next.cloud`, waits for the deployed Flutter smoke state to expose
+the pushed commit SHA, grants a fixed test geolocation, and fails if the browser
+receives snapshot/fallback places, non-PostGIS place ordering, missing AirKorea
+PM10/PM2.5 values, a docent script without live place/local value/official
+grounding and captured PM context, raw score leakage, or a map state that
+renders only clusters without pins. The first deployed run also simulates a
+denied geolocation request and verifies that the user can still continue
+through the nationwide manual location fallback instead of seeing a generic
+request failure.
 
 To review alert and dashboard candidates without creating observability
 resources:

@@ -9,6 +9,7 @@ REQUIRE_FLUTTER="false"
 REQUIRE_BROWSER="false"
 FAIL_ON_CONSOLE_ERROR="false"
 CHECK_LOCATION_DENIAL_FALLBACK="false"
+WAIT_FOR_BUILD_SHA="false"
 START_API="false"
 PORT="8099"
 API_PORT="18080"
@@ -17,6 +18,7 @@ API_BASE_URL="http://127.0.0.1:8080"
 API_BASE_URL_EXPLICIT="false"
 WEB_URL=""
 WEB_URL_EXPLICIT="false"
+EXPECT_BUILD_SHA=""
 SMOKE_LAT="37.5665"
 SMOKE_LNG="126.9780"
 
@@ -36,6 +38,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --check-location-denial-fallback)
       CHECK_LOCATION_DENIAL_FALLBACK="true"
+      shift
+      ;;
+    --expect-build-sha)
+      EXPECT_BUILD_SHA="${2:-}"
+      shift 2
+      ;;
+    --wait-for-build-sha)
+      WAIT_FOR_BUILD_SHA="true"
       shift
       ;;
     --start-api)
@@ -69,7 +79,7 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     -h|--help)
-      echo "Usage: scripts/unix/smoke_flutter_web.sh [--require-flutter] [--require-browser] [--fail-on-console-error] [--check-location-denial-fallback] [--start-api] [--api-base-url URL] [--web-url URL] [--api-port PORT] [--port PORT] [--smoke-lat LAT] [--smoke-lng LNG]"
+      echo "Usage: scripts/unix/smoke_flutter_web.sh [--require-flutter] [--require-browser] [--fail-on-console-error] [--check-location-denial-fallback] [--expect-build-sha SHA] [--wait-for-build-sha] [--start-api] [--api-base-url URL] [--web-url URL] [--api-port PORT] [--port PORT] [--smoke-lat LAT] [--smoke-lng LNG]"
       exit 0
       ;;
     *)
@@ -244,6 +254,9 @@ else
     --dart-define
     "LALA_API_BASE_URL=$API_BASE_URL"
   )
+  if [[ -n "${GITHUB_SHA:-}" ]]; then
+    FLUTTER_BUILD_ARGS+=(--dart-define "LALA_BUILD_SHA=$GITHUB_SHA")
+  fi
   if [[ "$START_API" == "true" ]]; then
     FLUTTER_BUILD_ARGS+=(--dart-define "LALA_IOS_API_KEY=$SMOKE_API_KEY")
   fi
@@ -329,6 +342,81 @@ if not state.get("hasFlutterEntrypoint"):
 if int(state.get("bodyLength") or 0) < 100:
     raise SystemExit("Flutter web document body looked unexpectedly small.")
 PY
+
+if [[ -n "$EXPECT_BUILD_SHA" ]]; then
+  if [[ "$WAIT_FOR_BUILD_SHA" == "true" ]]; then
+    echo "Waiting for deployed Flutter web build SHA $EXPECT_BUILD_SHA ..."
+  else
+    echo "Checking Flutter web build SHA $EXPECT_BUILD_SHA ..."
+  fi
+  BUILD_STATE="$("$PWCLI" -s="$PW_SESSION" run-code "async (page) => {
+    const expected = '$EXPECT_BUILD_SHA';
+    const waitForBuild = $([[ "$WAIT_FOR_BUILD_SHA" == "true" ]] && echo "true" || echo "false");
+    const maxAttempts = waitForBuild ? 60 : 1;
+    const selector = 'flutter-view, flt-glass-pane, flt-scene-host';
+    let lastState = {};
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      for (let index = 0; index < 80; index += 1) {
+        if (await page.locator(selector).count()) {
+          break;
+        }
+        await page.waitForTimeout(250);
+      }
+      for (let index = 0; index < 40; index += 1) {
+        lastState = await page.evaluate(() => window.__lalaAppState || {});
+        if (String(lastState.buildSha || '') === expected) {
+          return {
+            expected,
+            matched: true,
+            attempts: attempt,
+            state: lastState,
+            url: page.url()
+          };
+        }
+        await page.waitForTimeout(250);
+      }
+      if (attempt < maxAttempts) {
+        await page.waitForTimeout(10000);
+        await page.reload({ waitUntil: 'domcontentloaded' });
+      }
+    }
+    return {
+      expected,
+      matched: false,
+      attempts: maxAttempts,
+      state: lastState,
+      url: page.url()
+    };
+  }")"
+  printf '%s\n' "$BUILD_STATE" >"$OUTPUT_DIR/flutter-web-build-state.json"
+  BUILD_STATE="$BUILD_STATE" "$PYTHON" - <<'PY'
+import json
+import os
+
+raw = os.environ["BUILD_STATE"]
+try:
+    payload = json.loads(raw)
+except json.JSONDecodeError:
+    marker = "### Result"
+    marker_index = raw.find(marker)
+    start = raw.find("{", marker_index if marker_index >= 0 else 0)
+    if start < 0:
+        raise SystemExit(
+            "Flutter build SHA check produced no JSON result. Raw output starts: "
+            + raw[:200].replace("\n", "\\n")
+        )
+    payload, _ = json.JSONDecoder().raw_decode(raw[start:])
+state = payload.get("state") if isinstance(payload.get("state"), dict) else {}
+if payload.get("matched") is not True:
+    expected = str(payload.get("expected") or "")
+    observed = str(state.get("buildSha") or "")
+    attempts = payload.get("attempts")
+    raise SystemExit(
+        "Flutter web build SHA did not match the expected deployment. "
+        f"expected={expected!r} observed={observed!r} attempts={attempts}"
+    )
+PY
+fi
 
 "$PWCLI" -s="$PW_SESSION" snapshot >"$OUTPUT_DIR/flutter-web-snapshot.txt"
 "$PWCLI" -s="$PW_SESSION" screenshot >"$OUTPUT_DIR/flutter-web-screenshot.txt"

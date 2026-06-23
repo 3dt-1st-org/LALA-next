@@ -156,10 +156,12 @@ refused `/healthz` request. Use `--api-base-url <url>` to point the bundle at a
 separately running backend that allows the selected local web origin and run the
 same location-flow request check against it. Use
 `--web-url https://lala-next.cloud/?qa=<label>` for the deployed contest site so
-the browser opens the registered Kakao/CORS origin directly; deployed and
-DB-backed checks also verify a live-context docent script from the same
-place/weather data, including live place/local value/official grounding without
-raw score leakage. The deployed public site version is CI-gated by
+the browser opens the registered Kakao/CORS origin directly. Pair it with
+`--expect-build-sha <sha> --wait-for-build-sha` when the check should wait for a
+new Vercel Flutter bundle before judging the UI flow. Deployed and DB-backed
+checks also verify a live-context docent script from the same place/weather
+data, including live place/local value/official grounding without raw score
+leakage. The deployed public site version is CI-gated by
 `.github/workflows/deployed-web-smoke.yml` on relevant `dev` pushes.
 
 The app shell loads public readiness before auth, shows whether the current
