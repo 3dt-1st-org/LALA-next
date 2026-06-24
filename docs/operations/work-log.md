@@ -117,6 +117,30 @@ Verification:
 - `curl -sS -o /dev/null -w 'ready %{time_total}\n' https://api.lala-next.cloud/readyz`
 - `curl -sS -o /dev/null -w 'places %{time_total}\n' 'https://api.lala-next.cloud/api/v1/places?lat=36.9940&lng=127.1128&radius_m=3000&category=all&include_scores=true'`
 
+### Queryless Root Freshness Slice
+
+What changed:
+
+- Updated [apps/flutter_app/web/vercel.json](/Users/geondongkim/LALA-next/apps/flutter_app/web/vercel.json)
+  so the deployed root document `/` and `/index.html` use `Cache-Control:
+  no-store` instead of relying only on the broader revalidation rule.
+- Added matching no-cache meta tags to
+  [apps/flutter_app/web/index.html](/Users/geondongkim/LALA-next/apps/flutter_app/web/index.html)
+  as a secondary guard for the app shell document.
+
+Why it matters:
+
+- Judges and first-time visitors should be able to open
+  `https://lala-next.cloud` directly without appending a cache-busting query
+  string just to fetch the latest deployed Flutter shell.
+- The change keeps the HTML entry document fresh while leaving the rest of the
+  asset caching behavior unchanged.
+
+Verification:
+
+- `curl -sSI https://lala-next.cloud/`
+- `curl -sSI 'https://lala-next.cloud/?qa=root-check'`
+
 ### Nationwide Region and Culture Expansion Slice
 
 What changed:
