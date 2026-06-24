@@ -89,6 +89,9 @@ What changed:
 - Updated [apps/flutter_app/lib/main.dart](/Users/geondongkim/LALA-next/apps/flutter_app/lib/main.dart)
   so the first-load `health`, `readyz`, and `places` requests start together
   instead of waiting for each other in sequence.
+- Slow or unanswered geolocation now falls back to the default recommendation
+  load after a short grace period, so judges do not stare at an empty startup
+  screen while the browser location prompt stalls.
 - The follow-up `weather` and `intervention` requests now also start together
   once the recommendation rail is ready.
 - Added focused regression coverage in
@@ -102,11 +105,14 @@ Why it matters:
   backend needed to be.
 - The homepage can now reach its first useful state much closer to the slowest
   single core request instead of the sum of three sequential requests.
+- Browser geolocation delays no longer block the first default recommendation
+  surface for the whole timeout window.
 
 Verification:
 
 - `flutter analyze lib/main.dart test/widget_test.dart`
 - `flutter test test/widget_test.dart --plain-name 'loads core startup requests in parallel'`
+- `flutter test test/widget_test.dart --plain-name 'slow location startup falls back to default recommendations first'`
 - `curl -sS -o /dev/null -w 'health %{time_total}\n' https://api.lala-next.cloud/healthz`
 - `curl -sS -o /dev/null -w 'ready %{time_total}\n' https://api.lala-next.cloud/readyz`
 - `curl -sS -o /dev/null -w 'places %{time_total}\n' 'https://api.lala-next.cloud/api/v1/places?lat=36.9940&lng=127.1128&radius_m=3000&category=all&include_scores=true'`

@@ -571,6 +571,28 @@ void main() {
     },
   );
 
+  testWidgets(
+    'slow location startup falls back to default recommendations first',
+    (tester) async {
+      final locationProvider = PendingLocationProvider();
+
+      await tester.pumpWidget(
+        TestLalaApp(
+          backendFactory: FakeBackend.new,
+          initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+          locationProvider: locationProvider,
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 3));
+
+      expect(locationProvider.requests, 1);
+      expect(find.text('추천 장소 접기'), findsOneWidget);
+      expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
+      expect(find.text('위치 권한 확인 중'), findsNothing);
+    },
+  );
+
   testWidgets('surfaces retry when browser location is unavailable', (
     tester,
   ) async {

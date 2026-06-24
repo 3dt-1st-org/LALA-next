@@ -409,6 +409,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
   static const double _weatherReloadThresholdMeters = 10000;
   static const Duration _autoDocentCooldown = Duration(seconds: 12);
   static const Duration _interventionToastAutoDismiss = Duration(seconds: 8);
+  static const Duration _initialLocationFallbackDelay = Duration(seconds: 2);
   static const Duration _weatherMaxAge = Duration(minutes: 10);
 
   late final LalaAppConfig _baseConfig;
@@ -526,13 +527,42 @@ class _LalaHomePageState extends State<LalaHomePage> {
       }
     });
 
-    final result = await widget.locationProvider.requestCurrentLocation();
+    final locationFuture = widget.locationProvider.requestCurrentLocation();
+    LalaLocationResult? result;
+    var startedFallbackRefresh = false;
+
+    if (initial && _places == null) {
+      final fallbackDelay = Completer<void>();
+      final fallbackTimer = Timer(_initialLocationFallbackDelay, () {
+        if (!fallbackDelay.isCompleted) {
+          fallbackDelay.complete();
+        }
+      });
+      try {
+        final initialOutcome = await Future.any<Object?>([
+          locationFuture,
+          fallbackDelay.future,
+        ]);
+        if (initialOutcome is LalaLocationResult) {
+          result = initialOutcome;
+        } else {
+          startedFallbackRefresh = true;
+          await _refresh(forceWeather: true);
+        }
+      } finally {
+        fallbackTimer.cancel();
+      }
+    }
+
+    result ??= await locationFuture;
     if (!mounted) {
       return;
     }
 
-    final location = result.location;
-    if (result.status == LalaLocationResultStatus.found && location != null) {
+    final resolvedResult = result;
+    final location = resolvedResult.location;
+    if (resolvedResult.status == LalaLocationResultStatus.found &&
+        location != null) {
       setState(() {
         _locationConsentEnabled = true;
         _locationFallbackNoticeVisible = false;
@@ -548,13 +578,15 @@ class _LalaHomePageState extends State<LalaHomePage> {
     } else {
       setState(() {
         _locationRequestInFlight = false;
-        if (result.status == LalaLocationResultStatus.denied) {
+        if (resolvedResult.status == LalaLocationResultStatus.denied) {
           _locationFallbackNoticeVisible = true;
         } else if (initial || resetSelection) {
           _locationFallbackNoticeVisible = true;
         }
       });
-      await _refresh(forceWeather: true);
+      if (!startedFallbackRefresh) {
+        await _refresh(forceWeather: true);
+      }
       return;
     }
 
