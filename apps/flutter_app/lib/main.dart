@@ -3,7 +3,9 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
@@ -14,7 +16,15 @@ import 'kakao_map_view.dart';
 import 'manual_location_options.dart';
 import 'smoke_state.dart';
 
+SemanticsHandle? _webSemanticsHandle;
+
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  if (kIsWeb) {
+    // Force the Flutter semantics tree on web so assistive tech and browser
+    // automation can inspect more than the canvas fallback placeholder.
+    _webSemanticsHandle ??= SemanticsBinding.instance.ensureSemantics();
+  }
   runApp(const LalaApp());
 }
 
@@ -591,12 +601,11 @@ class _LalaHomePageState extends State<LalaHomePage> {
 
       final previousHealth = _health;
       final previousReadiness = _readiness;
-      final health =
-          await loadOptional(_backend.getHealth, reportError: false) ??
-          previousHealth;
-      final readiness =
-          await loadOptional(_backend.getReadiness, reportError: false) ??
-          previousReadiness;
+      final healthFuture = loadOptional(_backend.getHealth, reportError: false);
+      final readinessFuture = loadOptional(
+        _backend.getReadiness,
+        reportError: false,
+      );
       final shouldReloadWeather = shouldReloadWeatherForMapMove(
         force: forceWeather,
         hasWeather: _weather?.data != null,
@@ -611,10 +620,18 @@ class _LalaHomePageState extends State<LalaHomePage> {
       final previousPlaces = _places;
       final previousWeather = _weather;
       final previousIntervention = _intervention;
-      final places = await loadOptional(
-        _backend.getPlaces,
+      final placesFuture = loadOptional(
+        () => loadWithSingleRetry(
+          _backend.getPlaces,
+          shouldRetry:
+              previousPlaces == null ||
+              (previousPlaces.data?.places.isEmpty ?? true),
+        ),
         fallbackMessage: (_) => _recommendationLoadFailureMessage(),
       );
+      final health = (await healthFuture) ?? previousHealth;
+      final readiness = (await readinessFuture) ?? previousReadiness;
+      final places = await placesFuture;
       final activePlaces = places ?? previousPlaces;
       final placeItems = activePlaces?.data?.places ?? const <LalaPlace>[];
       final filteredItems = _filterPlaces(placeItems, _selectedCategory);
@@ -653,15 +670,22 @@ class _LalaHomePageState extends State<LalaHomePage> {
         }
       });
 
+      final dailyPlanFuture = loadOptional(
+        _backend.createDailyPlan,
+        reportError: false,
+      );
+
       if (shouldReloadWeather) {
-        final weather = await loadOptional(
+        final weatherFuture = loadOptional(
           _backend.getWeather,
           reportError: false,
         );
-        final intervention = await loadOptional(
+        final interventionFuture = loadOptional(
           _backend.getIntervention,
           reportError: false,
         );
+        final weather = await weatherFuture;
+        final intervention = await interventionFuture;
         final loadError = loadErrors.isEmpty
             ? null
             : loadErrors.toSet().take(2).join(' / ');
@@ -683,10 +707,6 @@ class _LalaHomePageState extends State<LalaHomePage> {
       }
       _syncInterventionToastTimer();
 
-      final dailyPlanFuture = loadOptional(
-        _backend.createDailyPlan,
-        reportError: false,
-      );
       Future<LalaEnvelope<LalaDocentScript>?> docentScriptFuture =
           Future<LalaEnvelope<LalaDocentScript>?>.value();
       if (firstPlace != null) {
@@ -7804,6 +7824,22 @@ bool shouldReloadPlacesForMapMove({
   }
   return _distanceMeters(lastFetchLat, lastFetchLng, currentLat, currentLng) >=
       thresholdMeters;
+}
+
+Future<T> loadWithSingleRetry<T>(
+  Future<T> Function() loader, {
+  required bool shouldRetry,
+  Duration retryDelay = const Duration(milliseconds: 600),
+}) async {
+  try {
+    return await loader();
+  } on Object {
+    if (!shouldRetry) {
+      rethrow;
+    }
+    await Future<void>.delayed(retryDelay);
+    return await loader();
+  }
 }
 
 bool shouldReloadWeatherForMapMove({

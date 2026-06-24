@@ -100,6 +100,45 @@ void main() {
     );
   });
 
+  test('single retry loader retries once only when allowed', () async {
+    var attempts = 0;
+    final result = await loadWithSingleRetry(
+      () async {
+        attempts += 1;
+        if (attempts == 1) {
+          throw StateError('temporary');
+        }
+        return 'ok';
+      },
+      shouldRetry: true,
+      retryDelay: Duration.zero,
+    );
+
+    expect(result, 'ok');
+    expect(attempts, 2);
+  });
+
+  test(
+    'single retry loader surfaces the first failure when retry is disabled',
+    () async {
+      var attempts = 0;
+
+      await expectLater(
+        () => loadWithSingleRetry(
+          () async {
+            attempts += 1;
+            throw StateError('temporary');
+          },
+          shouldRetry: false,
+          retryDelay: Duration.zero,
+        ),
+        throwsA(isA<StateError>()),
+      );
+
+      expect(attempts, 1);
+    },
+  );
+
   test('map clustering waits for dense point count and zoom threshold', () {
     final places = [
       _clusterRestaurant('cluster-food-a', '클러스터 맛집 A', 210),
@@ -480,6 +519,25 @@ void main() {
     expect(backends.last.dailyPlanRequests, 1);
     expect(find.text('추천 장소 접기'), findsOneWidget);
     expect(find.textContaining('요청을 처리하지 못했습니다'), findsNothing);
+  });
+
+  testWidgets('loads core startup requests in parallel', (tester) async {
+    await tester.pumpWidget(
+      TestLalaApp(
+        backendFactory: (config) => FakeBackend(
+          config,
+          healthDelay: const Duration(milliseconds: 200),
+          readinessDelay: const Duration(milliseconds: 200),
+          placesDelay: const Duration(milliseconds: 200),
+        ),
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 260));
+    expect(find.text('추천 장소 접기'), findsOneWidget);
+    expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
   });
 
   testWidgets(
@@ -2362,6 +2420,13 @@ class FakeBackend implements LalaBackend {
     this.liveSpeech = true,
     this.places,
     this.weather,
+    this.healthDelay = Duration.zero,
+    this.readinessDelay = Duration.zero,
+    this.placesDelay = Duration.zero,
+    this.weatherDelay = Duration.zero,
+    this.interventionDelay = Duration.zero,
+    this.dailyPlanDelay = Duration.zero,
+    this.docentScriptDelay = Duration.zero,
   });
 
   final LalaAppConfig config;
@@ -2375,6 +2440,13 @@ class FakeBackend implements LalaBackend {
   final bool liveSpeech;
   final List<LalaPlace>? places;
   final LalaWeather? weather;
+  final Duration healthDelay;
+  final Duration readinessDelay;
+  final Duration placesDelay;
+  final Duration weatherDelay;
+  final Duration interventionDelay;
+  final Duration dailyPlanDelay;
+  final Duration docentScriptDelay;
   final List<String> docentScriptRequests = <String>[];
   final List<String> audioRequests = <String>[];
   final List<LalaAppConfig> placesRequestConfigs = <LalaAppConfig>[];
@@ -2386,6 +2458,7 @@ class FakeBackend implements LalaBackend {
 
   @override
   Future<LalaEnvelope<Map<String, dynamic>>> getHealth() async {
+    await _delayIfNeeded(healthDelay);
     return _envelope(<String, dynamic>{
       'status': 'ok',
       'service': 'lala-next-api',
@@ -2395,6 +2468,7 @@ class FakeBackend implements LalaBackend {
 
   @override
   Future<LalaEnvelope<LalaReadiness>> getReadiness() async {
+    await _delayIfNeeded(readinessDelay);
     if (failReadinessLoad) {
       throw const LalaApiException(
         code: 'UPSTREAM_TIMEOUT',
@@ -2438,6 +2512,7 @@ class FakeBackend implements LalaBackend {
   @override
   Future<LalaEnvelope<LalaPlacesResponse>> getPlaces() async {
     placesRequestConfigs.add(config);
+    await _delayIfNeeded(placesDelay);
     if (failAuthenticatedLoad) {
       throw const LalaApiException(
         code: 'UPSTREAM_UNAVAILABLE',
@@ -2471,6 +2546,7 @@ class FakeBackend implements LalaBackend {
   Future<LalaEnvelope<LalaWeather>> getWeather() async {
     weatherRequests += 1;
     weatherRequestConfigs.add(config);
+    await _delayIfNeeded(weatherDelay);
     if (failWeatherLoad) {
       throw const LalaApiException(
         code: 'WEATHER_UNAVAILABLE',
@@ -2486,6 +2562,7 @@ class FakeBackend implements LalaBackend {
   @override
   Future<LalaEnvelope<LalaIntervention>> getIntervention() async {
     interventionRequestConfigs.add(config);
+    await _delayIfNeeded(interventionDelay);
     if (failInterventionLoad) {
       throw const LalaApiException(
         code: 'INTERVENTION_UNAVAILABLE',
@@ -2513,6 +2590,7 @@ class FakeBackend implements LalaBackend {
   Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan() async {
     dailyPlanRequests += 1;
     dailyPlanRequestConfigs.add(config);
+    await _delayIfNeeded(dailyPlanDelay);
     if (failDailyPlanLoad) {
       throw const LalaApiException(
         code: 'DAILY_PLAN_UNAVAILABLE',
@@ -2547,6 +2625,7 @@ class FakeBackend implements LalaBackend {
     String mode = 'brief',
   }) async {
     docentScriptRequests.add('$mode:${place.placeId}');
+    await _delayIfNeeded(docentScriptDelay);
     if (failDocentScriptLoad) {
       throw const LalaApiException(
         code: 'DOCENT_UNAVAILABLE',
@@ -2589,6 +2668,12 @@ class FakeBackend implements LalaBackend {
 
   @override
   void close() {}
+}
+
+Future<void> _delayIfNeeded(Duration delay) async {
+  if (delay > Duration.zero) {
+    await Future<void>.delayed(delay);
+  }
 }
 
 class SnapshotFallbackBackend extends FakeBackend {

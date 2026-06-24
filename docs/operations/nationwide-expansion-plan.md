@@ -266,6 +266,12 @@ Therefore:
 - documentation and API behavior should make this absence safe rather than hide
   it
 
+See also:
+
+- [Nationwide Fallback Score Plan](/Users/geondongkim/LALA-next/docs/operations/nationwide-fallback-score-plan.md),
+  which defines the free nationwide fallback signals and rollout tiers for
+  regions without approved card coverage.
+
 ## Suggested Execution Order
 
 1. Add the shared nationwide region catalog.
@@ -314,4 +320,3 @@ Nationwide expansion for the first pass is done when:
 - nationwide places and culture rows can flow through scoring and RAG safely
 - regions without approved card-spending source remain null for local spending
 - repo tests and guarded verification remain green
-

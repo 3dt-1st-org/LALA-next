@@ -1,11 +1,15 @@
 # LALA Completion Backlog
 
-Last updated: 2026-06-23 KST
+Last updated: 2026-06-24 KST
 
 This backlog tracks remaining work found during the Azure migration and
 franchise/local-value implementation pass. It is intentionally secret-safe:
 do not add live resource names, Key Vault URLs, database DSNs, tokens, or
 subscription identifiers here.
+
+For dated execution history, use
+[work-log.md](/Users/geondongkim/LALA-next/docs/operations/work-log.md).
+This backlog is the current-state view, not the full narrative log.
 
 Current baseline evidence:
 
@@ -35,6 +39,10 @@ Current baseline evidence:
   it inserted fresh KMA/AirKorea-backed observations, recorded a succeeded
   `weather-refresh` row in `ops.job_runs`, regenerated `local-value-v2` score
   snapshots, and refreshed dynamic RAG chunks.
+- Nationwide expansion is now documented as an active rollout lane rather than
+  a future-only idea. The repo now has a dedicated nationwide rollout plan, a
+  card-spending source inventory, and a fallback score plan for regions without
+  approved card coverage.
 - Review quality scoring is now connected to
   `community.place_mentions_weekly.attributes.review_quality.score`; the latest
   shared-dev scoring pass produced non-null `review_quality_score` for 4
