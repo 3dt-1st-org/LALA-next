@@ -10,6 +10,7 @@ from typing import Any
 from apps.api.app.core.config import get_settings
 from apps.api.app.core.observability import LOGGER_NAME
 from apps.api.app.services import db_repository
+from apps.api.app.services import region_catalog
 from apps.api.app.services.dust_quality import (
     build_dust_payload,
     clean_air_quality_value,
@@ -32,6 +33,44 @@ _OFFICIAL_CACHE_TTL = timedelta(minutes=20)
 _official_cache_lock = Lock()
 _official_weather_cache: dict[str, tuple[datetime, dict[str, Any]]] = {}
 logger = logging.getLogger(LOGGER_NAME)
+_PROVINCE_BOUNDS = (
+    ("서울특별시", 37.42, 37.72, 126.75, 127.22),
+    ("인천광역시", 37.0, 37.9, 126.25, 126.85),
+    ("부산광역시", 35.0, 35.45, 128.75, 129.35),
+    ("대구광역시", 35.65, 36.05, 128.35, 128.85),
+    ("광주광역시", 35.0, 35.35, 126.65, 127.05),
+    ("세종특별자치시", 36.35, 36.75, 127.15, 127.45),
+    ("대전광역시", 36.15, 36.55, 127.2, 127.65),
+    ("울산광역시", 35.35, 35.75, 129.0, 129.55),
+    ("제주특별자치도", 33.0, 34.0, 126.0, 127.1),
+    ("강원특별자치도", 37.0, 38.7, 127.0, 129.5),
+    ("경상북도", 35.5, 37.2, 128.0, 130.0),
+    ("충청북도", 36.0, 37.3, 127.2, 128.7),
+    ("전북특별자치도", 35.3, 36.4, 126.4, 127.9),
+    ("충청남도", 35.8, 37.2, 126.0, 127.7),
+    ("전라남도", 34.0, 35.4, 126.0, 127.9),
+    ("경상남도", 34.6, 35.8, 127.5, 129.5),
+    ("경기도", 37.0, 38.35, 126.35, 127.95),
+)
+_PROVINCE_REFERENCE_POINTS = {
+    "서울특별시": (37.5665, 126.9780),
+    "인천광역시": (37.4563, 126.7052),
+    "부산광역시": (35.1796, 129.0756),
+    "대구광역시": (35.8714, 128.6014),
+    "광주광역시": (35.1595, 126.8526),
+    "대전광역시": (36.3504, 127.3845),
+    "울산광역시": (35.5384, 129.3114),
+    "세종특별자치시": (36.48, 127.2890),
+    "경기도": (37.2636, 127.0286),
+    "강원특별자치도": (37.8813, 127.7298),
+    "충청북도": (36.6424, 127.4890),
+    "충청남도": (36.6012, 126.6608),
+    "전북특별자치도": (35.8242, 127.1480),
+    "전라남도": (34.8118, 126.3922),
+    "경상북도": (36.5760, 128.5056),
+    "경상남도": (35.2278, 128.6811),
+    "제주특별자치도": (33.4996, 126.5312),
+}
 
 
 def current_weather(*, lat: float, lng: float, force: bool = False) -> dict:
@@ -458,41 +497,24 @@ def _merge_outdoor_status_with_dust(status: Any, dust: dict[str, Any]) -> str:
 
 
 def _sido_name_for_coordinate(*, lat: float, lng: float) -> str:
-    if 37.42 <= lat <= 37.72 and 126.75 <= lng <= 127.22:
-        return "서울"
-    if 37.0 <= lat <= 38.35 and 126.35 <= lng <= 127.95:
-        return "경기"
-    if 37.0 <= lat <= 37.9 and 126.25 <= lng <= 126.85:
-        return "인천"
-    if 35.0 <= lat <= 35.45 and 128.75 <= lng <= 129.35:
-        return "부산"
-    if 35.65 <= lat <= 36.05 and 128.35 <= lng <= 128.85:
-        return "대구"
-    if 35.0 <= lat <= 35.35 and 126.65 <= lng <= 127.05:
-        return "광주"
-    if 36.15 <= lat <= 36.55 and 127.2 <= lng <= 127.65:
-        return "대전"
-    if 35.35 <= lat <= 35.75 and 129.0 <= lng <= 129.55:
-        return "울산"
-    if 36.35 <= lat <= 36.75 and 127.15 <= lng <= 127.45:
-        return "세종"
-    if 33.0 <= lat <= 34.0 and 126.0 <= lng <= 127.1:
-        return "제주"
-    if 37.0 <= lat <= 38.7 and 127.0 <= lng <= 129.5:
-        return "강원"
-    if 36.0 <= lat <= 37.3 and 127.2 <= lng <= 128.7:
-        return "충북"
-    if 35.8 <= lat <= 37.2 and 126.0 <= lng <= 127.7:
-        return "충남"
-    if 35.3 <= lat <= 36.4 and 126.4 <= lng <= 127.9:
-        return "전북"
-    if 34.0 <= lat <= 35.4 and 126.0 <= lng <= 127.9:
-        return "전남"
-    if 35.5 <= lat <= 37.2 and 128.0 <= lng <= 130.0:
-        return "경북"
-    if 34.6 <= lat <= 35.8 and 127.5 <= lng <= 129.5:
-        return "경남"
-    return "경기"
+    matches = [
+        province_name_ko
+        for province_name_ko, min_lat, max_lat, min_lng, max_lng in _PROVINCE_BOUNDS
+        if min_lat <= lat <= max_lat and min_lng <= lng <= max_lng
+    ]
+    candidates = matches or list(_PROVINCE_REFERENCE_POINTS)
+    province_name_ko = min(
+        candidates,
+        key=lambda name: _coordinate_distance_squared(
+            lat,
+            lng,
+            *_PROVINCE_REFERENCE_POINTS.get(name, (lat, lng)),
+        ),
+    )
+    province = region_catalog.PROVINCE_BY_KO.get(province_name_ko)
+    if province:
+        return province.short_ko
+    return region_catalog.PROVINCE_BY_KO["경기도"].short_ko
 
 
 def _kma_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
@@ -619,3 +641,12 @@ def _parse_datetime(value: Any) -> datetime | None:
     if parsed.tzinfo is None:
         return parsed.replace(tzinfo=UTC)
     return parsed
+
+
+def _coordinate_distance_squared(
+    lat_a: float,
+    lng_a: float,
+    lat_b: float,
+    lng_b: float,
+) -> float:
+    return ((lat_a - lat_b) ** 2) + ((lng_a - lng_b) ** 2)

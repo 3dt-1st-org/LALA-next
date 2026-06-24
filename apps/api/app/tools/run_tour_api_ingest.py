@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 
 from apps.api.app.core.key_vault import get_secret_if_configured
 from apps.api.app.core.redaction import redact_secret_text
+from apps.api.app.services import region_catalog
 from apps.api.app.services.tour_api_ingest import (
     DEFAULT_AREA_CODE,
     DEFAULT_CONTENT_TYPE_IDS,
@@ -16,6 +17,7 @@ from apps.api.app.services.tour_api_ingest import (
     TOUR_API_DETAIL_IMAGE_OPERATION,
     TOUR_API_OPERATION,
     fetch_tour_api_places,
+    fetch_tour_api_places_for_area_codes,
     upsert_tour_api_places,
 )
 
@@ -34,6 +36,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--apply", action="store_true", help="Upsert TourAPI rows into DB.")
     parser.add_argument("--confirm", default="", help=f"Required with --apply: {CONFIRM_TEXT}")
     parser.add_argument("--area-code", default=DEFAULT_AREA_CODE)
+    parser.add_argument(
+        "--all-supported-areas",
+        action="store_true",
+        help="Sweep every nationwide TourAPI area code known to the shared region catalog.",
+    )
     parser.add_argument(
         "--content-type-id",
         action="append",
@@ -62,8 +69,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     content_type_ids = tuple(args.content_type_ids or DEFAULT_CONTENT_TYPE_IDS)
+    area_codes = region_catalog.tour_api_area_codes() if args.all_supported_areas else (args.area_code,)
     if not args.apply and not args.preview:
-        _write(args, _plan_payload(args.area_code, content_type_ids))
+        _write(args, _plan_payload(area_codes, content_type_ids))
         return 0
 
     service_key = _env_or_secret("PUBLIC_DATA_SERVICE_KEY", "public-data-service-key")
@@ -83,15 +91,26 @@ def main(argv: list[str] | None = None) -> int:
             return 2
 
     try:
-        result = fetch_tour_api_places(
-            service_key=service_key,
-            area_code=args.area_code,
-            content_type_ids=content_type_ids,
-            rows=args.rows,
-            page_size=args.page_size,
-            timeout=args.timeout,
-            fetch_missing_images=not args.skip_missing_images,
-        )
+        if len(area_codes) == 1:
+            result = fetch_tour_api_places(
+                service_key=service_key,
+                area_code=area_codes[0],
+                content_type_ids=content_type_ids,
+                rows=args.rows,
+                page_size=args.page_size,
+                timeout=args.timeout,
+                fetch_missing_images=not args.skip_missing_images,
+            )
+        else:
+            result = fetch_tour_api_places_for_area_codes(
+                service_key=service_key,
+                area_codes=area_codes,
+                content_type_ids=content_type_ids,
+                rows=args.rows,
+                page_size=args.page_size,
+                timeout=args.timeout,
+                fetch_missing_images=not args.skip_missing_images,
+            )
         apply_result: dict[str, Any] | None = None
         if args.apply:
             apply_result = upsert_tour_api_places(
@@ -127,7 +146,7 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def _plan_payload(area_code: str, content_type_ids: tuple[str, ...]) -> dict[str, Any]:
+def _plan_payload(area_codes: tuple[str, ...], content_type_ids: tuple[str, ...]) -> dict[str, Any]:
     return {
         "ok": True,
         "mode": "plan",
@@ -138,7 +157,8 @@ def _plan_payload(area_code: str, content_type_ids: tuple[str, ...]) -> dict[str
         "operation": TOUR_API_OPERATION,
         "image_operation": TOUR_API_DETAIL_IMAGE_OPERATION,
         "base_url": TOUR_API_BASE_URL,
-        "area_code": area_code,
+        "area_code": area_codes[0] if len(area_codes) == 1 else "multi",
+        "area_codes": list(area_codes),
         "content_type_ids": list(content_type_ids),
         "target": "travel.places",
         "required_env": ["PUBLIC_DATA_SERVICE_KEY"],
@@ -182,6 +202,8 @@ def _write(args: argparse.Namespace, payload: dict[str, Any]) -> None:
         print(f"source_name={result.get('source_name')}")
         print(f"operation={result.get('operation')}")
         print(f"area_code={result.get('area_code')}")
+        if result.get("area_codes"):
+            print(f"area_codes={result.get('area_codes')}")
         print(f"request_count={result.get('request_count')}")
         print(f"image_request_count={result.get('image_request_count')}")
         print(f"image_error_count={result.get('image_error_count')}")

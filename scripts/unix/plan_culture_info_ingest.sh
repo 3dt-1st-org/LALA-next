@@ -13,6 +13,7 @@ CONFIRM=""
 KEY_VAULT_URL_ARG=""
 OPERATION="area2"
 SIDO="경기"
+ALL_SUPPORTED_SIDO="false"
 SIGUNGU="수원시"
 ROWS="20"
 PAGE_SIZE="10"
@@ -45,6 +46,10 @@ while [[ $# -gt 0 ]]; do
       SIDO="${2:-}"
       shift 2
       ;;
+    --all-supported-sido)
+      ALL_SUPPORTED_SIDO="true"
+      shift
+      ;;
     --sigungu)
       SIGUNGU="${2:-}"
       shift 2
@@ -74,7 +79,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     -h|--help)
-      echo "Usage: scripts/unix/plan_culture_info_ingest.sh [--preview|--apply --confirm APPLY_CULTURE_INFO_INGEST] [--operation area2] [--sido 경기] [--sigungu 수원시] [--rows N] [--key-vault-url URL] [--json] [--python PATH]"
+      echo "Usage: scripts/unix/plan_culture_info_ingest.sh [--preview|--apply --confirm APPLY_CULTURE_INFO_INGEST] [--operation area2] [--sido 경기|--all-supported-sido] [--sigungu 수원시] [--rows N] [--key-vault-url URL] [--json] [--python PATH]"
       exit 0
       ;;
     *)
@@ -108,13 +113,17 @@ fi
 ARGS=(
   -m apps.api.app.tools.run_culture_info_ingest
   --operation "$OPERATION"
-  --sido "$SIDO"
   --sigungu "$SIGUNGU"
   --rows "$ROWS"
   --page-size "$PAGE_SIZE"
   --timeout "$TIMEOUT"
   --connect-timeout "$CONNECT_TIMEOUT"
 )
+if [[ "$ALL_SUPPORTED_SIDO" == "true" ]]; then
+  ARGS+=(--all-supported-sido)
+else
+  ARGS+=(--sido "$SIDO")
+fi
 if [[ "$JSON_STATUS" == "true" ]]; then
   ARGS+=(--json)
 fi

@@ -5,6 +5,8 @@ import types
 from datetime import datetime
 from types import SimpleNamespace
 
+import pytest
+
 from apps.api.app.services import weather_service
 
 
@@ -24,6 +26,36 @@ def test_latest_kma_base_time_uses_previous_hour_before_publish_window() -> None
         weather_service._latest_kma_base_time(after_publish).strftime("%Y%m%d%H%M")
         == "202606190000"
     )
+
+
+@pytest.mark.parametrize(
+    ("lat", "lng", "expected"),
+    [
+        (37.5665, 126.9780, "서울"),
+        (37.4563, 126.7052, "인천"),
+        (35.1796, 129.0756, "부산"),
+        (35.8714, 128.6014, "대구"),
+        (35.1595, 126.8526, "광주"),
+        (36.3504, 127.3845, "대전"),
+        (35.5384, 129.3114, "울산"),
+        (36.48, 127.289, "세종"),
+        (37.2636, 127.0286, "경기"),
+        (37.8813, 127.7298, "강원"),
+        (36.6424, 127.4890, "충북"),
+        (36.6012, 126.6608, "충남"),
+        (35.8242, 127.1480, "전북"),
+        (34.8118, 126.3922, "전남"),
+        (36.5760, 128.5056, "경북"),
+        (35.2278, 128.6811, "경남"),
+        (33.4996, 126.5312, "제주"),
+    ],
+)
+def test_sido_name_for_coordinate_covers_supported_provinces(
+    lat: float,
+    lng: float,
+    expected: str,
+) -> None:
+    assert weather_service._sido_name_for_coordinate(lat=lat, lng=lng) == expected
 
 
 def test_current_weather_uses_kma_nowcast_when_db_is_empty(monkeypatch) -> None:

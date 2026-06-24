@@ -10,6 +10,12 @@ from typing import Any, Iterable
 from xml.etree import ElementTree
 
 from apps.api.app.services.official_media import normalize_official_image_url
+from apps.api.app.services.region_catalog import (
+    infer_region_name_from_text,
+    kopis_signgucodes,
+    normalize_kopis_signgucode,
+    normalize_province_name_ko,
+)
 
 KOPIS_BASE_URL = "http://www.kopis.or.kr/openApi/restful"
 KOPIS_OPERATION = "pblprfr"
@@ -18,72 +24,6 @@ DEFAULT_SOURCE_NAME = "kopis"
 DEFAULT_DATASET_NAME = "공연예술통합전산망_공연목록 조회 서비스"
 MAX_DATE_RANGE_DAYS = 31
 KST = timezone(timedelta(hours=9), "Asia/Seoul")
-
-GYEONGGI_REGION_ALIASES = {
-    "가평": "가평군",
-    "가평군": "가평군",
-    "고양": "고양시",
-    "고양시": "고양시",
-    "과천": "과천시",
-    "과천시": "과천시",
-    "광명": "광명시",
-    "광명시": "광명시",
-    "광주": "광주시",
-    "광주시": "광주시",
-    "구리": "구리시",
-    "구리시": "구리시",
-    "군포": "군포시",
-    "군포시": "군포시",
-    "김포": "김포시",
-    "김포시": "김포시",
-    "남양주": "남양주시",
-    "남양주시": "남양주시",
-    "동두천": "동두천시",
-    "동두천시": "동두천시",
-    "부천": "부천시",
-    "부천시": "부천시",
-    "성남": "성남시",
-    "성남시": "성남시",
-    "수원": "수원시",
-    "수원시": "수원시",
-    "시흥": "시흥시",
-    "시흥시": "시흥시",
-    "안산": "안산시",
-    "안산시": "안산시",
-    "안성": "안성시",
-    "안성시": "안성시",
-    "안양": "안양시",
-    "안양시": "안양시",
-    "양주": "양주시",
-    "양주시": "양주시",
-    "양평": "양평군",
-    "양평군": "양평군",
-    "여주": "여주시",
-    "여주시": "여주시",
-    "연천": "연천군",
-    "연천군": "연천군",
-    "오산": "오산시",
-    "오산시": "오산시",
-    "용인": "용인시",
-    "용인시": "용인시",
-    "의왕": "의왕시",
-    "의왕시": "의왕시",
-    "의정부": "의정부시",
-    "의정부시": "의정부시",
-    "이천": "이천시",
-    "이천시": "이천시",
-    "파주": "파주시",
-    "파주시": "파주시",
-    "평택": "평택시",
-    "평택시": "평택시",
-    "포천": "포천시",
-    "포천시": "포천시",
-    "하남": "하남시",
-    "하남시": "하남시",
-    "화성": "화성시",
-    "화성시": "화성시",
-}
-
 
 @dataclass(frozen=True)
 class KopisPerformance:
@@ -143,6 +83,7 @@ class KopisFetchResult:
     stdate: str
     eddate: str
     signgucode: str | None
+    signgucodes: tuple[str, ...]
     signgucodesub: str | None
     prfstate: str | None
     source_name: str = DEFAULT_SOURCE_NAME
@@ -157,6 +98,7 @@ class KopisFetchResult:
             "stdate": self.stdate,
             "eddate": self.eddate,
             "signgucode": self.signgucode,
+            "signgucodes": list(self.signgucodes),
             "signgucodesub": self.signgucodesub,
             "prfstate": self.prfstate,
             "request_count": self.request_count,
@@ -225,13 +167,72 @@ def fetch_kopis_performances(
         remaining -= num_rows
         page_no += 1
 
+    normalized_signgucode = _normalize_signgucode(signgucode)
     return KopisFetchResult(
         performances=tuple(_dedupe_performances(performances)),
         request_count=request_count,
         raw_count=raw_count,
         stdate=stdate,
         eddate=eddate,
-        signgucode=signgucode,
+        signgucode=normalized_signgucode,
+        signgucodes=((normalized_signgucode,) if normalized_signgucode else ()),
+        signgucodesub=signgucodesub,
+        prfstate=prfstate,
+    )
+
+
+def fetch_kopis_performances_for_signgucodes(
+    *,
+    service_key: str,
+    stdate: str,
+    eddate: str,
+    signgucodes: Iterable[str] | None = None,
+    signgucodesub: str | None = None,
+    prfstate: str | None = None,
+    rows: int = 20,
+    page_size: int = 10,
+    timeout: int = 10,
+) -> KopisFetchResult:
+    normalized_signgucodes = tuple(
+        dict.fromkeys(
+            normalized
+            for signgucode in (
+                tuple(signgucodes) if signgucodes is not None else kopis_signgucodes()
+            )
+            if (normalized := _normalize_signgucode(signgucode)) is not None
+        )
+    )
+    if not normalized_signgucodes:
+        raise ValueError("At least one KOPIS signgucode is required.")
+
+    results = [
+        fetch_kopis_performances(
+            service_key=service_key,
+            stdate=stdate,
+            eddate=eddate,
+            signgucode=signgucode,
+            signgucodesub=signgucodesub,
+            prfstate=prfstate,
+            rows=rows,
+            page_size=page_size,
+            timeout=timeout,
+        )
+        for signgucode in normalized_signgucodes
+    ]
+    return KopisFetchResult(
+        performances=tuple(
+            _dedupe_performances(
+                performance
+                for result in results
+                for performance in result.performances
+            )
+        ),
+        request_count=sum(result.request_count for result in results),
+        raw_count=sum(result.raw_count for result in results),
+        stdate=stdate,
+        eddate=eddate,
+        signgucode=normalized_signgucodes[0] if len(normalized_signgucodes) == 1 else "multi",
+        signgucodes=normalized_signgucodes,
         signgucodesub=signgucodesub,
         prfstate=prfstate,
     )
@@ -368,13 +369,12 @@ def infer_region_name_ko(
     venue_name: str | None,
     area: str | None,
 ) -> str | None:
-    area_text = _clean_text(area)
+    area_text = normalize_province_name_ko(_clean_text(area)) or _clean_text(area)
     texts = [_clean_text(title), _clean_text(venue_name)]
-    if area_text == "경기도":
-        for text in texts:
-            region = _infer_gyeonggi_region_from_text(text)
-            if region:
-                return region
+    for text in texts:
+        region = infer_region_name_from_text(text, area_text)
+        if region:
+            return region
     return area_text
 
 
@@ -473,23 +473,5 @@ def _parse_date(value: Any) -> date | None:
         return None
 
 
-def _infer_gyeonggi_region_from_text(value: str | None) -> str | None:
-    text = value or ""
-    bracket_candidates = re.findall(r"[\[\(（【]([^\]\)）】]+)[\]\)）】]", text)
-    for candidate in bracket_candidates:
-        region = _lookup_gyeonggi_region(candidate)
-        if region:
-            return region
-    return _lookup_gyeonggi_region(text)
-
-
-def _lookup_gyeonggi_region(text: str) -> str | None:
-    compact = re.sub(r"\s+", "", text)
-    for alias, region in sorted(
-        GYEONGGI_REGION_ALIASES.items(),
-        key=lambda item: len(item[0]),
-        reverse=True,
-    ):
-        if alias in compact:
-            return region
-    return None
+def _normalize_signgucode(value: str | None) -> str | None:
+    return normalize_kopis_signgucode(value)

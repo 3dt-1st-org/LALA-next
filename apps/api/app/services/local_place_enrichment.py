@@ -4,7 +4,7 @@ import json
 from dataclasses import dataclass
 from typing import Any, Sequence
 
-from apps.api.app.services.public_mvp_snapshot import DEFAULT_REGION_NAME_EN
+from apps.api.app.services import region_catalog
 
 PROMPT_VERSION = "local-romanization-v1"
 
@@ -73,13 +73,8 @@ _NAME_SUFFIXES = (
 )
 
 _ADDRESS_TOKEN_MAP = {
-    "경기도": "Gyeonggi-do",
-    "서울특별시": "Seoul",
-    "서울시": "Seoul",
-    **DEFAULT_REGION_NAME_EN,
+    **region_catalog.address_token_en_map(),
 }
-
-_REGION_PREFIXES = {"경기도", "서울특별시", "서울시", "인천광역시"}
 
 
 @dataclass(frozen=True)
@@ -288,17 +283,11 @@ def _matched_suffix_en(text: str) -> str:
 def _region_name_en(region_name_ko: str | None) -> str | None:
     if not region_name_ko:
         return None
-    return DEFAULT_REGION_NAME_EN.get(region_name_ko) or _romanize(region_name_ko)
+    return region_catalog.region_name_en(region_name_ko) or _romanize(region_name_ko)
 
 
 def _infer_region_name_ko(address: object) -> str | None:
-    text = _optional_text(address)
-    if not text:
-        return None
-    parts = text.split()
-    if len(parts) >= 2 and parts[0] in _REGION_PREFIXES:
-        return parts[1]
-    return None
+    return region_catalog.infer_region_name_from_address(address)
 
 
 def _romanize(value: str) -> str | None:

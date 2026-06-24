@@ -14,6 +14,7 @@ KEY_VAULT_URL_ARG=""
 STDATE=""
 EDDATE=""
 SIGNGUCODE="41"
+ALL_SUPPORTED_SIGNGUCODES="false"
 SIGNGUCODESUB=""
 PRFSTATE=""
 ROWS="20"
@@ -51,6 +52,10 @@ while [[ $# -gt 0 ]]; do
       SIGNGUCODE="${2:-}"
       shift 2
       ;;
+    --all-supported-signgucodes)
+      ALL_SUPPORTED_SIGNGUCODES="true"
+      shift
+      ;;
     --signgucodesub)
       SIGNGUCODESUB="${2:-}"
       shift 2
@@ -84,7 +89,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     -h|--help)
-      echo "Usage: scripts/unix/plan_kopis_ingest.sh [--preview|--apply --confirm APPLY_KOPIS_INGEST] [--stdate YYYYMMDD] [--eddate YYYYMMDD] [--signgucode 41] [--signgucodesub CODE] [--prfstate CODE] [--rows N] [--key-vault-url URL] [--json] [--python PATH]"
+      echo "Usage: scripts/unix/plan_kopis_ingest.sh [--preview|--apply --confirm APPLY_KOPIS_INGEST] [--stdate YYYYMMDD] [--eddate YYYYMMDD] [--signgucode 41|--all-supported-signgucodes] [--signgucodesub CODE] [--prfstate CODE] [--rows N] [--key-vault-url URL] [--json] [--python PATH]"
       exit 0
       ;;
     *)
@@ -117,7 +122,6 @@ fi
 
 ARGS=(
   -m apps.api.app.tools.run_kopis_ingest
-  --signgucode "$SIGNGUCODE"
   --signgucodesub "$SIGNGUCODESUB"
   --prfstate "$PRFSTATE"
   --rows "$ROWS"
@@ -125,6 +129,11 @@ ARGS=(
   --timeout "$TIMEOUT"
   --connect-timeout "$CONNECT_TIMEOUT"
 )
+if [[ "$ALL_SUPPORTED_SIGNGUCODES" == "true" ]]; then
+  ARGS+=(--all-supported-signgucodes)
+else
+  ARGS+=(--signgucode "$SIGNGUCODE")
+fi
 if [[ -n "$STDATE" ]]; then
   ARGS+=(--stdate "$STDATE")
 fi

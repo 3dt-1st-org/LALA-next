@@ -7,6 +7,7 @@ from decimal import Decimal
 from typing import Any, Sequence
 
 from apps.api.app.services.official_media import normalize_official_image_url
+from apps.api.app.services import region_catalog
 
 SNAPSHOT_DATA_BASIS = "public_mvp_snapshot"
 DEFAULT_SNAPSHOT_DESCRIPTION = (
@@ -15,72 +16,11 @@ DEFAULT_SNAPSHOT_DESCRIPTION = (
 )
 DEFAULT_OUTPUT_PATH = "apps/api/app/data/public_mvp_places.json"
 
-GYEONGGI_REGION_NAME_EN = {
-    "가평군": "Gapyeong-gun",
-    "고양시": "Goyang-si",
-    "과천시": "Gwacheon-si",
-    "광명시": "Gwangmyeong-si",
-    "광주시": "Gwangju-si",
-    "구리시": "Guri-si",
-    "군포시": "Gunpo-si",
-    "김포시": "Gimpo-si",
-    "남양주시": "Namyangju-si",
-    "동두천시": "Dongducheon-si",
-    "부천시": "Bucheon-si",
-    "성남시": "Seongnam-si",
-    "수원시": "Suwon-si",
-    "시흥시": "Siheung-si",
-    "안산시": "Ansan-si",
-    "안성시": "Anseong-si",
-    "안양시": "Anyang-si",
-    "양주시": "Yangju-si",
-    "양평군": "Yangpyeong-gun",
-    "여주시": "Yeoju-si",
-    "연천군": "Yeoncheon-gun",
-    "오산시": "Osan-si",
-    "용인시": "Yongin-si",
-    "의왕시": "Uiwang-si",
-    "의정부시": "Uijeongbu-si",
-    "이천시": "Icheon-si",
-    "파주시": "Paju-si",
-    "평택시": "Pyeongtaek-si",
-    "포천시": "Pocheon-si",
-    "하남시": "Hanam-si",
-    "화성시": "Hwaseong-si",
-}
-
-SEOUL_REGION_NAME_EN = {
-    "강남구": "Gangnam-gu",
-    "강동구": "Gangdong-gu",
-    "강북구": "Gangbuk-gu",
-    "강서구": "Gangseo-gu",
-    "관악구": "Gwanak-gu",
-    "광진구": "Gwangjin-gu",
-    "구로구": "Guro-gu",
-    "금천구": "Geumcheon-gu",
-    "노원구": "Nowon-gu",
-    "도봉구": "Dobong-gu",
-    "동대문구": "Dongdaemun-gu",
-    "동작구": "Dongjak-gu",
-    "마포구": "Mapo-gu",
-    "서대문구": "Seodaemun-gu",
-    "서초구": "Seocho-gu",
-    "성동구": "Seongdong-gu",
-    "성북구": "Seongbuk-gu",
-    "송파구": "Songpa-gu",
-    "양천구": "Yangcheon-gu",
-    "영등포구": "Yeongdeungpo-gu",
-    "용산구": "Yongsan-gu",
-    "은평구": "Eunpyeong-gu",
-    "종로구": "Jongno-gu",
-    "중구": "Jung-gu",
-    "중랑구": "Jungnang-gu",
-}
-
-DEFAULT_REGION_NAME_EN = {
-    **GYEONGGI_REGION_NAME_EN,
-    **SEOUL_REGION_NAME_EN,
-}
+GYEONGGI_REGION_NAME_EN = region_catalog.region_name_en_map(province_names=("경기도",))
+SEOUL_REGION_NAME_EN = region_catalog.region_name_en_map(province_names=("서울특별시",))
+DEFAULT_REGION_NAME_EN = region_catalog.region_name_en_map(
+    province_names=("경기도", "서울특별시")
+)
 
 
 def build_snapshot_payload(
@@ -309,17 +249,17 @@ def _snapshot_address_en(row: dict[str, Any]) -> str | None:
     if not address_en:
         return None
     address_ko = _optional_text(row.get("address_ko")) or ""
-    if "경기도" in address_ko and "gyeonggi" not in address_en.lower():
-        return f"{address_en}, Gyeonggi-do"
-    if "서울특별시" in address_ko and "seoul" not in address_en.lower():
-        return f"{address_en}, Seoul"
+    province_ko = region_catalog.infer_province_name_from_address(address_ko)
+    province_en = region_catalog.province_name_en(province_ko)
+    if province_en and province_en.lower() not in address_en.lower():
+        return f"{address_en}, {province_en}"
     return address_en
 
 
 def _snapshot_region_en(row: dict[str, Any]) -> str | None:
     region_ko = _optional_text(row.get("region_ko"))
     if region_ko:
-        canonical_region = DEFAULT_REGION_NAME_EN.get(region_ko)
+        canonical_region = region_catalog.region_name_en(region_ko)
         if canonical_region:
             return canonical_region
     return _optional_text(row.get("region_en"))

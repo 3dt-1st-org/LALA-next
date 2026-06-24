@@ -18,11 +18,27 @@ def test_culture_info_ingest_plan_uses_public_data_key_without_live_call(capsys)
     assert payload["mode"] == "plan"
     assert payload["source_name"] == "kcisa"
     assert payload["operation"] == "area2"
+    assert payload["sido"] == "경기"
+    assert payload["sidos"] == ["경기"]
     assert payload["target"] == "culture.events"
     assert payload["job_name"] == run_culture_info_ingest.JOB_NAME
     assert payload["required_env"] == ["PUBLIC_DATA_SERVICE_KEY"]
     assert payload["live_api_call"] is False
     assert payload["db_mutation"] is False
+
+
+def test_culture_info_ingest_plan_supports_all_supported_sido(capsys):
+    exit_code = run_culture_info_ingest.main(["--json", "--all-supported-sido"])
+
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert payload["ok"] is True
+    assert payload["mode"] == "plan"
+    assert payload["sido"] == "multi"
+    assert len(payload["sidos"]) == 17
+    assert payload["sidos"][0] == "서울"
+    assert payload["sidos"][-1] == "제주"
 
 
 def test_parse_culture_info_event_maps_fields_to_data_dictionary_names():
@@ -129,6 +145,55 @@ def test_fetch_culture_info_events_uses_num_ofrows_param(monkeypatch):
     assert calls[0]["params"]["numOfrows"] == "1"
     assert result.raw_count == 1
     assert len(result.events) == 1
+    assert result.sidos == ("경기",)
+
+
+def test_fetch_result_can_sweep_multiple_sidos(monkeypatch):
+    def fake_fetch(**kwargs):
+        sido = kwargs["sido"]
+        seq = "1" if sido == "서울" else "2"
+        return culture_info_ingest.CultureInfoFetchResult(
+            events=(
+                culture_info_ingest.CultureInfoEvent(
+                    seq=seq,
+                    title_ko=f"{sido} 행사",
+                    event_type="공연",
+                    venue_name_ko="장소",
+                    area=f"{sido}특별시" if sido == "서울" else "부산광역시",
+                    sigungu=None,
+                    starts_on=None,
+                    ends_on=None,
+                    url=None,
+                    thumbnail_url=None,
+                    gps_x=None,
+                    gps_y=None,
+                ),
+            ),
+            request_count=1,
+            raw_count=1,
+            total_count=1,
+            operation="area2",
+            sido=sido,
+            sidos=(sido,),
+            sigungu=None,
+        )
+
+    monkeypatch.setattr(culture_info_ingest, "fetch_culture_info_events", fake_fetch)
+
+    result = culture_info_ingest.fetch_culture_info_events_for_sidos(
+        service_key="secret-key",
+        sidos=("서울특별시", "부산"),
+        sigungu=None,
+        rows=5,
+        page_size=5,
+    )
+
+    assert result.sido == "multi"
+    assert result.sidos == ("서울", "부산")
+    assert result.request_count == 2
+    assert result.raw_count == 2
+    assert result.total_count == 2
+    assert len(result.events) == 2
 
 
 def test_apply_requires_guard_before_calling_api(monkeypatch, capsys):
@@ -179,6 +244,7 @@ def test_apply_records_succeeded_job_run(monkeypatch, capsys):
         total_count=0,
         operation="area2",
         sido="경기",
+        sidos=("경기",),
         sigungu="수원시",
     )
 
@@ -306,6 +372,7 @@ def test_upsert_culture_info_events_targets_source_files_and_events(monkeypatch)
         total_count=1,
         operation="area2",
         sido="경기",
+        sidos=("경기",),
         sigungu="수원시",
     )
 

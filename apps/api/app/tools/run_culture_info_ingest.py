@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 
 from apps.api.app.core.key_vault import get_secret_if_configured
 from apps.api.app.core.redaction import redact_secret_text
+from apps.api.app.services import region_catalog
 from apps.api.app.services.job_runs import duration_ms, record_job_run
 from apps.api.app.services.culture_info_ingest import (
     CULTURE_INFO_BASE_URL,
@@ -18,6 +19,7 @@ from apps.api.app.services.culture_info_ingest import (
     DEFAULT_SIDO,
     DEFAULT_SIGUNGU,
     fetch_culture_info_events,
+    fetch_culture_info_events_for_sidos,
     upsert_culture_info_events,
 )
 
@@ -38,6 +40,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--confirm", default="", help=f"Required with --apply: {CONFIRM_TEXT}")
     parser.add_argument("--operation", default=DEFAULT_OPERATION)
     parser.add_argument("--sido", default=DEFAULT_SIDO)
+    parser.add_argument(
+        "--all-supported-sido",
+        action="store_true",
+        help="Sweep every KCISA sido known to the shared region catalog.",
+    )
     parser.add_argument("--sigungu", default=DEFAULT_SIGUNGU)
     parser.add_argument("--rows", type=int, default=20)
     parser.add_argument("--page-size", type=int, default=10)
@@ -56,8 +63,12 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     sigungu = args.sigungu.strip() or None
+    if args.all_supported_sido:
+        sidos = region_catalog.kcisa_sido_names()
+    else:
+        sidos = region_catalog.kcisa_sido_names(province_names=(args.sido,)) or (args.sido,)
     if not args.apply and not args.preview:
-        _write(args, _plan_payload(args, sigungu))
+        _write(args, _plan_payload(args, sidos, sigungu))
         return 0
 
     service_key = _env_or_secret("PUBLIC_DATA_SERVICE_KEY", "public-data-service-key")
@@ -78,15 +89,26 @@ def main(argv: list[str] | None = None) -> int:
 
     started_at = datetime.now(UTC)
     try:
-        result = fetch_culture_info_events(
-            service_key=service_key,
-            operation=args.operation,
-            sido=args.sido,
-            sigungu=sigungu,
-            rows=args.rows,
-            page_size=args.page_size,
-            timeout=args.timeout,
-        )
+        if len(sidos) == 1:
+            result = fetch_culture_info_events(
+                service_key=service_key,
+                operation=args.operation,
+                sido=sidos[0],
+                sigungu=sigungu,
+                rows=args.rows,
+                page_size=args.page_size,
+                timeout=args.timeout,
+            )
+        else:
+            result = fetch_culture_info_events_for_sidos(
+                service_key=service_key,
+                operation=args.operation,
+                sidos=sidos,
+                sigungu=sigungu,
+                rows=args.rows,
+                page_size=args.page_size,
+                timeout=args.timeout,
+            )
         apply_result: dict[str, Any] | None = None
         if args.apply:
             apply_result = upsert_culture_info_events(
@@ -152,7 +174,11 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def _plan_payload(args: argparse.Namespace, sigungu: str | None) -> dict[str, Any]:
+def _plan_payload(
+    args: argparse.Namespace,
+    sidos: tuple[str, ...],
+    sigungu: str | None,
+) -> dict[str, Any]:
     return {
         "ok": True,
         "mode": "plan",
@@ -163,7 +189,8 @@ def _plan_payload(args: argparse.Namespace, sigungu: str | None) -> dict[str, An
         "operation": args.operation,
         "base_url": CULTURE_INFO_BASE_URL,
         "job_name": JOB_NAME,
-        "sido": args.sido,
+        "sido": sidos[0] if len(sidos) == 1 else "multi",
+        "sidos": list(sidos),
         "sigungu": sigungu,
         "target": "culture.events",
         "required_env": ["PUBLIC_DATA_SERVICE_KEY"],
@@ -209,6 +236,8 @@ def _write(args: argparse.Namespace, payload: dict[str, Any]) -> None:
         print(f"source_name={result.get('source_name')}")
         print(f"operation={result.get('operation')}")
         print(f"sido={result.get('sido')}")
+        if result.get("sidos"):
+            print(f"sidos={result.get('sidos')}")
         print(f"sigungu={result.get('sigungu')}")
         print(f"request_count={result.get('request_count')}")
         print(f"raw_count={result.get('raw_count')}")

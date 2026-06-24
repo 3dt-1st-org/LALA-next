@@ -40,6 +40,13 @@ def test_romanize_address_uses_seoul_short_alias() -> None:
     assert "Seoulsi" not in address
 
 
+def test_romanize_address_supports_non_capital_regions() -> None:
+    address = local_place_enrichment.romanize_address("부산광역시 해운대구 우동")
+
+    assert address == "Busan Haeundae-gu Udong"
+    assert "부산" not in address
+
+
 def test_build_local_enrichment_preserves_existing_values() -> None:
     enrichment = local_place_enrichment.build_local_enrichment(
         {

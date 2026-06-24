@@ -25,8 +25,23 @@ def test_kopis_ingest_plan_uses_kopis_key_without_live_call(capsys):
     assert payload["job_name"] == run_kopis_ingest.JOB_NAME
     assert payload["required_env"] == ["KOPIS_API_KEY"]
     assert payload["signgucode"] == "41"
+    assert payload["signgucodes"] == ["41"]
     assert payload["live_api_call"] is False
     assert payload["db_mutation"] is False
+
+
+def test_kopis_ingest_plan_supports_all_supported_signgucodes(capsys):
+    exit_code = run_kopis_ingest.main(["--json", "--all-supported-signgucodes"])
+
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert payload["ok"] is True
+    assert payload["mode"] == "plan"
+    assert payload["signgucode"] == "multi"
+    assert len(payload["signgucodes"]) == 17
+    assert payload["signgucodes"][0] == "11"
+    assert payload["signgucodes"][-1] == "50"
 
 
 def test_default_kopis_date_window_is_within_public_api_limit():
@@ -96,6 +111,23 @@ def test_kopis_region_inference_uses_gyeonggi_venue_name_when_title_has_no_regio
     assert performance.region_name_ko == "성남시"
 
 
+def test_kopis_region_inference_supports_non_capital_province_aliases():
+    performance = kopis_ingest.KopisPerformance(
+        mt20id="PF2",
+        title_ko="여름 바다 축제 [해운대]",
+        starts_on=None,
+        ends_on=None,
+        venue_name_ko="부산문화회관",
+        poster_url=None,
+        area="부산광역시",
+        genre_name="축제",
+        openrun=None,
+        performance_state=None,
+    )
+
+    assert performance.region_name_ko == "해운대구"
+
+
 def test_fetch_kopis_performances_uses_official_rest_parameters(monkeypatch):
     class Response:
         text = """
@@ -141,6 +173,53 @@ def test_fetch_kopis_performances_uses_official_rest_parameters(monkeypatch):
     assert calls[0]["params"]["signgucode"] == "41"
     assert result.raw_count == 1
     assert len(result.performances) == 1
+    assert result.signgucodes == ("41",)
+
+
+def test_fetch_result_can_sweep_multiple_signgucodes(monkeypatch):
+    def fake_fetch(**kwargs):
+        signgucode = kwargs["signgucode"]
+        return kopis_ingest.KopisFetchResult(
+            performances=(
+                kopis_ingest.KopisPerformance(
+                    mt20id=f"PF{signgucode}",
+                    title_ko=f"공연 [{signgucode}]",
+                    starts_on=None,
+                    ends_on=None,
+                    venue_name_ko="공연장",
+                    poster_url=None,
+                    area="서울특별시" if signgucode == "11" else "부산광역시",
+                    genre_name="연극",
+                    openrun=None,
+                    performance_state=None,
+                ),
+            ),
+            request_count=1,
+            raw_count=1,
+            stdate="20260615",
+            eddate="20260715",
+            signgucode=signgucode,
+            signgucodes=(signgucode,),
+            signgucodesub=None,
+            prfstate=None,
+        )
+
+    monkeypatch.setattr(kopis_ingest, "fetch_kopis_performances", fake_fetch)
+
+    result = kopis_ingest.fetch_kopis_performances_for_signgucodes(
+        service_key="kopis-secret",
+        stdate="20260615",
+        eddate="20260715",
+        signgucodes=("서울특별시", "26"),
+        rows=5,
+        page_size=5,
+    )
+
+    assert result.signgucode == "multi"
+    assert result.signgucodes == ("11", "26")
+    assert result.request_count == 2
+    assert result.raw_count == 2
+    assert len(result.performances) == 2
 
 
 def test_fetch_kopis_performances_rejects_windows_larger_than_31_days():
@@ -200,6 +279,7 @@ def test_kopis_apply_records_succeeded_job_run(monkeypatch, capsys):
         stdate="20260615",
         eddate="20260715",
         signgucode="41",
+        signgucodes=("41",),
         signgucodesub=None,
         prfstate=None,
     )
@@ -322,6 +402,7 @@ def test_upsert_kopis_performances_targets_source_files_and_culture_events(monke
         stdate="20260615",
         eddate="20260715",
         signgucode="41",
+        signgucodes=("41",),
         signgucodesub=None,
         prfstate=None,
     )

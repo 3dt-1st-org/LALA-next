@@ -25,6 +25,18 @@ def test_tour_api_ingest_plan_uses_public_data_key_without_live_call(capsys):
     assert payload["db_mutation"] is False
 
 
+def test_tour_api_ingest_plan_supports_all_supported_areas(capsys):
+    exit_code = run_tour_api_ingest.main(["--json", "--all-supported-areas"])
+
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert payload["area_code"] == "multi"
+    assert len(payload["area_codes"]) == 17
+    assert payload["area_codes"][0] == "1"
+    assert payload["area_codes"][-1] == "39"
+
+
 def test_parse_tour_api_place_maps_fields_to_data_dictionary_names():
     item = {
         "contentid": "2874056",
@@ -64,6 +76,10 @@ def test_parse_tour_api_place_maps_fields_to_data_dictionary_names():
 
 def test_infer_region_name_accepts_seoul_short_alias():
     assert tour_api_ingest.infer_region_name_ko("서울시 종로구 익선동") == "종로구"
+
+
+def test_infer_region_name_accepts_busan_province_alias():
+    assert tour_api_ingest.infer_region_name_ko("부산광역시 해운대구 우동") == "해운대구"
 
 
 def test_fetch_result_dedupes_content_ids(monkeypatch):
@@ -150,6 +166,55 @@ def test_fetch_result_dedupes_content_ids(monkeypatch):
     assert result.raw_count == 2
     assert len(result.places) == 1
     assert result.places[0].first_image == "https://example.invalid/detail.jpg"
+
+
+def test_fetch_result_can_sweep_multiple_area_codes(monkeypatch):
+    calls = []
+
+    def fake_fetch(**kwargs):
+        calls.append(kwargs["area_code"])
+        return tour_api_ingest.TourApiFetchResult(
+            places=(
+                tour_api_ingest.TourApiPlace(
+                    content_id=f"{kwargs['area_code']}-1",
+                    content_type_id="12",
+                    title=f"장소-{kwargs['area_code']}",
+                    category="attraction",
+                    addr1="부산광역시 해운대구",
+                    addr2=None,
+                    area_code=kwargs["area_code"],
+                    sigungu_code="1",
+                    lat=35.1,
+                    lng=129.1,
+                    first_image=None,
+                    modified_time=None,
+                ),
+            ),
+            request_count=1,
+            image_request_count=0,
+            image_error_count=0,
+            raw_count=1,
+            area_code=kwargs["area_code"],
+            area_codes=(kwargs["area_code"],),
+            content_type_ids=("12",),
+        )
+
+    monkeypatch.setattr(tour_api_ingest, "fetch_tour_api_places", fake_fetch)
+
+    result = tour_api_ingest.fetch_tour_api_places_for_area_codes(
+        service_key="secret-key",
+        area_codes=("1", "6"),
+        content_type_ids=("12",),
+        rows=1,
+        page_size=1,
+    )
+
+    assert calls == ["1", "6"]
+    assert result.area_code == "multi"
+    assert result.area_codes == ("1", "6")
+    assert result.request_count == 2
+    assert result.raw_count == 2
+    assert len(result.places) == 2
 
 
 def test_fetch_result_skips_detail_image_when_firstimage_exists(monkeypatch):
@@ -400,6 +465,7 @@ def test_upsert_tour_api_places_targets_source_files_and_places(monkeypatch):
         image_error_count=0,
         raw_count=1,
         area_code="31",
+        area_codes=("31",),
         content_type_ids=("12",),
     )
 

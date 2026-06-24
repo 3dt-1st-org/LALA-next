@@ -12,6 +12,7 @@ APPLY="false"
 CONFIRM=""
 KEY_VAULT_URL_ARG=""
 AREA_CODE="31"
+ALL_SUPPORTED_AREAS="false"
 ROWS="40"
 PAGE_SIZE="20"
 TIMEOUT="10"
@@ -40,6 +41,10 @@ while [[ $# -gt 0 ]]; do
     --area-code)
       AREA_CODE="${2:-}"
       shift 2
+      ;;
+    --all-supported-areas)
+      ALL_SUPPORTED_AREAS="true"
+      shift
       ;;
     --content-type-id)
       CONTENT_TYPE_ARGS+=(--content-type-id "${2:-}")
@@ -74,7 +79,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     -h|--help)
-      echo "Usage: scripts/unix/plan_tour_api_ingest.sh [--preview|--apply --confirm APPLY_TOUR_API_INGEST] [--area-code CODE] [--content-type-id ID] [--rows N] [--skip-missing-images] [--key-vault-url URL] [--json] [--python PATH]"
+      echo "Usage: scripts/unix/plan_tour_api_ingest.sh [--preview|--apply --confirm APPLY_TOUR_API_INGEST] [--area-code CODE|--all-supported-areas] [--content-type-id ID] [--rows N] [--skip-missing-images] [--key-vault-url URL] [--json] [--python PATH]"
       exit 0
       ;;
     *)
@@ -107,12 +112,16 @@ fi
 
 ARGS=(
   -m apps.api.app.tools.run_tour_api_ingest
-  --area-code "$AREA_CODE"
   --rows "$ROWS"
   --page-size "$PAGE_SIZE"
   --timeout "$TIMEOUT"
   --connect-timeout "$CONNECT_TIMEOUT"
 )
+if [[ "$ALL_SUPPORTED_AREAS" == "true" ]]; then
+  ARGS+=(--all-supported-areas)
+else
+  ARGS+=(--area-code "$AREA_CODE")
+fi
 if [[ ${#CONTENT_TYPE_ARGS[@]} -gt 0 ]]; then
   ARGS+=("${CONTENT_TYPE_ARGS[@]}")
 fi

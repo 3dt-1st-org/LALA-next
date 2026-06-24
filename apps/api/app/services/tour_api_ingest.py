@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import Any, Iterable, Sequence
 
 from apps.api.app.services.official_media import normalize_official_image_url
+from apps.api.app.services.region_catalog import infer_region_name_from_address
 
 TOUR_API_BASE_URL = "https://apis.data.go.kr/B551011/KorService2"
 TOUR_API_OPERATION = "areaBasedList2"
@@ -74,6 +75,7 @@ class TourApiFetchResult:
     image_error_count: int
     raw_count: int
     area_code: str
+    area_codes: tuple[str, ...]
     content_type_ids: tuple[str, ...]
     source_name: str = "tour_api"
     dataset_name: str = "한국관광공사_국문 관광정보 서비스_GW"
@@ -85,6 +87,7 @@ class TourApiFetchResult:
             "dataset_name": self.dataset_name,
             "operation": self.operation,
             "area_code": self.area_code,
+            "area_codes": list(self.area_codes),
             "content_type_ids": list(self.content_type_ids),
             "request_count": self.request_count,
             "image_request_count": self.image_request_count,
@@ -176,6 +179,55 @@ def fetch_tour_api_places(
         image_error_count=image_error_count,
         raw_count=raw_count,
         area_code=area_code,
+        area_codes=(area_code,),
+        content_type_ids=tuple(content_type_ids),
+    )
+
+
+def fetch_tour_api_places_for_area_codes(
+    *,
+    service_key: str,
+    area_codes: Sequence[str],
+    content_type_ids: Sequence[str] = DEFAULT_CONTENT_TYPE_IDS,
+    rows: int = 100,
+    page_size: int = 20,
+    timeout: int = 10,
+    fetch_missing_images: bool = True,
+) -> TourApiFetchResult:
+    unique_area_codes = tuple(dict.fromkeys(str(code).strip() for code in area_codes if str(code).strip()))
+    if not unique_area_codes:
+        raise ValueError("area_codes must not be empty.")
+
+    places: list[TourApiPlace] = []
+    request_count = 0
+    image_request_count = 0
+    image_error_count = 0
+    raw_count = 0
+    for area_code in unique_area_codes:
+        result = fetch_tour_api_places(
+            service_key=service_key,
+            area_code=area_code,
+            content_type_ids=content_type_ids,
+            rows=rows,
+            page_size=page_size,
+            timeout=timeout,
+            fetch_missing_images=fetch_missing_images,
+        )
+        places.extend(result.places)
+        request_count += result.request_count
+        image_request_count += result.image_request_count
+        image_error_count += result.image_error_count
+        raw_count += result.raw_count
+
+    deduped_places = tuple(_dedupe_places(places))
+    return TourApiFetchResult(
+        places=deduped_places,
+        request_count=request_count,
+        image_request_count=image_request_count,
+        image_error_count=image_error_count,
+        raw_count=raw_count,
+        area_code=unique_area_codes[0] if len(unique_area_codes) == 1 else "multi",
+        area_codes=unique_area_codes,
         content_type_ids=tuple(content_type_ids),
     )
 
@@ -371,15 +423,7 @@ def upsert_tour_api_places(
 
 
 def infer_region_name_ko(address: str | None) -> str | None:
-    text = _optional_text(address)
-    if not text:
-        return None
-    parts = text.split()
-    if len(parts) >= 2 and parts[0] in {"경기도", "서울특별시", "서울시", "인천광역시"}:
-        return parts[1]
-    if parts:
-        return parts[0]
-    return None
+    return infer_region_name_from_address(address)
 
 
 def _extract_items(payload: dict[str, Any]) -> list[dict[str, Any]]:

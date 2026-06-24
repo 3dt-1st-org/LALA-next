@@ -9,6 +9,7 @@ from typing import Any, Iterable
 from xml.etree import ElementTree
 
 from apps.api.app.services.official_media import normalize_official_image_url
+from apps.api.app.services.region_catalog import kcisa_sido_names, normalize_province_name_ko
 
 CULTURE_INFO_BASE_URL = "https://apis.data.go.kr/B553457/cultureinfo"
 DEFAULT_OPERATION = "area2"
@@ -76,6 +77,7 @@ class CultureInfoFetchResult:
     total_count: int | None
     operation: str
     sido: str
+    sidos: tuple[str, ...]
     sigungu: str | None
     source_name: str = DEFAULT_SOURCE_NAME
     dataset_name: str = DEFAULT_DATASET_NAME
@@ -86,6 +88,7 @@ class CultureInfoFetchResult:
             "dataset_name": self.dataset_name,
             "operation": self.operation,
             "sido": self.sido,
+            "sidos": list(self.sidos),
             "sigungu": self.sigungu,
             "request_count": self.request_count,
             "raw_count": self.raw_count,
@@ -160,7 +163,54 @@ def fetch_culture_info_events(
         raw_count=raw_count,
         total_count=total_count,
         operation=operation,
-        sido=sido,
+        sido=_normalize_sido(sido),
+        sidos=(_normalize_sido(sido),),
+        sigungu=sigungu,
+    )
+
+
+def fetch_culture_info_events_for_sidos(
+    *,
+    service_key: str,
+    operation: str = DEFAULT_OPERATION,
+    sidos: Iterable[str] | None = None,
+    sigungu: str | None = None,
+    rows: int = 20,
+    page_size: int = 10,
+    timeout: int = 10,
+) -> CultureInfoFetchResult:
+    normalized_sidos = tuple(
+        dict.fromkeys(
+            _normalize_sido(sido)
+            for sido in (tuple(sidos) if sidos is not None else kcisa_sido_names())
+        )
+    )
+    if not normalized_sidos:
+        raise ValueError("At least one KCISA sido is required.")
+
+    results = [
+        fetch_culture_info_events(
+            service_key=service_key,
+            operation=operation,
+            sido=sido,
+            sigungu=sigungu,
+            rows=rows,
+            page_size=page_size,
+            timeout=timeout,
+        )
+        for sido in normalized_sidos
+    ]
+    total_count: int | None = None
+    if all(result.total_count is not None for result in results):
+        total_count = sum(result.total_count or 0 for result in results)
+    return CultureInfoFetchResult(
+        events=tuple(_dedupe_events(event for result in results for event in result.events)),
+        request_count=sum(result.request_count for result in results),
+        raw_count=sum(result.raw_count for result in results),
+        total_count=total_count,
+        operation=operation,
+        sido=normalized_sidos[0] if len(normalized_sidos) == 1 else "multi",
+        sidos=normalized_sidos,
         sigungu=sigungu,
     )
 
@@ -376,9 +426,17 @@ def _clean_text(value: Any) -> str | None:
 
 
 def _normalize_area(value: Any) -> str | None:
+    return normalize_province_name_ko(_clean_text(value))
+
+
+def _normalize_sido(value: Any) -> str:
     text = _clean_text(value)
-    if text == "경기":
-        return "경기도"
+    if not text:
+        raise ValueError("KCISA sido is required.")
+    province_ko = normalize_province_name_ko(text)
+    if province_ko:
+        for candidate in kcisa_sido_names(province_names=(province_ko,)):
+            return candidate
     return text
 
 

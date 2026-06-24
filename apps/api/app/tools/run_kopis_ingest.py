@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 
 from apps.api.app.core.key_vault import get_secret_if_configured
 from apps.api.app.core.redaction import redact_secret_text
+from apps.api.app.services import region_catalog
 from apps.api.app.services.job_runs import duration_ms, record_job_run
 from apps.api.app.services.kopis_ingest import (
     DEFAULT_DATASET_NAME,
@@ -18,6 +19,7 @@ from apps.api.app.services.kopis_ingest import (
     KOPIS_OPERATION,
     default_date_window,
     fetch_kopis_performances,
+    fetch_kopis_performances_for_signgucodes,
     upsert_kopis_performances,
 )
 
@@ -40,6 +42,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--stdate", default=default_stdate, help="Start date YYYYMMDD.")
     parser.add_argument("--eddate", default=default_eddate, help="End date YYYYMMDD. KOPIS supports up to 31 days.")
     parser.add_argument("--signgucode", default=DEFAULT_SIGNGUCODE, help="KOPIS 시도 code. Default 41=경기도.")
+    parser.add_argument(
+        "--all-supported-signgucodes",
+        action="store_true",
+        help="Sweep every KOPIS signgucode known to the shared region catalog.",
+    )
     parser.add_argument("--signgucodesub", default="", help="Optional KOPIS 시군구 code.")
     parser.add_argument("--prfstate", default="", help="Optional KOPIS performance state code.")
     parser.add_argument("--rows", type=int, default=20)
@@ -58,11 +65,17 @@ def main(argv: list[str] | None = None) -> int:
         _write(args, {"ok": False, "mode": "plan", "error": "Use either --apply or --preview."})
         return 2
 
-    signgucode = args.signgucode.strip() or None
+    if args.all_supported_signgucodes:
+        signgucodes = region_catalog.kopis_signgucodes()
+    else:
+        signgucodes = region_catalog.kopis_signgucodes(province_names=(args.signgucode,)) or (
+            args.signgucode.strip(),
+        )
+    signgucode = signgucodes[0] if len(signgucodes) == 1 else "multi"
     signgucodesub = args.signgucodesub.strip() or None
     prfstate = args.prfstate.strip() or None
     if not args.apply and not args.preview:
-        _write(args, _plan_payload(args, signgucode, signgucodesub, prfstate))
+        _write(args, _plan_payload(args, signgucodes, signgucodesub, prfstate))
         return 0
 
     service_key = _env_or_secret("KOPIS_API_KEY", "kopis-api-key")
@@ -83,17 +96,30 @@ def main(argv: list[str] | None = None) -> int:
 
     started_at = datetime.now(UTC)
     try:
-        result = fetch_kopis_performances(
-            service_key=service_key,
-            stdate=args.stdate,
-            eddate=args.eddate,
-            signgucode=signgucode,
-            signgucodesub=signgucodesub,
-            prfstate=prfstate,
-            rows=args.rows,
-            page_size=args.page_size,
-            timeout=args.timeout,
-        )
+        if len(signgucodes) == 1:
+            result = fetch_kopis_performances(
+                service_key=service_key,
+                stdate=args.stdate,
+                eddate=args.eddate,
+                signgucode=signgucodes[0],
+                signgucodesub=signgucodesub,
+                prfstate=prfstate,
+                rows=args.rows,
+                page_size=args.page_size,
+                timeout=args.timeout,
+            )
+        else:
+            result = fetch_kopis_performances_for_signgucodes(
+                service_key=service_key,
+                stdate=args.stdate,
+                eddate=args.eddate,
+                signgucodes=signgucodes,
+                signgucodesub=signgucodesub,
+                prfstate=prfstate,
+                rows=args.rows,
+                page_size=args.page_size,
+                timeout=args.timeout,
+            )
         apply_result: dict[str, Any] | None = None
         if args.apply:
             apply_result = upsert_kopis_performances(
@@ -161,7 +187,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def _plan_payload(
     args: argparse.Namespace,
-    signgucode: str | None,
+    signgucodes: tuple[str, ...],
     signgucodesub: str | None,
     prfstate: str | None,
 ) -> dict[str, Any]:
@@ -177,7 +203,8 @@ def _plan_payload(
         "job_name": JOB_NAME,
         "stdate": args.stdate,
         "eddate": args.eddate,
-        "signgucode": signgucode,
+        "signgucode": signgucodes[0] if len(signgucodes) == 1 else "multi",
+        "signgucodes": list(signgucodes),
         "signgucodesub": signgucodesub,
         "prfstate": prfstate,
         "target": "culture.events",
@@ -226,6 +253,8 @@ def _write(args: argparse.Namespace, payload: dict[str, Any]) -> None:
         print(f"stdate={result.get('stdate')}")
         print(f"eddate={result.get('eddate')}")
         print(f"signgucode={result.get('signgucode')}")
+        if result.get("signgucodes"):
+            print(f"signgucodes={result.get('signgucodes')}")
         print(f"request_count={result.get('request_count')}")
         print(f"raw_count={result.get('raw_count')}")
         print(f"performance_count={result.get('performance_count')}")
