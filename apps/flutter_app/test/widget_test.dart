@@ -541,6 +541,32 @@ void main() {
   });
 
   testWidgets(
+    'shows bundled startup recommendations before live places resolve',
+    (tester) async {
+      await tester.pumpWidget(
+        TestLalaApp(
+          backendFactory: (config) =>
+              FakeBackend(config, placesDelay: const Duration(seconds: 5)),
+          initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+        ),
+      );
+
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 120));
+
+      expect(find.text('추천 장소 접기'), findsOneWidget);
+      expect(find.text('히말라야정원'), findsAtLeastNWidgets(1));
+      expect(find.textContaining('0곳'), findsNothing);
+      expect(find.text('추천을 준비 중입니다'), findsNothing);
+
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+
+      expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
+    },
+  );
+
+  testWidgets(
     'shows current location startup state while permission is pending',
     (tester) async {
       final locationProvider = PendingLocationProvider();

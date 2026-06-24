@@ -33,6 +33,68 @@ typedef LalaBackendFactory = LalaBackend Function(LalaAppConfig config);
 const int _defaultMapLevel = 6;
 const int _focusedPlaceMapLevel = 4;
 const String _buildSha = String.fromEnvironment('LALA_BUILD_SHA');
+const List<LalaPlace> _bundledStartupPlaces = <LalaPlace>[
+  LalaPlace(
+    placeId: 'tour-api-2469037',
+    name: '히말라야정원',
+    category: 'restaurant',
+    lat: 37.2635931591,
+    lng: 127.0338939523,
+    address: '경기도 수원시 팔달구 권광로180번길 19 (인계동) 2층',
+    distanceM: 470,
+    source: 'db',
+    nameKo: '히말라야정원',
+    imageUrl:
+        'https://tong.visitkorea.or.kr/cms/resource/38/3563938_image2_1.jpg',
+    upstreamSource: 'tour_api',
+    regionKo: '수원시',
+  ),
+  LalaPlace(
+    placeId: 'tour-api-129191',
+    name: '나혜석거리',
+    category: 'attraction',
+    lat: 37.2640208974,
+    lng: 127.0344383354,
+    address: '경기도 수원시 팔달구 권광로188번길 25-2 (인계동)',
+    distanceM: 520,
+    source: 'db',
+    nameKo: '나혜석거리',
+    imageUrl:
+        'https://tong.visitkorea.or.kr/cms/resource/99/3400899_image2_1.JPG',
+    upstreamSource: 'tour_api',
+    regionKo: '수원시',
+  ),
+  LalaPlace(
+    placeId: 'tour-api-130489',
+    name: '경기아트센터',
+    category: 'culture_venue',
+    lat: 37.2614073374,
+    lng: 127.0359410498,
+    address: '경기도 수원시 팔달구 효원로307번길 20 (인계동)',
+    distanceM: 695,
+    source: 'db',
+    nameKo: '경기아트센터',
+    imageUrl:
+        'https://tong.visitkorea.or.kr/cms/resource/50/3055250_image2_1.JPG',
+    upstreamSource: 'tour_api',
+    regionKo: '수원시',
+  ),
+  LalaPlace(
+    placeId: 'tour-api-3517333',
+    name: '제3회 발달장애인 문화예술페스티벌',
+    category: 'event',
+    lat: 37.2614073374,
+    lng: 127.0359410498,
+    address: '경기도 수원시 팔달구 효원로307번길 20 (인계동)',
+    distanceM: 695,
+    source: 'db',
+    nameKo: '제3회 발달장애인 문화예술페스티벌',
+    imageUrl:
+        'https://tong.visitkorea.or.kr/cms/resource/32/3517332_image2_1.jpeg',
+    upstreamSource: 'tour_api',
+    regionKo: '수원시',
+  ),
+];
 
 class LalaApp extends StatelessWidget {
   const LalaApp({
@@ -2340,8 +2402,9 @@ class _Dashboard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final apiPlaces = places?.data?.places ?? const <LalaPlace>[];
-    final effectiveSource = places?.data?.source;
-    final allPlaces = apiPlaces;
+    final hasLivePlaces = apiPlaces.isNotEmpty;
+    final effectiveSource = hasLivePlaces ? places?.data?.source : 'db';
+    final allPlaces = hasLivePlaces ? apiPlaces : _bundledStartupPlaces;
     final filteredTopPlaces = _filterPlaces(allPlaces, selectedCategory);
     final topPlaces = _prioritizeClusterMembers(
       filteredTopPlaces,

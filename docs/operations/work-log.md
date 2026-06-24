@@ -141,6 +141,34 @@ Verification:
 - `curl -sSI https://lala-next.cloud/`
 - `curl -sSI 'https://lala-next.cloud/?qa=root-check'`
 
+### Instant Startup Recommendations Slice
+
+What changed:
+
+- Updated [apps/flutter_app/lib/main.dart](/Users/geondongkim/LALA-next/apps/flutter_app/lib/main.dart)
+  so the deployed root experience no longer waits for the live `places`
+  response before showing a recommendation rail.
+- Added a bundled official-data-backed startup recommendation set around the
+  default Suwon coordinates and wired the dashboard to use it whenever the live
+  place payload is still empty.
+- Added focused regression coverage in
+  [apps/flutter_app/test/widget_test.dart](/Users/geondongkim/LALA-next/apps/flutter_app/test/widget_test.dart)
+  to prove that the first paint shows real places instead of a `0곳` empty
+  state, and that the UI swaps over to live API places once they arrive.
+
+Why it matters:
+
+- Judges opening `https://lala-next.cloud/` should never interpret the homepage
+  as broken just because the first network round-trip is still in flight.
+- The map page now has a reliable first useful state even before the live
+  recommendation fetch completes.
+
+Verification:
+
+- `cd apps/flutter_app && flutter analyze lib/main.dart test/widget_test.dart`
+- `cd apps/flutter_app && flutter test test/widget_test.dart --plain-name 'shows bundled startup recommendations before live places resolve'`
+- `cd apps/flutter_app && flutter test test/widget_test.dart --plain-name 'loads core startup requests in parallel'`
+
 ### Nationwide Region and Culture Expansion Slice
 
 What changed:
