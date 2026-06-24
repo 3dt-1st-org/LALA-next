@@ -15,10 +15,10 @@ class LalaApiClient {
 
   static const Duration healthTimeout = Duration(seconds: 3);
   static const Duration readinessTimeout = Duration(seconds: 3);
-  static const Duration readTimeout = Duration(seconds: 12);
-  static const Duration generationTimeout = Duration(seconds: 30);
-  static const Duration audioTimeout = Duration(seconds: 30);
-  static const Duration plannerTimeout = Duration(seconds: 20);
+  static const Duration readTimeout = Duration(seconds: 8);
+  static const Duration generationTimeout = Duration(seconds: 24);
+  static const Duration audioTimeout = Duration(seconds: 24);
+  static const Duration plannerTimeout = Duration(seconds: 16);
 
   final Uri baseUri;
   final String? bearerToken;

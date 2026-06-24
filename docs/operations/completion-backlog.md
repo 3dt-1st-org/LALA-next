@@ -1,6 +1,6 @@
 # LALA Completion Backlog
 
-Last updated: 2026-06-24 KST
+Last updated: 2026-06-25 KST
 
 This backlog tracks remaining work found during the Azure migration and
 franchise/local-value implementation pass. It is intentionally secret-safe:
@@ -22,6 +22,14 @@ Current baseline evidence:
   build SHA, grants a fixed browser geolocation, and verifies DB/PostGIS places,
   AirKorea PM10/PM2.5, PM-grounded docent scripts with live place/local
   value/official grounding, and real map pins instead of cluster-only rendering.
+- The Flutter web frontend now separates bundled startup fallback from real
+  recommendation-load failures, retries every `getPlaces` refresh once, and
+  schedules bounded background recovery attempts with smoke-visible browser
+  telemetry for the latest frontend recovery state.
+- The production API no longer scales all the way to zero for the public
+  contest path. The live first-hit `places` latency regression was traced to
+  Container Apps cold start and the current scale floor keeps one warm replica
+  so `lala-next.cloud` can render normally on first open.
 - Docent audio no longer has a local fake-byte fallback: live Speech returns
   `audio/mpeg`, while disabled Speech returns `SPEECH_NOT_CONFIGURED` and the
   Flutter UI hides audio controls.
@@ -102,7 +110,7 @@ RAG, and docent-quality gaps:
 | Replace contest public access with durable auth | Shared dev uses `LALA_PUBLIC_CONTEST_ACCESS=true` during the contest window so reviewers can use the app without login or a bundled static API token. | Choose OAuth/Entra token acquisition or a backend-for-frontend proxy for browser clients, then disable public contest access. | Flutter web remains usable without exposing static credentials, and API access is mediated by signed tokens or BFF session credentials. |
 | Remove temporary DB firewall allowance | Azure migration status notes operator firewall cleanup is blocked by a delete lock. | During an approved maintenance window, remove or scope the lock and delete the temporary operator rule. | Firewall rules contain only approved runtime/network entries. |
 | Add production networking and identity boundaries | Dev uses a shared lane; docs say production needs private networking and stronger identity. | Split staging/prod resources, review backup/restore, private access, managed identity, and DNS cutover. | Production checklist passes without relying on dev resource assumptions. |
-| Persist observability beyond in-process metrics | Planning docs exist, but durable dashboards and log retention are still open. | Create approved dashboards, alerts, retention policy, and owner routing. | Operators can diagnose `/readyz`, latency, 5xx, and worker failures without local shell access. |
+| Persist observability beyond in-process metrics | Planning docs exist, and the frontend now emits browser-visible recovery telemetry, but durable dashboards, alerting, and root-to-docent request correlation are still open. The latest live smoke still showed some intermediate `docents/script` request aborts before a later successful response. | Create approved dashboards, alerts, retention policy, and owner routing, then add explicit monitoring for recovery exhaustion and repeated docent abort churn. | Operators can diagnose `/readyz`, first-hit latency, frontend-red/backend-green states, and worker/docent failures without local shell access. |
 
 ## P2: Maintainability and Cost
 

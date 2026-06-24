@@ -174,6 +174,29 @@ can stop before handing the DB to Flutter/API smoke testers.
 Use `-Json` when another tool needs machine-readable output; in that mode the
 PowerShell wrapper suppresses human-readable preamble text.
 
+## Deployed First-Open Regression Check
+
+For the public contest path, a healthy `200` is not enough. Re-check the real
+first-impression path on `https://lala-next.cloud/` and confirm the API no
+longer shows a cold-start first-hit stall.
+
+Recommended operator checks:
+
+```bash
+for i in 1 2 3; do
+  curl -sS -o /dev/null -w "run$i %{http_code} %{time_total}s\n" \
+    'https://api.lala-next.cloud/api/v1/places?lat=37.5665&lng=126.9780&radius_m=3000&category=all&include_scores=true'
+done
+
+scripts/unix/smoke_flutter_web.sh \
+  --web-url 'https://lala-next.cloud/' \
+  --require-browser \
+  --fail-on-console-error
+```
+
+Treat a repeated first-hit multi-second spike plus a visibly stalled root page
+as a production regression even when `/healthz` and `/readyz` are green.
+
 To review the exact canonical SQL files before any DB rollout, run:
 
 ```bash
@@ -878,6 +901,10 @@ browser requests. With `--api-base-url` or `--start-api`, the smoke grants a
 fixed test browser geolocation, reloads into the first-run location request
 flow, captures `flutter-web-requests.txt`, and verifies places, weather,
 intervention, and daily plan requests with the granted latitude and longitude.
+During browser investigation, the live Flutter bundle now also exposes
+`window.__lalaAppState` fields such as `usingBundledStartupPlaces`,
+`recommendationRecoveryPending`, and `recommendationRecoveryAttempt`, plus the
+latest frontend recovery event under `window.__lalaAppEvent`.
 When the smoke targets `--api-base-url` or the deployed `--web-url`, it also
 verifies a live-context docent script from the same place/weather data. On
 macOS/Linux, the same smoke captures or refetches API JSON responses in

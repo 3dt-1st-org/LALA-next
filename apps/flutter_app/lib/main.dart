@@ -32,6 +32,12 @@ typedef LalaBackendFactory = LalaBackend Function(LalaAppConfig config);
 
 const int _defaultMapLevel = 6;
 const int _focusedPlaceMapLevel = 4;
+const Duration _recommendationRequestRetryDelay = Duration(milliseconds: 450);
+const List<Duration> _defaultRecommendationRecoveryDelays = <Duration>[
+  Duration(seconds: 8),
+  Duration(seconds: 16),
+  Duration(seconds: 30),
+];
 const String _buildSha = String.fromEnvironment('LALA_BUILD_SHA');
 const List<LalaPlace> _bundledStartupPlaces = <LalaPlace>[
   LalaPlace(
@@ -102,11 +108,13 @@ class LalaApp extends StatelessWidget {
     this.backendFactory = LalaApiBackend.new,
     this.initialConfig = const LalaAppConfig.fromEnvironment(),
     this.locationProvider = const GeolocatorLalaLocationProvider(),
+    this.recommendationRecoveryDelays = _defaultRecommendationRecoveryDelays,
   });
 
   final LalaBackendFactory backendFactory;
   final LalaAppConfig initialConfig;
   final LalaLocationProvider locationProvider;
+  final List<Duration> recommendationRecoveryDelays;
 
   @override
   Widget build(BuildContext context) {
@@ -142,6 +150,7 @@ class LalaApp extends StatelessWidget {
         backendFactory: backendFactory,
         initialConfig: initialConfig,
         locationProvider: locationProvider,
+        recommendationRecoveryDelays: recommendationRecoveryDelays,
       ),
     );
   }
@@ -452,12 +461,14 @@ class LalaHomePage extends StatefulWidget {
     required this.backendFactory,
     required this.initialConfig,
     required this.locationProvider,
+    required this.recommendationRecoveryDelays,
     super.key,
   });
 
   final LalaBackendFactory backendFactory;
   final LalaAppConfig initialConfig;
   final LalaLocationProvider locationProvider;
+  final List<Duration> recommendationRecoveryDelays;
 
   @override
   State<LalaHomePage> createState() => _LalaHomePageState();
@@ -522,8 +533,11 @@ class _LalaHomePageState extends State<LalaHomePage> {
   int _mapLevel = _defaultMapLevel;
   Timer? _mapCameraDebounce;
   Timer? _interventionToastTimer;
+  Timer? _recommendationRecoveryTimer;
   String _uiLanguage = 'ko';
   double _fontScale = 1.0;
+  int _recommendationRecoveryAttempts = 0;
+  bool _recommendationRecoveryInFlight = false;
 
   @override
   void initState() {
@@ -548,6 +562,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
   void dispose() {
     _mapCameraDebounce?.cancel();
     _interventionToastTimer?.cancel();
+    _recommendationRecoveryTimer?.cancel();
     _backend.close();
     super.dispose();
   }
@@ -659,11 +674,19 @@ class _LalaHomePageState extends State<LalaHomePage> {
     }
   }
 
-  Future<void> _refresh({bool forceWeather = false}) async {
+  Future<void> _refresh({
+    bool forceWeather = false,
+    bool fromAutoRecovery = false,
+  }) async {
+    if (!fromAutoRecovery) {
+      _resetRecommendationRecoveryState();
+    }
     final config = _currentConfig();
     setState(() {
       _loading = true;
-      _error = null;
+      if (!fromAutoRecovery) {
+        _error = null;
+      }
       _audioError = null;
       _docentAudio = null;
       _tourAudio = null;
@@ -717,11 +740,10 @@ class _LalaHomePageState extends State<LalaHomePage> {
       final placesFuture = loadOptional(
         () => loadWithSingleRetry(
           _backend.getPlaces,
-          shouldRetry:
-              previousPlaces == null ||
-              (previousPlaces.data?.places.isEmpty ?? true),
+          shouldRetry: true,
+          retryDelay: _recommendationRequestRetryDelay,
         ),
-        fallbackMessage: (_) => _recommendationLoadFailureMessage(),
+        fallbackMessage: (_) => _recommendationLoadFailureMessage(config.lang),
       );
       final health = (await healthFuture) ?? previousHealth;
       final readiness = (await readinessFuture) ?? previousReadiness;
@@ -763,6 +785,14 @@ class _LalaHomePageState extends State<LalaHomePage> {
           _applyAutoDocentPlace(autoDocentPlace, closeActiveSheet: false);
         }
       });
+      if (coreLoadError == null) {
+        _resetRecommendationRecoveryState(
+          emitTelemetry: fromAutoRecovery,
+          reason: 'places-loaded',
+        );
+      } else {
+        _scheduleRecommendationRecovery(reason: 'places-load-failed');
+      }
 
       final dailyPlanFuture = loadOptional(
         _backend.createDailyPlan,
@@ -839,10 +869,12 @@ class _LalaHomePageState extends State<LalaHomePage> {
       setState(() {
         _error = _safeErrorMessage(
           error,
-          fallbackMessage: (_) => _recommendationLoadFailureMessage(),
+          fallbackMessage: (_) =>
+              _recommendationLoadFailureMessage(config.lang),
         );
       });
       _cancelInterventionToastTimer();
+      _scheduleRecommendationRecovery(reason: 'refresh-exception');
     } finally {
       if (mounted) {
         setState(() {
@@ -1141,6 +1173,103 @@ class _LalaHomePageState extends State<LalaHomePage> {
     _interventionToastTimer = null;
   }
 
+  bool get _recommendationRecoveryPending =>
+      _recommendationRecoveryTimer != null || _recommendationRecoveryInFlight;
+
+  Duration _recommendationRecoveryDelayForAttempt(int attempt) {
+    final delays = widget.recommendationRecoveryDelays;
+    if (delays.isEmpty) {
+      return Duration.zero;
+    }
+    final index = math.min(attempt, delays.length) - 1;
+    return delays[index];
+  }
+
+  void _recordFrontendEvent(
+    String event, {
+    Map<String, Object?> details = const {},
+  }) {
+    publishLalaSmokeEvent({
+      'event': event,
+      'language': _uiLanguage,
+      'category': _selectedCategory,
+      'recoveryAttempt': _recommendationRecoveryAttempts,
+      ...details,
+    });
+  }
+
+  void _resetRecommendationRecoveryState({
+    bool emitTelemetry = false,
+    String reason = 'manual-reset',
+  }) {
+    final hadRecoveryState =
+        _recommendationRecoveryAttempts > 0 ||
+        _recommendationRecoveryTimer != null ||
+        _recommendationRecoveryInFlight;
+    _recommendationRecoveryTimer?.cancel();
+    _recommendationRecoveryTimer = null;
+    _recommendationRecoveryAttempts = 0;
+    _recommendationRecoveryInFlight = false;
+    if (emitTelemetry && hadRecoveryState) {
+      _recordFrontendEvent(
+        'recommendation-recovery-cleared',
+        details: {'reason': reason},
+      );
+    }
+  }
+
+  void _scheduleRecommendationRecovery({required String reason}) {
+    final maxAttempts = widget.recommendationRecoveryDelays.length;
+    if (maxAttempts == 0 || _recommendationRecoveryInFlight) {
+      return;
+    }
+    if (_recommendationRecoveryAttempts >= maxAttempts) {
+      _recordFrontendEvent(
+        'recommendation-recovery-exhausted',
+        details: {'reason': reason},
+      );
+      return;
+    }
+    _recommendationRecoveryTimer?.cancel();
+    final nextAttempt = _recommendationRecoveryAttempts + 1;
+    final delay = _recommendationRecoveryDelayForAttempt(nextAttempt);
+    _recordFrontendEvent(
+      'recommendation-recovery-scheduled',
+      details: {
+        'reason': reason,
+        'attempt': nextAttempt,
+        'delayMs': delay.inMilliseconds,
+      },
+    );
+    _recommendationRecoveryTimer = Timer(delay, () async {
+      _recommendationRecoveryTimer = null;
+      if (!mounted) {
+        return;
+      }
+      _recommendationRecoveryAttempts = nextAttempt;
+      _recommendationRecoveryInFlight = true;
+      setState(() {});
+      _recordFrontendEvent(
+        'recommendation-recovery-started',
+        details: {'attempt': nextAttempt},
+      );
+      try {
+        await _refresh(forceWeather: true, fromAutoRecovery: true);
+      } finally {
+        if (!mounted) {
+          _recommendationRecoveryInFlight = false;
+        } else {
+          setState(() {
+            _recommendationRecoveryInFlight = false;
+          });
+        }
+      }
+    });
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
   void _syncSpeechCapabilityFromReadiness(
     LalaEnvelope<LalaReadiness>? readiness,
   ) {
@@ -1437,6 +1566,8 @@ class _LalaHomePageState extends State<LalaHomePage> {
               locationFallbackNoticeVisible: _locationFallbackNoticeVisible,
               locationStartPromptVisible: _locationStartPromptVisible,
               recommendationRailExpanded: _recommendationRailExpanded,
+              recommendationRecoveryPending: _recommendationRecoveryPending,
+              recommendationRecoveryAttempt: _recommendationRecoveryAttempts,
               focusedClusterMemberIds: _focusedClusterMemberIds,
               mapFocusLat: _mapFocusLat,
               mapFocusLng: _mapFocusLng,
@@ -2312,6 +2443,8 @@ class _Dashboard extends StatelessWidget {
     required this.locationFallbackNoticeVisible,
     required this.locationStartPromptVisible,
     required this.recommendationRailExpanded,
+    required this.recommendationRecoveryPending,
+    required this.recommendationRecoveryAttempt,
     required this.focusedClusterMemberIds,
     required this.mapFocusLat,
     required this.mapFocusLng,
@@ -2372,6 +2505,8 @@ class _Dashboard extends StatelessWidget {
   final bool locationFallbackNoticeVisible;
   final bool locationStartPromptVisible;
   final bool recommendationRailExpanded;
+  final bool recommendationRecoveryPending;
+  final int recommendationRecoveryAttempt;
   final List<String> focusedClusterMemberIds;
   final double? mapFocusLat;
   final double? mapFocusLng;
@@ -2404,7 +2539,19 @@ class _Dashboard extends StatelessWidget {
     final apiPlaces = places?.data?.places ?? const <LalaPlace>[];
     final hasLivePlaces = apiPlaces.isNotEmpty;
     final effectiveSource = hasLivePlaces ? places?.data?.source : 'db';
-    final allPlaces = hasLivePlaces ? apiPlaces : _bundledStartupPlaces;
+    final visibleError = _localizedUiMessage(error, uiLanguage);
+    final showBundledStartupPlaces = !hasLivePlaces && visibleError == null;
+    final displayedError = visibleError == null
+        ? null
+        : _recommendationStatusMessage(
+            uiLanguage,
+            recoveryPending: recommendationRecoveryPending,
+          );
+    final allPlaces = hasLivePlaces
+        ? apiPlaces
+        : showBundledStartupPlaces
+        ? _bundledStartupPlaces
+        : const <LalaPlace>[];
     final filteredTopPlaces = _filterPlaces(allPlaces, selectedCategory);
     final topPlaces = _prioritizeClusterMembers(
       filteredTopPlaces,
@@ -2418,11 +2565,11 @@ class _Dashboard extends StatelessWidget {
     final currentWeather = _publicWeatherOrNull(weather?.data);
     final activeIntervention = intervention?.data;
     final liveSpeechEnabled = _liveSpeechEnabled(readiness?.data);
-    final visibleError = _localizedUiMessage(error, uiLanguage);
     publishLalaSmokeState({
       'buildSha': _buildSha,
       'apiPlacesCount': apiPlaces.length,
       'topPlacesCount': topPlaces.length,
+      'usingBundledStartupPlaces': showBundledStartupPlaces,
       'selectedCategory': selectedCategory,
       'locationFallbackNoticeVisible': locationFallbackNoticeVisible,
       'locationManualSelectAvailable':
@@ -2435,6 +2582,9 @@ class _Dashboard extends StatelessWidget {
       'weatherHasPm10': currentWeather?.dust.pm10 != null,
       'weatherHasPm25': currentWeather?.dust.pm25 != null,
       'visibleError': visibleError ?? '',
+      'displayedError': displayedError ?? '',
+      'recommendationRecoveryPending': recommendationRecoveryPending,
+      'recommendationRecoveryAttempt': recommendationRecoveryAttempt,
       'mapLevel': mapLevel,
     });
     void selectPlaceById(String placeId) {
@@ -2536,7 +2686,7 @@ class _Dashboard extends StatelessWidget {
                   onPressed: () => onOpenSheet(_ActiveMapSheet.tour),
                 ),
               ),
-            if (visibleError != null)
+            if (displayedError != null)
               Positioned(
                 left: 16,
                 right: isWide ? null : 16,
@@ -2545,14 +2695,18 @@ class _Dashboard extends StatelessWidget {
                   width: isWide ? 420 : null,
                   child: _MapToast(
                     icon: Icons.error_outline,
-                    label: visibleError,
-                    actionLabel: _copy(uiLanguage, ko: '다시 시도', en: 'Retry'),
+                    label: displayedError,
+                    actionLabel: _copy(
+                      uiLanguage,
+                      ko: '지금 다시 시도',
+                      en: 'Retry now',
+                    ),
                     onAction: onRefresh,
                     color: Theme.of(context).colorScheme.errorContainer,
                   ),
                 ),
               ),
-            if (visibleError == null &&
+            if (displayedError == null &&
                 locationFallbackNoticeVisible &&
                 !locationRequestInFlight)
               Positioned(
@@ -2586,7 +2740,7 @@ class _Dashboard extends StatelessWidget {
                   ),
                 ),
               ),
-            if (visibleError == null &&
+            if (displayedError == null &&
                 activeIntervention?.shouldIntervene == true &&
                 !interventionToastDismissed)
               Positioned(
@@ -2640,9 +2794,13 @@ class _Dashboard extends StatelessWidget {
                         topPlace != null &&
                         !detailDocentPlayedPlaceIds.contains(topPlace.placeId),
                     showEvidence: showEvidence,
+                    error: displayedError,
+                    recommendationRecoveryPending:
+                        recommendationRecoveryPending,
                     onFetchAudio: onFetchAudio,
                     onAddToPlan: () => onOpenSheet(_ActiveMapSheet.planner),
                     onOpenDetail: () => onOpenSheet(_ActiveMapSheet.detail),
+                    onRefresh: onRefresh,
                     onToggleEvidence: onToggleEvidence,
                   ),
                 ),
@@ -3474,9 +3632,12 @@ class _MapBottomDock extends StatelessWidget {
     required this.audioError,
     required this.canFetchAudio,
     required this.showEvidence,
+    required this.error,
+    required this.recommendationRecoveryPending,
     required this.onFetchAudio,
     required this.onAddToPlan,
     required this.onOpenDetail,
+    required this.onRefresh,
     required this.onToggleEvidence,
   });
 
@@ -3493,9 +3654,12 @@ class _MapBottomDock extends StatelessWidget {
   final String? audioError;
   final bool canFetchAudio;
   final bool showEvidence;
+  final String? error;
+  final bool recommendationRecoveryPending;
   final VoidCallback onFetchAudio;
   final VoidCallback onAddToPlan;
   final VoidCallback onOpenDetail;
+  final VoidCallback onRefresh;
   final VoidCallback onToggleEvidence;
 
   @override
@@ -3547,7 +3711,12 @@ class _MapBottomDock extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               if (currentPlace == null)
-                _EmptyDockContent(language: uiLanguage)
+                _EmptyDockContent(
+                  language: uiLanguage,
+                  errorLabel: error,
+                  recoveryPending: recommendationRecoveryPending,
+                  onRetry: onRefresh,
+                )
               else ...[
                 Row(
                   children: [
@@ -3827,24 +3996,34 @@ class _DockDocentPreview extends StatelessWidget {
 }
 
 class _EmptyDockContent extends StatelessWidget {
-  const _EmptyDockContent({required this.language});
+  const _EmptyDockContent({
+    required this.language,
+    this.errorLabel,
+    this.recoveryPending = false,
+    this.onRetry,
+  });
 
   final String language;
+  final String? errorLabel;
+  final bool recoveryPending;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
+    final hasError = errorLabel != null && errorLabel!.trim().isNotEmpty;
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
           width: 42,
           height: 42,
-          decoration: const BoxDecoration(
-            color: Color(0xFFEAF2FF),
+          decoration: BoxDecoration(
+            color: hasError ? const Color(0xFFFFF3E8) : const Color(0xFFEAF2FF),
             shape: BoxShape.circle,
           ),
-          child: const Icon(
-            Icons.travel_explore,
-            color: Color(0xFF2B6CB0),
+          child: Icon(
+            hasError ? Icons.refresh_outlined : Icons.travel_explore,
+            color: hasError ? const Color(0xFFB45309) : const Color(0xFF2B6CB0),
             size: 21,
           ),
         ),
@@ -3854,11 +4033,17 @@ class _EmptyDockContent extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                _copy(
-                  language,
-                  ko: '추천을 준비 중입니다',
-                  en: 'Preparing recommendations',
-                ),
+                hasError
+                    ? _copy(
+                        language,
+                        ko: '추천 연결을 다시 확인하고 있어요',
+                        en: 'Checking recommendations again',
+                      )
+                    : _copy(
+                        language,
+                        ko: '추천을 준비 중입니다',
+                        en: 'Preparing recommendations',
+                      ),
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
                   color: const Color(0xFF111827),
                   fontWeight: FontWeight.w900,
@@ -3866,11 +4051,21 @@ class _EmptyDockContent extends StatelessWidget {
               ),
               const SizedBox(height: 3),
               Text(
-                _copy(
-                  language,
-                  ko: '공식 데이터가 확인된 장소만 표시합니다.',
-                  en: 'Only places backed by official data are shown.',
-                ),
+                hasError
+                    ? _copy(
+                        language,
+                        ko: recoveryPending
+                            ? '잠시 후 자동으로 다시 시도합니다. 지금 바로 다시 시도할 수도 있어요.'
+                            : '잠시 후 다시 시도해 주세요. 필요하면 지금 바로 다시 시도할 수 있어요.',
+                        en: recoveryPending
+                            ? 'Retrying automatically soon. You can also retry right now.'
+                            : 'Please try again shortly. You can also retry right now.',
+                      )
+                    : _copy(
+                        language,
+                        ko: '공식 데이터가 확인된 장소만 표시합니다.',
+                        en: 'Only places backed by official data are shown.',
+                      ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
@@ -3878,6 +4073,28 @@ class _EmptyDockContent extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                 ),
               ),
+              if (hasError && onRetry != null) ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    key: const ValueKey('dock-error-retry'),
+                    onPressed: onRetry,
+                    icon: const Icon(Icons.refresh, size: 16),
+                    label: Text(
+                      _copy(language, ko: '지금 다시 시도', en: 'Retry now'),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      minimumSize: const Size(0, 32),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -7989,6 +8206,24 @@ String _copy(String language, {required String ko, required String en}) {
   return _isEnglish(language) ? en : ko;
 }
 
+String _recommendationStatusMessage(
+  String language, {
+  required bool recoveryPending,
+}) {
+  if (recoveryPending) {
+    return _copy(
+      language,
+      ko: '추천 연결이 잠시 지연되고 있어요. 자동으로 다시 불러오는 중입니다.',
+      en: 'Recommendations are taking longer than expected. Retrying automatically.',
+    );
+  }
+  return _copy(
+    language,
+    ko: '추천 장소를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.',
+    en: 'Could not load recommendations. Please try again shortly.',
+  );
+}
+
 String? _localizedUiMessage(String? value, String language) {
   final localized = _singleLanguageText(value, language);
   if (localized != null && localized.isNotEmpty) {
@@ -8016,8 +8251,12 @@ String _safeUiErrorMessage(String? value, {String? fallbackMessage}) {
   return fallbackMessage ?? _requestFailureMessage();
 }
 
-String _recommendationLoadFailureMessage() {
-  return '추천 장소를 불러오지 못했어요. 잠시 후 다시 시도해 주세요. Could not load recommendations. Please try again shortly.';
+String _recommendationLoadFailureMessage(String language) {
+  return _copy(
+    language,
+    ko: '추천 장소를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.',
+    en: 'Could not load recommendations. Please try again shortly.',
+  );
 }
 
 String _docentAudioFailureMessage() {

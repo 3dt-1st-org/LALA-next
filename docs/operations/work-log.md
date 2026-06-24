@@ -1,6 +1,6 @@
 # LALA Work Log
 
-Last updated: 2026-06-24 KST
+Last updated: 2026-06-25 KST
 
 This document is the dated execution log for non-trivial LALA repo work.
 
@@ -22,6 +22,49 @@ For every non-trivial slice, update at least:
 
 If a slice changes ingest behavior, score semantics, rollout policy, or shared
 environment evidence, it should not live only in chat history.
+
+## 2026-06-25
+
+### Frontend Recommendation Recovery Hardening Slice
+
+What changed:
+
+- Updated [apps/flutter_app/lib/main.dart](/Users/geondongkim/LALA-next/apps/flutter_app/lib/main.dart)
+  so bundled startup recommendations render only while the app is still in a
+  neutral loading state. When recommendation loading fails, the UI now switches
+  to an explicit recovery state instead of showing bundled cards and an error
+  toast at the same time.
+- Broadened the places loader retry path so every `getPlaces` refresh retries
+  once, not only the first empty-load case.
+- Added automatic background recovery with bounded delayed retries after a
+  recommendation failure, plus softer user-facing copy that frames the issue as
+  a temporary delay while recovery is pending.
+- Added lightweight browser-side telemetry through
+  `window.__lalaAppState` and `window.__lalaAppEvent` so smoke and live
+  debugging can see whether bundled startup data is active, whether recovery is
+  pending, which attempt is running, and what the latest frontend recovery
+  event was.
+- Tightened the Flutter client timeout defaults in
+  [clients/flutter/lib/lala_api_client.dart](/Users/geondongkim/LALA-next/clients/flutter/lib/lala_api_client.dart)
+  to reduce long perceived stalls on read, planner, docent, and audio requests.
+- Expanded [apps/flutter_app/test/widget_test.dart](/Users/geondongkim/LALA-next/apps/flutter_app/test/widget_test.dart)
+  with regression coverage for no bundled fallback during recommendation
+  failure, retry after a previously successful live load, and background
+  auto-recovery.
+
+Why it matters:
+
+- The live homepage no longer looks self-contradictory when recommendation
+  loading hiccups.
+- Recovery is now proactive instead of depending entirely on a manual reload or
+  retry click.
+- Operators and browser smoke now have a clearer frontend-side signal when the
+  recommendation rail is recovering versus genuinely healthy.
+
+Verification:
+
+- `flutter analyze --no-pub lib/main.dart test/widget_test.dart`
+- `flutter test test/widget_test.dart`
 
 ## 2026-06-24
 
@@ -258,6 +301,51 @@ Why it matters:
 
 - The user's manual part of the nationwide card-source workflow is now captured
   in repo docs instead of chat only.
+
+### Live First-Open Root-Cause Closure Slice
+
+What changed:
+
+- Confirmed the main recurring `lala-next.cloud` first-open failure was not a
+  slow in-process query path but Azure Container Apps scale-to-zero cold start:
+  the earlier first `/api/v1/places` request took about 24.6 seconds, while
+  subsequent requests and application-side logs stayed around 0.5 to 0.6
+  seconds.
+- Updated the live API Container App scale floor from `minReplicas: 0` to
+  `minReplicas: 1` and kept the same setting in
+  [infra/azure/main.bicep](/Users/geondongkim/LALA-next/infra/azure/main.bicep)
+  so source-of-truth infra matches the live fix.
+- Rebuilt and redeployed the Flutter web frontend to production
+  `https://lala-next.cloud/` after the frontend recovery patch and the warm
+  replica fix.
+- Re-ran the real deployed browser smoke against the queryless root URL and
+  confirmed the page rendered real recommendation cards, 60 live map pins, and
+  successful places/weather/plans/docent requests without browser console
+  errors.
+
+Why it matters:
+
+- The service is judged on first-impression UX, so a 200 status alone was never
+  sufficient evidence.
+- Keeping one warm API replica removes the dominant first-open failure mode
+  that made the homepage look broken or stalled even when the backend logic
+  itself was healthy.
+
+Verification:
+
+- `az containerapp show ... --query '{minReplicas:properties.template.scale.minReplicas,maxReplicas:properties.template.scale.maxReplicas}'`
+- `curl -sS -o /dev/null -w 'run1 %{http_code} %{time_total}s\n' 'https://api.lala-next.cloud/api/v1/places?...'`
+- `curl -sS -o /dev/null -w 'run2 %{http_code} %{time_total}s\n' 'https://api.lala-next.cloud/api/v1/places?...'`
+- `curl -sS -o /dev/null -w 'run3 %{http_code} %{time_total}s\n' 'https://api.lala-next.cloud/api/v1/places?...'`
+- `scripts/unix/smoke_flutter_web.sh --web-url 'https://lala-next.cloud/' --require-browser --fail-on-console-error`
+- `curl -sSI https://lala-next.cloud/`
+
+Residual risk:
+
+- Some intermediate `docents/script` browser requests were aborted during UI
+  transitions before a later successful `200`, so docent-request cancellation
+  churn and durable monitoring are still follow-up items rather than current
+  root-cause blockers.
 
 ## 2026-06-23
 

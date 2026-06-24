@@ -1619,17 +1619,20 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('추천 장소를 불러오지 못했어요'), findsOneWidget);
+    expect(find.textContaining('추천 연결이 잠시 지연되고 있어요'), findsOneWidget);
     expect(find.textContaining('요청을 처리하지 못했습니다'), findsNothing);
     expect(
       find.text('UPSTREAM_UNAVAILABLE: Authenticated route failed.'),
       findsNothing,
     );
-    expect(find.text('추천을 준비 중입니다'), findsOneWidget);
-    expect(find.textContaining('공식 데이터가 확인된 장소만 표시합니다'), findsOneWidget);
+    expect(find.text('추천 연결을 다시 확인하고 있어요'), findsOneWidget);
     expect(find.textContaining('데모'), findsNothing);
     expect(find.text('화성행궁'), findsNothing);
+    expect(find.text('히말라야정원'), findsNothing);
+    expect(find.text('나혜석거리'), findsNothing);
+    expect(find.textContaining('자동으로 다시 시도합니다'), findsOneWidget);
     expect(find.byKey(const ValueKey('map-error-retry')), findsOneWidget);
+    expect(find.byKey(const ValueKey('dock-error-retry')), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('map-error-retry')));
     await tester.pumpAndSettle();
@@ -1662,17 +1665,92 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.textContaining('Could not load recommendations'),
+      find.textContaining('Recommendations are taking longer than expected'),
       findsOneWidget,
     );
     expect(find.textContaining('Unable to complete the request'), findsNothing);
     expect(find.textContaining('UPSTREAM_UNAVAILABLE'), findsNothing);
     expect(find.textContaining('Authenticated route failed'), findsNothing);
-    expect(find.text('Preparing recommendations'), findsOneWidget);
-    expect(
-      find.textContaining('Only places backed by official data'),
-      findsOneWidget,
+    expect(find.text('Checking recommendations again'), findsOneWidget);
+  });
+
+  testWidgets('refresh retries place loading even after live places exist', (
+    tester,
+  ) async {
+    final createdBackends = <FakeBackend>[];
+    var backendCreations = 0;
+
+    await tester.pumpWidget(
+      TestLalaApp(
+        backendFactory: (config) {
+          backendCreations += 1;
+          final backend = backendCreations == 3
+              ? FailNTimesThenSucceedPlacesBackend(
+                  config,
+                  failuresBeforeSuccess: 1,
+                )
+              : FakeBackend(config);
+          createdBackends.add(backend);
+          return backend;
+        },
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
     );
+
+    await tester.pumpAndSettle();
+    expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
+
+    await tester.tap(find.byKey(const ValueKey('location-refresh')));
+    await tester.pumpAndSettle();
+
+    expect(backendCreations, 3);
+    expect(createdBackends.last, isA<FailNTimesThenSucceedPlacesBackend>());
+    expect(
+      (createdBackends.last as FailNTimesThenSucceedPlacesBackend)
+          .getPlacesAttempts,
+      2,
+    );
+    expect(find.textContaining('추천 장소를 불러오지 못했어요'), findsNothing);
+    expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
+  });
+
+  testWidgets('recommendation failures auto-recover in the background', (
+    tester,
+  ) async {
+    var backendCreations = 0;
+
+    await tester.pumpWidget(
+      TestLalaApp(
+        backendFactory: (config) {
+          backendCreations += 1;
+          if (backendCreations == 2) {
+            return FailNTimesThenSucceedPlacesBackend(
+              config,
+              failuresBeforeSuccess: 2,
+            );
+          }
+          return FakeBackend(config);
+        },
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+        recommendationRecoveryDelays: const <Duration>[
+          Duration(milliseconds: 50),
+        ],
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('화성행궁'), findsNothing);
+
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pumpAndSettle();
+
+    expect(backendCreations, 3);
+    expect(find.textContaining('추천 연결이 잠시 지연되고 있어요'), findsNothing);
+    expect(find.textContaining('추천 장소를 불러오지 못했어요'), findsNothing);
+    expect(find.byKey(const ValueKey('map-error-retry')), findsNothing);
+    expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
   });
 
   testWidgets('settings hides developer connection controls', (tester) async {
@@ -2216,7 +2294,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('장소를 불러오지 못했어요'), findsOneWidget);
+    expect(find.textContaining('추천 연결이 잠시 지연되고 있어요'), findsOneWidget);
     expect(find.textContaining('Places failed'), findsNothing);
     expect(_visibleMixedLanguageTexts(tester), isEmpty);
 
@@ -2227,8 +2305,11 @@ void main() {
     await tester.tap(find.byIcon(Icons.arrow_back_ios_new));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Places failed'), findsOneWidget);
-    expect(find.textContaining('장소를 불러오지 못했어요'), findsNothing);
+    expect(
+      find.textContaining('Recommendations are taking longer than expected'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('추천 연결이 잠시 지연되고 있어요'), findsNothing);
     expect(_visibleMixedLanguageTexts(tester), isEmpty);
   });
 
@@ -2400,6 +2481,7 @@ class TestLalaApp extends StatelessWidget {
     required this.initialConfig,
     this.locationProvider,
     this.requireLocationStartConfirmation = false,
+    this.recommendationRecoveryDelays,
     super.key,
   });
 
@@ -2407,6 +2489,7 @@ class TestLalaApp extends StatelessWidget {
   final LalaAppConfig initialConfig;
   final LalaLocationProvider? locationProvider;
   final bool requireLocationStartConfirmation;
+  final List<Duration>? recommendationRecoveryDelays;
 
   @override
   Widget build(BuildContext context) {
@@ -2415,6 +2498,13 @@ class TestLalaApp extends StatelessWidget {
       initialConfig: initialConfig.copyWith(
         requireLocationStartConfirmation: requireLocationStartConfirmation,
       ),
+      recommendationRecoveryDelays:
+          recommendationRecoveryDelays ??
+          const <Duration>[
+            Duration(seconds: 8),
+            Duration(seconds: 16),
+            Duration(seconds: 30),
+          ],
       locationProvider:
           locationProvider ??
           FakeLocationProvider(
@@ -2912,6 +3002,50 @@ class PlaceholderDocentBackend extends FakeBackend {
         requestHash:
             '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
         cacheKey: 'docent_script:0123456789abcdef0123456789abcdef',
+      ),
+    );
+  }
+}
+
+class FailNTimesThenSucceedPlacesBackend extends FakeBackend {
+  FailNTimesThenSucceedPlacesBackend(
+    super.config, {
+    required this.failuresBeforeSuccess,
+  });
+
+  final int failuresBeforeSuccess;
+  int getPlacesAttempts = 0;
+
+  @override
+  Future<LalaEnvelope<LalaPlacesResponse>> getPlaces() async {
+    getPlacesAttempts += 1;
+    placesRequestConfigs.add(config);
+    await _delayIfNeeded(placesDelay);
+    if (getPlacesAttempts <= failuresBeforeSuccess) {
+      throw const LalaApiException(
+        code: 'UPSTREAM_UNAVAILABLE',
+        message: 'Authenticated route failed.',
+        statusCode: 503,
+        retryable: true,
+        requestId: 'flaky-auth-route',
+      );
+    }
+    final responsePlaces =
+        places ?? [_place(), _culturePlace(), _restaurantPlace()];
+    return _envelope(
+      LalaPlacesResponse(
+        count: responsePlaces.length,
+        places: responsePlaces,
+        query: LalaPlacesQuery(
+          lat: config.lat,
+          lng: config.lng,
+          radiusM: config.radiusM,
+          limit: config.placeLimit,
+          category: config.category,
+          language: config.lang,
+        ),
+        source: 'db',
+        locationEngine: 'postgis',
       ),
     );
   }
