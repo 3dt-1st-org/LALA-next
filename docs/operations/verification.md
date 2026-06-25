@@ -1169,6 +1169,42 @@ This check is intentionally separate from local and CI verification because it
 requires Azure CLI login and live Azure read access. It prints resource names,
 deployment metadata, and secret names only; it does not print secret values.
 
+## On-Premises Verification
+
+Use the on-premises verification path only after the target host has process
+environment values for `DB_DSN` and required public-data/API keys. Keep
+`KEY_VAULT_URL` empty unless Azure Key Vault is intentionally retained as a
+temporary secret source.
+
+Database schema verification:
+
+```bash
+scripts/unix/verify_db_schema.sh --json --connect-timeout 30 --python .venv/bin/python
+```
+
+```powershell
+.\scripts\windows\verify_db_schema.ps1 -ConnectTimeout 30
+```
+
+API smoke after starting the on-premises API:
+
+```bash
+curl -fsS http://127.0.0.1:8080/healthz
+curl -fsS http://127.0.0.1:8080/readyz
+scripts/unix/smoke_api.sh --base-url http://127.0.0.1:8080
+scripts/unix/smoke_api_matrix.sh --base-url http://127.0.0.1:8080
+```
+
+```powershell
+.\scripts\windows\smoke_api.ps1 -BaseUrl http://127.0.0.1:8080
+```
+
+Cutover rehearsal is not ready unless `/readyz` reports DB-backed operation with
+`db=configured` and `postgis=configured`. The same smoke commands must pass
+against the reverse-proxy or public rehearsal URL before any DNS change. The
+full documentation path starts at
+[onprem-migration-overview.md](onprem-migration-overview.md).
+
 ## Paid Dependency Checks
 
 Live Azure OpenAI and Azure Speech checks are kept opt-in. Use them only when a

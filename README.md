@@ -390,6 +390,16 @@ when a small paid OpenAI/Speech smoke check is acceptable.
 
 See [docs/operations/azure-resources.md](docs/operations/azure-resources.md).
 
+## On-Premises Migration
+
+Azure remains the current shared dev runtime until a separate cutover is
+approved. The on-premises migration docs cover only the safe documentation path
+for moving the API, PostgreSQL/PostGIS/pgvector database, and runtime secrets
+while keeping the public Flutter Web hosting path separate.
+
+Start with
+[docs/operations/onprem-migration-overview.md](docs/operations/onprem-migration-overview.md).
+
 ## Verification
 
 See [docs/operations/verification.md](docs/operations/verification.md).

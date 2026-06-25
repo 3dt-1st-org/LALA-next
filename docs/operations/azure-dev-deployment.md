@@ -3,6 +3,13 @@
 LALA keeps the public Flutter Web app on its existing web hosting path for now,
 while the shared backend and database move to Azure for team development.
 
+Azure remains the shared dev runtime until the on-premises cutover is approved.
+The on-premises documentation path starts at
+[onprem-migration-overview.md](onprem-migration-overview.md) and should be used
+for API, database, and secret migration planning. Documentation-only on-premises
+work must not delete Azure resources, change DNS, or alter the `dev` deployment
+workflow.
+
 ## What Moves To Azure
 
 - FastAPI backend: Azure Container Apps
@@ -125,5 +132,7 @@ This deployment lane is for shared dev, not production.
 - Production should use private networking, separate staging/prod resource
   groups, stricter database identities, backup policy review, and explicit
   DNS cutover planning.
+- During an on-premises transition, Azure must stay healthy as the rollback
+  target until the team approves decommissioning.
 - Live resource names and subscription identifiers must stay out of tracked
   Markdown. Put them in GitHub environment variables, Azure, or local runbooks.
