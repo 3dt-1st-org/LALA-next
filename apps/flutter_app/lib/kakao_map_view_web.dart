@@ -117,7 +117,7 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
         oldWidget.centerLng != widget.centerLng ||
         oldWidget.level != widget.level ||
         oldWidget.language != widget.language ||
-        oldWidget.places != widget.places) {
+        !sameKakaoMapPlaces(oldWidget.places, widget.places)) {
       _renderMap();
     }
   }

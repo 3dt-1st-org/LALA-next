@@ -23,6 +23,32 @@ class KakaoMapPlace {
   final bool selected;
 
   bool get isCluster => (clusterCount ?? 0) > 1;
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        other is KakaoMapPlace &&
+            other.id == id &&
+            other.name == name &&
+            other.category == category &&
+            other.lat == lat &&
+            other.lng == lng &&
+            other.clusterCount == clusterCount &&
+            listEquals(other.clusterMemberIds, clusterMemberIds) &&
+            other.selected == selected;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    name,
+    category,
+    lat,
+    lng,
+    clusterCount,
+    Object.hashAll(clusterMemberIds),
+    selected,
+  );
 }
 
 @immutable
@@ -36,4 +62,8 @@ class KakaoMapCamera {
   final double lat;
   final double lng;
   final int level;
+}
+
+bool sameKakaoMapPlaces(List<KakaoMapPlace> a, List<KakaoMapPlace> b) {
+  return listEquals(a, b);
 }

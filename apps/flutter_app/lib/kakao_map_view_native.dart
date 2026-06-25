@@ -116,7 +116,7 @@ class _KakaoMapNativeWebViewState extends State<_KakaoMapNativeWebView> {
         oldWidget.centerLat != widget.centerLat ||
         oldWidget.centerLng != widget.centerLng ||
         oldWidget.level != widget.level ||
-        oldWidget.places != widget.places) {
+        !sameKakaoMapPlaces(oldWidget.places, widget.places)) {
       _controller.loadRequest(_mapUri());
     }
   }

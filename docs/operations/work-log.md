@@ -25,6 +25,36 @@ environment evidence, it should not live only in chat history.
 
 ## 2026-06-25
 
+### Map Drag Recenter Regression Slice
+
+What changed:
+
+- Updated [apps/flutter_app/lib/kakao_map_models.dart](/Users/geondongkim/LALA-next/apps/flutter_app/lib/kakao_map_models.dart)
+  so `KakaoMapPlace` now has value semantics instead of relying on object
+  identity only.
+- Added `sameKakaoMapPlaces(...)` and changed both
+  [apps/flutter_app/lib/kakao_map_view_web.dart](/Users/geondongkim/LALA-next/apps/flutter_app/lib/kakao_map_view_web.dart)
+  and
+  [apps/flutter_app/lib/kakao_map_view_native.dart](/Users/geondongkim/LALA-next/apps/flutter_app/lib/kakao_map_view_native.dart)
+  to compare marker content rather than raw list identity before recreating the
+  map view.
+- Added focused regression coverage in
+  [apps/flutter_app/test/kakao_map_models_test.dart](/Users/geondongkim/LALA-next/apps/flutter_app/test/kakao_map_models_test.dart)
+  for equivalent rebuilt marker lists versus real marker-state changes.
+
+Why it matters:
+
+- The map marker list is rebuilt frequently during normal Flutter state updates.
+- The old bridge logic treated every rebuilt list as a brand-new map payload,
+  which could recreate the Kakao map and snap it back to the previous center.
+- That made the map feel pinned to the current location even when the user was
+  trying to drag somewhere else.
+
+Verification:
+
+- `flutter analyze --no-pub lib/kakao_map_models.dart lib/kakao_map_view_web.dart lib/kakao_map_view_native.dart test/kakao_map_models_test.dart`
+- `flutter test test/kakao_map_models_test.dart`
+
 ### Frontend Recommendation Recovery Hardening Slice
 
 What changed:
