@@ -7,6 +7,12 @@ PostGIS/pgvector, and a `systemd` API service.
 
 ## Repository Setup
 
+Create the service account before cloning:
+
+```bash
+sudo useradd --system --create-home --home-dir /opt/lala-next --shell /usr/sbin/nologin lala
+```
+
 ```bash
 sudo mkdir -p /opt/lala-next
 sudo chown -R lala:lala /opt/lala-next
@@ -16,6 +22,7 @@ sudo -u lala git fetch origin --prune
 sudo -u lala git switch dev
 sudo -u lala git pull --ff-only origin dev
 sudo -u lala uv sync --extra dev
+sudo -u lala mkdir -p /opt/lala-next/runtime/logs
 ```
 
 Use an unprivileged `lala` service account. Do not run the API as root.
@@ -25,6 +32,12 @@ Use an unprivileged `lala` service account. Do not run the API as root.
 Install PostgreSQL, PostGIS, and pgvector using the team's approved package
 source. Create the runtime database and role without writing passwords to shell
 history.
+
+Use PostgreSQL 16 with PostGIS 3.4 as the preferred first target unless the
+team explicitly validates another version. Install pgvector for the same
+PostgreSQL major version. If the restore role cannot create extensions, ask a
+database administrator to pre-create `pgcrypto`, `postgis`, and `vector` before
+the dump restore.
 
 After restore or canonical SQL apply, verify:
 
@@ -90,6 +103,12 @@ Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true
 PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/lala-next/runtime
+CapabilityBoundingSet=
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 
 [Install]
 WantedBy=multi-user.target

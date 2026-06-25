@@ -1183,7 +1183,9 @@ scripts/unix/verify_db_schema.sh --json --connect-timeout 30 --python .venv/bin/
 ```
 
 ```powershell
-.\scripts\windows\verify_db_schema.ps1 -ConnectTimeout 30
+.\scripts\windows\verify_db_schema.ps1 `
+  -EnvFile C:\services\lala-secrets\api.env `
+  -ConnectTimeout 30
 ```
 
 API smoke after starting the on-premises API:
@@ -1204,6 +1206,11 @@ Cutover rehearsal is not ready unless `/readyz` reports DB-backed operation with
 against the reverse-proxy or public rehearsal URL before any DNS change. The
 full documentation path starts at
 [onprem-migration-overview.md](onprem-migration-overview.md).
+
+The smoke matrix assumes the restored database has representative place,
+weather, score, and docent/RAG data. If the rehearsal target was rebuilt from
+canonical SQL only, complete the approved ingest and refresh jobs before
+treating a matrix failure as an API regression.
 
 ## Paid Dependency Checks
 

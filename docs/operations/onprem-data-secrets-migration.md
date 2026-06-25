@@ -21,6 +21,10 @@ execute these steps only during an approved maintenance or rehearsal window.
 Resolve connection details from Azure CLI or the private runbook. Build the
 source DSN in the operator shell without echoing it.
 
+Use `pg_dump` from the same PostgreSQL major version as the Azure source server
+or newer. Record the source server major version and dump client version in the
+private runbook, but do not commit live server names or DSNs.
+
 Recommended export shape:
 
 ```bash
@@ -49,6 +53,12 @@ pg_restore \
   --no-privileges \
   runtime/backups/lala-azure-<date>.dump
 ```
+
+The restore operator must either be able to create required extensions and
+schemas, or a database administrator must pre-create `pgcrypto`, `postgis`, and
+`vector` in the target database. Use a short-lived restore/operator credential
+for this step. Do not reuse a database-owner credential as the long-lived API
+`DB_DSN`.
 
 Then verify:
 
@@ -119,6 +129,21 @@ The tracked repository may list secret names, but never the values.
 - Keep `KEY_VAULT_URL` empty unless Azure Key Vault remains a temporary source.
 - Rotate `DB_DSN` after a failed or aborted migration rehearsal if it was shared
   too broadly.
+
+## Backup And Restore Routine
+
+Before public cutover, configure a repeatable backup job outside git:
+
+- daily custom-format `pg_dump` for the LALA database;
+- 7 to 14 days of local encrypted or access-restricted retention;
+- one weekly off-host copy to an approved backup location;
+- monthly restore drill into a disposable database;
+- additional restore drill before contest/review windows or major data refreshes.
+
+The restore drill must rerun `verify_db_schema.sh` or
+`verify_db_schema.ps1`, then start an API against the rehearsal DSN and pass
+`/readyz` plus the API smoke matrix. A backup that has never been restored is
+not accepted as migration evidence.
 
 ## Post-Restore Data Checks
 

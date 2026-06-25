@@ -1,6 +1,8 @@
 param(
     [string]$Python = "",
+    [string]$EnvFile = "",
     [string]$KeyVaultUrl = "",
+    [int]$ConnectTimeout = 5,
     [switch]$Json
 )
 
@@ -23,7 +25,9 @@ try {
         [Environment]::SetEnvironmentVariable("KEY_VAULT_URL", $KeyVaultUrl, "Process")
     }
 
-    $EnvFile = Join-Path $RepoRoot ".env"
+    if (-not $EnvFile) {
+        $EnvFile = Join-Path $RepoRoot ".env"
+    }
     if (Test-Path $EnvFile) {
         Get-Content $EnvFile | ForEach-Object {
             $line = $_.Trim()
@@ -44,7 +48,12 @@ try {
         Write-Host "DB_DSN value is never printed by this script."
     }
 
-    $toolArgs = @("-m", "apps.api.app.tools.verify_db_schema")
+    $toolArgs = @(
+        "-m",
+        "apps.api.app.tools.verify_db_schema",
+        "--connect-timeout",
+        "$ConnectTimeout"
+    )
     if ($Json) {
         $toolArgs += "--json"
     }

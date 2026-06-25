@@ -48,11 +48,28 @@ Recommended DNS process:
 
 1. Lower DNS TTL before the maintenance window if the provider supports it.
 2. Confirm Azure and on-premises smoke results.
-3. Update only the API record.
-4. Wait for DNS propagation.
-5. Run public smoke against `https://api.lala-next.cloud`.
-6. Run browser/mobile happy path checks.
-7. Keep Azure API untouched as rollback.
+3. Confirm the on-premises TLS certificate is already issued and renews without
+   manual intervention, or that a documented renewal owner and calendar exists.
+4. Update only the API record.
+   - If the on-premises ingress has a static public IP, replace the existing
+     `api` CNAME with `A` and optional `AAAA` records.
+   - If the on-premises ingress is behind an approved managed tunnel or reverse
+     proxy hostname, keep `api` as a CNAME to that provider target.
+   - Preserve the previous Azure record type and value in the private runbook
+     before changing anything.
+   - Do not remove Azure custom-domain validation records during the rollback
+     window unless the team separately approves it.
+5. Wait for DNS propagation.
+6. Run public smoke against `https://api.lala-next.cloud`.
+7. Run browser/mobile happy path checks.
+8. Keep Azure API untouched as rollback.
+
+TLS acceptance criteria:
+
+- `https://api.lala-next.cloud/healthz` succeeds without certificate warnings.
+- The certificate common name or SAN covers `api.lala-next.cloud`.
+- The renewal process is documented and assigned to an owner.
+- Expired, self-signed, or browser-warning certificates block cutover.
 
 ## Public Smoke After DNS
 

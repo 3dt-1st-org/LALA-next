@@ -28,14 +28,24 @@ C:\services\lala-secrets\api.env
 ```
 
 The file must be readable only by the service account and operators. It should
-contain process environment assignments only. Do not commit it.
+use dotenv-style `NAME=value` lines so the Windows start script can import it.
+Do not commit it.
+
+Apply restrictive ACLs after creating the file. Replace `<service-account>` with
+the actual Windows service identity in the private runbook:
+
+```powershell
+$ServiceAccount = "DOMAIN\lala-api"
+icacls C:\services\lala-secrets\api.env /inheritance:r
+icacls C:\services\lala-secrets\api.env /grant:r "${ServiceAccount}:R" "Administrators:F"
+```
 
 Required runtime defaults:
 
-```powershell
-$env:LALA_STATIC_SNAPSHOT_FALLBACK = "false"
-$env:LALA_PUBLIC_CONTEST_ACCESS = "false"
-$env:KEY_VAULT_URL = ""
+```dotenv
+LALA_STATIC_SNAPSHOT_FALLBACK=false
+LALA_PUBLIC_CONTEST_ACCESS=false
+KEY_VAULT_URL=
 ```
 
 Set `LALA_PUBLIC_CONTEST_ACCESS=true` only for a time-boxed public review window
@@ -46,9 +56,11 @@ and record the owner and expiry in the private runbook.
 For a foreground rehearsal:
 
 ```powershell
+New-Item -ItemType Directory -Force .\runtime\logs | Out-Null
 .\scripts\windows\start_api.ps1 `
   -HostName 0.0.0.0 `
   -Port 8080 `
+  -EnvFile C:\services\lala-secrets\api.env `
   -AccessLogPath .\runtime\logs\api-access.jsonl
 ```
 
@@ -72,6 +84,7 @@ The first acceptable long-running Windows setup can be one of:
 The wrapper must:
 
 - set the working directory to the repository root;
+- call `scripts\windows\start_api.ps1` with the approved `-EnvFile` path;
 - load secrets without printing them;
 - restart on failure only after logs are persisted;
 - write stdout/stderr to `runtime/logs` or an operator-owned log directory;
@@ -94,7 +107,9 @@ LAN or reverse-proxy check:
 DB schema check:
 
 ```powershell
-.\scripts\windows\verify_db_schema.ps1
+.\scripts\windows\verify_db_schema.ps1 `
+  -EnvFile C:\services\lala-secrets\api.env `
+  -ConnectTimeout 30
 ```
 
 The ready response must show DB-backed operation before cutover:
