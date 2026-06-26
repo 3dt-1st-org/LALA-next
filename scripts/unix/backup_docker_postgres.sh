@@ -10,6 +10,7 @@ CONTAINER_NAME="lala-next-postgres"
 BACKUP_DIR=""
 OFFSITE_DIR=""
 RETENTION_DAYS="14"
+REQUIRE_OFFSITE="false"
 APPLY="false"
 CONFIRM=""
 
@@ -31,6 +32,10 @@ while [[ $# -gt 0 ]]; do
       OFFSITE_DIR="${2:-}"
       shift 2
       ;;
+    --require-offsite)
+      REQUIRE_OFFSITE="true"
+      shift
+      ;;
     --retention-days)
       RETENTION_DAYS="${2:-}"
       shift 2
@@ -44,7 +49,7 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     -h|--help)
-      echo "Usage: scripts/unix/backup_docker_postgres.sh [--env-file PATH] [--backup-dir PATH] [--offsite-dir PATH] [--retention-days DAYS] --apply --confirm BACKUP_DOCKER_POSTGRES"
+      echo "Usage: scripts/unix/backup_docker_postgres.sh [--env-file PATH] [--backup-dir PATH] [--offsite-dir PATH] [--require-offsite] [--retention-days DAYS] --apply --confirm BACKUP_DOCKER_POSTGRES"
       echo "Creates a custom-format PostgreSQL dump from the Docker PostgreSQL container."
       echo "Secrets and DB_DSN values are never printed."
       exit 0
@@ -92,6 +97,7 @@ echo "LALA Docker PostgreSQL backup"
 echo "container=$CONTAINER_NAME"
 echo "backup_dir=$BACKUP_DIR"
 echo "offsite_dir=${OFFSITE_DIR:-disabled}"
+echo "require_offsite=$REQUIRE_OFFSITE"
 echo "retention_days=$RETENTION_DAYS"
 echo "db_name=$LALA_POSTGRES_DB"
 echo "db_user=$LALA_POSTGRES_USER"
@@ -105,6 +111,10 @@ fi
 
 require_command docker
 
+if [[ "$REQUIRE_OFFSITE" == "true" && -z "$OFFSITE_DIR" ]]; then
+  echo "--require-offsite requires --offsite-dir." >&2
+  exit 2
+fi
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "Env file is missing: $ENV_FILE" >&2
   exit 1
@@ -149,7 +159,15 @@ echo "backup_bytes=$backup_bytes"
 if [[ -n "$OFFSITE_DIR" ]]; then
   mkdir -p "$OFFSITE_DIR"
   cp -p "$final_path" "$OFFSITE_DIR/$backup_name"
+  copied_bytes="$(wc -c < "$OFFSITE_DIR/$backup_name" | tr -d '[:space:]')"
+  if [[ "$copied_bytes" != "$backup_bytes" ]]; then
+    echo "Offsite backup copy size mismatch." >&2
+    exit 1
+  fi
   echo "offsite_copy=$OFFSITE_DIR/$backup_name"
+elif [[ "$REQUIRE_OFFSITE" == "true" ]]; then
+  echo "Offsite backup is required but was not created." >&2
+  exit 1
 fi
 
 find "$BACKUP_DIR" -type f -name 'lala-docker-postgres-*.dump' -mtime +"$RETENTION_DAYS" -print -delete

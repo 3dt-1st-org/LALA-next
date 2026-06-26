@@ -12,6 +12,7 @@ KEY_VAULT_URL_ARG=""
 ENABLE_LIVE_AI="false"
 ENABLE_LIVE_SPEECH="false"
 ACCESS_LOG_PATH_ARG=""
+GRACEFUL_TIMEOUT="20"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -20,10 +21,11 @@ while [[ $# -gt 0 ]]; do
     --python) PYTHON_ARG="${2:-}"; shift 2 ;;
     --key-vault-url) KEY_VAULT_URL_ARG="${2:-}"; shift 2 ;;
     --access-log-path) ACCESS_LOG_PATH_ARG="${2:-}"; shift 2 ;;
+    --graceful-timeout) GRACEFUL_TIMEOUT="${2:-}"; shift 2 ;;
     --enable-live-ai) ENABLE_LIVE_AI="true"; shift ;;
     --enable-live-speech) ENABLE_LIVE_SPEECH="true"; shift ;;
     -h|--help)
-      echo "Usage: scripts/unix/start_api.sh [--host-name HOST] [--port PORT] [--key-vault-url URL] [--access-log-path PATH] [--enable-live-ai] [--enable-live-speech] [--python PATH]"
+      echo "Usage: scripts/unix/start_api.sh [--host-name HOST] [--port PORT] [--key-vault-url URL] [--access-log-path PATH] [--graceful-timeout SEC] [--enable-live-ai] [--enable-live-speech] [--python PATH]"
       exit 0
       ;;
     *)
@@ -62,6 +64,7 @@ echo "Starting LALA-next API on $HOST_NAME:$PORT"
 echo "Health endpoint: http://127.0.0.1:$PORT/healthz"
 echo "Python executable: $PYTHON"
 echo "JSONL access log: $(env_status LALA_ACCESS_LOG_PATH)"
+echo "Graceful shutdown timeout: $GRACEFUL_TIMEOUT seconds"
 if [[ "$ENABLE_LIVE_AI" == "true" ]]; then
   echo "Live Azure OpenAI generation: enabled"
 fi
@@ -69,4 +72,4 @@ if [[ "$ENABLE_LIVE_SPEECH" == "true" ]]; then
   echo "Live Azure Speech synthesis: enabled"
 fi
 
-exec "$PYTHON" -m uvicorn apps.api.app.main:app --host "$HOST_NAME" --port "$PORT" --no-access-log
+exec "$PYTHON" -m uvicorn apps.api.app.main:app --host "$HOST_NAME" --port "$PORT" --no-access-log --timeout-graceful-shutdown "$GRACEFUL_TIMEOUT"

@@ -15,6 +15,8 @@ CLOUDFLARED_CONFIG=""
 CLOUDFLARED_BIN=""
 TUNNEL_NAME="lala-next-onprem-api"
 PUBLIC_CONTEST_ACCESS="true"
+GRACEFUL_TIMEOUT="20"
+EXIT_TIMEOUT="30"
 APPLY="false"
 CONFIRM=""
 
@@ -28,6 +30,8 @@ while [[ $# -gt 0 ]]; do
     --cloudflared-bin) CLOUDFLARED_BIN="${2:-}"; shift 2 ;;
     --tunnel-name) TUNNEL_NAME="${2:-}"; shift 2 ;;
     --public-contest-access) PUBLIC_CONTEST_ACCESS="${2:-}"; shift 2 ;;
+    --graceful-timeout) GRACEFUL_TIMEOUT="${2:-}"; shift 2 ;;
+    --exit-timeout) EXIT_TIMEOUT="${2:-}"; shift 2 ;;
     --apply) APPLY="true"; shift ;;
     --confirm) CONFIRM="${2:-}"; shift 2 ;;
     -h|--help)
@@ -76,6 +80,8 @@ echo "cloudflared_label=$CLOUDFLARED_LABEL"
 echo "repo_root=$ROOT"
 echo "env_file=$ENV_FILE"
 echo "cloudflared_config=$CLOUDFLARED_CONFIG"
+echo "graceful_timeout=$GRACEFUL_TIMEOUT"
+echo "exit_timeout=$EXIT_TIMEOUT"
 echo "secret_printing=false"
 
 if [[ "$APPLY" != "true" || "$CONFIRM" != "INSTALL_LAUNCHD" ]]; then
@@ -110,6 +116,8 @@ CLOUDFLARED_CONFIG="$CLOUDFLARED_CONFIG" \
 CLOUDFLARED_BIN="$CLOUDFLARED_BIN" \
 TUNNEL_NAME="$TUNNEL_NAME" \
 PUBLIC_CONTEST_ACCESS="$PUBLIC_CONTEST_ACCESS" \
+GRACEFUL_TIMEOUT="$GRACEFUL_TIMEOUT" \
+EXIT_TIMEOUT="$EXIT_TIMEOUT" \
 API_PLIST="$API_PLIST" \
 CLOUDFLARED_PLIST="$CLOUDFLARED_PLIST" \
 python3 - <<'PY'
@@ -124,6 +132,8 @@ api_host = os.environ["API_HOST"]
 api_port = os.environ["API_PORT"]
 access_log_path = os.environ["ACCESS_LOG_PATH"]
 public_contest_access = os.environ["PUBLIC_CONTEST_ACCESS"]
+graceful_timeout = os.environ["GRACEFUL_TIMEOUT"]
+exit_timeout = int(os.environ["EXIT_TIMEOUT"])
 cloudflared_bin = os.environ["CLOUDFLARED_BIN"]
 cloudflared_config = os.environ["CLOUDFLARED_CONFIG"]
 tunnel_name = os.environ["TUNNEL_NAME"]
@@ -136,7 +146,8 @@ api_command = (
     "export LALA_STATIC_SNAPSHOT_FALLBACK=false && "
     f"export LALA_PUBLIC_CONTEST_ACCESS={shlex.quote(public_contest_access)} && "
     f"exec scripts/unix/start_api.sh --host-name {shlex.quote(api_host)} --port {shlex.quote(api_port)} "
-    f"--access-log-path {shlex.quote(access_log_path)}"
+    f"--access-log-path {shlex.quote(access_log_path)} "
+    f"--graceful-timeout {shlex.quote(graceful_timeout)}"
 )
 
 api_plist = {
@@ -148,6 +159,7 @@ api_plist = {
     "StandardOutPath": str(Path(root) / "runtime/logs/lala-onprem-api.launchd.out"),
     "StandardErrorPath": str(Path(root) / "runtime/logs/lala-onprem-api.launchd.err"),
     "ProcessType": "Background",
+    "ExitTimeOut": exit_timeout,
 }
 cloudflared_plist = {
     "Label": os.environ["CLOUDFLARED_LABEL"],

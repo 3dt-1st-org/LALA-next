@@ -25,10 +25,13 @@ Tracked files:
 - `infra/local-postgres/Dockerfile`
 - `scripts/unix/restore_docker_postgres_dump.sh`
 - `scripts/unix/backup_docker_postgres.sh`
+- `scripts/unix/drill_restore_docker_postgres_backup.sh`
 - `scripts/unix/install_onprem_launchd_macos.sh`
 - `scripts/unix/install_onprem_backup_launchd_macos.sh`
 - `scripts/unix/check_onprem_runtime.sh`
 - `scripts/unix/install_onprem_monitor_launchd_macos.sh`
+- `scripts/unix/rotate_onprem_logs.sh`
+- `scripts/unix/install_onprem_log_rotation_launchd_macos.sh`
 
 Ignored local files:
 
@@ -57,6 +60,22 @@ The local PostgreSQL image is built from `postgis/postgis:16-3.4` and installs
 `postgresql-16-pgvector`. Do not install host-level PostGIS or pgvector for this
 runtime unless the team intentionally moves away from Docker.
 
+The host port must bind to localhost only. `compose.local.yml` should render:
+
+```text
+127.0.0.1:<local-postgres-port>->5432/tcp
+```
+
+Verify:
+
+```bash
+set -a
+source runtime/local-postgres.env
+set +a
+docker compose -f compose.local.yml up -d postgres
+docker ps --filter name=lala-next-postgres --format '{{.Ports}}'
+```
+
 Restore a dump into the Docker database:
 
 ```bash
@@ -75,6 +94,19 @@ scripts/unix/restore_docker_postgres_dump.sh \
 
 The restore script drops and recreates the target database in the Docker
 container. Use it only during a rehearsal or approved replacement window.
+
+Run a non-destructive restore drill against the latest local backup:
+
+```bash
+scripts/unix/drill_restore_docker_postgres_backup.sh
+scripts/unix/drill_restore_docker_postgres_backup.sh \
+  --apply \
+  --confirm DRILL_DOCKER_POSTGRES_RESTORE
+```
+
+The drill restores into a disposable PostgreSQL container, runs canonical schema
+verification, prints safe row-count summaries, and then removes the disposable
+container.
 
 ## API LaunchAgent
 
@@ -167,6 +199,7 @@ For off-host storage, pass an ignored local mount or sync target:
 ```bash
 scripts/unix/install_onprem_backup_launchd_macos.sh \
   --offsite-dir /Volumes/<team-backup-volume>/lala-next-postgres \
+  --require-offsite \
   --apply \
   --confirm INSTALL_BACKUP_LAUNCHD
 ```
@@ -180,7 +213,8 @@ Run the health check once:
 ```bash
 scripts/unix/check_onprem_runtime.sh \
   --require-live-ai \
-  --require-live-speech
+  --require-live-speech \
+  --require-data-freshness
 ```
 
 The check covers:
@@ -189,6 +223,7 @@ The check covers:
 - Docker PostgreSQL health.
 - Local and public `/readyz`.
 - DB-backed data mode, PostGIS, snapshot fallback, live AI, and live speech.
+- Optional data freshness checks for weather-backed runtime freshness.
 - Host disk headroom.
 
 Install the 5-minute monitor LaunchAgent:
@@ -211,6 +246,20 @@ scripts/unix/install_onprem_monitor_launchd_macos.sh \
   --confirm INSTALL_MONITOR_LAUNCHD
 ```
 
+To forward failed checks to a team webhook, keep the webhook URL in ignored
+runtime env and pass only the env-var name:
+
+```dotenv
+LALA_ONPREM_ALERT_WEBHOOK_URL=<team-webhook-url>
+```
+
+```bash
+scripts/unix/install_onprem_monitor_launchd_macos.sh \
+  --webhook-env-name LALA_ONPREM_ALERT_WEBHOOK_URL \
+  --apply \
+  --confirm INSTALL_MONITOR_LAUNCHD
+```
+
 Check monitor status:
 
 ```bash
@@ -218,6 +267,43 @@ launchctl list | rg 'cloud\.lala-next\.monitor'
 tail -n 5 runtime/logs/onprem-health.jsonl
 tail -n 200 runtime/logs/lala-onprem-monitor.launchd.err
 ```
+
+## Log Rotation
+
+Review and install daily ignored runtime log rotation:
+
+```bash
+scripts/unix/rotate_onprem_logs.sh
+scripts/unix/install_onprem_log_rotation_launchd_macos.sh
+scripts/unix/install_onprem_log_rotation_launchd_macos.sh \
+  --apply \
+  --confirm INSTALL_LOG_ROTATION_LAUNCHD
+```
+
+Defaults:
+
+- Rotate files in `runtime/logs`.
+- Rotate files larger than 10 MiB.
+- Delete rotated files older than 14 days.
+
+## Paid Route Rate Limit
+
+When `LALA_PUBLIC_CONTEST_ACCESS=true`, the API applies a first-line in-process
+rate limit to paid docent routes:
+
+- `POST /api/v1/docents/script`
+- `POST /api/v1/docents/audio`
+
+Runtime knobs:
+
+```dotenv
+LALA_PAID_ROUTE_RATE_LIMIT_ENABLED=true
+LALA_DOCENT_SCRIPT_RATE_LIMIT_PER_MINUTE=60
+LALA_DOCENT_AUDIO_RATE_LIMIT_PER_MINUTE=30
+```
+
+This does not replace Cloudflare WAF/rate limiting, but it prevents a completely
+unguarded public contest path from directly exhausting AI/Speech quota.
 
 ## Cloudflare Tunnel
 

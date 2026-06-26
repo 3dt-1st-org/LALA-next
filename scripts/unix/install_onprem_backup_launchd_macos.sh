@@ -10,6 +10,7 @@ ENV_FILE=""
 BACKUP_DIR=""
 OFFSITE_DIR=""
 RETENTION_DAYS="14"
+REQUIRE_OFFSITE="false"
 HOUR="3"
 MINUTE="30"
 APPLY="false"
@@ -20,6 +21,7 @@ while [[ $# -gt 0 ]]; do
     --env-file) ENV_FILE="${2:-}"; shift 2 ;;
     --backup-dir) BACKUP_DIR="${2:-}"; shift 2 ;;
     --offsite-dir) OFFSITE_DIR="${2:-}"; shift 2 ;;
+    --require-offsite) REQUIRE_OFFSITE="true"; shift ;;
     --retention-days) RETENTION_DAYS="${2:-}"; shift 2 ;;
     --hour) HOUR="${2:-}"; shift 2 ;;
     --minute) MINUTE="${2:-}"; shift 2 ;;
@@ -61,6 +63,7 @@ echo "repo_root=$ROOT"
 echo "env_file=$ENV_FILE"
 echo "backup_dir=$BACKUP_DIR"
 echo "offsite_dir=${OFFSITE_DIR:-disabled}"
+echo "require_offsite=$REQUIRE_OFFSITE"
 echo "retention_days=$RETENTION_DAYS"
 echo "schedule=$HOUR:$MINUTE"
 echo "secret_printing=false"
@@ -83,6 +86,7 @@ ROOT="$ROOT" \
 ENV_FILE="$ENV_FILE" \
 BACKUP_DIR="$BACKUP_DIR" \
 OFFSITE_DIR="$OFFSITE_DIR" \
+REQUIRE_OFFSITE="$REQUIRE_OFFSITE" \
 RETENTION_DAYS="$RETENTION_DAYS" \
 HOUR="$HOUR" \
 MINUTE="$MINUTE" \
@@ -97,6 +101,7 @@ root = os.environ["ROOT"]
 env_file = os.environ["ENV_FILE"]
 backup_dir = os.environ["BACKUP_DIR"]
 offsite_dir = os.environ["OFFSITE_DIR"]
+require_offsite = os.environ["REQUIRE_OFFSITE"].lower() == "true"
 retention_days = os.environ["RETENTION_DAYS"]
 
 command = (
@@ -108,6 +113,8 @@ command = (
 )
 if offsite_dir:
     command += f"--offsite-dir {shlex.quote(offsite_dir)} "
+if require_offsite:
+    command += "--require-offsite "
 command += "--apply --confirm BACKUP_DOCKER_POSTGRES"
 
 plist = {

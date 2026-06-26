@@ -14,6 +14,7 @@ TIMEOUT="8"
 MIN_DISK_GB="10"
 REQUIRE_LIVE_AI="false"
 REQUIRE_LIVE_SPEECH="false"
+REQUIRE_DATA_FRESHNESS="false"
 JSON_STATUS="false"
 PYTHON_ARG=""
 
@@ -28,6 +29,7 @@ while [[ $# -gt 0 ]]; do
     --min-disk-gb) MIN_DISK_GB="${2:-}"; shift 2 ;;
     --require-live-ai) REQUIRE_LIVE_AI="true"; shift ;;
     --require-live-speech) REQUIRE_LIVE_SPEECH="true"; shift ;;
+    --require-data-freshness) REQUIRE_DATA_FRESHNESS="true"; shift ;;
     --json) JSON_STATUS="true"; shift ;;
     --python) PYTHON_ARG="${2:-}"; shift 2 ;;
     -h|--help)
@@ -57,6 +59,7 @@ TIMEOUT="$TIMEOUT" \
 MIN_DISK_GB="$MIN_DISK_GB" \
 REQUIRE_LIVE_AI="$REQUIRE_LIVE_AI" \
 REQUIRE_LIVE_SPEECH="$REQUIRE_LIVE_SPEECH" \
+REQUIRE_DATA_FRESHNESS="$REQUIRE_DATA_FRESHNESS" \
 JSON_STATUS="$JSON_STATUS" \
 "$PYTHON" - <<'PY'
 from __future__ import annotations
@@ -145,6 +148,12 @@ def evaluate_readyz(name: str, payload: dict[str, Any]) -> list[dict[str, Any]]:
             "live_speech",
             checks.get("live_speech") == "enabled",
             str(checks.get("live_speech")),
+        )
+    if env_bool("REQUIRE_DATA_FRESHNESS"):
+        add(
+            "data_freshness",
+            checks.get("data_freshness") == "configured",
+            str(checks.get("data_freshness")),
         )
     return rows
 

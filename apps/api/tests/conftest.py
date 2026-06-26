@@ -35,10 +35,16 @@ def isolate_db_env(monkeypatch) -> None:
         "AZURE_SPEECH_REGION",
         "AZURE_SPEECH_KEY",
         "AZURE_SPEECH_ENDPOINT",
+        "LALA_PAID_ROUTE_RATE_LIMIT_ENABLED",
+        "LALA_DOCENT_SCRIPT_RATE_LIMIT_PER_MINUTE",
+        "LALA_DOCENT_AUDIO_RATE_LIMIT_PER_MINUTE",
         "CORS_ALLOW_ORIGINS",
         "LALA_ACCESS_LOG_PATH",
     ):
         monkeypatch.delenv(name, raising=False)
+    from apps.api.app.core.rate_limit import reset_rate_limit_state_for_tests
+
+    reset_rate_limit_state_for_tests()
 
 
 @pytest.fixture()

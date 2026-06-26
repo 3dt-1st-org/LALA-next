@@ -10,7 +10,8 @@ AI/Speech flags, database restore, or public contest access.
 ```bash
 scripts/unix/check_onprem_runtime.sh \
   --require-live-ai \
-  --require-live-speech
+  --require-live-speech \
+  --require-data-freshness
 
 scripts/unix/smoke_api_matrix.sh \
   --base-url https://api.lala-next.cloud \

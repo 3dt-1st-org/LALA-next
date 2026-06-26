@@ -115,12 +115,12 @@ def _worker_mode(worker_status: str) -> str:
 def _overall_runtime_mode(mode: dict[str, str]) -> str:
     if any(value == "degraded" for value in mode.values()):
         return "degraded"
-    if mode["ai"] == "live-azure" or mode["speech"] == "live-azure":
-        return "live-azure"
-    if mode["data"] == "public-cache":
-        return "public-cache"
     if mode["data"] == "db-backed":
         return "db-backed"
+    if mode["data"] == "public-cache":
+        return "public-cache"
+    if mode["ai"] == "live-azure" or mode["speech"] == "live-azure":
+        return "live-azure"
     return "degraded"
 
 
@@ -141,6 +141,14 @@ def build_readiness(settings: Settings | None = None) -> dict:
         if db_status == "configured"
         else db_status
     )
+    data_freshness_status = (
+        db_repository.check_data_freshness_status(
+            settings.db_dsn,
+            weather_max_hours=settings.weather_freshness_max_hours,
+        )
+        if db_status == "configured"
+        else db_status
+    )
     checks = {
         "client_auth": client_auth_status,
         "client_identity": _client_identity_status(settings),
@@ -158,6 +166,7 @@ def build_readiness(settings: Settings | None = None) -> dict:
         "oauth_required_scopes": "configured" if settings.oauth_required_scopes else "skipped",
         "db": db_status,
         "postgis": postgis_status,
+        "data_freshness": data_freshness_status,
         "key_vault": _status(settings.key_vault_url, required=False),
         "azure_openai_endpoint": _status(settings.azure_openai_endpoint, required=False),
         "azure_openai_deployment": _status(settings.azure_openai_deployment, required=False),

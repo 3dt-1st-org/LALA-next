@@ -36,6 +36,11 @@ API runtime and database path moved for this cutover step.
 - Runtime monitor: LaunchAgent `cloud.lala-next.monitor`, 5-minute JSONL
   checks in ignored `runtime/logs/onprem-health.jsonl`, with local macOS
   notification on failed checks.
+- Log rotation: LaunchAgent `cloud.lala-next.log-rotation`, daily 04:00 KST.
+- Paid route rate limit: enabled for public contest access on docent script and
+  audio routes.
+- Data freshness: latest weather observations refreshed on 2026-06-26 KST and
+  readiness now reports `data_freshness=configured`.
 
 ## Restored Data Snapshot
 
@@ -79,8 +84,12 @@ Latest observed public readiness:
 Latest observed smoke:
 
 - On-prem runtime health check: passed for API LaunchAgent, Cloudflare Tunnel,
-  Docker PostgreSQL, local/public readiness, live AI, live speech, and disk
-  headroom.
+  Docker PostgreSQL, local/public readiness, live AI, live speech, data
+  freshness, and disk headroom.
+- Docker PostgreSQL restore drill: passed against the local backup dump.
+- PostgreSQL host port: bound to `127.0.0.1`.
+- Weather observation refresh: applied with 20 inserted observations and
+  recorded job run.
 - Local API smoke: passed.
 - Local API matrix smoke: passed, 37 checks.
 - Public API smoke: passed.
@@ -99,7 +108,8 @@ Latest observed smoke:
   be attached before treating the single Mac as recoverable after disk loss.
 - Team-wide external alert delivery is not yet wired. The monitor writes JSONL
   locally and emits a local Mac notification on failure; a later step should
-  forward failures to the team's preferred notification channel.
+  set `LALA_ONPREM_ALERT_WEBHOOK_URL` in the ignored runtime env and reinstall
+  the monitor with `--webhook-env-name LALA_ONPREM_ALERT_WEBHOOK_URL`.
 - Public contest access is intentionally enabled for review. Follow
   [onprem-post-contest-auth-transition.md](onprem-post-contest-auth-transition.md)
   after the contest window.

@@ -3,6 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query, Request, Response
 
 from apps.api.app.core.auth import require_client_auth
+from apps.api.app.core.config import get_settings
+from apps.api.app.core.rate_limit import enforce_public_contest_paid_route_limit
 from apps.api.app.core.responses import ensure_request_id, success_envelope
 from apps.api.app.schemas.docent import DocentAudioRequest, DocentScriptRequest
 from apps.api.app.schemas.planner import DailyPlanRequest
@@ -53,6 +55,12 @@ def weather(
 
 @router.post("/docents/script")
 def docent_script(request: Request, body: DocentScriptRequest) -> dict:
+    settings = get_settings()
+    enforce_public_contest_paid_route_limit(
+        request,
+        route_key="docents:script",
+        limit_per_minute=settings.docent_script_rate_limit_per_minute,
+    )
     payload = docent_service.generate_script(body)
     return success_envelope(request=request, data=payload, meta={"source": payload.get("source", "computed")})
 
@@ -71,6 +79,12 @@ def docent_script(request: Request, body: DocentScriptRequest) -> dict:
     },
 )
 def docent_audio(request: Request, body: DocentAudioRequest) -> Response:
+    settings = get_settings()
+    enforce_public_contest_paid_route_limit(
+        request,
+        route_key="docents:audio",
+        limit_per_minute=settings.docent_audio_rate_limit_per_minute,
+    )
     audio = docent_service.generate_audio(body)
     identity = docent_service.audio_identity(body)
     return Response(

@@ -24,6 +24,9 @@ LALA_ENABLE_LIVE_AI=true
 LALA_ENABLE_LIVE_SPEECH=true
 KEY_VAULT_URL=
 LALA_ALLOWED_KEY_VAULT_HOSTS=
+LALA_PAID_ROUTE_RATE_LIMIT_ENABLED=true
+LALA_DOCENT_SCRIPT_RATE_LIMIT_PER_MINUTE=60
+LALA_DOCENT_AUDIO_RATE_LIMIT_PER_MINUTE=30
 ```
 
 Cost or provider incident fallback:
@@ -75,6 +78,8 @@ or demo data.
   generation and use cached docent scripts until the provider recovers.
 - If a cost threshold is agreed by the team, record the threshold outside the
   repository and review it before enabling broad public traffic.
+- Keep Cloudflare WAF/rate limiting as the preferred edge control. The API's
+  in-process paid route rate limit is only the first guardrail.
 
 ## Recovery
 
