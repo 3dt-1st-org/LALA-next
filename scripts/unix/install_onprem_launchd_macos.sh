@@ -47,7 +47,11 @@ ROOT="$(repo_root)"
 cd "$ROOT"
 
 if [[ -z "$ENV_FILE" ]]; then
-  ENV_FILE="$ROOT/runtime/local-postgres.env"
+  if [[ -f "$ROOT/runtime/onprem-api.env" ]]; then
+    ENV_FILE="$ROOT/runtime/onprem-api.env"
+  else
+    ENV_FILE="$ROOT/runtime/local-postgres.env"
+  fi
 fi
 if [[ -z "$ACCESS_LOG_PATH" ]]; then
   ACCESS_LOG_PATH="$ROOT/runtime/logs/onprem-api-access.jsonl"

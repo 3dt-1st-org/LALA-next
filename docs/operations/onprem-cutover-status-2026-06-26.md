@@ -29,6 +29,8 @@ API runtime and database path moved for this cutover step.
 - Static snapshot fallback: disabled.
 - Public contest access: enabled for the contest/review window.
 - Cloudflare Tunnel protocol: `http2`.
+- Live AI: enabled through the local on-premises env file.
+- Live speech: enabled through the local on-premises env file.
 
 ## Restored Data Snapshot
 
@@ -66,6 +68,8 @@ Latest observed public readiness:
 - `postgis=configured`
 - `static_snapshot_fallback=disabled`
 - `public_contest_access=enabled`
+- `live_ai=enabled`
+- `live_speech=enabled`
 
 Latest observed smoke:
 
@@ -73,13 +77,13 @@ Latest observed smoke:
 - Local API matrix smoke: passed, 37 checks.
 - Public API smoke: passed.
 - Public API matrix smoke: passed, 37 checks.
+- Local paid-dependency smoke: passed with Azure OpenAI script generation and
+  audio/mpeg Speech response.
+- Public paid-dependency smoke: passed with Azure OpenAI script generation and
+  audio/mpeg Speech response.
 
 ## Known Remaining Work
 
-- Live AI and live speech currently report disabled when the LaunchAgent clears
-  `KEY_VAULT_URL`. To enable them on-premises, inject the required Azure OpenAI
-  and Speech env values through the local secret file or an approved team secret
-  store.
 - Azure should remain available as the rollback target until the team approves
   the retention window end.
 - Browser/mobile happy-path checks should be rerun after any frontend API-base

@@ -28,6 +28,7 @@ Tracked files:
 
 Ignored local files:
 
+- `runtime/onprem-api.env`
 - `runtime/local-postgres.env`
 - `runtime/cloudflared/*.yml`
 - `runtime/backups/*.dump`
@@ -92,10 +93,12 @@ The installer writes:
 - `~/Library/LaunchAgents/cloud.lala-next.api.plist`
 - `~/Library/LaunchAgents/cloud.lala-next.cloudflared.plist`
 
-The API LaunchAgent sources `runtime/local-postgres.env`, forces
+The API LaunchAgent sources `runtime/onprem-api.env` when present, otherwise it
+falls back to `runtime/local-postgres.env`. It forces
 `LALA_STATIC_SNAPSHOT_FALLBACK=false`, and binds FastAPI to `127.0.0.1:8080`.
-By default it clears `KEY_VAULT_URL`; provide live AI and speech values directly
-in the env file if those features must be enabled on-premises.
+By default it clears `KEY_VAULT_URL`; provide live AI and speech values
+directly in `runtime/onprem-api.env` if those features must be enabled
+on-premises.
 
 Check status:
 
