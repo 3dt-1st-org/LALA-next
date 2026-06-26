@@ -39,7 +39,9 @@ credentials into tracked docs.
 The expected public behavior after cutover is:
 
 - `lala-next.cloud` remains the Flutter Web site.
-- `api.lala-next.cloud` resolves to the on-premises API ingress.
+- `api.lala-next.cloud` resolves to the on-premises API ingress. The current
+  review runtime uses Cloudflare Tunnel to reach `127.0.0.1:8080` on the
+  on-premises host.
 - TLS certificate is valid for `api.lala-next.cloud`.
 - Existing Flutter Web build can call the API without changing the public site
   hosting path.
@@ -53,8 +55,9 @@ Recommended DNS process:
 4. Update only the API record.
    - If the on-premises ingress has a static public IP, replace the existing
      `api` CNAME with `A` and optional `AAAA` records.
-   - If the on-premises ingress is behind an approved managed tunnel or reverse
-     proxy hostname, keep `api` as a CNAME to that provider target.
+   - If the on-premises ingress is behind Cloudflare Tunnel or another approved
+     managed tunnel, keep the DNS route owned by that tunnel and verify the
+     tunnel maps only `api.lala-next.cloud` to the local API.
    - Preserve the previous Azure record type and value in the private runbook
      before changing anything.
    - Do not remove Azure custom-domain validation records during the rollback

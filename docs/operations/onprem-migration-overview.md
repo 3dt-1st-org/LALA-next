@@ -2,25 +2,44 @@
 
 Last updated: 2026-06-26 KST
 
-This document defines the safe documentation baseline for moving LALA's shared
-runtime from Azure to an on-premises environment. It is intentionally a planning
-and runbook document. Do not delete Azure resources, change DNS, restore
-databases, or start a long-running on-premises service from this document alone.
+This document defines the operating baseline for moving LALA's shared runtime
+from Azure to an on-premises environment. The first approved target is a
+Docker-backed PostgreSQL/PostGIS/pgvector database plus the existing FastAPI
+service, exposed through a managed ingress or reverse proxy.
 
 ## Target State
 
 The public Flutter Web app remains on the existing web deployment path. The API
-domain can later move from Azure Container Apps to the on-premises API after a
-parallel verification window.
+domain moves independently through `api.lala-next.cloud`.
 
 | Current Azure role | On-premises replacement | Notes |
 |---|---|---|
-| Azure Container Apps | Windows `start_api.ps1` service wrapper or Linux `systemd` service | FastAPI remains the API edge. |
-| Azure Database for PostgreSQL Flexible Server | PostgreSQL with PostGIS and pgvector | Canonical schemas, extensions, and spatial index must verify before cutover. |
-| Azure Key Vault | OS-protected env file or team-approved secret store | Runtime still receives process env values such as `DB_DSN`. |
+| Azure Container Apps | macOS LaunchAgent, Linux `systemd`, or Windows service wrapper | FastAPI remains the API edge and should bind to localhost behind the ingress. |
+| Azure Database for PostgreSQL Flexible Server | Docker PostgreSQL with PostGIS and pgvector | `compose.local.yml` and `infra/local-postgres/Dockerfile` are the default on-premises DB path. Native packages are optional, not required. |
+| Azure Key Vault | OS-protected env file or team-approved secret store | Runtime still receives process env values such as `DB_DSN`; `KEY_VAULT_URL` is normally empty on-premises. |
 | Application Insights and Log Analytics | Local structured logs plus retention policy | `runtime/` stays ignored; production logs need operator-owned storage. |
-| Azure Container Registry | Local image registry, direct checkout deploy, or packaged artifact | The first on-premises runbook assumes direct checkout plus `uv`. |
-| Azure custom hostname binding | DNS record for `api.lala-next.cloud` | DNS change is a later cutover step, not part of docs-only work. |
+| Azure Container Registry | Direct checkout deploy plus Docker Compose, or later a local registry | The first on-premises runbook assumes direct checkout plus `uv`. |
+| Azure custom hostname binding | Cloudflare Tunnel, reverse proxy, or DNS record for `api.lala-next.cloud` | Keep Azure as rollback until the retention window ends. |
+
+## Current On-Premises State
+
+As of 2026-06-26 KST, `api.lala-next.cloud` is routed through Cloudflare Tunnel
+to the on-premises API host. The API process runs on localhost and reads the
+Docker PostgreSQL database exposed on a localhost port.
+
+Current acceptance evidence to refresh before any final handoff:
+
+- `https://api.lala-next.cloud/readyz` reports `overall=db-backed`.
+- `/readyz.data.checks.db` reports `configured`.
+- `/readyz.data.checks.postgis` reports `configured`.
+- `/readyz.data.checks.static_snapshot_fallback` reports `disabled`.
+- `scripts/unix/smoke_api.sh --base-url https://api.lala-next.cloud` passes.
+- `scripts/unix/smoke_api_matrix.sh --base-url https://api.lala-next.cloud`
+  passes.
+
+Live AI and live speech are separate readiness dimensions. If the on-premises
+LaunchAgent clears `KEY_VAULT_URL`, those features must be supplied from the
+local env file before they are expected to report `configured`.
 
 ## Non-Negotiable Runtime Policy
 
@@ -38,12 +57,16 @@ parallel verification window.
 
 - [onprem-prerequisites.md](onprem-prerequisites.md): server, network, TLS,
   backup, account, and secret prerequisites.
+- [onprem-runbook-docker-macos.md](onprem-runbook-docker-macos.md): current
+  Docker Desktop, macOS LaunchAgent, and Cloudflare Tunnel operation.
 - [onprem-runbook-windows.md](onprem-runbook-windows.md): Windows API operation.
 - [onprem-runbook-linux.md](onprem-runbook-linux.md): Linux API and DB operation.
 - [onprem-data-secrets-migration.md](onprem-data-secrets-migration.md): DB and
   secret migration flow.
 - [onprem-cutover-rollback.md](onprem-cutover-rollback.md): parallel
   verification, DNS cutover, and rollback rules.
+- [onprem-cutover-status-2026-06-26.md](onprem-cutover-status-2026-06-26.md):
+  current review-runtime cutover status and refreshable evidence.
 
 ## Recommended Migration Shape
 
@@ -51,7 +74,7 @@ parallel verification window.
    schema verification, and latest ingest/scoring/RAG job status.
 2. Prepare the on-premises host, database, secret injection, TLS endpoint, and
    operator accounts without touching public DNS.
-3. Restore a fresh Azure database dump into the on-premises PostgreSQL target.
+3. Restore a fresh Azure database dump into the Docker PostgreSQL target.
 4. Verify canonical SQL, PostGIS, pgvector, and API readiness locally.
 5. Run the same API matrix smoke against the on-premises API URL.
 6. Run a browser/mobile rehearsal with an explicit API base URL override.
@@ -61,8 +84,6 @@ parallel verification window.
 ## Out Of Scope For This Documentation Slice
 
 - Actual Azure resource deletion.
-- Actual DNS mutation.
-- Actual `pg_dump` or restore execution.
 - Production auth redesign.
 - Flutter Web hosting migration.
 - Replacing the current environment-variable based runtime configuration.

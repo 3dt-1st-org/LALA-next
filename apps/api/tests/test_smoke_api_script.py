@@ -22,6 +22,7 @@ class _SmokeHandler(BaseHTTPRequestHandler):
         return
 
     def do_GET(self) -> None:
+        self.server.user_agents.append(self.headers.get("User-Agent") or "")
         path = urlparse(self.path).path
         if path == "/healthz":
             self._write_json({"ok": True, "data": {"status": "ok"}})
@@ -192,6 +193,7 @@ class _SmokeServer(ThreadingHTTPServer):
     daily_plan_payload: dict[str, Any]
     docent_payload: dict[str, Any]
     docent_request_bodies: list[dict[str, Any]]
+    user_agents: list[str]
 
 
 def _run_smoke(
@@ -282,6 +284,7 @@ def _start_server(
     server.daily_plan_payload = daily_plan_payload or _live_daily_plan_payload()
     server.docent_payload = docent_payload or _live_docent_payload()
     server.docent_request_bodies = []
+    server.user_agents = []
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     host, port = server.server_address
@@ -471,6 +474,18 @@ def test_unix_matrix_smoke_covers_route_variants_without_printing_auth():
     assert server.protected_paths.count("/api/v1/plans/daily") == 4
     assert server.protected_paths.count("/api/v1/docents/script") == 4
     assert server.protected_paths.count("/api/v1/docents/audio") == 1
+
+
+def test_unix_matrix_smoke_sends_stable_user_agent_for_tunnel_edges():
+    server, thread, base_url = _start_server(public_access=True)
+    try:
+        result = _run_matrix_smoke(base_url, {})
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+    assert result.returncode == 0, result.stderr
+    assert "LALA-next-smoke-api-matrix/1.0" in server.user_agents
 
 
 def test_unix_matrix_smoke_deploy_profile_keeps_ci_gate_bounded():

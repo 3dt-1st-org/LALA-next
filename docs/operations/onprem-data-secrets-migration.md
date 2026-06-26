@@ -39,7 +39,29 @@ pg_dump \
 Store the dump in an ignored path or approved backup location. Do not commit
 dump files.
 
-## Restore To On-Premises PostgreSQL
+## Restore To Docker PostgreSQL
+
+For the current on-premises runtime, use the Docker restore wrapper:
+
+```bash
+scripts/unix/restore_docker_postgres_dump.sh \
+  --dump runtime/backups/lala-azure-<date>.dump
+```
+
+After reviewing the plan output, execute only during an approved window:
+
+```bash
+scripts/unix/restore_docker_postgres_dump.sh \
+  --dump runtime/backups/lala-azure-<date>.dump \
+  --apply \
+  --confirm RESTORE_DOCKER_POSTGRES
+```
+
+The script reads `runtime/local-postgres.env`, pre-creates `pgcrypto`,
+`postgis`, and `vector`, restores with `--no-owner --no-acl`, and prints only
+safe row-count summaries.
+
+## Restore To Native On-Premises PostgreSQL
 
 Restore into a clean rehearsal database first:
 

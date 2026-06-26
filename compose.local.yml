@@ -4,6 +4,7 @@ services:
       context: ./infra/local-postgres
     image: lala-next-postgres-local:16-postgis-vector
     container_name: lala-next-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${LALA_POSTGRES_USER:-lala}
       POSTGRES_PASSWORD: ${LALA_POSTGRES_PASSWORD:?Set LALA_POSTGRES_PASSWORD for local development.}

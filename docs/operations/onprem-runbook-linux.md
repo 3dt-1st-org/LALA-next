@@ -2,8 +2,8 @@
 
 Last updated: 2026-06-26 KST
 
-This runbook describes a Linux on-premises runtime using PostgreSQL,
-PostGIS/pgvector, and a `systemd` API service.
+This runbook describes a Linux on-premises runtime using Docker PostgreSQL with
+PostGIS/pgvector and a `systemd` API service.
 
 ## Repository Setup
 
@@ -27,17 +27,26 @@ sudo -u lala mkdir -p /opt/lala-next/runtime/logs
 
 Use an unprivileged `lala` service account. Do not run the API as root.
 
-## PostgreSQL Setup
+## Docker PostgreSQL Setup
 
-Install PostgreSQL, PostGIS, and pgvector using the team's approved package
-source. Create the runtime database and role without writing passwords to shell
-history.
+Install Docker Engine and Compose using the team's approved package source.
+Create `/opt/lala-next/runtime/local-postgres.env` outside git with the local
+PostgreSQL env values. Do not write passwords to shell history.
+
+Start the database:
+
+```bash
+set -a
+source /opt/lala-next/runtime/local-postgres.env
+set +a
+docker compose -f compose.local.yml up -d postgres
+docker inspect --format '{{.State.Health.Status}}' lala-next-postgres
+```
 
 Use PostgreSQL 16 with PostGIS 3.4 as the preferred first target unless the
-team explicitly validates another version. Install pgvector for the same
-PostgreSQL major version. If the restore role cannot create extensions, ask a
-database administrator to pre-create `pgcrypto`, `postgis`, and `vector` before
-the dump restore.
+team explicitly validates another version. The default Dockerfile also installs
+pgvector for PostgreSQL 16. Host-level PostGIS and pgvector packages are not
+required for the Docker runtime.
 
 After restore or canonical SQL apply, verify:
 

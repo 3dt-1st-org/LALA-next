@@ -15,13 +15,23 @@ Minimum starting point for a shared dev/review-grade runtime:
 | CPU | 4 vCPU | 8 vCPU |
 | Memory | 16 GiB | 32 GiB |
 | Disk | 200 GiB SSD | 500 GiB SSD/NVMe |
-| OS | Windows Server 2022 or Ubuntu LTS | Team standard image |
+| OS | macOS host for the current review runtime, Windows Server 2022, or Ubuntu LTS | Team standard image |
 | Network | Stable public ingress or tunnel | Static public IP or managed reverse proxy |
 
 PostgreSQL and the API may share a host only for a small shared-dev runtime. For
 heavier data ingest, separate the DB host from the API host.
 
 ## Required Software
+
+Current macOS Docker host:
+
+- Docker Desktop.
+- Git.
+- Python compatible with the repo and `uv`.
+- `uv`.
+- Cloudflared when using Cloudflare Tunnel.
+- PostgreSQL client tools are useful for diagnostics, but host-level PostGIS and
+  pgvector packages are not required when `compose.local.yml` is used.
 
 Windows host:
 
@@ -37,9 +47,10 @@ Linux host:
 - Git.
 - Python compatible with the repo and `uv`.
 - `uv`.
-- PostgreSQL server and client tools.
-- PostGIS package.
-- pgvector package or approved build/install path.
+- Docker Engine and Compose for the preferred DB runtime.
+- PostgreSQL client tools.
+- Host-level PostgreSQL, PostGIS, and pgvector packages only if the team
+  intentionally chooses a native DB install instead of Docker.
 - `systemd`.
 - Reverse proxy such as nginx, Caddy, or an approved tunnel.
 
@@ -82,8 +93,10 @@ Recommended role split:
 | Restore operator | One-time dump restore and canonical SQL apply | Create schemas, create extensions, restore objects |
 | Runtime role | `DB_DSN` used by the API | Read/write only to approved LALA schemas |
 
-If the restore operator cannot create extensions, a database administrator must
-pre-create `pgcrypto`, `postgis`, and `vector`, then rerun schema verification.
+When Docker is used, `infra/local-postgres/Dockerfile` provides PostGIS and
+pgvector inside the container. If a native database is used, and the restore
+operator cannot create extensions, a database administrator must pre-create
+`pgcrypto`, `postgis`, and `vector`, then rerun schema verification.
 Do not grant the long-lived runtime role broad database-owner privileges merely
 to make restore easier.
 
