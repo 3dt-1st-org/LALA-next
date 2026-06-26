@@ -24,7 +24,11 @@ Tracked files:
 - `compose.local.yml`
 - `infra/local-postgres/Dockerfile`
 - `scripts/unix/restore_docker_postgres_dump.sh`
+- `scripts/unix/backup_docker_postgres.sh`
 - `scripts/unix/install_onprem_launchd_macos.sh`
+- `scripts/unix/install_onprem_backup_launchd_macos.sh`
+- `scripts/unix/check_onprem_runtime.sh`
+- `scripts/unix/install_onprem_monitor_launchd_macos.sh`
 
 Ignored local files:
 
@@ -122,6 +126,99 @@ tail -n 200 runtime/logs/lala-next-cloudflared.err.log
 tail -n 200 runtime/logs/onprem-api-access.jsonl
 ```
 
+## Backup Automation
+
+Create and verify one Docker PostgreSQL backup:
+
+```bash
+scripts/unix/backup_docker_postgres.sh
+scripts/unix/backup_docker_postgres.sh \
+  --apply \
+  --confirm BACKUP_DOCKER_POSTGRES
+```
+
+The backup script creates a custom-format dump under ignored
+`runtime/backups/`, validates it with `pg_restore --list`, and prunes backups
+older than the configured retention window. It does not print DSNs, passwords,
+or secret values.
+
+Install the daily backup LaunchAgent:
+
+```bash
+scripts/unix/install_onprem_backup_launchd_macos.sh
+scripts/unix/install_onprem_backup_launchd_macos.sh \
+  --apply \
+  --confirm INSTALL_BACKUP_LAUNCHD
+```
+
+Default schedule: daily at 03:30 KST. Default retention: 14 days.
+
+Check backup status:
+
+```bash
+launchctl list | rg 'cloud\.lala-next\.backup'
+tail -n 200 runtime/logs/lala-onprem-backup.launchd.out
+tail -n 200 runtime/logs/lala-onprem-backup.launchd.err
+ls -lh runtime/backups/lala-docker-postgres-*.dump
+```
+
+For off-host storage, pass an ignored local mount or sync target:
+
+```bash
+scripts/unix/install_onprem_backup_launchd_macos.sh \
+  --offsite-dir /Volumes/<team-backup-volume>/lala-next-postgres \
+  --apply \
+  --confirm INSTALL_BACKUP_LAUNCHD
+```
+
+Do not configure an offsite target inside the repository.
+
+## Runtime Monitoring
+
+Run the health check once:
+
+```bash
+scripts/unix/check_onprem_runtime.sh \
+  --require-live-ai \
+  --require-live-speech
+```
+
+The check covers:
+
+- macOS LaunchAgents for API and Cloudflare Tunnel.
+- Docker PostgreSQL health.
+- Local and public `/readyz`.
+- DB-backed data mode, PostGIS, snapshot fallback, live AI, and live speech.
+- Host disk headroom.
+
+Install the 5-minute monitor LaunchAgent:
+
+```bash
+scripts/unix/install_onprem_monitor_launchd_macos.sh
+scripts/unix/install_onprem_monitor_launchd_macos.sh \
+  --apply \
+  --confirm INSTALL_MONITOR_LAUNCHD
+```
+
+The monitor writes JSONL to ignored `runtime/logs/onprem-health.jsonl`.
+By default, failed checks also emit a local macOS notification for the logged-in
+operator. Disable local notification only when another alert path exists:
+
+```bash
+scripts/unix/install_onprem_monitor_launchd_macos.sh \
+  --alert none \
+  --apply \
+  --confirm INSTALL_MONITOR_LAUNCHD
+```
+
+Check monitor status:
+
+```bash
+launchctl list | rg 'cloud\.lala-next\.monitor'
+tail -n 5 runtime/logs/onprem-health.jsonl
+tail -n 200 runtime/logs/lala-onprem-monitor.launchd.err
+```
+
 ## Cloudflare Tunnel
 
 The tracked repository must not contain the tunnel credential JSON or the live
@@ -153,6 +250,7 @@ changing the public app.
 Local API:
 
 ```bash
+scripts/unix/check_onprem_runtime.sh
 curl -fsS http://127.0.0.1:8080/healthz
 curl -fsS http://127.0.0.1:8080/readyz
 scripts/unix/smoke_api.sh --base-url http://127.0.0.1:8080
@@ -170,6 +268,15 @@ scripts/unix/smoke_api_matrix.sh --base-url https://api.lala-next.cloud
 
 Cutover is accepted only when public readiness reports DB-backed data with
 PostGIS configured and static snapshot fallback disabled.
+
+Additional operating policies:
+
+- [onprem-post-contest-auth-transition.md](onprem-post-contest-auth-transition.md)
+  covers disabling `LALA_PUBLIC_CONTEST_ACCESS` after the review window.
+- [onprem-ai-speech-cost-fallback.md](onprem-ai-speech-cost-fallback.md)
+  covers live AI/Speech cost, quota, and incident fallback.
+- [onprem-browser-ios-revalidation.md](onprem-browser-ios-revalidation.md)
+  covers desktop/mobile/iOS flow checks after runtime changes.
 
 ## Disk Operations
 

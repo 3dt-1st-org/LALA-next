@@ -31,6 +31,11 @@ API runtime and database path moved for this cutover step.
 - Cloudflare Tunnel protocol: `http2`.
 - Live AI: enabled through the local on-premises env file.
 - Live speech: enabled through the local on-premises env file.
+- Backup automation: LaunchAgent `cloud.lala-next.backup`, daily 03:30 KST,
+  ignored `runtime/backups/`, 14-day default retention.
+- Runtime monitor: LaunchAgent `cloud.lala-next.monitor`, 5-minute JSONL
+  checks in ignored `runtime/logs/onprem-health.jsonl`, with local macOS
+  notification on failed checks.
 
 ## Restored Data Snapshot
 
@@ -73,6 +78,9 @@ Latest observed public readiness:
 
 Latest observed smoke:
 
+- On-prem runtime health check: passed for API LaunchAgent, Cloudflare Tunnel,
+  Docker PostgreSQL, local/public readiness, live AI, live speech, and disk
+  headroom.
 - Local API smoke: passed.
 - Local API matrix smoke: passed, 37 checks.
 - Public API smoke: passed.
@@ -86,5 +94,14 @@ Latest observed smoke:
 
 - Azure should remain available as the rollback target until the team approves
   the retention window end.
+- Off-host backup storage is still a team operations decision. The local daily
+  backup job exists, but a mounted backup volume or team backup service should
+  be attached before treating the single Mac as recoverable after disk loss.
+- Team-wide external alert delivery is not yet wired. The monitor writes JSONL
+  locally and emits a local Mac notification on failure; a later step should
+  forward failures to the team's preferred notification channel.
+- Public contest access is intentionally enabled for review. Follow
+  [onprem-post-contest-auth-transition.md](onprem-post-contest-auth-transition.md)
+  after the contest window.
 - Browser/mobile happy-path checks should be rerun after any frontend API-base
   configuration change.

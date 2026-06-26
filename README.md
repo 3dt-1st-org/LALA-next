@@ -11,6 +11,11 @@ current implementation should run from real DB/API-backed data by default.
 Bundled static snapshots are limited to read-only outage recovery or isolated
 local checks.
 
+Current on-premises operations are documented in
+[`docs/operations/onprem-runbook-docker-macos.md`](docs/operations/onprem-runbook-docker-macos.md),
+with follow-up checklists for post-contest auth, AI/Speech fallback, and
+browser/iOS revalidation under `docs/operations/`.
+
 ## Wave 1 Scope
 
 - FastAPI public API edge under `apps/api`.

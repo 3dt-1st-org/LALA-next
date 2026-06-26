@@ -67,6 +67,12 @@ local env file before they are expected to report `configured`.
   verification, DNS cutover, and rollback rules.
 - [onprem-cutover-status-2026-06-26.md](onprem-cutover-status-2026-06-26.md):
   current review-runtime cutover status and refreshable evidence.
+- [onprem-post-contest-auth-transition.md](onprem-post-contest-auth-transition.md):
+  public contest access shutdown and authenticated operation checklist.
+- [onprem-ai-speech-cost-fallback.md](onprem-ai-speech-cost-fallback.md): live
+  AI/Speech cost, quota, and fallback policy.
+- [onprem-browser-ios-revalidation.md](onprem-browser-ios-revalidation.md):
+  browser, mobile, and iOS flow verification after runtime changes.
 
 ## Recommended Migration Shape
 
@@ -87,3 +93,4 @@ local env file before they are expected to report `configured`.
 - Production auth redesign.
 - Flutter Web hosting migration.
 - Replacing the current environment-variable based runtime configuration.
+- High-availability replacement for the current single Mac host.
