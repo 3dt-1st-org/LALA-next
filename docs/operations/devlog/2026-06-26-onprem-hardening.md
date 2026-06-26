@@ -183,3 +183,37 @@ Observed result:
 - Flutter app widget tests and web release build passed.
 - Public API matrix smoke passed with 10 checked route variants.
 - Paid dependency smoke returned `audio/mpeg` bytes.
+
+### 8. Follow-Up Operational Value Hooks
+
+Added the next-layer hooks for the remaining team-owned values:
+
+- `scripts/unix/verify_onprem_offsite_backup.sh` verifies that the offsite
+  backup target is writable and not accidentally inside the repo. By default it
+  also rejects targets on the same filesystem as the repo.
+- `scripts/unix/test_onprem_alert_webhook.sh` sends a safe test alert through an
+  env-var-provided webhook without printing the URL.
+- `scripts/unix/apply_cloudflare_edge_controls.sh` applies a Cloudflare
+  Rulesets API `http_ratelimit` rule to the live paid docent routes after a
+  scoped token and zone id are supplied outside git.
+- `scripts/unix/plan_onprem_standby.sh` prints the cold-standby checklist for a
+  second host without assuming the host already exists.
+
+Why:
+
+- These values should not be committed, but the operational path should be
+  repeatable once the team provides them.
+- The repo can now distinguish "not provided yet" from "not implemented yet."
+
+Verification target:
+
+```bash
+bash -n scripts/unix/verify_onprem_offsite_backup.sh \
+  scripts/unix/test_onprem_alert_webhook.sh \
+  scripts/unix/apply_cloudflare_edge_controls.sh \
+  scripts/unix/plan_onprem_standby.sh
+scripts/unix/verify_onprem_offsite_backup.sh --offsite-dir /tmp/lala-offsite-check
+scripts/unix/test_onprem_alert_webhook.sh
+scripts/unix/apply_cloudflare_edge_controls.sh
+scripts/unix/plan_onprem_standby.sh
+```

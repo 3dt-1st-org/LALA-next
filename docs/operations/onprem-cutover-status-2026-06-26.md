@@ -41,6 +41,8 @@ API runtime and database path moved for this cutover step.
   audio routes.
 - Data freshness: latest weather observations refreshed on 2026-06-26 KST and
   readiness now reports `data_freshness=configured`.
+- Operational follow-up runbook:
+  [onprem-edge-backup-alert-ha.md](onprem-edge-backup-alert-ha.md).
 
 ## Restored Data Snapshot
 
@@ -103,13 +105,19 @@ Latest observed smoke:
 
 - Azure should remain available as the rollback target until the team approves
   the retention window end.
-- Off-host backup storage is still a team operations decision. The local daily
-  backup job exists, but a mounted backup volume or team backup service should
-  be attached before treating the single Mac as recoverable after disk loss.
-- Team-wide external alert delivery is not yet wired. The monitor writes JSONL
-  locally and emits a local Mac notification on failure; a later step should
-  set `LALA_ONPREM_ALERT_WEBHOOK_URL` in the ignored runtime env and reinstall
-  the monitor with `--webhook-env-name LALA_ONPREM_ALERT_WEBHOOK_URL`.
+- Off-host backup storage is now scriptable, but the team still needs to choose
+  and mount the actual backup target. Use
+  `scripts/unix/verify_onprem_offsite_backup.sh` before reinstalling backup
+  automation with `--require-offsite`.
+- Team-wide external alert delivery is now scriptable, but the team still needs
+  to provide the actual webhook URL in ignored runtime env. Use
+  `scripts/unix/test_onprem_alert_webhook.sh` before reinstalling the monitor
+  with `--webhook-env-name LALA_ONPREM_ALERT_WEBHOOK_URL`.
+- Cloudflare edge rate limiting is now scriptable through
+  `scripts/unix/apply_cloudflare_edge_controls.sh`; apply it after setting a
+  scoped Cloudflare token and zone id outside git.
+- Single-Mac SPOF remains until a second host exists. Use
+  `scripts/unix/plan_onprem_standby.sh` as the cold-standby checklist.
 - Public contest access is intentionally enabled for review. Follow
   [onprem-post-contest-auth-transition.md](onprem-post-contest-auth-transition.md)
   after the contest window.

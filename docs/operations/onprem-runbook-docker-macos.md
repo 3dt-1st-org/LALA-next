@@ -25,11 +25,15 @@ Tracked files:
 - `infra/local-postgres/Dockerfile`
 - `scripts/unix/restore_docker_postgres_dump.sh`
 - `scripts/unix/backup_docker_postgres.sh`
+- `scripts/unix/verify_onprem_offsite_backup.sh`
 - `scripts/unix/drill_restore_docker_postgres_backup.sh`
 - `scripts/unix/install_onprem_launchd_macos.sh`
 - `scripts/unix/install_onprem_backup_launchd_macos.sh`
 - `scripts/unix/check_onprem_runtime.sh`
+- `scripts/unix/test_onprem_alert_webhook.sh`
 - `scripts/unix/install_onprem_monitor_launchd_macos.sh`
+- `scripts/unix/apply_cloudflare_edge_controls.sh`
+- `scripts/unix/plan_onprem_standby.sh`
 - `scripts/unix/rotate_onprem_logs.sh`
 - `scripts/unix/install_onprem_log_rotation_launchd_macos.sh`
 
@@ -197,6 +201,11 @@ ls -lh runtime/backups/lala-docker-postgres-*.dump
 For off-host storage, pass an ignored local mount or sync target:
 
 ```bash
+scripts/unix/verify_onprem_offsite_backup.sh \
+  --offsite-dir /Volumes/<team-backup-volume>/lala-next-postgres \
+  --apply \
+  --confirm VERIFY_OFFSITE_BACKUP
+
 scripts/unix/install_onprem_backup_launchd_macos.sh \
   --offsite-dir /Volumes/<team-backup-volume>/lala-next-postgres \
   --require-offsite \
@@ -254,7 +263,12 @@ LALA_ONPREM_ALERT_WEBHOOK_URL=<team-webhook-url>
 ```
 
 ```bash
+scripts/unix/test_onprem_alert_webhook.sh \
+  --apply \
+  --confirm TEST_ONPREM_ALERT_WEBHOOK
+
 scripts/unix/install_onprem_monitor_launchd_macos.sh \
+  --require-data-freshness \
   --webhook-env-name LALA_ONPREM_ALERT_WEBHOOK_URL \
   --apply \
   --confirm INSTALL_MONITOR_LAUNCHD
@@ -304,6 +318,16 @@ LALA_DOCENT_AUDIO_RATE_LIMIT_PER_MINUTE=30
 
 This does not replace Cloudflare WAF/rate limiting, but it prevents a completely
 unguarded public contest path from directly exhausting AI/Speech quota.
+
+Apply the edge guard after setting `CLOUDFLARE_API_TOKEN` and
+`CLOUDFLARE_ZONE_ID` in ignored runtime env or the process environment:
+
+```bash
+scripts/unix/apply_cloudflare_edge_controls.sh
+scripts/unix/apply_cloudflare_edge_controls.sh \
+  --apply \
+  --confirm APPLY_CLOUDFLARE_EDGE_CONTROLS
+```
 
 ## Cloudflare Tunnel
 
