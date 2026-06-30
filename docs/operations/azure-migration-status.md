@@ -99,6 +99,21 @@ queries to resolve live names during operations.
   `api.lala-next.cloud` custom-domain binding instead of resetting ingress to
   the default Azure Container Apps FQDN only.
 
+## On-Premises Transition Premise
+
+Azure is still the current shared dev source of truth until an approved
+cutover. The on-premises documentation path is tracked separately in
+[onprem-migration-overview.md](onprem-migration-overview.md) and covers the API,
+PostgreSQL/PostGIS/pgvector database, and runtime secrets only. It does not move
+the public Flutter Web hosting path.
+
+During the transition, keep Azure healthy as the rollback target. Do not delete
+Azure Container Apps, Azure PostgreSQL, Key Vault, custom hostname bindings, or
+GitHub environment settings until the on-premises cutover and retention window
+are approved. The normal runtime policy remains unchanged:
+`LALA_STATIC_SNAPSHOT_FALLBACK=false`, DB-backed data, reviewed ingest/scoring
+jobs, and no mock/demo data as the normal path.
+
 ## Manual Data Rollout Order
 
 Run these steps from a trusted operator machine. Keep secrets in process-local

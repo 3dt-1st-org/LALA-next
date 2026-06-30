@@ -205,6 +205,62 @@ def test_azure_container_build_excludes_local_secrets():
     assert "value: string(staticSnapshotFallback)" in bicep
 
 
+def test_onprem_docker_and_runtime_hardening_contracts():
+    compose = (ROOT / "compose.local.yml").read_text(encoding="utf-8")
+    backup_script = (ROOT / "scripts" / "unix" / "backup_docker_postgres.sh").read_text(
+        encoding="utf-8"
+    )
+    drill_script = (
+        ROOT / "scripts" / "unix" / "drill_restore_docker_postgres_backup.sh"
+    ).read_text(encoding="utf-8")
+    monitor_script = (ROOT / "scripts" / "unix" / "onprem_monitor_tick.sh").read_text(
+        encoding="utf-8"
+    )
+    offsite_script = (
+        ROOT / "scripts" / "unix" / "verify_onprem_offsite_backup.sh"
+    ).read_text(encoding="utf-8")
+    webhook_script = (
+        ROOT / "scripts" / "unix" / "test_onprem_alert_webhook.sh"
+    ).read_text(encoding="utf-8")
+    cloudflare_script = (
+        ROOT / "scripts" / "unix" / "apply_cloudflare_edge_controls.sh"
+    ).read_text(encoding="utf-8")
+    standby_script = (ROOT / "scripts" / "unix" / "plan_onprem_standby.sh").read_text(
+        encoding="utf-8"
+    )
+    start_script = (ROOT / "scripts" / "unix" / "start_api.sh").read_text(encoding="utf-8")
+    rotation_script = (ROOT / "scripts" / "unix" / "rotate_onprem_logs.sh").read_text(
+        encoding="utf-8"
+    )
+
+    assert '"127.0.0.1:${LALA_POSTGRES_PORT:-55432}:5432"' in compose
+    assert "--require-offsite" in backup_script
+    assert "secret_printing=false" in backup_script
+    assert "DRILL_DOCKER_POSTGRES_RESTORE" in drill_script
+    assert "PostgreSQL init process complete" in drill_script
+    assert "dsn_scheme=\"postgresql\"" in drill_script
+    assert "DB_DSN=\"$dsn_scheme://" in drill_script
+    assert "echo \"$DB_DSN\"" not in drill_script
+    assert "--webhook-env-name" in monitor_script
+    assert "WEBHOOK_URL" in monitor_script
+    assert "VERIFY_OFFSITE_BACKUP" in offsite_script
+    assert "ALLOW_SAME_FILESYSTEM" in offsite_script
+    assert "Offsite backup target must not be inside the repository." in offsite_script
+    assert "TEST_ONPREM_ALERT_WEBHOOK" in webhook_script
+    assert "WEBHOOK_URL" in webhook_script
+    assert "webhook_configured" in webhook_script
+    assert "APPLY_CLOUDFLARE_EDGE_CONTROLS" in cloudflare_script
+    assert "CLOUDFLARE_API_TOKEN" in cloudflare_script
+    assert "http_ratelimit" in cloudflare_script
+    assert "cloudflare_token_configured" in cloudflare_script
+    assert "cf.colo.id" in cloudflare_script
+    assert "LALA_ONPREM_STANDBY_HOST" in standby_script
+    assert "applies_changes=false" in standby_script
+    assert "--timeout-graceful-shutdown" in start_script
+    assert "ROTATE_ONPREM_LOGS" in rotation_script
+    assert "secret_printing=false" in rotation_script
+
+
 def test_kakao_map_bridges_forward_zoom_camera_updates():
     web_bridge = (ROOT / "apps" / "flutter_app" / "lib" / "kakao_map_view_web.dart").read_text(
         encoding="utf-8"

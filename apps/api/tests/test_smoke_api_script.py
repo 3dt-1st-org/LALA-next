@@ -22,6 +22,7 @@ class _SmokeHandler(BaseHTTPRequestHandler):
         return
 
     def do_GET(self) -> None:
+        self.server.user_agents.append(self.headers.get("User-Agent") or "")
         path = urlparse(self.path).path
         if path == "/healthz":
             self._write_json({"ok": True, "data": {"status": "ok"}})
@@ -192,10 +193,11 @@ class _SmokeServer(ThreadingHTTPServer):
     daily_plan_payload: dict[str, Any]
     docent_payload: dict[str, Any]
     docent_request_bodies: list[dict[str, Any]]
+    user_agents: list[str]
 
 
 def _run_smoke(
-    base_url: str, env_overrides: dict[str, str]
+    base_url: str, env_overrides: dict[str, str], extra_args: list[str] | None = None
 ) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env.update(
@@ -210,7 +212,13 @@ def _run_smoke(
     )
     env.update(env_overrides)
     return subprocess.run(
-        [usable_bash(), "scripts/unix/smoke_api.sh", "--base-url", base_url],
+        [
+            usable_bash(),
+            "scripts/unix/smoke_api.sh",
+            "--base-url",
+            base_url,
+            *(extra_args or []),
+        ],
         cwd=ROOT,
         env=env,
         text=True,
@@ -282,6 +290,7 @@ def _start_server(
     server.daily_plan_payload = daily_plan_payload or _live_daily_plan_payload()
     server.docent_payload = docent_payload or _live_docent_payload()
     server.docent_request_bodies = []
+    server.user_agents = []
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     host, port = server.server_address
@@ -452,6 +461,28 @@ def test_unix_smoke_uses_public_contest_access_without_auth_headers():
     assert "/api/v1/docents/audio" in server.protected_paths
 
 
+def test_unix_smoke_paid_dependency_reuses_script_payload_for_live_checks():
+    docent_payload = _live_docent_payload()
+    docent_payload["data"]["source"] = "azure_openai"
+
+    server, thread, base_url = _start_server(
+        public_access=True,
+        live_speech=True,
+        docent_payload=docent_payload,
+    )
+    try:
+        result = _run_smoke(base_url, {}, ["--paid-dependency"])
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+    assert result.returncode == 0, result.stderr
+    assert "Paid dependency smoke requested" in result.stdout
+    assert "Audio smoke returned audio/mpeg bytes." in result.stdout
+    assert server.protected_paths.count("/api/v1/docents/script") == 1
+    assert server.protected_paths.count("/api/v1/docents/audio") == 2
+
+
 def test_unix_matrix_smoke_covers_route_variants_without_printing_auth():
     server, thread, base_url = _start_server()
     try:
@@ -471,6 +502,18 @@ def test_unix_matrix_smoke_covers_route_variants_without_printing_auth():
     assert server.protected_paths.count("/api/v1/plans/daily") == 4
     assert server.protected_paths.count("/api/v1/docents/script") == 4
     assert server.protected_paths.count("/api/v1/docents/audio") == 1
+
+
+def test_unix_matrix_smoke_sends_stable_user_agent_for_tunnel_edges():
+    server, thread, base_url = _start_server(public_access=True)
+    try:
+        result = _run_matrix_smoke(base_url, {})
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+
+    assert result.returncode == 0, result.stderr
+    assert "LALA-next-smoke-api-matrix/1.0" in server.user_agents
 
 
 def test_unix_matrix_smoke_deploy_profile_keeps_ci_gate_bounded():

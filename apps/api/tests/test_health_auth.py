@@ -217,6 +217,10 @@ def test_readyz_reports_db_backed_and_live_azure_runtime_modes(client, monkeypat
         "apps.api.app.core.readiness.db_repository.check_postgis_status",
         lambda dsn: "configured",
     )
+    monkeypatch.setattr(
+        "apps.api.app.core.readiness.db_repository.check_data_freshness_status",
+        lambda dsn, weather_max_hours=24: "configured",
+    )
 
     response = client.get("/readyz")
 
@@ -225,11 +229,12 @@ def test_readyz_reports_db_backed_and_live_azure_runtime_modes(client, monkeypat
     assert body["data"]["status"] == "ok"
     assert body["data"]["checks"]["db"] == "configured"
     assert body["data"]["checks"]["postgis"] == "configured"
+    assert body["data"]["checks"]["data_freshness"] == "configured"
     assert body["data"]["checks"]["client_identity"] == "static"
     assert body["data"]["checks"]["live_ai"] == "enabled"
     assert body["data"]["checks"]["live_speech"] == "enabled"
     assert body["data"]["mode"] == {
-        "overall": "live-azure",
+        "overall": "db-backed",
         "data": "db-backed",
         "ai": "live-azure",
         "speech": "live-azure",
@@ -248,6 +253,10 @@ def test_readyz_reports_ok_for_db_backed_runtime_with_disabled_live_options(clie
         "apps.api.app.core.readiness.db_repository.check_postgis_status",
         lambda dsn: "configured",
     )
+    monkeypatch.setattr(
+        "apps.api.app.core.readiness.db_repository.check_data_freshness_status",
+        lambda dsn, weather_max_hours=24: "stale",
+    )
 
     response = client.get("/readyz")
 
@@ -255,6 +264,7 @@ def test_readyz_reports_ok_for_db_backed_runtime_with_disabled_live_options(clie
     body = response.json()
     assert body["data"]["status"] == "ok"
     assert body["data"]["checks"]["postgis"] == "configured"
+    assert body["data"]["checks"]["data_freshness"] == "stale"
     assert body["data"]["checks"]["live_ai"] == "disabled"
     assert body["data"]["checks"]["live_speech"] == "disabled"
     assert body["data"]["mode"] == {

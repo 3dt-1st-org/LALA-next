@@ -59,12 +59,28 @@ def run_matrix(
     *, base_url: str, timeout: float, profile: str = "full"
 ) -> dict[str, Any]:
     base_url = base_url.rstrip("/")
-    readyz = _request_json(
-        SmokeCase("GET", "/readyz"),
-        base_url=base_url,
-        headers={},
-        timeout=timeout,
-    )
+    try:
+        readyz = _request_json(
+            SmokeCase("GET", "/readyz"),
+            base_url=base_url,
+            headers={},
+            timeout=timeout,
+        )
+    except Exception as exc:
+        return {
+            "ok": False,
+            "mode": "api_matrix_smoke",
+            "profile": profile,
+            "checked": 0,
+            "failures": [
+                {
+                    "method": "GET",
+                    "path": "/readyz",
+                    "status": "exception",
+                    "reason": type(exc).__name__,
+                }
+            ],
+        }
     deploy_readyz_failure = (
         _deploy_readyz_failure(readyz) if profile == "deploy" else None
     )
@@ -964,6 +980,7 @@ def _request_raw(
     timeout: float,
 ) -> tuple[int, str, bytes]:
     request_headers = dict(headers)
+    request_headers.setdefault("User-Agent", "LALA-next-smoke-api-matrix/1.0")
     if case.body is not None:
         request_headers["Content-Type"] = "application/json; charset=utf-8"
     req = request.Request(

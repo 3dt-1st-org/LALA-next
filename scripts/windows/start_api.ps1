@@ -2,6 +2,7 @@ param(
     [string]$HostName = "0.0.0.0",
     [int]$Port = 8080,
     [string]$Python = "",
+    [string]$EnvFile = "",
     [string]$KeyVaultUrl = "",
     [string]$AccessLogPath = "",
     [switch]$EnableLiveAI,
@@ -27,7 +28,9 @@ if ($KeyVaultUrl) {
     [Environment]::SetEnvironmentVariable("KEY_VAULT_URL", $KeyVaultUrl, "Process")
 }
 
-$EnvFile = Join-Path $RepoRoot ".env"
+if (-not $EnvFile) {
+    $EnvFile = Join-Path $RepoRoot ".env"
+}
 if (Test-Path $EnvFile) {
     Get-Content $EnvFile | ForEach-Object {
         $line = $_.Trim()

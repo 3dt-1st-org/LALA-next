@@ -4,12 +4,13 @@ services:
       context: ./infra/local-postgres
     image: lala-next-postgres-local:16-postgis-vector
     container_name: lala-next-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${LALA_POSTGRES_USER:-lala}
       POSTGRES_PASSWORD: ${LALA_POSTGRES_PASSWORD:?Set LALA_POSTGRES_PASSWORD for local development.}
       POSTGRES_DB: ${LALA_POSTGRES_DB:-lala}
     ports:
-      - "${LALA_POSTGRES_PORT:-55432}:5432"
+      - "127.0.0.1:${LALA_POSTGRES_PORT:-55432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s

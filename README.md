@@ -2,13 +2,19 @@
 
 LALA-next is the refactored LALA backend and Flutter web/app workspace. The
 normal service path is a FastAPI public API, PostgreSQL/PostGIS/pgvector,
-Azure Key Vault, official public-data APIs, and reviewed ingest/scoring/RAG
-pipelines.
+official public-data APIs, and reviewed ingest/scoring/RAG pipelines. Shared
+cloud/dev deployments can still use Azure Key Vault, but the on-premises path
+uses Docker PostgreSQL plus process env injection by default.
 
 The repository keeps selected legacy LALA behavior and UI/UX patterns, but the
 current implementation should run from real DB/API-backed data by default.
 Bundled static snapshots are limited to read-only outage recovery or isolated
 local checks.
+
+Current on-premises operations are documented in
+[`docs/operations/onprem-runbook-docker-macos.md`](docs/operations/onprem-runbook-docker-macos.md),
+with follow-up checklists for post-contest auth, AI/Speech fallback, and
+browser/iOS revalidation under `docs/operations/`.
 
 ## Wave 1 Scope
 
@@ -389,6 +395,18 @@ and run
 when a small paid OpenAI/Speech smoke check is acceptable.
 
 See [docs/operations/azure-resources.md](docs/operations/azure-resources.md).
+
+## On-Premises Migration
+
+Azure remains the rollback target during the transition. The on-premises
+migration docs cover moving the API, Docker PostgreSQL/PostGIS/pgvector
+database, and runtime secrets while keeping the public Flutter Web hosting path
+separate.
+
+Start with
+[docs/operations/onprem-migration-overview.md](docs/operations/onprem-migration-overview.md)
+and the current Docker macOS runbook at
+[docs/operations/onprem-runbook-docker-macos.md](docs/operations/onprem-runbook-docker-macos.md).
 
 ## Verification
 

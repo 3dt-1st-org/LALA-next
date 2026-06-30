@@ -84,6 +84,42 @@ def check_postgis_status(dsn: str) -> str:
     return "configured"
 
 
+def check_data_freshness_status(dsn: str, *, weather_max_hours: int = 24) -> str:
+    if not dsn:
+        return "skipped"
+    try:
+        import psycopg2
+        from psycopg2.extras import RealDictCursor
+    except Exception:
+        return "degraded"
+    sql = """
+        SELECT
+            (SELECT max(updated_at) FROM travel.public_places) AS places_updated_at,
+            (SELECT max(observed_at) FROM travel.weather_observations) AS weather_observed_at,
+            (SELECT max(scored_at) FROM analytics.place_score_snapshots) AS scores_scored_at,
+            (SELECT max(updated_at) FROM rag.knowledge_chunks) AS rag_updated_at
+    """
+    try:
+        with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(sql)
+                row = cur.fetchone()
+    except Exception:
+        return "degraded"
+    if not row or not all(row.get(key) for key in row.keys()):
+        return "degraded"
+    weather_observed_at = row.get("weather_observed_at")
+    if weather_observed_at is None:
+        return "degraded"
+    now = datetime.now(UTC)
+    if weather_observed_at.tzinfo is None:
+        weather_observed_at = weather_observed_at.replace(tzinfo=UTC)
+    age_hours = (now - weather_observed_at.astimezone(UTC)).total_seconds() / 3600
+    if age_hours > max(1, weather_max_hours):
+        return "stale"
+    return "configured"
+
+
 def fetch_places(
     *,
     lat: float,

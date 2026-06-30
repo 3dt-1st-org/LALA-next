@@ -46,6 +46,10 @@ class Settings:
     azure_speech_endpoint: str = ""
     azure_speech_key: str = ""
     enable_live_speech: bool = False
+    paid_route_rate_limit_enabled: bool = True
+    docent_script_rate_limit_per_minute: int = 60
+    docent_audio_rate_limit_per_minute: int = 30
+    weather_freshness_max_hours: int = 24
     cors_allow_origins: tuple[str, ...] = ()
     log_level: str = "INFO"
     access_log_path: str = ""
@@ -144,6 +148,25 @@ class Settings:
             azure_speech_endpoint=_env_or_secret("AZURE_SPEECH_ENDPOINT", "azure-speech-endpoint", key_vault_url),
             azure_speech_key=_env_or_secret("AZURE_SPEECH_KEY", "azure-speech-key", key_vault_url),
             enable_live_speech=_bool_env("LALA_ENABLE_LIVE_SPEECH", default=False),
+            paid_route_rate_limit_enabled=_bool_env(
+                "LALA_PAID_ROUTE_RATE_LIMIT_ENABLED",
+                default=True,
+            ),
+            docent_script_rate_limit_per_minute=_int_env(
+                "LALA_DOCENT_SCRIPT_RATE_LIMIT_PER_MINUTE",
+                default=60,
+                minimum=1,
+            ),
+            docent_audio_rate_limit_per_minute=_int_env(
+                "LALA_DOCENT_AUDIO_RATE_LIMIT_PER_MINUTE",
+                default=30,
+                minimum=1,
+            ),
+            weather_freshness_max_hours=_int_env(
+                "LALA_WEATHER_FRESHNESS_MAX_HOURS",
+                default=24,
+                minimum=1,
+            ),
             cors_allow_origins=_csv_value(
                 _env_or_secret("CORS_ALLOW_ORIGINS", "cors-allow-origins", key_vault_url)
             ),
@@ -168,6 +191,17 @@ def _bool_env(env_name: str, *, default: bool) -> bool:
     if not raw:
         return default
     return raw in {"1", "true", "yes", "on"}
+
+
+def _int_env(env_name: str, *, default: int, minimum: int) -> int:
+    raw = (os.getenv(env_name) or "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        return default
+    return max(minimum, value)
 
 
 def _static_snapshot_fallback_enabled() -> bool:

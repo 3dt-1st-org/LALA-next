@@ -276,7 +276,7 @@ PLAN_BODY='{"lat":37.2636,"lng":127.0286,"radius_m":1000,"language":"ko"}'
 smoke_post_json "/api/v1/plans/daily" "$PLAN_BODY" "${CURL_AUTH_ARGS[@]}" >/dev/null
 
 SCRIPT_BODY='{"place_id":"tour-api-3066000","place_name":"중랑아트센터","category":"culture_venue","language":"ko","mode":"brief"}'
-smoke_post_json "/api/v1/docents/script" "$SCRIPT_BODY" "${CURL_AUTH_ARGS[@]}" >/dev/null
+SCRIPT_RESULT="$(smoke_post_json "/api/v1/docents/script" "$SCRIPT_BODY" "${CURL_AUTH_ARGS[@]}")"
 
 AUDIO_BODY='{"script":"LALA smoke audio","language":"ko"}'
 SERVER_SPEECH_MODE="$(readyz_mode speech)"
@@ -288,9 +288,7 @@ else
 fi
 
 if [[ "$PAID_DEPENDENCY" == "true" ]]; then
-  echo "Paid dependency smoke requested. Start the API with --enable-live-ai and --enable-live-speech before running this check."
-  PAID_BODY='{"place_id":"paid-smoke-suwon","category":"attraction","language":"ko","mode":"brief"}'
-  SCRIPT_RESULT="$(smoke_post_json "/api/v1/docents/script" "$PAID_BODY" "${CURL_AUTH_ARGS[@]}")"
+  echo "Paid dependency smoke requested. Verifying live AI and Speech responses."
   SCRIPT_TEXT="$(JSON_PAYLOAD="$SCRIPT_RESULT" "$PYTHON" - <<'PY'
 import json
 import os
