@@ -2,6 +2,12 @@
 
 set -euo pipefail
 
+# Force Python child processes into UTF-8 mode so scripts that emit non-ASCII
+# output (e.g. Korean docent text in paid-dependency smoke) encode correctly
+# under Windows Git Bash, whose default cp1252 codec raises UnicodeEncodeError.
+# No-op on macOS/Linux, which already default to UTF-8.
+export PYTHONUTF8=1
+
 repo_root() {
   local script_dir
   script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
