@@ -36,6 +36,7 @@ Tracked files:
 - `scripts/unix/plan_onprem_standby.sh`
 - `scripts/unix/rotate_onprem_logs.sh`
 - `scripts/unix/install_onprem_log_rotation_launchd_macos.sh`
+- `scripts/unix/install_onprem_docker_autostart_launchd_macos.sh`
 
 Ignored local files:
 
@@ -160,6 +161,36 @@ Logs:
 tail -n 200 runtime/logs/lala-onprem-api.launchd.err
 tail -n 200 runtime/logs/lala-next-cloudflared.err.log
 tail -n 200 runtime/logs/onprem-api-access.jsonl
+```
+
+## Docker Autostart
+
+The whole on-prem runtime depends on Docker Desktop, which is not a
+LaunchAgent and does not start itself after a reboot or logout unless
+configured. A single reboot with Docker left down takes the database,
+backups, and the monitor down with it while the API and tunnel keep
+running in degraded mode. To make reboot and mid-session Docker drops
+self-healing, install the autostart LaunchAgent:
+
+```bash
+scripts/unix/install_onprem_docker_autostart_launchd_macos.sh
+scripts/unix/install_onprem_docker_autostart_launchd_macos.sh \
+  --apply \
+  --confirm INSTALL_DOCKER_AUTOSTART_LAUNCHD
+```
+
+The installer writes `~/Library/LaunchAgents/cloud.lala-next.docker-autostart.plist`.
+It fires at login (`RunAtLoad`) and every 5 minutes (`StartInterval`). The
+command is idempotent: it runs `docker info` and only calls `open -a Docker`
+when the daemon is not reachable, so a healthy Docker is never disturbed and
+no GUI focus is stolen. The PostgreSQL container's `restart: unless-stopped`
+policy then brings the database back on its own once Docker is up.
+
+Check status:
+
+```bash
+launchctl list | rg 'cloud\.lala-next\.docker-autostart'
+tail -n 50 runtime/logs/lala-onprem-docker-autostart.launchd.out
 ```
 
 ## Backup Automation
