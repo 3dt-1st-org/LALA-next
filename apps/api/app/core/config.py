@@ -41,6 +41,9 @@ class Settings:
     azure_openai_api_version: str = ""
     azure_openai_embedding_api_version: str = ""
     azure_openai_key: str = ""
+    openai_api_key: str = ""
+    openai_base_url: str = ""
+    openai_embedding_model: str = ""
     enable_live_ai: bool = False
     azure_speech_region: str = ""
     azure_speech_endpoint: str = ""
@@ -143,6 +146,15 @@ class Settings:
                 )
             ),
             azure_openai_key=_env_or_secret("AZURE_OPENAI_KEY", "azure-openai-key", key_vault_url),
+            openai_api_key=_env_or_secret("OPENAI_API_KEY", "openai-api-key", key_vault_url),
+            openai_base_url=(
+                _env_or_secret("OPENAI_BASE_URL", "openai-base-url", key_vault_url)
+                or "https://api.openai.com/v1"
+            ),
+            openai_embedding_model=(
+                _env_or_secret("OPENAI_EMBEDDING_MODEL", "openai-embedding-model", key_vault_url)
+                or "text-embedding-3-small"
+            ),
             enable_live_ai=_bool_env("LALA_ENABLE_LIVE_AI", default=False),
             azure_speech_region=_env_or_secret("AZURE_SPEECH_REGION", "azure-speech-region", key_vault_url),
             azure_speech_endpoint=_env_or_secret("AZURE_SPEECH_ENDPOINT", "azure-speech-endpoint", key_vault_url),
