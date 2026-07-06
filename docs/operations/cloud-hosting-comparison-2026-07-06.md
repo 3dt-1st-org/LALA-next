@@ -730,7 +730,7 @@ gcloud sql databases create lalanext \
 ### 6단계: 환경변수 업데이트
 ```bash
 gcloud run services update lala-next-api \
-  --update-env-vars DATABASE_URL=postgresql://USER:PASSWORD@/lalanext?host=/cloudsql/lala-next-prod:us-central1:lala-next-db \
+  --update-env-vars DATABASE_URL='postgresql://<DB_USER>:<DB_PASSWORD>@/lalanext?host=/cloudsql/lala-next-prod:us-central1:lala-next-db' \
   --update-secrets=AZURE_SPEECH_KEY=azure-speech-key \
   --project=lala-next-prod
 ```
