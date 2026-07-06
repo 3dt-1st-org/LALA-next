@@ -101,8 +101,15 @@ sudo systemctl status lala-next
 # 재시작
 sudo systemctl restart lala-next
 
-# 로그 확인
+# 로그 확인 (EC2 로컬)
 sudo journalctl -u lala-next -f
+sudo tail -f /var/log/lala-next/access.log
+
+# CloudWatch Logs에서 조회 (원격, 로컬에서 실행 가능)
+aws logs filter-log-events --log-group-name "lala-next/fastapi" --limit 20
+aws logs filter-log-events --log-group-name "lala-next/nginx" --limit 20
+# 에러만 필터:
+aws logs filter-log-events --log-group-name "lala-next/fastapi" --filter-pattern "ERROR" --limit 20
 
 # Nginx 상태/재시작
 sudo systemctl status nginx
@@ -176,9 +183,9 @@ done
 - [x] **비밀번호 강화**: RDS 마스터 비밀번호 → AWS Secrets Manager 이관
 
 ### ⏳ 남은 작업
-- [ ] **data_freshness 정상화**: 날씨 관측 데이터 갱신 (`PUBLIC_DATA_SERVICE_KEY` 설정 후 갱신 스크립트 실행)
-- [ ] **CORS 도메인 제한**: 운영 전환 시 `*` → `https://*.lala-next.cloud` 등으로 한정
-- [ ] **CloudWatch 로그 스트리밍**: 애플리케이션 로그 → CloudWatch Logs (현재는 EC2 로컬)
+- [ ] **data_freshness 정상화**: 4개 테이블(`travel.public_places`, `travel.weather_observations`, `analytics.place_score_snapshots`, `rag.knowledge_chunks`)에 최근 데이터 필요. 스키마만 있고 비즈니스 데이터는 비어있음 → **데이터 적재 파이프라인 구축이 별도 작업** (KOPIS/tour API/card spending/RAG ingest 실행). dev_reset seed는 `Do not run against production` 명시라 사용 불가. 날씨 갱신 스크립트(`scripts/unix/plan_weather_observation_refresh.sh --apply`)는 파이프라인 선행 후에만 의미 있음.
+- [x] **CORS 도메인 제한**: `*` → `https://lala-next.cloud,https://www.lala-next.cloud` (환경변수 `CORS_ALLOW_ORIGINS`, LALA_ 접두사 아님 주의)
+- [x] **CloudWatch Logs 스트리밍**: 에이전트로 `lala-next/fastapi`, `lala-next/nginx`, `lala-next/backup` 로그 그룹 전송 중
 
 ---
 
