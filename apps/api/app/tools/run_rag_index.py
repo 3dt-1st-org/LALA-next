@@ -40,7 +40,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--embedding-method",
-        choices=["local-hash", "azure-openai"],
+        choices=["local-hash", "azure-openai", "openai"],
         default="local-hash",
     )
     parser.add_argument("--place-id", default="", help="Optional query filter for a place_id.")
