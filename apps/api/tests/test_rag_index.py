@@ -222,3 +222,39 @@ def test_rag_query_prints_bounded_result_summary(monkeypatch, capsys):
     assert "result_count=1" in output
     assert "culture_event" in output
     assert "postgresql://" not in output
+
+
+def test_build_embedding_routes_openai_method(monkeypatch):
+    called = {}
+
+    def fake_build_openai(text):
+        called["text"] = text
+        return [0.0] * rag_index.VECTOR_DIMENSIONS
+
+    monkeypatch.setattr(rag_index, "build_openai_embedding", fake_build_openai)
+    monkeypatch.setattr(
+        rag_index, "settings_openai_embedding_model_name", lambda: "text-embedding-3-small"
+    )
+
+    vector, model = rag_index.build_embedding("수원 화성", method="openai")
+    assert called["text"] == "수원 화성"
+    assert len(vector) == rag_index.VECTOR_DIMENSIONS
+    assert model == "text-embedding-3-small"
+
+
+def test_openai_embedding_missing_key_raises(monkeypatch):
+    class FakeSettings:
+        openai_api_key = ""
+        openai_base_url = ""
+        openai_embedding_model = ""
+        enable_live_ai = True
+
+    monkeypatch.setattr(rag_index, "get_settings", lambda: FakeSettings())
+
+    raised = False
+    try:
+        rag_index.build_openai_embedding("수원 화성")
+    except RuntimeError as exc:
+        raised = True
+        assert "OPENAI_API_KEY" in str(exc)
+    assert raised, "expected RuntimeError when OPENAI_API_KEY is missing"

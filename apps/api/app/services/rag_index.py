@@ -13,7 +13,7 @@ from apps.api.app.core.config import get_settings
 
 VECTOR_DIMENSIONS = 1536
 LOCAL_HASH_EMBEDDING_MODEL = "local-hash-v1"
-EmbeddingMethod = Literal["local-hash", "azure-openai"]
+EmbeddingMethod = Literal["local-hash", "azure-openai", "openai"]
 SourceScope = Literal["all", "static", "dynamic"]
 
 STATIC_SOURCE_TYPES = ("place_profile",)
@@ -126,7 +126,42 @@ def build_embedding(text: str, *, method: EmbeddingMethod) -> tuple[list[float],
         return build_local_embedding(text), LOCAL_HASH_EMBEDDING_MODEL
     if method == "azure-openai":
         return build_azure_openai_embedding(text), _azure_embedding_model_name()
+    if method == "openai":
+        return build_openai_embedding(text), settings_openai_embedding_model_name()
     raise ValueError(f"Unsupported embedding method: {method}")
+
+
+def settings_openai_embedding_model_name() -> str:
+    settings = get_settings()
+    return settings.openai_embedding_model or "text-embedding-3-small"
+
+
+def build_openai_embedding(text: str) -> list[float]:
+    settings = get_settings()
+    if not settings.openai_api_key:
+        raise RuntimeError("OpenAI embedding requires OPENAI_API_KEY.")
+    if not settings.enable_live_ai:
+        raise RuntimeError("OpenAI embedding requires LALA_ENABLE_LIVE_AI=true.")
+
+    try:
+        from openai import OpenAI
+    except Exception as exc:
+        raise RuntimeError("openai package is required for OpenAI embeddings.") from exc
+
+    client = OpenAI(
+        api_key=settings.openai_api_key,
+        base_url=settings.openai_base_url or "https://api.openai.com/v1",
+    )
+    response = client.embeddings.create(
+        model=settings.openai_embedding_model or "text-embedding-3-small",
+        input=text,
+    )
+    embedding = list(response.data[0].embedding)
+    if len(embedding) != VECTOR_DIMENSIONS:
+        raise RuntimeError(
+            f"Expected {VECTOR_DIMENSIONS} embedding dimensions, got {len(embedding)}."
+        )
+    return [float(value) for value in embedding]
 
 
 def build_azure_openai_embedding(text: str) -> list[float]:
