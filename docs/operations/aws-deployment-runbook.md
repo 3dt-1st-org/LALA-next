@@ -190,10 +190,49 @@ done
 - [x] **백업 자동화**: RDS→S3 매일 03:17 (systemd timer) + 버저닝 + Glacier 수명주기
 - [x] **모니터링**: CloudWatch 알람 5종 (EC2 CPU/상태, RDS CPU/연결수/스토리지) + SNS 이메일
 - [x] **비밀번호 강화**: RDS 마스터 비밀번호 → AWS Secrets Manager 이관
+- [x] **CORS 도메인 제한**: `https://lala-next.cloud,https://www.lala-next.cloud` (환경변수 `CORS_ALLOW_ORIGINS`, LALA_ 접두사 아님)
+- [x] **CloudWatch 로그 스트리밍**: `lala-next/fastapi`, `lala-next/nginx` 로그 그룹
+- [x] **데이터 적재 파이프라인**: 4개 테이블 채워져 `/readyz data_freshness=configured` 달성. 실행 명령은 §9 참조.
 
 ### ⏳ 남은 작업
-- [ ] **data_freshness 정상화**: 4개 테이블(`travel.public_places`, `travel.weather_observations`, `analytics.place_score_snapshots`, `rag.knowledge_chunks`)에 최근 데이터 필요. 스키마만 있고 비즈니스 데이터는 비어있음 → **데이터 적재 파이프라인 구축이 별도 작업** (KOPIS/tour API/card spending/RAG ingest 실행). dev_reset seed는 `Do not run against production` 명시라 사용 불가. 날씨 갱신 스크립트(`scripts/unix/plan_weather_observation_refresh.sh --apply`)는 파이프라인 선행 후에만 의미 있음.
-- [x] **CORS 도메인 제한**: `*` → `https://lala-next.cloud,https://www.lala-next.cloud` (환경변수 `CORS_ALLOW_ORIGINS`, LALA_ 접두사 아님 주의)
+- [ ] **파이프라인 자동화**: 주기적 갱신(systemd timer) — 현재 수동 실행
+- [ ] **score 신호 보강**: card_spending/identity region 매칭 점검 (일부 missing_signals)
+
+---
+
+## 9. 데이터 적재 파이프라인 실행 (수동)
+
+`/readyz data_freshness=configured`를 위한 DAG 실행 순서. EC2 `/opt/lala-next`에서 실행. 각 도구는 `--apply --confirm <TOKEN>` + `ALLOW_*_APPLY=1` 가드 사용.
+
+```bash
+cd /opt/lala-next
+
+# Phase 1: 외부 소스 (경기+서울, t3.micro 메모리 고려)
+ALLOW_TOUR_API_INGEST_APPLY=1 bash scripts/unix/plan_tour_api_ingest.sh --apply --confirm APPLY_TOUR_API_INGEST --area-code 31 --rows 40   # 경기
+ALLOW_TOUR_API_INGEST_APPLY=1 bash scripts/unix/plan_tour_api_ingest.sh --apply --confirm APPLY_TOUR_API_INGEST --area-code 1  --rows 40   # 서울
+ALLOW_CULTURE_INFO_INGEST_APPLY=1 bash scripts/unix/plan_culture_info_ingest.sh --apply --confirm APPLY_CULTURE_INFO_INGEST --sido 경기 --rows 20
+ALLOW_KOPIS_INGEST_APPLY=1 bash scripts/unix/plan_kopis_ingest.sh --apply --confirm APPLY_KOPIS_INGEST --signgucode 41 --rows 20   # 경기
+ALLOW_KOPIS_INGEST_APPLY=1 bash scripts/unix/plan_kopis_ingest.sh --apply --confirm APPLY_KOPIS_INGEST --signgucode 11 --rows 20   # 서울
+ALLOW_CARD_SPENDING_FILE_INGEST_APPLY=1 bash scripts/unix/plan_card_spending_file_ingest.sh --apply --confirm APPLY_CARD_SPENDING_FILE_INGEST --file-path '/opt/lala-next/artifacts/tmp/raw/gyeonggi-card/카드소비 데이터_202601-202603.zip'
+ALLOW_FRANCHISE_REFERENCE_INGEST_APPLY=1 bash scripts/unix/plan_franchise_reference_ingest.sh --apply --confirm APPLY_FRANCHISE_REFERENCE_INGEST
+
+# Phase 2: 처리
+ALLOW_FRANCHISE_IDENTITY_BATCH_APPLY=1 bash scripts/unix/plan_franchise_identity_batch.sh --apply --confirm APPLY_FRANCHISE_IDENTITY_BATCH --limit 500
+
+# Phase 3: 집계 (data_freshness 직접 타겟)
+ALLOW_PLACE_SCORE_BATCH_APPLY=1 bash scripts/unix/plan_place_score_batch.sh --apply --confirm APPLY_PLACE_SCORE_BATCH --category all --limit 500
+# RAG 임베딩 배치 실행 시에만 LALA_ENABLE_LIVE_AI=true (FastAPI 런타임은 false 유지 — readyz ai 모드)
+LALA_ENABLE_LIVE_AI=true ALLOW_RAG_INDEX_APPLY=1 bash scripts/unix/plan_rag_index.sh --apply --confirm APPLY_RAG_INDEX --source all --embedding-method openai --limit 500
+ALLOW_WEATHER_OBSERVATION_REFRESH_APPLY=1 bash scripts/unix/plan_weather_observation_refresh.sh --apply --confirm APPLY_WEATHER_OBSERVATION_REFRESH --limit 20   # 24h freshness, 가장 마지막
+
+# 검증
+curl -s https://api.lala-next.cloud/readyz | python3 -m json.tool | grep data_freshness
+# 기대: "data_freshness": "configured"
+```
+
+**비용**: RAG `text-embedding-3-small` 임베딩 1회 실행 약 $0.02-0.06 (약 130 청크).
+
+**주의**: `LALA_ENABLE_LIVE_AI=true`는 RAG 임베딩 배치 실행 시에만 임시로 설정. FastAPI 런타임은 `false` 유지 (그렇지 않으면 `/readyz` ai 모드가 Azure OpenAI 설정을 검사해 degraded 표시).
 - [x] **CloudWatch Logs 스트리밍**: 에이전트로 `lala-next/fastapi`, `lala-next/nginx`, `lala-next/backup` 로그 그룹 전송 중
 
 ---
