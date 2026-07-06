@@ -10,15 +10,18 @@
 
 ```
 [인터넷]
-   ↓ 포트 80
-[Nginx (리버스 프록시, SSL 종료 예정)]
+   ↓ HTTPS (443)
+[Cloudflare 프록시 (오렌지 구름, SSL Full strict, DDoS 방어)]
+   ↓ HTTPS (443) — Let's Encrypt 인증서 종료
+[Nginx (리버스 프록시 + SSL 종료, HTTP→HTTPS 리다이렉트)]
    ↓ 포트 8000
 [EC2 t3.micro: uvicorn FastAPI (workers=2)]
    ↓ 포트 5432 (프라이빗 서브넷)
 [RDS PostgreSQL 15.18 + PostGIS 3.4 + pgcrypto + vector]
 ```
 
-**외부 엔드포인트**: `http://54.160.16.183/` (Elastic IP, 고정)
+**외부 엔드포인트**: `https://api.lala-next.cloud` (Cloudflare 프록시 + EC2 Let's Encrypt)
+**직접 IP**: `http://54.160.16.183/` (Elastic IP, 디버깅용)
 
 ---
 
@@ -39,6 +42,12 @@
 | 보안그룹 (RDS) | `sg-02db54e4b9b95e81b` |
 | DB 파라미터 그룹 | `lala-next-postgres-params` (rds.allowed_extensions: postgis,pgcrypto,vector) |
 | SSH 키 | `~/.ssh/lala-next-key.pem` (user `ec2-user`) |
+| Cloudflare Zone | `eee348ff140b1ed22e51bfe591bed110` (`lala-next.cloud`) |
+| Cloudflare SSL 모드 | Full (strict) |
+| 도메인 | `api.lala-next.cloud` → A `54.160.16.183` (Proxied) |
+| SSL 인증서 | Let's Encrypt (EC2 `/etc/letsencrypt/live/api.lala-next.cloud/`, 자동 갱신) |
+| Secrets Manager | `lala-next/rds-master-password` (RDS 마스터 비밀번호) |
+| S3 백업 버킷 | `lala-next-backups-292216133883` (버저닝 + 30일 Glacier) |
 
 ---
 
@@ -65,18 +74,20 @@ ssh -i ~/.ssh/lala-next-key.pem ec2-user@54.160.16.183
 ### 헬스체크
 ```bash
 # /healthz (프로세스 생존)
-curl http://54.160.16.183/healthz
+curl https://api.lala-next.cloud/healthz
 
 # /readyz (DB-backed 상태)
-curl http://54.160.16.183/readyz | python3 -m json.tool
+curl https://api.lala-next.cloud/readyz | python3 -m json.tool
 
 # 정상 상태: overall=db-backed, db=configured, postgis=configured
 ```
 
 ### API 문서
 ```
-http://54.160.16.183/docs
+https://api.lala-next.cloud/docs
 ```
+
+> 디버깅 시 Cloudflare 프록시를 우회하려면 직접 IP 사용: `curl -H "Host: api.lala-next.cloud" http://54.160.16.183/healthz`
 
 ---
 
@@ -115,10 +126,15 @@ sudo systemctl restart lala-next
 
 ### 스키마 변경 (EC2 통해 RDS)
 ```bash
+# 비밀번호는 Secrets Manager에서 조회 (런북에 평문 금지)
+RDS_PW=$(aws secretsmanager get-secret-value \
+  --secret-id lala-next/rds-master-password \
+  --query SecretString --output text | python3 -c "import sys,json;print(json.loads(sys.stdin.read())['password'])")
+
 # canonical 스키마 재적용 (순서대로)
 cd /opt/lala-next
 for f in $(ls -1 sql/canonical/*.sql | sort); do
-  PGPASSWORD='LalaNext2024!' psql -h lala-next-db.cojm284ouqxi.us-east-1.rds.amazonaws.com -U lalaadmin -d lalanext -f "$f"
+  PGPASSWORD="$RDS_PW" psql -h lala-next-db.cojm284ouqxi.us-east-1.rds.amazonaws.com -U lalaadmin -d lalanext -f "$f"
 done
 ```
 
@@ -132,7 +148,9 @@ done
 | 가상환경 | `/opt/lala-next/.venv/` | Python 3.11 + 의존성 |
 | 환경변수 | `/opt/lala-next/.env` | DB_DSN, LALA_PUBLIC_CONTEST_ACCESS 등 |
 | systemd 서비스 | `/etc/systemd/system/lala-next.service` | uvicorn workers=2 |
-| Nginx 설정 | `/etc/nginx/conf.d/lala-next.conf` | 80 → 8000 프록시 |
+| Nginx 설정 | `/etc/nginx/conf.d/lala-next.conf` | SSL 종료 + 443→8000 프록시 + HTTP 리다이렉트 |
+| SSL 인증서 | `/etc/letsencrypt/live/api.lala-next.cloud/` | Let's Encrypt, certbot-renew.timer가 매일 갱신 체크 |
+| 백업 스크립트 | `/opt/lala-next/scripts/backup_to_s3.sh` | RDS→S3, lala-next-backup.timer 매일 03:17 |
 | 액세스 로그 | `/var/log/lala-next/access.log` | |
 
 ---
@@ -148,13 +166,19 @@ done
 
 ---
 
-## 8. 남은 작업 / 다음 단계
+## 8. 완료된 운영 기능 / 남은 작업
 
-- [ ] **SSL/TLS 설정**: Route 53 도메인 연결 + ACM 인증서 + Nginx HTTPS
+### ✅ 완료됨
+- [x] **SSL/TLS**: Cloudflare 프록시 + Let's Encrypt 인증서 (Full strict, 자동 갱신 02:30 UTC)
+- [x] **도메인**: `https://api.lala-next.cloud` (Cloudflare DNS, 오렌지 구름)
+- [x] **백업 자동화**: RDS→S3 매일 03:17 (systemd timer) + 버저닝 + Glacier 수명주기
+- [x] **모니터링**: CloudWatch 알람 5종 (EC2 CPU/상태, RDS CPU/연결수/스토리지) + SNS 이메일
+- [x] **비밀번호 강화**: RDS 마스터 비밀번호 → AWS Secrets Manager 이관
+
+### ⏳ 남은 작업
 - [ ] **data_freshness 정상화**: 날씨 관측 데이터 갱신 (`PUBLIC_DATA_SERVICE_KEY` 설정 후 갱신 스크립트 실행)
-- [ ] **백업 자동화**: RDS 자동 백업(7일) 확인 + S3 offsite 백업 스크립트
-- [ ] **모니터링**: CloudWatch 알람 설정 (CPU, 디스크, DB 연결)
-- [ ] **비밀번호 강화**: 초기 비밀번호 → Secrets Manager 이관
+- [ ] **CORS 도메인 제한**: 운영 전환 시 `*` → `https://*.lala-next.cloud` 등으로 한정
+- [ ] **CloudWatch 로그 스트리밍**: 애플리케이션 로그 → CloudWatch Logs (현재는 EC2 로컬)
 
 ---
 
