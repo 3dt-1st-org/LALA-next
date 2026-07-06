@@ -8,20 +8,29 @@
 
 ## 1. 아키텍처
 
+**프론트엔드/백엔드 분리 구조:**
+
 ```
-[인터넷]
-   ↓ HTTPS (443)
-[Cloudflare 프록시 (오렌지 구름, SSL Full strict, DDoS 방어)]
-   ↓ HTTPS (443) — Let's Encrypt 인증서 종료
-[Nginx (리버스 프록시 + SSL 종료, HTTP→HTTPS 리다이렉트)]
-   ↓ 포트 8000
-[EC2 t3.micro: uvicorn FastAPI (workers=2)]
-   ↓ 포트 5432 (프라이빗 서브넷)
-[RDS PostgreSQL 15.18 + PostGIS 3.4 + pgcrypto + vector]
+[프론트엔드 — Vercel]
+  lala-next.cloud / www.lala-next.cloud → A 76.76.21.21 (Vercel, 회색 구름)
+  Vercel 프로젝트: lala-next (Flutter 웹)
+
+[백엔드 — AWS EC2]
+  api.lala-next.cloud → A 54.160.16.183 (Cloudflare 프록시, 오렌지 구름)
+    ↓ HTTPS (443) — Cloudflare Full strict + Let's Encrypt 인증서 종료
+  [Nginx (리버스 프록시 + SSL 종료, HTTP→HTTPS 리다이렉트)]
+    ↓ 포트 8000
+  [EC2 t3.micro: uvicorn FastAPI (workers=2)]
+    ↓ 포트 5432 (프라이빗 서브넷)
+  [RDS PostgreSQL 15.18 + PostGIS 3.4 + pgcrypto + vector]
 ```
 
-**외부 엔드포인트**: `https://api.lala-next.cloud` (Cloudflare 프록시 + EC2 Let's Encrypt)
-**직접 IP**: `http://54.160.16.183/` (Elastic IP, 디버깅용)
+**엔드포인트**:
+- 프론트엔드: `https://lala-next.cloud` (Vercel)
+- 백엔드: `https://api.lala-next.cloud` (Cloudflare 프록시 + EC2)
+- 직접 IP: `http://54.160.16.183/` (Elastic IP, 디버깅용)
+
+> **DNS 주의**: 도메인 네임서버는 Cloudflare. 가비아의 레코드는 무시됨 (Cloudflare만 유효). 프론트엔드(Vercel)는 회색 구름, 백엔드(EC2)는 오렌지 구름 — 용도별로 다름.
 
 ---
 
