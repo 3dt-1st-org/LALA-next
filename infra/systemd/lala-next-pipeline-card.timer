@@ -1,0 +1,10 @@
+[Unit]
+Description=Monthly LALA-next card spending ingest (1st 02:00 KST = 1st 17:00 UTC prev day)
+Requires=lala-next-pipeline-card.service
+
+[Timer]
+OnCalendar=*-*-01 17:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

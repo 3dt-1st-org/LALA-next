@@ -1,0 +1,10 @@
+[Unit]
+Description=Weekly LALA-next data pipeline (Sun 04:00 KST = Sat 19:00 UTC)
+Requires=lala-next-pipeline.service
+
+[Timer]
+OnCalendar=Sat 19:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

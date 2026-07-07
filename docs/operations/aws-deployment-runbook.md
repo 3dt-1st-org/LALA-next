@@ -233,6 +233,29 @@ curl -s https://api.lala-next.cloud/readyz | python3 -m json.tool | grep data_fr
 **비용**: RAG `text-embedding-3-small` 임베딩 1회 실행 약 $0.02-0.06 (약 130 청크).
 
 **주의**: `LALA_ENABLE_LIVE_AI=true`는 RAG 임베딩 배치 실행 시에만 임시로 설정. FastAPI 런타임은 `false` 유지 (그렇지 않으면 `/readyz` ai 모드가 Azure OpenAI 설정을 검사해 degraded 표시).
+
+### 자동화 (systemd timer)
+
+`infra/systemd/`의 unit 파일 6개로 주기적 자동 갱신. EC2에서 활성화:
+
+```bash
+sudo cp /opt/lala-next/infra/systemd/lala-next-pipeline*.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now lala-next-pipeline.timer lala-next-pipeline-daily.timer lala-next-pipeline-card.timer
+sudo systemctl list-timers | grep lala-next
+```
+
+| Timer | 주기 (KST) | 실행 내용 | 래퍼 스크립트 |
+|-------|-----------|----------|--------------|
+| `lala-next-pipeline-daily.timer` | 매일 03:00 | weather refresh (24h freshness) | `run_daily_weather.sh` |
+| `lala-next-pipeline.timer` | 일요일 04:00 | 전체 DAG (tour→score→rag→weather) | `run_weekly_pipeline.sh` |
+| `lala-next-pipeline-card.timer` | 매월 1일 02:00 | 최신 카드 zip 자동 탐색 후 적재 | `run_monthly_card.sh` |
+
+- `ALLOW_*_APPLY=1` 가드는 unit 파일의 `Environment=`에서 주입 (시크릿 아님). API 키는 `EnvironmentFile=/opt/lala-next/.env`로 로드.
+- RAG 임베딩만 `LALA_ENABLE_LIVE_AI=true` (래퍼 내 export/unset, FastAPI 런타임과 격리).
+- 로그: `sudo journalctl -u lala-next-pipeline -n 100` 및 `/opt/lala-next/runtime/logs/`.
+- 수동 트리거: `sudo systemctl start lala-next-pipeline-daily.service`.
+- 비용: 주간 RAG 1회 약 $0.02-0.06.
 - [x] **CloudWatch Logs 스트리밍**: 에이전트로 `lala-next/fastapi`, `lala-next/nginx`, `lala-next/backup` 로그 그룹 전송 중
 
 ---

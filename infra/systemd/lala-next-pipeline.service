@@ -1,0 +1,23 @@
+[Unit]
+Description=LALA-next weekly data pipeline (tour/culture/score/rag/weather)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ec2-user
+Group=ec2-user
+WorkingDirectory=/opt/lala-next
+EnvironmentFile=/opt/lala-next/.env
+Environment=ALLOW_TOUR_API_INGEST_APPLY=1
+Environment=ALLOW_CULTURE_INFO_INGEST_APPLY=1
+Environment=ALLOW_KOPIS_INGEST_APPLY=1
+Environment=ALLOW_FRANCHISE_REFERENCE_INGEST_APPLY=1
+Environment=ALLOW_FRANCHISE_IDENTITY_BATCH_APPLY=1
+Environment=ALLOW_PLACE_SCORE_BATCH_APPLY=1
+Environment=ALLOW_RAG_INDEX_APPLY=1
+Environment=ALLOW_WEATHER_OBSERVATION_REFRESH_APPLY=1
+ExecStart=/opt/lala-next/scripts/unix/run_weekly_pipeline.sh
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=2h
