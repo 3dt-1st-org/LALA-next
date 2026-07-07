@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily LALA-next weather refresh (03:00 KST = 18:00 UTC)
+Requires=lala-next-pipeline-daily.service
+
+[Timer]
+OnCalendar=*-*-* 18:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

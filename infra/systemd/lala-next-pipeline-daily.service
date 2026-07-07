@@ -1,0 +1,16 @@
+[Unit]
+Description=LALA-next daily weather refresh (24h freshness)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ec2-user
+Group=ec2-user
+WorkingDirectory=/opt/lala-next
+EnvironmentFile=/opt/lala-next/.env
+Environment=ALLOW_WEATHER_OBSERVATION_REFRESH_APPLY=1
+ExecStart=/opt/lala-next/scripts/unix/run_daily_weather.sh
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=30min

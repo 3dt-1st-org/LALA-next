@@ -1,0 +1,16 @@
+[Unit]
+Description=LALA-next monthly card spending ingest
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ec2-user
+Group=ec2-user
+WorkingDirectory=/opt/lala-next
+EnvironmentFile=/opt/lala-next/.env
+Environment=ALLOW_CARD_SPENDING_FILE_INGEST_APPLY=1
+ExecStart=/opt/lala-next/scripts/unix/run_monthly_card.sh
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=1h
