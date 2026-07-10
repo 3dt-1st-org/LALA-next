@@ -135,7 +135,7 @@ class LogtoManagementClient:
             return response
         if allow_not_found and response.status_code == 404:
             return None
-        if response.status_code >= 500:
+        if response.status_code in {408, 429} or response.status_code >= 500:
             raise LogtoManagementUnavailable()
         raise LogtoManagementRejected()
 
@@ -178,7 +178,10 @@ def _resource_ids(response) -> list[str]:
         payload = response.json()
     except Exception as exc:
         raise LogtoManagementRejected() from exc
-    items = payload.get("data") if isinstance(payload, dict) else payload
-    if not isinstance(items, list):
-        return []
-    return [item["id"] for item in items if isinstance(item, dict) and isinstance(item.get("id"), str)]
+    if not isinstance(payload, list):
+        raise LogtoManagementRejected()
+    return [
+        item["id"]
+        for item in payload
+        if isinstance(item, dict) and isinstance(item.get("id"), str)
+    ]

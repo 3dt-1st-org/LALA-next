@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import logging
+
 import httpx
 import pytest
 
 from apps.api.app.core.config import Settings
+from apps.api.app.core.observability import configure_logging
 from apps.api.app.services.logto_management import (
     LogtoManagementClient,
+    LogtoManagementRejected,
     LogtoManagementUnavailable,
 )
 
@@ -120,3 +124,63 @@ def test_management_user_404_is_an_idempotent_success() -> None:
         ("POST", "https://tenant.logto.app/oidc/token"),
         ("GET", "https://tenant.logto.app/api/users/user-subject/grants"),
     ]
+
+
+@pytest.mark.parametrize("status_code", (408, 429))
+def test_management_transient_http_failures_are_retryable(status_code: int) -> None:
+    client = FakeClient(
+        [
+            FakeResponse(200, {"access_token": "sensitive-token"}),
+            FakeResponse(status_code),
+        ]
+    )
+
+    with pytest.raises(LogtoManagementUnavailable):
+        LogtoManagementClient(_settings(), client=client).delete_user("user-subject")
+
+
+@pytest.mark.parametrize(
+    "responses",
+    (
+        [
+            FakeResponse(200, {"access_token": "sensitive-token"}),
+            FakeResponse(200, {"unexpected": []}),
+        ],
+        [
+            FakeResponse(200, {"access_token": "sensitive-token"}),
+            FakeResponse(200, []),
+            FakeResponse(200, {"unexpected": []}),
+        ],
+    ),
+)
+def test_management_unexpected_list_payload_is_a_non_retryable_service_error(responses) -> None:
+    expected_call_count = len(responses)
+    client = FakeClient(responses)
+
+    with pytest.raises(LogtoManagementRejected) as exc_info:
+        LogtoManagementClient(_settings(), client=client).delete_user("user-subject")
+
+    assert exc_info.value.retryable is False
+    assert len(client.calls) == expected_call_count
+
+
+def test_management_http_libraries_do_not_log_subject_urls(caplog) -> None:
+    subject = "unique-subject-marker"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/oidc/token":
+            return httpx.Response(200, json={"access_token": "sensitive-token"})
+        if request.url.path.endswith("/grants"):
+            return httpx.Response(200, json=[])
+        if request.url.path.endswith("/sessions"):
+            return httpx.Response(200, json=[])
+        return httpx.Response(204)
+
+    caplog.set_level(logging.INFO)
+    configure_logging("INFO")
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        LogtoManagementClient(_settings(), client=client).delete_user(subject)
+
+    assert logging.getLogger("httpx").getEffectiveLevel() >= logging.WARNING
+    assert logging.getLogger("httpcore").getEffectiveLevel() >= logging.WARNING
+    assert subject not in " ".join(record.getMessage() for record in caplog.records)

@@ -11,6 +11,8 @@ LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s"
 
 def configure_logging(level_name: str) -> logging.Logger:
     level = getattr(logging, (level_name or "INFO").upper(), logging.INFO)
+    for library_logger_name in ("httpx", "httpcore"):
+        logging.getLogger(library_logger_name).setLevel(logging.WARNING)
     logger = logging.getLogger(LOGGER_NAME)
     logger.setLevel(level)
     logger.propagate = True

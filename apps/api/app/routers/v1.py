@@ -59,10 +59,9 @@ def delete_me(
     issuer = identity.issuer or ""
     subject = identity.subject or ""
     user = identity_service.mark_user_deleting(issuer, subject)
-    if user is None:
-        return Response(status_code=204)
     management_client.delete_user(subject)
-    identity_service.delete_local_user(issuer, subject)
+    if user is not None:
+        identity_service.delete_local_user(issuer, subject)
     return Response(status_code=204)
 
 

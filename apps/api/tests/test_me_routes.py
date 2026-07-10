@@ -6,7 +6,10 @@ from uuid import UUID
 from apps.api.app.core.auth import RequestIdentity, require_oauth_identity
 from apps.api.app.services.identity_repository import LocalUser
 from apps.api.app.services.identity_service import get_identity_service
-from apps.api.app.services.logto_management import get_logto_management_client
+from apps.api.app.services.logto_management import (
+    LogtoManagementUnavailable,
+    get_logto_management_client,
+)
 
 
 USER = LocalUser(
@@ -21,8 +24,10 @@ USER = LocalUser(
 
 
 class FakeIdentityService:
-    def __init__(self, user: LocalUser | None = USER) -> None:
+    def __init__(self, user: LocalUser | None = USER, *, events: list[str] | None = None) -> None:
         self.user = user
+        self.events = events
+        self.local_state = "active" if user is not None else "absent"
         self.provisioned: list[tuple[str, str]] = []
         self.marked: list[tuple[str, str]] = []
         self.deleted: list[tuple[str, str]] = []
@@ -32,19 +37,30 @@ class FakeIdentityService:
         return USER
 
     def mark_user_deleting(self, issuer: str, subject: str) -> LocalUser | None:
+        if self.events is not None:
+            self.events.append("mark")
+        if self.user is not None:
+            self.local_state = "deleting"
         self.marked.append((issuer, subject))
         return self.user
 
     def delete_local_user(self, issuer: str, subject: str) -> bool:
+        if self.events is not None:
+            self.events.append("local-hard-delete")
+        if self.user is not None:
+            self.local_state = "deleted"
         self.deleted.append((issuer, subject))
         return self.user is not None
 
 
 class FakeManagementClient:
-    def __init__(self) -> None:
+    def __init__(self, *, events: list[str] | None = None) -> None:
+        self.events = events
         self.deleted_subjects: list[str] = []
 
     def delete_user(self, subject: str) -> None:
+        if self.events is not None:
+            self.events.append("external-delete")
         self.deleted_subjects.append(subject)
 
 
@@ -129,5 +145,88 @@ def test_delete_me_is_idempotent_when_local_user_is_missing(client, api_key) -> 
     assert response.status_code == 204
     assert response.content == b""
     assert service.marked == [("https://issuer.example", "user-subject")]
-    assert management.deleted_subjects == []
+    assert management.deleted_subjects == ["user-subject"]
     assert service.deleted == []
+
+
+def test_delete_me_marks_then_deletes_external_user_before_local_hard_delete(client, api_key) -> None:
+    events: list[str] = []
+    service = FakeIdentityService(events=events)
+    management = FakeManagementClient(events=events)
+    client.app.dependency_overrides[require_oauth_identity] = _oauth_identity
+    client.app.dependency_overrides[get_identity_service] = lambda: service
+    client.app.dependency_overrides[get_logto_management_client] = lambda: management
+
+    response = client.request(
+        "DELETE",
+        "/api/v1/me",
+        headers={"X-API-Key": api_key},
+        json={"confirmation": "delete-my-account"},
+    )
+
+    assert response.status_code == 204
+    assert events == ["mark", "external-delete", "local-hard-delete"]
+
+
+def test_delete_me_external_failure_keeps_deleting_state_and_skips_local_hard_delete(client, api_key) -> None:
+    events: list[str] = []
+    service = FakeIdentityService(events=events)
+
+    class FailingManagementClient(FakeManagementClient):
+        def delete_user(self, subject: str) -> None:
+            super().delete_user(subject)
+            raise LogtoManagementUnavailable()
+
+    management = FailingManagementClient(events=events)
+    client.app.dependency_overrides[require_oauth_identity] = _oauth_identity
+    client.app.dependency_overrides[get_identity_service] = lambda: service
+    client.app.dependency_overrides[get_logto_management_client] = lambda: management
+
+    response = client.request(
+        "DELETE",
+        "/api/v1/me",
+        headers={"X-API-Key": api_key},
+        json={"confirmation": "delete-my-account"},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["error"]["retryable"] is True
+    assert events == ["mark", "external-delete"]
+    assert service.local_state == "deleting"
+    assert service.deleted == []
+
+
+def test_delete_me_retry_completes_after_external_failure(client, api_key) -> None:
+    events: list[str] = []
+    service = FakeIdentityService(events=events)
+
+    class FlakyManagementClient(FakeManagementClient):
+        def __init__(self, **kwargs) -> None:
+            super().__init__(**kwargs)
+            self.failures_remaining = 1
+
+        def delete_user(self, subject: str) -> None:
+            super().delete_user(subject)
+            if self.failures_remaining:
+                self.failures_remaining -= 1
+                raise LogtoManagementUnavailable()
+
+    management = FlakyManagementClient(events=events)
+    client.app.dependency_overrides[require_oauth_identity] = _oauth_identity
+    client.app.dependency_overrides[get_identity_service] = lambda: service
+    client.app.dependency_overrides[get_logto_management_client] = lambda: management
+    payload = {"confirmation": "delete-my-account"}
+
+    first_response = client.request("DELETE", "/api/v1/me", headers={"X-API-Key": api_key}, json=payload)
+    second_response = client.request("DELETE", "/api/v1/me", headers={"X-API-Key": api_key}, json=payload)
+
+    assert first_response.status_code == 503
+    assert second_response.status_code == 204
+    assert events == [
+        "mark",
+        "external-delete",
+        "mark",
+        "external-delete",
+        "local-hard-delete",
+    ]
+    assert service.local_state == "deleted"
