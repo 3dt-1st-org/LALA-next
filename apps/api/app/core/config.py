@@ -191,10 +191,17 @@ def get_settings() -> Settings:
     return Settings.from_env()
 
 
-def _env_or_secret(env_name: str, secret_name: str, key_vault_url: str) -> str:
+def _env_or_secret(env_name: str, secret_name: str, key_vault_url: str = "") -> str:
     value = (os.getenv(env_name) or "").strip()
     if value:
         return value
+    # AWS Secrets Manager (AWS 운영 환경 우선)
+    from apps.api.app.core.aws_secrets import get_aws_sm_secret
+
+    aws_value = get_aws_sm_secret(secret_name)
+    if aws_value:
+        return aws_value
+    # Azure Key Vault (레거시 폴백)
     return get_secret_if_configured(key_vault_url, secret_name)
 
 
