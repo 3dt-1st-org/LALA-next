@@ -64,16 +64,21 @@
 - 감사 로그 (CloudTrail)
 - Private 서브넷도 가능 (VPC 엔드포인트)
 
-### 5. 트러블슈팅: SSM 배포 3연속 실패 → 3개 원인 직렬 해결
+### 5. 트러블슈팅: SSM 배포 4연속 실패 → 4개 원인 직렬 해결
 
 OIDC 역할 가정은 1회차부터 성공했지만, SSM 명령 실행 단계에서 연쇄 에러:
 
 1. **`ssm:GetCommandInvocation` AccessDenied** — 인라인 정책의 Resource를 `arn:...:command/*`로 좁혔으나 실제 API는 account-level 리소스 요구 → Resource `*`로 완화 (GetCommandInvocation은 민감 데이터 없는 조회).
 
-2. **`fatal: detected dubious ownership in repository at '/opt/lala-next'`** — SSM AWS-RunShellScript가 기본 **root**로 실행되어, ec2-user 소유의 `/opt/lala-next`에서 git 2.35.2+ 보안 검증(다른 소유자 디렉토리 거부)이 발동.
-   - 해결: SSM 파라미터 `runAs=ec2-user` 추가 (root 회피 + 소유자 일치) + `git config --global --add safe.directory` 이중 안전장치.
+2. **`fatal: detected dubious ownership in repository at '/opt/lala-next'`** — SSM AWS-RunShellScript가 기본 **root**로 실행되어, ec2-user 소유의 `/opt/lala-next`에서 git 2.35.2+ 보안 검증(다른 소유자 디렉토리 거부)이 발동. 시도: `runAs=ec2-user` → 다음 에러로.
 
-**교훈**: GitHub Actions OIDC → SSM 파이프라인은 권한(3단계: 역할 가정 / SendCommand / GetCommandInvocation)과 실행 컨텍스트(root vs 소유자)를 각각 검증해야.
+3. **`InvalidParameters: Parameters provided in document are invalid`** — `runAs` 파라미터가 `AWS-RunShellScript` document에서 허용되지 않음. → `runAs` 제거, root 실행 + `safe.directory`로 회귀. 그러나 `sudo systemctl`은 root에 불필요해 `sudo`도 제거.
+
+4. **`fatal: $HOME not set`** — SSM Run Command는 `$HOME` 환경변수를 설정하지 않아 git이 config 파일 위치를 못 찾음. → commands 첫 줄에 `export HOME=/root` 추가. **이것이 최종 해결책**.
+
+최종 동작 SSM 명령(commands): `set -euo pipefail` → `export HOME=/root` → `git config --global --add safe.directory` → `git fetch/reset` → `pip install` → `systemctl restart`. 배포 후 `/readyz`로 `db-backed` 유지 확인.
+
+**교훈**: GitHub Actions OIDC → SSM 파이프라인은 권한(역할 가정 / SendCommand / GetCommandInvocation)과 **실행 컨텍스트(root 소유자 충돌 + $HOME 부재)** 를 각각 검증해야. SSM Run Command는 일반 셸과 환경이 다르다.
 
 ## 포트폴리오 관점 (학습/성과)
 
