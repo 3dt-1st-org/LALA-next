@@ -64,6 +64,17 @@
 - 감사 로그 (CloudTrail)
 - Private 서브넷도 가능 (VPC 엔드포인트)
 
+### 5. 트러블슈팅: SSM 배포 3연속 실패 → 3개 원인 직렬 해결
+
+OIDC 역할 가정은 1회차부터 성공했지만, SSM 명령 실행 단계에서 연쇄 에러:
+
+1. **`ssm:GetCommandInvocation` AccessDenied** — 인라인 정책의 Resource를 `arn:...:command/*`로 좁혔으나 실제 API는 account-level 리소스 요구 → Resource `*`로 완화 (GetCommandInvocation은 민감 데이터 없는 조회).
+
+2. **`fatal: detected dubious ownership in repository at '/opt/lala-next'`** — SSM AWS-RunShellScript가 기본 **root**로 실행되어, ec2-user 소유의 `/opt/lala-next`에서 git 2.35.2+ 보안 검증(다른 소유자 디렉토리 거부)이 발동.
+   - 해결: SSM 파라미터 `runAs=ec2-user` 추가 (root 회피 + 소유자 일치) + `git config --global --add safe.directory` 이중 안전장치.
+
+**교훈**: GitHub Actions OIDC → SSM 파이프라인은 권한(3단계: 역할 가정 / SendCommand / GetCommandInvocation)과 실행 컨텍스트(root vs 소유자)를 각각 검증해야.
+
 ## 포트폴리오 관점 (학습/성과)
 
 - **클라우드 네트워크 보안 vs 자동화 충돌**: 보안그룹 IP 제한(모범 사례)이 GitHub Actions 배포를 차단. SSM으로 "포트 없는 자동화" 달성 — 최신 AWS 권장 패턴.
