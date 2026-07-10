@@ -1,0 +1,46 @@
+name: Deploy to EC2
+
+# CI(ci.yml)가 main 브랜치에서 성공적으로 완료되면 EC2에 자동 배포.
+# CI 실패 시 배포 안 함.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            cd /opt/lala-next
+            echo "=== git pull ==="
+            git fetch origin main
+            git reset --hard origin/main
+            echo "=== pip install ==="
+            source .venv/bin/activate
+            pip install -e . -q
+            echo "=== restart FastAPI ==="
+            sudo systemctl restart lala-next
+            # health check (최대 30초 대기)
+            for i in $(seq 1 15); do
+              if curl -sf http://localhost:8000/healthz > /dev/null 2>&1; then
+                echo "DEPLOY OK - healthz responding (after ${i}x2s)"
+                curl -sf http://localhost:8000/readyz | python3 -c "import sys,json;d=json.loads(sys.stdin.read());print('overall:', d['data']['mode']['overall'])" || true
+                exit 0
+              fi
+              sleep 2
+            done
+            echo "DEPLOY FAILED - healthz not responding"
+            sudo journalctl -u lala-next -n 20 --no-pager
+            exit 1
