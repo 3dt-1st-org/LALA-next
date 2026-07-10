@@ -194,6 +194,7 @@ def _add_account_error_responses(
     errors = [("503", unavailable_description)]
     if include_conflict:
         errors.append(("409", "Account deletion is already in progress."))
+        errors.append(("410", "The Logto identity was previously deleted."))
     for status_code, description in errors:
         responses.setdefault(
             status_code,
@@ -433,6 +434,7 @@ def _readiness_checks_schema() -> dict[str, Any]:
             "oauth_required_scopes",
             "logto_management",
             "db",
+            "identity_schema",
             "postgis",
             "key_vault",
             "azure_openai_endpoint",
@@ -488,6 +490,7 @@ def _readiness_checks_schema() -> dict[str, Any]:
                 "enum": ["configured", "partial", "skipped"],
             },
             "db": configured_skipped_degraded,
+            "identity_schema": configured_skipped_degraded,
             "postgis": configured_skipped_degraded,
             "key_vault": configured_or_skipped,
             "azure_openai_endpoint": configured_or_skipped,

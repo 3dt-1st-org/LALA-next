@@ -6,8 +6,13 @@ import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 
-from apps.api.app.core.auth import require_client_auth
+from apps.api.app.core.auth import (
+    RequestIdentity,
+    require_client_auth,
+    require_logto_identity,
+)
 from apps.api.app.core.config import Settings
+from apps.api.app.core.errors import ApiError
 from apps.api.app.core.jwt_auth import is_oauth_jwt_validation_configured
 
 LOGTO_ENDPOINT = "https://lala-test.logto.app"
@@ -153,6 +158,51 @@ def test_oauth_identity_returns_validated_issuer_and_subject(monkeypatch):
     assert identity.mode == "oauth"
     assert identity.issuer == LOGTO_ISSUER
     assert identity.subject == "logto-user-subject"
+
+
+def test_logto_identity_requires_current_canonical_endpoint_issuer() -> None:
+    settings = Settings(
+        logto_endpoint=f"{LOGTO_ENDPOINT}/",
+        logto_api_audience=LOGTO_API_AUDIENCE,
+    )
+
+    identity = require_logto_identity(
+        identity=RequestIdentity(
+            mode="oauth",
+            issuer=LOGTO_ISSUER,
+            subject="logto-user-subject",
+        ),
+        settings=settings,
+    )
+
+    assert identity.issuer == LOGTO_ISSUER
+
+
+@pytest.mark.parametrize(
+    "settings",
+    (
+        Settings(
+            logto_endpoint=LOGTO_ENDPOINT,
+            logto_api_audience=LOGTO_API_AUDIENCE,
+        ),
+        Settings(logto_endpoint=LOGTO_ENDPOINT),
+        Settings(logto_api_audience=LOGTO_API_AUDIENCE),
+    ),
+)
+def test_logto_identity_rejects_legacy_or_incomplete_configuration(settings) -> None:
+    with pytest.raises(ApiError) as exc_info:
+        require_logto_identity(
+            identity=RequestIdentity(
+                mode="oauth",
+                issuer="https://legacy.example/oidc",
+                subject="legacy-subject",
+            ),
+            settings=settings,
+        )
+
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.code == "USER_AUTH_REQUIRED"
+    assert "legacy" not in str(exc_info.value)
 
 
 def test_oauth_validation_does_not_require_scopes_when_none_are_configured(client, monkeypatch):

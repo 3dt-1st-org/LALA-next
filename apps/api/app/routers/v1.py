@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from apps.api.app.core.auth import (
     RequestIdentity,
     require_client_auth,
-    require_oauth_identity,
+    require_logto_identity,
 )
 from apps.api.app.core.config import get_settings
 from apps.api.app.core.rate_limit import enforce_public_contest_paid_route_limit
@@ -29,10 +29,16 @@ router = APIRouter(
 )
 
 
-@router.get("/me")
+@router.get(
+    "/me",
+    description=(
+        "Returns the local account for an OAuth identity issued by the current configured "
+        "LOGTO_ENDPOINT. Legacy OAUTH issuers are not accepted."
+    ),
+)
 def me(
     request: Request,
-    identity: Annotated[RequestIdentity, Depends(require_oauth_identity)],
+    identity: Annotated[RequestIdentity, Depends(require_logto_identity)],
     identity_service: Annotated[IdentityService, Depends(get_identity_service)],
 ) -> dict:
     user = identity_service.provision_user(identity.issuer or "", identity.subject or "")
@@ -46,11 +52,18 @@ def me(
     )
 
 
-@router.delete("/me", status_code=204)
+@router.delete(
+    "/me",
+    status_code=204,
+    description=(
+        "Deletes the account for an OAuth identity issued by the current configured "
+        "LOGTO_ENDPOINT. Legacy OAUTH issuers are not accepted."
+    ),
+)
 def delete_me(
     body: AccountDeletionRequest,
     request: Request,
-    identity: Annotated[RequestIdentity, Depends(require_oauth_identity)],
+    identity: Annotated[RequestIdentity, Depends(require_logto_identity)],
     identity_service: Annotated[IdentityService, Depends(get_identity_service)],
     management_client: Annotated[
         LogtoManagementClient,
@@ -60,10 +73,9 @@ def delete_me(
     issuer = identity.issuer or ""
     subject = identity.subject or ""
     try:
-        user = identity_service.mark_user_deleting(issuer, subject)
+        identity_service.mark_user_deleting(issuer, subject)
         management_client.delete_user(subject)
-        if user is not None:
-            identity_service.delete_local_user(issuer, subject)
+        identity_service.finalize_user_deletion(issuer, subject)
     except Exception:
         request.app.state.metrics.record_auth_event("account_deletion_failure")
         raise

@@ -3,6 +3,7 @@ from __future__ import annotations
 from apps.api.app.core.config import get_settings
 from apps.api.app.core.errors import ServiceError
 from apps.api.app.services.identity_repository import (
+    DeletedIdentityError,
     IdentityRepository,
     IdentityRepositoryUnavailable,
     LocalUser,
@@ -17,6 +18,13 @@ class IdentityService:
     def provision_user(self, issuer: str, subject: str) -> LocalUser:
         try:
             return self._repository.provision_user(issuer, subject)
+        except DeletedIdentityError as exc:
+            raise ServiceError(
+                status_code=410,
+                code="ACCOUNT_DELETED",
+                message="This account has been deleted.",
+                retryable=False,
+            ) from exc
         except PendingDeletionError as exc:
             raise ServiceError(
                 status_code=409,
@@ -33,9 +41,9 @@ class IdentityService:
         except IdentityRepositoryUnavailable as exc:
             raise _database_unavailable() from exc
 
-    def delete_local_user(self, issuer: str, subject: str) -> bool:
+    def finalize_user_deletion(self, issuer: str, subject: str) -> bool:
         try:
-            return self._repository.delete_local_user(issuer, subject)
+            return self._repository.finalize_user_deletion(issuer, subject)
         except IdentityRepositoryUnavailable as exc:
             raise _database_unavailable() from exc
 

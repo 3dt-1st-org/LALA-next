@@ -19,7 +19,12 @@ class FakeCursor:
         return None
 
     def execute(self, sql: str, params: tuple[str, ...]) -> None:
-        self.last_name = params[0]
+        if "information_schema.columns" in sql:
+            self.last_name = ".".join(params[:3])
+        elif "FROM pg_constraint" in sql:
+            self.last_name = f"{params[0]}.{params[1]}({','.join(params[2])})"
+        else:
+            self.last_name = params[0]
 
     def fetchone(self) -> tuple[bool]:
         return (self.present.get(self.last_name, False),)
@@ -51,6 +56,11 @@ def test_inspect_canonical_schema_reports_ok_when_all_required_objects_exist(mon
     assert "economy.franchise_brands" in db_schema.REQUIRED_RELATIONS
     assert "economy.franchise_locations" in db_schema.REQUIRED_RELATIONS
     assert "analytics.place_business_identity" in db_schema.REQUIRED_RELATIONS
+    assert "identity" in db_schema.REQUIRED_SCHEMAS
+    assert "identity.users" in db_schema.REQUIRED_RELATIONS
+    assert "identity.deleted_users" in db_schema.REQUIRED_RELATIONS
+    assert "identity.deleted_users.identity_digest" in db_schema.REQUIRED_COLUMNS
+    assert "identity.deleted_users(identity_digest)" in db_schema.REQUIRED_UNIQUE_CONSTRAINTS
 
     present = {
         name: True
@@ -58,6 +68,8 @@ def test_inspect_canonical_schema_reports_ok_when_all_required_objects_exist(mon
             *db_schema.REQUIRED_EXTENSIONS,
             *db_schema.REQUIRED_SCHEMAS,
             *db_schema.REQUIRED_RELATIONS,
+            *db_schema.REQUIRED_COLUMNS,
+            *db_schema.REQUIRED_UNIQUE_CONSTRAINTS,
         )
     }
     calls: list[dict] = []
@@ -66,7 +78,13 @@ def test_inspect_canonical_schema_reports_ok_when_all_required_objects_exist(mon
     report = db_schema.inspect_canonical_schema(dsn="postgresql://redacted", connect_timeout=3)
 
     assert report.ok is True
-    assert report.missing() == {"extensions": [], "schemas": [], "relations": []}
+    assert report.missing() == {
+        "extensions": [],
+        "schemas": [],
+        "relations": [],
+        "columns": [],
+        "unique_constraints": [],
+    }
     assert calls == [{"dsn": "postgresql://redacted", "connect_timeout": 3}]
 
 
@@ -77,11 +95,15 @@ def test_inspect_canonical_schema_lists_missing_objects(monkeypatch):
             *db_schema.REQUIRED_EXTENSIONS,
             *db_schema.REQUIRED_SCHEMAS,
             *db_schema.REQUIRED_RELATIONS,
+            *db_schema.REQUIRED_COLUMNS,
+            *db_schema.REQUIRED_UNIQUE_CONSTRAINTS,
         )
     }
     present["vector"] = False
     present["ops"] = False
     present["travel.latest_weather"] = False
+    present["identity.deleted_users.deleted_at"] = False
+    present["identity.users(issuer,subject)"] = False
     install_fake_psycopg2(monkeypatch, present, [])
 
     report = db_schema.inspect_canonical_schema(dsn="postgresql://redacted")
@@ -91,6 +113,8 @@ def test_inspect_canonical_schema_lists_missing_objects(monkeypatch):
         "extensions": ["vector"],
         "schemas": ["ops"],
         "relations": ["travel.latest_weather"],
+        "columns": ["identity.deleted_users.deleted_at"],
+        "unique_constraints": ["identity.users(issuer,subject)"],
     }
     assert report.to_dict()["ok"] is False
 
@@ -112,6 +136,8 @@ def test_verify_db_schema_cli_prints_missing_without_dsn(monkeypatch, capsys):
         extensions={"postgis": True, "vector": False, "pgcrypto": True},
         schemas={"travel": True, "community": True, "ops": True},
         relations={"travel.public_places": True},
+        columns={"identity.users.id": True},
+        unique_constraints={"identity.users(issuer,subject)": True},
     )
     monkeypatch.setenv("DB_DSN", "postgresql://redacted")
     monkeypatch.setattr(verify_db_schema, "inspect_canonical_schema", lambda **kwargs: report)

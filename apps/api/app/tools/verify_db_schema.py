@@ -43,7 +43,13 @@ def _write(args: argparse.Namespace, payload: dict) -> None:
         print(f"error={payload['error']}")
         return
     missing = payload.get("missing") or {}
-    for group in ("extensions", "schemas", "relations"):
+    for group in (
+        "extensions",
+        "schemas",
+        "relations",
+        "columns",
+        "unique_constraints",
+    ):
         values = missing.get(group) or []
         if values:
             print(f"missing_{group}={','.join(values)}")

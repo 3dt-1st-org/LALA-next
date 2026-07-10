@@ -198,6 +198,11 @@ def test_openapi_documents_readyz_runtime_mode(client):
     ]
     assert readiness_checks["oauth_jwks_url"]["enum"] == ["configured", "skipped"]
     assert readiness_checks["db"]["enum"] == ["configured", "skipped", "degraded"]
+    assert readiness_checks["identity_schema"]["enum"] == [
+        "configured",
+        "skipped",
+        "degraded",
+    ]
     assert readiness_checks["postgis"]["enum"] == ["configured", "skipped", "degraded"]
 
 
@@ -444,12 +449,17 @@ def test_openapi_documents_account_operations(client):
         "schema"
     ] == {"$ref": "#/components/schemas/AccountDeletionRequest"}
     assert account_path["delete"]["responses"]["204"].get("content") in (None, {})
-    assert set(account_path["get"]["responses"]) >= {"200", "401", "409", "503"}
+    assert set(account_path["get"]["responses"]) >= {"200", "401", "409", "410", "503"}
     assert set(account_path["delete"]["responses"]) >= {"204", "401", "422", "503"}
     assert "409" not in account_path["delete"]["responses"]
     assert account_path["get"]["responses"]["503"]["description"] == (
         "Identity storage is unavailable."
     )
+    assert account_path["get"]["responses"]["410"]["description"] == (
+        "The Logto identity was previously deleted."
+    )
     assert account_path["delete"]["responses"]["503"]["description"] == (
         "Identity storage or account deletion service is unavailable."
     )
+    assert "current configured LOGTO_ENDPOINT" in account_path["get"]["description"]
+    assert "current configured LOGTO_ENDPOINT" in account_path["delete"]["description"]

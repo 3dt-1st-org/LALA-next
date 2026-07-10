@@ -171,6 +171,10 @@ def test_readyz_treats_guest_access_as_configured_client_access(client, monkeypa
         lambda dsn: "configured",
     )
     monkeypatch.setattr(
+        "apps.api.app.core.readiness.db_repository.check_identity_schema_status",
+        lambda dsn: "configured",
+    )
+    monkeypatch.setattr(
         "apps.api.app.core.readiness.db_repository.check_data_freshness_status",
         lambda dsn, weather_max_hours=24: "configured",
     )
@@ -335,9 +339,42 @@ def test_readyz_reports_db_degraded_when_probe_fails(client, monkeypatch):
     body = response.json()
     assert body["data"]["status"] == "degraded"
     assert body["data"]["checks"]["db"] == "degraded"
+    assert body["data"]["checks"]["identity_schema"] == "degraded"
     assert body["data"]["checks"]["postgis"] == "degraded"
     assert body["data"]["mode"]["data"] == "degraded"
     assert body["data"]["mode"]["overall"] == "degraded"
+
+
+def test_readyz_reports_identity_schema_degraded_without_changing_general_db_status(
+    client,
+    monkeypatch,
+):
+    monkeypatch.setenv("API_BEARER_TOKEN", "test-bearer-token")
+    monkeypatch.setenv("DB_DSN", "postgresql://db.example/lala")
+    monkeypatch.setattr(
+        "apps.api.app.core.readiness.db_repository.check_db_status",
+        lambda dsn: "configured",
+    )
+    monkeypatch.setattr(
+        "apps.api.app.core.readiness.db_repository.check_identity_schema_status",
+        lambda dsn: "degraded",
+    )
+    monkeypatch.setattr(
+        "apps.api.app.core.readiness.db_repository.check_postgis_status",
+        lambda dsn: "configured",
+    )
+    monkeypatch.setattr(
+        "apps.api.app.core.readiness.db_repository.check_data_freshness_status",
+        lambda dsn, weather_max_hours=24: "configured",
+    )
+
+    response = client.get("/readyz")
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["status"] == "degraded"
+    assert data["checks"]["db"] == "configured"
+    assert data["checks"]["identity_schema"] == "degraded"
 
 
 def test_readyz_reports_degraded_when_postgis_probe_fails(client, monkeypatch):
@@ -382,6 +419,10 @@ def test_readyz_reports_db_backed_and_live_azure_runtime_modes(client, monkeypat
         lambda dsn: "configured",
     )
     monkeypatch.setattr(
+        "apps.api.app.core.readiness.db_repository.check_identity_schema_status",
+        lambda dsn: "configured",
+    )
+    monkeypatch.setattr(
         "apps.api.app.core.readiness.db_repository.check_data_freshness_status",
         lambda dsn, weather_max_hours=24: "configured",
     )
@@ -392,6 +433,7 @@ def test_readyz_reports_db_backed_and_live_azure_runtime_modes(client, monkeypat
     body = response.json()
     assert body["data"]["status"] == "ok"
     assert body["data"]["checks"]["db"] == "configured"
+    assert body["data"]["checks"]["identity_schema"] == "configured"
     assert body["data"]["checks"]["postgis"] == "configured"
     assert body["data"]["checks"]["data_freshness"] == "configured"
     assert body["data"]["checks"]["client_identity"] == "static"
@@ -415,6 +457,10 @@ def test_readyz_reports_ok_for_db_backed_runtime_with_disabled_live_options(clie
     )
     monkeypatch.setattr(
         "apps.api.app.core.readiness.db_repository.check_postgis_status",
+        lambda dsn: "configured",
+    )
+    monkeypatch.setattr(
+        "apps.api.app.core.readiness.db_repository.check_identity_schema_status",
         lambda dsn: "configured",
     )
     monkeypatch.setattr(

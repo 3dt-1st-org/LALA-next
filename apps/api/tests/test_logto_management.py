@@ -110,10 +110,56 @@ def test_management_network_failure_is_retryable_and_redacts_token() -> None:
     assert "sensitive-token" not in str(exc_info.value)
 
 
-def test_management_user_404_is_an_idempotent_success() -> None:
+@pytest.mark.parametrize(
+    ("responses", "expected_calls"),
+    (
+        (
+            [
+                FakeResponse(200, {"access_token": "sensitive-token"}),
+                FakeResponse(404),
+                FakeResponse(200, []),
+                FakeResponse(204),
+            ],
+            [
+                ("POST", "https://tenant.logto.app/oidc/token"),
+                ("GET", "https://tenant.logto.app/api/users/user-subject/grants"),
+                ("GET", "https://tenant.logto.app/api/users/user-subject/sessions"),
+                ("DELETE", "https://tenant.logto.app/api/users/user-subject"),
+            ],
+        ),
+        (
+            [
+                FakeResponse(200, {"access_token": "sensitive-token"}),
+                FakeResponse(200, []),
+                FakeResponse(404),
+                FakeResponse(204),
+            ],
+            [
+                ("POST", "https://tenant.logto.app/oidc/token"),
+                ("GET", "https://tenant.logto.app/api/users/user-subject/grants"),
+                ("GET", "https://tenant.logto.app/api/users/user-subject/sessions"),
+                ("DELETE", "https://tenant.logto.app/api/users/user-subject"),
+            ],
+        ),
+    ),
+)
+def test_management_optional_collection_404_still_deletes_user(
+    responses,
+    expected_calls,
+) -> None:
+    client = FakeClient(responses)
+
+    LogtoManagementClient(_settings(), client=client).delete_user("user-subject")
+
+    assert [(method, url) for method, url, _ in client.calls] == expected_calls
+
+
+def test_management_user_delete_404_is_an_idempotent_success() -> None:
     client = FakeClient(
         [
             FakeResponse(200, {"access_token": "sensitive-token"}),
+            FakeResponse(200, []),
+            FakeResponse(200, []),
             FakeResponse(404),
         ]
     )
@@ -123,6 +169,8 @@ def test_management_user_404_is_an_idempotent_success() -> None:
     assert [(method, url) for method, url, _ in client.calls] == [
         ("POST", "https://tenant.logto.app/oidc/token"),
         ("GET", "https://tenant.logto.app/api/users/user-subject/grants"),
+        ("GET", "https://tenant.logto.app/api/users/user-subject/sessions"),
+        ("DELETE", "https://tenant.logto.app/api/users/user-subject"),
     ]
 
 

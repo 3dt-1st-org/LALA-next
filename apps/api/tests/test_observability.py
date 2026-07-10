@@ -7,7 +7,7 @@ from uuid import UUID
 import pytest
 from fastapi.testclient import TestClient
 
-from apps.api.app.core.auth import RequestIdentity, require_oauth_identity
+from apps.api.app.core.auth import RequestIdentity, require_logto_identity
 from apps.api.app.core.errors import ServiceError
 from apps.api.app.core.jwt_auth import JwtValidationRejected, JwtValidationUnavailable
 from apps.api.app.main import create_app
@@ -296,7 +296,7 @@ def test_metrics_counts_account_deletion_service_failures_without_identity_label
         def delete_user(self, subject):
             raise LogtoManagementUnavailable()
 
-    client.app.dependency_overrides[require_oauth_identity] = lambda: RequestIdentity(
+    client.app.dependency_overrides[require_logto_identity] = lambda: RequestIdentity(
         mode="oauth",
         issuer="https://issuer.test/oidc",
         subject=raw_subject,
@@ -349,7 +349,7 @@ def test_metrics_counts_identity_deletion_stage_failure_once(client, monkeypatch
                 retryable=True,
             )
 
-    client.app.dependency_overrides[require_oauth_identity] = lambda: RequestIdentity(
+    client.app.dependency_overrides[require_logto_identity] = lambda: RequestIdentity(
         mode="oauth",
         issuer="https://issuer.test/oidc",
         subject="identity-failure-subject",
@@ -377,7 +377,7 @@ def test_metrics_counts_unexpected_deletion_stage_failure_once(client, monkeypat
         def delete_user(self, subject):
             raise RuntimeError("unexpected deletion failure")
 
-    client.app.dependency_overrides[require_oauth_identity] = lambda: RequestIdentity(
+    client.app.dependency_overrides[require_logto_identity] = lambda: RequestIdentity(
         mode="oauth",
         issuer="https://issuer.test/oidc",
         subject="unexpected-failure-subject",

@@ -142,6 +142,11 @@ def build_readiness(settings: Settings | None = None) -> dict:
         client_auth_status = "configured"
 
     db_status = db_repository.check_db_status(settings.db_dsn)
+    identity_schema_status = (
+        db_repository.check_identity_schema_status(settings.db_dsn)
+        if db_status == "configured"
+        else db_status
+    )
     postgis_status = (
         db_repository.check_postgis_status(settings.db_dsn)
         if db_status == "configured"
@@ -177,6 +182,7 @@ def build_readiness(settings: Settings | None = None) -> dict:
         "oauth_required_scopes": "configured" if settings.oauth_required_scopes else "skipped",
         "logto_management": logto_management_configuration_status(settings),
         "db": db_status,
+        "identity_schema": identity_schema_status,
         "postgis": postgis_status,
         "data_freshness": data_freshness_status,
         "key_vault": _status(settings.key_vault_url, required=False),
@@ -200,6 +206,8 @@ def build_readiness(settings: Settings | None = None) -> dict:
 
 def _overall_readiness_status(*, checks: dict[str, str], mode: dict[str, str]) -> str:
     if checks["client_auth"] == "missing":
+        return "degraded"
+    if checks["identity_schema"] == "degraded":
         return "degraded"
     if mode["overall"] == "degraded":
         return "degraded"

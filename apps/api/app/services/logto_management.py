@@ -79,9 +79,7 @@ class LogtoManagementClient:
             params={"appType": "firstParty"},
             allow_not_found=True,
         )
-        if grants_response is None:
-            return
-        for grant_id in _resource_ids(grants_response):
+        for grant_id in _resource_ids(grants_response) if grants_response is not None else []:
             self._request(
                 client,
                 "DELETE",
@@ -97,9 +95,7 @@ class LogtoManagementClient:
             headers=headers,
             allow_not_found=True,
         )
-        if sessions_response is None:
-            return
-        for session_id in _resource_ids(sessions_response):
+        for session_id in _resource_ids(sessions_response) if sessions_response is not None else []:
             self._request(
                 client,
                 "DELETE",

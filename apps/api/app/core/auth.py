@@ -7,7 +7,7 @@ from typing import Annotated, Literal
 
 from fastapi import Depends, Header, Request
 
-from apps.api.app.core.config import Settings, get_settings
+from apps.api.app.core.config import Settings, derive_logto_oidc_urls, get_settings
 from apps.api.app.core.errors import ApiError
 from apps.api.app.core.jwt_auth import (
     JwtValidationRejected,
@@ -119,6 +119,28 @@ def require_oauth_identity(
         status_code=401,
         code="USER_AUTH_REQUIRED",
         message="OAuth user authentication is required.",
+        retryable=False,
+    )
+
+
+def require_logto_identity(
+    identity: Annotated[RequestIdentity, Depends(require_client_auth)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> RequestIdentity:
+    expected_issuer, expected_jwks_url = derive_logto_oidc_urls(settings.logto_endpoint)
+    if (
+        expected_issuer
+        and expected_jwks_url
+        and settings.logto_api_audience
+        and identity.mode == "oauth"
+        and identity.issuer == expected_issuer
+        and identity.subject
+    ):
+        return identity
+    raise ApiError(
+        status_code=401,
+        code="USER_AUTH_REQUIRED",
+        message="Logto user authentication is required.",
         retryable=False,
     )
 

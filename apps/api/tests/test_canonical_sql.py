@@ -72,6 +72,11 @@ def test_identity_user_migration_has_only_local_identity_columns():
     ):
         assert column in user_sql
     assert "CHECK (status IN ('active', 'deleting'))" in user_sql
+    assert "CREATE TABLE IF NOT EXISTS identity.deleted_users" in user_sql
+    assert "identity_digest bytea NOT NULL" in user_sql
+    assert "deleted_at timestamptz NOT NULL DEFAULT now()" in user_sql
+    assert "UNIQUE (identity_digest)" in user_sql
+    assert "octet_length(identity_digest) = 32" in user_sql
     for forbidden in ("email", "nationality", "token", "claim", "client_secret"):
         assert forbidden not in user_sql.lower()
 

@@ -454,6 +454,8 @@ def test_aws_logto_rollout_covers_schema_secrets_clients_connectors_smoke_and_ro
 
     for term in (
         "sql/canonical/005_identity_users.sql",
+        "python -m apps.api.app.tools.verify_db_schema --json",
+        "identity_schema=configured",
         "Secrets Manager",
         "LALA_GUEST_ACCESS",
         "LOGTO_ENDPOINT",

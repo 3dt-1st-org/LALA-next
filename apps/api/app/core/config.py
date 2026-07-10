@@ -77,7 +77,7 @@ class Settings:
             "logto-api-audience",
             key_vault_url,
         )
-        logto_issuer, logto_jwks_url = _derive_logto_oidc_urls(logto_endpoint)
+        logto_issuer, logto_jwks_url = derive_logto_oidc_urls(logto_endpoint)
         logto_validation_configured = bool(
             logto_issuer and logto_jwks_url and logto_api_audience
         )
@@ -278,7 +278,7 @@ def _static_snapshot_fallback_enabled() -> bool:
     return _bool_env("LALA_STATIC_SNAPSHOT_FALLBACK", default=False)
 
 
-def _derive_logto_oidc_urls(endpoint: str) -> tuple[str, str]:
+def derive_logto_oidc_urls(endpoint: str) -> tuple[str, str]:
     """Derive Logto's fixed OIDC issuer and JWKS URL from a safe base endpoint."""
     try:
         parsed = urlsplit(endpoint)

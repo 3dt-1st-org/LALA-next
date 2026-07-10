@@ -75,6 +75,72 @@ def test_check_db_status_degrades_when_canonical_relation_is_missing(monkeypatch
     assert status == "degraded"
 
 
+def test_check_identity_schema_status_requires_tombstone_storage_and_unique_keys(
+    monkeypatch,
+):
+    captured = {}
+
+    class FakeCursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def execute(self, sql):
+            captured["sql"] = sql
+
+        def fetchone(self):
+            return (True, True, True, True, True)
+
+    class FakeConnection:
+        def cursor(self):
+            return FakeCursor()
+
+        def close(self):
+            return None
+
+    psycopg2_module = types.ModuleType("psycopg2")
+    psycopg2_module.connect = lambda dsn, connect_timeout: FakeConnection()
+    monkeypatch.setitem(sys.modules, "psycopg2", psycopg2_module)
+
+    status = db_repository.check_identity_schema_status("postgresql://db.example/lala")
+
+    assert status == "configured"
+    assert "identity.users" in captured["sql"]
+    assert "identity.deleted_users" in captured["sql"]
+    assert "identity_digest" in captured["sql"]
+    assert "pg_constraint" in captured["sql"]
+
+
+def test_check_identity_schema_status_degrades_without_deleted_users(monkeypatch):
+    class FakeCursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def execute(self, sql):
+            return None
+
+        def fetchone(self):
+            return (True, True, False, True, True)
+
+    class FakeConnection:
+        def cursor(self):
+            return FakeCursor()
+
+        def close(self):
+            return None
+
+    psycopg2_module = types.ModuleType("psycopg2")
+    psycopg2_module.connect = lambda dsn, connect_timeout: FakeConnection()
+    monkeypatch.setitem(sys.modules, "psycopg2", psycopg2_module)
+
+    assert db_repository.check_identity_schema_status("postgresql://db.example/lala") == "degraded"
+
+
 def test_check_postgis_status_requires_extension_and_spatial_index(monkeypatch):
     captured = {}
 
