@@ -5,6 +5,7 @@ from typing import Any
 
 import jwt
 from jwt import PyJWKClient, PyJWTError
+from jwt.exceptions import PyJWKClientConnectionError, PyJWKClientError
 
 from apps.api.app.core.config import Settings
 
@@ -26,7 +27,6 @@ def is_oauth_jwt_validation_configured(settings: Settings) -> bool:
         settings.oauth_issuer
         and settings.oauth_audience
         and settings.oauth_jwks_url
-        and settings.oauth_required_scopes
     )
 
 
@@ -36,7 +36,11 @@ def validate_oauth_jwt(token: str, settings: Settings) -> dict[str, Any]:
 
     try:
         signing_key = _get_signing_key(settings.oauth_jwks_url, token)
-    except Exception as exc:  # pragma: no cover - exact PyJWT/network exceptions vary.
+    except PyJWKClientConnectionError as exc:
+        raise JwtValidationUnavailable("OAuth signing keys are unavailable.") from exc
+    except PyJWKClientError as exc:
+        raise JwtValidationRejected("OAuth signing key is not accepted.") from exc
+    except Exception as exc:  # pragma: no cover - exact network exceptions vary.
         raise JwtValidationUnavailable("OAuth signing keys are unavailable.") from exc
 
     try:
@@ -47,10 +51,14 @@ def validate_oauth_jwt(token: str, settings: Settings) -> dict[str, Any]:
             audience=settings.oauth_audience,
             issuer=settings.oauth_issuer,
             leeway=JWT_LEEWAY_SECONDS,
-            options={"require": ["exp", "iss", "aud"]},
+            options={"require": ["exp", "iss", "aud", "sub"]},
         )
     except PyJWTError as exc:
         raise JwtValidationRejected("OAuth JWT validation failed.") from exc
+
+    subject = payload.get("sub")
+    if not isinstance(subject, str) or not subject.strip():
+        raise JwtValidationRejected("OAuth JWT is missing a valid subject.")
 
     if not _has_required_scope(payload, settings.oauth_required_scopes):
         raise JwtValidationRejected("OAuth JWT is missing required scope.")
@@ -81,6 +89,9 @@ def _has_required_scope(payload: dict[str, Any], required_scopes: tuple[str, ...
 
 def _token_scopes(payload: dict[str, Any]) -> tuple[str, ...]:
     scopes: list[str] = []
+    scope = payload.get("scope")
+    if isinstance(scope, str):
+        scopes.extend(value for value in scope.split() if value)
     scp = payload.get("scp")
     if isinstance(scp, str):
         scopes.extend(scope for scope in scp.split() if scope)

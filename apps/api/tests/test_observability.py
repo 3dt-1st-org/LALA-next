@@ -17,8 +17,14 @@ def test_request_duration_header_is_returned(client):
     assert float(response.headers["X-Request-Duration-Ms"]) >= 0
 
 
-def test_request_logging_omits_auth_headers_and_query_string(client, auth_headers, caplog):
+def test_request_logging_omits_auth_headers_and_query_string(
+    client,
+    auth_headers,
+    caplog,
+    monkeypatch,
+):
     caplog.set_level(logging.INFO, logger="lala_next.api")
+    monkeypatch.setenv("API_BEARER_TOKEN", "should-not-be-logged")
 
     response = client.get(
         "/api/v1/places?lat=37.2&lng=127.0&token=should-not-be-logged",
@@ -101,8 +107,13 @@ def test_unsafe_request_id_header_is_not_logged_or_echoed(client, caplog):
     assert response.headers["X-Request-ID"] in rendered
 
 
-def test_metrics_endpoint_is_public_and_omits_query_and_auth_values(client, auth_headers):
+def test_metrics_endpoint_is_public_and_omits_query_and_auth_values(
+    client,
+    auth_headers,
+    monkeypatch,
+):
     marker = "should-not-be-exported"
+    monkeypatch.setenv("API_BEARER_TOKEN", marker)
     response = client.get(
         f"/api/v1/places?lat=37.2&lng=127.0&token={marker}",
         headers={

@@ -28,7 +28,7 @@ def enforce_public_contest_paid_route_limit(
     limit_per_minute: int,
 ) -> None:
     settings = get_settings()
-    if not settings.public_contest_access:
+    if not settings.guest_access_enabled:
         return
     if not settings.paid_route_rate_limit_enabled:
         return
