@@ -91,3 +91,29 @@ OIDC 역할 가정은 1회차부터 성공했지만, SSM 명령 실행 단계에
 - **런북 민감값**: public repo이므로 계정ID/리소스ID/엔드포인트는 placeholder, 비밀번호는 Secrets Manager 조회만.
 - **배포**: main 머지 시 자동 배포(SSM). 배포 로그는 GitHub Actions + `aws ssm get-command-invocation`.
 - **RDS 비밀번호 회전**: 런북 §7 절차 준수. ssh 환경변수 전달 금지.
+
+## 6. SSH(22) 포트 완전 폐쇄 → SSM 전용 접속
+
+배포(SSM Run Command)와 팀원 접속(SSM Session Manager)이 모두 SSM으로 통합되어, EC2 보안그룹의 SSH(22) 인바운드 규칙을 제거했다. 이제 EC2는 인터넷에서 직접 SSH 접속이 불가능 (포트 22 완전 폐쇄).
+
+- **접속 경로**: AWS 콘솔 → EC2 → 인스턴스 → Connect → **Session Manager** 탭 (브라우저 터미널). 또는 CLI `aws ssm start-session --target <instance-id>` (session-manager-plugin 설치 필요).
+- **인증**: SSH 키 대신 **IAM** (lala-next-team 그룹 = ssm:StartSession 권한).
+- **보안 이점**: 포트 노출 없음, 키 관리 부담 제거, 감사 로그(CloudTrail/Session Manager), IP 허용목록 불필요.
+- **비상 복구**: 필요 시 `aws ec2 authorize-security-group-ingress --group-id <sg> --protocol tcp --port 22 --cidr <IP>/32` 로 일시 재개방.
+
+**교훈**: SSM은 배포 자동화뿐 아니라 휴먼 접속까지 통합하는 단일 보안 경로. SSH 포트를 아예 닫을 수 있어 공격면이 축소된다.
+
+## 7. 배포 자동화 최종 아키텍처 (정리)
+
+```
+push to main
+  → CI(ci.yml): pytest 테스트
+  → 성공 시 deploy.yml 트리거 (workflow_run)
+    → aws-actions/configure-aws-credentials@v4 (GitHub OIDC → IAM 역할 가정, 장기 키 없음)
+    → aws ssm send-command (AWS-RunShellScript, root, HOME=/root, safe.directory)
+      → git pull + pip install + systemctl restart
+    → /readyz health check
+```
+
+- **신규 기여자 배포 가이드**: main에 PR 머지만 하면 자동 배포. SSH 키/EC2 직접 조작 불필요.
+- **포트폴리오 포인트**: GitHub OIDC + AWS SSM 조합으로 "포트 22 없는 제로트러스트 배포 파이프라인" 구축. SSH IP 허용(7,216개 GitHub 대역)이 불가능한 제약을 IAM 기반으로 우회.
