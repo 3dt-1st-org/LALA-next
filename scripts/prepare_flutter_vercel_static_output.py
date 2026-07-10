@@ -5,6 +5,7 @@ import json
 import os
 import re
 import shutil
+import stat
 from pathlib import Path
 
 
@@ -47,8 +48,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             print(f"Verified Flutter Vercel staging contract: {output}")
             return 0
-        source = args.source.resolve()
-        _validate_source(source=source, output=output)
+        source = _validate_source(source=args.source, output=output)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         parser.error(str(exc))
 
@@ -85,23 +85,56 @@ def _validate_output_boundary(output: Path) -> None:
         raise ValueError("Output resolves outside the repository staging boundary.")
 
 
-def _validate_source(*, source: Path, output: Path) -> None:
+def _validate_source(*, source: Path, output: Path) -> Path:
+    source_metadata = source.lstat()
+    if stat.S_ISLNK(source_metadata.st_mode):
+        raise ValueError("Flutter web build source must not be a symlink.")
+    if not stat.S_ISDIR(source_metadata.st_mode):
+        raise ValueError("Flutter web build source must be a directory.")
+
+    resolved_source = source.resolve()
     resolved_output = output.resolve()
     if (
-        resolved_output == source
-        or source in resolved_output.parents
-        or resolved_output in source.parents
+        resolved_output == resolved_source
+        or resolved_source in resolved_output.parents
+        or resolved_output in resolved_source.parents
     ):
         raise ValueError("Output must be separate from the source build.")
-    missing = [
+    _reject_source_tree_symlinks(resolved_source)
+    _validate_required_artifacts(resolved_source, "Flutter web build")
+    return resolved_source
+
+
+def _reject_source_tree_symlinks(directory: Path) -> None:
+    with os.scandir(directory) as entries:
+        for entry in entries:
+            metadata = entry.stat(follow_symlinks=False)
+            if stat.S_ISLNK(metadata.st_mode):
+                raise ValueError(
+                    f"Flutter web build must not contain symlinks: {entry.path}"
+                )
+            if stat.S_ISDIR(metadata.st_mode):
+                _reject_source_tree_symlinks(Path(entry.path))
+
+
+def _validate_required_artifacts(directory: Path, label: str) -> None:
+    invalid = [
         str(relative_path)
         for relative_path in REQUIRED_BUILD_ARTIFACTS
-        if not (source / relative_path).is_file()
+        if not _is_regular_file(directory / relative_path)
     ]
-    if missing:
-        raise ValueError(f"Flutter web build is missing required artifact: {missing[0]}")
-    if (source / ".vercel").is_symlink():
-        raise ValueError("Flutter web build must not contain a .vercel symlink.")
+    if invalid:
+        raise ValueError(
+            f"{label} artifact must be a non-symlink regular file: {invalid[0]}"
+        )
+
+
+def _is_regular_file(path: Path) -> bool:
+    try:
+        metadata = path.lstat()
+    except FileNotFoundError:
+        return False
+    return stat.S_ISREG(metadata.st_mode)
 
 
 def _load_project_binding() -> dict[str, str]:
@@ -128,13 +161,7 @@ def _verify_staged_contract(
     _validate_output_boundary(output)
     if not output.is_dir():
         raise ValueError("Flutter Vercel staging output does not exist.")
-    missing = [
-        str(relative_path)
-        for relative_path in REQUIRED_BUILD_ARTIFACTS
-        if not (output / relative_path).is_file()
-    ]
-    if missing:
-        raise ValueError(f"Staged Flutter output is missing required artifact: {missing[0]}")
+    _validate_required_artifacts(output, "Staged Flutter output")
     effective_config = _read_json_object(output / "vercel.json", "Vercel config")
     if effective_config != template:
         raise ValueError("Staged Vercel config does not match the Flutter template.")

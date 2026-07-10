@@ -2,13 +2,28 @@
 
 ## Status
 
-IMPLEMENTED - second independent re-review fixes and verification included.
+IMPLEMENTED - final symlink review fix and verification included.
 
 ## Commits
 
 - Initial implementation: `caf4bb6` (`feat(auth): align guest auth operations contracts`)
 - First independent review fixes: `620c78e` (`fix(auth): address Task 5 review findings`)
-- Second independent re-review fixes: this commit.
+- Second independent re-review fixes: `f081970` (`fix(auth): address Task 5 second review`)
+- Final symlink review fix: this commit.
+
+## Final Symlink Review Fix
+
+- Preserved the lexical Flutter source path until `lstat()` rejects a symlinked
+  source root, then resolved it only for source/output boundary comparison.
+- Walked the complete source tree with non-following `os.scandir()` metadata and
+  rejected every nested file or directory symlink before replacing
+  `static-output/`.
+- Required all five source and staged release artifacts to be non-symlink regular
+  files according to `lstat()` metadata. Deploy-time project-binding verification
+  therefore also rejects a tampered required-artifact symlink.
+- Added source-root, required-file, nested-file, and nested-directory symlink
+  tests. Every staging rejection preserves the existing output marker and proves
+  no external payload path was copied into the fixed output boundary.
 
 ## Second Re-review Fixes
 
@@ -53,12 +68,16 @@ IMPLEMENTED - second independent re-review fixes and verification included.
    the complete deployment contract now passes all 28 tests; its negative subset
    passes 21 tests covering missing/invalid IDs, tampered config/binding, unsafe
    outputs, and every missing artifact.
+4. Symlink RED: all five new cases failed because staging followed source-root,
+   required-file, nested-file, and nested-directory links, while deploy-time
+   verification accepted a required-file link (`5 failed`). GREEN: all five
+   regression cases pass, including marker preservation and external-copy checks.
 
 ## Final Verification
 
-- Focused readiness, Logto, `/me`, observability, OpenAPI, deployment, and safety
-  tests: `138 passed, 1 deselected`.
-- Broad API suite: `485 passed, 1 deselected`, excluding
+- Focused deployment contract: `33 passed`.
+- Focused OpenAPI compatibility and deployment contracts: `48 passed`.
+- Broad API suite: `490 passed, 1 deselected`, excluding
   `apps/api/tests/test_smoke_api_script.py` and deselecting only
   `apps/api/tests/test_safety_contracts.py::test_unix_scripts_parse_with_bash`
   for the accepted CRLF baseline.
@@ -67,10 +86,10 @@ IMPLEMENTED - second independent re-review fixes and verification included.
   byte-for-byte fixture comparison passed.
 - Actual compatibility CLI against that fresh export: exit 0, 10 baseline paths,
   10 current paths, and zero findings.
-- Deployment negative tests: `21 passed, 7 deselected`.
+- Symlink regression subset: `5 passed, 28 deselected`.
 - `python -m compileall -q apps/api/app scripts/prepare_flutter_vercel_static_output.py`:
   passed.
-- Changed-file secret scan: zero matches across 7 files for private keys,
+- Changed-file secret scan: zero matches across 3 files for private keys,
   high-confidence provider tokens, JWTs, credential-bearing PostgreSQL URLs, and
   nonblank secret/password/token/DSN assignments.
 

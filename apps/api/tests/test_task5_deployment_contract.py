@@ -361,6 +361,94 @@ def test_flutter_vercel_staging_rejects_each_missing_release_artifact_before_del
     assert marker.read_text(encoding="utf-8") == "keep"
 
 
+@pytest.mark.parametrize(
+    "source_case",
+    [
+        "source-root",
+        "required-file",
+        "nested-file",
+        "nested-directory",
+    ],
+)
+def test_flutter_vercel_staging_rejects_source_symlinks_before_deletion(
+    tmp_path, monkeypatch, source_case
+):
+    isolated_root = tmp_path / "repo"
+    build_output = isolated_root / "build" / "web"
+    source = build_output
+    outside = tmp_path / "outside"
+
+    if source_case == "source-root":
+        _write_flutter_build(outside)
+        build_output.parent.mkdir(parents=True)
+        build_output.symlink_to(outside, target_is_directory=True)
+        copied_path = Path("index.html")
+    else:
+        _write_flutter_build(build_output)
+        outside.mkdir()
+        if source_case == "required-file":
+            external_payload = outside / "auth-callback.html"
+            external_payload.write_text("outside-required", encoding="utf-8")
+            linked_path = build_output / "auth-callback.html"
+            linked_path.unlink()
+            linked_path.symlink_to(external_payload)
+            copied_path = Path("auth-callback.html")
+        elif source_case == "nested-file":
+            external_payload = outside / "payload.txt"
+            external_payload.write_text("outside-file", encoding="utf-8")
+            linked_path = build_output / "nested" / "payload.txt"
+            linked_path.parent.mkdir()
+            linked_path.symlink_to(external_payload)
+            copied_path = Path("nested/payload.txt")
+        else:
+            external_directory = outside / "external-directory"
+            external_directory.mkdir()
+            (external_directory / "payload.txt").write_text(
+                "outside-directory", encoding="utf-8"
+            )
+            linked_path = build_output / "nested-directory"
+            linked_path.symlink_to(external_directory, target_is_directory=True)
+            copied_path = Path("nested-directory/payload.txt")
+
+    static_output = isolated_root / "static-output"
+    static_output.mkdir(parents=True)
+    marker = static_output / "keep.txt"
+    marker.write_text("keep", encoding="utf-8")
+    monkeypatch.setattr(staging, "ROOT", isolated_root)
+    monkeypatch.setattr(staging, "DEFAULT_OUTPUT", static_output)
+    monkeypatch.setenv("VERCEL_ORG_ID", "team_contract_fixture")
+    monkeypatch.setenv("VERCEL_PROJECT_ID", "prj_contract_fixture")
+
+    with pytest.raises(SystemExit):
+        staging.main(["--source", str(source)])
+
+    assert marker.read_text(encoding="utf-8") == "keep"
+    assert not (static_output / copied_path).exists()
+
+
+def test_flutter_vercel_binding_verification_rejects_required_artifact_symlink(
+    tmp_path, monkeypatch
+):
+    isolated_root = tmp_path / "repo"
+    build_output = isolated_root / "build" / "web"
+    _write_flutter_build(build_output)
+    static_output = isolated_root / "static-output"
+    monkeypatch.setattr(staging, "ROOT", isolated_root)
+    monkeypatch.setattr(staging, "DEFAULT_OUTPUT", static_output)
+    monkeypatch.setenv("VERCEL_ORG_ID", "team_contract_fixture")
+    monkeypatch.setenv("VERCEL_PROJECT_ID", "prj_contract_fixture")
+    assert staging.main(["--source", str(build_output)]) == 0
+
+    external_payload = tmp_path / "outside-auth-callback.html"
+    external_payload.write_text("outside-required", encoding="utf-8")
+    staged_artifact = static_output / "auth-callback.html"
+    staged_artifact.unlink()
+    staged_artifact.symlink_to(external_payload)
+
+    with pytest.raises(SystemExit):
+        staging.main(["--verify-project-binding"])
+
+
 def test_aws_logto_rollout_covers_schema_secrets_clients_connectors_smoke_and_rollback():
     aws = _text("docs/operations/aws-deployment-runbook.md")
 
