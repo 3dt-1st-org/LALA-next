@@ -127,7 +127,7 @@ def _add_client_auth_security(schema: dict[str, Any]) -> None:
             if isinstance(operation, dict):
                 if path == ME_PATH:
                     operation["security"] = [{"OAuthBearerAuth": []}]
-                    _remove_static_auth_parameter(operation)
+                    _remove_generated_auth_parameters(operation)
                 else:
                     operation["security"] = [
                         {},
@@ -142,7 +142,7 @@ def _add_client_auth_security(schema: dict[str, Any]) -> None:
                     )
 
 
-def _remove_static_auth_parameter(operation: dict[str, Any]) -> None:
+def _remove_generated_auth_parameters(operation: dict[str, Any]) -> None:
     parameters = operation.get("parameters")
     if not isinstance(parameters, list):
         return
@@ -152,7 +152,7 @@ def _remove_static_auth_parameter(operation: dict[str, Any]) -> None:
         if not (
             isinstance(parameter, dict)
             and parameter.get("in") == "header"
-            and parameter.get("name") == "X-API-Key"
+            and parameter.get("name") in {"Authorization", "X-API-Key"}
         )
     ]
 
@@ -186,7 +186,12 @@ def _add_account_error_responses(
     include_conflict: bool,
 ) -> None:
     responses = operation.setdefault("responses", {})
-    errors = [("503", "Identity storage or account deletion service is unavailable.")]
+    unavailable_description = (
+        "Identity storage is unavailable."
+        if include_conflict
+        else "Identity storage or account deletion service is unavailable."
+    )
+    errors = [("503", unavailable_description)]
     if include_conflict:
         errors.append(("409", "Account deletion is already in progress."))
     for status_code, description in errors:

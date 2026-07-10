@@ -28,6 +28,8 @@ def compare_openapi_compatibility(
     findings: list[str] = []
     baseline_paths = baseline.get("paths") or {}
     current_paths = current.get("paths") or {}
+    baseline_root_security = baseline.get("security") or []
+    current_root_security = current.get("security") or []
 
     for path, baseline_path_item in sorted(baseline_paths.items()):
         current_path_item = current_paths.get(path)
@@ -52,6 +54,8 @@ def compare_openapi_compatibility(
                     method=method.upper(),
                     baseline_operation=baseline_operation,
                     current_operation=current_operation,
+                    baseline_root_security=baseline_root_security,
+                    current_root_security=current_root_security,
                 )
             )
 
@@ -69,14 +73,31 @@ def _compare_operation(
     method: str,
     baseline_operation: dict[str, Any],
     current_operation: dict[str, Any],
+    baseline_root_security: Any,
+    current_root_security: Any,
 ) -> list[str]:
     findings: list[str] = []
     operation_label = f"{method} {path}"
+    baseline_security = _effective_security(
+        baseline_operation,
+        baseline_root_security,
+    )
+    current_security = _effective_security(
+        current_operation,
+        current_root_security,
+    )
+    if _normalize_security(baseline_security) != _normalize_security(current_security):
+        findings.append(f"changed security: {operation_label}")
     findings.extend(
         _compare_parameters(
             operation_label=operation_label,
             baseline_parameters=baseline_operation.get("parameters") or [],
             current_parameters=current_operation.get("parameters") or [],
+            allow_account_auth_correction=_is_exact_account_auth_migration(
+                operation_label=operation_label,
+                baseline_operation=baseline_operation,
+                current_operation=current_operation,
+            ),
         )
     )
     findings.extend(
@@ -94,6 +115,7 @@ def _compare_parameters(
     operation_label: str,
     baseline_parameters: list[dict[str, Any]],
     current_parameters: list[dict[str, Any]],
+    allow_account_auth_correction: bool,
 ) -> list[str]:
     findings: list[str] = []
     current_by_key = {
@@ -107,10 +129,9 @@ def _compare_parameters(
         key = (parameter.get("in"), parameter.get("name"))
         current_parameter = current_by_key.get(key)
         if current_parameter is None:
-            if _is_account_static_api_key_correction(
-                operation_label=operation_label,
-                location=str(key[0]),
-                name=str(key[1]),
+            if (
+                allow_account_auth_correction
+                and _is_expected_generated_auth_header(parameter)
             ):
                 continue
             findings.append(f"removed parameter: {operation_label} {key[0]} {key[1]}")
@@ -120,17 +141,76 @@ def _compare_parameters(
     return findings
 
 
-def _is_account_static_api_key_correction(
+def _is_exact_account_auth_migration(
     *,
     operation_label: str,
-    location: str,
-    name: str,
+    baseline_operation: dict[str, Any],
+    current_operation: dict[str, Any],
 ) -> bool:
-    return (
-        operation_label in {"GET /api/v1/me", "DELETE /api/v1/me"}
-        and location == "header"
-        and name == "X-API-Key"
+    expected_security = [{"OAuthBearerAuth": []}]
+    if (
+        operation_label not in {"GET /api/v1/me", "DELETE /api/v1/me"}
+        or baseline_operation.get("security") != expected_security
+        or current_operation.get("security") != expected_security
+    ):
+        return False
+    return not any(
+        isinstance(parameter, dict)
+        and parameter.get("in") == "header"
+        and parameter.get("name") in {"Authorization", "X-API-Key"}
+        for parameter in current_operation.get("parameters") or []
     )
+
+
+def _is_expected_generated_auth_header(parameter: dict[str, Any]) -> bool:
+    if (
+        parameter.get("in") != "header"
+        or parameter.get("name") not in {"Authorization", "X-API-Key"}
+        or parameter.get("required") is not False
+    ):
+        return False
+    schema = parameter.get("schema")
+    if not isinstance(schema, dict):
+        return False
+    if schema.get("type") == "string":
+        return True
+    any_of = schema.get("anyOf")
+    return isinstance(any_of, list) and {
+        item.get("type")
+        for item in any_of
+        if isinstance(item, dict)
+    } == {"string", "null"}
+
+
+def _effective_security(operation: dict[str, Any], root_security: Any) -> Any:
+    if "security" in operation:
+        return operation["security"]
+    return root_security
+
+
+def _normalize_security(security: Any) -> tuple:
+    if not isinstance(security, list):
+        return ()
+    requirements: list[tuple] = []
+    for requirement in security:
+        if not isinstance(requirement, dict):
+            requirements.append(((str(requirement), ()),))
+            continue
+        normalized_requirement = tuple(
+            sorted(
+                (
+                    str(scheme),
+                    tuple(sorted(str(scope) for scope in scopes))
+                    if isinstance(scopes, list)
+                    else (str(scopes),),
+                )
+                for scheme, scopes in requirement.items()
+            )
+        )
+        requirements.append(normalized_requirement)
+    if requirements and all(not requirement for requirement in requirements):
+        return ()
+    return tuple(sorted(requirements))
 
 
 def _compare_responses(

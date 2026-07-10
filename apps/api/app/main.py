@@ -79,12 +79,6 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(ApiError)
     async def api_error_handler(request: Request, exc: ApiError):
-        if (
-            request.method == "DELETE"
-            and request.url.path == "/api/v1/me"
-            and exc.status_code >= 500
-        ):
-            app.state.metrics.record_auth_event("account_deletion_failure")
         return JSONResponse(
             status_code=exc.status_code,
             content=error_envelope(

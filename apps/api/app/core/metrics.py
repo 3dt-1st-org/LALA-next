@@ -140,7 +140,7 @@ def render_prometheus(metrics: RuntimeMetrics, readiness: Mapping[str, object] |
             "# HELP lala_next_auth_jwt_rejection_total Rejected presented OAuth JWTs.",
             "# TYPE lala_next_auth_jwt_rejection_total counter",
             f"lala_next_auth_jwt_rejection_total {auth_counters['jwt_rejection']}",
-            "# HELP lala_next_account_deletion_failure_total Account deletion service failures.",
+            "# HELP lala_next_account_deletion_failure_total Account deletion orchestration failures.",
             "# TYPE lala_next_account_deletion_failure_total counter",
             "lala_next_account_deletion_failure_total "
             f"{auth_counters['account_deletion_failure']}",

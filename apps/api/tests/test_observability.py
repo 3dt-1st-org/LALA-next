@@ -4,10 +4,12 @@ import json
 import logging
 from uuid import UUID
 
+import pytest
 from fastapi.testclient import TestClient
 
 from apps.api.app.core.auth import RequestIdentity, require_oauth_identity
-from apps.api.app.core.jwt_auth import JwtValidationRejected
+from apps.api.app.core.errors import ServiceError
+from apps.api.app.core.jwt_auth import JwtValidationRejected, JwtValidationUnavailable
 from apps.api.app.main import create_app
 from apps.api.app.services.identity_service import get_identity_service
 from apps.api.app.services.logto_management import (
@@ -279,8 +281,12 @@ def test_metrics_exports_safe_aggregate_oauth_success_and_jwt_rejection(client, 
     assert "issuer.test" not in body
 
 
-def test_metrics_counts_account_deletion_service_failures_without_identity_labels(client):
+def test_metrics_counts_account_deletion_service_failures_without_identity_labels(
+    client,
+    monkeypatch,
+):
     raw_subject = "deletion-subject-marker"
+    monkeypatch.setenv("LALA_GUEST_ACCESS", "true")
 
     class IdentityService:
         def mark_user_deleting(self, issuer, subject):
@@ -308,3 +314,82 @@ def test_metrics_counts_account_deletion_service_failures_without_identity_label
     body = client.get("/metrics").text
     assert "lala_next_account_deletion_failure_total 1" in body
     assert raw_subject not in body
+
+
+def test_metrics_does_not_count_jwks_failure_before_deletion_starts(client, monkeypatch):
+    monkeypatch.setenv("OAUTH_ISSUER", "https://issuer.test/oidc")
+    monkeypatch.setenv("OAUTH_AUDIENCE", "https://api.test")
+    monkeypatch.setenv("OAUTH_JWKS_URL", "https://issuer.test/oidc/jwks")
+
+    def unavailable_jwks(token, settings):
+        raise JwtValidationUnavailable()
+
+    monkeypatch.setattr("apps.api.app.core.auth.validate_oauth_jwt", unavailable_jwks)
+
+    response = client.request(
+        "DELETE",
+        "/api/v1/me",
+        headers={"Authorization": "Bearer unavailable-jwks-token"},
+        json={"confirmation": "delete-my-account"},
+    )
+
+    assert response.status_code == 503
+    assert "lala_next_account_deletion_failure_total 0" in client.get("/metrics").text
+
+
+def test_metrics_counts_identity_deletion_stage_failure_once(client, monkeypatch):
+    monkeypatch.setenv("LALA_GUEST_ACCESS", "true")
+
+    class FailingIdentityService:
+        def mark_user_deleting(self, issuer, subject):
+            raise ServiceError(
+                status_code=503,
+                code="IDENTITY_DB_UNAVAILABLE",
+                message="Local identity storage is temporarily unavailable.",
+                retryable=True,
+            )
+
+    client.app.dependency_overrides[require_oauth_identity] = lambda: RequestIdentity(
+        mode="oauth",
+        issuer="https://issuer.test/oidc",
+        subject="identity-failure-subject",
+    )
+    client.app.dependency_overrides[get_identity_service] = FailingIdentityService
+
+    response = client.request(
+        "DELETE",
+        "/api/v1/me",
+        json={"confirmation": "delete-my-account"},
+    )
+
+    assert response.status_code == 503
+    assert "lala_next_account_deletion_failure_total 1" in client.get("/metrics").text
+
+
+def test_metrics_counts_unexpected_deletion_stage_failure_once(client, monkeypatch):
+    monkeypatch.setenv("LALA_GUEST_ACCESS", "true")
+
+    class IdentityService:
+        def mark_user_deleting(self, issuer, subject):
+            return None
+
+    class UnexpectedManagementClient:
+        def delete_user(self, subject):
+            raise RuntimeError("unexpected deletion failure")
+
+    client.app.dependency_overrides[require_oauth_identity] = lambda: RequestIdentity(
+        mode="oauth",
+        issuer="https://issuer.test/oidc",
+        subject="unexpected-failure-subject",
+    )
+    client.app.dependency_overrides[get_identity_service] = IdentityService
+    client.app.dependency_overrides[get_logto_management_client] = UnexpectedManagementClient
+
+    with pytest.raises(RuntimeError, match="unexpected deletion failure"):
+        client.request(
+            "DELETE",
+            "/api/v1/me",
+            json={"confirmation": "delete-my-account"},
+        )
+
+    assert "lala_next_account_deletion_failure_total 1" in client.get("/metrics").text

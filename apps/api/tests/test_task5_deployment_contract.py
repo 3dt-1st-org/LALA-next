@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 
@@ -39,6 +42,47 @@ def test_current_deployment_docs_describe_aws_api_rds_and_vercel_flutter():
     assert "Flutter web" in vercel
     assert "AWS EC2" in vercel
     assert "FastAPI backend" not in vercel.split("## Historical", maxsplit=1)[0]
+
+
+def test_flutter_vercel_static_output_uses_isolated_effective_config(tmp_path):
+    root_config = json.loads(_text("vercel.json"))
+    assert root_config["rewrites"][0]["destination"] == "/api/index.py"
+
+    template = json.loads(_text("deploy/vercel/flutter-static.vercel.json"))
+    build_output = tmp_path / "build" / "web"
+    build_output.mkdir(parents=True)
+    (build_output / "index.html").write_text("<html></html>", encoding="utf-8")
+    (build_output / "vercel.json").write_text(
+        json.dumps({"rewrites": [{"source": "/(.*)", "destination": "/api/index.py"}]}),
+        encoding="utf-8",
+    )
+    static_output = tmp_path / "static-output"
+
+    subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "scripts" / "prepare_flutter_vercel_static_output.py"),
+            "--source",
+            str(build_output),
+            "--output",
+            str(static_output),
+        ],
+        cwd=ROOT,
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+
+    effective = json.loads((static_output / "vercel.json").read_text(encoding="utf-8"))
+    assert effective == template
+    assert "/api/index.py" not in json.dumps(effective)
+    assert effective["rewrites"] == [{"source": "/(.*)", "destination": "/index.html"}]
+    assert (static_output / "index.html").is_file()
+
+    deployment_doc = _text("docs/operations/vercel-deployment.md")
+    assert "python3 scripts/prepare_flutter_vercel_static_output.py" in deployment_doc
+    assert "vercel deploy static-output --prod" in deployment_doc
+    assert "static-output/" in _text(".gitignore")
 
 
 def test_aws_logto_rollout_covers_schema_secrets_clients_connectors_smoke_and_rollback():

@@ -49,6 +49,7 @@ def me(
 @router.delete("/me", status_code=204)
 def delete_me(
     body: AccountDeletionRequest,
+    request: Request,
     identity: Annotated[RequestIdentity, Depends(require_oauth_identity)],
     identity_service: Annotated[IdentityService, Depends(get_identity_service)],
     management_client: Annotated[
@@ -58,10 +59,14 @@ def delete_me(
 ) -> Response:
     issuer = identity.issuer or ""
     subject = identity.subject or ""
-    user = identity_service.mark_user_deleting(issuer, subject)
-    management_client.delete_user(subject)
-    if user is not None:
-        identity_service.delete_local_user(issuer, subject)
+    try:
+        user = identity_service.mark_user_deleting(issuer, subject)
+        management_client.delete_user(subject)
+        if user is not None:
+            identity_service.delete_local_user(issuer, subject)
+    except Exception:
+        request.app.state.metrics.record_auth_event("account_deletion_failure")
+        raise
     return Response(status_code=204)
 
 

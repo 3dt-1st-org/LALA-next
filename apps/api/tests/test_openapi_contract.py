@@ -51,7 +51,7 @@ def test_openapi_documents_client_auth_headers_on_v1_routes(client):
     assert "MigrationApiKey" not in str(schema["paths"]["/api/v1/me"])
     for operation in schema["paths"]["/api/v1/me"].values():
         assert not any(
-            parameter.get("name") == "X-API-Key"
+            parameter.get("name") in {"Authorization", "X-API-Key"}
             for parameter in operation.get("parameters", [])
         )
     assert "security" not in schema["paths"]["/healthz"]["get"]
@@ -447,3 +447,9 @@ def test_openapi_documents_account_operations(client):
     assert set(account_path["get"]["responses"]) >= {"200", "401", "409", "503"}
     assert set(account_path["delete"]["responses"]) >= {"204", "401", "422", "503"}
     assert "409" not in account_path["delete"]["responses"]
+    assert account_path["get"]["responses"]["503"]["description"] == (
+        "Identity storage is unavailable."
+    )
+    assert account_path["delete"]["responses"]["503"]["description"] == (
+        "Identity storage or account deletion service is unavailable."
+    )

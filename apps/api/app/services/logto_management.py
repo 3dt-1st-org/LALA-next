@@ -117,11 +117,7 @@ class LogtoManagementClient:
         )
 
     def _validate_configuration(self) -> None:
-        if (
-            not self._endpoint
-            or not self._settings.logto_management_client_id
-            or not self._settings.logto_management_client_secret
-        ):
+        if logto_management_configuration_status(self._settings) != "configured":
             raise LogtoManagementRejected(code="LOGTO_MANAGEMENT_NOT_CONFIGURED")
 
     def _request(self, client, method: str, url: str, *, allow_not_found: bool = False, **kwargs):
@@ -142,6 +138,22 @@ class LogtoManagementClient:
 
 def get_logto_management_client() -> LogtoManagementClient:
     return LogtoManagementClient(get_settings())
+
+
+def logto_management_configuration_status(settings: Settings) -> str:
+    endpoint_value = settings.logto_management_endpoint or settings.logto_endpoint
+    values_present = (
+        bool(endpoint_value),
+        bool(settings.logto_management_client_id),
+        bool(settings.logto_management_client_secret),
+    )
+    if (
+        _management_endpoint(endpoint_value)
+        and settings.logto_management_client_id
+        and settings.logto_management_client_secret
+    ):
+        return "configured"
+    return "partial" if any(values_present) else "skipped"
 
 
 def _management_endpoint(value: str) -> str:

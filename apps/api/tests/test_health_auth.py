@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 
 def test_healthz_is_public(client):
     response = client.get("/healthz")
@@ -213,6 +215,89 @@ def test_readyz_reports_partial_oauth_and_management_configuration(client, monke
     checks = response.json()["data"]["checks"]
     assert checks["jwt_validation"] == "partial"
     assert checks["logto_management"] == "partial"
+
+
+@pytest.mark.parametrize(
+    ("environment", "expected_status"),
+    [
+        (
+            {
+                "LOGTO_MANAGEMENT_ENDPOINT": "http://tenant.logto.app",
+                "LOGTO_MANAGEMENT_CLIENT_ID": "management-client",
+                "LOGTO_MANAGEMENT_CLIENT_SECRET": "management-secret",
+            },
+            "partial",
+        ),
+        (
+            {
+                "LOGTO_MANAGEMENT_ENDPOINT": "https://tenant.logto.app/tenant",
+                "LOGTO_MANAGEMENT_CLIENT_ID": "management-client",
+                "LOGTO_MANAGEMENT_CLIENT_SECRET": "management-secret",
+            },
+            "partial",
+        ),
+        (
+            {
+                "LOGTO_MANAGEMENT_ENDPOINT": "https://user@tenant.logto.app",
+                "LOGTO_MANAGEMENT_CLIENT_ID": "management-client",
+                "LOGTO_MANAGEMENT_CLIENT_SECRET": "management-secret",
+            },
+            "partial",
+        ),
+        (
+            {
+                "LOGTO_MANAGEMENT_ENDPOINT": "https://tenant.logto.app?region=test",
+                "LOGTO_MANAGEMENT_CLIENT_ID": "management-client",
+                "LOGTO_MANAGEMENT_CLIENT_SECRET": "management-secret",
+            },
+            "partial",
+        ),
+        (
+            {
+                "LOGTO_MANAGEMENT_ENDPOINT": "https://tenant.logto.app#management",
+                "LOGTO_MANAGEMENT_CLIENT_ID": "management-client",
+                "LOGTO_MANAGEMENT_CLIENT_SECRET": "management-secret",
+            },
+            "partial",
+        ),
+        (
+            {
+                "LOGTO_MANAGEMENT_ENDPOINT": "https://tenant.logto.app/",
+                "LOGTO_MANAGEMENT_CLIENT_ID": "management-client",
+                "LOGTO_MANAGEMENT_CLIENT_SECRET": "management-secret",
+            },
+            "configured",
+        ),
+        (
+            {
+                "LOGTO_ENDPOINT": "https://tenant.logto.app",
+                "LOGTO_MANAGEMENT_CLIENT_ID": "management-client",
+                "LOGTO_MANAGEMENT_CLIENT_SECRET": "management-secret",
+            },
+            "configured",
+        ),
+        (
+            {
+                "LOGTO_MANAGEMENT_ENDPOINT": "https://tenant.logto.app",
+                "LOGTO_MANAGEMENT_CLIENT_ID": "management-client",
+            },
+            "partial",
+        ),
+        ({}, "skipped"),
+    ],
+)
+def test_readyz_management_status_matches_runtime_endpoint_validation(
+    client,
+    monkeypatch,
+    environment,
+    expected_status,
+):
+    for name, value in environment.items():
+        monkeypatch.setenv(name, value)
+
+    response = client.get("/readyz")
+
+    assert response.json()["data"]["checks"]["logto_management"] == expected_status
 
 
 def test_readyz_never_exposes_configuration_values(client, monkeypatch):

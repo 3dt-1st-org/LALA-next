@@ -52,23 +52,91 @@ def test_openapi_compat_allows_legacy_docent_audio_empty_json_cleanup():
     assert report.findings == ()
 
 
-def test_openapi_compat_allows_removing_static_api_key_from_oauth_account_routes():
+def test_openapi_compat_allows_removing_generated_auth_headers_from_exact_oauth_account_routes():
     baseline = create_app().openapi()
     current = create_app().openapi()
     for method in ("get", "delete"):
-        baseline["paths"]["/api/v1/me"][method].setdefault("parameters", []).append(
-            {
-                "name": "X-API-Key",
-                "in": "header",
-                "required": False,
-                "schema": {"type": "string"},
-            }
+        baseline_parameters = baseline["paths"]["/api/v1/me"][method].setdefault(
+            "parameters", []
         )
+        if not any(parameter.get("name") == "Authorization" for parameter in baseline_parameters):
+            baseline_parameters.append(_optional_auth_header("Authorization"))
+        baseline_parameters.append(_optional_auth_header("X-API-Key"))
+        current["paths"]["/api/v1/me"][method]["parameters"] = []
 
     report = compare_openapi_compatibility(baseline=baseline, current=current)
 
     assert report.ok is True
     assert report.findings == ()
+
+
+def test_openapi_compat_flags_account_route_becoming_anonymous():
+    baseline = create_app().openapi()
+    current = create_app().openapi()
+    current["paths"]["/api/v1/me"]["get"]["security"] = []
+
+    report = compare_openapi_compatibility(baseline=baseline, current=current)
+
+    assert report.ok is False
+    assert "changed security: GET /api/v1/me" in report.findings
+
+
+def test_openapi_compat_flags_static_auth_reintroduction_on_account_route():
+    baseline = create_app().openapi()
+    current = create_app().openapi()
+    current["paths"]["/api/v1/me"]["delete"]["security"] = [
+        {"OAuthBearerAuth": []},
+        {"MigrationApiKey": []},
+    ]
+
+    report = compare_openapi_compatibility(baseline=baseline, current=current)
+
+    assert report.ok is False
+    assert "changed security: DELETE /api/v1/me" in report.findings
+
+
+def test_openapi_compat_flags_security_drift_on_other_operations():
+    baseline = create_app().openapi()
+    current = create_app().openapi()
+    current["paths"]["/api/v1/places"]["get"]["security"] = []
+
+    report = compare_openapi_compatibility(baseline=baseline, current=current)
+
+    assert report.ok is False
+    assert "changed security: GET /api/v1/places" in report.findings
+
+
+def test_openapi_compat_flags_unrelated_account_header_removal():
+    baseline = create_app().openapi()
+    current = create_app().openapi()
+    baseline["paths"]["/api/v1/me"]["get"].setdefault("parameters", []).append(
+        {
+            "name": "X-Request-Trace",
+            "in": "header",
+            "required": False,
+            "schema": {"type": "string"},
+        }
+    )
+
+    report = compare_openapi_compatibility(baseline=baseline, current=current)
+
+    assert report.ok is False
+    assert (
+        "removed parameter: GET /api/v1/me header X-Request-Trace"
+        in report.findings
+    )
+
+
+def _optional_auth_header(name: str) -> dict:
+    return {
+        "name": name,
+        "in": "header",
+        "required": False,
+        "schema": {
+            "anyOf": [{"type": "string"}, {"type": "null"}],
+            "title": name,
+        },
+    }
 
 
 def test_check_openapi_compat_cli_passes_against_current_snapshot(tmp_path):

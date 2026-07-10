@@ -3,6 +3,7 @@ from __future__ import annotations
 from apps.api.app.core.config import Settings, get_settings
 from apps.api.app.core.jwt_auth import is_oauth_jwt_validation_configured
 from apps.api.app.services import db_repository, public_mvp_data
+from apps.api.app.services.logto_management import logto_management_configuration_status
 from apps.workers.app import contracts as worker_contracts
 
 
@@ -174,11 +175,7 @@ def build_readiness(settings: Settings | None = None) -> dict:
         "oauth_jwks_url": _status(settings.oauth_jwks_url, required=False),
         "oauth_client_id": _status(settings.oauth_client_id, required=False),
         "oauth_required_scopes": "configured" if settings.oauth_required_scopes else "skipped",
-        "logto_management": _configuration_status(
-            settings.logto_management_endpoint,
-            settings.logto_management_client_id,
-            settings.logto_management_client_secret,
-        ),
+        "logto_management": logto_management_configuration_status(settings),
         "db": db_status,
         "postgis": postgis_status,
         "data_freshness": data_freshness_status,
