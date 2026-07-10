@@ -6,6 +6,273 @@ import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test('uses a fresh provider token for each sequential private request',
+      () async {
+    final tokens = <String>['first-token', 'second-token'];
+    final capturedAuthorization = <String?>[];
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      accessTokenProvider: () async => tokens.removeAt(0),
+      httpClient: MockClient((request) async {
+        capturedAuthorization.add(request.headers['authorization']);
+        return _placesResponse();
+      }),
+    );
+
+    await client.getPlaces(lat: 37.2, lng: 127.0);
+    await client.getPlaces(lat: 37.2, lng: 127.0);
+
+    expect(
+        capturedAuthorization, ['Bearer first-token', 'Bearer second-token']);
+  });
+
+  test('provider token takes precedence over static bearer and API key',
+      () async {
+    late http.Request captured;
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      bearerToken: 'static-bearer',
+      apiKey: 'static-api-key',
+      accessTokenProvider: () async => 'dynamic-token',
+      httpClient: MockClient((request) async {
+        captured = request;
+        return _placesResponse();
+      }),
+    );
+
+    await client.getPlaces(lat: 37.2, lng: 127.0);
+
+    expect(captured.headers['authorization'], 'Bearer dynamic-token');
+    expect(captured.headers.containsKey('x-api-key'), isFalse);
+    expect(client.authMode, LalaAuthMode.bearerToken);
+    expect(client.hasDynamicAuth, isTrue);
+  });
+
+  test(
+      'public health and readiness never invoke the provider or send credentials',
+      () async {
+    var providerCalls = 0;
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      bearerToken: 'static-bearer',
+      apiKey: 'static-api-key',
+      accessTokenProvider: () async {
+        providerCalls++;
+        throw StateError('provider must not be called');
+      },
+      httpClient: MockClient((request) async {
+        expect(request.headers.containsKey('authorization'), isFalse);
+        expect(request.headers.containsKey('x-api-key'), isFalse);
+        if (request.url.path.endsWith('/healthz')) {
+          return _jsonResponse({
+            'ok': true,
+            'data': <String, Object?>{},
+            'meta': <String, Object?>{},
+            'error': null,
+          });
+        }
+        return _jsonResponse({
+          'ok': true,
+          'data': {
+            'status': 'ok',
+            'checks': <String, String>{},
+            'mode': <String, String>{},
+          },
+          'meta': <String, Object?>{},
+          'error': null,
+        });
+      }),
+    );
+
+    await client.getHealth();
+    await client.getReadiness();
+
+    expect(providerCalls, 0);
+  });
+
+  test('blank provider token falls back to static bearer, API key, or no auth',
+      () async {
+    final capturedHeaders = <Map<String, String>>[];
+    final clients = [
+      LalaApiClient(
+        baseUri: Uri.parse('http://api.example.test'),
+        bearerToken: 'static-bearer',
+        apiKey: 'static-api-key',
+        accessTokenProvider: () async => '  ',
+        httpClient: MockClient((request) async {
+          capturedHeaders.add(request.headers);
+          return _placesResponse();
+        }),
+      ),
+      LalaApiClient(
+        baseUri: Uri.parse('http://api.example.test'),
+        apiKey: 'static-api-key',
+        accessTokenProvider: () async => null,
+        httpClient: MockClient((request) async {
+          capturedHeaders.add(request.headers);
+          return _placesResponse();
+        }),
+      ),
+      LalaApiClient(
+        baseUri: Uri.parse('http://api.example.test'),
+        accessTokenProvider: () async => null,
+        httpClient: MockClient((request) async {
+          capturedHeaders.add(request.headers);
+          return _placesResponse();
+        }),
+      ),
+    ];
+
+    for (final client in clients) {
+      await client.getPlaces(lat: 37.2, lng: 127.0);
+    }
+
+    expect(capturedHeaders[0]['authorization'], 'Bearer static-bearer');
+    expect(capturedHeaders[0].containsKey('x-api-key'), isFalse);
+    expect(capturedHeaders[1]['x-api-key'], 'static-api-key');
+    expect(capturedHeaders[1].containsKey('authorization'), isFalse);
+    expect(capturedHeaders[2].containsKey('authorization'), isFalse);
+    expect(capturedHeaders[2].containsKey('x-api-key'), isFalse);
+  });
+
+  test('provider errors become redacted retryable auth exceptions', () async {
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      accessTokenProvider: () async {
+        throw StateError('secret-provider-token');
+      },
+      httpClient: MockClient((request) async => _placesResponse()),
+    );
+
+    await expectLater(
+      client.getPlaces(lat: 37.2, lng: 127.0),
+      throwsA(
+        isA<LalaApiException>()
+            .having((error) => error.code, 'code', 'AUTH_TOKEN_UNAVAILABLE')
+            .having((error) => error.statusCode, 'statusCode', 0)
+            .having((error) => error.retryable, 'retryable', isTrue)
+            .having(
+                (error) => error.message, 'message', isNot(contains('secret')))
+            .having((error) => error.toString(), 'toString',
+                isNot(contains('secret'))),
+      ),
+    );
+  });
+
+  test('getMe parses the strict account response', () async {
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      httpClient: MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/api/v1/me');
+        return _jsonResponse({
+          'ok': true,
+          'data': {
+            'user_id': 'user-123',
+            'created_at': '2026-07-10T00:00:00Z',
+            'authenticated': true,
+          },
+          'meta': {'request_id': 'me-request-id'},
+          'error': null,
+        });
+      }),
+    );
+
+    final envelope = await client.getMe();
+
+    expect(envelope.data?.userId, 'user-123');
+    expect(envelope.data?.createdAt, '2026-07-10T00:00:00Z');
+    expect(envelope.data?.authenticated, isTrue);
+    expect(envelope.requestId, 'me-request-id');
+  });
+
+  test('LalaMe rejects non-strict JSON field types', () {
+    expect(
+      () => LalaMe.fromJsonObject({
+        'user_id': 123,
+        'created_at': '2026-07-10T00:00:00Z',
+        'authenticated': true,
+      }),
+      throwsA(isA<FormatException>()),
+    );
+  });
+
+  test('deleteMe sends JSON confirmation and dynamic auth, accepting only 204',
+      () async {
+    late http.Request captured;
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      accessTokenProvider: () async => 'delete-token',
+      httpClient: MockClient((request) async {
+        captured = request;
+        return http.Response('', 204);
+      }),
+    );
+
+    await client.deleteMe(confirmation: 'delete-my-account');
+
+    expect(captured.method, 'DELETE');
+    expect(captured.url.path, '/api/v1/me');
+    expect(jsonDecode(captured.body), {'confirmation': 'delete-my-account'});
+    expect(captured.headers['authorization'], 'Bearer delete-token');
+    expect(captured.headers['content-type'], contains('application/json'));
+  });
+
+  test('deleteMe rejects an unexpected successful status as INVALID_RESPONSE',
+      () async {
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      httpClient: MockClient((request) async => _jsonResponse({
+            'ok': true,
+            'data': null,
+            'meta': <String, Object?>{},
+            'error': null,
+          })),
+    );
+
+    await expectLater(
+      client.deleteMe(confirmation: 'delete-my-account'),
+      throwsA(
+        isA<LalaApiException>()
+            .having((error) => error.code, 'code', 'INVALID_RESPONSE')
+            .having((error) => error.statusCode, 'statusCode', 200),
+      ),
+    );
+  });
+
+  test('deleteMe preserves a JSON error envelope as a typed exception',
+      () async {
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      httpClient: MockClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'ok': false,
+            'data': null,
+            'meta': {'request_id': 'delete-error-id'},
+            'error': {
+              'code': 'CONFIRMATION_REQUIRED',
+              'message': 'Confirmation is required.',
+              'retryable': false,
+            },
+          }),
+          400,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    await expectLater(
+      client.deleteMe(confirmation: 'wrong-confirmation'),
+      throwsA(
+        isA<LalaApiException>()
+            .having((error) => error.code, 'code', 'CONFIRMATION_REQUIRED')
+            .having((error) => error.statusCode, 'statusCode', 400)
+            .having((error) => error.requestId, 'requestId', 'delete-error-id'),
+      ),
+    );
+  });
+
   test('auth mode classifies OAuth JWT, static bearer, and API key', () {
     expect(
       LalaAuthMode.fromCredentials(
@@ -614,6 +881,28 @@ http.Response _jsonResponse(Map<String, Object?> payload) {
     200,
     headers: {'content-type': 'application/json; charset=utf-8'},
   );
+}
+
+http.Response _placesResponse() {
+  return _jsonResponse({
+    'ok': true,
+    'data': {
+      'count': 0,
+      'places': <Object?>[],
+      'query': {
+        'lat': 37.2,
+        'lng': 127.0,
+        'radius_m': 1000,
+        'limit': 60,
+        'category': 'all',
+        'language': 'ko',
+      },
+      'source': 'db',
+      'location_engine': 'postgis',
+    },
+    'meta': <String, Object?>{},
+    'error': null,
+  });
 }
 
 Map<String, Object?> _placePayload() {
