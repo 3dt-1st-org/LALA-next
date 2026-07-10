@@ -1768,26 +1768,12 @@ class _AccountSettingsSection extends StatelessWidget {
             const Icon(Icons.account_circle_outlined, color: Color(0xFF2B6CB0)),
             const SizedBox(width: 10),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _copy(language, ko: '로그인됨', en: 'Signed in'),
-                    style: const TextStyle(
-                      color: Color(0xFF1E293B),
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${_copy(language, ko: '계정 ID', en: 'Account ID')}: ${me.userId}',
-                    style: const TextStyle(
-                      color: Color(0xFF64748B),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
+              child: Text(
+                _copy(language, ko: '로그인됨', en: 'Signed in'),
+                style: const TextStyle(
+                  color: Color(0xFF1E293B),
+                  fontWeight: FontWeight.w900,
+                ),
               ),
             ),
             IconButton(

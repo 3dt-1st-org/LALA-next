@@ -5,6 +5,9 @@ import 'package:logto_dart_sdk/logto_dart_sdk.dart';
 import 'auth_controller.dart';
 
 const String _nativeRedirectUri = 'cloud.lalanext.lala://callback';
+const String _nativeRedirectScheme = 'cloud.lalanext.lala';
+
+typedef LalaEnvironmentValue = String Function(String name);
 
 @immutable
 class LalaAuthConfig {
@@ -14,26 +17,39 @@ class LalaAuthConfig {
     required this.apiAudience,
     required this.redirectUri,
     this.postLogoutRedirectUri,
+    this.isWeb = false,
   });
 
-  factory LalaAuthConfig.fromEnvironment() {
-    final defaultRedirectUri = kIsWeb
-        ? Uri.base.resolve('/auth-callback.html').toString()
+  factory LalaAuthConfig.fromEnvironment({
+    bool? isWeb,
+    Uri? baseUri,
+    LalaEnvironmentValue? environmentValue,
+  }) {
+    final selectedIsWeb = isWeb ?? kIsWeb;
+    final selectedBaseUri = baseUri ?? Uri.base;
+    final read = environmentValue ?? _compileTimeEnvironmentValue;
+    final endpoint = read('LOGTO_ENDPOINT').trim();
+    final appId = read(
+      selectedIsWeb ? 'LOGTO_WEB_APP_ID' : 'LOGTO_NATIVE_APP_ID',
+    ).trim();
+    final apiAudience = read('LOGTO_API_AUDIENCE').trim();
+    final configuredRedirectUri = read('LOGTO_REDIRECT_URI').trim();
+    final postLogoutRedirectUri = read('LOGTO_POST_LOGOUT_REDIRECT_URI').trim();
+    final defaultRedirectUri = selectedIsWeb
+        ? selectedBaseUri.resolve('/auth-callback.html').toString()
         : _nativeRedirectUri;
-    const configuredRedirectUri = String.fromEnvironment('LOGTO_REDIRECT_URI');
 
     return LalaAuthConfig(
-      endpoint: const String.fromEnvironment('LOGTO_ENDPOINT'),
-      appId: kIsWeb
-          ? const String.fromEnvironment('LOGTO_WEB_APP_ID')
-          : const String.fromEnvironment('LOGTO_NATIVE_APP_ID'),
-      apiAudience: const String.fromEnvironment('LOGTO_API_AUDIENCE'),
-      redirectUri: configuredRedirectUri.trim().isEmpty
+      endpoint: endpoint,
+      appId: appId,
+      apiAudience: apiAudience,
+      redirectUri: configuredRedirectUri.isEmpty
           ? defaultRedirectUri
-          : configuredRedirectUri.trim(),
-      postLogoutRedirectUri: _optionalEnvironmentValue(
-        const String.fromEnvironment('LOGTO_POST_LOGOUT_REDIRECT_URI'),
-      ),
+          : configuredRedirectUri,
+      postLogoutRedirectUri: postLogoutRedirectUri.isEmpty
+          ? null
+          : postLogoutRedirectUri,
+      isWeb: selectedIsWeb,
     );
   }
 
@@ -42,12 +58,15 @@ class LalaAuthConfig {
   final String apiAudience;
   final String redirectUri;
   final String? postLogoutRedirectUri;
+  final bool isWeb;
 
   bool get enabled =>
       _isHttpsUri(endpoint) &&
-      appId.trim().isNotEmpty &&
+      appId.isNotEmpty &&
       _isHttpsUri(apiAudience) &&
-      redirectUri.trim().isNotEmpty;
+      _isValidRedirectUri(redirectUri, isWeb: isWeb) &&
+      (postLogoutRedirectUri == null ||
+          _isValidRedirectUri(postLogoutRedirectUri!, isWeb: isWeb));
 }
 
 abstract interface class LalaAuthGateway {
@@ -182,12 +201,38 @@ class _DisabledAccountApi implements LalaAccountApi {
       Future<LalaMe>.error(StateError('Account API is disabled.'));
 }
 
-String? _optionalEnvironmentValue(String value) {
-  final trimmed = value.trim();
-  return trimmed.isEmpty ? null : trimmed;
+String _compileTimeEnvironmentValue(String name) {
+  return switch (name) {
+    'LOGTO_ENDPOINT' => const String.fromEnvironment('LOGTO_ENDPOINT'),
+    'LOGTO_WEB_APP_ID' => const String.fromEnvironment('LOGTO_WEB_APP_ID'),
+    'LOGTO_NATIVE_APP_ID' => const String.fromEnvironment(
+      'LOGTO_NATIVE_APP_ID',
+    ),
+    'LOGTO_API_AUDIENCE' => const String.fromEnvironment('LOGTO_API_AUDIENCE'),
+    'LOGTO_REDIRECT_URI' => const String.fromEnvironment('LOGTO_REDIRECT_URI'),
+    'LOGTO_POST_LOGOUT_REDIRECT_URI' => const String.fromEnvironment(
+      'LOGTO_POST_LOGOUT_REDIRECT_URI',
+    ),
+    _ => throw ArgumentError.value(name, 'name', 'Unknown environment value.'),
+  };
 }
 
 bool _isHttpsUri(String value) {
-  final uri = Uri.tryParse(value.trim());
+  final uri = Uri.tryParse(value);
   return uri != null && uri.scheme == 'https' && uri.host.isNotEmpty;
+}
+
+bool _isValidRedirectUri(String value, {required bool isWeb}) {
+  final uri = Uri.tryParse(value);
+  if (uri == null || uri.host.isEmpty || uri.hasFragment) {
+    return false;
+  }
+  if (!isWeb) {
+    return uri.scheme == _nativeRedirectScheme;
+  }
+  if (uri.scheme == 'https') {
+    return true;
+  }
+  return uri.scheme == 'http' &&
+      (uri.host == 'localhost' || uri.host == '127.0.0.1' || uri.host == '::1');
 }

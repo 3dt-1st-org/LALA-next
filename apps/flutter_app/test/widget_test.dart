@@ -1823,7 +1823,8 @@ void main() {
 
       expect(gateway.signInCalls, 1);
       expect(find.text('로그인됨'), findsOneWidget);
-      expect(find.textContaining('account-123'), findsOneWidget);
+      expect(find.textContaining('account-123'), findsNothing);
+      expect(find.textContaining('계정 ID'), findsNothing);
       expect(configs.last.accessTokenProvider, isNotNull);
       expect(await configs.last.accessTokenProvider!(), 'fresh-access-token');
     },
