@@ -186,6 +186,7 @@ done
 2. RDS 적용: `aws rds modify-db-instance --db-instance-identifier lala-next-db --master-user-password '<NEW>' --apply-immediately` (적용까지 수 분)
 3. Secrets Manager 갱신: `aws secretsmanager put-secret-value --secret-id lala-next/rds-master-password --secret-string '{"password":"<NEW>"}'`
 4. EC2 `.env`의 `DB_DSN` 비밀번호 부분을 새 값으로 갱신 → `sudo systemctl restart lala-next`
+   - ⚠️ **ssh는 환경변수를 원격으로 전달하지 않습니다** — 비밀번호를 `ssh "..."` 안의 변수로 넣으면 빈 값이 들어가 잠시 장애(degraded) 발생. 대신 **파일로 안전 전송**: 로컬에서 `DB_DSN=...` 파일 작성 → `scp` → EC2에서 `sed`로 갱신 → 파일 삭제.
 5. `/readyz`로 `db-backed` 유지 확인
 
 기타:
