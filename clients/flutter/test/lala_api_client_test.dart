@@ -761,8 +761,10 @@ void main() {
     expect(audio.cacheKey, startsWith('docent_audio:'));
   });
 
-  test('createDocentAudio uses one nonblank dynamic provider token', () async {
+  test('createDocentAudio uses the current provider token exactly once',
+      () async {
     var providerCalls = 0;
+    var currentToken = 'stale-audio-token';
     late http.Request captured;
     final client = LalaApiClient(
       baseUri: Uri.parse('http://api.example.test'),
@@ -770,7 +772,7 @@ void main() {
       apiKey: 'static-api-key',
       accessTokenProvider: () async {
         providerCalls++;
-        return '  dynamic-audio-token  ';
+        return '  $currentToken  ';
       },
       httpClient: MockClient((request) async {
         captured = request;
@@ -782,10 +784,11 @@ void main() {
       }),
     );
 
+    currentToken = 'fresh-audio-token';
     await client.createDocentAudio(script: 'dynamic audio script');
 
     expect(providerCalls, 1);
-    expect(captured.headers['authorization'], 'Bearer dynamic-audio-token');
+    expect(captured.headers['authorization'], 'Bearer fresh-audio-token');
     expect(captured.headers.containsKey('x-api-key'), isFalse);
   });
 
