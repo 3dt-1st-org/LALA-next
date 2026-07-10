@@ -27,18 +27,25 @@ LALA_ENABLE_LIVE_AI=true
 LALA_ENABLE_LIVE_SPEECH=true
 ```
 
-The primary API runtime now lives on Azure Container Apps. For production,
-review, and shared dev, keep `LALA_STATIC_SNAPSHOT_FALLBACK=false`; the normal
-data path is PostgreSQL plus Key Vault with reviewed ingest, scoring, and RAG
-jobs. Bundled static data is only an offline, read-only snapshot fallback for DB
-outage handling or isolated local checks.
-During the public contest review window, shared dev enables Azure OpenAI-backed
-docent scripts when the LALA Key Vault contains the OpenAI endpoint, deployment,
-API version, and key. Live Speech remains disabled by default to avoid paid audio
-generation during automated deploy smokes.
+The primary API runtime now lives on **AWS EC2** (`api.lala-next.cloud`,
+FastAPI behind Nginx), backed by **Amazon RDS PostgreSQL/PostGIS**. See
+`docs/operations/aws-deployment-runbook.md` for the authoritative deployment.
+Vercel now hosts the **frontend only** (Flutter web, `lala-next.cloud` / `www`);
+the `api/index.py` path here is a legacy Vercel API fallback, not the primary API.
 
-During the public contest review window, Azure dev uses
-`LALA_PUBLIC_CONTEST_ACCESS=true`, so Flutter web builds should call Azure
+For production, review, and shared dev, keep `LALA_STATIC_SNAPSHOT_FALLBACK=false`;
+the normal data path is PostgreSQL (RDS) plus AWS Secrets Manager with reviewed
+ingest, scoring, and RAG jobs. Bundled static data is only an offline, read-only
+snapshot fallback for DB outage handling or isolated local checks.
+
+RAG embeddings run against the standard OpenAI API (`OPENAI_API_KEY`,
+`text-embedding-3-small`) when `LALA_ENABLE_LIVE_AI=true`. The FastAPI runtime
+keeps `LALA_ENABLE_LIVE_AI=false` by default (the embeddings batch toggles it
+transiently); docent scripts and Live Speech are disabled outside the contest
+window to avoid paid AI/audio generation during automated deploy smokes.
+
+During the public contest review window, the backend runs with
+`LALA_PUBLIC_CONTEST_ACCESS=true`, so Flutter web builds should call the API
 without bundling a static API bearer token. After the contest window, switch
 back to OAuth or a backend-for-frontend proxy before disabling public contest
 access.
@@ -116,22 +123,24 @@ any Vercel preview domain used for judging.
 
 ## DNS
 
-Gabia currently hosts DNS for `lala-next.cloud`. Vercel is configured in
-external-DNS mode, so changing nameservers is not required for this MVP.
+Cloudflare currently hosts DNS for `lala-next.cloud` (nameservers
+`*.ns.cloudflare.com`). Vercel is configured in external-DNS mode, so changing
+nameservers is not required.
 
-Expected public record shape. Resolve the exact target values from Vercel,
-Azure, and Gabia rather than copying live values into this repo:
+Expected public record shape. Resolve the exact target values from Vercel and
+AWS rather than copying live values into this repo:
 
 ```text
-@          A      <vercel-apex-address>
-www        A      <vercel-www-address>
-api        CNAME  <azure-container-app-fqdn>.
-asuid.api  TXT    <azure-custom-domain-validation-id>
+@          A      <vercel-apex-address>   (grey cloud — Vercel manages SSL)
+www        A      <vercel-www-address>    (grey cloud — Vercel manages SSL)
+api        A      <ec2-public-ip>         (orange cloud — Cloudflare proxy, Full strict)
 ```
 
-`@` and `www` stay on Vercel. `api.lala-next.cloud` belongs to Azure Container
-Apps and should be verified with Azure hostname and certificate status, not
-Vercel domain status.
+`@` and `www` stay on Vercel (grey cloud so Vercel issues its own certificate).
+`api.lala-next.cloud` is an A record to the EC2 Elastic IP behind Cloudflare's
+orange-cloud proxy (Full strict); its TLS certificate is Let's Encrypt on EC2,
+renewed automatically by `certbot-renew.timer`. Verify `api` with the EC2 host
+and certificate status, not Vercel domain status.
 
 If `@` or `www` records change, verify Vercel status:
 

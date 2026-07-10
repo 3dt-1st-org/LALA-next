@@ -36,27 +36,29 @@
 
 ## 2. 핵심 리소스 ID
 
+> ⚠️ **민감값 정책**: 이 문서는 public repo에 있습니다. 계정 ID, 리소스 ID, 엔드포인트, 비밀번호 등은 placeholder로 표기합니다. **실제 값은 AWS 콘솔 또는 팀 내 private 운영 문서에서 확인**하세요. RDS 비밀번호는 AWS Secrets Manager(`lala-next/rds-master-password`)에서만 조회 — 문서에 평문을 기록하지 않습니다.
+
 | 리소스 | ID / 값 |
 |--------|---------|
-| AWS 계정 | `292216133883` (신규, $200 크레딧 6개월 + 12개월 무료티어) |
+| AWS 계정 | `<AWS_ACCOUNT_ID>` (12개월 무료티어) — 콘솔에서 확인 |
 | 리전 | `us-east-1` (버지니아 북부) |
-| VPC | `vpc-08905332b2ce7c4b7` |
-| EC2 인스턴스 | `i-0a15ffbfa381a5843` |
-| EC2 퍼블릭 IP | `54.160.16.183` (Elastic IP, 고정) |
-| Elastic IP | `eipalloc-06027fd44aa12394d` |
+| VPC | `<VPC_ID>` |
+| EC2 인스턴스 | `<EC2_INSTANCE_ID>` |
+| EC2 퍼블릭 IP | `54.160.16.183` (Elastic IP, 고정 — 도메인 DNS로 공개됨) |
+| Elastic IP | `<EIP_ALLOC_ID>` |
 | RDS 인스턴스 | `lala-next-db` |
-| RDS 엔드포인트 | `lala-next-db.cojm284ouqxi.us-east-1.rds.amazonaws.com:5432` |
+| RDS 엔드포인트 | `<RDS_ENDPOINT>:5432` — AWS 콘솔 RDS에서 확인 |
 | RDS 데이터베이스 | `lalanext` (user `lalaadmin`) |
-| 보안그룹 (EC2) | `sg-07b44009e6593a54b` |
-| 보안그룹 (RDS) | `sg-02db54e4b9b95e81b` |
+| 보안그룹 (EC2) | `<SG_EC2_ID>` |
+| 보안그룹 (RDS) | `<SG_RDS_ID>` |
 | DB 파라미터 그룹 | `lala-next-postgres-params` (rds.allowed_extensions: postgis,pgcrypto,vector) |
 | SSH 키 | `~/.ssh/lala-next-key.pem` (user `ec2-user`) |
-| Cloudflare Zone | `eee348ff140b1ed22e51bfe591bed110` (`lala-next.cloud`) |
+| Cloudflare Zone | `<CF_ZONE_ID>` (`lala-next.cloud`) |
 | Cloudflare SSL 모드 | Full (strict) |
 | 도메인 | `api.lala-next.cloud` → A `54.160.16.183` (Proxied) |
 | SSL 인증서 | Let's Encrypt (EC2 `/etc/letsencrypt/live/api.lala-next.cloud/`, 자동 갱신) |
-| Secrets Manager | `lala-next/rds-master-password` (RDS 마스터 비밀번호) |
-| S3 백업 버킷 | `lala-next-backups-292216133883` (버저닝 + 30일 Glacier) |
+| Secrets Manager | `lala-next/rds-master-password` (RDS 마스터 비밀번호, **값은 Secret에서만 조회**) |
+| S3 백업 버킷 | `lala-next-backups-<AWS_ACCOUNT_ID>` (버저닝 + 30일 Glacier) |
 
 ---
 
@@ -128,7 +130,11 @@ sudo systemctl restart nginx
 ### DB 접속 (EC2 통해)
 ```bash
 # RDS는 프라이뱃 서브넷 → EC2에서만 접근 가능
-PGPASSWORD='LalaNext2024!' psql -h lala-next-db.cojm284ouqxi.us-east-1.rds.amazonaws.com -U lalaadmin -d lalanext
+# 비밀번호는 Secrets Manager에서 조회 (런북에 평문 금지)
+RDS_PW=$(aws secretsmanager get-secret-value \
+  --secret-id lala-next/rds-master-password \
+  --query SecretString --output text | python3 -c "import sys,json;print(json.loads(sys.stdin.read())['password'])")
+PGPASSWORD="$RDS_PW" psql -h <RDS_ENDPOINT> -U lalaadmin -d lalanext
 ```
 
 ### 코드 업데이트 (EC2 내부)
@@ -150,7 +156,7 @@ RDS_PW=$(aws secretsmanager get-secret-value \
 # canonical 스키마 재적용 (순서대로)
 cd /opt/lala-next
 for f in $(ls -1 sql/canonical/*.sql | sort); do
-  PGPASSWORD="$RDS_PW" psql -h lala-next-db.cojm284ouqxi.us-east-1.rds.amazonaws.com -U lalaadmin -d lalanext -f "$f"
+  PGPASSWORD="$RDS_PW" psql -h <RDS_ENDPOINT> -U lalaadmin -d lalanext -f "$f"
 done
 ```
 
@@ -173,10 +179,18 @@ done
 
 ## 7. 보안 주의사항
 
-⚠️ **현재 비밀번호(`LalaNext2024!`)는 초기 설정용** — 운영 전환 전에 다음을 권장:
-1. RDS 마스터 비밀번호 변경 (`aws rds modify-db-instance --master-user-password ...`)
-2. AWS Secrets Manager로 비밀번호 이관
-3. EC2 보안그룹 SSH 규칙을 특정 IP로 제한 (현재 단일 IP로 제한됨)
+⚠️ **비밀번호는 평문으로 어디에도 기록하지 않습니다** — 항상 AWS Secrets Manager에서만 조회. 비밀번호가 노출(예: git history, 스크린샷)된 경우 즉시 회전:
+
+**RDS 마스터 비밀번호 회전 절차** (강한 권한의 AWS 자격증명 필요):
+1. 새 강력한 비밀번호 생성: `aws secretsmanager get-random-password --exclude-characters "\"'\\\`" --password-length 32`
+2. RDS 적용: `aws rds modify-db-instance --db-instance-identifier lala-next-db --master-user-password '<NEW>' --apply-immediately` (적용까지 수 분)
+3. Secrets Manager 갱신: `aws secretsmanager put-secret-value --secret-id lala-next/rds-master-password --secret-string '{"password":"<NEW>"}'`
+4. EC2 `.env`의 `DB_DSN` 비밀번호 부분을 새 값으로 갱신 → `sudo systemctl restart lala-next`
+5. `/readyz`로 `db-backed` 유지 확인
+
+기타:
+- EC2 보안그룹 SSH 규칙을 특정 IP로 제한 (현재 단일 IP로 제한됨)
+- 운영 전환 후 API bearer token / OAuth 자격증명 회전
 
 ⚠️ **CORS 현재 `*` (모두 허용)** — 운영 전환 전에 도메인 지정으로 변경.
 
@@ -263,7 +277,7 @@ sudo systemctl list-timers | grep lala-next
 ## 9. 장애 대응 플레이북
 
 ### 증상: /healthz 응답 없음
-1. EC2 상태 확인: `aws ec2 describe-instances --instance-ids i-0a15ffbfa381a5843`
+1. EC2 상태 확인: `aws ec2 describe-instances --instance-ids <EC2_INSTANCE_ID>`
 2. SSH 접속 후: `sudo systemctl status lala-next`
 3. `failed` 시: `sudo systemctl restart lala-next`
 4. 로그 확인: `sudo journalctl -u lala-next -n 50`
