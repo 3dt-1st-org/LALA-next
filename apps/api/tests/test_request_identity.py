@@ -33,6 +33,20 @@ def test_logto_settings_are_canonical_and_derive_jwt_validation_values(monkeypat
     assert is_oauth_jwt_validation_configured(settings) is True
 
 
+def test_unsafe_logto_endpoint_preserves_legacy_oauth_validation_settings(monkeypatch):
+    monkeypatch.setenv("LOGTO_ENDPOINT", "http://unsafe-logto.example")
+    monkeypatch.setenv("LOGTO_API_AUDIENCE", LOGTO_API_AUDIENCE)
+    monkeypatch.setenv("OAUTH_ISSUER", "https://legacy.example/issuer")
+    monkeypatch.setenv("OAUTH_AUDIENCE", "legacy-audience")
+    monkeypatch.setenv("OAUTH_JWKS_URL", "https://legacy.example/jwks")
+
+    settings = Settings.from_env()
+
+    assert settings.oauth_issuer == "https://legacy.example/issuer"
+    assert settings.oauth_audience == "legacy-audience"
+    assert settings.oauth_jwks_url == "https://legacy.example/jwks"
+
+
 @pytest.mark.parametrize(
     ("method", "path", "payload"),
     (
