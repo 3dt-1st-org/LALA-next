@@ -75,7 +75,9 @@ class Settings:
             key_vault_url,
         )
         logto_issuer, logto_jwks_url = _derive_logto_oidc_urls(logto_endpoint)
-        logto_validation_configured = bool(logto_issuer and logto_jwks_url)
+        logto_validation_configured = bool(
+            logto_issuer and logto_jwks_url and logto_api_audience
+        )
         azure_openai_deployment = _env_or_secret(
             "AZURE_OPENAI_DEPLOYMENT",
             "azure-openai-deployment",
@@ -103,7 +105,7 @@ class Settings:
             logto_endpoint=logto_endpoint,
             logto_api_audience=logto_api_audience,
             oauth_issuer=(
-                logto_issuer
+                logto_issuer if logto_validation_configured else ""
                 or _env_or_secret("OAUTH_ISSUER", "oauth-issuer", key_vault_url)
             ),
             oauth_audience=(
@@ -111,7 +113,7 @@ class Settings:
                 or _env_or_secret("OAUTH_AUDIENCE", "oauth-audience", key_vault_url)
             ),
             oauth_jwks_url=(
-                logto_jwks_url
+                logto_jwks_url if logto_validation_configured else ""
                 or _env_or_secret("OAUTH_JWKS_URL", "oauth-jwks-url", key_vault_url)
             ),
             oauth_client_id=_env_or_secret("OAUTH_CLIENT_ID", "oauth-client-id", key_vault_url),

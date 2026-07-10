@@ -47,6 +47,20 @@ def test_unsafe_logto_endpoint_preserves_legacy_oauth_validation_settings(monkey
     assert settings.oauth_jwks_url == "https://legacy.example/jwks"
 
 
+def test_missing_logto_audience_preserves_legacy_oauth_validation_settings(monkeypatch):
+    monkeypatch.setenv("LOGTO_ENDPOINT", LOGTO_ENDPOINT)
+    monkeypatch.delenv("LOGTO_API_AUDIENCE", raising=False)
+    monkeypatch.setenv("OAUTH_ISSUER", "https://legacy.example/issuer")
+    monkeypatch.setenv("OAUTH_AUDIENCE", "legacy-audience")
+    monkeypatch.setenv("OAUTH_JWKS_URL", "https://legacy.example/jwks")
+
+    settings = Settings.from_env()
+
+    assert settings.oauth_issuer == "https://legacy.example/issuer"
+    assert settings.oauth_audience == "legacy-audience"
+    assert settings.oauth_jwks_url == "https://legacy.example/jwks"
+
+
 @pytest.mark.parametrize(
     ("method", "path", "payload"),
     (
