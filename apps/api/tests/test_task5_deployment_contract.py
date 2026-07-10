@@ -6,12 +6,30 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
+from scripts import prepare_flutter_vercel_static_output as staging
+
 
 ROOT = Path(__file__).resolve().parents[3]
+REQUIRED_FLUTTER_BUILD_FILES = (
+    "index.html",
+    "flutter_bootstrap.js",
+    "main.dart.js",
+    "assets/AssetManifest.bin.json",
+    "auth-callback.html",
+)
 
 
 def _text(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
+
+
+def _write_flutter_build(build_output: Path) -> None:
+    for relative_path in REQUIRED_FLUTTER_BUILD_FILES:
+        artifact = build_output / relative_path
+        artifact.parent.mkdir(parents=True, exist_ok=True)
+        artifact.write_text(f"fixture:{relative_path}\n", encoding="utf-8")
 
 
 def test_env_example_documents_guest_logto_and_public_flutter_configuration():
@@ -44,45 +62,303 @@ def test_current_deployment_docs_describe_aws_api_rds_and_vercel_flutter():
     assert "FastAPI backend" not in vercel.split("## Historical", maxsplit=1)[0]
 
 
-def test_flutter_vercel_static_output_uses_isolated_effective_config(tmp_path):
+def test_flutter_vercel_static_output_uses_isolated_effective_config(
+    tmp_path, monkeypatch, capsys
+):
     root_config = json.loads(_text("vercel.json"))
     assert root_config["rewrites"][0]["destination"] == "/api/index.py"
 
     template = json.loads(_text("deploy/vercel/flutter-static.vercel.json"))
-    build_output = tmp_path / "build" / "web"
-    build_output.mkdir(parents=True)
-    (build_output / "index.html").write_text("<html></html>", encoding="utf-8")
+    isolated_root = tmp_path / "repo"
+    build_output = isolated_root / "build" / "web"
+    _write_flutter_build(build_output)
     (build_output / "vercel.json").write_text(
         json.dumps({"rewrites": [{"source": "/(.*)", "destination": "/api/index.py"}]}),
         encoding="utf-8",
     )
-    static_output = tmp_path / "static-output"
-
-    subprocess.run(
-        [
-            sys.executable,
-            str(ROOT / "scripts" / "prepare_flutter_vercel_static_output.py"),
-            "--source",
-            str(build_output),
-            "--output",
-            str(static_output),
-        ],
-        cwd=ROOT,
-        check=True,
-        text=True,
-        capture_output=True,
+    static_output = isolated_root / "static-output"
+    monkeypatch.setattr(staging, "ROOT", isolated_root)
+    monkeypatch.setattr(staging, "DEFAULT_OUTPUT", static_output)
+    org_id = "team_contract_fixture"
+    project_id = "prj_contract_fixture"
+    monkeypatch.setenv("VERCEL_ORG_ID", org_id)
+    monkeypatch.setenv("VERCEL_PROJECT_ID", project_id)
+    monkeypatch.setattr(
+        sys, "argv", ["prepare_flutter_vercel_static_output.py", "--source", str(build_output)]
     )
+
+    assert staging.main() == 0
+    stage_output = capsys.readouterr().out
+    assert org_id not in stage_output
+    assert project_id not in stage_output
 
     effective = json.loads((static_output / "vercel.json").read_text(encoding="utf-8"))
     assert effective == template
     assert "/api/index.py" not in json.dumps(effective)
     assert effective["rewrites"] == [{"source": "/(.*)", "destination": "/index.html"}]
     assert (static_output / "index.html").is_file()
+    project_path = static_output / ".vercel" / "project.json"
+    assert project_path.is_file()
+    project_binding = json.loads(project_path.read_text(encoding="utf-8"))
+    assert project_binding == {"orgId": org_id, "projectId": project_id}
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["prepare_flutter_vercel_static_output.py", "--verify-project-binding"],
+    )
+    assert staging.main() == 0
+    verification_output = capsys.readouterr().out
+    assert org_id not in verification_output
+    assert project_id not in verification_output
 
     deployment_doc = _text("docs/operations/vercel-deployment.md")
     assert "python3 scripts/prepare_flutter_vercel_static_output.py" in deployment_doc
+    assert "VERCEL_ORG_ID" in deployment_doc
+    assert "VERCEL_PROJECT_ID" in deployment_doc
+    verify_command = (
+        "python3 scripts/prepare_flutter_vercel_static_output.py "
+        "--verify-project-binding"
+    )
+    assert verify_command in deployment_doc
     assert "vercel deploy static-output --prod" in deployment_doc
+    assert deployment_doc.index(verify_command) < deployment_doc.index(
+        "vercel deploy static-output --prod"
+    )
     assert "static-output/" in _text(".gitignore")
+
+
+@pytest.mark.parametrize("missing_name", ["VERCEL_ORG_ID", "VERCEL_PROJECT_ID"])
+def test_flutter_vercel_staging_requires_project_binding_before_deleting_output(
+    tmp_path, monkeypatch, missing_name
+):
+    isolated_root = tmp_path / "repo"
+    build_output = isolated_root / "build" / "web"
+    _write_flutter_build(build_output)
+    static_output = isolated_root / "static-output"
+    static_output.mkdir(parents=True)
+    marker = static_output / "keep.txt"
+    marker.write_text("keep", encoding="utf-8")
+    monkeypatch.setattr(staging, "ROOT", isolated_root)
+    monkeypatch.setattr(staging, "DEFAULT_OUTPUT", static_output)
+    monkeypatch.setenv("VERCEL_ORG_ID", "team_contract_fixture")
+    monkeypatch.setenv("VERCEL_PROJECT_ID", "prj_contract_fixture")
+    monkeypatch.delenv(missing_name)
+    monkeypatch.setattr(
+        sys, "argv", ["prepare_flutter_vercel_static_output.py", "--source", str(build_output)]
+    )
+
+    with pytest.raises(SystemExit):
+        staging.main()
+
+    assert marker.read_text(encoding="utf-8") == "keep"
+
+
+@pytest.mark.parametrize(
+    ("name", "invalid_value"),
+    [
+        ("VERCEL_ORG_ID", "contains whitespace"),
+        ("VERCEL_PROJECT_ID", "../project"),
+    ],
+)
+def test_flutter_vercel_staging_rejects_invalid_project_binding_without_logging_it(
+    tmp_path, monkeypatch, capsys, name, invalid_value
+):
+    isolated_root = tmp_path / "repo"
+    build_output = isolated_root / "build" / "web"
+    _write_flutter_build(build_output)
+    monkeypatch.setattr(staging, "ROOT", isolated_root)
+    monkeypatch.setattr(staging, "DEFAULT_OUTPUT", isolated_root / "static-output")
+    monkeypatch.setenv("VERCEL_ORG_ID", "team_contract_fixture")
+    monkeypatch.setenv("VERCEL_PROJECT_ID", "prj_contract_fixture")
+    monkeypatch.setenv(name, invalid_value)
+    monkeypatch.setattr(
+        sys, "argv", ["prepare_flutter_vercel_static_output.py", "--source", str(build_output)]
+    )
+
+    with pytest.raises(SystemExit):
+        staging.main()
+
+    captured = capsys.readouterr()
+    assert invalid_value not in captured.out
+    assert invalid_value not in captured.err
+
+
+@pytest.mark.parametrize(
+    "tamper",
+    ["config", "missing-org", "wrong-project", "extra-project-key"],
+)
+def test_flutter_vercel_binding_verification_rejects_tampered_staged_contract(
+    tmp_path, monkeypatch, tamper
+):
+    isolated_root = tmp_path / "repo"
+    build_output = isolated_root / "build" / "web"
+    _write_flutter_build(build_output)
+    static_output = isolated_root / "static-output"
+    monkeypatch.setattr(staging, "ROOT", isolated_root)
+    monkeypatch.setattr(staging, "DEFAULT_OUTPUT", static_output)
+    monkeypatch.setenv("VERCEL_ORG_ID", "team_contract_fixture")
+    monkeypatch.setenv("VERCEL_PROJECT_ID", "prj_contract_fixture")
+    monkeypatch.setattr(
+        sys, "argv", ["prepare_flutter_vercel_static_output.py", "--source", str(build_output)]
+    )
+    assert staging.main() == 0
+
+    project_path = static_output / ".vercel" / "project.json"
+    assert project_path.is_file()
+    if tamper == "config":
+        (static_output / "vercel.json").write_text("{}\n", encoding="utf-8")
+    else:
+        project = json.loads(project_path.read_text(encoding="utf-8"))
+        if tamper == "missing-org":
+            project.pop("orgId")
+        elif tamper == "wrong-project":
+            project["projectId"] = "prj_other_fixture"
+        else:
+            project["unexpected"] = True
+        project_path.write_text(json.dumps(project), encoding="utf-8")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["prepare_flutter_vercel_static_output.py", "--verify-project-binding"],
+    )
+
+    with pytest.raises(SystemExit):
+        staging.main()
+
+
+def test_flutter_vercel_staging_cli_rejects_arbitrary_output(tmp_path):
+    build_output = tmp_path / "build" / "web"
+    _write_flutter_build(build_output)
+    unrelated = tmp_path / "unrelated-output"
+    unrelated.mkdir()
+    marker = unrelated / "keep.txt"
+    marker.write_text("keep", encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "scripts" / "prepare_flutter_vercel_static_output.py"),
+            "--source",
+            str(build_output),
+            "--output",
+            str(unrelated),
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode != 0
+    assert marker.read_text(encoding="utf-8") == "keep"
+
+
+@pytest.mark.parametrize(
+    "output_case",
+    ["symlink", "out-of-root", "parent", "absolute-sibling", "source", "file"],
+)
+def test_flutter_vercel_staging_rejects_unsafe_output_without_deleting(
+    tmp_path, output_case
+):
+    test_root = tmp_path / "repo"
+    build_output = test_root / "build" / "web"
+    _write_flutter_build(build_output)
+    sibling = tmp_path / "sibling"
+    sibling.mkdir()
+    sibling_marker = sibling / "keep.txt"
+    sibling_marker.write_text("keep", encoding="utf-8")
+
+    if output_case == "symlink":
+        output = test_root / "static-output"
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.symlink_to(sibling, target_is_directory=True)
+        marker = sibling_marker
+    elif output_case == "out-of-root":
+        output = test_root / ".." / "sibling"
+        marker = sibling_marker
+    elif output_case == "parent":
+        output = test_root
+        marker = build_output / "index.html"
+    elif output_case == "absolute-sibling":
+        output = sibling.resolve()
+        marker = sibling_marker
+    elif output_case == "source":
+        output = build_output
+        marker = build_output / "index.html"
+    else:
+        output = test_root / "static-output"
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text("keep", encoding="utf-8")
+        marker = output
+    marker_contents = marker.read_text(encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "scripts" / "prepare_flutter_vercel_static_output.py"),
+            "--source",
+            str(build_output),
+            "--output",
+            str(output),
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode != 0
+    assert marker.is_file()
+    assert marker.read_text(encoding="utf-8") == marker_contents
+
+
+def test_flutter_vercel_staging_rejects_default_output_symlink_before_deletion(
+    tmp_path, monkeypatch
+):
+    isolated_root = tmp_path / "repo"
+    build_output = isolated_root / "build" / "web"
+    _write_flutter_build(build_output)
+    target = tmp_path / "outside"
+    target.mkdir()
+    marker = target / "keep.txt"
+    marker.write_text("keep", encoding="utf-8")
+    default_output = isolated_root / "static-output"
+    default_output.symlink_to(target, target_is_directory=True)
+    monkeypatch.setattr(staging, "ROOT", isolated_root)
+    monkeypatch.setattr(staging, "DEFAULT_OUTPUT", default_output)
+    monkeypatch.setattr(
+        sys, "argv", ["prepare_flutter_vercel_static_output.py", "--source", str(build_output)]
+    )
+
+    with pytest.raises(SystemExit):
+        staging.main()
+
+    assert marker.read_text(encoding="utf-8") == "keep"
+
+
+@pytest.mark.parametrize("missing_path", REQUIRED_FLUTTER_BUILD_FILES)
+def test_flutter_vercel_staging_rejects_each_missing_release_artifact_before_deletion(
+    tmp_path, monkeypatch, missing_path
+):
+    isolated_root = tmp_path / "repo"
+    build_output = isolated_root / "build" / "web"
+    _write_flutter_build(build_output)
+    (build_output / missing_path).unlink()
+    default_output = isolated_root / "static-output"
+    default_output.mkdir(parents=True)
+    marker = default_output / "keep.txt"
+    marker.write_text("keep", encoding="utf-8")
+    monkeypatch.setattr(staging, "ROOT", isolated_root)
+    monkeypatch.setattr(staging, "DEFAULT_OUTPUT", default_output)
+    monkeypatch.setenv("VERCEL_ORG_ID", "team_contract_fixture")
+    monkeypatch.setenv("VERCEL_PROJECT_ID", "prj_contract_fixture")
+    monkeypatch.setattr(
+        sys, "argv", ["prepare_flutter_vercel_static_output.py", "--source", str(build_output)]
+    )
+
+    with pytest.raises(SystemExit):
+        staging.main()
+
+    assert marker.read_text(encoding="utf-8") == "keep"
 
 
 def test_aws_logto_rollout_covers_schema_secrets_clients_connectors_smoke_and_rollback():

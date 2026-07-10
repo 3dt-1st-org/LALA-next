@@ -1,0 +1,3003 @@
+{
+  "components": {
+    "schemas": {
+      "AccountDeletionRequest": {
+        "properties": {
+          "confirmation": {
+            "const": "delete-my-account",
+            "title": "Confirmation",
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirmation"
+        ],
+        "title": "AccountDeletionRequest",
+        "type": "object"
+      },
+      "ApiError": {
+        "additionalProperties": true,
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "details": {},
+          "message": {
+            "type": "string"
+          },
+          "retryable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "retryable"
+        ],
+        "type": "object"
+      },
+      "ApiErrorEnvelope": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "type": "null"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ApiError"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ApiMeta"
+          },
+          "ok": {
+            "const": false,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok",
+          "data",
+          "meta",
+          "error"
+        ],
+        "type": "object"
+      },
+      "ApiMeta": {
+        "additionalProperties": true,
+        "properties": {
+          "request_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id"
+        ],
+        "type": "object"
+      },
+      "ApiSuccessEnvelope": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {},
+          "error": {
+            "type": "null"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ApiMeta"
+          },
+          "ok": {
+            "const": true,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok",
+          "data",
+          "meta",
+          "error"
+        ],
+        "type": "object"
+      },
+      "Coordinate": {
+        "additionalProperties": false,
+        "properties": {
+          "lat": {
+            "format": "double",
+            "type": "number"
+          },
+          "lng": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "lat",
+          "lng"
+        ],
+        "type": "object"
+      },
+      "DailyPlanData": {
+        "additionalProperties": false,
+        "properties": {
+          "cache_key": {
+            "type": "string"
+          },
+          "center": {
+            "$ref": "#/components/schemas/Coordinate"
+          },
+          "language": {
+            "enum": [
+              "ko",
+              "en"
+            ],
+            "type": "string"
+          },
+          "radius_m": {
+            "type": "integer"
+          },
+          "request_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "slots": {
+            "items": {
+              "$ref": "#/components/schemas/DailyPlanSlot"
+            },
+            "type": "array"
+          },
+          "source": {
+            "enum": [
+              "unavailable",
+              "public_mvp_snapshot",
+              "db",
+              "mixed"
+            ],
+            "type": "string"
+          },
+          "weather": {
+            "$ref": "#/components/schemas/WeatherData"
+          }
+        },
+        "required": [
+          "language",
+          "center",
+          "radius_m",
+          "weather",
+          "slots",
+          "source",
+          "request_hash",
+          "cache_key"
+        ],
+        "type": "object"
+      },
+      "DailyPlanRequest": {
+        "properties": {
+          "language": {
+            "default": "ko",
+            "title": "Language",
+            "type": "string"
+          },
+          "lat": {
+            "maximum": 90.0,
+            "minimum": -90.0,
+            "title": "Lat",
+            "type": "number"
+          },
+          "lng": {
+            "maximum": 180.0,
+            "minimum": -180.0,
+            "title": "Lng",
+            "type": "number"
+          },
+          "radius_m": {
+            "default": 3000,
+            "exclusiveMinimum": 0.0,
+            "maximum": 50000.0,
+            "title": "Radius M",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "lat",
+          "lng"
+        ],
+        "title": "DailyPlanRequest",
+        "type": "object"
+      },
+      "DailyPlanSlot": {
+        "additionalProperties": false,
+        "properties": {
+          "period": {
+            "type": "string"
+          },
+          "place": {
+            "$ref": "#/components/schemas/Place"
+          },
+          "title": {
+            "type": "string"
+          },
+          "weather_hint": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "period",
+          "title"
+        ],
+        "type": "object"
+      },
+      "DailyPlanSuccessEnvelope": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DailyPlanData"
+          },
+          "error": {
+            "type": "null"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ApiMeta"
+          },
+          "ok": {
+            "const": true,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok",
+          "data",
+          "meta",
+          "error"
+        ],
+        "type": "object"
+      },
+      "DocentAudioRequest": {
+        "properties": {
+          "language": {
+            "default": "ko",
+            "title": "Language",
+            "type": "string"
+          },
+          "script": {
+            "minLength": 1,
+            "title": "Script",
+            "type": "string"
+          }
+        },
+        "required": [
+          "script"
+        ],
+        "title": "DocentAudioRequest",
+        "type": "object"
+      },
+      "DocentScriptData": {
+        "additionalProperties": false,
+        "properties": {
+          "cache_key": {
+            "type": "string"
+          },
+          "category": {
+            "enum": [
+              "attraction",
+              "restaurant",
+              "event",
+              "culture_venue"
+            ],
+            "type": "string"
+          },
+          "generated_at": {
+            "nullable": true,
+            "type": "string"
+          },
+          "grounding_count": {
+            "type": "integer"
+          },
+          "grounding_sources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "language": {
+            "enum": [
+              "ko",
+              "en"
+            ],
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "brief",
+              "detail"
+            ],
+            "type": "string"
+          },
+          "place_id": {
+            "type": "string"
+          },
+          "request_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "script": {
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "rule_based_curation",
+              "db_cache",
+              "azure_openai"
+            ],
+            "type": "string"
+          },
+          "ttl_sec": {
+            "nullable": true,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "place_id",
+          "category",
+          "language",
+          "mode",
+          "script",
+          "source",
+          "request_hash",
+          "cache_key"
+        ],
+        "type": "object"
+      },
+      "DocentScriptRequest": {
+        "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "category": {
+            "enum": [
+              "attraction",
+              "restaurant",
+              "event",
+              "culture_venue"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "culture_relevance_score": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Culture Relevance Score"
+          },
+          "demand_dispersion_score": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Demand Dispersion Score"
+          },
+          "distance_m": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distance M"
+          },
+          "dust_grade": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dust Grade"
+          },
+          "dust_pm10": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dust Pm10"
+          },
+          "dust_pm10_grade": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dust Pm10 Grade"
+          },
+          "dust_pm25": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dust Pm25"
+          },
+          "dust_pm25_grade": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dust Pm25 Grade"
+          },
+          "final_score": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final Score"
+          },
+          "language": {
+            "default": "ko",
+            "title": "Language",
+            "type": "string"
+          },
+          "local_spending_score": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Local Spending Score"
+          },
+          "mode": {
+            "default": "brief",
+            "title": "Mode",
+            "type": "string"
+          },
+          "place_id": {
+            "minLength": 1,
+            "title": "Place Id",
+            "type": "string"
+          },
+          "place_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Place Name"
+          },
+          "region_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region En"
+          },
+          "region_ko": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Ko"
+          },
+          "small_merchant_fit_score": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Small Merchant Fit Score"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "upstream_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upstream Source"
+          },
+          "weather_fit_score": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weather Fit Score"
+          },
+          "weather_icon": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weather Icon"
+          },
+          "weather_outdoor_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weather Outdoor Status"
+          },
+          "weather_temp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weather Temp"
+          }
+        },
+        "required": [
+          "place_id",
+          "category"
+        ],
+        "title": "DocentScriptRequest",
+        "type": "object"
+      },
+      "DocentScriptSuccessEnvelope": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DocentScriptData"
+          },
+          "error": {
+            "type": "null"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ApiMeta"
+          },
+          "ok": {
+            "const": true,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok",
+          "data",
+          "meta",
+          "error"
+        ],
+        "type": "object"
+      },
+      "Dust": {
+        "additionalProperties": false,
+        "properties": {
+          "grade": {
+            "type": "string"
+          },
+          "grade_ko": {
+            "type": "string"
+          },
+          "pm10": {
+            "type": "string"
+          },
+          "pm10_grade": {
+            "type": "string"
+          },
+          "pm10_grade_ko": {
+            "type": "string"
+          },
+          "pm25": {
+            "type": "string"
+          },
+          "pm25_grade": {
+            "type": "string"
+          },
+          "pm25_grade_ko": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "pm10",
+          "pm25",
+          "grade",
+          "grade_ko",
+          "pm10_grade",
+          "pm10_grade_ko",
+          "pm25_grade",
+          "pm25_grade_ko"
+        ],
+        "type": "object"
+      },
+      "ForecastItem": {
+        "additionalProperties": false,
+        "properties": {
+          "icon": {
+            "type": "string"
+          },
+          "temp": {
+            "type": "string"
+          },
+          "time": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "time",
+          "temp",
+          "icon"
+        ],
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HealthzData": {
+        "additionalProperties": false,
+        "properties": {
+          "service": {
+            "enum": [
+              "lala-next-api"
+            ],
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "ok"
+            ],
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "service",
+          "version"
+        ],
+        "type": "object"
+      },
+      "HealthzSuccessEnvelope": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/HealthzData"
+          },
+          "error": {
+            "type": "null"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ApiMeta"
+          },
+          "ok": {
+            "const": true,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok",
+          "data",
+          "meta",
+          "error"
+        ],
+        "type": "object"
+      },
+      "InterventionData": {
+        "additionalProperties": false,
+        "properties": {
+          "center": {
+            "$ref": "#/components/schemas/Coordinate"
+          },
+          "place": {
+            "$ref": "#/components/schemas/Place",
+            "nullable": true
+          },
+          "radius_m": {
+            "type": "integer"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "recommended_action": {
+            "type": "string"
+          },
+          "should_intervene": {
+            "type": "boolean"
+          },
+          "source": {
+            "enum": [
+              "unavailable",
+              "public_mvp_snapshot",
+              "db",
+              "mixed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "center",
+          "radius_m",
+          "should_intervene",
+          "reason",
+          "recommended_action",
+          "source"
+        ],
+        "type": "object"
+      },
+      "InterventionSuccessEnvelope": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/InterventionData"
+          },
+          "error": {
+            "type": "null"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ApiMeta"
+          },
+          "ok": {
+            "const": true,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok",
+          "data",
+          "meta",
+          "error"
+        ],
+        "type": "object"
+      },
+      "Place": {
+        "additionalProperties": true,
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "category": {
+            "enum": [
+              "attraction",
+              "restaurant",
+              "event",
+              "culture_venue"
+            ],
+            "type": "string"
+          },
+          "distance_m": {
+            "type": "integer"
+          },
+          "event_end_date": {
+            "format": "date",
+            "nullable": true,
+            "type": "string"
+          },
+          "event_start_date": {
+            "format": "date",
+            "nullable": true,
+            "type": "string"
+          },
+          "event_url": {
+            "format": "uri",
+            "nullable": true,
+            "type": "string"
+          },
+          "image_url": {
+            "format": "uri",
+            "nullable": true,
+            "type": "string"
+          },
+          "is_approximate_location": {
+            "nullable": true,
+            "type": "boolean"
+          },
+          "is_ongoing": {
+            "nullable": true,
+            "type": "boolean"
+          },
+          "lat": {
+            "format": "double",
+            "type": "number"
+          },
+          "lng": {
+            "format": "double",
+            "type": "number"
+          },
+          "name": {
+            "type": "string"
+          },
+          "name_en": {
+            "nullable": true,
+            "type": "string"
+          },
+          "name_ko": {
+            "nullable": true,
+            "type": "string"
+          },
+          "place_id": {
+            "type": "string"
+          },
+          "region_en": {
+            "nullable": true,
+            "type": "string"
+          },
+          "region_ko": {
+            "nullable": true,
+            "type": "string"
+          },
+          "score": {
+            "$ref": "#/components/schemas/PlaceScore",
+            "nullable": true
+          },
+          "source": {
+            "enum": [
+              "public_mvp_snapshot",
+              "db"
+            ],
+            "type": "string"
+          },
+          "upstream_source": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "place_id",
+          "name",
+          "category",
+          "lat",
+          "lng",
+          "address",
+          "distance_m",
+          "source"
+        ],
+        "type": "object"
+      },
+      "PlaceScore": {
+        "additionalProperties": false,
+        "properties": {
+          "components": {
+            "$ref": "#/components/schemas/PlaceScoreComponents"
+          },
+          "data_basis": {
+            "enum": [
+              "analytics.place_score_snapshots",
+              "public_mvp_snapshot"
+            ],
+            "type": "string"
+          },
+          "features": {
+            "type": "object"
+          },
+          "final_score": {
+            "format": "double",
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "formula_version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "final_score",
+          "formula_version",
+          "components",
+          "data_basis",
+          "features"
+        ],
+        "type": "object"
+      },
+      "PlaceScoreComponents": {
+        "additionalProperties": false,
+        "properties": {
+          "accessibility_fit_score": {
+            "format": "double",
+            "maximum": 1,
+            "minimum": 0,
+            "nullable": true,
+            "type": "number"
+          },
+          "culture_relevance_score": {
+            "format": "double",
+            "maximum": 1,
+            "minimum": 0,
+            "nullable": true,
+            "type": "number"
+          },
+          "demand_dispersion_score": {
+            "format": "double",
+            "maximum": 1,
+            "minimum": 0,
+            "nullable": true,
+            "type": "number"
+          },
+          "local_spending_score": {
+            "format": "double",
+            "maximum": 1,
+            "minimum": 0,
+            "nullable": true,
+            "type": "number"
+          },
+          "review_quality_score": {
+            "format": "double",
+            "maximum": 1,
+            "minimum": 0,
+            "nullable": true,
+            "type": "number"
+          },
+          "small_merchant_fit_score": {
+            "format": "double",
+            "maximum": 1,
+            "minimum": 0,
+            "nullable": true,
+            "type": "number"
+          },
+          "weather_fit_score": {
+            "format": "double",
+            "maximum": 1,
+            "minimum": 0,
+            "nullable": true,
+            "type": "number"
+          }
+        },
+        "required": [
+          "local_spending_score",
+          "small_merchant_fit_score",
+          "demand_dispersion_score",
+          "culture_relevance_score",
+          "weather_fit_score",
+          "review_quality_score",
+          "accessibility_fit_score"
+        ],
+        "type": "object"
+      },
+      "PlacesData": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "location_engine": {
+            "enum": [
+              "postgis",
+              "static_snapshot",
+              "none"
+            ],
+            "type": "string"
+          },
+          "places": {
+            "items": {
+              "$ref": "#/components/schemas/Place"
+            },
+            "type": "array"
+          },
+          "query": {
+            "$ref": "#/components/schemas/PlacesQuery"
+          },
+          "source": {
+            "enum": [
+              "public_mvp_snapshot",
+              "db"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "count",
+          "places",
+          "query",
+          "source",
+          "location_engine"
+        ],
+        "type": "object"
+      },
+      "PlacesQuery": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "enum": [
+              "all",
+              "attraction",
+              "restaurant",
+              "event",
+              "culture_venue"
+            ],
+            "type": "string"
+          },
+          "include_scores": {
+            "type": "boolean"
+          },
+          "language": {
+            "enum": [
+              "ko",
+              "en"
+            ],
+            "type": "string"
+          },
+          "lat": {
+            "format": "double",
+            "type": "number"
+          },
+          "limit": {
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "lng": {
+            "format": "double",
+            "type": "number"
+          },
+          "radius_m": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "lat",
+          "lng",
+          "radius_m",
+          "category",
+          "language",
+          "include_scores",
+          "limit"
+        ],
+        "type": "object"
+      },
+      "PlacesSuccessEnvelope": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PlacesData"
+          },
+          "error": {
+            "type": "null"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ApiMeta"
+          },
+          "ok": {
+            "const": true,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok",
+          "data",
+          "meta",
+          "error"
+        ],
+        "type": "object"
+      },
+      "ReadinessChecks": {
+        "additionalProperties": true,
+        "properties": {
+          "api_key": {
+            "enum": [
+              "configured",
+              "skipped"
+            ],
+            "type": "string"
+          },
+          "azure_openai_deployment": {
+            "enum": [
+              "configured",
+              "skipped"
+            ],
+            "type": "string"
+          },
+          "azure_openai_endpoint": {
+            "enum": [
+              "configured",
+              "skipped"
+            ],
+            "type": "string"
+          },
+          "azure_openai_key": {
+            "enum": [
+              "configured",
+              "skipped"
+            ],
+            "type": "string"
+          },
+          "azure_speech_endpoint": {
+            "enum": [
+              "configured",
+              "skipped"
+            ],
+            "type": "string"
+          },
+          "azure_speech_key": {
+            "enum": [
+              "configured",
+              "skipped"
+            ],
+            "type": "string"
+          },
+          "azure_speech_region": {
+            "enum": [
+              "configured",
+              "skipped"
+            ],
+            "type": "string"
+          },
+          "bearer_token": {
+            "enum": [
+              "configured",
+              "skipped"
+            ],
+            "type": "string"
+          },
+          "client_auth": {
+            "enum": [
+              "configured",
+              "missing",
+              "snapshot-fallback",
+              "public-contest"
+            ],
+            "type": "string"
+          },
+          "client_identity": {
+            "enum": [
+              "static",
+              "transition",
+              "oauth-configured",
+              "snapshot-fallback",
+              "public-contest",
+              "missing"
+            ],
+            "type": "string"
+          },
+          "db": {
+            "enum": [
+              "configured",
+              "skipped",
+              "degraded"
+            ],
+            "type": "string"
+          },
+          "jwt_validation": {
+            "enum": [
+              "configured",
+              "skipped"
+            ],
+            "type": "string"
+          },
+          "key_vault": {
+            "enum": [
+              "configured",
+              "skipped"
+            ],
+            "type": "string"
+          },
+          "live_ai": {
+            "enum": [
+              "enabled",
+              "disabled"
+            ],
+            "type": "string"
+          },
+          "live_speech": {
+            "enum": [
+              "enabled",
+              "disabled"
+            ],
+            "type": "string"
+          },
+          "oauth_audience": {
+            "enum": [
+              "configured",
+              "skipped"
+            ],
+            "type": "string"
+          },
+          "oauth_client_id": {
+            "enum": [
+              "configured",
+              "skipped"
+            ],
+            "type": "string"
+          },
+          "oauth_issuer": {
+            "enum": [
+              "configured",
+              "skipped"
+            ],
+            "type": "string"
+          },
+          "oauth_jwks_url": {
+            "enum": [
+              "configured",
+              "skipped"
+            ],
+            "type": "string"
+          },
+          "oauth_required_scopes": {
+            "enum": [
+              "configured",
+              "skipped"
+            ],
+            "type": "string"
+          },
+          "postgis": {
+            "enum": [
+              "configured",
+              "skipped",
+              "degraded"
+            ],
+            "type": "string"
+          },
+          "public_contest_access": {
+            "enum": [
+              "enabled",
+              "disabled"
+            ],
+            "type": "string"
+          },
+          "public_data_service_key": {
+            "enum": [
+              "configured",
+              "skipped"
+            ],
+            "type": "string"
+          },
+          "public_data_snapshot": {
+            "enum": [
+              "configured",
+              "missing"
+            ],
+            "type": "string"
+          },
+          "static_snapshot_fallback": {
+            "enum": [
+              "enabled",
+              "disabled"
+            ],
+            "type": "string"
+          },
+          "worker_contracts": {
+            "enum": [
+              "configured",
+              "missing",
+              "degraded"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_auth",
+          "client_identity",
+          "public_contest_access",
+          "static_snapshot_fallback",
+          "public_data_snapshot",
+          "public_data_service_key",
+          "api_key",
+          "bearer_token",
+          "jwt_validation",
+          "oauth_issuer",
+          "oauth_audience",
+          "oauth_jwks_url",
+          "oauth_client_id",
+          "oauth_required_scopes",
+          "db",
+          "postgis",
+          "key_vault",
+          "azure_openai_endpoint",
+          "azure_openai_deployment",
+          "azure_openai_key",
+          "live_ai",
+          "azure_speech_region",
+          "azure_speech_endpoint",
+          "azure_speech_key",
+          "live_speech",
+          "worker_contracts"
+        ],
+        "type": "object"
+      },
+      "ReadyzData": {
+        "additionalProperties": false,
+        "properties": {
+          "checks": {
+            "$ref": "#/components/schemas/ReadinessChecks"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/RuntimeMode"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "degraded"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "checks",
+          "mode"
+        ],
+        "type": "object"
+      },
+      "ReadyzSuccessEnvelope": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ReadyzData"
+          },
+          "error": {
+            "type": "null"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ApiMeta"
+          },
+          "ok": {
+            "const": true,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok",
+          "data",
+          "meta",
+          "error"
+        ],
+        "type": "object"
+      },
+      "RuntimeMode": {
+        "additionalProperties": false,
+        "properties": {
+          "ai": {
+            "enum": [
+              "disabled",
+              "live-azure",
+              "degraded"
+            ],
+            "type": "string"
+          },
+          "data": {
+            "enum": [
+              "unavailable",
+              "public-cache",
+              "db-backed",
+              "degraded"
+            ],
+            "type": "string"
+          },
+          "overall": {
+            "enum": [
+              "public-cache",
+              "db-backed",
+              "live-azure",
+              "degraded"
+            ],
+            "type": "string"
+          },
+          "speech": {
+            "enum": [
+              "disabled",
+              "live-azure",
+              "degraded"
+            ],
+            "type": "string"
+          },
+          "worker": {
+            "enum": [
+              "dry-run",
+              "degraded"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "overall",
+          "data",
+          "ai",
+          "speech",
+          "worker"
+        ],
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "WeatherData": {
+        "additionalProperties": true,
+        "properties": {
+          "dust": {
+            "$ref": "#/components/schemas/Dust"
+          },
+          "force": {
+            "type": "boolean"
+          },
+          "forecast": {
+            "items": {
+              "$ref": "#/components/schemas/ForecastItem"
+            },
+            "type": "array"
+          },
+          "icon": {
+            "type": "string"
+          },
+          "lat": {
+            "format": "double",
+            "type": "number"
+          },
+          "lng": {
+            "format": "double",
+            "type": "number"
+          },
+          "location": {
+            "nullable": true,
+            "type": "string"
+          },
+          "location_match": {
+            "nullable": true,
+            "type": "boolean"
+          },
+          "outdoor_status": {
+            "enum": [
+              "good",
+              "bad",
+              "unknown"
+            ],
+            "type": "string"
+          },
+          "record_time": {
+            "nullable": true,
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "db",
+              "db+airkorea_sido_realtime",
+              "kma_ultra_srt_ncst",
+              "airkorea_sido_realtime",
+              "kma_ultra_srt_ncst+airkorea_sido_realtime",
+              "unavailable"
+            ],
+            "type": "string"
+          },
+          "temp": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "lat",
+          "lng",
+          "temp",
+          "icon",
+          "dust",
+          "forecast",
+          "outdoor_status",
+          "force",
+          "source"
+        ],
+        "type": "object"
+      },
+      "WeatherSuccessEnvelope": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/WeatherData"
+          },
+          "error": {
+            "type": "null"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ApiMeta"
+          },
+          "ok": {
+            "const": true,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok",
+          "data",
+          "meta",
+          "error"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "BearerAuth": {
+        "description": "Preferred client token. Accepts API_BEARER_TOKEN during migration or a signed OAuth/Entra JWT when OAuth configuration is complete.",
+        "scheme": "bearer",
+        "type": "http"
+      },
+      "MigrationApiKey": {
+        "description": "Migration client key from IOS_API_KEY.",
+        "in": "header",
+        "name": "X-API-Key",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "description": "FastAPI edge for the Flutter-facing LALA-next contract.",
+    "title": "LALA-next Public API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/docents/audio": {
+      "post": {
+        "operationId": "docent_audio_api_v1_docents_audio_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocentAudioRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "audio/mpeg": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful MP3 audio response",
+            "headers": {
+              "X-LALA-Cache-Key": {
+                "description": "Opaque client-safe generation cache key derived from the request hash.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-LALA-Request-Hash": {
+                "description": "Deterministic SHA-256 hash of the normalized generation request.",
+                "schema": {
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                }
+              },
+              "X-Request-Duration-Ms": {
+                "description": "Server-side request duration in milliseconds.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "description": "Safe request correlation id generated or accepted by the API.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client authentication required or invalid.",
+            "headers": {
+              "X-Request-Duration-Ms": {
+                "description": "Server-side request duration in milliseconds.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "description": "Safe request correlation id generated or accepted by the API.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Request validation failed.",
+            "headers": {
+              "X-Request-Duration-Ms": {
+                "description": "Server-side request duration in milliseconds.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "description": "Safe request correlation id generated or accepted by the API.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Live speech synthesis is not configured",
+            "headers": {
+              "X-Request-Duration-Ms": {
+                "description": "Server-side request duration in milliseconds.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "description": "Safe request correlation id generated or accepted by the API.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "MigrationApiKey": []
+          }
+        ],
+        "summary": "Docent Audio",
+        "tags": [
+          "v1"
+        ],
+        "x-lala-auth-required": true,
+        "x-lala-timeout-seconds": 30
+      }
+    },
+    "/api/v1/docents/script": {
+      "post": {
+        "operationId": "docent_script_api_v1_docents_script_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocentScriptRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocentScriptSuccessEnvelope"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "X-Request-Duration-Ms": {
+                "description": "Server-side request duration in milliseconds.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "description": "Safe request correlation id generated or accepted by the API.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client authentication required or invalid.",
+            "headers": {
+              "X-Request-Duration-Ms": {
+                "description": "Server-side request duration in milliseconds.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "description": "Safe request correlation id generated or accepted by the API.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Request validation failed.",
+            "headers": {
+              "X-Request-Duration-Ms": {
+                "description": "Server-side request duration in milliseconds.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "description": "Safe request correlation id generated or accepted by the API.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "MigrationApiKey": []
+          }
+        ],
+        "summary": "Docent Script",
+        "tags": [
+          "v1"
+        ],
+        "x-lala-auth-required": true,
+        "x-lala-timeout-seconds": 30
+      }
+    },
+    "/api/v1/me": {
+      "delete": {
+        "operationId": "delete_me_api_v1_me_delete",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountDeletionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response",
+            "headers": {
+              "X-Request-Duration-Ms": {
+                "description": "Server-side request duration in milliseconds.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "description": "Safe request correlation id generated or accepted by the API.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client authentication required or invalid.",
+            "headers": {
+              "X-Request-Duration-Ms": {
+                "description": "Server-side request duration in milliseconds.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "description": "Safe request correlation id generated or accepted by the API.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Request validation failed.",
+            "headers": {
+              "X-Request-Duration-Ms": {
+                "description": "Server-side request duration in milliseconds.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "description": "Safe request correlation id generated or accepted by the API.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "MigrationApiKey": []
+          }
+        ],
+        "summary": "Delete Me",
+        "tags": [
+          "v1"
+        ]
+      },
+      "get": {
+        "operationId": "me_api_v1_me_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessEnvelope"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "X-Request-Duration-Ms": {
+                "description": "Server-side request duration in milliseconds.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "description": "Safe request correlation id generated or accepted by the API.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client authentication required or invalid.",
+            "headers": {
+              "X-Request-Duration-Ms": {
+                "description": "Server-side request duration in milliseconds.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "description": "Safe request correlation id generated or accepted by the API.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Request validation failed.",
+            "headers": {
+              "X-Request-Duration-Ms": {
+                "description": "Server-side request duration in milliseconds.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "description": "Safe request correlation id generated or accepted by the API.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "MigrationApiKey": []
+          }
+        ],
+        "summary": "Me",
+        "tags": [
+          "v1"
+        ]
+      }
+    },
+    "/api/v1/places": {
+      "get": {
+        "operationId": "places_api_v1_places_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "lat",
+            "required": true,
+            "schema": {
+              "maximum": 90,
+              "minimum": -90,
+              "title": "Lat",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lng",
+            "required": true,
+            "schema": {
+              "maximum": 180,
+              "minimum": -180,
+              "title": "Lng",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "radius_m",
+            "required": false,
+            "schema": {
+              "default": 1000,
+              "exclusiveMinimum": 0,
+              "maximum": 50000,
+              "title": "Radius M",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "category",
+            "required": false,
+            "schema": {
+              "default": "all",
+              "title": "Category",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lang",
+            "required": false,
+            "schema": {
+              "default": "ko",
+              "title": "Lang",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "language",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Language"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_scores",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Scores",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 60,
+              "exclusiveMinimum": 0,
+              "maximum": 100,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlacesSuccessEnvelope"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "X-Request-Duration-Ms": {
+                "description": "Server-side request duration in milliseconds.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "description": "Safe request correlation id generated or accepted by the API.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client authentication required or invalid.",
+            "headers": {
+              "X-Request-Duration-Ms": {
+                "description": "Server-side request duration in milliseconds.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "description": "Safe request correlation id generated or accepted by the API.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Request validation failed.",
+            "headers": {
+              "X-Request-Duration-Ms": {
+                "description": "Server-side request duration in milliseconds.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "description": "Safe request correlation id generated or accepted by the API.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "MigrationApiKey": []
+          }
+        ],
+        "summary": "Places",
+        "tags": [
+          "v1"
+        ],
+        "x-lala-auth-required": true,
+        "x-lala-timeout-seconds": 12
+      }
+    },
+    "/api/v1/plans/daily": {
+      "post": {
+        "operationId": "daily_plan_api_v1_plans_daily_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DailyPlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyPlanSuccessEnvelope"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "X-Request-Duration-Ms": {
+                "description": "Server-side request duration in milliseconds.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "description": "Safe request correlation id generated or accepted by the API.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client authentication required or invalid.",
+            "headers": {
+              "X-Request-Duration-Ms": {
+                "description": "Server-side request duration in milliseconds.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "description": "Safe request correlation id generated or accepted by the API.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Request validation failed.",
+            "headers": {
+              "X-Request-Duration-Ms": {
+                "description": "Server-side request duration in milliseconds.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "description": "Safe request correlation id generated or accepted by the API.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "MigrationApiKey": []
+          }
+        ],
+        "summary": "Daily Plan",
+        "tags": [
+          "v1"
+        ],
+        "x-lala-auth-required": true,
+        "x-lala-timeout-seconds": 20
+      }
+    },
+    "/api/v1/plans/intervention": {
+      "get": {
+        "operationId": "intervention_api_v1_plans_intervention_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "lat",
+            "required": true,
+            "schema": {
+              "maximum": 90,
+              "minimum": -90,
+              "title": "Lat",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lng",
+            "required": true,
+            "schema": {
+              "maximum": 180,
+              "minimum": -180,
+              "title": "Lng",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "radius_m",
+            "required": false,
+            "schema": {
+              "default": 10000,
+              "exclusiveMinimum": 0,
+              "maximum": 50000,
+              "title": "Radius M",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterventionSuccessEnvelope"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "X-Request-Duration-Ms": {
+                "description": "Server-side request duration in milliseconds.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "description": "Safe request correlation id generated or accepted by the API.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client authentication required or invalid.",
+            "headers": {
+              "X-Request-Duration-Ms": {
+                "description": "Server-side request duration in milliseconds.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "description": "Safe request correlation id generated or accepted by the API.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Request validation failed.",
+            "headers": {
+              "X-Request-Duration-Ms": {
+                "description": "Server-side request duration in milliseconds.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "description": "Safe request correlation id generated or accepted by the API.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "MigrationApiKey": []
+          }
+        ],
+        "summary": "Intervention",
+        "tags": [
+          "v1"
+        ],
+        "x-lala-auth-required": true,
+        "x-lala-timeout-seconds": 12
+      }
+    },
+    "/api/v1/weather": {
+      "get": {
+        "operationId": "weather_api_v1_weather_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "lat",
+            "required": true,
+            "schema": {
+              "maximum": 90,
+              "minimum": -90,
+              "title": "Lat",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lng",
+            "required": true,
+            "schema": {
+              "maximum": 180,
+              "minimum": -180,
+              "title": "Lng",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "force",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Force",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WeatherSuccessEnvelope"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "X-Request-Duration-Ms": {
+                "description": "Server-side request duration in milliseconds.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "description": "Safe request correlation id generated or accepted by the API.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Client authentication required or invalid.",
+            "headers": {
+              "X-Request-Duration-Ms": {
+                "description": "Server-side request duration in milliseconds.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "description": "Safe request correlation id generated or accepted by the API.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "Request validation failed.",
+            "headers": {
+              "X-Request-Duration-Ms": {
+                "description": "Server-side request duration in milliseconds.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "description": "Safe request correlation id generated or accepted by the API.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "MigrationApiKey": []
+          }
+        ],
+        "summary": "Weather",
+        "tags": [
+          "v1"
+        ],
+        "x-lala-auth-required": true,
+        "x-lala-timeout-seconds": 12
+      }
+    },
+    "/healthz": {
+      "get": {
+        "operationId": "healthz_healthz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthzSuccessEnvelope"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "X-Request-Duration-Ms": {
+                "description": "Server-side request duration in milliseconds.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "description": "Safe request correlation id generated or accepted by the API.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Healthz",
+        "tags": [
+          "operations"
+        ],
+        "x-lala-auth-required": false,
+        "x-lala-timeout-seconds": 3
+      }
+    },
+    "/metrics": {
+      "get": {
+        "operationId": "metrics_metrics_get",
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "X-Request-Duration-Ms": {
+                "description": "Server-side request duration in milliseconds.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "description": "Safe request correlation id generated or accepted by the API.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Metrics",
+        "tags": [
+          "operations"
+        ],
+        "x-lala-auth-required": false,
+        "x-lala-timeout-seconds": 3
+      }
+    },
+    "/readyz": {
+      "get": {
+        "operationId": "readyz_readyz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadyzSuccessEnvelope"
+                }
+              }
+            },
+            "description": "Successful Response",
+            "headers": {
+              "X-Request-Duration-Ms": {
+                "description": "Server-side request duration in milliseconds.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "description": "Safe request correlation id generated or accepted by the API.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Readyz",
+        "tags": [
+          "operations"
+        ],
+        "x-lala-auth-required": false,
+        "x-lala-timeout-seconds": 3
+      }
+    }
+  }
+}

@@ -4,6 +4,48 @@ from dataclasses import dataclass
 from typing import Any
 
 
+_PRE_TASK5_GUEST_OPERATIONS = frozenset(
+    {
+        "POST /api/v1/docents/audio",
+        "POST /api/v1/docents/script",
+        "GET /api/v1/places",
+        "POST /api/v1/plans/daily",
+        "GET /api/v1/plans/intervention",
+        "GET /api/v1/weather",
+    }
+)
+_PRE_TASK5_ACCOUNT_OPERATIONS = frozenset(
+    {"GET /api/v1/me", "DELETE /api/v1/me"}
+)
+_PRE_TASK5_CLIENT_SECURITY = [{"BearerAuth": []}, {"MigrationApiKey": []}]
+_TASK5_GUEST_SECURITY = [
+    {},
+    {"BearerAuth": []},
+    {"MigrationApiKey": []},
+]
+_TASK5_ACCOUNT_SECURITY = [{"OAuthBearerAuth": []}]
+_PRE_TASK5_AUTH_HEADERS = {
+    "X-API-Key": {
+        "name": "X-API-Key",
+        "in": "header",
+        "required": False,
+        "schema": {
+            "anyOf": [{"type": "string"}, {"type": "null"}],
+            "title": "X-Api-Key",
+        },
+    },
+    "Authorization": {
+        "name": "Authorization",
+        "in": "header",
+        "required": False,
+        "schema": {
+            "anyOf": [{"type": "string"}, {"type": "null"}],
+            "title": "Authorization",
+        },
+    },
+}
+
+
 @dataclass(frozen=True)
 class OpenApiCompatReport:
     ok: bool
@@ -86,17 +128,34 @@ def _compare_operation(
         current_operation,
         current_root_security,
     )
-    if _normalize_security(baseline_security) != _normalize_security(current_security):
+    exact_security_migration = _is_exact_task5_security_migration(
+        operation_label=operation_label,
+        baseline_operation=baseline_operation,
+        current_operation=current_operation,
+        baseline_security=baseline_security,
+        current_security=current_security,
+    )
+    migration_baseline = _is_pre_task5_security_baseline(
+        operation_label=operation_label,
+        baseline_operation=baseline_operation,
+        baseline_security=baseline_security,
+    )
+    if migration_baseline:
+        security_changed = not exact_security_migration
+    else:
+        security_changed = _normalize_security(
+            baseline_security
+        ) != _normalize_security(current_security)
+    if security_changed:
         findings.append(f"changed security: {operation_label}")
     findings.extend(
         _compare_parameters(
             operation_label=operation_label,
             baseline_parameters=baseline_operation.get("parameters") or [],
             current_parameters=current_operation.get("parameters") or [],
-            allow_account_auth_correction=_is_exact_account_auth_migration(
-                operation_label=operation_label,
-                baseline_operation=baseline_operation,
-                current_operation=current_operation,
+            allow_account_auth_correction=(
+                operation_label in _PRE_TASK5_ACCOUNT_OPERATIONS
+                and exact_security_migration
             ),
         )
     )
@@ -141,25 +200,60 @@ def _compare_parameters(
     return findings
 
 
-def _is_exact_account_auth_migration(
+def _is_pre_task5_security_baseline(
+    *,
+    operation_label: str,
+    baseline_operation: dict[str, Any],
+    baseline_security: Any,
+) -> bool:
+    if baseline_security != _PRE_TASK5_CLIENT_SECURITY:
+        return False
+    if operation_label in _PRE_TASK5_GUEST_OPERATIONS:
+        return True
+    return (
+        operation_label in _PRE_TASK5_ACCOUNT_OPERATIONS
+        and _has_exact_pre_task5_auth_headers(baseline_operation)
+    )
+
+
+def _is_exact_task5_security_migration(
     *,
     operation_label: str,
     baseline_operation: dict[str, Any],
     current_operation: dict[str, Any],
+    baseline_security: Any,
+    current_security: Any,
 ) -> bool:
-    expected_security = [{"OAuthBearerAuth": []}]
-    if (
-        operation_label not in {"GET /api/v1/me", "DELETE /api/v1/me"}
-        or baseline_operation.get("security") != expected_security
-        or current_operation.get("security") != expected_security
-    ):
+    if operation_label in _PRE_TASK5_GUEST_OPERATIONS:
+        return (
+            baseline_security == _PRE_TASK5_CLIENT_SECURITY
+            and current_security == _TASK5_GUEST_SECURITY
+        )
+    if operation_label not in _PRE_TASK5_ACCOUNT_OPERATIONS:
         return False
-    return not any(
-        isinstance(parameter, dict)
-        and parameter.get("in") == "header"
-        and parameter.get("name") in {"Authorization", "X-API-Key"}
-        for parameter in current_operation.get("parameters") or []
+    return (
+        baseline_security == _PRE_TASK5_CLIENT_SECURITY
+        and current_security == _TASK5_ACCOUNT_SECURITY
+        and _has_exact_pre_task5_auth_headers(baseline_operation)
+        and not _auth_headers(current_operation)
     )
+
+
+def _has_exact_pre_task5_auth_headers(operation: dict[str, Any]) -> bool:
+    headers = _auth_headers(operation)
+    return len(headers) == 2 and {
+        str(header.get("name")): header for header in headers
+    } == _PRE_TASK5_AUTH_HEADERS
+
+
+def _auth_headers(operation: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        parameter
+        for parameter in operation.get("parameters") or []
+        if isinstance(parameter, dict)
+        and parameter.get("in") == "header"
+        and parameter.get("name") in _PRE_TASK5_AUTH_HEADERS
+    ]
 
 
 def _is_expected_generated_auth_header(parameter: dict[str, Any]) -> bool:

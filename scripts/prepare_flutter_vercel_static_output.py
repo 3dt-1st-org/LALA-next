@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import re
 import shutil
 from pathlib import Path
 
@@ -10,42 +12,152 @@ ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "deploy" / "vercel" / "flutter-static.vercel.json"
 DEFAULT_SOURCE = ROOT / "apps" / "flutter_app" / "build" / "web"
 DEFAULT_OUTPUT = ROOT / "static-output"
+REQUIRED_BUILD_ARTIFACTS = (
+    Path("index.html"),
+    Path("flutter_bootstrap.js"),
+    Path("main.dart.js"),
+    Path("assets/AssetManifest.bin.json"),
+    Path("auth-callback.html"),
+)
+VERCEL_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{3,128}")
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Stage Flutter web assets with the isolated Vercel static config."
     )
     parser.add_argument("--source", type=Path, default=DEFAULT_SOURCE)
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
-    args = parser.parse_args()
+    parser.add_argument(
+        "--verify-project-binding",
+        action="store_true",
+        help="Validate the staged config and project binding without modifying output.",
+    )
+    args = parser.parse_args(argv)
 
-    source = args.source.resolve()
-    output = args.output.resolve()
-    _validate_paths(parser, source=source, output=output)
-    template = _load_static_template()
+    output = DEFAULT_OUTPUT
+    try:
+        _validate_output_boundary(output)
+        project_binding = _load_project_binding()
+        template = _load_static_template()
+        if args.verify_project_binding:
+            _verify_staged_contract(
+                output=output,
+                template=template,
+                project_binding=project_binding,
+            )
+            print(f"Verified Flutter Vercel staging contract: {output}")
+            return 0
+        source = args.source.resolve()
+        _validate_source(source=source, output=output)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        parser.error(str(exc))
 
     if output.exists():
         shutil.rmtree(output)
     shutil.copytree(source, output)
-    (output / "vercel.json").write_text(
-        json.dumps(template, indent=2) + "\n",
-        encoding="utf-8",
+    _write_json(output / "vercel.json", template)
+    project_directory = output / ".vercel"
+    if project_directory.exists():
+        shutil.rmtree(project_directory)
+    project_directory.mkdir()
+    _write_json(project_directory / "project.json", project_binding)
+    _verify_staged_contract(
+        output=output,
+        template=template,
+        project_binding=project_binding,
     )
     print(f"Staged Flutter Vercel output: {output}")
     return 0
 
 
-def _validate_paths(
-    parser: argparse.ArgumentParser,
+def _validate_output_boundary(output: Path) -> None:
+    root = ROOT.resolve()
+    expected_output = root / "static-output"
+    lexical_output = output.absolute()
+    if lexical_output != expected_output or output != DEFAULT_OUTPUT:
+        raise ValueError("Output must be the repository static-output directory.")
+    if output.is_symlink():
+        raise ValueError("Output must not be a symlink.")
+    if output.exists() and not output.is_dir():
+        raise ValueError("Output must be a directory when it already exists.")
+    resolved_output = output.resolve()
+    if resolved_output != expected_output or root not in resolved_output.parents:
+        raise ValueError("Output resolves outside the repository staging boundary.")
+
+
+def _validate_source(*, source: Path, output: Path) -> None:
+    resolved_output = output.resolve()
+    if (
+        resolved_output == source
+        or source in resolved_output.parents
+        or resolved_output in source.parents
+    ):
+        raise ValueError("Output must be separate from the source build.")
+    missing = [
+        str(relative_path)
+        for relative_path in REQUIRED_BUILD_ARTIFACTS
+        if not (source / relative_path).is_file()
+    ]
+    if missing:
+        raise ValueError(f"Flutter web build is missing required artifact: {missing[0]}")
+    if (source / ".vercel").is_symlink():
+        raise ValueError("Flutter web build must not contain a .vercel symlink.")
+
+
+def _load_project_binding() -> dict[str, str]:
+    binding: dict[str, str] = {}
+    for environment_name, json_name in (
+        ("VERCEL_ORG_ID", "orgId"),
+        ("VERCEL_PROJECT_ID", "projectId"),
+    ):
+        value = os.environ.get(environment_name, "")
+        if not VERCEL_ID_PATTERN.fullmatch(value):
+            raise ValueError(
+                f"{environment_name} must be set to a valid Vercel identifier."
+            )
+        binding[json_name] = value
+    return binding
+
+
+def _verify_staged_contract(
     *,
-    source: Path,
     output: Path,
+    template: dict,
+    project_binding: dict[str, str],
 ) -> None:
-    if not (source / "index.html").is_file():
-        parser.error(f"Flutter web build is missing index.html: {source}")
-    if output == ROOT or output == source or source in output.parents or output in source.parents:
-        parser.error("Output must be separate from the repository root and source build.")
+    _validate_output_boundary(output)
+    if not output.is_dir():
+        raise ValueError("Flutter Vercel staging output does not exist.")
+    missing = [
+        str(relative_path)
+        for relative_path in REQUIRED_BUILD_ARTIFACTS
+        if not (output / relative_path).is_file()
+    ]
+    if missing:
+        raise ValueError(f"Staged Flutter output is missing required artifact: {missing[0]}")
+    effective_config = _read_json_object(output / "vercel.json", "Vercel config")
+    if effective_config != template:
+        raise ValueError("Staged Vercel config does not match the Flutter template.")
+    effective_binding = _read_json_object(
+        output / ".vercel" / "project.json",
+        "Vercel project binding",
+    )
+    if effective_binding != project_binding:
+        raise ValueError("Staged Vercel project binding does not match the environment.")
+
+
+def _read_json_object(path: Path, label: str) -> dict:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} must be a JSON object.")
+    return payload
+
+
+def _write_json(path: Path, payload: dict) -> None:
+    path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
 
 def _load_static_template() -> dict:
