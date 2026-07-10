@@ -42,6 +42,7 @@ def test_load_canonical_sql_plan_is_safe_and_ordered():
     assert plan.ok is True
     assert [item.name for item in plan.files] == [
         "000_extensions_and_schemas.sql",
+        "005_identity_users.sql",
         "010_travel_core_tables.sql",
         "020_travel_domain_tables.sql",
         "030_community_core_tables.sql",
@@ -52,6 +53,27 @@ def test_load_canonical_sql_plan_is_safe_and_ordered():
     ]
     assert plan.to_dict()["statement_count"] >= 10
     assert all(len(item.sha256) == 64 for item in plan.files)
+
+
+def test_identity_user_migration_has_only_local_identity_columns():
+    schema_sql = (canonical_sql.CANONICAL_SQL_DIR / "000_extensions_and_schemas.sql").read_text()
+    user_sql = (canonical_sql.CANONICAL_SQL_DIR / "005_identity_users.sql").read_text()
+
+    assert "CREATE SCHEMA IF NOT EXISTS identity" in schema_sql
+    for column in (
+        "id uuid PRIMARY KEY DEFAULT gen_random_uuid()",
+        "issuer text NOT NULL",
+        "subject text NOT NULL",
+        "status text NOT NULL DEFAULT 'active'",
+        "created_at timestamptz NOT NULL DEFAULT now()",
+        "last_seen_at timestamptz NOT NULL DEFAULT now()",
+        "deletion_requested_at timestamptz",
+        "UNIQUE (issuer, subject)",
+    ):
+        assert column in user_sql
+    assert "CHECK (status IN ('active', 'deleting'))" in user_sql
+    for forbidden in ("email", "nationality", "token", "claim", "client_secret"):
+        assert forbidden not in user_sql.lower()
 
 
 def test_sql_safety_scan_flags_destructive_and_secret_text():
@@ -76,7 +98,7 @@ def test_apply_canonical_sql_cli_defaults_to_plan_json(capsys):
     assert exit_code == 0
     assert output["ok"] is True
     assert output["mode"] == "plan"
-    assert output["plan"]["file_count"] == 8
+    assert output["plan"]["file_count"] == 9
     assert "result" not in output
 
 

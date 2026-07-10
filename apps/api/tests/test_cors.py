@@ -51,6 +51,22 @@ def test_cors_allows_configured_flutter_web_origin(monkeypatch):
     assert "X-Request-Duration-Ms" in response.headers["access-control-expose-headers"]
 
 
+def test_cors_preflight_allows_account_deletion(monkeypatch):
+    monkeypatch.setenv("CORS_ALLOW_ORIGINS", "http://localhost:3000")
+    client = TestClient(create_app())
+
+    response = client.options(
+        "/api/v1/me",
+        headers={
+            "Origin": "http://localhost:3000",
+            "Access-Control-Request-Method": "DELETE",
+        },
+    )
+
+    assert response.status_code == 200
+    assert "DELETE" in response.headers["access-control-allow-methods"]
+
+
 def test_cors_origin_list_trims_spaces_and_trailing_slashes(monkeypatch):
     monkeypatch.setenv("CORS_ALLOW_ORIGINS", " http://localhost:3000/ ,, https://team.example ")
 

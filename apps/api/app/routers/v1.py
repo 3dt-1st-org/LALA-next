@@ -1,20 +1,69 @@
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, Query, Request, Response
 
-from apps.api.app.core.auth import require_client_auth
+from apps.api.app.core.auth import (
+    RequestIdentity,
+    require_client_auth,
+    require_oauth_identity,
+)
 from apps.api.app.core.config import get_settings
 from apps.api.app.core.rate_limit import enforce_public_contest_paid_route_limit
 from apps.api.app.core.responses import ensure_request_id, success_envelope
+from apps.api.app.schemas.account import AccountDeletionRequest
 from apps.api.app.schemas.docent import DocentAudioRequest, DocentScriptRequest
 from apps.api.app.schemas.planner import DailyPlanRequest
 from apps.api.app.services import docent_service, planner_service, places_service, weather_service
+from apps.api.app.services.identity_service import IdentityService, get_identity_service
+from apps.api.app.services.logto_management import (
+    LogtoManagementClient,
+    get_logto_management_client,
+)
 
 router = APIRouter(
     prefix="/api/v1",
     tags=["v1"],
     dependencies=[Depends(require_client_auth)],
 )
+
+
+@router.get("/me")
+def me(
+    request: Request,
+    identity: Annotated[RequestIdentity, Depends(require_oauth_identity)],
+    identity_service: Annotated[IdentityService, Depends(get_identity_service)],
+) -> dict:
+    user = identity_service.provision_user(identity.issuer or "", identity.subject or "")
+    return success_envelope(
+        request=request,
+        data={
+            "user_id": str(user.id),
+            "created_at": user.created_at.isoformat(),
+            "authenticated": True,
+        },
+    )
+
+
+@router.delete("/me", status_code=204)
+def delete_me(
+    body: AccountDeletionRequest,
+    identity: Annotated[RequestIdentity, Depends(require_oauth_identity)],
+    identity_service: Annotated[IdentityService, Depends(get_identity_service)],
+    management_client: Annotated[
+        LogtoManagementClient,
+        Depends(get_logto_management_client),
+    ],
+) -> Response:
+    issuer = identity.issuer or ""
+    subject = identity.subject or ""
+    user = identity_service.mark_user_deleting(issuer, subject)
+    if user is None:
+        return Response(status_code=204)
+    management_client.delete_user(subject)
+    identity_service.delete_local_user(issuer, subject)
+    return Response(status_code=204)
 
 
 @router.get("/places")

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from hashlib import sha256
 from typing import Annotated, Literal
 
-from fastapi import Header
+from fastapi import Depends, Header
 
 from apps.api.app.core.config import Settings, get_settings
 from apps.api.app.core.errors import ApiError
@@ -91,6 +91,19 @@ def _oauth_identity(token: str, settings: Settings) -> RequestIdentity:
     if not isinstance(issuer, str) or not isinstance(subject, str):
         raise _unauthorized()
     return RequestIdentity(mode="oauth", issuer=issuer, subject=subject)
+
+
+def require_oauth_identity(
+    identity: Annotated[RequestIdentity, Depends(require_client_auth)],
+) -> RequestIdentity:
+    if identity.mode == "oauth" and identity.issuer and identity.subject:
+        return identity
+    raise ApiError(
+        status_code=401,
+        code="USER_AUTH_REQUIRED",
+        message="OAuth user authentication is required.",
+        retryable=False,
+    )
 
 
 def _unauthorized() -> ApiError:

@@ -19,6 +19,9 @@ class Settings:
     api_bearer_token: str = ""
     logto_endpoint: str = ""
     logto_api_audience: str = ""
+    logto_management_endpoint: str = ""
+    logto_management_client_id: str = ""
+    logto_management_client_secret: str = ""
     oauth_issuer: str = ""
     oauth_audience: str = ""
     oauth_jwks_url: str = ""
@@ -104,6 +107,24 @@ class Settings:
             api_bearer_token=_env_or_secret("API_BEARER_TOKEN", "api-bearer-token", key_vault_url),
             logto_endpoint=logto_endpoint,
             logto_api_audience=logto_api_audience,
+            logto_management_endpoint=(
+                _env_or_secret(
+                    "LOGTO_MANAGEMENT_ENDPOINT",
+                    "logto-management-endpoint",
+                    key_vault_url,
+                )
+                or logto_endpoint
+            ),
+            logto_management_client_id=_env_or_secret(
+                "LOGTO_MANAGEMENT_CLIENT_ID",
+                "logto-management-client-id",
+                key_vault_url,
+            ),
+            logto_management_client_secret=_env_or_secret(
+                "LOGTO_MANAGEMENT_CLIENT_SECRET",
+                "logto-management-client-secret",
+                key_vault_url,
+            ),
             oauth_issuer=(
                 logto_issuer if logto_validation_configured else ""
                 or _env_or_secret("OAUTH_ISSUER", "oauth-issuer", key_vault_url)
