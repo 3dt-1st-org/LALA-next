@@ -3,6 +3,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lala_next_app/auth/auth_controller.dart';
+import 'package:lala_next_app/auth/logto_auth_gateway.dart';
 import 'package:lala_next_app/kakao_map_fallback.dart';
 import 'package:lala_next_app/kakao_map_models.dart';
 import 'package:lala_next_app/main.dart';
@@ -1791,6 +1793,161 @@ void main() {
     expect(find.textContaining('개발'), findsNothing);
   });
 
+  testWidgets(
+    'signed-out account action signs in through the injected gateway',
+    (tester) async {
+      final gateway = WidgetTestAuthGateway(
+        accessTokenValue: 'fresh-access-token',
+      );
+      final configs = <LalaAppConfig>[];
+      await tester.pumpWidget(
+        TestLalaApp(
+          backendFactory: (config) {
+            configs.add(config);
+            return FakeBackend(config);
+          },
+          initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+          authControllerFactory: (_) =>
+              _widgetTestAuthController(gateway: gateway),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('settings-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('account-panel')), findsOneWidget);
+      expect(find.byKey(const ValueKey('account-sign-in')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('account-sign-in')));
+      await tester.pumpAndSettle();
+
+      expect(gateway.signInCalls, 1);
+      expect(find.text('로그인됨'), findsOneWidget);
+      expect(find.textContaining('account-123'), findsOneWidget);
+      expect(configs.last.accessTokenProvider, isNotNull);
+      expect(await configs.last.accessTokenProvider!(), 'fresh-access-token');
+    },
+  );
+
+  testWidgets('signed-in account action signs out without closing the map', (
+    tester,
+  ) async {
+    final gateway = WidgetTestAuthGateway(authenticated: true);
+    await tester.pumpWidget(
+      TestLalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+        authControllerFactory: (_) =>
+            _widgetTestAuthController(gateway: gateway),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('settings-button')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('account-sign-out')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.signOutCalls, 1);
+    expect(find.byKey(const ValueKey('account-sign-in')), findsOneWidget);
+    await tester.tap(find.byTooltip('닫기').first);
+    await tester.pumpAndSettle();
+    expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
+  });
+
+  testWidgets('disabled auth shows unavailable status without login action', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      TestLalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+        authControllerFactory: (_) => _widgetTestAuthController(enabled: false),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('settings-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('account-panel')), findsOneWidget);
+    expect(find.text('계정 로그인을 사용할 수 없어요'), findsOneWidget);
+    expect(find.byKey(const ValueKey('account-sign-in')), findsNothing);
+  });
+
+  testWidgets('account deletion requires confirmation and supports cancel', (
+    tester,
+  ) async {
+    final accountApi = WidgetTestAccountApi();
+    await tester.pumpWidget(
+      TestLalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+        authControllerFactory: (_) => _widgetTestAuthController(
+          gateway: WidgetTestAuthGateway(authenticated: true),
+          accountApi: accountApi,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('settings-button')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('account-delete')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('account-delete-dialog')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('account-delete-cancel')));
+    await tester.pumpAndSettle();
+    expect(accountApi.deleteConfirmations, isEmpty);
+
+    await tester.tap(find.byKey(const ValueKey('account-delete')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('account-delete-confirm')));
+    await tester.pumpAndSettle();
+
+    expect(accountApi.deleteConfirmations, ['delete-my-account']);
+    expect(find.byKey(const ValueKey('account-sign-in')), findsOneWidget);
+    expect(find.byKey(const ValueKey('account-delete')), findsNothing);
+  });
+
+  testWidgets('account failures show localized safe copy without raw details', (
+    tester,
+  ) async {
+    final gateway = WidgetTestAuthGateway(
+      signInError: StateError('provider subject and secret token'),
+    );
+    await tester.pumpWidget(
+      TestLalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+        authControllerFactory: (_) =>
+            _widgetTestAuthController(gateway: gateway),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('settings-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('account-sign-in')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('계정 요청을 완료하지 못했어요. 다시 시도해 주세요.'), findsOneWidget);
+    expect(find.textContaining('provider subject'), findsNothing);
+    expect(find.byKey(const ValueKey('account-sign-in')), findsOneWidget);
+  });
+
+  testWidgets('disabled auth preserves guest map startup', (tester) async {
+    await tester.pumpWidget(
+      TestLalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+        authControllerFactory: (_) => _widgetTestAuthController(enabled: false),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
+    expect(find.byKey(const ValueKey('settings-button')), findsOneWidget);
+  });
+
   testWidgets('desktop map chrome keeps app controls at usable width', (
     tester,
   ) async {
@@ -2482,6 +2639,7 @@ class TestLalaApp extends StatelessWidget {
     this.locationProvider,
     this.requireLocationStartConfirmation = false,
     this.recommendationRecoveryDelays,
+    this.authControllerFactory,
     super.key,
   });
 
@@ -2490,6 +2648,7 @@ class TestLalaApp extends StatelessWidget {
   final LalaLocationProvider? locationProvider;
   final bool requireLocationStartConfirmation;
   final List<Duration>? recommendationRecoveryDelays;
+  final LalaAuthControllerFactory? authControllerFactory;
 
   @override
   Widget build(BuildContext context) {
@@ -2512,7 +2671,76 @@ class TestLalaApp extends StatelessWidget {
               LalaLocation(lat: initialConfig.lat, lng: initialConfig.lng),
             ),
           ),
+      authControllerFactory: authControllerFactory ?? createLalaAuthController,
     );
+  }
+}
+
+LalaAuthController _widgetTestAuthController({
+  bool enabled = true,
+  WidgetTestAuthGateway? gateway,
+  WidgetTestAccountApi? accountApi,
+}) {
+  return LalaAuthController(
+    config: LalaAuthConfig(
+      endpoint: enabled ? 'https://auth.example.com' : '',
+      appId: enabled ? 'public-client-id' : '',
+      apiAudience: enabled ? 'https://api.example.com' : '',
+      redirectUri: 'cloud.lalanext.lala://callback',
+    ),
+    gateway: gateway ?? WidgetTestAuthGateway(),
+    accountApi: accountApi ?? WidgetTestAccountApi(),
+  );
+}
+
+class WidgetTestAuthGateway implements LalaAuthGateway {
+  WidgetTestAuthGateway({
+    this.authenticated = false,
+    this.accessTokenValue,
+    this.signInError,
+  });
+
+  bool authenticated;
+  final String? accessTokenValue;
+  final Object? signInError;
+  int signInCalls = 0;
+  int signOutCalls = 0;
+
+  @override
+  Future<bool> get isAuthenticated async => authenticated;
+
+  @override
+  Future<void> signIn() async {
+    signInCalls += 1;
+    if (signInError != null) {
+      throw signInError!;
+    }
+    authenticated = true;
+  }
+
+  @override
+  Future<void> signOut() async {
+    signOutCalls += 1;
+    authenticated = false;
+  }
+
+  @override
+  Future<String?> accessToken(String resource) async => accessTokenValue;
+}
+
+class WidgetTestAccountApi implements LalaAccountApi {
+  final List<String> deleteConfirmations = [];
+
+  @override
+  Future<LalaMe> getMe() async => const LalaMe(
+    userId: 'account-123',
+    createdAt: '2026-07-10T00:00:00Z',
+    authenticated: true,
+  );
+
+  @override
+  Future<void> deleteMe({required String confirmation}) async {
+    deleteConfirmations.add(confirmation);
   }
 }
 

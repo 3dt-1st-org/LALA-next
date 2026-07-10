@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Authentication complete</title>
+</head>
+<body>
+  <p>Authentication is complete. You can close this window.</p>
+  <script>
+    function postAuthenticationMessage() {
+      const message = {
+        'flutter-web-auth-2': window.location.href
+      };
+
+      if (window.opener) {
+        window.opener.postMessage(message, window.location.origin);
+        window.close();
+      } else if (window.parent && window.parent !== window) {
+        window.parent.postMessage(message, window.location.origin);
+      } else {
+        localStorage.setItem('flutter-web-auth-2', window.location.href);
+        window.close();
+      }
+    }
+
+    postAuthenticationMessage();
+  </script>
+</body>
+</html>
