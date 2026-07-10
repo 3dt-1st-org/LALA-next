@@ -59,16 +59,20 @@ path, operation, parameter, response, or response content type disappears.
 Notes:
 
 - `/healthz`, `/readyz`, `/docs`, `/redoc`, and `/openapi.json` are public.
-- `/api/v1/*` routes require client auth. New clients should send
-  `Authorization: Bearer <token>`. During migration this can be the static
-  `API_BEARER_TOKEN`; when OAuth/Entra settings are complete it can be a signed
-  RS256 JWT. The migration `X-API-Key` header remains accepted while
-  `IOS_API_KEY` is configured.
-- The generated OpenAPI schema includes `BearerAuth` and `MigrationApiKey`
-  security schemes on `/api/v1/*`; operational routes remain public.
+- Tourism `/api/v1/*` routes are guest-accessible when
+  `LALA_GUEST_ACCESS=true`. Their OpenAPI security list starts with an empty
+  alternative and then advertises optional bearer and migration API-key
+  credentials. Any presented credentials are still validated.
+- `GET /api/v1/me` and `DELETE /api/v1/me` are Bearer-only OAuth operations.
+  Their OpenAPI operations advertise only `OAuthBearerAuth`; static bearer and
+  `MigrationApiKey` are not account credentials.
+- The generated OpenAPI schema includes accurate `/me` success data, deletion
+  request, empty 204, and shared error-envelope contracts.
 - Public contract operations include `x-lala-auth-required` and
   `x-lala-timeout-seconds` vendor extensions so generated clients can keep
   route auth and timeout behavior aligned with the reference Flutter client.
+  Guest tourism routes use `x-lala-auth-required: false`; account routes use
+  `x-lala-auth-required: true`.
 - JSON route responses use the `{ ok, data, meta, error }` envelope with
   `meta.request_id`; generated OpenAPI 200 JSON responses use either the shared
   `ApiSuccessEnvelope` or route-specific success envelope schemas when the

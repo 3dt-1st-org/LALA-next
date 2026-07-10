@@ -107,11 +107,30 @@ def _compare_parameters(
         key = (parameter.get("in"), parameter.get("name"))
         current_parameter = current_by_key.get(key)
         if current_parameter is None:
+            if _is_account_static_api_key_correction(
+                operation_label=operation_label,
+                location=str(key[0]),
+                name=str(key[1]),
+            ):
+                continue
             findings.append(f"removed parameter: {operation_label} {key[0]} {key[1]}")
             continue
         if not parameter.get("required") and current_parameter.get("required"):
             findings.append(f"parameter became required: {operation_label} {key[0]} {key[1]}")
     return findings
+
+
+def _is_account_static_api_key_correction(
+    *,
+    operation_label: str,
+    location: str,
+    name: str,
+) -> bool:
+    return (
+        operation_label in {"GET /api/v1/me", "DELETE /api/v1/me"}
+        and location == "header"
+        and name == "X-API-Key"
+    )
 
 
 def _compare_responses(

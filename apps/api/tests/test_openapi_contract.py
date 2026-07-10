@@ -17,6 +17,7 @@ def test_openapi_schema_is_public_and_lists_wave1_routes(client):
         "/api/v1/docents/audio",
         "/api/v1/plans/daily",
         "/api/v1/plans/intervention",
+        "/api/v1/me",
     ):
         assert route in paths
 
@@ -37,9 +38,22 @@ def test_openapi_documents_client_auth_headers_on_v1_routes(client):
     assert security_schemes["BearerAuth"]["scheme"] == "bearer"
     assert security_schemes["MigrationApiKey"]["name"] == "X-API-Key"
     assert schema["paths"]["/api/v1/places"]["get"]["security"] == [
+        {},
         {"BearerAuth": []},
         {"MigrationApiKey": []},
     ]
+    assert schema["paths"]["/api/v1/me"]["get"]["security"] == [
+        {"OAuthBearerAuth": []}
+    ]
+    assert schema["paths"]["/api/v1/me"]["delete"]["security"] == [
+        {"OAuthBearerAuth": []}
+    ]
+    assert "MigrationApiKey" not in str(schema["paths"]["/api/v1/me"])
+    for operation in schema["paths"]["/api/v1/me"].values():
+        assert not any(
+            parameter.get("name") == "X-API-Key"
+            for parameter in operation.get("parameters", [])
+        )
     assert "security" not in schema["paths"]["/healthz"]["get"]
 
 
@@ -49,12 +63,13 @@ def test_openapi_documents_public_route_timeout_expectations(client):
         "/healthz": ("get", 3, False),
         "/readyz": ("get", 3, False),
         "/metrics": ("get", 3, False),
-        "/api/v1/places": ("get", 12, True),
-        "/api/v1/weather": ("get", 12, True),
-        "/api/v1/docents/script": ("post", 30, True),
-        "/api/v1/docents/audio": ("post", 30, True),
-        "/api/v1/plans/daily": ("post", 20, True),
-        "/api/v1/plans/intervention": ("get", 12, True),
+        "/api/v1/places": ("get", 12, False),
+        "/api/v1/weather": ("get", 12, False),
+        "/api/v1/docents/script": ("post", 30, False),
+        "/api/v1/docents/audio": ("post", 30, False),
+        "/api/v1/plans/daily": ("post", 20, False),
+        "/api/v1/plans/intervention": ("get", 12, False),
+        "/api/v1/me": ("get", 12, True),
     }
 
     for path, (method, timeout_seconds, auth_required) in route_contracts.items():
@@ -152,6 +167,7 @@ def test_openapi_documents_readyz_runtime_mode(client):
         "public-contest",
     ]
     assert readiness_checks["client_identity"]["enum"] == [
+        "guest",
         "static",
         "transition",
         "oauth-configured",
@@ -160,6 +176,7 @@ def test_openapi_documents_readyz_runtime_mode(client):
         "missing",
     ]
     assert readiness_checks["public_contest_access"]["enum"] == ["enabled", "disabled"]
+    assert readiness_checks["guest_access"]["enum"] == ["enabled", "disabled"]
     assert readiness_checks["static_snapshot_fallback"]["enum"] == [
         "enabled",
         "disabled",
@@ -169,7 +186,16 @@ def test_openapi_documents_readyz_runtime_mode(client):
         "configured",
         "skipped",
     ]
-    assert readiness_checks["jwt_validation"]["enum"] == ["configured", "skipped"]
+    assert readiness_checks["jwt_validation"]["enum"] == [
+        "configured",
+        "partial",
+        "skipped",
+    ]
+    assert readiness_checks["logto_management"]["enum"] == [
+        "configured",
+        "partial",
+        "skipped",
+    ]
     assert readiness_checks["oauth_jwks_url"]["enum"] == ["configured", "skipped"]
     assert readiness_checks["db"]["enum"] == ["configured", "skipped", "degraded"]
     assert readiness_checks["postgis"]["enum"] == ["configured", "skipped", "degraded"]
@@ -400,3 +426,24 @@ def test_openapi_documents_docent_audio_mpeg_success(client):
     assert success_response["headers"]["X-LALA-Cache-Key"]["schema"] == {
         "type": "string"
     }
+
+
+def test_openapi_documents_account_operations(client):
+    schema = client.get("/openapi.json").json()
+    account_path = schema["paths"]["/api/v1/me"]
+
+    assert account_path["get"]["responses"]["200"]["content"]["application/json"][
+        "schema"
+    ] == {"$ref": "#/components/schemas/MeSuccessEnvelope"}
+    assert schema["components"]["schemas"]["MeData"]["required"] == [
+        "user_id",
+        "created_at",
+        "authenticated",
+    ]
+    assert account_path["delete"]["requestBody"]["content"]["application/json"][
+        "schema"
+    ] == {"$ref": "#/components/schemas/AccountDeletionRequest"}
+    assert account_path["delete"]["responses"]["204"].get("content") in (None, {})
+    assert set(account_path["get"]["responses"]) >= {"200", "401", "409", "503"}
+    assert set(account_path["delete"]["responses"]) >= {"204", "401", "422", "503"}
+    assert "409" not in account_path["delete"]["responses"]

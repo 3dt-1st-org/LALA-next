@@ -52,6 +52,25 @@ def test_openapi_compat_allows_legacy_docent_audio_empty_json_cleanup():
     assert report.findings == ()
 
 
+def test_openapi_compat_allows_removing_static_api_key_from_oauth_account_routes():
+    baseline = create_app().openapi()
+    current = create_app().openapi()
+    for method in ("get", "delete"):
+        baseline["paths"]["/api/v1/me"][method].setdefault("parameters", []).append(
+            {
+                "name": "X-API-Key",
+                "in": "header",
+                "required": False,
+                "schema": {"type": "string"},
+            }
+        )
+
+    report = compare_openapi_compatibility(baseline=baseline, current=current)
+
+    assert report.ok is True
+    assert report.findings == ()
+
+
 def test_check_openapi_compat_cli_passes_against_current_snapshot(tmp_path):
     baseline_path = tmp_path / "baseline-openapi.json"
     baseline_path.write_text(

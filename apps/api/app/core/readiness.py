@@ -12,6 +12,15 @@ def _status(value: str, *, required: bool = False) -> str:
     return "missing" if required else "skipped"
 
 
+def _configuration_status(*values: object) -> str:
+    configured = tuple(bool(value) for value in values)
+    if all(configured):
+        return "configured"
+    if any(configured):
+        return "partial"
+    return "skipped"
+
+
 def _worker_contract_status() -> str:
     try:
         jobs = worker_contracts.list_worker_jobs()
@@ -21,19 +30,13 @@ def _worker_contract_status() -> str:
 
 
 def _client_identity_status(settings: Settings) -> str:
+    if settings.guest_access:
+        return "guest"
     if settings.public_contest_access:
         return "public-contest"
     if settings.static_snapshot_fallback:
         return "snapshot-fallback"
-    oauth_configured = all(
-        (
-            settings.oauth_issuer,
-            settings.oauth_audience,
-            settings.oauth_jwks_url,
-            settings.oauth_client_id,
-            settings.oauth_required_scopes,
-        )
-    )
+    oauth_configured = is_oauth_jwt_validation_configured(settings)
     static_configured = bool(settings.ios_api_key or settings.api_bearer_token)
     if oauth_configured and static_configured:
         return "transition"
@@ -128,7 +131,9 @@ def build_readiness(settings: Settings | None = None) -> dict:
     settings = settings or get_settings()
     jwt_validation_configured = is_oauth_jwt_validation_configured(settings)
     client_auth_status = "missing"
-    if settings.public_contest_access:
+    if settings.guest_access:
+        client_auth_status = "configured"
+    elif settings.public_contest_access:
         client_auth_status = "public-contest"
     elif settings.static_snapshot_fallback:
         client_auth_status = "snapshot-fallback"
@@ -152,18 +157,28 @@ def build_readiness(settings: Settings | None = None) -> dict:
     checks = {
         "client_auth": client_auth_status,
         "client_identity": _client_identity_status(settings),
+        "guest_access": "enabled" if settings.guest_access else "disabled",
         "public_contest_access": "enabled" if settings.public_contest_access else "disabled",
         "static_snapshot_fallback": "enabled" if settings.static_snapshot_fallback else "disabled",
         "public_data_snapshot": public_mvp_data.snapshot_status(),
         "public_data_service_key": _status(settings.public_data_service_key, required=False),
         "api_key": _status(settings.ios_api_key, required=False),
         "bearer_token": _status(settings.api_bearer_token, required=False),
-        "jwt_validation": "configured" if jwt_validation_configured else "skipped",
+        "jwt_validation": _configuration_status(
+            settings.oauth_issuer,
+            settings.oauth_audience,
+            settings.oauth_jwks_url,
+        ),
         "oauth_issuer": _status(settings.oauth_issuer, required=False),
         "oauth_audience": _status(settings.oauth_audience, required=False),
         "oauth_jwks_url": _status(settings.oauth_jwks_url, required=False),
         "oauth_client_id": _status(settings.oauth_client_id, required=False),
         "oauth_required_scopes": "configured" if settings.oauth_required_scopes else "skipped",
+        "logto_management": _configuration_status(
+            settings.logto_management_endpoint,
+            settings.logto_management_client_id,
+            settings.logto_management_client_secret,
+        ),
         "db": db_status,
         "postgis": postgis_status,
         "data_freshness": data_freshness_status,

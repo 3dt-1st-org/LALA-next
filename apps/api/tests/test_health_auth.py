@@ -158,6 +158,85 @@ def test_readyz_reports_oauth_identity_rollout_configuration(client, monkeypatch
     assert checks["jwt_validation"] == "configured"
 
 
+def test_readyz_treats_guest_access_as_configured_client_access(client, monkeypatch):
+    monkeypatch.setenv("LALA_GUEST_ACCESS", "true")
+    monkeypatch.setattr(
+        "apps.api.app.core.readiness.db_repository.check_db_status",
+        lambda dsn: "configured",
+    )
+    monkeypatch.setattr(
+        "apps.api.app.core.readiness.db_repository.check_postgis_status",
+        lambda dsn: "configured",
+    )
+    monkeypatch.setattr(
+        "apps.api.app.core.readiness.db_repository.check_data_freshness_status",
+        lambda dsn, weather_max_hours=24: "configured",
+    )
+    monkeypatch.setenv("DB_DSN", "postgresql://test.invalid/lala")
+
+    response = client.get("/readyz")
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["status"] == "ok"
+    assert data["checks"]["client_auth"] == "configured"
+    assert data["checks"]["client_identity"] == "guest"
+    assert data["checks"]["guest_access"] == "enabled"
+    assert data["checks"]["api_key"] == "skipped"
+    assert data["checks"]["bearer_token"] == "skipped"
+
+
+def test_readyz_oauth_validation_matches_runtime_tuple_without_client_metadata(
+    client,
+    monkeypatch,
+):
+    monkeypatch.setenv("OAUTH_ISSUER", "https://issuer.test/oidc")
+    monkeypatch.setenv("OAUTH_AUDIENCE", "https://api.test")
+    monkeypatch.setenv("OAUTH_JWKS_URL", "https://issuer.test/oidc/jwks")
+
+    response = client.get("/readyz")
+
+    checks = response.json()["data"]["checks"]
+    assert checks["jwt_validation"] == "configured"
+    assert checks["client_identity"] == "oauth-configured"
+    assert checks["oauth_client_id"] == "skipped"
+    assert checks["oauth_required_scopes"] == "skipped"
+
+
+def test_readyz_reports_partial_oauth_and_management_configuration(client, monkeypatch):
+    monkeypatch.setenv("OAUTH_ISSUER", "https://issuer.test/oidc")
+    monkeypatch.setenv("LOGTO_MANAGEMENT_ENDPOINT", "https://issuer.test")
+    monkeypatch.setenv("LOGTO_MANAGEMENT_CLIENT_ID", "management-client-marker")
+
+    response = client.get("/readyz")
+
+    checks = response.json()["data"]["checks"]
+    assert checks["jwt_validation"] == "partial"
+    assert checks["logto_management"] == "partial"
+
+
+def test_readyz_never_exposes_configuration_values(client, monkeypatch):
+    markers = {
+        "OAUTH_ISSUER": "https://issuer-marker.test/oidc",
+        "OAUTH_AUDIENCE": "audience-marker",
+        "OAUTH_JWKS_URL": "https://issuer-marker.test/oidc/jwks",
+        "OAUTH_CLIENT_ID": "oauth-client-marker",
+        "API_BEARER_TOKEN": "bearer-marker",
+        "LOGTO_MANAGEMENT_ENDPOINT": "https://management-marker.test",
+        "LOGTO_MANAGEMENT_CLIENT_ID": "management-client-marker",
+        "LOGTO_MANAGEMENT_CLIENT_SECRET": "management-secret-marker",
+        "DB_DSN": "postgresql://dsn-marker.invalid/lala",
+    }
+    for name, value in markers.items():
+        monkeypatch.setenv(name, value)
+
+    response = client.get("/readyz")
+
+    assert response.status_code == 200
+    for marker in markers.values():
+        assert marker not in response.text
+
+
 def test_readyz_reports_db_degraded_when_probe_fails(client, monkeypatch):
     monkeypatch.setenv("DB_DSN", "postgresql://db.example/lala")
     monkeypatch.setattr(

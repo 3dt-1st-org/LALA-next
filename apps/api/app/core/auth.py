@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from hashlib import sha256
 from typing import Annotated, Literal
 
-from fastapi import Depends, Header
+from fastapi import Depends, Header, Request
 
 from apps.api.app.core.config import Settings, get_settings
 from apps.api.app.core.errors import ApiError
@@ -29,6 +29,7 @@ class RequestIdentity:
 def require_client_auth(
     x_api_key: Annotated[str | None, Header(alias="X-API-Key")] = None,
     authorization: Annotated[str | None, Header(alias="Authorization")] = None,
+    request: Request = None,
 ) -> RequestIdentity:
     settings = get_settings()
     jwt_validation_configured = is_oauth_jwt_validation_configured(settings)
@@ -53,7 +54,7 @@ def require_client_auth(
         ):
             identity = RequestIdentity(mode="static")
         elif jwt_validation_configured:
-            identity = _oauth_identity(bearer_token, settings)
+            identity = _oauth_identity(bearer_token, settings, request=request)
         else:
             raise _unauthorized()
 
@@ -73,10 +74,16 @@ def require_client_auth(
     raise _unauthorized()
 
 
-def _oauth_identity(token: str, settings: Settings) -> RequestIdentity:
+def _oauth_identity(
+    token: str,
+    settings: Settings,
+    *,
+    request: Request | None = None,
+) -> RequestIdentity:
     try:
         payload = validate_oauth_jwt(token, settings)
     except JwtValidationRejected as exc:
+        _record_auth_event(request, "jwt_rejection")
         raise _unauthorized() from exc
     except JwtValidationUnavailable as exc:
         raise ApiError(
@@ -89,8 +96,18 @@ def _oauth_identity(token: str, settings: Settings) -> RequestIdentity:
     issuer = payload.get("iss")
     subject = payload.get("sub")
     if not isinstance(issuer, str) or not isinstance(subject, str):
+        _record_auth_event(request, "jwt_rejection")
         raise _unauthorized()
+    _record_auth_event(request, "oauth_success")
     return RequestIdentity(mode="oauth", issuer=issuer, subject=subject)
+
+
+def _record_auth_event(request: Request | None, name: str) -> None:
+    if request is None:
+        return
+    metrics = getattr(request.app.state, "metrics", None)
+    if metrics is not None:
+        metrics.record_auth_event(name)
 
 
 def require_oauth_identity(

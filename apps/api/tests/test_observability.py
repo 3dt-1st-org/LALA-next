@@ -6,7 +6,14 @@ from uuid import UUID
 
 from fastapi.testclient import TestClient
 
+from apps.api.app.core.auth import RequestIdentity, require_oauth_identity
+from apps.api.app.core.jwt_auth import JwtValidationRejected
 from apps.api.app.main import create_app
+from apps.api.app.services.identity_service import get_identity_service
+from apps.api.app.services.logto_management import (
+    LogtoManagementUnavailable,
+    get_logto_management_client,
+)
 
 
 def test_request_duration_header_is_returned(client):
@@ -221,3 +228,83 @@ def test_metrics_exports_readiness_gauges(client, monkeypatch):
     assert 'lala_next_runtime_mode{component="data",mode="degraded"} 1' in metrics.text
     assert 'lala_next_runtime_mode{component="overall",mode="degraded"} 1' in metrics.text
     assert 'lala_next_runtime_mode{component="speech",mode="live-azure"} 1' in metrics.text
+
+
+def test_metrics_treats_guest_identity_as_ready(client, monkeypatch):
+    monkeypatch.setenv("LALA_GUEST_ACCESS", "true")
+
+    body = client.get("/metrics").text
+
+    assert (
+        'lala_next_dependency_ready{name="client_identity",status="guest"} 1'
+        in body
+    )
+
+
+def test_metrics_exports_safe_aggregate_oauth_success_and_jwt_rejection(client, monkeypatch):
+    monkeypatch.setenv("OAUTH_ISSUER", "https://issuer.test/oidc")
+    monkeypatch.setenv("OAUTH_AUDIENCE", "https://api.test")
+    monkeypatch.setenv("OAUTH_JWKS_URL", "https://issuer.test/oidc/jwks")
+    raw_token = "raw-token-marker"
+    raw_subject = "raw-subject-marker"
+    monkeypatch.setattr(
+        "apps.api.app.core.auth.validate_oauth_jwt",
+        lambda token, settings: {
+            "iss": "https://issuer.test/oidc",
+            "sub": raw_subject,
+        },
+    )
+
+    accepted = client.get(
+        "/api/v1/places?lat=37.2&lng=127.0",
+        headers={"Authorization": f"Bearer {raw_token}"},
+    )
+    assert accepted.status_code == 200
+
+    def reject_token(token, settings):
+        raise JwtValidationRejected()
+
+    monkeypatch.setattr("apps.api.app.core.auth.validate_oauth_jwt", reject_token)
+    rejected = client.get(
+        "/api/v1/places?lat=37.2&lng=127.0",
+        headers={"Authorization": f"Bearer {raw_token}"},
+    )
+    assert rejected.status_code == 401
+
+    body = client.get("/metrics").text
+    assert "lala_next_auth_oauth_success_total 1" in body
+    assert "lala_next_auth_jwt_rejection_total 1" in body
+    assert raw_token not in body
+    assert raw_subject not in body
+    assert "issuer.test" not in body
+
+
+def test_metrics_counts_account_deletion_service_failures_without_identity_labels(client):
+    raw_subject = "deletion-subject-marker"
+
+    class IdentityService:
+        def mark_user_deleting(self, issuer, subject):
+            return None
+
+    class FailingManagementClient:
+        def delete_user(self, subject):
+            raise LogtoManagementUnavailable()
+
+    client.app.dependency_overrides[require_oauth_identity] = lambda: RequestIdentity(
+        mode="oauth",
+        issuer="https://issuer.test/oidc",
+        subject=raw_subject,
+    )
+    client.app.dependency_overrides[get_identity_service] = IdentityService
+    client.app.dependency_overrides[get_logto_management_client] = FailingManagementClient
+
+    response = client.request(
+        "DELETE",
+        "/api/v1/me",
+        json={"confirmation": "delete-my-account"},
+    )
+
+    assert response.status_code == 503
+    body = client.get("/metrics").text
+    assert "lala_next_account_deletion_failure_total 1" in body
+    assert raw_subject not in body
