@@ -511,3 +511,30 @@ def test_aws_runbook_has_no_plaintext_password_or_live_dsn_example():
     assert "LalaNext2024" not in aws
     assert not re.search(r"postgres(?:ql)?://[^\s<>]+", aws)
     assert "aws secretsmanager get-secret-value" in aws
+
+
+def test_post_merge_auth_guide_is_numbered_copy_safe_and_matches_supported_login_scope():
+    guide = _text("docs/operations/post-merge-auth-deployment-guide.md")
+
+    assert len(re.findall(r"^## \d+\.", guide, re.MULTILINE)) == 10
+    for term in (
+        "Google",
+        "Apple",
+        "Email verification code",
+        "Magic Link는 구현하지 않았다",
+        "000_extensions_and_schemas.sql",
+        "005_identity_users.sql",
+        "identity_schema=configured",
+        "PREVIOUS_API_SHA",
+        "vercel deploy static-output --prod",
+        "git switch --detach",
+    ):
+        assert term in guide
+
+    assert guide.index("000_extensions_and_schemas.sql") < guide.index(
+        "005_identity_users.sql"
+    )
+    assert "export VERCEL_ORG_ID=<" not in guide
+    assert "export VERCEL_PROJECT_ID=<" not in guide
+    assert "LalaNext2024" not in guide
+    assert not re.search(r"postgres(?:ql)?://[^\s<>]+", guide)
