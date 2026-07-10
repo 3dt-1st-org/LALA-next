@@ -761,6 +761,34 @@ void main() {
     expect(audio.cacheKey, startsWith('docent_audio:'));
   });
 
+  test('createDocentAudio uses one nonblank dynamic provider token', () async {
+    var providerCalls = 0;
+    late http.Request captured;
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      bearerToken: 'static-audio-token',
+      apiKey: 'static-api-key',
+      accessTokenProvider: () async {
+        providerCalls++;
+        return '  dynamic-audio-token  ';
+      },
+      httpClient: MockClient((request) async {
+        captured = request;
+        return http.Response.bytes(
+          [0x49, 0x44, 0x33],
+          200,
+          headers: {'content-type': 'audio/mpeg'},
+        );
+      }),
+    );
+
+    await client.createDocentAudio(script: 'dynamic audio script');
+
+    expect(providerCalls, 1);
+    expect(captured.headers['authorization'], 'Bearer dynamic-audio-token');
+    expect(captured.headers.containsKey('x-api-key'), isFalse);
+  });
+
   test(
     'JSON error envelope becomes LalaApiException without body leakage',
     () async {
