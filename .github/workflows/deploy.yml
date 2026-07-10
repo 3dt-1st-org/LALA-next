@@ -33,7 +33,7 @@ jobs:
           CMD_ID=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
-            --parameters workingDirectory=/opt/lala-next,commands='["set -euo pipefail","git fetch origin main","git reset --hard origin/main","source .venv/bin/activate","pip install -e . -q","sudo systemctl restart lala-next"]' \
+            --parameters workingDirectory=/opt/lala-next,runAs=ec2-user,commands='["set -euo pipefail","git config --global --add safe.directory /opt/lala-next","git fetch origin main","git reset --hard origin/main","source .venv/bin/activate","pip install -e . -q","sudo systemctl restart lala-next"]' \
             --query 'Command.CommandId' --output text)
           echo "SSM command: $CMD_ID"
           # 결과 대기 (최대 180초)
