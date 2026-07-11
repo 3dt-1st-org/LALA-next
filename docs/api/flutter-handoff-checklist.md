@@ -1,196 +1,132 @@
 # Flutter Handoff Checklist
 
-Use this checklist when handing the shared Windows backend to a Flutter client
-developer.
+Use this checklist for the current Flutter web/native handoff. Flutter web runs
+on Vercel. FastAPI runs on AWS EC2 behind nginx and Cloudflare, with PostgreSQL
+on RDS.
 
-## Required Inputs
+## Required Public Configuration
 
-- Backend base URL, for example `http://<windows-host-lan-ip>:8080`.
-- Client bearer token for `Authorization: Bearer <token>` (static transition
-  token or signed OAuth/Entra JWT), or migration API key value for `X-API-Key`.
-- Current git commit SHA from the backend operator.
-- Backend runtime mode from `/readyz.data.mode.overall`: `public-cache`,
-  `db-backed`, `live-azure`, or `degraded`.
+Provide these through local dart-defines or the Vercel build environment:
 
-## Public Checks
+- `LALA_API_BASE_URL`
+- `LOGTO_ENDPOINT`
+- `LOGTO_API_AUDIENCE`
+- `LOGTO_NATIVE_APP_ID`
+- `LOGTO_WEB_APP_ID`
+- `LOGTO_REDIRECT_URI`
+- `LOGTO_POST_LOGOUT_REDIRECT_URI`
 
-These routes do not require `X-API-Key`:
+Application IDs, endpoint, audience, and redirect URIs are public configuration.
+Do not hand off a Logto client secret, M2M secret, connector credential, static
+API token, API key, database value, or DSN to Flutter.
 
-```text
-GET /healthz
-GET /readyz
-GET /openapi.json
-```
+The backend must set `LALA_GUEST_ACCESS=true` for the guest-first rollout. It
+must also configure a complete canonical `LOGTO_ENDPOINT` plus
+`LOGTO_API_AUDIENCE` pair, or a complete legacy issuer/audience/JWKS tuple.
 
-The mobile device must use the Windows host LAN IP, not `localhost`, unless the
-API process is running on the same device.
-The reference Dart client can call `getHealth()` and `getReadiness()` before
-client auth is available, then switch to bearer/API-key auth for `/api/v1/*`
-methods.
-It exposes `LalaAuthMode` so the app shell can distinguish public-only,
-migration API-key, static bearer-token, and OAuth/JWT bearer-token states
-without decoding or printing the token.
-It also applies bounded client-side timeouts and maps slow requests to
-retryable `REQUEST_TIMEOUT` exceptions.
+## Guest Tourism Routes
 
-## Authenticated Routes
-
-Every `/api/v1/*` request must include one of:
+These routes work without credentials:
 
 ```text
-Authorization: Bearer <client token>
-```
-
-or the migration fallback:
-
-```text
-X-API-Key: <client api key>
-```
-
-Wave 1 Flutter routes:
-
-```text
-GET  /api/v1/places?lat=37.2636&lng=127.0286&radius_m=3000
-GET  /api/v1/weather?lat=37.2636&lng=127.0286
+GET  /healthz
+GET  /readyz
+GET  /openapi.json
+GET  /api/v1/places
+GET  /api/v1/weather
 POST /api/v1/docents/script
 POST /api/v1/docents/audio
 POST /api/v1/plans/daily
-GET  /api/v1/plans/intervention?lat=37.2636&lng=127.0286&radius_m=3000
+GET  /api/v1/plans/intervention
 ```
 
-JSON routes return `{ ok, data, meta, error }`. Audio success from
-`POST /api/v1/docents/audio` returns `audio/mpeg` bytes.
-Generation routes expose deterministic identity values for idempotency-aware
-client flows: script and daily-plan JSON include `request_hash` and `cache_key`,
-while audio success returns `X-LALA-Request-Hash` and `X-LALA-Cache-Key`
-headers.
+Bearer and migration API-key credentials remain optional on tourism routes for
+transition clients. Any presented credentials are validated. An invalid or
+malformed header returns 401 and must never silently downgrade to guest.
 
-## Handoff Verification
+The app starts guest tourism requests without waiting for Logto. After sign-in,
+the reusable client asks its access-token provider for a fresh API token before
+each authenticated request.
 
-Ask the backend operator to run:
+## OAuth Account Routes
 
-```powershell
-.\scripts\windows\smoke_api.ps1 -BaseUrl "http://<host>:8080"
-.\scripts\windows\export_openapi.ps1 -BaseUrl "http://<host>:8080"
+Account operations are Bearer-only OAuth operations:
+
+```text
+GET /api/v1/me
+DELETE /api/v1/me
 ```
 
-If the Flutter developer is validating an OAuth/Entra JWT before full app login
-is wired, ask the operator to set `LALA_SMOKE_BEARER_TOKEN` only in the smoke
-shell and clear it after the check.
+- Static bearer and `X-API-Key` credentials are not accepted.
+- `GET /api/v1/me` returns `user_id`, `created_at`, and `authenticated=true` in
+  the standard JSON envelope.
+- `DELETE /api/v1/me` sends exactly
+  `{"confirmation":"delete-my-account"}` and returns an empty 204 response.
+- Deletion is retry-safe after an upstream failure.
+- The Flutter UI must not display, log, persist, or report provider identity or
+  access-token values.
 
-Expected handoff artifacts:
+Apple upstream revocation remains a live release gate described in
+`docs/operations/aws-deployment-runbook.md`; a passing local deletion response
+does not waive that gate.
 
-- Smoke result: `/healthz`, `/readyz`, and `/openapi.json` pass.
-- Runtime mode: `/readyz.data.mode` matches the intended public-cache,
-  DB-backed, live Azure, or degraded handoff.
-- Request correlation: the Flutter app shell shows latest public/API/audio
-  request ids from response metadata or headers; use those ids with JSONL access
-  logs when debugging a handoff.
-- OpenAPI JSON: `artifacts/openapi/lala-next-openapi.json`.
-- Human-readable contract: `docs/api/flutter-contract.md`.
-- Reference Dart client: `clients/flutter/lib/lala_api_client.dart`.
-- Flutter app shell: `apps/flutter_app/lib/main.dart`.
+## Runtime Checks
 
-The backend repository verifies that the reference client still points at the
-current OpenAPI route set:
+Before handing off a build:
+
+1. Confirm `/healthz` returns 200.
+2. Confirm `/readyz` reports `client_auth=configured`,
+   `client_identity=guest`, `guest_access=enabled`, `jwt_validation=configured`,
+   and the intended RDS/PostGIS data mode.
+3. Confirm `logto_management=configured` for account deletion rollout.
+4. Confirm guest places and weather succeed without headers.
+5. Confirm a deliberately invalid presented credential returns 401.
+6. Confirm Native and Web hosted sign-in each acquire a LALA API access token.
+7. Confirm `GET /api/v1/me` succeeds after sign-in and rejects static
+   credentials.
+8. Confirm sign-out returns the app to guest mode without hiding tourism data.
+9. Confirm account deletion requires UI confirmation and handles 204 without
+   parsing JSON.
+
+Do not paste response bodies from account routes into tickets or chat. Correlate
+failures using the safe `X-Request-ID` value.
+
+## Repository Verification
 
 ```bash
 python -m apps.api.app.tools.check_flutter_client_contract
-```
-
-When Dart is installed, the reference client also has local unit tests for auth
-headers, JSON envelopes, audio bytes, and error handling:
-
-```bash
+scripts/unix/export_openapi.sh --in-process
 scripts/unix/verify_flutter_client.sh --require-dart
-```
-
-When Flutter is installed, the app shell can also be checked without a live
-backend because its widget tests inject a fake backend. The same verifier also
-builds a release web bundle to catch browser-target compile errors:
-
-```bash
 scripts/unix/verify_flutter_app.sh --require-flutter
 ```
 
-For an actual browser render smoke on macOS/Linux, run:
-
-```bash
-scripts/unix/smoke_flutter_web.sh --require-flutter --require-browser --port 8099
-```
-
-For a stronger local handoff check that does not require Azure, Key Vault, or
-PostgreSQL:
+When browser tooling is available:
 
 ```bash
 scripts/unix/smoke_flutter_web.sh \
   --require-flutter \
   --require-browser \
-  --start-api \
   --fail-on-console-error \
-  --port 8099 \
-  --api-port 18080
+  --web-url "$DEPLOYED_WEB_URL" \
+  --expect-build-sha "$EXPECTED_BUILD_SHA"
 ```
 
-```powershell
-.\scripts\windows\smoke_flutter_web.ps1 `
-  -RequireFlutter `
-  -RequireBrowser `
-  -StartApi `
-  -FailOnConsoleError `
-  -Port 8099 `
-  -ApiPort 18080
-```
+Expected artifacts:
 
-Local Flutter bundle smoke remains optional outside CI. It uses the Playwright
-CLI, captures artifacts under `output/playwright/`, and validates that the
-Flutter web bundle renders. With `--start-api`, the wrapper starts a local
-FastAPI process, injects a temporary local migration API key at compile time,
-and checks the API log for `/healthz`, `/readyz`, places, weather,
-intervention, and daily plan route hits. It also grants a fixed test browser
-geolocation, reloads into the first-run location request flow, and checks
-`flutter-web-requests.txt` for the expected API requests with that latitude and
-longitude. Without `--start-api`, the app is expected to show the offline public
-state when the API is not running and the console artifact can include a
-refused `/healthz` request. Use `--api-base-url <url>` to point the bundle at a
-separately running backend that allows the selected local web origin and run the
-same location-flow request check against it. Use
-`--web-url https://lala-next.cloud/?qa=<label>` for the deployed contest site so
-the browser opens the registered Kakao/CORS origin directly. Pair it with
-`--expect-build-sha <sha> --wait-for-build-sha` when the check should wait for a
-new Vercel Flutter bundle before judging the UI flow. Deployed and DB-backed
-checks also verify a live-context docent script from the same place/weather
-data, including live place/local value/official grounding without raw score
-leakage. The deployed public site version is CI-gated by
-`.github/workflows/deployed-web-smoke.yml` on relevant `dev` pushes.
+- OpenAPI JSON at `artifacts/openapi/lala-next-openapi.json`.
+- Human-readable API contract at `docs/api/flutter-contract.md`.
+- Reference client at `clients/flutter/lib/lala_api_client.dart`.
+- Flutter session integration at `apps/flutter_app/lib/auth/`.
 
-The app shell loads public readiness before auth, shows whether the current
-client credential shape is public-only, migration API-key, static bearer-token,
-or OAuth/JWT bearer-token, shows latest request ids for backend log
-correlation, loads the JSON `/api/v1/*` panels after bearer/API-key auth is
-provided, and can fetch docent audio metadata from
-`POST /api/v1/docents/audio` after an explicit button tap. That audio action is
-not automatic because live Speech-enabled backends may perform a paid Azure
-Speech request. If public `/healthz` and `/readyz` succeed but an authenticated
-`/api/v1/*` request fails, the shell keeps the public runtime status visible and
-shows a bounded error banner for the authenticated panel load.
-Use `scripts/unix/inspect_access_log.sh` or
-`scripts/windows/inspect_access_log.ps1` to look up those request ids in a local
-JSONL access log without exposing query strings, auth headers, request bodies,
-or generated content.
+## Failure Handoff
 
-## Mode Notes
-
-- `DB_DSN` enables PostgreSQL-backed places, weather, planner, and docent-cache
-  reads. Without DB, routes return empty or `unavailable` contract-safe results
-  unless static snapshot fallback is explicitly enabled.
-- Production, review, and shared dev deployments should keep
-  `LALA_STATIC_SNAPSHOT_FALLBACK=false`; bundled static snapshots are limited to
-  offline, read-only DB-outage fallback or isolated local checks.
-- `LALA_ENABLE_LIVE_AI=true` enables Azure OpenAI script generation.
-- `LALA_ENABLE_LIVE_SPEECH=true` enables Azure Speech MP3 generation.
-- `/readyz.data.mode.data` reports `db-backed` only after the canonical DB probe
-  succeeds; live AI/Speech report `live-azure` only when explicitly enabled and
-  configured.
-- Production routing, persisted secure token storage, release packaging, and
-  platform-specific distribution remain a later wave.
+- Guest route 401 with no headers: verify `LALA_GUEST_ACCESS` and readiness.
+- Invalid credential unexpectedly succeeds: block rollout; guest fallback must
+  not accept presented invalid credentials.
+- `/me` accepts static auth: block rollout; account operations are OAuth-only.
+- JWT validation partial: restore the complete canonical or legacy tuple as one
+  unit.
+- Deletion 503: retain the local deleting state and retry after the dependency
+  recovers.
+- Apple upstream authorization remains present: block launch and follow the AWS
+  runbook release gate.

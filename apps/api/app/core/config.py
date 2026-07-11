@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from urllib.parse import urlsplit, urlunsplit
 
 from dotenv import load_dotenv
 
@@ -16,6 +17,11 @@ class Settings:
     app_version: str = "0.1.0"
     ios_api_key: str = ""
     api_bearer_token: str = ""
+    logto_endpoint: str = ""
+    logto_api_audience: str = ""
+    logto_management_endpoint: str = ""
+    logto_management_client_id: str = ""
+    logto_management_client_secret: str = ""
     oauth_issuer: str = ""
     oauth_audience: str = ""
     oauth_jwks_url: str = ""
@@ -30,6 +36,7 @@ class Settings:
     public_data_service_key: str = ""
     gyeonggi_data_dream_api_key: str = ""
     public_contest_access: bool = False
+    guest_access: bool = False
     static_snapshot_fallback: bool = False
     db_dsn: str = ""
     key_vault_url: str = ""
@@ -57,9 +64,23 @@ class Settings:
     log_level: str = "INFO"
     access_log_path: str = ""
 
+    @property
+    def guest_access_enabled(self) -> bool:
+        return self.guest_access or self.public_contest_access
+
     @classmethod
     def from_env(cls) -> "Settings":
         key_vault_url = (os.getenv("KEY_VAULT_URL") or "").strip()
+        logto_endpoint = _env_or_secret("LOGTO_ENDPOINT", "logto-endpoint", key_vault_url)
+        logto_api_audience = _env_or_secret(
+            "LOGTO_API_AUDIENCE",
+            "logto-api-audience",
+            key_vault_url,
+        )
+        logto_issuer, logto_jwks_url = derive_logto_oidc_urls(logto_endpoint)
+        logto_validation_configured = bool(
+            logto_issuer and logto_jwks_url and logto_api_audience
+        )
         azure_openai_deployment = _env_or_secret(
             "AZURE_OPENAI_DEPLOYMENT",
             "azure-openai-deployment",
@@ -84,9 +105,38 @@ class Settings:
         return cls(
             ios_api_key=_env_or_secret("IOS_API_KEY", "ios-api-key", key_vault_url),
             api_bearer_token=_env_or_secret("API_BEARER_TOKEN", "api-bearer-token", key_vault_url),
-            oauth_issuer=_env_or_secret("OAUTH_ISSUER", "oauth-issuer", key_vault_url),
-            oauth_audience=_env_or_secret("OAUTH_AUDIENCE", "oauth-audience", key_vault_url),
-            oauth_jwks_url=_env_or_secret("OAUTH_JWKS_URL", "oauth-jwks-url", key_vault_url),
+            logto_endpoint=logto_endpoint,
+            logto_api_audience=logto_api_audience,
+            logto_management_endpoint=(
+                _env_or_secret(
+                    "LOGTO_MANAGEMENT_ENDPOINT",
+                    "logto-management-endpoint",
+                    key_vault_url,
+                )
+                or logto_endpoint
+            ),
+            logto_management_client_id=_env_or_secret(
+                "LOGTO_MANAGEMENT_CLIENT_ID",
+                "logto-management-client-id",
+                key_vault_url,
+            ),
+            logto_management_client_secret=_env_or_secret(
+                "LOGTO_MANAGEMENT_CLIENT_SECRET",
+                "logto-management-client-secret",
+                key_vault_url,
+            ),
+            oauth_issuer=(
+                logto_issuer if logto_validation_configured else ""
+                or _env_or_secret("OAUTH_ISSUER", "oauth-issuer", key_vault_url)
+            ),
+            oauth_audience=(
+                logto_api_audience if logto_validation_configured else ""
+                or _env_or_secret("OAUTH_AUDIENCE", "oauth-audience", key_vault_url)
+            ),
+            oauth_jwks_url=(
+                logto_jwks_url if logto_validation_configured else ""
+                or _env_or_secret("OAUTH_JWKS_URL", "oauth-jwks-url", key_vault_url)
+            ),
             oauth_client_id=_env_or_secret("OAUTH_CLIENT_ID", "oauth-client-id", key_vault_url),
             oauth_required_scopes=_csv_value(
                 _env_or_secret("OAUTH_REQUIRED_SCOPES", "oauth-required-scopes", key_vault_url)
@@ -112,6 +162,7 @@ class Settings:
                 key_vault_url,
             ),
             public_contest_access=_bool_env("LALA_PUBLIC_CONTEST_ACCESS", default=False),
+            guest_access=_bool_env("LALA_GUEST_ACCESS", default=False),
             static_snapshot_fallback=_static_snapshot_fallback_enabled(),
             db_dsn=_env_or_secret("DB_DSN", "db-dsn", key_vault_url),
             key_vault_url=key_vault_url,
@@ -225,6 +276,27 @@ def _int_env(env_name: str, *, default: int, minimum: int) -> int:
 
 def _static_snapshot_fallback_enabled() -> bool:
     return _bool_env("LALA_STATIC_SNAPSHOT_FALLBACK", default=False)
+
+
+def derive_logto_oidc_urls(endpoint: str) -> tuple[str, str]:
+    """Derive Logto's fixed OIDC issuer and JWKS URL from a safe base endpoint."""
+    try:
+        parsed = urlsplit(endpoint)
+    except ValueError:
+        return "", ""
+    if (
+        parsed.scheme.lower() != "https"
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+        or parsed.path not in {"", "/"}
+        or parsed.query
+        or parsed.fragment
+    ):
+        return "", ""
+    base_url = urlunsplit((parsed.scheme.lower(), parsed.netloc, "", "", ""))
+    issuer = f"{base_url}/oidc"
+    return issuer, f"{issuer}/jwks"
 
 
 def _csv_env(env_name: str) -> tuple[str, ...]:

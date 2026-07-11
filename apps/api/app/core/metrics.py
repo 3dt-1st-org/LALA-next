@@ -6,6 +6,13 @@ from threading import Lock
 from time import monotonic
 
 
+AUTH_COUNTER_NAMES = (
+    "oauth_success",
+    "jwt_rejection",
+    "account_deletion_failure",
+)
+
+
 READY_STATUSES = frozenset(
     {
         "ok",
@@ -14,6 +21,7 @@ READY_STATUSES = frozenset(
         "static",
         "transition",
         "oauth-configured",
+        "guest",
         "public-contest",
     }
 )
@@ -38,6 +46,7 @@ class RuntimeMetrics:
         self._started_at = monotonic()
         self._lock = Lock()
         self._routes: dict[tuple[str, str, int], dict[str, float | int]] = {}
+        self._auth_counters = {name: 0 for name in AUTH_COUNTER_NAMES}
 
     def record_request(
         self,
@@ -57,6 +66,12 @@ class RuntimeMetrics:
             current["duration_ms_sum"] = float(current["duration_ms_sum"]) + duration_ms
             current["duration_ms_max"] = max(float(current["duration_ms_max"]), duration_ms)
 
+    def record_auth_event(self, name: str) -> None:
+        if name not in self._auth_counters:
+            raise ValueError("Unsupported auth metric name.")
+        with self._lock:
+            self._auth_counters[name] += 1
+
     def snapshot(self) -> tuple[float, tuple[RouteMetric, ...]]:
         with self._lock:
             uptime_seconds = monotonic() - self._started_at
@@ -72,6 +87,10 @@ class RuntimeMetrics:
                 for (method, path, status_code), values in sorted(self._routes.items())
             )
         return uptime_seconds, routes
+
+    def auth_snapshot(self) -> dict[str, int]:
+        with self._lock:
+            return dict(self._auth_counters)
 
 
 def render_prometheus(metrics: RuntimeMetrics, readiness: Mapping[str, object] | None = None) -> str:
@@ -112,6 +131,21 @@ def render_prometheus(metrics: RuntimeMetrics, readiness: Mapping[str, object] |
         )
     if readiness is not None:
         lines.extend(_readiness_lines(readiness))
+    auth_counters = metrics.auth_snapshot()
+    lines.extend(
+        [
+            "# HELP lala_next_auth_oauth_success_total Accepted OAuth JWT authentications.",
+            "# TYPE lala_next_auth_oauth_success_total counter",
+            f"lala_next_auth_oauth_success_total {auth_counters['oauth_success']}",
+            "# HELP lala_next_auth_jwt_rejection_total Rejected presented OAuth JWTs.",
+            "# TYPE lala_next_auth_jwt_rejection_total counter",
+            f"lala_next_auth_jwt_rejection_total {auth_counters['jwt_rejection']}",
+            "# HELP lala_next_account_deletion_failure_total Account deletion orchestration failures.",
+            "# TYPE lala_next_account_deletion_failure_total counter",
+            "lala_next_account_deletion_failure_total "
+            f"{auth_counters['account_deletion_failure']}",
+        ]
+    )
     return "\n".join(lines) + "\n"
 
 

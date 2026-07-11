@@ -11,6 +11,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'auth/auth_controller.dart';
+import 'auth/logto_auth_gateway.dart';
 import 'browser_location.dart';
 import 'kakao_map_view.dart';
 import 'manual_location_options.dart';
@@ -109,12 +111,14 @@ class LalaApp extends StatelessWidget {
     this.initialConfig = const LalaAppConfig.fromEnvironment(),
     this.locationProvider = const GeolocatorLalaLocationProvider(),
     this.recommendationRecoveryDelays = _defaultRecommendationRecoveryDelays,
+    this.authControllerFactory = createLalaAuthController,
   });
 
   final LalaBackendFactory backendFactory;
   final LalaAppConfig initialConfig;
   final LalaLocationProvider locationProvider;
   final List<Duration> recommendationRecoveryDelays;
+  final LalaAuthControllerFactory authControllerFactory;
 
   @override
   Widget build(BuildContext context) {
@@ -151,6 +155,7 @@ class LalaApp extends StatelessWidget {
         initialConfig: initialConfig,
         locationProvider: locationProvider,
         recommendationRecoveryDelays: recommendationRecoveryDelays,
+        authControllerFactory: authControllerFactory,
       ),
     );
   }
@@ -169,6 +174,7 @@ class LalaAppConfig {
     this.category = 'all',
     this.lang = 'ko',
     this.requireLocationStartConfirmation = false,
+    this.accessTokenProvider,
   });
 
   const LalaAppConfig.fromEnvironment()
@@ -194,7 +200,8 @@ class LalaAppConfig {
       requireLocationStartConfirmation = const bool.fromEnvironment(
         'LALA_REQUIRE_LOCATION_START_CONFIRMATION',
         defaultValue: false,
-      );
+      ),
+      accessTokenProvider = null;
 
   final String baseUri;
   final String bearerToken;
@@ -207,6 +214,7 @@ class LalaAppConfig {
   final String category;
   final String lang;
   final bool requireLocationStartConfirmation;
+  final LalaAccessTokenProvider? accessTokenProvider;
 
   bool get hasAuth => bearerToken.trim().isNotEmpty || apiKey.trim().isNotEmpty;
   LalaAuthMode get authMode =>
@@ -224,6 +232,7 @@ class LalaAppConfig {
     String? category,
     String? lang,
     bool? requireLocationStartConfirmation,
+    LalaAccessTokenProvider? accessTokenProvider,
   }) {
     return LalaAppConfig(
       baseUri: baseUri ?? this.baseUri,
@@ -239,6 +248,7 @@ class LalaAppConfig {
       requireLocationStartConfirmation:
           requireLocationStartConfirmation ??
           this.requireLocationStartConfirmation,
+      accessTokenProvider: accessTokenProvider ?? this.accessTokenProvider,
     );
   }
 }
@@ -358,6 +368,7 @@ class LalaApiBackend implements LalaBackend {
         baseUri: Uri.parse(config.baseUri),
         bearerToken: config.bearerToken,
         apiKey: config.apiKey,
+        accessTokenProvider: config.accessTokenProvider,
       );
 
   final LalaAppConfig config;
@@ -462,6 +473,7 @@ class LalaHomePage extends StatefulWidget {
     required this.initialConfig,
     required this.locationProvider,
     required this.recommendationRecoveryDelays,
+    required this.authControllerFactory,
     super.key,
   });
 
@@ -469,6 +481,7 @@ class LalaHomePage extends StatefulWidget {
   final LalaAppConfig initialConfig;
   final LalaLocationProvider locationProvider;
   final List<Duration> recommendationRecoveryDelays;
+  final LalaAuthControllerFactory authControllerFactory;
 
   @override
   State<LalaHomePage> createState() => _LalaHomePageState();
@@ -489,6 +502,9 @@ class _LalaHomePageState extends State<LalaHomePage> {
   late double _queryLat;
   late double _queryLng;
   late LalaBackend _backend;
+  late final LalaAuthController _authController;
+  bool _authInitializationComplete = false;
+  LalaAuthStatus? _lastAuthStatus;
 
   bool _loading = false;
   String? _error;
@@ -548,7 +564,13 @@ class _LalaHomePageState extends State<LalaHomePage> {
     _queryLng = config.lng;
     _uiLanguage = config.lang;
     _locationStartPromptVisible = config.requireLocationStartConfirmation;
+    _authController = widget.authControllerFactory(
+      LalaAppAuthDependencies(apiBaseUri: Uri.parse(config.baseUri)),
+    );
+    _lastAuthStatus = _authController.state.status;
+    _authController.addListener(_handleAuthStateChanged);
     _backend = widget.backendFactory(_currentConfig());
+    unawaited(_initializeAuth());
     if (!config.requireLocationStartConfirmation) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -563,6 +585,8 @@ class _LalaHomePageState extends State<LalaHomePage> {
     _mapCameraDebounce?.cancel();
     _interventionToastTimer?.cancel();
     _recommendationRecoveryTimer?.cancel();
+    _authController.removeListener(_handleAuthStateChanged);
+    _authController.dispose();
     _backend.close();
     super.dispose();
   }
@@ -573,7 +597,27 @@ class _LalaHomePageState extends State<LalaHomePage> {
       lng: _queryLng,
       category: _selectedCategory,
       lang: _uiLanguage,
+      accessTokenProvider: _authController.accessToken,
     );
+  }
+
+  Future<void> _initializeAuth() async {
+    await _authController.initialize();
+    _authInitializationComplete = true;
+  }
+
+  void _handleAuthStateChanged() {
+    final previousStatus = _lastAuthStatus;
+    final currentStatus = _authController.state.status;
+    _lastAuthStatus = currentStatus;
+    if (!_authInitializationComplete || !mounted) {
+      return;
+    }
+    if (previousStatus == LalaAuthStatus.busy &&
+        (currentStatus == LalaAuthStatus.signedIn ||
+            currentStatus == LalaAuthStatus.signedOut)) {
+      unawaited(_refresh(forceWeather: true));
+    }
   }
 
   void _resetMapContext() {
@@ -1480,6 +1524,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
             }
 
             return _UserSettingsSheet(
+              authController: _authController,
               locationConsentEnabled: _locationConsentEnabled,
               uiLanguage: _uiLanguage,
               fontScale: _fontScale,
@@ -1602,8 +1647,251 @@ class _LalaHomePageState extends State<LalaHomePage> {
   }
 }
 
+class _AccountSettingsSection extends StatelessWidget {
+  const _AccountSettingsSection({
+    required this.controller,
+    required this.language,
+  });
+
+  final LalaAuthController controller;
+  final String language;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) {
+        final state = controller.state;
+        if (state.status == LalaAuthStatus.disabled) {
+          return _SettingsSection(
+            key: const ValueKey('account-panel'),
+            title: _copy(language, ko: '계정', en: 'Account'),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.lock_outline,
+                  size: 18,
+                  color: Color(0xFF64748B),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  _copy(
+                    language,
+                    ko: '계정 로그인을 사용할 수 없어요',
+                    en: 'Sign-in unavailable',
+                  ),
+                  style: const TextStyle(
+                    color: Color(0xFF64748B),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+        return _SettingsSection(
+          title: _copy(language, ko: '계정', en: 'Account'),
+          child: Container(
+            key: const ValueKey('account-panel'),
+            constraints: const BoxConstraints(minHeight: 72),
+            alignment: Alignment.centerLeft,
+            child: _buildState(context, state),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildState(BuildContext context, LalaAuthState state) {
+    if (state.status == LalaAuthStatus.busy) {
+      return Row(
+        children: [
+          const SizedBox.square(
+            dimension: 22,
+            child: CircularProgressIndicator(
+              key: ValueKey('account-progress'),
+              strokeWidth: 2.5,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            _copy(language, ko: '계정 처리 중', en: 'Updating account'),
+            style: const TextStyle(
+              color: Color(0xFF475569),
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      );
+    }
+
+    final me = state.me;
+    if (me == null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _AccountStatusRow(
+                  icon: Icons.person_outline,
+                  label: _copy(
+                    language,
+                    ko: '게스트로 이용 중',
+                    en: 'Using LALA as a guest',
+                  ),
+                ),
+              ),
+              TextButton.icon(
+                key: const ValueKey('account-sign-in'),
+                onPressed: controller.signIn,
+                icon: const Icon(Icons.login, size: 20),
+                label: Text(_copy(language, ko: '로그인', en: 'Sign in')),
+              ),
+            ],
+          ),
+          if (state.errorMessage != null) ...[
+            const SizedBox(height: 8),
+            _AccountErrorText(language: language),
+          ],
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.account_circle_outlined, color: Color(0xFF2B6CB0)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                _copy(language, ko: '로그인됨', en: 'Signed in'),
+                style: const TextStyle(
+                  color: Color(0xFF1E293B),
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            IconButton(
+              key: const ValueKey('account-sign-out'),
+              tooltip: _copy(language, ko: '로그아웃', en: 'Sign out'),
+              onPressed: controller.signOut,
+              icon: const Icon(Icons.logout),
+            ),
+          ],
+        ),
+        if (state.errorMessage != null) ...[
+          const SizedBox(height: 8),
+          _AccountErrorText(language: language),
+        ],
+        TextButton(
+          key: const ValueKey('account-delete'),
+          onPressed: () => _confirmDelete(context),
+          style: TextButton.styleFrom(
+            padding: EdgeInsets.zero,
+            foregroundColor: const Color(0xFFB42318),
+            textStyle: const TextStyle(fontWeight: FontWeight.w900),
+          ),
+          child: Text(_copy(language, ko: '계정 삭제', en: 'Delete account')),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _confirmDelete(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: const ValueKey('account-delete-dialog'),
+        title: Text(_copy(language, ko: '계정을 삭제할까요?', en: 'Delete account?')),
+        content: Text(
+          _copy(
+            language,
+            ko: '계정과 연결된 데이터가 삭제되며 되돌릴 수 없습니다.',
+            en: 'Your account data will be deleted and cannot be restored.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            key: const ValueKey('account-delete-cancel'),
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(_copy(language, ko: '취소', en: 'Cancel')),
+          ),
+          TextButton(
+            key: const ValueKey('account-delete-confirm'),
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFFB42318),
+            ),
+            child: Text(_copy(language, ko: '삭제', en: 'Delete')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await controller.deleteAccount();
+    }
+  }
+}
+
+class _AccountStatusRow extends StatelessWidget {
+  const _AccountStatusRow({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, color: const Color(0xFF64748B)),
+        if (label.isNotEmpty) ...[
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFF64748B),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _AccountErrorText extends StatelessWidget {
+  const _AccountErrorText({required this.language});
+
+  final String language;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      _copy(
+        language,
+        ko: '계정 요청을 완료하지 못했어요. 다시 시도해 주세요.',
+        en: 'We could not complete the account request. Please try again.',
+      ),
+      style: const TextStyle(
+        color: Color(0xFFB42318),
+        fontSize: 12,
+        fontWeight: FontWeight.w800,
+        height: 1.35,
+      ),
+    );
+  }
+}
+
 class _UserSettingsSheet extends StatelessWidget {
   const _UserSettingsSheet({
+    required this.authController,
     required this.locationConsentEnabled,
     required this.uiLanguage,
     required this.fontScale,
@@ -1612,6 +1900,7 @@ class _UserSettingsSheet extends StatelessWidget {
     required this.onFontScaleChanged,
   });
 
+  final LalaAuthController authController;
   final bool locationConsentEnabled;
   final String uiLanguage;
   final double fontScale;
@@ -1625,9 +1914,9 @@ class _UserSettingsSheet extends StatelessWidget {
     final closeLabel = _copy(uiLanguage, ko: '닫기', en: 'Close');
     return DraggableScrollableSheet(
       expand: false,
-      initialChildSize: 0.82,
+      initialChildSize: 1,
       minChildSize: 0.48,
-      maxChildSize: 0.95,
+      maxChildSize: 1,
       builder: (context, scrollController) {
         return DecoratedBox(
           decoration: BoxDecoration(
@@ -1684,6 +1973,10 @@ class _UserSettingsSheet extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 16),
+              _AccountSettingsSection(
+                controller: authController,
+                language: uiLanguage,
+              ),
               _SettingsSection(
                 title: _copy(
                   uiLanguage,
@@ -2369,7 +2662,12 @@ class _PrivacyDetailRow extends StatelessWidget {
 }
 
 class _SettingsSection extends StatelessWidget {
-  const _SettingsSection({required this.title, this.child, this.trailing});
+  const _SettingsSection({
+    super.key,
+    required this.title,
+    this.child,
+    this.trailing,
+  });
 
   final String title;
   final Widget? child;

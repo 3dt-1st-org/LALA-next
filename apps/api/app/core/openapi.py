@@ -18,6 +18,7 @@ WEATHER_PATH = "/api/v1/weather"
 DOCENT_SCRIPT_PATH = "/api/v1/docents/script"
 DAILY_PLAN_PATH = "/api/v1/plans/daily"
 INTERVENTION_PATH = "/api/v1/plans/intervention"
+ME_PATH = "/api/v1/me"
 
 OPERATION_TIMEOUT_SECONDS = {
     HEALTHZ_PATH: 3,
@@ -29,6 +30,7 @@ OPERATION_TIMEOUT_SECONDS = {
     DOCENT_AUDIO_PATH: 30,
     DAILY_PLAN_PATH: 20,
     INTERVENTION_PATH: 12,
+    ME_PATH: 12,
 }
 
 
@@ -98,11 +100,18 @@ def _add_client_auth_security(schema: dict[str, Any]) -> None:
         "InterventionSuccessEnvelope",
         _success_envelope_schema("InterventionData"),
     )
+    schemas.setdefault("MeData", _me_data_schema())
+    schemas.setdefault("MeSuccessEnvelope", _success_envelope_schema("MeData"))
 
     security_schemes["BearerAuth"] = {
         "type": "http",
         "scheme": "bearer",
-        "description": "Preferred client token. Accepts API_BEARER_TOKEN during migration or a signed OAuth/Entra JWT when OAuth configuration is complete.",
+        "description": "Optional credential for guest-accessible tourism routes. Presented static or OAuth bearer credentials are always validated.",
+    }
+    security_schemes["OAuthBearerAuth"] = {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Logto OAuth API access token required for account operations. Static bearer tokens are not accepted.",
     }
     security_schemes["MigrationApiKey"] = {
         "type": "apiKey",
@@ -114,13 +123,38 @@ def _add_client_auth_security(schema: dict[str, Any]) -> None:
     for path, path_item in (schema.get("paths") or {}).items():
         if not path.startswith(V1_PATH_PREFIX) or not isinstance(path_item, Mapping):
             continue
-        for operation in path_item.values():
+        for method, operation in path_item.items():
             if isinstance(operation, dict):
-                operation["security"] = [
-                    {"BearerAuth": []},
-                    {"MigrationApiKey": []},
-                ]
+                if path == ME_PATH:
+                    operation["security"] = [{"OAuthBearerAuth": []}]
+                    _remove_generated_auth_parameters(operation)
+                else:
+                    operation["security"] = [
+                        {},
+                        {"BearerAuth": []},
+                        {"MigrationApiKey": []},
+                    ]
                 _add_error_envelope_responses(operation)
+                if path == ME_PATH:
+                    _add_account_error_responses(
+                        operation,
+                        include_conflict=method.lower() == "get",
+                    )
+
+
+def _remove_generated_auth_parameters(operation: dict[str, Any]) -> None:
+    parameters = operation.get("parameters")
+    if not isinstance(parameters, list):
+        return
+    operation["parameters"] = [
+        parameter
+        for parameter in parameters
+        if not (
+            isinstance(parameter, dict)
+            and parameter.get("in") == "header"
+            and parameter.get("name") in {"Authorization", "X-API-Key"}
+        )
+    ]
 
 
 def _add_error_envelope_responses(operation: dict[str, Any]) -> None:
@@ -144,6 +178,35 @@ def _add_error_envelope_responses(operation: dict[str, Any]) -> None:
             }
         },
     }
+
+
+def _add_account_error_responses(
+    operation: dict[str, Any],
+    *,
+    include_conflict: bool,
+) -> None:
+    responses = operation.setdefault("responses", {})
+    unavailable_description = (
+        "Identity storage is unavailable."
+        if include_conflict
+        else "Identity storage or account deletion service is unavailable."
+    )
+    errors = [("503", unavailable_description)]
+    if include_conflict:
+        errors.append(("409", "Account deletion is already in progress."))
+        errors.append(("410", "The Logto identity was previously deleted."))
+    for status_code, description in errors:
+        responses.setdefault(
+            status_code,
+            {
+                "description": description,
+                "content": {
+                    "application/json": {
+                        "schema": {"$ref": "#/components/schemas/ApiErrorEnvelope"}
+                    }
+                },
+            },
+        )
 
 
 def _fix_docent_audio_success_content(schema: dict[str, Any]) -> None:
@@ -186,7 +249,7 @@ def _add_operation_contract_extensions(schema: dict[str, Any]) -> None:
             if not isinstance(operation, dict):
                 continue
             operation["x-lala-timeout-seconds"] = timeout_seconds
-            operation["x-lala-auth-required"] = path.startswith(V1_PATH_PREFIX)
+            operation["x-lala-auth-required"] = path == ME_PATH
 
 
 def _add_standard_response_headers(schema: dict[str, Any]) -> None:
@@ -312,6 +375,8 @@ def _success_response_ref(path: str) -> dict[str, Any]:
         return {"$ref": "#/components/schemas/DailyPlanSuccessEnvelope"}
     if path == INTERVENTION_PATH:
         return {"$ref": "#/components/schemas/InterventionSuccessEnvelope"}
+    if path == ME_PATH:
+        return {"$ref": "#/components/schemas/MeSuccessEnvelope"}
     return {"$ref": "#/components/schemas/ApiSuccessEnvelope"}
 
 
@@ -354,6 +419,7 @@ def _readiness_checks_schema() -> dict[str, Any]:
         "required": [
             "client_auth",
             "client_identity",
+            "guest_access",
             "public_contest_access",
             "static_snapshot_fallback",
             "public_data_snapshot",
@@ -366,7 +432,9 @@ def _readiness_checks_schema() -> dict[str, Any]:
             "oauth_jwks_url",
             "oauth_client_id",
             "oauth_required_scopes",
+            "logto_management",
             "db",
+            "identity_schema",
             "postgis",
             "key_vault",
             "azure_openai_endpoint",
@@ -392,6 +460,7 @@ def _readiness_checks_schema() -> dict[str, Any]:
             "client_identity": {
                 "type": "string",
                 "enum": [
+                    "guest",
                     "static",
                     "transition",
                     "oauth-configured",
@@ -400,19 +469,28 @@ def _readiness_checks_schema() -> dict[str, Any]:
                     "missing",
                 ],
             },
+            "guest_access": enabled_or_disabled,
             "public_contest_access": enabled_or_disabled,
             "static_snapshot_fallback": enabled_or_disabled,
             "public_data_snapshot": configured_or_missing,
             "public_data_service_key": configured_or_skipped,
             "api_key": configured_or_skipped,
             "bearer_token": configured_or_skipped,
-            "jwt_validation": configured_or_skipped,
+            "jwt_validation": {
+                "type": "string",
+                "enum": ["configured", "partial", "skipped"],
+            },
             "oauth_issuer": configured_or_skipped,
             "oauth_audience": configured_or_skipped,
             "oauth_jwks_url": configured_or_skipped,
             "oauth_client_id": configured_or_skipped,
             "oauth_required_scopes": configured_or_skipped,
+            "logto_management": {
+                "type": "string",
+                "enum": ["configured", "partial", "skipped"],
+            },
             "db": configured_skipped_degraded,
+            "identity_schema": configured_skipped_degraded,
             "postgis": configured_skipped_degraded,
             "key_vault": configured_or_skipped,
             "azure_openai_endpoint": configured_or_skipped,
@@ -451,6 +529,19 @@ def _runtime_mode_schema() -> dict[str, Any]:
                 "enum": ["disabled", "live-azure", "degraded"],
             },
             "worker": {"type": "string", "enum": ["dry-run", "degraded"]},
+        },
+        "additionalProperties": False,
+    }
+
+
+def _me_data_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": ["user_id", "created_at", "authenticated"],
+        "properties": {
+            "user_id": {"type": "string", "format": "uuid"},
+            "created_at": {"type": "string", "format": "date-time"},
+            "authenticated": {"type": "boolean", "const": True},
         },
         "additionalProperties": False,
     }

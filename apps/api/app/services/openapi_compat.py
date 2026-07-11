@@ -4,6 +4,48 @@ from dataclasses import dataclass
 from typing import Any
 
 
+_PRE_TASK5_GUEST_OPERATIONS = frozenset(
+    {
+        "POST /api/v1/docents/audio",
+        "POST /api/v1/docents/script",
+        "GET /api/v1/places",
+        "POST /api/v1/plans/daily",
+        "GET /api/v1/plans/intervention",
+        "GET /api/v1/weather",
+    }
+)
+_PRE_TASK5_ACCOUNT_OPERATIONS = frozenset(
+    {"GET /api/v1/me", "DELETE /api/v1/me"}
+)
+_PRE_TASK5_CLIENT_SECURITY = [{"BearerAuth": []}, {"MigrationApiKey": []}]
+_TASK5_GUEST_SECURITY = [
+    {},
+    {"BearerAuth": []},
+    {"MigrationApiKey": []},
+]
+_TASK5_ACCOUNT_SECURITY = [{"OAuthBearerAuth": []}]
+_PRE_TASK5_AUTH_HEADERS = {
+    "X-API-Key": {
+        "name": "X-API-Key",
+        "in": "header",
+        "required": False,
+        "schema": {
+            "anyOf": [{"type": "string"}, {"type": "null"}],
+            "title": "X-Api-Key",
+        },
+    },
+    "Authorization": {
+        "name": "Authorization",
+        "in": "header",
+        "required": False,
+        "schema": {
+            "anyOf": [{"type": "string"}, {"type": "null"}],
+            "title": "Authorization",
+        },
+    },
+}
+
+
 @dataclass(frozen=True)
 class OpenApiCompatReport:
     ok: bool
@@ -28,6 +70,8 @@ def compare_openapi_compatibility(
     findings: list[str] = []
     baseline_paths = baseline.get("paths") or {}
     current_paths = current.get("paths") or {}
+    baseline_root_security = baseline.get("security") or []
+    current_root_security = current.get("security") or []
 
     for path, baseline_path_item in sorted(baseline_paths.items()):
         current_path_item = current_paths.get(path)
@@ -52,6 +96,8 @@ def compare_openapi_compatibility(
                     method=method.upper(),
                     baseline_operation=baseline_operation,
                     current_operation=current_operation,
+                    baseline_root_security=baseline_root_security,
+                    current_root_security=current_root_security,
                 )
             )
 
@@ -69,14 +115,48 @@ def _compare_operation(
     method: str,
     baseline_operation: dict[str, Any],
     current_operation: dict[str, Any],
+    baseline_root_security: Any,
+    current_root_security: Any,
 ) -> list[str]:
     findings: list[str] = []
     operation_label = f"{method} {path}"
+    baseline_security = _effective_security(
+        baseline_operation,
+        baseline_root_security,
+    )
+    current_security = _effective_security(
+        current_operation,
+        current_root_security,
+    )
+    exact_security_migration = _is_exact_task5_security_migration(
+        operation_label=operation_label,
+        baseline_operation=baseline_operation,
+        current_operation=current_operation,
+        baseline_security=baseline_security,
+        current_security=current_security,
+    )
+    migration_baseline = _is_pre_task5_security_baseline(
+        operation_label=operation_label,
+        baseline_operation=baseline_operation,
+        baseline_security=baseline_security,
+    )
+    if migration_baseline:
+        security_changed = not exact_security_migration
+    else:
+        security_changed = _normalize_security(
+            baseline_security
+        ) != _normalize_security(current_security)
+    if security_changed:
+        findings.append(f"changed security: {operation_label}")
     findings.extend(
         _compare_parameters(
             operation_label=operation_label,
             baseline_parameters=baseline_operation.get("parameters") or [],
             current_parameters=current_operation.get("parameters") or [],
+            allow_account_auth_correction=(
+                operation_label in _PRE_TASK5_ACCOUNT_OPERATIONS
+                and exact_security_migration
+            ),
         )
     )
     findings.extend(
@@ -94,6 +174,7 @@ def _compare_parameters(
     operation_label: str,
     baseline_parameters: list[dict[str, Any]],
     current_parameters: list[dict[str, Any]],
+    allow_account_auth_correction: bool,
 ) -> list[str]:
     findings: list[str] = []
     current_by_key = {
@@ -107,11 +188,123 @@ def _compare_parameters(
         key = (parameter.get("in"), parameter.get("name"))
         current_parameter = current_by_key.get(key)
         if current_parameter is None:
+            if (
+                allow_account_auth_correction
+                and _is_expected_generated_auth_header(parameter)
+            ):
+                continue
             findings.append(f"removed parameter: {operation_label} {key[0]} {key[1]}")
             continue
         if not parameter.get("required") and current_parameter.get("required"):
             findings.append(f"parameter became required: {operation_label} {key[0]} {key[1]}")
     return findings
+
+
+def _is_pre_task5_security_baseline(
+    *,
+    operation_label: str,
+    baseline_operation: dict[str, Any],
+    baseline_security: Any,
+) -> bool:
+    if baseline_security != _PRE_TASK5_CLIENT_SECURITY:
+        return False
+    if operation_label in _PRE_TASK5_GUEST_OPERATIONS:
+        return True
+    return (
+        operation_label in _PRE_TASK5_ACCOUNT_OPERATIONS
+        and _has_exact_pre_task5_auth_headers(baseline_operation)
+    )
+
+
+def _is_exact_task5_security_migration(
+    *,
+    operation_label: str,
+    baseline_operation: dict[str, Any],
+    current_operation: dict[str, Any],
+    baseline_security: Any,
+    current_security: Any,
+) -> bool:
+    if operation_label in _PRE_TASK5_GUEST_OPERATIONS:
+        return (
+            baseline_security == _PRE_TASK5_CLIENT_SECURITY
+            and current_security == _TASK5_GUEST_SECURITY
+        )
+    if operation_label not in _PRE_TASK5_ACCOUNT_OPERATIONS:
+        return False
+    return (
+        baseline_security == _PRE_TASK5_CLIENT_SECURITY
+        and current_security == _TASK5_ACCOUNT_SECURITY
+        and _has_exact_pre_task5_auth_headers(baseline_operation)
+        and not _auth_headers(current_operation)
+    )
+
+
+def _has_exact_pre_task5_auth_headers(operation: dict[str, Any]) -> bool:
+    headers = _auth_headers(operation)
+    return len(headers) == 2 and {
+        str(header.get("name")): header for header in headers
+    } == _PRE_TASK5_AUTH_HEADERS
+
+
+def _auth_headers(operation: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        parameter
+        for parameter in operation.get("parameters") or []
+        if isinstance(parameter, dict)
+        and parameter.get("in") == "header"
+        and parameter.get("name") in _PRE_TASK5_AUTH_HEADERS
+    ]
+
+
+def _is_expected_generated_auth_header(parameter: dict[str, Any]) -> bool:
+    if (
+        parameter.get("in") != "header"
+        or parameter.get("name") not in {"Authorization", "X-API-Key"}
+        or parameter.get("required") is not False
+    ):
+        return False
+    schema = parameter.get("schema")
+    if not isinstance(schema, dict):
+        return False
+    if schema.get("type") == "string":
+        return True
+    any_of = schema.get("anyOf")
+    return isinstance(any_of, list) and {
+        item.get("type")
+        for item in any_of
+        if isinstance(item, dict)
+    } == {"string", "null"}
+
+
+def _effective_security(operation: dict[str, Any], root_security: Any) -> Any:
+    if "security" in operation:
+        return operation["security"]
+    return root_security
+
+
+def _normalize_security(security: Any) -> tuple:
+    if not isinstance(security, list):
+        return ()
+    requirements: list[tuple] = []
+    for requirement in security:
+        if not isinstance(requirement, dict):
+            requirements.append(((str(requirement), ()),))
+            continue
+        normalized_requirement = tuple(
+            sorted(
+                (
+                    str(scheme),
+                    tuple(sorted(str(scope) for scope in scopes))
+                    if isinstance(scopes, list)
+                    else (str(scopes),),
+                )
+                for scheme, scopes in requirement.items()
+            )
+        )
+        requirements.append(normalized_requirement)
+    if requirements and all(not requirement for requirement in requirements):
+        return ()
+    return tuple(sorted(requirements))
 
 
 def _compare_responses(

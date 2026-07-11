@@ -8,8 +8,8 @@ For handoff steps, see `docs/api/flutter-handoff-checklist.md`.
 Base URL examples:
 
 - Local developer: `http://127.0.0.1:8080`
-- Shared Windows backend: `http://<windows-host-lan-ip>:8080`
-- Tunnel or staging: `https://<team-domain>`
+- Production web: Flutter on Vercel calling FastAPI through Cloudflare to AWS EC2
+- Staging: `https://<approved-api-domain>`
 
 Mobile clients should not use `localhost` unless the API process runs on the same device.
 
@@ -26,39 +26,40 @@ it can also load the optional `cors-allow-origins` secret into
 
 ## Authentication
 
-The preferred client auth header for new clients is:
+Tourism routes are guest-first when the API sets `LALA_GUEST_ACCESS=true`:
 
 ```text
-Authorization: Bearer <client token>
+GET  /api/v1/places
+GET  /api/v1/weather
+POST /api/v1/docents/script
+POST /api/v1/docents/audio
+POST /api/v1/plans/daily
+GET  /api/v1/plans/intervention
 ```
 
-During the migration window, the server accepts the exact static bearer token
-from `API_BEARER_TOKEN`. When OAuth/Entra settings are complete
-(`OAUTH_ISSUER`, `OAUTH_AUDIENCE`, `OAUTH_JWKS_URL`, and
-`OAUTH_REQUIRED_SCOPES`), the same header can carry a signed RS256 JWT. The JWT
-must match issuer and audience and include all required scopes in `scp` or
-`roles`.
+These calls do not require a token. Transition clients may still present
+`Authorization: Bearer <credential>` or `X-API-Key`, but any presented
+credentials are validated. Invalid credentials return 401 rather than silently
+becoming guest requests.
 
-The existing migration guard is still accepted:
+Logto is the canonical OAuth issuer. FastAPI derives issuer and JWKS from the
+HTTPS `LOGTO_ENDPOINT` and validates the `LOGTO_API_AUDIENCE`. The equivalent
+legacy configuration is the atomic `OAUTH_ISSUER`, `OAUTH_AUDIENCE`, and
+`OAUTH_JWKS_URL` tuple. OAuth client ID and required scopes are optional and do
+not determine whether resource-server JWT validation is configured.
+
+Account routes are Bearer-only OAuth operations:
 
 ```text
-X-API-Key: <client api key>
+GET /api/v1/me
+DELETE /api/v1/me
 ```
 
-The server reads the expected API key from `IOS_API_KEY`. Configure static
-credentials or complete OAuth/Entra JWT validation settings; if none are
-available, `/api/v1/*` returns `CLIENT_AUTH_NOT_CONFIGURED`.
-Credentials are trimmed at the header edges, compared with a constant-time
-digest comparison, and rejected when the header value is oversized or when a
-bearer token contains internal whitespace. Auth values and JWT validation
-errors are never logged into response bodies.
-
-For the public contest review window, Azure dev can set
-`LALA_PUBLIC_CONTEST_ACCESS=true`. In that mode `/api/v1/*` is intentionally
-reachable without a client credential, while `/readyz.data.mode` should still
-show the normal PostgreSQL-backed data path when the shared DB is healthy. This
-is separate from `LALA_STATIC_SNAPSHOT_FALLBACK`, which remains only an
-offline, read-only fallback for DB outage handling or isolated local checks.
+Static bearer and migration API-key credentials are rejected on account routes.
+`GET /api/v1/me` provisions the local identity and returns only the internal
+user ID, creation time, and `authenticated=true`. `DELETE /api/v1/me` requires
+the exact `delete-my-account` confirmation and returns 204. Provider identity,
+tokens, and connector data never appear in the response, logs, or metric labels.
 
 ## Response Envelope
 
@@ -110,6 +111,8 @@ request `input` values are removed before the response is returned.
 | GET | `/healthz` | Process liveness |
 | GET | `/readyz` | Dependency readiness summary plus `data.mode` runtime mode |
 | GET | `/metrics` | Operator metrics, readiness gauges, and runtime mode gauges in Prometheus text format |
+| GET | `/api/v1/me` | OAuth account summary |
+| DELETE | `/api/v1/me` | Confirmed OAuth account deletion |
 | GET | `/api/v1/places` | Nearby place list |
 | GET | `/api/v1/weather` | Current weather context |
 | POST | `/api/v1/docents/script` | Generate or fetch docent script |
@@ -132,9 +135,8 @@ Flutter can read `/readyz.data.mode.overall` for a compact handoff label:
 `public-cache`, `db-backed`, `live-azure`, or `degraded`. Component
 labels are also available at `data.mode.data`, `data.mode.ai`,
 `data.mode.speech`, and `data.mode.worker`.
-The reference Dart client exposes public `getHealth()` and `getReadiness()`
-methods without requiring client auth; `/api/v1/*` client methods still require
-`Authorization: Bearer <token>` or `X-API-Key`.
+The reference Dart client exposes public health, readiness, and tourism methods.
+Only account methods require a fresh OAuth access token.
 The first Flutter app shell displays latest readiness, `/api/v1/*`, and audio
 request ids from response metadata/headers so handoff testers can correlate a
 screen state with server JSONL access logs without exposing credentials or
@@ -159,9 +161,23 @@ docent script/audio generation 30s. Each method accepts a `timeout:` override;
 timeouts are reported as retryable `LalaApiException(code: REQUEST_TIMEOUT)`
 without exposing response bodies or credentials. The generated OpenAPI schema
 mirrors these defaults through `x-lala-timeout-seconds`; it also marks
-`/api/v1/*` operations with `x-lala-auth-required: true`.
+guest tourism operations with `x-lala-auth-required: false` and account
+operations with `x-lala-auth-required: true`.
 
 ## Route Details
+
+### `GET /api/v1/me` and `DELETE /api/v1/me`
+
+`GET` returns the standard envelope with `user_id`, ISO-8601 `created_at`, and
+`authenticated=true`. `DELETE` accepts only:
+
+```json
+{"confirmation": "delete-my-account"}
+```
+
+Successful deletion returns HTTP 204 with no response body. Both operations
+require a Logto API bearer token; static bearer and `X-API-Key` credentials are
+not account authentication.
 
 ### `GET /api/v1/places`
 

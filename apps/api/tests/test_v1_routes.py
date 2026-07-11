@@ -381,6 +381,28 @@ def test_public_contest_paid_docent_script_is_rate_limited(client, monkeypatch):
     assert body["error"]["code"] == "PAID_ROUTE_RATE_LIMITED"
 
 
+def test_guest_access_paid_docent_script_is_rate_limited(client, monkeypatch):
+    monkeypatch.delenv("IOS_API_KEY", raising=False)
+    monkeypatch.delenv("API_BEARER_TOKEN", raising=False)
+    monkeypatch.setenv("LALA_GUEST_ACCESS", "true")
+    monkeypatch.setenv("LALA_DOCENT_SCRIPT_RATE_LIMIT_PER_MINUTE", "1")
+
+    payload = {
+        "place_id": "guest-paid-route",
+        "place_name": "Guest Test Place",
+        "category": "attraction",
+        "language": "en",
+        "mode": "brief",
+    }
+
+    first = client.post("/api/v1/docents/script", json=payload)
+    second = client.post("/api/v1/docents/script", json=payload)
+
+    assert first.status_code == 200
+    assert second.status_code == 429
+    assert second.json()["error"]["code"] == "PAID_ROUTE_RATE_LIMITED"
+
+
 def test_docent_script_does_not_present_snapshot_fallback_as_official_live_data(
     client, auth_headers
 ):

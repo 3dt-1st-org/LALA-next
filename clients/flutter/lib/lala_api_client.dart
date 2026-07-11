@@ -4,11 +4,14 @@ import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
+typedef LalaAccessTokenProvider = Future<String?> Function();
+
 class LalaApiClient {
   LalaApiClient({
     required this.baseUri,
     this.bearerToken,
     this.apiKey,
+    this.accessTokenProvider,
     this.defaultTimeout = const Duration(seconds: 15),
     http.Client? httpClient,
   }) : _httpClient = httpClient ?? http.Client();
@@ -23,11 +26,14 @@ class LalaApiClient {
   final Uri baseUri;
   final String? bearerToken;
   final String? apiKey;
+  final LalaAccessTokenProvider? accessTokenProvider;
   final Duration defaultTimeout;
   final http.Client _httpClient;
 
   LalaAuthMode get authMode =>
       LalaAuthMode.fromCredentials(bearerToken: bearerToken, apiKey: apiKey);
+
+  bool get hasDynamicAuth => accessTokenProvider != null;
 
   Future<LalaEnvelope<Map<String, dynamic>>> getHealth({
     String? requestId,
@@ -38,6 +44,7 @@ class LalaApiClient {
       '/healthz',
       requestId: requestId,
       timeout: timeout ?? healthTimeout,
+      includeAuth: false,
     );
   }
 
@@ -51,6 +58,35 @@ class LalaApiClient {
       requestId: requestId,
       timeout: timeout ?? readinessTimeout,
       parseData: LalaReadiness.fromJsonObject,
+      includeAuth: false,
+    );
+  }
+
+  Future<LalaEnvelope<LalaMe>> getMe({
+    String? requestId,
+    Duration? timeout,
+  }) {
+    return _sendJson<LalaMe>(
+      'GET',
+      '/api/v1/me',
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+      parseData: LalaMe.fromJsonObject,
+    );
+  }
+
+  Future<void> deleteMe({
+    required String confirmation,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    await _sendJson<void>(
+      'DELETE',
+      '/api/v1/me',
+      body: {'confirmation': confirmation},
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+      expectNoContent: true,
     );
   }
 
@@ -186,7 +222,7 @@ class LalaApiClient {
     final response = await _withTimeout(
       _httpClient.post(
         _uri('/api/v1/docents/audio'),
-        headers: _headers(
+        headers: await _headers(
           requestId: requestId,
           contentType: 'application/json',
           accept: 'audio/mpeg, application/json',
@@ -260,12 +296,15 @@ class LalaApiClient {
     String? requestId,
     T Function(Object?)? parseData,
     Duration? timeout,
+    bool includeAuth = true,
+    bool expectNoContent = false,
   }) async {
     final uri = _uri(path, query: query);
-    final headers = _headers(
+    final headers = await _headers(
       requestId: requestId,
       contentType: body == null ? null : 'application/json',
       accept: 'application/json',
+      includeAuth: includeAuth,
     );
 
     late Future<http.Response> responseFuture;
@@ -275,6 +314,13 @@ class LalaApiClient {
         break;
       case 'POST':
         responseFuture = _httpClient.post(
+          uri,
+          headers: headers,
+          body: jsonEncode(body),
+        );
+        break;
+      case 'DELETE':
+        responseFuture = _httpClient.delete(
           uri,
           headers: headers,
           body: jsonEncode(body),
@@ -291,6 +337,39 @@ class LalaApiClient {
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw _exceptionFromJsonResponse(response);
+    }
+
+    if (expectNoContent) {
+      if (response.statusCode == 204) {
+        return LalaEnvelope<T>(
+          ok: true,
+          data: null,
+          meta: const <String, dynamic>{},
+          error: null,
+          statusCode: response.statusCode,
+          requestId: response.headers['x-request-id'],
+        );
+      }
+
+      try {
+        final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+        if (decoded is Map<String, dynamic>) {
+          final envelope = LalaEnvelope<Map<String, dynamic>>.fromJson(
+            decoded,
+            statusCode: response.statusCode,
+            responseRequestId: response.headers['x-request-id'],
+          );
+          if (!envelope.ok) {
+            throw LalaApiException.fromEnvelope(envelope);
+          }
+        }
+      } on LalaApiException {
+        rethrow;
+      } catch (_) {
+        // Fall through to the generic invalid-response exception.
+      }
+
+      throw _invalidResponse(response);
     }
 
     return _parseEnvelope<T>(response, parseData: parseData);
@@ -365,19 +444,39 @@ class LalaApiClient {
     );
   }
 
-  Map<String, String> _headers({
+  Future<Map<String, String>> _headers({
     String? requestId,
     String? contentType,
     String accept = 'application/json',
-  }) {
+    bool includeAuth = true,
+  }) async {
     final headers = <String, String>{'Accept': accept};
-    final token = bearerToken?.trim();
-    final key = apiKey?.trim();
 
-    if (token != null && token.isNotEmpty) {
-      headers['Authorization'] = 'Bearer $token';
-    } else if (key != null && key.isNotEmpty) {
-      headers['X-API-Key'] = key;
+    if (includeAuth) {
+      String? providerToken;
+      if (accessTokenProvider != null) {
+        try {
+          providerToken = (await accessTokenProvider!())?.trim();
+        } catch (_) {
+          throw const LalaApiException(
+            code: 'AUTH_TOKEN_UNAVAILABLE',
+            message: 'Access token unavailable.',
+            statusCode: 0,
+            retryable: true,
+          );
+        }
+      }
+
+      final token = providerToken?.isNotEmpty == true
+          ? providerToken
+          : bearerToken?.trim();
+      final key = apiKey?.trim();
+
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      } else if (key != null && key.isNotEmpty) {
+        headers['X-API-Key'] = key;
+      }
     }
     if (contentType != null) {
       headers['Content-Type'] = contentType;
@@ -386,6 +485,16 @@ class LalaApiClient {
       headers['X-Request-ID'] = requestId.trim();
     }
     return headers;
+  }
+
+  LalaApiException _invalidResponse(http.Response response) {
+    return LalaApiException(
+      code: 'INVALID_RESPONSE',
+      message: 'Unexpected response from LALA API.',
+      statusCode: response.statusCode,
+      retryable: false,
+      requestId: response.headers['x-request-id'],
+    );
   }
 
   Uri _uri(String path, {Map<String, String>? query}) {
@@ -486,6 +595,43 @@ class LalaEnvelope<T> {
           : null,
       statusCode: statusCode,
       requestId: (meta['request_id'] as String?) ?? responseRequestId,
+    );
+  }
+}
+
+class LalaMe {
+  const LalaMe({
+    required this.userId,
+    required this.createdAt,
+    required this.authenticated,
+  });
+
+  final String userId;
+  final String createdAt;
+  final bool authenticated;
+
+  static LalaMe fromJsonObject(Object? value) {
+    if (value is! Map) {
+      throw const FormatException('Expected /api/v1/me data object.');
+    }
+    return LalaMe.fromJson(
+      value.map((key, value) => MapEntry('$key', value)),
+    );
+  }
+
+  factory LalaMe.fromJson(Map<String, dynamic> json) {
+    final userId = json['user_id'];
+    final createdAt = json['created_at'];
+    final authenticated = json['authenticated'];
+    if (userId is! String || createdAt is! String || authenticated is! bool) {
+      throw const FormatException(
+        'Expected user_id, created_at, and authenticated fields.',
+      );
+    }
+    return LalaMe(
+      userId: userId,
+      createdAt: createdAt,
+      authenticated: authenticated,
     );
   }
 }

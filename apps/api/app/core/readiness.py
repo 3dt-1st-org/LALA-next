@@ -3,6 +3,7 @@ from __future__ import annotations
 from apps.api.app.core.config import Settings, get_settings
 from apps.api.app.core.jwt_auth import is_oauth_jwt_validation_configured
 from apps.api.app.services import db_repository, public_mvp_data
+from apps.api.app.services.logto_management import logto_management_configuration_status
 from apps.workers.app import contracts as worker_contracts
 
 
@@ -10,6 +11,15 @@ def _status(value: str, *, required: bool = False) -> str:
     if value:
         return "configured"
     return "missing" if required else "skipped"
+
+
+def _configuration_status(*values: object) -> str:
+    configured = tuple(bool(value) for value in values)
+    if all(configured):
+        return "configured"
+    if any(configured):
+        return "partial"
+    return "skipped"
 
 
 def _worker_contract_status() -> str:
@@ -21,19 +31,13 @@ def _worker_contract_status() -> str:
 
 
 def _client_identity_status(settings: Settings) -> str:
+    if settings.guest_access:
+        return "guest"
     if settings.public_contest_access:
         return "public-contest"
     if settings.static_snapshot_fallback:
         return "snapshot-fallback"
-    oauth_configured = all(
-        (
-            settings.oauth_issuer,
-            settings.oauth_audience,
-            settings.oauth_jwks_url,
-            settings.oauth_client_id,
-            settings.oauth_required_scopes,
-        )
-    )
+    oauth_configured = is_oauth_jwt_validation_configured(settings)
     static_configured = bool(settings.ios_api_key or settings.api_bearer_token)
     if oauth_configured and static_configured:
         return "transition"
@@ -128,7 +132,9 @@ def build_readiness(settings: Settings | None = None) -> dict:
     settings = settings or get_settings()
     jwt_validation_configured = is_oauth_jwt_validation_configured(settings)
     client_auth_status = "missing"
-    if settings.public_contest_access:
+    if settings.guest_access:
+        client_auth_status = "configured"
+    elif settings.public_contest_access:
         client_auth_status = "public-contest"
     elif settings.static_snapshot_fallback:
         client_auth_status = "snapshot-fallback"
@@ -136,6 +142,11 @@ def build_readiness(settings: Settings | None = None) -> dict:
         client_auth_status = "configured"
 
     db_status = db_repository.check_db_status(settings.db_dsn)
+    identity_schema_status = (
+        db_repository.check_identity_schema_status(settings.db_dsn)
+        if db_status == "configured"
+        else db_status
+    )
     postgis_status = (
         db_repository.check_postgis_status(settings.db_dsn)
         if db_status == "configured"
@@ -152,19 +163,26 @@ def build_readiness(settings: Settings | None = None) -> dict:
     checks = {
         "client_auth": client_auth_status,
         "client_identity": _client_identity_status(settings),
+        "guest_access": "enabled" if settings.guest_access else "disabled",
         "public_contest_access": "enabled" if settings.public_contest_access else "disabled",
         "static_snapshot_fallback": "enabled" if settings.static_snapshot_fallback else "disabled",
         "public_data_snapshot": public_mvp_data.snapshot_status(),
         "public_data_service_key": _status(settings.public_data_service_key, required=False),
         "api_key": _status(settings.ios_api_key, required=False),
         "bearer_token": _status(settings.api_bearer_token, required=False),
-        "jwt_validation": "configured" if jwt_validation_configured else "skipped",
+        "jwt_validation": _configuration_status(
+            settings.oauth_issuer,
+            settings.oauth_audience,
+            settings.oauth_jwks_url,
+        ),
         "oauth_issuer": _status(settings.oauth_issuer, required=False),
         "oauth_audience": _status(settings.oauth_audience, required=False),
         "oauth_jwks_url": _status(settings.oauth_jwks_url, required=False),
         "oauth_client_id": _status(settings.oauth_client_id, required=False),
         "oauth_required_scopes": "configured" if settings.oauth_required_scopes else "skipped",
+        "logto_management": logto_management_configuration_status(settings),
         "db": db_status,
+        "identity_schema": identity_schema_status,
         "postgis": postgis_status,
         "data_freshness": data_freshness_status,
         "key_vault": _status(settings.key_vault_url, required=False),
@@ -188,6 +206,8 @@ def build_readiness(settings: Settings | None = None) -> dict:
 
 def _overall_readiness_status(*, checks: dict[str, str], mode: dict[str, str]) -> str:
     if checks["client_auth"] == "missing":
+        return "degraded"
+    if checks["identity_schema"] == "degraded":
         return "degraded"
     if mode["overall"] == "degraded":
         return "degraded"

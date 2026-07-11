@@ -55,6 +55,67 @@ def check_db_status(dsn: str) -> str:
     return "configured"
 
 
+def check_identity_schema_status(dsn: str) -> str:
+    if not dsn:
+        return "skipped"
+    try:
+        import psycopg2
+    except Exception:
+        return "degraded"
+    try:
+        with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        to_regnamespace('identity') IS NOT NULL,
+                        to_regclass('identity.users') IS NOT NULL,
+                        to_regclass('identity.deleted_users') IS NOT NULL,
+                        (
+                            SELECT count(*) = 9
+                            FROM (
+                                VALUES
+                                    ('users', 'id', 'uuid', 'NO'),
+                                    ('users', 'issuer', 'text', 'NO'),
+                                    ('users', 'subject', 'text', 'NO'),
+                                    ('users', 'status', 'text', 'NO'),
+                                    ('users', 'created_at', 'timestamp with time zone', 'NO'),
+                                    ('users', 'last_seen_at', 'timestamp with time zone', 'NO'),
+                                    ('users', 'deletion_requested_at', 'timestamp with time zone', 'YES'),
+                                    ('deleted_users', 'identity_digest', 'bytea', 'NO'),
+                                    ('deleted_users', 'deleted_at', 'timestamp with time zone', 'NO')
+                            ) AS required(table_name, column_name, data_type, is_nullable)
+                            JOIN information_schema.columns actual
+                              ON actual.table_schema = 'identity'
+                             AND actual.table_name = required.table_name
+                             AND actual.column_name = required.column_name
+                             AND actual.data_type = required.data_type
+                             AND actual.is_nullable = required.is_nullable
+                        ),
+                        EXISTS (
+                            SELECT 1
+                            FROM pg_constraint
+                            WHERE conrelid = 'identity.users'::regclass
+                              AND contype = 'u'
+                              AND conname = 'identity_users_issuer_subject_key'
+                        )
+                        AND EXISTS (
+                            SELECT 1
+                            FROM pg_constraint
+                            WHERE conrelid = 'identity.deleted_users'::regclass
+                              AND contype = 'u'
+                              AND conname = 'identity_deleted_users_identity_digest_key'
+                        )
+                    """
+                )
+                row = cur.fetchone()
+    except Exception:
+        return "degraded"
+    if not row or not all(bool(value) for value in row):
+        return "degraded"
+    return "configured"
+
+
 def check_postgis_status(dsn: str) -> str:
     if not dsn:
         return "skipped"
