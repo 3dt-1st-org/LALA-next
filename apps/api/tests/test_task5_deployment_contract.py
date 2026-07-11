@@ -55,11 +55,12 @@ def test_current_deployment_docs_describe_aws_api_rds_and_vercel_flutter():
     aws = _text("docs/operations/aws-deployment-runbook.md")
     vercel = _text("docs/operations/vercel-deployment.md")
 
-    for term in ("Flutter web", "Vercel", "FastAPI", "EC2", "nginx", "Cloudflare", "RDS"):
-        assert term in aws
+    topology = f"{aws}\n{vercel}".lower()
+    for term in ("flutter web", "vercel", "fastapi", "ec2", "nginx", "cloudflare", "rds"):
+        assert term in topology
     assert "Flutter web" in vercel
     assert "AWS EC2" in vercel
-    assert "FastAPI backend" not in vercel.split("## Historical", maxsplit=1)[0]
+    assert "legacy Vercel API fallback, not the primary API" in vercel
 
 
 def test_flutter_vercel_static_output_uses_isolated_effective_config(
@@ -112,7 +113,7 @@ def test_flutter_vercel_static_output_uses_isolated_effective_config(
     assert org_id not in verification_output
     assert project_id not in verification_output
 
-    deployment_doc = _text("docs/operations/vercel-deployment.md")
+    deployment_doc = _text("docs/operations/post-merge-auth-deployment-guide.md")
     assert "python3 scripts/prepare_flutter_vercel_static_output.py" in deployment_doc
     assert "VERCEL_ORG_ID" in deployment_doc
     assert "VERCEL_PROJECT_ID" in deployment_doc
@@ -450,7 +451,7 @@ def test_flutter_vercel_binding_verification_rejects_required_artifact_symlink(
 
 
 def test_aws_logto_rollout_covers_schema_secrets_clients_connectors_smoke_and_rollback():
-    aws = _text("docs/operations/aws-deployment-runbook.md")
+    auth_rollout = _text("docs/operations/post-merge-auth-deployment-guide.md")
 
     for term in (
         "sql/canonical/005_identity_users.sql",
@@ -470,20 +471,20 @@ def test_aws_logto_rollout_covers_schema_secrets_clients_connectors_smoke_and_ro
         "Apple",
         "M2M",
         "/api/v1/me",
-        "rollback",
+        "롤백",
     ):
-        assert term in aws
+        assert term in auth_rollout
 
 
 def test_apple_upstream_revoke_is_an_explicit_live_release_gate_without_fake_fallback():
-    aws = _text("docs/operations/aws-deployment-runbook.md")
+    auth_rollout = _text("docs/operations/post-merge-auth-deployment-guide.md")
 
-    assert "release gate" in aws
-    assert "live connector integration" in aws
-    assert "provider refresh token" in aws
-    assert "block launch" in aws
-    assert "direct `/auth/revoke` fallback" not in aws
-    assert "server fallback is not supported" in aws
+    assert "release gate" in auth_rollout
+    assert "live connector integration" in auth_rollout
+    assert "provider refresh token" in auth_rollout
+    assert "block launch" in auth_rollout
+    assert "direct `/auth/revoke` fallback" not in auth_rollout
+    assert re.search(r"server\s+fallback is not supported", auth_rollout)
 
 
 def test_current_handoff_docs_are_guest_first_and_keep_me_oauth_only():

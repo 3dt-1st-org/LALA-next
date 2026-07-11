@@ -245,6 +245,13 @@ Android는 callback 후 앱 복귀와 세션 복구를 확인한다.
 Apple authorization 철회를 확인하지 못하면 출시하지 않는다. 운영 사용자의 계정
 삭제는 테스트하지 않는다.
 
+Apple upstream authorization revocation is a release gate. Verify it with a
+dedicated test account in the live connector integration. The Logto Management
+API does not expose a usable provider refresh token to this server, so server
+fallback is not supported. If supported Logto or Apple evidence cannot confirm
+the revocation, block launch and handle the connector design in a separately
+reviewed change.
+
 ## 10. 오류가 나면 이전 버전으로 돌린다
 
 API 오류라면 EC2에서 2단계의 commit으로 복원한다.
