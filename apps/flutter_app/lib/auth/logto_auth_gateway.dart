@@ -72,6 +72,10 @@ class LalaAuthConfig {
 abstract interface class LalaAuthGateway {
   Future<bool> get isAuthenticated;
 
+  Future<LalaAuthProfile?> get profile;
+
+  Future<bool> validateSession(String resource);
+
   Future<void> signIn();
 
   Future<void> signOut();
@@ -101,13 +105,7 @@ LalaAuthController createLalaAuthController(
     );
   }
 
-  final client = LogtoClient(
-    config: LogtoConfig(
-      endpoint: config.endpoint,
-      appId: config.appId,
-      resources: [config.apiAudience],
-    ),
-  );
+  final client = LogtoClient(config: createLogtoSdkConfig(config));
   final gateway = LogtoAuthGateway(client, config: config);
   final apiClient = LalaApiClient(
     baseUri: dependencies.apiBaseUri,
@@ -128,6 +126,26 @@ class LogtoAuthGateway implements LalaAuthGateway {
 
   @override
   Future<bool> get isAuthenticated => _client.isAuthenticated;
+
+  @override
+  Future<LalaAuthProfile?> get profile async {
+    final claims = await _client.idTokenClaims;
+    if (claims == null) {
+      return null;
+    }
+    final values = claims.toJson();
+    return LalaAuthProfile(
+      name: _normalizedString(values['name']),
+      email: _normalizedString(values['email']),
+      picture: _normalizedString(values['picture']),
+      emailVerified: _normalizedBool(values['email_verified']),
+    );
+  }
+
+  @override
+  Future<bool> validateSession(String resource) async {
+    return await accessToken(resource) != null;
+  }
 
   @override
   Future<void> signIn() => _client.signIn(config.redirectUri);
@@ -181,6 +199,12 @@ class _DisabledAuthGateway implements LalaAuthGateway {
   Future<bool> get isAuthenticated => Future<bool>.value(false);
 
   @override
+  Future<LalaAuthProfile?> get profile => Future<LalaAuthProfile?>.value();
+
+  @override
+  Future<bool> validateSession(String resource) => Future<bool>.value(false);
+
+  @override
   Future<String?> accessToken(String resource) => Future<String?>.value();
 
   @override
@@ -215,6 +239,34 @@ String _compileTimeEnvironmentValue(String name) {
     ),
     _ => throw ArgumentError.value(name, 'name', 'Unknown environment value.'),
   };
+}
+
+@visibleForTesting
+LogtoConfig createLogtoSdkConfig(LalaAuthConfig config) {
+  return LogtoConfig(
+    endpoint: config.endpoint,
+    appId: config.appId,
+    resources: [config.apiAudience],
+    scopes: [LogtoUserScope.email.value],
+  );
+}
+
+String? _normalizedString(Object? value) {
+  if (value is! String) {
+    return null;
+  }
+  final normalized = value.trim();
+  return normalized.isEmpty ? null : normalized;
+}
+
+bool? _normalizedBool(Object? value) {
+  if (value is bool) {
+    return value;
+  }
+  if (value is String) {
+    return bool.tryParse(value.trim());
+  }
+  return null;
 }
 
 bool _isHttpsUri(String value) {

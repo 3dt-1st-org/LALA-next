@@ -1705,7 +1705,7 @@ class _AccountSettingsSection extends StatelessWidget {
   }
 
   Widget _buildState(BuildContext context, LalaAuthState state) {
-    if (state.status == LalaAuthStatus.busy) {
+    if (state.status == LalaAuthStatus.busy && !state.authenticated) {
       return Row(
         children: [
           const SizedBox.square(
@@ -1727,8 +1727,7 @@ class _AccountSettingsSection extends StatelessWidget {
       );
     }
 
-    final me = state.me;
-    if (me == null) {
+    if (!state.authenticated) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1760,37 +1759,134 @@ class _AccountSettingsSection extends StatelessWidget {
       );
     }
 
+    final profile = state.profile;
+    final displayName =
+        profile?.name ?? _copy(language, ko: 'LALA 여행자', en: 'LALA traveler');
+    final displayEmail =
+        profile?.email ??
+        _copy(language, ko: '이메일 정보 없음', en: 'Email unavailable');
+    final isBusy = state.status == LalaAuthStatus.busy;
+    final accountReady =
+        state.accountSyncStatus == LalaAccountSyncStatus.ready &&
+        state.me != null;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const Icon(Icons.account_circle_outlined, color: Color(0xFF2B6CB0)),
-            const SizedBox(width: 10),
+            _AccountProfileAvatar(picture: profile?.picture),
+            const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                _copy(language, ko: '로그인됨', en: 'Signed in'),
-                style: const TextStyle(
-                  color: Color(0xFF1E293B),
-                  fontWeight: FontWeight.w900,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    displayName,
+                    key: const ValueKey('account-profile-name'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF1E293B),
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    displayEmail,
+                    key: const ValueKey('account-profile-email'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF64748B),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _copy(language, ko: '로그인됨', en: 'Signed in'),
+                    style: const TextStyle(
+                      color: Color(0xFF2B6CB0),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
               ),
             ),
             IconButton(
               key: const ValueKey('account-sign-out'),
               tooltip: _copy(language, ko: '로그아웃', en: 'Sign out'),
-              onPressed: controller.signOut,
+              onPressed: isBusy ? null : controller.signOut,
               icon: const Icon(Icons.logout),
             ),
           ],
         ),
-        if (state.errorMessage != null) ...[
+        if (state.accountSyncStatus == LalaAccountSyncStatus.syncing) ...[
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const SizedBox.square(
+                dimension: 14,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                _copy(
+                  language,
+                  ko: 'LALA 계정 연결 중',
+                  en: 'Connecting your LALA account',
+                ),
+                style: const TextStyle(
+                  color: Color(0xFF64748B),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ],
+        if (state.accountSyncStatus == LalaAccountSyncStatus.error) ...[
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _copy(
+                    language,
+                    ko: 'LALA 계정 연결을 완료하지 못했어요.',
+                    en: 'We could not connect your LALA account.',
+                  ),
+                  style: const TextStyle(
+                    color: Color(0xFFB42318),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    height: 1.35,
+                  ),
+                ),
+              ),
+              TextButton.icon(
+                key: const ValueKey('account-sync-retry'),
+                onPressed: isBusy ? null : controller.retryAccountSync,
+                icon: const Icon(Icons.refresh, size: 18),
+                label: Text(_copy(language, ko: '다시 시도', en: 'Retry')),
+              ),
+            ],
+          ),
+        ],
+        if (state.errorMessage != null &&
+            (state.accountSyncStatus != LalaAccountSyncStatus.error ||
+                state.status == LalaAuthStatus.error)) ...[
           const SizedBox(height: 8),
           _AccountErrorText(language: language),
         ],
         TextButton(
           key: const ValueKey('account-delete'),
-          onPressed: () => _confirmDelete(context),
+          onPressed: isBusy || !accountReady
+              ? null
+              : () => _confirmDelete(context),
           style: TextButton.styleFrom(
             padding: EdgeInsets.zero,
             foregroundColor: const Color(0xFFB42318),
@@ -1835,6 +1931,25 @@ class _AccountSettingsSection extends StatelessWidget {
     if (confirmed == true) {
       await controller.deleteAccount();
     }
+  }
+}
+
+class _AccountProfileAvatar extends StatelessWidget {
+  const _AccountProfileAvatar({this.picture});
+
+  final String? picture;
+
+  @override
+  Widget build(BuildContext context) {
+    final image = picture == null ? null : NetworkImage(picture!);
+    return CircleAvatar(
+      key: const ValueKey('account-profile-avatar'),
+      radius: 22,
+      backgroundColor: const Color(0xFFE2E8F0),
+      foregroundImage: image,
+      onForegroundImageError: image == null ? null : (_, _) {},
+      child: const Icon(Icons.person_outline, color: Color(0xFF475569)),
+    );
   }
 }
 

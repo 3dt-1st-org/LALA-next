@@ -1823,10 +1823,152 @@ void main() {
 
       expect(gateway.signInCalls, 1);
       expect(find.text('로그인됨'), findsOneWidget);
+      expect(find.text('LALA 여행자'), findsOneWidget);
+      expect(find.text('이메일 정보 없음'), findsOneWidget);
       expect(find.textContaining('account-123'), findsNothing);
       expect(find.textContaining('계정 ID'), findsNothing);
       expect(configs.last.accessTokenProvider, isNotNull);
       expect(await configs.last.accessTokenProvider!(), 'fresh-access-token');
+    },
+  );
+
+  testWidgets('signed-in account shows the Logto profile', (tester) async {
+    final gateway = WidgetTestAuthGateway(
+      authenticated: true,
+      profileValue: const LalaAuthProfile(
+        name: 'Ada Lovelace',
+        email: 'ada@example.com',
+        picture: 'https://images.example.com/ada.png',
+        emailVerified: true,
+      ),
+    );
+    await tester.pumpWidget(
+      TestLalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+        authControllerFactory: (_) =>
+            _widgetTestAuthController(gateway: gateway),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('settings-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('로그인됨'), findsOneWidget);
+    expect(find.text('Ada Lovelace'), findsOneWidget);
+    expect(find.text('ada@example.com'), findsOneWidget);
+    final avatar = tester.widget<CircleAvatar>(
+      find.byKey(const ValueKey('account-profile-avatar')),
+    );
+    expect(avatar.foregroundImage, isA<NetworkImage>());
+    expect(
+      (avatar.foregroundImage! as NetworkImage).url,
+      'https://images.example.com/ada.png',
+    );
+  });
+
+  testWidgets(
+    'account synchronization failure keeps signed-in UI and supports retry',
+    (tester) async {
+      final accountApi = WidgetTestAccountApi(
+        getMeError: StateError('private backend details'),
+      );
+      final gateway = WidgetTestAuthGateway(
+        authenticated: true,
+        profileValue: const LalaAuthProfile(
+          name: 'Ada Lovelace',
+          email: 'ada@example.com',
+        ),
+      );
+      await tester.pumpWidget(
+        TestLalaApp(
+          backendFactory: FakeBackend.new,
+          initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+          authControllerFactory: (_) => _widgetTestAuthController(
+            gateway: gateway,
+            accountApi: accountApi,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('settings-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('로그인됨'), findsOneWidget);
+      expect(find.text('Ada Lovelace'), findsOneWidget);
+      expect(find.byKey(const ValueKey('account-sign-in')), findsNothing);
+      expect(find.text('LALA 계정 연결을 완료하지 못했어요.'), findsOneWidget);
+      expect(
+        tester
+            .widget<TextButton>(find.byKey(const ValueKey('account-delete')))
+            .onPressed,
+        isNull,
+      );
+
+      accountApi.getMeError = null;
+      await tester.tap(find.byKey(const ValueKey('account-sync-retry')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('LALA 계정 연결을 완료하지 못했어요.'), findsNothing);
+      expect(accountApi.getMeCalls, 2);
+      expect(
+        tester
+            .widget<TextButton>(find.byKey(const ValueKey('account-delete')))
+            .onPressed,
+        isNotNull,
+      );
+    },
+  );
+
+  testWidgets(
+    'failed sign-out keeps its error visible beside account sync retry',
+    (tester) async {
+      final accountResponse = Completer<LalaMe>();
+      final gateway = WidgetTestAuthGateway(
+        profileValue: const LalaAuthProfile(
+          name: 'Ada Lovelace',
+          email: 'ada@example.com',
+        ),
+        signOutError: StateError('private hosted logout details'),
+      );
+      await tester.pumpWidget(
+        TestLalaApp(
+          backendFactory: FakeBackend.new,
+          initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+          authControllerFactory: (_) => _widgetTestAuthController(
+            gateway: gateway,
+            accountApi: WidgetTestAccountApi(
+              getMeFuture: accountResponse.future,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('settings-button')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('account-sign-in')));
+      await tester.pump();
+      expect(find.text('LALA 계정 연결 중'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('account-sign-out')));
+      await tester.pump();
+
+      expect(find.text('계정 요청을 완료하지 못했어요. 다시 시도해 주세요.'), findsOneWidget);
+      expect(find.text('LALA 계정 연결을 완료하지 못했어요.'), findsOneWidget);
+      expect(find.byKey(const ValueKey('account-sync-retry')), findsOneWidget);
+      expect(find.textContaining('private hosted'), findsNothing);
+
+      accountResponse.complete(
+        const LalaMe(
+          userId: 'account-123',
+          createdAt: '2026-07-10T00:00:00Z',
+          authenticated: true,
+        ),
+      );
+      await tester.pump();
     },
   );
 
@@ -2697,18 +2839,30 @@ LalaAuthController _widgetTestAuthController({
 class WidgetTestAuthGateway implements LalaAuthGateway {
   WidgetTestAuthGateway({
     this.authenticated = false,
+    this.sessionValid = true,
     this.accessTokenValue,
+    this.profileValue,
     this.signInError,
+    this.signOutError,
   });
 
   bool authenticated;
+  final bool sessionValid;
   final String? accessTokenValue;
+  final LalaAuthProfile? profileValue;
   final Object? signInError;
+  final Object? signOutError;
   int signInCalls = 0;
   int signOutCalls = 0;
 
   @override
   Future<bool> get isAuthenticated async => authenticated;
+
+  @override
+  Future<LalaAuthProfile?> get profile async => profileValue;
+
+  @override
+  Future<bool> validateSession(String resource) async => sessionValid;
 
   @override
   Future<void> signIn() async {
@@ -2722,6 +2876,9 @@ class WidgetTestAuthGateway implements LalaAuthGateway {
   @override
   Future<void> signOut() async {
     signOutCalls += 1;
+    if (signOutError != null) {
+      throw signOutError!;
+    }
     authenticated = false;
   }
 
@@ -2730,14 +2887,28 @@ class WidgetTestAuthGateway implements LalaAuthGateway {
 }
 
 class WidgetTestAccountApi implements LalaAccountApi {
+  WidgetTestAccountApi({this.getMeError, this.getMeFuture});
+
+  Object? getMeError;
+  final Future<LalaMe>? getMeFuture;
+  int getMeCalls = 0;
   final List<String> deleteConfirmations = [];
 
   @override
-  Future<LalaMe> getMe() async => const LalaMe(
-    userId: 'account-123',
-    createdAt: '2026-07-10T00:00:00Z',
-    authenticated: true,
-  );
+  Future<LalaMe> getMe() async {
+    getMeCalls += 1;
+    if (getMeError != null) {
+      throw getMeError!;
+    }
+    if (getMeFuture != null) {
+      return getMeFuture!;
+    }
+    return const LalaMe(
+      userId: 'account-123',
+      createdAt: '2026-07-10T00:00:00Z',
+      authenticated: true,
+    );
+  }
 
   @override
   Future<void> deleteMe({required String confirmation}) async {
