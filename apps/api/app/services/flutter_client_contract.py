@@ -8,16 +8,29 @@ from apps.api.app.services.canonical_sql import REPO_ROOT
 
 FLUTTER_CLIENT_PATH = REPO_ROOT / "clients" / "flutter" / "lib" / "lala_api_client.dart"
 
-EXPECTED_CLIENT_ROUTES: tuple[tuple[str, str], ...] = (
-    ("GET", "/healthz"),
-    ("GET", "/readyz"),
-    ("GET", "/api/v1/places"),
-    ("GET", "/api/v1/weather"),
-    ("POST", "/api/v1/docents/script"),
-    ("POST", "/api/v1/docents/audio"),
-    ("POST", "/api/v1/plans/daily"),
-    ("GET", "/api/v1/plans/intervention"),
+# OpenAPI 에는 노출되지만 Flutter 클라이언트가 의도적으로 소비하지 않는 라우트(ops/모니터링 전용).
+# 신규 ops 라우트 추가 시 여기에 명시적으로 기록한다 (SSOT 예외).
+CLIENT_EXEMPT_ROUTES: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("GET", "/metrics"),
+    }
 )
+
+_HTTP_METHODS = ("get", "post", "put", "delete", "patch")
+
+
+def _api_routes_from_openapi(openapi_schema: dict[str, Any]) -> list[tuple[str, str]]:
+    """OpenAPI paths 에서 (METHOD, path) 를 파생한다 — 하드코딩 라우트 리스트 없이 SSOT."""
+    paths = openapi_schema.get("paths", {}) or {}
+    routes: list[tuple[str, str]] = []
+    for path, methods in paths.items():
+        if not isinstance(methods, dict):
+            continue
+        for method in methods:
+            if method.lower() in _HTTP_METHODS:
+                routes.append((method.upper(), path))
+    routes.sort()
+    return routes
 
 
 @dataclass(frozen=True)
@@ -53,13 +66,13 @@ def check_flutter_client_contract(
         )
 
     client_text = client_path.read_text(encoding="utf-8")
-    paths = openapi_schema.get("paths", {})
 
-    for method, route in EXPECTED_CLIENT_ROUTES:
+    # SSOT: 검증 대상 라우트를 OpenAPI 스키마에서 파생 (하드코딩 EXPECTED_CLIENT_ROUTES 제거).
+    # 라우트 추가 시 자동으로 검증 대상이 되어 스펙-클라이언트 드리프트를 즉시 포착.
+    for method, route in _api_routes_from_openapi(openapi_schema):
         checked_routes.append(f"{method} {route}")
-        operation = paths.get(route, {}).get(method.lower())
-        if operation is None:
-            findings.append(f"OpenAPI missing operation: {method} {route}")
+        if (method, route) in CLIENT_EXEMPT_ROUTES:
+            continue  # ops/모니터링 전용 — Flutter 클라이언트가 소비하지 않는 라우트
         if f"'{route}'" not in client_text and f'"{route}"' not in client_text:
             findings.append(f"Flutter client missing route: {method} {route}")
 
