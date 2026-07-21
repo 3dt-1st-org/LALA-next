@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
 import json
 import os
 import re
 import sys
+from dataclasses import dataclass
 from typing import Any
 from urllib import error, parse, request
 
@@ -31,9 +31,7 @@ class SmokeFailure:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
-        description="Run a broader LALA-next API smoke matrix."
-    )
+    parser = argparse.ArgumentParser(description="Run a broader LALA-next API smoke matrix.")
     parser.add_argument("--base-url", default="http://127.0.0.1:8080")
     parser.add_argument("--timeout", type=float, default=20.0)
     parser.add_argument(
@@ -45,9 +43,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
 
-    result = run_matrix(
-        base_url=args.base_url, timeout=args.timeout, profile=args.profile
-    )
+    result = run_matrix(base_url=args.base_url, timeout=args.timeout, profile=args.profile)
     if args.json:
         print(json.dumps(result, ensure_ascii=False, sort_keys=True))
     else:
@@ -55,9 +51,7 @@ def main(argv: list[str] | None = None) -> int:
     return 0 if result["ok"] else 1
 
 
-def run_matrix(
-    *, base_url: str, timeout: float, profile: str = "full"
-) -> dict[str, Any]:
+def run_matrix(*, base_url: str, timeout: float, profile: str = "full") -> dict[str, Any]:
     base_url = base_url.rstrip("/")
     try:
         readyz = _request_json(
@@ -81,9 +75,7 @@ def run_matrix(
                 }
             ],
         }
-    deploy_readyz_failure = (
-        _deploy_readyz_failure(readyz) if profile == "deploy" else None
-    )
+    deploy_readyz_failure = _deploy_readyz_failure(readyz) if profile == "deploy" else None
     if deploy_readyz_failure:
         return {
             "ok": False,
@@ -224,9 +216,7 @@ def _build_deploy_cases(*, live_speech_enabled: bool) -> list[SmokeCase]:
             f"/api/v1/places?{gyeonggi_place_query}",
             validator="places_local_value_data",
         ),
-        SmokeCase(
-            "GET", f"/api/v1/weather?{weather_query}", validator="weather_live_data"
-        ),
+        SmokeCase("GET", f"/api/v1/weather?{weather_query}", validator="weather_live_data"),
         SmokeCase(
             "GET",
             f"/api/v1/weather?{gyeonggi_weather_query}",
@@ -313,9 +303,7 @@ def _build_full_cases(*, live_speech_enabled: bool) -> list[SmokeCase]:
             SmokeCase(
                 "POST",
                 "/api/v1/plans/daily",
-                _json_body(
-                    {"lat": lat, "lng": lng, "radius_m": 50000, "language": "ko"}
-                ),
+                _json_body({"lat": lat, "lng": lng, "radius_m": 50000, "language": "ko"}),
             )
         )
 
@@ -388,9 +376,7 @@ def _run_case(
         return SmokeFailure(case=case, status=status, reason="server_error")
     if case.response_kind == "audio":
         if not content_type.startswith("audio/mpeg"):
-            return SmokeFailure(
-                case=case, status=status, reason="unexpected_audio_content_type"
-            )
+            return SmokeFailure(case=case, status=status, reason="unexpected_audio_content_type")
         if not body:
             return SmokeFailure(case=case, status=status, reason="empty_audio_body")
         return None
@@ -439,19 +425,11 @@ def _run_live_docent_context_case(
             )
         places_failure = _validate_payload("places_live_data", places_payload)
         if places_failure:
-            return SmokeFailure(
-                case=chain_case, status=places_status, reason=places_failure
-            )
+            return SmokeFailure(case=chain_case, status=places_status, reason=places_failure)
         places_data = places_payload.get("data") or {}
         places = places_data.get("places")
-        if (
-            not isinstance(places, list)
-            or not places
-            or not isinstance(places[0], dict)
-        ):
-            return SmokeFailure(
-                case=chain_case, status=places_status, reason="live_places_empty"
-            )
+        if not isinstance(places, list) or not places or not isinstance(places[0], dict):
+            return SmokeFailure(case=chain_case, status=places_status, reason="live_places_empty")
         place = places[0]
 
         weather_status, weather_payload = _request_json_with_status(
@@ -468,9 +446,7 @@ def _run_live_docent_context_case(
             )
         weather_failure = _validate_payload("weather_live_data", weather_payload)
         if weather_failure:
-            return SmokeFailure(
-                case=chain_case, status=weather_status, reason=weather_failure
-            )
+            return SmokeFailure(case=chain_case, status=weather_status, reason=weather_failure)
         weather = weather_payload.get("data") or {}
 
         docent_body = _live_docent_body(place=place, weather=weather)
@@ -493,18 +469,14 @@ def _run_live_docent_context_case(
             )
         docent_failure = _validate_payload("docent_quality", docent_payload)
         if docent_failure:
-            return SmokeFailure(
-                case=chain_case, status=docent_status, reason=docent_failure
-            )
+            return SmokeFailure(case=chain_case, status=docent_status, reason=docent_failure)
         context_failure = _validate_live_docent_context(
             docent_payload.get("data") or {},
             place=place,
             weather=weather,
         )
         if context_failure:
-            return SmokeFailure(
-                case=chain_case, status=docent_status, reason=context_failure
-            )
+            return SmokeFailure(case=chain_case, status=docent_status, reason=context_failure)
     except Exception as exc:
         return SmokeFailure(
             case=chain_case,
@@ -677,15 +649,10 @@ def _validate_places_live_data(data: dict[str, Any]) -> str | None:
     places = data.get("places")
     if not isinstance(places, list) or not places:
         return "places_empty"
-    if any(
-        _is_fallback_source(place.get("source"))
-        for place in places
-        if isinstance(place, dict)
-    ):
+    if any(_is_fallback_source(place.get("source")) for place in places if isinstance(place, dict)):
         return "place_contains_fallback_source"
     if any(
-        str(place.get("upstream_source") or "").strip()
-        in {"dev_seed", "local_fixture"}
+        str(place.get("upstream_source") or "").strip() in {"dev_seed", "local_fixture"}
         for place in places
         if isinstance(place, dict)
     ):
@@ -696,11 +663,7 @@ def _validate_places_live_data(data: dict[str, Any]) -> str | None:
         if isinstance(place, dict)
     ):
         return "place_contains_synthetic_image"
-    if not any(
-        _has_live_score(place.get("score"))
-        for place in places
-        if isinstance(place, dict)
-    ):
+    if not any(_has_live_score(place.get("score")) for place in places if isinstance(place, dict)):
         return "places_missing_live_score"
     return None
 
@@ -813,8 +776,7 @@ def _validate_docent_quality(data: dict[str, Any]) -> str | None:
     if any(term in lowered for term in ("skeleton", "placeholder", "mock", "demo")):
         return "docent_script_contains_placeholder"
     if any(
-        term in script
-        for term in ("종합 추천 점수", "최종 추천 점수", "장소 지식 인덱스", "°C°C")
+        term in script for term in ("종합 추천 점수", "최종 추천 점수", "장소 지식 인덱스", "°C°C")
     ):
         return "docent_script_contains_internal_evidence"
     if re.search(
@@ -832,17 +794,20 @@ def _validate_docent_quality(data: dict[str, Any]) -> str | None:
         script,
     ):
         return "docent_script_contains_orphan_score_decimal"
-    if any(
-        term in lowered
-        for term in (
-            "culture_venue",
-            "tour_api",
-            "dev_seed",
-            "local_fixture",
-            "public_mvp_snapshot",
-            "snapshot",
+    if (
+        any(
+            term in lowered
+            for term in (
+                "culture_venue",
+                "tour_api",
+                "dev_seed",
+                "local_fixture",
+                "public_mvp_snapshot",
+                "snapshot",
+            )
         )
-    ) or "스냅샷" in script:
+        or "스냅샷" in script
+    ):
         return "docent_script_contains_internal_code"
     grounding_count = data.get("grounding_count")
     if not isinstance(grounding_count, int) or grounding_count < 1:
@@ -854,7 +819,9 @@ def _validate_docent_quality(data: dict[str, Any]) -> str | None:
         return "docent_missing_location_context"
     if not any(term in script for term in ("내국인 소비", "로컬 소비", "지역 소비")):
         return "docent_missing_local_value_context"
-    if not any(term in script for term in ("소상공인", "상권", "골목", "로컬 카페", "local business")):
+    if not any(
+        term in script for term in ("소상공인", "상권", "골목", "로컬 카페", "local business")
+    ):
         return "docent_missing_small_merchant_context"
     if any(term in script for term in ("준비하고 있습니다", "준비 중입니다")):
         return "docent_script_too_generic"
@@ -862,7 +829,10 @@ def _validate_docent_quality(data: dict[str, Any]) -> str | None:
         return "docent_missing_weather_context"
     if "PM10" not in script or not any(term in script for term in ("PM2.5", "초미세먼지")):
         return "docent_missing_dust_split_context"
-    if not any(term in script for term in ("방문 전후", "동선", "이어", "함께 연결", "continue to the next")):
+    if not any(
+        term in script
+        for term in ("방문 전후", "동선", "이어", "함께 연결", "continue to the next")
+    ):
         return "docent_missing_route_action_context"
     if not any(term in script for term in ("공식", "한국관광공사")):
         return "docent_missing_official_grounding"
@@ -913,10 +883,7 @@ def _has_live_score(value: Any) -> bool:
     if not isinstance(value, dict):
         return False
     data_basis = str(value.get("data_basis") or "").strip()
-    return (
-        data_basis == "analytics.place_score_snapshots"
-        and value.get("final_score") is not None
-    )
+    return data_basis == "analytics.place_score_snapshots" and value.get("final_score") is not None
 
 
 def _has_actual_local_spending_signal(value: Any) -> bool:
@@ -929,9 +896,7 @@ def _has_actual_local_spending_signal(value: Any) -> bool:
     if not isinstance(components, dict) or not isinstance(features, dict):
         return False
     missing = {
-        str(item).strip()
-        for item in (features.get("missing_signals") or [])
-        if str(item).strip()
+        str(item).strip() for item in (features.get("missing_signals") or []) if str(item).strip()
     }
     return (
         components.get("local_spending_score") is not None
@@ -961,9 +926,7 @@ def _request_json_with_status(
     headers: dict[str, str],
     timeout: float,
 ) -> tuple[int, dict[str, Any]]:
-    status, _, body = _request_raw(
-        case, base_url=base_url, headers=headers, timeout=timeout
-    )
+    status, _, body = _request_raw(case, base_url=base_url, headers=headers, timeout=timeout)
     payload = json.loads(body.decode("utf-8"))
     if not isinstance(payload, dict):
         raise RuntimeError("Unexpected JSON response.")

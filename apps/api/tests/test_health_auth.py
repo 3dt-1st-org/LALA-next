@@ -143,7 +143,9 @@ def test_readyz_reports_oauth_identity_rollout_configuration(client, monkeypatch
     monkeypatch.setenv("API_BEARER_TOKEN", "test-bearer-token")
     monkeypatch.setenv("OAUTH_ISSUER", "https://login.microsoftonline.com/tenant/v2.0")
     monkeypatch.setenv("OAUTH_AUDIENCE", "api://lala-next-dev")
-    monkeypatch.setenv("OAUTH_JWKS_URL", "https://login.microsoftonline.com/tenant/discovery/v2.0/keys")
+    monkeypatch.setenv(
+        "OAUTH_JWKS_URL", "https://login.microsoftonline.com/tenant/discovery/v2.0/keys"
+    )
     monkeypatch.setenv("OAUTH_CLIENT_ID", "00000000-0000-0000-0000-000000000000")
     monkeypatch.setenv("OAUTH_REQUIRED_SCOPES", "access_as_user,lala.read")
 
@@ -569,7 +571,9 @@ def test_v1_requires_present_credentials_when_oauth_is_configured(client, monkey
     monkeypatch.delenv("API_BEARER_TOKEN", raising=False)
     monkeypatch.setenv("OAUTH_ISSUER", "https://login.microsoftonline.com/tenant/v2.0")
     monkeypatch.setenv("OAUTH_AUDIENCE", "api://lala-next-dev")
-    monkeypatch.setenv("OAUTH_JWKS_URL", "https://login.microsoftonline.com/tenant/discovery/v2.0/keys")
+    monkeypatch.setenv(
+        "OAUTH_JWKS_URL", "https://login.microsoftonline.com/tenant/discovery/v2.0/keys"
+    )
     monkeypatch.setenv("OAUTH_CLIENT_ID", "00000000-0000-0000-0000-000000000000")
     monkeypatch.setenv("OAUTH_REQUIRED_SCOPES", "access_as_user")
 

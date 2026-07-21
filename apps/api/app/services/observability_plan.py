@@ -132,7 +132,7 @@ def build_observability_plan(*, base_url: str = "http://127.0.0.1:8080") -> Obse
             AlertRulePlan(
                 name="api-5xx-rate",
                 severity="critical",
-                signal="lala_next_http_requests_total{status_class=\"5xx\"}",
+                signal='lala_next_http_requests_total{status_class="5xx"}',
                 condition="5xx count increases in two consecutive scrape windows",
                 window="5m",
                 runbook="Check request_completed logs by request_id and route, then run verify_repo if reproducible.",

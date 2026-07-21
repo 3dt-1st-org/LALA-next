@@ -225,9 +225,7 @@ def test_weather_sentence_branches_by_language(
         (["one"], "one"),
     ],
 )
-def test_join_script_parts_strips_and_drops_empty(
-    parts: list[str | None], expected: str
-) -> None:
+def test_join_script_parts_strips_and_drops_empty(parts: list[str | None], expected: str) -> None:
     assert docent_service._join_script_parts(parts) == expected
 
 
@@ -287,9 +285,7 @@ def test_is_noisy_attraction_review_context_guards_attraction_categories(
     category: str, item: dict[str, object], expected: bool
 ) -> None:
     request = _make_request(category=category)
-    assert (
-        docent_service._is_noisy_attraction_review_context(request, item) is expected
-    )
+    assert docent_service._is_noisy_attraction_review_context(request, item) is expected
 
 
 def test_prepare_docent_grounding_context_filters_noise_and_sorts_by_priority() -> None:
@@ -301,15 +297,10 @@ def test_prepare_docent_grounding_context_filters_noise_and_sorts_by_priority() 
         {"source_type": "place_profile", "title_ko": "화성행궁", "source_id": "b"},
     ]
 
-    prepared = docent_service._prepare_docent_grounding_context(
-        request, grounding_context=items
-    )
+    prepared = docent_service._prepare_docent_grounding_context(request, grounding_context=items)
 
     assert [item["source_id"] for item in prepared] == ["b", "c", "d"]
-    assert (
-        docent_service._prepare_docent_grounding_context(request, grounding_context=[])
-        == []
-    )
+    assert docent_service._prepare_docent_grounding_context(request, grounding_context=[]) == []
 
 
 @pytest.mark.parametrize(

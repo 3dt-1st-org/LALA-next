@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
-from typing import Any, Iterable, Sequence
+from typing import Any
 
 from apps.api.app.services.official_media import normalize_official_image_url
 from apps.api.app.services.region_catalog import infer_region_name_from_address
@@ -148,9 +149,7 @@ def fetch_tour_api_places(
             items = _extract_items(payload)
             raw_count += len(items)
             places.extend(
-                place
-                for item in items
-                if (place := parse_tour_api_place(item)) is not None
+                place for item in items if (place := parse_tour_api_place(item)) is not None
             )
             if len(items) < num_rows:
                 break
@@ -194,7 +193,9 @@ def fetch_tour_api_places_for_area_codes(
     timeout: int = 10,
     fetch_missing_images: bool = True,
 ) -> TourApiFetchResult:
-    unique_area_codes = tuple(dict.fromkeys(str(code).strip() for code in area_codes if str(code).strip()))
+    unique_area_codes = tuple(
+        dict.fromkeys(str(code).strip() for code in area_codes if str(code).strip())
+    )
     if not unique_area_codes:
         raise ValueError("area_codes must not be empty.")
 
@@ -427,7 +428,7 @@ def infer_region_name_ko(address: str | None) -> str | None:
 
 
 def _extract_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    header = ((payload.get("response") or {}).get("header") or {})
+    header = (payload.get("response") or {}).get("header") or {}
     result_code = str(header.get("resultCode") or "")
     if result_code and result_code != "0000":
         result_message = str(header.get("resultMsg") or "TourAPI request failed.")

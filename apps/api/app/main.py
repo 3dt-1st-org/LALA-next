@@ -12,7 +12,7 @@ from apps.api.app.core.errors import ApiError
 from apps.api.app.core.metrics import RuntimeMetrics, route_path_from_scope
 from apps.api.app.core.observability import append_access_log, configure_logging, request_log_extra
 from apps.api.app.core.openapi import configure_openapi
-from apps.api.app.core.responses import error_envelope, ensure_request_id, safe_validation_details
+from apps.api.app.core.responses import ensure_request_id, error_envelope, safe_validation_details
 from apps.api.app.routers.health import router as health_router
 from apps.api.app.routers.v1 import router as v1_router
 

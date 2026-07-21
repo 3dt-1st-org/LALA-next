@@ -3,10 +3,10 @@ from __future__ import annotations
 import hashlib
 import html
 import json
-import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta, timezone
-from typing import Any, Iterable
+from typing import Any
 from xml.etree import ElementTree
 
 from apps.api.app.services.official_media import normalize_official_image_url
@@ -24,6 +24,7 @@ DEFAULT_SOURCE_NAME = "kopis"
 DEFAULT_DATASET_NAME = "공연예술통합전산망_공연목록 조회 서비스"
 MAX_DATE_RANGE_DAYS = 31
 KST = timezone(timedelta(hours=9), "Asia/Seoul")
+
 
 @dataclass(frozen=True)
 class KopisPerformance:
@@ -222,9 +223,7 @@ def fetch_kopis_performances_for_signgucodes(
     return KopisFetchResult(
         performances=tuple(
             _dedupe_performances(
-                performance
-                for result in results
-                for performance in result.performances
+                performance for result in results for performance in result.performances
             )
         ),
         request_count=sum(result.request_count for result in results),
@@ -419,7 +418,9 @@ def _validate_date_window(stdate: str, eddate: str) -> None:
 def _raise_for_error(root: ElementTree.Element) -> None:
     error_code = _find_text(root, "resultCode", "returnReasonCode", "code")
     if error_code and error_code not in {"00", "0000"}:
-        message = _find_text(root, "resultMsg", "returnAuthMsg", "message") or "KOPIS request failed."
+        message = (
+            _find_text(root, "resultMsg", "returnAuthMsg", "message") or "KOPIS request failed."
+        )
         raise RuntimeError(f"KOPIS error {error_code}: {message}")
     error_message = _find_text(root, "returnAuthMsg", "errMsg")
     if error_message and "SERVICE_KEY" in error_message.upper():

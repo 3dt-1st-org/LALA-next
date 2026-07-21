@@ -267,10 +267,7 @@ def test_fetch_result_skips_detail_image_when_firstimage_exists(monkeypatch):
     assert result.image_error_count == 0
     assert result.raw_count == 1
     assert len(result.places) == 1
-    assert (
-        result.places[0].first_image
-        == "https://tong.visitkorea.or.kr/cms/resource/list.jpg"
-    )
+    assert result.places[0].first_image == "https://tong.visitkorea.or.kr/cms/resource/list.jpg"
 
 
 def test_fetch_result_can_skip_missing_detail_image_lookup(monkeypatch):
@@ -380,9 +377,7 @@ def test_apply_requires_guard_before_reading_db(monkeypatch, capsys):
     monkeypatch.setenv("DB_DSN", dsn)
     monkeypatch.delenv(run_tour_api_ingest.ALLOW_ENV, raising=False)
 
-    exit_code = run_tour_api_ingest.main(
-        ["--apply", "--confirm", run_tour_api_ingest.CONFIRM_TEXT]
-    )
+    exit_code = run_tour_api_ingest.main(["--apply", "--confirm", run_tour_api_ingest.CONFIRM_TEXT])
 
     output = capsys.readouterr().out
     assert exit_code == 2

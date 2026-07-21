@@ -62,7 +62,9 @@ def test_plan_legacy_retirement_cli_outputs_json_without_secret_values():
     payload = json.loads(result.stdout)
     assert payload["ok"] is True
     assert payload["applies_changes"] is False
-    assert any(mapping["new_route"] == "/healthz and /readyz" for mapping in payload["route_mappings"])
+    assert any(
+        mapping["new_route"] == "/healthz and /readyz" for mapping in payload["route_mappings"]
+    )
     assert "legacy-flask" in result.stdout
     assert "rm -rf" not in result.stdout
     assert "password=" not in result.stdout.lower()

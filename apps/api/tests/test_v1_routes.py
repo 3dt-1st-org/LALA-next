@@ -286,9 +286,7 @@ def test_weather_uses_db_repository_when_available(client, auth_headers, monkeyp
 
 
 def test_intervention_treats_unknown_weather_as_neutral(client, auth_headers):
-    response = client.get(
-        "/api/v1/plans/intervention?lat=37.2&lng=127.0", headers=auth_headers
-    )
+    response = client.get("/api/v1/plans/intervention?lat=37.2&lng=127.0", headers=auth_headers)
 
     assert response.status_code == 200
     body = response.json()
@@ -508,9 +506,7 @@ def test_docent_script_accepts_culture_venue_category(client, auth_headers):
     assert "로컬 카페" in body["data"]["script"]
 
 
-def test_docent_script_uses_db_cache_before_generation(
-    client, auth_headers, monkeypatch
-):
+def test_docent_script_uses_db_cache_before_generation(client, auth_headers, monkeypatch):
     monkeypatch.setattr(
         "apps.api.app.services.db_repository.fetch_docent_script_cache",
         lambda **kwargs: {
@@ -550,9 +546,7 @@ def test_docent_script_uses_rag_grounding_before_generic_cache(
     monkeypatch,
 ):
     def fail_if_cache_is_read(**kwargs):
-        raise AssertionError(
-            "RAG-grounded docent generation must not use generic cache"
-        )
+        raise AssertionError("RAG-grounded docent generation must not use generic cache")
 
     monkeypatch.setattr(
         "apps.api.app.services.db_repository.fetch_docent_script_cache",
@@ -891,9 +885,7 @@ def test_docent_script_localizes_grounding_codes_in_english(
     assert "문화공간" not in script
 
 
-def test_docent_script_score_context_skips_stale_cache(
-    client, auth_headers, monkeypatch
-):
+def test_docent_script_score_context_skips_stale_cache(client, auth_headers, monkeypatch):
     def fail_if_cache_is_read(**kwargs):
         raise AssertionError("score-aware docent generation must not use stale cache")
 
@@ -929,9 +921,7 @@ def test_docent_script_score_context_skips_stale_cache(
     assert "추천 근거" not in body["data"]["script"]
 
 
-def test_docent_script_accepts_legacy_detail_mode_and_english_language(
-    client, auth_headers
-):
+def test_docent_script_accepts_legacy_detail_mode_and_english_language(client, auth_headers):
     response = client.post(
         "/api/v1/docents/script",
         headers=auth_headers,
@@ -985,9 +975,7 @@ def test_docent_script_generation_identity_is_deterministic(client, auth_headers
     assert first_data["cache_key"] == second_data["cache_key"]
 
 
-def test_docent_script_generation_identity_changes_with_score_context(
-    client, auth_headers
-):
+def test_docent_script_generation_identity_changes_with_score_context(client, auth_headers):
     base_payload = {
         "place_id": "score-identity",
         "category": "event",
@@ -996,9 +984,7 @@ def test_docent_script_generation_identity_changes_with_score_context(
         "final_score": 0.7,
     }
 
-    first = client.post(
-        "/api/v1/docents/script", headers=auth_headers, json=base_payload
-    )
+    first = client.post("/api/v1/docents/script", headers=auth_headers, json=base_payload)
     second = client.post(
         "/api/v1/docents/script",
         headers=auth_headers,
@@ -1329,9 +1315,7 @@ def test_docent_script_live_ai_receives_rag_grounding_without_cache_write(
     saved_calls = []
 
     def fail_if_cache_is_read(**kwargs):
-        raise AssertionError(
-            "RAG-grounded live AI generation must not use generic cache"
-        )
+        raise AssertionError("RAG-grounded live AI generation must not use generic cache")
 
     monkeypatch.setattr(
         "apps.api.app.services.db_repository.fetch_docent_script_cache",
@@ -1630,9 +1614,7 @@ def test_daily_plan_rejects_out_of_range_coordinates(client, auth_headers):
     assert '"input"' not in response.text
 
 
-def test_daily_plan_marks_mixed_source_when_db_places_are_used(
-    client, auth_headers, monkeypatch
-):
+def test_daily_plan_marks_mixed_source_when_db_places_are_used(client, auth_headers, monkeypatch):
     monkeypatch.setattr(
         "apps.api.app.services.db_repository.fetch_places",
         lambda **kwargs: [
@@ -1690,9 +1672,7 @@ def test_daily_plan_handles_empty_place_candidates(client, auth_headers, monkeyp
     ]
 
 
-def test_daily_plan_uses_public_snapshot_radius_in_snapshot_fallback(
-    client, monkeypatch
-):
+def test_daily_plan_uses_public_snapshot_radius_in_snapshot_fallback(client, monkeypatch):
     monkeypatch.delenv("IOS_API_KEY", raising=False)
     monkeypatch.delenv("API_BEARER_TOKEN", raising=False)
     monkeypatch.setenv("LALA_STATIC_SNAPSHOT_FALLBACK", "true")
@@ -1729,9 +1709,7 @@ def test_intervention_route_returns_envelope(client, auth_headers):
     assert body["data"]["place"] is None
 
 
-def test_intervention_uses_public_snapshot_candidate_in_snapshot_fallback(
-    client, monkeypatch
-):
+def test_intervention_uses_public_snapshot_candidate_in_snapshot_fallback(client, monkeypatch):
     monkeypatch.delenv("IOS_API_KEY", raising=False)
     monkeypatch.delenv("API_BEARER_TOKEN", raising=False)
     monkeypatch.setenv("LALA_STATIC_SNAPSHOT_FALLBACK", "true")

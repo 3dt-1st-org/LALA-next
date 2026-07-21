@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 from datetime import UTC, datetime
@@ -93,7 +94,7 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:
         if args.apply:
             finished_at = datetime.now(UTC)
-            try:
+            with contextlib.suppress(Exception):
                 record_job_run(
                     dsn=dsn,
                     status="failed",
@@ -106,8 +107,6 @@ def main(argv: list[str] | None = None) -> int:
                     ),
                     connect_timeout=args.connect_timeout,
                 )
-            except Exception:
-                pass
         _write(
             args,
             {
@@ -204,9 +203,7 @@ def _write(args: argparse.Namespace, payload: dict[str, Any]) -> None:
                     "place_id": aggregate.get("place_id"),
                     "place_name_ko": aggregate.get("place_name_ko"),
                     "organic_mention_count": aggregate.get("organic_mention_count"),
-                    "category_policy": (aggregate.get("attributes") or {}).get(
-                        "category_policy"
-                    ),
+                    "category_policy": (aggregate.get("attributes") or {}).get("category_policy"),
                 },
                 ensure_ascii=False,
                 sort_keys=True,

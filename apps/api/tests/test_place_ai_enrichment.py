@@ -24,9 +24,7 @@ def test_place_ai_enrichment_plan_uses_data_dictionary_names(capsys):
 
 
 def test_place_ai_enrichment_english_only_plan_excludes_indoor(capsys):
-    exit_code = enrich_place_ai_columns.main(
-        ["--json", "--fields", "english", "--replace-local"]
-    )
+    exit_code = enrich_place_ai_columns.main(["--json", "--fields", "english", "--replace-local"])
 
     payload = json.loads(capsys.readouterr().out)
 

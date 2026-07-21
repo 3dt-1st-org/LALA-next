@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 import subprocess
-import logging
 from functools import lru_cache
 from urllib.parse import urlparse
 

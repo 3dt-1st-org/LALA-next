@@ -25,6 +25,13 @@ output/
 /local-runbook*.md
 /operator-notes*.md
 
+# Local-only AI agent instruction files (각 개발자가 자기 것으로 유지, 커밋 안 함).
+# OpenAI Codex 와 Claude Code 모두 루트 AGENTS.md 를 네이티브로 읽는다.
+# 템플릿: AGENTS.example.md -> cp AGENTS.example.md AGENTS.md
+/AGENTS.md
+/CLAUDE.md
+/ORCA_GUIDE.md
+
 # Local legacy/reference imports from the previous LALA project.
 /lala-macbook-usb-local-artifacts-*.zip
 /lala-legacy-*/

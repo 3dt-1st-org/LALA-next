@@ -69,14 +69,23 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     content_type_ids = tuple(args.content_type_ids or DEFAULT_CONTENT_TYPE_IDS)
-    area_codes = region_catalog.tour_api_area_codes() if args.all_supported_areas else (args.area_code,)
+    area_codes = (
+        region_catalog.tour_api_area_codes() if args.all_supported_areas else (args.area_code,)
+    )
     if not args.apply and not args.preview:
         _write(args, _plan_payload(area_codes, content_type_ids))
         return 0
 
     service_key = _env_or_secret("PUBLIC_DATA_SERVICE_KEY", "public-data-service-key")
     if not service_key:
-        _write(args, {"ok": False, "mode": _mode(args), "error": "PUBLIC_DATA_SERVICE_KEY is not configured."})
+        _write(
+            args,
+            {
+                "ok": False,
+                "mode": _mode(args),
+                "error": "PUBLIC_DATA_SERVICE_KEY is not configured.",
+            },
+        )
         return 2
 
     dsn = _env_or_secret("DB_DSN", "db-dsn")

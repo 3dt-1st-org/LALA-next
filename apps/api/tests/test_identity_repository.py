@@ -14,7 +14,6 @@ from apps.api.app.services.identity_repository import (
 )
 from apps.api.app.services.identity_service import IdentityService
 
-
 USER_ID = UUID("00000000-0000-0000-0000-000000000001")
 CREATED_AT = datetime(2026, 7, 10, tzinfo=UTC)
 
@@ -24,7 +23,7 @@ class FakeCursor:
         self.rows = rows
         self.executed = executed
 
-    def __enter__(self) -> "FakeCursor":
+    def __enter__(self) -> FakeCursor:
         return self
 
     def __exit__(self, *args) -> None:
@@ -42,7 +41,7 @@ class FakeConnection:
         self.rows = rows
         self.executed = executed
 
-    def __enter__(self) -> "FakeConnection":
+    def __enter__(self) -> FakeConnection:
         return self
 
     def __exit__(self, *args) -> None:
@@ -78,7 +77,15 @@ def test_provision_user_uses_atomic_upsert_and_returns_existing_user() -> None:
 
 def test_provision_user_rejects_a_deleting_row_without_reactivating_it() -> None:
     executed: list[tuple[str, tuple]] = []
-    deleting_row = (USER_ID, "https://issuer.example", "subject-1", "deleting", CREATED_AT, CREATED_AT, CREATED_AT)
+    deleting_row = (
+        USER_ID,
+        "https://issuer.example",
+        "subject-1",
+        "deleting",
+        CREATED_AT,
+        CREATED_AT,
+        CREATED_AT,
+    )
     rows = [None, None, deleting_row]
     repository = IdentityRepository(
         Settings(db_dsn="postgresql://redacted"),

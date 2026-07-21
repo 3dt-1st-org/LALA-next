@@ -15,7 +15,7 @@ from apps.api.app.core.responses import ensure_request_id, success_envelope
 from apps.api.app.schemas.account import AccountDeletionRequest
 from apps.api.app.schemas.docent import DocentAudioRequest, DocentScriptRequest
 from apps.api.app.schemas.planner import DailyPlanRequest
-from apps.api.app.services import docent_service, planner_service, places_service, weather_service
+from apps.api.app.services import docent_service, places_service, planner_service, weather_service
 from apps.api.app.services.identity_service import IdentityService, get_identity_service
 from apps.api.app.services.logto_management import (
     LogtoManagementClient,
@@ -104,7 +104,9 @@ def places(
         include_scores=include_scores,
         limit=limit,
     )
-    return success_envelope(request=request, data=payload, meta={"source": payload.get("source", "computed")})
+    return success_envelope(
+        request=request, data=payload, meta={"source": payload.get("source", "computed")}
+    )
 
 
 @router.get("/weather")
@@ -115,7 +117,9 @@ def weather(
     force: bool = Query(False),
 ) -> dict:
     payload = weather_service.current_weather(lat=lat, lng=lng, force=force)
-    return success_envelope(request=request, data=payload, meta={"source": payload.get("source", "computed")})
+    return success_envelope(
+        request=request, data=payload, meta={"source": payload.get("source", "computed")}
+    )
 
 
 @router.post("/docents/script")
@@ -127,7 +131,9 @@ def docent_script(request: Request, body: DocentScriptRequest) -> dict:
         limit_per_minute=settings.docent_script_rate_limit_per_minute,
     )
     payload = docent_service.generate_script(body)
-    return success_envelope(request=request, data=payload, meta={"source": payload.get("source", "computed")})
+    return success_envelope(
+        request=request, data=payload, meta={"source": payload.get("source", "computed")}
+    )
 
 
 @router.post(
@@ -140,7 +146,7 @@ def docent_script(request: Request, body: DocentScriptRequest) -> dict:
         503: {
             "description": "Live speech synthesis is not configured",
             "content": {"application/json": {"schema": {"type": "object"}}},
-        }
+        },
     },
 )
 def docent_audio(request: Request, body: DocentAudioRequest) -> Response:
@@ -166,7 +172,9 @@ def docent_audio(request: Request, body: DocentAudioRequest) -> Response:
 @router.post("/plans/daily")
 def daily_plan(request: Request, body: DailyPlanRequest) -> dict:
     payload = planner_service.daily_plan(body)
-    return success_envelope(request=request, data=payload, meta={"source": payload.get("source", "computed")})
+    return success_envelope(
+        request=request, data=payload, meta={"source": payload.get("source", "computed")}
+    )
 
 
 @router.get("/plans/intervention")
@@ -177,4 +185,6 @@ def intervention(
     radius_m: int = Query(10000, gt=0, le=50000),
 ) -> dict:
     payload = planner_service.intervention(lat=lat, lng=lng, radius_m=radius_m)
-    return success_envelope(request=request, data=payload, meta={"source": payload.get("source", "computed")})
+    return success_envelope(
+        request=request, data=payload, meta={"source": payload.get("source", "computed")}
+    )

@@ -1,10 +1,6 @@
 from __future__ import annotations
 
-import sys
-import types
-
-from apps.api.app.core import aws_secrets
-from apps.api.app.core import config
+from apps.api.app.core import aws_secrets, config
 
 
 def test_get_aws_sm_secret_returns_value(monkeypatch):
@@ -69,9 +65,7 @@ def test_env_or_secret_prefers_aws_sm_over_key_vault(monkeypatch):
         return "from-aws-sm"
 
     monkeypatch.setattr(config, "get_secret_if_configured", lambda *a, **k: "from-azure-kv")
-    monkeypatch.setattr(
-        "apps.api.app.core.aws_secrets.get_aws_sm_secret", fake_aws
-    )
+    monkeypatch.setattr("apps.api.app.core.aws_secrets.get_aws_sm_secret", fake_aws)
 
     result = config._env_or_secret("LOGTO_ENDPOINT", "logto-endpoint", "https://kv.vault.azure.net")
     assert result == "from-aws-sm"
@@ -81,10 +75,10 @@ def test_env_or_secret_prefers_aws_sm_over_key_vault(monkeypatch):
 def test_env_or_secret_falls_back_to_key_vault_when_sm_empty(monkeypatch):
     """AWS SM이 빈 값을 주면 Azure Key Vault로 폴백."""
     monkeypatch.delenv("OAUTH_CLIENT_ID", raising=False)
-    monkeypatch.setattr(
-        "apps.api.app.core.aws_secrets.get_aws_sm_secret", lambda sid: ""
-    )
+    monkeypatch.setattr("apps.api.app.core.aws_secrets.get_aws_sm_secret", lambda sid: "")
     monkeypatch.setattr(config, "get_secret_if_configured", lambda url, name: "from-azure-kv")
 
-    result = config._env_or_secret("OAUTH_CLIENT_ID", "oauth-client-id", "https://kv.vault.azure.net")
+    result = config._env_or_secret(
+        "OAUTH_CLIENT_ID", "oauth-client-id", "https://kv.vault.azure.net"
+    )
     assert result == "from-azure-kv"

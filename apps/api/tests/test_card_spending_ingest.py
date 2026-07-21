@@ -373,7 +373,9 @@ def test_apply_failure_records_redacted_job_run(monkeypatch, tmp_path, capsys):
 
 def test_insert_card_spending_result_targets_source_and_economy_tables(monkeypatch, tmp_path):
     source = tmp_path / "detail.csv"
-    source.write_text("기준년월,시군구명,매출금액,매출건수\n202508,수원시,1000,2\n", encoding="utf-8")
+    source.write_text(
+        "기준년월,시군구명,매출금액,매출건수\n202508,수원시,1000,2\n", encoding="utf-8"
+    )
     result = card_spending_ingest.parse_card_spending_file(path=source)
     executed = []
     fetches = [None, ("source-file-id",)]

@@ -156,9 +156,9 @@ def parse_brand_stats_items(
         headquarters_name = _text_value(item.get("corpNm"))
         large_category = _text_value(item.get("indutyLclasNm"))
         middle_category = _text_value(item.get("indutyMlsfcNm"))
-        business_category = " / ".join(
-            value for value in (large_category, middle_category) if value
-        ) or None
+        business_category = (
+            " / ".join(value for value in (large_category, middle_category) if value) or None
+        )
         source_year = _int_value(item.get("yr")) or year
         franchise_store_count = _int_value(item.get("frcsCnt"))
         normalized_brand_name = normalize_business_name(brand_name)

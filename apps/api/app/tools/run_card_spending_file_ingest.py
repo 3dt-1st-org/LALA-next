@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 from datetime import UTC, datetime
@@ -11,15 +12,15 @@ from dotenv import load_dotenv
 
 from apps.api.app.core.key_vault import get_secret_if_configured
 from apps.api.app.core.redaction import redact_secret_text
-from apps.api.app.services.job_runs import duration_ms, record_job_run
 from apps.api.app.services.card_spending_ingest import (
     DEFAULT_SOURCE_NAME,
     DEFAULT_VISITOR_TYPE,
     DETAIL_DATASET_NAME,
+    insert_card_spending_result,
     load_region_code_map,
     parse_card_spending_file,
-    insert_card_spending_result,
 )
+from apps.api.app.services.job_runs import duration_ms, record_job_run
 
 CONFIRM_TEXT = "APPLY_CARD_SPENDING_FILE_INGEST"
 ALLOW_ENV = "ALLOW_CARD_SPENDING_FILE_INGEST_APPLY"
@@ -33,12 +34,16 @@ def main(argv: list[str] | None = None) -> int:
         description="Plan, preview, or apply public card spending file ingestion."
     )
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
-    parser.add_argument("--preview", action="store_true", help="Parse a local CSV/XLSX file without DB writes.")
+    parser.add_argument(
+        "--preview", action="store_true", help="Parse a local CSV/XLSX file without DB writes."
+    )
     parser.add_argument("--apply", action="store_true", help="Insert parsed aggregates into DB.")
     parser.add_argument("--confirm", default="", help=f"Required with --apply: {CONFIRM_TEXT}")
     parser.add_argument("--file-path", default="", help="Local CSV/XLSX source file path.")
     parser.add_argument("--csv-path", default="", help="Deprecated alias for --file-path.")
-    parser.add_argument("--region-map", default="", help="Optional CSV/XLSX code-to-name mapping file.")
+    parser.add_argument(
+        "--region-map", default="", help="Optional CSV/XLSX code-to-name mapping file."
+    )
     parser.add_argument("--source-name", default=DEFAULT_SOURCE_NAME)
     parser.add_argument("--dataset-name", default=DETAIL_DATASET_NAME)
     parser.add_argument("--visitor-type", default=DEFAULT_VISITOR_TYPE)
@@ -110,7 +115,7 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:
         if args.apply:
             finished_at = datetime.now(UTC)
-            try:
+            with contextlib.suppress(Exception):
                 record_job_run(
                     dsn=dsn,
                     job_name=JOB_NAME,
@@ -121,8 +126,6 @@ def main(argv: list[str] | None = None) -> int:
                     error_message=redact_secret_text(str(exc) or exc.__class__.__name__, (dsn,)),
                     connect_timeout=args.connect_timeout,
                 )
-            except Exception:
-                pass
         _write(
             args,
             {

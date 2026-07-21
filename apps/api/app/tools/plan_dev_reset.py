@@ -18,7 +18,9 @@ def main(argv: list[str] | None = None) -> int:
         description="Plan or locally apply LALA-next dev seed/reset SQL."
     )
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
-    parser.add_argument("--apply", action="store_true", help="Apply dev reset SQL to a local DB_DSN.")
+    parser.add_argument(
+        "--apply", action="store_true", help="Apply dev reset SQL to a local DB_DSN."
+    )
     parser.add_argument("--confirm", default="", help=f"Required with --apply: {CONFIRM_TEXT}")
     parser.add_argument("--connect-timeout", type=int, default=5)
     args = parser.parse_args(argv)

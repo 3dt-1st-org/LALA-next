@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta, timezone
-from typing import Any, Iterable
+from typing import Any
 
 from apps.api.app.services import weather_service
 from apps.api.app.services.dust_quality import clean_air_quality_value
@@ -136,8 +137,7 @@ def build_weather_observation(
     if not isinstance(dust, dict):
         dust = official_weather.get("dust") if isinstance(official_weather, dict) else {}
     observed_at = _parse_observed_at(
-        (official_weather or {}).get("record_time")
-        or (air_quality or {}).get("record_time")
+        (official_weather or {}).get("record_time") or (air_quality or {}).get("record_time")
     )
     if observed_at is None:
         observed_at = collected

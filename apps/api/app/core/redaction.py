@@ -21,7 +21,9 @@ def redact_secret_text(text: str, explicit_values: tuple[str, ...] = ()) -> str:
 
 def redact_operational_resource_text(text: str, replacements: Mapping[str, str]) -> str:
     result = text
-    for value, placeholder in sorted(replacements.items(), key=lambda item: len(item[0]), reverse=True):
+    for value, placeholder in sorted(
+        replacements.items(), key=lambda item: len(item[0]), reverse=True
+    ):
         if value:
             result = result.replace(value, placeholder)
     return redact_secret_text(result)

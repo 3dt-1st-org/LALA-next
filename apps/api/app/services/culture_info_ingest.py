@@ -3,9 +3,10 @@ from __future__ import annotations
 import hashlib
 import html
 import json
-from dataclasses import asdict, dataclass
+from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
-from typing import Any, Iterable
+from typing import Any
 from xml.etree import ElementTree
 
 from apps.api.app.services.official_media import normalize_official_image_url

@@ -162,10 +162,7 @@ def test_metrics_records_status_classes_for_errors(client, api_key):
 
     metrics = client.get("/metrics")
 
-    assert (
-        'method="GET",path="/api/v1/places",status_code="401",status_class="4xx"'
-        in metrics.text
-    )
+    assert 'method="GET",path="/api/v1/places",status_code="401",status_class="4xx"' in metrics.text
 
 
 def test_unmatched_paths_are_collapsed_in_logs_and_metrics(client, caplog):
@@ -237,10 +234,7 @@ def test_metrics_treats_guest_identity_as_ready(client, monkeypatch):
 
     body = client.get("/metrics").text
 
-    assert (
-        'lala_next_dependency_ready{name="client_identity",status="guest"} 1'
-        in body
-    )
+    assert 'lala_next_dependency_ready{name="client_identity",status="guest"} 1' in body
 
 
 def test_metrics_exports_safe_aggregate_oauth_success_and_jwt_rejection(client, monkeypatch):

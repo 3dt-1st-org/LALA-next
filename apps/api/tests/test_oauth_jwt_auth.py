@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -117,7 +117,7 @@ def _signed_token(
     audience: str = OAUTH_AUDIENCE,
     scopes: str = "access_as_user",
 ) -> str:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return jwt.encode(
         {
             "iss": issuer,

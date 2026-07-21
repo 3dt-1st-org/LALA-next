@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from contextlib import closing
-from datetime import UTC, datetime
 import hashlib
 import json
 import math
+from contextlib import closing
+from datetime import UTC, datetime
 from typing import Any
 
 from apps.api.app.core.config import get_settings
@@ -167,7 +167,7 @@ def check_data_freshness_status(dsn: str, *, weather_max_hours: int = 24) -> str
                 row = cur.fetchone()
     except Exception:
         return "degraded"
-    if not row or not all(row.get(key) for key in row.keys()):
+    if not row or not all(row.get(key) for key in row):
         return "degraded"
     weather_observed_at = row.get("weather_observed_at")
     if weather_observed_at is None:
@@ -198,7 +198,7 @@ def fetch_places(
         import psycopg2
         from psycopg2.extras import RealDictCursor
     except Exception:
-        raise DatabaseReadError("psycopg2_unavailable")
+        raise DatabaseReadError("psycopg2_unavailable") from None
 
     min_lat, max_lat, min_lng, max_lng = _coordinate_radius_bounds(
         lat=lat,
@@ -317,7 +317,7 @@ def fetch_places(
                 cur.execute(sql, params)
                 rows = list(cur.fetchall())
     except Exception:
-        raise DatabaseReadError("places_query_failed")
+        raise DatabaseReadError("places_query_failed") from None
 
     places: list[dict[str, Any]] = []
     for row in rows:
@@ -401,20 +401,12 @@ def _place_score_from_row(row: dict[str, Any]) -> dict[str, Any] | None:
         "formula_version": row.get("formula_version") or "unknown",
         "components": {
             "local_spending_score": _optional_float(row.get("local_spending_score")),
-            "small_merchant_fit_score": _optional_float(
-                row.get("small_merchant_fit_score")
-            ),
-            "demand_dispersion_score": _optional_float(
-                row.get("demand_dispersion_score")
-            ),
-            "culture_relevance_score": _optional_float(
-                row.get("culture_relevance_score")
-            ),
+            "small_merchant_fit_score": _optional_float(row.get("small_merchant_fit_score")),
+            "demand_dispersion_score": _optional_float(row.get("demand_dispersion_score")),
+            "culture_relevance_score": _optional_float(row.get("culture_relevance_score")),
             "weather_fit_score": _optional_float(row.get("weather_fit_score")),
             "review_quality_score": _optional_float(row.get("review_quality_score")),
-            "accessibility_fit_score": _optional_float(
-                row.get("accessibility_fit_score")
-            ),
+            "accessibility_fit_score": _optional_float(row.get("accessibility_fit_score")),
         },
         "data_basis": "analytics.place_score_snapshots",
         "features": row.get("score_features") or {},
@@ -547,9 +539,7 @@ def fetch_latest_weather(*, lat: float, lng: float) -> dict[str, Any] | None:
     try:
         with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute(
-                    sql, (lng, lat, min_lat, max_lat, min_lng, max_lng, lat, lng)
-                )
+                cur.execute(sql, (lng, lat, min_lat, max_lat, min_lng, max_lng, lat, lng))
                 row = cur.fetchone()
     except Exception:
         return None
@@ -583,9 +573,7 @@ def fetch_latest_weather(*, lat: float, lng: float) -> dict[str, Any] | None:
         "forecast": [],
         "outdoor_status": outdoor_status,
         "location_match": row.get("location_match_rank") == 0,
-        "record_time": row.get("record_time").isoformat()
-        if row.get("record_time")
-        else None,
+        "record_time": row.get("record_time").isoformat() if row.get("record_time") else None,
         "source": "db",
     }
 
@@ -703,9 +691,7 @@ def fetch_docent_script_cache(
         "script": row["script"],
         "source": "db_cache",
         "upstream_source": row.get("source_method") or "unknown",
-        "generated_at": row.get("generated_at").isoformat()
-        if row.get("generated_at")
-        else None,
+        "generated_at": row.get("generated_at").isoformat() if row.get("generated_at") else None,
         "ttl_sec": _remaining_ttl_sec(row.get("expires_at")),
     }
 
@@ -768,9 +754,7 @@ def fetch_docent_knowledge_context(
             "body_en": _optional_text(row.get("body_en")),
             "metadata": _json_object(row.get("metadata")),
             "content_sha256": _optional_text(row.get("content_sha256")),
-            "updated_at": row.get("updated_at").isoformat()
-            if row.get("updated_at")
-            else None,
+            "updated_at": row.get("updated_at").isoformat() if row.get("updated_at") else None,
         }
         for row in rows
         if str(row.get("body_ko") or "").strip()
@@ -834,12 +818,8 @@ def fetch_docent_place_profile_context(*, place_id: str) -> list[dict[str, Any]]
             "body_ko": body_ko,
             "body_en": body_en,
             "metadata": _json_object(metadata),
-            "content_sha256": hashlib.sha256(
-                body_ko.encode("utf-8")
-            ).hexdigest(),
-            "updated_at": row.get("updated_at").isoformat()
-            if row.get("updated_at")
-            else None,
+            "content_sha256": hashlib.sha256(body_ko.encode("utf-8")).hexdigest(),
+            "updated_at": row.get("updated_at").isoformat() if row.get("updated_at") else None,
         }
     ]
 

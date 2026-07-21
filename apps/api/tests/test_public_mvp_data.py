@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from apps.api.app.services import public_mvp_data
 
-
 GYEONGGI_REGIONS = {
     "가평군",
     "고양시",
@@ -128,10 +127,7 @@ def test_public_mvp_snapshot_uses_english_fields_when_requested() -> None:
 
     assert places
     assert all(not any("가" <= char <= "힣" for char in place["name"]) for place in places)
-    assert all(
-        "Gyeonggi-do" in place["address"] or "Seoul" in place["address"]
-        for place in places
-    )
+    assert all("Gyeonggi-do" in place["address"] or "Seoul" in place["address"] for place in places)
 
 
 def test_public_mvp_snapshot_has_publishable_english_labels() -> None:

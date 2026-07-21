@@ -11,12 +11,11 @@ from urllib.parse import urlparse
 
 from apps.api.tests._bash import usable_bash
 
-
 ROOT = Path(__file__).resolve().parents[3]
 
 
 class _SmokeHandler(BaseHTTPRequestHandler):
-    server: "_SmokeServer"
+    server: _SmokeServer
 
     def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
         return
@@ -42,18 +41,14 @@ class _SmokeHandler(BaseHTTPRequestHandler):
                                 "bearer_token": "skipped",
                                 "db": "configured",
                                 "postgis": "configured",
-                                "live_speech": "enabled"
-                                if self.server.live_speech
-                                else "disabled",
+                                "live_speech": "enabled" if self.server.live_speech else "disabled",
                                 "static_snapshot_fallback": self.server.static_snapshot_fallback,
                             },
                             "mode": {
                                 "overall": self.server.data_mode,
                                 "data": self.server.data_mode,
                                 "ai": "disabled",
-                                "speech": "live-azure"
-                                if self.server.live_speech
-                                else "disabled",
+                                "speech": "live-azure" if self.server.live_speech else "disabled",
                                 "worker": "dry-run",
                             },
                         },
@@ -73,18 +68,14 @@ class _SmokeHandler(BaseHTTPRequestHandler):
                             "bearer_token": "configured",
                             "db": "configured",
                             "postgis": "configured",
-                            "live_speech": "enabled"
-                            if self.server.live_speech
-                            else "disabled",
+                            "live_speech": "enabled" if self.server.live_speech else "disabled",
                             "static_snapshot_fallback": self.server.static_snapshot_fallback,
                         },
                         "mode": {
                             "overall": self.server.data_mode,
                             "data": self.server.data_mode,
                             "ai": "disabled",
-                            "speech": "live-azure"
-                            if self.server.live_speech
-                            else "disabled",
+                            "speech": "live-azure" if self.server.live_speech else "disabled",
                             "worker": "dry-run",
                         },
                     },
@@ -152,9 +143,7 @@ class _SmokeHandler(BaseHTTPRequestHandler):
             return
         self._write_json({"ok": False}, status=404)
 
-    def _write_bytes(
-        self, body: bytes, *, content_type: str, status: int = 200
-    ) -> None:
+    def _write_bytes(self, body: bytes, *, content_type: str, status: int = 200) -> None:
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
@@ -297,9 +286,7 @@ def _start_server(
     return server, thread, f"http://{host}:{port}"
 
 
-def _live_place(
-    *, place_id: str = "tour-api-1", distance_m: int = 212
-) -> dict[str, Any]:
+def _live_place(*, place_id: str = "tour-api-1", distance_m: int = 212) -> dict[str, Any]:
     return {
         "place_id": place_id,
         "name": "중랑아트센터",
@@ -375,9 +362,7 @@ def _live_daily_plan_payload() -> dict[str, Any]:
         "ok": True,
         "data": {
             "source": "db",
-            "slots": [
-                {"period": "morning", "title": "문화 산책", "place": _live_place()}
-            ],
+            "slots": [{"period": "morning", "title": "문화 산책", "place": _live_place()}],
         },
     }
 
@@ -583,9 +568,7 @@ def test_unix_matrix_smoke_deploy_profile_rejects_snapshot_place_payload():
     snapshot_payload["data"]["source"] = "public_mvp_snapshot"
     snapshot_payload["data"]["places"][0]["source"] = "public_mvp_snapshot"
 
-    server, thread, base_url = _start_server(
-        public_access=True, places_payload=snapshot_payload
-    )
+    server, thread, base_url = _start_server(public_access=True, places_payload=snapshot_payload)
     try:
         result = _run_matrix_smoke(base_url, {}, profile="deploy")
     finally:
@@ -602,9 +585,7 @@ def test_unix_matrix_smoke_deploy_profile_rejects_local_fixture_place_payload():
     places_payload = _live_places_payload()
     places_payload["data"]["places"][0]["upstream_source"] = "local_fixture"
 
-    server, thread, base_url = _start_server(
-        public_access=True, places_payload=places_payload
-    )
+    server, thread, base_url = _start_server(public_access=True, places_payload=places_payload)
     try:
         result = _run_matrix_smoke(base_url, {}, profile="deploy")
     finally:
@@ -621,13 +602,9 @@ def test_unix_matrix_smoke_deploy_profile_rejects_gyeonggi_without_local_value()
     for place in places_payload["data"]["places"]:
         place["score"]["components"]["local_spending_score"] = None
         place["score"]["features"]["card_month"] = None
-        place["score"]["features"]["missing_signals"] = [
-            "card_spending_area_monthly"
-        ]
+        place["score"]["features"]["missing_signals"] = ["card_spending_area_monthly"]
 
-    server, thread, base_url = _start_server(
-        public_access=True, places_payload=places_payload
-    )
+    server, thread, base_url = _start_server(public_access=True, places_payload=places_payload)
     try:
         result = _run_matrix_smoke(base_url, {}, profile="deploy")
     finally:
@@ -642,9 +619,7 @@ def test_unix_matrix_smoke_deploy_profile_rejects_missing_postgis_distance():
     places_payload = _live_places_payload()
     places_payload["data"]["places"][0].pop("distance_m")
 
-    server, thread, base_url = _start_server(
-        public_access=True, places_payload=places_payload
-    )
+    server, thread, base_url = _start_server(public_access=True, places_payload=places_payload)
     try:
         result = _run_matrix_smoke(base_url, {}, profile="deploy")
     finally:
@@ -659,9 +634,7 @@ def test_unix_matrix_smoke_deploy_profile_rejects_place_outside_radius():
     places_payload = _live_places_payload()
     places_payload["data"]["places"][0]["distance_m"] = 1200
 
-    server, thread, base_url = _start_server(
-        public_access=True, places_payload=places_payload
-    )
+    server, thread, base_url = _start_server(public_access=True, places_payload=places_payload)
     try:
         result = _run_matrix_smoke(base_url, {}, profile="deploy")
     finally:
@@ -676,9 +649,7 @@ def test_unix_matrix_smoke_deploy_profile_rejects_unknown_dust_split():
     weather_payload = _live_weather_payload()
     weather_payload["data"]["dust"]["pm25_grade"] = "unknown"
 
-    server, thread, base_url = _start_server(
-        public_access=True, weather_payload=weather_payload
-    )
+    server, thread, base_url = _start_server(public_access=True, weather_payload=weather_payload)
     try:
         result = _run_matrix_smoke(base_url, {}, profile="deploy")
     finally:
@@ -694,9 +665,7 @@ def test_unix_matrix_smoke_deploy_profile_rejects_missing_dust_values():
     weather_payload = _live_weather_payload()
     weather_payload["data"]["dust"]["pm10"] = "-"
 
-    server, thread, base_url = _start_server(
-        public_access=True, weather_payload=weather_payload
-    )
+    server, thread, base_url = _start_server(public_access=True, weather_payload=weather_payload)
     try:
         result = _run_matrix_smoke(base_url, {}, profile="deploy")
     finally:
@@ -712,9 +681,7 @@ def test_unix_matrix_smoke_deploy_profile_rejects_weather_without_airkorea():
     weather_payload = _live_weather_payload()
     weather_payload["data"]["source"] = "kma_ultra_srt_ncst"
 
-    server, thread, base_url = _start_server(
-        public_access=True, weather_payload=weather_payload
-    )
+    server, thread, base_url = _start_server(public_access=True, weather_payload=weather_payload)
     try:
         result = _run_matrix_smoke(base_url, {}, profile="deploy")
     finally:
@@ -730,9 +697,7 @@ def test_unix_matrix_smoke_deploy_profile_rejects_missing_air_quality_station():
     weather_payload = _live_weather_payload()
     weather_payload["data"]["air_quality_location"] = ""
 
-    server, thread, base_url = _start_server(
-        public_access=True, weather_payload=weather_payload
-    )
+    server, thread, base_url = _start_server(public_access=True, weather_payload=weather_payload)
     try:
         result = _run_matrix_smoke(base_url, {}, profile="deploy")
     finally:
@@ -748,9 +713,7 @@ def test_unix_matrix_smoke_deploy_profile_rejects_internal_weather_location():
     weather_payload = _live_weather_payload()
     weather_payload["data"]["location"] = "기상청 격자"
 
-    server, thread, base_url = _start_server(
-        public_access=True, weather_payload=weather_payload
-    )
+    server, thread, base_url = _start_server(public_access=True, weather_payload=weather_payload)
     try:
         result = _run_matrix_smoke(base_url, {}, profile="deploy")
     finally:
@@ -766,9 +729,7 @@ def test_unix_matrix_smoke_deploy_profile_rejects_placeholder_docent():
     docent_payload = _live_docent_payload()
     docent_payload["data"]["script"] = "placeholder"
 
-    server, thread, base_url = _start_server(
-        public_access=True, docent_payload=docent_payload
-    )
+    server, thread, base_url = _start_server(public_access=True, docent_payload=docent_payload)
     try:
         result = _run_matrix_smoke(base_url, {}, profile="deploy")
     finally:
@@ -785,9 +746,7 @@ def test_unix_matrix_smoke_deploy_profile_rejects_docent_without_grounding():
     docent_payload["data"]["grounding_count"] = 0
     docent_payload["data"]["grounding_sources"] = []
 
-    server, thread, base_url = _start_server(
-        public_access=True, docent_payload=docent_payload
-    )
+    server, thread, base_url = _start_server(public_access=True, docent_payload=docent_payload)
     try:
         result = _run_matrix_smoke(base_url, {}, profile="deploy")
     finally:
@@ -804,9 +763,7 @@ def test_unix_matrix_smoke_deploy_profile_rejects_docent_internal_codes():
         " category culture_venue source tour_api official snapshot data"
     )
 
-    server, thread, base_url = _start_server(
-        public_access=True, docent_payload=docent_payload
-    )
+    server, thread, base_url = _start_server(public_access=True, docent_payload=docent_payload)
     try:
         result = _run_matrix_smoke(base_url, {}, profile="deploy")
     finally:
@@ -821,9 +778,7 @@ def test_unix_matrix_smoke_deploy_profile_rejects_docent_internal_evidence():
     docent_payload = _live_docent_payload()
     docent_payload["data"]["script"] += " 종합 추천 점수는 86점입니다."
 
-    server, thread, base_url = _start_server(
-        public_access=True, docent_payload=docent_payload
-    )
+    server, thread, base_url = _start_server(public_access=True, docent_payload=docent_payload)
     try:
         result = _run_matrix_smoke(base_url, {}, profile="deploy")
     finally:
@@ -838,9 +793,7 @@ def test_unix_matrix_smoke_deploy_profile_rejects_docent_score_values():
     docent_payload = _live_docent_payload()
     docent_payload["data"]["script"] += " 관광 수요 분산는 0.941입니다."
 
-    server, thread, base_url = _start_server(
-        public_access=True, docent_payload=docent_payload
-    )
+    server, thread, base_url = _start_server(public_access=True, docent_payload=docent_payload)
     try:
         result = _run_matrix_smoke(base_url, {}, profile="deploy")
     finally:
@@ -855,9 +808,7 @@ def test_unix_matrix_smoke_deploy_profile_rejects_docent_orphan_score_decimal():
     docent_payload = _live_docent_payload()
     docent_payload["data"]["script"] += " 828입니다."
 
-    server, thread, base_url = _start_server(
-        public_access=True, docent_payload=docent_payload
-    )
+    server, thread, base_url = _start_server(public_access=True, docent_payload=docent_payload)
     try:
         result = _run_matrix_smoke(base_url, {}, profile="deploy")
     finally:
@@ -877,9 +828,7 @@ def test_unix_matrix_smoke_deploy_profile_rejects_docent_without_dust_split():
         "공식 한국관광공사 데이터와 장소 맥락을 함께 확인했고, 방문 전후 가까운 로컬 카페와 식당까지 이어지는 동선으로 연결합니다."
     )
 
-    server, thread, base_url = _start_server(
-        public_access=True, docent_payload=docent_payload
-    )
+    server, thread, base_url = _start_server(public_access=True, docent_payload=docent_payload)
     try:
         result = _run_matrix_smoke(base_url, {}, profile="deploy")
     finally:
@@ -899,9 +848,7 @@ def test_unix_matrix_smoke_deploy_profile_rejects_docent_without_small_merchant_
         "공식 한국관광공사 데이터와 장소 맥락을 함께 확인했고, 방문 전후 가까운 다음 장소까지 이어지는 동선으로 연결합니다."
     )
 
-    server, thread, base_url = _start_server(
-        public_access=True, docent_payload=docent_payload
-    )
+    server, thread, base_url = _start_server(public_access=True, docent_payload=docent_payload)
     try:
         result = _run_matrix_smoke(base_url, {}, profile="deploy")
     finally:
@@ -916,9 +863,7 @@ def test_unix_matrix_smoke_deploy_profile_rejects_generic_docent_waiting_copy():
     docent_payload = _live_docent_payload()
     docent_payload["data"]["script"] += " 도슨트를 준비하고 있습니다."
 
-    server, thread, base_url = _start_server(
-        public_access=True, docent_payload=docent_payload
-    )
+    server, thread, base_url = _start_server(public_access=True, docent_payload=docent_payload)
     try:
         result = _run_matrix_smoke(base_url, {}, profile="deploy")
     finally:
@@ -938,9 +883,7 @@ def test_unix_matrix_smoke_deploy_profile_rejects_docent_without_route_action():
         "공식 한국관광공사 데이터와 장소 맥락을 확인했습니다."
     )
 
-    server, thread, base_url = _start_server(
-        public_access=True, docent_payload=docent_payload
-    )
+    server, thread, base_url = _start_server(public_access=True, docent_payload=docent_payload)
     try:
         result = _run_matrix_smoke(base_url, {}, profile="deploy")
     finally:

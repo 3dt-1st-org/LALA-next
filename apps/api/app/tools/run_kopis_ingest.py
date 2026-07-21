@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 from datetime import UTC, datetime
@@ -40,8 +41,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--apply", action="store_true", help="Upsert KOPIS rows into DB.")
     parser.add_argument("--confirm", default="", help=f"Required with --apply: {CONFIRM_TEXT}")
     parser.add_argument("--stdate", default=default_stdate, help="Start date YYYYMMDD.")
-    parser.add_argument("--eddate", default=default_eddate, help="End date YYYYMMDD. KOPIS supports up to 31 days.")
-    parser.add_argument("--signgucode", default=DEFAULT_SIGNGUCODE, help="KOPIS 시도 code. Default 41=경기도.")
+    parser.add_argument(
+        "--eddate", default=default_eddate, help="End date YYYYMMDD. KOPIS supports up to 31 days."
+    )
+    parser.add_argument(
+        "--signgucode", default=DEFAULT_SIGNGUCODE, help="KOPIS 시도 code. Default 41=경기도."
+    )
     parser.add_argument(
         "--all-supported-signgucodes",
         action="store_true",
@@ -71,7 +76,7 @@ def main(argv: list[str] | None = None) -> int:
         signgucodes = region_catalog.kopis_signgucodes(province_names=(args.signgucode,)) or (
             args.signgucode.strip(),
         )
-    signgucode = signgucodes[0] if len(signgucodes) == 1 else "multi"
+    signgucodes[0] if len(signgucodes) == 1 else "multi"
     signgucodesub = args.signgucodesub.strip() or None
     prfstate = args.prfstate.strip() or None
     if not args.apply and not args.preview:
@@ -80,7 +85,9 @@ def main(argv: list[str] | None = None) -> int:
 
     service_key = _env_or_secret("KOPIS_API_KEY", "kopis-api-key")
     if not service_key:
-        _write(args, {"ok": False, "mode": _mode(args), "error": "KOPIS_API_KEY is not configured."})
+        _write(
+            args, {"ok": False, "mode": _mode(args), "error": "KOPIS_API_KEY is not configured."}
+        )
         return 2
 
     dsn = _env_or_secret("DB_DSN", "db-dsn")
@@ -141,7 +148,7 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:
         if args.apply:
             finished_at = datetime.now(UTC)
-            try:
+            with contextlib.suppress(Exception):
                 record_job_run(
                     dsn=dsn,
                     job_name=JOB_NAME,
@@ -155,8 +162,6 @@ def main(argv: list[str] | None = None) -> int:
                     ),
                     connect_timeout=args.connect_timeout,
                 )
-            except Exception:
-                pass
         _write(
             args,
             {

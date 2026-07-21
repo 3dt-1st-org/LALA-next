@@ -12,7 +12,7 @@ class FakeCursor:
         self.present = present
         self.last_name = ""
 
-    def __enter__(self) -> "FakeCursor":
+    def __enter__(self) -> FakeCursor:
         return self
 
     def __exit__(self, *args) -> None:
@@ -34,7 +34,7 @@ class FakeConnection:
     def __init__(self, present: dict[str, bool]) -> None:
         self.present = present
 
-    def __enter__(self) -> "FakeConnection":
+    def __enter__(self) -> FakeConnection:
         return self
 
     def __exit__(self, *args) -> None:

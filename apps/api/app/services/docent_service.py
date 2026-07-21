@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
 import hashlib
 import re
+from datetime import UTC, datetime
 from typing import Any
 
 from apps.api.app.core.config import get_settings
@@ -11,7 +11,6 @@ from apps.api.app.schemas.docent import DocentAudioRequest, DocentScriptRequest
 from apps.api.app.services import ai_service, db_repository, speech_service
 from apps.api.app.services.normalization import display_language, format_celsius_label
 from apps.api.app.services.request_identity import generation_identity
-
 
 _STORY_KEYWORDS_KO = (
     "역사",
@@ -205,9 +204,7 @@ def _rule_based_script(
         "restaurant": "LALA looks for local character and neighborhood spending signals instead of treating every food stop as a generic listing.",
         "event": "The route is designed to connect the event with nearby culture spaces and small local businesses before or after the visit.",
         "culture_venue": "Use it as an anchor for a short route that connects exhibitions, performances, cafes, restaurants, and nearby streets.",
-    }.get(
-        request.category, "LALA reads official data together with nearby local context."
-    )
+    }.get(request.category, "LALA reads official data together with nearby local context.")
     context = _en_context_sentence(request)
     score_context = _en_score_sentence(request)
     weather_context = _en_weather_sentence(request)
@@ -298,9 +295,7 @@ def _prepare_docent_grounding_context(
     if not grounding_context:
         return []
     filtered = [
-        item
-        for item in grounding_context
-        if not _is_noisy_attraction_review_context(request, item)
+        item for item in grounding_context if not _is_noisy_attraction_review_context(request, item)
     ]
     return sorted(filtered, key=_grounding_priority_key)
 
@@ -314,10 +309,7 @@ def _is_noisy_attraction_review_context(
     source_type = str(item.get("source_type") or "").strip().lower()
     if not any(hint in source_type for hint in _REVIEW_SOURCE_HINTS):
         return False
-    body = " ".join(
-        str(item.get(key) or "")
-        for key in ("title_ko", "body_ko", "body_en")
-    )
+    body = " ".join(str(item.get(key) or "") for key in ("title_ko", "body_ko", "body_en"))
     if not any(keyword in body for keyword in _ATTRACTION_REVIEW_NOISE_KEYWORDS_KO):
         return False
     return not any(hint in body for hint in _ATTRACTION_PLACE_HINTS_KO)
@@ -341,10 +333,7 @@ def _grounding_priority_key(item: dict[str, Any]) -> tuple[int, str]:
 
 
 def _contains_story_hint(item: dict[str, Any]) -> bool:
-    body = " ".join(
-        str(item.get(key) or "")
-        for key in ("title_ko", "body_ko", "body_en")
-    )
+    body = " ".join(str(item.get(key) or "") for key in ("title_ko", "body_ko", "body_en"))
     return any(keyword in body for keyword in _STORY_KEYWORDS_KO)
 
 
@@ -523,9 +512,7 @@ def _en_context_sentence(request: DocentScriptRequest) -> str:
     if region:
         parts.append(f"local context around {region}")
     if request.distance_m is not None and request.distance_m > 0:
-        parts.append(
-            f"about {_format_distance(request.distance_m)} from your current location"
-        )
+        parts.append(f"about {_format_distance(request.distance_m)} from your current location")
     source = _en_source_label(request.upstream_source or request.source)
     if source:
         parts.append(f"grounded in {source}")
@@ -536,9 +523,7 @@ def _en_context_sentence(request: DocentScriptRequest) -> str:
             f"It reads {', '.join(parts)} together with available location and "
             "local spending signals."
         )
-    return (
-        f"It reads {', '.join(parts)} together with local spending and route signals."
-    )
+    return f"It reads {', '.join(parts)} together with local spending and route signals."
 
 
 def _ko_grounding_sentence(grounding_context: list[dict[str, Any]]) -> str:
@@ -677,9 +662,15 @@ def _ensure_ko_docent_quality_context(
         and request.distance_m > 0
         and not _contains_any(script, ("현재 위치", "거리", _format_distance(request.distance_m)))
     ):
-        parts.append(f"현재 위치에서 약 {_format_distance(request.distance_m)} 거리라 짧은 이동으로 연결하기 좋습니다.")
-    if _has_score_context(request) and not _contains_any(script, ("내국인 소비", "지역 소비", "로컬 소비")):
-        parts.append("LALA는 실제 내국인 소비 흐름과 지역 소비 신호를 함께 보고 이 장소를 고릅니다.")
+        parts.append(
+            f"현재 위치에서 약 {_format_distance(request.distance_m)} 거리라 짧은 이동으로 연결하기 좋습니다."
+        )
+    if _has_score_context(request) and not _contains_any(
+        script, ("내국인 소비", "지역 소비", "로컬 소비")
+    ):
+        parts.append(
+            "LALA는 실제 내국인 소비 흐름과 지역 소비 신호를 함께 보고 이 장소를 고릅니다."
+        )
     if _score_at_least(request.small_merchant_fit_score, 0.5) and not _contains_any(
         script,
         ("소상공인", "상권", "골목", "로컬 카페"),
@@ -697,7 +688,9 @@ def _ensure_ko_docent_quality_context(
             if "PM10" not in script or not _contains_any(script, ("PM2.5", "초미세먼지")):
                 parts.append(_ko_dust_split_sentence(request))
     source = _ko_source_label(request.upstream_source or request.source)
-    if source and not _contains_any(script, ("공식", "한국관광공사", "문화정보원", "공연예술통합전산망", "운영 DB")):
+    if source and not _contains_any(
+        script, ("공식", "한국관광공사", "문화정보원", "공연예술통합전산망", "운영 DB")
+    ):
         if _is_limited_offline_source(request.upstream_source or request.source):
             parts.append(f"{source}로 확인 가능한 범위만 바탕으로 소개합니다.")
         else:
@@ -716,19 +709,28 @@ def _ensure_en_docent_quality_context(
     if (
         request.distance_m is not None
         and request.distance_m > 0
-        and not _contains_any(script.lower(), ("current location", "distance", _format_distance(request.distance_m).lower()))
+        and not _contains_any(
+            script.lower(),
+            ("current location", "distance", _format_distance(request.distance_m).lower()),
+        )
     ):
-        parts.append(f"It is about {_format_distance(request.distance_m)} from your current location, so it can fit into a short nearby route.")
+        parts.append(
+            f"It is about {_format_distance(request.distance_m)} from your current location, so it can fit into a short nearby route."
+        )
     if _has_score_context(request) and not _contains_any(
         script.lower(),
         ("domestic spending", "local spending", "local consumption"),
     ):
-        parts.append("LALA reads real domestic spending patterns together with neighborhood route signals.")
+        parts.append(
+            "LALA reads real domestic spending patterns together with neighborhood route signals."
+        )
     if _score_at_least(request.small_merchant_fit_score, 0.5) and not _contains_any(
         script.lower(),
         ("small local business", "local business", "neighborhood business", "nearby streets"),
     ):
-        parts.append("Before or after the stop, connect it with nearby small local businesses and streets.")
+        parts.append(
+            "Before or after the stop, connect it with nearby small local businesses and streets."
+        )
     if _has_weather_context(request):
         if not _contains_any(script, ("weather", "PM10", "PM2.5", "dust")):
             parts.append(_en_weather_sentence(request))
@@ -754,7 +756,7 @@ def _ensure_en_docent_quality_context(
         ("official", "korea tourism", "culture information", "kopis", "live lala database"),
     ):
         if _is_limited_offline_source(request.upstream_source or request.source):
-            parts.append(f"It is grounded only in the available limited offline context.")
+            parts.append("It is grounded only in the available limited offline context.")
         else:
             parts.append(f"It is grounded in official context from {source}.")
     if not _contains_any(
@@ -899,11 +901,7 @@ def _strip_score_metric_fragments(text: str, *, language: str) -> str:
 
 
 def _public_sentences(text: str) -> list[str]:
-    return [
-        sentence.strip()
-        for sentence in re.split(r"(?<=[.!?])\s+", text)
-        if sentence.strip()
-    ]
+    return [sentence.strip() for sentence in re.split(r"(?<=[.!?])\s+", text) if sentence.strip()]
 
 
 def _looks_like_orphan_score_sentence(text: str) -> bool:

@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-
 REPO_ROOT = Path(__file__).resolve().parents[4]
 CANONICAL_SQL_DIR = REPO_ROOT / "sql" / "canonical"
 DEFAULT_LOCK_TIMEOUT = "5s"
@@ -155,13 +154,12 @@ def execute_canonical_sql(
         raise RuntimeError("psycopg2 is required for canonical SQL execution.") from exc
 
     applied: list[str] = []
-    with psycopg2.connect(dsn, connect_timeout=connect_timeout) as conn:
-        with conn.cursor() as cur:
-            cur.execute("SET LOCAL lock_timeout = %s", (lock_timeout,))
-            cur.execute("SET LOCAL statement_timeout = %s", (statement_timeout,))
-            for item in plan.files:
-                cur.execute(item.read_text())
-                applied.append(item.name)
+    with psycopg2.connect(dsn, connect_timeout=connect_timeout) as conn, conn.cursor() as cur:
+        cur.execute("SET LOCAL lock_timeout = %s", (lock_timeout,))
+        cur.execute("SET LOCAL statement_timeout = %s", (statement_timeout,))
+        for item in plan.files:
+            cur.execute(item.read_text())
+            applied.append(item.name)
 
     return {"ok": True, "applied_files": applied}
 

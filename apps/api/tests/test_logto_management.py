@@ -41,7 +41,9 @@ def _settings() -> Settings:
     )
 
 
-def test_management_settings_default_endpoint_and_resolve_secrets_from_key_vault(monkeypatch) -> None:
+def test_management_settings_default_endpoint_and_resolve_secrets_from_key_vault(
+    monkeypatch,
+) -> None:
     monkeypatch.setenv("KEY_VAULT_URL", "https://vault.example")
     monkeypatch.setenv("LOGTO_ENDPOINT", "https://tenant.logto.app")
 
@@ -95,7 +97,10 @@ def test_management_deletion_uses_m2m_and_revokes_first_party_grants_and_session
         ("DELETE", "https://tenant.logto.app/api/users/user-subject"),
     ]
     assert client.calls[1][2]["params"] == {"appType": "firstParty"}
-    assert all(call[2].get("headers", {}).get("Authorization") == "Bearer sensitive-token" for call in client.calls[1:])
+    assert all(
+        call[2].get("headers", {}).get("Authorization") == "Bearer sensitive-token"
+        for call in client.calls[1:]
+    )
 
 
 def test_management_network_failure_is_retryable_and_redacts_token() -> None:
