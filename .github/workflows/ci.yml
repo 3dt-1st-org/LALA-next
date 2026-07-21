@@ -152,5 +152,8 @@ jobs:
       - name: Sync Python dependencies
         run: uv sync --extra dev
 
+      - name: Run pre-commit hooks
+        run: uv run pre-commit run --all-files
+
       - name: Run Unix verification wrapper
         run: bash scripts/unix/verify_repo.sh --skip-install

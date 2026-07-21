@@ -1,6 +1,6 @@
 # LALA-next Data Dictionary
 
-Status: draft source of truth for the next schema refactor  
+Status: draft source of truth for the next schema refactor
 Last updated: 2026-06-15
 
 이 문서는 LALA-next의 데이터베이스 스키마, 테이블, 주요 컬럼 이름을 정리한다.
