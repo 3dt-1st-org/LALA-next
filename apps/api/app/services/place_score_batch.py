@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from datetime import date
-from decimal import Decimal, ROUND_HALF_UP
-from typing import Any, Sequence
+from decimal import ROUND_HALF_UP, Decimal
+from typing import Any
 
 from apps.api.app.services.recommendation_scoring import (
-    FORMULA_VERSION,
     build_place_score,
 )
 
@@ -53,7 +53,7 @@ class PlaceSignal:
     review_provider: str | None = None
 
     @classmethod
-    def from_row(cls, row: dict[str, Any]) -> "PlaceSignal":
+    def from_row(cls, row: dict[str, Any]) -> PlaceSignal:
         return cls(
             place_id=str(row.get("place_id") or ""),
             name_ko=str(row.get("name_ko") or ""),
@@ -79,9 +79,7 @@ class PlaceSignal:
             is_coldwave=_optional_bool(row.get("is_coldwave")),
             is_strong_wind=_optional_bool(row.get("is_strong_wind")),
             review_mention_count=_optional_int(row.get("review_mention_count")),
-            review_organic_mention_count=_optional_int(
-                row.get("review_organic_mention_count")
-            ),
+            review_organic_mention_count=_optional_int(row.get("review_organic_mention_count")),
             review_sentiment_score=_optional_float(row.get("review_sentiment_score")),
             review_attributes=_optional_json_object(row.get("review_attributes")),
             review_week_start=_optional_date_text(row.get("review_week_start")),
@@ -104,7 +102,7 @@ class PlaceScoreSnapshot:
     features: dict[str, Any]
 
     @classmethod
-    def from_score(cls, *, place_id: str, score: dict[str, Any]) -> "PlaceScoreSnapshot":
+    def from_score(cls, *, place_id: str, score: dict[str, Any]) -> PlaceScoreSnapshot:
         components = score["components"]
         return cls(
             place_id=place_id,
@@ -126,9 +124,7 @@ class PlaceScoreSnapshot:
 
 def compute_score_snapshots(signals: Sequence[PlaceSignal]) -> list[PlaceScoreSnapshot]:
     spending_values = [
-        signal.region_spend_amount
-        for signal in signals
-        if signal.region_spend_amount is not None
+        signal.region_spend_amount for signal in signals if signal.region_spend_amount is not None
     ]
     place_count_values = [
         float(signal.region_place_count)
@@ -514,9 +510,7 @@ def _review_quality_score(signal: PlaceSignal) -> float | None:
         return None
 
     sentiment_confidence = _optional_float(review_attributes.get("sentiment_confidence"))
-    attribute_confidence = _optional_float(
-        review_attributes.get("attribute_confidence_avg")
-    )
+    attribute_confidence = _optional_float(review_attributes.get("attribute_confidence_avg"))
     raw_count = (
         signal.review_mention_count
         or _optional_int(attributes.get("mention_count"))
@@ -529,9 +523,7 @@ def _review_quality_score(signal: PlaceSignal) -> float | None:
     organic_coverage = min(1.0, organic_count / _review_category_target(signal.category))
     ad_quality = 1.0 - min(1.0, filtered_ad_count / max(raw_count, 1))
     confidence_values = [
-        value
-        for value in (sentiment_confidence, attribute_confidence)
-        if value is not None
+        value for value in (sentiment_confidence, attribute_confidence) if value is not None
     ]
     confidence = min(confidence_values) if confidence_values else 0.5
     if organic_count < 10:

@@ -8,7 +8,6 @@ import shutil
 import stat
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "deploy" / "vercel" / "flutter-static.vercel.json"
 DEFAULT_SOURCE = ROOT / "apps" / "flutter_app" / "build" / "web"
@@ -110,9 +109,7 @@ def _reject_source_tree_symlinks(directory: Path) -> None:
         for entry in entries:
             metadata = entry.stat(follow_symlinks=False)
             if stat.S_ISLNK(metadata.st_mode):
-                raise ValueError(
-                    f"Flutter web build must not contain symlinks: {entry.path}"
-                )
+                raise ValueError(f"Flutter web build must not contain symlinks: {entry.path}")
             if stat.S_ISDIR(metadata.st_mode):
                 _reject_source_tree_symlinks(Path(entry.path))
 
@@ -124,9 +121,7 @@ def _validate_required_artifacts(directory: Path, label: str) -> None:
         if not _is_regular_file(directory / relative_path)
     ]
     if invalid:
-        raise ValueError(
-            f"{label} artifact must be a non-symlink regular file: {invalid[0]}"
-        )
+        raise ValueError(f"{label} artifact must be a non-symlink regular file: {invalid[0]}")
 
 
 def _is_regular_file(path: Path) -> bool:
@@ -145,9 +140,7 @@ def _load_project_binding() -> dict[str, str]:
     ):
         value = os.environ.get(environment_name, "")
         if not VERCEL_ID_PATTERN.fullmatch(value):
-            raise ValueError(
-                f"{environment_name} must be set to a valid Vercel identifier."
-            )
+            raise ValueError(f"{environment_name} must be set to a valid Vercel identifier.")
         binding[json_name] = value
     return binding
 

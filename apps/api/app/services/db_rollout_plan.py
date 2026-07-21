@@ -251,7 +251,9 @@ def build_db_rollout_plan(
             ),
             approval_required=True,
             secret_sensitive=True,
-            notes=("Use SSL-required PostgreSQL DSN. Do not paste the secret value into chat or docs.",),
+            notes=(
+                "Use SSL-required PostgreSQL DSN. Do not paste the secret value into chat or docs.",
+            ),
         ),
         DbRolloutPlanStep(
             order=6,

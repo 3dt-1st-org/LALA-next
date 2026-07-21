@@ -27,13 +27,9 @@ def test_openapi_documents_client_auth_headers_on_v1_routes(client):
     places_params = schema["paths"]["/api/v1/places"]["get"]["parameters"]
     security_schemes = schema["components"]["securitySchemes"]
 
+    assert any(param["name"] == "X-API-Key" and param["in"] == "header" for param in places_params)
     assert any(
-        param["name"] == "X-API-Key" and param["in"] == "header"
-        for param in places_params
-    )
-    assert any(
-        param["name"] == "Authorization" and param["in"] == "header"
-        for param in places_params
+        param["name"] == "Authorization" and param["in"] == "header" for param in places_params
     )
     assert security_schemes["BearerAuth"]["scheme"] == "bearer"
     assert security_schemes["MigrationApiKey"]["name"] == "X-API-Key"
@@ -42,12 +38,8 @@ def test_openapi_documents_client_auth_headers_on_v1_routes(client):
         {"BearerAuth": []},
         {"MigrationApiKey": []},
     ]
-    assert schema["paths"]["/api/v1/me"]["get"]["security"] == [
-        {"OAuthBearerAuth": []}
-    ]
-    assert schema["paths"]["/api/v1/me"]["delete"]["security"] == [
-        {"OAuthBearerAuth": []}
-    ]
+    assert schema["paths"]["/api/v1/me"]["get"]["security"] == [{"OAuthBearerAuth": []}]
+    assert schema["paths"]["/api/v1/me"]["delete"]["security"] == [{"OAuthBearerAuth": []}]
     assert "MigrationApiKey" not in str(schema["paths"]["/api/v1/me"])
     for operation in schema["paths"]["/api/v1/me"].values():
         assert not any(
@@ -83,9 +75,9 @@ def test_openapi_documents_v1_error_envelope(client):
     places_operation = schema["paths"]["/api/v1/places"]["get"]
     responses = places_operation["responses"]
 
-    assert schema["components"]["schemas"]["ApiErrorEnvelope"]["properties"][
-        "error"
-    ] == {"$ref": "#/components/schemas/ApiError"}
+    assert schema["components"]["schemas"]["ApiErrorEnvelope"]["properties"]["error"] == {
+        "$ref": "#/components/schemas/ApiError"
+    }
     assert responses["401"]["content"]["application/json"]["schema"] == {
         "$ref": "#/components/schemas/ApiErrorEnvelope"
     }
@@ -101,35 +93,31 @@ def test_openapi_documents_json_success_envelope(client):
     readyz_ref = {"$ref": "#/components/schemas/ReadyzSuccessEnvelope"}
     places_ref = {"$ref": "#/components/schemas/PlacesSuccessEnvelope"}
 
-    assert schema["components"]["schemas"]["ApiSuccessEnvelope"]["properties"][
-        "ok"
-    ] == {
+    assert schema["components"]["schemas"]["ApiSuccessEnvelope"]["properties"]["ok"] == {
         "type": "boolean",
         "const": True,
     }
     assert (
-        schema["paths"]["/healthz"]["get"]["responses"]["200"]["content"][
-            "application/json"
-        ]["schema"]
+        schema["paths"]["/healthz"]["get"]["responses"]["200"]["content"]["application/json"][
+            "schema"
+        ]
         == healthz_ref
     )
     assert (
-        schema["paths"]["/readyz"]["get"]["responses"]["200"]["content"][
-            "application/json"
-        ]["schema"]
+        schema["paths"]["/readyz"]["get"]["responses"]["200"]["content"]["application/json"][
+            "schema"
+        ]
         == readyz_ref
     )
     assert (
-        schema["paths"]["/api/v1/places"]["get"]["responses"]["200"]["content"][
-            "application/json"
-        ]["schema"]
+        schema["paths"]["/api/v1/places"]["get"]["responses"]["200"]["content"]["application/json"][
+            "schema"
+        ]
         == places_ref
     )
     assert (
         "application/json"
-        not in schema["paths"]["/api/v1/docents/audio"]["post"]["responses"]["200"][
-            "content"
-        ]
+        not in schema["paths"]["/api/v1/docents/audio"]["post"]["responses"]["200"]["content"]
     )
 
 
@@ -213,21 +201,15 @@ def test_openapi_documents_v1_success_data_schemas(client):
     assert schema["paths"]["/api/v1/weather"]["get"]["responses"]["200"]["content"][
         "application/json"
     ]["schema"] == {"$ref": "#/components/schemas/WeatherSuccessEnvelope"}
-    assert schema["paths"]["/api/v1/docents/script"]["post"]["responses"]["200"][
-        "content"
-    ]["application/json"]["schema"] == {
-        "$ref": "#/components/schemas/DocentScriptSuccessEnvelope"
-    }
-    assert schema["paths"]["/api/v1/plans/daily"]["post"]["responses"]["200"][
-        "content"
-    ]["application/json"]["schema"] == {
-        "$ref": "#/components/schemas/DailyPlanSuccessEnvelope"
-    }
-    assert schema["paths"]["/api/v1/plans/intervention"]["get"]["responses"]["200"][
-        "content"
-    ]["application/json"]["schema"] == {
-        "$ref": "#/components/schemas/InterventionSuccessEnvelope"
-    }
+    assert schema["paths"]["/api/v1/docents/script"]["post"]["responses"]["200"]["content"][
+        "application/json"
+    ]["schema"] == {"$ref": "#/components/schemas/DocentScriptSuccessEnvelope"}
+    assert schema["paths"]["/api/v1/plans/daily"]["post"]["responses"]["200"]["content"][
+        "application/json"
+    ]["schema"] == {"$ref": "#/components/schemas/DailyPlanSuccessEnvelope"}
+    assert schema["paths"]["/api/v1/plans/intervention"]["get"]["responses"]["200"]["content"][
+        "application/json"
+    ]["schema"] == {"$ref": "#/components/schemas/InterventionSuccessEnvelope"}
 
     assert schemas["PlacesSuccessEnvelope"]["properties"]["data"] == {
         "$ref": "#/components/schemas/PlacesData"
@@ -249,23 +231,13 @@ def test_openapi_documents_v1_success_data_schemas(client):
     assert schemas["PlaceScore"]["properties"]["components"] == {
         "$ref": "#/components/schemas/PlaceScoreComponents"
     }
+    assert schemas["PlaceScoreComponents"]["properties"]["local_spending_score"]["nullable"] is True
     assert (
-        schemas["PlaceScoreComponents"]["properties"]["local_spending_score"][
-            "nullable"
-        ]
+        schemas["PlaceScoreComponents"]["properties"]["small_merchant_fit_score"]["nullable"]
         is True
     )
     assert (
-        schemas["PlaceScoreComponents"]["properties"]["small_merchant_fit_score"][
-            "nullable"
-        ]
-        is True
-    )
-    assert (
-        schemas["PlaceScoreComponents"]["properties"]["accessibility_fit_score"][
-            "nullable"
-        ]
-        is True
+        schemas["PlaceScoreComponents"]["properties"]["accessibility_fit_score"]["nullable"] is True
     )
     assert schemas["Place"]["properties"]["image_url"]["nullable"] is True
     assert schemas["Place"]["properties"]["event_start_date"] == {
@@ -314,9 +286,7 @@ def test_openapi_documents_v1_success_data_schemas(client):
         "static_snapshot",
         "none",
     ]
-    assert schemas["WeatherData"]["properties"]["dust"] == {
-        "$ref": "#/components/schemas/Dust"
-    }
+    assert schemas["WeatherData"]["properties"]["dust"] == {"$ref": "#/components/schemas/Dust"}
     assert schemas["Dust"]["required"] == [
         "pm10",
         "pm25",
@@ -340,9 +310,7 @@ def test_openapi_documents_v1_success_data_schemas(client):
         "db_cache",
         "azure_openai",
     ]
-    assert schemas["DocentScriptData"]["properties"]["grounding_count"] == {
-        "type": "integer"
-    }
+    assert schemas["DocentScriptData"]["properties"]["grounding_count"] == {"type": "integer"}
     assert schemas["DocentScriptData"]["properties"]["grounding_sources"] == {
         "type": "array",
         "items": {"type": "string"},
@@ -369,9 +337,7 @@ def test_openapi_documents_v1_success_data_schemas(client):
     ]
     assert "cache_key" in schemas["DailyPlanData"]["required"]
     assert schemas["DailyPlanData"]["properties"]["cache_key"] == {"type": "string"}
-    assert schemas["InterventionData"]["properties"]["recommended_action"] == {
-        "type": "string"
-    }
+    assert schemas["InterventionData"]["properties"]["recommended_action"] == {"type": "string"}
     assert schemas["InterventionData"]["properties"]["place"] == {
         "$ref": "#/components/schemas/Place",
         "nullable": True,
@@ -414,9 +380,7 @@ def test_openapi_documents_daily_plan_coordinate_bounds(client):
 
 def test_openapi_documents_docent_audio_mpeg_success(client):
     schema = client.get("/openapi.json").json()
-    success_response = schema["paths"]["/api/v1/docents/audio"]["post"]["responses"][
-        "200"
-    ]
+    success_response = schema["paths"]["/api/v1/docents/audio"]["post"]["responses"]["200"]
 
     assert set(success_response["content"]) == {"audio/mpeg"}
     assert "audio/mpeg" in success_response["content"]
@@ -428,26 +392,24 @@ def test_openapi_documents_docent_audio_mpeg_success(client):
         "type": "string",
         "pattern": "^[0-9a-f]{64}$",
     }
-    assert success_response["headers"]["X-LALA-Cache-Key"]["schema"] == {
-        "type": "string"
-    }
+    assert success_response["headers"]["X-LALA-Cache-Key"]["schema"] == {"type": "string"}
 
 
 def test_openapi_documents_account_operations(client):
     schema = client.get("/openapi.json").json()
     account_path = schema["paths"]["/api/v1/me"]
 
-    assert account_path["get"]["responses"]["200"]["content"]["application/json"][
-        "schema"
-    ] == {"$ref": "#/components/schemas/MeSuccessEnvelope"}
+    assert account_path["get"]["responses"]["200"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/MeSuccessEnvelope"
+    }
     assert schema["components"]["schemas"]["MeData"]["required"] == [
         "user_id",
         "created_at",
         "authenticated",
     ]
-    assert account_path["delete"]["requestBody"]["content"]["application/json"][
-        "schema"
-    ] == {"$ref": "#/components/schemas/AccountDeletionRequest"}
+    assert account_path["delete"]["requestBody"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/AccountDeletionRequest"
+    }
     assert account_path["delete"]["responses"]["204"].get("content") in (None, {})
     assert set(account_path["get"]["responses"]) >= {"200", "401", "409", "410", "503"}
     assert set(account_path["delete"]["responses"]) >= {"204", "401", "422", "503"}

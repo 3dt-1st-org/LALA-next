@@ -172,10 +172,7 @@ def test_openapi_compat_flags_unrelated_account_header_removal():
     report = compare_openapi_compatibility(baseline=baseline, current=current)
 
     assert report.ok is False
-    assert (
-        "removed parameter: GET /api/v1/me header X-Request-Trace"
-        in report.findings
-    )
+    assert "removed parameter: GET /api/v1/me header X-Request-Trace" in report.findings
 
 
 def _optional_auth_header(name: str) -> dict:

@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-
 _PRE_TASK5_GUEST_OPERATIONS = frozenset(
     {
         "POST /api/v1/docents/audio",
@@ -14,9 +13,7 @@ _PRE_TASK5_GUEST_OPERATIONS = frozenset(
         "GET /api/v1/weather",
     }
 )
-_PRE_TASK5_ACCOUNT_OPERATIONS = frozenset(
-    {"GET /api/v1/me", "DELETE /api/v1/me"}
-)
+_PRE_TASK5_ACCOUNT_OPERATIONS = frozenset({"GET /api/v1/me", "DELETE /api/v1/me"})
 _PRE_TASK5_CLIENT_SECURITY = [{"BearerAuth": []}, {"MigrationApiKey": []}]
 _TASK5_GUEST_SECURITY = [
     {},
@@ -143,9 +140,9 @@ def _compare_operation(
     if migration_baseline:
         security_changed = not exact_security_migration
     else:
-        security_changed = _normalize_security(
-            baseline_security
-        ) != _normalize_security(current_security)
+        security_changed = _normalize_security(baseline_security) != _normalize_security(
+            current_security
+        )
     if security_changed:
         findings.append(f"changed security: {operation_label}")
     findings.extend(
@@ -154,8 +151,7 @@ def _compare_operation(
             baseline_parameters=baseline_operation.get("parameters") or [],
             current_parameters=current_operation.get("parameters") or [],
             allow_account_auth_correction=(
-                operation_label in _PRE_TASK5_ACCOUNT_OPERATIONS
-                and exact_security_migration
+                operation_label in _PRE_TASK5_ACCOUNT_OPERATIONS and exact_security_migration
             ),
         )
     )
@@ -188,10 +184,7 @@ def _compare_parameters(
         key = (parameter.get("in"), parameter.get("name"))
         current_parameter = current_by_key.get(key)
         if current_parameter is None:
-            if (
-                allow_account_auth_correction
-                and _is_expected_generated_auth_header(parameter)
-            ):
+            if allow_account_auth_correction and _is_expected_generated_auth_header(parameter):
                 continue
             findings.append(f"removed parameter: {operation_label} {key[0]} {key[1]}")
             continue
@@ -210,9 +203,8 @@ def _is_pre_task5_security_baseline(
         return False
     if operation_label in _PRE_TASK5_GUEST_OPERATIONS:
         return True
-    return (
-        operation_label in _PRE_TASK5_ACCOUNT_OPERATIONS
-        and _has_exact_pre_task5_auth_headers(baseline_operation)
+    return operation_label in _PRE_TASK5_ACCOUNT_OPERATIONS and _has_exact_pre_task5_auth_headers(
+        baseline_operation
     )
 
 
@@ -241,9 +233,10 @@ def _is_exact_task5_security_migration(
 
 def _has_exact_pre_task5_auth_headers(operation: dict[str, Any]) -> bool:
     headers = _auth_headers(operation)
-    return len(headers) == 2 and {
-        str(header.get("name")): header for header in headers
-    } == _PRE_TASK5_AUTH_HEADERS
+    return (
+        len(headers) == 2
+        and {str(header.get("name")): header for header in headers} == _PRE_TASK5_AUTH_HEADERS
+    )
 
 
 def _auth_headers(operation: dict[str, Any]) -> list[dict[str, Any]]:
@@ -270,9 +263,7 @@ def _is_expected_generated_auth_header(parameter: dict[str, Any]) -> bool:
         return True
     any_of = schema.get("anyOf")
     return isinstance(any_of, list) and {
-        item.get("type")
-        for item in any_of
-        if isinstance(item, dict)
+        item.get("type") for item in any_of if isinstance(item, dict)
     } == {"string", "null"}
 
 

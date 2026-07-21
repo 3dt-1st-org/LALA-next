@@ -24,7 +24,9 @@ def daily_plan(request: DailyPlanRequest) -> dict:
         "center": {"lat": request.lat, "lng": request.lng},
         "radius_m": request.radius_m,
         "weather": weather,
-        "slots": _daily_plan_slots(place_candidates=place_candidates, weather=weather, language=language),
+        "slots": _daily_plan_slots(
+            place_candidates=place_candidates, weather=weather, language=language
+        ),
         "source": source,
         **daily_plan_identity(request, language=language),
     }
@@ -112,7 +114,9 @@ def _recommended_action(*, weather_status: str, candidate_name: str) -> str:
     return f"Show indoor or short-walk alternatives around {candidate_name}."
 
 
-def daily_plan_identity(request: DailyPlanRequest, *, language: str | None = None) -> dict[str, str]:
+def daily_plan_identity(
+    request: DailyPlanRequest, *, language: str | None = None
+) -> dict[str, str]:
     return generation_identity(
         "daily_plan",
         {

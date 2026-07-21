@@ -1,16 +1,15 @@
 from __future__ import annotations
 
-from copy import deepcopy
-import math
-from datetime import UTC, datetime, timedelta, timezone
 import logging
+import math
+from copy import deepcopy
+from datetime import UTC, datetime, timedelta, timezone
 from threading import Lock
 from typing import Any
 
 from apps.api.app.core.config import get_settings
 from apps.api.app.core.observability import LOGGER_NAME
-from apps.api.app.services import db_repository
-from apps.api.app.services import region_catalog
+from apps.api.app.services import db_repository, region_catalog
 from apps.api.app.services.dust_quality import (
     build_dust_payload,
     clean_air_quality_value,
@@ -96,9 +95,7 @@ def current_weather(*, lat: float, lng: float, force: bool = False) -> dict:
         db_weather["force"] = force
         return db_weather
 
-    official_weather, air_quality = _fetch_official_weather_pair(
-        lat=lat, lng=lng, force=force
-    )
+    official_weather, air_quality = _fetch_official_weather_pair(lat=lat, lng=lng, force=force)
     if official_weather:
         if air_quality:
             official_weather["dust"] = air_quality["dust"]
@@ -168,19 +165,13 @@ def _fetch_official_weather_pair(
             _fetch_airkorea_sido_air_quality(lat=lat, lng=lng),
         )
 
-    with ThreadPoolExecutor(
-        max_workers=2, thread_name_prefix="lala-weather"
-    ) as executor:
-        kma_future = executor.submit(
-            _fetch_kma_ultra_short_nowcast, lat=lat, lng=lng, force=force
-        )
+    with ThreadPoolExecutor(max_workers=2, thread_name_prefix="lala-weather") as executor:
+        kma_future = executor.submit(_fetch_kma_ultra_short_nowcast, lat=lat, lng=lng, force=force)
         air_future = executor.submit(_fetch_airkorea_sido_air_quality, lat=lat, lng=lng)
         return kma_future.result(), air_future.result()
 
 
-def _fetch_kma_ultra_short_nowcast(
-    *, lat: float, lng: float, force: bool
-) -> dict[str, Any] | None:
+def _fetch_kma_ultra_short_nowcast(*, lat: float, lng: float, force: bool) -> dict[str, Any] | None:
     service_key = get_settings().public_data_service_key
     if not service_key:
         logger.info("kma_nowcast_skipped reason=missing_public_data_service_key")
@@ -227,9 +218,7 @@ def _fetch_kma_ultra_short_nowcast(
         logger.warning("kma_nowcast_empty_items")
         return None
     values = {
-        str(item.get("category") or "").strip(): str(
-            item.get("obsrValue") or ""
-        ).strip()
+        str(item.get("category") or "").strip(): str(item.get("obsrValue") or "").strip()
         for item in items
         if item.get("category")
     }
@@ -258,9 +247,7 @@ def _fetch_kma_ultra_short_nowcast(
     return weather
 
 
-def _fetch_airkorea_sido_air_quality(
-    *, lat: float, lng: float
-) -> dict[str, Any] | None:
+def _fetch_airkorea_sido_air_quality(*, lat: float, lng: float) -> dict[str, Any] | None:
     service_key = get_settings().public_data_service_key
     if not service_key:
         logger.info("airkorea_sido_skipped reason=missing_public_data_service_key")
@@ -485,9 +472,7 @@ def _is_internal_weather_location(value: Any) -> bool:
 
 
 def _dust_outdoor_status(dust: dict[str, Any]) -> str:
-    return (
-        "bad" if str(dust.get("grade") or "").strip() in {"bad", "very_bad"} else "good"
-    )
+    return "bad" if str(dust.get("grade") or "").strip() in {"bad", "very_bad"} else "good"
 
 
 def _merge_outdoor_status_with_dust(status: Any, dust: dict[str, Any]) -> str:
@@ -569,9 +554,7 @@ def _kma_grid_xy(lat: float, lng: float) -> tuple[int, int]:
     if theta < -math.pi:
         theta += 2.0 * math.pi
     theta *= sn
-    return int(ra * math.sin(theta) + xo + 0.5), int(
-        ro - ra * math.cos(theta) + yo + 0.5
-    )
+    return int(ra * math.sin(theta) + xo + 0.5), int(ro - ra * math.cos(theta) + yo + 0.5)
 
 
 def _kma_icon(precipitation_type: str | None) -> str:

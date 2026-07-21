@@ -3,14 +3,13 @@ from __future__ import annotations
 import json
 import math
 import re
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
-from typing import Any, Iterable, Sequence
+from typing import Any
 
 CORPORATE_PREFIX_RE = re.compile(r"^(?:주식회사|유한회사|농업회사법인|사회적협동조합)+")
 BRACKETED_TEXT_RE = re.compile(r"\([^)]*\)|\[[^]]*\]")
-KNOWN_BRANCH_SUFFIX_RE = re.compile(
-    r"(?:수원역점|강남역점|홍대점|명동점|스타필드점|롯데몰점)$"
-)
+KNOWN_BRANCH_SUFFIX_RE = re.compile(r"(?:수원역점|강남역점|홍대점|명동점|스타필드점|롯데몰점)$")
 SEPARATED_BRANCH_SUFFIX_RE = re.compile(
     r"(?:\s+|[-_/])(?:본점|직영점|가맹점|분점|[가-힣A-Za-z0-9]{1,12}점)$"
 )
@@ -163,10 +162,7 @@ def compute_place_business_identities(
     brands: Sequence[FranchiseBrand],
     locations: Sequence[FranchiseLocation] = (),
 ) -> list[PlaceBusinessIdentity]:
-    return [
-        classify_place_business(place, brands=brands, locations=locations)
-        for place in places
-    ]
+    return [classify_place_business(place, brands=brands, locations=locations) for place in places]
 
 
 def fetch_business_identity_inputs(
@@ -445,10 +441,14 @@ def _best_location_match(
             continue
         confidence = 0.95 if distance_m is not None else base_confidence
         resolved_match_type = "location_coordinate" if distance_m is not None else match_type
-        if best is None or confidence > best[1] or (
-            confidence == best[1]
-            and (distance_m if distance_m is not None else 999999.0)
-            < (best[2] if best[2] is not None else 999999.0)
+        if (
+            best is None
+            or confidence > best[1]
+            or (
+                confidence == best[1]
+                and (distance_m if distance_m is not None else 999999.0)
+                < (best[2] if best[2] is not None else 999999.0)
+            )
         ):
             best = (location, confidence, distance_m, resolved_match_type)
     return best

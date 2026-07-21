@@ -8,9 +8,9 @@ from typing import Any
 from urllib.parse import urlparse
 
 from apps.api.app.services.canonical_sql import (
-    DESTRUCTIVE_PATTERNS,
     DEFAULT_LOCK_TIMEOUT,
     DEFAULT_STATEMENT_TIMEOUT,
+    DESTRUCTIVE_PATTERNS,
     REPO_ROOT,
     SECRET_PATTERNS,
     split_sql_statements,
@@ -139,13 +139,12 @@ def execute_dev_reset_sql(
         raise RuntimeError("psycopg2 is required for dev reset SQL execution.") from exc
 
     applied: list[str] = []
-    with psycopg2.connect(dsn, connect_timeout=connect_timeout) as conn:
-        with conn.cursor() as cur:
-            cur.execute("SET LOCAL lock_timeout = %s", (lock_timeout,))
-            cur.execute("SET LOCAL statement_timeout = %s", (statement_timeout,))
-            for item in plan.files:
-                cur.execute(item.path.read_text(encoding="utf-8"))
-                applied.append(item.name)
+    with psycopg2.connect(dsn, connect_timeout=connect_timeout) as conn, conn.cursor() as cur:
+        cur.execute("SET LOCAL lock_timeout = %s", (lock_timeout,))
+        cur.execute("SET LOCAL statement_timeout = %s", (statement_timeout,))
+        for item in plan.files:
+            cur.execute(item.path.read_text(encoding="utf-8"))
+            applied.append(item.name)
 
     return {"ok": True, "local_host": local_host, "applied_files": applied}
 

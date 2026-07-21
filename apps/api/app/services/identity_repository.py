@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Iterator
 from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from hashlib import sha256
-from typing import Any, Callable, Iterator
+from typing import Any
 from uuid import UUID
 
 from apps.api.app.core.config import Settings

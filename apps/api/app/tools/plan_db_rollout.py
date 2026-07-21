@@ -79,7 +79,9 @@ def _write(args: argparse.Namespace, payload: dict) -> None:
     for warning in payload.get("warnings") or []:
         print(f"warning={_display(warning, replacements)}")
     for step in payload.get("steps") or []:
-        print(f"step={step['order']} approval_required={str(step['approval_required']).lower()} {step['title']}")
+        print(
+            f"step={step['order']} approval_required={str(step['approval_required']).lower()} {step['title']}"
+        )
         print(f"command={_display(step['command'], replacements)}")
 
 

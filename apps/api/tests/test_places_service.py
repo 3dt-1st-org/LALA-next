@@ -29,9 +29,7 @@ def _patch_db_fetch_places(monkeypatch, *, places=None, raises=None):
             raise raises
         return list(places or [])
 
-    monkeypatch.setattr(
-        places_service.db_repository, "fetch_places", fake_fetch_places
-    )
+    monkeypatch.setattr(places_service.db_repository, "fetch_places", fake_fetch_places)
     return captured
 
 
@@ -92,9 +90,7 @@ def test_list_places_accepts_valid_category_and_normalizes(
     category: str | None, expected: str, monkeypatch
 ) -> None:
     monkeypatch.setattr(places_service, "get_settings", lambda: _fake_settings())
-    captured = _patch_db_fetch_places(
-        monkeypatch, places=[{"name": "spot", "score": 0.5}]
-    )
+    captured = _patch_db_fetch_places(monkeypatch, places=[{"name": "spot", "score": 0.5}])
 
     result = places_service.list_places(
         lat=37.5665,
@@ -129,13 +125,9 @@ def test_list_places_accepts_valid_category_and_normalizes(
         ("xyz", "ko"),
     ],
 )
-def test_list_places_normalizes_language(
-    language: str | None, expected: str, monkeypatch
-) -> None:
+def test_list_places_normalizes_language(language: str | None, expected: str, monkeypatch) -> None:
     monkeypatch.setattr(places_service, "get_settings", lambda: _fake_settings())
-    captured = _patch_db_fetch_places(
-        monkeypatch, places=[{"name": "spot", "score": 0.5}]
-    )
+    captured = _patch_db_fetch_places(monkeypatch, places=[{"name": "spot", "score": 0.5}])
 
     result = places_service.list_places(
         lat=37.5665,
@@ -295,7 +287,9 @@ def test_list_places_returns_empty_payload_when_no_results_and_no_fallback(
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(
-        places_service, "get_settings", lambda: _fake_settings(static_snapshot_fallback=False, db_dsn="")
+        places_service,
+        "get_settings",
+        lambda: _fake_settings(static_snapshot_fallback=False, db_dsn=""),
     )
     _patch_db_fetch_places(monkeypatch, places=[])
 
@@ -316,7 +310,9 @@ def test_list_places_returns_empty_payload_when_no_results_and_no_fallback(
 
 def test_list_places_empty_payload_reports_postgis_when_db_dsn_set(monkeypatch) -> None:
     monkeypatch.setattr(
-        places_service, "get_settings", lambda: _fake_settings(static_snapshot_fallback=False, db_dsn="postgres://x")
+        places_service,
+        "get_settings",
+        lambda: _fake_settings(static_snapshot_fallback=False, db_dsn="postgres://x"),
     )
     _patch_db_fetch_places(monkeypatch, places=[])
 
@@ -340,9 +336,7 @@ def test_list_places_empty_payload_reports_postgis_when_db_dsn_set(monkeypatch) 
         ({"name": "x", "score": "high"}, None),
     ],
 )
-def test_places_without_scores_nullifies_score_field(
-    place: dict, expected_score
-) -> None:
+def test_places_without_scores_nullifies_score_field(place: dict, expected_score) -> None:
     result = places_service._places_without_scores([dict(place)])
 
     assert result[0]["score"] == expected_score

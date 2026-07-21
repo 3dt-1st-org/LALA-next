@@ -16,7 +16,6 @@ from apps.api.app.services.logto_management import (
     get_logto_management_client,
 )
 
-
 USER = LocalUser(
     id=UUID("00000000-0000-0000-0000-000000000001"),
     issuer="https://issuer.example",
@@ -98,7 +97,9 @@ def test_get_me_provisions_idempotently_and_hides_external_identity(client, api_
     assert "user-subject" not in response.text
 
 
-def test_me_database_unavailability_is_retryable_and_does_not_leak_identity(client, api_key) -> None:
+def test_me_database_unavailability_is_retryable_and_does_not_leak_identity(
+    client, api_key
+) -> None:
     client.app.dependency_overrides[require_logto_identity] = _oauth_identity
 
     response = client.get("/api/v1/me", headers={"X-API-Key": api_key})
@@ -198,7 +199,9 @@ def test_delete_me_marks_then_deletes_external_user_before_local_finalize(client
     assert events == ["mark", "external-delete", "local-finalize"]
 
 
-def test_delete_me_external_failure_keeps_deleting_state_and_skips_local_finalize(client, api_key) -> None:
+def test_delete_me_external_failure_keeps_deleting_state_and_skips_local_finalize(
+    client, api_key
+) -> None:
     events: list[str] = []
     service = FakeIdentityService(events=events)
 
@@ -247,8 +250,12 @@ def test_delete_me_retry_completes_after_external_failure(client, api_key) -> No
     client.app.dependency_overrides[get_logto_management_client] = lambda: management
     payload = {"confirmation": "delete-my-account"}
 
-    first_response = client.request("DELETE", "/api/v1/me", headers={"X-API-Key": api_key}, json=payload)
-    second_response = client.request("DELETE", "/api/v1/me", headers={"X-API-Key": api_key}, json=payload)
+    first_response = client.request(
+        "DELETE", "/api/v1/me", headers={"X-API-Key": api_key}, json=payload
+    )
+    second_response = client.request(
+        "DELETE", "/api/v1/me", headers={"X-API-Key": api_key}, json=payload
+    )
 
     assert first_response.status_code == 503
     assert second_response.status_code == 204

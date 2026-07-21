@@ -60,7 +60,9 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Evaluate live worker rollout prerequisites without external reads or writes.",
     )
     preflight_parser.add_argument("--job-id", default="", help="Limit preflight to one worker job.")
-    preflight_parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    preflight_parser.add_argument(
+        "--json", action="store_true", help="Print machine-readable JSON."
+    )
 
     rollout_parser = subparsers.add_parser(
         "plan-rollout",
@@ -168,7 +170,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"key_vault={_display(payload.get('key_vault_name'), replacements)}")
             print(f"function_app={_display(payload.get('function_app_name'), replacements)}")
             print(f"storage_account={_display(payload.get('storage_account_name'), replacements)}")
-            print(f"event_hub_namespace={_display(payload.get('event_hub_namespace'), replacements)}")
+            print(
+                f"event_hub_namespace={_display(payload.get('event_hub_namespace'), replacements)}"
+            )
             print(f"worker_job_count={len(payload.get('worker_jobs') or [])}")
             for warning in payload.get("warnings") or []:
                 print(f"warning={_display(warning, replacements)}")

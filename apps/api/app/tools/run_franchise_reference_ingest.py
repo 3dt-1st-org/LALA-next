@@ -30,7 +30,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     parser.add_argument("--preview", action="store_true", help="Call API and preview brand rows.")
-    parser.add_argument("--apply", action="store_true", help="Upsert economy.franchise_brands rows.")
+    parser.add_argument(
+        "--apply", action="store_true", help="Upsert economy.franchise_brands rows."
+    )
     parser.add_argument("--confirm", default="", help=f"Required with --apply: {CONFIRM_TEXT}")
     parser.add_argument("--year", type=int, default=date.today().year - 1)
     parser.add_argument(
@@ -60,7 +62,11 @@ def main(argv: list[str] | None = None) -> int:
     if not api_key:
         _write(
             args,
-            {"ok": False, "mode": _mode(args), "error": "PUBLIC_DATA_SERVICE_KEY is not configured."},
+            {
+                "ok": False,
+                "mode": _mode(args),
+                "error": "PUBLIC_DATA_SERVICE_KEY is not configured.",
+            },
         )
         return 2
 

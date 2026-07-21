@@ -47,15 +47,13 @@ def test_combined_source_applies_mixing_rules(
         ),
         (
             "bad",
-            "Weather is not ideal; prioritize short-walk or indoor-friendly "
-            "options near 한강공원.",
+            "Weather is not ideal; prioritize short-walk or indoor-friendly options near 한강공원.",
             "Show indoor or short-walk alternatives around 한강공원.",
         ),
         # Any status outside good/unknown hits the not-ideal fallback branch.
         (
             "severe",
-            "Weather is not ideal; prioritize short-walk or indoor-friendly "
-            "options near 한강공원.",
+            "Weather is not ideal; prioritize short-walk or indoor-friendly options near 한강공원.",
             "Show indoor or short-walk alternatives around 한강공원.",
         ),
     ],
@@ -149,13 +147,8 @@ def test_daily_plan_identity_reflects_location_and_radius() -> None:
 
     base_identity = planner_service.daily_plan_identity(base, language="ko")
 
-    assert (
-        planner_service.daily_plan_identity(other_location, language="ko")
-        != base_identity
-    )
-    assert (
-        planner_service.daily_plan_identity(other_radius, language="ko") != base_identity
-    )
+    assert planner_service.daily_plan_identity(other_location, language="ko") != base_identity
+    assert planner_service.daily_plan_identity(other_radius, language="ko") != base_identity
 
 
 def test_daily_plan_identity_language_none_falls_back_to_request_language() -> None:
@@ -296,8 +289,7 @@ def test_intervention_flags_bad_weather_and_keeps_top_place(monkeypatch) -> None
     assert result["place"] == {"name": "남산서울타워", "category": "landmark"}
     assert result["source"] == "db"
     assert result["reason"] == (
-        "Weather is not ideal; prioritize short-walk or indoor-friendly "
-        "options near 남산서울타워."
+        "Weather is not ideal; prioritize short-walk or indoor-friendly options near 남산서울타워."
     )
     assert result["recommended_action"] == (
         "Show indoor or short-walk alternatives around 남산서울타워."
@@ -331,9 +323,7 @@ def test_intervention_skips_when_weather_is_good(monkeypatch) -> None:
 
     assert result["should_intervene"] is False
     assert result["source"] == "public_mvp_snapshot"
-    assert result["reason"] == (
-        "Weather is suitable, so keep the current route toward 해운대."
-    )
+    assert result["reason"] == ("Weather is suitable, so keep the current route toward 해운대.")
     assert result["recommended_action"] == "Keep 해운대 as the primary local stop."
 
 

@@ -23,11 +23,7 @@ class JwtValidationUnavailable(Exception):
 
 
 def is_oauth_jwt_validation_configured(settings: Settings) -> bool:
-    return bool(
-        settings.oauth_issuer
-        and settings.oauth_audience
-        and settings.oauth_jwks_url
-    )
+    return bool(settings.oauth_issuer and settings.oauth_audience and settings.oauth_jwks_url)
 
 
 def validate_oauth_jwt(token: str, settings: Settings) -> dict[str, Any]:

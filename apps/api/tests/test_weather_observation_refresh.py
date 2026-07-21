@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
 import json
 import sys
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 from apps.api.app.services import weather_observation_refresh

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Sequence
 
 
 @dataclass(frozen=True)
@@ -39,7 +39,11 @@ _OPTION_PATTERN = re.compile(
 )
 _REGION_SUFFIXES = ("시", "군", "구")
 _MANUAL_LOCATION_PATH = (
-    Path(__file__).resolve().parents[4] / "apps" / "flutter_app" / "lib" / "manual_location_options.dart"
+    Path(__file__).resolve().parents[4]
+    / "apps"
+    / "flutter_app"
+    / "lib"
+    / "manual_location_options.dart"
 )
 _TOUR_API_AREA_CODES = {
     "seoul": "1",
@@ -125,9 +129,7 @@ def _load_catalog() -> tuple[tuple[ProvinceMetadata, ...], dict[str, dict[str, s
 PROVINCES, REGION_NAME_EN_BY_PROVINCE = _load_catalog()
 PROVINCE_BY_KO = {province.label_ko: province for province in PROVINCES}
 PROVINCE_NAME_EN = {province.label_ko: province.label_en for province in PROVINCES}
-PROVINCE_BY_KOPIS_SIGNGUCODE = {
-    province.kopis_signgucode: province for province in PROVINCES
-}
+PROVINCE_BY_KOPIS_SIGNGUCODE = {province.kopis_signgucode: province for province in PROVINCES}
 REGION_NAME_EN = {
     region_ko: region_en
     for region_map in REGION_NAME_EN_BY_PROVINCE.values()
@@ -151,7 +153,12 @@ def _region_aliases(region_name_ko: str) -> tuple[str, ...]:
 
 PROVINCE_ALIAS_TO_KO: dict[str, str] = {}
 for province in PROVINCES:
-    for alias in (province.label_ko, province.short_ko, _compact(province.label_ko), _compact(province.short_ko)):
+    for alias in (
+        province.label_ko,
+        province.short_ko,
+        _compact(province.label_ko),
+        _compact(province.short_ko),
+    ):
         PROVINCE_ALIAS_TO_KO[alias] = province.label_ko
     if province.label_ko.endswith(("특별시", "광역시", "특별자치시")):
         PROVINCE_ALIAS_TO_KO[f"{province.short_ko}시"] = province.label_ko
@@ -208,7 +215,9 @@ def province_name_en(value: object) -> str | None:
     return PROVINCE_NAME_EN.get(province_ko)
 
 
-def normalize_region_name_ko(value: object, *, province_name_ko: object | None = None) -> str | None:
+def normalize_region_name_ko(
+    value: object, *, province_name_ko: object | None = None
+) -> str | None:
     text = _optional_text(value)
     if not text:
         return None

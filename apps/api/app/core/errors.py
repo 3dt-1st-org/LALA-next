@@ -19,4 +19,3 @@ class ApiError(Exception):
 
 class ServiceError(ApiError):
     pass
-

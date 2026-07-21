@@ -22,8 +22,12 @@ def main(argv: list[str] | None = None) -> int:
         description="Plan, preview, or apply franchise business identity matching."
     )
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
-    parser.add_argument("--preview", action="store_true", help="Read DB franchise refs and preview matches.")
-    parser.add_argument("--apply", action="store_true", help="Upsert analytics.place_business_identity rows.")
+    parser.add_argument(
+        "--preview", action="store_true", help="Read DB franchise refs and preview matches."
+    )
+    parser.add_argument(
+        "--apply", action="store_true", help="Upsert analytics.place_business_identity rows."
+    )
     parser.add_argument("--confirm", default="", help=f"Required with --apply: {CONFIRM_TEXT}")
     parser.add_argument(
         "--category",
@@ -149,7 +153,13 @@ def _write(args: argparse.Namespace, payload: dict[str, Any]) -> None:
     if payload.get("error"):
         print(f"error={payload['error']}")
         return
-    for key in ("place_count", "brand_reference_count", "location_reference_count", "identity_count", "upserted_rows"):
+    for key in (
+        "place_count",
+        "brand_reference_count",
+        "location_reference_count",
+        "identity_count",
+        "upserted_rows",
+    ):
         if key in payload:
             print(f"{key}={payload[key]}")
     for relation in payload.get("input_relations") or []:

@@ -14,12 +14,17 @@ def test_infer_region_name_from_address_supports_nationwide_manual_catalog() -> 
 
 
 def test_infer_region_name_from_text_uses_province_scoped_aliases() -> None:
-    assert region_catalog.infer_region_name_from_text("여름 바다 축제 [해운대]", "부산광역시") == "해운대구"
+    assert (
+        region_catalog.infer_region_name_from_text("여름 바다 축제 [해운대]", "부산광역시")
+        == "해운대구"
+    )
     assert region_catalog.infer_region_name_from_text("강릉 단오제", "강원특별자치도") == "강릉시"
 
 
 def test_region_name_en_map_can_include_province_aliases() -> None:
-    mapping = region_catalog.region_name_en_map(province_names=("부산광역시",), include_provinces=True)
+    mapping = region_catalog.region_name_en_map(
+        province_names=("부산광역시",), include_provinces=True
+    )
 
     assert mapping["부산광역시"] == "Busan"
     assert mapping["부산"] == "Busan"

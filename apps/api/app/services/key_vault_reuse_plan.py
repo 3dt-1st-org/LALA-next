@@ -85,9 +85,10 @@ def build_key_vault_reuse_plan(
         target_vault_name=target_vault_name,
     )
     command_source_vault_name = source_vault_name or DEFAULT_SOURCE_VAULT_NAME
-    command_target_vault_name = (
+    (
         target_vault_name
-        if target_vault_name == DEFAULT_TARGET_VAULT_NAME and "onmu" not in target_vault_name.lower()
+        if target_vault_name == DEFAULT_TARGET_VAULT_NAME
+        and "onmu" not in target_vault_name.lower()
         else DEFAULT_TARGET_VAULT_NAME
     )
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 FORMULA_VERSION = "local-value-v2"
@@ -58,10 +58,7 @@ def build_place_score(
     formula_version: str = FORMULA_VERSION,
     features: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    normalized = {
-        name: _normalize_component(components.get(name))
-        for name in COMPONENT_WEIGHTS
-    }
+    normalized = {name: _normalize_component(components.get(name)) for name in COMPONENT_WEIGHTS}
     return {
         "final_score": weighted_score(normalized),
         "formula_version": formula_version,

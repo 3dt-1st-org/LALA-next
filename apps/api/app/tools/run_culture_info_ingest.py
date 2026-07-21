@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 from datetime import UTC, datetime
@@ -11,7 +12,6 @@ from dotenv import load_dotenv
 from apps.api.app.core.key_vault import get_secret_if_configured
 from apps.api.app.core.redaction import redact_secret_text
 from apps.api.app.services import region_catalog
-from apps.api.app.services.job_runs import duration_ms, record_job_run
 from apps.api.app.services.culture_info_ingest import (
     CULTURE_INFO_BASE_URL,
     DEFAULT_DATASET_NAME,
@@ -22,6 +22,7 @@ from apps.api.app.services.culture_info_ingest import (
     fetch_culture_info_events_for_sidos,
     upsert_culture_info_events,
 )
+from apps.api.app.services.job_runs import duration_ms, record_job_run
 
 CONFIRM_TEXT = "APPLY_CULTURE_INFO_INGEST"
 ALLOW_ENV = "ALLOW_CULTURE_INFO_INGEST_APPLY"
@@ -35,8 +36,12 @@ def main(argv: list[str] | None = None) -> int:
         description="Plan, preview, or apply KCISA culture information ingestion into culture.events."
     )
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
-    parser.add_argument("--preview", action="store_true", help="Call KCISA culture info API and preview rows.")
-    parser.add_argument("--apply", action="store_true", help="Upsert KCISA culture info rows into DB.")
+    parser.add_argument(
+        "--preview", action="store_true", help="Call KCISA culture info API and preview rows."
+    )
+    parser.add_argument(
+        "--apply", action="store_true", help="Upsert KCISA culture info rows into DB."
+    )
     parser.add_argument("--confirm", default="", help=f"Required with --apply: {CONFIRM_TEXT}")
     parser.add_argument("--operation", default=DEFAULT_OPERATION)
     parser.add_argument("--sido", default=DEFAULT_SIDO)
@@ -73,7 +78,14 @@ def main(argv: list[str] | None = None) -> int:
 
     service_key = _env_or_secret("PUBLIC_DATA_SERVICE_KEY", "public-data-service-key")
     if not service_key:
-        _write(args, {"ok": False, "mode": _mode(args), "error": "PUBLIC_DATA_SERVICE_KEY is not configured."})
+        _write(
+            args,
+            {
+                "ok": False,
+                "mode": _mode(args),
+                "error": "PUBLIC_DATA_SERVICE_KEY is not configured.",
+            },
+        )
         return 2
 
     dsn = _env_or_secret("DB_DSN", "db-dsn")
@@ -130,7 +142,7 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:
         if args.apply:
             finished_at = datetime.now(UTC)
-            try:
+            with contextlib.suppress(Exception):
                 record_job_run(
                     dsn=dsn,
                     job_name=JOB_NAME,
@@ -144,8 +156,6 @@ def main(argv: list[str] | None = None) -> int:
                     ),
                     connect_timeout=args.connect_timeout,
                 )
-            except Exception:
-                pass
         _write(
             args,
             {

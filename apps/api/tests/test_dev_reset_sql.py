@@ -69,7 +69,12 @@ def test_dev_reset_dsn_host_guard_accepts_only_explicit_local_hosts():
     assert dev_reset_sql.extract_local_dsn_host("hostaddr=127.0.0.1 dbname=lala user=lala")
 
     assert dev_reset_sql.extract_local_dsn_host("postgresql://user:pass@example.com/lala") == ""
-    assert dev_reset_sql.extract_local_dsn_host("host=lala-next-db.postgres.database.azure.com dbname=lala") == ""
+    assert (
+        dev_reset_sql.extract_local_dsn_host(
+            "host=lala-next-db.postgres.database.azure.com dbname=lala"
+        )
+        == ""
+    )
     assert dev_reset_sql.extract_local_dsn_host("dbname=lala user=lala") == ""
 
 

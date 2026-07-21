@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from contextlib import closing
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Any, Sequence
+from typing import Any
 
-from apps.api.app.services.official_media import normalize_official_image_url
 from apps.api.app.services import region_catalog
+from apps.api.app.services.official_media import normalize_official_image_url
 
 SNAPSHOT_DATA_BASIS = "public_mvp_snapshot"
 DEFAULT_SNAPSHOT_DESCRIPTION = (
@@ -18,9 +19,7 @@ DEFAULT_OUTPUT_PATH = "apps/api/app/data/public_mvp_places.json"
 
 GYEONGGI_REGION_NAME_EN = region_catalog.region_name_en_map(province_names=("경기도",))
 SEOUL_REGION_NAME_EN = region_catalog.region_name_en_map(province_names=("서울특별시",))
-DEFAULT_REGION_NAME_EN = region_catalog.region_name_en_map(
-    province_names=("경기도", "서울특별시")
-)
+DEFAULT_REGION_NAME_EN = region_catalog.region_name_en_map(province_names=("경기도", "서울특별시"))
 
 
 def build_snapshot_payload(

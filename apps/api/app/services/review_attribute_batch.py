@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import json
 import time
-from collections import Counter
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
-from typing import Any, Iterable, Sequence
+from typing import Any
 
 from apps.api.app.core.config import get_settings
 
@@ -105,7 +105,7 @@ class ReviewAttributeCandidate:
     posts: tuple[dict[str, str | None], ...]
 
     @classmethod
-    def from_row(cls, row: dict[str, Any]) -> "ReviewAttributeCandidate":
+    def from_row(cls, row: dict[str, Any]) -> ReviewAttributeCandidate:
         posts = row.get("posts")
         if isinstance(posts, str):
             posts = json.loads(posts)
@@ -306,10 +306,7 @@ def fetch_review_attribute_candidates(
 def build_deterministic_enrichments(
     candidates: Sequence[ReviewAttributeCandidate],
 ) -> list[ReviewAttributeEnrichment]:
-    return [
-        _deterministic_enrichment(candidate)
-        for candidate in candidates
-    ]
+    return [_deterministic_enrichment(candidate) for candidate in candidates]
 
 
 def generate_ai_enrichments(
@@ -565,11 +562,7 @@ def _deterministic_enrichment(
     if sentiment is None:
         sentiment = _deterministic_sentiment(text)
     confidence = round(min(0.78, 0.45 + candidate.organic_mention_count / 18), 4)
-    summary_terms = [
-        term
-        for terms in evidence.values()
-        for term in terms
-    ][:4]
+    summary_terms = [term for terms in evidence.values() for term in terms][:4]
     summary = (
         f"{candidate.place_name_ko} 언급에서 {', '.join(summary_terms)} 신호가 확인됩니다."
         if summary_terms

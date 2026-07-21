@@ -4,9 +4,8 @@ import re
 import subprocess
 from pathlib import Path
 
-from apps.api.tests._bash import usable_bash
-
 from apps.api.app.core.key_vault import is_allowed_key_vault_url, key_vault_name_from_url
+from apps.api.tests._bash import usable_bash
 
 ROOT = Path(__file__).resolve().parents[3]
 TEXT_SUFFIXES = {
@@ -130,9 +129,7 @@ def test_public_repo_does_not_contain_live_resource_identifiers():
 
 
 def test_azure_dev_deploy_uses_oidc_and_dev_branch_only():
-    workflow = (ROOT / ".github" / "workflows" / "azure-dev-deploy.yml").read_text(
-        encoding="utf-8"
-    )
+    workflow = (ROOT / ".github" / "workflows" / "azure-dev-deploy.yml").read_text(encoding="utf-8")
 
     assert "branches:\n      - dev" in workflow
     assert "id-token: write" in workflow
@@ -154,9 +151,12 @@ def test_azure_dev_deploy_uses_oidc_and_dev_branch_only():
     assert "apply_canonical_sql" not in workflow
     assert "verify_db_schema" not in workflow
     assert "az postgres flexible-server firewall-rule" not in workflow
-    assert "SMOKE_BASE_URL=\"https://${API_FQDN}\"" in workflow
+    assert 'SMOKE_BASE_URL="https://${API_FQDN}"' in workflow
     assert 'scripts/unix/smoke_api.sh --base-url "$SMOKE_BASE_URL"' in workflow
-    assert 'scripts/unix/smoke_api_matrix.sh --base-url "$SMOKE_BASE_URL" --timeout 25 --profile deploy' in workflow
+    assert (
+        'scripts/unix/smoke_api_matrix.sh --base-url "$SMOKE_BASE_URL" --timeout 25 --profile deploy'
+        in workflow
+    )
 
 
 def test_deployed_web_smoke_runs_public_location_flow():
@@ -171,7 +171,10 @@ def test_deployed_web_smoke_runs_public_location_flow():
     assert '"scripts/unix/smoke_flutter_web.sh"' in workflow
     assert "uses: actions/setup-node@v4" in workflow
     assert 'node-version: "24"' in workflow
-    assert "--web-url \"https://lala-next.cloud/?qa=deployed-web-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}\"" in workflow
+    assert (
+        '--web-url "https://lala-next.cloud/?qa=deployed-web-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"'
+        in workflow
+    )
     assert "--require-browser" in workflow
     assert "--fail-on-console-error" in workflow
     assert "Detect Flutter bundle changes" in workflow
@@ -216,15 +219,15 @@ def test_onprem_docker_and_runtime_hardening_contracts():
     monitor_script = (ROOT / "scripts" / "unix" / "onprem_monitor_tick.sh").read_text(
         encoding="utf-8"
     )
-    offsite_script = (
-        ROOT / "scripts" / "unix" / "verify_onprem_offsite_backup.sh"
-    ).read_text(encoding="utf-8")
-    webhook_script = (
-        ROOT / "scripts" / "unix" / "test_onprem_alert_webhook.sh"
-    ).read_text(encoding="utf-8")
-    cloudflare_script = (
-        ROOT / "scripts" / "unix" / "apply_cloudflare_edge_controls.sh"
-    ).read_text(encoding="utf-8")
+    offsite_script = (ROOT / "scripts" / "unix" / "verify_onprem_offsite_backup.sh").read_text(
+        encoding="utf-8"
+    )
+    webhook_script = (ROOT / "scripts" / "unix" / "test_onprem_alert_webhook.sh").read_text(
+        encoding="utf-8"
+    )
+    cloudflare_script = (ROOT / "scripts" / "unix" / "apply_cloudflare_edge_controls.sh").read_text(
+        encoding="utf-8"
+    )
     standby_script = (ROOT / "scripts" / "unix" / "plan_onprem_standby.sh").read_text(
         encoding="utf-8"
     )
@@ -238,9 +241,9 @@ def test_onprem_docker_and_runtime_hardening_contracts():
     assert "secret_printing=false" in backup_script
     assert "DRILL_DOCKER_POSTGRES_RESTORE" in drill_script
     assert "PostgreSQL init process complete" in drill_script
-    assert "dsn_scheme=\"postgresql\"" in drill_script
-    assert "DB_DSN=\"$dsn_scheme://" in drill_script
-    assert "echo \"$DB_DSN\"" not in drill_script
+    assert 'dsn_scheme="postgresql"' in drill_script
+    assert 'DB_DSN="$dsn_scheme://' in drill_script
+    assert 'echo "$DB_DSN"' not in drill_script
     assert "--webhook-env-name" in monitor_script
     assert "WEBHOOK_URL" in monitor_script
     assert "VERIFY_OFFSITE_BACKUP" in offsite_script
@@ -272,23 +275,21 @@ def test_kakao_map_bridges_forward_zoom_camera_updates():
     assert 'kakao.maps.event.addListener(map, "dragend"' in web_bridge
     assert 'kakao.maps.event.addListener(map, "zoom_changed"' in web_bridge
     assert '"lala-map-camera-idle"' in web_bridge
-    assert 'level: map.getLevel()' in web_bridge
+    assert "level: map.getLevel()" in web_bridge
     assert "new kakao.maps.Circle" not in web_bridge
 
     assert 'kakao.maps.event.addListener(map, "dragend"' in native_embed
     assert 'kakao.maps.event.addListener(map, "zoom_changed"' in native_embed
     assert 'type: "cameraIdle"' in native_embed
-    assert 'level: map.getLevel()' in native_embed
+    assert "level: map.getLevel()" in native_embed
     assert "new kakao.maps.Circle" not in native_embed
 
 
 def test_flutter_web_smoke_drives_location_flow_and_route_requests():
-    unix_script = (ROOT / "scripts" / "unix" / "smoke_flutter_web.sh").read_text(
+    unix_script = (ROOT / "scripts" / "unix" / "smoke_flutter_web.sh").read_text(encoding="utf-8")
+    windows_script = (ROOT / "scripts" / "windows" / "smoke_flutter_web.ps1").read_text(
         encoding="utf-8"
     )
-    windows_script = (
-        ROOT / "scripts" / "windows" / "smoke_flutter_web.ps1"
-    ).read_text(encoding="utf-8")
 
     for script in (unix_script, windows_script):
         assert "grantPermissions(['geolocation']" in script
@@ -328,7 +329,9 @@ def test_flutter_web_smoke_drives_location_flow_and_route_requests():
     assert "Flutter docent script did not include the captured PM2.5 value." in unix_script
     assert "Flutter location flow rendered no real map pins." in unix_script
     assert "Flutter location flow rendered only clusters without place pins." in unix_script
-    assert "Flutter initial location map clustered places before the user zoomed out." in unix_script
+    assert (
+        "Flutter initial location map clustered places before the user zoomed out." in unix_script
+    )
 
 
 def test_paid_smoke_requires_authenticated_api_key():
@@ -337,18 +340,18 @@ def test_paid_smoke_requires_authenticated_api_key():
     db_schema_script = (ROOT / "scripts" / "windows" / "verify_db_schema.ps1").read_text(
         encoding="utf-8"
     )
-    db_resources_script = (
-        ROOT / "scripts" / "windows" / "verify_db_resources.ps1"
-    ).read_text(encoding="utf-8")
-    db_rollout_plan_script = (
-        ROOT / "scripts" / "windows" / "plan_db_rollout.ps1"
-    ).read_text(encoding="utf-8")
-    observability_plan_script = (
-        ROOT / "scripts" / "windows" / "plan_observability.ps1"
-    ).read_text(encoding="utf-8")
-    key_vault_reuse_script = (
-        ROOT / "scripts" / "windows" / "plan_key_vault_reuse.ps1"
-    ).read_text(encoding="utf-8")
+    db_resources_script = (ROOT / "scripts" / "windows" / "verify_db_resources.ps1").read_text(
+        encoding="utf-8"
+    )
+    db_rollout_plan_script = (ROOT / "scripts" / "windows" / "plan_db_rollout.ps1").read_text(
+        encoding="utf-8"
+    )
+    observability_plan_script = (ROOT / "scripts" / "windows" / "plan_observability.ps1").read_text(
+        encoding="utf-8"
+    )
+    key_vault_reuse_script = (ROOT / "scripts" / "windows" / "plan_key_vault_reuse.ps1").read_text(
+        encoding="utf-8"
+    )
     place_score_batch_script = (
         ROOT / "scripts" / "windows" / "plan_place_score_batch.ps1"
     ).read_text(encoding="utf-8")
@@ -370,9 +373,9 @@ def test_paid_smoke_requires_authenticated_api_key():
     place_local_enrichment_script = (
         ROOT / "scripts" / "windows" / "plan_place_local_enrichment.ps1"
     ).read_text(encoding="utf-8")
-    tour_api_ingest_script = (
-        ROOT / "scripts" / "windows" / "plan_tour_api_ingest.ps1"
-    ).read_text(encoding="utf-8")
+    tour_api_ingest_script = (ROOT / "scripts" / "windows" / "plan_tour_api_ingest.ps1").read_text(
+        encoding="utf-8"
+    )
     culture_info_ingest_script = (
         ROOT / "scripts" / "windows" / "plan_culture_info_ingest.ps1"
     ).read_text(encoding="utf-8")
@@ -382,36 +385,36 @@ def test_paid_smoke_requires_authenticated_api_key():
     card_spending_ingest_script = (
         ROOT / "scripts" / "windows" / "plan_card_spending_file_ingest.ps1"
     ).read_text(encoding="utf-8")
-    access_log_inspect_script = (
-        ROOT / "scripts" / "windows" / "inspect_access_log.ps1"
-    ).read_text(encoding="utf-8")
+    access_log_inspect_script = (ROOT / "scripts" / "windows" / "inspect_access_log.ps1").read_text(
+        encoding="utf-8"
+    )
     apply_sql_script = (ROOT / "scripts" / "windows" / "apply_canonical_sql.ps1").read_text(
         encoding="utf-8"
     )
-    flutter_client_script = (
-        ROOT / "scripts" / "windows" / "verify_flutter_client.ps1"
-    ).read_text(encoding="utf-8")
-    flutter_web_smoke_script = (
-        ROOT / "scripts" / "windows" / "smoke_flutter_web.ps1"
-    ).read_text(encoding="utf-8")
+    flutter_client_script = (ROOT / "scripts" / "windows" / "verify_flutter_client.ps1").read_text(
+        encoding="utf-8"
+    )
+    flutter_web_smoke_script = (ROOT / "scripts" / "windows" / "smoke_flutter_web.ps1").read_text(
+        encoding="utf-8"
+    )
     dev_reset_script = (ROOT / "scripts" / "windows" / "plan_dev_reset.ps1").read_text(
         encoding="utf-8"
     )
-    worker_smoke_script = (
-        ROOT / "scripts" / "windows" / "smoke_workers.ps1"
-    ).read_text(encoding="utf-8")
-    oauth_smoke_script = (
-        ROOT / "scripts" / "windows" / "smoke_oauth_jwt.ps1"
-    ).read_text(encoding="utf-8")
-    worker_contracts = (
-        ROOT / "apps" / "workers" / "app" / "contracts.py"
-    ).read_text(encoding="utf-8")
-    oauth_smoke_tool = (
-        ROOT / "apps" / "api" / "app" / "tools" / "smoke_oauth_jwt.py"
-    ).read_text(encoding="utf-8")
-    apply_sql_tool = (
-        ROOT / "apps" / "api" / "app" / "tools" / "apply_canonical_sql.py"
-    ).read_text(encoding="utf-8")
+    worker_smoke_script = (ROOT / "scripts" / "windows" / "smoke_workers.ps1").read_text(
+        encoding="utf-8"
+    )
+    oauth_smoke_script = (ROOT / "scripts" / "windows" / "smoke_oauth_jwt.ps1").read_text(
+        encoding="utf-8"
+    )
+    worker_contracts = (ROOT / "apps" / "workers" / "app" / "contracts.py").read_text(
+        encoding="utf-8"
+    )
+    oauth_smoke_tool = (ROOT / "apps" / "api" / "app" / "tools" / "smoke_oauth_jwt.py").read_text(
+        encoding="utf-8"
+    )
+    apply_sql_tool = (ROOT / "apps" / "api" / "app" / "tools" / "apply_canonical_sql.py").read_text(
+        encoding="utf-8"
+    )
 
     assert "[string]$KeyVaultUrl" in script
     assert "[string]$CorsOrigin" in script
@@ -421,8 +424,8 @@ def test_paid_smoke_requires_authenticated_api_key():
     assert ".vault.azure.net" in start_script
     assert "LALA_ALLOWED_KEY_VAULT_HOSTS" in script
     assert "LALA_ALLOWED_KEY_VAULT_HOSTS" in start_script
-    assert "Contains(\"onmu\")" in script
-    assert "Contains(\"onmu\")" in start_script
+    assert 'Contains("onmu")' in script
+    assert 'Contains("onmu")' in start_script
     assert "cors-allow-origins" in start_script
     assert "LALA_ACCESS_LOG_PATH" in start_script
     assert "if ($PaidDependency)" in script
@@ -462,7 +465,10 @@ def test_paid_smoke_requires_authenticated_api_key():
     assert "Write-Host $env:DB_DSN" not in review_mention_ingest_script
     assert "apps.api.app.tools.run_review_attribute_batch" in review_attribute_batch_script
     assert "ALLOW_REVIEW_ATTRIBUTE_BATCH_APPLY=1" in review_attribute_batch_script
-    assert "AZURE_OPENAI_KEY and DB_DSN values are never printed by this script." in review_attribute_batch_script
+    assert (
+        "AZURE_OPENAI_KEY and DB_DSN values are never printed by this script."
+        in review_attribute_batch_script
+    )
     assert "secret show" not in review_attribute_batch_script
     assert "Write-Host $env:DB_DSN" not in review_attribute_batch_script
     assert "Write-Host $env:AZURE_OPENAI_KEY" not in review_attribute_batch_script
@@ -473,13 +479,19 @@ def test_paid_smoke_requires_authenticated_api_key():
     assert "Write-Host $env:DB_DSN" not in franchise_identity_batch_script
     assert "apps.api.app.tools.run_rag_index" in rag_index_unix_script
     assert "ALLOW_RAG_INDEX_APPLY=1" in rag_index_unix_script
-    assert "DB_DSN and AZURE_OPENAI_KEY values are never printed by this script." in rag_index_unix_script
+    assert (
+        "DB_DSN and AZURE_OPENAI_KEY values are never printed by this script."
+        in rag_index_unix_script
+    )
     assert "secret show" not in rag_index_unix_script
-    assert "echo \"$DB_DSN\"" not in rag_index_unix_script
-    assert "echo \"$AZURE_OPENAI_KEY\"" not in rag_index_unix_script
+    assert 'echo "$DB_DSN"' not in rag_index_unix_script
+    assert 'echo "$AZURE_OPENAI_KEY"' not in rag_index_unix_script
     assert "apps.api.app.tools.enrich_place_ai_columns" in place_ai_enrichment_script
     assert "ALLOW_AI_PLACE_ENRICHMENT_APPLY=1" in place_ai_enrichment_script
-    assert "AZURE_OPENAI_KEY and DB_DSN values are never printed by this script." in place_ai_enrichment_script
+    assert (
+        "AZURE_OPENAI_KEY and DB_DSN values are never printed by this script."
+        in place_ai_enrichment_script
+    )
     assert "secret show" not in place_ai_enrichment_script
     assert "Write-Host $env:DB_DSN" not in place_ai_enrichment_script
     assert "Write-Host $env:AZURE_OPENAI_KEY" not in place_ai_enrichment_script
@@ -490,19 +502,27 @@ def test_paid_smoke_requires_authenticated_api_key():
     assert "Write-Host $env:DB_DSN" not in place_local_enrichment_script
     assert "apps.api.app.tools.run_tour_api_ingest" in tour_api_ingest_script
     assert "ALLOW_TOUR_API_INGEST_APPLY=1" in tour_api_ingest_script
-    assert "PUBLIC_DATA_SERVICE_KEY and DB_DSN values are never printed by this script." in tour_api_ingest_script
+    assert (
+        "PUBLIC_DATA_SERVICE_KEY and DB_DSN values are never printed by this script."
+        in tour_api_ingest_script
+    )
     assert "secret show" not in tour_api_ingest_script
     assert "Write-Host $env:DB_DSN" not in tour_api_ingest_script
     assert "Write-Host $env:PUBLIC_DATA_SERVICE_KEY" not in tour_api_ingest_script
     assert "apps.api.app.tools.run_culture_info_ingest" in culture_info_ingest_script
     assert "ALLOW_CULTURE_INFO_INGEST_APPLY=1" in culture_info_ingest_script
-    assert "PUBLIC_DATA_SERVICE_KEY and DB_DSN values are never printed by this script." in culture_info_ingest_script
+    assert (
+        "PUBLIC_DATA_SERVICE_KEY and DB_DSN values are never printed by this script."
+        in culture_info_ingest_script
+    )
     assert "secret show" not in culture_info_ingest_script
     assert "Write-Host $env:DB_DSN" not in culture_info_ingest_script
     assert "Write-Host $env:PUBLIC_DATA_SERVICE_KEY" not in culture_info_ingest_script
     assert "apps.api.app.tools.run_kopis_ingest" in kopis_ingest_script
     assert "ALLOW_KOPIS_INGEST_APPLY=1" in kopis_ingest_script
-    assert "KOPIS_API_KEY and DB_DSN values are never printed by this script." in kopis_ingest_script
+    assert (
+        "KOPIS_API_KEY and DB_DSN values are never printed by this script." in kopis_ingest_script
+    )
     assert "secret show" not in kopis_ingest_script
     assert "Write-Host $env:DB_DSN" not in kopis_ingest_script
     assert "Write-Host $env:KOPIS_API_KEY" not in kopis_ingest_script
@@ -533,10 +553,10 @@ def test_paid_smoke_requires_authenticated_api_key():
     assert "secret show" not in oauth_smoke_tool
     assert "playwright-cli" in flutter_web_smoke_script
     assert "--no-wasm-dry-run" in flutter_web_smoke_script
-    assert "KEY_VAULT_URL\", \"\"" in flutter_web_smoke_script
-    assert "DB_DSN\", \"\"" in flutter_web_smoke_script
-    assert "LALA_ENABLE_LIVE_AI\", \"false\"" in flutter_web_smoke_script
-    assert "LALA_ENABLE_LIVE_SPEECH\", \"false\"" in flutter_web_smoke_script
+    assert 'KEY_VAULT_URL", ""' in flutter_web_smoke_script
+    assert 'DB_DSN", ""' in flutter_web_smoke_script
+    assert 'LALA_ENABLE_LIVE_AI", "false"' in flutter_web_smoke_script
+    assert 'LALA_ENABLE_LIVE_SPEECH", "false"' in flutter_web_smoke_script
     assert "CORS_ALLOW_ORIGINS" in flutter_web_smoke_script
     assert "/api/v1/docents/script" in flutter_web_smoke_script
     assert "secret show" not in flutter_web_smoke_script
@@ -592,7 +612,7 @@ def test_unix_scripts_have_safe_operational_guards():
 
     assert ".vault.azure.net" in scripts["_common.sh"]
     assert "LALA_ALLOWED_KEY_VAULT_HOSTS" in scripts["_common.sh"]
-    assert '${!name+x}' in scripts["_common.sh"]
+    assert "${!name+x}" in scripts["_common.sh"]
     assert '"$vault_name" == *onmu*' in scripts["_common.sh"]
     assert "Unsupported Key Vault URL for LALA-next" in scripts["_common.sh"]
     assert "Worker smoke uses dry-run only" in scripts["smoke_workers.sh"]
@@ -640,7 +660,9 @@ def test_unix_scripts_have_safe_operational_guards():
     assert "plan_review_mention_ingest.sh" in scripts["verify_repo.sh"]
     assert "ALLOW_REVIEW_MENTION_INGEST_APPLY=1" in scripts["plan_review_mention_ingest.sh"]
     assert "--confirm APPLY_REVIEW_MENTION_INGEST" in scripts["plan_review_mention_ingest.sh"]
-    assert "DB_DSN value is never printed by this script." in scripts["plan_review_mention_ingest.sh"]
+    assert (
+        "DB_DSN value is never printed by this script." in scripts["plan_review_mention_ingest.sh"]
+    )
     assert "run_review_attribute_batch" in scripts["plan_review_attribute_batch.sh"]
     assert "plan_review_attribute_batch.sh" in scripts["verify_repo.sh"]
     assert "ALLOW_REVIEW_ATTRIBUTE_BATCH_APPLY=1" in scripts["plan_review_attribute_batch.sh"]
@@ -653,21 +675,35 @@ def test_unix_scripts_have_safe_operational_guards():
     assert "plan_franchise_identity_batch.sh" in scripts["verify_repo.sh"]
     assert "ALLOW_FRANCHISE_IDENTITY_BATCH_APPLY=1" in scripts["plan_franchise_identity_batch.sh"]
     assert "--confirm APPLY_FRANCHISE_IDENTITY_BATCH" in scripts["plan_franchise_identity_batch.sh"]
-    assert "DB_DSN value is never printed by this script." in scripts["plan_franchise_identity_batch.sh"]
+    assert (
+        "DB_DSN value is never printed by this script."
+        in scripts["plan_franchise_identity_batch.sh"]
+    )
     assert "load_env_names_from_file" in scripts["plan_franchise_identity_batch.sh"]
     assert "load_lala_key_vault_secrets" in scripts["plan_franchise_identity_batch.sh"]
     assert "run_weather_observation_refresh" in scripts["plan_weather_observation_refresh.sh"]
     assert "plan_weather_observation_refresh.sh" in scripts["verify_repo.sh"]
-    assert "ALLOW_WEATHER_OBSERVATION_REFRESH_APPLY=1" in scripts["plan_weather_observation_refresh.sh"]
-    assert "--confirm APPLY_WEATHER_OBSERVATION_REFRESH" in scripts["plan_weather_observation_refresh.sh"]
+    assert (
+        "ALLOW_WEATHER_OBSERVATION_REFRESH_APPLY=1"
+        in scripts["plan_weather_observation_refresh.sh"]
+    )
+    assert (
+        "--confirm APPLY_WEATHER_OBSERVATION_REFRESH"
+        in scripts["plan_weather_observation_refresh.sh"]
+    )
     assert (
         "PUBLIC_DATA_SERVICE_KEY and DB_DSN values are never printed by this script."
         in scripts["plan_weather_observation_refresh.sh"]
     )
     assert "run_franchise_reference_ingest" in scripts["plan_franchise_reference_ingest.sh"]
     assert "plan_franchise_reference_ingest.sh" in scripts["verify_repo.sh"]
-    assert "ALLOW_FRANCHISE_REFERENCE_INGEST_APPLY=1" in scripts["plan_franchise_reference_ingest.sh"]
-    assert "--confirm APPLY_FRANCHISE_REFERENCE_INGEST" in scripts["plan_franchise_reference_ingest.sh"]
+    assert (
+        "ALLOW_FRANCHISE_REFERENCE_INGEST_APPLY=1" in scripts["plan_franchise_reference_ingest.sh"]
+    )
+    assert (
+        "--confirm APPLY_FRANCHISE_REFERENCE_INGEST"
+        in scripts["plan_franchise_reference_ingest.sh"]
+    )
     assert (
         "PUBLIC_DATA_SERVICE_KEY and DB_DSN values are never printed by this script."
         in scripts["plan_franchise_reference_ingest.sh"]
@@ -678,48 +714,72 @@ def test_unix_scripts_have_safe_operational_guards():
     assert "plan_rag_index.sh" in scripts["verify_repo.sh"]
     assert "ALLOW_RAG_INDEX_APPLY=1" in scripts["plan_rag_index.sh"]
     assert "--confirm APPLY_RAG_INDEX" in scripts["plan_rag_index.sh"]
-    assert "DB_DSN and AZURE_OPENAI_KEY values are never printed by this script." in scripts["plan_rag_index.sh"]
+    assert (
+        "DB_DSN and AZURE_OPENAI_KEY values are never printed by this script."
+        in scripts["plan_rag_index.sh"]
+    )
     assert "enrich_place_ai_columns" in scripts["plan_place_ai_enrichment.sh"]
     assert "plan_place_ai_enrichment.sh" in scripts["verify_repo.sh"]
     assert "ALLOW_AI_PLACE_ENRICHMENT_APPLY=1" in scripts["plan_place_ai_enrichment.sh"]
     assert "--confirm APPLY_AI_PLACE_ENRICHMENT" in scripts["plan_place_ai_enrichment.sh"]
-    assert "AZURE_OPENAI_KEY and DB_DSN values are never printed by this script." in scripts["plan_place_ai_enrichment.sh"]
+    assert (
+        "AZURE_OPENAI_KEY and DB_DSN values are never printed by this script."
+        in scripts["plan_place_ai_enrichment.sh"]
+    )
     assert "enrich_place_local_columns" in scripts["plan_place_local_enrichment.sh"]
     assert "plan_place_local_enrichment.sh" in scripts["verify_repo.sh"]
     assert "ALLOW_LOCAL_PLACE_ENRICHMENT_APPLY=1" in scripts["plan_place_local_enrichment.sh"]
     assert "--confirm APPLY_LOCAL_PLACE_ENRICHMENT" in scripts["plan_place_local_enrichment.sh"]
-    assert "DB_DSN value is never printed by this script." in scripts["plan_place_local_enrichment.sh"]
+    assert (
+        "DB_DSN value is never printed by this script." in scripts["plan_place_local_enrichment.sh"]
+    )
     assert "export_public_mvp_snapshot" in scripts["export_public_mvp_snapshot.sh"]
     assert "export_public_mvp_snapshot.sh" in scripts["verify_repo.sh"]
     assert "ALLOW_PUBLIC_MVP_SNAPSHOT_WRITE=1" in scripts["export_public_mvp_snapshot.sh"]
     assert "--confirm WRITE_PUBLIC_MVP_SNAPSHOT" in scripts["export_public_mvp_snapshot.sh"]
-    assert "DB_DSN value is never printed by this script." in scripts["export_public_mvp_snapshot.sh"]
+    assert (
+        "DB_DSN value is never printed by this script." in scripts["export_public_mvp_snapshot.sh"]
+    )
     assert "run_tour_api_ingest" in scripts["plan_tour_api_ingest.sh"]
     assert "plan_tour_api_ingest.sh" in scripts["verify_repo.sh"]
     assert "ALLOW_TOUR_API_INGEST_APPLY=1" in scripts["plan_tour_api_ingest.sh"]
     assert "--confirm APPLY_TOUR_API_INGEST" in scripts["plan_tour_api_ingest.sh"]
-    assert "PUBLIC_DATA_SERVICE_KEY and DB_DSN values are never printed by this script." in scripts["plan_tour_api_ingest.sh"]
+    assert (
+        "PUBLIC_DATA_SERVICE_KEY and DB_DSN values are never printed by this script."
+        in scripts["plan_tour_api_ingest.sh"]
+    )
     assert "load_env_names_from_file" in scripts["plan_tour_api_ingest.sh"]
     assert "load_lala_key_vault_secrets" in scripts["plan_tour_api_ingest.sh"]
     assert "run_culture_info_ingest" in scripts["plan_culture_info_ingest.sh"]
     assert "plan_culture_info_ingest.sh" in scripts["verify_repo.sh"]
     assert "ALLOW_CULTURE_INFO_INGEST_APPLY=1" in scripts["plan_culture_info_ingest.sh"]
     assert "--confirm APPLY_CULTURE_INFO_INGEST" in scripts["plan_culture_info_ingest.sh"]
-    assert "PUBLIC_DATA_SERVICE_KEY and DB_DSN values are never printed by this script." in scripts["plan_culture_info_ingest.sh"]
+    assert (
+        "PUBLIC_DATA_SERVICE_KEY and DB_DSN values are never printed by this script."
+        in scripts["plan_culture_info_ingest.sh"]
+    )
     assert "load_env_names_from_file" in scripts["plan_culture_info_ingest.sh"]
     assert "load_lala_key_vault_secrets" in scripts["plan_culture_info_ingest.sh"]
     assert "run_kopis_ingest" in scripts["plan_kopis_ingest.sh"]
     assert "plan_kopis_ingest.sh" in scripts["verify_repo.sh"]
     assert "ALLOW_KOPIS_INGEST_APPLY=1" in scripts["plan_kopis_ingest.sh"]
     assert "--confirm APPLY_KOPIS_INGEST" in scripts["plan_kopis_ingest.sh"]
-    assert "KOPIS_API_KEY and DB_DSN values are never printed by this script." in scripts["plan_kopis_ingest.sh"]
+    assert (
+        "KOPIS_API_KEY and DB_DSN values are never printed by this script."
+        in scripts["plan_kopis_ingest.sh"]
+    )
     assert "load_env_names_from_file" in scripts["plan_kopis_ingest.sh"]
     assert "load_lala_key_vault_secrets" in scripts["plan_kopis_ingest.sh"]
     assert "run_card_spending_file_ingest" in scripts["plan_card_spending_file_ingest.sh"]
     assert "plan_card_spending_file_ingest.sh" in scripts["verify_repo.sh"]
     assert "ALLOW_CARD_SPENDING_FILE_INGEST_APPLY=1" in scripts["plan_card_spending_file_ingest.sh"]
-    assert "--confirm APPLY_CARD_SPENDING_FILE_INGEST" in scripts["plan_card_spending_file_ingest.sh"]
-    assert "DB_DSN value is never printed by this script." in scripts["plan_card_spending_file_ingest.sh"]
+    assert (
+        "--confirm APPLY_CARD_SPENDING_FILE_INGEST" in scripts["plan_card_spending_file_ingest.sh"]
+    )
+    assert (
+        "DB_DSN value is never printed by this script."
+        in scripts["plan_card_spending_file_ingest.sh"]
+    )
     assert "load_env_names_from_file" in scripts["plan_card_spending_file_ingest.sh"]
     assert "load_lala_key_vault_secrets" in scripts["plan_card_spending_file_ingest.sh"]
     assert "--check-compat" in scripts["export_openapi.sh"]
@@ -740,7 +800,10 @@ def test_unix_scripts_have_safe_operational_guards():
     assert "load_lala_key_vault_secrets" in scripts["apply_canonical_sql.sh"]
     assert "compose.local.yml" in scripts["bootstrap_local_mvp_db.sh"]
     assert "LALA_POSTGRES_PASSWORD is required" in scripts["bootstrap_local_mvp_db.sh"]
-    assert "DB_DSN and LALA_POSTGRES_PASSWORD values are never printed by this script." in scripts["bootstrap_local_mvp_db.sh"]
+    assert (
+        "DB_DSN and LALA_POSTGRES_PASSWORD values are never printed by this script."
+        in scripts["bootstrap_local_mvp_db.sh"]
+    )
     assert "ALLOW_CANONICAL_SQL_APPLY=1" in scripts["bootstrap_local_mvp_db.sh"]
     assert "ALLOW_DEV_RESET_APPLY=1" in scripts["bootstrap_local_mvp_db.sh"]
     assert "ALLOW_PLACE_SCORE_BATCH_APPLY=1" in scripts["bootstrap_local_mvp_db.sh"]
@@ -759,7 +822,10 @@ def test_unix_scripts_have_safe_operational_guards():
     assert 'CURL_AUTH_ARGS=(-K "$AUTH_CONFIG_FILE")' in scripts["smoke_api.sh"]
     assert "AUTH_HEADER=(-H" not in scripts["smoke_api.sh"]
     assert "apps.api.app.tools.smoke_api_matrix" in scripts["smoke_api_matrix.sh"]
-    assert "Runs a bounded deploy or wider live API matrix without printing client tokens" in scripts["smoke_api_matrix.sh"]
+    assert (
+        "Runs a bounded deploy or wider live API matrix without printing client tokens"
+        in scripts["smoke_api_matrix.sh"]
+    )
     assert "load_lala_key_vault_secrets" in scripts["smoke_api_matrix.sh"]
     assert "LALA_SMOKE_BEARER_TOKEN" not in scripts["smoke_api_matrix.sh"]
     assert "LALA_SMOKE_API_KEY" not in scripts["smoke_api_matrix.sh"]

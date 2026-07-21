@@ -4,9 +4,10 @@ import hashlib
 import html
 import re
 from collections import defaultdict
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
-from typing import Any, Iterable, Sequence
+from typing import Any
 
 PROMPT_VERSION = "review-mention-preprocess-v1"
 JOB_NAME = "review-mention-ingest"
@@ -241,7 +242,7 @@ def classify_post(
 ) -> ReviewMentionDecision:
     normalized_text = clean_review_text(post.keyword, post.title, post.body)
     content_sha256 = hashlib.sha256(
-        f"{post.provider}|{post.external_key}|{normalized_text}".encode("utf-8")
+        f"{post.provider}|{post.external_key}|{normalized_text}".encode()
     ).hexdigest()
     week_start = _week_start(post.created_at_source or post.collected_at)
     match = _match_place(normalized_text, places)
@@ -552,11 +553,7 @@ def _match_place(
     places: Sequence[ReviewMentionPlace],
 ) -> tuple[ReviewMentionPlace, float, str, bool] | None:
     normalized = _compact(text)
-    matches = [
-        place
-        for place in places
-        if place.name_ko and _compact(place.name_ko) in normalized
-    ]
+    matches = [place for place in places if place.name_ko and _compact(place.name_ko) in normalized]
     if not matches:
         return None
     exact_length = max(len(_compact(place.name_ko)) for place in matches)

@@ -107,8 +107,7 @@ def test_build_snapshot_payload_upgrades_tour_api_images_to_https() -> None:
     )
 
     assert (
-        payload["places"][0]["image_url"]
-        == "https://tong.visitkorea.or.kr/cms/resource/photo.jpg"
+        payload["places"][0]["image_url"] == "https://tong.visitkorea.or.kr/cms/resource/photo.jpg"
     )
 
 

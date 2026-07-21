@@ -4,10 +4,11 @@ import hashlib
 import json
 import math
 import re
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Iterable, Literal
+from typing import Any, Literal
 
 from apps.api.app.core.config import get_settings
 
@@ -75,7 +76,7 @@ class RagSearchResult:
     updated_at: str | None
 
     @classmethod
-    def from_row(cls, row: dict[str, Any]) -> "RagSearchResult":
+    def from_row(cls, row: dict[str, Any]) -> RagSearchResult:
         return cls(
             source_type=str(row.get("source_type") or ""),
             source_id=str(row.get("source_id") or ""),
@@ -93,9 +94,7 @@ class RagSearchResult:
         return asdict(self)
 
 
-def build_local_embedding(
-    text: str, *, dimensions: int = VECTOR_DIMENSIONS
-) -> list[float]:
+def build_local_embedding(text: str, *, dimensions: int = VECTOR_DIMENSIONS) -> list[float]:
     if dimensions <= 0:
         raise ValueError("dimensions must be positive.")
 
@@ -168,18 +167,14 @@ def build_azure_openai_embedding(text: str) -> list[float]:
     settings = get_settings()
     missing = _missing_azure_embedding_settings(settings)
     if missing:
-        raise RuntimeError(
-            "Azure OpenAI embedding config is missing: " + ", ".join(missing)
-        )
+        raise RuntimeError("Azure OpenAI embedding config is missing: " + ", ".join(missing))
     if not settings.enable_live_ai:
         raise RuntimeError("Azure OpenAI embedding requires LALA_ENABLE_LIVE_AI=true.")
 
     try:
         from openai import AzureOpenAI
     except Exception as exc:
-        raise RuntimeError(
-            "openai package is required for Azure OpenAI embeddings."
-        ) from exc
+        raise RuntimeError("openai package is required for Azure OpenAI embeddings.") from exc
 
     client = AzureOpenAI(
         azure_endpoint=settings.azure_openai_endpoint,
@@ -460,9 +455,7 @@ def upsert_knowledge_chunks(
     """
     rows = []
     for chunk in chunk_list:
-        embedding, model_name = build_embedding(
-            chunk.text_for_embedding, method=embedding_method
-        )
+        embedding, model_name = build_embedding(chunk.text_for_embedding, method=embedding_method)
         rows.append(
             {
                 "source_type": chunk.source_type,
@@ -588,19 +581,11 @@ def _place_profile_chunk(row: dict[str, Any]) -> KnowledgeChunk:
             "final_score": _optional_float(row.get("final_score")),
             "formula_version": row.get("formula_version"),
             "components": {
-                "local_spending_score": _optional_float(
-                    row.get("local_spending_score")
-                ),
-                "demand_dispersion_score": _optional_float(
-                    row.get("demand_dispersion_score")
-                ),
+                "local_spending_score": _optional_float(row.get("local_spending_score")),
+                "demand_dispersion_score": _optional_float(row.get("demand_dispersion_score")),
                 "weather_fit_score": _optional_float(row.get("weather_fit_score")),
-                "review_quality_score": _optional_float(
-                    row.get("review_quality_score")
-                ),
-                "culture_relevance_score": _optional_float(
-                    row.get("culture_relevance_score")
-                ),
+                "review_quality_score": _optional_float(row.get("review_quality_score")),
+                "culture_relevance_score": _optional_float(row.get("culture_relevance_score")),
             },
             "features": _json_safe(row.get("features") or {}),
         },
@@ -663,9 +648,7 @@ def _culture_event_chunk(row: dict[str, Any]) -> KnowledgeChunk:
 
 def _community_post_chunk(row: dict[str, Any]) -> KnowledgeChunk:
     title = (
-        _optional_text(row.get("title"))
-        or _optional_text(row.get("keyword"))
-        or "지역 커뮤니티 글"
+        _optional_text(row.get("title")) or _optional_text(row.get("keyword")) or "지역 커뮤니티 글"
     )
     body_text = _optional_text(row.get("body")) or "본문 요약이 없습니다."
     body = _join_sentences(
@@ -803,9 +786,7 @@ def _missing_azure_embedding_settings(settings: Any) -> list[str]:
         missing.append("AZURE_OPENAI_KEY")
     if not settings.azure_openai_embedding_deployment:
         missing.append("AZURE_OPENAI_EMBEDDING_DEPLOYMENT")
-    if not (
-        settings.azure_openai_embedding_api_version or settings.azure_openai_api_version
-    ):
+    if not (settings.azure_openai_embedding_api_version or settings.azure_openai_api_version):
         missing.append("AZURE_OPENAI_EMBEDDING_API_VERSION")
     return missing
 

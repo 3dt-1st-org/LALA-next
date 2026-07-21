@@ -119,25 +119,24 @@ def inspect_canonical_schema(*, dsn: str, connect_timeout: int = 5) -> DbSchemaR
     except Exception as exc:
         raise RuntimeError("psycopg2 is required for DB schema verification.") from exc
 
-    with psycopg2.connect(dsn, connect_timeout=connect_timeout) as conn:
-        with conn.cursor() as cur:
-            extensions = _presence_map(
-                cur,
-                "SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = %s)",
-                REQUIRED_EXTENSIONS,
-            )
-            schemas = _presence_map(
-                cur,
-                "SELECT EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = %s)",
-                REQUIRED_SCHEMAS,
-            )
-            relations = _presence_map(
-                cur,
-                "SELECT to_regclass(%s) IS NOT NULL",
-                REQUIRED_RELATIONS,
-            )
-            columns = _column_presence_map(cur)
-            unique_constraints = _unique_constraint_presence_map(cur)
+    with psycopg2.connect(dsn, connect_timeout=connect_timeout) as conn, conn.cursor() as cur:
+        extensions = _presence_map(
+            cur,
+            "SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = %s)",
+            REQUIRED_EXTENSIONS,
+        )
+        schemas = _presence_map(
+            cur,
+            "SELECT EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = %s)",
+            REQUIRED_SCHEMAS,
+        )
+        relations = _presence_map(
+            cur,
+            "SELECT to_regclass(%s) IS NOT NULL",
+            REQUIRED_RELATIONS,
+        )
+        columns = _column_presence_map(cur)
+        unique_constraints = _unique_constraint_presence_map(cur)
 
     return DbSchemaReport(
         extensions=extensions,

@@ -141,9 +141,7 @@ def test_rag_index_apply_records_succeeded_job_run(monkeypatch, capsys):
         lambda **kwargs: recorded_runs.append(kwargs),
     )
 
-    exit_code = run_rag_index.main(
-        ["--apply", "--confirm", run_rag_index.CONFIRM_TEXT, "--json"]
-    )
+    exit_code = run_rag_index.main(["--apply", "--confirm", run_rag_index.CONFIRM_TEXT, "--json"])
 
     payload = json.loads(capsys.readouterr().out)
     assert exit_code == 0
@@ -172,9 +170,7 @@ def test_rag_index_apply_failure_records_redacted_job_run(monkeypatch, capsys):
         lambda **kwargs: recorded_runs.append(kwargs),
     )
 
-    exit_code = run_rag_index.main(
-        ["--apply", "--confirm", run_rag_index.CONFIRM_TEXT, "--json"]
-    )
+    exit_code = run_rag_index.main(["--apply", "--confirm", run_rag_index.CONFIRM_TEXT, "--json"])
 
     output = capsys.readouterr().out
     payload = json.loads(output)
@@ -211,9 +207,7 @@ def test_rag_query_prints_bounded_result_summary(monkeypatch, capsys):
             )
         ]
 
-    monkeypatch.setattr(
-        run_rag_index, "query_knowledge_chunks", fake_query_knowledge_chunks
-    )
+    monkeypatch.setattr(run_rag_index, "query_knowledge_chunks", fake_query_knowledge_chunks)
 
     exit_code = run_rag_index.main(["--query", "수원 문화 행사", "--source", "dynamic"])
 

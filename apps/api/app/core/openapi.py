@@ -65,9 +65,7 @@ def _add_client_auth_security(schema: dict[str, Any]) -> None:
     schemas.setdefault("ApiSuccessEnvelope", _api_success_envelope_schema())
     schemas.setdefault("ApiErrorEnvelope", _api_error_envelope_schema())
     schemas.setdefault("HealthzData", _healthz_data_schema())
-    schemas.setdefault(
-        "HealthzSuccessEnvelope", _success_envelope_schema("HealthzData")
-    )
+    schemas.setdefault("HealthzSuccessEnvelope", _success_envelope_schema("HealthzData"))
     schemas.setdefault("ReadinessChecks", _readiness_checks_schema())
     schemas.setdefault("RuntimeMode", _runtime_mode_schema())
     schemas.setdefault("ReadyzData", _readyz_data_schema())
@@ -82,9 +80,7 @@ def _add_client_auth_security(schema: dict[str, Any]) -> None:
     schemas.setdefault("Dust", _dust_schema())
     schemas.setdefault("ForecastItem", _forecast_item_schema())
     schemas.setdefault("WeatherData", _weather_data_schema())
-    schemas.setdefault(
-        "WeatherSuccessEnvelope", _success_envelope_schema("WeatherData")
-    )
+    schemas.setdefault("WeatherSuccessEnvelope", _success_envelope_schema("WeatherData"))
     schemas.setdefault("DocentScriptData", _docent_script_data_schema())
     schemas.setdefault(
         "DocentScriptSuccessEnvelope",
@@ -92,9 +88,7 @@ def _add_client_auth_security(schema: dict[str, Any]) -> None:
     )
     schemas.setdefault("DailyPlanSlot", _daily_plan_slot_schema())
     schemas.setdefault("DailyPlanData", _daily_plan_data_schema())
-    schemas.setdefault(
-        "DailyPlanSuccessEnvelope", _success_envelope_schema("DailyPlanData")
-    )
+    schemas.setdefault("DailyPlanSuccessEnvelope", _success_envelope_schema("DailyPlanData"))
     schemas.setdefault("InterventionData", _intervention_data_schema())
     schemas.setdefault(
         "InterventionSuccessEnvelope",
@@ -164,18 +158,14 @@ def _add_error_envelope_responses(operation: dict[str, Any]) -> None:
         {
             "description": "Client authentication required or invalid.",
             "content": {
-                "application/json": {
-                    "schema": {"$ref": "#/components/schemas/ApiErrorEnvelope"}
-                }
+                "application/json": {"schema": {"$ref": "#/components/schemas/ApiErrorEnvelope"}}
             },
         },
     )
     responses["422"] = {
         "description": "Request validation failed.",
         "content": {
-            "application/json": {
-                "schema": {"$ref": "#/components/schemas/ApiErrorEnvelope"}
-            }
+            "application/json": {"schema": {"$ref": "#/components/schemas/ApiErrorEnvelope"}}
         },
     }
 
@@ -233,9 +223,7 @@ def _add_success_envelope_responses(schema: dict[str, Any]) -> None:
             if not isinstance(success_response, dict):
                 continue
             content = success_response.get("content") or {}
-            json_content = (
-                content.get("application/json") if isinstance(content, dict) else None
-            )
+            json_content = content.get("application/json") if isinstance(content, dict) else None
             if isinstance(json_content, dict):
                 json_content["schema"] = _success_response_ref(path)
 

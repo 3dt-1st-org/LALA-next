@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 from datetime import UTC, datetime
@@ -39,7 +40,9 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Read DB candidates and call Azure OpenAI without DB writes.",
     )
-    parser.add_argument("--apply", action="store_true", help="Call Azure OpenAI and update DB rows.")
+    parser.add_argument(
+        "--apply", action="store_true", help="Call Azure OpenAI and update DB rows."
+    )
     parser.add_argument("--confirm", default="", help=f"Required with --apply: {CONFIRM_TEXT}")
     parser.add_argument(
         "--category",
@@ -128,7 +131,7 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:
         if args.apply:
             finished_at = datetime.now(UTC)
-            try:
+            with contextlib.suppress(Exception):
                 record_job_run(
                     dsn=dsn,
                     status="failed",
@@ -141,8 +144,6 @@ def main(argv: list[str] | None = None) -> int:
                     ),
                     connect_timeout=args.connect_timeout,
                 )
-            except Exception:
-                pass
         _write(
             args,
             {

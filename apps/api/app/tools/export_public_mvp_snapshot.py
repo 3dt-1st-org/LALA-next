@@ -23,8 +23,12 @@ def main(argv: list[str] | None = None) -> int:
         description="Export the bundled public MVP recommendation snapshot from the canonical DB."
     )
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
-    parser.add_argument("--preview", action="store_true", help="Read DB rows and preview snapshot metadata.")
-    parser.add_argument("--write", action="store_true", help="Write the exported snapshot JSON file.")
+    parser.add_argument(
+        "--preview", action="store_true", help="Read DB rows and preview snapshot metadata."
+    )
+    parser.add_argument(
+        "--write", action="store_true", help="Write the exported snapshot JSON file."
+    )
     parser.add_argument("--confirm", default="", help=f"Required with --write: {CONFIRM_TEXT}")
     parser.add_argument("--output", default=public_mvp_snapshot.DEFAULT_OUTPUT_PATH)
     parser.add_argument("--lat", type=float, default=DEFAULT_LAT)

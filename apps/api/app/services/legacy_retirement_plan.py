@@ -230,9 +230,7 @@ def build_legacy_retirement_plan(
                 "and retain rollback to the previous Flask/App Service deployment"
             ),
             approval_required=True,
-            notes=(
-                "The plan intentionally has no command that deletes Flask code or routes.",
-            ),
+            notes=("The plan intentionally has no command that deletes Flask code or routes.",),
         ),
     )
 

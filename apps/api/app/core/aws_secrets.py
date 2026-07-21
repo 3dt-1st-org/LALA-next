@@ -7,6 +7,7 @@ AWS Secrets Manager를 우선 사용한다.
 boto3가 설치되어 있지 않거나 자격증명/권한이 없으면 조용히 빈 문자열을 반환
 (설정이 없는 것과 동일 취급)하여 앱 부팅을 막지 않는다.
 """
+
 from __future__ import annotations
 
 import os

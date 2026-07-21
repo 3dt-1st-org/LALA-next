@@ -34,9 +34,7 @@ def safe_validation_details(details) -> list:
 def _strip_validation_input(value):
     if isinstance(value, dict):
         return {
-            str(key): _strip_validation_input(item)
-            for key, item in value.items()
-            if key != "input"
+            str(key): _strip_validation_input(item) for key, item in value.items() if key != "input"
         }
     if isinstance(value, list):
         return [_strip_validation_input(item) for item in value]

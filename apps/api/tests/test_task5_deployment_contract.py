@@ -10,7 +10,6 @@ import pytest
 
 from scripts import prepare_flutter_vercel_static_output as staging
 
-
 ROOT = Path(__file__).resolve().parents[3]
 REQUIRED_FLUTTER_BUILD_FILES = (
     "index.html",
@@ -63,9 +62,7 @@ def test_current_deployment_docs_describe_aws_api_rds_and_vercel_flutter():
     assert "legacy Vercel API fallback, not the primary API" in vercel
 
 
-def test_flutter_vercel_static_output_uses_isolated_effective_config(
-    tmp_path, monkeypatch, capsys
-):
+def test_flutter_vercel_static_output_uses_isolated_effective_config(tmp_path, monkeypatch, capsys):
     root_config = json.loads(_text("vercel.json"))
     assert root_config["rewrites"][0]["destination"] == "/api/index.py"
 
@@ -118,8 +115,7 @@ def test_flutter_vercel_static_output_uses_isolated_effective_config(
     assert "VERCEL_ORG_ID" in deployment_doc
     assert "VERCEL_PROJECT_ID" in deployment_doc
     verify_command = (
-        "python3 scripts/prepare_flutter_vercel_static_output.py "
-        "--verify-project-binding"
+        "python3 scripts/prepare_flutter_vercel_static_output.py --verify-project-binding"
     )
     assert verify_command in deployment_doc
     assert "vercel deploy static-output --prod" in deployment_doc
@@ -258,9 +254,7 @@ def test_flutter_vercel_staging_cli_rejects_arbitrary_output(tmp_path):
     "output_case",
     ["symlink", "out-of-root", "parent", "absolute-sibling", "source", "file"],
 )
-def test_flutter_vercel_staging_rejects_unsafe_output_without_deleting(
-    tmp_path, output_case
-):
+def test_flutter_vercel_staging_rejects_unsafe_output_without_deleting(tmp_path, output_case):
     test_root = tmp_path / "repo"
     build_output = test_root / "build" / "web"
     _write_flutter_build(build_output)
@@ -404,9 +398,7 @@ def test_flutter_vercel_staging_rejects_source_symlinks_before_deletion(
         else:
             external_directory = outside / "external-directory"
             external_directory.mkdir()
-            (external_directory / "payload.txt").write_text(
-                "outside-directory", encoding="utf-8"
-            )
+            (external_directory / "payload.txt").write_text("outside-directory", encoding="utf-8")
             linked_path = build_output / "nested-directory"
             linked_path.symlink_to(external_directory, target_is_directory=True)
             copied_path = Path("nested-directory/payload.txt")
@@ -532,9 +524,7 @@ def test_post_merge_auth_guide_is_numbered_copy_safe_and_matches_supported_login
     ):
         assert term in guide
 
-    assert guide.index("000_extensions_and_schemas.sql") < guide.index(
-        "005_identity_users.sql"
-    )
+    assert guide.index("000_extensions_and_schemas.sql") < guide.index("005_identity_users.sql")
     assert "export VERCEL_ORG_ID=<" not in guide
     assert "export VERCEL_PROJECT_ID=<" not in guide
     assert "LalaNext2024" not in guide

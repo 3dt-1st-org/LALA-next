@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 import pytest
@@ -249,7 +249,7 @@ def _configure_logto(monkeypatch) -> None:
 
 
 def _signed_token(key, *, scope: str = "") -> str:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return jwt.encode(
         {
             "iss": LOGTO_ISSUER,

@@ -8,7 +8,7 @@ import subprocess
 import sys
 import threading
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -209,7 +209,7 @@ def _public_jwk(private_key) -> dict[str, Any]:
 
 
 def _signed_token(private_key, *, issuer: str, audience: str, scope: str) -> str:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return jwt.encode(
         {
             "iss": issuer,

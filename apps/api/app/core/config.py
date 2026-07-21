@@ -69,7 +69,7 @@ class Settings:
         return self.guest_access or self.public_contest_access
 
     @classmethod
-    def from_env(cls) -> "Settings":
+    def from_env(cls) -> Settings:
         key_vault_url = (os.getenv("KEY_VAULT_URL") or "").strip()
         logto_endpoint = _env_or_secret("LOGTO_ENDPOINT", "logto-endpoint", key_vault_url)
         logto_api_audience = _env_or_secret(
@@ -78,9 +78,7 @@ class Settings:
             key_vault_url,
         )
         logto_issuer, logto_jwks_url = derive_logto_oidc_urls(logto_endpoint)
-        logto_validation_configured = bool(
-            logto_issuer and logto_jwks_url and logto_api_audience
-        )
+        logto_validation_configured = bool(logto_issuer and logto_jwks_url and logto_api_audience)
         azure_openai_deployment = _env_or_secret(
             "AZURE_OPENAI_DEPLOYMENT",
             "azure-openai-deployment",
@@ -126,30 +124,39 @@ class Settings:
                 key_vault_url,
             ),
             oauth_issuer=(
-                logto_issuer if logto_validation_configured else ""
-                or _env_or_secret("OAUTH_ISSUER", "oauth-issuer", key_vault_url)
+                logto_issuer
+                if logto_validation_configured
+                else "" or _env_or_secret("OAUTH_ISSUER", "oauth-issuer", key_vault_url)
             ),
             oauth_audience=(
-                logto_api_audience if logto_validation_configured else ""
-                or _env_or_secret("OAUTH_AUDIENCE", "oauth-audience", key_vault_url)
+                logto_api_audience
+                if logto_validation_configured
+                else "" or _env_or_secret("OAUTH_AUDIENCE", "oauth-audience", key_vault_url)
             ),
             oauth_jwks_url=(
-                logto_jwks_url if logto_validation_configured else ""
-                or _env_or_secret("OAUTH_JWKS_URL", "oauth-jwks-url", key_vault_url)
+                logto_jwks_url
+                if logto_validation_configured
+                else "" or _env_or_secret("OAUTH_JWKS_URL", "oauth-jwks-url", key_vault_url)
             ),
             oauth_client_id=_env_or_secret("OAUTH_CLIENT_ID", "oauth-client-id", key_vault_url),
             oauth_required_scopes=_csv_value(
                 _env_or_secret("OAUTH_REQUIRED_SCOPES", "oauth-required-scopes", key_vault_url)
             ),
-            kakao_rest_api_key=_env_or_secret("KAKAO_REST_API_KEY", "kakao-rest-api-key", key_vault_url),
+            kakao_rest_api_key=_env_or_secret(
+                "KAKAO_REST_API_KEY", "kakao-rest-api-key", key_vault_url
+            ),
             kakao_javascript_key=_env_or_secret(
                 "KAKAO_JAVASCRIPT_KEY",
                 "kakao-javascript-key",
                 key_vault_url,
             ),
-            kakao_redirect_uri=_env_or_secret("KAKAO_REDIRECT_URI", "kakao-redirect-uri", key_vault_url),
+            kakao_redirect_uri=_env_or_secret(
+                "KAKAO_REDIRECT_URI", "kakao-redirect-uri", key_vault_url
+            ),
             naver_client_id=_env_or_secret("NAVER_CLIENT_ID", "naver-client-id", key_vault_url),
-            naver_client_secret=_env_or_secret("NAVER_CLIENT_SECRET", "naver-client-secret", key_vault_url),
+            naver_client_secret=_env_or_secret(
+                "NAVER_CLIENT_SECRET", "naver-client-secret", key_vault_url
+            ),
             kopis_api_key=_env_or_secret("KOPIS_API_KEY", "kopis-api-key", key_vault_url),
             public_data_service_key=_env_or_secret(
                 "PUBLIC_DATA_SERVICE_KEY",
@@ -207,8 +214,12 @@ class Settings:
                 or "text-embedding-3-small"
             ),
             enable_live_ai=_bool_env("LALA_ENABLE_LIVE_AI", default=False),
-            azure_speech_region=_env_or_secret("AZURE_SPEECH_REGION", "azure-speech-region", key_vault_url),
-            azure_speech_endpoint=_env_or_secret("AZURE_SPEECH_ENDPOINT", "azure-speech-endpoint", key_vault_url),
+            azure_speech_region=_env_or_secret(
+                "AZURE_SPEECH_REGION", "azure-speech-region", key_vault_url
+            ),
+            azure_speech_endpoint=_env_or_secret(
+                "AZURE_SPEECH_ENDPOINT", "azure-speech-endpoint", key_vault_url
+            ),
             azure_speech_key=_env_or_secret("AZURE_SPEECH_KEY", "azure-speech-key", key_vault_url),
             enable_live_speech=_bool_env("LALA_ENABLE_LIVE_SPEECH", default=False),
             paid_route_rate_limit_enabled=_bool_env(

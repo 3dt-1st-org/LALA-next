@@ -108,7 +108,9 @@ def test_generate_docent_script_uses_short_timeout_without_sdk_retries(monkeypat
         def create(self, **kwargs):
             captured["completion"] = kwargs
             return SimpleNamespace(
-                choices=[SimpleNamespace(message=SimpleNamespace(content="검증된 도슨트 문장입니다."))]
+                choices=[
+                    SimpleNamespace(message=SimpleNamespace(content="검증된 도슨트 문장입니다."))
+                ]
             )
 
     class FakeAzureOpenAI:

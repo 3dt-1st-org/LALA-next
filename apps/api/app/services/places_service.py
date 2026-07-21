@@ -76,7 +76,9 @@ def list_places(
         if public_places:
             return {
                 "count": len(public_places),
-                "places": public_places if include_scores else _places_without_scores(public_places),
+                "places": public_places
+                if include_scores
+                else _places_without_scores(public_places),
                 "query": {
                     "lat": lat,
                     "lng": lng,

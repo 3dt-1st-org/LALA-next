@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
-from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Any
 
@@ -28,7 +28,9 @@ def main(argv: list[str] | None = None) -> int:
         description="Plan, preview, apply, or query the LALA RAG knowledge index."
     )
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
-    parser.add_argument("--preview", action="store_true", help="Read source rows and preview chunks.")
+    parser.add_argument(
+        "--preview", action="store_true", help="Read source rows and preview chunks."
+    )
     parser.add_argument("--apply", action="store_true", help="Upsert rag.knowledge_chunks rows.")
     parser.add_argument("--confirm", default="", help=f"Required with --apply: {CONFIRM_TEXT}")
     parser.add_argument("--query", default="", help="Run a read-only vector search query.")
@@ -138,7 +140,7 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:
         if args.apply:
             finished_at = datetime.now(UTC)
-            try:
+            with contextlib.suppress(Exception):
                 record_job_run(
                     dsn=dsn,
                     job_name=JOB_NAME,
@@ -152,8 +154,6 @@ def main(argv: list[str] | None = None) -> int:
                     ),
                     connect_timeout=args.connect_timeout,
                 )
-            except Exception:
-                pass
         _write(
             args,
             {

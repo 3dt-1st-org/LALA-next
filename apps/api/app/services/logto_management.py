@@ -8,7 +8,6 @@ import httpx
 from apps.api.app.core.config import Settings, get_settings
 from apps.api.app.core.errors import ServiceError
 
-
 REQUEST_TIMEOUT_SECONDS = 5.0
 
 
@@ -189,7 +188,5 @@ def _resource_ids(response) -> list[str]:
     if not isinstance(payload, list):
         raise LogtoManagementRejected()
     return [
-        item["id"]
-        for item in payload
-        if isinstance(item, dict) and isinstance(item.get("id"), str)
+        item["id"] for item in payload if isinstance(item, dict) and isinstance(item.get("id"), str)
     ]

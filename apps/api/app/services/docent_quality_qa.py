@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Sequence
-
+from typing import Any
 
 CATEGORY_ORDER = ("attraction", "restaurant", "event", "culture_venue")
 CATEGORY_TARGETS_40 = {
@@ -62,7 +62,7 @@ class DocentQaCandidate:
     script_generation_error: str | None = None
 
     @classmethod
-    def from_row(cls, row: dict[str, Any]) -> "DocentQaCandidate":
+    def from_row(cls, row: dict[str, Any]) -> DocentQaCandidate:
         return cls(
             place_id=_text(row.get("place_id")) or "",
             name_ko=_text(row.get("name_ko")) or "",
@@ -286,9 +286,7 @@ def select_representative_candidates(
 
     remaining_by_category = {
         category: [
-            item
-            for item in pool
-            if item.category == category and item.place_id not in selected_ids
+            item for item in pool if item.category == category and item.place_id not in selected_ids
         ]
         for category in CATEGORY_ORDER
     }
@@ -494,19 +492,14 @@ def summarize_qa_records(records: Sequence[dict[str, Any]]) -> dict[str, Any]:
         if record.get("auto_precheck", {}).get("auto_precheck_score") is not None
     ]
     blockers = [
-        record
-        for record in records
-        if bool(record.get("auto_precheck", {}).get("blocker"))
+        record for record in records if bool(record.get("auto_precheck", {}).get("blocker"))
     ]
     pending = [
         record
         for record in records
-        if "needs_script_generation"
-        in (record.get("auto_precheck", {}).get("issue_tags") or [])
+        if "needs_script_generation" in (record.get("auto_precheck", {}).get("issue_tags") or [])
     ]
-    generation_errors = [
-        record for record in records if record.get("script_generation_error")
-    ]
+    generation_errors = [record for record in records if record.get("script_generation_error")]
     category_counts: dict[str, int] = {}
     category_scores: dict[str, list[int]] = {}
     for record in records:
@@ -521,9 +514,7 @@ def summarize_qa_records(records: Sequence[dict[str, Any]]) -> dict[str, Any]:
         "pending_generation_count": len(pending),
         "generation_error_count": len(generation_errors),
         "blocker_count": len(blockers),
-        "average_auto_precheck_score": round(sum(scored) / len(scored), 2)
-        if scored
-        else None,
+        "average_auto_precheck_score": round(sum(scored) / len(scored), 2) if scored else None,
         "category_counts": category_counts,
         "category_average_auto_precheck_score": {
             category: round(sum(values) / len(values), 2)
@@ -668,16 +659,18 @@ def _has_weather_values(candidate: DocentQaCandidate) -> bool:
 
 def _mentions_pm_context(script: str) -> bool:
     normalized = script.lower().replace(" ", "")
-    return (
-        "pm10" in normalized
-        and ("pm2.5" in normalized or "pm25" in normalized)
-    ) or ("미세먼지" in script and "초미세먼지" in script)
+    return ("pm10" in normalized and ("pm2.5" in normalized or "pm25" in normalized)) or (
+        "미세먼지" in script and "초미세먼지" in script
+    )
 
 
 def _has_route_action(script: str, language: str) -> bool:
     if language == "en":
         return bool(re.search(r"\b(route|walk|course|before|after|nearby|stop by)\b", script, re.I))
-    return any(token in script for token in ("동선", "코스", "이동", "산책", "들러", "가기 전", "나온 뒤", "근처"))
+    return any(
+        token in script
+        for token in ("동선", "코스", "이동", "산책", "들러", "가기 전", "나온 뒤", "근처")
+    )
 
 
 def _has_category_persona(script: str, category: str) -> bool:

@@ -7,12 +7,13 @@ import io
 import re
 import zipfile
 from collections import defaultdict
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Iterable, Sequence
+from typing import Any
 
 DEFAULT_SOURCE_NAME = "data_portal"
 DETAIL_DATASET_NAME = "경기도_카드 소비 데이터"
@@ -229,12 +230,8 @@ class CardSpendingParseResult:
             "demographic_row_count": len(self.demographic_rows),
             "warnings": list(self.warnings),
             "preview": {
-                "area_monthly": [
-                    row.to_public_dict() for row in self.area_monthly_rows[:5]
-                ],
-                "demographics": [
-                    row.to_public_dict() for row in self.demographic_rows[:5]
-                ],
+                "area_monthly": [row.to_public_dict() for row in self.area_monthly_rows[:5]],
+                "demographics": [row.to_public_dict() for row in self.demographic_rows[:5]],
             },
         }
 
@@ -285,7 +282,10 @@ def parse_card_spending_file(
         )
         if parsed_row is None:
             skipped += 1
-            _append_warning_once(warning_messages, "Some rows were skipped because month, region, or sales metrics were missing.")
+            _append_warning_once(
+                warning_messages,
+                "Some rows were skipped because month, region, or sales metrics were missing.",
+            )
             continue
 
         parsed += 1
@@ -688,8 +688,7 @@ def _iter_zip_rows(path: Path) -> Iterable[dict[str, Any]]:
         members = [
             member
             for member in archive.infolist()
-            if not member.is_dir()
-            and Path(member.filename).suffix.lower() in {".csv", ".xlsx"}
+            if not member.is_dir() and Path(member.filename).suffix.lower() in {".csv", ".xlsx"}
         ]
         if not members:
             raise ValueError("ZIP file must contain at least one CSV or XLSX file.")
@@ -779,11 +778,7 @@ def _normalize_key_text(value: str) -> str:
 
 @lru_cache(maxsize=128)
 def _normalized_row_key_map(keys: tuple[Any, ...]) -> tuple[tuple[Any, str], ...]:
-    return tuple(
-        (key, _normalize_key(key))
-        for key in keys
-        if key is not None and str(key).strip()
-    )
+    return tuple((key, _normalize_key(key)) for key in keys if key is not None and str(key).strip())
 
 
 @lru_cache(maxsize=128)

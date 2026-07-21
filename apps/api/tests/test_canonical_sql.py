@@ -12,7 +12,7 @@ class FakeCursor:
     def __init__(self, executed: list) -> None:
         self.executed = executed
 
-    def __enter__(self) -> "FakeCursor":
+    def __enter__(self) -> FakeCursor:
         return self
 
     def __exit__(self, *args) -> None:
@@ -26,7 +26,7 @@ class FakeConnection:
     def __init__(self, executed: list) -> None:
         self.executed = executed
 
-    def __enter__(self) -> "FakeConnection":
+    def __enter__(self) -> FakeConnection:
         return self
 
     def __exit__(self, *args) -> None:
@@ -84,11 +84,7 @@ def test_identity_user_migration_has_only_local_identity_columns():
 def test_sql_safety_scan_flags_destructive_and_secret_text():
     fake_dsn = "postgresql://user:" + "pass@example/db"
     findings = canonical_sql.scan_sql_safety(
-        text=(
-            "DROP TABLE travel.places;\n"
-            f"SELECT '{fake_dsn}';\n"
-            "DELETE FROM ops.daily_costs;"
-        ),
+        text=(f"DROP TABLE travel.places;\nSELECT '{fake_dsn}';\nDELETE FROM ops.daily_costs;"),
         label="bad.sql",
     )
 
@@ -113,9 +109,7 @@ def test_apply_canonical_sql_cli_requires_apply_guard(monkeypatch, capsys):
     monkeypatch.setenv("DB_DSN", dsn)
     monkeypatch.delenv(apply_canonical_sql.ALLOW_ENV, raising=False)
 
-    exit_code = apply_canonical_sql.main(
-        ["--apply", "--confirm", apply_canonical_sql.CONFIRM_TEXT]
-    )
+    exit_code = apply_canonical_sql.main(["--apply", "--confirm", apply_canonical_sql.CONFIRM_TEXT])
 
     output = capsys.readouterr().out
     assert exit_code == 2
@@ -135,9 +129,7 @@ def test_apply_canonical_sql_cli_redacts_execution_errors(monkeypatch, capsys):
 
     monkeypatch.setattr(apply_canonical_sql, "execute_canonical_sql", fail)
 
-    exit_code = apply_canonical_sql.main(
-        ["--apply", "--confirm", apply_canonical_sql.CONFIRM_TEXT]
-    )
+    exit_code = apply_canonical_sql.main(["--apply", "--confirm", apply_canonical_sql.CONFIRM_TEXT])
 
     output = capsys.readouterr().out
     assert exit_code == 2
@@ -150,7 +142,9 @@ def test_execute_canonical_sql_runs_files_with_timeouts(monkeypatch, tmp_path):
     sql_dir = tmp_path / "canonical"
     sql_dir.mkdir()
     (sql_dir / "000_first.sql").write_text("CREATE SCHEMA IF NOT EXISTS one;", encoding="utf-8")
-    (sql_dir / "010_second.sql").write_text("CREATE TABLE IF NOT EXISTS one.t(id int);", encoding="utf-8")
+    (sql_dir / "010_second.sql").write_text(
+        "CREATE TABLE IF NOT EXISTS one.t(id int);", encoding="utf-8"
+    )
     plan = canonical_sql.load_canonical_sql_plan(sql_dir)
     executed: list = []
 

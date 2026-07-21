@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from threading import Lock
 from time import monotonic
 
-
 AUTH_COUNTER_NAMES = (
     "oauth_success",
     "jwt_rejection",
@@ -93,7 +92,9 @@ class RuntimeMetrics:
             return dict(self._auth_counters)
 
 
-def render_prometheus(metrics: RuntimeMetrics, readiness: Mapping[str, object] | None = None) -> str:
+def render_prometheus(
+    metrics: RuntimeMetrics, readiness: Mapping[str, object] | None = None
+) -> str:
     uptime_seconds, routes = metrics.snapshot()
     lines = [
         "# HELP lala_next_process_uptime_seconds Process uptime in seconds.",
@@ -114,8 +115,7 @@ def render_prometheus(metrics: RuntimeMetrics, readiness: Mapping[str, object] |
     for route in routes:
         labels = _labels(route)
         lines.append(
-            f"lala_next_http_request_duration_ms_sum{{{labels}}} "
-            f"{route.duration_ms_sum:.2f}"
+            f"lala_next_http_request_duration_ms_sum{{{labels}}} {route.duration_ms_sum:.2f}"
         )
     lines.extend(
         [
@@ -126,8 +126,7 @@ def render_prometheus(metrics: RuntimeMetrics, readiness: Mapping[str, object] |
     for route in routes:
         labels = _labels(route)
         lines.append(
-            f"lala_next_http_request_duration_ms_max{{{labels}}} "
-            f"{route.duration_ms_max:.2f}"
+            f"lala_next_http_request_duration_ms_max{{{labels}}} {route.duration_ms_max:.2f}"
         )
     if readiness is not None:
         lines.extend(_readiness_lines(readiness))
@@ -142,8 +141,7 @@ def render_prometheus(metrics: RuntimeMetrics, readiness: Mapping[str, object] |
             f"lala_next_auth_jwt_rejection_total {auth_counters['jwt_rejection']}",
             "# HELP lala_next_account_deletion_failure_total Account deletion orchestration failures.",
             "# TYPE lala_next_account_deletion_failure_total counter",
-            "lala_next_account_deletion_failure_total "
-            f"{auth_counters['account_deletion_failure']}",
+            f"lala_next_account_deletion_failure_total {auth_counters['account_deletion_failure']}",
         ]
     )
     return "\n".join(lines) + "\n"
@@ -187,8 +185,7 @@ def _readiness_lines(readiness: Mapping[str, object]) -> list[str]:
     lines = [
         "# HELP lala_next_readiness_status Overall readiness status as 1 when ok.",
         "# TYPE lala_next_readiness_status gauge",
-        f'lala_next_readiness_status{{status="{_escape_label(status)}"}} '
-        f"{_status_value(status)}",
+        f'lala_next_readiness_status{{status="{_escape_label(status)}"}} {_status_value(status)}',
         "# HELP lala_next_dependency_ready Dependency readiness as 1 when configured, enabled, or ok.",
         "# TYPE lala_next_dependency_ready gauge",
     ]
@@ -196,10 +193,11 @@ def _readiness_lines(readiness: Mapping[str, object]) -> list[str]:
         for name, value in sorted(checks.items()):
             dependency_status = str(value)
             labels = (
-                f'name="{_escape_label(str(name))}",'
-                f'status="{_escape_label(dependency_status)}"'
+                f'name="{_escape_label(str(name))}",status="{_escape_label(dependency_status)}"'
             )
-            lines.append(f"lala_next_dependency_ready{{{labels}}} {_status_value(dependency_status)}")
+            lines.append(
+                f"lala_next_dependency_ready{{{labels}}} {_status_value(dependency_status)}"
+            )
     if isinstance(mode, Mapping):
         lines.extend(
             [

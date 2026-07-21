@@ -81,9 +81,7 @@ def generate_docent_script_text(
     language = display_language(request.language)
     grounding_context = grounding_context or []
     place_name = (
-        _canonical_grounding_title(grounding_context)
-        or request.place_name
-        or request.place_id
+        _canonical_grounding_title(grounding_context) or request.place_name or request.place_id
     )
     context = _docent_context_prompt(
         request,
@@ -207,10 +205,7 @@ def _has_visitor_review_context(grounding_context: list[dict]) -> bool:
         source_type = str(item.get("source_type") or "").strip().lower()
         if any(hint in source_type for hint in _REVIEW_SOURCE_HINTS):
             return True
-        body = " ".join(
-            str(item.get(key) or "")
-            for key in ("title_ko", "body_ko", "body_en")
-        )
+        body = " ".join(str(item.get(key) or "") for key in ("title_ko", "body_ko", "body_en"))
         if any(hint in body for hint in _REVIEW_TEXT_HINTS_KO):
             return True
     return False
@@ -249,15 +244,11 @@ def _score_context_prompt(request: DocentScriptRequest) -> str:
     if request.final_score is not None:
         score_parts.append(f"overall recommendation score {request.final_score:.2f}")
     if request.local_spending_score is not None:
-        score_parts.append(
-            f"domestic spending score {request.local_spending_score:.2f}"
-        )
+        score_parts.append(f"domestic spending score {request.local_spending_score:.2f}")
     if request.small_merchant_fit_score is not None:
         score_parts.append(f"small merchant fit {request.small_merchant_fit_score:.2f}")
     if request.demand_dispersion_score is not None:
-        score_parts.append(
-            f"tourism demand dispersion {request.demand_dispersion_score:.2f}"
-        )
+        score_parts.append(f"tourism demand dispersion {request.demand_dispersion_score:.2f}")
     if request.weather_fit_score is not None:
         score_parts.append(f"weather fit {request.weather_fit_score:.2f}")
     if request.culture_relevance_score is not None:
@@ -272,9 +263,7 @@ def _weather_context_prompt(request: DocentScriptRequest) -> str:
     if temperature := format_celsius_label(request.weather_temp):
         weather_parts.append(f"temperature {temperature}")
     if condition := _weather_condition_label(request.weather_icon):
-        weather_parts.append(
-            f"weather condition {condition} (icon {request.weather_icon})"
-        )
+        weather_parts.append(f"weather condition {condition} (icon {request.weather_icon})")
     if request.weather_outdoor_status:
         weather_parts.append(f"outdoor status {request.weather_outdoor_status}")
     if request.dust_grade:

@@ -5,8 +5,9 @@ import json
 import os
 import sys
 import time
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass, replace
-from typing import Any, Sequence
+from typing import Any
 
 from apps.api.app.core.config import get_settings
 from apps.api.app.core.redaction import redact_secret_text
@@ -29,7 +30,7 @@ class PlaceCandidate:
     is_indoor: bool | None = None
 
     @classmethod
-    def from_row(cls, row: dict[str, Any]) -> "PlaceCandidate":
+    def from_row(cls, row: dict[str, Any]) -> PlaceCandidate:
         return cls(
             place_id=str(row.get("place_id") or ""),
             name_ko=str(row.get("name_ko") or ""),
@@ -472,7 +473,9 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Call Azure OpenAI and print a preview without updating rows.",
     )
-    parser.add_argument("--apply", action="store_true", help="Call Azure OpenAI and update DB rows.")
+    parser.add_argument(
+        "--apply", action="store_true", help="Call Azure OpenAI and update DB rows."
+    )
     parser.add_argument("--confirm", default="", help=f"Required with --apply: {CONFIRM_TEXT}")
     parser.add_argument(
         "--category",
@@ -507,7 +510,9 @@ def main(argv: list[str] | None = None) -> int:
         _write(args, {"ok": False, "mode": "plan", "error": "--retry-attempts must be positive."})
         return 2
     if args.retry_delay_sec < 0:
-        _write(args, {"ok": False, "mode": "plan", "error": "--retry-delay-sec must be non-negative."})
+        _write(
+            args, {"ok": False, "mode": "plan", "error": "--retry-delay-sec must be non-negative."}
+        )
         return 2
     if args.apply and args.dry_run_ai:
         _write(args, {"ok": False, "mode": "plan", "error": "Use either --apply or --dry-run-ai."})
