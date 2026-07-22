@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
+import 'package:lala_next_app/app/map_sheet_visibility.dart';
 import 'package:lala_next_app/features/docent/docent_helpers.dart';
 import 'package:lala_next_app/features/home/home_view_helpers.dart';
 import 'package:lala_next_app/features/home/widgets/map_draggable_sheet.dart';
@@ -220,6 +221,15 @@ class Dashboard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ONMU P0: 시트 활성화 여부를 빌드 이후(post-frame)에 쉘에 전파 → 하단 네비게이션
+    // 바를 숨긴다. 시트가 네비게이션 바 위까지 덮어 콘텐츠(예: 점수/근거 버튼)가
+    // 가려지지 않도록 한다. post-frame 콜백으로 빌드 중 리빌드를 유발하지 않는다.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final active = activeSheet != null;
+      if (lalaMapSheetActive.value != active) {
+        lalaMapSheetActive.value = active;
+      }
+    });
     final apiPlaces = places?.data?.places ?? const <LalaPlace>[];
     final hasLivePlaces = apiPlaces.isNotEmpty;
     final effectiveSource = hasLivePlaces ? places?.data?.source : 'db';

@@ -1076,6 +1076,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      useRootNavigator: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
@@ -1108,6 +1109,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
     final selected = await showModalBottomSheet<ManualLocationOption>(
       context: context,
       isScrollControlled: true,
+      useRootNavigator: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (context) => ManualLocationSheet(language: _uiLanguage),

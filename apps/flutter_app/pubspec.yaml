@@ -21,6 +21,8 @@ dependencies:
   web: ^1.1.1
   # C2: MVVM 기반(Riverpod). go_router/dio/json_serializable 은 실사용 시점(C3/B1.3)에 추가.
   flutter_riverpod: ^2.5.1
+  # ONMU P0: StatefulShellRoute 기반 3-탭 하단 네비게이션.
+  go_router: ^14.6.0
 
 dev_dependencies:
   flutter_test:
