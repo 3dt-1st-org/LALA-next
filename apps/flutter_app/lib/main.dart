@@ -16,10 +16,15 @@ import 'auth/auth_controller.dart';
 import 'auth/logto_auth_gateway.dart';
 import 'browser_location.dart';
 import 'features/intervention/widgets/intervention_toast.dart';
-import 'features/weather/widgets/weather_forecast_chart_painter.dart';
+import 'features/weather/weather_helpers.dart';
+import 'features/weather/widgets/forecast_chip.dart';
+import 'features/weather/widgets/weather_fact.dart';
+import 'features/weather/widgets/weather_forecast_chart_card.dart';
+import 'features/weather/widgets/weather_unavailable_card.dart';
 import 'kakao_map_view.dart';
 import 'manual_location_options.dart';
 import 'shared/l10n/lala_copy.dart';
+import 'shared/widgets/compact_info_tile.dart';
 import 'smoke_state.dart';
 
 SemanticsHandle? _webSemanticsHandle;
@@ -4823,7 +4828,7 @@ class _PlannerOverviewCard extends StatelessWidget {
         : _copy(language, ko: '현재 위치', en: 'Current location');
     final weatherLabel = weather == null
         ? _copy(language, ko: '날씨 확인 중', en: 'Checking weather')
-        : '${_outdoorLabel(weather!.outdoorStatus, language: language)} · ${_temperatureLabel(weather!.temp)} · ${_dustSituationLabel(weather!.dust, language)}';
+        : '${_outdoorLabel(weather!.outdoorStatus, language: language)} · ${temperatureLabel(weather!.temp)} · ${_dustSituationLabel(weather!.dust, language)}';
     return Container(
       padding: const EdgeInsets.fromLTRB(2, 0, 2, 0),
       decoration: BoxDecoration(
@@ -5563,7 +5568,7 @@ class _WeatherSheetContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final data = _publicWeatherOrNull(weather);
     if (data == null) {
-      return _WeatherUnavailableCard(language: language);
+      return WeatherUnavailableCard(language: language);
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -5574,11 +5579,11 @@ class _WeatherSheetContent extends StatelessWidget {
           spacing: 10,
           runSpacing: 10,
           children: [
-            _WeatherFact(
+            WeatherFact(
               label: _copy(language, ko: '통합 대기', en: 'Air quality'),
               value: _dustLabel(data.dust, language),
             ),
-            _WeatherFact(
+            WeatherFact(
               label: _copy(language, ko: '미세먼지(PM10)', en: 'PM10'),
               value: _dustPollutantValueLabel(
                 value: data.dust.pm10,
@@ -5586,7 +5591,7 @@ class _WeatherSheetContent extends StatelessWidget {
                 language: language,
               ),
             ),
-            _WeatherFact(
+            WeatherFact(
               label: _copy(language, ko: '초미세먼지(PM2.5)', en: 'PM2.5'),
               value: _dustPollutantValueLabel(
                 value: data.dust.pm25,
@@ -5594,7 +5599,7 @@ class _WeatherSheetContent extends StatelessWidget {
                 language: language,
               ),
             ),
-            _WeatherFact(
+            WeatherFact(
               label: _copy(language, ko: '야외 상태', en: 'Outdoor'),
               value: _outdoorLabel(data.outdoorStatus, language: language),
             ),
@@ -5609,7 +5614,7 @@ class _WeatherSheetContent extends StatelessWidget {
             ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 8),
-          _WeatherForecastChartCard(items: data.forecast, language: language),
+          WeatherForecastChartCard(items: data.forecast, language: language),
           const SizedBox(height: 10),
           SizedBox(
             height: 82,
@@ -5619,7 +5624,7 @@ class _WeatherSheetContent extends StatelessWidget {
               separatorBuilder: (_, _) => const SizedBox(width: 8),
               itemBuilder: (context, index) {
                 final item = data.forecast[index];
-                return _ForecastChip(item: item, language: language);
+                return ForecastChip(item: item, language: language);
               },
             ),
           ),
@@ -5629,110 +5634,7 @@ class _WeatherSheetContent extends StatelessWidget {
   }
 }
 
-class _WeatherForecastChartCard extends StatelessWidget {
-  const _WeatherForecastChartCard({
-    required this.items,
-    required this.language,
-  });
-
-  final List<LalaForecastItem> items;
-  final String language;
-
-  @override
-  Widget build(BuildContext context) {
-    final visibleItems = items.take(8).toList(growable: false);
-    final columnWidth = visibleItems.length <= 4 ? 72.0 : 62.0;
-    final chartWidth = math.max(
-      MediaQuery.sizeOf(context).width - 72,
-      visibleItems.length * columnWidth,
-    );
-    final points = _weatherChartPoints(
-      items: visibleItems,
-      columnWidth: columnWidth,
-      chartHeight: 96,
-    );
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(10, 12, 10, 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFD7E3F5)),
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: SizedBox(
-          width: chartWidth,
-          child: Column(
-            children: [
-              SizedBox(
-                height: 98,
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: CustomPaint(
-                        painter: WeatherForecastChartPainter(points: points),
-                      ),
-                    ),
-                    for (final point in points)
-                      Positioned(
-                        left: point.x - 18,
-                        top: math.max(0, point.y - 26),
-                        width: 36,
-                        child: Text(
-                          point.label,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: Color(0xFF1A202C),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 2),
-              Row(
-                children: [
-                  for (final item in visibleItems)
-                    SizedBox(
-                      width: columnWidth,
-                      child: Icon(
-                        _weatherForecastIcon(item.icon),
-                        size: 22,
-                        color: const Color(0xFF2B6CB0),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  for (final item in visibleItems)
-                    SizedBox(
-                      width: columnWidth,
-                      child: Text(
-                        _weatherChartTimeLabel(item.time, language: language),
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Color(0xFF64748B),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
+// C3: WeatherForecastChartCard -> features/weather/widgets/weather_forecast_chart_card.dart.
 
 // C3-2: WeatherChartPoint + WeatherForecastChartPainter → features/weather/widgets/weather_forecast_chart_painter.dart.
 
@@ -5771,7 +5673,7 @@ class _WeatherHeroCard extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  _temperatureLabel(weather.temp),
+                  temperatureLabel(weather.temp),
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                     color: const Color(0xFF111827),
                     fontWeight: FontWeight.w900,
@@ -5790,128 +5692,11 @@ class _WeatherHeroCard extends StatelessWidget {
   }
 }
 
-class _WeatherUnavailableCard extends StatelessWidget {
-  const _WeatherUnavailableCard({required this.language});
+// C3: WeatherUnavailableCard -> features/weather/widgets/weather_unavailable_card.dart.
 
-  final String language;
+// C3: WeatherFact -> features/weather/widgets/weather_fact.dart.
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      key: const ValueKey('weather-unavailable-card'),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFD7E3F5)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(
-            Icons.cloud_off_outlined,
-            size: 38,
-            color: Color(0xFF64748B),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _copy(
-                    language,
-                    ko: '날씨 데이터 준비 중',
-                    en: 'Weather data is being prepared',
-                  ),
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: const Color(0xFF111827),
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  _copy(
-                    language,
-                    ko: '실시간 관측값이 확인될 때 온도와 미세먼지를 표시합니다.',
-                    en: 'Temperature and dust appear when verified observations are available.',
-                  ),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: const Color(0xFF64748B),
-                    height: 1.35,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _WeatherFact extends StatelessWidget {
-  const _WeatherFact({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 148,
-      child: _CompactInfoTile(
-        icon: Icons.check_circle_outline,
-        label: label,
-        value: value,
-      ),
-    );
-  }
-}
-
-class _ForecastChip extends StatelessWidget {
-  const _ForecastChip({required this.item, required this.language});
-
-  final LalaForecastItem item;
-  final String language;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 88,
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFD7E3F5)),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            language == 'en' ? item.time : _weatherChartTimeLabel(item.time),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: const Color(0xFF64748B),
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            _temperatureLabel(item.temp),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(
-              context,
-            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
-          ),
-        ],
-      ),
-    );
-  }
-}
+// C3: ForecastChip -> features/weather/widgets/forecast_chip.dart.
 
 class _MutedSheetCard extends StatelessWidget {
   const _MutedSheetCard({required this.icon, required this.label});
@@ -6863,7 +6648,7 @@ class _RouteAndDocentPanel extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: _CompactInfoTile(
+              child: CompactInfoTile(
                 icon: Icons.route,
                 label: _copy(language, ko: '오늘 코스', en: 'Today route'),
                 value: slots.isEmpty
@@ -6877,12 +6662,12 @@ class _RouteAndDocentPanel extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: _CompactInfoTile(
+              child: CompactInfoTile(
                 icon: Icons.cloud,
                 label: _copy(language, ko: '날씨', en: 'Weather'),
                 value: weather == null
                     ? _copy(language, ko: '확인 중', en: 'Checking')
-                    : '${_temperatureLabel(weather!.temp)} · ${_dustSituationLabel(weather!.dust, language)}',
+                    : '${temperatureLabel(weather!.temp)} · ${_dustSituationLabel(weather!.dust, language)}',
               ),
             ),
           ],
@@ -7784,56 +7569,7 @@ class _CategoryBadge extends StatelessWidget {
   }
 }
 
-class _CompactInfoTile extends StatelessWidget {
-  const _CompactInfoTile({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF7FAFC),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: const Color(0xFF2B6CB0)),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: const Color(0xFF64748B),
-                  ),
-                ),
-                Text(
-                  value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+// C3: CompactInfoTile -> shared/widgets/compact_info_tile.dart.
 
 class _LalaWordmark extends StatelessWidget {
   const _LalaWordmark();
@@ -7940,7 +7676,7 @@ class _WeatherMapPill extends StatelessWidget {
     final data = _publicWeatherOrNull(weather);
     final label = data == null
         ? _copy(language, ko: '날씨 데이터 준비 중', en: 'Weather pending')
-        : '${_temperatureLabel(data.temp)} · ${_weatherPillDustLabel(data.dust, language)}';
+        : '${temperatureLabel(data.temp)} · ${_weatherPillDustLabel(data.dust, language)}';
     return _SmallStatusPill(
       key: const ValueKey('weather-pill-hit-target'),
       icon: Icons.thermostat,
@@ -8887,7 +8623,7 @@ List<_ContextFact> _placeContextFacts({
   if (weather != null) {
     add(
       Icons.wb_cloudy_outlined,
-      '${_outdoorLabel(weather.outdoorStatus, language: language)} · ${_temperatureLabel(weather.temp)}',
+      '${_outdoorLabel(weather.outdoorStatus, language: language)} · ${temperatureLabel(weather.temp)}',
     );
   }
 
@@ -8999,82 +8735,7 @@ bool _isPlaceholderWeatherSource(String? source) {
       normalized.endsWith('_fallback');
 }
 
-String _temperatureLabel(String value) {
-  final trimmed = value.trim();
-  if (trimmed.isEmpty) {
-    return '-';
-  }
-  if (RegExp(r'^-?\d+(\.\d+)?$').hasMatch(trimmed)) {
-    return '$trimmed°C';
-  }
-  if (RegExp(r'^-?\d+(\.\d+)?C$').hasMatch(trimmed)) {
-    return trimmed.replaceFirst('C', '°C');
-  }
-  return trimmed;
-}
-
-double? _temperatureValue(String value) {
-  final match = RegExp(r'-?\d+(?:\.\d+)?').firstMatch(value.trim());
-  if (match == null) {
-    return null;
-  }
-  return double.tryParse(match.group(0)!);
-}
-
-List<WeatherChartPoint> _weatherChartPoints({
-  required List<LalaForecastItem> items,
-  required double columnWidth,
-  required double chartHeight,
-}) {
-  final values = items.map((item) => _temperatureValue(item.temp)).toList();
-  final validValues = values.whereType<double>().toList(growable: false);
-  final maxValue = validValues.isEmpty ? 1.0 : validValues.reduce(math.max);
-  final minValue = validValues.isEmpty ? 0.0 : validValues.reduce(math.min);
-  final range = math.max(0.1, maxValue - minValue);
-  const topPadding = 28.0;
-  const bottomPadding = 18.0;
-  final drawHeight = math.max(1.0, chartHeight - topPadding - bottomPadding);
-
-  return [
-    for (var index = 0; index < items.length; index += 1)
-      WeatherChartPoint(
-        x: index * columnWidth + columnWidth / 2,
-        y:
-            topPadding +
-            (((maxValue - (values[index] ?? minValue)) / range) * drawHeight),
-        label: values[index] == null ? '--' : '${values[index]!.round()}°',
-      ),
-  ];
-}
-
-String _weatherChartTimeLabel(String raw, {String language = 'ko'}) {
-  if (_isEnglish(language)) {
-    return raw.trim();
-  }
-  final trimmed = raw.trim();
-  final match = RegExp(r'(\d{1,2})(?=:\d{2})').firstMatch(trimmed);
-  if (match == null) {
-    return trimmed;
-  }
-  return '${match.group(1)!.padLeft(2, '0')}시';
-}
-
-IconData _weatherForecastIcon(String icon) {
-  final normalized = icon.toLowerCase();
-  if (normalized.contains('rain') || normalized.contains('shower')) {
-    return Icons.water_drop_outlined;
-  }
-  if (normalized.contains('snow') || normalized.contains('sleet')) {
-    return Icons.ac_unit;
-  }
-  if (normalized.contains('fog') || normalized.contains('dust')) {
-    return Icons.blur_on;
-  }
-  if (normalized.contains('clear') || normalized.contains('sun')) {
-    return Icons.wb_sunny_outlined;
-  }
-  return Icons.wb_cloudy_outlined;
-}
+// C3: weather helpers (temperatureLabel, buildWeatherChartPoints, weatherChartTimeLabel, weatherForecastIcon) -> features/weather/weather_helpers.dart.
 
 String _periodLabel(String period, {String language = 'ko'}) {
   if (_isEnglish(language)) {
