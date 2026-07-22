@@ -16,7 +16,22 @@ import 'auth/auth_controller.dart';
 import 'auth/logto_auth_gateway.dart';
 import 'browser_location.dart';
 import 'features/intervention/widgets/intervention_toast.dart';
+import 'features/docent/widgets/auto_docent_fab.dart';
+import 'features/docent/widgets/tour_audio_bar.dart';
+import 'features/docent/widgets/tour_script_card.dart';
 import 'features/location/widgets/manual_location_sheet.dart';
+import 'features/place/place_helpers.dart';
+import 'features/place/widgets/category_badge.dart';
+import 'features/place/widgets/context_fact.dart';
+import 'features/place/widgets/context_fact_chip.dart';
+import 'features/place/widgets/empty_place_state.dart';
+import 'features/place/widgets/event_status_pill.dart';
+import 'features/place/widgets/place_image.dart';
+import 'features/place/widgets/place_thumb.dart';
+import 'features/place/widgets/proof_chip.dart';
+import 'features/place/widgets/rail_category_badge.dart';
+import 'features/place/widgets/rail_place_thumb.dart';
+import 'features/place/widgets/signal_grid.dart';
 import 'features/settings/widgets/user_settings_sheet.dart';
 import 'features/weather/weather_helpers.dart';
 import 'features/weather/widgets/forecast_chip.dart';
@@ -27,6 +42,7 @@ import 'kakao_map_view.dart';
 import 'manual_location_options.dart';
 import 'shared/l10n/lala_copy.dart';
 import 'shared/widgets/compact_info_tile.dart';
+import 'shared/widgets/tiny_meta.dart';
 import 'smoke_state.dart';
 
 SemanticsHandle? _webSemanticsHandle;
@@ -2385,31 +2401,31 @@ class _TopMapChrome extends StatelessWidget {
                   child: Row(
                     children: [
                       _CategoryChip(
-                        label: _categoryFilterLabel('all', language),
+                        label: categoryFilterLabel('all', language),
                         active: selectedCategory == 'all',
                         color: const Color(0xFF1A202C),
                         onTap: () => onSelectCategory('all'),
                       ),
                       _CategoryChip(
-                        label: _categoryFilterLabel('attraction', language),
+                        label: categoryFilterLabel('attraction', language),
                         active: selectedCategory == 'attraction',
                         color: const Color(0xFFC53030),
                         onTap: () => onSelectCategory('attraction'),
                       ),
                       _CategoryChip(
-                        label: _categoryFilterLabel('restaurant', language),
+                        label: categoryFilterLabel('restaurant', language),
                         active: selectedCategory == 'restaurant',
                         color: const Color(0xFFF5C842),
                         onTap: () => onSelectCategory('restaurant'),
                       ),
                       _CategoryChip(
-                        label: _categoryFilterLabel('event', language),
+                        label: categoryFilterLabel('event', language),
                         active: selectedCategory == 'event',
                         color: const Color(0xFF2B6CB0),
                         onTap: () => onSelectCategory('event'),
                       ),
                       _CategoryChip(
-                        label: _categoryFilterLabel('culture_venue', language),
+                        label: categoryFilterLabel('culture_venue', language),
                         active: selectedCategory == 'culture_venue',
                         color: const Color(0xFF0F766E),
                         onTap: () => onSelectCategory('culture_venue'),
@@ -2617,8 +2633,8 @@ class _MapRailPlaceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = _categoryColor(place.category);
-    final hasImage = _hasOfficialPlaceImage(place);
+    final color = categoryColor(place.category);
+    final hasImage = hasOfficialPlaceImage(place);
     final cardWidth = compact
         ? (hasImage ? 226.0 : 198.0)
         : (hasImage ? 252.0 : 222.0);
@@ -2681,7 +2697,7 @@ class _MapRailPlaceCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      _RailCategoryBadge(place: place, language: language),
+                      RailCategoryBadge(place: place, language: language),
                       const SizedBox(height: 5),
                       Row(
                         key: ValueKey('rail-place-region-${place.placeId}'),
@@ -2713,7 +2729,7 @@ class _MapRailPlaceCard extends StatelessWidget {
                         runSpacing: 4,
                         children: [
                           if (place.distanceM > 0)
-                            _TinyMeta('${place.distanceM}m'),
+                            TinyMeta('${place.distanceM}m'),
                         ],
                       ),
                     ],
@@ -2721,7 +2737,7 @@ class _MapRailPlaceCard extends StatelessWidget {
                 ),
                 if (hasImage) ...[
                   SizedBox(width: compact ? 8 : 10),
-                  _RailPlaceThumb(place: place, compact: compact),
+                  RailPlaceThumb(place: place, compact: compact),
                 ],
               ],
             ),
@@ -2732,56 +2748,8 @@ class _MapRailPlaceCard extends StatelessWidget {
   }
 }
 
-class _RailCategoryBadge extends StatelessWidget {
-  const _RailCategoryBadge({required this.place, required this.language});
-
-  final LalaPlace place;
-  final String language;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = _categoryColor(place.category);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.22)),
-      ),
-      child: Text(
-        _railCategoryLabel(place, language),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: color,
-          fontWeight: FontWeight.w900,
-          height: 1,
-        ),
-      ),
-    );
-  }
-}
-
-class _RailPlaceThumb extends StatelessWidget {
-  const _RailPlaceThumb({required this.place, required this.compact});
-
-  final LalaPlace place;
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    final dimension = compact ? 72.0 : 86.0;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: SizedBox(
-        key: ValueKey('rail-place-thumb-${place.placeId}'),
-        width: dimension,
-        height: dimension,
-        child: _PlaceImage(place: place, width: dimension, height: dimension),
-      ),
-    );
-  }
-}
+// C3: RailCategoryBadge → features/place/widgets/rail_category_badge.dart (RailCategoryBadge).
+// C3: RailPlaceThumb → features/place/widgets/rail_place_thumb.dart (RailPlaceThumb).
 
 class _PlannerMapPill extends StatelessWidget {
   const _PlannerMapPill({
@@ -2980,7 +2948,7 @@ class _MapBottomDock extends StatelessWidget {
               else ...[
                 Row(
                   children: [
-                    _CategoryBadge(
+                    CategoryBadge(
                       category: currentPlace.category,
                       language: uiLanguage,
                     ),
@@ -3016,9 +2984,9 @@ class _MapBottomDock extends StatelessWidget {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    _TinyMeta(_placeRegionLabel(currentPlace, uiLanguage)),
-                    _TinyMeta('${currentPlace.distanceM}m'),
-                    _TinyMeta(_sourceLabel(source, language: uiLanguage)),
+                    TinyMeta(_placeRegionLabel(currentPlace, uiLanguage)),
+                    TinyMeta('${currentPlace.distanceM}m'),
+                    TinyMeta(_sourceLabel(source, language: uiLanguage)),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -3805,9 +3773,9 @@ class _PlannerOverviewCard extends StatelessWidget {
                   spacing: 6,
                   runSpacing: 5,
                   children: [
-                    _TinyMeta(weatherLabel),
+                    TinyMeta(weatherLabel),
                     if (visibleSlotCount > 0)
-                      _TinyMeta(
+                      TinyMeta(
                         _copy(
                           language,
                           ko: '$visibleSlotCount개 일정',
@@ -4083,10 +4051,10 @@ class _TourSheetContent extends StatelessWidget {
           ),
           child: Row(
             children: [
-              if (_hasOfficialPlaceImage(first)) ...[
+              if (hasOfficialPlaceImage(first)) ...[
                 ClipRRect(
                   borderRadius: BorderRadius.circular(14),
-                  child: _PlaceImage(place: first, width: 64, height: 64),
+                  child: PlaceImage(place: first, width: 64, height: 64),
                 ),
                 const SizedBox(width: 12),
               ],
@@ -4138,14 +4106,14 @@ class _TourSheetContent extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        _TourScriptCard(
+        TourScriptCard(
           script: script,
           sourceLabel: sourceLabel,
           language: language,
         ),
         const SizedBox(height: 12),
         if (liveSpeechEnabled) ...[
-          _TourAudioBar(
+          TourAudioBar(
             language: language,
             audio: tourAudio,
             loading: audioLoading,
@@ -4194,179 +4162,8 @@ class _TourTag extends StatelessWidget {
   }
 }
 
-class _TourScriptCard extends StatelessWidget {
-  const _TourScriptCard({
-    required this.script,
-    required this.sourceLabel,
-    required this.language,
-  });
-
-  final String script;
-  final String sourceLabel;
-  final String language;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: const [
-          BoxShadow(
-            blurRadius: 16,
-            offset: Offset(0, 7),
-            color: Color(0x10000000),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.record_voice_over_outlined,
-                size: 19,
-                color: Color(0xFFC87F11),
-              ),
-              const SizedBox(width: 7),
-              Expanded(
-                child: Text(
-                  _copy(language, ko: '투어 도슨트 스크립트', en: 'Tour docent script'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: const Color(0xFF111827),
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              _TinyMeta(sourceLabel),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            script,
-            style: const TextStyle(
-              color: Color(0xFF1A202C),
-              fontWeight: FontWeight.w600,
-              height: 1.55,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TourAudioBar extends StatelessWidget {
-  const _TourAudioBar({
-    required this.language,
-    required this.audio,
-    required this.loading,
-    required this.error,
-    required this.onFetchAudio,
-  });
-
-  final String language;
-  final LalaAudioResponse? audio;
-  final bool loading;
-  final String? error;
-  final VoidCallback onFetchAudio;
-
-  @override
-  Widget build(BuildContext context) {
-    final hasAudio = audio != null;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFFBEB),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFF5C842)),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            hasAudio ? Icons.graphic_eq : Icons.volume_up_outlined,
-            color: const Color(0xFFC87F11),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  hasAudio
-                      ? _copy(language, ko: '투어 음성 준비됨', en: 'Tour audio ready')
-                      : _copy(
-                          language,
-                          ko: '도슨트 음성으로 듣기',
-                          en: 'Listen as a docent audio guide',
-                        ),
-                  style: const TextStyle(
-                    color: Color(0xFF744210),
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                if (error != null) ...[
-                  const SizedBox(height: 3),
-                  Text(
-                    error!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ] else if (hasAudio) ...[
-                  const SizedBox(height: 3),
-                  Text(
-                    _copy(
-                      language,
-                      ko: '오디오 캐시 ${audio!.bytes.length}바이트',
-                      en: '${audio!.bytes.length} bytes cached',
-                    ),
-                    style: const TextStyle(
-                      color: Color(0xFF92400E),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          FilledButton.icon(
-            onPressed: loading ? null : onFetchAudio,
-            icon: loading
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Icon(hasAudio ? Icons.replay : Icons.play_arrow),
-            label: Text(
-              loading
-                  ? _copy(language, ko: '변환 중', en: 'Converting')
-                  : hasAudio
-                  ? _copy(language, ko: '다시 준비', en: 'Prepare again')
-                  : _copy(language, ko: '오디오 준비', en: 'Prepare audio'),
-            ),
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFC87F11),
-              foregroundColor: Colors.white,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+// C3: TourScriptCard → features/docent/widgets/tour_script_card.dart (TourScriptCard).
+// C3: TourAudioBar → features/docent/widgets/tour_audio_bar.dart (TourAudioBar).
 
 class _TourStopTile extends StatelessWidget {
   const _TourStopTile({
@@ -4446,8 +4243,8 @@ class _TourStopTile extends StatelessWidget {
                       spacing: 6,
                       runSpacing: 4,
                       children: [
-                        _TinyMeta('${place.distanceM}m'),
-                        _TinyMeta(
+                        TinyMeta('${place.distanceM}m'),
+                        TinyMeta(
                           _copy(
                             language,
                             ko: '소비 신호 $spendingLabel',
@@ -4456,7 +4253,7 @@ class _TourStopTile extends StatelessWidget {
                         ),
                         if (place.regionKo?.trim().isNotEmpty == true ||
                             place.regionEn?.trim().isNotEmpty == true)
-                          _TinyMeta(_placeRegionLabel(place, language)),
+                          TinyMeta(_placeRegionLabel(place, language)),
                       ],
                     ),
                   ],
@@ -4631,7 +4428,7 @@ class _WeatherHeroCard extends StatelessWidget {
               ],
             ),
           ),
-          _ProofChip(
+          ProofChip(
             key: const ValueKey('weather-source-chip'),
             label: _weatherSourceLabel(weather.source, language: language),
           ),
@@ -4783,7 +4580,7 @@ class _FeaturedPlacePanel extends StatelessWidget {
         ),
         if (showEvidence) ...[
           const SizedBox(height: 12),
-          _SignalGrid(
+          SignalGrid(
             language: language,
             localSpending: components?.localSpendingScore,
             demandDispersion: components?.demandDispersionScore,
@@ -4846,13 +4643,13 @@ class _FeaturedPlaceHeader extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (_hasOfficialPlaceImage(place)) ...[
+        if (hasOfficialPlaceImage(place)) ...[
           ClipRRect(
             borderRadius: BorderRadius.circular(14),
             child: SizedBox(
               key: const ValueKey('detail-place-hero-image'),
               height: 170,
-              child: _PlaceImage(
+              child: PlaceImage(
                 place: place,
                 width: double.infinity,
                 height: 170,
@@ -4868,7 +4665,7 @@ class _FeaturedPlaceHeader extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _CategoryBadge(category: place.category, language: language),
+                  CategoryBadge(category: place.category, language: language),
                   const SizedBox(height: 7),
                   Text(
                     _placeDisplayName(place, language),
@@ -5019,7 +4816,7 @@ class _PlaceContextCard extends StatelessWidget {
             children: facts
                 .map(
                   (fact) =>
-                      _ContextFactChip(icon: fact.icon, label: fact.label),
+                      ContextFactChip(icon: fact.icon, label: fact.label),
                 )
                 .toList(growable: false),
           ),
@@ -5029,49 +4826,8 @@ class _PlaceContextCard extends StatelessWidget {
   }
 }
 
-class _ContextFact {
-  const _ContextFact({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-}
-
-class _ContextFactChip extends StatelessWidget {
-  const _ContextFactChip({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 15, color: const Color(0xFF475569)),
-          const SizedBox(width: 5),
-          Flexible(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: const Color(0xFF334155),
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+// C3: ContextFact → features/place/widgets/context_fact.dart (ContextFact).
+// C3: ContextFactChip → features/place/widgets/context_fact_chip.dart (ContextFactChip).
 
 class _EventInfoCard extends StatelessWidget {
   const _EventInfoCard({required this.place, required this.language});
@@ -5121,7 +4877,7 @@ class _EventInfoCard extends StatelessWidget {
                   ),
                 ),
               ),
-              _EventStatusPill(isOngoing: isOngoing, language: language),
+              EventStatusPill(isOngoing: isOngoing, language: language),
             ],
           ),
           if (dateText != null) ...[
@@ -5170,35 +4926,7 @@ class _EventInfoCard extends StatelessWidget {
   }
 }
 
-class _EventStatusPill extends StatelessWidget {
-  const _EventStatusPill({required this.isOngoing, required this.language});
-
-  final bool isOngoing;
-  final String language;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = isOngoing ? const Color(0xFF2B6CB0) : const Color(0xFF94A3B8);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.26)),
-      ),
-      child: Text(
-        isOngoing
-            ? _copy(language, ko: '진행 중', en: 'Ongoing')
-            : _copy(language, ko: '종료', en: 'Ended'),
-        style: TextStyle(
-          color: color,
-          fontWeight: FontWeight.w900,
-          fontSize: 12,
-        ),
-      ),
-    );
-  }
-}
+// C3: EventStatusPill → features/place/widgets/event_status_pill.dart (EventStatusPill).
 
 class _InlineIconText extends StatelessWidget {
   const _InlineIconText({required this.icon, required this.label});
@@ -5229,117 +4957,8 @@ class _InlineIconText extends StatelessWidget {
   }
 }
 
-class _SignalGrid extends StatelessWidget {
-  const _SignalGrid({
-    required this.language,
-    required this.localSpending,
-    required this.demandDispersion,
-    required this.cultureRelevance,
-    required this.weatherFit,
-  });
-
-  final String language;
-  final double? localSpending;
-  final double? demandDispersion;
-  final double? cultureRelevance;
-  final double? weatherFit;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFD7E3F5)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _SignalMeter(
-              label: _copy(language, ko: '내국인 소비', en: 'Local spending'),
-              value: localSpending ?? 0.82,
-              color: const Color(0xFFC53030),
-            ),
-          ),
-          Expanded(
-            child: _SignalMeter(
-              label: _copy(language, ko: '수요 분산', en: 'Demand spread'),
-              value: demandDispersion ?? 0.78,
-              color: const Color(0xFFF5C842),
-            ),
-          ),
-          Expanded(
-            child: _SignalMeter(
-              label: _copy(language, ko: '문화 연계', en: 'Culture fit'),
-              value: cultureRelevance ?? 0.91,
-              color: const Color(0xFF2B6CB0),
-            ),
-          ),
-          Expanded(
-            child: _SignalMeter(
-              label: _copy(language, ko: '날씨 적합', en: 'Weather fit'),
-              value: weatherFit ?? 0.74,
-              color: const Color(0xFF0F766E),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SignalMeter extends StatelessWidget {
-  const _SignalMeter({
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  final String label;
-  final double value;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final bounded = value.clamp(0.0, 1.0);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: const Color(0xFF1A202C),
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            bounded.toStringAsFixed(2),
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: const Color(0xFF475569),
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 5),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: bounded,
-              minHeight: 7,
-              backgroundColor: const Color(0xFFE2E8F0),
-              valueColor: AlwaysStoppedAnimation<Color>(color),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+// C3: SignalGrid → features/place/widgets/signal_grid.dart (SignalGrid).
+// C3: SignalMeter → features/place/widgets/signal_meter.dart (SignalMeter).
 
 class _PublicDataProofRow extends StatelessWidget {
   const _PublicDataProofRow({
@@ -5393,7 +5012,7 @@ class _PublicDataProofRow extends StatelessWidget {
               fontWeight: FontWeight.w900,
             ),
           ),
-          ...labels.map((label) => _ProofChip(label: label)),
+          ...labels.map((label) => ProofChip(label: label)),
         ],
       ),
     );
@@ -5478,22 +5097,7 @@ List<String> _proofSourceLabels({
   return labels.take(8).toList(growable: false);
 }
 
-class _ProofChip extends StatelessWidget {
-  const _ProofChip({super.key, required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Chip(
-      avatar: const Icon(Icons.check_circle, size: 17),
-      label: Text(label),
-      backgroundColor: Colors.white,
-      side: const BorderSide(color: Color(0xFFD7E3F5)),
-      labelStyle: const TextStyle(fontWeight: FontWeight.w800),
-    );
-  }
-}
+// C3: ProofChip → features/place/widgets/proof_chip.dart (ProofChip).
 
 class _PlaceRail extends StatelessWidget {
   const _PlaceRail({
@@ -5536,7 +5140,7 @@ class _PlaceRail extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         if (items.isEmpty)
-          _EmptyPlaceState(language: language)
+          EmptyPlaceState(language: language)
         else
           SizedBox(
             height: 164,
@@ -6157,7 +5761,7 @@ class _FloatingMapControls extends StatelessWidget {
           onPressed: onToggleVoice,
         ),
         const SizedBox(width: 14),
-        _AutoDocentFab(
+        AutoDocentFab(
           key: const ValueKey('auto-docent-toggle'),
           tooltip: language == 'en'
               ? (autoDocentEnabled ? 'Auto guide off' : 'Auto guide on')
@@ -6186,63 +5790,7 @@ class _FloatingMapControls extends StatelessWidget {
   }
 }
 
-class _AutoDocentFab extends StatelessWidget {
-  const _AutoDocentFab({
-    super.key,
-    required this.tooltip,
-    required this.label,
-    required this.active,
-    required this.statusLabel,
-    required this.onPressed,
-  });
-
-  final String tooltip;
-  final String label;
-  final bool active;
-  final String statusLabel;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final backgroundColor = active
-        ? const Color(0xFF2B6CB0)
-        : const Color(0xFF1A202C).withValues(alpha: 0.84);
-    return Tooltip(
-      message: tooltip,
-      child: Semantics(
-        button: true,
-        label: label,
-        child: FilledButton(
-          onPressed: onPressed,
-          style: FilledButton.styleFrom(
-            fixedSize: const Size.square(74),
-            shape: const CircleBorder(),
-            padding: EdgeInsets.zero,
-            backgroundColor: backgroundColor,
-            foregroundColor: Colors.white,
-            elevation: 9,
-            shadowColor: const Color(0x33000000),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.auto_awesome, size: 19),
-              const SizedBox(height: 3),
-              Text(
-                statusLabel,
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w900,
-                  height: 1,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
+// C3: AutoDocentFab → features/docent/widgets/auto_docent_fab.dart (AutoDocentFab).
 
 class _MapFab extends StatelessWidget {
   const _MapFab({
@@ -6325,7 +5873,7 @@ class _RecommendedPlaceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final categoryColor = _categoryColor(place.category);
-    final hasImage = _hasOfficialPlaceImage(place);
+    final hasImage = hasOfficialPlaceImage(place);
     return Container(
       key: ValueKey('recommended-place-card-${place.placeId}'),
       width: hasImage ? 270 : 232,
@@ -6354,7 +5902,7 @@ class _RecommendedPlaceCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    _CategoryBadge(
+                    CategoryBadge(
                       category: place.category,
                       language: language,
                     ),
@@ -6389,7 +5937,7 @@ class _RecommendedPlaceCard extends StatelessWidget {
           ),
           if (hasImage) ...[
             const SizedBox(width: 10),
-            _PlaceThumb(place: place),
+            PlaceThumb(place: place),
           ],
         ],
       ),
@@ -6415,108 +5963,10 @@ class _RecommendedPlaceCard extends StatelessWidget {
   }
 }
 
-class _PlaceThumb extends StatelessWidget {
-  const _PlaceThumb({required this.place});
-
-  final LalaPlace place;
-
-  @override
-  Widget build(BuildContext context) {
-    if (!_hasOfficialPlaceImage(place)) {
-      return const SizedBox.shrink();
-    }
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(18),
-      child: _PlaceImage(place: place, width: 76, height: 76),
-    );
-  }
-}
-
-class _PlaceImage extends StatelessWidget {
-  const _PlaceImage({
-    required this.place,
-    required this.width,
-    required this.height,
-  });
-
-  final LalaPlace place;
-  final double width;
-  final double height;
-
-  @override
-  Widget build(BuildContext context) {
-    final imageUri = _normalizedPlaceImageUri(place.imageUrl);
-    if (imageUri != null) {
-      return Image.network(
-        imageUri.toString(),
-        width: width,
-        height: height,
-        fit: BoxFit.cover,
-        webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
-        errorBuilder: (_, _, _) => const SizedBox.shrink(),
-      );
-    }
-    return const SizedBox.shrink();
-  }
-}
-
-bool _hasOfficialPlaceImage(LalaPlace place) {
-  return _normalizedPlaceImageUri(place.imageUrl) != null;
-}
-
-Uri? _normalizedPlaceImageUri(String? rawUrl) {
-  final imageUrl = rawUrl?.trim();
-  if (imageUrl == null || imageUrl.isEmpty) {
-    return null;
-  }
-  final parsedImageUrl = Uri.tryParse(imageUrl);
-  if (parsedImageUrl == null ||
-      !parsedImageUrl.hasScheme ||
-      parsedImageUrl.host.isEmpty) {
-    return null;
-  }
-  if (parsedImageUrl.scheme == 'http' &&
-      parsedImageUrl.host == 'tong.visitkorea.or.kr') {
-    return parsedImageUrl.replace(scheme: 'https');
-  }
-  return parsedImageUrl;
-}
-
-class _CategoryBadge extends StatelessWidget {
-  const _CategoryBadge({required this.category, this.language = 'ko'});
-
-  final String category;
-  final String language;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = switch (category) {
-      'attraction' => const Color(0xFFC53030),
-      'restaurant' => const Color(0xFFF5C842),
-      'event' => const Color(0xFF2B6CB0),
-      'culture_venue' => const Color(0xFF0F766E),
-      _ => const Color(0xFF1A202C),
-    };
-    final textColor = category == 'restaurant'
-        ? const Color(0xFF1A202C)
-        : Colors.white;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        _categoryLabel(category, language: language),
-        style: TextStyle(
-          color: textColor,
-          fontSize: 11,
-          fontWeight: FontWeight.w900,
-        ),
-      ),
-    );
-  }
-}
+// C3: PlaceThumb → features/place/widgets/place_thumb.dart (PlaceThumb).
+// C3: PlaceImage → features/place/widgets/place_image.dart (PlaceImage).
+// C3: hasOfficialPlaceImage / normalizedPlaceImageUri → features/place/place_helpers.dart.
+// C3: CategoryBadge → features/place/widgets/category_badge.dart (CategoryBadge).
 
 // C3: CompactInfoTile -> shared/widgets/compact_info_tile.dart.
 
@@ -6757,32 +6207,7 @@ class _InlineMeta extends StatelessWidget {
   }
 }
 
-class _TinyMeta extends StatelessWidget {
-  const _TinyMeta(this.label);
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF1F5F9),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
-          color: Color(0xFF475569),
-          fontSize: 10,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    );
-  }
-}
+// C3: TinyMeta → shared/widgets/tiny_meta.dart (TinyMeta).
 
 class _MapToast extends StatelessWidget {
   const _MapToast({
@@ -6939,31 +6364,7 @@ class _MapToast extends StatelessWidget {
 
 // C3-1: _InterventionToast → features/intervention/widgets/intervention_toast.dart (InterventionToast).
 
-class _EmptyPlaceState extends StatelessWidget {
-  const _EmptyPlaceState({required this.language});
-
-  final String language;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 132,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: const Color(0xFFF7FAFC),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Text(
-        _copy(
-          language,
-          ko: '이 주변 추천을 준비 중입니다.',
-          en: 'Recommendations are still being prepared here.',
-        ),
-      ),
-    );
-  }
-}
+// C3: EmptyPlaceState → features/place/widgets/empty_place_state.dart (EmptyPlaceState).
 
 bool _isEnglish(String language) => isLalaEnglish(language);
 
@@ -7183,52 +6584,7 @@ String _interventionToastLabel(LalaIntervention intervention, String language) {
   return '날씨가 바뀌었어요. 하루 일정을 다시 확인해보세요.';
 }
 
-String _categoryLabel(String category, {String language = 'ko'}) {
-  if (_isEnglish(language)) {
-    return switch (category) {
-      'restaurant' => 'Food',
-      'event' => 'Event',
-      'culture_venue' => 'Culture',
-      'attraction' => 'Attraction',
-      _ => 'Local',
-    };
-  }
-  return switch (category) {
-    'restaurant' => '맛집',
-    'event' => '행사',
-    'culture_venue' => '문화',
-    'attraction' => '명소',
-    _ => '로컬',
-  };
-}
-
-String _categoryFilterLabel(String category, String language) {
-  if (language == 'en') {
-    return switch (category) {
-      'all' => 'All',
-      'restaurant' => 'Restaurants',
-      'event' => 'Events',
-      'culture_venue' => 'Culture',
-      'attraction' => 'Attractions',
-      _ => 'Local',
-    };
-  }
-  return switch (category) {
-    'all' => '전체',
-    _ => _categoryLabel(category, language: language),
-  };
-}
-
-String _railCategoryLabel(LalaPlace place, String language) {
-  final category = _categoryLabel(place.category, language: language);
-  if (place.category != 'event') {
-    return category;
-  }
-  final status = place.isOngoing == false
-      ? _copy(language, ko: '종료', en: 'Ended')
-      : _copy(language, ko: '진행 중', en: 'Ongoing');
-  return '$category · $status';
-}
+// C3: categoryLabel / categoryFilterLabel / railCategoryLabel → features/place/place_helpers.dart.
 
 List<LalaPlace> _filterPlaces(List<LalaPlace> places, String category) {
   if (category == 'all') {
@@ -7493,7 +6849,7 @@ IconData _placeContextIcon(String category) {
   };
 }
 
-List<_ContextFact> _placeContextFacts({
+List<ContextFact> _placeContextFacts({
   required LalaPlace place,
   required String language,
   required LalaWeather? weather,
@@ -7501,7 +6857,7 @@ List<_ContextFact> _placeContextFacts({
 }) {
   final score = place.score;
   final features = score?.features ?? const <String, dynamic>{};
-  final facts = <_ContextFact>[];
+  final facts = <ContextFact>[];
 
   void add(IconData icon, String? label) {
     final trimmed = label?.trim();
@@ -7511,7 +6867,7 @@ List<_ContextFact> _placeContextFacts({
     if (facts.any((fact) => fact.label == trimmed)) {
       return;
     }
-    facts.add(_ContextFact(icon: icon, label: trimmed));
+    facts.add(ContextFact(icon: icon, label: trimmed));
   }
 
   add(Icons.place_outlined, _placeRegionLabel(place, language));
@@ -7651,15 +7007,8 @@ String? _planSlotDetail(LalaPlanSlot slot, String language) {
   return detail;
 }
 
-Color _categoryColor(String category) {
-  return switch (category) {
-    'attraction' => const Color(0xFFC53030),
-    'restaurant' => const Color(0xFFF5C842),
-    'event' => const Color(0xFF2B6CB0),
-    'culture_venue' => const Color(0xFF0F766E),
-    _ => const Color(0xFF1A202C),
-  };
-}
+// C3: 최상위 _categoryColor → features/place/place_helpers.dart (categoryColor).
+// (주의: _RecommendedPlaceCard 인스턴스 메서드 _categoryColor 는 별개 — 잔류)
 
 LalaWeather? _publicWeatherOrNull(LalaWeather? weather) {
   if (weather == null || _isPlaceholderWeatherSource(weather.source)) {
