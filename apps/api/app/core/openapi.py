@@ -318,9 +318,12 @@ def _api_success_envelope_schema() -> dict[str, Any]:
 
 
 def _success_envelope_schema(data_schema_name: str | None = None) -> dict[str, Any]:
-    data_schema: dict[str, Any] = {}
+    # data: 구체 타입(있으면) 또는 nullable 객체(제네릭 fallback). 빈 스키마({})는
+    # openapi-generator 가 dynamic 으로 취급해 빌드가 깨지므로 구체 타입을 부여한다.
     if data_schema_name:
-        data_schema = {"$ref": f"#/components/schemas/{data_schema_name}"}
+        data_schema: dict[str, Any] = {"$ref": f"#/components/schemas/{data_schema_name}"}
+    else:
+        data_schema = {"type": "object", "nullable": True}
     return {
         "type": "object",
         "required": ["ok", "data", "meta", "error"],
@@ -328,7 +331,10 @@ def _success_envelope_schema(data_schema_name: str | None = None) -> dict[str, A
             "ok": {"type": "boolean", "const": True},
             "data": data_schema,
             "meta": {"$ref": "#/components/schemas/ApiMeta"},
-            "error": {"type": "null"},
+            # error: 성공 응답에서는 항상 null 이지만, 스키마를 null 전용(type:"null")으로 두면
+            # openapi-generator(dart-dio) 가 미생성 ModelNull 을 참조해 빌드가 깨진다.
+            # 런타임 값은 여전히 null 이되, 타입은 nullable ApiError 로 구체화한다.
+            "error": {"allOf": [{"$ref": "#/components/schemas/ApiError"}], "nullable": True},
         },
         "additionalProperties": False,
     }
@@ -340,7 +346,7 @@ def _api_error_envelope_schema() -> dict[str, Any]:
         "required": ["ok", "data", "meta", "error"],
         "properties": {
             "ok": {"type": "boolean", "const": False},
-            "data": {"type": "null"},
+            "data": {"type": "object", "nullable": True},
             "meta": {"$ref": "#/components/schemas/ApiMeta"},
             "error": {"$ref": "#/components/schemas/ApiError"},
         },
