@@ -45,6 +45,11 @@ import 'features/weather/widgets/weather_unavailable_card.dart';
 import 'kakao_map_view.dart';
 import 'manual_location_options.dart';
 import 'shared/l10n/lala_copy.dart';
+import 'shared/l10n/multi_language_text.dart';
+import 'shared/l10n/place_labels.dart';
+import 'shared/labels/dust_label.dart';
+import 'shared/labels/source_label.dart';
+import 'shared/widgets/muted_sheet_card.dart';
 import 'shared/widgets/compact_info_tile.dart';
 import 'shared/widgets/small_status_pill.dart';
 import 'shared/widgets/tiny_meta.dart';
@@ -4329,39 +4334,8 @@ class _WeatherHeroCard extends StatelessWidget {
 
 // C3: ForecastChip -> features/weather/widgets/forecast_chip.dart.
 
-class _MutedSheetCard extends StatelessWidget {
-  const _MutedSheetCard({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFD7E3F5)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: const Color(0xFF64748B)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: const Color(0xFF64748B),
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+// C3: _MutedSheetCard → shared/widgets/muted_sheet_card.dart (MutedSheetCard).
+typedef _MutedSheetCard = MutedSheetCard;
 
 class _FeaturedPlacePanel extends StatelessWidget {
   const _FeaturedPlacePanel({
@@ -6328,36 +6302,9 @@ String _requestFailureMessage() {
   return '지금 정보를 불러오지 못했어요.';
 }
 
-String _locationLabel(String? value, String language) {
-  final trimmed = value?.trim();
-  if (trimmed == null || trimmed.isEmpty) {
-    return _copy(language, ko: '수원', en: 'Suwon');
-  }
-  final normalized = trimmed.toLowerCase();
-  final localized = _singleLanguageText(trimmed, language);
-  if (_isEnglish(language)) {
-    if (localized == null || localized.isEmpty) {
-      return switch (trimmed) {
-        '수원' || '수원시' => 'Suwon',
-        _ => 'Nearby area',
-      };
-    }
-    return switch (localized) {
-      '수원' || '수원시' => 'Suwon',
-      final location => location,
-    };
-  }
-  if (localized == null || localized.isEmpty) {
-    return switch (normalized) {
-      'suwon' || 'suwon-si' || 'suwon city' => '수원',
-      _ => '주변 지역',
-    };
-  }
-  return switch (normalized) {
-    'suwon' || 'suwon-si' || 'suwon city' => '수원',
-    _ => localized,
-  };
-}
+// C3: _locationLabel → shared/l10n/place_labels.dart (locationLabel).
+String _locationLabel(String? value, String language) =>
+    locationLabel(value, language);
 
 String _interventionToastLabel(LalaIntervention intervention, String language) {
   final place = intervention.place == null
@@ -6463,110 +6410,22 @@ LalaPlace? _placeById(List<LalaPlace> places, String? placeId) {
   return null;
 }
 
-String _placeDisplayName(LalaPlace place, String language) {
-  if (_isEnglish(language)) {
-    final nameEn = _singleLanguageText(place.nameEn, language);
-    if (nameEn != null) {
-      return nameEn;
-    }
-    final primaryName = _singleLanguageText(place.name, language);
-    if (primaryName != null) {
-      return primaryName;
-    }
-    return 'Local place';
-  }
-  final nameKo = _singleLanguageText(place.nameKo, language);
-  if (nameKo != null) {
-    return nameKo;
-  }
-  final primaryName = _singleLanguageText(place.name, language);
-  if (primaryName != null) {
-    return primaryName;
-  }
-  return '이 장소';
-}
+// C3: _placeDisplayName / _placeRegionLabel → shared/l10n/place_labels.dart.
+String _placeDisplayName(LalaPlace place, String language) =>
+    placeDisplayName(place, language);
 
-String _placeRegionLabel(LalaPlace place, String language) {
-  if (_isEnglish(language)) {
-    final regionEn = _singleLanguageText(place.regionEn, language);
-    if (regionEn != null) {
-      return regionEn;
-    }
-    final regionKo = _singleLanguageText(place.regionKo, 'ko');
-    if (regionKo != null) {
-      final localizedRegion = _locationLabel(regionKo, language);
-      if (!_containsKorean(localizedRegion)) {
-        return localizedRegion;
-      }
-    }
-    final address = _singleLanguageText(place.address, language);
-    if (address != null) {
-      return address;
-    }
-    return 'Nearby area';
-  }
-  final regionKo = _singleLanguageText(place.regionKo, language);
-  if (regionKo != null) {
-    return regionKo;
-  }
-  final address = _singleLanguageText(place.address, language);
-  if (address != null) {
-    return address;
-  }
-  return '주변 지역';
-}
+String _placeRegionLabel(LalaPlace place, String language) =>
+    placeRegionLabel(place, language);
 
-bool _containsKorean(String value) => RegExp(r'[가-힣]').hasMatch(value);
+// C3: 다국어 텍스트 헬퍼 → shared/l10n/multi_language_text.dart.
+//     _singleLanguageText/_containsKorean/_looksEnglishText 는 외부 호출이 있어 forwarder 유지.
+//     (extract*/hasMixedKoreanEnglish/cleanLocalizedFragment 는 외부 사용 없어 본문 제거)
+bool _containsKorean(String value) => containsKorean(value);
 
-bool _looksEnglishText(String value) => RegExp(r'[A-Za-z]{3,}').hasMatch(value);
+bool _looksEnglishText(String value) => looksEnglishText(value);
 
-bool _hasMixedKoreanEnglish(String value) {
-  return _containsKorean(value) && _looksEnglishText(value);
-}
-
-String? _singleLanguageText(String? value, String language) {
-  final trimmed = value?.trim();
-  if (trimmed == null || trimmed.isEmpty) {
-    return null;
-  }
-  if (_isEnglish(language)) {
-    if (_containsKorean(trimmed)) {
-      return _extractEnglishText(trimmed);
-    }
-    return trimmed;
-  }
-  if (!_containsKorean(trimmed) && _looksEnglishText(trimmed)) {
-    return null;
-  }
-  if (_hasMixedKoreanEnglish(trimmed)) {
-    return _extractKoreanText(trimmed);
-  }
-  return trimmed;
-}
-
-String? _extractEnglishText(String value) {
-  final withoutKorean = value.replaceAll(RegExp(r'[가-힣]+'), ' ');
-  final cleaned = _cleanLocalizedFragment(withoutKorean);
-  return _looksEnglishText(cleaned) ? cleaned : null;
-}
-
-String? _extractKoreanText(String value) {
-  final withoutEnglish = value.replaceAll(
-    RegExp(r"[A-Za-z][A-Za-z0-9&'.,()/-]*(?:\s+[A-Za-z][A-Za-z0-9&'.,()/-]*)*"),
-    ' ',
-  );
-  final cleaned = _cleanLocalizedFragment(withoutEnglish);
-  return _containsKorean(cleaned) ? cleaned : null;
-}
-
-String _cleanLocalizedFragment(String value) {
-  return value
-      .replaceAll(RegExp(r'[\[\]{}()|/·]+'), ' ')
-      .replaceAll(RegExp(r'\s+'), ' ')
-      .trim()
-      .replaceAll(RegExp(r'^[,.:;~-]+|[,.:;~-]+$'), '')
-      .trim();
-}
+String? _singleLanguageText(String? value, String language) =>
+    singleLanguageText(value, language);
 
 String _audioBytesLabel(int bytes, String language) {
   return _isEnglish(language) ? '$bytes bytes' : '$bytes바이트';
@@ -6829,14 +6688,9 @@ LalaWeather? _publicWeatherOrNull(LalaWeather? weather) {
   return weather;
 }
 
-bool _isPlaceholderWeatherSource(String? source) {
-  final normalized = (source ?? '').trim();
-  return normalized.isEmpty ||
-      normalized == 'skeleton' ||
-      normalized == 'fallback' ||
-      normalized == 'unavailable' ||
-      normalized.endsWith('_fallback');
-}
+// C3: _isPlaceholderWeatherSource → shared/labels/source_label.dart (isPlaceholderWeatherSource).
+bool _isPlaceholderWeatherSource(String? source) =>
+    isPlaceholderWeatherSource(source);
 
 // C3: weather helpers (temperatureLabel, buildWeatherChartPoints, weatherChartTimeLabel, weatherForecastIcon) -> features/weather/weather_helpers.dart.
 
@@ -6877,22 +6731,9 @@ IconData _periodIcon(String period) {
   };
 }
 
-String _outdoorLabel(String status, {String language = 'ko'}) {
-  if (_isEnglish(language)) {
-    return switch (status) {
-      'good' => 'Good',
-      'normal' => 'Normal',
-      'bad' => 'Caution',
-      _ => status,
-    };
-  }
-  return switch (status) {
-    'good' => '좋음',
-    'normal' => '보통',
-    'bad' => '주의',
-    _ => status,
-  };
-}
+// C3: _outdoorLabel → shared/l10n/place_labels.dart (outdoorLabel).
+String _outdoorLabel(String status, {String language = 'ko'}) =>
+    outdoorLabel(status, language: language);
 
 String _weatherPillDustLabel(LalaDust dust, String language) {
   final pm10 = dust.pm10.trim();
@@ -6911,38 +6752,17 @@ String _weatherPillDustLabel(LalaDust dust, String language) {
   return _dustSituationLabel(dust, language, includePrefix: false);
 }
 
-String _dustLabel(LalaDust dust, String language) {
-  return _dustGradeLabel(dust.grade, dust.gradeKo, language);
-}
-
-String _dustGradeLabel(String gradeCode, String gradeKo, String language) {
-  if (!_isEnglish(language)) {
-    final localizedKo = _singleLanguageText(gradeKo, language);
-    return localizedKo ?? gradeCode;
-  }
-  return switch (gradeCode.trim()) {
-    'good' => 'Good',
-    'normal' => 'Normal',
-    'bad' => 'Bad',
-    'very_bad' => 'Very bad',
-    final grade when grade.isEmpty => gradeKo,
-    final grade => grade,
-  };
-}
+// C3: 미세먼지 라벨 → shared/labels/dust_label.dart.
+//     _dustLabel/_dustPollutantGradeLabel 은 외부 호출이 있어 forwarder 유지.
+//     (_dustGradeLabel 은 외부 사용 없어 본문 제거)
+String _dustLabel(LalaDust dust, String language) => dustLabel(dust, language);
 
 String _dustPollutantGradeLabel(
   LalaDust dust,
   String pollutant,
   String language,
-) {
-  final isPm10 = pollutant == 'pm10';
-  final gradeCode = (isPm10 ? dust.pm10Grade : dust.pm25Grade).trim();
-  final gradeKo = (isPm10 ? dust.pm10GradeKo : dust.pm25GradeKo).trim();
-  if (gradeCode.isEmpty && gradeKo.isEmpty) {
-    return _dustLabel(dust, language);
-  }
-  return _dustGradeLabel(gradeCode, gradeKo, language);
-}
+) =>
+    dustPollutantGradeLabel(dust, pollutant, language);
 
 String _dustPollutantValueLabel({
   required String value,
@@ -6957,55 +6777,20 @@ String _dustPollutantValueLabel({
   return '$normalized$unit · $grade';
 }
 
+// C3: _dustSituationLabel / _compactDustPart → shared/labels/dust_label.dart.
 String _dustSituationLabel(
   LalaDust dust,
   String language, {
   bool includePrefix = true,
-}) {
-  final grade = _dustLabel(dust, language).trim();
-  final pm10 = dust.pm10.trim();
-  final pm25 = dust.pm25.trim();
-  final hasPm10 = pm10.isNotEmpty;
-  final hasPm25 = pm25.isNotEmpty;
-  final pm10Grade = _dustPollutantGradeLabel(dust, 'pm10', language).trim();
-  final pm25Grade = _dustPollutantGradeLabel(dust, 'pm25', language).trim();
-  if (_isEnglish(language)) {
-    final values = [
-      if (hasPm10)
-        _compactDustPart(label: 'PM10', value: pm10, grade: pm10Grade),
-      if (hasPm25)
-        _compactDustPart(label: 'PM2.5', value: pm25, grade: pm25Grade),
-    ];
-    if (values.isEmpty) {
-      return includePrefix ? 'Dust $grade' : grade;
-    }
-    return [if (includePrefix) 'Dust', values.join(' · ')].join(' ');
-  }
-  final values = [
-    if (hasPm10) _compactDustPart(label: '미세', value: pm10, grade: pm10Grade),
-    if (hasPm25) _compactDustPart(label: '초미세', value: pm25, grade: pm25Grade),
-  ];
-  if (values.isEmpty) {
-    return includePrefix ? '미세먼지 $grade' : grade;
-  }
-  return [if (includePrefix) '미세먼지', values.join(' · ')].join(' ');
-}
+}) =>
+    dustSituationLabel(dust, language, includePrefix: includePrefix);
 
 String _compactDustPart({
   required String label,
   required String value,
   required String grade,
-}) {
-  final cleanedValue = value.trim();
-  final cleanedGrade = grade.trim();
-  if (cleanedValue.isEmpty) {
-    return '$label $cleanedGrade'.trim();
-  }
-  if (cleanedGrade.isEmpty) {
-    return '$label $cleanedValue';
-  }
-  return '$label $cleanedValue $cleanedGrade';
-}
+}) =>
+    compactDustPart(label: label, value: value, grade: grade);
 
 List<LalaPlace> _railPlaces(List<LalaPlace> places) {
   if (places.isEmpty) {
@@ -7208,56 +6993,12 @@ class _MiniChip extends StatelessWidget {
   }
 }
 
-String _sourceLabel(String? value, {String language = 'ko'}) {
-  if (_isFallbackSourceCode(value)) {
-    return _isEnglish(language) ? 'Limited offline data' : '제한적 오프라인 데이터';
-  }
-  if (_isEnglish(language)) {
-    return switch ((value ?? '').trim()) {
-      'db' => 'Live recommendations',
-      'mixed' => 'Live + official data',
-      'skeleton' => 'LALA curation',
-      '' => '-',
-      final source => source,
-    };
-  }
-  return switch ((value ?? '').trim()) {
-    'db' => '실시간 추천',
-    'mixed' => '실시간·공식 데이터',
-    'skeleton' => '로컬 큐레이션',
-    '' => '-',
-    final source => source,
-  };
-}
+// C3: _sourceLabel / _weatherSourceLabel → shared/labels/source_label.dart.
+String _sourceLabel(String? value, {String language = 'ko'}) =>
+    sourceLabel(value, language: language);
 
-String _weatherSourceLabel(String? value, {String language = 'ko'}) {
-  if (_isPlaceholderWeatherSource(value) || _isFallbackSourceCode(value)) {
-    return _isEnglish(language) ? 'Weather pending' : '날씨 준비 중';
-  }
-  if (_isEnglish(language)) {
-    return switch ((value ?? '').trim()) {
-      'db' => 'Live weather',
-      'db+airkorea_sido_realtime' => 'Live weather + AirKorea air quality',
-      'kma_ultra_srt_ncst' => 'KMA live weather',
-      'airkorea_sido_realtime' => 'AirKorea live air quality',
-      'kma_ultra_srt_ncst+airkorea_sido_realtime' =>
-        'KMA weather + AirKorea air quality',
-      'mixed' => 'Live + official weather',
-      '' => '-',
-      final source => _sourceLabel(source, language: language),
-    };
-  }
-  return switch ((value ?? '').trim()) {
-    'db' => '실시간 날씨',
-    'db+airkorea_sido_realtime' => '실시간 날씨·AirKorea 대기질',
-    'kma_ultra_srt_ncst' => '기상청 실황',
-    'airkorea_sido_realtime' => 'AirKorea 대기질',
-    'kma_ultra_srt_ncst+airkorea_sido_realtime' => '기상청·AirKorea 실황',
-    'mixed' => '실시간·공식 날씨',
-    '' => '-',
-    final source => _sourceLabel(source, language: language),
-  };
-}
+String _weatherSourceLabel(String? value, {String language = 'ko'}) =>
+    weatherSourceLabel(value, language: language);
 
 String? _externalSourceLabel(Object? value, {String language = 'ko'}) {
   final normalized = (value?.toString() ?? '').trim();
@@ -7314,13 +7055,8 @@ String _basisLabel(String value, {String language = 'ko'}) {
   };
 }
 
-bool _isFallbackSourceCode(String? value) {
-  final normalized = (value ?? '').trim();
-  return normalized == 'public_mvp_snapshot' ||
-      normalized == 'fallback' ||
-      normalized.endsWith('_fallback') ||
-      normalized.contains('snapshot_fallback');
-}
+// C3: _isFallbackSourceCode → shared/labels/source_label.dart (isFallbackSourceCode).
+bool _isFallbackSourceCode(String? value) => isFallbackSourceCode(value);
 
 List<String> _stringList(Object? value) {
   if (value is Iterable) {
