@@ -41,6 +41,3 @@ clients/flutter/.dart_tool/
 clients/flutter/pubspec.lock
 apps/flutter_app/.dart_tool/
 .vercel
-
-# dart-dio 자동생성 클라이언트 (재생성 가능; openapi-generator serializer 버그 해결 전까지 미커밋).
-/clients/flutter_generated/
