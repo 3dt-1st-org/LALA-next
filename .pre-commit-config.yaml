@@ -1,6 +1,8 @@
 # LALA-next pre-commit hooks (로컬/CI 동일).
 # ruff/detect-secrets/pre-commit 자체는 pyproject.toml dev 그룹 + pre-commit 프레임워크로 구동.
 # 설치: uv sync --extra dev && uv run pre-commit install
+# clients/flutter_generated/ 는 openapi-generator 자동생성 코드 → 린트/시크릿스캔/포맷 대상에서 제외.
+exclude: '^clients/flutter_generated/'
 repos:
   # ruff는 프로젝트 pyproject.toml 설정을 그대로 쓰도록 local 훅(uv run)으로 구동 (버전 드리프트 방지).
   - repo: local
