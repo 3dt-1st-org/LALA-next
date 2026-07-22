@@ -33,6 +33,9 @@ npx --yes "@openapitools/openapi-generator-cli" generate \
   --additional-properties packageName=lala_next_flutter_client_generated,pubName=lala_next_flutter_client_generated,nullSafety=true,dateLibrary=core \
   --skip-validate-spec
 
+echo ">> dart-dio serializer 버그 패치 (nested BuiltValue 모델 -> toBuilder, EnumClass 제외)"
+python3 "$REPO_ROOT/scripts/patch_dart_dio_serializers.py" "$OUT/lib/src/model"
+
 echo ">> dart pub get + build_runner (built_value serializer .g.dart 생성)"
 ( cd "$OUT" && dart pub get && dart run build_runner build --delete-conflicting-outputs )
 
