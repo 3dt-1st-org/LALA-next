@@ -4,7 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import '../../shared/l10n/lala_copy.dart';
+import '../../shared/labels/source_label.dart';
 import 'widgets/weather_forecast_chart_painter.dart';
+
+/// 표시 가능한(placeholder 아닌) 날씨만 통과(C3 추출 — main.dart 의 _publicWeatherOrNull).
+/// source 가 skeleton/fallback/unavailable 등이면 null 취급한다.
+LalaWeather? publicWeatherOrNull(LalaWeather? weather) {
+  if (weather == null || isPlaceholderWeatherSource(weather.source)) {
+    return null;
+  }
+  return weather;
+}
 
 /// 온도 문자열 표시 포맷터(C3 추출 — main.dart 의 _temperatureLabel).
 String temperatureLabel(String value) {
