@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -27,7 +28,8 @@ void main() {
     // automation can inspect more than the canvas fallback placeholder.
     _webSemanticsHandle ??= SemanticsBinding.instance.ensureSemantics();
   }
-  runApp(const LalaApp());
+  // C2: Riverpod 루트. feature 컨트롤러(C3)가 ProviderScope 하위에서 동작한다.
+  runApp(const ProviderScope(child: LalaApp()));
 }
 
 typedef LalaBackendFactory = LalaBackend Function(LalaAppConfig config);

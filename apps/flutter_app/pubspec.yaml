@@ -17,6 +17,8 @@ dependencies:
   geolocator: 14.0.2
   logto_dart_sdk: ^3.0.0
   web: ^1.1.1
+  # C2: MVVM 기반(Riverpod). go_router/dio/json_serializable 은 실사용 시점(C3/B1.3)에 추가.
+  flutter_riverpod: ^2.5.1
 
 dev_dependencies:
   flutter_test:
