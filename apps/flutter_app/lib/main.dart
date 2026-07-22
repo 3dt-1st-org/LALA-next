@@ -32,7 +32,11 @@ import 'features/place/widgets/proof_chip.dart';
 import 'features/place/widgets/rail_category_badge.dart';
 import 'features/place/widgets/rail_place_thumb.dart';
 import 'features/place/widgets/signal_grid.dart';
+import 'features/planner/widgets/planner_loading_card.dart';
+import 'features/planner/widgets/planner_map_pill.dart';
 import 'features/settings/widgets/user_settings_sheet.dart';
+import 'features/tour/widgets/tour_map_pill.dart';
+import 'features/tour/widgets/tour_tag.dart';
 import 'features/weather/weather_helpers.dart';
 import 'features/weather/widgets/forecast_chip.dart';
 import 'features/weather/widgets/weather_fact.dart';
@@ -42,6 +46,7 @@ import 'kakao_map_view.dart';
 import 'manual_location_options.dart';
 import 'shared/l10n/lala_copy.dart';
 import 'shared/widgets/compact_info_tile.dart';
+import 'shared/widgets/small_status_pill.dart';
 import 'shared/widgets/tiny_meta.dart';
 import 'smoke_state.dart';
 
@@ -1953,7 +1958,7 @@ class _Dashboard extends StatelessWidget {
               Positioned(
                 right: 16,
                 top: 52,
-                child: _TourMapPill(
+                child: TourMapPill(
                   places: tourPlaces,
                   language: uiLanguage,
                   onPressed: () => onOpenSheet(_ActiveMapSheet.tour),
@@ -2751,29 +2756,7 @@ class _MapRailPlaceCard extends StatelessWidget {
 // C3: RailCategoryBadge → features/place/widgets/rail_category_badge.dart (RailCategoryBadge).
 // C3: RailPlaceThumb → features/place/widgets/rail_place_thumb.dart (RailPlaceThumb).
 
-class _PlannerMapPill extends StatelessWidget {
-  const _PlannerMapPill({
-    required this.dailyPlan,
-    required this.language,
-    required this.onPressed,
-  });
-
-  final LalaDailyPlan? dailyPlan;
-  final String language;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final slots = dailyPlan?.slots ?? const <LalaPlanSlot>[];
-    return _SmallStatusPill(
-      key: const ValueKey('planner-pill-hit-target'),
-      icon: Icons.event_note,
-      label: language == 'en' ? 'Daily Plan' : '하루 일정',
-      active: slots.isNotEmpty,
-      onPressed: onPressed,
-    );
-  }
-}
+// C3: PlannerMapPill → features/planner/widgets/planner_map_pill.dart (PlannerMapPill).
 
 class _MapUtilityControlRow extends StatelessWidget {
   const _MapUtilityControlRow({
@@ -2798,7 +2781,7 @@ class _MapUtilityControlRow extends StatelessWidget {
         Expanded(
           child: Align(
             alignment: Alignment.centerLeft,
-            child: _PlannerMapPill(
+            child: PlannerMapPill(
               dailyPlan: dailyPlan,
               language: language,
               onPressed: onOpenPlanner,
@@ -2822,28 +2805,7 @@ class _MapUtilityControlRow extends StatelessWidget {
   }
 }
 
-class _TourMapPill extends StatelessWidget {
-  const _TourMapPill({
-    required this.places,
-    required this.language,
-    required this.onPressed,
-  });
-
-  final List<LalaPlace> places;
-  final String language;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return _SmallStatusPill(
-      key: const ValueKey('tour-pill-hit-target'),
-      icon: Icons.restaurant_menu,
-      label: _copy(language, ko: '맛집 투어', en: 'Food tour'),
-      active: places.isNotEmpty,
-      onPressed: onPressed,
-    );
-  }
-}
+// C3: TourMapPill → features/tour/widgets/tour_map_pill.dart (TourMapPill).
 
 class _MapBottomDock extends StatelessWidget {
   const _MapBottomDock({
@@ -3669,7 +3631,7 @@ class _PlannerSheetContent extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         if (visibleSlots.isEmpty)
-          _PlannerLoadingCard(language: language)
+          PlannerLoadingCard(language: language)
         else
           ...visibleSlots
               .take(5)
@@ -3812,63 +3774,7 @@ class _PlannerOverviewCard extends StatelessWidget {
   }
 }
 
-class _PlannerLoadingCard extends StatelessWidget {
-  const _PlannerLoadingCard({required this.language});
-
-  final String language;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.95),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Row(
-        children: [
-          const SizedBox(
-            width: 18,
-            height: 18,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _copy(
-                    language,
-                    ko: '일정을 생성하는 중...',
-                    en: 'Generating your daily plan...',
-                  ),
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF1E293B),
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  _copy(
-                    language,
-                    ko: '처음 방문하는 장소는 최대 5~10초 소요돼요',
-                    en: 'New locations may take 5-10 seconds.',
-                  ),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: const Color(0xFF64748B),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+// C3: PlannerLoadingCard → features/planner/widgets/planner_loading_card.dart (PlannerLoadingCard).
 
 class _PlanSlotTile extends StatelessWidget {
   const _PlanSlotTile({
@@ -4098,7 +4004,7 @@ class _TourSheetContent extends StatelessWidget {
           runSpacing: 8,
           children: [
             for (final place in items)
-              _TourTag(
+              TourTag(
                 key: ValueKey('tour-tag-${place.placeId}'),
                 label: _placeDisplayName(place, language),
                 onPressed: () => onSelectPlace(place),
@@ -4139,28 +4045,7 @@ class _TourSheetContent extends StatelessWidget {
   }
 }
 
-class _TourTag extends StatelessWidget {
-  const _TourTag({super.key, required this.label, required this.onPressed});
-
-  final String label;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return ActionChip(
-      avatar: const Icon(Icons.restaurant_menu, size: 16),
-      label: Text(label, overflow: TextOverflow.ellipsis),
-      onPressed: onPressed,
-      backgroundColor: Colors.white,
-      side: const BorderSide(color: Color(0xFFF5C842)),
-      labelStyle: const TextStyle(
-        color: Color(0xFF744210),
-        fontWeight: FontWeight.w900,
-      ),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-    );
-  }
-}
+// C3: TourTag → features/tour/widgets/tour_tag.dart (TourTag).
 
 // C3: TourScriptCard → features/docent/widgets/tour_script_card.dart (TourScriptCard).
 // C3: TourAudioBar → features/docent/widgets/tour_audio_bar.dart (TourAudioBar).
@@ -6076,7 +5961,7 @@ class _WeatherMapPill extends StatelessWidget {
     final label = data == null
         ? _copy(language, ko: '날씨 데이터 준비 중', en: 'Weather pending')
         : '${temperatureLabel(data.temp)} · ${_weatherPillDustLabel(data.dust, language)}';
-    return _SmallStatusPill(
+    return SmallStatusPill(
       key: const ValueKey('weather-pill-hit-target'),
       icon: Icons.thermostat,
       label: label,
@@ -6088,80 +5973,7 @@ class _WeatherMapPill extends StatelessWidget {
   }
 }
 
-class _SmallStatusPill extends StatelessWidget {
-  const _SmallStatusPill({
-    super.key,
-    required this.icon,
-    required this.label,
-    required this.active,
-    required this.onPressed,
-    this.maxWidth = 150,
-    this.maxLines = 1,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool active;
-  final VoidCallback onPressed;
-  final double maxWidth;
-  final int maxLines;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(999),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: onPressed,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: maxWidth),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-            decoration: BoxDecoration(
-              color: active
-                  ? Colors.white.withValues(alpha: 0.98)
-                  : Colors.white.withValues(alpha: 0.72),
-              borderRadius: BorderRadius.circular(999),
-              boxShadow: const [
-                BoxShadow(
-                  blurRadius: 12,
-                  offset: Offset(0, 4),
-                  color: Color(0x12000000),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  icon,
-                  size: 16,
-                  color: active
-                      ? const Color(0xFF2B6CB0)
-                      : const Color(0xFF64748B),
-                ),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(
-                    label,
-                    maxLines: maxLines,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Color(0xFF0F172A),
-                      fontWeight: FontWeight.w800,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
+// C3: SmallStatusPill(공용) → shared/widgets/small_status_pill.dart (SmallStatusPill).
 
 class _RoundIconButton extends StatelessWidget {
   const _RoundIconButton({
