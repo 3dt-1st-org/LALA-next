@@ -326,15 +326,17 @@ def _success_envelope_schema(data_schema_name: str | None = None) -> dict[str, A
         data_schema = {"type": "object", "nullable": True}
     return {
         "type": "object",
-        "required": ["ok", "data", "meta", "error"],
+        # error 는 성공 응답에서 항상 null 이므로 required 에서 제외 → optional/nullable 로
+        # 역직렬화(dart-dio 가 required+nullable 을 non-nullable 로 만드는 것을 회피).
+        "required": ["ok", "data", "meta"],
         "properties": {
             "ok": {"type": "boolean", "const": True},
             "data": data_schema,
             "meta": {"$ref": "#/components/schemas/ApiMeta"},
-            # error: 성공 응답에서는 항상 null 이지만, 스키마를 null 전용(type:"null")으로 두면
-            # openapi-generator(dart-dio) 가 미생성 ModelNull 을 참조해 빌드가 깨진다.
-            # 런타임 값은 여전히 null 이되, 타입은 nullable ApiError 로 구체화한다.
-            "error": {"allOf": [{"$ref": "#/components/schemas/ApiError"}], "nullable": True},
+            # error: 성공 응답에서는 항상 null. type:"null" 은 dart-dio 가 ModelNull 을 참조해 빠지고,
+            # nullable ApiError 는 직렬화 시 null 을 ApiError 로 빌드하려다 code(non-null) 누락으로 실패.
+            # 따라서 generic nullable 객체(JsonObject?)로 둬 null 이 깔끔히 역직렬화되게 한다.
+            "error": {"type": "object", "nullable": True},
         },
         "additionalProperties": False,
     }
@@ -343,7 +345,8 @@ def _success_envelope_schema(data_schema_name: str | None = None) -> dict[str, A
 def _api_error_envelope_schema() -> dict[str, Any]:
     return {
         "type": "object",
-        "required": ["ok", "data", "meta", "error"],
+        # data 는 에러 응답에서 항상 null 이므로 required 에서 제외 → optional/nullable.
+        "required": ["ok", "meta", "error"],
         "properties": {
             "ok": {"type": "boolean", "const": False},
             "data": {"type": "object", "nullable": True},

@@ -12,7 +12,7 @@ void main() {
       // TODO
     });
 
-    // ApiError error
+    // JsonObject error
     test('to test the property `error`', () async {
       // TODO
     });

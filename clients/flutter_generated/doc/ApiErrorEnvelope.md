@@ -8,7 +8,7 @@ import 'package:lala_next_flutter_client_generated/api.dart';
 ## Properties
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**data** | [**JsonObject**](.md) |  | 
+**data** | [**JsonObject**](.md) |  | [optional] 
 **error** | [**ApiError**](ApiError.md) |  | 
 **meta** | [**ApiMeta**](ApiMeta.md) |  | 
 **ok** | **bool** |  | 

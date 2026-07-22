@@ -22,7 +22,7 @@ part 'api_error_envelope.g.dart';
 @BuiltValue()
 abstract class ApiErrorEnvelope implements Built<ApiErrorEnvelope, ApiErrorEnvelopeBuilder> {
   @BuiltValueField(wireName: r'data')
-  JsonObject get data;
+  JsonObject? get data;
 
   @BuiltValueField(wireName: r'error')
   ApiError get error;
@@ -56,11 +56,13 @@ class _$ApiErrorEnvelopeSerializer implements PrimitiveSerializer<ApiErrorEnvelo
     ApiErrorEnvelope object, {
     FullType specifiedType = FullType.unspecified,
   }) sync* {
-    yield r'data';
-    yield serializers.serialize(
-      object.data,
-      specifiedType: const FullType(JsonObject),
-    );
+    if (object.data != null) {
+      yield r'data';
+      yield serializers.serialize(
+        object.data,
+        specifiedType: const FullType(JsonObject),
+      );
+    }
     yield r'error';
     yield serializers.serialize(
       object.error,

@@ -8,7 +8,7 @@ part of 'api_error_envelope.dart';
 
 class _$ApiErrorEnvelope extends ApiErrorEnvelope {
   @override
-  final JsonObject data;
+  final JsonObject? data;
   @override
   final ApiError error;
   @override
@@ -21,10 +21,7 @@ class _$ApiErrorEnvelope extends ApiErrorEnvelope {
       (ApiErrorEnvelopeBuilder()..update(updates))._build();
 
   _$ApiErrorEnvelope._(
-      {required this.data,
-      required this.error,
-      required this.meta,
-      required this.ok})
+      {this.data, required this.error, required this.meta, required this.ok})
       : super._();
   @override
   ApiErrorEnvelope rebuild(void Function(ApiErrorEnvelopeBuilder) updates) =>
@@ -120,8 +117,7 @@ class ApiErrorEnvelopeBuilder
     try {
       _$result = _$v ??
           _$ApiErrorEnvelope._(
-            data: BuiltValueNullFieldError.checkNotNull(
-                data, r'ApiErrorEnvelope', 'data'),
+            data: data,
             error: error.build(),
             meta: meta.build(),
             ok: BuiltValueNullFieldError.checkNotNull(

@@ -9,7 +9,7 @@ import 'package:lala_next_flutter_client_generated/api.dart';
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **data** | [**InterventionData**](InterventionData.md) |  | 
-**error** | [**ApiError**](ApiError.md) |  | 
+**error** | [**JsonObject**](.md) |  | [optional] 
 **meta** | [**ApiMeta**](ApiMeta.md) |  | 
 **ok** | **bool** |  | 
 
