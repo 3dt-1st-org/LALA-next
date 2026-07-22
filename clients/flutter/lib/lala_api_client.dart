@@ -370,6 +370,134 @@ class LalaApiClient {
     );
   }
 
+  /// ONMU P3b: 커뮤니티 게시판 — 목록 조회(페이지네이션). 클라이언트 인증.
+  Future<LalaEnvelope<CommunityPostsResponse>> getCommunityPosts({
+    int limit = 20,
+    int offset = 0,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'GET',
+      '/api/v1/community/posts',
+      query: {'limit': '$limit', 'offset': '$offset'},
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+    );
+    return _envelopeFromResponse<CommunityPostsResponse>(
+      resp,
+      parseData: CommunityPostsResponse.fromJsonObject,
+    );
+  }
+
+  /// ONMU P3b: 게시글 작성(OAuth). 본문은 단순 JSON 맵(title/body/tags).
+  Future<LalaEnvelope<CommunityPost>> createCommunityPost({
+    required String title,
+    required String body,
+    List<String>? tags,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final payload = <String, dynamic>{
+      'title': title,
+      'body': body,
+    };
+    if (tags != null && tags.isNotEmpty) {
+      payload['tags'] = tags;
+    }
+    final resp = await _request(
+      'POST',
+      '/api/v1/community/posts',
+      body: payload,
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+      contentType: 'application/json',
+    );
+    return _envelopeFromResponse<CommunityPost>(
+      resp,
+      parseData: CommunityPost.fromJsonObject,
+    );
+  }
+
+  /// ONMU P3b: 단일 게시글 상세 조회.
+  Future<LalaEnvelope<CommunityPost>> getCommunityPost({
+    required String postId,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'GET',
+      '/api/v1/community/posts/$postId',
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+    );
+    return _envelopeFromResponse<CommunityPost>(
+      resp,
+      parseData: CommunityPost.fromJsonObject,
+    );
+  }
+
+  /// ONMU P3b: 게시글 댓글 목록 조회.
+  Future<LalaEnvelope<CommunityCommentsResponse>> getCommunityComments({
+    required String postId,
+    int limit = 50,
+    int offset = 0,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'GET',
+      '/api/v1/community/posts/$postId/comments',
+      query: {'limit': '$limit', 'offset': '$offset'},
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+    );
+    return _envelopeFromResponse<CommunityCommentsResponse>(
+      resp,
+      parseData: CommunityCommentsResponse.fromJsonObject,
+    );
+  }
+
+  /// ONMU P3b: 댓글 작성(OAuth).
+  Future<LalaEnvelope<CommunityComment>> createCommunityComment({
+    required String postId,
+    required String body,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'POST',
+      '/api/v1/community/posts/$postId/comments',
+      body: <String, dynamic>{'body': body},
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+      contentType: 'application/json',
+    );
+    return _envelopeFromResponse<CommunityComment>(
+      resp,
+      parseData: CommunityComment.fromJsonObject,
+    );
+  }
+
+  /// ONMU P3b: 게시글 좋아요 토글(OAuth). 응답: post_id/liked/like_count.
+  Future<LalaEnvelope<CommunityLikeState>> toggleCommunityLike({
+    required String postId,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'POST',
+      '/api/v1/community/posts/$postId/like',
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+      contentType: 'application/json',
+    );
+    return _envelopeFromResponse<CommunityLikeState>(
+      resp,
+      parseData: CommunityLikeState.fromJsonObject,
+    );
+  }
+
   void close() {
     _dio.close(force: true);
   }
@@ -1314,6 +1442,194 @@ class LalaAudioResponse {
   final String contentType;
   final String? requestHash;
   final String? cacheKey;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// ONMU P3b: 커뮤니티 데이터 모델. apps/api app/schemas/community.py 와 대응.
+// created_at/updated_at 은 백엔드가 ISO-8601 문자열로 내려주므로 String 그대로 보관한다.
+// ─────────────────────────────────────────────────────────────────────────
+
+/// 커뮤니티 게시글.
+class CommunityPost {
+  const CommunityPost({
+    required this.id,
+    required this.authorUserId,
+    required this.title,
+    required this.body,
+    required this.tags,
+    required this.likeCount,
+    required this.commentCount,
+    required this.viewerLiked,
+    required this.createdAt,
+    this.updatedAt,
+  });
+
+  final String id;
+  final String authorUserId;
+  final String title;
+  final String body;
+  final List<String> tags;
+  final int likeCount;
+  final int commentCount;
+  final bool viewerLiked;
+  final String createdAt;
+  final String? updatedAt;
+
+  static CommunityPost fromJsonObject(Object? value) {
+    return CommunityPost.fromJson(_asMap(value));
+  }
+
+  factory CommunityPost.fromJson(Map<String, dynamic> json) {
+    final rawTags = json['tags'];
+    final tags = rawTags is List
+        ? rawTags.map((e) => '$e').toList(growable: false)
+        : const <String>[];
+    return CommunityPost(
+      id: _asString(json['id']),
+      authorUserId: _asString(json['author_user_id']),
+      title: _asString(json['title']),
+      body: _asString(json['body']),
+      tags: tags,
+      likeCount: _asInt(json['like_count']),
+      commentCount: _asInt(json['comment_count']),
+      viewerLiked: _asBool(json['viewer_liked']),
+      createdAt: _asString(json['created_at']),
+      updatedAt: _asOptionalString(json['updated_at']),
+    );
+  }
+
+  /// 좋아요/댓글 수·viewer_liked 만 갱신한 복사본(낙관적 UI 용).
+  CommunityPost copyWithReactions({
+    int? likeCount,
+    int? commentCount,
+    bool? viewerLiked,
+  }) {
+    return CommunityPost(
+      id: id,
+      authorUserId: authorUserId,
+      title: title,
+      body: body,
+      tags: tags,
+      likeCount: likeCount ?? this.likeCount,
+      commentCount: commentCount ?? this.commentCount,
+      viewerLiked: viewerLiked ?? this.viewerLiked,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+    );
+  }
+}
+
+/// 게시글 목록 응답(count/total/posts).
+class CommunityPostsResponse {
+  const CommunityPostsResponse({
+    required this.count,
+    required this.total,
+    required this.posts,
+  });
+
+  final int count;
+  final int total;
+  final List<CommunityPost> posts;
+
+  static CommunityPostsResponse fromJsonObject(Object? value) {
+    return CommunityPostsResponse.fromJson(_asMap(value));
+  }
+
+  factory CommunityPostsResponse.fromJson(Map<String, dynamic> json) {
+    return CommunityPostsResponse(
+      count: _asInt(json['count']),
+      total: _asInt(json['total']),
+      posts: _asList(json['posts'])
+          .map(CommunityPost.fromJsonObject)
+          .toList(growable: false),
+    );
+  }
+}
+
+/// 커뮤니티 댓글.
+class CommunityComment {
+  const CommunityComment({
+    required this.id,
+    required this.postId,
+    required this.authorUserId,
+    required this.body,
+    required this.createdAt,
+    this.updatedAt,
+  });
+
+  final String id;
+  final String postId;
+  final String authorUserId;
+  final String body;
+  final String createdAt;
+  final String? updatedAt;
+
+  static CommunityComment fromJsonObject(Object? value) {
+    return CommunityComment.fromJson(_asMap(value));
+  }
+
+  factory CommunityComment.fromJson(Map<String, dynamic> json) {
+    return CommunityComment(
+      id: _asString(json['id']),
+      postId: _asString(json['post_id']),
+      authorUserId: _asString(json['author_user_id']),
+      body: _asString(json['body']),
+      createdAt: _asString(json['created_at']),
+      updatedAt: _asOptionalString(json['updated_at']),
+    );
+  }
+}
+
+/// 댓글 목록 응답(count/total/comments).
+class CommunityCommentsResponse {
+  const CommunityCommentsResponse({
+    required this.count,
+    required this.total,
+    required this.comments,
+  });
+
+  final int count;
+  final int total;
+  final List<CommunityComment> comments;
+
+  static CommunityCommentsResponse fromJsonObject(Object? value) {
+    return CommunityCommentsResponse.fromJson(_asMap(value));
+  }
+
+  factory CommunityCommentsResponse.fromJson(Map<String, dynamic> json) {
+    return CommunityCommentsResponse(
+      count: _asInt(json['count']),
+      total: _asInt(json['total']),
+      comments: _asList(json['comments'])
+          .map(CommunityComment.fromJsonObject)
+          .toList(growable: false),
+    );
+  }
+}
+
+/// 좋아요 토글 응답(post_id/liked/like_count).
+class CommunityLikeState {
+  const CommunityLikeState({
+    required this.postId,
+    required this.liked,
+    required this.likeCount,
+  });
+
+  final String postId;
+  final bool liked;
+  final int likeCount;
+
+  static CommunityLikeState fromJsonObject(Object? value) {
+    return CommunityLikeState.fromJson(_asMap(value));
+  }
+
+  factory CommunityLikeState.fromJson(Map<String, dynamic> json) {
+    return CommunityLikeState(
+      postId: _asString(json['post_id']),
+      liked: _asBool(json['liked']),
+      likeCount: _asInt(json['like_count']),
+    );
+  }
 }
 
 Map<String, dynamic> _asMap(Object? value) {
