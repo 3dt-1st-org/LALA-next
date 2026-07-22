@@ -12,6 +12,8 @@ dependencies:
   cupertino_icons: ^1.0.8
   lala_next_flutter_client_reference:
     path: ../../clients/flutter
+  lala_next_flutter_client_generated:
+    path: ../../clients/flutter_generated
   url_launcher: ^6.3.2
   webview_flutter: ^4.14.0
   geolocator: 14.0.2
