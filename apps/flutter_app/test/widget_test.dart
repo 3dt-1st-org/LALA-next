@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lala_next_app/auth/auth_controller.dart';
 import 'package:lala_next_app/auth/logto_auth_gateway.dart';
+import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/kakao_map_fallback.dart';
 import 'package:lala_next_app/kakao_map_models.dart';
 import 'package:lala_next_app/main.dart';
@@ -2631,6 +2632,166 @@ void main() {
     expect(backend.weatherRequests, 1);
     expect(backend.interventionRequestConfigs, hasLength(1));
   });
+
+  // --- ONMU P2: 온보딩 플로우 ---
+
+  testWidgets(
+    'onboarding redirects to splash when not completed and blocks the main shell',
+    (tester) async {
+      await tester.pumpWidget(
+        TestLalaApp(
+          backendFactory: FakeBackend.new,
+          initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+          onboardingCompleted: false,
+        ),
+      );
+      await tester.pump();
+
+      // 메인 라우트가 스플래시로 차단된다. 메인 지도 콘텐츠는 보이지 않는다.
+      expect(find.text('당신의 수원을 안내합니다'), findsOneWidget);
+      expect(find.text('화성행궁'), findsNothing);
+
+      // 스플래시는 아직 온보딩을 완료하지 않았다.
+      expect(OnboardingState.isCompleted, isFalse);
+    },
+  );
+
+  testWidgets('onboarding splash auto-advances to the tourist type start page', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      TestLalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+        onboardingCompleted: false,
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('당신의 수원을 안내합니다'), findsOneWidget);
+
+    // 2초 후 자동으로 start 단계로 이동한다.
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+
+    expect(find.text('어떤 관광객이신가요?'), findsOneWidget);
+    expect(find.text('외국인 관광객'), findsOneWidget);
+    expect(find.text('내국인 관광객'), findsOneWidget);
+  });
+
+  testWidgets(
+    'onboarding foreign tourist defaults to english and reaches the map on skip',
+    (tester) async {
+      final locationProvider = FakeLocationProvider(
+        const LalaLocationResult.found(
+          LalaLocation(lat: 37.5665, lng: 126.9780),
+        ),
+      );
+      await tester.pumpWidget(
+        TestLalaApp(
+          backendFactory: FakeBackend.new,
+          initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+          locationProvider: locationProvider,
+          onboardingCompleted: false,
+        ),
+      );
+      await tester.pump();
+      // 스플래시 건너뛰기.
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+
+      // 외국인 관광객 선택 → 기본 English.
+      await tester.tap(find.text('외국인 관광객'));
+      await tester.pumpAndSettle();
+      expect(OnboardingState.language, 'en');
+
+      // 언어 단계: English 가 pre-select 되어 있고, Next 로 위치 단계로.
+      expect(find.text('English'), findsOneWidget);
+      await tester.tap(
+        find.widgetWithText(FilledButton, 'Next'),
+      );
+      await tester.pumpAndSettle();
+
+      // 위치 단계: "Not now" 스킵 → 온보딩 완료 → 메인 쉘(지도) 진입.
+      expect(find.text('We need your location for nearby tips'), findsOneWidget);
+      await tester.tap(find.text('Not now'));
+      await tester.pumpAndSettle();
+
+      expect(OnboardingState.isCompleted, isTrue);
+      expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
+    },
+  );
+
+  testWidgets('onboarding local tourist stays korean on location skip', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      TestLalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+        onboardingCompleted: false,
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('내국인 관광객'));
+    await tester.pumpAndSettle();
+    expect(OnboardingState.language, 'ko');
+
+    await tester.tap(find.widgetWithText(FilledButton, '다음'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('나중에 하기'));
+    await tester.pumpAndSettle();
+
+    expect(OnboardingState.isCompleted, isTrue);
+    expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
+  });
+
+  testWidgets(
+    'onboarding location denial offers manual area selection then completes',
+    (tester) async {
+      final locationProvider = FakeLocationProvider(
+        const LalaLocationResult.denied(),
+      );
+      await tester.pumpWidget(
+        TestLalaApp(
+          backendFactory: FakeBackend.new,
+          initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+          locationProvider: locationProvider,
+          onboardingCompleted: false,
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+
+      // 내국인 관광객(한국어) → 언어 다음 → 위치 단계.
+      await tester.tap(find.text('내국인 관광객'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, '다음'));
+      await tester.pumpAndSettle();
+
+      // 위치 허용 요청 → 거부 → 수동 지역 선택 옵션 노출.
+      await tester.tap(find.text('위치 권한 허용'));
+      await tester.pumpAndSettle();
+      expect(find.text('지역 직접 선택'), findsOneWidget);
+      expect(locationProvider.requests, 1);
+
+      // 수동 지역 선택 시트에서 서울 중구를 선택하면 온보딩이 완료된다.
+      await tester.tap(find.text('지역 직접 선택'));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('manual-location-option-seoul-jung')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(OnboardingState.isCompleted, isTrue);
+      expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
+    },
+  );
 }
 
 class TestLalaApp extends StatelessWidget {
@@ -2641,6 +2802,7 @@ class TestLalaApp extends StatelessWidget {
     this.requireLocationStartConfirmation = false,
     this.recommendationRecoveryDelays,
     this.authControllerFactory,
+    this.onboardingCompleted = true,
     super.key,
   });
 
@@ -2651,8 +2813,17 @@ class TestLalaApp extends StatelessWidget {
   final List<Duration>? recommendationRecoveryDelays;
   final LalaAuthControllerFactory? authControllerFactory;
 
+  /// ONMU P2: 기존 라이브 지도 테스트는 온보딩이 완료된 상태를 가정한다.
+  /// 온보딩 플로우 자체를 검증할 때만 false 로 넘겨 reset 한다.
+  final bool onboardingCompleted;
+
   @override
   Widget build(BuildContext context) {
+    if (onboardingCompleted) {
+      OnboardingState.markCompleted();
+    } else {
+      OnboardingState.reset();
+    }
     return LalaApp(
       backendFactory: backendFactory,
       initialConfig: initialConfig.copyWith(
