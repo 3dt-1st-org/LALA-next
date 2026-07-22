@@ -10,7 +10,7 @@ class _$WeatherSuccessEnvelope extends WeatherSuccessEnvelope {
   @override
   final WeatherData data;
   @override
-  final ApiError error;
+  final JsonObject? error;
   @override
   final ApiMeta meta;
   @override
@@ -21,10 +21,7 @@ class _$WeatherSuccessEnvelope extends WeatherSuccessEnvelope {
       (WeatherSuccessEnvelopeBuilder()..update(updates))._build();
 
   _$WeatherSuccessEnvelope._(
-      {required this.data,
-      required this.error,
-      required this.meta,
-      required this.ok})
+      {required this.data, this.error, required this.meta, required this.ok})
       : super._();
   @override
   WeatherSuccessEnvelope rebuild(
@@ -75,9 +72,9 @@ class WeatherSuccessEnvelopeBuilder
   WeatherDataBuilder get data => _$this._data ??= WeatherDataBuilder();
   set data(WeatherDataBuilder? data) => _$this._data = data;
 
-  ApiErrorBuilder? _error;
-  ApiErrorBuilder get error => _$this._error ??= ApiErrorBuilder();
-  set error(ApiErrorBuilder? error) => _$this._error = error;
+  JsonObject? _error;
+  JsonObject? get error => _$this._error;
+  set error(JsonObject? error) => _$this._error = error;
 
   ApiMetaBuilder? _meta;
   ApiMetaBuilder get meta => _$this._meta ??= ApiMetaBuilder();
@@ -95,7 +92,7 @@ class WeatherSuccessEnvelopeBuilder
     final $v = _$v;
     if ($v != null) {
       _data = $v.data.toBuilder();
-      _error = $v.error.toBuilder();
+      _error = $v.error;
       _meta = $v.meta.toBuilder();
       _ok = $v.ok;
       _$v = null;
@@ -122,7 +119,7 @@ class WeatherSuccessEnvelopeBuilder
       _$result = _$v ??
           _$WeatherSuccessEnvelope._(
             data: data.build(),
-            error: error.build(),
+            error: error,
             meta: meta.build(),
             ok: BuiltValueNullFieldError.checkNotNull(
                 ok, r'WeatherSuccessEnvelope', 'ok'),
@@ -132,8 +129,7 @@ class WeatherSuccessEnvelopeBuilder
       try {
         _$failedField = 'data';
         data.build();
-        _$failedField = 'error';
-        error.build();
+
         _$failedField = 'meta';
         meta.build();
       } catch (e) {

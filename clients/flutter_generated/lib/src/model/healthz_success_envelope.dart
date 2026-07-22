@@ -4,7 +4,6 @@
 
 // ignore_for_file: unused_element
 import 'package:built_collection/built_collection.dart';
-import 'package:lala_next_flutter_client_generated/src/model/api_error.dart';
 import 'package:lala_next_flutter_client_generated/src/model/api_meta.dart';
 import 'package:lala_next_flutter_client_generated/src/model/healthz_data.dart';
 import 'package:built_value/json_object.dart';
@@ -26,7 +25,7 @@ abstract class HealthzSuccessEnvelope implements Built<HealthzSuccessEnvelope, H
   HealthzData get data;
 
   @BuiltValueField(wireName: r'error')
-  ApiError get error;
+  JsonObject? get error;
 
   @BuiltValueField(wireName: r'meta')
   ApiMeta get meta;
@@ -62,11 +61,13 @@ class _$HealthzSuccessEnvelopeSerializer implements PrimitiveSerializer<HealthzS
       object.data,
       specifiedType: const FullType(HealthzData),
     );
-    yield r'error';
-    yield serializers.serialize(
-      object.error,
-      specifiedType: const FullType(ApiError),
-    );
+    if (object.error != null) {
+      yield r'error';
+      yield serializers.serialize(
+        object.error,
+        specifiedType: const FullType(JsonObject),
+      );
+    }
     yield r'meta';
     yield serializers.serialize(
       object.meta,
@@ -110,9 +111,9 @@ class _$HealthzSuccessEnvelopeSerializer implements PrimitiveSerializer<HealthzS
         case r'error':
           final valueDes = serializers.deserialize(
             value,
-            specifiedType: const FullType(ApiError),
-          ) as ApiError;
-          result.error = valueDes.toBuilder();
+            specifiedType: const FullType(JsonObject),
+          ) as JsonObject;
+          result.error = valueDes;
           break;
         case r'meta':
           final valueDes = serializers.deserialize(

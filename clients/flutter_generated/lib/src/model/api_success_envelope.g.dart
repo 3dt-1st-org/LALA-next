@@ -10,7 +10,7 @@ class _$ApiSuccessEnvelope extends ApiSuccessEnvelope {
   @override
   final JsonObject data;
   @override
-  final ApiError error;
+  final JsonObject? error;
   @override
   final ApiMeta meta;
   @override
@@ -21,10 +21,7 @@ class _$ApiSuccessEnvelope extends ApiSuccessEnvelope {
       (ApiSuccessEnvelopeBuilder()..update(updates))._build();
 
   _$ApiSuccessEnvelope._(
-      {required this.data,
-      required this.error,
-      required this.meta,
-      required this.ok})
+      {required this.data, this.error, required this.meta, required this.ok})
       : super._();
   @override
   ApiSuccessEnvelope rebuild(
@@ -75,9 +72,9 @@ class ApiSuccessEnvelopeBuilder
   JsonObject? get data => _$this._data;
   set data(JsonObject? data) => _$this._data = data;
 
-  ApiErrorBuilder? _error;
-  ApiErrorBuilder get error => _$this._error ??= ApiErrorBuilder();
-  set error(ApiErrorBuilder? error) => _$this._error = error;
+  JsonObject? _error;
+  JsonObject? get error => _$this._error;
+  set error(JsonObject? error) => _$this._error = error;
 
   ApiMetaBuilder? _meta;
   ApiMetaBuilder get meta => _$this._meta ??= ApiMetaBuilder();
@@ -95,7 +92,7 @@ class ApiSuccessEnvelopeBuilder
     final $v = _$v;
     if ($v != null) {
       _data = $v.data;
-      _error = $v.error.toBuilder();
+      _error = $v.error;
       _meta = $v.meta.toBuilder();
       _ok = $v.ok;
       _$v = null;
@@ -123,7 +120,7 @@ class ApiSuccessEnvelopeBuilder
           _$ApiSuccessEnvelope._(
             data: BuiltValueNullFieldError.checkNotNull(
                 data, r'ApiSuccessEnvelope', 'data'),
-            error: error.build(),
+            error: error,
             meta: meta.build(),
             ok: BuiltValueNullFieldError.checkNotNull(
                 ok, r'ApiSuccessEnvelope', 'ok'),
@@ -131,8 +128,6 @@ class ApiSuccessEnvelopeBuilder
     } catch (_) {
       late String _$failedField;
       try {
-        _$failedField = 'error';
-        error.build();
         _$failedField = 'meta';
         meta.build();
       } catch (e) {

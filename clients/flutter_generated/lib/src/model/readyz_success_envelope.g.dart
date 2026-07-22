@@ -10,7 +10,7 @@ class _$ReadyzSuccessEnvelope extends ReadyzSuccessEnvelope {
   @override
   final ReadyzData data;
   @override
-  final ApiError error;
+  final JsonObject? error;
   @override
   final ApiMeta meta;
   @override
@@ -21,10 +21,7 @@ class _$ReadyzSuccessEnvelope extends ReadyzSuccessEnvelope {
       (ReadyzSuccessEnvelopeBuilder()..update(updates))._build();
 
   _$ReadyzSuccessEnvelope._(
-      {required this.data,
-      required this.error,
-      required this.meta,
-      required this.ok})
+      {required this.data, this.error, required this.meta, required this.ok})
       : super._();
   @override
   ReadyzSuccessEnvelope rebuild(
@@ -75,9 +72,9 @@ class ReadyzSuccessEnvelopeBuilder
   ReadyzDataBuilder get data => _$this._data ??= ReadyzDataBuilder();
   set data(ReadyzDataBuilder? data) => _$this._data = data;
 
-  ApiErrorBuilder? _error;
-  ApiErrorBuilder get error => _$this._error ??= ApiErrorBuilder();
-  set error(ApiErrorBuilder? error) => _$this._error = error;
+  JsonObject? _error;
+  JsonObject? get error => _$this._error;
+  set error(JsonObject? error) => _$this._error = error;
 
   ApiMetaBuilder? _meta;
   ApiMetaBuilder get meta => _$this._meta ??= ApiMetaBuilder();
@@ -95,7 +92,7 @@ class ReadyzSuccessEnvelopeBuilder
     final $v = _$v;
     if ($v != null) {
       _data = $v.data.toBuilder();
-      _error = $v.error.toBuilder();
+      _error = $v.error;
       _meta = $v.meta.toBuilder();
       _ok = $v.ok;
       _$v = null;
@@ -122,7 +119,7 @@ class ReadyzSuccessEnvelopeBuilder
       _$result = _$v ??
           _$ReadyzSuccessEnvelope._(
             data: data.build(),
-            error: error.build(),
+            error: error,
             meta: meta.build(),
             ok: BuiltValueNullFieldError.checkNotNull(
                 ok, r'ReadyzSuccessEnvelope', 'ok'),
@@ -132,8 +129,7 @@ class ReadyzSuccessEnvelopeBuilder
       try {
         _$failedField = 'data';
         data.build();
-        _$failedField = 'error';
-        error.build();
+
         _$failedField = 'meta';
         meta.build();
       } catch (e) {
