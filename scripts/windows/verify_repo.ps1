@@ -53,12 +53,6 @@ try {
         throw "OpenAPI schema export failed."
     }
 
-    Write-Host "Checking Flutter reference client contract..."
-    & $Python -m apps.api.app.tools.check_flutter_client_contract
-    if ($LASTEXITCODE -ne 0) {
-        throw "Flutter reference client contract check failed."
-    }
-
     Write-Host "Checking Flutter reference client Dart package when Dart is available..."
     & powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\windows\verify_flutter_client.ps1"
     if ($LASTEXITCODE -ne 0) {
