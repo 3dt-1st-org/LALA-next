@@ -24,6 +24,9 @@ import 'package:lala_next_app/features/onboarding/presentation/pages/start_page.
 import 'package:lala_next_app/features/map_route/presentation/pages/map_route_page.dart';
 import 'package:lala_next_app/features/plan/presentation/pages/plan_page.dart';
 import 'package:lala_next_app/features/search/presentation/pages/search_page.dart';
+import 'package:lala_next_app/features/community/presentation/pages/community_feed_page.dart';
+import 'package:lala_next_app/features/community/presentation/pages/community_post_detail_page.dart';
+import 'package:lala_next_app/features/community/presentation/pages/community_create_post_page.dart';
 
 GoRouter createLalaRouter({
   required LalaBackendFactory backendFactory,
@@ -113,6 +116,25 @@ GoRouter createLalaRouter({
             ],
           ),
         ],
+      ),
+      // --- ONMU P3b: 커뮤니티 push 라우트(메인 쉘 외부). context.push 로 진입해
+      // 탭 상태를 유지한 채 풀스크린으로 올라간다. ---
+      GoRoute(
+        path: LalaRoutePaths.community,
+        builder: (BuildContext context, GoRouterState state) =>
+            const CommunityFeedPage(),
+      ),
+      GoRoute(
+        path: LalaRoutePaths.communityPost,
+        builder: (BuildContext context, GoRouterState state) {
+          final postId = state.pathParameters['id'] ?? '';
+          return CommunityPostDetailPage(postId: postId);
+        },
+      ),
+      GoRoute(
+        path: LalaRoutePaths.communityCreate,
+        builder: (BuildContext context, GoRouterState state) =>
+            const CommunityCreatePostPage(),
       ),
     ],
   );

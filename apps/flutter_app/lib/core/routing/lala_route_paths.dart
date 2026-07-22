@@ -22,4 +22,17 @@ abstract final class LalaRoutePaths {
 
   /// 4/4 위치 권한 요청 — 완료 시 /map-route 로 전환.
   static const String onboardingLocation = '/onboarding/location';
+
+  // --- ONMU P3b: 커뮤니티 push 라우트(메인 쉘 외부, 탭 상태 유지) ---
+  /// 커뮤니티 게시판 피드.
+  static const String community = '/community';
+
+  /// 커뮤니티 게시글 상세(:id = postId).
+  static const String communityPost = '/community/post/:id';
+
+  /// 커뮤니티 게시글 작성.
+  static const String communityCreate = '/community/create';
+
+  /// 커뮤니티 상세 경로를 postId 로 조합.
+  static String communityPostFor(String postId) => '/community/post/$postId';
 }

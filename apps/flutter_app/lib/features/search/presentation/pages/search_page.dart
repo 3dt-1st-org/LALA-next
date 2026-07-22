@@ -5,11 +5,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import 'package:lala_next_app/core/backend/lala_backend.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
+import 'package:lala_next_app/core/routing/lala_route_paths.dart';
 import 'package:lala_next_app/features/home/home_view_helpers.dart' show filterPlaces;
 import 'package:lala_next_app/features/place/place_helpers.dart';
 import 'package:lala_next_app/features/place/widgets/category_badge.dart';
@@ -166,6 +168,7 @@ class _SearchPageState extends State<SearchPage> {
               language: _language,
               onChanged: (value) => setState(() => _query = value),
               onRefresh: _load,
+              onOpenCommunity: () => context.push(LalaRoutePaths.community),
             ),
             _CategoryChipBar(
               categories: _kSearchCategories,
@@ -197,19 +200,21 @@ class _SearchPageState extends State<SearchPage> {
   }
 }
 
-/// 상단 검색 바 + 새로고침 버튼.
+/// 상단 검색 바 + 커뮤니티 진입 + 새로고침 버튼.
 class _SearchHeader extends StatelessWidget {
   const _SearchHeader({
     required this.controller,
     required this.language,
     required this.onChanged,
     required this.onRefresh,
+    required this.onOpenCommunity,
   });
 
   final TextEditingController controller;
   final String language;
   final ValueChanged<String> onChanged;
   final VoidCallback onRefresh;
+  final VoidCallback onOpenCommunity;
 
   @override
   Widget build(BuildContext context) {
@@ -277,6 +282,12 @@ class _SearchHeader extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
+          IconButton(
+            tooltip: lalaCopy(language, ko: '커뮤니티', en: 'Community'),
+            onPressed: onOpenCommunity,
+            icon: const Icon(Icons.forum_outlined),
+            color: const Color(0xFF2B6CB0),
+          ),
           IconButton(
             tooltip: lalaCopy(language, ko: '새로고침', en: 'Refresh'),
             onPressed: onRefresh,
