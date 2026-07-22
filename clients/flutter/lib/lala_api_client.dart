@@ -2,10 +2,28 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:http/http.dart' as http;
+import 'package:built_value/serializer.dart';
+import 'package:dio/dio.dart';
+import 'package:lala_next_flutter_client_generated/lala_next_flutter_client_generated.dart';
 
 typedef LalaAccessTokenProvider = Future<String?> Function();
 
+/// Reference LALA API client.
+///
+/// Transport is powered by the generated `dart-dio` client's [Dio] engine and
+/// its [standardSerializers] registry (used to serialize the simple POST
+/// request bodies that have no enum fields). Response decoding deliberately
+/// reuses this client's hand-made, defensively-loose parsers instead of the
+/// generated `built_value` response models: those models declare non-nullable
+/// fields and closed enums (e.g. `PlaceScoreComponents.reviewQualityScore` is a
+/// non-nullable `double`, `ApiMeta.requestId` is required, `ReadinessChecks`
+/// has 29 required enum fields) that cannot represent this contract's nullable,
+/// stringly-typed wire shape. Routing responses through them would discard
+/// information (notably `MeData.createdAt`, parsed by the generator as
+/// `DateTime` and not reconstructable to the original ISO string). The request
+/// wire (paths, query encoding, Dio auth/interceptor hooks) therefore comes
+/// from the generated client surface, while the response adapter maps the raw
+/// decoded JSON into the unchanged public model classes.
 class LalaApiClient {
   LalaApiClient({
     required this.baseUri,
@@ -13,8 +31,13 @@ class LalaApiClient {
     this.apiKey,
     this.accessTokenProvider,
     this.defaultTimeout = const Duration(seconds: 15),
-    http.Client? httpClient,
-  }) : _httpClient = httpClient ?? http.Client();
+    Dio? dio,
+  }) : _dio = dio ?? Dio() {
+    _dio.options.validateStatus = (_) => true;
+    _dio.options.receiveTimeout = null;
+    _dio.options.connectTimeout = null;
+    _dio.options.sendTimeout = null;
+  }
 
   static const Duration healthTimeout = Duration(seconds: 3);
   static const Duration readinessTimeout = Duration(seconds: 3);
@@ -28,7 +51,8 @@ class LalaApiClient {
   final String? apiKey;
   final LalaAccessTokenProvider? accessTokenProvider;
   final Duration defaultTimeout;
-  final http.Client _httpClient;
+  final Dio _dio;
+  final Serializers _serializers = standardSerializers;
 
   LalaAuthMode get authMode =>
       LalaAuthMode.fromCredentials(bearerToken: bearerToken, apiKey: apiKey);
@@ -38,39 +62,46 @@ class LalaApiClient {
   Future<LalaEnvelope<Map<String, dynamic>>> getHealth({
     String? requestId,
     Duration? timeout,
-  }) {
-    return _sendJson<Map<String, dynamic>>(
+  }) async {
+    final resp = await _request(
       'GET',
       '/healthz',
       requestId: requestId,
       timeout: timeout ?? healthTimeout,
       includeAuth: false,
     );
+    return _envelopeFromResponse<Map<String, dynamic>>(resp);
   }
 
   Future<LalaEnvelope<LalaReadiness>> getReadiness({
     String? requestId,
     Duration? timeout,
-  }) {
-    return _sendJson<LalaReadiness>(
+  }) async {
+    final resp = await _request(
       'GET',
       '/readyz',
       requestId: requestId,
       timeout: timeout ?? readinessTimeout,
-      parseData: LalaReadiness.fromJsonObject,
       includeAuth: false,
+    );
+    return _envelopeFromResponse<LalaReadiness>(
+      resp,
+      parseData: LalaReadiness.fromJsonObject,
     );
   }
 
   Future<LalaEnvelope<LalaMe>> getMe({
     String? requestId,
     Duration? timeout,
-  }) {
-    return _sendJson<LalaMe>(
+  }) async {
+    final resp = await _request(
       'GET',
       '/api/v1/me',
       requestId: requestId,
       timeout: timeout ?? readTimeout,
+    );
+    return _envelopeFromResponse<LalaMe>(
+      resp,
       parseData: LalaMe.fromJsonObject,
     );
   }
@@ -80,13 +111,36 @@ class LalaApiClient {
     String? requestId,
     Duration? timeout,
   }) async {
-    await _sendJson<void>(
+    final resp = await _request(
       'DELETE',
       '/api/v1/me',
       body: {'confirmation': confirmation},
       requestId: requestId,
       timeout: timeout ?? readTimeout,
-      expectNoContent: true,
+      contentType: 'application/json',
+    );
+    final status = resp.statusCode ?? 0;
+    final reqId = resp.headers.value('x-request-id');
+    if (status == 204) return;
+
+    final raw = resp.data;
+    if (raw is Map<String, dynamic>) {
+      final envelope = LalaEnvelope<Map<String, dynamic>>.fromJson(
+        raw,
+        statusCode: status,
+        responseRequestId: reqId,
+      );
+      if (!envelope.ok) {
+        throw LalaApiException.fromEnvelope(envelope);
+      }
+    }
+
+    throw LalaApiException(
+      code: 'INVALID_RESPONSE',
+      message: 'Unexpected response from LALA API.',
+      statusCode: status,
+      retryable: false,
+      requestId: reqId,
     );
   }
 
@@ -100,8 +154,8 @@ class LalaApiClient {
     bool includeScores = false,
     String? requestId,
     Duration? timeout,
-  }) {
-    return _sendJson<LalaPlacesResponse>(
+  }) async {
+    final resp = await _request(
       'GET',
       '/api/v1/places',
       query: {
@@ -115,6 +169,9 @@ class LalaApiClient {
       },
       requestId: requestId,
       timeout: timeout ?? readTimeout,
+    );
+    return _envelopeFromResponse<LalaPlacesResponse>(
+      resp,
       parseData: LalaPlacesResponse.fromJsonObject,
     );
   }
@@ -125,13 +182,16 @@ class LalaApiClient {
     bool force = false,
     String? requestId,
     Duration? timeout,
-  }) {
-    return _sendJson<LalaWeather>(
+  }) async {
+    final resp = await _request(
       'GET',
       '/api/v1/weather',
       query: {'lat': '$lat', 'lng': '$lng', 'force': '$force'},
       requestId: requestId,
       timeout: timeout ?? readTimeout,
+    );
+    return _envelopeFromResponse<LalaWeather>(
+      resp,
       parseData: LalaWeather.fromJsonObject,
     );
   }
@@ -164,8 +224,11 @@ class LalaApiClient {
     String mode = 'brief',
     String? requestId,
     Duration? timeout,
-  }) {
-    return _sendJson<LalaDocentScript>(
+  }) async {
+    // `category` is a closed enum in the generated `DocentScriptRequest`, so
+    // the body is serialized from a literal map to preserve the loose string
+    // contract and the conditional/trimmed-field semantics.
+    final resp = await _request(
       'POST',
       '/api/v1/docents/script',
       body: {
@@ -209,6 +272,10 @@ class LalaApiClient {
       },
       requestId: requestId,
       timeout: timeout ?? generationTimeout,
+      contentType: 'application/json',
+    );
+    return _envelopeFromResponse<LalaDocentScript>(
+      resp,
       parseData: LalaDocentScript.fromJsonObject,
     );
   }
@@ -219,34 +286,37 @@ class LalaApiClient {
     String? requestId,
     Duration? timeout,
   }) async {
-    final response = await _withTimeout(
-      _httpClient.post(
-        _uri('/api/v1/docents/audio'),
-        headers: await _headers(
-          requestId: requestId,
-          contentType: 'application/json',
-          accept: 'audio/mpeg, application/json',
-        ),
-        body: jsonEncode({'script': script, 'language': language}),
-      ),
-      timeout: timeout ?? audioTimeout,
-      requestId: requestId,
+    final request = DocentAudioRequestBuilder()
+      ..script = script
+      ..language = language;
+    final body = _serializers.serialize(
+      request.build(),
+      specifiedType: const FullType(DocentAudioRequest),
     );
-
-    final contentType = response.headers['content-type'] ?? '';
-    if (response.statusCode >= 200 &&
-        response.statusCode < 300 &&
+    final resp = await _request(
+      'POST',
+      '/api/v1/docents/audio',
+      body: body,
+      requestId: requestId,
+      timeout: timeout ?? audioTimeout,
+      responseType: ResponseType.bytes,
+      accept: 'audio/mpeg, application/json',
+      contentType: 'application/json',
+    );
+    final status = resp.statusCode ?? 0;
+    final contentType = resp.headers.value('content-type') ?? '';
+    if (status >= 200 &&
+        status < 300 &&
         contentType.toLowerCase().contains('audio/mpeg')) {
       return LalaAudioResponse(
-        bytes: response.bodyBytes,
-        requestId: response.headers['x-request-id'],
+        bytes: _asBytes(resp.data),
+        requestId: resp.headers.value('x-request-id'),
         contentType: contentType,
-        requestHash: response.headers['x-lala-request-hash'],
-        cacheKey: response.headers['x-lala-cache-key'],
+        requestHash: resp.headers.value('x-lala-request-hash'),
+        cacheKey: resp.headers.value('x-lala-cache-key'),
       );
     }
-
-    throw _exceptionFromJsonResponse(response);
+    throw _exceptionFromBytesResponse(resp);
   }
 
   Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({
@@ -256,13 +326,26 @@ class LalaApiClient {
     String language = 'ko',
     String? requestId,
     Duration? timeout,
-  }) {
-    return _sendJson<LalaDailyPlan>(
+  }) async {
+    final request = DailyPlanRequestBuilder()
+      ..lat = lat
+      ..lng = lng
+      ..radiusM = radiusM
+      ..language = language;
+    final body = _serializers.serialize(
+      request.build(),
+      specifiedType: const FullType(DailyPlanRequest),
+    );
+    final resp = await _request(
       'POST',
       '/api/v1/plans/daily',
-      body: {'lat': lat, 'lng': lng, 'radius_m': radiusM, 'language': language},
+      body: body,
       requestId: requestId,
       timeout: timeout ?? plannerTimeout,
+      contentType: 'application/json',
+    );
+    return _envelopeFromResponse<LalaDailyPlan>(
+      resp,
       parseData: LalaDailyPlan.fromJsonObject,
     );
   }
@@ -273,115 +356,67 @@ class LalaApiClient {
     int radiusM = 10000,
     String? requestId,
     Duration? timeout,
-  }) {
-    return _sendJson<LalaIntervention>(
+  }) async {
+    final resp = await _request(
       'GET',
       '/api/v1/plans/intervention',
       query: {'lat': '$lat', 'lng': '$lng', 'radius_m': '$radiusM'},
       requestId: requestId,
       timeout: timeout ?? readTimeout,
+    );
+    return _envelopeFromResponse<LalaIntervention>(
+      resp,
       parseData: LalaIntervention.fromJsonObject,
     );
   }
 
   void close() {
-    _httpClient.close();
+    _dio.close(force: true);
   }
 
-  Future<LalaEnvelope<T>> _sendJson<T>(
+  Future<Response<dynamic>> _request(
     String method,
     String path, {
-    Map<String, String>? query,
-    Map<String, Object?>? body,
+    Map<String, dynamic>? query,
+    Object? body,
     String? requestId,
-    T Function(Object?)? parseData,
-    Duration? timeout,
-    bool includeAuth = true,
-    bool expectNoContent = false,
-  }) async {
-    final uri = _uri(path, query: query);
-    final headers = await _headers(
-      requestId: requestId,
-      contentType: body == null ? null : 'application/json',
-      accept: 'application/json',
-      includeAuth: includeAuth,
-    );
-
-    late Future<http.Response> responseFuture;
-    switch (method) {
-      case 'GET':
-        responseFuture = _httpClient.get(uri, headers: headers);
-        break;
-      case 'POST':
-        responseFuture = _httpClient.post(
-          uri,
-          headers: headers,
-          body: jsonEncode(body),
-        );
-        break;
-      case 'DELETE':
-        responseFuture = _httpClient.delete(
-          uri,
-          headers: headers,
-          body: jsonEncode(body),
-        );
-        break;
-      default:
-        throw ArgumentError('Unsupported method $method.');
-    }
-    final response = await _withTimeout(
-      responseFuture,
-      timeout: timeout ?? defaultTimeout,
-      requestId: requestId,
-    );
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw _exceptionFromJsonResponse(response);
-    }
-
-    if (expectNoContent) {
-      if (response.statusCode == 204) {
-        return LalaEnvelope<T>(
-          ok: true,
-          data: null,
-          meta: const <String, dynamic>{},
-          error: null,
-          statusCode: response.statusCode,
-          requestId: response.headers['x-request-id'],
-        );
-      }
-
-      try {
-        final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-        if (decoded is Map<String, dynamic>) {
-          final envelope = LalaEnvelope<Map<String, dynamic>>.fromJson(
-            decoded,
-            statusCode: response.statusCode,
-            responseRequestId: response.headers['x-request-id'],
-          );
-          if (!envelope.ok) {
-            throw LalaApiException.fromEnvelope(envelope);
-          }
-        }
-      } on LalaApiException {
-        rethrow;
-      } catch (_) {
-        // Fall through to the generic invalid-response exception.
-      }
-
-      throw _invalidResponse(response);
-    }
-
-    return _parseEnvelope<T>(response, parseData: parseData);
-  }
-
-  Future<T> _withTimeout<T>(
-    Future<T> request, {
     required Duration timeout,
-    String? requestId,
+    bool includeAuth = true,
+    ResponseType responseType = ResponseType.json,
+    String accept = 'application/json',
+    String? contentType,
   }) async {
+    final auth = await _resolveAuth(includeAuth);
+    final headers = <String, String>{'Accept': accept};
+    if (auth.authorization != null) {
+      headers['Authorization'] = auth.authorization!;
+    }
+    if (auth.apiKey != null) {
+      headers['X-API-Key'] = auth.apiKey!;
+    }
+    if (contentType != null) {
+      headers['Content-Type'] = contentType;
+    }
+    final reqId = requestId?.trim();
+    if (reqId != null && reqId.isNotEmpty) {
+      headers['X-Request-ID'] = reqId;
+    }
+
+    final uri = _uri(path, query: query);
     try {
-      return await request.timeout(timeout);
+      return await _dio.requestUri<dynamic>(
+        uri,
+        data: body,
+        options: Options(
+          method: method,
+          headers: headers,
+          responseType: responseType,
+          contentType: contentType,
+          validateStatus: (_) => true,
+          receiveTimeout: null,
+          sendTimeout: null,
+        ),
+      ).timeout(timeout);
     } on TimeoutException {
       throw LalaApiException(
         code: 'REQUEST_TIMEOUT',
@@ -390,28 +425,49 @@ class LalaApiClient {
         retryable: true,
         requestId: requestId,
       );
+    } on DioException catch (e) {
+      if (e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout ||
+          e.type == DioExceptionType.sendTimeout) {
+        throw LalaApiException(
+          code: 'REQUEST_TIMEOUT',
+          message: 'LALA API request timed out.',
+          statusCode: 0,
+          retryable: true,
+          requestId: requestId,
+        );
+      }
+      final status = e.response?.statusCode ?? 0;
+      throw LalaApiException(
+        code: status == 0 ? 'NETWORK_ERROR' : 'HTTP_$status',
+        message: 'LALA API request failed.',
+        statusCode: status,
+        retryable: status >= 500,
+        requestId: e.response?.headers.value('x-request-id') ?? requestId,
+      );
     }
   }
 
-  LalaEnvelope<T> _parseEnvelope<T>(
-    http.Response response, {
+  LalaEnvelope<T> _envelopeFromResponse<T>(
+    Response<dynamic> resp, {
     T Function(Object?)? parseData,
   }) {
-    final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-    if (decoded is! Map<String, dynamic>) {
+    final status = resp.statusCode ?? 0;
+    final reqId = resp.headers.value('x-request-id');
+    final raw = resp.data;
+    if (raw is! Map<String, dynamic>) {
       throw LalaApiException(
-        code: 'INVALID_RESPONSE',
+        code: status < 200 || status >= 300 ? 'HTTP_$status' : 'INVALID_RESPONSE',
         message: 'Expected a JSON object response.',
-        statusCode: response.statusCode,
-        retryable: false,
-        requestId: response.headers['x-request-id'],
+        statusCode: status,
+        retryable: status >= 500,
+        requestId: reqId,
       );
     }
-
     final envelope = LalaEnvelope<T>.fromJson(
-      decoded,
-      statusCode: response.statusCode,
-      responseRequestId: response.headers['x-request-id'],
+      raw,
+      statusCode: status,
+      responseRequestId: reqId,
       parseData: parseData,
     );
     if (!envelope.ok) {
@@ -420,84 +476,73 @@ class LalaApiClient {
     return envelope;
   }
 
-  LalaApiException _exceptionFromJsonResponse(http.Response response) {
+  LalaApiException _exceptionFromBytesResponse(Response<dynamic> resp) {
+    final status = resp.statusCode ?? 0;
+    final reqId = resp.headers.value('x-request-id');
     try {
-      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      final decoded = jsonDecode(utf8.decode(_asBytes(resp.data)));
       if (decoded is Map<String, dynamic>) {
         final envelope = LalaEnvelope<Map<String, dynamic>>.fromJson(
           decoded,
-          statusCode: response.statusCode,
-          responseRequestId: response.headers['x-request-id'],
+          statusCode: status,
+          responseRequestId: reqId,
         );
         return LalaApiException.fromEnvelope(envelope);
       }
     } catch (_) {
       // Fall through to a generic exception. Do not include response body text.
     }
-
     return LalaApiException(
-      code: 'HTTP_${response.statusCode}',
+      code: 'HTTP_$status',
       message: 'LALA API request failed.',
-      statusCode: response.statusCode,
-      retryable: response.statusCode >= 500,
-      requestId: response.headers['x-request-id'],
+      statusCode: status,
+      retryable: status >= 500,
+      requestId: reqId,
     );
   }
 
-  Future<Map<String, String>> _headers({
-    String? requestId,
-    String? contentType,
-    String accept = 'application/json',
-    bool includeAuth = true,
-  }) async {
-    final headers = <String, String>{'Accept': accept};
+  Future<({String? authorization, String? apiKey})> _resolveAuth(
+    bool includeAuth,
+  ) async {
+    if (!includeAuth) {
+      return (authorization: null, apiKey: null);
+    }
 
-    if (includeAuth) {
-      String? providerToken;
-      if (accessTokenProvider != null) {
-        try {
-          providerToken = (await accessTokenProvider!())?.trim();
-        } catch (_) {
-          throw const LalaApiException(
-            code: 'AUTH_TOKEN_UNAVAILABLE',
-            message: 'Access token unavailable.',
-            statusCode: 0,
-            retryable: true,
-          );
-        }
-      }
-
-      final token = providerToken?.isNotEmpty == true
-          ? providerToken
-          : bearerToken?.trim();
-      final key = apiKey?.trim();
-
-      if (token != null && token.isNotEmpty) {
-        headers['Authorization'] = 'Bearer $token';
-      } else if (key != null && key.isNotEmpty) {
-        headers['X-API-Key'] = key;
+    String? providerToken;
+    if (accessTokenProvider != null) {
+      try {
+        providerToken = (await accessTokenProvider!())?.trim();
+      } catch (_) {
+        throw const LalaApiException(
+          code: 'AUTH_TOKEN_UNAVAILABLE',
+          message: 'Access token unavailable.',
+          statusCode: 0,
+          retryable: true,
+        );
       }
     }
-    if (contentType != null) {
-      headers['Content-Type'] = contentType;
+
+    final token = providerToken != null && providerToken.isNotEmpty
+        ? providerToken
+        : bearerToken?.trim();
+    final key = apiKey?.trim();
+
+    if (token != null && token.isNotEmpty) {
+      return (authorization: 'Bearer $token', apiKey: null);
     }
-    if (requestId != null && requestId.trim().isNotEmpty) {
-      headers['X-Request-ID'] = requestId.trim();
+    if (key != null && key.isNotEmpty) {
+      return (authorization: null, apiKey: key);
     }
-    return headers;
+    return (authorization: null, apiKey: null);
   }
 
-  LalaApiException _invalidResponse(http.Response response) {
-    return LalaApiException(
-      code: 'INVALID_RESPONSE',
-      message: 'Unexpected response from LALA API.',
-      statusCode: response.statusCode,
-      retryable: false,
-      requestId: response.headers['x-request-id'],
-    );
+  Uint8List _asBytes(dynamic data) {
+    if (data is Uint8List) return data;
+    if (data is List) return Uint8List.fromList(data.cast<int>());
+    return Uint8List(0);
   }
 
-  Uri _uri(String path, {Map<String, String>? query}) {
+  Uri _uri(String path, {Map<String, dynamic>? query}) {
     final basePath = baseUri.path.endsWith('/')
         ? baseUri.path.substring(0, baseUri.path.length - 1)
         : baseUri.path;

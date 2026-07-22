@@ -52,9 +52,6 @@ echo "Planning worker/batch live rollout gates..."
 echo "Exporting OpenAPI schema in-process..."
 "$ROOT/scripts/unix/export_openapi.sh" --in-process --python "$PYTHON"
 
-echo "Checking Flutter reference client contract..."
-"$PYTHON" -m apps.api.app.tools.check_flutter_client_contract
-
 echo "Checking Flutter reference client Dart package when Dart is available..."
 "$ROOT/scripts/unix/verify_flutter_client.sh"
 

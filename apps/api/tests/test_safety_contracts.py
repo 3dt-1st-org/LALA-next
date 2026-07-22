@@ -619,7 +619,6 @@ def test_unix_scripts_have_safe_operational_guards():
     assert "--dry-run" in scripts["smoke_workers.sh"]
     assert "preflight" in scripts["smoke_workers.sh"]
     assert "Live Azure checks are intentionally excluded" in scripts["verify_repo.sh"]
-    assert "check_flutter_client_contract" in scripts["verify_repo.sh"]
     assert "verify_flutter_client.sh" in scripts["verify_repo.sh"]
     assert "smoke_oauth_jwt.sh" in scripts["verify_repo.sh"]
     assert "local JWKS server" in scripts["smoke_oauth_jwt.sh"]

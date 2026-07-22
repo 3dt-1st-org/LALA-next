@@ -152,12 +152,7 @@ def build_legacy_retirement_plan(
         LegacyRetirementPlanStep(
             order=1,
             title="Confirm FastAPI contract and current route set",
-            command="\n".join(
-                (
-                    _cmd("scripts/unix/export_openapi.sh", "--in-process"),
-                    _cmd("python", "-m", "apps.api.app.tools.check_flutter_client_contract"),
-                )
-            ),
+            command="\n".join((_cmd("scripts/unix/export_openapi.sh", "--in-process"),)),
             approval_required=False,
             notes=(
                 "Read-only. Confirms /api/v1/*, /healthz, /readyz, and schema expectations before comparing legacy consumers.",

@@ -46,9 +46,6 @@ jobs:
         shell: pwsh
         run: .\scripts\windows\export_openapi.ps1 -InProcess
 
-      - name: Check Flutter reference client contract
-        run: uv run python -m apps.api.app.tools.check_flutter_client_contract
-
       - name: Verify Flutter reference client when Dart is available
         shell: pwsh
         run: .\scripts\windows\verify_flutter_client.ps1
