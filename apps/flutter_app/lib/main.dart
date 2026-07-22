@@ -16,6 +16,7 @@ import 'auth/auth_controller.dart';
 import 'auth/logto_auth_gateway.dart';
 import 'browser_location.dart';
 import 'features/intervention/widgets/intervention_toast.dart';
+import 'features/weather/widgets/weather_forecast_chart_painter.dart';
 import 'kakao_map_view.dart';
 import 'manual_location_options.dart';
 import 'shared/l10n/lala_copy.dart';
@@ -5670,7 +5671,7 @@ class _WeatherForecastChartCard extends StatelessWidget {
                   children: [
                     Positioned.fill(
                       child: CustomPaint(
-                        painter: _WeatherForecastChartPainter(points: points),
+                        painter: WeatherForecastChartPainter(points: points),
                       ),
                     ),
                     for (final point in points)
@@ -5733,69 +5734,7 @@ class _WeatherForecastChartCard extends StatelessWidget {
   }
 }
 
-class _WeatherChartPoint {
-  const _WeatherChartPoint({
-    required this.x,
-    required this.y,
-    required this.label,
-  });
-
-  final double x;
-  final double y;
-  final String label;
-}
-
-class _WeatherForecastChartPainter extends CustomPainter {
-  const _WeatherForecastChartPainter({required this.points});
-
-  final List<_WeatherChartPoint> points;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final gridPaint = Paint()
-      ..color = const Color(0xFFE2E8F0)
-      ..strokeWidth = 1;
-    for (final y in <double>[26, 52, 78]) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
-    }
-
-    if (points.isEmpty) {
-      return;
-    }
-
-    final path = Path()..moveTo(points.first.x, points.first.y);
-    for (var index = 1; index < points.length; index += 1) {
-      final previous = points[index - 1];
-      final current = points[index];
-      final midX = (previous.x + current.x) / 2;
-      path.cubicTo(midX, previous.y, midX, current.y, current.x, current.y);
-    }
-
-    final linePaint = Paint()
-      ..color = const Color(0xFF2B6CB0)
-      ..strokeWidth = 3
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round
-      ..style = PaintingStyle.stroke;
-    canvas.drawPath(path, linePaint);
-
-    final fillPaint = Paint()..color = const Color(0xFFF5C842);
-    final strokePaint = Paint()
-      ..color = Colors.white
-      ..strokeWidth = 3
-      ..style = PaintingStyle.stroke;
-    for (final point in points) {
-      final offset = Offset(point.x, point.y);
-      canvas.drawCircle(offset, 5.5, fillPaint);
-      canvas.drawCircle(offset, 5.5, strokePaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _WeatherForecastChartPainter oldDelegate) {
-    return oldDelegate.points != points;
-  }
-}
+// C3-2: WeatherChartPoint + WeatherForecastChartPainter → features/weather/widgets/weather_forecast_chart_painter.dart.
 
 class _WeatherHeroCard extends StatelessWidget {
   const _WeatherHeroCard({required this.weather, required this.language});
@@ -9082,7 +9021,7 @@ double? _temperatureValue(String value) {
   return double.tryParse(match.group(0)!);
 }
 
-List<_WeatherChartPoint> _weatherChartPoints({
+List<WeatherChartPoint> _weatherChartPoints({
   required List<LalaForecastItem> items,
   required double columnWidth,
   required double chartHeight,
@@ -9098,7 +9037,7 @@ List<_WeatherChartPoint> _weatherChartPoints({
 
   return [
     for (var index = 0; index < items.length; index += 1)
-      _WeatherChartPoint(
+      WeatherChartPoint(
         x: index * columnWidth + columnWidth / 2,
         y:
             topPadding +
