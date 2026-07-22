@@ -56,6 +56,39 @@ String compactDustPart({
   return '$label $cleanedValue $cleanedGrade';
 }
 
+/// 단일 항목 수치 + 등급 결합 라벨(C3 추출 — main.dart 의 _dustPollutantValueLabel).
+String dustPollutantValueLabel({
+  required String value,
+  required String grade,
+  required String language,
+}) {
+  final normalized = value.trim();
+  if (normalized.isEmpty) {
+    return grade;
+  }
+  final unit = isLalaEnglish(language) ? 'ug/m3' : '㎍/m³';
+  return '$normalized$unit · $grade';
+}
+
+/// 날씨 알림용 미세먼지 요약 라벨(C3 추출 — main.dart 의 _weatherPillDustLabel).
+/// PM10/PM2.5 수치+등급이 있으면 "PM10 … · PM2.5 …", 없으면 상황 라벨로 대체.
+String weatherPillDustLabel(LalaDust dust, String language) {
+  final pm10 = dust.pm10.trim();
+  final pm25 = dust.pm25.trim();
+  final pm10Grade = dustPollutantGradeLabel(dust, 'pm10', language).trim();
+  final pm25Grade = dustPollutantGradeLabel(dust, 'pm25', language).trim();
+  final values = [
+    if (pm10.isNotEmpty)
+      compactDustPart(label: 'PM10', value: pm10, grade: pm10Grade),
+    if (pm25.isNotEmpty)
+      compactDustPart(label: 'PM2.5', value: pm25, grade: pm25Grade),
+  ];
+  if (values.isNotEmpty) {
+    return values.join(' · ');
+  }
+  return dustSituationLabel(dust, language, includePrefix: false);
+}
+
 String dustSituationLabel(
   LalaDust dust,
   String language, {

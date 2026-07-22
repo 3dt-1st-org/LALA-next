@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import '../../shared/l10n/lala_copy.dart';
+import '../../shared/l10n/multi_language_text.dart';
 
 /// 장소 카테고리 표시 라벨(C3 추출 — main.dart 의 _categoryLabel).
 String categoryLabel(String category, {String language = 'ko'}) {
@@ -86,4 +87,79 @@ Uri? normalizedPlaceImageUri(String? rawUrl) {
 /// 공식 장소 이미지 보유 여부(C3 추출 — main.dart 의 _hasOfficialPlaceImage).
 bool hasOfficialPlaceImage(LalaPlace place) {
   return normalizedPlaceImageUri(place.imageUrl) != null;
+}
+
+/// 행사 정보 노출 대상 여부(C3 추출 — main.dart 의 _shouldShowEventInfo).
+bool shouldShowEventInfo(LalaPlace place) {
+  return place.category == 'event' ||
+      place.eventStartDate?.trim().isNotEmpty == true ||
+      place.eventEndDate?.trim().isNotEmpty == true ||
+      place.eventUrl?.trim().isNotEmpty == true ||
+      place.isOngoing != null ||
+      place.isApproximateLocation == true;
+}
+
+/// 행사 URL 검증(C3 추출 — main.dart 의 _validEventUri). http/https 만 허용.
+Uri? validEventUri(String? rawUrl) {
+  final trimmed = rawUrl?.trim();
+  if (trimmed == null || trimmed.isEmpty) {
+    return null;
+  }
+  final uri = Uri.tryParse(trimmed);
+  if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
+    return null;
+  }
+  if (uri.scheme != 'https' && uri.scheme != 'http') {
+    return null;
+  }
+  return uri;
+}
+
+/// 행사 날짜 표시 포맷(C3 추출 — main.dart 의 _formatEventDate).
+String? formatEventDate(String? rawDate, String language) {
+  final trimmed = rawDate?.trim();
+  if (trimmed == null || trimmed.isEmpty) {
+    return null;
+  }
+  final match = RegExp(r'^(\d{4})-(\d{2})-(\d{2})').firstMatch(trimmed);
+  if (match == null) {
+    return singleLanguageText(trimmed, language) ?? trimmed;
+  }
+  final year = match.group(1)!;
+  final month = int.parse(match.group(2)!);
+  final day = int.parse(match.group(3)!);
+  if (isLalaEnglish(language)) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${months[month - 1]} $day, $year';
+  }
+  return '$year년 ${month.toString().padLeft(2, '0')}월 ${day.toString().padLeft(2, '0')}일';
+}
+
+/// 행사 날짜 구간 텍스트(C3 추출 — main.dart 의 _eventDateRangeText).
+String? eventDateRangeText(LalaPlace place, String language) {
+  final start = formatEventDate(place.eventStartDate, language);
+  final end = formatEventDate(place.eventEndDate, language);
+  if (start == null && end == null) {
+    return null;
+  }
+  if (start != null && end != null) {
+    return '$start ~ $end';
+  }
+  if (start != null) {
+    return lalaCopy(language, ko: '$start부터', en: 'From $start');
+  }
+  return lalaCopy(language, ko: '~$end까지', en: 'Until $end');
 }
