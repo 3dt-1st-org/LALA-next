@@ -15,28 +15,30 @@ import 'auth/auth_controller.dart';
 import 'auth/logto_auth_gateway.dart';
 import 'browser_location.dart';
 import 'features/intervention/widgets/intervention_toast.dart';
+import 'features/map/map_helpers.dart';
+import 'features/map/widgets/floating_map_controls.dart';
+import 'features/map/widgets/legacy_map_canvas.dart';
+import 'features/map/widgets/map_bottom_dock.dart';
+import 'features/map/widgets/map_place_carousel_overlay.dart';
+import 'features/map/widgets/map_toast.dart';
+import 'features/map/widgets/map_utility_control_row.dart';
+import 'features/map/widgets/top_map_chrome.dart';
 import 'features/docent/docent_helpers.dart';
-import 'features/docent/widgets/auto_docent_fab.dart';
-import 'features/docent/widgets/dock_docent_preview.dart';
 import 'features/docent/widgets/docent_subtitle.dart';
 import 'features/location/widgets/manual_location_sheet.dart';
 import 'features/place/place_helpers.dart';
-import 'features/place/widgets/category_badge.dart';
 import 'features/place/widgets/context_fact.dart';
 import 'features/place/widgets/context_fact_chip.dart';
 import 'features/place/widgets/event_info_card.dart';
 import 'features/place/widgets/featured_place_header.dart';
-import 'features/place/widgets/map_rail_place_card.dart';
 import 'features/place/widgets/proof_chip.dart';
 import 'features/place/widgets/signal_grid.dart';
-import 'features/planner/widgets/planner_map_pill.dart';
 import 'features/planner/widgets/planner_sheet_content.dart';
 import 'features/settings/widgets/user_settings_sheet.dart';
 import 'features/tour/tour_helpers.dart';
 import 'features/tour/widgets/tour_map_pill.dart';
 import 'features/tour/widgets/tour_sheet_content.dart';
 import 'features/weather/weather_helpers.dart';
-import 'features/weather/widgets/weather_map_pill.dart';
 import 'features/weather/widgets/weather_sheet_content.dart';
 import 'kakao_map_view.dart';
 import 'manual_location_options.dart';
@@ -47,8 +49,11 @@ import 'shared/labels/basis_label.dart';
 import 'shared/labels/dust_label.dart';
 import 'shared/labels/source_label.dart';
 import 'shared/widgets/muted_sheet_card.dart';
-import 'shared/widgets/tiny_meta.dart';
 import 'smoke_state.dart';
+
+// C3: clusterMapPlacesForMap 는 features/map/map_helpers.dart 로 이관.
+//     test/widget_test.dart 가 main.dart import 하여 호출하므로 호환용 re-export.
+export 'features/map/map_helpers.dart' show clusterMapPlacesForMap;
 
 SemanticsHandle? _webSemanticsHandle;
 
@@ -1904,7 +1909,7 @@ class _Dashboard extends StatelessWidget {
         return Stack(
           children: [
             Positioned.fill(
-              child: _LegacyMapCanvas(
+              child: LegacyMapCanvas(
                 places: topPlaces,
                 selectedPlace: topPlace,
                 weather: currentWeather,
@@ -1922,7 +1927,7 @@ class _Dashboard extends StatelessWidget {
               left: 0,
               right: 0,
               top: 0,
-              child: _TopMapChrome(
+              child: TopMapChrome(
                 loading: loading,
                 language: uiLanguage,
                 selectedCategory: selectedCategory,
@@ -1939,7 +1944,7 @@ class _Dashboard extends StatelessWidget {
                   width: isWide
                       ? math.min(780.0, constraints.maxWidth - 32)
                       : constraints.maxWidth - 32,
-                  child: _MapPlaceCarouselOverlay(
+                  child: MapPlaceCarouselOverlay(
                     places: topPlaces,
                     source: effectiveSource,
                     language: uiLanguage,
@@ -1971,7 +1976,7 @@ class _Dashboard extends StatelessWidget {
                 top: isWide ? 88 : 118,
                 child: SizedBox(
                   width: isWide ? 420 : null,
-                  child: _MapToast(
+                  child: MapToast(
                     icon: Icons.error_outline,
                     label: displayedError,
                     actionLabel: _copy(
@@ -1994,7 +1999,7 @@ class _Dashboard extends StatelessWidget {
                 child: Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 520),
-                    child: _MapToast(
+                    child: MapToast(
                       actionKey: const ValueKey('location-fallback-retry'),
                       secondaryActionKey: const ValueKey(
                         'location-manual-select',
@@ -2046,7 +2051,7 @@ class _Dashboard extends StatelessWidget {
                   width: isWide
                       ? math.min(760.0, constraints.maxWidth - 32)
                       : constraints.maxWidth,
-                  child: _MapBottomDock(
+                  child: MapBottomDock(
                     isWide: isWide,
                     places: topPlaces,
                     source: effectiveSource,
@@ -2092,7 +2097,7 @@ class _Dashboard extends StatelessWidget {
               right: 0,
               bottom: floatingControlsBottom,
               child: Center(
-                child: _FloatingMapControls(
+                child: FloatingMapControls(
                   voiceEnabled: voiceEnabled,
                   autoDocentEnabled: autoDocentEnabled,
                   language: uiLanguage,
@@ -2112,7 +2117,7 @@ class _Dashboard extends StatelessWidget {
                     width: isWide
                         ? math.min(760.0, constraints.maxWidth - 32)
                         : constraints.maxWidth - 32,
-                    child: _MapUtilityControlRow(
+                    child: MapUtilityControlRow(
                       dailyPlan: activeDailyPlan,
                       weather: currentWeather,
                       language: uiLanguage,
@@ -2375,580 +2380,11 @@ class _LocationStartupOverlay extends StatelessWidget {
   }
 }
 
-class _TopMapChrome extends StatelessWidget {
-  const _TopMapChrome({
-    required this.loading,
-    required this.language,
-    required this.selectedCategory,
-    required this.onSelectCategory,
-    required this.onOpenSettings,
-  });
-
-  final bool loading;
-  final String language;
-  final String selectedCategory;
-  final ValueChanged<String> onSelectCategory;
-  final VoidCallback onOpenSettings;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      _CategoryChip(
-                        label: categoryFilterLabel('all', language),
-                        active: selectedCategory == 'all',
-                        color: const Color(0xFF1A202C),
-                        onTap: () => onSelectCategory('all'),
-                      ),
-                      _CategoryChip(
-                        label: categoryFilterLabel('attraction', language),
-                        active: selectedCategory == 'attraction',
-                        color: const Color(0xFFC53030),
-                        onTap: () => onSelectCategory('attraction'),
-                      ),
-                      _CategoryChip(
-                        label: categoryFilterLabel('restaurant', language),
-                        active: selectedCategory == 'restaurant',
-                        color: const Color(0xFFF5C842),
-                        onTap: () => onSelectCategory('restaurant'),
-                      ),
-                      _CategoryChip(
-                        label: categoryFilterLabel('event', language),
-                        active: selectedCategory == 'event',
-                        color: const Color(0xFF2B6CB0),
-                        onTap: () => onSelectCategory('event'),
-                      ),
-                      _CategoryChip(
-                        label: categoryFilterLabel('culture_venue', language),
-                        active: selectedCategory == 'culture_venue',
-                        color: const Color(0xFF0F766E),
-                        onTap: () => onSelectCategory('culture_venue'),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              _MapRoundButton(
-                buttonKey: const ValueKey('settings-button'),
-                tooltip: _copy(language, ko: '설정', en: 'Settings'),
-                icon: Icons.settings,
-                onPressed: onOpenSettings,
-              ),
-            ],
-          ),
-          if (loading) ...[
-            const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: const LinearProgressIndicator(minHeight: 3),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _MapPlaceCarouselOverlay extends StatelessWidget {
-  const _MapPlaceCarouselOverlay({
-    required this.places,
-    required this.source,
-    required this.language,
-    required this.selectedPlaceId,
-    required this.explicitSelectedPlaceId,
-    required this.expanded,
-    required this.compact,
-    required this.onSelectPlace,
-    required this.onReselectSelectedPlace,
-    required this.onToggleExpanded,
-  });
-
-  final List<LalaPlace> places;
-  final String? source;
-  final String language;
-  final String? selectedPlaceId;
-  final String? explicitSelectedPlaceId;
-  final bool expanded;
-  final bool compact;
-  final ValueChanged<LalaPlace> onSelectPlace;
-  final VoidCallback onReselectSelectedPlace;
-  final VoidCallback onToggleExpanded;
-
-  @override
-  Widget build(BuildContext context) {
-    final items = _railPlaces(places);
-    final railHeight = compact ? 126.0 : 150.0;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Align(
-          alignment: Alignment.center,
-          child: Material(
-            color: Colors.white.withValues(alpha: 0.94),
-            borderRadius: BorderRadius.circular(999),
-            elevation: 0,
-            shadowColor: const Color(0x18000000),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(999),
-              onTap: onToggleExpanded,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 7,
-                ),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(999),
-                  boxShadow: const [
-                    BoxShadow(
-                      blurRadius: 12,
-                      offset: Offset(0, 4),
-                      color: Color(0x18000000),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      expanded
-                          ? Icons.keyboard_arrow_up
-                          : Icons.keyboard_arrow_down,
-                      size: 17,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      expanded
-                          ? _copy(language, ko: '추천 장소 접기', en: 'Hide places')
-                          : _copy(language, ko: '추천 장소 보기', en: 'Show places'),
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: const Color(0xFF374151),
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      _copy(
-                        language,
-                        ko: '${items.length}곳 · ${_sourceLabel(source, language: language)}',
-                        en: '${items.length} places · ${_sourceLabel(source, language: language)}',
-                      ),
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: const Color(0xFF64748B),
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 180),
-          switchInCurve: Curves.easeOut,
-          switchOutCurve: Curves.easeIn,
-          child: expanded
-              ? Column(
-                  key: const ValueKey('recommendation-rail-expanded'),
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      key: const ValueKey('recommendation-rail-list'),
-                      height: railHeight,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.82),
-                          borderRadius: BorderRadius.circular(22),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.72),
-                          ),
-                          boxShadow: const [
-                            BoxShadow(
-                              blurRadius: 18,
-                              offset: Offset(0, 8),
-                              color: Color(0x16000000),
-                            ),
-                          ],
-                        ),
-                        child: ListView.separated(
-                          padding: const EdgeInsets.all(8),
-                          scrollDirection: Axis.horizontal,
-                          itemCount: items.length,
-                          separatorBuilder: (_, _) => const SizedBox(width: 10),
-                          itemBuilder: (context, index) {
-                            final place = items[index];
-                            final selected =
-                                (selectedPlaceId == null && index == 0) ||
-                                selectedPlaceId == place.placeId;
-                            final explicitlySelected =
-                                explicitSelectedPlaceId == place.placeId;
-                            return MapRailPlaceCard(
-                              place: place,
-                              language: language,
-                              selected: selected,
-                              compact: compact,
-                              onTap: explicitlySelected
-                                  ? onReselectSelectedPlace
-                                  : selected
-                                  ? null
-                                  : () => onSelectPlace(place),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                  ],
-                )
-              : const SizedBox.shrink(
-                  key: ValueKey('recommendation-rail-collapsed'),
-                ),
-        ),
-      ],
-    );
-  }
-}
-
-// C3: RailCategoryBadge → features/place/widgets/rail_category_badge.dart (RailCategoryBadge).
-// C3: RailPlaceThumb → features/place/widgets/rail_place_thumb.dart (RailPlaceThumb).
-
-// C3: PlannerMapPill → features/planner/widgets/planner_map_pill.dart (PlannerMapPill).
-
-class _MapUtilityControlRow extends StatelessWidget {
-  const _MapUtilityControlRow({
-    required this.dailyPlan,
-    required this.weather,
-    required this.language,
-    required this.onOpenPlanner,
-    required this.onOpenWeather,
-  });
-
-  final LalaDailyPlan? dailyPlan;
-  final LalaWeather? weather;
-  final String language;
-  final VoidCallback onOpenPlanner;
-  final VoidCallback onOpenWeather;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      key: const ValueKey('map-utility-control-row'),
-      children: [
-        Expanded(
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: PlannerMapPill(
-              dailyPlan: dailyPlan,
-              language: language,
-              onPressed: onOpenPlanner,
-            ),
-          ),
-        ),
-        const SizedBox(width: 46),
-        Expanded(
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: WeatherMapPill(
-              key: const ValueKey('weather-pill'),
-              weather: weather,
-              language: language,
-              onPressed: onOpenWeather,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// C3: TourMapPill → features/tour/widgets/tour_map_pill.dart (TourMapPill).
-
-class _MapBottomDock extends StatelessWidget {
-  const _MapBottomDock({
-    required this.isWide,
-    required this.places,
-    required this.source,
-    required this.topPlace,
-    required this.uiLanguage,
-    required this.height,
-    required this.docentScript,
-    required this.docentAudio,
-    required this.docentAction,
-    required this.audioLoading,
-    required this.audioError,
-    required this.canFetchAudio,
-    required this.showEvidence,
-    required this.error,
-    required this.recommendationRecoveryPending,
-    required this.onFetchAudio,
-    required this.onAddToPlan,
-    required this.onOpenDetail,
-    required this.onRefresh,
-    required this.onToggleEvidence,
-  });
-
-  final bool isWide;
-  final List<LalaPlace> places;
-  final String? source;
-  final LalaPlace? topPlace;
-  final String uiLanguage;
-  final double height;
-  final String? docentScript;
-  final LalaAudioResponse? docentAudio;
-  final String? docentAction;
-  final bool audioLoading;
-  final String? audioError;
-  final bool canFetchAudio;
-  final bool showEvidence;
-  final String? error;
-  final bool recommendationRecoveryPending;
-  final VoidCallback onFetchAudio;
-  final VoidCallback onAddToPlan;
-  final VoidCallback onOpenDetail;
-  final VoidCallback onRefresh;
-  final VoidCallback onToggleEvidence;
-
-  @override
-  Widget build(BuildContext context) {
-    final currentPlace = topPlace;
-    return SizedBox(
-      key: const ValueKey('map-bottom-dock'),
-      height: height,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.96),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          boxShadow: const [
-            BoxShadow(
-              blurRadius: 28,
-              offset: Offset(0, -10),
-              color: Color(0x22000000),
-            ),
-          ],
-        ),
-        child: SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(16, 8, 16, isWide ? 14 : 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Center(
-                      child: GestureDetector(
-                        onTap: onOpenDetail,
-                        child: Container(
-                          width: 44,
-                          height: 5,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFCBD5E0),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  TextButton.icon(
-                    onPressed: currentPlace == null ? null : onOpenDetail,
-                    icon: const Icon(Icons.keyboard_arrow_up),
-                    label: Text(uiLanguage == 'en' ? 'Details' : '상세'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              if (currentPlace == null)
-                _EmptyDockContent(
-                  language: uiLanguage,
-                  errorLabel: error,
-                  recoveryPending: recommendationRecoveryPending,
-                  onRetry: onRefresh,
-                )
-              else ...[
-                Row(
-                  children: [
-                    CategoryBadge(
-                      category: currentPlace.category,
-                      language: uiLanguage,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _placeDisplayName(currentPlace, uiLanguage),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(
-                              color: const Color(0xFF111827),
-                              fontWeight: FontWeight.w900,
-                            ),
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        if (!showEvidence) {
-                          onToggleEvidence();
-                        }
-                        onOpenDetail();
-                      },
-                      child: Text(
-                        uiLanguage == 'en' ? 'Signals' : '점수/근거',
-                        style: const TextStyle(fontWeight: FontWeight.w900),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    TinyMeta(_placeRegionLabel(currentPlace, uiLanguage)),
-                    TinyMeta('${currentPlace.distanceM}m'),
-                    TinyMeta(_sourceLabel(source, language: uiLanguage)),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                DockDocentPreview(
-                  place: currentPlace,
-                  language: uiLanguage,
-                  script: docentScript,
-                  action: docentAction,
-                  audioLoading: audioLoading,
-                  audioError: audioError,
-                  docentAudio: docentAudio,
-                  canFetchAudio: canFetchAudio,
-                  onFetchAudio: onFetchAudio,
-                  onAddToPlan: onAddToPlan,
-                  onOpenDetail: onOpenDetail,
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _EmptyDockContent extends StatelessWidget {
-  const _EmptyDockContent({
-    required this.language,
-    this.errorLabel,
-    this.recoveryPending = false,
-    this.onRetry,
-  });
-
-  final String language;
-  final String? errorLabel;
-  final bool recoveryPending;
-  final VoidCallback? onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    final hasError = errorLabel != null && errorLabel!.trim().isNotEmpty;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            color: hasError ? const Color(0xFFFFF3E8) : const Color(0xFFEAF2FF),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(
-            hasError ? Icons.refresh_outlined : Icons.travel_explore,
-            color: hasError ? const Color(0xFFB45309) : const Color(0xFF2B6CB0),
-            size: 21,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                hasError
-                    ? _copy(
-                        language,
-                        ko: '추천 연결을 다시 확인하고 있어요',
-                        en: 'Checking recommendations again',
-                      )
-                    : _copy(
-                        language,
-                        ko: '추천을 준비 중입니다',
-                        en: 'Preparing recommendations',
-                      ),
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: const Color(0xFF111827),
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                hasError
-                    ? _copy(
-                        language,
-                        ko: recoveryPending
-                            ? '잠시 후 자동으로 다시 시도합니다. 지금 바로 다시 시도할 수도 있어요.'
-                            : '잠시 후 다시 시도해 주세요. 필요하면 지금 바로 다시 시도할 수 있어요.',
-                        en: recoveryPending
-                            ? 'Retrying automatically soon. You can also retry right now.'
-                            : 'Please try again shortly. You can also retry right now.',
-                      )
-                    : _copy(
-                        language,
-                        ko: '공식 데이터가 확인된 장소만 표시합니다.',
-                        en: 'Only places backed by official data are shown.',
-                      ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: const Color(0xFF64748B),
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              if (hasError && onRetry != null) ...[
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    key: const ValueKey('dock-error-retry'),
-                    onPressed: onRetry,
-                    icon: const Icon(Icons.refresh, size: 16),
-                    label: Text(
-                      _copy(language, ko: '지금 다시 시도', en: 'Retry now'),
-                    ),
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      minimumSize: const Size(0, 32),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
+// C3: _TopMapChrome → features/map/widgets/top_map_chrome.dart (TopMapChrome).
+// C3: _MapPlaceCarouselOverlay → features/map/widgets/map_place_carousel_overlay.dart (MapPlaceCarouselOverlay).
+// C3: _MapUtilityControlRow → features/map/widgets/map_utility_control_row.dart (MapUtilityControlRow).
+// C3: _MapBottomDock → features/map/widgets/map_bottom_dock.dart (MapBottomDock).
+// C3: _EmptyDockContent → features/map/widgets/empty_dock_content.dart (EmptyDockContent).
 
 class _MapDraggableSheet extends StatelessWidget {
   const _MapDraggableSheet({
@@ -3640,376 +3076,16 @@ List<String> _proofSourceLabels({
 
 // C3: ProofChip → features/place/widgets/proof_chip.dart (ProofChip).
 
-class _LegacyMapCanvas extends StatelessWidget {
-  const _LegacyMapCanvas({
-    required this.places,
-    required this.selectedPlace,
-    required this.weather,
-    required this.kakaoJavascriptKey,
-    required this.language,
-    required this.mapFocusLat,
-    required this.mapFocusLng,
-    required this.mapLevel,
-    required this.onSelectPlaceId,
-    required this.onSelectCluster,
-    required this.onCameraIdle,
-  });
+// C3: _LegacyMapCanvas → features/map/widgets/legacy_map_canvas.dart (LegacyMapCanvas).
+// C3: clusterMapPlacesForMap + _selectedPlaceSortValue → features/map/map_helpers.dart (clusterMapPlacesForMap; test 호환용 re-export 유지).
 
-  final List<LalaPlace> places;
-  final LalaPlace? selectedPlace;
-  final LalaWeather? weather;
-  final String kakaoJavascriptKey;
-  final String language;
-  final double? mapFocusLat;
-  final double? mapFocusLng;
-  final int mapLevel;
-  final ValueChanged<String> onSelectPlaceId;
-  final ValueChanged<KakaoMapPlace> onSelectCluster;
-  final ValueChanged<KakaoMapCamera> onCameraIdle;
+// C3: _MapRoundButton → features/map/widgets/map_round_button.dart (MapRoundButton).
 
-  @override
-  Widget build(BuildContext context) {
-    final selected = selectedPlace;
-    final centerLat = mapFocusLat ?? selected?.lat ?? 37.2823;
-    final centerLng = mapFocusLng ?? selected?.lng ?? 127.0179;
-    final mapPlaces = clusterMapPlacesForMap(
-      places: places,
-      selected: selected,
-      mapLevel: mapLevel,
-      language: language,
-    );
-
-    void handleMapFeatureTap(String featureId) {
-      for (final marker in mapPlaces) {
-        if (marker.id == featureId) {
-          if (marker.isCluster) {
-            onSelectCluster(marker);
-            return;
-          }
-          break;
-        }
-      }
-      onSelectPlaceId(featureId);
-    }
-
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: buildKakaoMapView(
-            javascriptKey: kakaoJavascriptKey,
-            language: language,
-            centerLat: centerLat,
-            centerLng: centerLng,
-            level: mapLevel,
-            places: mapPlaces,
-            onPlaceTap: handleMapFeatureTap,
-            onCameraIdle: onCameraIdle,
-          ),
-        ),
-        Positioned.fill(
-          child: IgnorePointer(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.white.withValues(alpha: 0.18),
-                    Colors.white.withValues(alpha: 0.02),
-                    Colors.white.withValues(alpha: 0.26),
-                  ],
-                  stops: const [0, 0.46, 1],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-@visibleForTesting
-List<KakaoMapPlace> clusterMapPlacesForMap({
-  required List<LalaPlace> places,
-  required LalaPlace? selected,
-  required int mapLevel,
-  required String language,
-}) {
-  final selectedId = selected?.placeId;
-  final expandedPinFloor = mapLevel >= 10 ? 36 : 48;
-  final selectedMarkers = <KakaoMapPlace>[];
-  final expandedMarkers = <KakaoMapPlace>[];
-  final buckets = <String, List<LalaPlace>>{};
-  final shouldUseClusters = places.length >= 80 && mapLevel >= 10;
-  var expandedPinCount = 0;
-  final orderedPlaces = [...places]
-    ..sort((a, b) {
-      final selectedCompare = _selectedPlaceSortValue(
-        a.placeId,
-        selectedId,
-      ).compareTo(_selectedPlaceSortValue(b.placeId, selectedId));
-      if (selectedCompare != 0) {
-        return selectedCompare;
-      }
-      final distanceCompare = a.distanceM.compareTo(b.distanceM);
-      if (distanceCompare != 0) {
-        return distanceCompare;
-      }
-      return _placeDisplayName(
-        a,
-        language,
-      ).compareTo(_placeDisplayName(b, language));
-    });
-
-  KakaoMapPlace toMapPlace(LalaPlace place, {bool selected = false}) {
-    return KakaoMapPlace(
-      id: place.placeId,
-      name: _placeDisplayName(place, language),
-      category: place.category,
-      lat: place.lat,
-      lng: place.lng,
-      selected: selected,
-    );
-  }
-
-  for (final place in orderedPlaces.take(60)) {
-    if (place.placeId == selectedId) {
-      selectedMarkers.add(toMapPlace(place, selected: true));
-      continue;
-    }
-    if (!shouldUseClusters) {
-      selectedMarkers.add(toMapPlace(place));
-      continue;
-    }
-    if (expandedPinCount < expandedPinFloor) {
-      expandedMarkers.add(toMapPlace(place));
-      expandedPinCount += 1;
-      continue;
-    }
-    final latBucket = (place.lat * 180).round();
-    final lngBucket = (place.lng * 180).round();
-    final key = '${place.category}:$latBucket:$lngBucket';
-    buckets.putIfAbsent(key, () => <LalaPlace>[]).add(place);
-  }
-
-  final clustered = <KakaoMapPlace>[];
-  for (final entry in buckets.entries) {
-    final group = entry.value;
-    if (group.length >= 3) {
-      final lat =
-          group.fold<double>(0, (sum, place) => sum + place.lat) / group.length;
-      final lng =
-          group.fold<double>(0, (sum, place) => sum + place.lng) / group.length;
-      clustered.add(
-        KakaoMapPlace(
-          id: 'cluster-${entry.key}',
-          name: _copy(
-            language,
-            ko: '${group.length}곳',
-            en: '${group.length} places',
-          ),
-          category: group.first.category,
-          lat: lat,
-          lng: lng,
-          clusterCount: group.length,
-          clusterMemberIds: group
-              .map((place) => place.placeId)
-              .toList(growable: false),
-        ),
-      );
-    } else {
-      clustered.addAll(group.map(toMapPlace));
-    }
-  }
-
-  return [...clustered, ...expandedMarkers, ...selectedMarkers];
-}
-
-int _selectedPlaceSortValue(String placeId, String? selectedId) {
-  if (selectedId == null) {
-    return 1;
-  }
-  return placeId == selectedId ? 0 : 1;
-}
-
-class _MapRoundButton extends StatelessWidget {
-  const _MapRoundButton({
-    this.buttonKey,
-    required this.tooltip,
-    required this.icon,
-    required this.onPressed,
-  });
-
-  final Key? buttonKey;
-  final String tooltip;
-  final IconData icon;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: Semantics(
-        button: true,
-        label: tooltip,
-        child: Listener(
-          key: buttonKey,
-          behavior: HitTestBehavior.opaque,
-          onPointerUp: (_) => onPressed(),
-          child: Material(
-            color: Colors.white.withValues(alpha: 0.95),
-            elevation: 7,
-            shadowColor: const Color(0x22000000),
-            shape: const CircleBorder(
-              side: BorderSide(color: Color(0xFFE2E8F0), width: 1.4),
-            ),
-            child: SizedBox.square(
-              dimension: 46,
-              child: Icon(icon, size: 22, color: const Color(0xFF1A202C)),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _FloatingMapControls extends StatelessWidget {
-  const _FloatingMapControls({
-    required this.voiceEnabled,
-    required this.autoDocentEnabled,
-    required this.language,
-    required this.onToggleVoice,
-    required this.onToggleAutoDocent,
-    required this.onReturnToLocation,
-  });
-
-  final bool voiceEnabled;
-  final bool autoDocentEnabled;
-  final String language;
-  final VoidCallback onToggleVoice;
-  final VoidCallback onToggleAutoDocent;
-  final VoidCallback onReturnToLocation;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _MapFab(
-          key: const ValueKey('voice-toggle'),
-          tooltip: language == 'en'
-              ? (voiceEnabled ? 'Mute voice' : 'Enable voice')
-              : (voiceEnabled ? '음성 끄기' : '음성 켜기'),
-          icon: voiceEnabled ? Icons.volume_up : Icons.volume_off,
-          label: language == 'en'
-              ? (voiceEnabled ? 'Voice on' : 'Voice off')
-              : (voiceEnabled ? '음성 켜짐' : '음성 꺼짐'),
-          active: voiceEnabled,
-          statusLabel: language == 'en'
-              ? (voiceEnabled ? 'ON' : 'OFF')
-              : (voiceEnabled ? '켬' : '끔'),
-          onPressed: onToggleVoice,
-        ),
-        const SizedBox(width: 14),
-        AutoDocentFab(
-          key: const ValueKey('auto-docent-toggle'),
-          tooltip: language == 'en'
-              ? (autoDocentEnabled ? 'Auto guide off' : 'Auto guide on')
-              : (autoDocentEnabled ? '자동 도슨트 끄기' : '자동 도슨트 켜기'),
-          label: language == 'en'
-              ? (autoDocentEnabled ? 'Auto on' : 'Auto off')
-              : (autoDocentEnabled ? '자동 켜짐' : '자동 꺼짐'),
-          active: autoDocentEnabled,
-          statusLabel: language == 'en'
-              ? (autoDocentEnabled ? 'ON' : 'OFF')
-              : (autoDocentEnabled ? '켬' : '끔'),
-          onPressed: onToggleAutoDocent,
-        ),
-        const SizedBox(width: 14),
-        _MapFab(
-          key: const ValueKey('location-refresh'),
-          tooltip: language == 'en' ? 'My location' : '내 위치',
-          icon: Icons.my_location,
-          label: language == 'en' ? 'My location' : '내 위치',
-          active: true,
-          statusLabel: null,
-          onPressed: onReturnToLocation,
-        ),
-      ],
-    );
-  }
-}
+// C3: _FloatingMapControls → features/map/widgets/floating_map_controls.dart (FloatingMapControls).
 
 // C3: AutoDocentFab → features/docent/widgets/auto_docent_fab.dart (AutoDocentFab).
 
-class _MapFab extends StatelessWidget {
-  const _MapFab({
-    super.key,
-    required this.tooltip,
-    required this.icon,
-    required this.label,
-    required this.active,
-    required this.statusLabel,
-    required this.onPressed,
-  });
-
-  final String tooltip;
-  final IconData icon;
-  final String label;
-  final bool active;
-  final String? statusLabel;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: Semantics(
-        button: true,
-        label: label,
-        child: Badge(
-          isLabelVisible: statusLabel != null,
-          alignment: Alignment.topRight,
-          backgroundColor: active
-              ? const Color(0xFFF5C842)
-              : const Color(0xFF64748B),
-          textColor: active ? const Color(0xFF1A202C) : Colors.white,
-          label: statusLabel == null
-              ? null
-              : Text(
-                  statusLabel!,
-                  style: const TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-          child: IconButton.filled(
-            onPressed: onPressed,
-            icon: Icon(icon, size: 22),
-            style: IconButton.styleFrom(
-              fixedSize: const Size.square(46),
-              backgroundColor: active
-                  ? const Color(0xFF2B6CB0)
-                  : const Color(0xFF1A202C).withValues(alpha: 0.82),
-              foregroundColor: Colors.white,
-              shape: CircleBorder(
-                side: BorderSide(
-                  color: active
-                      ? Colors.white.withValues(alpha: 0.86)
-                      : Colors.white.withValues(alpha: 0.22),
-                  width: 1.6,
-                ),
-              ),
-              elevation: 8,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
+// C3: _MapFab → features/map/widgets/map_fab.dart (MapFab).
 
 // C3: PlaceThumb → features/place/widgets/place_thumb.dart (PlaceThumb).
 // C3: PlaceImage → features/place/widgets/place_image.dart (PlaceImage).
@@ -4052,59 +3128,7 @@ class _LalaWordmark extends StatelessWidget {
   }
 }
 
-class _CategoryChip extends StatelessWidget {
-  const _CategoryChip({
-    required this.label,
-    required this.active,
-    required this.color,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool active;
-  final Color color;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(999),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(999),
-          onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-            decoration: BoxDecoration(
-              color: active ? color : Colors.white.withValues(alpha: 0.95),
-              borderRadius: BorderRadius.circular(999),
-              boxShadow: const [
-                BoxShadow(
-                  blurRadius: 12,
-                  offset: Offset(0, 4),
-                  color: Color(0x12000000),
-                ),
-              ],
-            ),
-            child: Text(
-              label,
-              style: TextStyle(
-                color: active
-                    ? (color == const Color(0xFFF5C842)
-                          ? const Color(0xFF1A202C)
-                          : Colors.white)
-                    : const Color(0xFF0F172A),
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
+// C3: _CategoryChip → features/map/widgets/category_chip.dart (CategoryChip).
 
 // C3: SmallStatusPill(공용) → shared/widgets/small_status_pill.dart (SmallStatusPill).
 
@@ -4135,158 +3159,7 @@ class _RoundIconButton extends StatelessWidget {
 
 // C3: TinyMeta → shared/widgets/tiny_meta.dart (TinyMeta).
 
-class _MapToast extends StatelessWidget {
-  const _MapToast({
-    required this.icon,
-    required this.label,
-    required this.color,
-    this.actionKey = const ValueKey('map-error-retry'),
-    this.secondaryActionKey = const ValueKey('map-secondary-action'),
-    this.actionLabel,
-    this.onAction,
-    this.secondaryActionLabel,
-    this.onSecondaryAction,
-  });
-
-  final IconData icon;
-  final String label;
-  final Color color;
-  final Key actionKey;
-  final Key secondaryActionKey;
-  final String? actionLabel;
-  final VoidCallback? onAction;
-  final String? secondaryActionLabel;
-  final VoidCallback? onSecondaryAction;
-
-  @override
-  Widget build(BuildContext context) {
-    final foreground = Theme.of(context).colorScheme.onErrorContainer;
-    final accent = Theme.of(context).colorScheme.error;
-    final actions = <Widget>[
-      if (actionLabel != null && onAction != null)
-        TextButton(
-          key: actionKey,
-          onPressed: onAction,
-          style: TextButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            minimumSize: const Size(0, 32),
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            foregroundColor: accent,
-            backgroundColor: color.withValues(alpha: 0.42),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(999),
-            ),
-            textStyle: const TextStyle(
-              fontWeight: FontWeight.w900,
-              fontSize: 12,
-            ),
-          ),
-          child: Text(actionLabel!),
-        ),
-      if (secondaryActionLabel != null && onSecondaryAction != null)
-        TextButton(
-          key: secondaryActionKey,
-          onPressed: onSecondaryAction,
-          style: TextButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            minimumSize: const Size(0, 32),
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            foregroundColor: const Color(0xFF2B6CB0),
-            backgroundColor: const Color(0xFFE6F0FB),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(999),
-            ),
-            textStyle: const TextStyle(
-              fontWeight: FontWeight.w900,
-              fontSize: 12,
-            ),
-          ),
-          child: Text(secondaryActionLabel!),
-        ),
-    ];
-
-    Widget message() {
-      return Row(
-        children: [
-          Icon(icon, size: 18, color: accent),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: foreground,
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-
-    Widget actionWrap() {
-      return Wrap(spacing: 4, runSpacing: 4, children: actions);
-    }
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final fallbackWidth = math.max(
-          0.0,
-          MediaQuery.sizeOf(context).width - 32,
-        );
-        final availableWidth = constraints.maxWidth.isFinite
-            ? constraints.maxWidth
-            : fallbackWidth;
-        final toastWidth = math.min(520.0, availableWidth);
-        final compact = actions.length > 1 && toastWidth < 440;
-        return SizedBox(
-          width: toastWidth,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.94),
-              borderRadius: BorderRadius.circular(compact ? 18 : 999),
-              border: Border.all(color: color.withValues(alpha: 0.78)),
-              boxShadow: const [
-                BoxShadow(
-                  blurRadius: 14,
-                  offset: Offset(0, 5),
-                  color: Color(0x16000000),
-                ),
-              ],
-            ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
-              child: compact
-                  ? Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        message(),
-                        const SizedBox(height: 8),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: actionWrap(),
-                        ),
-                      ],
-                    )
-                  : Row(
-                      children: [
-                        Expanded(child: message()),
-                        if (actions.isNotEmpty) ...[
-                          const SizedBox(width: 8),
-                          actionWrap(),
-                        ],
-                      ],
-                    ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
+// C3: _MapToast → features/map/widgets/map_toast.dart (MapToast).
 
 // C3-1: _InterventionToast → features/intervention/widgets/intervention_toast.dart (InterventionToast).
 
@@ -4718,39 +3591,9 @@ String _compactDustPart({
 }) =>
     compactDustPart(label: label, value: value, grade: grade);
 
-List<LalaPlace> _railPlaces(List<LalaPlace> places) {
-  if (places.isEmpty) {
-    return const <LalaPlace>[];
-  }
-  final featured = _featuredPlace(places);
-  if (featured == null) {
-    return places.take(8).toList();
-  }
-  return [
-    featured,
-    ...places.where((place) => place.placeId != featured.placeId),
-  ].take(8).toList();
-}
-
-LalaPlace? _featuredPlace(List<LalaPlace> places) {
-  if (places.isEmpty) {
-    return null;
-  }
-
-  final suwonPlaces = places.where((place) => place.distanceM <= 5000).toList()
-    ..sort((a, b) => a.distanceM.compareTo(b.distanceM));
-  for (final place in suwonPlaces) {
-    final name = '${place.nameKo ?? ''} ${place.name}';
-    if (name.contains('화성행궁') || name.contains('수원화성')) {
-      return place;
-    }
-  }
-  if (suwonPlaces.isNotEmpty) {
-    return suwonPlaces.first;
-  }
-
-  return places.first;
-}
+// C3: _railPlaces → features/map/map_helpers.dart (railPlaces).
+// C3: _featuredPlace → features/map/map_helpers.dart (featuredPlace; 본문 이관, forwarder 유지).
+LalaPlace? _featuredPlace(List<LalaPlace> places) => featuredPlace(places);
 
 bool _hasUsableDocentScript(String? script, String language) =>
     hasUsableDocentScript(script, language);
