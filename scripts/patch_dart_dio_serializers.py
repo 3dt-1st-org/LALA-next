@@ -12,6 +12,7 @@ nested BuiltValue 모델 필드에 대해 `result.<field> = valueDes;` 를 내�
 
 사용: python3 scripts/patch_dart_dio_serializers.py [model_dir]
 """
+
 from __future__ import annotations
 
 import re
