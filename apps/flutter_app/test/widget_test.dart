@@ -2674,9 +2674,9 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
     await tester.pumpAndSettle();
 
-    expect(find.text('어떤 관광객이신가요?'), findsOneWidget);
-    expect(find.text('외국인 관광객'), findsOneWidget);
-    expect(find.text('내국인 관광객'), findsOneWidget);
+    expect(find.text('어떤 여행을\n계획 중인가요?'), findsOneWidget);
+    expect(find.text('국내 여행'), findsOneWidget);
+    expect(find.text('해외 방문'), findsOneWidget);
   });
 
   testWidgets(
@@ -2700,12 +2700,15 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
       await tester.pumpAndSettle();
 
-      // 외국인 관광객 선택 → 기본 English.
-      await tester.tap(find.text('외국인 관광객'));
+      // S1(한국어): 해외 방문 선택 → 선택 상태만 갱신(언어/이동 없음).
+      await tester.tap(find.text('해외 방문'));
+      await tester.pumpAndSettle();
+      // "다음" 으로 유형+기본 언어(en) 기록 후 S2 로 이동.
+      await tester.tap(find.widgetWithText(FilledButton, '다음'));
       await tester.pumpAndSettle();
       expect(OnboardingState.language, 'en');
 
-      // 언어 단계: English 가 pre-select 되어 있고, Next 로 위치 단계로.
+      // 언어 단계(English): English 가 pre-select, Next 로 위치 단계로.
       expect(find.text('English'), findsOneWidget);
       await tester.tap(
         find.widgetWithText(FilledButton, 'Next'),
@@ -2713,7 +2716,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // 위치 단계: "Not now" 스킵 → 온보딩 완료 → 메인 쉘(지도) 진입.
-      expect(find.text('We need your location for nearby tips'), findsOneWidget);
+      expect(find.text('Use location'), findsOneWidget);
       await tester.tap(find.text('Not now'));
       await tester.pumpAndSettle();
 
@@ -2736,10 +2739,14 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('내국인 관광객'));
+    // S1: 국내 여행 선택(기본 언어 ko) → 다음 → S2.
+    await tester.tap(find.text('국내 여행'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '다음'));
     await tester.pumpAndSettle();
     expect(OnboardingState.language, 'ko');
 
+    // S2(한국어): 다음 → S3.
     await tester.tap(find.widgetWithText(FilledButton, '다음'));
     await tester.pumpAndSettle();
 
@@ -2768,14 +2775,16 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
       await tester.pumpAndSettle();
 
-      // 내국인 관광객(한국어) → 언어 다음 → 위치 단계.
-      await tester.tap(find.text('내국인 관광객'));
+      // S1 국내 여행 → S2 다음 → S3 위치 단계.
+      await tester.tap(find.text('국내 여행'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, '다음'));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(FilledButton, '다음'));
       await tester.pumpAndSettle();
 
-      // 위치 허용 요청 → 거부 → 수동 지역 선택 옵션 노출.
-      await tester.tap(find.text('위치 권한 허용'));
+      // 현재 위치 사용 요청 → 거부. 수동 선택은 항상 노출되어 그대로 사용 가능.
+      await tester.tap(find.text('현재 위치 사용'));
       await tester.pumpAndSettle();
       expect(find.text('지역 직접 선택'), findsOneWidget);
       expect(locationProvider.requests, 1);
