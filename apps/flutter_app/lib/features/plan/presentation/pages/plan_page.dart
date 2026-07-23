@@ -174,7 +174,7 @@ class _PlanPageState extends State<PlanPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _PlanHeader(
-              title: lalaCopy(_language, ko: '오늘의 일정', en: 'Today\'s Plan'),
+              title: lalaCopy(_language, ko: '오늘 일정', en: 'Today\'s Plan'),
               dateLabel: _todayLabel(),
             ),
             if (_shouldShowInterventionToast)
@@ -280,7 +280,7 @@ class _PlanHeader extends StatelessWidget {
   }
 }
 
-/// 로딩 본문(PlannerLoadingCard 재사용).
+/// 로딩 본문(PlannerLoadingCard 1장 — 중복 렌더 금지).
 class _PlanLoadingView extends StatelessWidget {
   const _PlanLoadingView({required this.language});
 
@@ -291,8 +291,6 @@ class _PlanLoadingView extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
-        PlannerLoadingCard(language: language),
-        const SizedBox(height: 12),
         PlannerLoadingCard(language: language),
       ],
     );

@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:lala_next_app/app/lala_metrics.dart';
 import 'package:lala_next_app/auth/logto_auth_gateway.dart';
 import 'package:lala_next_app/core/backend/lala_backend.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
@@ -82,6 +83,17 @@ class _LalaAppState extends State<LalaApp> {
           margin: EdgeInsets.zero,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.all(Radius.circular(8)),
+          ),
+        ),
+        // 컴팩트 하단탭: 참조 이미지 기준 한 단 낮춘 높이(68)와 12sp 라벨.
+        navigationBarTheme: NavigationBarThemeData(
+          height: 68,
+          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+          labelTextStyle: WidgetStatePropertyAll<TextStyle>(
+            TextStyle(
+              fontSize: LalaMetrics.navLabelSp,
+              fontWeight: FontWeight.w800,
+            ),
           ),
         ),
       ),
