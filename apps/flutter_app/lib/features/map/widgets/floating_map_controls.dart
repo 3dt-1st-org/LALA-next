@@ -24,9 +24,10 @@ class FloatingMapControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    // 모바일 비주얼 계약(00-ground-truth §6): 컨트롤 스택은 우측 세로 44dp 타겟, 8dp 간격.
+    return Column(
       mainAxisSize: MainAxisSize.min,
-      children: [
+      children: <Widget>[
         MapFab(
           key: const ValueKey('voice-toggle'),
           tooltip: language == 'en'
@@ -42,7 +43,7 @@ class FloatingMapControls extends StatelessWidget {
               : (voiceEnabled ? '켬' : '끔'),
           onPressed: onToggleVoice,
         ),
-        const SizedBox(width: 14),
+        const SizedBox(height: 8),
         AutoDocentFab(
           key: const ValueKey('auto-docent-toggle'),
           tooltip: language == 'en'
@@ -57,7 +58,7 @@ class FloatingMapControls extends StatelessWidget {
               : (autoDocentEnabled ? '켬' : '끔'),
           onPressed: onToggleAutoDocent,
         ),
-        const SizedBox(width: 14),
+        const SizedBox(height: 8),
         MapFab(
           key: const ValueKey('location-refresh'),
           tooltip: language == 'en' ? 'My location' : '내 위치',
