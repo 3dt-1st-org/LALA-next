@@ -19,10 +19,17 @@ import 'package:lala_next_app/features/planner/widgets/plan_slot_tile.dart';
 import 'package:lala_next_app/features/planner/widgets/planner_loading_card.dart';
 import 'package:lala_next_app/features/planner/widgets/planner_overview_card.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
+import 'package:lala_next_app/shared/widgets/lala_skeleton.dart';
 
 /// 플랜 탭: 하루 일정을 생성해 타임라인으로 보여준다.
 class PlanPage extends StatefulWidget {
-  const PlanPage({super.key});
+  const PlanPage({this.locationProvider, this.backendFactory, super.key});
+
+  /// 테스트 주입용 위치 프로바이더(기본 = Geolocator 하이브리드).
+  final LalaLocationProvider? locationProvider;
+
+  /// 테스트 주입용 백엔드 팩토리(기본 = LalaApiBackend).
+  final LalaBackendFactory? backendFactory;
 
   @override
   State<PlanPage> createState() => _PlanPageState();
@@ -34,6 +41,7 @@ class _PlanPageState extends State<PlanPage> {
   late final LalaAppConfig _baseConfig;
   late LalaAppConfig _config;
   late final LalaLocationProvider _locationProvider;
+  late final LalaBackendFactory _backendFactory;
   late LalaBackend _backend;
 
   _PlanLoadStatus _status = _PlanLoadStatus.loading;
@@ -47,8 +55,10 @@ class _PlanPageState extends State<PlanPage> {
     super.initState();
     _baseConfig = LalaAppConfig.fromEnvironment();
     _config = _baseConfig;
-    _locationProvider = const GeolocatorLalaLocationProvider();
-    _backend = LalaApiBackend(_config);
+    _locationProvider =
+        widget.locationProvider ?? const GeolocatorLalaLocationProvider();
+    _backendFactory = widget.backendFactory ?? LalaApiBackend.new;
+    _backend = _backendFactory(_config);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _load();
@@ -98,7 +108,7 @@ class _PlanPageState extends State<PlanPage> {
 
     _config = _baseConfig.copyWith(lat: lat, lng: lng);
     _backend.close();
-    _backend = LalaApiBackend(_config);
+    _backend = _backendFactory(_config);
 
     // 일정(필수)과 개입(intervention, 부가)을 병렬로 조회한다.
     // 각 라인은 독립된 try/catch 로 실패를 null 로 흡수한다.
@@ -174,8 +184,10 @@ class _PlanPageState extends State<PlanPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _PlanHeader(
-              title: lalaCopy(_language, ko: '오늘의 일정', en: 'Today\'s Plan'),
+              title: lalaCopy(_language, ko: '오늘 일정', en: 'Today\'s Plan'),
               dateLabel: _todayLabel(),
+              language: _language,
+              onCalendar: _load,
             ),
             if (_shouldShowInterventionToast)
               Padding(
@@ -233,24 +245,33 @@ class _PlanPageState extends State<PlanPage> {
   }
 }
 
-/// 헤더(제목 + 오늘 날짜 + 새로고침).
+/// 헤더(제목 + 오늘 날짜 + 달력 액션). 달력 아이콘은 44dp 타겟 + 시맨틱/툴팁.
 class _PlanHeader extends StatelessWidget {
-  const _PlanHeader({required this.title, required this.dateLabel});
+  const _PlanHeader({
+    required this.title,
+    required this.dateLabel,
+    required this.language,
+    required this.onCalendar,
+  });
 
   final String title;
   final String dateLabel;
+  final String language;
+
+  /// 달력/캘린더 액션 — 오늘 일정을 다시 불러온다.
+  final VoidCallback onCalendar;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 18, 16, 4),
+      padding: const EdgeInsets.fromLTRB(20, 18, 8, 4),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
+        children: <Widget>[
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+              children: <Widget>[
                 Text(
                   title,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
@@ -269,10 +290,11 @@ class _PlanHeader extends StatelessWidget {
               ],
             ),
           ),
-          Icon(
-            Icons.calendar_today_rounded,
+          IconButton(
+            tooltip: lalaCopy(language, ko: '달력', en: 'Calendar'),
+            onPressed: onCalendar,
+            icon: const Icon(Icons.calendar_today_rounded),
             color: Theme.of(context).colorScheme.primary,
-            size: 22,
           ),
         ],
       ),
@@ -280,7 +302,7 @@ class _PlanHeader extends StatelessWidget {
   }
 }
 
-/// 로딩 본문(PlannerLoadingCard 재사용).
+/// 로딩 본문: '준비 중' 카드 정확히 한 장 + 중성 타임라인 스켈레톤(중복 카드 금지).
 class _PlanLoadingView extends StatelessWidget {
   const _PlanLoadingView({required this.language});
 
@@ -289,12 +311,38 @@ class _PlanLoadingView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
+      key: const ValueKey('plan-loading-view'),
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      children: [
+      children: <Widget>[
         PlannerLoadingCard(language: language),
-        const SizedBox(height: 12),
-        PlannerLoadingCard(language: language),
+        const SizedBox(height: 16),
+        const _PlannerTimelineSkeleton(),
       ],
+    );
+  }
+}
+
+/// 일정 응답 대기 중 타임라인 스켈레톤(3 슬롯). 시간/순서/내용은 발명하지 않는다.
+class _PlannerTimelineSkeleton extends StatelessWidget {
+  const _PlannerTimelineSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      key: const ValueKey('plan-timeline-skeleton'),
+      children: List<Widget>.generate(3, (index) {
+        return Padding(
+          padding: EdgeInsets.only(top: index == 0 ? 0 : 10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: const <Widget>[
+              LalaSkeleton(width: 48, height: 14, radius: 7),
+              SizedBox(width: 12),
+              Expanded(child: LalaSkeleton(height: 40, radius: 8)),
+            ],
+          ),
+        );
+      }),
     );
   }
 }
