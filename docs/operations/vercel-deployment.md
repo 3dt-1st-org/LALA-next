@@ -83,27 +83,24 @@ curl -fsS 'https://api.lala-next.cloud/api/v1/places?lat=37.2636&lng=127.0286&ra
 
 ## Frontend
 
-Build Flutter web against the custom API domain:
+Use the guarded deploy script for every production frontend deploy. It fails
+before uploading anything if the Kakao Maps JavaScript key is absent or was not
+compiled into the bundle. This prevents the app from silently switching to the
+map-unavailable fallback.
 
 ```bash
-flutter build web --release \
-  --pwa-strategy=none \
-  --dart-define LALA_API_BASE_URL=https://api.lala-next.cloud \
-  --dart-define LALA_BUILD_SHA="$(git rev-parse HEAD)" \
-  --dart-define KAKAO_JAVASCRIPT_KEY="$KAKAO_JAVASCRIPT_KEY"
+set -a
+source .env
+set +a
+scripts/unix/deploy_flutter_web_vercel.sh
 ```
 
-Deploy the built frontend to the `lala-next` Vercel project:
+Use `scripts/unix/deploy_flutter_web_vercel.sh --dry-run` to build and verify
+the bundle without changing the public deployment.
 
-```bash
-vercel deploy apps/flutter_app/build/web \
-  --prod \
-  --yes \
-  --project lala-next \
-  --scope geond \
-  --local-config apps/flutter_app/build/web/vercel.json \
-  --format json
-```
+`KAKAO_JAVASCRIPT_KEY` is necessarily embedded in the browser bundle by Kakao
+Maps' JavaScript SDK design. Treat it as a restricted public client key: do not
+commit it, and allow only the production domains in Kakao Developers.
 
 Smoke the frontend:
 
