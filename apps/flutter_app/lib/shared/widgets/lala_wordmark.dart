@@ -1,6 +1,9 @@
-// C3 최종: main.dart 에서 이관. 본문 불변(이동만).
+// C3 최종: main.dart 에서 이관.
+// 모바일 비주얼 계약(00-visual-ground-truth.md §2) Wordmark 역할: 18/22, 800.
+// 로고 위젯 자체는 변경하지 않고 타입 수치만 계약 토큰으로 정렬한다.
 import 'package:flutter/material.dart';
 
+import 'package:lala_next_app/app/lala_visual_tokens.dart';
 
 class LalaWordmark extends StatelessWidget {
   const LalaWordmark({super.key});
@@ -10,10 +13,10 @@ class LalaWordmark extends StatelessWidget {
     return Semantics(
       label: 'LALA',
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
           boxShadow: const [
             BoxShadow(
               blurRadius: 12,
@@ -22,12 +25,14 @@ class LalaWordmark extends StatelessWidget {
             ),
           ],
         ),
-        child: const Text(
+        child: Text(
           'LALA',
           style: TextStyle(
-            color: Color(0xFF2B6CB0),
-            fontSize: 21,
-            fontWeight: FontWeight.w900,
+            color: LalaVisualColors.primaryBlue,
+            fontSize: LalaVisualTokens.wordmarkSize,
+            height: LalaVisualTokens.wordmarkLineHeight /
+                LalaVisualTokens.wordmarkSize,
+            fontWeight: FontWeight.w800,
             letterSpacing: 0,
           ),
         ),
