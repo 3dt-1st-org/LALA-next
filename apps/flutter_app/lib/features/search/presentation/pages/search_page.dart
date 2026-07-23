@@ -12,11 +12,13 @@ import 'package:lala_next_app/core/backend/lala_backend.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
 import 'package:lala_next_app/core/routing/lala_route_paths.dart';
-import 'package:lala_next_app/features/home/home_view_helpers.dart' show filterPlaces;
+import 'package:lala_next_app/features/home/home_view_helpers.dart'
+    show filterPlaces;
 import 'package:lala_next_app/features/place/place_helpers.dart';
 import 'package:lala_next_app/features/place/widgets/category_badge.dart';
 import 'package:lala_next_app/features/place/widgets/empty_place_state.dart';
 import 'package:lala_next_app/features/place/widgets/place_thumb.dart';
+import 'package:lala_next_app/features/search/widgets/search_results_skeleton.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 import 'package:lala_next_app/shared/l10n/place_labels.dart';
 
@@ -227,9 +229,9 @@ class _SearchHeader extends StatelessWidget {
               controller: controller,
               textInputAction: TextInputAction.search,
               onChanged: onChanged,
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
               decoration: InputDecoration(
                 hintText: lalaCopy(
                   language,
@@ -330,9 +332,7 @@ class _CategoryChipBar extends StatelessWidget {
             label: Text(
               categoryFilterLabel(category, language),
               style: TextStyle(
-                color: isSelected
-                    ? Colors.white
-                    : const Color(0xFF334155),
+                color: isSelected ? Colors.white : const Color(0xFF334155),
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -358,35 +358,13 @@ class _CategoryChipBar extends StatelessWidget {
   }
 }
 
-/// 로딩 상태 본문.
+/// 로딩 상태 본문 — 결과 카드형 스켈레톤 3개(빈 스피너 ❌).
 class _SearchLoadingView extends StatelessWidget {
   const _SearchLoadingView();
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Padding(
-        padding: EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              width: 28,
-              height: 28,
-              child: CircularProgressIndicator(strokeWidth: 2.4),
-            ),
-            SizedBox(height: 14),
-            Text(
-              '추천 장소를 불러오는 중...',
-              style: TextStyle(
-                color: Color(0xFF475569),
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    return const SearchResultsSkeleton();
   }
 }
 
@@ -534,9 +512,9 @@ class _SearchPlaceTile extends StatelessWidget {
                       Text(
                         '${place.distanceM}m',
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: const Color(0xFF64748B),
-                              fontWeight: FontWeight.w800,
-                            ),
+                          color: const Color(0xFF64748B),
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                   ],
                 ),
@@ -546,9 +524,9 @@ class _SearchPlaceTile extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
-                        height: 1.14,
-                      ),
+                    fontWeight: FontWeight.w900,
+                    height: 1.14,
+                  ),
                 ),
                 const SizedBox(height: 6),
                 Row(
@@ -565,9 +543,9 @@ class _SearchPlaceTile extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: const Color(0xFF475569),
-                              fontWeight: FontWeight.w700,
-                            ),
+                          color: const Color(0xFF475569),
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ],
