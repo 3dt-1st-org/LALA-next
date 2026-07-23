@@ -503,19 +503,18 @@ class Dashboard extends StatelessWidget {
                 ),
               ),
             ),
+            // 모바일 비주얼 계약(00-ground-truth §6 / 01-flow §3): 컨트롤 스택은
+            // 우측 가장자리(mapGutter=12), 도크 핸들보다 16dp 위. 세로 44dp 타겟.
             Positioned(
-              left: 0,
-              right: 0,
+              right: 12,
               bottom: floatingControlsBottom,
-              child: Center(
-                child: FloatingMapControls(
-                  voiceEnabled: voiceEnabled,
-                  autoDocentEnabled: autoDocentEnabled,
-                  language: uiLanguage,
-                  onToggleVoice: onToggleVoice,
-                  onToggleAutoDocent: onToggleAutoDocent,
-                  onReturnToLocation: onReturnToLocation,
-                ),
+              child: FloatingMapControls(
+                voiceEnabled: voiceEnabled,
+                autoDocentEnabled: autoDocentEnabled,
+                language: uiLanguage,
+                onToggleVoice: onToggleVoice,
+                onToggleAutoDocent: onToggleAutoDocent,
+                onReturnToLocation: onReturnToLocation,
               ),
             ),
             if (!locationFallbackNoticeVisible)

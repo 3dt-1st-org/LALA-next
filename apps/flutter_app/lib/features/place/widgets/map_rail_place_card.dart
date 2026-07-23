@@ -7,7 +7,9 @@ import '../place_helpers.dart';
 import 'rail_category_badge.dart';
 import 'rail_place_thumb.dart';
 
-/// 지도 레일용 장소 카드(C3 추출 — main.dart 의 _MapRailPlaceCard).
+/// 지도 레일용 장소 카드.
+// 모바일 비주얼 계약(00-ground-truth §6): 선택 테두리는 카테고리색 1줄 하나만.
+// 두 번째 내부 테두리/다중색 띠를 그리지 않는다.
 class MapRailPlaceCard extends StatelessWidget {
   const MapRailPlaceCard({
     super.key,
@@ -38,63 +40,61 @@ class MapRailPlaceCard extends StatelessWidget {
         key: ValueKey('tour-stop-action-${place.placeId}'),
         borderRadius: BorderRadius.circular(18),
         onTap: onTap,
-        child: Container(
-          key: ValueKey('map-rail-place-card-${place.placeId}'),
-          width: cardWidth,
-          padding: selected ? const EdgeInsets.all(3) : EdgeInsets.zero,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            color: selected ? color : Colors.white.withValues(alpha: 0.93),
-            border: Border.all(
-              color: selected ? color : const Color(0xFFE2E8F0),
-              width: selected ? 1.6 : 1,
-            ),
-            boxShadow: selected
-                ? const [
-                    BoxShadow(
-                      blurRadius: 16,
-                      offset: Offset(0, 7),
-                      color: Color(0x240F172A),
-                    ),
-                  ]
-                : null,
-          ),
+        child: Semantics(
+          label: placeDisplayName(place, language),
+          selected: selected,
+          button: onTap != null,
           child: Container(
-            key: selected ? ValueKey('category-border-${place.placeId}') : null,
+            key: ValueKey('map-rail-place-card-${place.placeId}'),
+            width: cardWidth,
             padding: EdgeInsets.symmetric(
               horizontal: compact ? 8 : 10,
               vertical: compact ? 7 : 8,
             ),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: selected ? 0.98 : 0.93),
-              borderRadius: BorderRadius.circular(selected ? 15 : 18),
-              border: selected
-                  ? Border.all(color: color.withValues(alpha: 0.18))
+              color: selected
+                  ? color.withValues(alpha: 0.08)
+                  : Colors.white.withValues(alpha: 0.93),
+              borderRadius: BorderRadius.circular(18),
+              // 선택 테두리 하나만(카테고리색 1px). 내부 테두리 금지.
+              border: Border.all(
+                color: selected ? color : const Color(0xFFE2E8F0),
+                width: 1,
+              ),
+              boxShadow: selected
+                  ? const [
+                      BoxShadow(
+                        blurRadius: 16,
+                        offset: Offset(0, 7),
+                        color: Color(0x240F172A),
+                      ),
+                    ]
                   : null,
             ),
             child: Row(
-              children: [
+              children: <Widget>[
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
+                    children: <Widget>[
                       Text(
                         placeDisplayName(place, language),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: selected ? color : const Color(0xFF111827),
-                          fontWeight: FontWeight.w900,
-                          height: 1.12,
-                        ),
+                        style: Theme.of(context).textTheme.titleSmall
+                            ?.copyWith(
+                              color: selected ? color : const Color(0xFF111827),
+                              fontWeight: FontWeight.w900,
+                              height: 1.12,
+                            ),
                       ),
                       const SizedBox(height: 4),
                       RailCategoryBadge(place: place, language: language),
                       const SizedBox(height: 5),
                       Row(
                         key: ValueKey('rail-place-region-${place.placeId}'),
-                        children: [
+                        children: <Widget>[
                           const Icon(
                             Icons.place_outlined,
                             size: 13,
@@ -120,7 +120,7 @@ class MapRailPlaceCard extends StatelessWidget {
                       Wrap(
                         spacing: 6,
                         runSpacing: 4,
-                        children: [
+                        children: <Widget>[
                           if (place.distanceM > 0)
                             TinyMeta('${place.distanceM}m'),
                         ],
@@ -128,7 +128,7 @@ class MapRailPlaceCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (hasImage) ...[
+                if (hasImage) ...<Widget>[
                   SizedBox(width: compact ? 8 : 10),
                   RailPlaceThumb(place: place, compact: compact),
                 ],

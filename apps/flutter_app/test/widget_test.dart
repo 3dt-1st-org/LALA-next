@@ -804,6 +804,11 @@ void main() {
   testWidgets('filters places from category chips and toggles map modes', (
     tester,
   ) async {
+    // 계약 뷰포트(393x852)에서 컨트롤 스택과 유틸리티 행이 겹치지 않는다.
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     final configs = <LalaAppConfig>[];
     final backends = <FakeBackend>[];
     await tester.pumpWidget(
@@ -888,7 +893,11 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(tester.getSize(autoToggle), const Size(74, 74));
+    // 모바일 비주얼 계약: 대형 중앙 컨트롤(74dp) 제거 — 44dp 타겟으로 축소.
+    expect(
+      tester.getSize(autoToggle).shortestSide,
+      lessThanOrEqualTo(52),
+    );
     final bottomDockRect = tester.getRect(
       find.byKey(const ValueKey('map-bottom-dock')),
     );
@@ -1220,6 +1229,10 @@ void main() {
   testWidgets('auto docent on keeps the nearest place in map guidance', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
       TestLalaApp(
         backendFactory: (config) => FakeBackend(
@@ -1255,6 +1268,10 @@ void main() {
   testWidgets('auto docent ignores places outside the legacy trigger radius', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
       TestLalaApp(
         backendFactory: (config) => FakeBackend(
@@ -1296,6 +1313,10 @@ void main() {
   testWidgets('auto docent re-evaluates the nearest place after refresh', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     var backendCreations = 0;
     await tester.pumpWidget(
       TestLalaApp(
@@ -1336,6 +1357,10 @@ void main() {
   testWidgets('auto docent keeps context during the legacy cooldown window', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     var backendCreations = 0;
     await tester.pumpWidget(
       TestLalaApp(
@@ -1424,8 +1449,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('수원화성'), findsOneWidget);
+    // 단일 선택 테두리: 내부 category-border 키는 제거됨(외부 카드 키로 선택 카드 확인).
     expect(
-      find.byKey(const ValueKey('category-border-hwaseong-haenggung')),
+      find.byKey(const ValueKey('map-rail-place-card-hwaseong-haenggung')),
       findsOneWidget,
     );
     expect(
@@ -1459,7 +1485,7 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('category-border-suwon-hwaseong')),
+      find.byKey(const ValueKey('map-rail-place-card-suwon-hwaseong')),
       findsOneWidget,
     );
     expect(find.text('수원화성 도슨트'), findsAtLeastNWidgets(1));
@@ -1979,6 +2005,53 @@ void main() {
     expect(dockWidth, lessThanOrEqualTo(760));
     expect(railWidth, lessThanOrEqualTo(780));
     expect(utilityWidth, lessThanOrEqualTo(760));
+  });
+
+  testWidgets(
+    'mobile map layout keeps the rail, control stack and dock non-overlapping',
+    (tester) async {
+      tester.view.physicalSize = const Size(393, 852);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        TestLalaApp(
+          backendFactory: FakeBackend.new,
+          initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final dockRect = tester.getRect(
+        find.byKey(const ValueKey('map-bottom-dock')),
+      );
+      // 컨트롤 스택(음성 토글 = 최상단)은 도크 핸들 위에 위치(겹치지 않음).
+      final voiceRect = tester.getRect(find.byKey(const ValueKey('voice-toggle')));
+      expect(voiceRect.bottom, lessThanOrEqualTo(dockRect.top));
+
+      // 추천 레일은 컨트롤 스택보다 위쪽 밴드에 있다(세로 영역이 겹치지 않음).
+      final railRect = tester.getRect(
+        find.byKey(const ValueKey('recommendation-rail-list')),
+      );
+      expect(railRect.bottom, lessThan(voiceRect.top));
+    },
+  );
+
+  testWidgets('bottom navigation shows contracted Korean labels', (tester) async {
+    await tester.pumpWidget(
+      TestLalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 계약: 하단 네비 한국어 라벨은 검색/지도/일정. 플랜 제거.
+    expect(find.text('검색'), findsOneWidget);
+    expect(find.text('지도'), findsOneWidget);
+    expect(find.text('일정'), findsOneWidget);
+    expect(find.text('플랜'), findsNothing);
   });
 
   testWidgets('place detail save control toggles local saved state', (
