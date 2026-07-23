@@ -498,6 +498,106 @@ class LalaApiClient {
     );
   }
 
+  /// ONMU P3c: 채팅방 목록 조회(페이지네이션). 클라이언트 인증.
+  Future<LalaEnvelope<ChatRoomsResponse>> getChatRooms({
+    int limit = 20,
+    int offset = 0,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'GET',
+      '/api/v1/community/chat/rooms',
+      query: {'limit': '$limit', 'offset': '$offset'},
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+    );
+    return _envelopeFromResponse<ChatRoomsResponse>(
+      resp,
+      parseData: ChatRoomsResponse.fromJsonObject,
+    );
+  }
+
+  /// ONMU P3c: 채팅방 생성(OAuth). 본문은 단순 JSON 맵(name).
+  Future<LalaEnvelope<ChatRoom>> createChatRoom({
+    required String name,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'POST',
+      '/api/v1/community/chat/rooms',
+      body: <String, dynamic>{'name': name},
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+      contentType: 'application/json',
+    );
+    return _envelopeFromResponse<ChatRoom>(
+      resp,
+      parseData: ChatRoom.fromJsonObject,
+    );
+  }
+
+  /// ONMU P3c: 채팅방 메시지 목록 조회(페이지네이션).
+  Future<LalaEnvelope<ChatMessagesResponse>> getChatMessages({
+    required String roomId,
+    int limit = 50,
+    int offset = 0,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'GET',
+      '/api/v1/community/chat/rooms/$roomId/messages',
+      query: {'limit': '$limit', 'offset': '$offset'},
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+    );
+    return _envelopeFromResponse<ChatMessagesResponse>(
+      resp,
+      parseData: ChatMessagesResponse.fromJsonObject,
+    );
+  }
+
+  /// ONMU P3c: 채팅 WebSocket 핸드셰이크에 사용할 bearer 토큰을 해석.
+  /// 동적 access token provider 가 있으면 이를, 아니면 static bearerToken 을 반환.
+  /// 빈 문자열이면 연결할 수 없다(호출측에서 가드).
+  Future<String> resolveWebSocketToken() async {
+    if (accessTokenProvider != null) {
+      try {
+        final provided = (await accessTokenProvider!())?.trim();
+        if (provided != null && provided.isNotEmpty) {
+          return provided;
+        }
+      } catch (_) {
+        // 폴백으로 static bearer 시도.
+      }
+    }
+    final static = bearerToken?.trim();
+    return static ?? '';
+  }
+
+  /// ONMU P3c: 채팅방 WebSocket URI 를 구성(baseUri 의 scheme 을 ws/wss 로 변환).
+  /// [token] 은 query param ?token= 로 전달(브라우저 핸드셰이크는 헤더 미지원).
+  Uri chatWebSocketUri({
+    required String roomId,
+    required String token,
+  }) {
+    final isSecure = baseUri.scheme == 'https' || baseUri.scheme == 'wss';
+    final scheme = isSecure ? 'wss' : 'ws';
+    final basePath = baseUri.path.endsWith('/')
+        ? baseUri.path.substring(0, baseUri.path.length - 1)
+        : baseUri.path;
+    final routePath =
+        '/api/v1/community/chat/rooms/$roomId/ws';
+    final mergedPath = basePath == '/' ? routePath : '$basePath$routePath';
+    return baseUri.replace(
+      scheme: scheme,
+      path: mergedPath,
+      queryParameters: {'token': token},
+    );
+  }
+
   void close() {
     _dio.close(force: true);
   }
@@ -1628,6 +1728,122 @@ class CommunityLikeState {
       postId: _asString(json['post_id']),
       liked: _asBool(json['liked']),
       likeCount: _asInt(json['like_count']),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// ONMU P3c: 커뮤니티 채팅 데이터 모델. apps/api app/schemas/community_chat.py 와 대응.
+// WebSocket 핸드셰이크/브로드캐스트 페이로드와 REST 응답이 동일한 메시지 모양을 공유한다.
+// ─────────────────────────────────────────────────────────────────────────
+
+/// 커뮤니티 채팅방.
+class ChatRoom {
+  const ChatRoom({
+    required this.id,
+    required this.name,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String name;
+  final String createdAt;
+
+  static ChatRoom fromJsonObject(Object? value) {
+    return ChatRoom.fromJson(_asMap(value));
+  }
+
+  factory ChatRoom.fromJson(Map<String, dynamic> json) {
+    return ChatRoom(
+      id: _asString(json['id']),
+      name: _asString(json['name']),
+      createdAt: _asString(json['created_at']),
+    );
+  }
+}
+
+/// 채팅방 목록 응답(count/total/rooms).
+class ChatRoomsResponse {
+  const ChatRoomsResponse({
+    required this.count,
+    required this.total,
+    required this.rooms,
+  });
+
+  final int count;
+  final int total;
+  final List<ChatRoom> rooms;
+
+  static ChatRoomsResponse fromJsonObject(Object? value) {
+    return ChatRoomsResponse.fromJson(_asMap(value));
+  }
+
+  factory ChatRoomsResponse.fromJson(Map<String, dynamic> json) {
+    return ChatRoomsResponse(
+      count: _asInt(json['count']),
+      total: _asInt(json['total']),
+      rooms: _asList(json['rooms'])
+          .map(ChatRoom.fromJsonObject)
+          .toList(growable: false),
+    );
+  }
+}
+
+/// 채팅 메시지. WebSocket 브로드캐스트 페이로드와 REST 메시지가 같은 모양.
+/// author_user_id 는 발신자가 identity.users 에 없을 수 있어 nullable.
+class ChatMessage {
+  const ChatMessage({
+    required this.id,
+    required this.roomId,
+    required this.authorUserId,
+    required this.body,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String roomId;
+  final String? authorUserId;
+  final String body;
+  final String createdAt;
+
+  static ChatMessage fromJsonObject(Object? value) {
+    return ChatMessage.fromJson(_asMap(value));
+  }
+
+  factory ChatMessage.fromJson(Map<String, dynamic> json) {
+    return ChatMessage(
+      id: _asString(json['id']),
+      roomId: _asString(json['room_id']),
+      authorUserId: _asOptionalString(json['author_user_id']),
+      body: _asString(json['body']),
+      createdAt: _asString(json['created_at']),
+    );
+  }
+}
+
+/// 채팅 메시지 목록 응답(count/total/messages).
+class ChatMessagesResponse {
+  const ChatMessagesResponse({
+    required this.count,
+    required this.total,
+    required this.messages,
+  });
+
+  final int count;
+  final int total;
+  final List<ChatMessage> messages;
+
+  static ChatMessagesResponse fromJsonObject(Object? value) {
+    return ChatMessagesResponse.fromJson(_asMap(value));
+  }
+
+  factory ChatMessagesResponse.fromJson(Map<String, dynamic> json) {
+    return ChatMessagesResponse(
+      count: _asInt(json['count']),
+      total: _asInt(json['total']),
+      messages: _asList(json['messages'])
+          .map(ChatMessage.fromJsonObject)
+          .toList(growable: false),
     );
   }
 }
