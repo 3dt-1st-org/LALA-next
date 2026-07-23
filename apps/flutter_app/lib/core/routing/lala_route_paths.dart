@@ -33,6 +33,16 @@ abstract final class LalaRoutePaths {
   /// 커뮤니티 게시글 작성.
   static const String communityCreate = '/community/create';
 
+  /// 커뮤니티 채팅방 목록.
+  static const String communityChat = '/community/chat';
+
+  /// 커뮤니티 채팅방(:id = roomId).
+  static const String communityChatRoom = '/community/chat/:id';
+
   /// 커뮤니티 상세 경로를 postId 로 조합.
   static String communityPostFor(String postId) => '/community/post/$postId';
+
+  /// 채팅방 경로를 roomId 로 조합.
+  static String communityChatRoomFor(String roomId) =>
+      '/community/chat/$roomId';
 }

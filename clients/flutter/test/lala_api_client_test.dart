@@ -986,6 +986,175 @@ void main() {
     expect(envelope.ok, isTrue);
     expect(envelope.requestId, 'no-token-request-id');
   });
+
+  // --- ONMU P3c: 커뮤니티 채팅 REST + WebSocket URI 테스트 ---
+
+  test('getChatRooms parses rooms list with pagination query', () async {
+    late RequestOptions captured;
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      dio: _dio(
+        (request) async {
+          captured = request;
+          return _json({
+            'ok': true,
+            'data': {
+              'count': 2,
+              'total': 5,
+              'rooms': [
+                {
+                  'id': '11111111-1111-1111-1111-111111111111',
+                  'name': '수원 채팅방',
+                  'created_at': '2026-07-20T10:00:00Z',
+                },
+                {
+                  'id': '22222222-2222-2222-2222-222222222222',
+                  'name': 'general',
+                  'created_at': '2026-07-21T11:30:00Z',
+                },
+              ],
+            },
+            'meta': <String, Object?>{},
+            'error': null,
+          });
+        },
+      ),
+    );
+
+    final envelope = await client.getChatRooms(limit: 10, offset: 20);
+
+    expect(captured.method, 'GET');
+    expect(captured.uri.path, '/api/v1/community/chat/rooms');
+    expect(captured.uri.queryParameters['limit'], '10');
+    expect(captured.uri.queryParameters['offset'], '20');
+    expect(envelope.data?.count, 2);
+    expect(envelope.data?.total, 5);
+    expect(envelope.data?.rooms.length, 2);
+    expect(envelope.data?.rooms.first.id,
+        '11111111-1111-1111-1111-111111111111');
+    expect(envelope.data?.rooms.first.name, '수원 채팅방');
+    expect(envelope.data?.rooms.last.createdAt, '2026-07-21T11:30:00Z');
+  });
+
+  test('createChatRoom sends JSON name with OAuth bearer auth', () async {
+    late RequestOptions captured;
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      accessTokenProvider: () async => 'oauth-room-token',
+      dio: _dio(
+        (request) async {
+          captured = request;
+          return _json({
+            'ok': true,
+            'data': {
+              'id': '33333333-3333-3333-3333-333333333333',
+              'name': '새방',
+              'created_at': '2026-07-22T09:00:00Z',
+            },
+            'meta': <String, Object?>{},
+            'error': null,
+          });
+        },
+      ),
+    );
+
+    final envelope = await client.createChatRoom(name: '새방');
+
+    expect(captured.method, 'POST');
+    expect(captured.uri.path, '/api/v1/community/chat/rooms');
+    expect(captured.data, {'name': '새방'});
+    expect(_h(captured, 'authorization'), 'Bearer oauth-room-token');
+    expect(_h(captured, 'content-type'), contains('application/json'));
+    expect(envelope.data?.id, '33333333-3333-3333-3333-333333333333');
+    expect(envelope.data?.name, '새방');
+  });
+
+  test('getChatMessages parses messages and tolerates null author', () async {
+    late RequestOptions captured;
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      dio: _dio(
+        (request) async {
+          captured = request;
+          return _json({
+            'ok': true,
+            'data': {
+              'count': 2,
+              'total': 2,
+              'messages': [
+                {
+                  'id': 'm1',
+                  'room_id': 'room-1',
+                  'author_user_id': null,
+                  'body': '익명 인사',
+                  'created_at': '2026-07-22T09:01:00Z',
+                },
+                {
+                  'id': 'm2',
+                  'room_id': 'room-1',
+                  'author_user_id': 'user-42',
+                  'body': '안녕!',
+                  'created_at': '2026-07-22T09:02:00Z',
+                },
+              ],
+            },
+            'meta': <String, Object?>{},
+            'error': null,
+          });
+        },
+      ),
+    );
+
+    final envelope =
+        await client.getChatMessages(roomId: 'room-1', limit: 50, offset: 0);
+
+    expect(captured.method, 'GET');
+    expect(captured.uri.path, '/api/v1/community/chat/rooms/room-1/messages');
+    expect(captured.uri.queryParameters['limit'], '50');
+    expect(envelope.data?.messages.length, 2);
+    expect(envelope.data?.messages.first.authorUserId, isNull);
+    expect(envelope.data?.messages.first.body, '익명 인사');
+    expect(envelope.data?.messages.last.authorUserId, 'user-42');
+  });
+
+  test('chatWebSocketUri builds ws/wss URI with token query param', () {
+    final insecure = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test:8080'),
+    );
+    final wsUri = insecure.chatWebSocketUri(
+      roomId: 'room-9',
+      token: 'abc.def.ghi',
+    );
+    expect(wsUri.scheme, 'ws');
+    expect(wsUri.host, 'api.example.test');
+    expect(wsUri.port, 8080);
+    expect(wsUri.path, '/api/v1/community/chat/rooms/room-9/ws');
+    expect(wsUri.queryParameters['token'], 'abc.def.ghi');
+
+    final secure = LalaApiClient(baseUri: Uri.parse('https://api.example.test'));
+    final wssUri = secure.chatWebSocketUri(roomId: 'r', token: 't');
+    expect(wssUri.scheme, 'wss');
+    expect(wssUri.path, '/api/v1/community/chat/rooms/r/ws');
+  });
+
+  test('resolveWebSocketToken prefers provider token then static bearer',
+      () async {
+    final withProvider = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      bearerToken: 'static-bearer',
+      accessTokenProvider: () async => 'dynamic-token',
+    );
+    expect(await withProvider.resolveWebSocketToken(), 'dynamic-token');
+
+    final staticOnly = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      bearerToken: '  static-bearer  ',
+    );
+    expect(await staticOnly.resolveWebSocketToken(), 'static-bearer');
+
+    final none = LalaApiClient(baseUri: Uri.parse('http://api.example.test'));
+    expect(await none.resolveWebSocketToken(), '');
+  });
 }
 
 ResponseBody _placesResponse() {

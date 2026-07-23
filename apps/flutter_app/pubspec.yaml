@@ -23,6 +23,9 @@ dependencies:
   flutter_riverpod: ^2.5.1
   # ONMU P0: StatefulShellRoute 기반 3-탭 하단 네비게이션.
   go_router: ^14.6.0
+  # ONMU P3c: 커뮤니티 채팅 WebSocket 클라이언트(모바일+웹 공용).
+  web_socket_channel: ^3.0.2
+  meta: ^1.16.0
 
 dev_dependencies:
   flutter_test:

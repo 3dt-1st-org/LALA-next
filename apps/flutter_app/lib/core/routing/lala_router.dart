@@ -27,6 +27,8 @@ import 'package:lala_next_app/features/search/presentation/pages/search_page.dar
 import 'package:lala_next_app/features/community/presentation/pages/community_feed_page.dart';
 import 'package:lala_next_app/features/community/presentation/pages/community_post_detail_page.dart';
 import 'package:lala_next_app/features/community/presentation/pages/community_create_post_page.dart';
+import 'package:lala_next_app/features/community/presentation/pages/chat_room_list_page.dart';
+import 'package:lala_next_app/features/community/presentation/pages/chat_room_page.dart';
 
 GoRouter createLalaRouter({
   required LalaBackendFactory backendFactory,
@@ -135,6 +137,19 @@ GoRouter createLalaRouter({
         path: LalaRoutePaths.communityCreate,
         builder: (BuildContext context, GoRouterState state) =>
             const CommunityCreatePostPage(),
+      ),
+      // --- ONMU P3c: 커뮤니티 채팅 push 라우트 ---
+      GoRoute(
+        path: LalaRoutePaths.communityChat,
+        builder: (BuildContext context, GoRouterState state) =>
+            const ChatRoomListPage(),
+      ),
+      GoRoute(
+        path: LalaRoutePaths.communityChatRoom,
+        builder: (BuildContext context, GoRouterState state) {
+          final roomId = state.pathParameters['id'] ?? '';
+          return ChatRoomPage(roomId: roomId);
+        },
       ),
     ],
   );
