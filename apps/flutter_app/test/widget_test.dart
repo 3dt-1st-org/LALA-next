@@ -888,7 +888,7 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(tester.getSize(autoToggle), const Size(74, 74));
+    expect(tester.getSize(autoToggle), const Size(48, 48));
     final bottomDockRect = tester.getRect(
       find.byKey(const ValueKey('map-bottom-dock')),
     );
@@ -1425,7 +1425,7 @@ void main() {
 
     expect(find.text('수원화성'), findsOneWidget);
     expect(
-      find.byKey(const ValueKey('category-border-hwaseong-haenggung')),
+      find.byKey(const ValueKey('map-rail-place-card-hwaseong-haenggung')),
       findsOneWidget,
     );
     expect(
@@ -1459,7 +1459,7 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('category-border-suwon-hwaseong')),
+      find.byKey(const ValueKey('map-rail-place-card-suwon-hwaseong')),
       findsOneWidget,
     );
     expect(find.text('수원화성 도슨트'), findsAtLeastNWidgets(1));

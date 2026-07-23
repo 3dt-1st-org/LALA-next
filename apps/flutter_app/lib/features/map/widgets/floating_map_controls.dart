@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import '../../docent/widgets/auto_docent_fab.dart';
 import 'map_fab.dart';
 
-/// 지도 플로팅 컨트롤 행(음성 토글 + 자동 도슨트 + 내 위치)(C3 추출 — main.dart 의 _FloatingMapControls).
+/// 지도 플로팅 컨트롤 세로 스택(음성 토글 + 자동 도슨트 + 내 위치).
+/// 참조 기준 우하단 컴팩트 세로 배치. 대형 흑색 원형 컨트롤을 쓰지 않는다.
 class FloatingMapControls extends StatelessWidget {
   const FloatingMapControls({
     super.key,
@@ -24,9 +25,10 @@ class FloatingMapControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Column(
       mainAxisSize: MainAxisSize.min,
-      children: [
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: <Widget>[
         MapFab(
           key: const ValueKey('voice-toggle'),
           tooltip: language == 'en'
@@ -42,7 +44,7 @@ class FloatingMapControls extends StatelessWidget {
               : (voiceEnabled ? '켬' : '끔'),
           onPressed: onToggleVoice,
         ),
-        const SizedBox(width: 14),
+        const SizedBox(height: 12),
         AutoDocentFab(
           key: const ValueKey('auto-docent-toggle'),
           tooltip: language == 'en'
@@ -57,7 +59,7 @@ class FloatingMapControls extends StatelessWidget {
               : (autoDocentEnabled ? '켬' : '끔'),
           onPressed: onToggleAutoDocent,
         ),
-        const SizedBox(width: 14),
+        const SizedBox(height: 12),
         MapFab(
           key: const ValueKey('location-refresh'),
           tooltip: language == 'en' ? 'My location' : '내 위치',
