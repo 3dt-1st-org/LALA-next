@@ -888,7 +888,7 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(tester.getSize(autoToggle), const Size(74, 74));
+    expect(tester.getSize(autoToggle), const Size(48, 48));
     final bottomDockRect = tester.getRect(
       find.byKey(const ValueKey('map-bottom-dock')),
     );
@@ -1425,7 +1425,7 @@ void main() {
 
     expect(find.text('수원화성'), findsOneWidget);
     expect(
-      find.byKey(const ValueKey('category-border-hwaseong-haenggung')),
+      find.byKey(const ValueKey('map-rail-place-card-hwaseong-haenggung')),
       findsOneWidget,
     );
     expect(
@@ -1459,7 +1459,7 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('category-border-suwon-hwaseong')),
+      find.byKey(const ValueKey('map-rail-place-card-suwon-hwaseong')),
       findsOneWidget,
     );
     expect(find.text('수원화성 도슨트'), findsAtLeastNWidgets(1));
@@ -2675,8 +2675,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('어떤 관광객이신가요?'), findsOneWidget);
-    expect(find.text('외국인 관광객'), findsOneWidget);
-    expect(find.text('내국인 관광객'), findsOneWidget);
+    expect(find.text('해외 방문'), findsOneWidget);
+    expect(find.text('국내 여행'), findsOneWidget);
   });
 
   testWidgets(
@@ -2700,10 +2700,14 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
       await tester.pumpAndSettle();
 
-      // 외국인 관광객 선택 → 기본 English.
-      await tester.tap(find.text('외국인 관광객'));
+      // 해외 방문 선택 → 기본 English.
+      await tester.tap(find.text('해외 방문'));
       await tester.pumpAndSettle();
       expect(OnboardingState.language, 'en');
+
+      // start 단계는 탭해도 자동 이동하지 않는다 — 명시적 Next 로 언어 단계로.
+      await tester.tap(find.widgetWithText(FilledButton, 'Next'));
+      await tester.pumpAndSettle();
 
       // 언어 단계: English 가 pre-select 되어 있고, Next 로 위치 단계로.
       expect(find.text('English'), findsOneWidget);
@@ -2736,10 +2740,13 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('내국인 관광객'));
+    await tester.tap(find.text('국내 여행'));
     await tester.pumpAndSettle();
     expect(OnboardingState.language, 'ko');
 
+    // start 단계 다음 → 언어 단계 다음 → 위치 단계.
+    await tester.tap(find.widgetWithText(FilledButton, '다음'));
+    await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, '다음'));
     await tester.pumpAndSettle();
 
@@ -2768,8 +2775,10 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
       await tester.pumpAndSettle();
 
-      // 내국인 관광객(한국어) → 언어 다음 → 위치 단계.
-      await tester.tap(find.text('내국인 관광객'));
+      // 국내 여행(한국어) → start 다음 → 언어 다음 → 위치 단계.
+      await tester.tap(find.text('국내 여행'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, '다음'));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(FilledButton, '다음'));
       await tester.pumpAndSettle();

@@ -503,21 +503,6 @@ class Dashboard extends StatelessWidget {
                 ),
               ),
             ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: floatingControlsBottom,
-              child: Center(
-                child: FloatingMapControls(
-                  voiceEnabled: voiceEnabled,
-                  autoDocentEnabled: autoDocentEnabled,
-                  language: uiLanguage,
-                  onToggleVoice: onToggleVoice,
-                  onToggleAutoDocent: onToggleAutoDocent,
-                  onReturnToLocation: onReturnToLocation,
-                ),
-              ),
-            ),
             if (!locationFallbackNoticeVisible)
               Positioned(
                 left: 16,
@@ -541,6 +526,21 @@ class Dashboard extends StatelessWidget {
                   ),
                 ),
               ),
+            // 컨트롤은 우하단 세로 스택(참조 기준). 대형 중앙 원형 ❌.
+            // 유틸리티 행(중앙 정렬)보다 위(z-order)에 그려 우측 빈 영역을 쓰고
+            // 탭이 가려지지 않게 한다.
+            Positioned(
+              right: 16,
+              bottom: floatingControlsBottom,
+              child: FloatingMapControls(
+                voiceEnabled: voiceEnabled,
+                autoDocentEnabled: autoDocentEnabled,
+                language: uiLanguage,
+                onToggleVoice: onToggleVoice,
+                onToggleAutoDocent: onToggleAutoDocent,
+                onReturnToLocation: onReturnToLocation,
+              ),
+            ),
             if (activeSheet != null)
               Positioned.fill(
                 child: MapDraggableSheet(

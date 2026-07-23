@@ -6,6 +6,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
 import 'package:lala_next_app/core/routing/lala_route_paths.dart';
 import 'package:lala_next_app/features/location/widgets/manual_location_sheet.dart';
@@ -13,6 +14,7 @@ import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/features/onboarding/presentation/widgets/onboarding_scaffold.dart';
 import 'package:lala_next_app/manual_location_options.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
+import 'package:lala_next_app/shared/widgets/kakao_map_preview.dart';
 
 class OnboardingLocationConsentPage extends StatefulWidget {
   const OnboardingLocationConsentPage({
@@ -92,100 +94,104 @@ class _OnboardingLocationConsentPageState
   Widget build(BuildContext context) {
     final language = _language;
     final requesting = _status == _LocationConsentStatus.requesting;
+    // 미리보기는 앱 기본 지역(수원)을 중심으로 한 실제 카카오 타일.
+    // 키가 없으면 기존 명시적 fallback 이 노출된다.
+    final config = LalaAppConfig.fromEnvironment();
     return OnboardingScaffold(
-      step: 4,
-      onBack: requesting ? null : () => context.go(LalaRoutePaths.onboardingLanguage),
+      step: 3,
+      onBack: requesting
+          ? null
+          : () => context.go(LalaRoutePaths.onboardingLanguage),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            const SizedBox(height: 12),
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(20),
+        // 작은 화면/배너 노출 시에도 넘침 없이 스크롤(크로스 플랫폼 안전).
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 168,
+                child: KakaoMapPreview(
+                  javascriptKey: config.kakaoJavascriptKey,
+                  language: language,
+                  centerLat: config.lat,
+                  centerLng: config.lng,
+                ),
               ),
-              child: Icon(
-                Icons.my_location_rounded,
-                size: 32,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
-            const SizedBox(height: 18),
-            Text(
-              lalaCopy(
-                language,
-                ko: '주변 추천을 위해 위치가 필요해요',
-                en: 'We need your location for nearby tips',
-              ),
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    height: 1.16,
-                  ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              lalaCopy(
-                language,
-                ko: '현재 위치 주변의 명소·맛집·날씨를 추천해 드릴게요. 허용하지 않아도 기본 지역으로 시작할 수 있어요.',
-                en:
-                    'Get nearby attractions, food, and weather. You can still start with a default area.',
-              ),
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF64748B),
-                    fontWeight: FontWeight.w700,
-                    height: 1.4,
-                  ),
-            ),
-            const Spacer(),
-            if (_offeredManual) ...<Widget>[
-              _InfoBanner(
-                language: language,
-                text: lalaCopy(
+              const SizedBox(height: 18),
+              Text(
+                lalaCopy(
                   language,
-                  ko: '위치 권한이 없어요. 지역을 직접 선택하거나 기본 지역으로 시작할 수 있어요.',
-                  en:
-                      'Location is unavailable. Pick an area or start with the default.',
+                  ko: '주변 추천을 위해 위치가 필요해요',
+                  en: 'We need your location for nearby tips',
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  height: 1.16,
                 ),
               ),
-              const SizedBox(height: 12),
-            ],
-            if (requesting)
-              const Padding(
-                padding: EdgeInsets.only(bottom: 14),
-                child: Center(
-                  child: SizedBox(
-                    width: 26,
-                    height: 26,
-                    child: CircularProgressIndicator(strokeWidth: 2.4),
+              const SizedBox(height: 8),
+              Text(
+                lalaCopy(
+                  language,
+                  ko: '현재 위치 주변의 명소·맛집·날씨를 추천해 드릴게요. 허용하지 않아도 기본 지역으로 시작할 수 있어요.',
+                  en: 'Get nearby attractions, food, and weather. You can still start with a default area.',
+                ),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: const Color(0xFF64748B),
+                  fontWeight: FontWeight.w700,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 20),
+              if (_offeredManual) ...<Widget>[
+                _InfoBanner(
+                  language: language,
+                  text: lalaCopy(
+                    language,
+                    ko: '위치 권한이 없어요. 지역을 직접 선택하거나 기본 지역으로 시작할 수 있어요.',
+                    en: 'Location is unavailable. Pick an area or start with the default.',
                   ),
                 ),
-              )
-            else
-              _PrimaryButton(
-                label: lalaCopy(language, ko: '위치 권한 허용', en: 'Allow location'),
-                icon: Icons.location_on_rounded,
-                onPressed: _allowLocation,
-              ),
-            const SizedBox(height: 12),
-            if (_offeredManual)
+                const SizedBox(height: 12),
+              ],
+              if (requesting)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 14),
+                  child: Center(
+                    child: SizedBox(
+                      width: 26,
+                      height: 26,
+                      child: CircularProgressIndicator(strokeWidth: 2.4),
+                    ),
+                  ),
+                )
+              else
+                _PrimaryButton(
+                  label: lalaCopy(
+                    language,
+                    ko: '위치 권한 허용',
+                    en: 'Allow location',
+                  ),
+                  icon: Icons.location_on_rounded,
+                  onPressed: _allowLocation,
+                ),
+              const SizedBox(height: 12),
+              // 지역 직접 선택은 첫 렌더부터 항상 노출(거부 후에만 나오지 않음).
               _SecondaryButton(
                 label: lalaCopy(language, ko: '지역 직접 선택', en: 'Choose area'),
                 onPressed: _openManualSheet,
               ),
-            const SizedBox(height: 8),
-            _TextActionButton(
-              label: lalaCopy(
-                language,
-                ko: '나중에 하기',
-                en: 'Not now',
+              const SizedBox(height: 8),
+              _TextActionButton(
+                label: lalaCopy(language, ko: '나중에 하기', en: 'Not now'),
+                onPressed: requesting ? null : _complete,
               ),
-              onPressed: requesting ? null : _complete,
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -292,7 +298,11 @@ class _InfoBanner extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Icon(Icons.info_outline_rounded, size: 18, color: Color(0xFFB7791F)),
+          const Icon(
+            Icons.info_outline_rounded,
+            size: 18,
+            color: Color(0xFFB7791F),
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(

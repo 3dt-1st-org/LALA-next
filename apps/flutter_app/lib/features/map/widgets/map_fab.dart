@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
-/// 지도 플로팅 액션 버튼(음성/내 위치 등)(C3 추출 — main.dart 의 _MapFab).
+import '../../../app/lala_metrics.dart';
+
+/// 지도 플로팅 액션 버튼(음성/내 위치 등) — 컴팩트 44px, 비활성은 흰색(흑색 ❌).
 class MapFab extends StatelessWidget {
   const MapFab({
     super.key,
@@ -31,7 +33,7 @@ class MapFab extends StatelessWidget {
           alignment: Alignment.topRight,
           backgroundColor: active
               ? const Color(0xFFF5C842)
-              : const Color(0xFF64748B),
+              : const Color(0xFF94A3B8),
           textColor: active ? const Color(0xFF1A202C) : Colors.white,
           label: statusLabel == null
               ? null
@@ -44,22 +46,24 @@ class MapFab extends StatelessWidget {
                 ),
           child: IconButton.filled(
             onPressed: onPressed,
-            icon: Icon(icon, size: 22),
+            icon: Icon(icon, size: 20),
             style: IconButton.styleFrom(
-              fixedSize: const Size.square(46),
+              fixedSize: const Size.square(LalaMetrics.mapControlSize),
               backgroundColor: active
                   ? const Color(0xFF2B6CB0)
-                  : const Color(0xFF1A202C).withValues(alpha: 0.82),
-              foregroundColor: Colors.white,
+                  : Colors.white,
+              foregroundColor: active
+                  ? Colors.white
+                  : const Color(0xFF1A202C),
               shape: CircleBorder(
                 side: BorderSide(
                   color: active
-                      ? Colors.white.withValues(alpha: 0.86)
-                      : Colors.white.withValues(alpha: 0.22),
-                  width: 1.6,
+                      ? const Color(0xFF2B6CB0)
+                      : const Color(0xFFE2E8F0),
+                  width: 1.4,
                 ),
               ),
-              elevation: 8,
+              elevation: 6,
             ),
           ),
         ),

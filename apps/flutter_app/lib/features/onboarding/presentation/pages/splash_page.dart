@@ -47,6 +47,7 @@ class _OnboardingSplashPageState extends State<OnboardingSplashPage> {
     return OnboardingScaffold(
       step: 1,
       showBack: false,
+      showProgress: false,
       child: Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 28),

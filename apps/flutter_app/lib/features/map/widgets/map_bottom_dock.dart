@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
+import '../../../app/lala_metrics.dart';
 import '../../../shared/l10n/place_labels.dart';
 import '../../../shared/labels/source_label.dart';
 import '../../../shared/widgets/tiny_meta.dart';
@@ -64,7 +65,9 @@ class MapBottomDock extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.96),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(LalaMetrics.sheetTopRadius),
+          ),
           boxShadow: const [
             BoxShadow(
               blurRadius: 28,
