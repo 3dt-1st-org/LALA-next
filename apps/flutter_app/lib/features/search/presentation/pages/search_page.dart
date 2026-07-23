@@ -19,10 +19,17 @@ import 'package:lala_next_app/features/place/widgets/empty_place_state.dart';
 import 'package:lala_next_app/features/place/widgets/place_thumb.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 import 'package:lala_next_app/shared/l10n/place_labels.dart';
+import 'package:lala_next_app/shared/widgets/lala_skeleton.dart';
 
 /// 검색 탭: 추천 장소를 불러와 카테고리/검색어로 필터링한다.
 class SearchPage extends StatefulWidget {
-  const SearchPage({super.key});
+  const SearchPage({this.locationProvider, this.backendFactory, super.key});
+
+  /// 테스트 주입용 위치 프로바이더(기본 = Geolocator 하이브리드).
+  final LalaLocationProvider? locationProvider;
+
+  /// 테스트 주입용 백엔드 팩토리(기본 = LalaApiBackend).
+  final LalaBackendFactory? backendFactory;
 
   @override
   State<SearchPage> createState() => _SearchPageState();
@@ -45,6 +52,7 @@ class _SearchPageState extends State<SearchPage> {
   late final LalaAppConfig _baseConfig;
   late LalaAppConfig _config;
   late final LalaLocationProvider _locationProvider;
+  late final LalaBackendFactory _backendFactory;
   late LalaBackend _backend;
 
   _SearchLoadStatus _status = _SearchLoadStatus.loading;
@@ -60,8 +68,10 @@ class _SearchPageState extends State<SearchPage> {
     super.initState();
     _baseConfig = LalaAppConfig.fromEnvironment();
     _config = _baseConfig.copyWith(radiusM: _radiusM);
-    _locationProvider = const GeolocatorLalaLocationProvider();
-    _backend = LalaApiBackend(_config);
+    _locationProvider =
+        widget.locationProvider ?? const GeolocatorLalaLocationProvider();
+    _backendFactory = widget.backendFactory ?? LalaApiBackend.new;
+    _backend = _backendFactory(_config);
     _searchController = TextEditingController();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -100,7 +110,7 @@ class _SearchPageState extends State<SearchPage> {
 
     _config = _baseConfig.copyWith(lat: lat, lng: lng, radiusM: _radiusM);
     _backend.close();
-    _backend = LalaApiBackend(_config);
+    _backend = _backendFactory(_config);
 
     try {
       final envelope = await _backend.getPlaces();
@@ -169,6 +179,13 @@ class _SearchPageState extends State<SearchPage> {
               onChanged: (value) => setState(() => _query = value),
               onRefresh: _load,
               onOpenCommunity: () => context.push(LalaRoutePaths.community),
+              onResetFilters: () {
+                _searchController.clear();
+                setState(() {
+                  _query = '';
+                  _selectedCategory = 'all';
+                });
+              },
             ),
             _CategoryChipBar(
               categories: _kSearchCategories,
@@ -208,6 +225,7 @@ class _SearchHeader extends StatelessWidget {
     required this.onChanged,
     required this.onRefresh,
     required this.onOpenCommunity,
+    required this.onResetFilters,
   });
 
   final TextEditingController controller;
@@ -216,72 +234,69 @@ class _SearchHeader extends StatelessWidget {
   final VoidCallback onRefresh;
   final VoidCallback onOpenCommunity;
 
+  /// 필터 아이콘: 카테고리/검색어 필터를 한 번에 지운다.
+  final VoidCallback onResetFilters;
+
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 12, 4),
+      // 계약: 검색 필드 상단 18, 좌측 24. 우측은 보조 컨트롤을 위해 8.
+      padding: const EdgeInsets.fromLTRB(24, 18, 8, 4),
       child: Row(
-        children: [
+        children: <Widget>[
           Expanded(
-            child: TextField(
-              controller: controller,
-              textInputAction: TextInputAction.search,
-              onChanged: onChanged,
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
+            child: SizedBox(
+              height: 48,
+              child: TextField(
+                controller: controller,
+                textInputAction: TextInputAction.search,
+                onChanged: onChanged,
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                decoration: InputDecoration(
+                  hintText: lalaCopy(
+                    language,
+                    ko: '장소·지역 검색',
+                    en: 'Search places or areas',
                   ),
-              decoration: InputDecoration(
-                hintText: lalaCopy(
-                  language,
-                  ko: '장소·지역 검색',
-                  en: 'Search places or areas',
-                ),
-                hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
-                prefixIcon: const Icon(
-                  Icons.search_rounded,
-                  color: Color(0xFF64748B),
-                ),
-                suffixIcon: ValueListenableBuilder<TextEditingValue>(
-                  valueListenable: controller,
-                  builder: (context, value, _) {
-                    if (value.text.isEmpty) {
-                      return const SizedBox.shrink();
-                    }
-                    return IconButton(
-                      tooltip: lalaCopy(language, ko: '지우기', en: 'Clear'),
-                      onPressed: () {
-                        controller.clear();
-                        onChanged('');
-                      },
-                      icon: const Icon(
-                        Icons.cancel,
-                        size: 18,
-                        color: Color(0xFF94A3B8),
-                      ),
-                    );
-                  },
-                ),
-                filled: true,
-                fillColor: Colors.white,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 12,
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide(
-                    color: Theme.of(context).colorScheme.primary,
-                    width: 1.6,
+                  hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
+                  prefixIcon: const Icon(
+                    Icons.search_rounded,
+                    color: Color(0xFF64748B),
+                  ),
+                  // 계약: 후행 아이콘 하나(필터). 카테고리/검색어 필터를 지운다.
+                  suffixIcon: IconButton(
+                    tooltip: lalaCopy(language, ko: '필터', en: 'Filter'),
+                    onPressed: onResetFilters,
+                    icon: const Icon(
+                      Icons.filter_list_rounded,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+                  filled: true,
+                  fillColor: Colors.white,
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 0,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: Theme.of(context).colorScheme.primary,
+                      width: 1.6,
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
           IconButton(
             tooltip: lalaCopy(language, ko: '커뮤니티', en: 'Community'),
             onPressed: onOpenCommunity,
@@ -320,7 +335,7 @@ class _CategoryChipBar extends StatelessWidget {
       height: 44,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        padding: const EdgeInsets.fromLTRB(24, 4, 24, 4),
         itemCount: categories.length,
         separatorBuilder: (context, index) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
@@ -358,33 +373,58 @@ class _CategoryChipBar extends StatelessWidget {
   }
 }
 
-/// 로딩 상태 본문.
+/// 로딩 상태 본문: 요청 진행 중에만 결과 모양의 중성 스켈레톤 3줄.
+/// 데이터/에러 도착 시 이 위젯은 더 이상 렌더되지 않는다(_buildBody 분기).
 class _SearchLoadingView extends StatelessWidget {
   const _SearchLoadingView();
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Padding(
-        padding: EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              width: 28,
-              height: 28,
-              child: CircularProgressIndicator(strokeWidth: 2.4),
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+      itemCount: 3,
+      itemBuilder: (context, index) => Padding(
+        padding: EdgeInsets.only(top: index == 0 ? 0 : 12),
+        child: const _SearchSkeletonRow(),
+      ),
+    );
+  }
+}
+
+/// 결과 타일 모양의 중성 스켈레톤(이미지 96x88 + 텍스트 레일). 가짜 매장명/이미지 없음.
+class _SearchSkeletonRow extends StatelessWidget {
+  const _SearchSkeletonRow();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey('search-skeleton-row'),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                const LalaSkeleton(width: 64, height: 18, radius: 9),
+                const SizedBox(height: 12),
+                const LalaSkeletonLine(width: 150),
+                const SizedBox(height: 8),
+                const LalaSkeletonLine(width: 110),
+                const SizedBox(height: 8),
+                const LalaSkeletonLine(width: 80),
+              ],
             ),
-            SizedBox(height: 14),
-            Text(
-              '추천 장소를 불러오는 중...',
-              style: TextStyle(
-                color: Color(0xFF475569),
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 12),
+          const LalaSkeleton(width: 96, height: 88, radius: 8),
+        ],
       ),
     );
   }
