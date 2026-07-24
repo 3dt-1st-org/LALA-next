@@ -544,7 +544,7 @@ void main() {
   });
 
   testWidgets(
-    'shows bundled startup recommendations before live places resolve',
+    'pending map state shows no hard-coded venues and renders real places on load',
     (tester) async {
       await tester.pumpWidget(
         TestLalaApp(
@@ -557,14 +557,18 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 120));
 
-      expect(find.text('추천 장소 접기'), findsOneWidget);
-      expect(find.text('히말라야정원'), findsAtLeastNWidgets(1));
-      expect(find.textContaining('0곳'), findsNothing);
-      expect(find.text('추천을 준비 중입니다'), findsNothing);
+      // 모바일 비주얼 계약 remediation B: 응답 전에는 하드코딩 시작 추천(venue/핀)이 없다.
+      expect(find.text('히말라야정원'), findsNothing);
+      expect(find.text('나혜석거리'), findsNothing);
+      expect(find.text('경기아트센터'), findsNothing);
+      expect(find.text('제3회 발달장애인 문화예술페스티벌'), findsNothing);
+      // 정직한 대기 메시지는 노출되어도 좋다.
+      expect(find.text('추천을 준비 중입니다'), findsOneWidget);
 
       await tester.pump(const Duration(seconds: 5));
       await tester.pumpAndSettle();
 
+      // 실제 응답 도착 후에만 실제 장소가 렌더된다.
       expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
     },
   );

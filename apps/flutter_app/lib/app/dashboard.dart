@@ -31,68 +31,6 @@ import 'package:lala_next_app/smoke_state.dart';
 
 const String _buildSha = String.fromEnvironment('LALA_BUILD_SHA');
 
-const List<LalaPlace> _bundledStartupPlaces = <LalaPlace>[
-  LalaPlace(
-    placeId: 'tour-api-2469037',
-    name: '히말라야정원',
-    category: 'restaurant',
-    lat: 37.2635931591,
-    lng: 127.0338939523,
-    address: '경기도 수원시 팔달구 권광로180번길 19 (인계동) 2층',
-    distanceM: 470,
-    source: 'db',
-    nameKo: '히말라야정원',
-    imageUrl:
-        'https://tong.visitkorea.or.kr/cms/resource/38/3563938_image2_1.jpg',
-    upstreamSource: 'tour_api',
-    regionKo: '수원시',
-  ),
-  LalaPlace(
-    placeId: 'tour-api-129191',
-    name: '나혜석거리',
-    category: 'attraction',
-    lat: 37.2640208974,
-    lng: 127.0344383354,
-    address: '경기도 수원시 팔달구 권광로188번길 25-2 (인계동)',
-    distanceM: 520,
-    source: 'db',
-    nameKo: '나혜석거리',
-    imageUrl:
-        'https://tong.visitkorea.or.kr/cms/resource/99/3400899_image2_1.JPG',
-    upstreamSource: 'tour_api',
-    regionKo: '수원시',
-  ),
-  LalaPlace(
-    placeId: 'tour-api-130489',
-    name: '경기아트센터',
-    category: 'culture_venue',
-    lat: 37.2614073374,
-    lng: 127.0359410498,
-    address: '경기도 수원시 팔달구 효원로307번길 20 (인계동)',
-    distanceM: 695,
-    source: 'db',
-    nameKo: '경기아트센터',
-    imageUrl:
-        'https://tong.visitkorea.or.kr/cms/resource/50/3055250_image2_1.JPG',
-    upstreamSource: 'tour_api',
-    regionKo: '수원시',
-  ),
-  LalaPlace(
-    placeId: 'tour-api-3517333',
-    name: '제3회 발달장애인 문화예술페스티벌',
-    category: 'event',
-    lat: 37.2614073374,
-    lng: 127.0359410498,
-    address: '경기도 수원시 팔달구 효원로307번길 20 (인계동)',
-    distanceM: 695,
-    source: 'db',
-    nameKo: '제3회 발달장애인 문화예술페스티벌',
-    imageUrl:
-        'https://tong.visitkorea.or.kr/cms/resource/32/3517332_image2_1.jpeg',
-    upstreamSource: 'tour_api',
-    regionKo: '수원시',
-  ),
-];
 
 class Dashboard extends StatelessWidget {
   const Dashboard({super.key,
@@ -232,20 +170,18 @@ class Dashboard extends StatelessWidget {
     });
     final apiPlaces = places?.data?.places ?? const <LalaPlace>[];
     final hasLivePlaces = apiPlaces.isNotEmpty;
-    final effectiveSource = hasLivePlaces ? places?.data?.source : 'db';
+    // 정상 경로에서는 라이브 응답만 소스로 사용. 응답 전/에러 시 source 도 중립(null).
+    final effectiveSource = hasLivePlaces ? places?.data?.source : null;
     final visibleError = localizedUiMessage(error, uiLanguage);
-    final showBundledStartupPlaces = !hasLivePlaces && visibleError == null;
     final displayedError = visibleError == null
         ? null
         : recommendationStatusMessage(
             uiLanguage,
             recoveryPending: recommendationRecoveryPending,
           );
-    final allPlaces = hasLivePlaces
-        ? apiPlaces
-        : showBundledStartupPlaces
-        ? _bundledStartupPlaces
-        : const <LalaPlace>[];
+    // 모바일 비주얼 계약 remediation B: 정상 경로에서 하드코딩 시작 추천을 주입하지 않는다.
+    // 응답 전에는 실제 장소/핀이 없는 정직한 대기 상태로 둔다(venue/좌표/사진 없음).
+    final allPlaces = apiPlaces;
     final filteredTopPlaces = filterPlaces(allPlaces, selectedCategory);
     final topPlaces = prioritizeClusterMembers(
       filteredTopPlaces,
@@ -263,7 +199,7 @@ class Dashboard extends StatelessWidget {
       'buildSha': _buildSha,
       'apiPlacesCount': apiPlaces.length,
       'topPlacesCount': topPlaces.length,
-      'usingBundledStartupPlaces': showBundledStartupPlaces,
+      'usingBundledStartupPlaces': false,
       'selectedCategory': selectedCategory,
       'locationFallbackNoticeVisible': locationFallbackNoticeVisible,
       'locationManualSelectAvailable':
