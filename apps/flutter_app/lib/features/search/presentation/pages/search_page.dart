@@ -5,13 +5,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import 'package:lala_next_app/core/backend/lala_backend.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
-import 'package:lala_next_app/core/routing/lala_route_paths.dart';
 import 'package:lala_next_app/features/home/home_view_helpers.dart' show filterPlaces;
 import 'package:lala_next_app/features/place/place_helpers.dart';
 import 'package:lala_next_app/features/place/widgets/category_badge.dart';
@@ -177,8 +175,6 @@ class _SearchPageState extends State<SearchPage> {
               controller: _searchController,
               language: _language,
               onChanged: (value) => setState(() => _query = value),
-              onRefresh: _load,
-              onOpenCommunity: () => context.push(LalaRoutePaths.community),
               onResetFilters: () {
                 _searchController.clear();
                 setState(() {
@@ -223,93 +219,70 @@ class _SearchHeader extends StatelessWidget {
     required this.controller,
     required this.language,
     required this.onChanged,
-    required this.onRefresh,
-    required this.onOpenCommunity,
     required this.onResetFilters,
   });
 
   final TextEditingController controller;
   final String language;
   final ValueChanged<String> onChanged;
-  final VoidCallback onRefresh;
-  final VoidCallback onOpenCommunity;
 
   /// 필터 아이콘: 카테고리/검색어 필터를 한 번에 지운다.
   final VoidCallback onResetFilters;
 
   @override
   Widget build(BuildContext context) {
+    // 모바일 비주얼 계약 remediation D: 헤더는 필드(선행 검색 아이콘 + placeholder +
+    // 후행 필터 아이콘 하나)만. 커뮤니티/새로고침 버튼은 이 헤더에서 뺀다(라우트/서비스 유지).
     return Padding(
-      // 계약: 검색 필드 상단 18, 좌측 24. 우측은 보조 컨트롤을 위해 8.
-      padding: const EdgeInsets.fromLTRB(24, 18, 8, 4),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: SizedBox(
-              height: 48,
-              child: TextField(
-                controller: controller,
-                textInputAction: TextInputAction.search,
-                onChanged: onChanged,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                decoration: InputDecoration(
-                  hintText: lalaCopy(
-                    language,
-                    ko: '장소·지역 검색',
-                    en: 'Search places or areas',
-                  ),
-                  hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
-                  prefixIcon: const Icon(
-                    Icons.search_rounded,
-                    color: Color(0xFF64748B),
-                  ),
-                  // 계약: 후행 아이콘 하나(필터). 카테고리/검색어 필터를 지운다.
-                  suffixIcon: IconButton(
-                    tooltip: lalaCopy(language, ko: '필터', en: 'Filter'),
-                    onPressed: onResetFilters,
-                    icon: const Icon(
-                      Icons.filter_list_rounded,
-                      color: Color(0xFF64748B),
-                    ),
-                  ),
-                  filled: true,
-                  fillColor: Colors.white,
-                  isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 0,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(
-                      color: Theme.of(context).colorScheme.primary,
-                      width: 1.6,
-                    ),
-                  ),
-                ),
+      padding: const EdgeInsets.fromLTRB(24, 18, 24, 4),
+      child: SizedBox(
+        height: 48,
+        child: TextField(
+          controller: controller,
+          textInputAction: TextInputAction.search,
+          onChanged: onChanged,
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+          decoration: InputDecoration(
+            hintText: lalaCopy(
+              language,
+              ko: '장소·지역 검색',
+              en: 'Search places or areas',
+            ),
+            hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
+            prefixIcon: const Icon(
+              Icons.search_rounded,
+              color: Color(0xFF64748B),
+            ),
+            suffixIcon: IconButton(
+              tooltip: lalaCopy(language, ko: '필터', en: 'Filter'),
+              onPressed: onResetFilters,
+              icon: const Icon(
+                Icons.filter_list_rounded,
+                color: Color(0xFF64748B),
+              ),
+            ),
+            filled: true,
+            fillColor: Colors.white,
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 0,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(
+                color: Theme.of(context).colorScheme.primary,
+                width: 1.6,
               ),
             ),
           ),
-          const SizedBox(width: 4),
-          IconButton(
-            tooltip: lalaCopy(language, ko: '커뮤니티', en: 'Community'),
-            onPressed: onOpenCommunity,
-            icon: const Icon(Icons.forum_outlined),
-            color: const Color(0xFF2B6CB0),
-          ),
-          IconButton(
-            tooltip: lalaCopy(language, ko: '새로고침', en: 'Refresh'),
-            onPressed: onRefresh,
-            icon: const Icon(Icons.refresh_rounded),
-            color: const Color(0xFF2B6CB0),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -357,6 +330,12 @@ class _CategoryChipBar extends StatelessWidget {
             backgroundColor: Colors.white,
             checkmarkColor: Colors.white,
             showCheckmark: false,
+            // 지도 칩과 동일한 컴팩트 언어: shrink wrap으로 40dp 이하 타겟.
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            visualDensity: const VisualDensity(
+              horizontal: -3,
+              vertical: -3,
+            ),
             side: BorderSide(
               color: isSelected
                   ? const Color(0xFF2B6CB0)
@@ -365,7 +344,7 @@ class _CategoryChipBar extends StatelessWidget {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(999),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           );
         },
       ),
@@ -402,7 +381,7 @@ class _SearchSkeletonRow extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Row(
