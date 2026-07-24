@@ -1,15 +1,17 @@
-// ONMU P2: 온보딩 4/4 — 위치 권한 요청.
-// - "위치 권한 허용": locationProvider.requestCurrentLocation() 호출.
-// - "나중에": 기본 위치(LalaAppConfig)로 스킵.
-// - 거부/사용불가 시 "지역 직접 선택" 으로 ManualLocationSheet(기존 위젯) 옵션 노출.
-// 완료 시 OnboardingState.markCompleted() → router redirect 가 /map-route 로 전환.
+// 모바일 비주얼 계약 S3: 위치 동의.
+// - 상단 읽기 전용 카카오맵 미리보기(라이브 키 경계 재사용, 제스처/콜백 차단).
+// - "현재 위치 사용"(요청 중에만 비활성), "지역 직접 선택"(항상 노출), "나중에 하기".
+// 수동 지역 선택은 권한 실패 뒤에만 나타나지 않고 첫 렌더부터 항상 사용 가능하다(01-flow §F1.5).
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:lala_next_app/app/lala_visual_tokens.dart';
+import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
 import 'package:lala_next_app/core/routing/lala_route_paths.dart';
 import 'package:lala_next_app/features/location/widgets/manual_location_sheet.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
+import 'package:lala_next_app/features/onboarding/presentation/widgets/location_map_preview.dart';
 import 'package:lala_next_app/features/onboarding/presentation/widgets/onboarding_scaffold.dart';
 import 'package:lala_next_app/manual_location_options.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
@@ -32,12 +34,16 @@ enum _LocationConsentStatus { idle, requesting }
 class _OnboardingLocationConsentPageState
     extends State<OnboardingLocationConsentPage> {
   _LocationConsentStatus _status = _LocationConsentStatus.idle;
-  bool _offeredManual = false;
+
+  // 미리보기 중심/키는 기본 지역(SSOT 기본값)을 따른다. 좌표가 확정되기 전이다.
+  late final LalaAppConfig _config = LalaAppConfig.fromEnvironment();
 
   String get _language => OnboardingState.language;
 
+  bool get _requesting => _status == _LocationConsentStatus.requesting;
+
   Future<void> _allowLocation() async {
-    if (_status == _LocationConsentStatus.requesting) {
+    if (_requesting) {
       return;
     }
     setState(() => _status = _LocationConsentStatus.requesting);
@@ -50,19 +56,13 @@ class _OnboardingLocationConsentPageState
         _complete();
         return;
       }
-      // 거부/사용불가 → 수동 지역 선택 옵션 노출.
-      setState(() {
-        _status = _LocationConsentStatus.idle;
-        _offeredManual = true;
-      });
+      // 거부/사용불가: 수동 선택은 항상 노출되므로 별도 배너 없이 대기 상태로 복귀.
+      setState(() => _status = _LocationConsentStatus.idle);
     } on Object {
       if (!mounted) {
         return;
       }
-      setState(() {
-        _status = _LocationConsentStatus.idle;
-        _offeredManual = true;
-      });
+      setState(() => _status = _LocationConsentStatus.idle);
     }
   }
 
@@ -91,71 +91,71 @@ class _OnboardingLocationConsentPageState
   @override
   Widget build(BuildContext context) {
     final language = _language;
-    final requesting = _status == _LocationConsentStatus.requesting;
     return OnboardingScaffold(
-      step: 4,
-      onBack: requesting ? null : () => context.go(LalaRoutePaths.onboardingLanguage),
+      step: 3,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+        padding: const EdgeInsets.fromLTRB(
+          LalaVisualTokens.pageGutter,
+          0,
+          LalaVisualTokens.pageGutter,
+          LalaVisualTokens.sectionGap + 12,
+        ),
+        // 미리보기 + 안내문은 스크롤, 세 개의 액션은 하단에 항상 노출 → 어떤 높이에서도
+        // 오버플로우 없이 액션이 닿는다(00-ground-truth §5).
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            const SizedBox(height: 12),
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Icon(
-                Icons.my_location_rounded,
-                size: 32,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
-            const SizedBox(height: 18),
-            Text(
-              lalaCopy(
-                language,
-                ko: '주변 추천을 위해 위치가 필요해요',
-                en: 'We need your location for nearby tips',
-              ),
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    height: 1.16,
-                  ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              lalaCopy(
-                language,
-                ko: '현재 위치 주변의 명소·맛집·날씨를 추천해 드릴게요. 허용하지 않아도 기본 지역으로 시작할 수 있어요.',
-                en:
-                    'Get nearby attractions, food, and weather. You can still start with a default area.',
-              ),
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF64748B),
-                    fontWeight: FontWeight.w700,
-                    height: 1.4,
-                  ),
-            ),
-            const Spacer(),
-            if (_offeredManual) ...<Widget>[
-              _InfoBanner(
-                language: language,
-                text: lalaCopy(
-                  language,
-                  ko: '위치 권한이 없어요. 지역을 직접 선택하거나 기본 지역으로 시작할 수 있어요.',
-                  en:
-                      'Location is unavailable. Pick an area or start with the default.',
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    // 읽기 전용 라이브 미리보기. 좌표가 없으므로 핀은 없다.
+                    LocationMapPreview(
+                      kakaoJavascriptKey: _config.kakaoJavascriptKey,
+                      centerLat: _config.lat,
+                      centerLng: _config.lng,
+                    ),
+                    const SizedBox(height: 24),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 272),
+                      child: Text(
+                        lalaCopy(
+                          language,
+                          ko: '내 주변을\n추천해 드릴게요',
+                          en: 'We\'ll recommend\nwhat\'s nearby',
+                        ),
+                        style: TextStyle(
+                          fontSize: LalaVisualTokens.onboardingTitleSize,
+                          height: LalaVisualTokens.onboardingTitleLineHeight /
+                              LalaVisualTokens.onboardingTitleSize,
+                          fontWeight: FontWeight.w800,
+                          color: LalaVisualColors.ink,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      lalaCopy(
+                        language,
+                        ko: '현재 위치를 사용하면 가까운 명소·맛집·행사 등\n맞춤 추천을 받을 수 있어요.\n\n위치 정보는 동의 없이 저장되지 않으며,\n언제든지 변경할 수 있어요.',
+                        en: 'Use your current location for nearby attractions,\nfood, and events.\n\nLocation is never stored without consent,\nand you can change it anytime.',
+                      ),
+                      style: TextStyle(
+                        fontSize: LalaVisualTokens.bodySize,
+                        height: LalaVisualTokens.bodyLineHeight /
+                            LalaVisualTokens.bodySize,
+                        fontWeight: FontWeight.w500,
+                        color: LalaVisualColors.muted,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 12),
-            ],
-            if (requesting)
+            ),
+            if (_requesting)
               const Padding(
-                padding: EdgeInsets.only(bottom: 14),
+                padding: EdgeInsets.only(top: 12),
                 child: Center(
                   child: SizedBox(
                     width: 26,
@@ -166,24 +166,19 @@ class _OnboardingLocationConsentPageState
               )
             else
               _PrimaryButton(
-                label: lalaCopy(language, ko: '위치 권한 허용', en: 'Allow location'),
-                icon: Icons.location_on_rounded,
+                label: lalaCopy(language, ko: '현재 위치 사용', en: 'Use location'),
                 onPressed: _allowLocation,
               ),
-            const SizedBox(height: 12),
-            if (_offeredManual)
-              _SecondaryButton(
-                label: lalaCopy(language, ko: '지역 직접 선택', en: 'Choose area'),
-                onPressed: _openManualSheet,
-              ),
+            const SizedBox(height: LalaVisualTokens.contentGap),
+            _SecondaryButton(
+              label: lalaCopy(language, ko: '지역 직접 선택', en: 'Choose area'),
+              // 권한 결과와 무관하게 항상 노출/사용 가능.
+              onPressed: _requesting ? null : _openManualSheet,
+            ),
             const SizedBox(height: 8),
             _TextActionButton(
-              label: lalaCopy(
-                language,
-                ko: '나중에 하기',
-                en: 'Not now',
-              ),
-              onPressed: requesting ? null : _complete,
+              label: lalaCopy(language, ko: '나중에 하기', en: 'Not now'),
+              onPressed: _requesting ? null : _complete,
             ),
           ],
         ),
@@ -193,33 +188,34 @@ class _OnboardingLocationConsentPageState
 }
 
 class _PrimaryButton extends StatelessWidget {
-  const _PrimaryButton({
-    required this.label,
-    required this.icon,
-    required this.onPressed,
-  });
+  const _PrimaryButton({required this.label, required this.onPressed});
 
   final String label;
-  final IconData icon;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: double.infinity,
-      child: FilledButton.icon(
+      child: FilledButton(
         onPressed: onPressed,
-        icon: Icon(icon, size: 20),
-        label: Text(label),
         style: FilledButton.styleFrom(
-          minimumSize: const Size.fromHeight(56),
-          backgroundColor: const Color(0xFF2B6CB0),
-          foregroundColor: Colors.white,
-          textStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+          minimumSize: const Size.fromHeight(LalaVisualTokens.actionHeight),
+          backgroundColor: LalaVisualColors.primaryBlue,
+          foregroundColor: LalaVisualColors.card,
+          textStyle: TextStyle(
+            fontSize: LalaVisualTokens.controlLabelSize,
+            height: LalaVisualTokens.controlLabelLineHeight /
+                LalaVisualTokens.controlLabelSize,
+            fontWeight: FontWeight.w700,
+          ),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(
+              LalaVisualTokens.controlRadius,
+            ),
           ),
         ),
+        child: Text(label),
       ),
     );
   }
@@ -229,7 +225,7 @@ class _SecondaryButton extends StatelessWidget {
   const _SecondaryButton({required this.label, required this.onPressed});
 
   final String label;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -238,12 +234,19 @@ class _SecondaryButton extends StatelessWidget {
       child: OutlinedButton(
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
-          minimumSize: const Size.fromHeight(56),
-          foregroundColor: const Color(0xFF2B6CB0),
-          side: const BorderSide(color: Color(0xFFB9D4F3)),
-          textStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+          minimumSize: const Size.fromHeight(48),
+          foregroundColor: LalaVisualColors.primaryBlue,
+          side: BorderSide(color: LalaVisualColors.primaryBlue.withValues(alpha: 0.4)),
+          textStyle: TextStyle(
+            fontSize: LalaVisualTokens.controlLabelSize,
+            height: LalaVisualTokens.controlLabelLineHeight /
+                LalaVisualTokens.controlLabelSize,
+            fontWeight: FontWeight.w700,
+          ),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(
+              LalaVisualTokens.controlRadius,
+            ),
           ),
         ),
         child: Text(label),
@@ -265,46 +268,10 @@ class _TextActionButton extends StatelessWidget {
         onPressed: onPressed,
         style: TextButton.styleFrom(
           minimumSize: const Size.fromHeight(48),
-          foregroundColor: const Color(0xFF64748B),
-          textStyle: const TextStyle(fontWeight: FontWeight.w800),
+          foregroundColor: LalaVisualColors.muted,
+          textStyle: const TextStyle(fontWeight: FontWeight.w700),
         ),
         child: Text(label),
-      ),
-    );
-  }
-}
-
-class _InfoBanner extends StatelessWidget {
-  const _InfoBanner({required this.language, required this.text});
-
-  final String language;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF7E6),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFF6E2B8)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          const Icon(Icons.info_outline_rounded, size: 18, color: Color(0xFFB7791F)),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              text,
-              style: const TextStyle(
-                color: Color(0xFF7B5E10),
-                fontWeight: FontWeight.w700,
-                height: 1.4,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

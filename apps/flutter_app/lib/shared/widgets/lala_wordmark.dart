@@ -1,6 +1,8 @@
-// C3 최종: main.dart 에서 이관. 본문 불변(이동만).
+// 모바일 비주얼 계약(00-visual-ground-truth §2 / remediation F): 워드마크는
+// 소스 이미지처럼 컴팩트한 plain 텍스트. floating 흰 알약/그림자/컨테이너를 뺀다.
 import 'package:flutter/material.dart';
 
+import 'package:lala_next_app/app/lala_visual_tokens.dart';
 
 class LalaWordmark extends StatelessWidget {
   const LalaWordmark({super.key});
@@ -9,27 +11,16 @@ class LalaWordmark extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       label: 'LALA',
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: const [
-            BoxShadow(
-              blurRadius: 12,
-              offset: Offset(0, 4),
-              color: Color(0x14000000),
-            ),
-          ],
-        ),
-        child: const Text(
-          'LALA',
-          style: TextStyle(
-            color: Color(0xFF2B6CB0),
-            fontSize: 21,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 0,
-          ),
+      child: Text(
+        'LALA',
+        style: TextStyle(
+          color: LalaVisualColors.primaryBlue,
+          fontSize: LalaVisualTokens.wordmarkSize,
+          height:
+              LalaVisualTokens.wordmarkLineHeight /
+              LalaVisualTokens.wordmarkSize,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.2,
         ),
       ),
     );

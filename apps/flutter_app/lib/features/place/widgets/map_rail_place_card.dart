@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import '../../../shared/l10n/place_labels.dart';
-import '../../../shared/widgets/tiny_meta.dart';
 import '../place_helpers.dart';
-import 'rail_category_badge.dart';
-import 'rail_place_thumb.dart';
+import 'place_image.dart';
 
-/// 지도 레일용 장소 카드(C3 추출 — main.dart 의 _MapRailPlaceCard).
+/// 지도 레일용 장소 카드.
+// 모바일 비주얼 계약 remediation C2: 컴팩트 모바일에서 148 x 114 photo-forward 카드.
+// 공식 이미지가 카드를 채우고 이름만 오버레이. 선택 시 1px 카테고리색 테두리 하나만.
+// 두 번째 내부 테두리·다중색 띠·점수/근거는 없다. 이미지가 없으면 중성 빈 슬롯.
 class MapRailPlaceCard extends StatelessWidget {
   const MapRailPlaceCard({
     super.key,
@@ -28,111 +29,94 @@ class MapRailPlaceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = categoryColor(place.category);
     final hasImage = hasOfficialPlaceImage(place);
-    final cardWidth = compact
-        ? (hasImage ? 226.0 : 198.0)
-        : (hasImage ? 252.0 : 222.0);
+    final name = placeDisplayName(place, language);
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(12),
       child: InkWell(
         key: ValueKey('tour-stop-action-${place.placeId}'),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(12),
         onTap: onTap,
-        child: Container(
-          key: ValueKey('map-rail-place-card-${place.placeId}'),
-          width: cardWidth,
-          padding: selected ? const EdgeInsets.all(3) : EdgeInsets.zero,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            color: selected ? color : Colors.white.withValues(alpha: 0.93),
-            border: Border.all(
-              color: selected ? color : const Color(0xFFE2E8F0),
-              width: selected ? 1.6 : 1,
-            ),
-            boxShadow: selected
-                ? const [
-                    BoxShadow(
-                      blurRadius: 16,
-                      offset: Offset(0, 7),
-                      color: Color(0x240F172A),
-                    ),
-                  ]
-                : null,
-          ),
+        child: Semantics(
+          label: name,
+          selected: selected,
+          button: onTap != null,
           child: Container(
-            key: selected ? ValueKey('category-border-${place.placeId}') : null,
-            padding: EdgeInsets.symmetric(
-              horizontal: compact ? 8 : 10,
-              vertical: compact ? 7 : 8,
-            ),
+            key: ValueKey('map-rail-place-card-${place.placeId}'),
+            width: 148,
+            height: 114,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: selected ? 0.98 : 0.93),
-              borderRadius: BorderRadius.circular(selected ? 15 : 18),
-              border: selected
-                  ? Border.all(color: color.withValues(alpha: 0.18))
-                  : null,
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        placeDisplayName(place, language),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: selected ? color : const Color(0xFF111827),
-                          fontWeight: FontWeight.w900,
-                          height: 1.12,
-                        ),
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              // 선택 테두리 하나만(카테고리색 1px). 내부 테두리 금지.
+              border: Border.all(
+                color: selected ? color : const Color(0xFFE2E8F0),
+                width: 1,
+              ),
+              boxShadow: selected
+                  ? const [
+                      BoxShadow(
+                        blurRadius: 14,
+                        offset: Offset(0, 6),
+                        color: Color(0x22000000),
                       ),
-                      const SizedBox(height: 4),
-                      RailCategoryBadge(place: place, language: language),
-                      const SizedBox(height: 5),
-                      Row(
-                        key: ValueKey('rail-place-region-${place.placeId}'),
-                        children: [
-                          const Icon(
-                            Icons.place_outlined,
-                            size: 13,
-                            color: Color(0xFF64748B),
-                          ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              placeRegionLabel(place, language),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.labelSmall
-                                  ?.copyWith(
-                                    color: const Color(0xFF64748B),
-                                    fontWeight: FontWeight.w700,
-                                    height: 1.05,
-                                  ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 5),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 4,
-                        children: [
-                          if (place.distanceM > 0)
-                            TinyMeta('${place.distanceM}m'),
-                        ],
+                    ]
+                  : const [
+                      BoxShadow(
+                        blurRadius: 10,
+                        offset: Offset(0, 4),
+                        color: Color(0x14000000),
                       ),
                     ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(11),
+              child: Stack(
+                fit: StackFit.expand,
+                children: <Widget>[
+                  if (hasImage)
+                    PlaceImage(
+                      key: ValueKey('rail-place-image-${place.placeId}'),
+                      place: place,
+                      width: 148,
+                      height: 114,
+                    )
+                  else
+                    const ColoredBox(color: Color(0xFFEDF2F7)),
+                  // 이름 오버레이(하단 그라디언트). 메타 밀도를 줄여 지도가 주 시면.
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: DecoratedBox(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: <Color>[
+                            Color(0x00FFFFFF),
+                            Color(0x66000000),
+                          ],
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 14, 8, 7),
+                        child: Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            height: 1.15,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-                if (hasImage) ...[
-                  SizedBox(width: compact ? 8 : 10),
-                  RailPlaceThumb(place: place, compact: compact),
                 ],
-              ],
+              ),
             ),
           ),
         ),

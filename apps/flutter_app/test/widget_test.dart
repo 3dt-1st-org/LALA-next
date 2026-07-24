@@ -544,7 +544,7 @@ void main() {
   });
 
   testWidgets(
-    'shows bundled startup recommendations before live places resolve',
+    'pending map state shows no hard-coded venues and renders real places on load',
     (tester) async {
       await tester.pumpWidget(
         TestLalaApp(
@@ -557,14 +557,18 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 120));
 
-      expect(find.text('추천 장소 접기'), findsOneWidget);
-      expect(find.text('히말라야정원'), findsAtLeastNWidgets(1));
-      expect(find.textContaining('0곳'), findsNothing);
-      expect(find.text('추천을 준비 중입니다'), findsNothing);
+      // 모바일 비주얼 계약 remediation B: 응답 전에는 하드코딩 시작 추천(venue/핀)이 없다.
+      expect(find.text('히말라야정원'), findsNothing);
+      expect(find.text('나혜석거리'), findsNothing);
+      expect(find.text('경기아트센터'), findsNothing);
+      expect(find.text('제3회 발달장애인 문화예술페스티벌'), findsNothing);
+      // 정직한 대기 메시지는 노출되어도 좋다.
+      expect(find.text('추천을 준비 중입니다'), findsOneWidget);
 
       await tester.pump(const Duration(seconds: 5));
       await tester.pumpAndSettle();
 
+      // 실제 응답 도착 후에만 실제 장소가 렌더된다.
       expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
     },
   );
@@ -804,6 +808,11 @@ void main() {
   testWidgets('filters places from category chips and toggles map modes', (
     tester,
   ) async {
+    // 계약 뷰포트(393x852)에서 컨트롤 스택과 유틸리티 행이 겹치지 않는다.
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     final configs = <LalaAppConfig>[];
     final backends = <FakeBackend>[];
     await tester.pumpWidget(
@@ -839,12 +848,16 @@ void main() {
     final restaurantRailCard = find.byKey(
       const ValueKey('tour-stop-action-haenggung-cafe-street'),
     );
+    // remediation C2: photo-forward 레일 카드는 이름 오버레이만(지역/거래 메타는 독 상세로).
     expect(
-      find.descendant(of: restaurantRailCard, matching: find.text('수원')),
+      find.descendant(
+        of: restaurantRailCard,
+        matching: find.text('행궁동 카페거리'),
+      ),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('rail-place-thumb-haenggung-cafe-street')),
+      find.byKey(const ValueKey('rail-place-image-haenggung-cafe-street')),
       findsNothing,
     );
     expect(
@@ -861,7 +874,7 @@ void main() {
             ),
           )
           .width,
-      198,
+      148,
     );
 
     final voiceToggle = find.byKey(const ValueKey('voice-toggle'));
@@ -888,7 +901,11 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(tester.getSize(autoToggle), const Size(74, 74));
+    // 모바일 비주얼 계약: 대형 중앙 컨트롤(74dp) 제거 — 44dp 타겟으로 축소.
+    expect(
+      tester.getSize(autoToggle).shortestSide,
+      lessThanOrEqualTo(52),
+    );
     final bottomDockRect = tester.getRect(
       find.byKey(const ValueKey('map-bottom-dock')),
     );
@@ -928,7 +945,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.byKey(const ValueKey('rail-place-thumb-hwaseong-haenggung')),
+      find.byKey(const ValueKey('rail-place-image-hwaseong-haenggung')),
       findsNothing,
     );
 
@@ -936,7 +953,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.byKey(const ValueKey('rail-place-thumb-haenggung-cafe-street')),
+      find.byKey(const ValueKey('rail-place-image-haenggung-cafe-street')),
       findsOneWidget,
     );
     expect(
@@ -953,7 +970,7 @@ void main() {
             ),
           )
           .width,
-      226,
+      148,
     );
   });
 
@@ -1220,6 +1237,10 @@ void main() {
   testWidgets('auto docent on keeps the nearest place in map guidance', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
       TestLalaApp(
         backendFactory: (config) => FakeBackend(
@@ -1255,6 +1276,10 @@ void main() {
   testWidgets('auto docent ignores places outside the legacy trigger radius', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
       TestLalaApp(
         backendFactory: (config) => FakeBackend(
@@ -1296,6 +1321,10 @@ void main() {
   testWidgets('auto docent re-evaluates the nearest place after refresh', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     var backendCreations = 0;
     await tester.pumpWidget(
       TestLalaApp(
@@ -1336,6 +1365,10 @@ void main() {
   testWidgets('auto docent keeps context during the legacy cooldown window', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     var backendCreations = 0;
     await tester.pumpWidget(
       TestLalaApp(
@@ -1424,8 +1457,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('수원화성'), findsOneWidget);
+    // 단일 선택 테두리: 내부 category-border 키는 제거됨(외부 카드 키로 선택 카드 확인).
     expect(
-      find.byKey(const ValueKey('category-border-hwaseong-haenggung')),
+      find.byKey(const ValueKey('map-rail-place-card-hwaseong-haenggung')),
       findsOneWidget,
     );
     expect(
@@ -1459,7 +1493,7 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('category-border-suwon-hwaseong')),
+      find.byKey(const ValueKey('map-rail-place-card-suwon-hwaseong')),
       findsOneWidget,
     );
     expect(find.text('수원화성 도슨트'), findsAtLeastNWidgets(1));
@@ -1981,6 +2015,64 @@ void main() {
     expect(utilityWidth, lessThanOrEqualTo(760));
   });
 
+  testWidgets(
+    'mobile map layout keeps the rail, control stack and dock non-overlapping',
+    (tester) async {
+      tester.view.physicalSize = const Size(393, 852);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        TestLalaApp(
+          backendFactory: FakeBackend.new,
+          initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // remediation C1: 5개 칩 중 문화 와 설정 아이콘이 393dp 에서 잘림 없이 보인다.
+      expect(find.text('문화'), findsOneWidget);
+      expect(find.text('전체'), findsOneWidget);
+      expect(find.byKey(const ValueKey('settings-button')), findsOneWidget);
+
+      final dockRect = tester.getRect(
+        find.byKey(const ValueKey('map-bottom-dock')),
+      );
+      // 컨트롤 스택(음성 토글 = 최상단)은 도크 핸들 위에 위치(겹치지 않음).
+      final voiceRect = tester.getRect(find.byKey(const ValueKey('voice-toggle')));
+      expect(voiceRect.bottom, lessThanOrEqualTo(dockRect.top));
+
+      // 추천 레일은 컨트롤 스택보다 위쪽 밴드에 있다(세로 영역이 겹치지 않음).
+      final railRect = tester.getRect(
+        find.byKey(const ValueKey('recommendation-rail-list')),
+      );
+      expect(railRect.bottom, lessThan(voiceRect.top));
+
+      // 카테고리 행(문화 칩)은 레일 위에 위치(겹치지 않음).
+      final cultureChip = tester.getRect(find.text('문화'));
+      expect(cultureChip.bottom, lessThanOrEqualTo(railRect.top));
+      // 문화 라벨이 화면 폭 안에 있다(잘림 아님).
+      expect(cultureChip.right, lessThan(393));
+    },
+  );
+
+  testWidgets('bottom navigation shows contracted Korean labels', (tester) async {
+    await tester.pumpWidget(
+      TestLalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 계약: 하단 네비 한국어 라벨은 검색/지도/일정. 플랜 제거.
+    expect(find.text('검색'), findsOneWidget);
+    expect(find.text('지도'), findsOneWidget);
+    expect(find.text('일정'), findsOneWidget);
+    expect(find.text('플랜'), findsNothing);
+  });
+
   testWidgets('place detail save control toggles local saved state', (
     tester,
   ) async {
@@ -2162,7 +2254,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('행사 · 진행 중'), findsOneWidget);
+      // remediation C2: photo-forward 레일 카드는 이름 오버레이만(행사 상태 라벨은 상세에서).
+      expect(find.text('화성행궁 야간 산책'), findsWidgets);
 
       await tester.tap(find.widgetWithText(TextButton, '상세'));
       await tester.pumpAndSettle();
@@ -2674,9 +2767,9 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
     await tester.pumpAndSettle();
 
-    expect(find.text('어떤 관광객이신가요?'), findsOneWidget);
-    expect(find.text('외국인 관광객'), findsOneWidget);
-    expect(find.text('내국인 관광객'), findsOneWidget);
+    expect(find.text('어떤 여행을\n계획 중인가요?'), findsOneWidget);
+    expect(find.text('국내 여행'), findsOneWidget);
+    expect(find.text('해외 방문'), findsOneWidget);
   });
 
   testWidgets(
@@ -2700,12 +2793,15 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
       await tester.pumpAndSettle();
 
-      // 외국인 관광객 선택 → 기본 English.
-      await tester.tap(find.text('외국인 관광객'));
+      // S1(한국어): 해외 방문 선택 → 선택 상태만 갱신(언어/이동 없음).
+      await tester.tap(find.text('해외 방문'));
+      await tester.pumpAndSettle();
+      // "다음" 으로 유형+기본 언어(en) 기록 후 S2 로 이동.
+      await tester.tap(find.widgetWithText(FilledButton, '다음'));
       await tester.pumpAndSettle();
       expect(OnboardingState.language, 'en');
 
-      // 언어 단계: English 가 pre-select 되어 있고, Next 로 위치 단계로.
+      // 언어 단계(English): English 가 pre-select, Next 로 위치 단계로.
       expect(find.text('English'), findsOneWidget);
       await tester.tap(
         find.widgetWithText(FilledButton, 'Next'),
@@ -2713,7 +2809,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // 위치 단계: "Not now" 스킵 → 온보딩 완료 → 메인 쉘(지도) 진입.
-      expect(find.text('We need your location for nearby tips'), findsOneWidget);
+      expect(find.text('Use location'), findsOneWidget);
       await tester.tap(find.text('Not now'));
       await tester.pumpAndSettle();
 
@@ -2736,10 +2832,14 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('내국인 관광객'));
+    // S1: 국내 여행 선택(기본 언어 ko) → 다음 → S2.
+    await tester.tap(find.text('국내 여행'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '다음'));
     await tester.pumpAndSettle();
     expect(OnboardingState.language, 'ko');
 
+    // S2(한국어): 다음 → S3.
     await tester.tap(find.widgetWithText(FilledButton, '다음'));
     await tester.pumpAndSettle();
 
@@ -2768,14 +2868,16 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
       await tester.pumpAndSettle();
 
-      // 내국인 관광객(한국어) → 언어 다음 → 위치 단계.
-      await tester.tap(find.text('내국인 관광객'));
+      // S1 국내 여행 → S2 다음 → S3 위치 단계.
+      await tester.tap(find.text('국내 여행'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, '다음'));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(FilledButton, '다음'));
       await tester.pumpAndSettle();
 
-      // 위치 허용 요청 → 거부 → 수동 지역 선택 옵션 노출.
-      await tester.tap(find.text('위치 권한 허용'));
+      // 현재 위치 사용 요청 → 거부. 수동 선택은 항상 노출되어 그대로 사용 가능.
+      await tester.tap(find.text('현재 위치 사용'));
       await tester.pumpAndSettle();
       expect(find.text('지역 직접 선택'), findsOneWidget);
       expect(locationProvider.requests, 1);

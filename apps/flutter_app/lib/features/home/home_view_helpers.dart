@@ -345,10 +345,10 @@ List<ContextFact> placeContextFacts({
   }
 
   if (weather != null) {
-    add(
-      Icons.wb_cloudy_outlined,
-      '${outdoorLabel(weather.outdoorStatus, language: language)} · ${temperatureLabel(weather.temp)}',
-    );
+    // P1: 빈 온도는 '야외 상태 · -' 로 보이지 않도록 온도 파트를 생략한다.
+    final outdoor = outdoorLabel(weather.outdoorStatus, language: language);
+    final temp = temperatureLabelOrNull(weather.temp);
+    add(Icons.wb_cloudy_outlined, temp == null ? outdoor : '$outdoor · $temp');
   }
 
   if (includeEvidence) {

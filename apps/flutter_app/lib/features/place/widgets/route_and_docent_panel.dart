@@ -69,9 +69,8 @@ class RouteAndDocentPanel extends StatelessWidget {
               child: CompactInfoTile(
                 icon: Icons.cloud,
                 label: lalaCopy(language, ko: '날씨', en: 'Weather'),
-                value: weather == null
-                    ? lalaCopy(language, ko: '확인 중', en: 'Checking')
-                    : '${temperatureLabel(weather!.temp)} · ${dustSituationLabel(weather!.dust, language)}',
+                // P1: 빈 온도는 '- · 먼지' 로 보이지 않도록 온도 파트를 생략한다.
+                value: _weatherTileValue(weather, language),
               ),
             ),
           ],
@@ -90,5 +89,15 @@ class RouteAndDocentPanel extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  /// 날씨 타일 값: 온도가 있으면 '온도 · 먼지상황', 비어있으면 먼지상황만.
+  String _weatherTileValue(LalaWeather? weather, String language) {
+    if (weather == null) {
+      return lalaCopy(language, ko: '확인 중', en: 'Checking');
+    }
+    final temp = temperatureLabelOrNull(weather.temp);
+    final dust = dustSituationLabel(weather.dust, language);
+    return temp == null ? dust : '$temp · $dust';
   }
 }

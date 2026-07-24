@@ -22,9 +22,26 @@ class WeatherMapPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final data = publicWeatherOrNull(weather);
-    final label = data == null
-        ? lalaCopy(language, ko: '날씨 데이터 준비 중', en: 'Weather pending')
-        : '${temperatureLabel(data.temp)} · ${weatherPillDustLabel(data.dust, language)}';
+    final pending =
+        lalaCopy(language, ko: '날씨 데이터 준비 중', en: 'Weather pending');
+    final String label;
+    if (data == null) {
+      label = pending;
+    } else {
+      final temp = temperatureLabelOrNull(data.temp);
+      if (temp == null) {
+        // P1: 온도가 비어있으면 의미 있는 먼지 수치(PM)로만 구성.
+        // PM 마저 없으면 선행/후행 구분자·'-' 없이 중립 대기 문구로.
+        final hasPm = data.dust.pm10.trim().isNotEmpty ||
+            data.dust.pm25.trim().isNotEmpty;
+        final dust = hasPm
+            ? weatherPillDustLabel(data.dust, language).trim()
+            : '';
+        label = dust.isEmpty ? pending : dust;
+      } else {
+        label = '$temp · ${weatherPillDustLabel(data.dust, language)}';
+      }
+    }
     return SmallStatusPill(
       key: const ValueKey('weather-pill-hit-target'),
       icon: Icons.thermostat,

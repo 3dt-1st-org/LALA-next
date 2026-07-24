@@ -41,8 +41,10 @@ class WeatherHeroCard extends StatelessWidget {
                     fontWeight: FontWeight.w900,
                   ),
                 ),
+                // P1: 빈 온도는 큰 '-' 헤드라인으로 보이지 않고, 야외 상태로 대체.
                 Text(
-                  temperatureLabel(weather.temp),
+                  temperatureLabelOrNull(weather.temp) ??
+                      outdoorLabel(weather.outdoorStatus, language: language),
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                     color: const Color(0xFF111827),
                     fontWeight: FontWeight.w900,
