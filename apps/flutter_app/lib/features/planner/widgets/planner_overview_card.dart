@@ -32,9 +32,35 @@ class PlannerOverviewCard extends StatelessWidget {
     final location = weather?.location?.trim().isNotEmpty == true
         ? locationLabel(weather!.location, language)
         : lalaCopy(language, ko: '현재 위치', en: 'Current location');
-    final weatherLabel = weather == null
-        ? lalaCopy(language, ko: '날씨 확인 중', en: 'Checking weather')
-        : '${outdoorLabel(weather!.outdoorStatus, language: language)} · ${temperatureLabel(weather!.temp)} · ${dustSituationLabel(weather!.dust, language)}';
+    // 모바일 비주얼 계약 remediation E: 날씨/먼지를 한 줄 긴 문자열(말줄임/중복 라벨)로
+    // 만들지 않고 각 사실을 별도 컴팩트 칩으로 분리해 Wrap 한다.
+    final dust = weather?.dust;
+    final weatherChips = <Widget>[
+      if (weather == null)
+        TinyMeta(lalaCopy(language, ko: '날씨 확인 중', en: 'Checking weather'))
+      else ...<Widget>[
+        TinyMeta(outdoorLabel(weather!.outdoorStatus, language: language)),
+        TinyMeta(temperatureLabel(weather!.temp)),
+        if (dust != null) ...<Widget>[
+          if (dust.pm10.trim().isNotEmpty)
+            TinyMeta(
+              compactDustPart(
+                label: 'PM10',
+                value: dust.pm10,
+                grade: dustPollutantGradeLabel(dust, 'pm10', language),
+              ),
+            ),
+          if (dust.pm25.trim().isNotEmpty)
+            TinyMeta(
+              compactDustPart(
+                label: 'PM2.5',
+                value: dust.pm25,
+                grade: dustPollutantGradeLabel(dust, 'pm25', language),
+              ),
+            ),
+        ],
+      ],
+    ];
     return Container(
       padding: const EdgeInsets.fromLTRB(2, 0, 2, 0),
       decoration: BoxDecoration(
@@ -61,8 +87,8 @@ class PlannerOverviewCard extends StatelessWidget {
                 Wrap(
                   spacing: 6,
                   runSpacing: 5,
-                  children: [
-                    TinyMeta(weatherLabel),
+                  children: <Widget>[
+                    ...weatherChips,
                     if (visibleSlotCount > 0)
                       TinyMeta(
                         lalaCopy(
