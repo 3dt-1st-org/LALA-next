@@ -131,7 +131,7 @@ class MapPlaceCarouselOverlay extends StatelessWidget {
                           ],
                         ),
                         child: ListView.separated(
-                          padding: const EdgeInsets.all(8),
+                          padding: const EdgeInsets.all(6),
                           scrollDirection: Axis.horizontal,
                           itemCount: items.length,
                           separatorBuilder: (_, _) => const SizedBox(width: 10),
