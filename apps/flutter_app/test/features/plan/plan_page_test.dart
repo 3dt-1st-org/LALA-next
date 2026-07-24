@@ -127,9 +127,9 @@ class _LoadedPlanBackend implements LalaBackend {
         LalaPlanSlot(period: 'morning', title: '화성행궁 산책 코스'),
       ],
       source: 'db',
-      requestHash:
-          'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
-      cacheKey: 'daily_plan:abcdef0123456789abcdef0123456789',
+      // 저엔트로피 테스트 값(detect-secrets 허위 양성 회피; 실제 키/해시 아님).
+      requestHash: 'test-plan-request-hash',
+      cacheKey: 'daily_plan:test-plan',
     ),
   );
 
