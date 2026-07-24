@@ -848,12 +848,16 @@ void main() {
     final restaurantRailCard = find.byKey(
       const ValueKey('tour-stop-action-haenggung-cafe-street'),
     );
+    // remediation C2: photo-forward 레일 카드는 이름 오버레이만(지역/거래 메타는 독 상세로).
     expect(
-      find.descendant(of: restaurantRailCard, matching: find.text('수원')),
+      find.descendant(
+        of: restaurantRailCard,
+        matching: find.text('행궁동 카페거리'),
+      ),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('rail-place-thumb-haenggung-cafe-street')),
+      find.byKey(const ValueKey('rail-place-image-haenggung-cafe-street')),
       findsNothing,
     );
     expect(
@@ -870,7 +874,7 @@ void main() {
             ),
           )
           .width,
-      198,
+      148,
     );
 
     final voiceToggle = find.byKey(const ValueKey('voice-toggle'));
@@ -941,7 +945,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.byKey(const ValueKey('rail-place-thumb-hwaseong-haenggung')),
+      find.byKey(const ValueKey('rail-place-image-hwaseong-haenggung')),
       findsNothing,
     );
 
@@ -949,7 +953,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.byKey(const ValueKey('rail-place-thumb-haenggung-cafe-street')),
+      find.byKey(const ValueKey('rail-place-image-haenggung-cafe-street')),
       findsOneWidget,
     );
     expect(
@@ -966,7 +970,7 @@ void main() {
             ),
           )
           .width,
-      226,
+      148,
     );
   });
 
@@ -2027,6 +2031,11 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      // remediation C1: 5개 칩 중 문화 와 설정 아이콘이 393dp 에서 잘림 없이 보인다.
+      expect(find.text('문화'), findsOneWidget);
+      expect(find.text('전체'), findsOneWidget);
+      expect(find.byKey(const ValueKey('settings-button')), findsOneWidget);
+
       final dockRect = tester.getRect(
         find.byKey(const ValueKey('map-bottom-dock')),
       );
@@ -2039,6 +2048,12 @@ void main() {
         find.byKey(const ValueKey('recommendation-rail-list')),
       );
       expect(railRect.bottom, lessThan(voiceRect.top));
+
+      // 카테고리 행(문화 칩)은 레일 위에 위치(겹치지 않음).
+      final cultureChip = tester.getRect(find.text('문화'));
+      expect(cultureChip.bottom, lessThanOrEqualTo(railRect.top));
+      // 문화 라벨이 화면 폭 안에 있다(잘림 아님).
+      expect(cultureChip.right, lessThan(393));
     },
   );
 
@@ -2239,7 +2254,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('행사 · 진행 중'), findsOneWidget);
+      // remediation C2: photo-forward 레일 카드는 이름 오버레이만(행사 상태 라벨은 상세에서).
+      expect(find.text('화성행궁 야간 산책'), findsWidgets);
 
       await tester.tap(find.widgetWithText(TextButton, '상세'));
       await tester.pumpAndSettle();

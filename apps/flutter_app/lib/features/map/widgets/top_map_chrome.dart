@@ -24,8 +24,9 @@ class TopMapChrome extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 모바일 비주얼 계약 remediation C1: 카테고리 행 상단 12, 좌우 12dp.
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

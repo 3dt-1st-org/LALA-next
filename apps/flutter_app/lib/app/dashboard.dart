@@ -245,13 +245,12 @@ class Dashboard extends StatelessWidget {
             : isWide
             ? 232.0
             : 220.0;
+        // 모바일 비주얼 계약 remediation C2: 모바일 선택장소 독 초기 높이 196dp.
         final bottomDockHeight = isWide
             ? 218.0
             : constraints.maxHeight < 700
             ? 164.0
-            : compactMapChrome
-            ? 224.0
-            : 238.0;
+            : 196.0;
         final floatingControlsBottom = bottomDockHeight + 16;
         return Stack(
           children: [
@@ -282,15 +281,16 @@ class Dashboard extends StatelessWidget {
                 onOpenSettings: onOpenSettings,
               ),
             ),
+            // 모바일 비주얼 계약 remediation C2: 레일 상단 66, 측면 12dp 거터.
             Positioned(
-              left: 16,
-              right: 16,
-              top: isWide ? 76 : 68,
+              left: 12,
+              right: 12,
+              top: isWide ? 76 : 66,
               child: Center(
                 child: SizedBox(
                   width: isWide
                       ? math.min(780.0, constraints.maxWidth - 32)
-                      : constraints.maxWidth - 32,
+                      : constraints.maxWidth - 24,
                   child: MapPlaceCarouselOverlay(
                     places: topPlaces,
                     source: effectiveSource,
