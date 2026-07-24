@@ -50,6 +50,30 @@ void main() {
       expect(find.text('재시도'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'plan loaded shows real slots and readable weather with no loading card',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlanPage(
+            locationProvider: _FoundLocationProvider(),
+            backendFactory: (config) => _LoadedPlanBackend(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // loaded: 로딩 카드/타임라인 스켈레톤 없음.
+      expect(find.byKey(const ValueKey('planner-loading-card')), findsNothing);
+      expect(find.byKey(const ValueKey('plan-timeline-skeleton')), findsNothing);
+      // 실제 슬롯 제목(서버 순서 그대로).
+      expect(find.text('화성행궁 산책 코스'), findsOneWidget);
+      // 읽을 수 있는 날씨/먼지(말줄임/중복 라벨 아님).
+      expect(find.textContaining('14°C'), findsWidgets);
+      expect(find.text('PM10 31 보통'), findsOneWidget);
+    },
+  );
 }
 
 class _FoundLocationProvider implements LalaLocationProvider {
@@ -88,4 +112,70 @@ class _PendingPlanBackend implements LalaBackend {
   @override
   dynamic noSuchMethod(Invocation invocation) =>
       throw UnimplementedError('not used in plan: ${invocation.memberName}');
+}
+
+/// 실제 일정(슬롯 + 날씨)을 반환하는 테스트용 백엔드.
+class _LoadedPlanBackend implements LalaBackend {
+  @override
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan() async => _envelope(
+    LalaDailyPlan(
+      language: 'ko',
+      center: const LalaCoordinate(lat: 37.2636, lng: 127.0286),
+      radiusM: 3000,
+      weather: _weather(),
+      slots: const <LalaPlanSlot>[
+        LalaPlanSlot(period: 'morning', title: '화성행궁 산책 코스'),
+      ],
+      source: 'db',
+      requestHash:
+          'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
+      cacheKey: 'daily_plan:abcdef0123456789abcdef0123456789',
+    ),
+  );
+
+  @override
+  void close() {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError('not used in plan: ${invocation.memberName}');
+}
+
+LalaWeather _weather() {
+  return LalaWeather(
+    lat: 37.2636,
+    lng: 127.0286,
+    temp: '14°C',
+    icon: 'partly-cloudy',
+    dust: const LalaDust(
+      pm10: '31',
+      pm25: '14',
+      grade: 'normal',
+      gradeKo: '보통',
+      pm10Grade: 'normal',
+      pm10GradeKo: '보통',
+      pm25Grade: 'good',
+      pm25GradeKo: '좋음',
+    ),
+    forecast: const <LalaForecastItem>[
+      LalaForecastItem(time: '15:00', temp: '22C', icon: 'partly-cloudy'),
+    ],
+    outdoorStatus: 'good',
+    force: false,
+    source: 'db',
+    location: 'Suwon',
+    recordTime: '2026-06-18T09:00:00+09:00',
+    locationMatch: true,
+  );
+}
+
+LalaEnvelope<T> _envelope<T>(T data) {
+  return LalaEnvelope<T>(
+    ok: true,
+    data: data,
+    meta: const <String, dynamic>{'request_id': 'test-request-id'},
+    error: null,
+    statusCode: 200,
+    requestId: 'test-request-id',
+  );
 }
