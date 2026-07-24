@@ -12,6 +12,8 @@ class ForecastChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // P1: 빈 예보 온도는 '-' 한 글자로 보이지 않고, 시간만 남긴다.
+    final tempLabel = temperatureLabelOrNull(item.temp);
     return Container(
       width: 88,
       padding: const EdgeInsets.all(10),
@@ -32,15 +34,17 @@ class ForecastChip extends StatelessWidget {
               fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            temperatureLabel(item.temp),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(
-              context,
-            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
-          ),
+          if (tempLabel != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              tempLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+            ),
+          ],
         ],
       ),
     );

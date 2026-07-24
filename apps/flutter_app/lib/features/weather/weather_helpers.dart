@@ -16,11 +16,13 @@ LalaWeather? publicWeatherOrNull(LalaWeather? weather) {
   return weather;
 }
 
-/// 온도 문자열 표시 포맷터(C3 추출 — main.dart 의 _temperatureLabel).
-String temperatureLabel(String value) {
+/// 온도 표시 라벨. 값이 없으면 null 을 반환해 caller 가 '-' 를 사용자 정보로
+/// 렌더하지 않도록 한다(C3 추출 — main.dart 의 _temperatureLabel).
+/// P1: 빈/공백/단독 '-' 는 null 취급. 기존 숫자/C/°C 포맷 동작은 동일하게 유지.
+String? temperatureLabelOrNull(String value) {
   final trimmed = value.trim();
-  if (trimmed.isEmpty) {
-    return '-';
+  if (trimmed.isEmpty || trimmed == '-') {
+    return null;
   }
   if (RegExp(r'^-?\d+(\.\d+)?$').hasMatch(trimmed)) {
     return '$trimmed°C';
@@ -30,6 +32,9 @@ String temperatureLabel(String value) {
   }
   return trimmed;
 }
+
+/// 하위 호환 포매터. 빈 값은 '-' 폴백(표시용 caller 는 temperatureLabelOrNull 사용).
+String temperatureLabel(String value) => temperatureLabelOrNull(value) ?? '-';
 
 double? _temperatureValue(String value) {
   final match = RegExp(r'-?\d+(?:\.\d+)?').firstMatch(value.trim());

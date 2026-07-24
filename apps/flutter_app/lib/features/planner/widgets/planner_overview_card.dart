@@ -35,12 +35,14 @@ class PlannerOverviewCard extends StatelessWidget {
     // 모바일 비주얼 계약 remediation E: 날씨/먼지를 한 줄 긴 문자열(말줄임/중복 라벨)로
     // 만들지 않고 각 사실을 별도 컴팩트 칩으로 분리해 Wrap 한다.
     final dust = weather?.dust;
+    // P1: 빈 온도는 독립 '-' 칩으로 만들지 않는다(Outdoor·PM·일정 수는 유지).
+    final tempLabel = weather == null ? null : temperatureLabelOrNull(weather!.temp);
     final weatherChips = <Widget>[
       if (weather == null)
         TinyMeta(lalaCopy(language, ko: '날씨 확인 중', en: 'Checking weather'))
       else ...<Widget>[
         TinyMeta(outdoorLabel(weather!.outdoorStatus, language: language)),
-        TinyMeta(temperatureLabel(weather!.temp)),
+        if (tempLabel != null) TinyMeta(tempLabel),
         if (dust != null) ...<Widget>[
           if (dust.pm10.trim().isNotEmpty)
             TinyMeta(
