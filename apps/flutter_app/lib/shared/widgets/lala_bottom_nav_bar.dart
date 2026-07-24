@@ -37,7 +37,7 @@ class LalaBottomNavBar extends StatelessWidget {
           key: ValueKey('nav-plan'),
           icon: Icon(Icons.calendar_today_outlined),
           selectedIcon: Icon(Icons.calendar_today),
-          label: '플랜',
+          label: '일정',
         ),
       ],
     );
