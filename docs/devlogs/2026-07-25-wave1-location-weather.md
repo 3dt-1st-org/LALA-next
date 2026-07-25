@@ -48,6 +48,10 @@ DB 마이그레이션·배포·DNS·비밀키 변경은 없다(아래 “롤백�
 - 수동/현재 컨텍스트가 잡히면 표시기는 숨겨지고 그 좌표가 장소·날씨 호출을 구동.
 - denied/permanentlyDenied/unavailable 모두 기존 컨텍스트(수동 선택 또는 기본 지역)를 유지.
   임의 좌표를 끼워 넣지 않음.
+- 빈 결과의 "준비 중" 사본 정정: 검색(쿼리 없음)은 "이 주변엔 아직 추천이 없어요" /
+  "No recommendations here yet", 플랜(빈 슬롯)은 "표시할 일정이 없어요" /
+  "No plan slots to show" 로 변경. 데이터가 도착한 빈 결과를 영구 "준비 중"으로
+  표시하던 오해 제거(로딩 카드/맵 대기 메시지는 로딩 중에만 "준비 중"을 쓰므로 그대로 유지).
 
 ### 날씨/대기 진실성 (변경 불필요 — 확인만)
 - 기존 구현이 이미 정직: `publicWeatherOrNull` + `isPlaceholderWeatherSource` 가

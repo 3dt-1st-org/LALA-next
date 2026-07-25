@@ -497,10 +497,13 @@ class _SearchResultsView extends StatelessWidget {
               Text(
                 lalaCopy(
                   language,
-                  ko: hasQuery ? '조건에 맞는 장소가 없어요.' : '이 주변 추천을 준비 중입니다.',
+                  // Why: an empty result is not "preparing" — the data arrived and
+                  // there is nothing here. Say so honestly instead of implying a
+                  // perpetual pending state.
+                  ko: hasQuery ? '조건에 맞는 장소가 없어요.' : '이 주변엔 아직 추천이 없어요.',
                   en: hasQuery
                       ? 'No places match your search.'
-                      : 'Recommendations are still being prepared here.',
+                      : 'No recommendations here yet.',
                 ),
                 style: const TextStyle(
                   color: Color(0xFF64748B),

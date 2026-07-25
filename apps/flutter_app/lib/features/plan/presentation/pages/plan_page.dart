@@ -441,8 +441,12 @@ class _PlanContent extends StatelessWidget {
               Text(
                 lalaCopy(
                   language,
-                  ko: '오늘 일정을 준비 중이에요.',
-                  en: 'Today\'s plan is being prepared.',
+                  // Why: the plan already loaded — an empty slot list is an empty
+                  // result, not a "preparing" state. The legitimate generating
+                  // state is the single _PlanLoadingView card shown only while
+                  // loading.
+                  ko: '표시할 일정이 없어요.',
+                  en: 'No plan slots to show.',
                 ),
                 style: const TextStyle(
                   color: Color(0xFF64748B),

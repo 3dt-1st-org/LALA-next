@@ -187,8 +187,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // No query/category filter → neutral empty copy, not invented places.
-      expect(find.text('이 주변 추천을 준비 중입니다.'), findsWidgets);
+      // No query/category filter → honest empty copy (data arrived, nothing
+      // here), not invented places and not a perpetual "preparing" placeholder.
+      expect(find.text('이 주변엔 아직 추천이 없어요.'), findsWidgets);
       expect(find.byType(PlaceThumb), findsNothing);
     });
   });
