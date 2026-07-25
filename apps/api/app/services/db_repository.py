@@ -8,9 +8,9 @@ from datetime import UTC, datetime
 from typing import Any
 
 from apps.api.app.core.config import get_settings
+from apps.api.app.services import region_catalog
 from apps.api.app.services.dust_quality import build_dust_payload
 from apps.api.app.services.official_media import normalize_official_image_url
-from apps.api.app.services.public_mvp_snapshot import GYEONGGI_REGION_NAME_EN
 
 _REQUIRED_DB_RELATIONS = (
     "travel.public_places",
@@ -453,12 +453,29 @@ def _english_display_name(row: dict[str, Any]) -> str:
 
 def _english_display_address(row: dict[str, Any]) -> str:
     region = _english_region(row)
-    return f"{region}, Gyeonggi-do" if region else "Gyeonggi-do"
+    province = _english_province(row)
+    if region and province:
+        return f"{region}, {province}"
+    return region or province or ""
+
+
+def _english_province(row: dict[str, Any]) -> str | None:
+    # Why: the synthesized English address must name the place's actual province
+    # (e.g. "Gyeonggi-do", "Seoul"), not assume Gyeonggi for every nationwide row.
+    # Prefer a province parsed from the Korean address; fall back to the
+    # region→province catalog for rows that only carry region_ko (no province
+    # prefix in address_ko), so a Busan/Jeju region still resolves correctly.
+    province_ko = region_catalog.infer_province_name_from_address(
+        row.get("address_ko") or row.get("region_ko")
+    )
+    if province_ko and province_ko in region_catalog.PROVINCE_NAME_EN:
+        return region_catalog.PROVINCE_NAME_EN[province_ko]
+    return region_catalog.province_name_en_for_region(row.get("region_ko"))
 
 
 def _english_region(row: dict[str, Any]) -> str | None:
     region_ko = str(row.get("region_ko") or "").strip()
-    canonical_region = GYEONGGI_REGION_NAME_EN.get(region_ko)
+    canonical_region = region_catalog.REGION_NAME_EN.get(region_ko)
     if canonical_region:
         return canonical_region
     region = str(row.get("region_en") or "").strip()

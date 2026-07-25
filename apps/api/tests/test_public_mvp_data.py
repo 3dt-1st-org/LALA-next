@@ -190,3 +190,37 @@ def test_public_mvp_snapshot_preserves_official_image_urls() -> None:
         place for place in places if (place.get("image_url") or "").startswith("http")
     )
     assert "tong.visitkorea.or.kr" in official_image["image_url"]
+
+
+def test_english_region_resolves_districts_outside_gyeonggi() -> None:
+    # Why: _english_region must be nationwide, not Gyeonggi-only.
+    cases = {
+        "해운대구": "Haeundae-gu",  # Busan
+        "제주시": "Jeju-si",  # Jeju
+        "춘천시": "Chuncheon-si",  # Gangwon
+        "수원시": "Suwon-si",  # Gyeonggi (regression)
+        "중구": "Jung-gu",  # Seoul (regression)
+    }
+    for region_ko, expected_en in cases.items():
+        assert public_mvp_data._english_region({"region_ko": region_ko}) == expected_en
+
+
+def test_english_display_address_names_actual_province_not_gyeonggi() -> None:
+    # Why: synthesized English address previously hard-coded "Gyeonggi-do";
+    # it must name the row's real province.
+    busan = public_mvp_data._english_display_address(
+        {
+            "region_ko": "해운대구",
+            "address_ko": "부산광역시 해운대구 해운대로 1",
+        }
+    )
+    assert busan == "Haeundae-gu, Busan"
+    assert "Gyeonggi-do" not in busan
+
+    gyeonggi = public_mvp_data._english_display_address(
+        {
+            "region_ko": "수원시",
+            "address_ko": "경기도 수원시 영통구 덕영대로",
+        }
+    )
+    assert gyeonggi == "Suwon-si, Gyeonggi-do"

@@ -243,6 +243,32 @@ def region_name_en(value: object, *, province_name_ko: object | None = None) -> 
     return province_name_en(region_ko)
 
 
+# Reverse lookup: 시/군/구 → the set of provinces that contain it. Most regions
+# belong to exactly one province; a few names repeat across provinces (e.g.
+# 광주). We only resolve a province for display when the region is unambiguous,
+# so a place is never attributed to the wrong province in synthesized English.
+_REGION_TO_PROVINCES_KO: dict[str, set[str]] = {}
+for _region_province_ko, _region_map in REGION_NAME_EN_BY_PROVINCE.items():
+    for _region_name_ko in _region_map:
+        _REGION_TO_PROVINCES_KO.setdefault(_region_name_ko, set()).add(_region_province_ko)
+
+
+def province_name_en_for_region(region_name_ko: object) -> str | None:
+    """English province label for a 시/군/구 region, or None when ambiguous/unknown.
+
+    Used for nationwide English place display (e.g. "Haeundae, Busan") rather
+    than assuming Gyeonggi-do. Returns None for region names shared by more
+    than one province so a place is never shown under the wrong province.
+    """
+    region_ko = normalize_region_name_ko(region_name_ko)
+    if not region_ko:
+        return None
+    provinces = _REGION_TO_PROVINCES_KO.get(region_ko)
+    if not provinces or len(provinces) != 1:
+        return None
+    return PROVINCE_NAME_EN[next(iter(provinces))]
+
+
 def infer_province_name_from_address(address: object) -> str | None:
     text = _optional_text(address)
     if not text:
