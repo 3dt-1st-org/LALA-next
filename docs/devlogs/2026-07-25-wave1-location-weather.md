@@ -53,6 +53,16 @@ DB 마이그레이션·배포·DNS·비밀키 변경은 없다(아래 “롤백�
   "No plan slots to show" 로 변경. 데이터가 도착한 빈 결과를 영구 "준비 중"으로
   표시하던 오해 제거(로딩 카드/맵 대기 메시지는 로딩 중에만 "준비 중"을 쓰므로 그대로 유지).
 
+### Cold-start 영속화 (`core/persistence/onboarding_preferences.dart`, `app/bootstrap.dart` — 후속, P0)
+- **문제(실제 재시작으로 확인)**: `OnboardingState`·`RegionContextStore` 가 메모리 전용이라 프로세스 재시작 시 (1) 완료된 온보딩이 다시 떠오르고, (2) 수동으로 고른 지역이 사라졌다.
+- **해결**: 완료 여부·선택 언어·관광객 유형·수동 지역 id 만을 버전 접두사 키(`lala.onboarding.v1.*`)로 SharedPreferences 에 영속화하는 작고 테스트 가능한 추상(`OnboardingPreferences` + 저장 백엔드 인터페이스). `bootstrapAppState()` 가 `runApp` **이전**에 영속화된 스냅샷을 정적 홀더에 주입(hydrate)한다.
+  - GoRouter.redirect 가 첫 프레임부터 참된 완료 플래그를 본다 → 완료 사용자의 온보딩으로의 일시적 리다이렉트 점멸이 없다.
+  - 검색/플랜/지도 탭이 첫 백엔드 시드를 *복원된 수동 지역* 좌표로 잡는다(`RegionContextStore.current` 가 이미 채워져 있어 기기 위치를 요청하지 않는다).
+- **쓰기 순서**: 완료 게이트(`OnboardingState.completeAndFlush`)는 라우터가 보는 `_completed` 플래그를 뒤집기 *전에* 영속화를 `await` 한다. 탭 직후 kill 되어도 restart 상태를 잃지 않는다.
+- **프라이버시 정책(현위치 좌표)**: `RegionSource.current`(정확한 기기 좌표)은 **절대** 저장하지 않는다. `set(current)` 는 저장된 수동 id 만 지운다. 그 결과 cold start 시 현위치 컨텍스트는 null 이 되고, 기존 하이브리드 위치 provider 가 다시 요청할 수 있다. 수동 선택만이 안정 regionId 로 복원된다.
+- **검증**: 유효하지 않거나 제거된 수동 regionId → 무시 + 해당 키 제거(크래시/가짜 지역 없음). 저장 읽기/쓰기 실패 → 깨끗한 first-run 상태로 안전하게 저하(앱은 항상 시작). 관광객 유형은 코드 문자열로 저장하고 enum 매핑은 `OnboardingState` 가 소유해 순환 import 를 피함.
+- **재온보딩/reset**: `OnboardingState.reset()`·`RegionContextStore.clear()` 가 각자의 영속 슬라이스도 지운다.
+
 ### 탭 간 region 컨텍스트 즉시 전파 (`search_page.dart`, `plan_page.dart` — 후속 수정)
 - 기존엔 두 탭이 `RegionContextStore.current` 를 최초 1회 시드한 뒤 `_load()` 때마다
   `requestCurrentLocation` 를 호출했다. 온보딩/다른 탭에서 수동 지역을 고른 뒤 탭을 전환하면
@@ -94,7 +104,7 @@ DB 마이그레이션·배포·DNS·비밀키 변경은 없다(아래 “롤백�
 |---|---|---|
 | 주변 장소 | DB/PostGIS + API(`getPlaces`) | 번들/목업 시작 장소 없음. pending/empty/unavailable 구분. |
 | 날씨/대기 | 서버사이드 공식 서비스(API `getWeather`) | 실제 타임스탬프 스냅샷만 표시. placeholder→unavailable. 클라이언트 provider 키 없음. |
-| 지역 컨텍스트 | in-memory store(process-local) | current/manual/default. 영속화는 범위외. |
+| 지역 컨텍스트 | SharedPreferences(cold-start) + in-memory store(process-local) | 수동 선택 regionId 만 영속화·복원. 현위치 좌표/RegionSource.current 는 미저장. |
 | 권한 | Geolocator(영구 구분) + browser_location(구분 불가→denied) | 4상태. |
 
 ## 검증
@@ -116,8 +126,12 @@ DB 마이그레이션·배포·DNS·비밀키 변경은 없다(아래 “롤백�
 - `widget_test.dart` 에 `setUp(RegionContextStore.clear)` 추가 — 프로세스 로컬 store 가 탭 간에 새어
   좌표 시드를 오염시키지 않도록 각 테스트 격리. 검색/플랜 페이지 테스트에도 `setUp`/`tearDown` 으로
   정적 store 를 매 케이스마다 초기화해 격리.
-- `flutter analyze`: 이슈 없음. `flutter test`: 159개 통과 — 탭 간 전파 리로드, 마운트 전 수동 선택
-  보존(초기 위치 요청이 덮어쓰지 않음) 검증 2건, permanentlyDenied 복구 + 설정 열기 추상화 검증 6건 추가.
+- `flutter analyze`: 이슈 없음. `flutter test`: 178개 통과(159 + cold-start 영속화 19건 추가) —
+  직렬화 라운드트립(완료+언어+관광객 유형+유효 수동 지역), cold-start 라우팅(완료 사용자 → 지도 쉘, 온보딩 점멸 없음),
+  복원된 수동 Busan 이 Search/Plan 첫 로드 시드 + 기기 위치 미요청, 현위치 미저장, 무효 region id/저장 실패 안전 저하,
+  reset 영속 데이터 청소, completeAndFlush 내구성/실패 시 인메모리 완료.
+  (이전 슬라이스 누적 검증: 탭 간 전파 리로드, 마운트 전 수동 선택 보존 — 초기 위치 요청이 덮어쓰지 않음 —
+  검증 2건, permanentlyDenied 복구 + 설정 열기 추상화 검증 6건.)
 
 ## CI/배포 평가
 
@@ -143,12 +157,20 @@ DB 마이그레이션·배포·DNS·비밀키 변경은 없다(아래 “롤백�
 - DB 마이그레이션·스키마 변경·데이터 이관 없음. 전부 코드/테스트/CI 추가·수정.
 - 롤백 = 해당 커밋 revert. 런타임 상태/데이터 부작용 없음. `RegionContextStore` 는 메모리 전용.
 
-## 진짜 블로커 (Wave-1 잔여, 비차단)
+## 진짜 블로컈 (Wave-1 잔여, 비차단)
 
-- `RegionContextStore` 영속화(Prefs) 미구현 — **앱(프로세스) 재시작시 컨텍스트가 초기화된다.**
-  의도적 범위외(온보딩 상태와 동일 패턴). 이번 후속 수정에서도 in-memory 유지는 그대로.
-  (프로세스가 살아있는 동안의 탭 간 전파·반응은 이제 검증됨 — 위 “탭 간 region 컨텍스트 즉시 전파” 참고.)
+- `OnboardingState`·`RegionContextStore` 의 cold-start 영속화는 **이제 구현됨**(위 “Cold-start 영속화” 참고).
+  완료·언어·관광객 유형·수동 지역 id 가 restart 에 복원된다. **잔여 한계(진실)**:
+  - `RegionSource.current`(정확한 기기 좌표)는 의도적으로 영속화하지 않는다. 온보딩/탭에서 “현재 위치 사용”
+    만 고른 사용자는 restart 시 실제 컨텍스트가 없고 기본 지역으로 폴백하며, provider 가 현위치를 다시
+    요청할 수 있다(프라이버시 우선). 마지막 *수동* 선택만 복원 대상이다.
+  - 앱이 시작조차 못 하는 극단적 저장 고장 시 first-run 으로 저하한다. 일시적 쓰기 실패는 해당 세션의
+    인메모리 상태에는 영향을 주지 않지만 cold restart 에는 기억되지 않을 수 있다(저장은 best-effort).
+  - 검증 방식: 단위/위젯 테스트(`flutter test`)로 직렬화 라운드트립·복원 라우팅·수동 Busan 시드·현위치
+    미저장·무효 id/저장 실패 저하·reset 청소를 증명했다. **실기기 재시작 프로브는 이 슬라이스에서 직접
+    수행하지 않았다** — 동작은 테스트로 보장되며, 실기기 재시작 검증은 별도 확인으로 남긴다.
 - `LalaAppConfig` 기본 좌표(수원)가 여전히 하드코딩된 “공개된 기본 지역”. 이제 정직 표시기로 공개되므로
   은폐 아님. 별도 작업에서 기본 지역 자체를 env/설정 가능하게 분리 가능.
-- splash copy(“당신의 수원을 안내합니다”)·`locationLabel` 의 null 기본값(수원)은 라벨 헬퍼 영역이라
-  이 슬라이스의 “탭 은폐” 범위 밖. 표시기가 이미 기본 지역을 정직 공개하므로 모순 아님.
+- splash copy(“당신의 수원을 안내합니다” → “여행을 안내해 드릴게요 / We'll guide your trip”)와
+  `locationLabel` 의 null 기본값(수원 → “기본 지역 / Default region”)은 **이제 정직한 사본으로 교체**됨.
+  위치가 확정되기 전 특정 지역/“주변”을 약속하지 않는다.

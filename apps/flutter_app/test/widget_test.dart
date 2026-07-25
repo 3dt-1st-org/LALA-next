@@ -2745,7 +2745,7 @@ void main() {
       await tester.pump();
 
       // 메인 라우트가 스플래시로 차단된다. 메인 지도 콘텐츠는 보이지 않는다.
-      expect(find.text('당신의 수원을 안내합니다'), findsOneWidget);
+      expect(find.text('여행을 안내해 드릴게요'), findsOneWidget);
       expect(find.text('화성행궁'), findsNothing);
 
       // 스플래시는 아직 온보딩을 완료하지 않았다.
@@ -2765,7 +2765,7 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.text('당신의 수원을 안내합니다'), findsOneWidget);
+      expect(find.text('여행을 안내해 드릴게요'), findsOneWidget);
 
       // 2초 후 자동으로 start 단계로 이동한다.
       await tester.pump(const Duration(seconds: 2));

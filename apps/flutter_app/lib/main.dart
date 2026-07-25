@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'app/bootstrap.dart';
 import 'app/lala_app.dart';
 
 // 테스트(test/widget_test.dart)가 main.dart import 로 접근하던 public 심볼 호환용 re-export.
@@ -31,13 +32,18 @@ export 'features/map/map_helpers.dart' show clusterMapPlacesForMap;
 
 SemanticsHandle? _webSemanticsHandle;
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   if (kIsWeb) {
     // Force the Flutter semantics tree on web so assistive tech and browser
     // automation can inspect more than the canvas fallback placeholder.
     _webSemanticsHandle ??= SemanticsBinding.instance.ensureSemantics();
   }
+  // Hydrate persisted onboarding/region state into the static holders BEFORE the
+  // router mounts, so a known-completed user lands on the map shell on the first
+  // frame and the tabs seed from a retained manual region. Storage failure is
+  // swallowed inside bootstrapAppState (clean first-run); the app always starts.
+  await bootstrapAppState();
   // C2: Riverpod 루트. feature 컨트롤러(C3)가 ProviderScope 하위에서 동작한다.
   runApp(const ProviderScope(child: LalaApp()));
 }

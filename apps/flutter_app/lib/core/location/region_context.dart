@@ -7,8 +7,17 @@
 // module is the single in-memory holder so a choice made in onboarding (or on
 // one tab) drives place + weather calls on every tab, and so an *intentional*
 // default region can be disclosed honestly instead of presented as "nearby".
+//
+// Wave-1 cold-start: a *manual* selection is persisted by stable regionId so it
+// survives a process restart and is restored before the search/plan/map tabs seed
+// their first backend. RegionSource.current (precise device coordinates) is NEVER
+// persisted — once current becomes the active context, the saved manual id is
+// cleared so a cold start yields no real region (the provider may re-request).
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
+import 'package:lala_next_app/core/persistence/onboarding_preferences.dart';
 import 'package:lala_next_app/manual_location_options.dart';
 
 /// How the active region context was established.
@@ -99,13 +108,17 @@ class RegionContext {
 /// Holds the user's resolved current/manual context across onboarding and the
 /// app shell. `null` means "no real context yet" — callers then use the app's
 /// documented default coordinates and must show an honest default indicator.
-/// Persistence (SharedPreferences) is intentionally out of scope here; the
-/// holder is process-local, matching the existing onboarding state pattern.
+/// A *manual* selection is optionally persisted (see [attachPersistence]) so the
+/// choice survives a process restart; precise current coordinates are not.
 class RegionContextStore {
   RegionContextStore._();
 
   static final ValueNotifier<RegionContext?> _notifier =
       ValueNotifier<RegionContext?>(null);
+
+  // Optional cold-start persistence for the manual region id. null in tests that
+  // don't exercise persistence.
+  static OnboardingPreferences? _prefs;
 
   /// Listen for cross-tab context changes.
   static ValueListenable<RegionContext?> get listenable => _notifier;
@@ -113,13 +126,58 @@ class RegionContextStore {
   /// The active context, or `null` when only the disclosed default applies.
   static RegionContext? get current => _notifier.value;
 
+  /// Attaches cold-start persistence for this process (see bootstrapAppState).
+  static void attachPersistence(OnboardingPreferences prefs) => _prefs = prefs;
+
+  /// Detaches persistence (test isolation).
+  static void detachPersistence() => _prefs = null;
+
   /// Publish a resolved current/manual context (or `null` to revert to default).
+  ///
+  /// Privacy: only an explicit manual selection is persisted. RegionSource.current
+  /// is never stored; when current becomes active the saved manual id is cleared so
+  /// a cold start yields no real region (provider may re-request). Reverting to
+  /// null/clear also clears the saved manual id.
   static void set(RegionContext? context) {
     _notifier.value = context;
+    final prefs = _prefs;
+    if (prefs == null) {
+      return;
+    }
+    final persistedId =
+        (context != null && context.source == RegionSource.manual)
+        ? context.regionId
+        : null;
+    unawaited(_safeWriteRegionId(prefs, persistedId));
+  }
+
+  /// Cold start: restore the manual region from a persisted id. Resolves the id
+  /// to a [ManualLocationOption]; null/unknown id -> no real context (disclosed
+  /// default). Does not write back — the id is already the durable truth.
+  static void applyManualRegionId(String? id) {
+    final option = manualOptionForId(id);
+    _notifier.value = option == null ? null : RegionContext.manual(option);
   }
 
   /// Reset to "no real context" (disclosed default). Used by tests/re-onboarding.
+  /// Also forgets the persisted manual id so a restart cannot resurrect it.
   static void clear() {
     _notifier.value = null;
+    final prefs = _prefs;
+    if (prefs == null) {
+      return;
+    }
+    unawaited(_safeWriteRegionId(prefs, null));
+  }
+
+  static Future<void> _safeWriteRegionId(
+    OnboardingPreferences prefs,
+    String? id,
+  ) async {
+    try {
+      await prefs.writeManualRegionId(id);
+    } on Object {
+      // best-effort persistence; the in-memory context stays authoritative.
+    }
   }
 }

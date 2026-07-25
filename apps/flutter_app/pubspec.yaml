@@ -27,6 +27,9 @@ dependencies:
   web_socket_channel: ^3.0.2
   meta: ^1.16.0
   app_settings: ^8.0.3
+  # Cold-start persistence for onboarding completion + chosen language/tourist
+  # type/manual region. Precise device coordinates are never stored.
+  shared_preferences: ^2.3.2
 
 dev_dependencies:
   flutter_test:
