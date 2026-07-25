@@ -357,9 +357,13 @@ approved_export, rejected}`, `terms_version`, `collection_method`,
 The governance boundary (`apps/api/app/services/review_ingest_governance.py`)
 refuses any source whose `license_class` is not in `{licensed,
 public_processed, approved_export}` — the `rejected` class is registrable (so an
-operator can record a blocked source) but is never accepted for ingestion,
-routing the whole batch to quarantine as `terms_violation`. This closes the
-provenance gap noted in
+operator can record a blocked source) but is never accepted for ingestion. The
+DB-authoritative source gate loads the row from `ingest.review_sources` and
+**aborts** a `rejected`/disabled/absent (or provider/terms-mismatch) batch with a
+`source_license_rejected` governance error **before any record is accepted** — it
+does not route records to quarantine. (The `terms_violation` quarantine reason
+is reserved for the future per-record refinement lane and is not emitted by this
+foundation.) This closes the provenance gap noted in
 `docs/operations/review-mention-preprocessing-strategy.md`.
 
 ## 10. Storage Model: Provenance / Normalized (raw retention BLOCKED)
@@ -567,11 +571,12 @@ inputs yields the same rows (no duplicates, no lost higher-tier enrichments).
   `ambiguous_match` discipline. Nothing in quarantine reaches scoring/RAG until
   `resolution='approved'` with a recorded approver/run.
 - **Observability:** quarantine depth is a metric/alert (§23).
-- **TARGET (next slice):** wrap register → run create/resume → quarantine insert
-  → run finalize in a **single transaction boundary** so a partial failure cannot
-  leave the ledger and the dead-letter out of sync. 062 persists each step in its
-  own connection today; the next review-specific implementation must close that
-  gap without calling external providers.
+- **IMPLEMENTED in PR #60:** register → run create/resume → receipt → quarantine
+  insert → run finalize run inside a **single transaction boundary**
+  (`persist_review_ingest_run`'s `with conn:` block) so a partial failure rolls
+  back and cannot leave the ledger, receipts, and the dead-letter out of sync. A
+  late failure rolls the whole batch back and never exposes accepted aggregates.
+  No external-provider calls.
 
 ## 20. Replay / Backfill
 
@@ -671,13 +676,18 @@ inputs yields the same rows (no duplicates, no lost higher-tier enrichments).
 
 1. **`062_review_ingestion_governance.sql`** (IMPLEMENTED): additive, re-runnable
    (`CREATE TABLE IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS` /
-   `CREATE INDEX IF NOT EXISTS`). Creates `ingest.review_sources` (§9.3), extends
-   `community.ingest_runs` with the governance columns + the `run_key` partial
-   unique idempotency index, and creates `community.ingest_quarantine` (§19) with
+   `CREATE INDEX IF NOT EXISTS`). Creates `ingest.review_sources` (§9.3) +
+   `ingest.review_ingest_receipts` (the aggregate-only persistent receipt/dedupe,
+   item 4 below), extends `community.ingest_runs` with the governance columns +
+   the `review_source_name` FK → registered source + the `run_key` partial unique
+   idempotency index, and creates `community.ingest_quarantine` (§19) with
    **no raw-body column**. Backed by the typed governance boundary in
-   `apps/api/app/services/review_ingest_governance.py`.
+   `apps/api/app/services/review_ingest_governance.py`, which runs the
+   DB-authoritative source gate + register → run → receipt → quarantine →
+   finalize inside one transaction.
 
-**Remaining TARGET migrations (do not reserve 062 — it is already in use):**
+**Remaining TARGET migrations (do not reserve 062 — it is already in use and
+already ships the aggregate-only receipt/dedupe):**
 
 2. **`travel.place_enrichments` uniqueness** (§18): add unique
    `(place_id, enrichment_type, prompt_version)` (or accept append-only history
@@ -685,13 +695,14 @@ inputs yields the same rows (no duplicates, no lost higher-tier enrichments).
 3. **`rag.knowledge_chunks` source-type policy** (§17): no schema change needed,
    but add a CHECK/CI rule that `community_post` rows must not embed raw bodies
    (enforced in code + test).
-4. **Aggregate-only persistent receipt/dedupe (TARGET, next review-specific
-   slice):** a cross-batch dedupe record keyed on `content_sha256` (or an
-   `ingest_runs`-side accepted-hash ledger) so duplicate records across batches
-   are detected without re-storing raw text — the persistent counterpart to
-   062's in-batch `seen_hashes` dedupe. Must ship with the single transaction
-   boundary across register → run → quarantine → finalize (§19 TARGET). Must not
-   call external providers.
+4. **Aggregate-only persistent receipt/dedupe — IMPLEMENTED in `062` (PR #60),
+   not a separate migration:** `ingest.review_ingest_receipts` keys cross-batch
+   dedupe on (source, external_key, `content_sha256`) so duplicate records across
+   batches are detected without re-storing raw text. An exact replay (same
+   triple, any run) yields `rowcount 0` and does not re-emit an aggregate; a
+   content revision (new hash) inserts a fresh row and does. It ships inside the
+   single transaction boundary across register → run → receipt → quarantine →
+   finalize (§19). No external-provider calls.
 
 **BLOCKED_EXTERNAL (not a migration — no raw-retention table):**
 
@@ -795,10 +806,11 @@ history via `place_enrichments` generations.
 ### M2 — Licensed/public acquisition lane (TARGET)
 
 - **Target:** one terms-compliant source governed via the worker contract
-  (§8/§9) using the 062 `ingest.review_sources` registry +
-  `review_ingest_governance.py` boundary. **No `posts_raw`** (BLOCKED_EXTERNAL,
-  §10); the aggregate-only receipt + persistent dedupe (§25.1 item 4) is the
-  persistence floor. Live acquisition that calls external providers remains
+  (§8/§9) using the `062` `ingest.review_sources` registry + DB-backed
+  `review_ingest_governance.py` gate. The aggregate-only receipt + persistent
+  dedupe (§25.1 item 4, **LANDED in `062`/PR #60**) is already the persistence
+  floor; this lane adds only live acquisition. **No `posts_raw`**
+  (BLOCKED_EXTERNAL, §10). Live acquisition that calls external providers remains
   BLOCKED_EXTERNAL until the legal/retention/access decision.
 - **Acceptance (Ops/DB):** an approved source runs plan→preview→apply; every
   aggregate has a resolvable `source_run_id` + `license_class`.
