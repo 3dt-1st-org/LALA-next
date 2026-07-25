@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
+from datetime import UTC, datetime
 from typing import Any
 
 from apps.api.app.core.config import get_settings
@@ -12,9 +14,11 @@ from apps.api.app.services.franchise_identity import (
     fetch_business_identity_inputs,
     upsert_place_business_identities,
 )
+from apps.api.app.services.job_runs import duration_ms, record_job_run
 
 CONFIRM_TEXT = "APPLY_FRANCHISE_IDENTITY_BATCH"
 ALLOW_ENV = "ALLOW_FRANCHISE_IDENTITY_BATCH_APPLY"
+JOB_NAME = "franchise-identity-batch"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -60,6 +64,7 @@ def main(argv: list[str] | None = None) -> int:
             _write(args, {"ok": False, "mode": "apply", "error": guard_error})
             return 2
 
+    started_at = datetime.now(UTC)
     try:
         places, brands, locations = fetch_business_identity_inputs(
             dsn=dsn,
@@ -80,6 +85,19 @@ def main(argv: list[str] | None = None) -> int:
                 connect_timeout=args.connect_timeout,
             )
     except Exception as exc:
+        if args.apply:
+            finished_at = datetime.now(UTC)
+            with contextlib.suppress(Exception):
+                record_job_run(
+                    dsn=dsn,
+                    job_name=JOB_NAME,
+                    status="failed",
+                    started_at=started_at,
+                    finished_at=finished_at,
+                    duration_ms=duration_ms(started_at, finished_at),
+                    error_message=redact_secret_text(str(exc) or exc.__class__.__name__, (dsn,)),
+                    connect_timeout=args.connect_timeout,
+                )
         _write(
             args,
             {
@@ -90,12 +108,28 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
 
+    if args.apply:
+        finished_at = datetime.now(UTC)
+        with contextlib.suppress(Exception):
+            record_job_run(
+                dsn=dsn,
+                job_name=JOB_NAME,
+                status="succeeded",
+                started_at=started_at,
+                finished_at=finished_at,
+                duration_ms=duration_ms(started_at, finished_at),
+                error_message=None,
+                connect_timeout=args.connect_timeout,
+            )
+
     _write(
         args,
         {
             "ok": True,
             "mode": _mode(args),
+            "live_api_call": False,  # DB-derived: no external API is called.
             "db_mutation": bool(args.apply),
+            "job_name": JOB_NAME,
             "target": "analytics.place_business_identity",
             "place_count": len(places),
             "brand_reference_count": len(brands),
@@ -112,7 +146,9 @@ def _plan_payload() -> dict[str, Any]:
     return {
         "ok": True,
         "mode": "plan",
+        "live_api_call": False,  # DB-derived: reads travel.places + franchise refs, no external API.
         "db_mutation": False,
+        "job_name": JOB_NAME,
         "target": "analytics.place_business_identity",
         "input_relations": [
             "travel.places",

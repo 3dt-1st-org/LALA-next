@@ -155,6 +155,8 @@ def test_franchise_identity_batch_plan_has_no_mutation(capsys):
     assert payload["ok"] is True
     assert payload["mode"] == "plan"
     assert payload["db_mutation"] is False
+    # DB-derived batch: no external API is called (payload-shape consistency).
+    assert payload["live_api_call"] is False
     assert payload["target"] == "analytics.place_business_identity"
     assert "economy.franchise_brands" in payload["input_relations"]
 

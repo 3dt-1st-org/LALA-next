@@ -1,8 +1,15 @@
 from __future__ import annotations
 
 import json
+import math
+import sys
+from types import SimpleNamespace
 
+import pytest
+
+from apps.api.app.services import franchise_reference_ingest
 from apps.api.app.services.franchise_reference_ingest import parse_brand_stats_items
+from apps.api.app.services.official_source_errors import OfficialSourceError
 from apps.api.app.tools import run_franchise_reference_ingest
 
 
@@ -91,3 +98,183 @@ def test_franchise_reference_ingest_apply_requires_guard(monkeypatch, capsys):
     assert exit_code == 2
     payload = json.loads(capsys.readouterr().out)
     assert run_franchise_reference_ingest.ALLOW_ENV in payload["error"]
+
+
+# ---------------------------------------------------------------------------
+# Reliability boundary tests: replay receipt, bounded errors, decision-input
+# ---------------------------------------------------------------------------
+
+
+def _brand_record():
+    return franchise_reference_ingest.FranchiseBrandReference(
+        brand_id="2025:hq:brand",
+        brand_name_ko="브랜드",
+        normalized_brand_name="브랜드",
+        headquarters_name_ko="hq",
+        business_category="외식 / 한식",
+        main_product=None,
+        franchise_store_count=10,
+        average_sales_amount=1000.0,
+        chain_scale_score=franchise_reference_ingest._chain_scale_score(10),
+        primary_source="fair_trade_commission",
+        source_record_id="2025:hq:brand",
+    )
+
+
+def _ingest_result():
+    return franchise_reference_ingest.FranchiseReferenceIngestResult(
+        source_name="fair_trade_commission",
+        dataset_name="공정위 가맹",
+        source_url="https://example.invalid/api",
+        year=2025,
+        requested_rows=1,
+        total_count=1,
+        parsed_row_count=1,
+        skipped_row_count=0,
+        brands=(_brand_record(),),
+    )
+
+
+def _install_fake_psycopg2(monkeypatch, fetchone_results):
+    executed: list = []
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def execute(self, sql, params=None):
+            executed.append((sql, params))
+
+        def fetchone(self):
+            return fetchone_results.pop(0) if fetchone_results else None
+
+    class Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def cursor(self):
+            return Cursor()
+
+        def commit(self):
+            executed.append(("commit", None))
+
+    def connect(dsn, connect_timeout):
+        executed.append(("connect", {"dsn": dsn, "connect_timeout": connect_timeout}))
+        return Connection()
+
+    monkeypatch.setitem(sys.modules, "psycopg2", SimpleNamespace(connect=connect))
+    monkeypatch.setitem(
+        sys.modules,
+        "psycopg2.extras",
+        SimpleNamespace(
+            execute_values=lambda cur, sql, values, page_size=500: executed.append(
+                ("execute_values", len(values))
+            )
+        ),
+    )
+    return executed
+
+
+def test_insert_franchise_brand_references_writes_receipt_then_upserts(monkeypatch):
+    executed = _install_fake_psycopg2(monkeypatch, [None, ("source-file-id",)])
+    payload = franchise_reference_ingest.insert_franchise_brand_references(
+        dsn="postgresql://redacted",
+        result=_ingest_result(),
+        connect_timeout=7,
+    )
+    assert payload["replayed"] is False
+    assert payload["source_file_id"] == "source-file-id"
+    assert payload["inserted_or_updated_rows"] == 1
+    assert any("SELECT id" in sql and "ingest.source_files" in sql for sql, _ in executed)
+    assert any("INSERT INTO ingest.source_files" in sql for sql, _ in executed)
+    assert any(sql == "execute_values" for sql, _ in executed)
+
+
+def test_insert_franchise_brand_references_replay_skips_upsert(monkeypatch):
+    executed = _install_fake_psycopg2(monkeypatch, [("existing-source-id",)])
+    payload = franchise_reference_ingest.insert_franchise_brand_references(
+        dsn="postgresql://redacted",
+        result=_ingest_result(),
+        connect_timeout=7,
+    )
+    assert payload["replayed"] is True
+    assert payload["source_file_id"] == "existing-source-id"
+    assert payload["inserted_or_updated_rows"] == 0
+    # No source_files INSERT and no brand upsert on replay.
+    assert not any("INSERT INTO ingest.source_files" in sql for sql, _ in executed)
+    assert not any(sql == "execute_values" for sql, _ in executed)
+
+
+def test_fetch_page_raises_bounded_error_without_raw_upstream_text(monkeypatch):
+    import urllib.request
+
+    raw_body = json.dumps(
+        {"resultCode": "30", "resultMsg": "ServiceKey echo-do-not-leak detail"}
+    ).encode("utf-8")
+
+    class _Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def read(self):
+            return raw_body
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: _Response())
+
+    with pytest.raises(OfficialSourceError) as info:
+        franchise_reference_ingest._fetch_page(
+            api_url="https://example.invalid/api",
+            api_key="dummy",
+            year=2025,
+            page_no=1,
+            page_size=10,
+            timeout=1,
+        )
+    message = str(info.value)
+    assert "echo-do-not-leak" not in message
+    assert "ServiceKey" not in message
+    assert info.value.category == "auth"
+
+
+def test_fetch_franchise_brand_references_flags_partial_run_when_capped(monkeypatch):
+    def fake_fetch_page(**kwargs):
+        return {
+            "totalCount": 50,
+            "items": [
+                {"yr": "2025", "corpNm": "hq", "brandNm": f"brand{n}", "frcsCnt": 2}
+                for n in range(2)
+            ],
+        }
+
+    monkeypatch.setattr(franchise_reference_ingest, "_fetch_page", fake_fetch_page)
+    result = franchise_reference_ingest.fetch_franchise_brand_references(
+        api_key="dummy",
+        year=2025,
+        rows=2,  # operator cap well below the upstream total of 50
+        page_size=10,
+        timeout=1,
+    )
+    assert result.total_count == 50
+    assert result.collected_count == 2
+    assert result.partial_run is True
+
+
+def test_franchise_reference_does_not_fabricate_main_product_or_signals():
+    # Decision-input/provenance only: main_product stays None (never invented),
+    # chain_scale_score is a deterministic transform of the upstream store count.
+    records, _ = parse_brand_stats_items(
+        [{"yr": "2025", "corpNm": "hq", "brandNm": "brand", "frcsCnt": "1000"}],
+        year=2025,
+    )
+    assert len(records) == 1
+    assert records[0].main_product is None
+    assert records[0].chain_scale_score == round(min(1.0, math.log10(1000) / 3.0), 4)
