@@ -349,6 +349,7 @@ def test_kopis_apply_failure_records_redacted_job_run(monkeypatch, capsys):
 
 def test_upsert_kopis_performances_targets_source_files_and_culture_events(monkeypatch):
     executed = []
+    fetchone_results: list = [None, ("source-file-id",)]  # dup-check miss, then INSERT RETURNING id
 
     class Cursor:
         def __enter__(self):
@@ -362,7 +363,7 @@ def test_upsert_kopis_performances_targets_source_files_and_culture_events(monke
             self.rowcount = 1
 
         def fetchone(self):
-            return ("source-file-id",)
+            return fetchone_results.pop(0) if fetchone_results else None
 
     class Connection:
         def __enter__(self):
@@ -414,6 +415,144 @@ def test_upsert_kopis_performances_targets_source_files_and_culture_events(monke
     )
 
     assert payload["upserted_rows"] == 1
-    assert "INSERT INTO ingest.source_files" in executed[1][0]
-    assert "INSERT INTO culture.events" in executed[2][0]
+    assert payload["source_file_id"] == "source-file-id"
+    assert payload["replayed"] is False
+    # Receipt dup-check SELECT, then source_files INSERT, then the event upsert.
+    assert "SELECT id" in executed[1][0] and "ingest.source_files" in executed[1][0]
+    assert "INSERT INTO ingest.source_files" in executed[2][0]
+    assert "INSERT INTO culture.events" in executed[3][0]
     assert executed[-1] == ("commit", None)
+
+
+# ---------------------------------------------------------------------------
+# Reliability boundary tests: replay, validation, bounded errors, partial-run
+# ---------------------------------------------------------------------------
+
+
+def test_upsert_kopis_performances_replay_skips_duplicate_source_file(monkeypatch):
+    executed = []
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def execute(self, sql, params=None):
+            executed.append((sql, params))
+            self.rowcount = 1
+
+        def fetchone(self):
+            return ("existing-source-id",)  # dup-check finds existing -> replay
+
+    class Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def cursor(self):
+            return Cursor()
+
+        def commit(self):
+            executed.append(("commit", None))
+
+    def connect(dsn, connect_timeout):
+        executed.append(("connect", {"dsn": dsn, "connect_timeout": connect_timeout}))
+        return Connection()
+
+    monkeypatch.setitem(sys.modules, "psycopg2", SimpleNamespace(connect=connect))
+    result = kopis_ingest.KopisFetchResult(
+        performances=(
+            kopis_ingest.KopisPerformance(
+                mt20id="PF1",
+                title_ko="공연",
+                starts_on=None,
+                ends_on=None,
+                venue_name_ko="경기아트센터",
+                poster_url=None,
+                area="경기도",
+                genre_name="연극",
+                openrun=None,
+                performance_state="공연예정",
+            ),
+        ),
+        request_count=1,
+        raw_count=1,
+        stdate="20260615",
+        eddate="20260715",
+        signgucode="41",
+        signgucodes=("41",),
+        signgucodesub=None,
+        prfstate=None,
+    )
+
+    payload = kopis_ingest.upsert_kopis_performances(
+        dsn="postgresql://redacted",
+        result=result,
+        connect_timeout=7,
+    )
+
+    assert payload["replayed"] is True
+    assert payload["upserted_rows"] == 0
+    assert not any("INSERT INTO ingest.source_files" in sql for sql, _ in executed)
+    assert not any("INSERT INTO culture.events" in sql for sql, _ in executed)
+
+
+def test_parse_kopis_performance_counts_missing_required_field():
+    counter = kopis_ingest.OfficialRejectionCounter()
+    xml = "<dbs><db><prfnm>제목만</prfnm></db></dbs>"  # missing mt20id
+    performances = kopis_ingest.parse_kopis_performances(xml, counter=counter)
+    assert performances == []
+    assert counter.counts().get("missing_required_field") == 1
+
+
+def test_parse_kopis_performance_drops_non_allowlisted_poster_host():
+    xml = (
+        "<dbs><db><mt20id>PF1</mt20id><prfnm>공연</prfnm>"
+        "<poster>https://evil.example.com/p.png</poster></db></dbs>"
+    )
+    performances = kopis_ingest.parse_kopis_performances(xml)
+    assert len(performances) == 1
+    assert performances[0].poster_url is None
+
+
+def test_kopis_raise_for_error_does_not_leak_service_key_text():
+    raw_message = "SERVICE_KEY is invalid (echo-do-not-leak)"
+    xml = f"<root><returnAuthMsg>{raw_message}</returnAuthMsg></root>"
+    with pytest.raises(kopis_ingest.OfficialSourceError) as info:
+        kopis_ingest.parse_kopis_performances(xml)
+    message = str(info.value)
+    assert "echo-do-not-leak" not in message
+    assert "SERVICE_KEY" not in message
+    assert info.value.category == "auth"
+
+
+def test_fetch_kopis_performances_reports_unknown_total_and_no_partial_flag(monkeypatch):
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        @property
+        def text(self):
+            return (
+                "<dbs>"
+                "<db><mt20id>PF1</mt20id><prfnm>공연1</prfnm></db>"
+                "<db><mt20id>PF2</mt20id><prfnm>공연2</prfnm></db>"
+                "</dbs>"
+            )
+
+    monkeypatch.setitem(sys.modules, "requests", SimpleNamespace(get=lambda *a, **k: Response()))
+    result = kopis_ingest.fetch_kopis_performances(
+        service_key="secret-key",
+        stdate="20260615",
+        eddate="20260715",
+        rows=2,
+        page_size=5,
+    )
+    # KOPIS reports no total -> honest unknown, partial_run stays False.
+    assert result.total_count is None
+    assert result.collected_count == 2
+    assert result.partial_run is False

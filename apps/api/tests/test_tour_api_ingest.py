@@ -4,7 +4,10 @@ import json
 import sys
 from types import SimpleNamespace
 
+import pytest
+
 from apps.api.app.services import tour_api_ingest
+from apps.api.app.services.official_source_errors import OfficialSourceError
 from apps.api.app.tools import run_tour_api_ingest
 
 
@@ -131,7 +134,7 @@ def test_fetch_result_dedupes_content_ids(monkeypatch):
                 "items": {
                     "item": {
                         "contentid": "1",
-                        "originimgurl": "https://example.invalid/detail.jpg",
+                        "originimgurl": "https://tong.visitkorea.or.kr/cms/resource/detail.jpg",
                     }
                 }
             },
@@ -165,7 +168,7 @@ def test_fetch_result_dedupes_content_ids(monkeypatch):
     assert result.image_error_count == 0
     assert result.raw_count == 2
     assert len(result.places) == 1
-    assert result.places[0].first_image == "https://example.invalid/detail.jpg"
+    assert result.places[0].first_image == "https://tong.visitkorea.or.kr/cms/resource/detail.jpg"
 
 
 def test_fetch_result_can_sweep_multiple_area_codes(monkeypatch):
@@ -405,6 +408,8 @@ def test_preview_redacts_service_key_on_execution_error(monkeypatch, capsys):
 
 def test_upsert_tour_api_places_targets_source_files_and_places(monkeypatch):
     executed = []
+    # Receipt duplicate-check misses (None), then the INSERT ... RETURNING id row.
+    fetchone_results: list = [None, ("source-file-id",)]
 
     class Cursor:
         def __enter__(self):
@@ -418,7 +423,7 @@ def test_upsert_tour_api_places_targets_source_files_and_places(monkeypatch):
             self.rowcount = 1
 
         def fetchone(self):
-            return ("source-file-id",)
+            return fetchone_results.pop(0) if fetchone_results else None
 
     class Connection:
         def __enter__(self):
@@ -471,7 +476,200 @@ def test_upsert_tour_api_places_targets_source_files_and_places(monkeypatch):
     )
 
     assert payload["upserted_rows"] == 1
-    assert "INSERT INTO ingest.source_files" in executed[1][0]
-    assert "INSERT INTO travel.places" in executed[2][0]
-    assert "COALESCE(EXCLUDED.image_url, travel.places.image_url)" in executed[2][0]
+    assert payload["source_file_id"] == "source-file-id"
+    assert payload["replayed"] is False
+    # Receipt duplicate-check SELECT, then the source_files INSERT, then the upsert.
+    assert "SELECT id" in executed[1][0]
+    assert "ingest.source_files" in executed[1][0]
+    assert "INSERT INTO ingest.source_files" in executed[2][0]
+    assert "INSERT INTO travel.places" in executed[3][0]
+    assert "COALESCE(EXCLUDED.image_url, travel.places.image_url)" in executed[3][0]
     assert executed[-1] == ("commit", None)
+
+
+# ---------------------------------------------------------------------------
+# Reliability boundary tests: replay, partial-run, validation, bounded errors
+# ---------------------------------------------------------------------------
+
+
+def _place_item(**overrides):
+    base = {
+        "contentid": "1",
+        "contenttypeid": "12",
+        "title": "장소",
+        "addr1": "경기도 수원시 팔달구",
+        "areacode": "31",
+        "sigungucode": "13",
+        "mapx": "127.0",
+        "mapy": "37.0",
+        "firstimage": "http://tong.visitkorea.or.kr/cms/resource/image.jpg",
+    }
+    base.update(overrides)
+    return base
+
+
+def test_upsert_tour_api_places_replay_skips_duplicate_source_file_and_fact_upserts(monkeypatch):
+    executed = []
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def execute(self, sql, params=None):
+            executed.append((sql, params))
+            self.rowcount = 1
+
+        def fetchone(self):
+            # Duplicate-check finds an existing receipt -> this is a replay.
+            return ("existing-source-id",)
+
+    class Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def cursor(self):
+            return Cursor()
+
+        def commit(self):
+            executed.append(("commit", None))
+
+    def connect(dsn, connect_timeout):
+        executed.append(("connect", {"dsn": dsn, "connect_timeout": connect_timeout}))
+        return Connection()
+
+    monkeypatch.setitem(sys.modules, "psycopg2", SimpleNamespace(connect=connect))
+    result = tour_api_ingest.TourApiFetchResult(
+        places=(
+            tour_api_ingest.TourApiPlace(
+                content_id="1",
+                content_type_id="12",
+                title="장소",
+                category="attraction",
+                addr1="경기도 수원시 팔달구",
+                addr2=None,
+                area_code="31",
+                sigungu_code="13",
+                lat=37.0,
+                lng=127.0,
+                first_image=None,
+                modified_time=None,
+            ),
+        ),
+        request_count=1,
+        image_request_count=0,
+        image_error_count=0,
+        raw_count=1,
+        area_code="31",
+        area_codes=("31",),
+        content_type_ids=("12",),
+    )
+
+    payload = tour_api_ingest.upsert_tour_api_places(
+        dsn="postgresql://redacted",
+        result=result,
+        connect_timeout=7,
+    )
+
+    assert payload["replayed"] is True
+    assert payload["source_file_id"] == "existing-source-id"
+    assert payload["upserted_rows"] == 0  # no duplicate fact work on replay
+    # No source_files INSERT, and no place upsert on a replayed receipt.
+    assert not any("INSERT INTO ingest.source_files" in sql for sql, _ in executed)
+    assert not any("INSERT INTO travel.places" in sql for sql, _ in executed)
+    assert executed[-1] == ("commit", None)
+
+
+def test_parse_tour_api_place_rejects_out_of_range_coordinate():
+    counter = tour_api_ingest.OfficialRejectionCounter()
+    place = tour_api_ingest.parse_tour_api_place(
+        _place_item(mapy="999.0", mapx="127.0"),  # latitude out of global bounds
+        counter=counter,
+    )
+    assert place is None
+    assert counter.counts().get("invalid_coordinate") == 1
+
+
+def test_parse_tour_api_place_counts_missing_required_field():
+    counter = tour_api_ingest.OfficialRejectionCounter()
+    place = tour_api_ingest.parse_tour_api_place(
+        _place_item(contentid=""),  # missing required identity
+        counter=counter,
+    )
+    assert place is None
+    assert counter.counts().get("missing_required_field") == 1
+
+
+def test_parse_tour_api_place_drops_non_allowlisted_image_host():
+    place = tour_api_ingest.parse_tour_api_place(
+        _place_item(firstimage="https://evil.example.com/exfil.png")
+    )
+    # The place is still valid; only the non-official image URL is dropped.
+    assert place is not None
+    assert place.first_image is None
+
+
+def test_parse_tour_api_restaurant_preserves_category_without_cuisine_filter():
+    # contenttypeid 39 -> restaurant. No new food/cuisine sub-filter is introduced;
+    # the existing category/evidence policy is preserved (scope item 9 guard).
+    place = tour_api_ingest.parse_tour_api_place(_place_item(contenttypeid="39"))
+    assert place is not None
+    assert place.category == "restaurant"
+
+
+def test_extract_items_raises_bounded_error_without_raw_upstream_text():
+    raw_message = "ServiceKey echo-do-not-leak plus internal upstream detail"
+    payload = {
+        "response": {
+            "header": {"resultCode": "030", "resultMsg": raw_message},
+            "body": {},
+        }
+    }
+    with pytest.raises(OfficialSourceError) as info:
+        tour_api_ingest._extract_items(payload)
+    message = str(info.value)
+    assert "echo-do-not-leak" not in message
+    assert "ServiceKey" not in message
+    assert info.value.category == "auth"
+
+
+def test_fetch_tour_api_places_flags_partial_run_when_collected_below_total(monkeypatch):
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "response": {
+                    "header": {"resultCode": "0000", "resultMsg": "OK"},
+                    "body": {
+                        "totalCount": 10,
+                        "items": {
+                            "item": [
+                                _place_item(contentid="1"),
+                                _place_item(contentid="2"),
+                            ]
+                        },
+                    },
+                }
+            }
+
+    monkeypatch.setitem(sys.modules, "requests", SimpleNamespace(get=lambda *a, **k: Response()))
+
+    result = tour_api_ingest.fetch_tour_api_places(
+        service_key="secret-key",
+        content_type_ids=("12",),
+        rows=2,
+        page_size=5,
+        fetch_missing_images=False,
+    )
+
+    assert result.total_count == 10
+    assert result.collected_count == 2
+    assert result.partial_run is True
+    assert len(result.places) == 2
