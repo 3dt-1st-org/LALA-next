@@ -521,7 +521,7 @@ def parse_ai_response(
                 evidence_terms=_evidence_terms(item.get("evidence_terms"), allowed),
                 summary_ko=_optional_text(item.get("summary_ko")),
                 reason=_optional_text(item.get("reason")),
-                source_method="azure_openai",
+                source_method="openai",
             )
         )
     return parsed
@@ -583,7 +583,7 @@ def apply_review_attribute_enrichments(
                         if row.review_quality is not None
                         else None,
                         "prompt_version": PROMPT_VERSION,
-                        "source_method": source_method,
+                        "source_method": row.source_method,
                     },
                 )
                 updated += cur.rowcount
@@ -714,12 +714,15 @@ def _apply_row(
     source_method: str,
 ) -> ReviewAttributeApplyRow:
     review_attributes = enrichment.to_attributes_payload()
+    # Per-enrichment lane wins so a rechecked row is persisted as "openai_recheck"
+    # (and bulk as "openai", deterministic as "deterministic") rather than a
+    # generic runner-level string. The caller's source_method is only a fallback.
     return ReviewAttributeApplyRow(
         mention_id=enrichment.mention_id,
         sentiment_score=enrichment.sentiment_score,
         review_attributes=review_attributes,
         review_quality=review_quality_payload(candidate, enrichment),
-        source_method=source_method,
+        source_method=enrichment.source_method or source_method,
     )
 
 

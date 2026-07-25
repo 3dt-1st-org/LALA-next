@@ -82,6 +82,40 @@ formula/caps; docent-side `_is_noisy_attraction_review_context` food guard.
 - No live AI calls, no live DB apply. `OPENAI_API_KEY` never printed/inspected/
   committed (test fixtures use `""` or a `# pragma: allowlist secret` dummy).
 
+## Follow-up — review findings (same PR #63)
+
+**B (runtime wiring).** The selective mini recheck is no longer dead code: the
+runner (`run_review_attribute_batch`) now runs bulk `gpt-5.4-nano`, then routes
+low-confidence rows through `gpt-5.4-mini` via `generate_ai_recheck` for
+`--dry-run-ai`/`--apply`. Preview stays deterministic and never invokes either
+live lane. When no rows are low-confidence, `generate_ai_recheck` is not called.
+Output is truthful: `bulk_model`, `recheck_model`, `recheck_routed_count`,
+`recheck_upgraded_count` (model names only; no secrets). Per-enrichment
+`source_method` is preserved through apply (`openai_recheck` / `openai` /
+`deterministic`) — `_apply_row` lets the enrichment's lane win over the generic
+runner-level string.
+
+**B (OpenAI wording completion).** Replaced every remaining Azure string in the
+review-batch runner: `--dry-run-ai`/`--apply` help text, plan payload env names
+(`OPENAI_REVIEW_BATCH_MODEL` / `OPENAI_REVIEW_RECHECK_MODEL`), apply requirements
+(`DB_DSN`, `OPENAI_API_KEY`, `LALA_ENABLE_LIVE_AI`, `ALLOW_REVIEW_ATTRIBUTE_BATCH_APPLY`),
+and dropped the stale `azure_openai_key` exception-redaction reference (now
+redacts `openai_api_key` only for this lane). `parse_ai_response` bulk tag fixed
+`azure_openai` → `openai`. Azure Speech / unrelated compatibility settings are
+untouched.
+
+**A (input consistency).** A contradictory declaration is now rejected at the
+governed boundary, never accepted: `is_organic=true` with a `non_organic_reason`
+→ `schema_invalid_contradictory_organic`; `is_organic=false` without a bounded
+reason → `schema_invalid_non_organic_reason_missing`. (No live adapters exist
+yet, so requiring the bounded reason is safe.)
+
+**Tests added:** 6 runner-flow CLI tests (preview never invokes a live lane;
+dry-run/apply invoke recheck after bulk; no low-confidence ⇒ no recheck; apply
+preserves per-row `openai_recheck`; recheck returning bulk preserves the result),
+1 apply per-row-provenance test, and 2 governance consistency tests. No live AI,
+no live DB.
+
 ## Residual external blockers / out of scope
 - No external review source is wired or called; approved adapters/exports must
   still be built to feed the governed boundary. Legacy Azure review pipeline was

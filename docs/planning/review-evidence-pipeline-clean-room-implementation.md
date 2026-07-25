@@ -164,6 +164,11 @@ positive mention, public score input, or docent/RAG evidence.
   (deterministic filter first, classifier second, per
   `review-mention-preprocessing-strategy.md:142-148`). The boundary **enforces**
   the decision rather than re-deriving it from text we deliberately do not hold.
+- **Declaration consistency (hardened):** a contradictory or incomplete organic
+  status is rejected, never accepted — `is_organic=true` with a
+  `non_organic_reason` → `schema_invalid_contradictory_organic`; `is_organic=false`
+  without a bounded reason → `schema_invalid_non_organic_reason_missing`. (No live
+  adapters yet, so requiring the bounded reason is safe.)
 - The legacy-derived mention path (`review_mention_ingest.AD_MARKERS`) keeps its
   deterministic ad filter for the raw-text lane; this slice does not weaken it.
 
@@ -252,9 +257,23 @@ is never printed, inspected, committed, or exposed.
   `source_method="openai_recheck"`). Recheck is best-effort/non-fatal.
 - Docent creation/QA is out of scope for this slice (its model routing is gap
   #11, §14); the policy states it stays gpt-5.4-mini.
+- **Runtime wiring:** the review-batch runner executes bulk `gpt-5.4-nano`, then
+  routes only low-confidence rows through `generate_ai_recheck` (gpt-5.4-mini) for
+  `--dry-run-ai`/`--apply`. Preview is deterministic and invokes neither live
+  lane; when no rows are low-confidence the recheck is not called. Output exposes
+  `bulk_model`, `recheck_model`, `recheck_routed_count`, `recheck_upgraded_count`
+  (model names only, no secrets). Per-enrichment `source_method` is preserved
+  through apply (`openai_recheck`/`openai`/`deterministic`); the enrichment's lane
+  wins over the runner-level string. All runner help text / plan env names /
+  apply requirements / redaction use standard OpenAI wording
+  (`OPENAI_API_KEY`, `LALA_ENABLE_LIVE_AI`, `OPENAI_REVIEW_BATCH_MODEL`,
+  `OPENAI_REVIEW_RECHECK_MODEL`); Azure Speech and unrelated settings untouched.
 - **Tests never make live AI calls** — they inject a fake client and assert:
   bulk uses `gpt-5.4-nano`, recheck uses `gpt-5.4-mini`, only low-confidence rows
-  are routed, high-confidence rows are not.
+  are routed, high-confidence rows are not; plus CLI tests proving preview never
+  invokes a live lane, dry-run/apply invoke recheck after bulk, no low-confidence
+  ⇒ no recheck, recheck failure preserves the bulk result, and apply keeps the
+  per-row `openai_recheck` tag.
 
 ---
 

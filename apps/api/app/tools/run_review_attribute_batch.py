@@ -17,8 +17,11 @@ from apps.api.app.services.review_attribute_batch import (
     duration_ms,
     fetch_review_attribute_candidates,
     generate_ai_enrichments,
+    generate_ai_recheck,
     record_job_run,
+    route_low_confidence_enrichments,
     selected_review_batch_model,
+    selected_review_recheck_model,
 )
 
 CONFIRM_TEXT = "APPLY_REVIEW_ATTRIBUTE_BATCH"
@@ -38,10 +41,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--dry-run-ai",
         action="store_true",
-        help="Read DB candidates and call Azure OpenAI without DB writes.",
+        help="Read DB candidates and call standard OpenAI (bulk nano + mini recheck) without DB writes.",
     )
     parser.add_argument(
-        "--apply", action="store_true", help="Call Azure OpenAI and update DB rows."
+        "--apply",
+        action="store_true",
+        help="Call standard OpenAI (bulk nano + mini recheck) and update DB rows.",
     )
     parser.add_argument("--confirm", default="", help=f"Required with --apply: {CONFIRM_TEXT}")
     parser.add_argument(
@@ -79,7 +84,8 @@ def main(argv: list[str] | None = None) -> int:
 
     settings = get_settings()
     dsn = os.getenv("DB_DSN") or settings.db_dsn
-    model_deployment = selected_review_batch_model(settings)
+    bulk_model = selected_review_batch_model(settings)
+    recheck_model = selected_review_recheck_model(settings)
     if not dsn:
         _write(args, {"ok": False, "mode": _mode(args), "error": "DB_DSN is not configured."})
         return 2
@@ -91,7 +97,10 @@ def main(argv: list[str] | None = None) -> int:
             return 2
 
     started_at = datetime.now(UTC)
-    source_method = "openai" if args.dry_run_ai or args.apply else "deterministic"
+    live_lane = bool(args.dry_run_ai or args.apply)
+    source_method = "openai" if live_lane else "deterministic"
+    recheck_routed_count = 0
+    recheck_upgraded_count = 0
     try:
         candidates = fetch_review_attribute_candidates(
             dsn=dsn,
@@ -101,14 +110,31 @@ def main(argv: list[str] | None = None) -> int:
             connect_timeout=args.connect_timeout,
         )
         if args.preview:
+            # Preview is deterministic only and must never invoke either live lane.
             enrichments = build_deterministic_enrichments(candidates)
         else:
+            # Bulk lane: standard OpenAI gpt-5.4-nano.
             enrichments = generate_ai_enrichments(
                 candidates=candidates,
                 batch_size=args.batch_size,
                 retry_attempts=args.retry_attempts,
                 retry_delay_sec=args.retry_delay_sec,
             )
+            # Selective recheck: route only low-confidence rows to gpt-5.4-mini.
+            # No low-confidence rows => generate_ai_recheck is not invoked.
+            routed = route_low_confidence_enrichments(enrichments)
+            recheck_routed_count = len(routed)
+            if routed:
+                enrichments = generate_ai_recheck(
+                    candidates=candidates,
+                    enrichments=enrichments,
+                    batch_size=args.batch_size,
+                    retry_attempts=args.retry_attempts,
+                    retry_delay_sec=args.retry_delay_sec,
+                )
+                recheck_upgraded_count = sum(
+                    1 for item in enrichments if item.source_method == "openai_recheck"
+                )
         updated_rows = 0
         if args.apply:
             updated_rows = apply_review_attribute_enrichments(
@@ -140,7 +166,7 @@ def main(argv: list[str] | None = None) -> int:
                     duration_ms=duration_ms(started_at, finished_at),
                     error_message=redact_secret_text(
                         str(exc) or exc.__class__.__name__,
-                        (dsn, settings.azure_openai_key, settings.openai_api_key),
+                        (dsn, settings.openai_api_key),
                     ),
                     connect_timeout=args.connect_timeout,
                 )
@@ -151,7 +177,7 @@ def main(argv: list[str] | None = None) -> int:
                 "mode": _mode(args),
                 "error": redact_secret_text(
                     str(exc) or exc.__class__.__name__,
-                    (dsn, settings.azure_openai_key, settings.openai_api_key),
+                    (dsn, settings.openai_api_key),
                 ),
             },
         )
@@ -167,7 +193,10 @@ def main(argv: list[str] | None = None) -> int:
             "target": "community.place_mentions_weekly",
             "job_name": JOB_NAME,
             "prompt_version": PROMPT_VERSION,
-            "model_deployment": model_deployment,
+            "bulk_model": bulk_model,
+            "recheck_model": recheck_model,
+            "recheck_routed_count": recheck_routed_count,
+            "recheck_upgraded_count": recheck_upgraded_count,
             "source_method": source_method,
             "candidate_count": len(candidates),
             "generated_count": len(enrichments),
@@ -189,10 +218,11 @@ def _plan_payload(args: argparse.Namespace) -> dict[str, Any]:
         "job_name": JOB_NAME,
         "prompt_version": PROMPT_VERSION,
         "model_role": "bulk_review_batch",
-        "model_deployment_envs": [
-            "AZURE_OPENAI_REVIEW_BATCH_DEPLOYMENT",
-            "AZURE_OPENAI_DEPLOYMENT",
-        ],
+        "model_envs": {
+            "bulk_review_batch": "OPENAI_REVIEW_BATCH_MODEL (gpt-5.4-nano)",
+            "low_confidence_recheck": "OPENAI_REVIEW_RECHECK_MODEL (gpt-5.4-mini)",
+        },
+        "live_ai_required_env": ["OPENAI_API_KEY", "LALA_ENABLE_LIVE_AI"],
         "input_relations": [
             "community.place_mentions_weekly",
             "community.posts",
@@ -203,7 +233,7 @@ def _plan_payload(args: argparse.Namespace) -> dict[str, Any]:
             "sentiment_score",
         ],
         "default_min_organic": args.min_organic,
-        "apply_required_env": ["DB_DSN", "AZURE_OPENAI_KEY", ALLOW_ENV],
+        "apply_required_env": ["DB_DSN", "OPENAI_API_KEY", "LALA_ENABLE_LIVE_AI", ALLOW_ENV],
     }
 
 
@@ -241,8 +271,10 @@ def _write(args: argparse.Namespace, payload: dict[str, Any]) -> None:
     print(f"prompt_version={payload.get('prompt_version', PROMPT_VERSION)}")
     if payload.get("model_role"):
         print(f"model_role={payload['model_role']}")
-    if payload.get("model_deployment"):
-        print(f"model_deployment={payload['model_deployment']}")
+    if payload.get("bulk_model"):
+        print(f"bulk_model={payload['bulk_model']}")
+    if payload.get("recheck_model"):
+        print(f"recheck_model={payload['recheck_model']}")
     if "live_ai_call" in payload:
         print(f"live_ai_call={str(payload.get('live_ai_call')).lower()}")
     if "db_mutation" in payload:
@@ -252,7 +284,13 @@ def _write(args: argparse.Namespace, payload: dict[str, Any]) -> None:
     if payload.get("error"):
         print(f"error={payload['error']}")
         return
-    for key in ("candidate_count", "generated_count", "updated_rows"):
+    for key in (
+        "candidate_count",
+        "generated_count",
+        "updated_rows",
+        "recheck_routed_count",
+        "recheck_upgraded_count",
+    ):
         if key in payload:
             print(f"{key}={payload[key]}")
     for relation in payload.get("input_relations") or []:

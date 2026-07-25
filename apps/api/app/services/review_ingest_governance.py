@@ -106,6 +106,8 @@ QuarantineReasonCode = Literal[
     "schema_invalid_type_error",
     "schema_invalid_extra_field",
     "schema_invalid_attribute_shape",
+    "schema_invalid_non_organic_reason_missing",
+    "schema_invalid_contradictory_organic",
     "source_identity_mismatch",
     "terms_violation_license_class",
     "terms_violation_non_organic",
@@ -243,6 +245,14 @@ REASON_SPEC: dict[QuarantineReasonCode, tuple[QuarantineReasonCategory, str]] = 
     "schema_invalid_attribute_shape": (
         "schema_invalid",
         "normalized_attributes failed the strict metric-score contract",
+    ),
+    "schema_invalid_non_organic_reason_missing": (
+        "schema_invalid",
+        "non-organic record did not declare a bounded non_organic_reason",
+    ),
+    "schema_invalid_contradictory_organic": (
+        "schema_invalid",
+        "organic record carried a non_organic_reason (contradictory declaration)",
     ),
     "source_identity_mismatch": (
         "terms_violation",
@@ -822,6 +832,32 @@ def _bind_record_to_registration(
     )
 
 
+def _organic_consistency_issue(
+    record: ReviewSourceRecord,
+) -> tuple[QuarantineReasonCode, QuarantineSafeMetadata] | None:
+    """Return a (reason_code, metadata) pair when the organic-status declaration
+    is contradictory or incomplete, else None.
+
+      * ``is_organic=False`` without a bounded ``non_organic_reason`` -> incomplete.
+      * ``is_organic=True`` with a ``non_organic_reason`` -> contradictory.
+
+    Both are schema-invalid; neither is ever accepted as an aggregate. A
+    non-organic record that also carries a bounded reason falls through here and
+    is handled by the non-organic quarantine path (terms_violation_non_organic).
+    """
+    if not record.is_organic and record.non_organic_reason is None:
+        return (
+            "schema_invalid_non_organic_reason_missing",
+            QuarantineSafeMetadata(malformed=True),
+        )
+    if record.is_organic and record.non_organic_reason is not None:
+        return (
+            "schema_invalid_contradictory_organic",
+            QuarantineSafeMetadata(malformed=True),
+        )
+    return None
+
+
 def classify_review_records(
     *,
     registration: ReviewSourceRegistration,
@@ -900,6 +936,18 @@ def classify_review_records(
         # adapter/export is quarantined under the registered identity -- it can
         # never become an accepted aggregate. We hold no raw text here, so the
         # boundary enforces the declaration rather than re-deriving it.
+        organic_issue = _organic_consistency_issue(record)
+        if organic_issue is not None:
+            code, metadata = organic_issue
+            quarantined.append(
+                _quarantine_for_code(
+                    raw,
+                    registration=registration,
+                    reason_code=code,
+                    safe_metadata=metadata,
+                )
+            )
+            continue
         if not record.is_organic:
             quarantined.append(
                 _quarantine_for_code(

@@ -129,6 +129,35 @@ def test_non_organic_reason_code_is_in_reason_spec_and_template_carries_no_raw()
         assert forbidden not in reason
 
 
+def test_contradictory_organic_record_with_reason_is_rejected():
+    # is_organic=True while declaring a non_organic_reason is contradictory.
+    valid, quarantined = governance.classify_review_records(
+        registration=_registration(),
+        records=[_record("post-x", is_organic=True, non_organic_reason="advertising")],
+    )
+
+    assert valid == ()
+    assert len(quarantined) == 1
+    entry = quarantined[0]
+    assert entry.reason_code == "schema_invalid_contradictory_organic"
+    assert entry.reason_category == "schema_invalid"
+
+
+def test_non_organic_record_without_bounded_reason_is_rejected():
+    # is_organic=False must carry a bounded non_organic_reason; otherwise reject.
+    valid, quarantined = governance.classify_review_records(
+        registration=_registration(),
+        records=[_record("post-y", is_organic=False)],  # no reason
+    )
+
+    assert valid == ()
+    assert len(quarantined) == 1
+    entry = quarantined[0]
+    assert entry.reason_code == "schema_invalid_non_organic_reason_missing"
+    assert entry.reason_category == "schema_invalid"
+    governance.enforce_no_raw_review_text(entry.model_dump(), label="quarantine_entry")
+
+
 # ---------------------------------------------------------------------------
 # B. Confidence routing + selective mini-model recheck (injectable client)
 # ---------------------------------------------------------------------------
