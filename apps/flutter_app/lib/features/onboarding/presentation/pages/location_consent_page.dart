@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:lala_next_app/app/lala_visual_tokens.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
+import 'package:lala_next_app/core/location/region_context.dart';
 import 'package:lala_next_app/core/routing/lala_route_paths.dart';
 import 'package:lala_next_app/features/location/widgets/manual_location_sheet.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
@@ -52,11 +53,21 @@ class _OnboardingLocationConsentPageState
       if (!mounted) {
         return;
       }
-      if (result.status == LalaLocationResultStatus.found) {
+      if (result.status == LalaLocationResultStatus.found &&
+          result.location != null) {
+        // Retain the resolved location into the app shell so the search/plan/map
+        // tabs drive place + weather calls from it instead of the default region.
+        RegionContextStore.set(
+          RegionContext.current(
+            lat: result.location!.lat,
+            lng: result.location!.lng,
+          ),
+        );
         _complete();
         return;
       }
       // 거부/사용불가: 수동 선택은 항상 노출되므로 별도 배너 없이 대기 상태로 복귀.
+      // permanentlyDenied 도 동일하게 수동 선택 경로로 안내한다.
       setState(() => _status = _LocationConsentStatus.idle);
     } on Object {
       if (!mounted) {
@@ -75,6 +86,8 @@ class _OnboardingLocationConsentPageState
       builder: (_) => ManualLocationSheet(language: _language),
     );
     if (selected != null && mounted) {
+      // 수동 선택도 앱 쉘로 이관한다(기존에는 폐기됨).
+      RegionContextStore.set(RegionContext.manual(selected));
       _complete();
     }
   }
@@ -127,7 +140,8 @@ class _OnboardingLocationConsentPageState
                         ),
                         style: TextStyle(
                           fontSize: LalaVisualTokens.onboardingTitleSize,
-                          height: LalaVisualTokens.onboardingTitleLineHeight /
+                          height:
+                              LalaVisualTokens.onboardingTitleLineHeight /
                               LalaVisualTokens.onboardingTitleSize,
                           fontWeight: FontWeight.w800,
                           color: LalaVisualColors.ink,
@@ -143,7 +157,8 @@ class _OnboardingLocationConsentPageState
                       ),
                       style: TextStyle(
                         fontSize: LalaVisualTokens.bodySize,
-                        height: LalaVisualTokens.bodyLineHeight /
+                        height:
+                            LalaVisualTokens.bodyLineHeight /
                             LalaVisualTokens.bodySize,
                         fontWeight: FontWeight.w500,
                         color: LalaVisualColors.muted,
@@ -205,14 +220,13 @@ class _PrimaryButton extends StatelessWidget {
           foregroundColor: LalaVisualColors.card,
           textStyle: TextStyle(
             fontSize: LalaVisualTokens.controlLabelSize,
-            height: LalaVisualTokens.controlLabelLineHeight /
+            height:
+                LalaVisualTokens.controlLabelLineHeight /
                 LalaVisualTokens.controlLabelSize,
             fontWeight: FontWeight.w700,
           ),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(
-              LalaVisualTokens.controlRadius,
-            ),
+            borderRadius: BorderRadius.circular(LalaVisualTokens.controlRadius),
           ),
         ),
         child: Text(label),
@@ -236,17 +250,18 @@ class _SecondaryButton extends StatelessWidget {
         style: OutlinedButton.styleFrom(
           minimumSize: const Size.fromHeight(48),
           foregroundColor: LalaVisualColors.primaryBlue,
-          side: BorderSide(color: LalaVisualColors.primaryBlue.withValues(alpha: 0.4)),
+          side: BorderSide(
+            color: LalaVisualColors.primaryBlue.withValues(alpha: 0.4),
+          ),
           textStyle: TextStyle(
             fontSize: LalaVisualTokens.controlLabelSize,
-            height: LalaVisualTokens.controlLabelLineHeight /
+            height:
+                LalaVisualTokens.controlLabelLineHeight /
                 LalaVisualTokens.controlLabelSize,
             fontWeight: FontWeight.w700,
           ),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(
-              LalaVisualTokens.controlRadius,
-            ),
+            borderRadius: BorderRadius.circular(LalaVisualTokens.controlRadius),
           ),
         ),
         child: Text(label),

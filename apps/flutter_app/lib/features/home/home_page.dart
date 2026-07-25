@@ -15,6 +15,7 @@ import 'package:lala_next_app/core/backend/lala_backend.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/geo/geo_helpers.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
+import 'package:lala_next_app/core/location/region_context.dart';
 import 'package:lala_next_app/features/location/widgets/manual_location_sheet.dart';
 import 'package:lala_next_app/features/map/domain/active_map_sheet.dart';
 import 'package:lala_next_app/features/map/map_helpers.dart';
@@ -123,8 +124,11 @@ class _LalaHomePageState extends State<LalaHomePage> {
     super.initState();
     final config = widget.initialConfig;
     _baseConfig = config;
-    _queryLat = config.lat;
-    _queryLng = config.lng;
+    // 온보딩/다른 탭에서 확정된 컨텍스트(수동 선택 또는 현재 위치)가 있으면 그 좌표로
+    // 시드한다. 없으면 공개된 기본 지역(LalaAppConfig)으로 폴백한다.
+    final region = RegionContextStore.current;
+    _queryLat = region?.lat ?? config.lat;
+    _queryLng = region?.lng ?? config.lng;
     _uiLanguage = config.lang;
     _locationStartPromptVisible = config.requireLocationStartConfirmation;
     _authController = widget.authControllerFactory(
@@ -258,11 +262,19 @@ class _LalaHomePageState extends State<LalaHomePage> {
         _mapLevel = _defaultMapLevel;
         _locationRequestInFlight = false;
       });
+      // 검색/플랜 탭이 같은 현재 위치 컨텍스트로 동작하도록 공유 저장소에 반영한다.
+      RegionContextStore.set(
+        RegionContext.current(lat: location.lat, lng: location.lng),
+      );
       await _refresh(forceWeather: true);
     } else {
       setState(() {
         _locationRequestInFlight = false;
-        if (resolvedResult.status == LalaLocationResultStatus.denied) {
+        // denied 와 permanentlyDenied 모두 수동 선택 유도 폴백 알림으로 안내한다.
+        // unavailable 은 initial/resetSelection 일 때만 폴백 알림을 띄운다.
+        if (resolvedResult.status == LalaLocationResultStatus.denied ||
+            resolvedResult.status ==
+                LalaLocationResultStatus.permanentlyDenied) {
           _locationFallbackNoticeVisible = true;
         } else if (initial || resetSelection) {
           _locationFallbackNoticeVisible = true;
@@ -476,8 +488,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
       setState(() {
         _error = _safeErrorMessage(
           error,
-          fallbackMessage: (_) =>
-              recommendationLoadFailureMessage(config.lang),
+          fallbackMessage: (_) => recommendationLoadFailureMessage(config.lang),
         );
       });
       _cancelInterventionToastTimer();
@@ -1130,6 +1141,8 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _mapFocusLng = selected.lng;
       _mapLevel = _defaultMapLevel;
     });
+    // 수동 선택을 검색/플랜 탭과 공유한다(온보딩 선택이 폐기되지 않도록).
+    RegionContextStore.set(RegionContext.manual(selected));
     await _refresh(forceWeather: true);
   }
 

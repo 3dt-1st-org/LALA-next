@@ -10,9 +10,11 @@ import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 import 'package:lala_next_app/core/backend/lala_backend.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
+import 'package:lala_next_app/core/location/region_context.dart';
 import 'package:lala_next_app/features/home/home_view_helpers.dart'
     show interventionToastLabel;
 import 'package:lala_next_app/features/intervention/widgets/intervention_toast.dart';
+import 'package:lala_next_app/features/location/widgets/default_region_indicator.dart';
 import 'package:lala_next_app/features/place/widgets/empty_place_state.dart';
 import 'package:lala_next_app/features/planner/planner_helpers.dart';
 import 'package:lala_next_app/features/planner/widgets/plan_slot_tile.dart';
@@ -48,6 +50,11 @@ class _PlanPageState extends State<PlanPage> {
   LalaDailyPlan? _dailyPlan;
   LalaIntervention? _intervention;
   bool _interventionDismissed = false;
+
+  // Active region context retained across onboarding/tabs (null = disclosed
+  // default region). Seeded from the shared store so a manual/current choice
+  // made elsewhere drives this tab's plan calls.
+  RegionContext? _region = RegionContextStore.current;
   String? _error;
 
   @override
@@ -74,6 +81,10 @@ class _PlanPageState extends State<PlanPage> {
 
   String get _language => _config.lang;
 
+  // True when the plan is built from the disclosed default region (no real
+  // current/manual context). The UI must badge this honestly.
+  bool get _regionIsDefault => _region == null;
+
   List<LalaPlanSlot> get _visibleSlots {
     final slots = _dailyPlan?.slots ?? const <LalaPlanSlot>[];
     return slots
@@ -93,17 +104,21 @@ class _PlanPageState extends State<PlanPage> {
       _interventionDismissed = false;
     });
 
-    var lat = _baseConfig.lat;
-    var lng = _baseConfig.lng;
+    var lat = _region?.lat ?? _baseConfig.lat;
+    var lng = _region?.lng ?? _baseConfig.lng;
     try {
       final result = await _locationProvider.requestCurrentLocation();
       if (result.status == LalaLocationResultStatus.found &&
           result.location != null) {
         lat = result.location!.lat;
         lng = result.location!.lng;
+        _region = RegionContext.current(lat: lat, lng: lng);
+        RegionContextStore.set(_region);
       }
+      // denied / permanentlyDenied / unavailable: 기존 컨텍스트(수동 선택 또는
+      // 기본 지역)를 유지. 절대 임의의 위치를 끼워 넣지 않는다.
     } on Object {
-      // 위치 미확정 시 기본 위치(LalaAppConfig)로 폴백.
+      // 위치 미확정 시 현재 컨텍스트(수동 선택 또는 기본 지역)를 유지.
     }
 
     _config = _baseConfig.copyWith(lat: lat, lng: lng);
@@ -189,6 +204,7 @@ class _PlanPageState extends State<PlanPage> {
               language: _language,
               onCalendar: _load,
             ),
+            if (_regionIsDefault) DefaultRegionIndicator(language: _language),
             if (_shouldShowInterventionToast)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
@@ -275,17 +291,17 @@ class _PlanHeader extends StatelessWidget {
                 Text(
                   title,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w900,
-                        height: 1.12,
-                      ),
+                    fontWeight: FontWeight.w900,
+                    height: 1.12,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   dateLabel,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: const Color(0xFF64748B),
-                        fontWeight: FontWeight.w800,
-                      ),
+                    color: const Color(0xFF64748B),
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ],
             ),

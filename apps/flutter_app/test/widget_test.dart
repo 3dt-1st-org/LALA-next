@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lala_next_app/auth/auth_controller.dart';
 import 'package:lala_next_app/auth/logto_auth_gateway.dart';
+import 'package:lala_next_app/core/location/region_context.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/kakao_map_fallback.dart';
 import 'package:lala_next_app/kakao_map_models.dart';
@@ -12,6 +13,11 @@ import 'package:lala_next_app/main.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 void main() {
+  // RegionContextStore is a process-local singleton; reset it before each test
+  // so a manual/current choice made in one test cannot leak into another tab's
+  // seed coordinates.
+  setUp(RegionContextStore.clear);
+
   test('map move reload policy follows the legacy places threshold', () {
     expect(
       shouldReloadPlacesForMapMove(
@@ -850,10 +856,7 @@ void main() {
     );
     // remediation C2: photo-forward 레일 카드는 이름 오버레이만(지역/거래 메타는 독 상세로).
     expect(
-      find.descendant(
-        of: restaurantRailCard,
-        matching: find.text('행궁동 카페거리'),
-      ),
+      find.descendant(of: restaurantRailCard, matching: find.text('행궁동 카페거리')),
       findsOneWidget,
     );
     expect(
@@ -902,10 +905,7 @@ void main() {
       findsOneWidget,
     );
     // 모바일 비주얼 계약: 대형 중앙 컨트롤(74dp) 제거 — 44dp 타겟으로 축소.
-    expect(
-      tester.getSize(autoToggle).shortestSide,
-      lessThanOrEqualTo(52),
-    );
+    expect(tester.getSize(autoToggle).shortestSide, lessThanOrEqualTo(52));
     final bottomDockRect = tester.getRect(
       find.byKey(const ValueKey('map-bottom-dock')),
     );
@@ -2040,7 +2040,9 @@ void main() {
         find.byKey(const ValueKey('map-bottom-dock')),
       );
       // 컨트롤 스택(음성 토글 = 최상단)은 도크 핸들 위에 위치(겹치지 않음).
-      final voiceRect = tester.getRect(find.byKey(const ValueKey('voice-toggle')));
+      final voiceRect = tester.getRect(
+        find.byKey(const ValueKey('voice-toggle')),
+      );
       expect(voiceRect.bottom, lessThanOrEqualTo(dockRect.top));
 
       // 추천 레일은 컨트롤 스택보다 위쪽 밴드에 있다(세로 영역이 겹치지 않음).
@@ -2057,7 +2059,9 @@ void main() {
     },
   );
 
-  testWidgets('bottom navigation shows contracted Korean labels', (tester) async {
+  testWidgets('bottom navigation shows contracted Korean labels', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       TestLalaApp(
         backendFactory: FakeBackend.new,
@@ -2749,28 +2753,29 @@ void main() {
     },
   );
 
-  testWidgets('onboarding splash auto-advances to the tourist type start page', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      TestLalaApp(
-        backendFactory: FakeBackend.new,
-        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
-        onboardingCompleted: false,
-      ),
-    );
-    await tester.pump();
+  testWidgets(
+    'onboarding splash auto-advances to the tourist type start page',
+    (tester) async {
+      await tester.pumpWidget(
+        TestLalaApp(
+          backendFactory: FakeBackend.new,
+          initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+          onboardingCompleted: false,
+        ),
+      );
+      await tester.pump();
 
-    expect(find.text('당신의 수원을 안내합니다'), findsOneWidget);
+      expect(find.text('당신의 수원을 안내합니다'), findsOneWidget);
 
-    // 2초 후 자동으로 start 단계로 이동한다.
-    await tester.pump(const Duration(seconds: 2));
-    await tester.pumpAndSettle();
+      // 2초 후 자동으로 start 단계로 이동한다.
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
 
-    expect(find.text('어떤 여행을\n계획 중인가요?'), findsOneWidget);
-    expect(find.text('국내 여행'), findsOneWidget);
-    expect(find.text('해외 방문'), findsOneWidget);
-  });
+      expect(find.text('어떤 여행을\n계획 중인가요?'), findsOneWidget);
+      expect(find.text('국내 여행'), findsOneWidget);
+      expect(find.text('해외 방문'), findsOneWidget);
+    },
+  );
 
   testWidgets(
     'onboarding foreign tourist defaults to english and reaches the map on skip',
@@ -2803,9 +2808,7 @@ void main() {
 
       // 언어 단계(English): English 가 pre-select, Next 로 위치 단계로.
       expect(find.text('English'), findsOneWidget);
-      await tester.tap(
-        find.widgetWithText(FilledButton, 'Next'),
-      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Next'));
       await tester.pumpAndSettle();
 
       // 위치 단계: "Not now" 스킵 → 온보딩 완료 → 메인 쉘(지도) 진입.
