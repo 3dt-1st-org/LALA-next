@@ -13,6 +13,27 @@ caller-supplied ``license_class``. The active source row is loaded from
 absent, disabled, rejected, or its provider/terms do not match the caller's
 expectations. Source registration is restricted to internal/admin code
 (:func:`register_review_source`); there is deliberately no public endpoint.
+This is enforced **per record**, not just per batch: every accepted record's
+``source_name``/``provider``/``license_class``/``terms_version`` must exactly
+equal the loaded registration, and accepted records are then *bound* to the
+registration so no caller-controlled source identity can reach an aggregate,
+receipt, or RAG metadata.
+
+Normalized attributes (Finding 2): :attr:`ReviewSourceRecord.normalized_attributes`
+is a strict, bounded, recursively-safe ``metric_key -> score`` mapping. Keys are
+restricted to the repository's existing review-attribute vocabulary and values
+are numeric scores in ``[0.0, 1.0]``. Strings, bools, nested objects/lists,
+raw-text keys, and unknown/free-form keys are rejected and routed to quarantine
+as ``schema_invalid_attribute_shape`` -- they can never become persisted
+attribute metadata or an aggregate score.
+
+Safe quarantine identity (Finding 3): quarantine identity never carries
+untrusted raw strings. Provider and source come from the DB registration
+whenever one is loaded; ``external_key`` is validated as a bounded opaque
+identifier and, when malformed (URL-like, too long, whitespace, non-ASCII),
+replaced by a deterministic digest-derived token rather than the original
+value. ``content_sha256`` is always a 64-char hex digest. Only raw-content
+hashes are ever persisted -- never raw provider text or URL-like locators.
 
 Hard security invariant (G-TRUST): this foundation never emits raw review text
 into ``rag.knowledge_chunks`` or any downstream write path. The only review
@@ -37,10 +58,11 @@ secrets.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from contextlib import closing
 from datetime import UTC, date, datetime
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 
 from pydantic import (
     BaseModel,
@@ -48,7 +70,6 @@ from pydantic import (
     Field,
     ValidationError,
     field_validator,
-    model_validator,
 )
 
 # Bumped only when this governance contract (models/columns/enums) changes.
@@ -84,6 +105,8 @@ QuarantineReasonCode = Literal[
     "schema_invalid_raw_text_field",
     "schema_invalid_type_error",
     "schema_invalid_extra_field",
+    "schema_invalid_attribute_shape",
+    "source_identity_mismatch",
     "terms_violation_license_class",
     "source_api_failure_upstream",
     "duplicate_suspect_in_batch",
@@ -111,6 +134,47 @@ RawTextFieldName = Literal[
     "post_url",
     "url",
 ]
+# Per-record provenance fields that must exactly match the DB-authoritative
+# registered source (Finding 1). A record claiming any of these differently
+# from its registered source is quarantined, never accepted.
+IdentityField = Literal["source_name", "provider", "license_class", "terms_version"]
+# Precise sub-reason recorded in quarantine metadata when a normalized-attribute
+# payload violates the strict metric-score contract (Finding 2).
+AttributeShapeViolation = Literal[
+    "non_numeric_value",
+    "nested_object",
+    "unknown_key",
+    "raw_text_key",
+    "out_of_range",
+]
+# Conservative, explicit metric-key contract for normalized attribute scores
+# (Finding 2). This is the repository's existing review-attribute vocabulary
+# (the union of ATTRIBUTE_TERMS keys in review_attribute_batch.py /
+# review_mention_ingest.py): taste/service/price/atmosphere/cleanliness/
+# wait_crowding/cultural_story/walking_comfort/photo_view/practical_tip/
+# crowding/program_quality/family_friendliness/foreign_visitor_fit/access/
+# weather_indoor_fit/local_experience. No free-form key may become persisted
+# attribute metadata; every accepted score is numeric and bounded to [0.0, 1.0].
+NormalizedAttributeKey = Literal[
+    "taste",
+    "service",
+    "price",
+    "atmosphere",
+    "cleanliness",
+    "wait_crowding",
+    "cultural_story",
+    "walking_comfort",
+    "photo_view",
+    "practical_tip",
+    "crowding",
+    "program_quality",
+    "family_friendliness",
+    "foreign_visitor_fit",
+    "access",
+    "weather_indoor_fit",
+    "local_experience",
+]
+ALLOWED_ATTRIBUTE_KEYS: frozenset[str] = frozenset(get_args(NormalizedAttributeKey))
 
 # Sources the pipeline may ingest from. ``rejected`` is registrable (so an
 # operator can record a blocked source) but is never accepted for ingestion.
@@ -164,6 +228,14 @@ REASON_SPEC: dict[QuarantineReasonCode, tuple[QuarantineReasonCategory, str]] = 
         "schema_invalid",
         "normalized record failed schema validation: extra field rejected by allowlist",
     ),
+    "schema_invalid_attribute_shape": (
+        "schema_invalid",
+        "normalized_attributes failed the strict metric-score contract",
+    ),
+    "source_identity_mismatch": (
+        "terms_violation",
+        "record provenance does not match the registered source",
+    ),
     "terms_violation_license_class": (
         "terms_violation",
         "source license class is not permitted for review ingestion",
@@ -194,6 +266,18 @@ class ReviewGovernanceError(RuntimeError):
         super().__init__(message)
         self.code = code
         self.message = message
+
+
+class AttributeShapeError(ValueError):
+    """Raised when normalized_attributes violates the strict metric contract.
+
+    Carries the precise :data:`AttributeShapeViolation` kind so the quarantine
+    metadata can record it without ever reading raw attribute content.
+    """
+
+    def __init__(self, violation: AttributeShapeViolation, message: str) -> None:
+        super().__init__(message)
+        self.violation = violation
 
 
 class ReviewSourceRegistration(BaseModel):
@@ -231,8 +315,12 @@ class ReviewSourceRecord(BaseModel):
     received_at: datetime
     category: str | None = None
     match_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
-    # Approved aggregate attributes only (e.g. {"taste": 0.7}). Never raw text.
-    normalized_attributes: dict[str, Any] = Field(default_factory=dict)
+    # Approved aggregate attributes only (e.g. {"taste": 0.7}). The contract is
+    # strict and bounded (Finding 2): keys are restricted to the repository's
+    # metric vocabulary and values are numeric scores in [0.0, 1.0]. No strings,
+    # nested objects/lists, or free-form keys can reach an aggregate. Enforcement
+    # happens in the before-validator via _coerce_normalized_attributes.
+    normalized_attributes: dict[NormalizedAttributeKey, float] = Field(default_factory=dict)
 
     @field_validator("content_sha256")
     @classmethod
@@ -244,15 +332,12 @@ class ReviewSourceRecord(BaseModel):
             raise ValueError("content_sha256 must be a 64-character hex sha256 digest")
         return normalized
 
-    @model_validator(mode="after")
-    def _no_raw_text_in_attributes(self) -> ReviewSourceRecord:
-        offending = [key for key in self.normalized_attributes if key in RAW_REVIEW_TEXT_FIELDS]
-        if offending:
-            raise ValueError(
-                "normalized_attributes must not carry raw-text fields: "
-                + ", ".join(sorted(offending))
-            )
-        return self
+    @field_validator("normalized_attributes", mode="before")
+    @classmethod
+    def _strict_normalized_attributes(cls, value: Any) -> dict[str, float]:
+        # Enforce the strict, bounded, recursively-safe shape before Pydantic's
+        # lax coercion can turn a string ("0.8") or nested object into a score.
+        return _coerce_normalized_attributes(value)
 
 
 class ApprovedReviewAggregate(BaseModel):
@@ -272,7 +357,7 @@ class ApprovedReviewAggregate(BaseModel):
     mention_count: int = Field(default=1, ge=0)
     organic_mention_count: int = Field(default=1, ge=0)
     sentiment_score: float | None = Field(default=None, ge=-1.0, le=1.0)
-    attribute_scores: dict[str, float] = Field(default_factory=dict)
+    attribute_scores: dict[NormalizedAttributeKey, float] = Field(default_factory=dict)
     schema_version: str = GOVERNANCE_SCHEMA_VERSION
 
     def to_rag_metadata(self) -> dict[str, Any]:
@@ -305,6 +390,9 @@ class QuarantineSafeMetadata(BaseModel):
     extra_field_present: bool = False
     bad_hash: bool = False
     type_error: bool = False
+    mismatched_identity_field: IdentityField | None = None
+    attribute_shape_violation: AttributeShapeViolation | None = None
+    replaced_external_key: bool = False
     received_field_count: int | None = Field(default=None, ge=0)
     attribute_count: int | None = Field(default=None, ge=0)
     match_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
@@ -408,12 +496,12 @@ def parse_review_record(data: Mapping[str, Any]) -> ReviewSourceRecord:
 def approved_aggregate_from_record(
     record: ReviewSourceRecord,
 ) -> ApprovedReviewAggregate:
-    """Project a validated record into the aggregate-only downstream payload."""
-    attribute_scores = {
-        key: float(value)
-        for key, value in record.normalized_attributes.items()
-        if isinstance(value, int | float)
-    }
+    """Project a validated record into the aggregate-only downstream payload.
+
+    ``record`` is the DB-registration-bound record produced by
+    :func:`classify_review_records`, so ``record.source_name`` is the registered
+    source -- never a caller-supplied value (Finding 1).
+    """
     return ApprovedReviewAggregate(
         source_name=record.source_name,
         # Identity for dedupe/audit, derived from the content hash -- not raw text.
@@ -421,7 +509,7 @@ def approved_aggregate_from_record(
         category=record.category,
         match_confidence=record.match_confidence,
         sentiment_score=None,
-        attribute_scores=attribute_scores,
+        attribute_scores=dict(record.normalized_attributes),
     )
 
 
@@ -442,6 +530,15 @@ def _classify_validation_error(
         err_type = err.get("type", "")
         loc = err.get("loc", ())
         loc_leaf = str(loc[-1]) if loc else ""
+        # Backstop: classify only catches attribute errors here when they reach
+        # Pydantic; the normal path quarantines them precisely upstream in
+        # classify_review_records via _coerce_normalized_attributes.
+        if loc and loc[0] == "normalized_attributes":
+            metadata = metadata.model_copy(
+                update={"attribute_shape_violation": "non_numeric_value"}  # type: ignore[arg-type]
+            )
+            code = "schema_invalid_attribute_shape"
+            return code, metadata
         if err_type == "missing" and loc_leaf in {
             "source_name",
             "provider",
@@ -488,39 +585,148 @@ def _classify_validation_error(
     return code, metadata
 
 
-def _fallback_hash(raw: Mapping[str, Any]) -> str:
-    """Best-effort stable hash for an unvalidated raw dict (identity only).
-
-    Used only when a malformed record omits ``content_sha256`` so the row is
-    still countable/deduplicable. Keys are field names, never raw text values;
-    values are stringified via repr which is acceptable for a fallback identity
-    (the result is a sha256 digest, not reversible raw content).
-    """
+def _sha256_hex(material: str) -> str:
+    """Return the sha256 hex digest of ``material`` (lazy stdlib import)."""
     import hashlib
 
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()
+
+
+def _fallback_hash(raw: Mapping[str, Any]) -> str:
+    """Best-effort stable digest for an unvalidated raw dict (identity only).
+
+    Used only when a malformed record omits a valid ``content_sha256`` so the
+    row is still countable/deduplicable. Keys are field names; values enter the
+    hash input via repr but ONLY the 64-char hex digest escapes -- raw text is
+    never persisted, returned, or logged by this helper (Finding 3).
+    """
     stable = "|".join(f"{key}={raw[key]!r}" for key in sorted(raw))
-    return hashlib.sha256(stable.encode("utf-8")).hexdigest()
+    return _sha256_hex(stable)
+
+
+# Bound on the material fed to a digest token, so a pathologically large
+# attacker-supplied identity field cannot make hashing unbounded.
+_SAFE_HASH_INPUT_MAX = 4096
+
+
+def _digest_token(label: str, raw_value: object) -> str:
+    """Return a deterministic digest-derived token; never the raw value.
+
+    Replaces an untrusted identity field (e.g. a URL-like external_key) with an
+    opaque, stable id of the form ``<label>_sha256:<hex16>``. Only the digest
+    escapes; the raw input is never persisted or logged (Finding 3).
+    """
+    material = repr(raw_value)[:_SAFE_HASH_INPUT_MAX]
+    return f"{label}_sha256:{_sha256_hex(material)[:16]}"
+
+
+def _coerce_normalized_attributes(value: Any) -> dict[str, float]:
+    """Enforce the strict, bounded, recursively-safe attribute contract (Finding 2).
+
+    Accepted shape: ``{metric_key: score}`` where keys are restricted to the
+    repository's attribute vocabulary and scores are real numbers in [0.0, 1.0].
+    Strings, bools, nested objects/lists, raw-text keys, and unknown/free-form
+    keys all raise :class:`AttributeShapeError`. Returns the cleaned mapping.
+    """
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise AttributeShapeError(
+            "non_numeric_value", "normalized_attributes must be a metric->score object"
+        )
+    cleaned: dict[str, float] = {}
+    for key, raw_value in value.items():
+        if not isinstance(key, str):
+            raise AttributeShapeError(
+                "unknown_key", "normalized_attributes key must be a string metric name"
+            )
+        if key in RAW_REVIEW_TEXT_FIELDS:
+            raise AttributeShapeError(
+                "raw_text_key", f"normalized_attributes must not carry raw-text fields: {key}"
+            )
+        if key not in ALLOWED_ATTRIBUTE_KEYS:
+            raise AttributeShapeError(
+                "unknown_key", f"normalized_attributes key is not an allowed metric: {key!r}"
+            )
+        if isinstance(raw_value, dict | list):
+            raise AttributeShapeError(
+                "nested_object",
+                f"normalized_attributes[{key!r}] must be a number, not a nested value",
+            )
+        if isinstance(raw_value, bool) or not isinstance(raw_value, int | float):
+            raise AttributeShapeError(
+                "non_numeric_value", f"normalized_attributes[{key!r}] must be a number"
+            )
+        score = float(raw_value)
+        if score < 0.0 or score > 1.0:
+            raise AttributeShapeError(
+                "out_of_range", f"normalized_attributes[{key!r}] score must be within [0.0, 1.0]"
+            )
+        cleaned[key] = score
+    return cleaned
+
+
+# A bounded opaque external identifier: ASCII alphanumerics plus a small set of
+# separator punctuation, 1-96 chars. Anything broader (URLs, free text,
+# whitespace, non-ASCII) is treated as malformed and replaced by a digest token
+# so no attacker-controlled locator/string is ever persisted (Finding 3).
+_EXTERNAL_KEY_PATTERN = re.compile(r"[A-Za-z0-9_.:-]{1,96}")
+
+
+def _sanitize_external_key(value: object) -> tuple[str, bool]:
+    """Validate external_key as a bounded opaque identifier (Finding 3).
+
+    Returns ``(external_key, replaced)``. A clean identifier is returned
+    unchanged (``replaced=False``); a malformed one (URL-like, too long,
+    whitespace, non-ASCII, non-string) is replaced by a deterministic digest
+    token (``replaced=True``) so the raw value is never persisted.
+    """
+    if not isinstance(value, str):
+        return _digest_token("external_key", value), True
+    candidate = value.strip()
+    if candidate and _EXTERNAL_KEY_PATTERN.fullmatch(candidate):
+        # Keep the trimmed form; flag replacement only when trimming changed it.
+        return candidate, candidate != value
+    return _digest_token("external_key", candidate), True
+
+
+def _safe_content_sha256(raw: Mapping[str, Any]) -> str:
+    """Return a 64-char hex content digest for identity; never raw content.
+
+    A well-formed sha256 hex digest is passed through; anything else is replaced
+    by :func:`_fallback_hash` so the column always holds a digest-shaped id.
+    """
+    candidate = raw.get("content_sha256")
+    if isinstance(candidate, str):
+        normalized = candidate.lower()
+        if len(normalized) == 64 and all(c in "0123456789abcdef" for c in normalized):
+            return normalized
+    return _fallback_hash(raw)
 
 
 def _safe_identity(
     raw: Mapping[str, Any],
     *,
     registration: ReviewSourceRegistration | None,
-) -> tuple[str, str, str, str | None]:
-    """Extract quarantine identity (provider, external_key, sha, source_name).
+) -> tuple[str, str, str, str | None, bool]:
+    """Extract quarantine identity (provider, external_key, sha, source_name, replaced).
 
-    Identity fields only -- never raw text. Missing values fall back to safe
-    placeholders so a malformed record is still quarantinable and countable.
+    Provider and source always come from the DB registration when available;
+    raw caller-supplied provider/source text is never persisted (Finding 3).
+    ``external_key`` is validated as a bounded opaque identifier and replaced by
+    a digest token when malformed. ``content_sha256`` is always a 64-char hex
+    digest. The fifth return value reports whether external_key was replaced.
     """
-    provider = str(raw.get("provider") or (registration.provider if registration else "unknown"))
-    external_key = str(raw.get("external_key") or "unknown")
-    content_sha256 = str(raw.get("content_sha256") or _fallback_hash(raw))
-    source_name = (
-        registration.source_name
-        if registration
-        else (str(raw.get("source_name")) if raw.get("source_name") else None)
-    )
-    return provider, external_key, content_sha256, source_name
+    # Provider/source: DB-authoritative when a registration is loaded; never raw.
+    if registration is not None:
+        provider = registration.provider
+        source_name = registration.source_name
+    else:
+        provider = "unknown"
+        source_name = None
+    external_key, replaced_external_key = _sanitize_external_key(raw.get("external_key"))
+    content_sha256 = _safe_content_sha256(raw)
+    return provider, external_key, content_sha256, source_name, replaced_external_key
 
 
 def _quarantine_for_code(
@@ -532,13 +738,16 @@ def _quarantine_for_code(
     received_at: datetime | None = None,
 ) -> ReviewQuarantineEntry:
     """Build a typed quarantine entry from a raw dict, without raw text."""
-    provider, external_key, content_sha256, source_name = _safe_identity(
-        raw, registration=registration
-    )
-    # Coerce a possibly-non-hex fallback to a stable 64-char hex so the column
-    # constraint (content_sha256 text NOT NULL) always holds a digest-shaped id.
-    if len(content_sha256) != 64:
-        content_sha256 = _fallback_hash({"fallback": content_sha256})
+    (
+        provider,
+        external_key,
+        content_sha256,
+        source_name,
+        replaced_external_key,
+    ) = _safe_identity(raw, registration=registration)
+    metadata = safe_metadata or QuarantineSafeMetadata(malformed=True)
+    if replaced_external_key:
+        metadata = metadata.model_copy(update={"replaced_external_key": True})
     return ReviewQuarantineEntry(
         provider=provider,
         external_key=external_key,
@@ -546,7 +755,44 @@ def _quarantine_for_code(
         reason_code=reason_code,
         source_name=source_name,
         received_at=received_at or datetime.now(UTC),
-        safe_metadata=safe_metadata or QuarantineSafeMetadata(malformed=True),
+        safe_metadata=metadata,
+    )
+
+
+def _identity_mismatch(
+    record: ReviewSourceRecord,
+    registration: ReviewSourceRegistration,
+) -> IdentityField | None:
+    """Return the first per-record provenance field that differs from the
+    registration, or ``None`` when the record's identity matches exactly."""
+    for field_name, record_value, registered_value in (
+        ("source_name", record.source_name, registration.source_name),
+        ("provider", record.provider, registration.provider),
+        ("license_class", record.license_class, registration.license_class),
+        ("terms_version", record.terms_version, registration.terms_version),
+    ):
+        if record_value != registered_value:
+            return field_name  # type: ignore[return-value]
+    return None
+
+
+def _bind_record_to_registration(
+    record: ReviewSourceRecord,
+    registration: ReviewSourceRegistration,
+) -> ReviewSourceRecord:
+    """Return a copy of ``record`` whose source identity is the DB registration.
+
+    Defense-in-depth for Finding 1: even though records reaching this point have
+    already been checked against the registration, downstream consumers read the
+    registration's canonical identity, never the caller-supplied copy.
+    """
+    return record.model_copy(
+        update={
+            "source_name": registration.source_name,
+            "provider": registration.provider,
+            "license_class": registration.license_class,
+            "terms_version": registration.terms_version,
+        }
     )
 
 
@@ -557,17 +803,44 @@ def classify_review_records(
 ) -> tuple[tuple[ReviewSourceRecord, ...], tuple[ReviewQuarantineEntry, ...]]:
     """Pure validation: split a batch into (valid, quarantined).
 
-    No license gate here -- the DB-backed source lookup is the authoritative
-    gate (Finding 1). No cross-run dedupe here -- the persistent receipt table
-    is the authoritative dedupe (Finding 3). This function only validates each
-    record's shape and routes malformed ones (including any raw-text leak) to a
-    typed quarantine with a code-backed reason.
+    Three layers of record-level governance run here, all routing failures to a
+    typed, code-backed quarantine without ever persisting raw text:
+
+      1. Strict normalized-attribute contract (Finding 2): strings, nested
+         objects, raw-text keys, and unknown/free-form keys are rejected with
+         ``schema_invalid_attribute_shape``.
+      2. Structural validation via :func:`parse_review_record` (the original
+         schema/raw-text-field gate).
+      3. Per-record DB-authoritative source identity (Finding 1): a record whose
+         source_name/provider/license_class/terms_version does not exactly match
+         the loaded registration is rejected with ``source_identity_mismatch``.
+
+    Accepted records are bound to the registration before returning, so no
+    caller-controlled source identity can reach an aggregate, receipt, or RAG
+    metadata path.
     """
     valid: list[ReviewSourceRecord] = []
     quarantined: list[ReviewQuarantineEntry] = []
     for raw in records:
+        # Finding 2: enforce the strict attribute contract first so a precise,
+        # code-backed reason is recorded for shape violations.
         try:
-            valid.append(parse_review_record(raw))
+            _coerce_normalized_attributes(raw.get("normalized_attributes"))
+        except AttributeShapeError as exc:
+            quarantined.append(
+                _quarantine_for_code(
+                    raw,
+                    registration=registration,
+                    reason_code="schema_invalid_attribute_shape",
+                    safe_metadata=QuarantineSafeMetadata(
+                        malformed=True, attribute_shape_violation=exc.violation
+                    ),
+                )
+            )
+            continue
+        # Structural validation (schema, raw-text-field allowlist, hash shape).
+        try:
+            record = parse_review_record(raw)
         except (ValidationError, ValueError) as exc:
             if isinstance(exc, ValidationError):
                 code, metadata = _classify_validation_error(exc)
@@ -582,6 +855,22 @@ def classify_review_records(
                     safe_metadata=metadata,
                 )
             )
+            continue
+        # Finding 1: per-record identity must match the DB-authoritative source.
+        mismatched = _identity_mismatch(record, registration)
+        if mismatched is not None:
+            quarantined.append(
+                _quarantine_for_code(
+                    raw,
+                    registration=registration,
+                    reason_code="source_identity_mismatch",
+                    safe_metadata=QuarantineSafeMetadata(
+                        malformed=True, mismatched_identity_field=mismatched
+                    ),
+                )
+            )
+            continue
+        valid.append(_bind_record_to_registration(record, registration))
     return tuple(valid), tuple(quarantined)
 
 

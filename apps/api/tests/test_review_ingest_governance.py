@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import sys
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -248,6 +249,275 @@ def test_quarantine_safe_metadata_is_typed_and_carries_no_raw_text():
     dumped = entry.safe_metadata.model_dump(exclude_none=True)
     governance.enforce_no_raw_review_text(dumped, label="safe_metadata")
     governance.enforce_no_raw_review_text(entry.model_dump(), label="quarantine_entry")
+
+
+# --- Finding 2: strict, bounded normalized-attribute contract ---
+
+
+def test_classify_quarantines_string_valued_attribute():
+    raw = _record_dict("post-1", seed="x", normalized_attributes={"taste": "0.8"})
+
+    valid, quarantined = governance.classify_review_records(
+        registration=_registration(), records=[raw]
+    )
+
+    assert valid == ()
+    assert len(quarantined) == 1
+    entry = quarantined[0]
+    assert entry.reason_code == "schema_invalid_attribute_shape"
+    assert entry.reason_category == "schema_invalid"
+    assert entry.safe_metadata.attribute_shape_violation == "non_numeric_value"
+
+
+def test_classify_quarantines_nested_object_attribute():
+    raw = _record_dict("post-1", seed="x", normalized_attributes={"taste": {"review": "raw text"}})
+
+    valid, quarantined = governance.classify_review_records(
+        registration=_registration(), records=[raw]
+    )
+
+    assert valid == ()
+    assert quarantined[0].safe_metadata.attribute_shape_violation == "nested_object"
+    # The nested raw-text object is never carried into the quarantine entry.
+    governance.enforce_no_raw_review_text(quarantined[0].model_dump(), label="q")
+
+
+def test_classify_quarantines_raw_text_like_attribute_key():
+    raw = _record_dict("post-1", seed="x", normalized_attributes={"body": 0.5})
+
+    valid, quarantined = governance.classify_review_records(
+        registration=_registration(), records=[raw]
+    )
+
+    assert valid == ()
+    assert quarantined[0].safe_metadata.attribute_shape_violation == "raw_text_key"
+
+
+def test_classify_quarantines_unknown_attribute_key():
+    raw = _record_dict("post-1", seed="x", normalized_attributes={"arbitrary_freeform_key": 0.5})
+
+    valid, quarantined = governance.classify_review_records(
+        registration=_registration(), records=[raw]
+    )
+
+    assert valid == ()
+    assert quarantined[0].safe_metadata.attribute_shape_violation == "unknown_key"
+
+
+def test_classify_quarantines_out_of_range_attribute():
+    raw_high = _record_dict("post-1", seed="x", normalized_attributes={"taste": 1.5})
+    raw_low = _record_dict("post-2", seed="x", normalized_attributes={"taste": -0.1})
+
+    for raw in (raw_high, raw_low):
+        valid, quarantined = governance.classify_review_records(
+            registration=_registration(), records=[raw]
+        )
+        assert valid == ()
+        assert quarantined[0].safe_metadata.attribute_shape_violation == "out_of_range"
+
+
+@pytest.mark.parametrize(
+    "bad_attributes",
+    [
+        {"taste": "0.8"},  # string value
+        {"taste": {"review": "raw"}},  # nested object
+        {"body": 0.5},  # raw-text-like key
+        {"unknown_metric": 0.5},  # free-form key
+        {"taste": True},  # bool is not a score
+        {"taste": [0.8]},  # nested list
+    ],
+)
+def test_parse_review_record_rejects_attribute_shape_violation(bad_attributes):
+    raw = _record_dict("post-1", seed="x", normalized_attributes=bad_attributes)
+    with pytest.raises(ValidationError):
+        governance.parse_review_record(raw)
+
+
+def test_normalized_attribute_contract_accepts_legitimate_scores():
+    raw = _record_dict(
+        "post-1",
+        seed="x",
+        normalized_attributes={
+            "taste": 0.8,
+            "service": 0.7,
+            "cleanliness": 0.0,
+            "atmosphere": 1.0,
+        },
+    )
+    record = governance.parse_review_record(raw)
+    assert record.normalized_attributes == {
+        "taste": 0.8,
+        "service": 0.7,
+        "cleanliness": 0.0,
+        "atmosphere": 1.0,
+    }
+
+
+def test_normalized_attribute_contract_rejects_non_dict_payload():
+    raw = _record_dict("post-1", seed="x")
+    raw["normalized_attributes"] = "taste=0.8"  # type: ignore[assignment]
+    with pytest.raises(ValidationError):
+        governance.parse_review_record(raw)
+
+
+# --- Finding 1: per-record DB-authoritative source identity ---
+
+
+@pytest.mark.parametrize(
+    "override,expected_field",
+    [
+        ({"source_name": "other_source"}, "source_name"),
+        ({"provider": "attacker_provider"}, "provider"),
+        ({"license_class": "public_processed"}, "license_class"),
+        ({"terms_version": "other-terms-v9"}, "terms_version"),
+    ],
+)
+def test_classify_quarantines_record_with_mismatched_identity(override, expected_field):
+    raw = _record_dict("post-1", seed="x", **override)
+
+    valid, quarantined = governance.classify_review_records(
+        registration=_registration(), records=[raw]
+    )
+
+    assert valid == ()
+    assert len(quarantined) == 1
+    entry = quarantined[0]
+    assert entry.reason_code == "source_identity_mismatch"
+    assert entry.reason_category == "terms_violation"
+    assert entry.safe_metadata.mismatched_identity_field == expected_field
+    # Even a mismatched record is quarantined under the registered provider, not
+    # any caller/attacker-supplied value.
+    assert entry.provider == FICTIONAL_PROVIDER
+
+
+def test_classify_binds_accepted_record_identity_to_registration():
+    raw = _record_dict("post-1", seed="x")  # identity matches the registration
+
+    valid, _ = governance.classify_review_records(registration=_registration(), records=[raw])
+
+    assert len(valid) == 1
+    record = valid[0]
+    reg = _registration()
+    # The accepted record is bound to the DB registration identity, never the
+    # caller-supplied copy.
+    assert record.source_name == reg.source_name
+    assert record.provider == reg.provider
+    assert record.license_class == reg.license_class
+    assert record.terms_version == reg.terms_version
+
+
+def test_aggregate_from_classified_record_carries_registered_source_only():
+    reg = _registration()
+    # Caller tries to inject a different source_name; it is quarantined (above).
+    # For a matching record the emitted aggregate source is the registration's.
+    raw = _record_dict("post-1", seed="x")
+    valid, quarantined = governance.classify_review_records(registration=reg, records=[raw])
+
+    assert len(valid) == 1
+    assert quarantined == ()
+    aggregate = governance.approved_aggregate_from_record(valid[0])
+    assert aggregate.source_name == reg.source_name
+    assert aggregate.attribute_scores == {"taste": 0.8, "service": 0.7}
+
+
+def test_mixed_batch_accepts_only_identity_matching_records():
+    reg = _registration()
+    matching = _record_dict("post-ok", seed="good")
+    mismatched = _record_dict("post-bad", seed="good", provider="other_provider")
+
+    valid, quarantined = governance.classify_review_records(
+        registration=reg, records=[matching, mismatched]
+    )
+
+    assert len(valid) == 1
+    assert valid[0].external_key == "post-ok"
+    assert len(quarantined) == 1
+    assert quarantined[0].reason_code == "source_identity_mismatch"
+
+
+# --- Finding 3: safe quarantine identity (no raw provider/URL text) ---
+
+
+def test_safe_identity_uses_registered_provider_and_hashes_url_like_external_key():
+    reg = _registration()
+    raw = {
+        "provider": "attacker-provider",  # caller/attacker-controlled
+        "external_key": "https://evil.example.com/exfil?token=secret",  # URL-like
+        "content_sha256": _sha("k", "s"),
+    }
+
+    provider, external_key, _content_sha, source_name, replaced = governance._safe_identity(  # noqa: SLF001
+        raw, registration=reg
+    )
+
+    assert provider == FICTIONAL_PROVIDER  # registered, never attacker
+    assert source_name == FICTIONAL_SOURCE_NAME
+    assert replaced is True
+    assert external_key.startswith("external_key_sha256:")
+    # No raw URL material survives into the identity.
+    assert "evil.example.com" not in external_key
+    assert "https" not in external_key
+    assert "token" not in external_key
+
+
+def test_safe_identity_hashes_non_string_external_key():
+    reg = _registration()
+    _provider, external_key, _content_sha, _src, replaced = governance._safe_identity(  # noqa: SLF001
+        {"external_key": 12345}, registration=reg
+    )
+    assert replaced is True
+    assert external_key.startswith("external_key_sha256:")
+
+
+def test_safe_identity_clean_external_key_passes_through_unchanged():
+    reg = _registration()
+    _provider, external_key, _content_sha, _src, replaced = governance._safe_identity(  # noqa: SLF001
+        {"external_key": "naver-post-9281"}, registration=reg
+    )
+    assert replaced is False
+    assert external_key == "naver-post-9281"
+
+
+def test_safe_identity_replacement_is_deterministic_for_dedupe():
+    reg = _registration()
+    raw = {"external_key": "https://evil.example.com/x?token=secret"}
+    first = governance._safe_identity(raw, registration=reg)[1]  # noqa: SLF001
+    second = governance._safe_identity(raw, registration=reg)[1]  # noqa: SLF001
+    assert first == second  # retry-safe quarantine dedupe
+
+
+def test_quarantine_entry_never_persists_raw_url_or_attacker_provider():
+    reg = _registration()
+    entry = governance._quarantine_for_code(  # noqa: SLF001
+        {
+            "provider": "attacker-provider",
+            "external_key": "https://evil.example.com/exfil?x=1",
+        },
+        registration=reg,
+        reason_code="schema_invalid",
+    )
+
+    serialized = json.dumps(entry.model_dump(mode="json"))
+    assert entry.provider == FICTIONAL_PROVIDER  # registered provider persisted
+    assert entry.safe_metadata.replaced_external_key is True
+    # Neither the attacker provider nor the URL-like locator appears anywhere in
+    # the persisted entry or its typed metadata.
+    assert "attacker-provider" not in serialized
+    assert "evil.example.com" not in serialized
+    assert "https://" not in serialized
+    assert "exfil" not in serialized
+
+
+def test_quarantine_entry_for_missing_record_uses_registration_identity():
+    # A malformed record with no identity of its own is still quarantined under
+    # the registered provider/source, never raw/unknown text.
+    reg = _registration()
+    entry = governance._quarantine_for_code(  # noqa: SLF001
+        {}, registration=reg, reason_code="schema_invalid_missing_field"
+    )
+    assert entry.provider == FICTIONAL_PROVIDER
+    assert entry.source_name == FICTIONAL_SOURCE_NAME
+    assert entry.content_sha256 != ""  # a digest, never raw content
 
 
 # --- DB-backed source gate (Finding 1): deterministic, no network ---
