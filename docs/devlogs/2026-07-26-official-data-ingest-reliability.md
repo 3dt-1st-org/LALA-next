@@ -18,7 +18,8 @@ Shared primitives (new focused modules):
   text is consumed only to classify the category and is never echoed.
 - `apps/api/app/services/official_source_receipts.py` — replay-safe
   `ingest.source_files` receipts by `(source_name, dataset_name, file_sha256)`
-  via a pre-flight SELECT (no unique constraint exists today), plus
+  via a pre-flight SELECT guarded by a transaction-scoped advisory lock (there
+  is no unique constraint to rely on until canonical 063 applies), plus
   `reconcile_partial_run`.
 - `apps/api/app/services/official_ingest_validation.py` — coordinate bounds
   (`[-90,90]`/`[-180,180]`, `(0,0)` null-island drop) and a bounded
