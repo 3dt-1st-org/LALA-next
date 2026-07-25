@@ -296,7 +296,7 @@ Daangn community (260226) → crawl_tasks (260303) → drop raw_payload + dedup 
 
 ## 12. Privacy / Secrets / Error / Fallback
 
-- Secrets: `KeyVaultManager` singleton (§3.3); OIDC secret-zero (no hardcoded secrets; `tests/unit/test_secret_config_contract.py` forbids PG-URL/password-literal patterns). CONFIRMED.
+- Credential handling: `KeyVaultManager` singleton (§3.3); OIDC secret-zero (no hardcoded secrets; `tests/unit/test_secret_config_contract.py` forbids PG-URL/password-literal patterns). CONFIRMED.
 - Privacy: iOS location consent (`MainMapViewModel.configureLocationUpdates`, overlay when denied, stops updates when disabled); `user_action_log` uses **session UUID for DAU (no user ids)** + coords for analytics; README XAI transparency ("why this place") reflected as `recommendationReason(for:)`. CONFIRMED.
 - Fallbacks: public-API flakiness ("점검중") handled with `BIGINT` coercion + exceptions; weather fallback chain **DB(`realtime_weather_conditions`) → Open-Meteo → KMA legacy** with `fallback_error` field and stale-dust reuse; docent LLM→fallback (§7); iOS `MapStatus` ∈ {none, noResults, networkError, configurationError}; health `/api/ios/v1/health` returns `{status, db, speech, openai}` (degrades if any subsystem not ok). CONFIRMED.
 
