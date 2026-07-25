@@ -9,10 +9,18 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import 'package:lala_next_app/core/backend/lala_backend.dart';
+import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
+import 'package:lala_next_app/core/location/region_context.dart';
 import 'package:lala_next_app/features/plan/presentation/pages/plan_page.dart';
+import 'package:lala_next_app/manual_location_options.dart';
 
 void main() {
+  // RegionContextStore is a process-local singleton; reset it before each test
+  // so a manual/current choice from another test cannot leak into this tab's
+  // seed coordinates.
+  setUp(RegionContextStore.clear);
+
   testWidgets(
     'plan pending shows one generating card and a skeleton timeline, then clears',
     (tester) async {
@@ -46,7 +54,10 @@ void main() {
       backend.completeError();
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('planner-loading-card')), findsNothing);
-      expect(find.byKey(const ValueKey('plan-timeline-skeleton')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('plan-timeline-skeleton')),
+        findsNothing,
+      );
       expect(find.text('재시도'), findsOneWidget);
     },
   );
@@ -66,7 +77,10 @@ void main() {
 
       // loaded: 로딩 카드/타임라인 스켈레톤 없음.
       expect(find.byKey(const ValueKey('planner-loading-card')), findsNothing);
-      expect(find.byKey(const ValueKey('plan-timeline-skeleton')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('plan-timeline-skeleton')),
+        findsNothing,
+      );
       // 실제 슬롯 제목(서버 순서 그대로).
       expect(find.text('화성행궁 산책 코스'), findsOneWidget);
       // 읽을 수 있는 날씨/먼지(말줄임/중복 라벨 아님).
@@ -74,14 +88,51 @@ void main() {
       expect(find.text('PM10 31 보통'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'store-driven manual region reloads the backend without re-requesting location',
+    (tester) async {
+      final configs = <LalaAppConfig>[];
+      final locationProvider = _CountingLocationProvider(
+        const LalaLocationResult.unavailable(),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlanPage(
+            locationProvider: locationProvider,
+            // _load/_reloadFromStore 모두 백엔드를 재생성하므로 호출될 때마다
+            // 사용된 config 를 기록한다.
+            backendFactory: (config) {
+              configs.add(config);
+              return _LoadedPlanBackend();
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 초기 로드는 기기 위치를 정확히 한 번 요청한다(기존 동작).
+      expect(locationProvider.requests, 1);
+
+      // 온보딩/다른 탭에서 수동 지역이 공유 store 에 게시되면 리스너가 발동한다.
+      RegionContextStore.set(RegionContext.manual(_busanOption()));
+      await tester.pumpAndSettle();
+
+      // 수동 선택이 발생한 리로드는 기기 위치를 다시 요청하지 않는다.
+      expect(locationProvider.requests, 1);
+      // 가장 마지막 백엔드는 수동 선택의 좌표로 구성되었다.
+      expect(configs.last.lat, 35.16);
+      expect(configs.last.lng, 129.16);
+    },
+  );
+
+  tearDown(RegionContextStore.clear);
 }
 
 class _FoundLocationProvider implements LalaLocationProvider {
   @override
   Future<LalaLocationResult> requestCurrentLocation() async =>
-      const LalaLocationResult.found(
-        LalaLocation(lat: 37.2636, lng: 127.0286),
-      );
+      const LalaLocationResult.found(LalaLocation(lat: 37.2636, lng: 127.0286));
 }
 
 /// 일정/개입 조회를 Completer 로 지연시키는 테스트용 백엔드.
@@ -177,5 +228,33 @@ LalaEnvelope<T> _envelope<T>(T data) {
     error: null,
     statusCode: 200,
     requestId: 'test-request-id',
+  );
+}
+
+/// Counts how many times the tab asked for device location. Used to prove a
+/// store-driven reload does NOT re-request location.
+class _CountingLocationProvider implements LalaLocationProvider {
+  _CountingLocationProvider(this._result);
+
+  final LalaLocationResult _result;
+  int requests = 0;
+
+  @override
+  Future<LalaLocationResult> requestCurrentLocation() async {
+    requests += 1;
+    return _result;
+  }
+}
+
+ManualLocationOption _busanOption() {
+  return const ManualLocationOption(
+    id: 'busan-haeundae',
+    provinceId: 'busan',
+    provinceKo: '부산광역시',
+    provinceEn: 'Busan',
+    labelKo: '해운대구',
+    labelEn: 'Haeundae-gu',
+    lat: 35.16,
+    lng: 129.16,
   );
 }

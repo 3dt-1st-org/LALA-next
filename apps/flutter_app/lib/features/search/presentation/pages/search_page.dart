@@ -65,6 +65,12 @@ class _SearchPageState extends State<SearchPage> {
   // made elsewhere drives this tab's place calls.
   RegionContext? _region = RegionContextStore.current;
 
+  // Monotonic load token. A store-driven reload or a manual retry can start
+  // while a device-location request is still in flight; only the newest load may
+  // write results so a late response cannot clobber a newer context.
+  int _loadGeneration = 0;
+  late final VoidCallback _onRegionChanged;
+
   String _selectedCategory = 'all';
   String _query = '';
   late final TextEditingController _searchController;
@@ -79,6 +85,21 @@ class _SearchPageState extends State<SearchPage> {
     _backendFactory = widget.backendFactory ?? LalaApiBackend.new;
     _backend = _backendFactory(_config);
     _searchController = TextEditingController();
+    // React to a region choice made in onboarding or on another tab: rebuild the
+    // backend from the shared coordinates WITHOUT re-requesting device location,
+    // so a manual choice cannot be overwritten by a later location fetch.
+    _onRegionChanged = () {
+      if (!mounted) {
+        return;
+      }
+      final next = RegionContextStore.current;
+      // Ignore our own publishes and no-op notifications.
+      if (next == _region) {
+        return;
+      }
+      _reloadFromStore(next);
+    };
+    RegionContextStore.listenable.addListener(_onRegionChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _load();
@@ -88,6 +109,7 @@ class _SearchPageState extends State<SearchPage> {
 
   @override
   void dispose() {
+    RegionContextStore.listenable.removeListener(_onRegionChanged);
     _searchController.dispose();
     _backend.close();
     super.dispose();
@@ -100,6 +122,7 @@ class _SearchPageState extends State<SearchPage> {
   bool get _regionIsDefault => _region == null;
 
   Future<void> _load() async {
+    final generation = ++_loadGeneration;
     setState(() {
       _status = _SearchLoadStatus.loading;
       _error = null;
@@ -111,6 +134,12 @@ class _SearchPageState extends State<SearchPage> {
     var lng = _region?.lng ?? _baseConfig.lng;
     try {
       final result = await _locationProvider.requestCurrentLocation();
+      // Stale guard: a store-driven reload or retry may have started while this
+      // device-location request was in flight — discard so a late response
+      // cannot overwrite a newer context.
+      if (generation != _loadGeneration || !mounted) {
+        return;
+      }
       if (result.status == LalaLocationResultStatus.found &&
           result.location != null) {
         lat = result.location!.lat;
@@ -122,24 +151,47 @@ class _SearchPageState extends State<SearchPage> {
       // 기본 지역)를 유지. 절대 임의의 위치를 끼워 넣지 않는다.
     } on Object {
       // 위치 미확정 시 현재 컨텍스트(수동 선택 또는 기본 지역)를 유지.
+      if (generation != _loadGeneration || !mounted) {
+        return;
+      }
     }
 
     _config = _baseConfig.copyWith(lat: lat, lng: lng, radiusM: _radiusM);
     _backend.close();
     _backend = _backendFactory(_config);
+    await _fetchPlaces(generation);
+  }
 
+  /// 공유 store 의 컨텍스트로 백엔드를 재구성한다. 기기 위치를 다시 요청하지 않으므로,
+  /// 온보딩/다른 탭의 수동 선택이 뒤늦은 위치 응답에 덮어씌워지지 않는다.
+  void _reloadFromStore(RegionContext? context) {
+    final generation = ++_loadGeneration;
+    setState(() {
+      _region = context;
+      _status = _SearchLoadStatus.loading;
+      _error = null;
+    });
+    final lat = context?.lat ?? _baseConfig.lat;
+    final lng = context?.lng ?? _baseConfig.lng;
+    _config = _baseConfig.copyWith(lat: lat, lng: lng, radiusM: _radiusM);
+    _backend.close();
+    _backend = _backendFactory(_config);
+    _fetchPlaces(generation);
+  }
+
+  Future<void> _fetchPlaces(int generation) async {
     try {
       final envelope = await _backend.getPlaces();
-      final places = envelope.data?.places ?? const <LalaPlace>[];
-      if (!mounted) {
+      if (generation != _loadGeneration || !mounted) {
         return;
       }
+      final places = envelope.data?.places ?? const <LalaPlace>[];
       setState(() {
         _places = places;
         _status = _SearchLoadStatus.data;
       });
     } on LalaApiException catch (error) {
-      if (!mounted) {
+      if (generation != _loadGeneration || !mounted) {
         return;
       }
       setState(() {
@@ -148,7 +200,7 @@ class _SearchPageState extends State<SearchPage> {
         _status = _SearchLoadStatus.error;
       });
     } on Object {
-      if (!mounted) {
+      if (generation != _loadGeneration || !mounted) {
         return;
       }
       setState(() {

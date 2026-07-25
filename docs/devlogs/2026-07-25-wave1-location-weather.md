@@ -53,6 +53,18 @@ DB 마이그레이션·배포·DNS·비밀키 변경은 없다(아래 “롤백�
   "No plan slots to show" 로 변경. 데이터가 도착한 빈 결과를 영구 "준비 중"으로
   표시하던 오해 제거(로딩 카드/맵 대기 메시지는 로딩 중에만 "준비 중"을 쓰므로 그대로 유지).
 
+### 탭 간 region 컨텍스트 즉시 전파 (`search_page.dart`, `plan_page.dart` — 후속 수정)
+- 기존엔 두 탭이 `RegionContextStore.current` 를 최초 1회 시드한 뒤 `_load()` 때마다
+  `requestCurrentLocation` 를 호출했다. 온보딩/다른 탭에서 수동 지역을 고른 뒤 탭을 전환하면
+  반영이 안 되거나, 뒤늦은 기기 위치 응답이 수동 선택을 덮어쓸 수 있었다.
+- 이제 `initState` 에서 `RegionContextStore.listenable` 리스너를 등록(`dispose` 해제)한다.
+  리스너는 공유 컨텍스트를 로컬 상태로 복사한 뒤, **기기 위치를 다시 요청하지 않고** 해당 좌표
+  (또는 공개된 기본 지역)로 백엔드를 재구성해 새로고침한다(`mounted` 일 때만). 자기 자신이
+  게시한 값은 `==` 가드로 무시해 중복 리로드/피드백 루프를 막는다.
+- 단조 증가 `_loadGeneration` 토큰으로 stale 리로드를 방지: 초기 로드 중 기기 위치 요청이
+  진행 중일 때 store 가 바뀌면, 뒤늦은 기기 응답이 새 컨텍스트를 덮어쓰지 못한다.
+- 초기 로드의 `requestCurrentLocation` 동작은 기존과 동일(최초 1회).
+
 ### 날씨/대기 진실성 (변경 불필요 — 확인만)
 - 기존 구현이 이미 정직: `publicWeatherOrNull` + `isPlaceholderWeatherSource` 가
   skeleton/fallback/unavailable/`*_fallback` 소스를 모두 `null` 로 억제. `WeatherUnavailableCard` 가
@@ -83,7 +95,7 @@ DB 마이그레이션·배포·DNS·비밀키 변경은 없다(아래 “롤백�
   `test/features/weather/weather_helpers_test.dart` 에 placeholder/실소소스 억제 테스트 추가.
 - `widget_test.dart` 에 `setUp(RegionContextStore.clear)` 추가 — 프로세스 로컬 store 가 탭 간에 새어
   좌표 시드를 오염시키지 않도록 각 테스트 격리.
-- `flutter analyze`: 이슈 없음. `flutter test`: 149개 통과. `dart format --set-exit-if-changed` 통과.
+- `flutter analyze`: 이슈 없음. `flutter test`: 151개 통과(탭 간 전파 리로드 검증 2건 추가). `dart format --set-exit-if-changed` 통과.
 
 ## CI/배포 평가
 
@@ -111,7 +123,8 @@ DB 마이그레이션·배포·DNS·비밀키 변경은 없다(아래 “롤백�
 
 ## 진짜 블로커 (Wave-1 잔여, 비차단)
 
-- `RegionContextStore` 영속화(Prefs) 미구현 — 앱 재시작시 컨텍스트 초기화. 의도적 범위외(온보딩 상태와 동일 패턴).
+- `RegionContextStore` 영속화(Prefs) 미구현 — 앱 재시작시 컨텍스트 초기화. 의도적 범위외(온보딩 상태와 동일 패턴). 프로세스 로컬(in-memory) 유지는 이번 후속 수정에서도 그대로.
+- `permanentlyDenied` 전용 설정 유도 UX(Onboarding/Home 의 네이티브 "설정 열기" 액션 + web/stub 미지원 분기 + 의존성 주입 테스트)는 이 슬라이스에서 별도 후속으로 연기. 현재는 4상태 구분까지만 되어 있고 UI 라우팅은 기존 폴백 알림/수동 선택 경로를 그대로 사용한다.
 - `LalaAppConfig` 기본 좌표(수원)가 여전히 하드코딩된 “공개된 기본 지역”. 이제 정직 표시기로 공개되므로
   은폐 아님. 별도 작업에서 기본 지역 자체를 env/설정 가능하게 분리 가능.
 - splash copy(“당신의 수원을 안내합니다”)·`locationLabel` 의 null 기본값(수원)은 라벨 헬퍼 영역이라
