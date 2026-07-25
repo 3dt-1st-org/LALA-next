@@ -126,6 +126,40 @@ void main() {
     },
   );
 
+  testWidgets(
+    'a manual region retained from onboarding is not overwritten by the initial location request',
+    (tester) async {
+      // 온보딩이 수동 선택을 store 에 남긴 채 탭이 마운트되는 상황.
+      RegionContextStore.set(RegionContext.manual(_busanOption()));
+      final configs = <LalaAppConfig>[];
+      // found provider(서울 인근) — 이 결과가 수동 선택을 덮어쓰면 안 된다.
+      final locationProvider = _CountingLocationProvider(
+        const LalaLocationResult.found(
+          LalaLocation(lat: 37.2636, lng: 127.0286),
+        ),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlanPage(
+            locationProvider: locationProvider,
+            backendFactory: (config) {
+              configs.add(config);
+              return _LoadedPlanBackend();
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Why: with a real context already in the store, the initial _load() must
+      // NOT request device location at all, so the deliberate manual choice can't
+      // be clobbered by a later geolocation fix.
+      expect(locationProvider.requests, 0);
+      expect(configs.last.lat, 35.16);
+      expect(configs.last.lng, 129.16);
+    },
+  );
+
   tearDown(RegionContextStore.clear);
 }
 

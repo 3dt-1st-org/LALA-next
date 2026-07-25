@@ -132,27 +132,34 @@ class _SearchPageState extends State<SearchPage> {
     // 우선한다. 없으면 공개된 기본 지역(LalaAppConfig)으로 폴백한다.
     var lat = _region?.lat ?? _baseConfig.lat;
     var lng = _region?.lng ?? _baseConfig.lng;
-    try {
-      final result = await _locationProvider.requestCurrentLocation();
-      // Stale guard: a store-driven reload or retry may have started while this
-      // device-location request was in flight — discard so a late response
-      // cannot overwrite a newer context.
-      if (generation != _loadGeneration || !mounted) {
-        return;
-      }
-      if (result.status == LalaLocationResultStatus.found &&
-          result.location != null) {
-        lat = result.location!.lat;
-        lng = result.location!.lng;
-        _region = RegionContext.current(lat: lat, lng: lng);
-        RegionContextStore.set(_region);
-      }
-      // denied / permanentlyDenied / unavailable: 기존 컨텍스트(수동 선택 또는
-      // 기본 지역)를 유지. 절대 임의의 위치를 끼워 넣지 않는다.
-    } on Object {
-      // 위치 미확정 시 현재 컨텍스트(수동 선택 또는 기본 지역)를 유지.
-      if (generation != _loadGeneration || !mounted) {
-        return;
+    // Why: only resolve live geolocation when no real context exists yet. A
+    // context already in the store (a manual choice retained from onboarding, or
+    // a current fix from another tab) is a deliberate selection that this tab's
+    // initial device-location request must not overwrite. After-mount changes
+    // arrive via _reloadFromStore, which never requests location.
+    if (_region == null) {
+      try {
+        final result = await _locationProvider.requestCurrentLocation();
+        // Stale guard: a store-driven reload or retry may have started while this
+        // device-location request was in flight — discard so a late response
+        // cannot overwrite a newer context.
+        if (generation != _loadGeneration || !mounted) {
+          return;
+        }
+        if (result.status == LalaLocationResultStatus.found &&
+            result.location != null) {
+          lat = result.location!.lat;
+          lng = result.location!.lng;
+          _region = RegionContext.current(lat: lat, lng: lng);
+          RegionContextStore.set(_region);
+        }
+        // denied / permanentlyDenied / unavailable: 기존 컨텍스트(수동 선택 또는
+        // 기본 지역)를 유지. 절대 임의의 위치를 끼워 넣지 않는다.
+      } on Object {
+        // 위치 미확정 시 현재 컨텍스트(수동 선택 또는 기본 지역)를 유지.
+        if (generation != _loadGeneration || !mounted) {
+          return;
+        }
       }
     }
 
