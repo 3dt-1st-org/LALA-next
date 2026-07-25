@@ -93,9 +93,11 @@ WAVE 0 — shared data contracts / governance ───────────�
         ▼                                  ▼                                  ▼
 WAVE 1 — place data + location/weather     WAVE 2 — review ingestion/         (WAVE 3 reads 1+2)
   region_catalog, place_operating_hours,     enrichment                       RAG/docent/TTS
-  weather_threshold_config, ASA flags,        posts_raw, source_registry,        (reads Wave 2
-  Open-Meteo fallback, is_indoor provenance   quarantine, bulk ad classifier,    summary chunks;
-  (reads Wave 0 migration runner)             summary-only RAG hand-off          reads Wave 1
+  weather_threshold_config, ASA flags,        review_sources (062 landed) +       (reads Wave 2
+  Open-Meteo fallback, is_indoor provenance   aggregate receipt (063), quarantine summary chunks;
+  (reads Wave 0 migration runner)             bulk ad classifier, summary-only     reads Wave 1
+                                              RAG hand-off (raw retention
+                                              BLOCKED_EXTERNAL — no posts_raw)
         │                                      │                                  weather/region metadata)
         │                                      ▼                                        │
         │                             WAVE 3 — RAG → docent / TTS                        │
@@ -121,7 +123,7 @@ WAVE 6 — device/runtime E2E + rollout (consumes all)
 | --- | --- | --- |
 | **W0** | Shared data contracts + governance: migration ordering, model-role router, source registry, flag registry, safety-contract spine, OpenAPI-compat check. | Every later wave edits canonical SQL, the API surface, and models. Without a frozen migration owner (§3), flag namespace (§5.0), and one source of truth per field (§4.2), the five plans' overlapping migrations and API deltas collide. W0 publishes the **interfaces** (table DDL shapes, flag names, model-role contract) so W1–W5 can be designed against them in parallel. |
 | **W1** | Official/static place data + location/weather reliability: region resolution to 시/군, operating hours, weather thresholds as config, explicit ASA flags + summary, Open-Meteo fallback tier, `is_indoor` provenance. | W2's review enrichments are **place-scoped**; W3's RAG chunks and docent grounding need region/category/`is_indoor` filter metadata; W4's substitutions need flag-level weather + indoor labels + hours; W5's viewport query needs a canonical region key. None of these can harden until place identity, region, and weather reliability exist. |
-| **W2** | Review ingestion/enrichment: raw/normalized/provenance split, source registry license gate, quarantine/dead-letter, bulk-lane ad classifier, summary-only RAG hand-off, recheck escalation. | W3 grounds docents in **aggregate evidence only** — impossible while raw review text still reaches RAG (`_community_post_chunk` CURRENT gap, §3). W5's `review_quality_score` and restaurant attributes depend on quarantined-low-confidence discipline from W2. |
+| **W2** | Review ingestion/enrichment: **062 governance foundation landed** via PR #60 (`ingest.review_sources`, `community.ingest_runs` run-accounting extension, `community.ingest_quarantine` — no raw-body column), aggregate-only persistent receipt/dedupe + DB-backed source gate (`063`), bulk-lane ad classifier, summary-only RAG hand-off, recheck escalation. **Raw review-body retention is BLOCKED_EXTERNAL** (no `community.posts_raw`, §4.4/DG-11). | W3 grounds docents in **aggregate evidence only** — impossible while raw review text still reaches RAG (`_community_post_chunk` CURRENT gap, §3). W5's `review_quality_score` and restaurant attributes depend on quarantined-low-confidence discipline from W2. |
 | **W3** | RAG/docent/TTS: real embeddings + `embedding_generation` reindex, hybrid retrieval + mini rerank in the live path, inline guardrails + language lock, per-chunk citations, on-demand reason, audio cache, offline mini QA judge. | W4's planner narration and "why now" reasons call `docent_service`; W5's Tour and "why this place" panel call docent/reason. They cannot ship honest, grounded, single-language narration until W3's guardrails, citations, and reason endpoint exist. |
 | **W4** | 4-slot planner + weather substitutions: full timed slots, `weather_aware_substitute`, `POST /plans/regenerate`, intervention history + diff, travel-time cache + provider + Haversine fallback. | W5's Daily Plan screen and situation-aware toast consume `/plans/daily` slots + `/plans/intervention` proposals. The Tour (W5) reuses the planner's meal-facet + anchor logic. Shipping the planner after RAG/docent lets slot narration be real, not stubbed. |
 | **W5** | Map/dashboard + restaurant discovery: viewport-bounds query, pin-first cluster policy hardening, cuisine/meal/diet/indoor facets, Local Restaurant Tour, franchise confidence surfacing, anonymous feedback + dispersion eval. | The map is the **integration surface** that renders every upstream contract: places (W1 geo/facets), weather pill (W1), docent sheet (W3), plan/intervention (W4). It must land after its data dependencies so a screenshot can be backed by live data end-to-end. |
@@ -151,36 +153,61 @@ eval fixtures.
 | --- | --- | --- | --- | --- | --- |
 | **Place identity / geo / category** | `010_travel_core_tables.sql` (`travel.places`, GIST `idx_places_geog_expr`, category CHECK) | `places_service.list_places` / `db_repository.fetch_places` (`/api/v1/places`) | `place_score_batch` (score snapshots) | `features/map/map_helpers.dart`, `features/home/home_page.dart` | `test_places_service.py`, `generated_client_places_poc_test.dart` |
 | **Localized content (KO/EN exclusive)** | (`place_enrichments` attributes jsonb, `010`) | `normalization.display_language` + docent `language` enum | (bulk lane translation of summary lines) | `shared/l10n/lala_copy.dart`, `features/docent/docent_helpers.dart` (`singleLanguageText`) | `test_i18n`-style + inline language-lock test |
-| **Weather / air snapshot** | `020_travel_domain_tables.sql` (`travel.weather_observations`) + `064` wind_speed/flags (TARGET) | `weather_service.current_weather` (`/api/v1/weather`) | `weather-refresh` job (`weather_observation_refresh`) | `features/weather/widgets/*` | `test_weather_observation_refresh.py`, `weather_map_pill_test.dart` |
-| **Review provenance / raw retention** | `030_community_core_tables.sql` + `062` `community.posts_raw`, `ingest.source_registry`, `community.ingest_quarantine` (TARGET) | (no raw-text endpoint — forbidden, §4.4) | `review-mention-ingest` job (`review_mention_ingest`, `run_review_mention_ingest`) | (none — aggregate only) | `test_safety_contracts.py` (no-raw-text) |
+| **Weather / air snapshot** | `020_travel_domain_tables.sql` (`travel.weather_observations`) + `065` wind_speed/flags (TARGET) | `weather_service.current_weather` (`/api/v1/weather`) | `weather-refresh` job (`weather_observation_refresh`) | `features/weather/widgets/*` | `test_weather_observation_refresh.py`, `weather_map_pill_test.dart` |
+| **Review provenance / raw retention** | `030_community_core_tables.sql` + `062` `ingest.review_sources`, `community.ingest_runs` run-accounting ext., `community.ingest_quarantine` (**PR #60, landed**); `063` aggregate receipt/dedupe + DB-backed source gate (TARGET); raw retention **BLOCKED_EXTERNAL** (no `posts_raw`, §4.4/DG-11) | `review_ingest_governance` boundary (no raw-text endpoint — forbidden, §4.4) | `review-mention-ingest` job (`review_mention_ingest`, `run_review_mention_ingest`) | (none — aggregate only) | `test_safety_contracts.py` (no-raw-text), `test_review_ingest_governance.py` (in PR #60) |
 | **Review normalized attributes** | `030` `community.place_mentions_weekly.attributes` + `010` `travel.place_enrichments` mirror (TARGET G8) | `review_attribute_batch` (internal; surfaced as aggregate fields on `/places`) | `review-attribute-batch` job (`run_review_attribute_batch`) | (aggregate fields only) | `test_review_attribute_batch.py` |
 | **Franchise / small-merchant classification** | `035_data_pipeline_tables.sql` (`economy.franchise_brands`, `analytics.place_business_identity`) | `franchise_identity.classify_place_business` (surfaced via `place_score_snapshots`) | `franchise-reference-ingest` + `place-score-batch` jobs | (confidence surfacing in W5) | `test_franchise_identity.py` |
 | **Local-value score + optional reason** | `035` `analytics.place_score_snapshots` (`formula_version=local-value-v2`) | `recommendation_scoring.build_place_score` (score) + `docent_service` reason (`/docents/reason`, TARGET) | `place-score-batch` job | `features/place/widgets/*` (`점수/근거` action, on demand) | `test_recommendation_scoring.py`, reason eval subset |
-| **RAG chunk / citation / embedding version** | `036_rag_knowledge_tables.sql` + `063` `embedding_generation` + filter metadata (TARGET) | `rag_index.query_knowledge_chunks` + hybrid fetch (TARGET) | `rag-reindex` worker (TARGET) | (citations rendered in docent sheet/reason) | `test_rag_index.py`, retrieval recall@3 eval |
-| **Docent cache / audio** | `020` `travel.docent_scripts` + `063` `travel.docent_audio_cache` (TARGET) | `docent_service.generate_script/audio` + `/docents/reason` (TARGET) | (offline QA job `run_docent_quality_qa`) | `features/docent/widgets/*`, `tour_audio_bar` | docent eval set (30–50 places), `test_docent_*` |
-| **Plan slot / substitution / intervention** | `020` + `064` `travel.plan_snapshots`, `weather_state_cache`, `place_operating_hours`, `travel_time_cache`, `weather_threshold_config`, `region_catalog` (TARGET) | `planner_service.daily_plan/intervention` + `/plans/regenerate` (TARGET) | (none — synchronous request path) | `features/planner/*`, `features/plan/*`, `features/intervention/*` | `test_planner_service.py` (extended) |
+| **RAG chunk / citation / embedding version** | `036_rag_knowledge_tables.sql` + `064` `embedding_generation` + filter metadata (TARGET) | `rag_index.query_knowledge_chunks` + hybrid fetch (TARGET) | `rag-reindex` worker (TARGET) | (citations rendered in docent sheet/reason) | `test_rag_index.py`, retrieval recall@3 eval |
+| **Docent cache / audio** | `020` `travel.docent_scripts` + `064` `travel.docent_audio_cache` (TARGET) | `docent_service.generate_script/audio` + `/docents/reason` (TARGET) | (offline QA job `run_docent_quality_qa`) | `features/docent/widgets/*`, `tour_audio_bar` | docent eval set (30–50 places), `test_docent_*` |
+| **Plan slot / substitution / intervention** | `020` + `065` `travel.plan_snapshots`, `weather_state_cache`, `place_operating_hours`, `travel_time_cache`, `weather_threshold_config`, `region_catalog` (TARGET) | `planner_service.daily_plan/intervention` + `/plans/regenerate` (TARGET) | (none — synchronous request path) | `features/planner/*`, `features/plan/*`, `features/intervention/*` | `test_planner_service.py` (extended) |
 | **Marker / cluster / viewport query** | (no change — `idx_places_geog_expr` + `idx_places_lat_lng`) | `places_service`/`db_repository.fetch_places` `bounds` param (TARGET) | (none) | `features/map/map_helpers.dart::clusterMapPlacesForMap` | `test/features/map/map_clustering_test.dart`, viewport-bounds test |
-| **User location / manual nationwide region** | `064` `travel.region_catalog` (TARGET; today in-code `region_catalog.py`) | `weather_service` region resolution + `/plans`/`/weather` region key | (none) | `core/location/lala_location.dart`, `features/location/widgets/manual_location_sheet.dart`, `manual_location_options.dart` | region-resolution test (GPS→시/군) |
+| **User location / manual nationwide region** | `065` `travel.region_catalog` (TARGET; today in-code `region_catalog.py`) | `weather_service` region resolution + `/plans`/`/weather` region key | (none) | `core/location/lala_location.dart`, `features/location/widgets/manual_location_sheet.dart`, `manual_location_options.dart` | region-resolution test (GPS→시/군) |
 
 ### 3.2 Shared migration runner (one SQL owner)
 
 All migrations flow through `apps/api/app/services/canonical_sql.py`
 (`load_canonical_sql_plan`, `scan_sql_safety`, `execute_canonical_sql`), which
-loads the ordered `sql/canonical/*.sql` set (currently `000`→`061`) and rejects
-unsafe statements. New additive migrations take the **next free number** and are
-proposed here (file names are TARGET, owned by the wave's SQL owner):
+loads the ordered `sql/canonical/*.sql` set (baseline `000`→`062`; `062` is the
+review-governance foundation that lands via the sibling PR #60 worktree
+`lala-review-ingestion-foundation` and is the authoritative baseline this program
+reconciles against) and rejects unsafe statements. New additive migrations take
+the **next free number** and are proposed here (file names are TARGET, owned by
+the wave's SQL owner):
 
-- `062_review_ingest_provenance.sql` (W2) — `community.posts_raw`,
-  `community.ingest_quarantine`, `ingest.source_registry` semantics, unique
-  `(place_id, enrichment_type, prompt_version)` on `travel.place_enrichments`.
-- `063_rag_docent_targets.sql` (W3) — `rag.knowledge_chunks.embedding_generation`
+- `062_review_ingestion_governance.sql` (**PR #60, landed**) — additive,
+  re-runnable. Owns `ingest.review_sources` (source_name PK, provider,
+  `license_class`, terms/collection/retention/redaction policy, status), the
+  run-accounting extension on `community.ingest_runs` (`run_key` partial-unique
+  idempotency index, received/processed/duplicate/quarantined counters,
+  `failure_category`), and `community.ingest_quarantine` dead-letter. **This is
+  not an immutable ledger and it stores no raw review text** (quarantine has no
+  body column by design). Backed by the typed governance boundary in
+  `apps/api/app/services/review_ingest_governance.py`.
+- `063_review_aggregate_receipt.sql` (W2) — aggregate-only persistent receipt
+  and cross-batch dedupe (keyed on `content_sha256` / an `ingest_runs`-side
+  accepted-hash ledger) so duplicates are detected **without storing raw text**,
+  plus the DB-backed `ingest.review_sources` license gate, shipped as one
+  transaction boundary across register → run → quarantine → finalize. Additive
+  unique `(place_id, enrichment_type, prompt_version)` on
+  `travel.place_enrichments` (G8 mirror auditing). **No `community.posts_raw`
+  table (raw retention is BLOCKED_EXTERNAL, §4.4/DG-11) and no external-provider
+  calls** — the slice accepts already-normalized records only.
+- `064_rag_docent_targets.sql` (W3) — `rag.knowledge_chunks.embedding_generation`
   + filter-grade `metadata`; `travel.docent_audio_cache`.
-- `064_planner_data_spine.sql` (W1+W4) — `travel.region_catalog`,
+- `065_planner_data_spine.sql` (W1+W4) — `travel.region_catalog`,
   `travel.place_operating_hours`, `travel.travel_time_cache`,
   `travel.plan_snapshots`, `travel.weather_state_cache`,
   `travel.weather_threshold_config`, `travel.weather_observations.wind_speed`.
-- `065_place_facets.sql` (W5) — `travel.places.cuisine_taxonomy`/`cuisine_code`,
+- `066_place_facets.sql` (W5) — `travel.places.cuisine_taxonomy`/`cuisine_code`,
   `analytics.recommendation_feedback`, optional `tour_route_cache`.
+
+**BLOCKED_EXTERNAL (not a migration — no raw-retention table):**
+`community.posts_raw` (or any raw review-body table) is **not created by any
+slice in this program** and is not assigned a migration number until the
+legal/retention/access decision (DG-11) clears. Earlier drafts listed it as a W2
+migration; that proposal is superseded — do not renumber it into the canonical
+sequence (it would collide with the already-shipped `062`).
 
 No wave may introduce a migration out of this order or bypass `scan_sql_safety`.
 
@@ -216,11 +243,11 @@ reviewed against them.
 - Additive and idempotent only (`CREATE TABLE/INDEX IF NOT EXISTS`, `ADD COLUMN
   IF NOT EXISTS`). `scan_sql_safety` forbids `DROP`, destructive `ALTER`, and
   unguarded renames. No exception, no `-- force`.
-- One ordering authority: `canonical_sql.py` over `sql/canonical/000…065`. A new
+- One ordering authority: `canonical_sql.py` over `sql/canonical/000…066`. A new
   migration takes the next free number per §3.2 and declares its wave.
 - No wave redefines a table another wave already shipped. Conflicting additive
   columns on the same table are resolved in this program before either merges
-  (e.g., `travel.place_enrichments` uniqueness is owned by W2's `062`).
+  (e.g., `travel.place_enrichments` uniqueness is owned by W2's `063`).
 
 ### 4.2 One source of truth per OpenAPI/schema field
 
@@ -249,19 +276,31 @@ reviewed against them.
   body/title into `body_ko` (CONFIRMED gap). W2/W3 retire/replace this: RAG
   grounds in **aggregate** `place_mention` summaries (counts, sentiment bands,
   attribute scores) only — never a reviewer's verbatim text.
-- No endpoint returns `community.posts.body` or `posts_raw.*`. Citations expose
-  source **type/table + record pointer**, not embedded content.
-- Enforced by `test_safety_contracts.py` (no-raw-text, no-PII-in-aggregates).
+- No endpoint returns `community.posts.body`. **No `community.posts_raw` table
+  exists or is created by any current slice** — until the legal/retention/access
+  decision (DG-11) clears, raw review text is **not stored, served, logged, or
+  embedded** anywhere (BLOCKED_EXTERNAL); should a raw table ever land, it would
+  be forbidden on the serve path too. Citations expose source **type/table +
+  record pointer**, not embedded content.
+- Enforced by `test_safety_contracts.py` (no-raw-text, no-PII-in-aggregates) and
+  the `enforce_no_raw_review_text` guard + `extra="forbid"` models in
+  `review_ingest_governance.py` (062, PR #60).
 
 ### 4.5 No direct Naver/Daangn scraping without approved source/legal sign-off
 
 - The legacy reliance on unauthenticated Naver/Daangn scraping is **not** carried
   over. Review/mention acquisition uses only sources marked
-  `licensed | public_processed | approved_export` in `ingest.source_registry`
-  (W2), after legal sign-off on retention/summarization per source.
+  `licensed | public_processed | approved_export` in `ingest.review_sources`
+  (062, PR #60; enforced by the `review_ingest_governance.py` boundary), after
+  legal sign-off on retention/summarization per source.
 - No scraping code ships in the repo. This is a code-review gate and a
   BLOCKED_EXTERNAL decision (DG-1, §10) until a first licensed source is
   approved. Community-crawl live execution remains approval-gated (DG-6).
+- **Raw review bodies are not stored at all** until DG-11 (raw-retention
+  legal/retention/access) clears: no `community.posts_raw` table is created by
+  any currently planned slice; `062` ships no raw-body column; the next review
+  migration (`063`) is aggregate-only and accepts already-normalized records
+  only (no external-provider calls).
 
 ### 4.6 No Azure Function blind port
 
@@ -285,7 +324,7 @@ possible). All migrations are listed in §3.2.
 
 | Slice | Scope (smallest mergeable) | Tests | Live-data acceptance | Rollback / flag | Risk / dependency |
 | --- | --- | --- | --- | --- | --- |
-| **W0-a Migration-runner contract** | Document/lock the canonical ordering (§3.2); add a CI assertion that `canonical_sql.py` loads `000…065` and `scan_sql_safety` passes on every PR. No new table. | `scan_sql_safety` runs in CI; ordering test green. | N/A (no data). | None (governance only). | Low. Blocks W1–W5 from shipping migrations. |
+| **W0-a Migration-runner contract** | Document/lock the canonical ordering (§3.2); add a CI assertion that `canonical_sql.py` loads `000…066` and `scan_sql_safety` passes on every PR. No new table. | `scan_sql_safety` runs in CI; ordering test green. | N/A (no data). | None (governance only). | Low. Blocks W1–W5 from shipping migrations. |
 | **W0-b Model-role router** | `config.py` `model_role_overrides` (env `LALA_MODEL_ROLE_*`) + `model_client.resolve(role)`; existing `selected_docent_model`/`selected_review_batch_model` become thin callers. **No prompt copy.** | Router resolves each role to a `(provider, model_id, client)` triple; default = current behavior. | `LALA_ENABLE_LIVE_AI=false` keeps offline; resolve() works without keys. | Flag off → current single-deployment path. | Medium. Touched by W2/W3/W4; must land first. |
 | **W0-c Feature-flag registry** | One registry (config + doc table) of every flag this program introduces (§5.x flags), each defaulting to current behavior. | Flag-default test asserts no-op deploy. | N/A. | Flags off = today. | Low. Prevents flag-name collisions across waves. |
 | **W0-d Safety-contract test spine** | Extend `test_safety_contracts.py` with the cross-cutting assertions every wave adds to: no-raw-text-in-RAG, no-PII-in-aggregates, no-secrets-in-logs, no-mock-on-normal-paths, no-scraping-code. | Tests red on the gaps they will close; green on CURRENT invariants. | N/A (contract). | None. | Low. Becomes the §9 DoD backbone. |
@@ -295,19 +334,19 @@ possible). All migrations are listed in §3.2.
 
 | Slice | Scope | Tests | Live-data acceptance | Rollback / flag | Risk / dependency |
 | --- | --- | --- | --- | --- | --- |
-| **W1-a Region resolution to 시/군** | `064` `travel.region_catalog` (from in-code `region_catalog.py`/`manual_location_options.dart`); extend resolution past province to `(province_code, city_code)`. No external geocoder (PostGIS-only parity). | GPS→city resolution test; manual-selection maps to same key. | `/weather`/`/places`/`/plans` return a real 시/군 key for a live coordinate. | Flag `REGION_SIGUN_RESOLUTION`; off = province-level. | Medium. Depends W0-a. Blocks W4/W5 region key. |
-| **W1-b Weather thresholds as config + explicit ASA flags** | `064` `travel.weather_threshold_config`; emit explicit `is_rain_snow/is_bad_dust/is_heatwave/is_coldwave/is_strong_wind` **plus** `outdoor_status` in `/weather` and plan envelope. Resolve PM2.5 cutoff (35 vs 36) and the two-tier wind decision (`discomfort_wind_ms`/`advisory_wind_ms`, DG-3). | Threshold-config resolution test; flag-vector test; priority `rain>cold>heat>pm`. | `/weather` returns real flag vector for a live region. | Flag `WEATHER_EXPLICIT_FLAGS`. | Medium. DG-3 decision gate. |
-| **W1-c Open-Meteo fallback tier + `wind_speed`** | `064` adds `travel.weather_observations.wind_speed`; restore DB→Open-Meteo→KMA chain (Open-Meteo as fallback tier only, within quota). | Fallback-chain test; stale-reuse test. | Live weather survives a KMA blip via Open-Meteo. | Flag `WEATHER_OPEN_METEO_FALLBACK`. | Medium. Legal: Open-Meteo quota/attribution (§8). |
-| **W1-d Operating hours** | `064` `travel.place_operating_hours`; `open_during(slot.window)` predicate (replaces legacy `bsn_state_nm='영업'`). Unknown hours → down-rank + honest flag, never silent drop. | `open_during` predicate test; unknown-hours down-rank test. | A real restaurant is filtered out of a slot it is closed for. | Flag `PLACE_OPEN_HOURS`. | Medium. DG-9 source-priority decision. Consumed by W4. |
+| **W1-a Region resolution to 시/군** | `065` `travel.region_catalog` (from in-code `region_catalog.py`/`manual_location_options.dart`); extend resolution past province to `(province_code, city_code)`. No external geocoder (PostGIS-only parity). | GPS→city resolution test; manual-selection maps to same key. | `/weather`/`/places`/`/plans` return a real 시/군 key for a live coordinate. | Flag `REGION_SIGUN_RESOLUTION`; off = province-level. | Medium. Depends W0-a. Blocks W4/W5 region key. |
+| **W1-b Weather thresholds as config + explicit ASA flags** | `065` `travel.weather_threshold_config`; emit explicit `is_rain_snow/is_bad_dust/is_heatwave/is_coldwave/is_strong_wind` **plus** `outdoor_status` in `/weather` and plan envelope. Resolve PM2.5 cutoff (35 vs 36) and the two-tier wind decision (`discomfort_wind_ms`/`advisory_wind_ms`, DG-3). | Threshold-config resolution test; flag-vector test; priority `rain>cold>heat>pm`. | `/weather` returns real flag vector for a live region. | Flag `WEATHER_EXPLICIT_FLAGS`. | Medium. DG-3 decision gate. |
+| **W1-c Open-Meteo fallback tier + `wind_speed`** | `065` adds `travel.weather_observations.wind_speed`; restore DB→Open-Meteo→KMA chain (Open-Meteo as fallback tier only, within quota). | Fallback-chain test; stale-reuse test. | Live weather survives a KMA blip via Open-Meteo. | Flag `WEATHER_OPEN_METEO_FALLBACK`. | Medium. Legal: Open-Meteo quota/attribution (§8). |
+| **W1-d Operating hours** | `065` `travel.place_operating_hours`; `open_during(slot.window)` predicate (replaces legacy `bsn_state_nm='영업'`). Unknown hours → down-rank + honest flag, never silent drop. | `open_during` predicate test; unknown-hours down-rank test. | A real restaurant is filtered out of a slot it is closed for. | Flag `PLACE_OPEN_HOURS`. | Medium. DG-9 source-priority decision. Consumed by W4. |
 | **W1-e `is_indoor` provenance** | Re-derive indoor/outdoor labels via model policy (nano classify + mini recheck) into `travel.place_enrichments`; do **not** copy legacy `classify_tourist_indoor.py`. | Classification confidence test; mini-recheck-on-low-confidence test. | A real attraction carries a grounded `is_indoor` label. | Flag `PLACE_INDOOR_CLASSIFY`. | Medium. Consumed by W4 substitution + W3 RAG filter. |
 
 ### 5.2 Wave 2 — review ingestion / enrichment
 
 | Slice | Scope | Tests | Live-data acceptance | Rollback / flag | Risk / dependency |
 | --- | --- | --- | --- | --- | --- |
-| **W2-a Raw / normalized / provenance split** | `062` `community.posts_raw` (raw payload, `source_run_id`, `license_class`, `content_sha256`, retention timestamp) + `ingest.source_registry`; `community.posts` becomes the normalized projection. Backfill existing rows with best-known `license_class`. | Raw-isolated test; backfill idempotency test. | An aggregate resolves to a `source_run_id` + `license_class`. | Flag `REVIEW_RAW_SPLIT`; off = today's inline posts. | High (privacy/legal). DG-1 first-licensed-source sign-off. |
-| **W2-b Source-registry license gate** | Bulk lane refuses any source not `licensed\|public_processed\|approved_export`. | License-gate test (rejected class blocked). | A `rejected` source is not processed. | Flag `REVIEW_LICENSE_GATE`. | High. BLOCKED_EXTERNAL until DG-1. |
-| **W2-c Quarantine / dead-letter + replay** | `062` `community.ingest_quarantine`; `--since/--window/--provider/--place-id` replay flags on the guarded tools. Poison → quarantine, not crash. | Quarantine-routing test; replay idempotency test. | A low-confidence/ambiguous signal is quarantined, not scored. | Flag `REVIEW_QUARANTINE`. | Medium. DG-4 review-queue UI owner. |
+| **W2-a Review-ingest governance foundation (`062`, landed)** | **PR #60 ships this** (`062_review_ingestion_governance.sql` + `review_ingest_governance.py`): `ingest.review_sources` provenance registry, the `community.ingest_runs` run-accounting extension (`run_key` idempotency, counters, `failure_category`), and `community.ingest_quarantine` dead-letter. **Not an immutable ledger; no raw-body column.** The typed boundary emits an aggregate-only `ApprovedReviewAggregate` (`extra="forbid"`, `enforce_no_raw_review_text`). | Governance tests in PR #60 (license gate, dedupe, quarantine routing, no-raw-text). | A governed batch produces a `run_key`-receipt + counted ledger row without storing raw text. | None (additive schema; PR #60 draft). | High (privacy/legal). Foundation for W2-b/c. |
+| **W2-b Aggregate-only receipt + DB-backed source gate (`063`)** | `063_review_aggregate_receipt.sql`: persistent cross-batch dedupe keyed on `content_sha256` (or an `ingest_runs`-side accepted-hash ledger) so duplicates are detected **without raw text**, plus the DB-backed `ingest.review_sources` license gate (`license_class ∈ {licensed, public_processed, approved_export, rejected}`; `rejected` routes the whole batch to quarantine as `terms_violation`), shipped as one transaction boundary across register → run → quarantine → finalize. Additive unique `(place_id, enrichment_type, prompt_version)` on `travel.place_enrichments`. **No `posts_raw`; no external-provider calls** — accepts already-normalized records only. | Cross-batch dedupe test; transaction-atomicity test; license-gate test (`rejected` → whole batch quarantined, nothing processed); no-raw-text invariant test. | An aggregate resolves to a `source_run_id` + `license_class`; a `rejected` source is recorded but never processed. | Flag `REVIEW_AGGREGATE_RECEIPT` / `REVIEW_LICENSE_GATE`. | High (privacy/legal). **BLOCKED_EXTERNAL** until DG-1. |
+| **W2-c Quarantine / dead-letter (landed) + replay** | `062` ships `community.ingest_quarantine` (typed metadata only — no body column; idempotent dead-letter dedupe via partial unique `(provider, external_key, reason_category) WHERE resolved_at IS NULL`); `review_ingest_governance.py::insert_quarantine_entries` persists. Replay is TARGET: `--since/--window/--provider/--place-id` on the guarded tools, re-reading normalized `community.posts` + the 062 run ledger (**never a raw store** — BLOCKED_EXTERNAL). | Quarantine-routing test (062); replay idempotency test. | A low-confidence/ambiguous signal is quarantined, not scored. | Flag `REVIEW_QUARANTINE`. | Medium. DG-4 review-queue UI owner. |
 | **W2-d Bulk-lane AI ad classifier + attribute mirror** | Second-pass nano classifier `{is_ad, ad_confidence, reason, organic_excerpt}` after deterministic `AD_MARKERS`; mirror attributes to `travel.place_enrichments` (G8). `review_quality_score` null when <3 organic (honest absence). | Ad-classifier test; <3-organic-null test; mirror test. | `place_mentions_weekly` + `place_enrichments` carry aligned attributes. | Flag `REVIEW_AI_CLASSIFIER`; `LALA_ENABLE_LIVE_AI`. | Medium. Cost/quota (DG-10). |
 | **W2-e Low-confidence recheck (mini) + summary-only RAG hand-off** | Uncertain signals → mini recheck (`resolve("recheck_low_conf")`) or quarantine; retire/replace `_community_post_chunk` raw-body embedding with `place_mention` aggregate chunks. | Recheck-escalation test; no-raw-text-in-RAG test (closes G7). | `rag.knowledge_chunks` has no raw review bodies; docent grounds in aggregates. | Flag `REVIEW_RECHECK`; RAG cut last after docent QA (W3). | High. Depends W0-b router, W3 grounding QA. |
 
@@ -315,11 +354,11 @@ possible). All migrations are listed in §3.2.
 
 | Slice | Scope | Tests | Live-data acceptance | Rollback / flag | Risk / dependency |
 | --- | --- | --- | --- | --- | --- |
-| **W3-a Real embeddings + reindex generation** | `063` `rag.knowledge_chunks.embedding_generation` + filter `metadata`; serving default = semantic (config-gated); `rag-reindex` worker (stale-only, idempotent). `local-hash` stays dev/offline-only. | Startup asserts semantic method when AI on; stale-predicate test; recall@3 ≥ baseline. | Backfill complete; stale=0; recall@3 holds on eval subset. | Flag `rag_embedding_method`/`rag_embedding_generation`. | High (backfill cost/quota). Depends W0-b. |
+| **W3-a Real embeddings + reindex generation** | `064` `rag.knowledge_chunks.embedding_generation` + filter `metadata`; serving default = semantic (config-gated); `rag-reindex` worker (stale-only, idempotent). `local-hash` stays dev/offline-only. | Startup asserts semantic method when AI on; stale-predicate test; recall@3 ≥ baseline. | Backfill complete; stale=0; recall@3 holds on eval subset. | Flag `rag_embedding_method`/`rag_embedding_generation`. | High (backfill cost/quota). Depends W0-b. |
 | **W3-b Hybrid retrieval + mini rerank** | `fetch_docent_knowledge_context_hybrid` (ANN ∪ keyword ∪ metadata filter) → reciprocal-rank fusion → mini rerank → top-3; wired behind `rag_retrieval_mode`. Keyword leg retained. | Hybrid-vs-legacy recall test; latency p95 within budget. | Canary region: recall@3 up vs legacy mode; latency OK. | `rag_retrieval_mode={legacy,hybrid}`. | Medium. |
 | **W3-c Inline guardrails + language lock** | Promote offline QA to inline: language lock (one mini regen, then same-language fallback), no robot-emoji/filler strip, score/secret-leak block, length contract, weather-verb honesty. | robot-emoji=0; language-purity=100% on eval (hard gates). | A generated script is single-language and filler-free. | Flag `docent_inline_guards`. | Medium. G4/G6 hard-zero gates. |
 | **W3-d Citations + on-demand reason** | Additive `citations[]?`/`retrieval?` on `DocentScriptData`; `POST /api/v1/docents/reason` (on-demand local-economy/experience rationale, ≤4 sentences, no private scores). OpenAPI regenerated + compat-checked. | Citation-correctness test; reason-no-score-leak test. | Reason endpoint returns a grounded rationale on demand. | Flag `docent_reason_enabled`. | Medium. G2/G5. |
-| **W3-e Audio contract** | `063` `travel.docent_audio_cache`; char-limit guard + idempotent retry + honest 503-with-retry + SSML prosody; `X-LALA-Audio-Cache` header. | Char-limit test; 503-on-failure test; cache-hit test. | Audio cache-hit ≥ target; honest failure state. | Flag `docent_audio_cache`; `LALA_ENABLE_LIVE_SPEECH`. | Medium. G1/G7. |
+| **W3-e Audio contract** | `064` `travel.docent_audio_cache`; char-limit guard + idempotent retry + honest 503-with-retry + SSML prosody; `X-LALA-Audio-Cache` header. | Char-limit test; 503-on-failure test; cache-hit test. | Audio cache-hit ≥ target; honest failure state. | Flag `docent_audio_cache`; `LALA_ENABLE_LIVE_SPEECH`. | Medium. G1/G7. |
 | **W3-f Offline mini QA judge** | `evaluate_docent_script` gains a mini LLM-judge pass (offline batch over eval set + production sample): grounding faithfulness, local-economy relevance, filler, language purity, route action. Regex stays the cheap pre-filter. | Judge stamps `judge_model`/`judge_version`; QA pass-rate metric. | QA runs on eval set; blocker rate within budget. | Flag `docent_qa_judge`. | Medium. Depends W0-b. |
 
 ### 5.4 Wave 4 — 4-slot planner / weather substitutions
@@ -329,7 +368,7 @@ possible). All migrations are listed in §3.2.
 | **W4-a Full 4-slot planner** | Restore 4 timed slots/roles (`plan.slot_windows` config), greedy anchor + `used_place_names` dedup + stable tie-break, meal roles, `build_place_score` + `weather_fit` + travel-time wired into slot ranking. | Slot-builder test; anchor+dedup test; determinism `(request,seed)`. | `/plans/daily` returns 4 real slots from live places. | Flag `PLAN_FULL_SLOTS`; off = 2-slot stub. | High. Depends W1 (hours/region/weather flags). |
 | **W4-b Indoor/outdoor substitution** | `weather_aware_substitute(active_flags, slot)` → ranked indoor/outdoor proposals, each with reason/location/travel-time/preference (the slide-8 two situations). | Rain→indoor, clear→outdoor fixture test. | Slide-8 substitution pair on a real device. | Flag `PLAN_WEATHER_SUBSTITUTE`. | Medium. G1 marquee. Depends W1-e indoor + W3 reason. |
 | **W4-c Regenerate + accept** | `POST /api/v1/plans/regenerate` (seed bump, deterministic re-roll, valid constraints); accept persists `travel.plan_snapshots` (W4-d) and seeds intervention baseline. | Regenerate-determinism test; changed-slot diff test. | Before/after regenerate changes ≥1 slot, still valid. | Flag (within `PLAN_FULL_SLOTS`). | Low. |
-| **W4-d Intervention history + travel-time** | `064` `travel.weather_state_cache` + `travel_time_cache`; `/plans/intervention` proposals + diff + history token; travel-time provider + Haversine fallback. | Intervention-diff test; travel-time-fallback test. | Mid-session weather change visibly updates the plan. | Flags `PLAN_INTERVENTION_HISTORY`, `PLAN_TRAVEL_TIME`. | Medium. DG-2 provider choice (BLOCKED_EXTERNAL). |
+| **W4-d Intervention history + travel-time** | `065` `travel.weather_state_cache` + `travel_time_cache`; `/plans/intervention` proposals + diff + history token; travel-time provider + Haversine fallback. | Intervention-diff test; travel-time-fallback test. | Mid-session weather change visibly updates the plan. | Flags `PLAN_INTERVENTION_HISTORY`, `PLAN_TRAVEL_TIME`. | Medium. DG-2 provider choice (BLOCKED_EXTERNAL). |
 
 ### 5.5 Wave 5 — map/dashboard + restaurant discovery
 
@@ -337,10 +376,10 @@ possible). All migrations are listed in §3.2.
 | --- | --- | --- | --- | --- | --- |
 | **W5-a Viewport-bounds query** | Optional `bounds=minLat,minLng,maxLat,maxLng` on `/places` (index-covered; circle query retained for rail). Pin-first: API returns places, clustering stays client-side. | In-rectangle-only test; circle-parity test. | Panning re-queries the visible rectangle as individual pins. | Flag `PLACES_VIEWPORT_BOUNDS`. | Low. No schema change. |
 | **W5-b Pin-first + cluster-policy hardening** | Re-affirm `clusterMapPlacesForMap` (`≥80/≥10`); selected-pin-individual invariant; `<80 ⇒ pins`. | Clustering-policy test (selected stays individual). | Map renders individual pins until threshold. | None (current truth). | Low. G6. |
-| **W5-c Cuisine/meal/diet/indoor facets + taxonomies** | `065` `travel.places.cuisine_taxonomy`/`cuisine_code` (re-derived, not legacy term list); `/places?cuisine&meal&diet&indoor`; `/api/v1/taxonomies` for data-driven chips. Invalid facet → `400`. | Facet-filter test; invalid-facet-400 test; empty=honest `count:0`. | Restaurants+Cafes chips show ≥3 live café pins. | Flag `PLACE_FACETS`. | Medium. Depends W1 geo. |
+| **W5-c Cuisine/meal/diet/indoor facets + taxonomies** | `066` `travel.places.cuisine_taxonomy`/`cuisine_code` (re-derived, not legacy term list); `/places?cuisine&meal&diet&indoor`; `/api/v1/taxonomies` for data-driven chips. Invalid facet → `400`. | Facet-filter test; invalid-facet-400 test; empty=honest `count:0`. | Restaurants+Cafes chips show ≥3 live café pins. | Flag `PLACE_FACETS`. | Medium. Depends W1 geo. |
 | **W5-d Local Restaurant Tour** | First-class "지역 식당 투어" screen: data-driven chips (W5-c), ≤5-stop walking route from live `/places`, per-stop grounded narration + tour-mode docent reason. | Tour screen test; honest-empty test; bilingual test. | Tour screen: chip selected, ≥3 live stops, rationale visible. | Flag `LOCAL_TOUR`. | Medium. Depends W3-d reason, W5-c facets. |
 | **W5-e Franchise confidence surfacing** | Expose data-basis/`missing_signals` + `franchise_match_confidence`/`unknown` in `/places` so UI shows "partial signals"/"limited review signal" honestly. | Confidence-surfacing test; unknown-fallback test. | A low-signal place shows an honest basis note. | Flag `PLACE_CONFIDENCE_SURFACE`. | Low. |
-| **W5-f Anonymous feedback + dispersion eval** | `065` `analytics.recommendation_feedback` (session-anonymous, `(place_id,category,day,action_counts)`); offline dispersion eval (Gini/Herfindahl vs card-spend baseline). Privacy: aggregate-only, never joined to identity. | Aggregate-only invariant test; dispersion metric test. | Dispersion eval report artifact (offline). | Flag `RECOMMENDATION_FEEDBACK`. | Medium. Privacy-sensitive. |
+| **W5-f Anonymous feedback + dispersion eval** | `066` `analytics.recommendation_feedback` (session-anonymous, `(place_id,category,day,action_counts)`); offline dispersion eval (Gini/Herfindahl vs card-spend baseline). Privacy: aggregate-only, never joined to identity. | Aggregate-only invariant test; dispersion metric test. | Dispersion eval report artifact (offline). | Flag `RECOMMENDATION_FEEDBACK`. | Medium. Privacy-sensitive. |
 
 ### 5.6 Wave 6 — device/runtime E2E + rollout
 
@@ -366,7 +405,7 @@ real-device capture on live API/DB — never a mock, never a fallback map.
 | **G-TRUST** | Trustworthy local signals; **no raw review text** to users or docents. | W2, W3 | No endpoint emits `community.posts.body`; RAG has no raw-body chunks; `test_safety_contracts.py` green. |
 | **G-SITUATION / GATE-D** | Weather/air-aware **reasoned** recommendations; same day visibly swaps indoor↔outdoor; substitutions carry *why/where/how-far/which-preference*. | W1, W4 | `/plans/daily` + `/plans/intervention` consume flag-level weather + `review_quality_score`; slide-8 substitution pair captured. |
 | **G-ECONOMY** | Aggregate place/area-level evidence; no per-user tracking; no joinable user identity in evidence. | W2, W5 | No user/person id in any review-evidence or economy table; feedback is session-anonymous and never joined for scoring. |
-| **G-LEGAL** | Licensed/public or processed/de-identified sources only; explicit location consent; raw text minimized and purged. | W2, W6 | `source_registry` license gate; secret-contract test; location Opt-in (onboarding S3). |
+| **G-LEGAL** | Licensed/public or processed/de-identified sources only; explicit location consent; **raw review text not stored** (BLOCKED_EXTERNAL). | W2, W6 | `ingest.review_sources` (062) license gate; secret-contract test; location Opt-in (onboarding S3). |
 | **G-REALDATA / G1** | Normal flows use **live DB/API data** with explicit honest loading/loaded/empty/error states; **no demo/mock** on normal paths. | All | `test_safety_contracts.py` no-mock/no-fallback; smoke against live DB/PostGIS. |
 | **G-I18N / G3** | KO and EN are **mutually exclusive** UI modes (sole bilingual surface = S2 language choice); signals language-tagged. | W2, W3, W5 | Inline language lock + client `singleLanguageText`; eval 100% single-language. |
 | **G-CROSSPLATFORM / G4** | Android, iOS, and Web preserve the same workflow; Kakao conditional-import bridge is the single map path. | W5, W6 | Same `/api/v1/*` envelope serves all clients; platform smoke in `smoke_api_matrix.py`. |
@@ -441,11 +480,11 @@ misconfigured environment cannot spend or mutate.
 
 | Gate | Requirement | Owner / enforcement |
 | --- | --- | --- |
-| **Licensed data provenance** | Each source recorded in `ingest.source_registry` with `license_class ∈ {licensed, public_processed, approved_export, rejected}`; bulk lane refuses the rest. Card data = public aggregates only (region×industry×month×demographic); community = mention aggregation only; weather = KMA/AirKorea public APIs. | W2-b; `source_registry`; code-review gate (§4.5). |
-| **Retention / deletion** | Raw bodies live only in `community.posts_raw` under a retention/purge schedule; serve path sees counts/sentiment/attributes/short evidence phrases only. | W2-a; purge job (W6-d). |
+| **Licensed data provenance** | Each source recorded in `ingest.review_sources` (062) with `license_class ∈ {licensed, public_processed, approved_export, rejected}`; the governance boundary refuses the rest and routes `rejected` batches to quarantine. Card data = public aggregates only (region×industry×month×demographic); community = mention aggregation only; weather = KMA/AirKorea public APIs. | W2-b; `review_ingest_governance.py` (062); code-review gate (§4.5). |
+| **Retention / deletion** | **Raw review bodies are not stored at all** (BLOCKED_EXTERNAL, §4.4/DG-11) — no `community.posts_raw` table exists or is created by any current slice; the serve path sees counts/sentiment/attributes/short evidence phrases only. Should a future legal/retention/access decision (DG-11) permit retention, a separate purge schedule applies. | W2-a/W2-b (063 aggregate-only); DG-11. |
 | **Secret injection, not docs** | Secrets via Key Vault + env (`DB_DSN`, `KEY_VAULT_URL`, model deployment keys); OIDC secret-zero deploy. No connection strings, keys, vault/registry/resource-group/subscription/tenant/client IDs, queue/event-hub names, DSNs, tokens, or private URLs in docs or code. ONMU vault isolation; `int-cors-origins` is the only mirrored value. | `test_secret_config_contract.py` / `test_aws_secrets.py`; `test_safety_contracts.py`. |
-| **Idempotency / dedupe** | Every write keyed and replay-safe: raw `(provider, external_key)`; posts `content_sha256`; aggregates `(week, place, provider, category)`; enrichments `(place_id, enrichment_type, prompt_version)`; chunks `(source_type, source_id)`; scores `(place_id, formula_version)`; weather `(location, observed_at)`; feedback `(place_id, day)`. | Per-wave upsert tests (§5). |
-| **Quarantine / replay** | `community.ingest_quarantine` dead-letter with `reason_category`; `--since/--window` deterministic replay from raw; nothing in quarantine reaches scoring/RAG until `resolution='approved'`. | W2-c. |
+| **Idempotency / dedupe** | Every write keyed and replay-safe: governance run `run_key = source_name + window + schema_version` (062); normalized posts `content_sha256`; aggregates `(week, place, provider, category)`; enrichments `(place_id, enrichment_type, prompt_version)`; chunks `(source_type, source_id)`; scores `(place_id, formula_version)`; weather `(location, observed_at)`; feedback `(place_id, day)`. No raw layer is keyed because no raw layer exists (BLOCKED_EXTERNAL). | Per-wave upsert tests (§5). |
+| **Quarantine / replay** | `community.ingest_quarantine` dead-letter with typed `reason_category` (062, **no raw-body column**); `--since/--window` deterministic replay from the normalized layer + the 062 run ledger (**never a raw store** — BLOCKED_EXTERNAL); nothing in quarantine reaches scoring/RAG until `resolution='approved'`. | 062 (landed); W2-c replay. |
 | **Schema migration / backup restore** | Additive-only, ordered (§4.1); every migration has a backup-restore check before apply; rollback = flip flags (additive schema needs no destructive reversal). | `canonical_sql.py`; W0-a. |
 | **Observability** | `ops.job_runs` per run; `community.ingest_runs/tasks`; aggregate quality counters in `place_mentions_weekly.attributes`; metrics: ingestion lag, quarantine depth, ad-ratio, match-confidence, 429/timeout rate, embedding freshness, per-lane cost, plan/weather/substitution funnel. No-secret logging (`redact_secret_text`). | `observability_plan.py` (non-mutating); W6-c. |
 | **Release flags** | Every behavior change behind a flag defaulting to current behavior (W0-c registry); canary by region then category; rollback drill per W6-e. | W0-c, W6-e. |
@@ -463,9 +502,11 @@ capture on live API/DB.
       AirKore with Open-Meteo fallback (W1-b/c). Captures: weather pill good/bad/
       unavailable; a closed restaurant excluded from its slot.
 - [ ] **Trustworthy evidence:** every aggregate resolves to `source_run_id` +
-      `license_class`; no raw review text in RAG or any API response; ambiguous/
-      low-confidence signals quarantined, not scored. Verified by
-      `test_safety_contracts.py` + a DB spot check.
+      `license_class`; no raw review text in RAG or any API response; no
+      `community.posts_raw` table exists (raw retention BLOCKED_EXTERNAL);
+      ambiguous/low-confidence signals quarantined, not scored. Verified by
+      `test_safety_contracts.py` + `test_review_ingest_governance.py` (PR #60) +
+      a DB spot check.
 - [ ] **Grounded docent:** `/docents/script` returns a single-language script
       grounded in ≥1 citation; `/docents/reason` returns a ≤4-sentence local-
       economy rationale on demand; zero robot-emoji; 30–50-place eval recall@3
@@ -523,9 +564,9 @@ a single PR may carry slices from one owner only (coordinate via §3 pins).
 
 | # | Slice | Owner subsystem | Dependency / decision gate |
 | --- | --- | --- | --- |
-| P1-1 | W2-a raw/normalized/provenance split (`posts_raw`, `source_registry`) | Ingest / DB | **DG-1** first-licensed-source legal sign-off (**BLOCKED_EXTERNAL**). |
-| P1-2 | W2-b source-registry license gate | Ingest / legal | **DG-1** (**BLOCKED_EXTERNAL**). |
-| P1-3 | W2-c quarantine/dead-letter + replay | Ingest / QA | **DG-4** manual-review-queue UI owner. |
+| P1-1 | W2-a review-ingest governance foundation (`062`, PR #60) | Ingest / DB | PR #60 merge (draft); then **DG-1** for any live acquisition (**BLOCKED_EXTERNAL**). |
+| P1-2 | W2-b aggregate-only receipt + DB-backed source gate (`063`) | Ingest / legal | **DG-1** first-licensed-source legal sign-off (**BLOCKED_EXTERNAL**); **DG-11** raw-retention decision. |
+| P1-3 | W2-c quarantine/dead-letter (`062` landed) + replay | Ingest / QA | **DG-4** manual-review-queue UI owner. |
 | P1-4 | W2-d bulk AI ad classifier + attribute mirror (G8) | Enrichment / AI | **DG-10** nightly bulk cost ceiling. |
 | P1-5 | W2-e mini recheck + summary-only RAG hand-off (closes G7) | Ingest / RAG | W0-b; W3 grounding QA. |
 | P1-6 | W3-a real embeddings + reindex generation | RAG / AI | W0-b; backfill budget. |
@@ -559,7 +600,7 @@ a single PR may carry slices from one owner only (coordinate via §3 pins).
 
 | ID | Decision | Why it blocks | Default if unresolved |
 | --- | --- | --- | --- |
-| **DG-1** | First **licensed review/mention source** + legal sign-off on retention/summarization (e.g. Naver Search API discovery within terms, or an approved export). | W2-a/b and W6-d ingest rollout cannot mark a source `licensed` without it. **BLOCKED_EXTERNAL.** | Pipeline consumes already-collected `community.posts`; no new acquisition. |
+| **DG-1** | First **licensed review/mention source** + legal sign-off on retention/summarization (e.g. Naver Search API discovery within terms, or an approved export). | W2-b cannot mark a source `licensed` without it and W6-d ingest rollout cannot call external providers. **BLOCKED_EXTERNAL.** | 062 governance foundation landed (PR #60) but no live acquisition; pipeline consumes already-collected `community.posts`; `063` accepts already-normalized records only. |
 | **DG-2** | Travel-time provider: Kakao Mobility vs OSRM (self-hosted). ToS/cost differ. | W4-d travel-time cache + provider. **BLOCKED_EXTERNAL** (vendor/ToS). | Haversine straight-line fallback (legacy parity). |
 | **DG-3** | Wind-threshold two-tier defaults (`discomfort_wind_ms`, `advisory_wind_ms`). | W1-b emits flags using them. | Config values documented as deliberate; flag off. |
 | **DG-4** | Manual-review-queue UI owner for quarantine/ambiguous matches (operator console vs CLI). | W2-c closure. | CLI report; no UI. |
@@ -569,6 +610,7 @@ a single PR may carry slices from one owner only (coordinate via §3 pins).
 | **DG-8** | Plan persistence scope: per-session only, or per-user (identity coupling)? | W4 plan_snapshots identity coupling. | Per-session only. |
 | **DG-9** | Opening-hours source priority: public open-data vs LLM-extracted (which is authoritative on conflict?). | W1-d data authority. | License/official first; LLM-extracted with confidence + honest flag. |
 | **DG-10** | Per-lane nightly cost ceiling (bulk lane) before W2-d scale-up. | W2-d quota/cost. | Stay batched + capped; no scale-up. |
+| **DG-11** | Raw review-body retention legal/retention/access decision: (a) which sources permit retention, (b) the purge schedule, and (c) the access model. | Any `community.posts_raw`-style table and any slice that stores raw review text. **BLOCKED_EXTERNAL.** | No raw review text stored, served, logged, or embedded; `062` ships no raw-body column; `063` is aggregate-only; raw retention stays BLOCKED_EXTERNAL. |
 
 ---
 
