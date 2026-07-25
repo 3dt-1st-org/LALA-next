@@ -67,13 +67,16 @@ class _OnboardingSplashPageState extends State<OnboardingSplashPage> {
                 Text(
                   lalaCopy(
                     language,
-                    ko: '당신의 수원을 안내합니다',
-                    en: 'Your Suwon, guided',
+                    // Why: a pre-onboarding boot transition must not promise a
+                    // specific region or "nearby" guidance before any location is
+                    // resolved. Keep the guidance promise, drop the Suwon claim.
+                    ko: '여행을 안내해 드릴게요',
+                    en: 'We\'ll guide your trip',
                   ),
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: const Color(0xFF475569),
-                        fontWeight: FontWeight.w800,
-                      ),
+                    color: const Color(0xFF475569),
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ],
             ),

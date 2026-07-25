@@ -14,8 +14,11 @@ import 'package:lala_next_app/auth/logto_auth_gateway.dart';
 import 'package:lala_next_app/core/backend/lala_backend.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/geo/geo_helpers.dart';
+import 'package:lala_next_app/core/location/app_settings_opener.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
+import 'package:lala_next_app/core/location/region_context.dart';
 import 'package:lala_next_app/features/location/widgets/manual_location_sheet.dart';
+import 'package:lala_next_app/features/location/widgets/permanently_denied_recovery.dart';
 import 'package:lala_next_app/features/map/domain/active_map_sheet.dart';
 import 'package:lala_next_app/features/map/map_helpers.dart';
 import 'package:lala_next_app/features/settings/widgets/user_settings_sheet.dart';
@@ -94,6 +97,9 @@ class _LalaHomePageState extends State<LalaHomePage> {
   bool _locationConsentEnabled = true;
   bool _locationRequestInFlight = false;
   bool _locationFallbackNoticeVisible = false;
+  // OS-level permanent denial gets a dedicated recovery surface (Open settings
+  // where supported + manual escape), distinct from the ordinary denied toast.
+  bool _locationPermanentlyDenied = false;
   bool _locationStartPromptVisible = false;
   bool _recommendationRailExpanded = true;
   List<String> _focusedClusterMemberIds = const <String>[];
@@ -123,8 +129,11 @@ class _LalaHomePageState extends State<LalaHomePage> {
     super.initState();
     final config = widget.initialConfig;
     _baseConfig = config;
-    _queryLat = config.lat;
-    _queryLng = config.lng;
+    // 온보딩/다른 탭에서 확정된 컨텍스트(수동 선택 또는 현재 위치)가 있으면 그 좌표로
+    // 시드한다. 없으면 공개된 기본 지역(LalaAppConfig)으로 폴백한다.
+    final region = RegionContextStore.current;
+    _queryLat = region?.lat ?? config.lat;
+    _queryLng = region?.lng ?? config.lng;
     _uiLanguage = config.lang;
     _locationStartPromptVisible = config.requireLocationStartConfirmation;
     _authController = widget.authControllerFactory(
@@ -250,6 +259,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
       setState(() {
         _locationConsentEnabled = true;
         _locationFallbackNoticeVisible = false;
+        _locationPermanentlyDenied = false;
         _currentLocation = location;
         _queryLat = location.lat;
         _queryLng = location.lng;
@@ -258,13 +268,27 @@ class _LalaHomePageState extends State<LalaHomePage> {
         _mapLevel = _defaultMapLevel;
         _locationRequestInFlight = false;
       });
+      // 검색/플랜 탭이 같은 현재 위치 컨텍스트로 동작하도록 공유 저장소에 반영한다.
+      RegionContextStore.set(
+        RegionContext.current(lat: location.lat, lng: location.lng),
+      );
       await _refresh(forceWeather: true);
     } else {
       setState(() {
         _locationRequestInFlight = false;
-        if (resolvedResult.status == LalaLocationResultStatus.denied) {
+        // Why: permanentlyDenied is an OS-level denial the system dialog can't
+        // re-surface, so it gets a dedicated recovery surface (Open settings +
+        // manual escape) instead of the ordinary retry toast. denied keeps the
+        // retry toast; unavailable only surfaces it on initial/reset.
+        if (resolvedResult.status ==
+            LalaLocationResultStatus.permanentlyDenied) {
+          _locationPermanentlyDenied = true;
+          _locationFallbackNoticeVisible = false;
+        } else if (resolvedResult.status == LalaLocationResultStatus.denied) {
+          _locationPermanentlyDenied = false;
           _locationFallbackNoticeVisible = true;
         } else if (initial || resetSelection) {
+          _locationPermanentlyDenied = false;
           _locationFallbackNoticeVisible = true;
         }
       });
@@ -476,8 +500,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
       setState(() {
         _error = _safeErrorMessage(
           error,
-          fallbackMessage: (_) =>
-              recommendationLoadFailureMessage(config.lang),
+          fallbackMessage: (_) => recommendationLoadFailureMessage(config.lang),
         );
       });
       _cancelInterventionToastTimer();
@@ -980,6 +1003,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
       if (!enabled) {
         _locationFallbackNoticeVisible = false;
       }
+      _locationPermanentlyDenied = false;
     });
     if (enabled) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -995,6 +1019,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _locationConsentEnabled = true;
       _locationFallbackNoticeVisible = false;
       _locationStartPromptVisible = false;
+      _locationPermanentlyDenied = false;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -1008,12 +1033,20 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _locationConsentEnabled = true;
       _locationFallbackNoticeVisible = false;
       _locationStartPromptVisible = false;
+      _locationPermanentlyDenied = false;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _requestLocationThenRefresh(initial: true, resetSelection: true);
       }
     });
+  }
+
+  // Real hand-off to the OS app settings page where supported. The recovery card
+  // only renders this action when canOpenAppSettings is true (native), so it is
+  // never a fake action; after the user grants and returns they tap Retry.
+  Future<void> _openAppSettingsForLocation() async {
+    await openAppSettings();
   }
 
   List<LalaPlace> _visiblePlacesForCurrentCategory() {
@@ -1122,6 +1155,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _locationConsentEnabled = true;
       _locationRequestInFlight = false;
       _locationFallbackNoticeVisible = false;
+      _locationPermanentlyDenied = false;
       _locationStartPromptVisible = false;
       _currentLocation = null;
       _queryLat = selected.lat;
@@ -1130,6 +1164,10 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _mapFocusLng = selected.lng;
       _mapLevel = _defaultMapLevel;
     });
+    // 수동 선택을 검색/플랜 탭과 공유한다(온보딩 선택이 폐기되지 않도록).
+    // Why: await the manual-id write before the UI refresh so a kill right after
+    // the pick cannot lose the region the user just chose.
+    await RegionContextStore.setAndFlush(RegionContext.manual(selected));
     await _refresh(forceWeather: true);
   }
 
@@ -1142,69 +1180,94 @@ class _LalaHomePageState extends State<LalaHomePage> {
       ).copyWith(textScaler: TextScaler.linear(_fontScale)),
       child: Scaffold(
         body: SafeArea(
-          child: Builder(
-            builder: (context) => Dashboard(
-              loading: _loading,
-              error: _error,
-              health: _health,
-              readiness: _readiness,
-              places: _places,
-              weather: _weather,
-              intervention: _intervention,
-              dailyPlan: _dailyPlan,
-              docentScript: _docentScript,
-              docentAudio: _docentAudio,
-              tourAudio: _tourAudio,
-              audioLoading: _audioLoading,
-              audioError: _audioError,
-              tourAudioLoading: _tourAudioLoading,
-              tourAudioError: _tourAudioError,
-              authMode: config.authMode,
-              kakaoJavascriptKey: config.kakaoJavascriptKey,
-              selectedCategory: _selectedCategory,
-              selectedPlaceId: _selectedPlaceId,
-              activeSheet: _activeSheet,
-              uiLanguage: _uiLanguage,
-              voiceEnabled: _voiceEnabled,
-              autoDocentEnabled: _autoDocentEnabled,
-              showEvidence: _showEvidence,
-              savedPlaceIds: _savedPlaceIds,
-              detailDocentPlayedPlaceIds: _detailDocentPlayedPlaceIds,
-              interventionToastDismissed: _interventionToastDismissed,
-              locationConsentEnabled: _locationConsentEnabled,
-              locationRequestInFlight: _locationRequestInFlight,
-              locationFallbackNoticeVisible: _locationFallbackNoticeVisible,
-              locationStartPromptVisible: _locationStartPromptVisible,
-              recommendationRailExpanded: _recommendationRailExpanded,
-              recommendationRecoveryPending: _recommendationRecoveryPending,
-              recommendationRecoveryAttempt: _recommendationRecoveryAttempts,
-              focusedClusterMemberIds: _focusedClusterMemberIds,
-              mapFocusLat: _mapFocusLat,
-              mapFocusLng: _mapFocusLng,
-              mapLevel: _mapLevel,
-              onSelectCategory: _selectCategory,
-              onSelectPlace: _selectPlace,
-              onSelectCluster: _focusCluster,
-              onCameraIdle: _handleMapCameraIdle,
-              onClearPlaceSelection: _clearPlaceSelection,
-              onToggleRecommendationRail: _toggleRecommendationRail,
-              onOpenSheet: _openSheet,
-              onCloseSheet: _closeSheet,
-              onToggleVoice: _toggleVoice,
-              onToggleAutoDocent: _toggleAutoDocent,
-              onToggleEvidence: _toggleEvidence,
-              onToggleSavedPlace: _toggleSavedPlace,
-              onDismissInterventionToast: _dismissInterventionToast,
-              onFetchAudio: _fetchMoreInfo,
-              onFetchTourAudio: _fetchTourAudio,
-              onRefresh: () => _refresh(),
-              onRefreshWeather: () => _refresh(forceWeather: true),
-              onReturnToLocation: _returnToCurrentLocation,
-              onOpenSettings: () => _openSettingsSheet(context),
-              onOpenManualLocation: () => _openManualLocationSheet(context),
-              onRetryLocation: _retryLocationConsent,
-              onStartLocation: _startFromCurrentLocation,
-            ),
+          child: Stack(
+            children: <Widget>[
+              Builder(
+                builder: (context) => Dashboard(
+                  loading: _loading,
+                  error: _error,
+                  health: _health,
+                  readiness: _readiness,
+                  places: _places,
+                  weather: _weather,
+                  intervention: _intervention,
+                  dailyPlan: _dailyPlan,
+                  docentScript: _docentScript,
+                  docentAudio: _docentAudio,
+                  tourAudio: _tourAudio,
+                  audioLoading: _audioLoading,
+                  audioError: _audioError,
+                  tourAudioLoading: _tourAudioLoading,
+                  tourAudioError: _tourAudioError,
+                  authMode: config.authMode,
+                  kakaoJavascriptKey: config.kakaoJavascriptKey,
+                  selectedCategory: _selectedCategory,
+                  selectedPlaceId: _selectedPlaceId,
+                  activeSheet: _activeSheet,
+                  uiLanguage: _uiLanguage,
+                  voiceEnabled: _voiceEnabled,
+                  autoDocentEnabled: _autoDocentEnabled,
+                  showEvidence: _showEvidence,
+                  savedPlaceIds: _savedPlaceIds,
+                  detailDocentPlayedPlaceIds: _detailDocentPlayedPlaceIds,
+                  interventionToastDismissed: _interventionToastDismissed,
+                  locationConsentEnabled: _locationConsentEnabled,
+                  locationRequestInFlight: _locationRequestInFlight,
+                  locationFallbackNoticeVisible: _locationFallbackNoticeVisible,
+                  locationStartPromptVisible: _locationStartPromptVisible,
+                  recommendationRailExpanded: _recommendationRailExpanded,
+                  recommendationRecoveryPending: _recommendationRecoveryPending,
+                  recommendationRecoveryAttempt:
+                      _recommendationRecoveryAttempts,
+                  focusedClusterMemberIds: _focusedClusterMemberIds,
+                  mapFocusLat: _mapFocusLat,
+                  mapFocusLng: _mapFocusLng,
+                  mapLevel: _mapLevel,
+                  onSelectCategory: _selectCategory,
+                  onSelectPlace: _selectPlace,
+                  onSelectCluster: _focusCluster,
+                  onCameraIdle: _handleMapCameraIdle,
+                  onClearPlaceSelection: _clearPlaceSelection,
+                  onToggleRecommendationRail: _toggleRecommendationRail,
+                  onOpenSheet: _openSheet,
+                  onCloseSheet: _closeSheet,
+                  onToggleVoice: _toggleVoice,
+                  onToggleAutoDocent: _toggleAutoDocent,
+                  onToggleEvidence: _toggleEvidence,
+                  onToggleSavedPlace: _toggleSavedPlace,
+                  onDismissInterventionToast: _dismissInterventionToast,
+                  onFetchAudio: _fetchMoreInfo,
+                  onFetchTourAudio: _fetchTourAudio,
+                  onRefresh: () => _refresh(),
+                  onRefreshWeather: () => _refresh(forceWeather: true),
+                  onReturnToLocation: _returnToCurrentLocation,
+                  onOpenSettings: () => _openSettingsSheet(context),
+                  onOpenManualLocation: () => _openManualLocationSheet(context),
+                  onRetryLocation: _retryLocationConsent,
+                  onStartLocation: _startFromCurrentLocation,
+                ),
+              ),
+              // permanentlyDenied recovery: a calm, non-blocking card over the
+              // map. The map stays usable beneath it; the manual escape and the
+              // real "Open settings" action (native only) resolve the state.
+              if (_locationPermanentlyDenied)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  child: SafeArea(
+                    child: SingleChildScrollView(
+                      child: PermanentlyDeniedRecovery(
+                        language: _uiLanguage,
+                        canOpenSettings: canOpenAppSettings,
+                        onOpenSettings: _openAppSettingsForLocation,
+                        onRetry: _retryLocationConsent,
+                        onChooseArea: () => _openManualLocationSheet(context),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
       ),

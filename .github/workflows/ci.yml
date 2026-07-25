@@ -154,3 +154,38 @@ jobs:
 
       - name: Run Unix verification wrapper
         run: bash scripts/unix/verify_repo.sh --skip-install
+
+  # Why: the wrapper scripts (verify_flutter_app.{sh,ps1}) intentionally skip
+  # Flutter analyze/test when the SDK is absent, so on runners without Flutter
+  # they silently passed and the app was never actually analyzed or tested in
+  # PR CI. This dedicated job installs Flutter and runs the gate explicitly so
+  # `flutter analyze` + `flutter test` are guaranteed on every PR. It needs no
+  # secrets: the public web build key is not required for analyze/test.
+  flutter-app:
+    name: Flutter app analyze + test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/flutter_app
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Show Flutter version
+        run: flutter --version
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test

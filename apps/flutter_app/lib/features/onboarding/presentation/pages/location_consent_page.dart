@@ -2,14 +2,19 @@
 // - 상단 읽기 전용 카카오맵 미리보기(라이브 키 경계 재사용, 제스처/콜백 차단).
 // - "현재 위치 사용"(요청 중에만 비활성), "지역 직접 선택"(항상 노출), "나중에 하기".
 // 수동 지역 선택은 권한 실패 뒤에만 나타나지 않고 첫 렌더부터 항상 사용 가능하다(01-flow §F1.5).
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:lala_next_app/app/lala_visual_tokens.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
+import 'package:lala_next_app/core/location/app_settings_opener.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
+import 'package:lala_next_app/core/location/region_context.dart';
 import 'package:lala_next_app/core/routing/lala_route_paths.dart';
 import 'package:lala_next_app/features/location/widgets/manual_location_sheet.dart';
+import 'package:lala_next_app/features/location/widgets/permanently_denied_recovery.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/features/onboarding/presentation/widgets/location_map_preview.dart';
 import 'package:lala_next_app/features/onboarding/presentation/widgets/onboarding_scaffold.dart';
@@ -34,6 +39,9 @@ enum _LocationConsentStatus { idle, requesting }
 class _OnboardingLocationConsentPageState
     extends State<OnboardingLocationConsentPage> {
   _LocationConsentStatus _status = _LocationConsentStatus.idle;
+  // OS 영구 거결(permanentlyDenied) 전용 복구 카드 노출 여부. 시스템 다이얼로그 재노출이
+  // 불가하므로 일반 denied 와 구분해 설정 유도 + 수동 선택 경로를 안내한다.
+  bool _permanentlyDenied = false;
 
   // 미리보기 중심/키는 기본 지역(SSOT 기본값)을 따른다. 좌표가 확정되기 전이다.
   late final LalaAppConfig _config = LalaAppConfig.fromEnvironment();
@@ -46,17 +54,39 @@ class _OnboardingLocationConsentPageState
     if (_requesting) {
       return;
     }
-    setState(() => _status = _LocationConsentStatus.requesting);
+    setState(() {
+      _status = _LocationConsentStatus.requesting;
+      _permanentlyDenied = false;
+    });
     try {
       final result = await widget.locationProvider.requestCurrentLocation();
       if (!mounted) {
         return;
       }
-      if (result.status == LalaLocationResultStatus.found) {
-        _complete();
+      if (result.status == LalaLocationResultStatus.found &&
+          result.location != null) {
+        // Retain the resolved location into the app shell so the search/plan/map
+        // tabs drive place + weather calls from it instead of the default region.
+        // Why: await the durable clear of any prior manual id before completion, so
+        // a kill right after this tap cannot leave a stale manual selection durable.
+        await RegionContextStore.setAndFlush(
+          RegionContext.current(
+            lat: result.location!.lat,
+            lng: result.location!.lng,
+          ),
+        );
+        await _complete();
         return;
       }
-      // 거부/사용불가: 수동 선택은 항상 노출되므로 별도 배너 없이 대기 상태로 복귀.
+      if (result.status == LalaLocationResultStatus.permanentlyDenied) {
+        // OS 영구 거절: 시스템 다이얼로그 재노출 불가 → 전용 복구 카드로 설정 유도.
+        setState(() {
+          _status = _LocationConsentStatus.idle;
+          _permanentlyDenied = true;
+        });
+        return;
+      }
+      // denied / unavailable: 수동 선택은 항상 노출되므로 별도 배너 없이 대기 상태로 복귀.
       setState(() => _status = _LocationConsentStatus.idle);
     } on Object {
       if (!mounted) {
@@ -75,14 +105,23 @@ class _OnboardingLocationConsentPageState
       builder: (_) => ManualLocationSheet(language: _language),
     );
     if (selected != null && mounted) {
-      _complete();
+      // 수동 선택도 앱 쉘로 이관한다(기존에는 폐기됨).
+      // Why: await the manual-id write before completion so a kill right after the
+      // tap cannot lose the region the user just chose.
+      await RegionContextStore.setAndFlush(RegionContext.manual(selected));
+      await _complete();
     }
   }
 
-  void _complete() {
-    OnboardingState.markCompleted();
-    // markCompleted() 가 ValueNotifier 를 바꾸면 router refreshListenable 이 redirect
-    // 를 재평가하여 /map-route 로 전환한다. (이동이 늦는 대비로 명시 이동도 안전.)
+  Future<void> _complete() async {
+    // Why: callers already durably flushed the region choice via setAndFlush, so
+    // only the completion slice remains. completeAndFlush awaits that write and
+    // flips the router's completion gate only afterwards; storage failure still
+    // completes so the user is never stranded. A kill after navigation can't lose
+    // either slice — region durable → completion durable → gate flip → navigate.
+    await OnboardingState.completeAndFlush();
+    // completeAndFlush() 가 ValueNotifier 를 바꾸면 router refreshListenable 이
+    // redirect 를 재평가하여 /map-route 로 전환한다. (이동이 늦는 대비로 명시 이동도 안전.)
     if (mounted) {
       context.go(LalaRoutePaths.mapRoute);
     }
@@ -127,7 +166,8 @@ class _OnboardingLocationConsentPageState
                         ),
                         style: TextStyle(
                           fontSize: LalaVisualTokens.onboardingTitleSize,
-                          height: LalaVisualTokens.onboardingTitleLineHeight /
+                          height:
+                              LalaVisualTokens.onboardingTitleLineHeight /
                               LalaVisualTokens.onboardingTitleSize,
                           fontWeight: FontWeight.w800,
                           color: LalaVisualColors.ink,
@@ -143,7 +183,8 @@ class _OnboardingLocationConsentPageState
                       ),
                       style: TextStyle(
                         fontSize: LalaVisualTokens.bodySize,
-                        height: LalaVisualTokens.bodyLineHeight /
+                        height:
+                            LalaVisualTokens.bodyLineHeight /
                             LalaVisualTokens.bodySize,
                         fontWeight: FontWeight.w500,
                         color: LalaVisualColors.muted,
@@ -153,7 +194,21 @@ class _OnboardingLocationConsentPageState
                 ),
               ),
             ),
-            if (_requesting)
+            if (_permanentlyDenied) ...<Widget>[
+              // OS 영구 거절 복구: 설정 유도(지원되는 플랫폼만) + 수동 선택 + 재시도.
+              PermanentlyDeniedRecovery(
+                language: language,
+                canOpenSettings: canOpenAppSettings,
+                onOpenSettings: () => openAppSettings(),
+                onRetry: _allowLocation,
+                onChooseArea: _openManualSheet,
+              ),
+              const SizedBox(height: 8),
+              _TextActionButton(
+                label: lalaCopy(language, ko: '나중에 하기', en: 'Not now'),
+                onPressed: () => unawaited(_complete()),
+              ),
+            ] else if (_requesting)
               const Padding(
                 padding: EdgeInsets.only(top: 12),
                 child: Center(
@@ -164,22 +219,23 @@ class _OnboardingLocationConsentPageState
                   ),
                 ),
               )
-            else
+            else ...<Widget>[
               _PrimaryButton(
                 label: lalaCopy(language, ko: '현재 위치 사용', en: 'Use location'),
                 onPressed: _allowLocation,
               ),
-            const SizedBox(height: LalaVisualTokens.contentGap),
-            _SecondaryButton(
-              label: lalaCopy(language, ko: '지역 직접 선택', en: 'Choose area'),
-              // 권한 결과와 무관하게 항상 노출/사용 가능.
-              onPressed: _requesting ? null : _openManualSheet,
-            ),
-            const SizedBox(height: 8),
-            _TextActionButton(
-              label: lalaCopy(language, ko: '나중에 하기', en: 'Not now'),
-              onPressed: _requesting ? null : _complete,
-            ),
+              const SizedBox(height: LalaVisualTokens.contentGap),
+              _SecondaryButton(
+                label: lalaCopy(language, ko: '지역 직접 선택', en: 'Choose area'),
+                // 권한 결과와 무관하게 항상 노출/사용 가능.
+                onPressed: _requesting ? null : _openManualSheet,
+              ),
+              const SizedBox(height: 8),
+              _TextActionButton(
+                label: lalaCopy(language, ko: '나중에 하기', en: 'Not now'),
+                onPressed: _requesting ? null : () => unawaited(_complete()),
+              ),
+            ],
           ],
         ),
       ),
@@ -205,14 +261,13 @@ class _PrimaryButton extends StatelessWidget {
           foregroundColor: LalaVisualColors.card,
           textStyle: TextStyle(
             fontSize: LalaVisualTokens.controlLabelSize,
-            height: LalaVisualTokens.controlLabelLineHeight /
+            height:
+                LalaVisualTokens.controlLabelLineHeight /
                 LalaVisualTokens.controlLabelSize,
             fontWeight: FontWeight.w700,
           ),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(
-              LalaVisualTokens.controlRadius,
-            ),
+            borderRadius: BorderRadius.circular(LalaVisualTokens.controlRadius),
           ),
         ),
         child: Text(label),
@@ -236,17 +291,18 @@ class _SecondaryButton extends StatelessWidget {
         style: OutlinedButton.styleFrom(
           minimumSize: const Size.fromHeight(48),
           foregroundColor: LalaVisualColors.primaryBlue,
-          side: BorderSide(color: LalaVisualColors.primaryBlue.withValues(alpha: 0.4)),
+          side: BorderSide(
+            color: LalaVisualColors.primaryBlue.withValues(alpha: 0.4),
+          ),
           textStyle: TextStyle(
             fontSize: LalaVisualTokens.controlLabelSize,
-            height: LalaVisualTokens.controlLabelLineHeight /
+            height:
+                LalaVisualTokens.controlLabelLineHeight /
                 LalaVisualTokens.controlLabelSize,
             fontWeight: FontWeight.w700,
           ),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(
-              LalaVisualTokens.controlRadius,
-            ),
+            borderRadius: BorderRadius.circular(LalaVisualTokens.controlRadius),
           ),
         ),
         child: Text(label),

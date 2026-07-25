@@ -641,3 +641,68 @@ def test_remaining_ttl_sec_clamps_expired_values():
     ttl = db_repository._remaining_ttl_sec(datetime.now(UTC) - timedelta(seconds=1))
 
     assert ttl == 0
+
+
+def test_english_region_resolves_districts_outside_gyeonggi():
+    # Why: _english_region must be nationwide, not Gyeonggi-only.
+    cases = {
+        "해운대구": "Haeundae-gu",  # Busan
+        "제주시": "Jeju-si",  # Jeju
+        "춘천시": "Chuncheon-si",  # Gangwon
+        "여수시": "Yeosu-si",  # Jeollanam-do
+        "경주시": "Gyeongju-si",  # Gyeongsangbuk-do
+        "수원시": "Suwon-si",  # Gyeonggi (regression)
+        "중구": "Jung-gu",  # Seoul (regression)
+    }
+    for region_ko, expected_en in cases.items():
+        assert db_repository._english_region({"region_ko": region_ko}) == expected_en
+
+
+def test_english_region_falls_back_to_region_en_when_unknown():
+    assert (
+        db_repository._english_region({"region_ko": "미분류동", "region_en": "Custom"}) == "Custom"
+    )
+    assert db_repository._english_region({"region_ko": "", "region_en": ""}) is None
+
+
+def test_english_display_address_names_actual_province_not_gyeonggi():
+    # Why: the synthesized English address previously hard-coded "Gyeonggi-do"
+    # for every nationwide row; it must name the row's real province.
+    busan = db_repository._english_display_address(
+        {
+            "region_ko": "해운대구",
+            "address_ko": "부산광역시 해운대구 해운대로 1",
+        }
+    )
+    assert busan == "Haeundae-gu, Busan"
+    assert "Gyeonggi-do" not in busan
+
+    jeju = db_repository._english_display_address(
+        {
+            "region_ko": "제주시",
+            "address_ko": "제주특별자치도 제주시 연동로",
+        }
+    )
+    assert jeju == "Jeju-si, Jeju"
+
+    # Gyeonggi regression: province still derived from the address, not assumed.
+    gyeonggi = db_repository._english_display_address(
+        {
+            "region_ko": "수원시",
+            "address_ko": "경기도 수원시 영통구 덕영대로",
+        }
+    )
+    assert gyeonggi == "Suwon-si, Gyeonggi-do"
+
+
+def test_english_display_address_resolves_province_from_region_only():
+    # Why: even without an address, an unambiguous 시/군/구 should resolve to its
+    # real province via the region→province catalog (not assume Gyeonggi).
+    assert db_repository._english_display_address({"region_ko": "해운대구"}) == "Haeundae-gu, Busan"
+
+
+def test_english_display_address_never_fabricates_province():
+    # Ambiguous region (중구 spans 6 provinces) and empty rows must not be shown
+    # under a wrong province; the address stays region-only or empty.
+    assert db_repository._english_display_address({"region_ko": "중구"}) == "Jung-gu"
+    assert db_repository._english_display_address({}) == ""

@@ -9,11 +9,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import 'package:lala_next_app/core/backend/lala_backend.dart';
+import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
+import 'package:lala_next_app/core/location/region_context.dart';
 import 'package:lala_next_app/features/place/widgets/place_thumb.dart';
 import 'package:lala_next_app/features/search/presentation/pages/search_page.dart';
+import 'package:lala_next_app/manual_location_options.dart';
 
 void main() {
+  // RegionContextStore is a process-local singleton; reset it before each test
+  // so a manual/current choice from another test cannot leak into this tab's
+  // seed coordinates.
+  setUp(RegionContextStore.clear);
+
   testWidgets(
     'search pending shows exactly three neutral skeleton rows then removes them',
     (tester) async {
@@ -68,14 +76,87 @@ void main() {
       expect(find.byType(PlaceThumb), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'store-driven manual region reloads the backend without re-requesting location',
+    (tester) async {
+      final configs = <LalaAppConfig>[];
+      final locationProvider = _CountingLocationProvider(
+        const LalaLocationResult.unavailable(),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SearchPage(
+            locationProvider: locationProvider,
+            // _load/_reloadFromStore 모두 백엔드를 재생성하므로 동일 인스턴스를
+            // 반환하되, 호출될 때마다 사용된 config 를 기록한다.
+            backendFactory: (config) {
+              configs.add(config);
+              return _LoadedPlacesBackend();
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 초기 로드는 기기 위치를 정확히 한 번 요청한다(기존 동작).
+      expect(locationProvider.requests, 1);
+
+      // 온보딩/다른 탭에서 수동 지역이 공유 store 에 게시되면 리스너가 발동한다.
+      RegionContextStore.set(RegionContext.manual(_busanOption()));
+      await tester.pumpAndSettle();
+
+      // 수동 선택이 발생한 리로드는 기기 위치를 다시 요청하지 않는다.
+      expect(locationProvider.requests, 1);
+      // 가장 마지막 백엔드는 수동 선택의 좌표로 구성되었다.
+      expect(configs.last.lat, 35.16);
+      expect(configs.last.lng, 129.16);
+    },
+  );
+
+  testWidgets(
+    'a manual region retained from onboarding is not overwritten by the initial location request',
+    (tester) async {
+      // 온보딩이 수동 선택을 store 에 남긴 채 탭이 마운트되는 상황.
+      RegionContextStore.set(RegionContext.manual(_busanOption()));
+      final configs = <LalaAppConfig>[];
+      // found provider(서울 인근) — 이 결과가 수동 선택을 덮어쓰면 안 된다.
+      final locationProvider = _CountingLocationProvider(
+        const LalaLocationResult.found(
+          LalaLocation(lat: 37.2636, lng: 127.0286),
+        ),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SearchPage(
+            locationProvider: locationProvider,
+            backendFactory: (config) {
+              configs.add(config);
+              return _LoadedPlacesBackend();
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Why: with a real context already in the store, the initial _load() must
+      // NOT request device location at all, so the deliberate manual choice can't
+      // be clobbered by a later geolocation fix.
+      expect(locationProvider.requests, 0);
+      expect(configs.last.lat, 35.16);
+      expect(configs.last.lng, 129.16);
+      // 기본 지역 표시기도 등장하지 않는다(실제 수동 컨텍스트 있음).
+      expect(find.text('현재 위치 대신 기본 지역(수원) 추천을 보여드려요'), findsNothing);
+    },
+  );
+
+  tearDown(RegionContextStore.clear);
 }
 
 class _FoundLocationProvider implements LalaLocationProvider {
   @override
   Future<LalaLocationResult> requestCurrentLocation() async =>
-      const LalaLocationResult.found(
-        LalaLocation(lat: 37.2636, lng: 127.0286),
-      );
+      const LalaLocationResult.found(LalaLocation(lat: 37.2636, lng: 127.0286));
 }
 
 /// getPlaces 를 Completer 로 지연시키는 테스트용 백엔드. pending 관측 후 에러로 종료.
@@ -153,5 +234,33 @@ LalaEnvelope<T> _envelope<T>(T data) {
     error: null,
     statusCode: 200,
     requestId: 'test-request-id',
+  );
+}
+
+/// Counts how many times the tab asked for device location. Used to prove a
+/// store-driven reload does NOT re-request location.
+class _CountingLocationProvider implements LalaLocationProvider {
+  _CountingLocationProvider(this._result);
+
+  final LalaLocationResult _result;
+  int requests = 0;
+
+  @override
+  Future<LalaLocationResult> requestCurrentLocation() async {
+    requests += 1;
+    return _result;
+  }
+}
+
+ManualLocationOption _busanOption() {
+  return const ManualLocationOption(
+    id: 'busan-haeundae',
+    provinceId: 'busan',
+    provinceKo: '부산광역시',
+    provinceEn: 'Busan',
+    labelKo: '해운대구',
+    labelEn: 'Haeundae-gu',
+    lat: 35.16,
+    lng: 129.16,
   );
 }

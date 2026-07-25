@@ -10,9 +10,11 @@ import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 import 'package:lala_next_app/core/backend/lala_backend.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
+import 'package:lala_next_app/core/location/region_context.dart';
 import 'package:lala_next_app/features/home/home_view_helpers.dart'
     show interventionToastLabel;
 import 'package:lala_next_app/features/intervention/widgets/intervention_toast.dart';
+import 'package:lala_next_app/features/location/widgets/default_region_indicator.dart';
 import 'package:lala_next_app/features/place/widgets/empty_place_state.dart';
 import 'package:lala_next_app/features/planner/planner_helpers.dart';
 import 'package:lala_next_app/features/planner/widgets/plan_slot_tile.dart';
@@ -48,6 +50,18 @@ class _PlanPageState extends State<PlanPage> {
   LalaDailyPlan? _dailyPlan;
   LalaIntervention? _intervention;
   bool _interventionDismissed = false;
+
+  // Active region context retained across onboarding/tabs (null = disclosed
+  // default region). Seeded from the shared store so a manual/current choice
+  // made elsewhere drives this tab's plan calls.
+  RegionContext? _region = RegionContextStore.current;
+
+  // Monotonic load token. A store-driven reload or a manual retry can start
+  // while a device-location request is still in flight; only the newest load may
+  // write results so a late response cannot clobber a newer context.
+  int _loadGeneration = 0;
+  late final VoidCallback _onRegionChanged;
+
   String? _error;
 
   @override
@@ -59,6 +73,21 @@ class _PlanPageState extends State<PlanPage> {
         widget.locationProvider ?? const GeolocatorLalaLocationProvider();
     _backendFactory = widget.backendFactory ?? LalaApiBackend.new;
     _backend = _backendFactory(_config);
+    // React to a region choice made in onboarding or on another tab: rebuild the
+    // backend from the shared coordinates WITHOUT re-requesting device location,
+    // so a manual choice cannot be overwritten by a later location fetch.
+    _onRegionChanged = () {
+      if (!mounted) {
+        return;
+      }
+      final next = RegionContextStore.current;
+      // Ignore our own publishes and no-op notifications.
+      if (next == _region) {
+        return;
+      }
+      _reloadFromStore(next);
+    };
+    RegionContextStore.listenable.addListener(_onRegionChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _load();
@@ -68,11 +97,16 @@ class _PlanPageState extends State<PlanPage> {
 
   @override
   void dispose() {
+    RegionContextStore.listenable.removeListener(_onRegionChanged);
     _backend.close();
     super.dispose();
   }
 
   String get _language => _config.lang;
+
+  // True when the plan is built from the disclosed default region (no real
+  // current/manual context). The UI must badge this honestly.
+  bool get _regionIsDefault => _region == null;
 
   List<LalaPlanSlot> get _visibleSlots {
     final slots = _dailyPlan?.slots ?? const <LalaPlanSlot>[];
@@ -87,29 +121,71 @@ class _PlanPageState extends State<PlanPage> {
       !_interventionDismissed;
 
   Future<void> _load() async {
+    final generation = ++_loadGeneration;
     setState(() {
       _status = _PlanLoadStatus.loading;
       _error = null;
       _interventionDismissed = false;
     });
 
-    var lat = _baseConfig.lat;
-    var lng = _baseConfig.lng;
-    try {
-      final result = await _locationProvider.requestCurrentLocation();
-      if (result.status == LalaLocationResultStatus.found &&
-          result.location != null) {
-        lat = result.location!.lat;
-        lng = result.location!.lng;
+    var lat = _region?.lat ?? _baseConfig.lat;
+    var lng = _region?.lng ?? _baseConfig.lng;
+    // Why: only resolve live geolocation when no real context exists yet. A
+    // context already in the store (a manual choice retained from onboarding, or
+    // a current fix from another tab) is a deliberate selection that this tab's
+    // initial device-location request must not overwrite. After-mount changes
+    // arrive via _reloadFromStore, which never requests location.
+    if (_region == null) {
+      try {
+        final result = await _locationProvider.requestCurrentLocation();
+        // Stale guard: a store-driven reload or retry may have started while this
+        // device-location request was in flight — discard so a late response
+        // cannot overwrite a newer context.
+        if (generation != _loadGeneration || !mounted) {
+          return;
+        }
+        if (result.status == LalaLocationResultStatus.found &&
+            result.location != null) {
+          lat = result.location!.lat;
+          lng = result.location!.lng;
+          _region = RegionContext.current(lat: lat, lng: lng);
+          RegionContextStore.set(_region);
+        }
+        // denied / permanentlyDenied / unavailable: 기존 컨텍스트(수동 선택 또는
+        // 기본 지역)를 유지. 절대 임의의 위치를 끼워 넣지 않는다.
+      } on Object {
+        // 위치 미확정 시 현재 컨텍스트(수동 선택 또는 기본 지역)를 유지.
+        if (generation != _loadGeneration || !mounted) {
+          return;
+        }
       }
-    } on Object {
-      // 위치 미확정 시 기본 위치(LalaAppConfig)로 폴백.
     }
 
     _config = _baseConfig.copyWith(lat: lat, lng: lng);
     _backend.close();
     _backend = _backendFactory(_config);
+    await _fetchPlan(generation);
+  }
 
+  /// 공유 store 의 컨텍스트로 백엔드를 재구성한다. 기기 위치를 다시 요청하지 않으므로,
+  /// 온보딩/다른 탭의 수동 선택이 뒤늦은 위치 응답에 덮어씌워지지 않는다.
+  void _reloadFromStore(RegionContext? context) {
+    final generation = ++_loadGeneration;
+    setState(() {
+      _region = context;
+      _status = _PlanLoadStatus.loading;
+      _error = null;
+      _interventionDismissed = false;
+    });
+    final lat = context?.lat ?? _baseConfig.lat;
+    final lng = context?.lng ?? _baseConfig.lng;
+    _config = _baseConfig.copyWith(lat: lat, lng: lng);
+    _backend.close();
+    _backend = _backendFactory(_config);
+    _fetchPlan(generation);
+  }
+
+  Future<void> _fetchPlan(int generation) async {
     // 일정(필수)과 개입(intervention, 부가)을 병렬로 조회한다.
     // 각 라인은 독립된 try/catch 로 실패를 null 로 흡수한다.
     Future<LalaDailyPlan?> loadPlan() async {
@@ -130,7 +206,7 @@ class _PlanPageState extends State<PlanPage> {
 
     final (plan, intervention) = await (loadPlan(), loadIntervention()).wait;
 
-    if (!mounted) {
+    if (generation != _loadGeneration || !mounted) {
       return;
     }
     if (plan == null) {
@@ -189,6 +265,7 @@ class _PlanPageState extends State<PlanPage> {
               language: _language,
               onCalendar: _load,
             ),
+            if (_regionIsDefault) DefaultRegionIndicator(language: _language),
             if (_shouldShowInterventionToast)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
@@ -275,17 +352,17 @@ class _PlanHeader extends StatelessWidget {
                 Text(
                   title,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w900,
-                        height: 1.12,
-                      ),
+                    fontWeight: FontWeight.w900,
+                    height: 1.12,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   dateLabel,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: const Color(0xFF64748B),
-                        fontWeight: FontWeight.w800,
-                      ),
+                    color: const Color(0xFF64748B),
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ],
             ),
@@ -425,8 +502,12 @@ class _PlanContent extends StatelessWidget {
               Text(
                 lalaCopy(
                   language,
-                  ko: '오늘 일정을 준비 중이에요.',
-                  en: 'Today\'s plan is being prepared.',
+                  // Why: the plan already loaded — an empty slot list is an empty
+                  // result, not a "preparing" state. The legitimate generating
+                  // state is the single _PlanLoadingView card shown only while
+                  // loading.
+                  ko: '표시할 일정이 없어요.',
+                  en: 'No plan slots to show.',
                 ),
                 style: const TextStyle(
                   color: Color(0xFF64748B),

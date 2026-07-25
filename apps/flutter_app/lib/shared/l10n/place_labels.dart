@@ -9,7 +9,10 @@ import 'multi_language_text.dart';
 String locationLabel(String? value, String language) {
   final trimmed = value?.trim();
   if (trimmed == null || trimmed.isEmpty) {
-    return lalaCopy(language, ko: '수원', en: 'Suwon');
+    // Why: a missing weather location must not be fabricated as "Suwon" (which
+    // reads as the user's own location). Disclose the default region honestly
+    // until a real location is resolved.
+    return lalaCopy(language, ko: '기본 지역', en: 'Default region');
   }
   final normalized = trimmed.toLowerCase();
   final localized = singleLanguageText(trimmed, language);

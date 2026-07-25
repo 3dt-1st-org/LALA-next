@@ -10,7 +10,10 @@ import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 import 'package:lala_next_app/core/backend/lala_backend.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
-import 'package:lala_next_app/features/home/home_view_helpers.dart' show filterPlaces;
+import 'package:lala_next_app/core/location/region_context.dart';
+import 'package:lala_next_app/features/home/home_view_helpers.dart'
+    show filterPlaces;
+import 'package:lala_next_app/features/location/widgets/default_region_indicator.dart';
 import 'package:lala_next_app/features/place/place_helpers.dart';
 import 'package:lala_next_app/features/place/widgets/category_badge.dart';
 import 'package:lala_next_app/features/place/widgets/empty_place_state.dart';
@@ -57,6 +60,17 @@ class _SearchPageState extends State<SearchPage> {
   List<LalaPlace> _places = const <LalaPlace>[];
   String? _error;
 
+  // Active region context retained across onboarding/tabs (null = disclosed
+  // default region). Seeded from the shared store so a manual/current choice
+  // made elsewhere drives this tab's place calls.
+  RegionContext? _region = RegionContextStore.current;
+
+  // Monotonic load token. A store-driven reload or a manual retry can start
+  // while a device-location request is still in flight; only the newest load may
+  // write results so a late response cannot clobber a newer context.
+  int _loadGeneration = 0;
+  late final VoidCallback _onRegionChanged;
+
   String _selectedCategory = 'all';
   String _query = '';
   late final TextEditingController _searchController;
@@ -71,6 +85,21 @@ class _SearchPageState extends State<SearchPage> {
     _backendFactory = widget.backendFactory ?? LalaApiBackend.new;
     _backend = _backendFactory(_config);
     _searchController = TextEditingController();
+    // React to a region choice made in onboarding or on another tab: rebuild the
+    // backend from the shared coordinates WITHOUT re-requesting device location,
+    // so a manual choice cannot be overwritten by a later location fetch.
+    _onRegionChanged = () {
+      if (!mounted) {
+        return;
+      }
+      final next = RegionContextStore.current;
+      // Ignore our own publishes and no-op notifications.
+      if (next == _region) {
+        return;
+      }
+      _reloadFromStore(next);
+    };
+    RegionContextStore.listenable.addListener(_onRegionChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _load();
@@ -80,6 +109,7 @@ class _SearchPageState extends State<SearchPage> {
 
   @override
   void dispose() {
+    RegionContextStore.listenable.removeListener(_onRegionChanged);
     _searchController.dispose();
     _backend.close();
     super.dispose();
@@ -87,41 +117,88 @@ class _SearchPageState extends State<SearchPage> {
 
   String get _language => _config.lang;
 
+  // True when the active results come from the disclosed default region (no real
+  // current/manual context). The UI must badge this honestly.
+  bool get _regionIsDefault => _region == null;
+
   Future<void> _load() async {
+    final generation = ++_loadGeneration;
     setState(() {
       _status = _SearchLoadStatus.loading;
       _error = null;
     });
 
-    var lat = _baseConfig.lat;
-    var lng = _baseConfig.lng;
-    try {
-      final result = await _locationProvider.requestCurrentLocation();
-      if (result.status == LalaLocationResultStatus.found &&
-          result.location != null) {
-        lat = result.location!.lat;
-        lng = result.location!.lng;
+    // 온보딩/다른 탭에서 확정된 컨텍스트(수동 선택 또는 현재 위치)를 기본 좌표보다
+    // 우선한다. 없으면 공개된 기본 지역(LalaAppConfig)으로 폴백한다.
+    var lat = _region?.lat ?? _baseConfig.lat;
+    var lng = _region?.lng ?? _baseConfig.lng;
+    // Why: only resolve live geolocation when no real context exists yet. A
+    // context already in the store (a manual choice retained from onboarding, or
+    // a current fix from another tab) is a deliberate selection that this tab's
+    // initial device-location request must not overwrite. After-mount changes
+    // arrive via _reloadFromStore, which never requests location.
+    if (_region == null) {
+      try {
+        final result = await _locationProvider.requestCurrentLocation();
+        // Stale guard: a store-driven reload or retry may have started while this
+        // device-location request was in flight — discard so a late response
+        // cannot overwrite a newer context.
+        if (generation != _loadGeneration || !mounted) {
+          return;
+        }
+        if (result.status == LalaLocationResultStatus.found &&
+            result.location != null) {
+          lat = result.location!.lat;
+          lng = result.location!.lng;
+          _region = RegionContext.current(lat: lat, lng: lng);
+          RegionContextStore.set(_region);
+        }
+        // denied / permanentlyDenied / unavailable: 기존 컨텍스트(수동 선택 또는
+        // 기본 지역)를 유지. 절대 임의의 위치를 끼워 넣지 않는다.
+      } on Object {
+        // 위치 미확정 시 현재 컨텍스트(수동 선택 또는 기본 지역)를 유지.
+        if (generation != _loadGeneration || !mounted) {
+          return;
+        }
       }
-    } on Object {
-      // 위치 미확정 시 기본 위치(LalaAppConfig)로 폴백.
     }
 
     _config = _baseConfig.copyWith(lat: lat, lng: lng, radiusM: _radiusM);
     _backend.close();
     _backend = _backendFactory(_config);
+    await _fetchPlaces(generation);
+  }
 
+  /// 공유 store 의 컨텍스트로 백엔드를 재구성한다. 기기 위치를 다시 요청하지 않으므로,
+  /// 온보딩/다른 탭의 수동 선택이 뒤늦은 위치 응답에 덮어씌워지지 않는다.
+  void _reloadFromStore(RegionContext? context) {
+    final generation = ++_loadGeneration;
+    setState(() {
+      _region = context;
+      _status = _SearchLoadStatus.loading;
+      _error = null;
+    });
+    final lat = context?.lat ?? _baseConfig.lat;
+    final lng = context?.lng ?? _baseConfig.lng;
+    _config = _baseConfig.copyWith(lat: lat, lng: lng, radiusM: _radiusM);
+    _backend.close();
+    _backend = _backendFactory(_config);
+    _fetchPlaces(generation);
+  }
+
+  Future<void> _fetchPlaces(int generation) async {
     try {
       final envelope = await _backend.getPlaces();
-      final places = envelope.data?.places ?? const <LalaPlace>[];
-      if (!mounted) {
+      if (generation != _loadGeneration || !mounted) {
         return;
       }
+      final places = envelope.data?.places ?? const <LalaPlace>[];
       setState(() {
         _places = places;
         _status = _SearchLoadStatus.data;
       });
     } on LalaApiException catch (error) {
-      if (!mounted) {
+      if (generation != _loadGeneration || !mounted) {
         return;
       }
       setState(() {
@@ -130,7 +207,7 @@ class _SearchPageState extends State<SearchPage> {
         _status = _SearchLoadStatus.error;
       });
     } on Object {
-      if (!mounted) {
+      if (generation != _loadGeneration || !mounted) {
         return;
       }
       setState(() {
@@ -190,6 +267,7 @@ class _SearchPageState extends State<SearchPage> {
               onSelect: (category) =>
                   setState(() => _selectedCategory = category),
             ),
+            if (_regionIsDefault) DefaultRegionIndicator(language: _language),
             Expanded(child: _buildBody(context)),
           ],
         ),
@@ -241,9 +319,9 @@ class _SearchHeader extends StatelessWidget {
           controller: controller,
           textInputAction: TextInputAction.search,
           onChanged: onChanged,
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
           decoration: InputDecoration(
             hintText: lalaCopy(
               language,
@@ -318,9 +396,7 @@ class _CategoryChipBar extends StatelessWidget {
             label: Text(
               categoryFilterLabel(category, language),
               style: TextStyle(
-                color: isSelected
-                    ? Colors.white
-                    : const Color(0xFF334155),
+                color: isSelected ? Colors.white : const Color(0xFF334155),
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -332,10 +408,7 @@ class _CategoryChipBar extends StatelessWidget {
             showCheckmark: false,
             // 지도 칩과 동일한 컴팩트 언어: shrink wrap으로 40dp 이하 타겟.
             materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            visualDensity: const VisualDensity(
-              horizontal: -3,
-              vertical: -3,
-            ),
+            visualDensity: const VisualDensity(horizontal: -3, vertical: -3),
             side: BorderSide(
               color: isSelected
                   ? const Color(0xFF2B6CB0)
@@ -483,10 +556,13 @@ class _SearchResultsView extends StatelessWidget {
               Text(
                 lalaCopy(
                   language,
-                  ko: hasQuery ? '조건에 맞는 장소가 없어요.' : '이 주변 추천을 준비 중입니다.',
+                  // Why: an empty result is not "preparing" — the data arrived and
+                  // there is nothing here. Say so honestly instead of implying a
+                  // perpetual pending state.
+                  ko: hasQuery ? '조건에 맞는 장소가 없어요.' : '이 주변엔 아직 추천이 없어요.',
                   en: hasQuery
                       ? 'No places match your search.'
-                      : 'Recommendations are still being prepared here.',
+                      : 'No recommendations here yet.',
                 ),
                 style: const TextStyle(
                   color: Color(0xFF64748B),
@@ -553,9 +629,9 @@ class _SearchPlaceTile extends StatelessWidget {
                       Text(
                         '${place.distanceM}m',
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: const Color(0xFF64748B),
-                              fontWeight: FontWeight.w800,
-                            ),
+                          color: const Color(0xFF64748B),
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                   ],
                 ),
@@ -565,9 +641,9 @@ class _SearchPlaceTile extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
-                        height: 1.14,
-                      ),
+                    fontWeight: FontWeight.w900,
+                    height: 1.14,
+                  ),
                 ),
                 const SizedBox(height: 6),
                 Row(
@@ -584,9 +660,9 @@ class _SearchPlaceTile extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: const Color(0xFF475569),
-                              fontWeight: FontWeight.w700,
-                            ),
+                          color: const Color(0xFF475569),
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ],

@@ -15,7 +15,17 @@ class LalaLocation {
   final double lng;
 }
 
-enum LalaLocationResultStatus { found, denied, unavailable }
+enum LalaLocationResultStatus {
+  found,
+  // Soft denial: the user declined this request but can be asked again.
+  denied,
+  // OS-level permanent denial (Geolocator deniedForever). Re-prompting will not
+  // show the system dialog; the user must grant from settings. Kept distinct so
+  // the UI can route to settings instead of re-requesting.
+  permanentlyDenied,
+  // Location service unsupported/unavailable on this platform or timed out.
+  unavailable,
+}
 
 class LalaLocationResult {
   const LalaLocationResult._({required this.status, this.location});
@@ -25,6 +35,9 @@ class LalaLocationResult {
 
   const LalaLocationResult.denied()
     : this._(status: LalaLocationResultStatus.denied);
+
+  const LalaLocationResult.permanentlyDenied()
+    : this._(status: LalaLocationResultStatus.permanentlyDenied);
 
   const LalaLocationResult.unavailable()
     : this._(status: LalaLocationResultStatus.unavailable);
@@ -66,8 +79,15 @@ class GeolocatorLalaLocationProvider implements LalaLocationProvider {
           _permissionTimeout,
         );
       }
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
+      // Why: the OS distinguishes a one-time decline from a permanent denial.
+      // Mapping both to `denied` hid permanently-denied users behind a retry
+      // that can never surface the system dialog, so deniedForever is reported
+      // truthfully as its own status. The web boundary cannot confirm
+      // permanence, so it stays at `denied` (handled above).
+      if (permission == LocationPermission.deniedForever) {
+        return const LalaLocationResult.permanentlyDenied();
+      }
+      if (permission == LocationPermission.denied) {
         return const LalaLocationResult.denied();
       }
       if (permission == LocationPermission.unableToDetermine) {

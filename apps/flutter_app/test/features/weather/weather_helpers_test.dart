@@ -5,6 +5,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:lala_next_app/features/weather/weather_helpers.dart';
+import 'package:lala_next_app/shared/labels/source_label.dart';
 
 void main() {
   group('temperatureLabelOrNull', () {
@@ -37,6 +38,26 @@ void main() {
       expect(temperatureLabel(''), '-');
       expect(temperatureLabel('14'), '14°C');
       expect(temperatureLabel('22C'), '22°C');
+    });
+  });
+
+  // Wave-1: weather/air stays at the official server-side boundary. Placeholder
+  // sources (skeleton/fallback/unavailable) must be suppressed to the truthful
+  // unavailable card; only real, timestamped snapshots reach the UI.
+  group('isPlaceholderWeatherSource (honest weather data states)', () {
+    test('placeholder/empty/fallback sources are suppressed', () {
+      expect(isPlaceholderWeatherSource(null), isTrue);
+      expect(isPlaceholderWeatherSource(''), isTrue);
+      expect(isPlaceholderWeatherSource('skeleton'), isTrue);
+      expect(isPlaceholderWeatherSource('fallback'), isTrue);
+      expect(isPlaceholderWeatherSource('unavailable'), isTrue);
+      expect(isPlaceholderWeatherSource('db_fallback'), isTrue);
+    });
+
+    test('real server-side sources pass through', () {
+      expect(isPlaceholderWeatherSource('db'), isFalse);
+      expect(isPlaceholderWeatherSource('kma_ultra_srt_ncst'), isFalse);
+      expect(isPlaceholderWeatherSource('airkorea_sido_realtime'), isFalse);
     });
   });
 }
