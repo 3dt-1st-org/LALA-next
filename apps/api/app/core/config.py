@@ -51,6 +51,11 @@ class Settings:
     openai_api_key: str = ""
     openai_base_url: str = ""
     openai_embedding_model: str = ""
+    # Standard OpenAI chat model names for the review-evidence lanes (Improvement B).
+    # bulk review processing -> gpt-5.4-nano; low-confidence recheck -> gpt-5.4-mini.
+    # Never use Azure OpenAI for LALA AI work.
+    openai_review_batch_model: str = ""
+    openai_review_recheck_model: str = ""
     enable_live_ai: bool = False
     azure_speech_region: str = ""
     azure_speech_endpoint: str = ""
@@ -99,6 +104,24 @@ class Settings:
                 key_vault_url,
             )
             or azure_openai_deployment
+        )
+        # Improvement B: standard OpenAI chat models for review evidence (never
+        # Azure). Bulk -> gpt-5.4-nano, low-confidence recheck -> gpt-5.4-mini.
+        openai_review_batch_model = (
+            _env_or_secret(
+                "OPENAI_REVIEW_BATCH_MODEL",
+                "openai-review-batch-model",
+                key_vault_url,
+            )
+            or "gpt-5.4-nano"
+        )
+        openai_review_recheck_model = (
+            _env_or_secret(
+                "OPENAI_REVIEW_RECHECK_MODEL",
+                "openai-review-recheck-model",
+                key_vault_url,
+            )
+            or "gpt-5.4-mini"
         )
         return cls(
             ios_api_key=_env_or_secret("IOS_API_KEY", "ios-api-key", key_vault_url),
@@ -213,6 +236,8 @@ class Settings:
                 _env_or_secret("OPENAI_EMBEDDING_MODEL", "openai-embedding-model", key_vault_url)
                 or "text-embedding-3-small"
             ),
+            openai_review_batch_model=openai_review_batch_model,
+            openai_review_recheck_model=openai_review_recheck_model,
             enable_live_ai=_bool_env("LALA_ENABLE_LIVE_AI", default=False),
             azure_speech_region=_env_or_secret(
                 "AZURE_SPEECH_REGION", "azure-speech-region", key_vault_url

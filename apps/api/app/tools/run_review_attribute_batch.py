@@ -91,7 +91,7 @@ def main(argv: list[str] | None = None) -> int:
             return 2
 
     started_at = datetime.now(UTC)
-    source_method = "azure_openai" if args.dry_run_ai or args.apply else "deterministic"
+    source_method = "openai" if args.dry_run_ai or args.apply else "deterministic"
     try:
         candidates = fetch_review_attribute_candidates(
             dsn=dsn,
@@ -140,7 +140,7 @@ def main(argv: list[str] | None = None) -> int:
                     duration_ms=duration_ms(started_at, finished_at),
                     error_message=redact_secret_text(
                         str(exc) or exc.__class__.__name__,
-                        (dsn, settings.azure_openai_key),
+                        (dsn, settings.azure_openai_key, settings.openai_api_key),
                     ),
                     connect_timeout=args.connect_timeout,
                 )
@@ -151,7 +151,7 @@ def main(argv: list[str] | None = None) -> int:
                 "mode": _mode(args),
                 "error": redact_secret_text(
                     str(exc) or exc.__class__.__name__,
-                    (dsn, settings.azure_openai_key),
+                    (dsn, settings.azure_openai_key, settings.openai_api_key),
                 ),
             },
         )

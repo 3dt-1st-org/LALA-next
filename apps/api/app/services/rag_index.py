@@ -647,23 +647,27 @@ def _culture_event_chunk(row: dict[str, Any]) -> KnowledgeChunk:
 
 
 def _community_post_chunk(row: dict[str, Any]) -> KnowledgeChunk:
-    title = (
-        _optional_text(row.get("title")) or _optional_text(row.get("keyword")) or "지역 커뮤니티 글"
-    )
-    body_text = _optional_text(row.get("body")) or "본문 요약이 없습니다."
+    # Improvement D: never embed the raw post body, raw title, or post_url into a
+    # user-facing RAG chunk. The chunk is categorical only (keyword/region/
+    # provider), so unlicensed review text cannot reach docent grounding -- the
+    # same leak the legacy pipeline had via clean_text columns. Review *evidence*
+    # reaches RAG through the governed aggregate -> place_mention handoff
+    # (review_rag_handoff), which is aggregate-only by construction.
+    keyword = _optional_text(row.get("keyword")) or "지역 커뮤니티"
+    region = _optional_text(row.get("region_slug")) or "미분류"
+    provider = _optional_text(row.get("provider")) or "unknown"
     body = _join_sentences(
         [
-            f"지역 커뮤니티 글 제목은 {title}입니다.",
-            f"본문 또는 요약은 {body_text}",
-            f"키워드는 {row.get('keyword') or '미분류'}이고 지역은 {row.get('region_slug') or '미분류'}입니다.",
-            f"공급자는 {row.get('provider') or 'unknown'}입니다.",
+            f"지역 커뮤니티 신호(키워드: {keyword})입니다.",
+            f"지역은 {region}이고 공급자는 {provider}입니다.",
+            "본문은 라이선스/프라이버시 경계상 RAG 에 임베드하지 않습니다.",
         ]
     )
     return KnowledgeChunk(
         source_type="community_post",
         source_id=f"post:{row.get('provider')}:{row.get('external_key')}",
         source_table="community.posts",
-        title_ko=title,
+        title_ko=keyword,
         body_ko=body,
         metadata=_json_object(
             {
@@ -671,7 +675,6 @@ def _community_post_chunk(row: dict[str, Any]) -> KnowledgeChunk:
                 "external_key": row.get("external_key"),
                 "keyword": row.get("keyword"),
                 "region_slug": row.get("region_slug"),
-                "post_url": row.get("post_url"),
                 "created_at_source": _isoformat(row.get("created_at_source")),
                 "collected_at": _isoformat(row.get("collected_at")),
             }

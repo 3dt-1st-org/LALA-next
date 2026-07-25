@@ -170,7 +170,7 @@ def test_apply_review_attribute_enrichments_targets_mentions_and_quality(monkeyp
     assert executed[-1] == ("commit", None)
 
 
-def test_generate_ai_enrichments_prefers_review_batch_specific_deployment(monkeypatch):
+def test_generate_ai_enrichments_uses_openai_review_batch_model(monkeypatch):
     captured: dict[str, object] = {}
     candidate = _candidate(category="restaurant", organic=3)
 
@@ -210,21 +210,23 @@ def test_generate_ai_enrichments_prefers_review_batch_specific_deployment(monkey
                 ]
             )
 
-    class FakeAzureOpenAI:
+    class FakeOpenAI:
         def __init__(self, **kwargs):
             self.chat = SimpleNamespace(completions=FakeCompletions())
 
-    fake_openai = SimpleNamespace(AzureOpenAI=FakeAzureOpenAI)
+    # Standard OpenAI only (never Azure): the client is openai.OpenAI and the
+    # model is the OpenAI review-batch model name. The key value is never asserted
+    # on or exposed.
+    fake_openai = SimpleNamespace(OpenAI=FakeOpenAI)
     monkeypatch.setitem(sys.modules, "openai", fake_openai)
     monkeypatch.setattr(
         review_attribute_batch,
         "get_settings",
         lambda: SimpleNamespace(
-            azure_openai_endpoint="https://example.openai.azure.com",
-            azure_openai_key="secret",
-            azure_openai_api_version="2024-02-15-preview",
-            azure_openai_deployment="generic-deployment",
-            azure_openai_review_batch_deployment="review-nano-deployment",
+            openai_api_key="dummy",  # pragma: allowlist secret -- fake test fixture, never a real key
+            openai_base_url="https://api.openai.com/v1",
+            enable_live_ai=True,
+            openai_review_batch_model="review-nano-model",
         ),
     )
 
@@ -236,7 +238,7 @@ def test_generate_ai_enrichments_prefers_review_batch_specific_deployment(monkey
     )
 
     assert len(enrichments) == 1
-    assert captured["completion"]["model"] == "review-nano-deployment"
+    assert captured["completion"]["model"] == "review-nano-model"
 
 
 def _candidate(
