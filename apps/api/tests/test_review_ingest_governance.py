@@ -7,6 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from pydantic import ValidationError
 
 from apps.api.app.services import review_ingest_governance as governance
 
@@ -55,96 +56,42 @@ def _record_dict(
     return record
 
 
-# --- pure governance logic ---
+# --- pure validation & projection (no DB, no network) ---
 
 
-def test_govern_accepts_licensed_normalized_records_and_builds_aggregate_only_payload():
-    result = governance.govern_review_records(
-        registration=_registration(),
-        records=[_record_dict("post-1", seed="warm service and good coffee")],
-    )
+def test_parse_review_record_accepts_valid_aggregate_record():
+    record = governance.parse_review_record(_record_dict("post-1", seed="warm coffee"))
+    assert record.source_name == FICTIONAL_SOURCE_NAME
+    assert record.content_sha256 == _sha("post-1", "warm coffee")
 
-    assert result.run.status == "succeeded"
-    assert result.run.failure_category == "none"
-    assert result.run.received_count == 1
-    assert result.run.processed_count == 1
-    assert result.run.quarantined_count == 0
-    assert len(result.accepted) == 1
 
-    aggregate = result.accepted[0]
-    assert aggregate.source_name == FICTIONAL_SOURCE_NAME
+def test_approved_aggregate_from_record_is_aggregate_only_and_rag_safe():
+    record = governance.parse_review_record(_record_dict("post-1", seed="good service"))
+    aggregate = governance.approved_aggregate_from_record(record)
+
     assert aggregate.attribute_scores == {"taste": 0.8, "service": 0.7}
+    assert aggregate.schema_version == governance.GOVERNANCE_SCHEMA_VERSION
     # The downstream payload is aggregate-only -- it must not carry raw text.
     governance.enforce_no_raw_review_text(aggregate.to_rag_metadata(), label="accepted")
-    assert aggregate.schema_version == governance.GOVERNANCE_SCHEMA_VERSION
+    governance.enforce_no_raw_review_text(aggregate.model_dump(), label="aggregate")
 
 
-def test_govern_deduplicates_repeat_records_by_content_hash():
-    duplicate = _record_dict("post-1", seed="same text")
-    result = governance.govern_review_records(
-        registration=_registration(),
-        records=[duplicate, duplicate],
-    )
-
-    assert result.run.received_count == 2
-    assert result.run.processed_count == 1
-    assert result.run.duplicate_count == 1
-    assert result.run.quarantined_count == 0
-    assert len(result.accepted) == 1
-
-
-def test_govern_routes_malformed_records_to_quarantine_as_schema_invalid():
-    malformed = _record_dict("post-bad", seed="x")
-    del malformed["content_sha256"]  # required field missing
-
-    result = governance.govern_review_records(
-        registration=_registration(),
-        records=[malformed],
-    )
-
-    assert result.run.processed_count == 0
-    assert result.run.quarantined_count == 1
-    entry = result.quarantined[0]
-    assert entry.reason_category == "schema_invalid"
-    assert entry.provider == FICTIONAL_PROVIDER
-    assert entry.external_key == "post-bad"
-    # Quarantine entry exposes no raw review text.
-    governance.enforce_no_raw_review_text(entry.model_dump(), label="quarantine")
-
-
-def test_govern_quarantines_entire_batch_when_source_license_is_rejected():
-    records = [_record_dict("post-1", seed="a"), _record_dict("post-2", seed="b")]
-    result = governance.govern_review_records(
-        registration=_registration(license_class="rejected"),
-        records=records,
-    )
-
-    assert result.run.status == "failed"
-    assert result.run.failure_category == "terms_violation"
-    assert result.run.processed_count == 0
-    assert result.run.quarantined_count == 2
-    assert all(entry.reason_category == "terms_violation" for entry in result.quarantined)
-    assert result.accepted == ()
-
-
-def test_govern_record_carrying_raw_text_field_is_quarantined_not_accepted():
-    # An upstream normalizer must never hand raw text to this boundary.
-    # extra="forbid" turns the raw body into a schema_invalid quarantine.
+def test_record_carrying_raw_body_field_is_rejected_by_allowlist():
     raw_leak = _record_dict("post-leak", seed="clean")
     raw_leak["body"] = "전시가 정말 좋았습니다."  # type: ignore[assignment]
 
-    result = governance.govern_review_records(
-        registration=_registration(),
-        records=[raw_leak],
-    )
+    with pytest.raises(ValidationError):
+        governance.parse_review_record(raw_leak)
 
-    assert result.run.processed_count == 0
-    assert result.run.quarantined_count == 1
-    assert result.quarantined[0].reason_category == "schema_invalid"
+
+def test_record_with_raw_text_key_in_normalized_attributes_is_rejected():
+    raw = _record_dict("post-attr", seed="x")
+    raw["normalized_attributes"] = {"body": "raw"}  # type: ignore[assignment]
+    with pytest.raises(ValidationError):
+        governance.parse_review_record(raw)
 
 
 def test_approved_review_aggregate_model_has_no_raw_text_fields():
-    # Invariant: the downstream payload type can never represent raw text.
     field_names = set(governance.ApprovedReviewAggregate.model_fields)
     assert field_names.isdisjoint(governance.RAW_REVIEW_TEXT_FIELDS)
 
@@ -157,7 +104,6 @@ def test_enforce_no_raw_review_text_rejects_raw_body_and_allows_clean_payload():
         )
     assert exc_info.value.code == "raw_review_text_forbidden"
 
-    # A clean aggregate payload passes.
     governance.enforce_no_raw_review_text(
         {"mention_count": 3, "sentiment_score": 0.5},
         label="rag_payload",
@@ -177,17 +123,15 @@ def test_build_run_key_is_deterministic_for_same_window_and_schema():
         schema_version=governance.GOVERNANCE_SCHEMA_VERSION,
     )
     assert first == second
-    other_window = governance.build_run_key(
+    other = governance.build_run_key(
         source_name=FICTIONAL_SOURCE_NAME,
         window_start=date(2026, 7, 27),
         schema_version=governance.GOVERNANCE_SCHEMA_VERSION,
     )
-    assert other_window != first
+    assert other != first
 
 
 def test_governance_module_does_not_couple_to_rag_write_path():
-    # The foundation must not call the RAG writer or embed raw text. Coupling
-    # would show up as an import of / reference to rag_index.upsert_knowledge_chunks.
     source = Path(governance.__file__).read_text(encoding="utf-8")
     assert "import rag_index" not in source
     assert "from apps.api.app.services.rag_index" not in source
@@ -195,14 +139,242 @@ def test_governance_module_does_not_couple_to_rag_write_path():
     assert "upsert_knowledge_chunks" not in source
 
 
-# --- repository helpers (fake psycopg2) ---
+def test_governance_module_has_no_public_endpoint_or_router_coupling():
+    # Source registration stays internal/admin-only: no FastAPI router import.
+    source = Path(governance.__file__).read_text(encoding="utf-8")
+    assert "APIRouter" not in source
+    assert "from apps.api.app.routers" not in source
+
+
+# --- classify_review_records: pure validation -> typed quarantine ---
+
+
+def test_classify_review_records_splits_valid_and_malformed():
+    malformed = _record_dict("post-bad", seed="x")
+    del malformed["content_sha256"]
+    valid_dict = _record_dict("post-1", seed="good")
+
+    valid, quarantined = governance.classify_review_records(
+        registration=_registration(),
+        records=[valid_dict, malformed],
+    )
+
+    assert len(valid) == 1
+    assert valid[0].external_key == "post-1"
+    assert len(quarantined) == 1
+    entry = quarantined[0]
+    assert entry.reason_category == "schema_invalid"
+    assert entry.provider == FICTIONAL_PROVIDER
+    assert entry.external_key == "post-bad"
+
+
+def test_classify_routes_missing_field_to_specific_code_and_typed_metadata():
+    malformed = _record_dict("post-missing", seed="x")
+    del malformed["content_sha256"]
+
+    _, quarantined = governance.classify_review_records(
+        registration=_registration(),
+        records=[malformed],
+    )
+
+    entry = quarantined[0]
+    assert entry.reason_code == "schema_invalid_missing_field"
+    assert entry.safe_metadata.missing_field_name == "content_sha256"
+    assert entry.safe_metadata.bad_hash is False
+
+
+def test_classify_routes_bad_hash_to_specific_code():
+    malformed = _record_dict("post-hash", seed="x", content_sha256="not-a-hex")
+    # The literal must be a valid sha-shaped override for the bad-hash path:
+    malformed["content_sha256"] = "zz" * 32  # 64 chars but non-hex
+
+    _, quarantined = governance.classify_review_records(
+        registration=_registration(),
+        records=[malformed],
+    )
+
+    entry = quarantined[0]
+    assert entry.reason_code == "schema_invalid_bad_hash"
+    assert entry.safe_metadata.bad_hash is True
+
+
+def test_classify_routes_raw_text_field_to_specific_code():
+    raw_leak = _record_dict("post-leak", seed="x")
+    raw_leak["body"] = "전시가 좋았습니다."  # type: ignore[assignment]
+
+    _, quarantined = governance.classify_review_records(
+        registration=_registration(),
+        records=[raw_leak],
+    )
+
+    entry = quarantined[0]
+    assert entry.reason_code == "schema_invalid_raw_text_field"
+    assert entry.safe_metadata.raw_text_field == "body"
+
+
+def test_quarantine_reason_is_code_backed_and_never_interpolates_raw_input():
+    # reason/reason_category are always derived from a fixed template via REASON_SPEC.
+    for _code, (category, reason) in governance.REASON_SPEC.items():
+        assert category in {
+            "schema_invalid",
+            "terms_violation",
+            "source_api_failure",
+            "duplicate_suspect",
+            "low_confidence",
+            "ambiguous_match",
+        }
+        # Templates are fixed strings that never name a raw content field.
+        assert isinstance(reason, str) and reason
+        for forbidden in ("body", "title", "post_url", "raw_text"):
+            assert forbidden not in reason
+
+
+def test_quarantine_safe_metadata_is_typed_and_carries_no_raw_text():
+    entry = governance._quarantine_for_code(  # noqa: SLF001 -- exercising the builder
+        {"provider": FICTIONAL_PROVIDER, "external_key": "k", "content_sha256": _sha("k", "s")},
+        registration=_registration(),
+        reason_code="schema_invalid_missing_field",
+        safe_metadata=governance.QuarantineSafeMetadata(
+            malformed=True, missing_field_name="content_sha256"
+        ),
+    )
+
+    # No free-form str field exists on the typed metadata model.
+    for name, field in governance.QuarantineSafeMetadata.model_fields.items():
+        assert name not in governance.RAW_REVIEW_TEXT_FIELDS
+        # Fields are bool/int/float or Literal-enumerable; never arbitrary text.
+        assert field.annotation is not str
+
+    dumped = entry.safe_metadata.model_dump(exclude_none=True)
+    governance.enforce_no_raw_review_text(dumped, label="safe_metadata")
+    governance.enforce_no_raw_review_text(entry.model_dump(), label="quarantine_entry")
+
+
+# --- DB-backed source gate (Finding 1): deterministic, no network ---
+
+
+class _StubCursor:
+    """Minimal cursor that records SQL and returns a preset source row."""
+
+    def __init__(self, row: tuple | None) -> None:
+        self.row = row
+        self.executed: list[tuple[str, tuple]] = []
+        self.rowcount = 0
+
+    def __enter__(self) -> _StubCursor:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+    def execute(self, sql: str, params: tuple | None = None) -> None:
+        self.executed.append((sql, params or ()))
+
+    def fetchone(self) -> tuple | None:
+        return self.row
+
+
+def _source_row(
+    *,
+    provider: str = FICTIONAL_PROVIDER,
+    license_class: str = "licensed",
+    terms_version: str = TERMS_VERSION,
+    status: str = "active",
+) -> tuple:
+    return (
+        provider,
+        license_class,
+        terms_version,
+        "licensed_api_discovery",
+        "metadata_and_aggregates_only",
+        "no_raw_text_no_pii",
+        status,
+    )
+
+
+def test_load_active_review_source_rejects_unregistered_source():
+    cur = _StubCursor(row=None)
+    with pytest.raises(governance.ReviewGovernanceError) as exc:
+        governance.load_active_review_source(
+            cur,
+            source_name=FICTIONAL_SOURCE_NAME,
+            expected_provider=FICTIONAL_PROVIDER,
+            expected_terms_version=TERMS_VERSION,
+        )
+    assert exc.value.code == "source_not_registered"
+    assert "ingest.review_sources" in cur.executed[0][0]
+
+
+def test_load_active_review_source_rejects_disabled_source():
+    cur = _StubCursor(row=_source_row(status="disabled"))
+    with pytest.raises(governance.ReviewGovernanceError) as exc:
+        governance.load_active_review_source(
+            cur,
+            source_name=FICTIONAL_SOURCE_NAME,
+            expected_provider=FICTIONAL_PROVIDER,
+            expected_terms_version=TERMS_VERSION,
+        )
+    assert exc.value.code == "source_disabled"
+
+
+def test_load_active_review_source_rejects_rejected_license_class():
+    cur = _StubCursor(row=_source_row(license_class="rejected"))
+    with pytest.raises(governance.ReviewGovernanceError) as exc:
+        governance.load_active_review_source(
+            cur,
+            source_name=FICTIONAL_SOURCE_NAME,
+            expected_provider=FICTIONAL_PROVIDER,
+            expected_terms_version=TERMS_VERSION,
+        )
+    assert exc.value.code == "source_license_rejected"
+
+
+def test_load_active_review_source_rejects_provider_mismatch():
+    cur = _StubCursor(row=_source_row(provider="other_provider"))
+    with pytest.raises(governance.ReviewGovernanceError) as exc:
+        governance.load_active_review_source(
+            cur,
+            source_name=FICTIONAL_SOURCE_NAME,
+            expected_provider=FICTIONAL_PROVIDER,
+            expected_terms_version=TERMS_VERSION,
+        )
+    assert exc.value.code == "source_provider_mismatch"
+
+
+def test_load_active_review_source_rejects_terms_mismatch():
+    cur = _StubCursor(row=_source_row(terms_version="other-terms-v2"))
+    with pytest.raises(governance.ReviewGovernanceError) as exc:
+        governance.load_active_review_source(
+            cur,
+            source_name=FICTIONAL_SOURCE_NAME,
+            expected_provider=FICTIONAL_PROVIDER,
+            expected_terms_version=TERMS_VERSION,
+        )
+    assert exc.value.code == "source_terms_mismatch"
+
+
+def test_load_active_review_source_does_not_trust_caller_license_value():
+    # The DB row says "licensed"; the caller passes nothing about license_class.
+    # The gate trusts the DB row, not any caller-supplied licensed assertion.
+    cur = _StubCursor(row=_source_row(license_class="licensed"))
+    registration = governance.load_active_review_source(
+        cur,
+        source_name=FICTIONAL_SOURCE_NAME,
+        expected_provider=FICTIONAL_PROVIDER,
+        expected_terms_version=TERMS_VERSION,
+    )
+    assert registration.license_class == "licensed"
+    assert registration.source_status == "active"
+
+
+# --- Fake psycopg2 harness for the persistent path (one shared store) ---
 
 
 class _FakeCursor:
     def __init__(self, store: dict[str, object]) -> None:
         self.store = store
         self.rowcount = 0
-        self._fetchone: tuple[object, ...] | None = None
+        self._fetchone: tuple | None = None
 
     def __enter__(self) -> _FakeCursor:
         return self
@@ -210,34 +382,66 @@ class _FakeCursor:
     def __exit__(self, *args: object) -> None:
         return None
 
-    def execute(self, sql: str, params: tuple[object, ...] | None = None) -> None:
-        executed = self.store.setdefault("executed", [])  # type: ignore[union-attr]
-        executed.append(sql)  # type: ignore[union-attr]
-        params = params or ()
-        if "RETURNING id" in sql:
+    def execute(self, sql: str, params: tuple | None = None) -> None:
+        params = tuple(params or ())
+        self.store.setdefault("executed", []).append((sql, params))  # type: ignore[union-attr]
+        sql_l = sql.lower()
+
+        fail_on = self.store.get("fail_on")
+        if isinstance(fail_on, str) and fail_on in sql_l:
+            raise RuntimeError("simulated db failure")
+
+        if "from ingest.review_sources" in sql_l:
+            self._fetchone = self.store.get("source_row")  # type: ignore[assignment]
+            self.rowcount = 0 if self._fetchone is None else 1
+        elif "returning id" in sql_l:
             run_key = str(params[1])
             runs = self.store.setdefault("runs", {})  # type: ignore[union-attr]
-            assigned = runs.get(run_key)  # type: ignore[union-attr]
-            if assigned is None:
-                assigned = f"run-{len(runs) + 1}"  # type: ignore[union-attr]
-                runs[run_key] = assigned  # type: ignore[union-attr]
-            self._fetchone = (assigned,)
+            run_id = runs.get(run_key)  # type: ignore[union-attr]
+            if run_id is None:
+                run_id = f"run-{len(runs) + 1}"  # type: ignore[union-attr]
+                runs[run_key] = run_id  # type: ignore[union-attr]
+            self._fetchone = (run_id,)  # type: ignore[assignment]
             self.rowcount = 1
-        elif "community.ingest_quarantine" in sql:
-            provider = str(params[2])
-            external_key = str(params[3])
-            reason_category = str(params[5])
-            key = (provider, external_key, reason_category)
+        elif "insert into ingest.review_ingest_receipts" in sql_l:
+            source_name, external_key, content_sha256 = params[0], params[1], params[2]
+            receipts = self.store.setdefault("receipts", {})  # type: ignore[union-attr]
+            key = (source_name, external_key, content_sha256)
+            if key in receipts:  # type: ignore[operator]
+                self.rowcount = 0
+            else:
+                receipts[key] = {  # type: ignore[index]
+                    "first_run_id": params[3],
+                    "last_run_id": params[4],
+                }
+                self.rowcount = 1
+        elif "update ingest.review_ingest_receipts" in sql_l:
+            # Refresh last_run_id/last_seen_at on exact replay.
+            source_name, external_key, content_sha256 = params[1], params[2], params[3]
+            receipts = self.store.setdefault("receipts", {})  # type: ignore[union-attr]
+            key = (source_name, external_key, content_sha256)
+            if key in receipts:  # type: ignore[operator]
+                receipts[key]["last_run_id"] = params[0]  # type: ignore[index]
+            self.rowcount = 1
+        elif "insert into community.ingest_quarantine" in sql_l:
+            provider, external_key, reason_category = params[2], params[3], params[5]
             seen = self.store.setdefault("quarantine_seen", set())  # type: ignore[union-attr]
-            if key in seen:
+            key = (provider, external_key, reason_category)
+            if key in seen:  # type: ignore[operator]
                 self.rowcount = 0
             else:
                 seen.add(key)  # type: ignore[union-attr]
+                self.store.setdefault("quarantine_rows", []).append(params)  # type: ignore[union-attr]
                 self.rowcount = 1
+        elif "update community.ingest_runs" in sql_l:
+            self.store.setdefault("finalized", []).append(params)  # type: ignore[union-attr]
+            self.rowcount = 1
+        elif "insert into ingest.review_sources" in sql_l:
+            self.rowcount = 1
         else:
             self.rowcount = 1
 
-    def fetchone(self) -> tuple[object, ...] | None:
+    def fetchone(self) -> tuple | None:
         return self._fetchone
 
 
@@ -248,14 +452,24 @@ class _FakeConnection:
     def __enter__(self) -> _FakeConnection:
         return self
 
-    def __exit__(self, *args: object) -> None:
-        return None
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        if exc_type is None:
+            self.commit()
+        else:
+            self.rollback()
+        return False
 
     def cursor(self) -> _FakeCursor:
         return _FakeCursor(self.store)
 
     def commit(self) -> None:
-        return None
+        self.store["committed"] = True  # type: ignore[assignment]
+
+    def rollback(self) -> None:
+        self.store["rolled_back"] = True  # type: ignore[assignment]
+
+    def close(self) -> None:
+        self.store["closed"] = True  # type: ignore[assignment]
 
 
 def _install_fake_psycopg2(monkeypatch, store: dict[str, object]) -> None:
@@ -271,8 +485,11 @@ def _install_fake_psycopg2(monkeypatch, store: dict[str, object]) -> None:
     )
 
 
-def _sql(store: dict[str, object]) -> str:
-    return "\n".join(store.get("executed", []))  # type: ignore[arg-type]
+def _prime_happy_source(store: dict[str, object]) -> None:
+    store["source_row"] = _source_row()
+
+
+# --- repository helpers (cursor-based) ---
 
 
 def test_register_review_source_upserts_by_source_name(monkeypatch):
@@ -285,14 +502,14 @@ def test_register_review_source_upserts_by_source_name(monkeypatch):
     )
 
     assert store["connects"] == [("postgresql://redacted", 7)]
-    sql = _sql(store)
-    assert "INSERT INTO ingest.review_sources" in sql
-    assert "ON CONFLICT (source_name) DO UPDATE" in sql
+    executed = [sql for sql, _ in store["executed"]]  # type: ignore[union-attr]
+    assert any("INSERT INTO ingest.review_sources" in s for s in executed)
+    assert any("ON CONFLICT (source_name) DO UPDATE" in s for s in executed)
 
 
-def test_create_or_resume_ingest_run_is_idempotent_on_run_key(monkeypatch):
+def test_create_or_resume_ingest_run_writes_registered_source_fk():
     store: dict[str, object] = {}
-    _install_fake_psycopg2(monkeypatch, store)
+    cur = _FakeCursor(store)
     registration = _registration()
     run_key = governance.build_run_key(
         source_name=registration.source_name,
@@ -300,33 +517,125 @@ def test_create_or_resume_ingest_run_is_idempotent_on_run_key(monkeypatch):
         schema_version=governance.GOVERNANCE_SCHEMA_VERSION,
     )
 
-    first_id = governance.create_or_resume_ingest_run(
-        dsn="postgresql://redacted",
-        run_key=run_key,
-        registration=registration,
-        received_count=3,
-        connect_timeout=7,
+    first = governance._create_or_resume_ingest_run(  # noqa: SLF001
+        cur, run_key=run_key, registration=registration, received_count=3
     )
-    second_id = governance.create_or_resume_ingest_run(
-        dsn="postgresql://redacted",
-        run_key=run_key,
-        registration=registration,
-        received_count=3,
-        connect_timeout=7,
+    second = governance._create_or_resume_ingest_run(  # noqa: SLF001
+        cur, run_key=run_key, registration=registration, received_count=3
     )
 
-    assert first_id == second_id  # retry resumes the same ledger row
-    sql = _sql(store)
-    assert "INSERT INTO community.ingest_runs" in sql
-    assert "ON CONFLICT (run_key)" in sql
-    assert "RETURNING id" in sql
+    assert first == second  # idempotent resume
+    insert_sql = store["executed"][0][0]  # type: ignore[index]
+    assert "INSERT INTO community.ingest_runs" in insert_sql
+    assert "review_source_name" in insert_sql  # registered-source FK (Finding 2)
+    assert "ON CONFLICT (run_key)" in insert_sql
 
 
-def test_finalize_ingest_run_writes_retry_safe_counters(monkeypatch):
+def test_record_review_receipts_distinguishes_new_from_exact_replay():
     store: dict[str, object] = {}
-    _install_fake_psycopg2(monkeypatch, store)
-    governance.finalize_ingest_run(
-        dsn="postgresql://redacted",
+    cur = _FakeCursor(store)
+    record = governance.parse_review_record(_record_dict("post-1", seed="same"))
+
+    new, replay = governance._record_review_receipts(  # noqa: SLF001
+        cur, run_id="run-1", source_name=FICTIONAL_SOURCE_NAME, records=[record]
+    )
+    assert len(new) == 1 and len(replay) == 0
+
+    # Same (source, external_key, content_sha256) in a *different* run -> replay.
+    new2, replay2 = governance._record_review_receipts(  # noqa: SLF001
+        cur, run_id="run-2", source_name=FICTIONAL_SOURCE_NAME, records=[record]
+    )
+    assert len(new2) == 0 and len(replay2) == 1
+    # last_run_id is refreshed to the latest run on replay.
+    assert (
+        store["receipts"][  # type: ignore[index]
+            (FICTIONAL_SOURCE_NAME, "post-1", record.content_sha256)
+        ]["last_run_id"]
+        == "run-2"
+    )
+
+
+def test_record_review_receipts_treats_content_revision_as_new():
+    store: dict[str, object] = {}
+    cur = _FakeCursor(store)
+    original = governance.parse_review_record(_record_dict("post-1", seed="original text"))
+    revised = governance.parse_review_record(
+        _record_dict("post-1", seed="edited text")  # same external_key, NEW hash
+    )
+    assert original.content_sha256 != revised.content_sha256
+
+    new1, _ = governance._record_review_receipts(  # noqa: SLF001
+        cur, run_id="run-1", source_name=FICTIONAL_SOURCE_NAME, records=[original]
+    )
+    new2, _ = governance._record_review_receipts(  # noqa: SLF001
+        cur, run_id="run-2", source_name=FICTIONAL_SOURCE_NAME, records=[revised]
+    )
+
+    assert len(new1) == 1
+    assert len(new2) == 1  # content revision -> emits a fresh aggregate
+    # Both receipt rows coexist (different content_sha256 for same external_key).
+    assert len(store["receipts"]) == 2  # type: ignore[arg-type]
+
+
+def test_record_review_receipts_dedupes_within_batch_via_persistent_arbiter():
+    store: dict[str, object] = {}
+    cur = _FakeCursor(store)
+    record = governance.parse_review_record(_record_dict("post-1", seed="dup"))
+
+    new, replay = governance._record_review_receipts(  # noqa: SLF001
+        cur,
+        run_id="run-1",
+        source_name=FICTIONAL_SOURCE_NAME,
+        records=[record, record],  # identical content twice in one batch
+    )
+    assert len(new) == 1
+    assert len(replay) == 1
+
+
+def test_insert_quarantine_entries_deduplicates_on_retry_and_persists_typed_metadata(
+    monkeypatch,
+):
+    store: dict[str, object] = {}
+    _install_fake_psycopg2(monkeypatch, store)  # makes psycopg2.extras.Json identity
+    cur = _FakeCursor(store)
+    entry = governance.ReviewQuarantineEntry(
+        provider=FICTIONAL_PROVIDER,
+        external_key="post-bad",
+        content_sha256=_sha("post-bad", "x"),
+        reason_code="schema_invalid_missing_field",
+        source_name=FICTIONAL_SOURCE_NAME,
+        received_at=RECEIVED_AT,
+        safe_metadata=governance.QuarantineSafeMetadata(
+            malformed=True, missing_field_name="content_sha256"
+        ),
+    )
+
+    first = governance._insert_quarantine_entries(  # noqa: SLF001
+        cur, entries=[entry, entry], run_id="run-1"
+    )
+    second = governance._insert_quarantine_entries(  # noqa: SLF001
+        cur, entries=[entry], run_id="run-1"
+    )
+
+    assert first == 1  # in-batch dup skipped by ON CONFLICT
+    assert second == 0  # cross-batch retry skipped too
+    persisted = store["quarantine_rows"][0]  # type: ignore[index]
+    # reason_code (params[6]) + code-backed reason (params[7]) persisted.
+    assert persisted[6] == "schema_invalid_missing_field"
+    assert persisted[7] == governance.REASON_SPEC["schema_invalid_missing_field"][1]
+    # persisted[9] is the Json-wrapped typed metadata (here the raw dict).
+    metadata = persisted[9]
+    assert metadata["malformed"] is True  # type: ignore[index]
+    assert metadata["missing_field_name"] == "content_sha256"  # type: ignore[index]
+    # Typed metadata carries no raw-text keys, by construction.
+    governance.enforce_no_raw_review_text(metadata, label="persisted_metadata")
+
+
+def test_finalize_ingest_run_writes_retry_safe_absolute_counters():
+    store: dict[str, object] = {}
+    cur = _FakeCursor(store)
+    governance._finalize_ingest_run(  # noqa: SLF001
+        cur,
         run_id="run-1",
         status="succeeded",
         processed_count=2,
@@ -334,44 +643,184 @@ def test_finalize_ingest_run_writes_retry_safe_counters(monkeypatch):
         quarantined_count=0,
         failure_category="none",
         error_message=None,
-        connect_timeout=7,
     )
-
-    sql = _sql(store)
+    sql = store["executed"][0][0]  # type: ignore[index]
     assert "UPDATE community.ingest_runs" in sql
     assert "processed_count = %s" in sql
+    assert "duplicate_count = %s" in sql
     assert "failure_category = %s" in sql
     assert "WHERE id = %s" in sql
 
 
-def test_insert_quarantine_entries_deduplicates_on_retry(monkeypatch):
+# --- atomic orchestrator (Finding 5): single transaction boundary ---
+
+
+def test_persist_review_ingest_run_happy_path_emits_aggregate_for_new_only(monkeypatch):
     store: dict[str, object] = {}
     _install_fake_psycopg2(monkeypatch, store)
-    entry = governance.ReviewQuarantineEntry(
-        provider=FICTIONAL_PROVIDER,
-        external_key="post-bad",
-        content_sha256=_sha("post-bad", "x"),
-        reason_category="schema_invalid",
-        reason="normalized record failed schema validation",
+    _prime_happy_source(store)
+
+    result = governance.persist_review_ingest_run(
+        dsn="postgresql://redacted",
         source_name=FICTIONAL_SOURCE_NAME,
-    )
-
-    first = governance.insert_quarantine_entries(
-        dsn="postgresql://redacted",
-        entries=[entry, entry],
-        run_id="run-1",
-        connect_timeout=7,
-    )
-    # Retrying the same failed batch must not double-count dead-letter rows.
-    second = governance.insert_quarantine_entries(
-        dsn="postgresql://redacted",
-        entries=[entry],
-        run_id="run-1",
+        expected_provider=FICTIONAL_PROVIDER,
+        expected_terms_version=TERMS_VERSION,
+        records=[_record_dict("post-1", seed="warm coffee")],
+        window_start=date(2026, 7, 20),
         connect_timeout=7,
     )
 
-    assert first == 1  # the second in-batch duplicate is skipped by ON CONFLICT
-    assert second == 0  # the cross-batch retry is also skipped
-    sql = _sql(store)
-    assert "INSERT INTO community.ingest_quarantine" in sql
-    assert "ON CONFLICT (provider, external_key, reason_category)" in sql
+    assert result.run.status == "succeeded"
+    assert result.run.received_count == 1
+    assert result.run.processed_count == 1
+    assert result.run.duplicate_count == 0
+    assert len(result.accepted) == 1
+    governance.enforce_no_raw_review_text(result.accepted[0].to_rag_metadata(), label="accepted")
+    # One connection == one transaction boundary.
+    assert len(store["connects"]) == 1  # type: ignore[arg-type]
+    assert store.get("committed") is True
+
+
+def test_persist_review_ingest_run_skips_replay_across_separate_runs(monkeypatch):
+    store: dict[str, object] = {}
+    _install_fake_psycopg2(monkeypatch, store)
+    _prime_happy_source(store)
+
+    record = _record_dict("post-1", seed="stable content")
+    first = governance.persist_review_ingest_run(
+        dsn="postgresql://redacted",
+        source_name=FICTIONAL_SOURCE_NAME,
+        expected_provider=FICTIONAL_PROVIDER,
+        expected_terms_version=TERMS_VERSION,
+        records=[record],
+        window_start=date(2026, 7, 20),
+    )
+    # Separate run, identical content -> exact replay, no downstream aggregate.
+    second = governance.persist_review_ingest_run(
+        dsn="postgresql://redacted",
+        source_name=FICTIONAL_SOURCE_NAME,
+        expected_provider=FICTIONAL_PROVIDER,
+        expected_terms_version=TERMS_VERSION,
+        records=[record],
+        window_start=date(2026, 7, 27),  # different window -> different run_key
+    )
+
+    assert first.run.processed_count == 1
+    assert len(first.accepted) == 1
+    assert second.run.processed_count == 0
+    assert second.run.duplicate_count == 1
+    assert second.accepted == ()
+
+
+def test_persist_review_ingest_run_emits_for_content_revision(monkeypatch):
+    store: dict[str, object] = {}
+    _install_fake_psycopg2(monkeypatch, store)
+    _prime_happy_source(store)
+
+    original = _record_dict("post-1", seed="original")
+    governance.persist_review_ingest_run(
+        dsn="postgresql://redacted",
+        source_name=FICTIONAL_SOURCE_NAME,
+        expected_provider=FICTIONAL_PROVIDER,
+        expected_terms_version=TERMS_VERSION,
+        records=[original],
+        window_start=date(2026, 7, 20),
+    )
+    revised = _record_dict("post-1", seed="revised")  # same key, new hash
+    second = governance.persist_review_ingest_run(
+        dsn="postgresql://redacted",
+        source_name=FICTIONAL_SOURCE_NAME,
+        expected_provider=FICTIONAL_PROVIDER,
+        expected_terms_version=TERMS_VERSION,
+        records=[revised],
+        window_start=date(2026, 7, 27),
+    )
+
+    assert second.run.processed_count == 1
+    assert len(second.accepted) == 1
+
+
+def test_persist_review_ingest_run_quarantines_malformed_with_typed_metadata(monkeypatch):
+    store: dict[str, object] = {}
+    _install_fake_psycopg2(monkeypatch, store)
+    _prime_happy_source(store)
+
+    malformed = _record_dict("post-bad", seed="x")
+    del malformed["content_sha256"]
+
+    result = governance.persist_review_ingest_run(
+        dsn="postgresql://redacted",
+        source_name=FICTIONAL_SOURCE_NAME,
+        expected_provider=FICTIONAL_PROVIDER,
+        expected_terms_version=TERMS_VERSION,
+        records=[malformed],
+        window_start=date(2026, 7, 20),
+    )
+
+    assert result.run.quarantined_count == 1
+    assert result.run.processed_count == 0
+    assert result.run.status == "succeeded"  # bad records routed correctly
+    entry = result.quarantined[0]
+    assert entry.reason_code == "schema_invalid_missing_field"
+    assert entry.safe_metadata.missing_field_name == "content_sha256"
+    governance.enforce_no_raw_review_text(entry.model_dump(), label="quarantine")
+    governance.enforce_no_raw_review_text(
+        entry.safe_metadata.model_dump(exclude_none=True), label="safe_metadata"
+    )
+
+
+@pytest.mark.parametrize(
+    "source_row,expected_code",
+    [
+        (None, "source_not_registered"),
+        (_source_row(status="disabled"), "source_disabled"),
+        (_source_row(license_class="rejected"), "source_license_rejected"),
+        (_source_row(provider="other_provider"), "source_provider_mismatch"),
+        (_source_row(terms_version="other-terms-v2"), "source_terms_mismatch"),
+    ],
+)
+def test_persist_review_ingest_run_rejects_gate_failures_and_writes_nothing(
+    monkeypatch, source_row, expected_code
+):
+    store: dict[str, object] = {}
+    _install_fake_psycopg2(monkeypatch, store)
+    store["source_row"] = source_row
+
+    with pytest.raises(governance.ReviewGovernanceError) as exc:
+        governance.persist_review_ingest_run(
+            dsn="postgresql://redacted",
+            source_name=FICTIONAL_SOURCE_NAME,
+            expected_provider=FICTIONAL_PROVIDER,
+            expected_terms_version=TERMS_VERSION,
+            records=[_record_dict("post-1", seed="x")],
+            window_start=date(2026, 7, 20),
+        )
+    assert exc.value.code == expected_code
+    # Gate fails before any run/receipt/quarantine is written -> nothing committed.
+    assert store.get("committed") is not True
+    assert "runs" not in store
+    assert "receipts" not in store
+    assert "quarantine_rows" not in store
+
+
+def test_persist_review_ingest_run_rolls_back_on_late_failure(monkeypatch):
+    store: dict[str, object] = {}
+    _install_fake_psycopg2(monkeypatch, store)
+    _prime_happy_source(store)
+    # Inject a failure at the finalize step so the transaction must roll back.
+    store["fail_on"] = "update community.ingest_runs"
+
+    with pytest.raises(RuntimeError, match="simulated db failure"):
+        governance.persist_review_ingest_run(
+            dsn="postgresql://redacted",
+            source_name=FICTIONAL_SOURCE_NAME,
+            expected_provider=FICTIONAL_PROVIDER,
+            expected_terms_version=TERMS_VERSION,
+            records=[_record_dict("post-1", seed="x")],
+            window_start=date(2026, 7, 20),
+        )
+
+    # Partial failure never exposes accepted aggregates (nothing returned) and
+    # the single transaction boundary rolled back rather than committing.
+    assert store.get("rolled_back") is True
+    assert store.get("committed") is not True

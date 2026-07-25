@@ -37,6 +37,7 @@ REQUIRED_RELATIONS = (
     "community.ingest_quarantine",
     "ingest.source_files",
     "ingest.review_sources",
+    "ingest.review_ingest_receipts",
     "analytics.place_business_identity",
     "analytics.place_score_snapshots",
     "rag.knowledge_chunks",

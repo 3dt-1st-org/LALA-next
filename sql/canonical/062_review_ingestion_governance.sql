@@ -2,15 +2,22 @@
 -- Additive only: CREATE TABLE IF NOT EXISTS / ADD COLUMN IF NOT EXISTS /
 -- CREATE INDEX IF NOT EXISTS. Re-runnable. No destructive statements, no secrets.
 --
--- This migration establishes three governance concepts the review/mention
+-- This migration establishes four governance concepts the review/mention
 -- pipeline needs before any acquisition lane is wired:
---   1. ingest.review_sources          -- provenance registry (provider/license/terms)
---   2. community.ingest_runs extension -- immutable ingest-run ledger (idempotent + counted)
---   3. community.ingest_quarantine     -- dead-letter for malformed/unsafe records
+--   1. ingest.review_sources            -- provenance registry (provider/license/terms)
+--   2. community.ingest_runs extension  -- idempotent, counted ingest-run accounting
+--   3. ingest.review_ingest_receipts    -- persistent aggregate-only dedupe (no raw text)
+--   4. community.ingest_quarantine      -- dead-letter for malformed/unsafe records
+--
+-- Run-ledger note: community.ingest_runs is *idempotent accounting*, not an
+-- immutable log. Re-running a (source, window, schema) batch resumes the same
+-- row and finalize_*() overwrites its counters with absolute retry-safe
+-- values. That is why dedupe/receipts live in their own table (3).
 --
 -- Security invariant: none of these tables store raw review text, post URLs,
 -- user identifiers, or secret values. Quarantine carries record identity
--- (provider, external_key), a content hash, and a reason only -- never a body.
+-- (provider, external_key), a content hash, a code-backed reason, and a typed
+-- whitelisted metadata blob only -- never a body/title/url/provider response.
 -- The only review-derived output permitted downstream is an aggregate payload
 -- built in code (apps/api/app/services/review_ingest_governance.py).
 
@@ -39,18 +46,29 @@ CREATE TABLE IF NOT EXISTS ingest.review_sources (
 CREATE INDEX IF NOT EXISTS idx_review_sources_license_class
     ON ingest.review_sources (license_class);
 
--- 2. Immutable ingest-run ledger extension.
+-- 2. Idempotent, counted ingest-run accounting extension.
 -- community.ingest_runs already exists (030) as the community run ledger; this
 -- extends it additively for review-ingestion governance. New columns are
--- nullable so existing community-keyword-watchlist usage is unaffected.
--- Enums (license_class, failure_category) are enforced in the service layer
--- (Pydantic Literal validators) rather than via ADD CONSTRAINT because
--- ADD CONSTRAINT is not idempotent and the canonical SQL must be re-runnable.
+-- nullable so legacy community-keyword-watchlist rows (NULL run_key, NULL
+-- review_source_name) remain valid and are never rejected by the new
+-- relationship. Enums (license_class, failure_category) are enforced in the
+-- service layer (Pydantic Literal validators) rather than via ADD CONSTRAINT
+-- because ADD CONSTRAINT is not idempotent and the canonical SQL must be
+-- re-runnable.
 ALTER TABLE community.ingest_runs
     ADD COLUMN IF NOT EXISTS run_key text;
 
 ALTER TABLE community.ingest_runs
     ADD COLUMN IF NOT EXISTS source_name text;
+
+-- Integrity relationship (Finding 2): new review-ingest runs refer to a
+-- *registered* review source. Legacy rows stay valid (NULL). The free-text
+-- source_name column above is retained for back-compat echo only; this FK is
+-- the authoritative source-of-truth link. ADD COLUMN IF NOT EXISTS with an
+-- inline REFERENCES is idempotent: re-run skips the existing column.
+ALTER TABLE community.ingest_runs
+    ADD COLUMN IF NOT EXISTS review_source_name text
+    REFERENCES ingest.review_sources(source_name);
 
 ALTER TABLE community.ingest_runs
     ADD COLUMN IF NOT EXISTS license_class text;
@@ -83,10 +101,39 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_community_ingest_runs_run_key
     ON community.ingest_runs (run_key)
     WHERE run_key IS NOT NULL;
 
--- 3. Review ingestion quarantine / dead-letter.
+-- 3. Persistent aggregate-only dedupe receipts (Finding 3).
+-- One row per (registered source, external key, content SHA-256). This is the
+-- cross-run dedupe arbiter: a re-attempt that produces the exact same content
+-- hash for the same external key is an *exact replay* (INSERT ... ON CONFLICT
+-- DO NOTHING -> rowcount 0) and must NOT emit a downstream aggregate again. A
+-- different content_sha256 for the same external key is a *content revision*
+-- -> new PK row -> emits a fresh aggregate. No raw text, title, url, or
+-- provider response is ever stored here; only identity, a hash, and run/time
+-- bookkeeping. first_run_id/first_seen_at are set once on insert and never
+-- mutated; last_run_id/last_seen_at are refreshed on each exact replay.
+CREATE TABLE IF NOT EXISTS ingest.review_ingest_receipts (
+    source_name text NOT NULL REFERENCES ingest.review_sources(source_name),
+    external_key text NOT NULL,
+    content_sha256 text NOT NULL,
+    first_run_id uuid NOT NULL REFERENCES community.ingest_runs(id),
+    last_run_id uuid NOT NULL REFERENCES community.ingest_runs(id),
+    first_seen_at timestamptz NOT NULL DEFAULT now(),
+    last_seen_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (source_name, external_key, content_sha256)
+);
+
+-- Supports "has this external key been seen with a different hash?" (revision
+-- detection) and per-source receipt audits, without scanning raw content.
+CREATE INDEX IF NOT EXISTS idx_review_ingest_receipts_external_key
+    ON ingest.review_ingest_receipts (source_name, external_key);
+
+-- 4. Review ingestion quarantine / dead-letter.
 -- Holds malformed, low-confidence, ambiguous, or terms-violating records until
 -- an operator resolves them. Nothing here reaches scoring or RAG until
--- resolution = 'approved'. No raw payload column by design (see header).
+-- resolution = 'approved'. No raw payload column by design (see header). The
+-- service layer persists only a code-backed reason (template string), a
+-- coarse reason_category, a machine reason_code, and a typed/whitelisted
+-- safe_metadata blob -- never raw body/title/url/provider response text.
 CREATE TABLE IF NOT EXISTS community.ingest_quarantine (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     source_run_id uuid REFERENCES community.ingest_runs(id),
@@ -95,6 +142,7 @@ CREATE TABLE IF NOT EXISTS community.ingest_quarantine (
     external_key text NOT NULL,
     content_sha256 text NOT NULL,
     reason_category text NOT NULL,
+    reason_code text,
     reason text NOT NULL,
     received_at timestamptz NOT NULL DEFAULT now(),
     quarantined_at timestamptz NOT NULL DEFAULT now(),

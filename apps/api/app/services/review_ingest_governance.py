@@ -1,27 +1,44 @@
-"""Licensed-source-ready review ingestion governance boundary.
+"""Licensed-source-ready review ingestion governance boundary (DB-backed).
 
 This module is the first, independently-mergeable slice of the review/mention
-ingestion pipeline. It owns *governance*, not acquisition: it validates a
-supplied normalized source record, creates/reuses an idempotent ingest run,
-deduplicates repeat records, routes malformed or unsafe records to quarantine,
-and records counted, retry-safe run accounting.
+ingestion pipeline. It owns *governance*, not acquisition: it loads and
+validates a registered source from the database, creates/reuses an idempotent
+ingest run, persistently deduplicates repeat records by content hash, routes
+malformed or unsafe records to a typed quarantine, and records counted,
+retry-safe run accounting -- all inside a single transaction boundary.
+
+Trust model (G-TRUST / Finding 1): the worker ingest path never trusts a
+caller-supplied ``license_class``. The active source row is loaded from
+``ingest.review_sources`` and the batch is rejected up front when the source is
+absent, disabled, rejected, or its provider/terms do not match the caller's
+expectations. Source registration is restricted to internal/admin code
+(:func:`register_review_source`); there is deliberately no public endpoint.
 
 Hard security invariant (G-TRUST): this foundation never emits raw review text
 into ``rag.knowledge_chunks`` or any downstream write path. The only review
 -derived output it produces is :class:`ApprovedReviewAggregate` -- a typed,
-frozen, aggregate-only payload with no body/title/url fields. The runtime guard
-:func:`enforce_no_raw_review_text` and the ``extra="forbid"`` model config make
-any attempt to pass raw text through this boundary a quarantineable failure.
+frozen, aggregate-only payload with no body/title/url fields. Quarantine
+entries carry identity + hash + a code-backed reason + a typed/whitelisted
+metadata blob only (Finding 4): raw body/title/url/provider response text can
+never be persisted to quarantine, logs, API payloads, or RAG metadata.
+
+Persistence (Finding 5): :func:`persist_review_ingest_run` is the one
+transaction boundary. Source lookup, run create/resume, receipt dedupe,
+quarantine insert, and final accounting all run inside a single
+``with conn:`` block -- commit on success, rollback on any error -- so partial
+failures never expose accepted aggregates.
 
 Persistence follows the repository conventions used by sibling services
-(``review_mention_ingest``, ``job_runs``): DB calls ``import psycopg2`` lazily
-inside the function and run behind the existing guarded batch tooling. This
-module performs no live acquisition, no network calls, and reads no secrets.
+(``review_mention_ingest``, ``community_service``): DB calls ``import psycopg2``
+lazily inside the function and run behind the existing guarded batch tooling.
+This module performs no live acquisition, no network calls, and reads no
+secrets.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from contextlib import closing
 from datetime import UTC, date, datetime
 from typing import Any, Literal
 
@@ -47,6 +64,7 @@ FailureCategory = Literal[
     "low_confidence",
     "ambiguous_match",
 ]
+# Coarse DB-facing category (matches the community.ingest_quarantine CHECK).
 QuarantineReasonCategory = Literal[
     "schema_invalid",
     "terms_violation",
@@ -54,6 +72,44 @@ QuarantineReasonCategory = Literal[
     "duplicate_suspect",
     "low_confidence",
     "ambiguous_match",
+]
+# Finer, code-backed reason token. Every value is a fixed enumerable string
+# drawn from this Literal -- it can never carry raw body/title/url text. The
+# human-readable ``reason`` is produced from a fixed template per code
+# (REASON_SPEC), never by interpolating record content.
+QuarantineReasonCode = Literal[
+    "schema_invalid",
+    "schema_invalid_missing_field",
+    "schema_invalid_bad_hash",
+    "schema_invalid_raw_text_field",
+    "schema_invalid_type_error",
+    "schema_invalid_extra_field",
+    "terms_violation_license_class",
+    "source_api_failure_upstream",
+    "duplicate_suspect_in_batch",
+    "low_confidence_match",
+    "ambiguous_match_place",
+]
+MissingFieldName = Literal[
+    "source_name",
+    "provider",
+    "external_key",
+    "license_class",
+    "terms_version",
+    "content_sha256",
+    "received_at",
+]
+RawTextFieldName = Literal[
+    "body",
+    "body_ko",
+    "body_en",
+    "title",
+    "title_ko",
+    "text",
+    "raw_text",
+    "review_text",
+    "post_url",
+    "url",
 ]
 
 # Sources the pipeline may ingest from. ``rejected`` is registrable (so an
@@ -79,6 +135,56 @@ RAW_REVIEW_TEXT_FIELDS: tuple[str, ...] = (
     "post_url",
     "url",
 )
+
+# Fixed, code-backed reason templates (Finding 4). The persisted ``reason`` text
+# is ALWAYS one of these strings -- it is never built from raw record content.
+# Maps reason_code -> (coarse reason_category, human-readable reason template).
+REASON_SPEC: dict[QuarantineReasonCode, tuple[QuarantineReasonCategory, str]] = {
+    "schema_invalid": (
+        "schema_invalid",
+        "normalized record failed schema validation",
+    ),
+    "schema_invalid_missing_field": (
+        "schema_invalid",
+        "normalized record failed schema validation: required field missing",
+    ),
+    "schema_invalid_bad_hash": (
+        "schema_invalid",
+        "normalized record failed schema validation: content_sha256 is not a 64-char hex digest",
+    ),
+    "schema_invalid_raw_text_field": (
+        "schema_invalid",
+        "normalized record failed schema validation: raw-text field present",
+    ),
+    "schema_invalid_type_error": (
+        "schema_invalid",
+        "normalized record failed schema validation: field type/value out of range",
+    ),
+    "schema_invalid_extra_field": (
+        "schema_invalid",
+        "normalized record failed schema validation: extra field rejected by allowlist",
+    ),
+    "terms_violation_license_class": (
+        "terms_violation",
+        "source license class is not permitted for review ingestion",
+    ),
+    "source_api_failure_upstream": (
+        "source_api_failure",
+        "upstream source API call failed",
+    ),
+    "duplicate_suspect_in_batch": (
+        "duplicate_suspect",
+        "record flagged as duplicate suspect",
+    ),
+    "low_confidence_match": (
+        "low_confidence",
+        "match confidence below acceptance threshold",
+    ),
+    "ambiguous_match_place": (
+        "ambiguous_match",
+        "place match was ambiguous",
+    ),
+}
 
 
 class ReviewGovernanceError(RuntimeError):
@@ -182,11 +288,37 @@ class ApprovedReviewAggregate(BaseModel):
         }
 
 
+class QuarantineSafeMetadata(BaseModel):
+    """Typed, whitelisted quarantine metadata (Finding 4).
+
+    Every field is a boolean, a bounded number, or a fixed enumerable Literal
+    token. There is intentionally no free-form ``str`` field: raw body/title/
+    url/provider-response text can never be stored here. This is the only shape
+    the boundary will serialize into the ``safe_metadata`` jsonb column.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    malformed: bool = False
+    missing_field_name: MissingFieldName | None = None
+    raw_text_field: RawTextFieldName | None = None
+    extra_field_present: bool = False
+    bad_hash: bool = False
+    type_error: bool = False
+    received_field_count: int | None = Field(default=None, ge=0)
+    attribute_count: int | None = Field(default=None, ge=0)
+    match_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    expected_license_class: LicenseClass | None = None
+
+
 class ReviewQuarantineEntry(BaseModel):
     """A dead-letter record persisted to ``community.ingest_quarantine``.
 
-    Carries identity + hash + reason only. There is intentionally no field for
-    the review body: quarantine must be diagnosable from metadata alone.
+    Carries identity + hash + a code-backed reason + typed metadata only. There
+    is intentionally no field for the review body: quarantine must be
+    diagnosable from metadata alone. ``reason`` and ``reason_category`` are
+    derived from the fixed ``reason_code`` via :data:`REASON_SPEC` -- they are
+    never assembled from raw record content.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -194,15 +326,22 @@ class ReviewQuarantineEntry(BaseModel):
     provider: str
     external_key: str
     content_sha256: str
-    reason_category: QuarantineReasonCategory
-    reason: str
+    reason_code: QuarantineReasonCode
     source_name: str | None = None
-    received_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    safe_metadata: dict[str, Any] = Field(default_factory=dict)
+    received_at: datetime
+    safe_metadata: QuarantineSafeMetadata = Field(default_factory=QuarantineSafeMetadata)
+
+    @property
+    def reason_category(self) -> QuarantineReasonCategory:
+        return REASON_SPEC[self.reason_code][0]
+
+    @property
+    def reason(self) -> str:
+        return REASON_SPEC[self.reason_code][1]
 
 
 class ReviewIngestRunSummary(BaseModel):
-    """Snapshot of the ingest-run ledger row for one governed batch."""
+    """Snapshot of the ingest-run accounting row for one governed batch."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -239,7 +378,7 @@ def build_run_key(
     """Deterministic idempotency key for one (source, window, schema) batch.
 
     Re-running the same window with the same inputs reuses the same run row
-    instead of creating a duplicate ledger entry.
+    instead of creating a duplicate accounting entry.
     """
     window = window_start.isoformat() if window_start else "adhoc"
     return f"{source_name}|{window}|{schema_version}"
@@ -286,16 +425,91 @@ def approved_aggregate_from_record(
     )
 
 
-def _quarantine_from_raw(
+# --- pure validation (no DB; deterministic; unit-tested directly) ---
+
+
+def _classify_validation_error(
+    exc: ValidationError,
+) -> tuple[QuarantineReasonCode, QuarantineSafeMetadata]:
+    """Map a Pydantic ValidationError to a code-backed reason + typed metadata.
+
+    No raw record content is read: only Pydantic's structured error tokens
+    (``type``, ``loc``), which are field names/categories rather than values.
+    """
+    metadata = QuarantineSafeMetadata(malformed=True)
+    code: QuarantineReasonCode = "schema_invalid"
+    for err in exc.errors():
+        err_type = err.get("type", "")
+        loc = err.get("loc", ())
+        loc_leaf = str(loc[-1]) if loc else ""
+        if err_type == "missing" and loc_leaf in {
+            "source_name",
+            "provider",
+            "external_key",
+            "license_class",
+            "terms_version",
+            "content_sha256",
+            "received_at",
+        }:
+            metadata = metadata.model_copy(
+                update={"missing_field_name": loc_leaf}  # type: ignore[arg-type]
+            )
+            code = "schema_invalid_missing_field"
+            return code, metadata
+        if err_type == "extra_forbidden" or loc_leaf in RAW_REVIEW_TEXT_FIELDS:
+            field_name = loc_leaf if loc_leaf in RAW_REVIEW_TEXT_FIELDS else None
+            updates: dict[str, Any] = {"extra_field_present": True}
+            if field_name is not None:
+                updates["raw_text_field"] = field_name  # type: ignore[assignment]
+            metadata = metadata.model_copy(update=updates)
+            code = (
+                "schema_invalid_raw_text_field"
+                if field_name is not None
+                else "schema_invalid_extra_field"
+            )
+            return code, metadata
+        if loc_leaf == "content_sha256" and err_type == "value_error":
+            metadata = metadata.model_copy(update={"bad_hash": True})
+            code = "schema_invalid_bad_hash"
+            return code, metadata
+        if err_type in {
+            "int_type",
+            "float_type",
+            "string_type",
+            "bool_type",
+            "less_than_equal",
+            "greater_than_equal",
+            "less_than",
+            "greater_than",
+            "datetime_parsing",
+        }:
+            metadata = metadata.model_copy(update={"type_error": True})
+            code = "schema_invalid_type_error"
+    return code, metadata
+
+
+def _fallback_hash(raw: Mapping[str, Any]) -> str:
+    """Best-effort stable hash for an unvalidated raw dict (identity only).
+
+    Used only when a malformed record omits ``content_sha256`` so the row is
+    still countable/deduplicable. Keys are field names, never raw text values;
+    values are stringified via repr which is acceptable for a fallback identity
+    (the result is a sha256 digest, not reversible raw content).
+    """
+    import hashlib
+
+    stable = "|".join(f"{key}={raw[key]!r}" for key in sorted(raw))
+    return hashlib.sha256(stable.encode("utf-8")).hexdigest()
+
+
+def _safe_identity(
     raw: Mapping[str, Any],
     *,
     registration: ReviewSourceRegistration | None,
-    reason_category: QuarantineReasonCategory,
-    reason: str,
-) -> ReviewQuarantineEntry:
-    """Build a quarantine entry from an unvalidated/raw dict, without raw text.
+) -> tuple[str, str, str, str | None]:
+    """Extract quarantine identity (provider, external_key, sha, source_name).
 
-    Identity is best-effort from the dict; missing fields fall back to safe
+    Identity fields only -- never raw text. Missing values fall back to safe
     placeholders so a malformed record is still quarantinable and countable.
     """
     provider = str(raw.get("provider") or (registration.provider if registration else "unknown"))
@@ -304,113 +518,71 @@ def _quarantine_from_raw(
     source_name = (
         registration.source_name
         if registration
-        else (str(raw.get("source_name")) or None if raw.get("source_name") else None)
+        else (str(raw.get("source_name")) if raw.get("source_name") else None)
     )
+    return provider, external_key, content_sha256, source_name
+
+
+def _quarantine_for_code(
+    raw: Mapping[str, Any],
+    *,
+    registration: ReviewSourceRegistration | None,
+    reason_code: QuarantineReasonCode,
+    safe_metadata: QuarantineSafeMetadata | None = None,
+    received_at: datetime | None = None,
+) -> ReviewQuarantineEntry:
+    """Build a typed quarantine entry from a raw dict, without raw text."""
+    provider, external_key, content_sha256, source_name = _safe_identity(
+        raw, registration=registration
+    )
+    # Coerce a possibly-non-hex fallback to a stable 64-char hex so the column
+    # constraint (content_sha256 text NOT NULL) always holds a digest-shaped id.
+    if len(content_sha256) != 64:
+        content_sha256 = _fallback_hash({"fallback": content_sha256})
     return ReviewQuarantineEntry(
         provider=provider,
         external_key=external_key,
         content_sha256=content_sha256,
-        reason_category=reason_category,
-        reason=reason,
+        reason_code=reason_code,
         source_name=source_name,
-        safe_metadata={"malformed": True},
+        received_at=received_at or datetime.now(UTC),
+        safe_metadata=safe_metadata or QuarantineSafeMetadata(malformed=True),
     )
 
 
-def _fallback_hash(raw: Mapping[str, Any]) -> str:
-    import hashlib
-
-    stable = "|".join(f"{key}={raw[key]}" for key in sorted(raw))
-    return hashlib.sha256(stable.encode("utf-8")).hexdigest()
-
-
-def govern_review_records(
+def classify_review_records(
     *,
     registration: ReviewSourceRegistration,
     records: Sequence[Mapping[str, Any]],
-    window_start: date | None = None,
-) -> ReviewIngestResult:
-    """Govern one batch: validate, dedupe, quarantine, and account.
+) -> tuple[tuple[ReviewSourceRecord, ...], tuple[ReviewQuarantineEntry, ...]]:
+    """Pure validation: split a batch into (valid, quarantined).
 
-    Pure (no DB). Persistence is performed separately by the ``*_ingest_run``
-    and ``insert_quarantine_entries`` repository helpers so this function is
-    deterministic and trivially testable.
+    No license gate here -- the DB-backed source lookup is the authoritative
+    gate (Finding 1). No cross-run dedupe here -- the persistent receipt table
+    is the authoritative dedupe (Finding 3). This function only validates each
+    record's shape and routes malformed ones (including any raw-text leak) to a
+    typed quarantine with a code-backed reason.
     """
-    run_key = build_run_key(
-        source_name=registration.source_name,
-        window_start=window_start,
-        schema_version=GOVERNANCE_SCHEMA_VERSION,
-    )
-    received_count = len(records)
-    accepted: list[ApprovedReviewAggregate] = []
+    valid: list[ReviewSourceRecord] = []
     quarantined: list[ReviewQuarantineEntry] = []
-    seen_hashes: set[str] = set()
-    duplicate_count = 0
-
-    # License gate: a non-ingestible source quarantines the whole batch.
-    if registration.license_class not in ALLOWED_LICENSE_CLASSES:
-        for raw in records:
-            quarantined.append(
-                _quarantine_from_raw(
-                    raw,
-                    registration=registration,
-                    reason_category="terms_violation",
-                    reason=(
-                        f"source license_class '{registration.license_class}' "
-                        "is not permitted for review ingestion"
-                    ),
-                )
-            )
-        return _build_result(
-            run_key=run_key,
-            registration=registration,
-            received_count=received_count,
-            accepted=accepted,
-            quarantined=quarantined,
-            duplicate_count=duplicate_count,
-            failure_category="terms_violation",
-            status="failed",
-        )
-
     for raw in records:
         try:
-            record = parse_review_record(raw)
-        except (ValidationError, ValueError):
+            valid.append(parse_review_record(raw))
+        except (ValidationError, ValueError) as exc:
+            if isinstance(exc, ValidationError):
+                code, metadata = _classify_validation_error(exc)
+            else:
+                code: QuarantineReasonCode = "schema_invalid"
+                metadata = QuarantineSafeMetadata(malformed=True)
             quarantined.append(
-                _quarantine_from_raw(
+                _quarantine_for_code(
                     raw,
                     registration=registration,
-                    reason_category="schema_invalid",
-                    reason=(
-                        "normalized record failed schema validation "
-                        "(missing fields, bad hash, or raw-text field present)"
-                    ),
+                    reason_code=code,
+                    safe_metadata=metadata,
                 )
             )
-            continue
-
-        if record.content_sha256 in seen_hashes:
-            duplicate_count += 1
-            continue
-        seen_hashes.add(record.content_sha256)
-        accepted.append(approved_aggregate_from_record(record))
-
-    failure_category: FailureCategory = (
-        "none" if not quarantined else _dominant_reason_category(quarantined)
-    )
-    # A run that routes bad records to quarantine still completed correctly;
-    # only the license-rejected path (nothing processed) is a failure.
-    status: Literal["running", "succeeded", "failed"] = "succeeded"
-    return _build_result(
-        run_key=run_key,
-        registration=registration,
-        received_count=received_count,
-        accepted=accepted,
-        quarantined=quarantined,
-        duplicate_count=duplicate_count,
-        failure_category=failure_category,
-        status=status,
-    )
+    return tuple(valid), tuple(quarantined)
 
 
 def _dominant_reason_category(
@@ -423,18 +595,18 @@ def _dominant_reason_category(
     return dominant  # type: ignore[return-value]
 
 
-def _build_result(
+def build_run_summary(
     *,
     run_key: str,
     registration: ReviewSourceRegistration,
     received_count: int,
-    accepted: Sequence[ApprovedReviewAggregate],
-    quarantined: Sequence[ReviewQuarantineEntry],
+    processed_count: int,
     duplicate_count: int,
+    quarantined_count: int,
     failure_category: FailureCategory,
     status: Literal["running", "succeeded", "failed"],
-) -> ReviewIngestResult:
-    summary = ReviewIngestRunSummary(
+) -> ReviewIngestRunSummary:
+    return ReviewIngestRunSummary(
         run_key=run_key,
         source_name=registration.source_name,
         provider=registration.provider,
@@ -442,20 +614,412 @@ def _build_result(
         terms_version=registration.terms_version,
         schema_version=GOVERNANCE_SCHEMA_VERSION,
         received_count=received_count,
-        processed_count=len(accepted),
+        processed_count=processed_count,
         duplicate_count=duplicate_count,
-        quarantined_count=len(quarantined),
+        quarantined_count=quarantined_count,
         failure_category=failure_category,
         status=status,
     )
-    return ReviewIngestResult(
-        run=summary,
-        accepted=tuple(accepted),
-        quarantined=tuple(quarantined),
+
+
+# --- Repository helpers (cursor-based; live inside the caller's transaction) ---
+#
+# Each helper operates on a cursor the caller owns so the whole batch shares
+# ONE transaction boundary (Finding 5). None of them commit/rollback -- the
+# orchestrator's ``with conn:`` owns the commit/rollback decision.
+
+
+def load_active_review_source(
+    cur,
+    *,
+    source_name: str,
+    expected_provider: str,
+    expected_terms_version: str,
+) -> ReviewSourceRegistration:
+    """DB-backed source gate (Finding 1).
+
+    Loads the source row from ``ingest.review_sources`` and rejects -- with
+    distinct governance codes -- absent, disabled, rejected-license, or
+    provider/terms-mismatch sources. The caller's ``expected_*`` values are for
+    *mismatch detection* only; the database row is the source of truth for
+    ``license_class`` and ``source_status`` and is never overridden by input.
+    """
+    sql = """
+        SELECT provider, license_class, terms_version,
+               collection_method, retention_policy, redaction_policy,
+               source_status
+        FROM ingest.review_sources
+        WHERE source_name = %s
+    """
+    cur.execute(sql, (source_name,))
+    row = cur.fetchone()
+    if row is None:
+        raise ReviewGovernanceError(
+            "source_not_registered",
+            f"review source '{source_name}' is not registered",
+        )
+    (
+        provider,
+        license_class,
+        terms_version,
+        collection_method,
+        retention_policy,
+        redaction_policy,
+        source_status,
+    ) = row
+    if source_status != "active":
+        raise ReviewGovernanceError(
+            "source_disabled",
+            f"review source '{source_name}' is disabled (status={source_status})",
+        )
+    if license_class not in ALLOWED_LICENSE_CLASSES:
+        raise ReviewGovernanceError(
+            "source_license_rejected",
+            (
+                f"review source '{source_name}' license_class "
+                f"'{license_class}' is not permitted for ingestion"
+            ),
+        )
+    if provider != expected_provider:
+        raise ReviewGovernanceError(
+            "source_provider_mismatch",
+            (
+                f"review source '{source_name}' provider '{provider}' does not "
+                f"match expected provider '{expected_provider}'"
+            ),
+        )
+    if terms_version != expected_terms_version:
+        raise ReviewGovernanceError(
+            "source_terms_mismatch",
+            (
+                f"review source '{source_name}' terms_version '{terms_version}' "
+                f"does not match expected '{expected_terms_version}'"
+            ),
+        )
+    return ReviewSourceRegistration(
+        source_name=source_name,
+        provider=provider,
+        license_class=license_class,
+        terms_version=terms_version,
+        collection_method=collection_method,
+        retention_policy=retention_policy,
+        redaction_policy=redaction_policy,
+        source_status=source_status,
     )
 
 
-# --- Repository helpers (lazy psycopg2; existing batch-tool conventions) ---
+def _create_or_resume_ingest_run(
+    cur,
+    *,
+    run_key: str,
+    registration: ReviewSourceRegistration,
+    received_count: int,
+) -> str:
+    """Create the run accounting row or resume an existing one for ``run_key``.
+
+    Writes the registered-source FK (``review_source_name``) so new review runs
+    refer to a registered source (Finding 2). The no-op ``DO UPDATE`` exists
+    only so ``RETURNING id`` yields the existing id on retry (idempotent
+    resume). Returns the run id.
+    """
+    sql = """
+        INSERT INTO community.ingest_runs (
+            provider,
+            status,
+            run_key,
+            source_name,
+            review_source_name,
+            license_class,
+            terms_version,
+            schema_version,
+            received_count,
+            started_at
+        )
+        VALUES (%s, 'running', %s, %s, %s, %s, %s, %s, %s, now())
+        ON CONFLICT (run_key) WHERE run_key IS NOT NULL
+        DO UPDATE SET received_count = community.ingest_runs.received_count
+        RETURNING id
+    """
+    cur.execute(
+        sql,
+        (
+            registration.provider,
+            run_key,
+            registration.source_name,
+            registration.source_name,
+            registration.license_class,
+            registration.terms_version,
+            GOVERNANCE_SCHEMA_VERSION,
+            received_count,
+        ),
+    )
+    row = cur.fetchone()
+    if not row:
+        raise ReviewGovernanceError(
+            "run_not_created",
+            "ingest run upsert returned no row",
+        )
+    return str(row[0])
+
+
+def _record_review_receipts(
+    cur,
+    *,
+    run_id: str,
+    source_name: str,
+    records: Sequence[ReviewSourceRecord],
+) -> tuple[tuple[ReviewSourceRecord, ...], tuple[ReviewSourceRecord, ...]]:
+    """Persistent aggregate-only dedupe (Finding 3).
+
+    For each valid record, attempt to insert a receipt keyed by
+    (source_name, external_key, content_sha256):
+
+    * rowcount 1 -> new content -> emit a downstream aggregate.
+    * rowcount 0 -> exact replay (same triple already receipted, possibly in a
+      *different* run) -> do NOT emit again; just refresh last_run/last_seen.
+
+    A *content revision* (same external_key, different content_sha256) does not
+    conflict on the PK, so it inserts as new content and correctly emits a fresh
+    aggregate. No raw text is stored -- only identity, a hash, and run/time.
+    """
+    if not records:
+        return (), ()
+
+    insert_sql = """
+        INSERT INTO ingest.review_ingest_receipts (
+            source_name, external_key, content_sha256,
+            first_run_id, last_run_id, first_seen_at, last_seen_at
+        )
+        VALUES (%s, %s, %s, %s, %s, now(), now())
+        ON CONFLICT (source_name, external_key, content_sha256) DO NOTHING
+    """
+    refresh_sql = """
+        UPDATE ingest.review_ingest_receipts
+        SET last_run_id = %s, last_seen_at = now()
+        WHERE source_name = %s
+          AND external_key = %s
+          AND content_sha256 = %s
+    """
+    new_records: list[ReviewSourceRecord] = []
+    replay_records: list[ReviewSourceRecord] = []
+    for record in records:
+        cur.execute(
+            insert_sql,
+            (
+                source_name,
+                record.external_key,
+                record.content_sha256,
+                run_id,
+                run_id,
+            ),
+        )
+        if int(getattr(cur, "rowcount", 0) or 0) == 1:
+            new_records.append(record)
+        else:
+            cur.execute(
+                refresh_sql,
+                (run_id, source_name, record.external_key, record.content_sha256),
+            )
+            replay_records.append(record)
+    return tuple(new_records), tuple(replay_records)
+
+
+def _insert_quarantine_entries(
+    cur,
+    *,
+    entries: Sequence[ReviewQuarantineEntry],
+    run_id: str,
+) -> int:
+    """Persist typed quarantine rows, deduped by the partial unique index.
+
+    Returns the number actually inserted so run accounting stays stable when a
+    failed batch is retried (re-running does not double-count dead-letter rows).
+    Only code-backed reason text and typed metadata are written.
+    """
+    if not entries:
+        return 0
+
+    from psycopg2.extras import Json
+
+    sql = """
+        INSERT INTO community.ingest_quarantine (
+            source_run_id,
+            source_name,
+            provider,
+            external_key,
+            content_sha256,
+            reason_category,
+            reason_code,
+            reason,
+            received_at,
+            safe_metadata
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (provider, external_key, reason_category)
+        WHERE resolved_at IS NULL
+        DO NOTHING
+    """
+    inserted = 0
+    for entry in entries:
+        cur.execute(
+            sql,
+            (
+                run_id,
+                entry.source_name,
+                entry.provider,
+                entry.external_key,
+                entry.content_sha256,
+                entry.reason_category,
+                entry.reason_code,
+                entry.reason,
+                entry.received_at,
+                Json(entry.safe_metadata.model_dump(exclude_none=True)),
+            ),
+        )
+        inserted += int(getattr(cur, "rowcount", 0) or 0)
+    return inserted
+
+
+def _finalize_ingest_run(
+    cur,
+    *,
+    run_id: str,
+    status: Literal["running", "succeeded", "failed"],
+    processed_count: int,
+    duplicate_count: int,
+    quarantined_count: int,
+    failure_category: FailureCategory,
+    error_message: str | None,
+) -> None:
+    """Write final counters/status to the run accounting row.
+
+    Idempotent *accounting* (not immutability): retry-safe absolute overwrite
+    of counters so re-running a batch converges rather than accumulates.
+    """
+    sql = """
+        UPDATE community.ingest_runs
+        SET status = %s,
+            processed_count = %s,
+            duplicate_count = %s,
+            quarantined_count = %s,
+            failure_category = %s,
+            error_message = %s,
+            finished_at = now()
+        WHERE id = %s
+    """
+    cur.execute(
+        sql,
+        (
+            status,
+            processed_count,
+            duplicate_count,
+            quarantined_count,
+            failure_category,
+            error_message,
+            run_id,
+        ),
+    )
+
+
+def persist_review_ingest_run(
+    *,
+    dsn: str,
+    source_name: str,
+    expected_provider: str,
+    expected_terms_version: str,
+    records: Sequence[Mapping[str, Any]],
+    window_start: date | None = None,
+    connect_timeout: int = 5,
+) -> ReviewIngestResult:
+    """One-transaction governance + persistence boundary (Finding 5).
+
+    Inside a single ``with conn:`` block (commit on success, rollback on any
+    error):
+
+      1. ``load_active_review_source`` -- DB-backed source gate (Finding 1).
+         Any gate failure raises and aborts the whole batch before a run row or
+         a receipt is written.
+      2. ``classify_review_records`` -- pure validation; builds typed
+         quarantines for malformed/unsafe records (Finding 4).
+      3. ``_create_or_resume_ingest_run`` -- idempotent run accounting row,
+         linked to the registered source via ``review_source_name`` (Finding 2).
+      4. ``_record_review_receipts`` -- persistent cross-run dedupe; only new
+         (non-replay) records become aggregates (Finding 3).
+      5. ``_insert_quarantine_entries`` -- typed dead-letter persistence.
+      6. ``_finalize_ingest_run`` -- absolute, retry-safe counter overwrite.
+
+    Aggregates are only returned after the transaction commits, so a partial
+    failure never exposes accepted aggregates to a downstream caller.
+    """
+    if not dsn:
+        raise ValueError("DB_DSN is required.")
+
+    import psycopg2
+
+    run_key = build_run_key(
+        source_name=source_name,
+        window_start=window_start,
+        schema_version=GOVERNANCE_SCHEMA_VERSION,
+    )
+    received_count = len(records)
+    conn = psycopg2.connect(dsn, connect_timeout=connect_timeout)
+    # ``closing`` owns connection lifecycle; the inner ``with conn:`` owns the
+    # transaction (commit on clean exit, rollback on exception).
+    with closing(conn):
+        with conn:
+            with conn.cursor() as cur:
+                registration = load_active_review_source(
+                    cur,
+                    source_name=source_name,
+                    expected_provider=expected_provider,
+                    expected_terms_version=expected_terms_version,
+                )
+                valid_records, quarantined = classify_review_records(
+                    registration=registration,
+                    records=records,
+                )
+                run_id = _create_or_resume_ingest_run(
+                    cur,
+                    run_key=run_key,
+                    registration=registration,
+                    received_count=received_count,
+                )
+                new_records, replay_records = _record_review_receipts(
+                    cur,
+                    run_id=run_id,
+                    source_name=registration.source_name,
+                    records=valid_records,
+                )
+                accepted = tuple(approved_aggregate_from_record(record) for record in new_records)
+                _insert_quarantine_entries(cur, entries=quarantined, run_id=run_id)
+                failure_category: FailureCategory = (
+                    "none" if not quarantined else _dominant_reason_category(quarantined)
+                )
+                _finalize_ingest_run(
+                    cur,
+                    run_id=run_id,
+                    status="succeeded",
+                    processed_count=len(new_records),
+                    duplicate_count=len(replay_records),
+                    quarantined_count=len(quarantined),
+                    failure_category=failure_category,
+                    error_message=None,
+                )
+                run_summary = build_run_summary(
+                    run_key=run_key,
+                    registration=registration,
+                    received_count=received_count,
+                    processed_count=len(new_records),
+                    duplicate_count=len(replay_records),
+                    quarantined_count=len(quarantined),
+                    failure_category=failure_category,
+                    status="succeeded",
+                )
+    return ReviewIngestResult(
+        run=run_summary,
+        accepted=accepted,
+        quarantined=quarantined,
+    )
 
 
 def register_review_source(
@@ -464,7 +1028,12 @@ def register_review_source(
     registration: ReviewSourceRegistration,
     connect_timeout: int,
 ) -> None:
-    """Idempotently upsert a review-source registration row."""
+    """Idempotently upsert a review-source registration row.
+
+    Internal/admin only: there is intentionally no public endpoint. This runs
+    in its own transaction (separate from any ingest run) because registration
+    is an operator action, not part of the worker batch boundary.
+    """
     if not dsn:
         raise ValueError("DB_DSN is required.")
 
@@ -509,168 +1078,3 @@ def register_review_source(
                 ),
             )
         conn.commit()
-
-
-def create_or_resume_ingest_run(
-    *,
-    dsn: str,
-    run_key: str,
-    registration: ReviewSourceRegistration,
-    received_count: int,
-    connect_timeout: int,
-) -> str:
-    """Create the run ledger row or resume an existing one for ``run_key``.
-
-    Returns the run id. The no-op ``DO UPDATE`` exists only so ``RETURNING id``
-    yields the existing id on retry (idempotent resume).
-    """
-    if not dsn:
-        raise ValueError("DB_DSN is required.")
-
-    import psycopg2
-
-    sql = """
-        INSERT INTO community.ingest_runs (
-            provider,
-            status,
-            run_key,
-            source_name,
-            license_class,
-            terms_version,
-            schema_version,
-            received_count,
-            started_at
-        )
-        VALUES (%s, 'running', %s, %s, %s, %s, %s, %s, now())
-        ON CONFLICT (run_key) WHERE run_key IS NOT NULL
-        DO UPDATE SET received_count = community.ingest_runs.received_count
-        RETURNING id
-    """
-    with psycopg2.connect(dsn, connect_timeout=connect_timeout) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                sql,
-                (
-                    registration.provider,
-                    run_key,
-                    registration.source_name,
-                    registration.license_class,
-                    registration.terms_version,
-                    GOVERNANCE_SCHEMA_VERSION,
-                    received_count,
-                ),
-            )
-            row = cur.fetchone()
-        conn.commit()
-    if not row:
-        raise ReviewGovernanceError(
-            "run_not_created",
-            "ingest run upsert returned no row",
-        )
-    return str(row[0])
-
-
-def finalize_ingest_run(
-    *,
-    dsn: str,
-    run_id: str,
-    status: Literal["running", "succeeded", "failed"],
-    processed_count: int,
-    duplicate_count: int,
-    quarantined_count: int,
-    failure_category: FailureCategory,
-    error_message: str | None,
-    connect_timeout: int,
-) -> None:
-    """Write final counters/status to the run ledger (retry-safe, absolute)."""
-    if not dsn:
-        raise ValueError("DB_DSN is required.")
-
-    import psycopg2
-
-    sql = """
-        UPDATE community.ingest_runs
-        SET status = %s,
-            processed_count = %s,
-            duplicate_count = %s,
-            quarantined_count = %s,
-            failure_category = %s,
-            error_message = %s,
-            finished_at = now()
-        WHERE id = %s
-    """
-    with psycopg2.connect(dsn, connect_timeout=connect_timeout) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                sql,
-                (
-                    status,
-                    processed_count,
-                    duplicate_count,
-                    quarantined_count,
-                    failure_category,
-                    error_message,
-                    run_id,
-                ),
-            )
-        conn.commit()
-
-
-def insert_quarantine_entries(
-    *,
-    dsn: str,
-    entries: Sequence[ReviewQuarantineEntry],
-    run_id: str,
-    connect_timeout: int,
-) -> int:
-    """Persist quarantine rows, deduped by the partial unique index.
-
-    Returns the number actually inserted so run accounting stays stable when a
-    failed batch is retried (re-running does not double-count dead-letter rows).
-    """
-    if not dsn:
-        raise ValueError("DB_DSN is required.")
-    if not entries:
-        return 0
-
-    import psycopg2
-    from psycopg2.extras import Json
-
-    sql = """
-        INSERT INTO community.ingest_quarantine (
-            source_run_id,
-            source_name,
-            provider,
-            external_key,
-            content_sha256,
-            reason_category,
-            reason,
-            received_at,
-            safe_metadata
-        )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-        ON CONFLICT (provider, external_key, reason_category)
-        WHERE resolved_at IS NULL
-        DO NOTHING
-    """
-    inserted = 0
-    with psycopg2.connect(dsn, connect_timeout=connect_timeout) as conn:
-        with conn.cursor() as cur:
-            for entry in entries:
-                cur.execute(
-                    sql,
-                    (
-                        run_id,
-                        entry.source_name,
-                        entry.provider,
-                        entry.external_key,
-                        entry.content_sha256,
-                        entry.reason_category,
-                        entry.reason,
-                        entry.received_at,
-                        Json(entry.safe_metadata),
-                    ),
-                )
-                inserted += int(cur.rowcount or 0)
-        conn.commit()
-    return inserted
