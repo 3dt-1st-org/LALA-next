@@ -478,12 +478,13 @@ def test_upsert_tour_api_places_targets_source_files_and_places(monkeypatch):
     assert payload["upserted_rows"] == 1
     assert payload["source_file_id"] == "source-file-id"
     assert payload["replayed"] is False
-    # Receipt duplicate-check SELECT, then the source_files INSERT, then the upsert.
-    assert "SELECT id" in executed[1][0]
-    assert "ingest.source_files" in executed[1][0]
-    assert "INSERT INTO ingest.source_files" in executed[2][0]
-    assert "INSERT INTO travel.places" in executed[3][0]
-    assert "COALESCE(EXCLUDED.image_url, travel.places.image_url)" in executed[3][0]
+    # Advisory lock, then receipt duplicate-check SELECT, source_files INSERT, upsert.
+    assert "pg_advisory_xact_lock" in executed[1][0]
+    assert "SELECT id" in executed[2][0]
+    assert "ingest.source_files" in executed[2][0]
+    assert "INSERT INTO ingest.source_files" in executed[3][0]
+    assert "INSERT INTO travel.places" in executed[4][0]
+    assert "COALESCE(EXCLUDED.image_url, travel.places.image_url)" in executed[4][0]
     assert executed[-1] == ("commit", None)
 
 
@@ -673,3 +674,119 @@ def test_fetch_tour_api_places_flags_partial_run_when_collected_below_total(monk
     assert result.collected_count == 2
     assert result.partial_run is True
     assert len(result.places) == 2
+
+
+def _tour_list_response(items, total_count):
+    return {
+        "response": {
+            "header": {"resultCode": "0000", "resultMsg": "OK"},
+            "body": {"totalCount": total_count, "items": {"item": items}},
+        }
+    }
+
+
+class _TourResponse:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return self._payload
+
+
+def _tour_item(content_id, content_type_id="12"):
+    return {
+        "contentid": str(content_id),
+        "contenttypeid": content_type_id,
+        "title": f"장소-{content_id}",
+        "addr1": "경기도 수원시 팔달구",
+        "areacode": "31",
+        "sigungucode": "13",
+        "mapx": "127.0",
+        "mapy": "37.0",
+    }
+
+
+def test_complete_multi_page_pull_is_not_partial(monkeypatch):
+    # totalCount repeats unchanged on every page; a full 2-page pull must not be
+    # double-counted as partial (regression for per-page total summing).
+    page1 = _tour_list_response([_tour_item(1), _tour_item(2)], total_count=4)
+    page2 = _tour_list_response([_tour_item(3), _tour_item(4)], total_count=4)
+
+    def get(url, params, timeout):
+        return _TourResponse(page1 if int(params["pageNo"]) == 1 else page2)
+
+    monkeypatch.setitem(sys.modules, "requests", SimpleNamespace(get=get))
+
+    result = tour_api_ingest.fetch_tour_api_places(
+        service_key="secret-key",
+        content_type_ids=("12",),
+        rows=4,
+        page_size=2,
+        fetch_missing_images=False,
+    )
+
+    assert result.raw_count == 4
+    assert result.total_count == 4
+    assert result.partial_run is False
+
+
+def test_truncated_pull_is_partial(monkeypatch):
+    # Upstream reports totalCount=10 but returns 5 then 3 (genuinely truncated).
+    page1 = _tour_list_response([_tour_item(i) for i in range(1, 6)], total_count=10)
+    page2 = _tour_list_response([_tour_item(i) for i in range(6, 9)], total_count=10)
+
+    def get(url, params, timeout):
+        return _TourResponse(page1 if int(params["pageNo"]) == 1 else page2)
+
+    monkeypatch.setitem(sys.modules, "requests", SimpleNamespace(get=get))
+
+    result = tour_api_ingest.fetch_tour_api_places(
+        service_key="secret-key",
+        content_type_ids=("12",),
+        rows=10,
+        page_size=5,
+        fetch_missing_images=False,
+    )
+
+    assert result.raw_count == 8
+    assert result.total_count == 10
+    assert result.partial_run is True
+
+
+def test_multi_type_total_sums_per_type_not_per_page(monkeypatch):
+    # Two content types, each a full 2-page pull with totalCount=4 repeated per
+    # page. Per-page summing would over-count (4 pages * 4 = 16 -> false partial);
+    # per-type summing gives 4 + 4 = 8 == collected.
+    def pages_for(content_type_id):
+        items_p1 = [_tour_item(f"{content_type_id}-{n}", content_type_id) for n in (1, 2)]
+        items_p2 = [_tour_item(f"{content_type_id}-{n}", content_type_id) for n in (3, 4)]
+        return (
+            _tour_list_response(items_p1, total_count=4),
+            _tour_list_response(items_p2, total_count=4),
+        )
+
+    pages_12 = pages_for("12")
+    pages_14 = pages_for("14")
+
+    def get(url, params, timeout):
+        ctype = params["contentTypeId"]
+        page_idx = int(params["pageNo"]) - 1
+        pair = pages_12 if ctype == "12" else pages_14
+        return _TourResponse(pair[page_idx])
+
+    monkeypatch.setitem(sys.modules, "requests", SimpleNamespace(get=get))
+
+    result = tour_api_ingest.fetch_tour_api_places(
+        service_key="secret-key",
+        content_type_ids=("12", "14"),
+        rows=8,
+        page_size=2,
+        fetch_missing_images=False,
+    )
+
+    assert result.raw_count == 8
+    assert result.total_count == 8
+    assert result.partial_run is False

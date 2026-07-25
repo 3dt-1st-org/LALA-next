@@ -152,6 +152,10 @@ def fetch_tour_api_places(
     for content_type_id in content_type_ids:
         remaining = per_type_rows
         page_no = 1
+        # totalCount is the total matching rows for this (area, content_type)
+        # query and repeats unchanged on every page; capture it once per type so
+        # a complete multi-page pull is not double-counted as partial.
+        type_total: int | None = None
         while remaining > 0:
             num_rows = min(page_size, remaining)
             response = requests.get(
@@ -173,7 +177,9 @@ def fetch_tour_api_places(
             response.raise_for_status()
             payload = response.json()
             items = _extract_items(payload)
-            total_count_sum += _body_total_count(payload)
+            page_total = _body_total_count(payload)
+            if page_total and (type_total is None or page_total > type_total):
+                type_total = page_total
             raw_count += len(items)
             for item in items:
                 place = parse_tour_api_place(item, counter=rejection_counter)
@@ -183,6 +189,8 @@ def fetch_tour_api_places(
                 break
             remaining -= num_rows
             page_no += 1
+        if type_total:
+            total_count_sum += type_total
 
     deduped_places = _dedupe_places(places)
     image_request_count = 0

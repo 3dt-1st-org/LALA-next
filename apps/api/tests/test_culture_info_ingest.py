@@ -389,10 +389,11 @@ def test_upsert_culture_info_events_targets_source_files_and_events(monkeypatch)
     assert payload["upserted_rows"] == 1
     assert payload["source_file_id"] == "source-file-id"
     assert payload["replayed"] is False
-    # Receipt dup-check SELECT, then source_files INSERT, then the event upsert.
-    assert "SELECT id" in executed[1][0] and "ingest.source_files" in executed[1][0]
-    assert "INSERT INTO ingest.source_files" in executed[2][0]
-    assert "INSERT INTO culture.events" in executed[3][0]
+    # Advisory lock, then receipt dup-check SELECT, source_files INSERT, event upsert.
+    assert "pg_advisory_xact_lock" in executed[1][0]
+    assert "SELECT id" in executed[2][0] and "ingest.source_files" in executed[2][0]
+    assert "INSERT INTO ingest.source_files" in executed[3][0]
+    assert "INSERT INTO culture.events" in executed[4][0]
     assert executed[-1] == ("commit", None)
 
 

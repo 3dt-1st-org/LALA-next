@@ -2,14 +2,17 @@
 
 The official-source lane writes one ``ingest.source_files`` row per pull as a
 provenance receipt. ``ingest.source_files`` has **no** unique constraint today, so
-dedup is a pre-flight SELECT by ``(source_name, dataset_name, file_sha256)`` --
-the same shape ``card_spending_ingest`` already uses. Re-running the same pull
-against unchanged upstream data must reuse the existing receipt row instead of
-appending a duplicate.
+dedup is a pre-flight SELECT by ``(source_name, dataset_name, file_sha256)``
+guarded by a transaction-scoped advisory lock. Until the canonical 063 unique
+index is applied, that lock -- not the SELECT alone -- is what stops two
+concurrent pulls of the same fingerprint from each inserting a receipt.
+Re-running the same pull against unchanged upstream data must reuse the
+existing receipt row instead of appending a duplicate.
 """
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from typing import Any, Final
 
@@ -34,6 +37,22 @@ _INSERT_SQL: Final[str] = """
     VALUES (%s, %s, %s, %s, %s)
     RETURNING id
 """
+
+# Transaction-scoped advisory lock taken before the duplicate lookup. The lock
+# is held only until the caller's transaction commits/rolls back, so it cannot
+# leak across runs.
+_LOCK_SQL: Final[str] = "SELECT pg_advisory_xact_lock(%s)"
+
+
+def _receipt_lock_key(source_name: str, dataset_name: str, file_sha256: str) -> int:
+    """Derive a stable 63-bit advisory-lock key from the receipt identity.
+
+    Different fingerprints map to different keys; a hash collision can serialize
+    two unrelated receipts but cannot merge them, since each still runs its own
+    SELECT + INSERT and writes its own row.
+    """
+    digest = hashlib.sha256(f"{source_name}\x1f{dataset_name}\x1f{file_sha256}".encode()).digest()
+    return int.from_bytes(digest[:8], "big", signed=False) & ((1 << 63) - 1)
 
 
 @dataclass(frozen=True)
@@ -62,6 +81,8 @@ def record_official_source_receipt(
     """
     if not file_sha256:
         # No content hash -> cannot dedup deterministically; record a fresh row.
+        # No advisory lock: there is no dedup identity to protect, and each
+        # no-hash call legitimately creates its own receipt row.
         with conn.cursor() as cur:
             cur.execute(
                 _INSERT_SQL,
@@ -71,6 +92,10 @@ def record_official_source_receipt(
         return OfficialSourceReceipt(source_file_id=str(row[0]), replayed=False)
 
     with conn.cursor() as cur:
+        # Serialize concurrent pulls of the same fingerprint BEFORE the lookup.
+        # Until canonical 063 applies a unique index, this is the only thing
+        # stopping two parallel SELECTs (both empty) from each inserting.
+        cur.execute(_LOCK_SQL, (_receipt_lock_key(source_name, dataset_name, file_sha256),))
         cur.execute(_DUPLICATE_SQL, (source_name, dataset_name, file_sha256))
         existing = cur.fetchone()
         if existing:

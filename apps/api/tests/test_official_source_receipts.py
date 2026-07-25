@@ -45,9 +45,10 @@ def test_first_pull_inserts_receipt_and_is_not_replay():
     )
     assert result.replayed is False
     assert result.source_file_id == "new-id-0001"
-    # Duplicate-check SELECT ran, then the INSERT.
-    assert "SELECT id" in conn.executed[0][0]
-    assert "INSERT INTO ingest.source_files" in conn.executed[1][0]
+    # Advisory lock, then duplicate-check SELECT, then the INSERT.
+    assert "pg_advisory_xact_lock" in conn.executed[0][0]
+    assert "SELECT id" in conn.executed[1][0]
+    assert "INSERT INTO ingest.source_files" in conn.executed[2][0]
 
 
 def test_replay_with_same_sha_reuses_id_and_skips_insert():
@@ -61,9 +62,10 @@ def test_replay_with_same_sha_reuses_id_and_skips_insert():
     )
     assert result.replayed is True
     assert result.source_file_id == "existing-id-9999"
-    # Only the duplicate-check SELECT ran; no INSERT on replay.
-    assert len(conn.executed) == 1
-    assert "SELECT id" in conn.executed[0][0]
+    # Advisory lock then duplicate-check SELECT; no INSERT on replay.
+    assert len(conn.executed) == 2
+    assert "pg_advisory_xact_lock" in conn.executed[0][0]
+    assert "SELECT id" in conn.executed[1][0]
     assert not any("INSERT INTO ingest.source_files" in sql for sql, _ in conn.executed)
 
 
@@ -91,9 +93,10 @@ def test_missing_sha_always_inserts_and_is_not_replay():
     )
     assert result.replayed is False
     assert result.source_file_id == "id-no-sha"
-    # No duplicate SELECT when there is no sha to dedup on.
+    # No duplicate SELECT and no advisory lock when there is no sha to dedup on.
     assert len(conn.executed) == 1
     assert "INSERT INTO ingest.source_files" in conn.executed[0][0]
+    assert not any("pg_advisory_xact_lock" in sql for sql, _ in conn.executed)
 
 
 def test_reconcile_partial_run_flags_shortfall():
@@ -118,3 +121,38 @@ def test_reconcile_partial_run_honest_when_total_unknown():
         report = receipts.reconcile_partial_run(total=total, collected=50)
         assert report.partial_run is False
         assert report.total in (None, 0)
+
+
+def test_hashed_receipt_takes_advisory_lock_before_duplicate_lookup():
+    # Until canonical 063 applies a unique index, the SELECT-then-INSERT must be
+    # guarded by a transaction-scoped advisory lock so two concurrent pulls of
+    # the same fingerprint cannot each insert a receipt.
+    conn = _FakeConn([None, ("locked-new-id",)])
+    result = receipts.record_official_source_receipt(
+        conn=conn,
+        source_name="tour_api",
+        dataset_name="한국관광공사_국문 관광정보 서비스_GW",
+        file_name="tour_api::2026-07-26",
+        file_sha256="d" * 64,
+    )
+    assert result.replayed is False
+    sqls = [sql for sql, _ in conn.executed]
+    lock_idx = next(i for i, sql in enumerate(sqls) if "pg_advisory_xact_lock" in sql)
+    dup_idx = next(i for i, sql in enumerate(sqls) if "SELECT id" in sql)
+    assert lock_idx < dup_idx
+
+
+def test_no_hash_receipt_does_not_take_advisory_lock():
+    conn = _FakeConn([("id-no-sha-2",)])
+    result = receipts.record_official_source_receipt(
+        conn=conn,
+        source_name="franchise_reference",
+        dataset_name="공정위 가맹점",
+        file_name="franchise::2026",
+        file_sha256="",
+    )
+    assert result.replayed is False
+    sqls = [sql for sql, _ in conn.executed]
+    assert not any("pg_advisory_xact_lock" in sql for sql in sqls)
+    assert len(sqls) == 1
+    assert "INSERT INTO ingest.source_files" in sqls[0]
