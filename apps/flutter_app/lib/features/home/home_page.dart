@@ -1165,7 +1165,9 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _mapLevel = _defaultMapLevel;
     });
     // 수동 선택을 검색/플랜 탭과 공유한다(온보딩 선택이 폐기되지 않도록).
-    RegionContextStore.set(RegionContext.manual(selected));
+    // Why: await the manual-id write before the UI refresh so a kill right after
+    // the pick cannot lose the region the user just chose.
+    await RegionContextStore.setAndFlush(RegionContext.manual(selected));
     await _refresh(forceWeather: true);
   }
 

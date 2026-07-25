@@ -67,7 +67,9 @@ class _OnboardingLocationConsentPageState
           result.location != null) {
         // Retain the resolved location into the app shell so the search/plan/map
         // tabs drive place + weather calls from it instead of the default region.
-        RegionContextStore.set(
+        // Why: await the durable clear of any prior manual id before completion, so
+        // a kill right after this tap cannot leave a stale manual selection durable.
+        await RegionContextStore.setAndFlush(
           RegionContext.current(
             lat: result.location!.lat,
             lng: result.location!.lng,
@@ -104,16 +106,19 @@ class _OnboardingLocationConsentPageState
     );
     if (selected != null && mounted) {
       // 수동 선택도 앱 쉘로 이관한다(기존에는 폐기됨).
-      RegionContextStore.set(RegionContext.manual(selected));
+      // Why: await the manual-id write before completion so a kill right after the
+      // tap cannot lose the region the user just chose.
+      await RegionContextStore.setAndFlush(RegionContext.manual(selected));
       await _complete();
     }
   }
 
   Future<void> _complete() async {
-    // Why: persist completion + the manual choice before the router redirects to
-    // the map shell, so a process kill right after the tap cannot lose the
-    // restart state. completeAndFlush flips the gate only after the write is
-    // durable; storage failure still completes so the user is never stranded.
+    // Why: callers already durably flushed the region choice via setAndFlush, so
+    // only the completion slice remains. completeAndFlush awaits that write and
+    // flips the router's completion gate only afterwards; storage failure still
+    // completes so the user is never stranded. A kill after navigation can't lose
+    // either slice — region durable → completion durable → gate flip → navigate.
     await OnboardingState.completeAndFlush();
     // completeAndFlush() 가 ValueNotifier 를 바꾸면 router refreshListenable 이
     // redirect 를 재평가하여 /map-route 로 전환한다. (이동이 늦는 대비로 명시 이동도 안전.)

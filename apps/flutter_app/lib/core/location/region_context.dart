@@ -134,6 +134,10 @@ class RegionContextStore {
 
   /// Publish a resolved current/manual context (or `null` to revert to default).
   ///
+  /// Best-effort: the manual-id write is fire-and-forget. Use [setAndFlush] at
+  /// completion points (onboarding finish, manual re-pick) where the choice must
+  /// be durable before the UI proceeds.
+  ///
   /// Privacy: only an explicit manual selection is persisted. RegionSource.current
   /// is never stored; when current becomes active the saved manual id is cleared so
   /// a cold start yields no real region (provider may re-request). Reverting to
@@ -144,11 +148,24 @@ class RegionContextStore {
     if (prefs == null) {
       return;
     }
-    final persistedId =
-        (context != null && context.source == RegionSource.manual)
-        ? context.regionId
-        : null;
-    unawaited(_safeWriteRegionId(prefs, persistedId));
+    unawaited(_safeWriteRegionId(prefs, _persistedIdFor(context)));
+  }
+
+  /// Awaited variant of [set] for completion-time writes. Updates memory
+  /// immediately, then durably writes (or clears) the manual id before returning,
+  /// so a process kill right after the tap cannot lose the restart state. Never
+  /// throws — a write failure leaves the in-memory context authoritative for the
+  /// session; the choice simply won't survive a cold restart (non-durable).
+  ///
+  /// Privacy is identical to [set]: current/null/clear writes null (clears any
+  /// prior manual id); only a manual selection writes its region id.
+  static Future<void> setAndFlush(RegionContext? context) async {
+    _notifier.value = context;
+    final prefs = _prefs;
+    if (prefs == null) {
+      return;
+    }
+    await _safeWriteRegionId(prefs, _persistedIdFor(context));
   }
 
   /// Cold start: restore the manual region from a persisted id. Resolves the id
@@ -179,5 +196,13 @@ class RegionContextStore {
     } on Object {
       // best-effort persistence; the in-memory context stays authoritative.
     }
+  }
+
+  // Only a manual selection has a durable id. current/default/null all map to
+  // null so the saved manual id is cleared (precise coordinates are never stored).
+  static String? _persistedIdFor(RegionContext? context) {
+    return (context != null && context.source == RegionSource.manual)
+        ? context.regionId
+        : null;
   }
 }

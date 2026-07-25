@@ -183,6 +183,124 @@ void main() {
     );
   });
 
+  group('bootstrapAppState factory failure safety', () {
+    test(
+      'default-preferences factory failure degrades to a clean first run (never throws)',
+      () async {
+        // Simulates SharedPreferences plugin initialization throwing — something
+        // createDefault() itself cannot be made to do, hence the factory seam.
+        await bootstrapAppState(
+          preferencesFactory: () async =>
+              throw StateError('plugin init failed'),
+        );
+        expect(OnboardingState.isCompleted, isFalse);
+        expect(OnboardingState.language, 'ko');
+        expect(OnboardingState.touristType, OnboardingTouristType.localTourist);
+        expect(RegionContextStore.current, isNull);
+      },
+    );
+
+    test(
+      'default-preferences factory failure leaves the session usable (non-durable)',
+      () async {
+        await bootstrapAppState(
+          preferencesFactory: () async =>
+              throw StateError('plugin init failed'),
+        );
+        // Persistence is detached, so completion holds for this session only.
+        await OnboardingState.completeAndFlush();
+        expect(OnboardingState.isCompleted, isTrue);
+      },
+    );
+  });
+
+  group('setAndFlush write ordering', () {
+    test(
+      'setAndFlush awaits a delayed write (contrast with best-effort set)',
+      () async {
+        final backend = _DelayedBackend();
+        await bootstrapAppState(preferences: OnboardingPreferences(backend));
+        final key = '${kOnboardingStoragePrefix}manualRegionId';
+
+        // Best-effort set is fire-and-forget: the delayed write has not settled.
+        RegionContextStore.set(RegionContext.manual(_busanHaeundae()));
+        expect(backend.store[key], isNull);
+
+        await _drainWrites();
+        expect(backend.store[key], 'busan-haeundae');
+        backend.store.clear();
+
+        // setAndFlush returns only after the delayed write has settled.
+        await RegionContextStore.setAndFlush(
+          RegionContext.manual(_busanHaeundae()),
+        );
+        expect(backend.store[key], 'busan-haeundae');
+      },
+    );
+
+    test(
+      'setAndFlush durably writes the manual id before the completion gate flips',
+      () async {
+        final backend = _DelayedBackend();
+        await bootstrapAppState(preferences: OnboardingPreferences(backend));
+        final key = '${kOnboardingStoragePrefix}manualRegionId';
+
+        // Same order as onboarding completion: durable region write first, then
+        // the completion slice, then the gate flips.
+        await RegionContextStore.setAndFlush(
+          RegionContext.manual(_busanHaeundae()),
+        );
+        // The delayed write settled BEFORE setAndFlush returned, so the manual id
+        // is already durable here — it cannot race with the completion write or
+        // the router redirect that follows completeAndFlush.
+        expect(backend.store[key], 'busan-haeundae');
+
+        await OnboardingState.completeAndFlush();
+        expect(OnboardingState.isCompleted, isTrue);
+        // The completion slice is durable too.
+        expect(backend.store['${kOnboardingStoragePrefix}completed'], isTrue);
+      },
+    );
+
+    test(
+      'setAndFlush(current) clears a prior manual id durably before completion',
+      () async {
+        final key = '${kOnboardingStoragePrefix}manualRegionId';
+        final backend = _DelayedBackend({key: 'busan-haeundae'});
+        await bootstrapAppState(preferences: OnboardingPreferences(backend));
+        // The seed restored into memory; the persisted id still sits in the store.
+        expect(RegionContextStore.current?.regionId, 'busan-haeundae');
+
+        // Choosing current must clear the prior manual id (privacy) and the clear
+        // must settle before the completion gate can flip / navigation runs.
+        await RegionContextStore.setAndFlush(
+          RegionContext.current(lat: 37.5665, lng: 126.978),
+        );
+        expect(backend.store[key], isNull);
+
+        await OnboardingState.completeAndFlush();
+        expect(OnboardingState.isCompleted, isTrue);
+        expect(RegionContextStore.current?.source, RegionSource.current);
+      },
+    );
+
+    test(
+      'setAndFlush keeps the in-memory context usable when the region write fails',
+      () async {
+        await bootstrapAppState(
+          preferences: OnboardingPreferences(_FailingBackend()),
+        );
+        // Must not throw to the UI; the in-memory context stays authoritative.
+        // The choice is non-durable (write failed) but the session still works.
+        await RegionContextStore.setAndFlush(
+          RegionContext.manual(_busanHaeundae()),
+        );
+        expect(RegionContextStore.current?.regionId, 'busan-haeundae');
+        expect(RegionContextStore.current?.source, RegionSource.manual);
+      },
+    );
+  });
+
   group('cold-start routing + region seed', () {
     testWidgets(
       'a completed cold-start user routes to the map shell with no onboarding flash',
@@ -367,6 +485,49 @@ class _FailingBackend implements OnboardingPreferencesBackend {
 
   @override
   Future<void> remove(String key) => _fail();
+}
+
+/// OnboardingPreferencesBackend whose every call yields to the event loop via a
+/// zero-delay timer instead of running inline. That async gap is enough to prove
+/// awaited (setAndFlush) vs fire-and-forget (set) ordering deterministically,
+/// without flaky wall-clock timing: an awaited write settles before the caller
+/// resumes (it is in the store the instant the await returns), while a
+/// fire-and-forget write is still pending the instant set() returns.
+class _DelayedBackend implements OnboardingPreferencesBackend {
+  _DelayedBackend([Map<String, Object?>? seed])
+    : store = Map<String, Object?>.from(seed ?? <String, Object?>{});
+
+  final Map<String, Object?> store;
+
+  @override
+  Future<bool?> getBool(String key) async {
+    await Future<void>.delayed(Duration.zero);
+    return store[key] as bool?;
+  }
+
+  @override
+  Future<String?> getString(String key) async {
+    await Future<void>.delayed(Duration.zero);
+    return store[key] as String?;
+  }
+
+  @override
+  Future<void> setBool(String key, bool value) async {
+    await Future<void>.delayed(Duration.zero);
+    store[key] = value;
+  }
+
+  @override
+  Future<void> setString(String key, String value) async {
+    await Future<void>.delayed(Duration.zero);
+    store[key] = value;
+  }
+
+  @override
+  Future<void> remove(String key) async {
+    await Future<void>.delayed(Duration.zero);
+    store.remove(key);
+  }
 }
 
 /// Counts device-location requests. Proves a restored region skips the request.

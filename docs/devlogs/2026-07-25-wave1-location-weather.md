@@ -58,7 +58,11 @@ DB 마이그레이션·배포·DNS·비밀키 변경은 없다(아래 “롤백�
 - **해결**: 완료 여부·선택 언어·관광객 유형·수동 지역 id 만을 버전 접두사 키(`lala.onboarding.v1.*`)로 SharedPreferences 에 영속화하는 작고 테스트 가능한 추상(`OnboardingPreferences` + 저장 백엔드 인터페이스). `bootstrapAppState()` 가 `runApp` **이전**에 영속화된 스냅샷을 정적 홀더에 주입(hydrate)한다.
   - GoRouter.redirect 가 첫 프레임부터 참된 완료 플래그를 본다 → 완료 사용자의 온보딩으로의 일시적 리다이렉트 점멸이 없다.
   - 검색/플랜/지도 탭이 첫 백엔드 시드를 *복원된 수동 지역* 좌표로 잡는다(`RegionContextStore.current` 가 이미 채워져 있어 기기 위치를 요청하지 않는다).
-- **쓰기 순서**: 완료 게이트(`OnboardingState.completeAndFlush`)는 라우터가 보는 `_completed` 플래그를 뒤집기 *전에* 영속화를 `await` 한다. 탭 직후 kill 되어도 restart 상태를 잃지 않는다.
+- **쓰기 순서(이중 내구성)**: 완료 지점의 두 영속 슬라이스가 모두 `await` 된 뒤 게이트가 뒤집힌다.
+  1. **수동/현위치 지역 선택** → `RegionContextStore.setAndFlush()`(신규). 메모리는 즉시 갱신하고, 수동 id 쓰기(또는 현위치 선택 시 기존 수동 id 제거)를 `await` 한 뒤 반환한다. 결코 UI 로 예외를 던지지 않고(쓰기 실패 시 인메모리 컨텍스트가 권위), 프라이버시 정책은 `set` 과 동일(current/null/clear → null 저장).
+  2. **완료 게이트** → `OnboardingState.completeAndFlush()` 가 라우터가 보는 `_completed` 플래그를 뒤집기 *전에* 완료 슬라이스 영속화를 `await`.
+  - 온보딩 완료/수동 선택 직후 kill 되어도 두 슬라이스 모두 살아있다(지역 내구 → 완료 내구 → 게이트 → 내비게이션 순). 홈의 수동 재선택도 `setAndFlush` 로 UI 갱신 전에 확정한다. 반응형 현위치 해석(search/plan/home 의 리스너 경로)은 완료 지점이 아니므로 기존 best-effort `set` 을 유지.
+- **팩토리 초기화 실패 안전**: `bootstrapAppState()` 가 `OnboardingPreferences.createDefault()`(SharedPreferences 초기화)를 try/catch 로 감싼다. 주입 가능한 `OnboardingPreferencesFactory` 시점(seam)으로 “플러그인 초기화 자체가 throw” 를 테스트한다(단순 백엔드 읽기 실패와 구분). 실패 시 잔류 영속화 참조를 detach 하고 메모리를 깨끗한 first-run(completed=false, region null)로 강제한 뒤 정상 복귀 — 앱은 항상 시작하며 해당 세션은 non-durable 로 동작.
 - **프라이버시 정책(현위치 좌표)**: `RegionSource.current`(정확한 기기 좌표)은 **절대** 저장하지 않는다. `set(current)` 는 저장된 수동 id 만 지운다. 그 결과 cold start 시 현위치 컨텍스트는 null 이 되고, 기존 하이브리드 위치 provider 가 다시 요청할 수 있다. 수동 선택만이 안정 regionId 로 복원된다.
 - **검증**: 유효하지 않거나 제거된 수동 regionId → 무시 + 해당 키 제거(크래시/가짜 지역 없음). 저장 읽기/쓰기 실패 → 깨끗한 first-run 상태로 안전하게 저하(앱은 항상 시작). 관광객 유형은 코드 문자열로 저장하고 enum 매핑은 `OnboardingState` 가 소유해 순환 import 를 피함.
 - **재온보딩/reset**: `OnboardingState.reset()`·`RegionContextStore.clear()` 가 각자의 영속 슬라이스도 지운다.
@@ -126,10 +130,12 @@ DB 마이그레이션·배포·DNS·비밀키 변경은 없다(아래 “롤백�
 - `widget_test.dart` 에 `setUp(RegionContextStore.clear)` 추가 — 프로세스 로컬 store 가 탭 간에 새어
   좌표 시드를 오염시키지 않도록 각 테스트 격리. 검색/플랜 페이지 테스트에도 `setUp`/`tearDown` 으로
   정적 store 를 매 케이스마다 초기화해 격리.
-- `flutter analyze`: 이슈 없음. `flutter test`: 178개 통과(159 + cold-start 영속화 19건 추가) —
+- `flutter analyze`: 이슈 없음. `flutter test`: 184개 통과(159 + cold-start 영속화 25건 추가) —
   직렬화 라운드트립(완료+언어+관광객 유형+유효 수동 지역), cold-start 라우팅(완료 사용자 → 지도 쉘, 온보딩 점멸 없음),
   복원된 수동 Busan 이 Search/Plan 첫 로드 시드 + 기기 위치 미요청, 현위치 미저장, 무효 region id/저장 실패 안전 저하,
-  reset 영속 데이터 청소, completeAndFlush 내구성/실패 시 인메모리 완료.
+  reset 영속 데이터 청소, completeAndFlush 내구성/실패 시 인메모리 완료,
+  팩토리 초기화(createDefault) 실패 시 clean first-run 저하 + non-durable 세션, setAndFlush 지연 백엔드에서
+  수동 id 내구 확정(best-effort set 대조) + 현위치가 기존 수동 id 를 먼저 확정 제거 + 실패해도 세션 유지.
   (이전 슬라이스 누적 검증: 탭 간 전파 리로드, 마운트 전 수동 선택 보존 — 초기 위치 요청이 덮어쓰지 않음 —
   검증 2건, permanentlyDenied 복구 + 설정 열기 추상화 검증 6건.)
 
@@ -164,11 +170,16 @@ DB 마이그레이션·배포·DNS·비밀키 변경은 없다(아래 “롤백�
   - `RegionSource.current`(정확한 기기 좌표)는 의도적으로 영속화하지 않는다. 온보딩/탭에서 “현재 위치 사용”
     만 고른 사용자는 restart 시 실제 컨텍스트가 없고 기본 지역으로 폴백하며, provider 가 현위치를 다시
     요청할 수 있다(프라이버시 우선). 마지막 *수동* 선택만 복원 대상이다.
-  - 앱이 시작조차 못 하는 극단적 저장 고장 시 first-run 으로 저하한다. 일시적 쓰기 실패는 해당 세션의
-    인메모리 상태에는 영향을 주지 않지만 cold restart 에는 기억되지 않을 수 있다(저장은 best-effort).
+  - 앱이 시작조차 못 하는 극단적 저장 고장(SharedPreferences 초기화 throw 포함) 시 first-run 으로
+    저하한다. 완료 지점(온보딩/홈의 수동·현위치 선택 + 완료)의 영속화는 setAndFlush/completeAndFlush 로
+    await 되어 탭 직후 kill 에도 내구된다. 단 반응형 현위치 해석(search/plan/home 리스너)은 여전히
+    best-effort set 이며, 그 쓰기가 실패하면 해당 세션엔 인메모리가 권위지만 cold restart 에는 반영되지
+    않을 수 있다(non-durable). createDefault/지역 쓰기 실패 시에도 해당 세션은 non-durable 로 동작.
   - 검증 방식: 단위/위젯 테스트(`flutter test`)로 직렬화 라운드트립·복원 라우팅·수동 Busan 시드·현위치
-    미저장·무효 id/저장 실패 저하·reset 청소를 증명했다. **실기기 재시작 프로브는 이 슬라이스에서 직접
-    수행하지 않았다** — 동작은 테스트로 보장되며, 실기기 재시작 검증은 별도 확인으로 남긴다.
+    미저장·무효 id/저장 실패 저하·reset 청소·팩토리(createDefault) 실패 저하·setAndFlush 지연 백엔드
+    내구(best-effort set 대조)·현위치의 기존 수동 id 확정 제거·실패 시 세션 유지를 증명했다. **실기기
+    재시작 프로브는 이 슬라이스에서 직접 수행하지 않았다** — 동작은 테스트로 보장되며, 실기기 재시작
+    검증은 별도 확인으로 남긴다.
 - `LalaAppConfig` 기본 좌표(수원)가 여전히 하드코딩된 “공개된 기본 지역”. 이제 정직 표시기로 공개되므로
   은폐 아님. 별도 작업에서 기본 지역 자체를 env/설정 가능하게 분리 가능.
 - splash copy(“당신의 수원을 안내합니다” → “여행을 안내해 드릴게요 / We'll guide your trip”)와
