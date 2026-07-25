@@ -26,6 +26,7 @@ dependencies:
   # ONMU P3c: 커뮤니티 채팅 WebSocket 클라이언트(모바일+웹 공용).
   web_socket_channel: ^3.0.2
   meta: ^1.16.0
+  app_settings: ^8.0.3
 
 dev_dependencies:
   flutter_test:

@@ -63,7 +63,25 @@ DB 마이그레이션·배포·DNS·비밀키 변경은 없다(아래 “롤백�
   게시한 값은 `==` 가드로 무시해 중복 리로드/피드백 루프를 막는다.
 - 단조 증가 `_loadGeneration` 토큰으로 stale 리로드를 방지: 초기 로드 중 기기 위치 요청이
   진행 중일 때 store 가 바뀌면, 뒤늦은 기기 응답이 새 컨텍스트를 덮어쓰지 못한다.
-- 초기 로드의 `requestCurrentLocation` 동작은 기존과 동일(최초 1회).
+- **추가 정제(후속)**: `_load()` 의 기기 위치 요청을 `_region == null` 일 때로 한정한다. 온보딩이
+  남긴 수동 선택(또는 다른 탭이 게시한 현재 위치)이 이미 store 에 있으면 초기 로드조차
+  `requestCurrentLocation` 을 부르지 않으므로, 의도적 수동 선택이 첫 위치 응답에 덮어씌워지지
+  않는다(실제 컨텍스트가 없을 때만 최초 1회 요청). 마운트 이후 변화는 여전히 리스너 경로.
+
+### 영구 거절(permanentlyDenied) 복구 UI (`home_page.dart`, `location_consent_page.dart`,
+`permanently_denied_recovery.dart`, `app_settings_opener*.dart` — 후속)
+- 기존엔 `permanentlyDenied` 를 일반 `denied`/`unavailable` 과 동일(재시도 토스트 / 대기 복귀)으로
+  렌더해, OS 영구 거절 사용자가 차이나 복구 경로를 볼 수 없었다.
+- 이제 permanentlyDenied 전용 평온한 복구 카드를 추가: 시스템/브라우저 설정에서 위치가 꺼져 있음을
+  설명하고, 수동 지역 선택(항상 노출)을 유지하며, **지원되는 플랫폼에서만** 실제 “설정 열기” 액션을 제공.
+- **플랫폼 경계 추상화**: `app_settings_opener.dart` 가 기존 `browser_location` 과 동일한
+  `dart.library.io` 조건부 import 로 분기. native(io)는 `app_settings` 패키지(8.0.3)로 OS 앱 설정
+  페이지(앱별 위치 토글이 있는 곳)를 열고 `canOpenAppSettings == true`. web/미지원(stub)은
+  `canOpenAppSettings == false` 이며 가짜 액션 없이 브라우저 사이트 설정 안내 + 수동 선택으로 정직 폴백.
+- 핸드오프가 실패/미지원이어도 흐름은 막히지 않는다: `openAppSettings()` 는 예외(`MissingPluginException`
+  포함)를 잡아 `false` 로 반환하고, 복구 카드는 항상 수동 선택(native 에선 “재시도”까지)을 노출.
+- 홈은 맵 위 비차단 오버레이(맵은 그대로 사용 가능), 온보딩은 액션 영역을 복구 카드로 교체.
+  위치가 다시 잡히거나 수동 선택/재시도하면 `_locationPermanentlyDenied` 를 해제.
 
 ### 날씨/대기 진실성 (변경 불필요 — 확인만)
 - 기존 구현이 이미 정직: `publicWeatherOrNull` + `isPlaceholderWeatherSource` 가
@@ -92,10 +110,14 @@ DB 마이그레이션·배포·DNS·비밀키 변경은 없다(아래 “롤백�
 ### Flutter
 - 집중 테스트 추가: `test/core/location/region_context_test.dart`(값 의미·store·permanentlyDenied 구분),
   `test/features/location/default_region_indicator_test.dart`(기본 표시 show/hide·수동 좌표 구동·빈 상태·ko/en 배타),
+  `test/features/location/permanently_denied_recovery_test.dart`(영구 거절 복구 카드: native-capable /
+  web-non-supported / ko·en 배타 / 수동 탈출 + `app_settings_opener` 추상화),
   `test/features/weather/weather_helpers_test.dart` 에 placeholder/실소소스 억제 테스트 추가.
 - `widget_test.dart` 에 `setUp(RegionContextStore.clear)` 추가 — 프로세스 로컬 store 가 탭 간에 새어
-  좌표 시드를 오염시키지 않도록 각 테스트 격리.
-- `flutter analyze`: 이슈 없음. `flutter test`: 151개 통과(탭 간 전파 리로드 검증 2건 추가). `dart format --set-exit-if-changed` 통과.
+  좌표 시드를 오염시키지 않도록 각 테스트 격리. 검색/플랜 페이지 테스트에도 `setUp`/`tearDown` 으로
+  정적 store 를 매 케이스마다 초기화해 격리.
+- `flutter analyze`: 이슈 없음. `flutter test`: 159개 통과 — 탭 간 전파 리로드, 마운트 전 수동 선택
+  보존(초기 위치 요청이 덮어쓰지 않음) 검증 2건, permanentlyDenied 복구 + 설정 열기 추상화 검증 6건 추가.
 
 ## CI/배포 평가
 
@@ -123,8 +145,9 @@ DB 마이그레이션·배포·DNS·비밀키 변경은 없다(아래 “롤백�
 
 ## 진짜 블로커 (Wave-1 잔여, 비차단)
 
-- `RegionContextStore` 영속화(Prefs) 미구현 — 앱 재시작시 컨텍스트 초기화. 의도적 범위외(온보딩 상태와 동일 패턴). 프로세스 로컬(in-memory) 유지는 이번 후속 수정에서도 그대로.
-- `permanentlyDenied` 전용 설정 유도 UX(Onboarding/Home 의 네이티브 "설정 열기" 액션 + web/stub 미지원 분기 + 의존성 주입 테스트)는 이 슬라이스에서 별도 후속으로 연기. 현재는 4상태 구분까지만 되어 있고 UI 라우팅은 기존 폴백 알림/수동 선택 경로를 그대로 사용한다.
+- `RegionContextStore` 영속화(Prefs) 미구현 — **앱(프로세스) 재시작시 컨텍스트가 초기화된다.**
+  의도적 범위외(온보딩 상태와 동일 패턴). 이번 후속 수정에서도 in-memory 유지는 그대로.
+  (프로세스가 살아있는 동안의 탭 간 전파·반응은 이제 검증됨 — 위 “탭 간 region 컨텍스트 즉시 전파” 참고.)
 - `LalaAppConfig` 기본 좌표(수원)가 여전히 하드코딩된 “공개된 기본 지역”. 이제 정직 표시기로 공개되므로
   은폐 아님. 별도 작업에서 기본 지역 자체를 env/설정 가능하게 분리 가능.
 - splash copy(“당신의 수원을 안내합니다”)·`locationLabel` 의 null 기본값(수원)은 라벨 헬퍼 영역이라

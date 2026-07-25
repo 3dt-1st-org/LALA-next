@@ -7,10 +7,12 @@ import 'package:go_router/go_router.dart';
 
 import 'package:lala_next_app/app/lala_visual_tokens.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
+import 'package:lala_next_app/core/location/app_settings_opener.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
 import 'package:lala_next_app/core/location/region_context.dart';
 import 'package:lala_next_app/core/routing/lala_route_paths.dart';
 import 'package:lala_next_app/features/location/widgets/manual_location_sheet.dart';
+import 'package:lala_next_app/features/location/widgets/permanently_denied_recovery.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/features/onboarding/presentation/widgets/location_map_preview.dart';
 import 'package:lala_next_app/features/onboarding/presentation/widgets/onboarding_scaffold.dart';
@@ -35,6 +37,9 @@ enum _LocationConsentStatus { idle, requesting }
 class _OnboardingLocationConsentPageState
     extends State<OnboardingLocationConsentPage> {
   _LocationConsentStatus _status = _LocationConsentStatus.idle;
+  // OS 영구 거결(permanentlyDenied) 전용 복구 카드 노출 여부. 시스템 다이얼로그 재노출이
+  // 불가하므로 일반 denied 와 구분해 설정 유도 + 수동 선택 경로를 안내한다.
+  bool _permanentlyDenied = false;
 
   // 미리보기 중심/키는 기본 지역(SSOT 기본값)을 따른다. 좌표가 확정되기 전이다.
   late final LalaAppConfig _config = LalaAppConfig.fromEnvironment();
@@ -47,7 +52,10 @@ class _OnboardingLocationConsentPageState
     if (_requesting) {
       return;
     }
-    setState(() => _status = _LocationConsentStatus.requesting);
+    setState(() {
+      _status = _LocationConsentStatus.requesting;
+      _permanentlyDenied = false;
+    });
     try {
       final result = await widget.locationProvider.requestCurrentLocation();
       if (!mounted) {
@@ -66,8 +74,15 @@ class _OnboardingLocationConsentPageState
         _complete();
         return;
       }
-      // 거부/사용불가: 수동 선택은 항상 노출되므로 별도 배너 없이 대기 상태로 복귀.
-      // permanentlyDenied 도 동일하게 수동 선택 경로로 안내한다.
+      if (result.status == LalaLocationResultStatus.permanentlyDenied) {
+        // OS 영구 거절: 시스템 다이얼로그 재노출 불가 → 전용 복구 카드로 설정 유도.
+        setState(() {
+          _status = _LocationConsentStatus.idle;
+          _permanentlyDenied = true;
+        });
+        return;
+      }
+      // denied / unavailable: 수동 선택은 항상 노출되므로 별도 배너 없이 대기 상태로 복귀.
       setState(() => _status = _LocationConsentStatus.idle);
     } on Object {
       if (!mounted) {
@@ -168,7 +183,21 @@ class _OnboardingLocationConsentPageState
                 ),
               ),
             ),
-            if (_requesting)
+            if (_permanentlyDenied) ...<Widget>[
+              // OS 영구 거절 복구: 설정 유도(지원되는 플랫폼만) + 수동 선택 + 재시도.
+              PermanentlyDeniedRecovery(
+                language: language,
+                canOpenSettings: canOpenAppSettings,
+                onOpenSettings: () => openAppSettings(),
+                onRetry: _allowLocation,
+                onChooseArea: _openManualSheet,
+              ),
+              const SizedBox(height: 8),
+              _TextActionButton(
+                label: lalaCopy(language, ko: '나중에 하기', en: 'Not now'),
+                onPressed: _complete,
+              ),
+            ] else if (_requesting)
               const Padding(
                 padding: EdgeInsets.only(top: 12),
                 child: Center(
@@ -179,22 +208,23 @@ class _OnboardingLocationConsentPageState
                   ),
                 ),
               )
-            else
+            else ...<Widget>[
               _PrimaryButton(
                 label: lalaCopy(language, ko: '현재 위치 사용', en: 'Use location'),
                 onPressed: _allowLocation,
               ),
-            const SizedBox(height: LalaVisualTokens.contentGap),
-            _SecondaryButton(
-              label: lalaCopy(language, ko: '지역 직접 선택', en: 'Choose area'),
-              // 권한 결과와 무관하게 항상 노출/사용 가능.
-              onPressed: _requesting ? null : _openManualSheet,
-            ),
-            const SizedBox(height: 8),
-            _TextActionButton(
-              label: lalaCopy(language, ko: '나중에 하기', en: 'Not now'),
-              onPressed: _requesting ? null : _complete,
-            ),
+              const SizedBox(height: LalaVisualTokens.contentGap),
+              _SecondaryButton(
+                label: lalaCopy(language, ko: '지역 직접 선택', en: 'Choose area'),
+                // 권한 결과와 무관하게 항상 노출/사용 가능.
+                onPressed: _requesting ? null : _openManualSheet,
+              ),
+              const SizedBox(height: 8),
+              _TextActionButton(
+                label: lalaCopy(language, ko: '나중에 하기', en: 'Not now'),
+                onPressed: _requesting ? null : _complete,
+              ),
+            ],
           ],
         ),
       ),
