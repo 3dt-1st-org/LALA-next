@@ -171,6 +171,20 @@ All paths below exist in this worktree and were read directly.
 - `analytics.place_score_snapshots` (review_quality_score numeric(7,4)) — `035`.
 - `ops.job_runs` (job_name, status, started_at, finished_at, duration_ms,
   error_message) — `040_ops_core_tables.sql`.
+- **Review-ingestion governance foundation (PR #60,
+  `062_review_ingestion_governance.sql`, additive/re-runnable):**
+  `ingest.review_sources` (source_name PK, provider, license_class ∈ {licensed,
+  public_processed, approved_export, rejected}, terms_version,
+  collection_method, retention_policy, redaction_policy, source_status); a
+  governance extension to `community.ingest_runs` (run_key partial unique index,
+  source_name, license_class, terms_version, schema_version, received/processed/
+  duplicate/quarantined counters, failure_category); and
+  `community.ingest_quarantine` dead-letter (provider, external_key,
+  content_sha256, reason_category, reason, safe_metadata jsonb — **no raw-body
+  column by design**). Service boundary: `apps/api/app/services/review_ingest_governance.py`.
+  > Note: `062` lands via the sibling PR #60 worktree
+  > (`lala-review-ingestion-foundation`); it is not yet present in this plan-only
+  > branch but is the authoritative foundation this plan is reconciled against.
 
 ### 4.6 Config & API surface — `apps/api/app/core/config.py`, `apps/api/app/routers/v1.py`
 
@@ -189,8 +203,8 @@ All paths below exist in this worktree and were read directly.
 | # | Gap | Current evidence | Target |
 | --- | --- | --- | --- |
 | G1 | No licensed/public **review-source acquisition** lane | Ingest only consumes `community.posts`; Naver keys unused | A guarded, terms-compliant review/mention acquisition worker (§9) |
-| G2 | No **raw / normalized / provenance** split | `community.posts` holds title/body inline; only `ingest.source_files` for files | Raw-payload isolation + per-source provenance rows (§10) |
-| G3 | No **quarantine / dead-letter** store | "future dead-letter store" placeholder in contract | `community.ingest_quarantine` + replay (§19) |
+| G2 | No **raw / normalized / provenance** split | `community.posts` holds title/body inline; `ingest.review_sources` (062) now provides per-source provenance; raw-body isolation still open | Provenance: **IMPLEMENTED in 062** (`ingest.review_sources`). Raw-body isolation: **BLOCKED_EXTERNAL** (§10) — no `posts_raw` until a separate legal/retention/access decision |
+| G3 | No **quarantine / dead-letter** store | "future dead-letter store" placeholder in contract (now superseded by 062) | **IMPLEMENTED in 062:** `community.ingest_quarantine` (no raw payload). Replay still TARGET (§19/§20) |
 | G4 | No **replay / backfill** CLI | Batch reads newest rows only | `--since/--window` deterministic re-run (§20) |
 | G5 | Ad suspicion is **deterministic-only** | `AD_MARKERS` substring; AI classifier marked Pending (M3) | Deterministic first-pass + bulk-lane AI classifier (§14) |
 | G6 | No **low-confidence recheck** escalation | Bulk lane only; no gpt-5.4-mini recheck | Uncertainty→recheck hand-off to docent lane (§16) |
@@ -244,7 +258,7 @@ criteria are concrete and screen/API/DB-tied.
 | **G-TRUST: trustworthy local signals, no raw review text** | Slides 7 ("LLM 학습 요약"/"속성 기반 분류") + 19 (privacy guardrail) | End users and docents see **aggregate/summarized** evidence only; raw review text never leaves the enrichment boundary. | UI/API: no endpoint returns raw `community.posts.body`; RAG `community_post` raw-text embedding removed or replaced by summary (§17). |
 | **G-SITUATION: weather/air-aware reasoned recommendations** | Slide 8 "상황 대응 추천" (rain→indoor, clear→alley walk; context not just list) | `review_quality_score` (this pipeline's output) is a scored input the planner swaps on. The pipeline must expose *why* a place is trusted (attribute evidence), feeding the "reasoned" substitution. | API: `/api/v1/plans/daily` and `/plans/intervention` consume `review_quality_score`; DB: score is null when evidence < 3 organic (honest absence). |
 | **G-ECONOMY: aggregate evidence, not personal tracking** | Slides 10 ("지역 상권에 닿는 방법" — recommendation→visit/spend/stay) + 16 ("외국인의 다양 행동을 지역 소비로 연결") | Card/official data and review signals are **aggregate place/area-level evidence**. No per-user tracking; no joinable user identity in review signals. | DB: `place_mentions_weekly`/`economy.*` carry no user ids; provenance is source-level, not person-level. |
-| **G-LEGAL: legal data-source + privacy guardrail** | Slide 19 "데이터 활용의 합법성 및 프라이버시 가드레일": (1) 합법적 수집 — 공공 API + 비식별/가명·가공 데이터; (2) 명시적 동의 — 온보딩 위치정보 Opt-in UI | Review/mention acquisition uses only **licensed/public or processed/de-identified** sources; no scraping that violates terms. Location consent is the app's concern, but this pipeline stores **no raw PII** and only **aggregate** signals. | Ops: source registry marks each source `licensed`/`public_processed`/`rejected`; secrets-contract test forbids review-text/PII in outputs. |
+| **G-LEGAL: legal data-source + privacy guardrail** | Slide 19 "데이터 활용의 합법성 및 프라이버시 가드레일": (1) 합법적 수집 — 공공 API + 비식별/가명·가공 데이터; (2) 명시적 동의 — 온보딩 위치정보 Opt-in UI | Review/mention acquisition uses only **licensed/public or processed/de-identified** sources; no scraping that violates terms. Location consent is the app's concern, but this pipeline stores **no raw PII** and only **aggregate** signals. | Ops: `ingest.review_sources` (062) marks each source `licensed`/`public_processed`/`approved_export`/`rejected`; secrets-contract test forbids review-text/PII in outputs. |
 | **G-REALDATA: no demo/mock in normal flows** | Slides 5–8 show real user-facing screens ("아이디어가 아닙니다. 경기도 테스트베드에서 이미 구현했습니다") | Normal UI uses live DB/API data with explicit honest loading/failure states. No mock review fixtures in non-test paths. | Tests: `test_safety_contracts.py` covers no-mock/no-fallback; smoke against live DB/PostGIS places. |
 | **G-I18N: KO/EN mutually exclusive** | Slide 7 output is foreigner guidance (EN-facing); slide 8 shows EN plan labels | UI is one language at a time; signals are language-tagged; no mixed-language public labels. | Schema: `language` tag on enrichments; serve-time `display_language` picks one mode. |
 | **G-CROSSPLATFORM: Android + iOS/Web preserve workflow** | Slides 5/8 mockups are device-agnostic screens | The review-evidence contract (aggregate JSON) is platform-neutral; consumed identically by Flutter (Android/iOS) and Web. | API: same `/api/v1/*` envelope serves all clients. |
@@ -294,9 +308,9 @@ A review/mention ingestion job is declared through the existing
 | Field | Review-ingest job (`review-mention-ingest`) | Attribute/recheck job (`review-attribute-batch`) |
 | --- | --- | --- |
 | trigger | schedule/manual (cron, e.g. nightly) or queue/manual | schedule/manual (follows ingest) or queue/manual |
-| writes | `community.posts_raw`, `community.posts`, `community.ingest_runs`, `community.ingest_tasks`, `ops.job_runs` | `community.place_mentions_weekly`, `travel.place_enrichments`, `analytics.place_score_snapshots`, `rag.knowledge_chunks`, `ops.job_runs` |
+| writes | `ingest.review_sources` (lookup), `community.ingest_runs` (062 governance cols), `community.ingest_quarantine`, `community.posts`, `community.ingest_tasks`, `ops.job_runs` — **no `posts_raw`** (BLOCKED_EXTERNAL, §10) | `community.place_mentions_weekly`, `travel.place_enrichments`, `analytics.place_score_snapshots`, `rag.knowledge_chunks`, `ops.job_runs` |
 | retry | exp `30s,2m,5m`; retryable `db_connection_error,source_api_timeout,rate_limited,transient_5xx`; non-retryable `invalid_event_schema,terms_violation` | exp `10s,30s,1m,2m,5m`; retryable `429,timeout,5xx`; non-retryable `schema_validation_error` |
-| idempotency | `provider + external_key` (raw) / `iso_week + place_id + provider + category` (aggregate) | `(place_id, week_start, schema_version)` |
+| idempotency | `run_key = source_name + window + schema_version` (062 run-ledger receipt) / `iso_week + place_id + provider + category` (aggregate) | `(place_id, week_start, schema_version)` |
 | poison | threshold → `community.ingest_quarantine` + `ops.job_runs(failed)` | threshold → leave prior enrichment, log to quarantine |
 | dependencies | `DB_DSN`, `KEY_VAULT_URL`, source credential env | `DB_DSN`, `KEY_VAULT_URL`, `[bulk deployment]`, `[docent deployment]` |
 
@@ -332,45 +346,71 @@ Live mutation stays behind `ALLOW_*_APPLY=1` + `--confirm` gates and the Wave-1
 - Content with no stable source URL, timestamp, or collection method.
 - Any raw secret, token, private user identifier, or PII.
 
-### 9.3 Source registry (TARGET)
+### 9.3 Source registry (IMPLEMENTED in 062 as `ingest.review_sources`)
 
-Add an `ingest.source_registry`-style discipline (or extend
-`ingest.source_files` semantics to API/community sources) recording per source:
-`source_name`, `license_class ∈ {licensed, public_processed, approved_export,
-rejected}`, `collection_method`, `retention_policy`, `redaction_policy`. The
-bulk lane refuses to process any source not marked
-`licensed|public_processed|approved_export`. This is the **provenance backbone**
-that lets a score prove it came from approved sources (a stated gap in
-`docs/operations/review-mention-preprocessing-strategy.md`).
+PR #60 lands `ingest.review_sources` (in `062_review_ingestion_governance.sql`)
+as the provenance backbone — **not** an `ingest.source_registry` table and **not**
+an extension of `ingest.source_files`. One row per approved source records:
+`source_name` (PK), `provider`, `license_class ∈ {licensed, public_processed,
+approved_export, rejected}`, `terms_version`, `collection_method`,
+`retention_policy`, `redaction_policy`, `source_status ∈ {active, disabled}`.
+The governance boundary (`apps/api/app/services/review_ingest_governance.py`)
+refuses any source whose `license_class` is not in `{licensed,
+public_processed, approved_export}` — the `rejected` class is registrable (so an
+operator can record a blocked source) but is never accepted for ingestion,
+routing the whole batch to quarantine as `terms_violation`. This closes the
+provenance gap noted in
+`docs/operations/review-mention-preprocessing-strategy.md`.
 
-## 10. Storage Model: Raw / Normalized / Provenance
+## 10. Storage Model: Provenance / Normalized (raw retention BLOCKED)
 
-### 10.1 Three-layer separation (TARGET, fixes G2)
+### 10.1 Layered separation (provenance IMPLEMENTED; raw retention BLOCKED_EXTERNAL)
 
-| Layer | Table (proposed) | Holds | Privacy posture |
+| Layer | Status | Holds | Privacy posture |
 | --- | --- | --- | --- |
-| **Raw** | `community.posts_raw` (new) | Original acquired payload (metadata + at most a short retained snippet under license), `provider`, `external_key`, `acquired_at`, `source_run_id`, `license_class`, `content_sha256`. Isolated from serve path. | Restricted; never read by API; raw bodies purged on a retention schedule. |
-| **Normalized** | `community.posts` (existing) | Cleaned text (HTML-stripped, whitespace-normalized), language tag, dedup hash — the working set for enrichment. | Cleaned but still source text; not served to users. |
-| **Provenance** | `community.ingest_runs`/`ingest_tasks` (existing) + `ingest.source_files`/source registry (§9.3) | Run/task lifecycle, source identity, prompt versions, filtered/ad/confidence counts. | Public-safe counts only. |
+| **Provenance** | **IMPLEMENTED (062)** — `ingest.review_sources` + `community.ingest_runs` governance extension | Source identity, license class, terms version, run lifecycle (run_key receipt), received/processed/duplicate/quarantined counters, failure_category. | Public-safe counts + identity only; no bodies. |
+| **Normalized** | CURRENT — `community.posts` (existing) | Cleaned text (HTML-stripped, whitespace-normalized), language tag, dedup hash — the working set for enrichment. | Cleaned but still source text; not served to users. |
+| **Raw retention** | **BLOCKED_EXTERNAL** — no `community.posts_raw` table is created by this plan or by PR #60. | Original acquired payload / review bodies. | Raw review text is **not stored, served, logged, or embedded** anywhere in the current pipeline. A future `posts_raw`-style table requires a separate legal/retention/access decision (§10.2) and is explicitly out of scope until then. |
 
-**Migration (§25):** introduce `community.posts_raw` as an additive table;
-`community.posts` becomes the normalized projection. Existing rows backfilled
-into `posts_raw` with `license_class='approved_export'` where provenance is
-known, else flagged for review. No destructive change to
-`place_mentions_weekly`.
+062 deliberately ships **no raw-body column** on `community.ingest_quarantine`
+and no `posts_raw` table. The governance service
+(`review_ingest_governance.py::ApprovedReviewAggregate`) emits an aggregate-only
+payload with no body/title/url fields, enforced by `extra="forbid"` on the model
+and the `enforce_no_raw_review_text` runtime guard. The earlier "Raw layer (new)"
+design that proposed backfilling `community.posts` into `posts_raw` is
+superseded — do not introduce such a table under this plan.
 
-### 10.2 Why the split
+### 10.2 Why raw retention is blocked (approved-before-legal policy)
 
-- **Replay/backfill** (§20) re-runs normalization/enrichment from raw without
-  re-acquiring.
-- **Privacy** lets us purge raw bodies while keeping aggregate evidence.
-- **Auditability** ties every aggregate back to a source run + license class
-  (G-LEGAL, G-TRUST).
+Per the approved contract decision, LALA-next does **not** create
+`community.posts_raw` now. Until a separate legal sign-off covers (a) which
+sources permit retention, (b) the retention/purge schedule, and (c) the access
+model, raw review text is never persisted. Consequences for the rest of this
+plan:
+
+- **Replay/backfill (§20)** cannot re-read raw payloads; it re-runs from the
+  existing normalized `community.posts` rows plus the 062 run ledger, and only
+  re-normalizes/re-enriches what is already in the normalized layer. A
+  `--reacquire` lane is doubly gated behind both the worker `ALLOW_*` env and
+  the unresolved raw-retention decision.
+- **Quarantine (§19)** carries `content_sha256` + identity + `safe_metadata`
+  only (as 062 already enforces) — never a body, never a `raw_payload_ref`.
+- **Privacy posture is strongest by construction:** there is no raw store to
+  leak. This is stricter than the earlier "isolated raw layer" design and
+  supersedes any §5/§21 reference to a retained raw layer.
+- **Auditability** still holds: every aggregate resolves to a `source_run_id` +
+  `license_class` + `prompt_version` via the 062 provenance layer (G-LEGAL,
+  G-TRUST), without any raw body being kept.
 
 ## 11. Pipeline Stages (end-to-end contract)
 
-1. **Acquire** (§9): guarded worker pulls licensed/public sources → `posts_raw`
-   with `source_run_id`, `license_class`, `content_sha256`.
+1. **Acquire / govern** (§9): the governance boundary validates each
+   already-normalized record against `ingest.review_sources` (062), opens/resumes
+   an idempotent `community.ingest_runs` ledger row keyed by `run_key`, and
+   produces an aggregate-only `ApprovedReviewAggregate` (no raw body stored — §10).
+   Calling external providers from this boundary is **BLOCKED_EXTERNAL**: the next
+   review-specific slice accepts already-normalized records only and must not
+   perform live acquisition.
 2. **Normalize** (§13): `clean_review_text`-style HTML/entity/whitespace cleanup;
    language detection/tagging; KO/EN place-term normalization.
 3. **Deduplicate** (§12): normalized-text + source + URL + content hash.
@@ -492,38 +532,54 @@ known, else flagged for review. No destructive change to
 
 | Target | Conflict key | Strategy |
 | --- | --- | --- |
-| `community.posts_raw` | `(provider, external_key)` | insert; on conflict skip (raw is immutable) |
+| `community.ingest_runs` (062 run ledger) | `run_key = source_name + window + schema_version` (partial unique where `run_key IS NOT NULL`) | insert-or-resume (062 `ON CONFLICT (run_key) DO UPDATE SET received_count ... RETURNING id`); finalized once per batch |
+| `community.ingest_quarantine` (062) | `(provider, external_key, reason_category) WHERE resolved_at IS NULL` | insert; on conflict skip (one dead-letter row per reason while unresolved) |
 | `community.posts` | `(provider, external_key)` | update cleaned fields + language tag |
 | `community.place_mentions_weekly` | `(week_start, place_name_ko, provider, category)` | **existing** upsert; **preserves** higher-tier AI `review_attributes`/`review_quality` when deterministic metadata is rewritten |
 | `travel.place_enrichments` | `(place_id, enrichment_type, prompt_version)` (TARGET unique) | insert new version row; keep history (`generated_at`) so recheck/replay is auditable |
 | `rag.knowledge_chunks` | `(source_type, source_id)` | existing upsert; re-embed on content change |
 | `ops.job_runs` | n/a | append-only provenance |
+| ~~`community.posts_raw`~~ | n/a | **BLOCKED_EXTERNAL** (§10) — no raw-retention table; no upsert strategy until legal decision |
 
 All upserts are **keyed and replay-safe**: re-running a window with the same
 inputs yields the same rows (no duplicates, no lost higher-tier enrichments).
 
-## 19. Quarantine / Dead-Letter
+## 19. Quarantine / Dead-Letter (IMPLEMENTED in 062; typed metadata only)
 
-- **New table (TARGET):** `community.ingest_quarantine` —
+- **Table (IMPLEMENTED in 062):** `community.ingest_quarantine` —
   `(id, source_run_id, provider, external_key, content_sha256, reason,
-  reason_category ∈ {ambiguous_match, low_confidence, schema_invalid,
-  terms_violation, ai_failure, duplicate_suspect}, raw_payload_ref, quarantined_at,
-  resolved_at, resolution)`. `raw_payload_ref` points into `posts_raw` (or a
-  hashed/redacted stub); **no raw PII**, short retained snippet only.
+  reason_category ∈ {schema_invalid, terms_violation, source_api_failure,
+  duplicate_suspect, low_confidence, ambiguous_match}, safe_metadata jsonb,
+  received_at, quarantined_at, resolved_at, resolution ∈ {approved, rejected,
+  retried})`. **No `raw_payload_ref` and no body column by design** — a record is
+  diagnosable from identity + content hash + reason + the typed `safe_metadata`
+  jsonb alone. This is the "typed safe quarantine metadata" the next slice
+  persists via `review_ingest_governance.py::insert_quarantine_entries`. (The
+  earlier draft's `ai_failure` reason and `raw_payload_ref` pointer are removed:
+  neither exists in 062.)
+- **Idempotent dead-letter:** partial unique index on
+  `(provider, external_key, reason_category) WHERE resolved_at IS NULL` means
+  retrying a failed batch does not duplicate dead-letter rows.
 - **Poison path (contract):** after the job's poison threshold (§8), malformed/
   unrecoverable events land here instead of crashing the batch. Replaces the
-  "future dead-letter store" placeholder in `contracts.py`.
+  "future dead-letter store" placeholder in `contracts.py` (§4.4).
 - **Operator action:** review queue (manual) — matches the existing
   `ambiguous_match` discipline. Nothing in quarantine reaches scoring/RAG until
   `resolution='approved'` with a recorded approver/run.
 - **Observability:** quarantine depth is a metric/alert (§23).
+- **TARGET (next slice):** wrap register → run create/resume → quarantine insert
+  → run finalize in a **single transaction boundary** so a partial failure cannot
+  leave the ledger and the dead-letter out of sync. 062 persists each step in its
+  own connection today; the next review-specific implementation must close that
+  gap without calling external providers.
 
 ## 20. Replay / Backfill
 
 - **CLI flags (TARGET):** extend the guarded tools with `--since`,
   `--until`/`--window`, `--provider`, `--place-id`, `--force-prompt-version`.
-  Replay re-reads from `community.posts_raw` (§10), re-normalizes, re-enriches,
-  and re-upserts idempotently (§18).
+  Replay re-reads from the existing normalized `community.posts` rows plus the
+  062 run ledger (§10) — **not** from a raw store, which is BLOCKED_EXTERNAL —
+  and re-enriches/re-upserts idempotently (§18).
 - **Determinism:** same raw inputs + same `prompt_version` → same outputs (bar
   model non-determinism, mitigated by low temperature + JSON schema). Each
   replay records a new `ops.job_runs` row and a new `place_enrichments`
@@ -544,10 +600,12 @@ inputs yields the same rows (no duplicates, no lost higher-tier enrichments).
   (`community.user_posts`) is kept on a separate identity axis and **never**
   joined into scoring evidence. Review signals derive from provider-scraped/
   exported posts keyed by `(provider, external_key)`, not by LALA user.
-- **Raw text minimization.** Raw bodies live only in `posts_raw` under a
-  retention/purge schedule; the serve path sees counts, sentiment, attributes,
-  short evidence phrases. This is the operational expression of slide 19's
-  "비식별/가명·가공 데이터 활용" (de-identified/processed data).
+- **Raw text minimization.** No raw review bodies are persisted at all
+  (BLOCKED_EXTERNAL, §10); the serve path sees counts, sentiment, attributes,
+  and short evidence phrases only. This is the operational expression of slide
+  19's "비식별/가명·가공 데이터 활용" (de-identified/processed data) — and it is
+  stricter than an "isolated raw store" design because there is no raw store to
+  leak.
 - **Provable trust.** Because every aggregate carries `source_run_id` +
   `license_class` + `prompt_version` + confidence, a recommendation can explain
   *why* a place is trusted (attribute evidence + sample size) without revealing
@@ -599,7 +657,7 @@ inputs yields the same rows (no duplicates, no lost higher-tier enrichments).
 | --- | --- | --- | --- |
 | Acquire (source API) | exp 30s/2m/5m; 429/timeout/5xx retryable | `(provider, external_key)` | quarantine (`source_api_failure`) |
 | Normalize/dedup | none (pure function) | `content_sha256` | quarantine (`schema_invalid`) |
-| Ad/classify (bulk) | exp 10s/30s/1m; 429/5xx | `(place_id, week, schema_version)` | keep deterministic result, flag `ai_failure` |
+| Ad/classify (bulk) | exp 10s/30s/1m; 429/5xx | `(place_id, week, schema_version)` | keep deterministic result, flag `source_api_failure` on the run ledger (062 has no `ai_failure` reason) |
 | Attribute (bulk) | exp 10s/30s/1m/2m/5m | `(place_id, week, schema_version)` | quarantine; preserve prior enrichment |
 | Recheck (docent) | 2 attempts linear | `(place_id, week, schema_version)` | quarantine (`low_confidence`) |
 | Embed | exp 30s/2m | `(source_type, source_id)` | leave prior embedding, alert |
@@ -609,31 +667,56 @@ inputs yields the same rows (no duplicates, no lost higher-tier enrichments).
 
 ### 25.1 Migrations (additive, ordered)
 
-1. **`community.posts_raw`** (§10): raw payload + `source_run_id` + `license_class`
-   + `content_sha256` + retention timestamp. Backfill existing `community.posts`
-   into it.
-2. **`ingest.source_registry`** (§9.3): source identity + license/method/retention.
-3. **`community.ingest_quarantine`** (§19): dead-letter with `reason_category`.
-4. **`travel.place_enrichments` uniqueness** (§18): add unique
+**Landed by PR #60 (governance foundation):**
+
+1. **`062_review_ingestion_governance.sql`** (IMPLEMENTED): additive, re-runnable
+   (`CREATE TABLE IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS` /
+   `CREATE INDEX IF NOT EXISTS`). Creates `ingest.review_sources` (§9.3), extends
+   `community.ingest_runs` with the governance columns + the `run_key` partial
+   unique idempotency index, and creates `community.ingest_quarantine` (§19) with
+   **no raw-body column**. Backed by the typed governance boundary in
+   `apps/api/app/services/review_ingest_governance.py`.
+
+**Remaining TARGET migrations (do not reserve 062 — it is already in use):**
+
+2. **`travel.place_enrichments` uniqueness** (§18): add unique
    `(place_id, enrichment_type, prompt_version)` (or accept append-only history
    with a `latest` flag) to support replay auditing.
-5. **`rag.knowledge_chunks` source-type policy** (§17): no schema change needed,
+3. **`rag.knowledge_chunks` source-type policy** (§17): no schema change needed,
    but add a CHECK/CI rule that `community_post` rows must not embed raw bodies
    (enforced in code + test).
+4. **Aggregate-only persistent receipt/dedupe (TARGET, next review-specific
+   slice):** a cross-batch dedupe record keyed on `content_sha256` (or an
+   `ingest_runs`-side accepted-hash ledger) so duplicate records across batches
+   are detected without re-storing raw text — the persistent counterpart to
+   062's in-batch `seen_hashes` dedupe. Must ship with the single transaction
+   boundary across register → run → quarantine → finalize (§19 TARGET). Must not
+   call external providers.
 
-All migrations are additive (`CREATE TABLE IF NOT EXISTS`, `ADD COLUMN IF NOT
-EXISTS`) and backward-compatible with the existing canonical baseline
-(`sql/canonical/000_extensions_and_schemas.sql` through `060/061`). No
-destructive change to `community.place_mentions_weekly`.
+**BLOCKED_EXTERNAL (not a migration — no raw-retention table):**
+
+5. `community.posts_raw` (or any raw review-body table) is **BLOCKED_EXTERNAL**:
+   not created by this plan, not created by PR #60, and not assigned a migration
+   number until a separate legal/retention/access decision (§10.2). Earlier
+   drafts of this plan listed it as migration item 1 and backfilled
+   `community.posts` into it; that proposal is superseded and must not be
+   renumbered into the canonical sequence (it would collide with the already
+   shipped `062`).
+
+All migrations remain additive (`CREATE TABLE IF NOT EXISTS`, `ADD COLUMN IF NOT
+EXISTS`) and backward-compatible with the canonical baseline
+(`sql/canonical/000_extensions_and_schemas.sql` through `062`). No destructive
+change to `community.place_mentions_weekly`.
 
 ### 25.2 API contracts (read-only; no raw-text exposure)
 
 - Existing: `/api/v1/places`, `/weather`, `/docents/script`, `/plans/daily`,
   `/plans/intervention`. This pipeline adds **no** new user-facing endpoint; it
   only enriches the data those endpoints read.
-- **Forbidden:** any endpoint returning `community.posts.body` or
-  `posts_raw.*`. The only review-derived user-facing fields are aggregate
-  (e.g. a place's top attribute labels + `review_quality_score` presence/absence).
+- **Forbidden:** any endpoint returning `community.posts.body` (and, should a
+  raw table ever land, `posts_raw.*` — none exists today, §10). The only
+  review-derived user-facing fields are aggregate (e.g. a place's top attribute
+  labels + `review_quality_score` presence/absence).
 - **Honest states (G-REALDATA):** loading skeletons while batch/DB read is in
   flight; explicit failure UI when the source is unavailable; `null`
   `review_quality_score` (not a fake number) when evidence < 3 organic.
@@ -684,7 +767,7 @@ history via `place_enrichments` generations.
 
 | Risk | Impact | Mitigation |
 | --- | --- | --- |
-| Review-source terms forbid retention/summarization | Legal exposure, G-LEGAL breach | Source registry + license-class gate; default to metadata-only; legal review per source before `licensed` |
+| Review-source terms forbid retention/summarization | Legal exposure, G-LEGAL breach | `ingest.review_sources` (062) + license-class gate; default to metadata-only; no raw retention (BLOCKED_EXTERNAL, §10); legal review per source before `licensed` |
 | Raw review text leaks into RAG/docent | Privacy breach, G-TRUST breach | Retire/replace `community_post` raw-body embedding (§17); safety-contract test |
 | Ambiguous place matches contaminate scoring | Wrong place credited | `ambiguous_match` → quarantine; manual approval before scoring |
 | Bulk-lane quota (429) stalls nightly batch | Stale evidence | Retry + quarantine; deterministic fallback keeps pipeline moving |
@@ -711,8 +794,12 @@ history via `place_enrichments` generations.
 
 ### M2 — Licensed/public acquisition lane (TARGET)
 
-- **Target:** one terms-compliant source via the worker contract (§8/§9); source
-  registry; `posts_raw` with `license_class`.
+- **Target:** one terms-compliant source governed via the worker contract
+  (§8/§9) using the 062 `ingest.review_sources` registry +
+  `review_ingest_governance.py` boundary. **No `posts_raw`** (BLOCKED_EXTERNAL,
+  §10); the aggregate-only receipt + persistent dedupe (§25.1 item 4) is the
+  persistence floor. Live acquisition that calls external providers remains
+  BLOCKED_EXTERNAL until the legal/retention/access decision.
 - **Acceptance (Ops/DB):** an approved source runs plan→preview→apply; every
   aggregate has a resolvable `source_run_id` + `license_class`.
 
@@ -791,7 +878,7 @@ most important acceptance criterion for this domain.
 | **DB** | `review_quality_score` is null when evidence < 3 organic (honest absence); non-null only with sufficient organic evidence | M3, §15 |
 | **DB** | `rag.knowledge_chunks` contains no raw review bodies; only `place_mention` aggregate summaries | M5, §17 |
 | **DB** | `community.ingest_quarantine` holds low-confidence/ambiguous/poison rows; none enter scoring/RAG until approved | M4, §19 |
-| **API** | No endpoint returns raw `community.posts.body` or `posts_raw.*`; only aggregate fields | §25.2 |
+| **API** | No endpoint returns raw `community.posts.body`; no `posts_raw` table exists (BLOCKED_EXTERNAL); only aggregate fields | §10, §25.2 |
 | **API** | `/api/v1/plans/daily` + `/plans/intervention` consume `review_quality_score` | G-SITUATION |
 | **UI** | Honest loading/failure states; no demo/mock in normal flows | G-REALDATA |
 | **UI** | KO and EN are mutually exclusive modes; same workflow on Android, iOS, Web | G-I18N, G-CROSSPLATFORM |
@@ -814,6 +901,12 @@ most important acceptance criterion for this domain.
    closure.
 5. Quota/cost ceiling for the bulk lane per nightly run — needs a budget number
    before M3 scale-up.
+6. **Raw-retention external gate (blocks any `community.posts_raw`-style table):**
+   a separate legal/retention/access decision must settle (a) which sources
+   permit retention, (b) the purge schedule, and (c) the access model before the
+   BLOCKED_EXTERNAL flag in §10/§25.1 can be lifted. Until then raw review text
+   is not stored, served, logged, or embedded, and the next review-specific
+   slice is aggregate-only by construction.
 
 ---
 
