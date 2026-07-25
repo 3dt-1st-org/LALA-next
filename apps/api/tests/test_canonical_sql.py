@@ -53,6 +53,7 @@ def test_load_canonical_sql_plan_is_safe_and_ordered():
         "060_community_tables.sql",
         "061_community_chat_tables.sql",
         "062_review_ingestion_governance.sql",
+        "063_official_source_provenance.sql",
     ]
     assert plan.to_dict()["statement_count"] >= 10
     assert all(len(item.sha256) == 64 for item in plan.files)
@@ -102,7 +103,7 @@ def test_apply_canonical_sql_cli_defaults_to_plan_json(capsys):
     assert exit_code == 0
     assert output["ok"] is True
     assert output["mode"] == "plan"
-    assert output["plan"]["file_count"] == 12
+    assert output["plan"]["file_count"] == 13
     assert "result" not in output
 
 
