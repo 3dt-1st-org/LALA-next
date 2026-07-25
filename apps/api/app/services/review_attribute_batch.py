@@ -374,8 +374,10 @@ def _build_openai_client(settings: Any) -> Any:
 
 def selected_review_recheck_model(settings: Any | None = None) -> str:
     """Standard OpenAI mini model for the low-confidence selective recheck
-    (Improvement B). Defaults to gpt-5.4-mini. Empty only if explicitly cleared
-    -- callers treat empty as "recheck unavailable" (non-fatal). Never Azure.
+    (Improvement B). Resolution is ``openai_review_recheck_model`` with a hard
+    default of ``gpt-5.4-mini`` -- so it always resolves to a mini model even
+    when the env var is unset or empty, and recheck is always available unless a
+    caller overrides this selector. Standard OpenAI only (never Azure).
     """
     if settings is None:
         settings = get_settings()
@@ -489,7 +491,7 @@ def parse_ai_response(
     payload = json.loads(_strip_code_fence(raw))
     items = payload.get("results") if isinstance(payload, dict) else None
     if not isinstance(items, list):
-        raise ValueError("Azure OpenAI JSON response did not include a results list.")
+        raise ValueError("OpenAI JSON response did not include a results list.")
     candidate_by_id = {candidate.mention_id: candidate for candidate in candidates}
     parsed: list[ReviewAttributeEnrichment] = []
     for index, item in enumerate(items):
@@ -753,7 +755,7 @@ def _create_chat_completion_with_retry(
             time.sleep(delay * attempt)
     if last_exc:
         raise last_exc
-    raise RuntimeError("Azure OpenAI completion failed before a request was attempted.")
+    raise RuntimeError("OpenAI completion failed before a request was attempted.")
 
 
 def _is_retryable_ai_error(exc: Exception) -> bool:

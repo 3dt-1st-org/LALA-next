@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sys
 from datetime import date
+from pathlib import Path
 from types import SimpleNamespace
 
 from apps.api.app.services import review_attribute_batch
@@ -545,3 +546,39 @@ def test_apply_row_provenance_keeps_openai_recheck_tag(monkeypatch):
     assert updated == 1
     # Per-row source_method (openai_recheck) is what gets written, not "openai".
     assert executed[0][1]["source_method"] == "openai_recheck"
+
+
+# ---------------------------------------------------------------------------
+# OpenAI wording guards (prevent Azure regression in error messages / selectors)
+# ---------------------------------------------------------------------------
+
+
+def test_parse_ai_response_error_uses_openai_wording():
+    candidate = _candidate(category="restaurant", organic=3)
+    try:
+        review_attribute_batch.parse_ai_response('{"not_results": []}', [candidate])
+    except ValueError as exc:
+        message = str(exc)
+        assert "OpenAI" in message
+        assert "Azure" not in message
+    else:  # pragma: no cover - guard against the raise disappearing
+        raise AssertionError("parse_ai_response should raise on a non-results payload")
+
+
+def test_ai_path_error_messages_do_not_use_azure_wording():
+    # Regression guard: the two AI-path error literals must stay OpenAI-worded.
+    source = Path(review_attribute_batch.__file__).read_text(encoding="utf-8")
+    assert '"Azure OpenAI JSON response' not in source
+    assert '"Azure OpenAI completion' not in source
+
+
+def test_selected_review_recheck_model_defaults_to_mini_even_when_unset():
+    # Resolution always yields gpt-5.4-mini even with an empty/missing setting,
+    # so recheck is always available -- not disableable via an empty env var.
+    empty = SimpleNamespace(openai_review_recheck_model="")
+    missing = SimpleNamespace()
+    configured = SimpleNamespace(openai_review_recheck_model="gpt-5.4-mini-custom")
+
+    assert review_attribute_batch.selected_review_recheck_model(empty) == "gpt-5.4-mini"
+    assert review_attribute_batch.selected_review_recheck_model(missing) == "gpt-5.4-mini"
+    assert review_attribute_batch.selected_review_recheck_model(configured) == "gpt-5.4-mini-custom"

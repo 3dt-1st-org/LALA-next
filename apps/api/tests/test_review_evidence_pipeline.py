@@ -348,9 +348,11 @@ def test_recheck_leaves_high_confidence_rows_untouched(monkeypatch):
     assert recorded_models == []  # no recheck call for high-confidence rows
 
 
-def test_recheck_is_noop_when_no_mini_model_configured(monkeypatch):
-    # Recheck explicitly disabled (empty model) -> selector returns "" -> recheck
-    # is a no-op that keeps the bulk result (non-fatal).
+def test_recheck_is_noop_when_selector_returns_empty(monkeypatch):
+    # Defensive guard: a selector override that returns "" makes generate_ai_recheck
+    # a no-op that keeps the bulk result (non-fatal). Note this cannot happen via
+    # normal config -- selected_review_recheck_model always resolves to gpt-5.4-mini
+    # even when the env is empty -- so this exercises the guard directly.
     monkeypatch.setattr(
         batch,
         "get_settings",
