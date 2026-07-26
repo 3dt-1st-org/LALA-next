@@ -31,4 +31,16 @@ foundation slice.
 
 ## Evidence
 
-Pending focused and full clean-worktree validation, push, and Draft PR CI.
+- Focused safety suite: `19 passed, 1 warning`.
+- Full clean no-`.env` API suite: `1058 passed, 1 warning` in `28.02s`.
+- `ruff check .`, `ruff format --check .`, `pre-commit run --all-files`, and
+  `git diff --check`: passed.
+- Draft PR: [#71](https://github.com/3dt-1st-org/LALA-next/pull/71)
+- Head: `c12ed649eb1aaaea6a342756c09a8046aa5dd713`
+- CI run: [30210134075](https://github.com/3dt-1st-org/LALA-next/actions/runs/30210134075)
+  — API job [89814839940](https://github.com/3dt-1st-org/LALA-next/actions/runs/30210134075/job/89814839940),
+  Flutter job [89814839923](https://github.com/3dt-1st-org/LALA-next/actions/runs/30210134075/job/89814839923),
+  Unix job [89814839928](https://github.com/3dt-1st-org/LALA-next/actions/runs/30210134075/job/89814839928):
+  all green.
+
+The PR remains Draft and is intentionally not merged.
