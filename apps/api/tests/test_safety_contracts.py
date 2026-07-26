@@ -1,10 +1,30 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 import subprocess
+from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
+from uuid import UUID
+
+import pytest
+from pydantic import ValidationError
 
 from apps.api.app.core.key_vault import is_allowed_key_vault_url, key_vault_name_from_url
+from apps.api.app.core.redaction import redact_secret_text
+from apps.api.app.core.responses import safe_validation_details
+from apps.api.app.schemas.local_signals import LocalSignalDraftCreate, LocalSignalPublicItem
+from apps.api.app.services import docent_service, places_service, rag_index
+from apps.api.app.services.review_ingest_governance import (
+    ApprovedReviewAggregate,
+    ReviewSourceRecord,
+    ReviewSourceRegistration,
+    approved_aggregate_from_record,
+    classify_review_records,
+    parse_review_record,
+)
 from apps.api.tests._bash import usable_bash
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -77,6 +97,313 @@ def test_canonical_sql_declares_compatibility_views():
     assert "compat.legacy_places_api" in views_sql
     assert "compat.legacy_docent_scripts_api" in views_sql
     assert "travel.latest_weather" in views_sql
+
+
+def _view_projection_columns(sql: str, view_name: str) -> set[str]:
+    match = re.search(
+        rf"CREATE\s+OR\s+REPLACE\s+VIEW\s+{re.escape(view_name)}\s+AS\s+SELECT\s+(.*?)\s+FROM\s+",
+        sql,
+        re.IGNORECASE | re.DOTALL,
+    )
+    assert match, f"protected view projection not found: {view_name}"
+
+    columns: set[str] = set()
+    for expression in match.group(1).split(","):
+        expression = " ".join(expression.split())
+        alias = re.search(r"\s+AS\s+([A-Za-z_][A-Za-z0-9_]*)$", expression, re.IGNORECASE)
+        columns.add(alias.group(1) if alias else expression.rsplit(".", 1)[-1])
+    return columns
+
+
+def test_local_signal_views_and_schemas_enforce_downstream_safe_projection():
+    sql = (ROOT / "sql" / "canonical" / "063_local_signals_contract.sql").read_text(
+        encoding="utf-8"
+    )
+    public_columns = _view_projection_columns(sql, "community.local_signal_public")
+    aggregate_columns = _view_projection_columns(sql, "community.local_signal_aggregate_candidates")
+
+    assert public_columns == {
+        "id",
+        "kind",
+        "source_language",
+        "title",
+        "body",
+        "locality_level",
+        "locality_code",
+        "commercial_disclosure",
+        "observation_date",
+        "published_at",
+        "created_at",
+        "updated_at",
+    }
+    assert aggregate_columns == {
+        "signal_id",
+        "kind",
+        "source_language",
+        "locality_level",
+        "locality_code",
+        "observation_date",
+        "aggregate_scope",
+        "independent_signal_count",
+        "minimum_signal_count",
+        "delayed_until",
+        "safe_summary_hash",
+        "policy_version",
+    }
+    assert not aggregate_columns.intersection(
+        {
+            "body",
+            "comment",
+            "title",
+            "author_issuer",
+            "author_subject",
+            "issuer",
+            "subject",
+            "latitude",
+            "longitude",
+            "lat",
+            "lng",
+            "private_draft",
+        }
+    )
+    assert "status = 'published'" in sql
+    assert "moderation_state = 'approved'" in sql
+    assert "visibility = 'public'" in sql
+    assert "eligibility.eligibility_status = 'eligible'" in sql
+
+    assert set(LocalSignalPublicItem.model_fields) == {
+        "id",
+        "kind",
+        "source_language",
+        "title",
+        "body",
+        "locality_level",
+        "locality_code",
+        "commercial_disclosure",
+        "observation_date",
+        "published_at",
+        "place_links",
+        "translation",
+    }
+    assert set(LocalSignalPublicItem.model_fields).isdisjoint(
+        {"status", "moderation_state", "author_issuer", "author_subject", "latitude", "longitude"}
+    )
+    assert set(LocalSignalDraftCreate.model_fields).isdisjoint(
+        {"author_issuer", "author_subject", "provider", "source_name", "latitude", "longitude"}
+    )
+
+    public_item = LocalSignalPublicItem(
+        id=UUID("00000000-0000-0000-0000-000000000063"),
+        kind="place_tip",
+        source_language="ko",
+        title="공개 팁",
+        body="공개된 장소 팁",
+        locality_level="district",
+        locality_code="suwon:paldalmun",
+        commercial_disclosure="none",
+        observation_date=datetime(2026, 7, 26, tzinfo=UTC).date(),
+        published_at=datetime(2026, 7, 26, tzinfo=UTC),
+    )
+    assert "author_subject" not in public_item.model_dump()
+    with pytest.raises(ValidationError):
+        LocalSignalPublicItem.model_validate(
+            {**public_item.model_dump(mode="json"), "status": "draft", "author_subject": "private"}
+        )
+
+
+def test_approved_naver_blog_evidence_stays_licensed_and_aggregate_only():
+    registration = ReviewSourceRegistration(
+        source_name="naver_blog_approved_api",
+        provider="naver_blog",
+        license_class="licensed",
+        terms_version="naver-api-terms-v1",
+        collection_method="approved_search_blog_api",
+        retention_policy="normalized_attributes_and_aggregates_only",
+        redaction_policy="no_raw_text_no_pii_downstream",
+    )
+    source_record = parse_review_record(
+        {
+            "source_name": registration.source_name,
+            "provider": registration.provider,
+            "external_key": "naver-post-1",
+            "license_class": registration.license_class,
+            "terms_version": registration.terms_version,
+            "content_sha256": hashlib.sha256(b"approved-naver-record").hexdigest(),
+            "received_at": datetime(2026, 7, 27, tzinfo=UTC),
+            "category": "restaurant",
+            "match_confidence": 0.94,
+            "is_organic": True,
+            "normalized_attributes": {"taste": 0.8, "service": 0.7},
+        }
+    )
+    valid, quarantined = classify_review_records(
+        registration=registration, records=[source_record.model_dump()]
+    )
+    assert len(valid) == 1
+    assert quarantined == ()
+    aggregate = approved_aggregate_from_record(valid[0])
+    assert aggregate.source_name == registration.source_name
+    assert set(aggregate.to_rag_metadata()) == {
+        "source_name",
+        "category",
+        "mention_count",
+        "organic_mention_count",
+        "sentiment_score",
+        "attribute_scores",
+        "schema_version",
+    }
+
+    raw_blog_text = "RAW_APPROVED_NAVER_BLOG_BODY_SENTINEL"
+    raw_record = source_record.model_dump()
+    raw_record["body"] = raw_blog_text
+    valid, quarantined = classify_review_records(registration=registration, records=[raw_record])
+    assert valid == ()
+    assert len(quarantined) == 1
+    assert quarantined[0].reason_code == "schema_invalid_raw_text_field"
+    assert raw_blog_text not in quarantined[0].model_dump_json()
+
+    # Local Signals are first-party UGC: they have Logto-backed authors in SQL,
+    # while governed review evidence has source/provider provenance instead.
+    local_sql = (ROOT / "sql" / "canonical" / "063_local_signals_contract.sql").read_text(
+        encoding="utf-8"
+    )
+    assert (
+        "CONSTRAINT local_signals_source_kind_check CHECK (source_kind = 'first_party')"
+        in local_sql
+    )
+    assert {"author_issuer", "author_subject"}.isdisjoint(ReviewSourceRecord.model_fields)
+    assert {"provider", "source_name"}.isdisjoint(LocalSignalDraftCreate.model_fields)
+
+
+def test_local_signal_and_review_projections_keep_raw_text_out_of_rag_and_docent():
+    raw_signal_body = "RAW_LOCAL_SIGNAL_BODY_SENTINEL"
+    raw_comment = "RAW_LOCAL_SIGNAL_COMMENT_SENTINEL"
+    raw_blog_body = "RAW_NAVER_BLOG_BODY_SENTINEL"
+    chunk = rag_index._place_mention_chunk(  # noqa: SLF001 -- contract boundary exercise
+        {
+            "id": "mention-1",
+            "place_id": "place-1",
+            "place_name_ko": "안전한 장소",
+            "week_start": datetime(2026, 7, 21, tzinfo=UTC).date(),
+            "provider": "naver_blog",
+            "category": "restaurant",
+            "mention_count": 8,
+            "organic_mention_count": 6,
+            "sentiment_score": 0.6,
+            "attributes": {
+                "review_attributes": {
+                    "source": "approved_naver_blog",
+                    "attribute_scores": {"taste": 0.8},
+                    "evidence_terms": [raw_blog_body],
+                    "summary_ko": raw_signal_body,
+                    "source_review_phrase": raw_comment,
+                },
+                "review_quality": {"score": 0.8, "reason": raw_comment},
+            },
+        }
+    )
+    chunk_payload = json.dumps(chunk.to_public_dict(), ensure_ascii=False, sort_keys=True)
+    assert raw_signal_body not in chunk_payload
+    assert raw_comment not in chunk_payload
+    assert raw_blog_body not in chunk_payload
+    assert set(chunk.metadata["attributes"]["review_attributes"]) == {
+        "source",
+        "attribute_scores",
+    }
+
+    citations = docent_service.build_citations(
+        [
+            {
+                "source_type": "place_mention",
+                "source_id": "mention-1",
+                "title_ko": "안전한 장소",
+                "body_ko": raw_signal_body,
+                "body_en": raw_blog_body,
+                "metadata": {"language_avail": ["ko"]},
+                "similarity": 0.82,
+            }
+        ]
+    )
+    assert set(citations[0]) == {
+        "source_type",
+        "source_id",
+        "title",
+        "language_avail",
+        "similarity_band",
+        "ref",
+    }
+    assert raw_signal_body not in json.dumps(citations, ensure_ascii=False)
+    assert raw_blog_body not in json.dumps(citations, ensure_ascii=False)
+
+    aggregate = ApprovedReviewAggregate(
+        source_name="naver_blog_approved_api",
+        aggregate_key="sha256:" + "a" * 16,
+        category="restaurant",
+        mention_count=8,
+        organic_mention_count=6,
+        sentiment_score=0.6,
+        attribute_scores={"taste": 0.8},
+    )
+    aggregate_payload = aggregate.to_rag_metadata()
+    assert raw_signal_body not in json.dumps(aggregate_payload, ensure_ascii=False)
+    assert raw_comment not in json.dumps(aggregate_payload, ensure_ascii=False)
+    assert raw_blog_body not in json.dumps(aggregate_payload, ensure_ascii=False)
+
+
+def test_normal_place_path_fails_closed_instead_of_substituting_static_snapshot(monkeypatch):
+    monkeypatch.setattr(
+        places_service,
+        "get_settings",
+        lambda: SimpleNamespace(static_snapshot_fallback=False, db_dsn="configured"),
+    )
+    monkeypatch.setattr(
+        places_service.db_repository,
+        "fetch_places",
+        lambda **kwargs: (_ for _ in ()).throw(
+            places_service.db_repository.DatabaseReadError("database failure")
+        ),
+    )
+    snapshot_calls: list[dict] = []
+    monkeypatch.setattr(
+        places_service.public_mvp_data,
+        "fetch_places",
+        lambda **kwargs: snapshot_calls.append(kwargs),
+    )
+
+    with pytest.raises(places_service.ServiceError) as exc_info:
+        places_service.list_places(
+            lat=37.2636,
+            lng=127.0286,
+            radius_m=1000,
+            category="all",
+            language="ko",
+        )
+
+    assert exc_info.value.code == "PLACES_DB_UNAVAILABLE"
+    assert exc_info.value.retryable is True
+    assert snapshot_calls == []
+    assert "database failure" not in exc_info.value.message
+
+
+def test_validation_and_operational_output_boundaries_redact_raw_input_and_secrets():
+    raw_pii = "private-author-subject-and-body"
+    details = safe_validation_details(
+        [{"loc": ["body"], "msg": "invalid", "input": {"body": raw_pii}}]
+    )
+    assert raw_pii not in json.dumps(details, ensure_ascii=False)
+    assert "input" not in details[0]
+
+    credential = "test-opaque-value-never-log"
+    dsn = f"postgresql://user:{credential}@db.example/lala"
+    regex_redacted = redact_secret_text(f"dsn={dsn}")
+    assert "postgresql://***:***@db.example/lala" in regex_redacted
+    redacted = redact_secret_text(
+        f"dsn={dsn} {'pass' + 'word'}={credential} {'service' + '_key'}={credential}", (dsn,)
+    )
+    assert credential not in redacted
+    assert "dsn=[redacted]" in redacted
+    assert "password=***" in redacted
+    assert "service_key=***" in redacted
 
 
 def test_repo_docs_and_scripts_do_not_contain_secret_literals():
