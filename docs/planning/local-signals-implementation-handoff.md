@@ -66,5 +66,5 @@
 - Rebase result before this ledger closeout commit: `1a18931`.
 - Post-rebase local evidence: focused `18 passed`; full API `1008 passed, 1 warning`; Ruff check/format passed; all pre-commit hooks passed; `git diff --check` passed.
 - GitHub Actions run [`30208098327`](https://github.com/3dt-1st-org/LALA-next/actions/runs/30208098327) completed green: API tests and safety contracts, Unix wrapper verification, and Flutter app analyze + test all succeeded.
-- After that run, PR #69 reported `mergeStateStatus=CLEAN`, `state=OPEN`, and `isDraft=true` against `origin/main` `bf24ff8`. This ledger update will create one follow-up CI run for the final head and must be rechecked before handoff.
+- Final head `617a001ba0753a0b638e46040a9823d177a7ba2b` was pushed with `--force-with-lease`. Follow-up GitHub Actions run [`30208188334`](https://github.com/3dt-1st-org/LALA-next/actions/runs/30208188334) also completed green for all three required checks. PR #69 then reported `mergeStateStatus=CLEAN`, `state=OPEN`, and `isDraft=true` against `origin/main` `bf24ff8`.
 - No secret value, source `.env`, live API, DB, crawl, deployment, or paid AI/translation call was read or used. PR remains Draft and merge is prohibited.
