@@ -10,11 +10,12 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Literal
 
-from apps.api.app.core.config import get_settings
+from apps.api.app.core.config import get_settings, resolve_openai_base_url_host
+from apps.api.app.services.review_ingest_governance import enforce_no_raw_review_text
 
 VECTOR_DIMENSIONS = 1536
 LOCAL_HASH_EMBEDDING_MODEL = "local-hash-v1"
-EmbeddingMethod = Literal["local-hash", "azure-openai", "openai"]
+EmbeddingMethod = Literal["local-hash", "openai"]
 SourceScope = Literal["all", "static", "dynamic"]
 
 STATIC_SOURCE_TYPES = ("place_profile",)
@@ -129,8 +130,6 @@ def build_local_embedding(text: str, *, dimensions: int = VECTOR_DIMENSIONS) -> 
 def build_embedding(text: str, *, method: EmbeddingMethod) -> tuple[list[float], str]:
     if method == "local-hash":
         return build_local_embedding(text), LOCAL_HASH_EMBEDDING_MODEL
-    if method == "azure-openai":
-        return build_azure_openai_embedding(text), _azure_embedding_model_name()
     if method == "openai":
         return build_openai_embedding(text), settings_openai_embedding_model_name()
     raise ValueError(f"Unsupported embedding method: {method}")
@@ -138,21 +137,20 @@ def build_embedding(text: str, *, method: EmbeddingMethod) -> tuple[list[float],
 
 # Methods that produce real semantic vectors. `local-hash` is a deterministic feature-hash
 # fixture (build_local_embedding) for dev/test only — it is NOT a semantic model.
-SEMANTIC_EMBEDDING_METHODS: tuple[EmbeddingMethod, ...] = ("azure-openai", "openai")
+SEMANTIC_EMBEDDING_METHODS: tuple[EmbeddingMethod, ...] = ("openai",)
 
 
 def resolve_serving_embedding_method(settings: Any | None = None) -> EmbeddingMethod:
     """Return the configured serving embedding method, validated against the Literal.
 
-    The contract uses general OpenAI naming (`openai`) for semantic serving; `azure-openai`
-    is retained for compatibility. An unknown value raises so a misconfigure fails fast.
+    The contract uses general OpenAI naming (`openai`) for semantic serving.
+    An unknown value raises so a misconfiguration fails fast.
     """
     settings = settings if settings is not None else get_settings()
     method = (getattr(settings, "rag_embedding_method", "") or "").strip().lower()
-    if method not in ("local-hash", "azure-openai", "openai"):
+    if method not in ("local-hash", "openai"):
         raise ValueError(
-            f"Unsupported rag_embedding_method={method!r}; "
-            "expected one of local-hash, azure-openai, openai."
+            f"Unsupported rag_embedding_method={method!r}; expected one of local-hash, openai."
         )
     return method  # type: ignore[return-value]
 
@@ -163,13 +161,17 @@ def assert_semantic_embedding_when_live(settings: Any | None = None) -> None:
     so a production config can never accidentally serve non-semantic hash vectors.
     """
     settings = settings if settings is not None else get_settings()
+    method = resolve_serving_embedding_method(settings)
+    if method == "openai":
+        # Validate the endpoint even when live AI is disabled so an Azure
+        # routing mistake cannot be hidden until a later serving transition.
+        resolve_openai_base_url_host(getattr(settings, "openai_base_url", ""))
     if not getattr(settings, "enable_live_ai", False):
         return
-    method = resolve_serving_embedding_method(settings)
     if method == "local-hash" and not getattr(settings, "rag_allow_local_hash_live", False):
         raise RuntimeError(
             "LALA_ENABLE_LIVE_AI=true requires a semantic rag_embedding_method "
-            "(openai/azure-openai); local-hash is dev/test only. "
+            "(openai); local-hash is dev/test only. "
             "Set LALA_RAG_ALLOW_LOCAL_HASH_LIVE=1 only for local fixtures."
         )
 
@@ -181,6 +183,7 @@ def settings_openai_embedding_model_name() -> str:
 
 def build_openai_embedding(text: str) -> list[float]:
     settings = get_settings()
+    resolve_openai_base_url_host(settings.openai_base_url)
     if not settings.openai_api_key:
         raise RuntimeError("OpenAI embedding requires OPENAI_API_KEY.")
     if not settings.enable_live_ai:
@@ -197,37 +200,6 @@ def build_openai_embedding(text: str) -> list[float]:
     )
     response = client.embeddings.create(
         model=settings.openai_embedding_model or "text-embedding-3-small",
-        input=text,
-    )
-    embedding = list(response.data[0].embedding)
-    if len(embedding) != VECTOR_DIMENSIONS:
-        raise RuntimeError(
-            f"Expected {VECTOR_DIMENSIONS} embedding dimensions, got {len(embedding)}."
-        )
-    return [float(value) for value in embedding]
-
-
-def build_azure_openai_embedding(text: str) -> list[float]:
-    settings = get_settings()
-    missing = _missing_azure_embedding_settings(settings)
-    if missing:
-        raise RuntimeError("Azure OpenAI embedding config is missing: " + ", ".join(missing))
-    if not settings.enable_live_ai:
-        raise RuntimeError("Azure OpenAI embedding requires LALA_ENABLE_LIVE_AI=true.")
-
-    try:
-        from openai import AzureOpenAI
-    except Exception as exc:
-        raise RuntimeError("openai package is required for Azure OpenAI embeddings.") from exc
-
-    client = AzureOpenAI(
-        azure_endpoint=settings.azure_openai_endpoint,
-        api_key=settings.azure_openai_key,
-        api_version=settings.azure_openai_embedding_api_version
-        or settings.azure_openai_api_version,
-    )
-    response = client.embeddings.create(
-        model=settings.azure_openai_embedding_deployment,
         input=text,
     )
     embedding = list(response.data[0].embedding)
@@ -895,23 +867,27 @@ def _culture_event_chunk(row: dict[str, Any]) -> KnowledgeChunk:
 
 
 def _community_post_chunk(row: dict[str, Any]) -> KnowledgeChunk:
-    title = (
-        _optional_text(row.get("title")) or _optional_text(row.get("keyword")) or "지역 커뮤니티 글"
-    )
-    body_text = _optional_text(row.get("body")) or "본문 요약이 없습니다."
+    # Improvement D: never embed the raw post body, raw title, or post_url into a
+    # user-facing RAG chunk. The chunk is categorical only (keyword/region/
+    # provider), so unlicensed review text cannot reach docent grounding -- the
+    # same leak the legacy pipeline had via clean_text columns. Review *evidence*
+    # reaches RAG through the governed aggregate -> place_mention handoff
+    # (review_rag_handoff), which is aggregate-only by construction.
+    keyword = _optional_text(row.get("keyword")) or "지역 커뮤니티"
+    region = _optional_text(row.get("region_slug")) or "미분류"
+    provider = _optional_text(row.get("provider")) or "unknown"
     body = _join_sentences(
         [
-            f"지역 커뮤니티 글 제목은 {title}입니다.",
-            f"본문 또는 요약은 {body_text}",
-            f"키워드는 {row.get('keyword') or '미분류'}이고 지역은 {row.get('region_slug') or '미분류'}입니다.",
-            f"공급자는 {row.get('provider') or 'unknown'}입니다.",
+            f"지역 커뮤니티 신호(키워드: {keyword})입니다.",
+            f"지역은 {region}이고 공급자는 {provider}입니다.",
+            "본문은 라이선스/프라이버시 경계상 RAG 에 임베드하지 않습니다.",
         ]
     )
     return KnowledgeChunk(
         source_type="community_post",
         source_id=f"post:{row.get('provider')}:{row.get('external_key')}",
         source_table="community.posts",
-        title_ko=title,
+        title_ko=keyword,
         body_ko=body,
         metadata=_json_object(
             {
@@ -919,7 +895,6 @@ def _community_post_chunk(row: dict[str, Any]) -> KnowledgeChunk:
                 "external_key": row.get("external_key"),
                 "keyword": row.get("keyword"),
                 "region_slug": row.get("region_slug"),
-                "post_url": row.get("post_url"),
                 "created_at_source": _isoformat(row.get("created_at_source")),
                 "collected_at": _isoformat(row.get("collected_at")),
             }
@@ -929,12 +904,13 @@ def _community_post_chunk(row: dict[str, Any]) -> KnowledgeChunk:
 
 def _place_mention_chunk(row: dict[str, Any]) -> KnowledgeChunk:
     attributes = _json_object(row.get("attributes"))
+    projected_attributes = _project_place_mention_attributes(attributes)
     body = _join_sentences(
         [
             f"{row.get('place_name_ko')}의 주간 로컬 언급 신호입니다.",
             f"전체 언급은 {row.get('mention_count')}회, 광고 필터 후 유기적 언급은 {row.get('organic_mention_count') or '미집계'}회입니다.",
             f"감성 점수는 {row.get('sentiment_score') if row.get('sentiment_score') is not None else '미집계'}입니다.",
-            f"속성 점수는 {_attributes_text(attributes)}입니다.",
+            f"속성 점수는 {_attributes_text(projected_attributes.get('attribute_scores', {}))}입니다.",
             f"공급자는 {row.get('provider') or 'unknown'}입니다.",
         ]
     )
@@ -953,7 +929,7 @@ def _place_mention_chunk(row: dict[str, Any]) -> KnowledgeChunk:
                 "mention_count": row.get("mention_count"),
                 "organic_mention_count": row.get("organic_mention_count"),
                 "sentiment_score": _optional_float(row.get("sentiment_score")),
-                "attributes": attributes,
+                "attributes": projected_attributes,
                 "updated_at": _isoformat(row.get("updated_at")),
             }
         ),
@@ -1026,24 +1002,6 @@ def _text_features(text: str) -> Iterable[str]:
                 yield f"pair:{token[start : start + 3]}"
 
 
-def _missing_azure_embedding_settings(settings: Any) -> list[str]:
-    missing: list[str] = []
-    if not settings.azure_openai_endpoint:
-        missing.append("AZURE_OPENAI_ENDPOINT")
-    if not settings.azure_openai_key:
-        missing.append("AZURE_OPENAI_KEY")
-    if not settings.azure_openai_embedding_deployment:
-        missing.append("AZURE_OPENAI_EMBEDDING_DEPLOYMENT")
-    if not (settings.azure_openai_embedding_api_version or settings.azure_openai_api_version):
-        missing.append("AZURE_OPENAI_EMBEDDING_API_VERSION")
-    return missing
-
-
-def _azure_embedding_model_name() -> str:
-    settings = get_settings()
-    return settings.azure_openai_embedding_deployment or "azure-openai-embedding"
-
-
 def _join_sentences(parts: Iterable[str | None]) -> str:
     return " ".join(part.strip() for part in parts if part and part.strip())
 
@@ -1072,6 +1030,74 @@ def _attributes_text(attributes: dict[str, Any]) -> str:
         return "미집계"
     items = [f"{key}={value}" for key, value in sorted(attributes.items())[:6]]
     return ", ".join(items)
+
+
+def _project_place_mention_attributes(attributes: dict[str, Any]) -> dict[str, Any]:
+    """Project review attributes to aggregate/provenance-safe RAG metadata.
+
+    Evidence phrases, summaries, reasons, retained snippets, and source review
+    text are intentionally not copied from the ingest row into the RAG chunk.
+    """
+    review = _json_object(attributes.get("review_attributes"))
+    quality = _json_object(attributes.get("review_quality"))
+    projected_review = {
+        key: value
+        for key in (
+            "schema_version",
+            "source",
+            "attribute_scores",
+            "attribute_mean",
+            "attribute_confidence_avg",
+            "sentiment_score",
+            "sentiment_confidence",
+        )
+        if (value := _safe_review_attribute_value(key, review.get(key))) is not None
+    }
+    projected_quality = {
+        key: value
+        for key in (
+            "schema_version",
+            "source",
+            "score",
+            "organic_review_count",
+            "mention_count",
+            "confidence",
+        )
+        if (value := _safe_review_attribute_value(key, quality.get(key))) is not None
+    }
+    projected: dict[str, Any] = {"review_attributes": projected_review}
+    if projected_quality:
+        projected["review_quality"] = projected_quality
+    enforce_no_raw_review_text(projected, label="place_mention_rag_metadata")
+    return projected
+
+
+def _safe_review_attribute_value(key: str, value: Any) -> Any:
+    if value is None:
+        return None
+    if key == "attribute_scores":
+        return {
+            str(name): number
+            for name, raw_number in _json_object(value).items()
+            if (number := _optional_float(raw_number)) is not None
+        }
+    if key in {"schema_version", "source"}:
+        return _optional_text(value)
+    if key in {
+        "attribute_mean",
+        "attribute_confidence_avg",
+        "sentiment_score",
+        "sentiment_confidence",
+        "score",
+        "confidence",
+    }:
+        return _optional_float(value)
+    if key in {"organic_review_count", "mention_count"}:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+    return None
 
 
 def _optional_text(value: Any) -> str | None:
