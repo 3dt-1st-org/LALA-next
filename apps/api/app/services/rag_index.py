@@ -10,7 +10,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Literal
 
-from apps.api.app.core.config import get_settings
+from apps.api.app.core.config import get_settings, resolve_openai_base_url_host
 from apps.api.app.services.review_ingest_governance import enforce_no_raw_review_text
 
 VECTOR_DIMENSIONS = 1536
@@ -161,9 +161,13 @@ def assert_semantic_embedding_when_live(settings: Any | None = None) -> None:
     so a production config can never accidentally serve non-semantic hash vectors.
     """
     settings = settings if settings is not None else get_settings()
+    method = resolve_serving_embedding_method(settings)
+    if method == "openai":
+        # Validate the endpoint even when live AI is disabled so an Azure
+        # routing mistake cannot be hidden until a later serving transition.
+        resolve_openai_base_url_host(getattr(settings, "openai_base_url", ""))
     if not getattr(settings, "enable_live_ai", False):
         return
-    method = resolve_serving_embedding_method(settings)
     if method == "local-hash" and not getattr(settings, "rag_allow_local_hash_live", False):
         raise RuntimeError(
             "LALA_ENABLE_LIVE_AI=true requires a semantic rag_embedding_method "
@@ -179,6 +183,7 @@ def settings_openai_embedding_model_name() -> str:
 
 def build_openai_embedding(text: str) -> list[float]:
     settings = get_settings()
+    resolve_openai_base_url_host(settings.openai_base_url)
     if not settings.openai_api_key:
         raise RuntimeError("OpenAI embedding requires OPENAI_API_KEY.")
     if not settings.enable_live_ai:

@@ -28,6 +28,18 @@ def test_azure_openai_is_not_an_accepted_rag_embedding_method():
         )
 
 
+def test_rag_openai_path_rejects_azure_base_url_without_a_live_call():
+    with pytest.raises(ValueError, match="Azure OpenAI base URLs are not supported"):
+        rag_index.assert_semantic_embedding_when_live(
+            SimpleNamespace(
+                rag_embedding_method="openai",
+                openai_base_url="https://tenant.openai.azure.com/openai/v1",
+                enable_live_ai=False,
+                rag_allow_local_hash_live=False,
+            )
+        )
+
+
 def test_place_profile_chunk_keeps_public_value_score_context():
     chunk = rag_index._place_profile_chunk(
         {
