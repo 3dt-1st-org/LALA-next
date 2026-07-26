@@ -102,6 +102,7 @@ def test_parse_culture_info_event_maps_fields_to_data_dictionary_names():
 
 def test_fetch_culture_info_events_uses_num_ofrows_param(monkeypatch):
     class Response:
+        status_code = 200
         text = """
         <response>
           <header><resultCode>00</resultCode><resultMsg>정상입니다.</resultMsg></header>
@@ -402,7 +403,10 @@ def test_upsert_culture_info_events_targets_source_files_and_events(monkeypatch)
 # ---------------------------------------------------------------------------
 
 
-def test_upsert_culture_info_events_replay_skips_duplicate_source_file(monkeypatch):
+def test_upsert_culture_info_events_upsert_runs_even_when_replayed(monkeypatch):
+    # F1: replayed is provenance metadata only -- it must never gate the actual,
+    # idempotent ON CONFLICT upsert. An existing receipt row must not stop a
+    # content-only upstream correction from being persisted.
     executed = []
 
     class Cursor:
@@ -470,9 +474,11 @@ def test_upsert_culture_info_events_replay_skips_duplicate_source_file(monkeypat
     )
 
     assert payload["replayed"] is True
-    assert payload["upserted_rows"] == 0
+    assert payload["upserted_rows"] == 1
+    # No NEW source_files INSERT (existing receipt reused)...
     assert not any("INSERT INTO ingest.source_files" in sql for sql, _ in executed)
-    assert not any("INSERT INTO culture.events" in sql for sql, _ in executed)
+    # ...but the event upsert always runs regardless of replay.
+    assert any("INSERT INTO culture.events" in sql for sql, _ in executed)
 
 
 def test_parse_culture_info_event_counts_missing_required_field():
@@ -527,6 +533,8 @@ def test_culture_info_raises_bounded_error_without_raw_upstream_text():
 
 def test_fetch_culture_info_events_flags_partial_run_when_collected_below_total(monkeypatch):
     class Response:
+        status_code = 200
+
         def raise_for_status(self):
             return None
 
@@ -549,3 +557,68 @@ def test_fetch_culture_info_events_flags_partial_run_when_collected_below_total(
     assert result.total_count == 10
     assert result.collected_count == 2
     assert result.partial_run is True
+
+
+def _culture_event(seq="1", venue_name_ko="장소"):
+    return culture_info_ingest.CultureInfoEvent(
+        seq=seq,
+        title_ko="행사",
+        event_type="공연",
+        venue_name_ko=venue_name_ko,
+        area="경기도",
+        sigungu="수원시",
+        starts_on=None,
+        ends_on=None,
+        url=None,
+        thumbnail_url=None,
+        gps_x=None,
+        gps_y=None,
+    )
+
+
+def test_events_fingerprint_reflects_row_content_not_only_counters():
+    # F1: a corrected venue (row content) with an identical event count must
+    # change the fingerprint. The old counters-only hash would have been
+    # identical here since raw_count/total_count are unchanged.
+    original = (_culture_event(venue_name_ko="장소"),)
+    corrected = (_culture_event(venue_name_ko="정정된 장소"),)
+
+    assert culture_info_ingest._events_fingerprint(
+        original
+    ) != culture_info_ingest._events_fingerprint(corrected)
+
+
+def test_fetch_culture_info_events_raises_official_error_on_bad_http_status(monkeypatch):
+    # F2: an unsuccessful HTTP status must raise the typed, bounded
+    # OfficialSourceError (via raise_for_official_http_status) instead of
+    # requests' HTTPError, which would embed the full request URL (including
+    # serviceKey=...) in its exception message.
+    class Response:
+        status_code = 500
+        text = ""
+
+        def raise_for_status(self):
+            raise AssertionError(
+                "requests.raise_for_status() must not be called (F2) -- "
+                "raise_for_official_http_status must be used instead"
+            )
+
+    monkeypatch.setitem(sys.modules, "requests", SimpleNamespace(get=lambda *a, **k: Response()))
+
+    with pytest.raises(OfficialSourceError) as info:
+        culture_info_ingest.fetch_culture_info_events(
+            service_key="my-secret-service-key",  # pragma: allowlist secret
+            rows=1,
+            page_size=1,
+        )
+    message = str(info.value)
+    assert "my-secret-service-key" not in message
+    assert "serviceKey" not in message
+
+
+def test_fetch_culture_info_events_raises_on_explicit_zero_result_code():
+    # F4: resultCode="0" is a real failure for this source (only "00"/"0000"
+    # mean success) -- it must raise, not be silently swallowed.
+    xml = "<root><resultCode>0</resultCode><resultMsg>no detail</resultMsg></root>"
+    with pytest.raises(OfficialSourceError):
+        culture_info_ingest.parse_culture_info_events(xml)

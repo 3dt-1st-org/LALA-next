@@ -95,11 +95,15 @@ def raise_for_official_result_code(
     """Raise ``OfficialSourceError`` when the upstream result code is non-zero.
 
     ``result_message`` is inspected only to pick the category (auth vs malformed);
-    it is never placed on the exception. A truthy/zero result code is treated as
-    success and returns ``None``.
+    it is never placed on the exception. Only a **missing** result code (``None``
+    or empty) is treated as "nothing to validate" and returns ``None`` -- an
+    explicit ``"0"`` is a real per-source failure code (e.g. every call site here
+    already decides its own success set, such as ``"00"``/``"0000"``, before
+    calling this helper) and must always raise, never be swallowed as a silent
+    success shorthand (F4).
     """
     code_text = "" if result_code is None else str(result_code).strip()
-    if code_text in ("", "0"):
+    if not code_text:
         return
     category = _classify_result_code(result_code=result_code, result_message=result_message)
     raise OfficialSourceError(

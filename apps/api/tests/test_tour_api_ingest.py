@@ -87,6 +87,8 @@ def test_infer_region_name_accepts_busan_province_alias():
 
 def test_fetch_result_dedupes_content_ids(monkeypatch):
     class Response:
+        status_code = 200
+
         def __init__(self, payload):
             self._payload = payload
 
@@ -222,6 +224,8 @@ def test_fetch_result_can_sweep_multiple_area_codes(monkeypatch):
 
 def test_fetch_result_skips_detail_image_when_firstimage_exists(monkeypatch):
     class Response:
+        status_code = 200
+
         def raise_for_status(self):
             return None
 
@@ -275,6 +279,8 @@ def test_fetch_result_skips_detail_image_when_firstimage_exists(monkeypatch):
 
 def test_fetch_result_can_skip_missing_detail_image_lookup(monkeypatch):
     class Response:
+        status_code = 200
+
         def raise_for_status(self):
             return None
 
@@ -325,6 +331,8 @@ def test_fetch_result_can_skip_missing_detail_image_lookup(monkeypatch):
 
 def test_fetch_result_keeps_place_when_detail_image_lookup_fails(monkeypatch):
     class Response:
+        status_code = 200
+
         def raise_for_status(self):
             return None
 
@@ -404,6 +412,34 @@ def test_preview_redacts_service_key_on_execution_error(monkeypatch, capsys):
     assert exit_code == 2
     assert "[redacted]" in output
     assert "public-data-secret" not in output
+
+
+def test_apply_stdout_error_never_leaks_service_key_on_bad_http_status(monkeypatch, capsys):
+    # F2 end-to-end: an OfficialSourceError from a bad HTTP status (as raised
+    # by raise_for_official_http_status) must never surface a raw upstream URL
+    # or service key in the CLI's error payload -- the same string is also
+    # what run_tour_api_ingest.py records to ops.job_runs.error_message.
+    monkeypatch.setenv("PUBLIC_DATA_SERVICE_KEY", "test-service-key")
+    monkeypatch.setenv("DB_DSN", "postgresql://redacted")
+    monkeypatch.setenv(run_tour_api_ingest.ALLOW_ENV, "1")
+
+    def fail(**kwargs):
+        from apps.api.app.services.official_source_errors import (
+            raise_for_official_http_status,
+        )
+
+        raise_for_official_http_status(source="tour_api", status_code=500)
+
+    monkeypatch.setattr(run_tour_api_ingest, "fetch_tour_api_places", fail)
+
+    exit_code = run_tour_api_ingest.main(
+        ["--apply", "--confirm", run_tour_api_ingest.CONFIRM_TEXT, "--json"]
+    )
+
+    output = capsys.readouterr().out
+    assert exit_code == 2
+    assert "test-service-key" not in output
+    assert "serviceKey" not in output
 
 
 def test_upsert_tour_api_places_targets_source_files_and_places(monkeypatch):
@@ -509,7 +545,11 @@ def _place_item(**overrides):
     return base
 
 
-def test_upsert_tour_api_places_replay_skips_duplicate_source_file_and_fact_upserts(monkeypatch):
+def test_upsert_tour_api_places_upsert_runs_even_when_replayed(monkeypatch):
+    # F1: replayed is provenance metadata only -- it must never gate the
+    # actual, idempotent ON CONFLICT upsert. An existing receipt row must not
+    # stop a content-only upstream correction (e.g. a corrected address) from
+    # being persisted.
     executed = []
 
     class Cursor:
@@ -579,10 +619,11 @@ def test_upsert_tour_api_places_replay_skips_duplicate_source_file_and_fact_upse
 
     assert payload["replayed"] is True
     assert payload["source_file_id"] == "existing-source-id"
-    assert payload["upserted_rows"] == 0  # no duplicate fact work on replay
-    # No source_files INSERT, and no place upsert on a replayed receipt.
+    assert payload["upserted_rows"] == 1
+    # No NEW source_files INSERT (existing receipt reused)...
     assert not any("INSERT INTO ingest.source_files" in sql for sql, _ in executed)
-    assert not any("INSERT INTO travel.places" in sql for sql, _ in executed)
+    # ...but the place upsert always runs regardless of replay.
+    assert any("INSERT INTO travel.places" in sql for sql, _ in executed)
     assert executed[-1] == ("commit", None)
 
 
@@ -641,6 +682,8 @@ def test_extract_items_raises_bounded_error_without_raw_upstream_text():
 
 def test_fetch_tour_api_places_flags_partial_run_when_collected_below_total(monkeypatch):
     class Response:
+        status_code = 200
+
         def raise_for_status(self):
             return None
 
@@ -686,6 +729,8 @@ def _tour_list_response(items, total_count):
 
 
 class _TourResponse:
+    status_code = 200
+
     def __init__(self, payload):
         self._payload = payload
 
@@ -790,3 +835,84 @@ def test_multi_type_total_sums_per_type_not_per_page(monkeypatch):
     assert result.raw_count == 8
     assert result.total_count == 8
     assert result.partial_run is False
+
+
+def test_places_fingerprint_reflects_row_content_not_only_counters():
+    # F1: a corrected address (row content) with an identical place count must
+    # change the fingerprint. The old counters-only hash (with source_updated_at
+    # unchanged) would have been identical here.
+    original_place = tour_api_ingest.parse_tour_api_place(_place_item(contentid="1"))
+    corrected_place = tour_api_ingest.parse_tour_api_place(
+        _place_item(contentid="1", addr1="경기도 수원시 영통구 정정된주소")
+    )
+
+    assert tour_api_ingest._places_fingerprint(
+        (original_place,)
+    ) != tour_api_ingest._places_fingerprint((corrected_place,))
+
+
+def test_fetch_tour_api_places_raises_official_error_on_bad_http_status(monkeypatch):
+    # F2: an unsuccessful HTTP status on the area-list call must raise the
+    # typed, bounded OfficialSourceError (via raise_for_official_http_status)
+    # instead of requests' HTTPError, which would embed the full request URL
+    # (including serviceKey=...) in its exception message.
+    class Response:
+        status_code = 500
+
+        def raise_for_status(self):
+            raise AssertionError(
+                "requests.raise_for_status() must not be called (F2) -- "
+                "raise_for_official_http_status must be used instead"
+            )
+
+        def json(self):
+            return {}
+
+    monkeypatch.setitem(sys.modules, "requests", SimpleNamespace(get=lambda *a, **k: Response()))
+
+    with pytest.raises(OfficialSourceError) as info:
+        tour_api_ingest.fetch_tour_api_places(
+            service_key="my-secret-service-key",  # pragma: allowlist secret
+            content_type_ids=("12",),
+            rows=1,
+            page_size=1,
+        )
+    message = str(info.value)
+    assert "my-secret-service-key" not in message
+    assert "serviceKey" not in message
+
+
+def test_fetch_detail_image_raises_official_error_on_bad_http_status():
+    # F2: same wiring for the detailImage2 call site (tour_api_ingest.py:387).
+    class Response:
+        status_code = 500
+
+        def raise_for_status(self):
+            raise AssertionError(
+                "requests.raise_for_status() must not be called (F2) -- "
+                "raise_for_official_http_status must be used instead"
+            )
+
+        def json(self):
+            return {}
+
+    class _RequestsModule:
+        @staticmethod
+        def get(*args, **kwargs):
+            return Response()
+
+    with pytest.raises(OfficialSourceError):
+        tour_api_ingest._fetch_detail_image_url(
+            requests_module=_RequestsModule(),
+            service_key="my-secret-service-key",  # pragma: allowlist secret
+            content_id="1",
+            timeout=1,
+        )
+
+
+def test_extract_items_raises_on_explicit_zero_result_code():
+    # F4: resultCode="0" is a real failure for this source (only "0000" means
+    # success) -- it must raise, not be silently swallowed.
+    payload = {"response": {"header": {"resultCode": "0", "resultMsg": "no detail"}, "body": {}}}
+    with pytest.raises(OfficialSourceError):
+        tour_api_ingest._extract_items(payload)

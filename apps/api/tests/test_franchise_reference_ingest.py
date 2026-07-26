@@ -135,6 +135,31 @@ def _ingest_result():
     )
 
 
+def test_brands_fingerprint_reflects_row_content_not_only_counters():
+    # F1: a corrected franchise_store_count (row content) with identical
+    # counters (parsed_row_count, total_count, ...) must change the
+    # fingerprint. The old counters-only hash would have been identical here.
+    original = _ingest_result()
+    corrected_brand = franchise_reference_ingest.FranchiseBrandReference(
+        brand_id="2025:hq:brand",
+        brand_name_ko="브랜드",
+        normalized_brand_name="브랜드",
+        headquarters_name_ko="hq",
+        business_category="외식 / 한식",
+        main_product=None,
+        franchise_store_count=99,  # corrected upstream value
+        average_sales_amount=1000.0,
+        chain_scale_score=franchise_reference_ingest._chain_scale_score(99),
+        primary_source="fair_trade_commission",
+        source_record_id="2025:hq:brand",
+    )
+
+    original_hash = franchise_reference_ingest._brands_fingerprint(original.brands)
+    corrected_hash = franchise_reference_ingest._brands_fingerprint((corrected_brand,))
+
+    assert original_hash != corrected_hash
+
+
 def _install_fake_psycopg2(monkeypatch, fetchone_results):
     executed: list = []
 
@@ -196,7 +221,11 @@ def test_insert_franchise_brand_references_writes_receipt_then_upserts(monkeypat
     assert any(sql == "execute_values" for sql, _ in executed)
 
 
-def test_insert_franchise_brand_references_replay_skips_upsert(monkeypatch):
+def test_insert_franchise_brand_references_upsert_runs_even_when_replayed(monkeypatch):
+    # F1: replayed is provenance metadata only -- it must never gate the
+    # actual, idempotent ON CONFLICT upsert. An existing receipt row must not
+    # stop a content-only upstream correction (e.g. a corrected store count)
+    # from being persisted.
     executed = _install_fake_psycopg2(monkeypatch, [("existing-source-id",)])
     payload = franchise_reference_ingest.insert_franchise_brand_references(
         dsn="postgresql://redacted",
@@ -205,10 +234,11 @@ def test_insert_franchise_brand_references_replay_skips_upsert(monkeypatch):
     )
     assert payload["replayed"] is True
     assert payload["source_file_id"] == "existing-source-id"
-    assert payload["inserted_or_updated_rows"] == 0
-    # No source_files INSERT and no brand upsert on replay.
+    assert payload["inserted_or_updated_rows"] == 1
+    # No NEW source_files INSERT (existing receipt reused)...
     assert not any("INSERT INTO ingest.source_files" in sql for sql, _ in executed)
-    assert not any(sql == "execute_values" for sql, _ in executed)
+    # ...but the brand upsert always runs regardless of replay.
+    assert any(sql == "execute_values" for sql, _ in executed)
 
 
 def test_fetch_page_raises_bounded_error_without_raw_upstream_text(monkeypatch):
@@ -243,6 +273,36 @@ def test_fetch_page_raises_bounded_error_without_raw_upstream_text(monkeypatch):
     assert "echo-do-not-leak" not in message
     assert "ServiceKey" not in message
     assert info.value.category == "auth"
+
+
+def test_fetch_page_raises_on_explicit_zero_result_code(monkeypatch):
+    # F4: resultCode="0" is a real failure for this source (only "00" means
+    # success) -- it must raise, not be silently swallowed as a success shorthand.
+    import urllib.request
+
+    raw_body = json.dumps({"resultCode": "0", "resultMsg": "no detail"}).encode("utf-8")
+
+    class _Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def read(self):
+            return raw_body
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: _Response())
+
+    with pytest.raises(OfficialSourceError):
+        franchise_reference_ingest._fetch_page(
+            api_url="https://example.invalid/api",
+            api_key="dummy",
+            year=2025,
+            page_no=1,
+            page_size=10,
+            timeout=1,
+        )
 
 
 def test_fetch_franchise_brand_references_flags_partial_run_when_capped(monkeypatch):

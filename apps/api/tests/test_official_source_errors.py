@@ -44,13 +44,28 @@ def test_error_does_not_embed_unbounded_code_tokens():
     assert "raw upstream sentence" not in str(exc)
 
 
-@pytest.mark.parametrize("code", [None, "", "0"])
+@pytest.mark.parametrize("code", [None, ""])
 def test_zero_or_missing_result_code_does_not_raise(code):
     errors.raise_for_official_result_code(
         source="tour_api",
         result_code=code,
         result_message="anything",
     )
+
+
+@pytest.mark.parametrize("source", ["tour_api", "kcisa", "kopis", "fair_trade_commission"])
+def test_explicit_zero_result_code_raises_for_every_source(source):
+    # F4: an explicit "0" result code is a real per-source failure code, not an
+    # implicit success shorthand. Every call site here has already decided its
+    # own success set (e.g. "00"/"0000") before calling this helper, so "0"
+    # must always raise -- it must never be silently swallowed as if it were
+    # equivalent to "no result code at all".
+    with pytest.raises(errors.OfficialSourceError):
+        errors.raise_for_official_result_code(
+            source=source,
+            result_code="0",
+            result_message="anything",
+        )
 
 
 def test_nonzero_result_code_classifies_auth_without_leaking_message():

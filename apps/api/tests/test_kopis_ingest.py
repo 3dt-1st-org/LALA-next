@@ -130,6 +130,7 @@ def test_kopis_region_inference_supports_non_capital_province_aliases():
 
 def test_fetch_kopis_performances_uses_official_rest_parameters(monkeypatch):
     class Response:
+        status_code = 200
         text = """
         <dbs>
           <db>
@@ -430,7 +431,10 @@ def test_upsert_kopis_performances_targets_source_files_and_culture_events(monke
 # ---------------------------------------------------------------------------
 
 
-def test_upsert_kopis_performances_replay_skips_duplicate_source_file(monkeypatch):
+def test_upsert_kopis_performances_upsert_runs_even_when_replayed(monkeypatch):
+    # F1: replayed is provenance metadata only -- it must never gate the actual,
+    # idempotent ON CONFLICT upsert. An existing receipt row must not stop a
+    # content-only upstream correction from being persisted.
     executed = []
 
     class Cursor:
@@ -497,9 +501,11 @@ def test_upsert_kopis_performances_replay_skips_duplicate_source_file(monkeypatc
     )
 
     assert payload["replayed"] is True
-    assert payload["upserted_rows"] == 0
+    assert payload["upserted_rows"] == 1
+    # No NEW source_files INSERT (existing receipt reused)...
     assert not any("INSERT INTO ingest.source_files" in sql for sql, _ in executed)
-    assert not any("INSERT INTO culture.events" in sql for sql, _ in executed)
+    # ...but the performance upsert always runs regardless of replay.
+    assert any("INSERT INTO culture.events" in sql for sql, _ in executed)
 
 
 def test_parse_kopis_performance_counts_missing_required_field():
@@ -533,6 +539,8 @@ def test_kopis_raise_for_error_does_not_leak_service_key_text():
 
 def test_fetch_kopis_performances_reports_unknown_total_and_no_partial_flag(monkeypatch):
     class Response:
+        status_code = 200
+
         def raise_for_status(self):
             return None
 
@@ -557,3 +565,68 @@ def test_fetch_kopis_performances_reports_unknown_total_and_no_partial_flag(monk
     assert result.total_count is None
     assert result.collected_count == 2
     assert result.partial_run is False
+
+
+def _kopis_performance(mt20id="PF1", venue_name_ko="경기아트센터"):
+    return kopis_ingest.KopisPerformance(
+        mt20id=mt20id,
+        title_ko="공연",
+        starts_on=None,
+        ends_on=None,
+        venue_name_ko=venue_name_ko,
+        poster_url=None,
+        area="경기도",
+        genre_name="연극",
+        openrun=None,
+        performance_state="공연예정",
+    )
+
+
+def test_performances_fingerprint_reflects_row_content_not_only_counters():
+    # F1: a corrected venue (row content) with an identical performance count
+    # must change the fingerprint. The old counters-only hash would have been
+    # identical here since raw_count/total_count are unchanged.
+    original = (_kopis_performance(venue_name_ko="경기아트센터"),)
+    corrected = (_kopis_performance(venue_name_ko="정정된 공연장"),)
+
+    assert kopis_ingest._performances_fingerprint(
+        original
+    ) != kopis_ingest._performances_fingerprint(corrected)
+
+
+def test_fetch_kopis_performances_raises_official_error_on_bad_http_status(monkeypatch):
+    # F2: an unsuccessful HTTP status must raise the typed, bounded
+    # OfficialSourceError (via raise_for_official_http_status) instead of
+    # requests' HTTPError, which would embed the full request URL (including
+    # serviceKey=...) in its exception message.
+    class Response:
+        status_code = 500
+        text = ""
+
+        def raise_for_status(self):
+            raise AssertionError(
+                "requests.raise_for_status() must not be called (F2) -- "
+                "raise_for_official_http_status must be used instead"
+            )
+
+    monkeypatch.setitem(sys.modules, "requests", SimpleNamespace(get=lambda *a, **k: Response()))
+
+    with pytest.raises(kopis_ingest.OfficialSourceError) as info:
+        kopis_ingest.fetch_kopis_performances(
+            service_key="my-secret-service-key",  # pragma: allowlist secret
+            stdate="20260615",
+            eddate="20260715",
+            rows=1,
+            page_size=1,
+        )
+    message = str(info.value)
+    assert "my-secret-service-key" not in message
+    assert "serviceKey" not in message
+
+
+def test_kopis_raises_on_explicit_zero_result_code():
+    # F4: resultCode="0" is a real failure for this source (only "00"/"0000"
+    # mean success) -- it must raise, not be silently swallowed.
+    xml = "<root><resultCode>0</resultCode><resultMsg>no detail</resultMsg></root>"
+    with pytest.raises(kopis_ingest.OfficialSourceError):
+        kopis_ingest.parse_kopis_performances(xml)

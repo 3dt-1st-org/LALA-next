@@ -13,6 +13,7 @@ from apps.api.app.services.official_ingest_validation import OfficialRejectionCo
 from apps.api.app.services.official_media import official_image_url_or_none
 from apps.api.app.services.official_source_errors import (
     OfficialSourceError,
+    raise_for_official_http_status,
     raise_for_official_result_code,
 )
 from apps.api.app.services.official_source_receipts import record_official_source_receipt
@@ -179,7 +180,9 @@ def fetch_kopis_performances(
             timeout=timeout,
         )
         request_count += 1
-        response.raise_for_status()
+        # Typed, fixed-reason error; the raw upstream URL (which carries
+        # serviceKey=...) is never echoed in the exception message (F2).
+        raise_for_official_http_status(source="kopis", status_code=response.status_code)
         page_items = parse_kopis_performances(response.text, counter=rejection_counter)
         raw_count += len(page_items)
         performances.extend(page_items)
@@ -309,6 +312,23 @@ def parse_kopis_performance(
     )
 
 
+def _performances_fingerprint(performances: tuple[KopisPerformance, ...]) -> str:
+    """Content fingerprint over the actual parsed rows (sorted, deterministic).
+
+    Unlike hashing ``to_public_dict()`` counters/params, this changes whenever
+    row CONTENT changes (a corrected date/venue) even when counters
+    (``raw_count``, ``total_count``, ...) stay identical, so an upstream
+    correction is never silently treated as an unchanged replay (F1).
+    """
+    sorted_rows = sorted(
+        (item.to_public_dict() for item in performances),
+        key=lambda row: row["event_id"],
+    )
+    return hashlib.sha256(
+        json.dumps(sorted_rows, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+
+
 def upsert_kopis_performances(
     *,
     dsn: str,
@@ -317,11 +337,7 @@ def upsert_kopis_performances(
 ) -> dict[str, Any]:
     import psycopg2
 
-    source_payload = result.to_public_dict()
-    source_payload["preview"] = []
-    file_sha256 = hashlib.sha256(
-        json.dumps(source_payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
-    ).hexdigest()
+    file_sha256 = _performances_fingerprint(result.performances)
 
     upsert_sql = """
         INSERT INTO culture.events (
@@ -376,12 +392,13 @@ def upsert_kopis_performances(
             file_name=_source_file_name(result),
             file_sha256=file_sha256,
         )
-        # Replay guard: skip redundant performance upserts on an unchanged fingerprint.
-        if not receipt.replayed:
-            with conn.cursor() as cur:
-                for performance in result.performances:
-                    cur.execute(upsert_sql, performance.to_event_row())
-                    inserted_or_updated += cur.rowcount
+        # Idempotent ON CONFLICT upsert always runs -- `replayed` is
+        # receipt/provenance metadata only, never a write gate, so an upstream
+        # content-only correction is never silently dropped (F1).
+        with conn.cursor() as cur:
+            for performance in result.performances:
+                cur.execute(upsert_sql, performance.to_event_row())
+                inserted_or_updated += cur.rowcount
         conn.commit()
 
     return {
