@@ -61,10 +61,21 @@ _ATTRACTION_REVIEW_GUARD_CATEGORIES = {"attraction", "culture_venue"}
 
 
 def generate_script(request: DocentScriptRequest) -> dict:
-    grounding_context = db_repository.fetch_docent_knowledge_context(
-        place_id=request.place_id,
-        limit=3,
-    )
+    settings = get_settings()
+    retrieval_mode = (settings.rag_retrieval_mode or "legacy").strip().lower()
+    if retrieval_mode == "hybrid":
+        grounding_context = db_repository.fetch_docent_knowledge_context_hybrid(
+            place_id=request.place_id,
+            query=_retrieval_query(request),
+            category=request.category,
+            language=request.language,
+            top_k=3,
+        )
+    else:
+        grounding_context = db_repository.fetch_docent_knowledge_context(
+            place_id=request.place_id,
+            limit=3,
+        )
     if not grounding_context:
         grounding_context = db_repository.fetch_docent_place_profile_context(
             place_id=request.place_id,
@@ -126,8 +137,8 @@ def generate_script(request: DocentScriptRequest) -> dict:
         script = _sanitize_docent_output(script, language=request.language)
         script = _ensure_docent_quality_context(script, request)
         source = "rule_based_curation"
-    ttl_sec = 604800
-    return {
+    ttl_sec = settings.docent_script_ttl_sec
+    response = {
         "place_id": request.place_id,
         "category": request.category,
         "language": request.language,
@@ -139,6 +150,17 @@ def generate_script(request: DocentScriptRequest) -> dict:
         **_grounding_meta(grounding_context),
         **identity,
     }
+    if retrieval_mode == "hybrid":
+        # Opt-in, provenance-safe: citation pointers + retrieval meta appear only in hybrid
+        # mode (legacy responses are unchanged). RRF-only — no online mini rerank in this slice.
+        response["citations"] = build_citations(grounding_context)
+        response["retrieval"] = {
+            "mode": "hybrid",
+            "reranker": "rrf",
+            "selected": len(grounding_context),
+            "embedding_generation": settings.rag_embedding_generation,
+        }
+    return response
 
 
 def _rule_based_script(
@@ -1015,11 +1037,16 @@ def script_identity(
     *,
     grounding_context: list[dict[str, Any]] | None = None,
 ) -> dict[str, str]:
+    settings = get_settings()
     payload: dict[str, object] = {
         "place_id": request.place_id,
         "category": request.category,
         "language": request.language,
         "mode": request.mode,
+        # A reindex (generation bump) or retrieval-mode switch must invalidate stale cached
+        # scripts, so both are part of the cache identity.
+        "embedding_generation": settings.rag_embedding_generation,
+        "retrieval_mode": (settings.rag_retrieval_mode or "legacy"),
     }
     if _has_score_context(request):
         payload.update(
@@ -1093,3 +1120,61 @@ def _grounding_hash(grounding_context: list[dict[str, Any]]) -> str:
         for item in grounding_context
     ]
     return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
+
+
+def _retrieval_query(request: DocentScriptRequest) -> str:
+    """Build the hybrid retrieval query text for a docent request."""
+    parts = [
+        request.place_name or "",
+        request.category.replace("_", " "),
+        request.region_ko or request.region_en or "",
+    ]
+    query = " ".join(part for part in parts if part.strip()).strip()
+    return query or request.place_id
+
+
+def build_citations(grounding_context: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Provenance-safe citation pointers for the grounding set.
+
+    Emits only pointers (source_type/source_id), the public title, available languages, a
+    similarity band, and a coarse ref class — never raw review/body text, PII, or secrets
+    (plan §9.1, §10.1)."""
+    return [_citation_for_item(item) for item in grounding_context]
+
+
+def _citation_for_item(item: dict[str, Any]) -> dict[str, Any]:
+    source_type = str(item.get("source_type") or "")
+    metadata = item.get("metadata") or {}
+    language_avail = metadata.get("language_avail")
+    if not isinstance(language_avail, list):
+        language_avail = ["ko", *(["en"] if item.get("body_en") else [])]
+    return {
+        "source_type": source_type,
+        "source_id": str(item.get("source_id") or ""),
+        "title": item.get("title_ko"),
+        "language_avail": language_avail,
+        "similarity_band": _similarity_band(item.get("similarity")),
+        "ref": _citation_ref(source_type),
+    }
+
+
+def _similarity_band(similarity: Any) -> str:
+    try:
+        score = float(similarity)
+    except (TypeError, ValueError):
+        return "unknown"
+    if score >= 0.75:
+        return "high"
+    if score >= 0.5:
+        return "medium"
+    return "low"
+
+
+def _citation_ref(source_type: str) -> str:
+    return {
+        "place_profile": "official",
+        "culture_event": "event",
+        "weather_context": "weather",
+        "place_mention": "community",
+        "community_post": "community",
+    }.get(source_type, "community")

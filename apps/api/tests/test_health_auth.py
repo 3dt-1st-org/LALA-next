@@ -488,6 +488,58 @@ def test_readyz_reports_ok_for_db_backed_runtime_with_disabled_live_options(clie
     }
 
 
+def test_readyz_reports_rag_serving_state_report_only(client, monkeypatch):
+    # R2: RAG serving state is report-only — it must not change mode.overall or the existing
+    # degraded-status logic below it.
+    monkeypatch.setenv("API_BEARER_TOKEN", "test-bearer-token")
+    monkeypatch.setenv("DB_DSN", "postgresql://db.example/lala")
+    monkeypatch.setenv("LALA_RAG_RETRIEVAL_MODE", "hybrid")
+    monkeypatch.setenv("LALA_RAG_EMBEDDING_METHOD", "openai")
+    monkeypatch.setenv("LALA_RAG_EMBEDDING_GENERATION", "3")
+    monkeypatch.setattr(
+        "apps.api.app.core.readiness.db_repository.check_db_status",
+        lambda dsn: "configured",
+    )
+    monkeypatch.setattr(
+        "apps.api.app.core.readiness.db_repository.check_postgis_status",
+        lambda dsn: "configured",
+    )
+    monkeypatch.setattr(
+        "apps.api.app.core.readiness.db_repository.check_identity_schema_status",
+        lambda dsn: "configured",
+    )
+    monkeypatch.setattr(
+        "apps.api.app.core.readiness.db_repository.check_data_freshness_status",
+        lambda dsn, weather_max_hours=24: "configured",
+    )
+
+    response = client.get("/readyz")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["data"]["status"] == "ok"
+    assert body["data"]["checks"]["rag_retrieval_mode"] == "hybrid"
+    assert body["data"]["checks"]["rag_embedding_method"] == "openai"
+    assert body["data"]["checks"]["rag_embedding_generation"] == 3
+    assert body["data"]["mode"] == {
+        "overall": "db-backed",
+        "data": "db-backed",
+        "ai": "disabled",
+        "speech": "disabled",
+        "worker": "dry-run",
+    }
+
+
+def test_readyz_reports_rag_serving_state_defaults(client):
+    response = client.get("/readyz")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["data"]["checks"]["rag_retrieval_mode"] == "legacy"
+    assert body["data"]["checks"]["rag_embedding_method"] == "local-hash"
+    assert body["data"]["checks"]["rag_embedding_generation"] == 1
+
+
 def test_readyz_reports_worker_contract_registry_failure(client, monkeypatch):
     def fail_list_worker_jobs():
         raise RuntimeError("worker registry unavailable")

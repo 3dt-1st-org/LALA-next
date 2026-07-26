@@ -13,8 +13,11 @@ from apps.api.app.services.job_runs import duration_ms, record_job_run
 from apps.api.app.services.rag_index import (
     DYNAMIC_SOURCE_TYPES,
     STATIC_SOURCE_TYPES,
+    assert_semantic_embedding_when_live,
     fetch_candidate_chunks,
     query_knowledge_chunks,
+    reindex_stale_chunks,
+    select_stale_chunks,
     upsert_knowledge_chunks,
 )
 
@@ -48,6 +51,29 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--place-id", default="", help="Optional query filter for a place_id.")
     parser.add_argument("--limit", type=int, default=500, help="Chunk candidate limit.")
     parser.add_argument("--top-k", type=int, default=5, help="Vector search result count.")
+    parser.add_argument(
+        "--reindex",
+        action="store_true",
+        help="Plan, preview, or apply stale-chunk re-embedding (embedding_generation lifecycle).",
+    )
+    parser.add_argument(
+        "--embedding-generation",
+        type=int,
+        default=None,
+        help="Serving embedding generation for --reindex (default: rag_embedding_generation).",
+    )
+    parser.add_argument(
+        "--chunk-cap",
+        type=int,
+        default=None,
+        help="Max chunks re-embedded per --reindex apply run (default: rag_reindex_chunk_cap).",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=None,
+        help="Commit batch size for --reindex apply (default: rag_reindex_batch_size).",
+    )
     parser.add_argument("--connect-timeout", type=int, default=5)
     args = parser.parse_args(argv)
 
@@ -57,6 +83,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.top_k <= 0:
         _write(args, {"ok": False, "mode": _mode(args), "error": "--top-k must be positive."})
         return 2
+    if args.reindex:
+        return _run_reindex(args)
     selected_modes = sum(bool(value) for value in (args.preview, args.apply, args.query.strip()))
     if selected_modes > 1:
         _write(
@@ -185,6 +213,193 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def _run_reindex(args: argparse.Namespace) -> int:
+    """--reindex: plan (no DB), preview (read-only stale SELECT), or apply (re-embed + stamp
+    embedding_generation). Apply reuses the same confirm + env gate as chunk upsert."""
+    if args.query.strip():
+        _write(
+            args,
+            {"ok": False, "mode": "reindex", "error": "--query is not valid with --reindex."},
+        )
+        return 2
+    selected = sum(bool(value) for value in (args.preview, args.apply))
+    if selected > 1:
+        _write(
+            args,
+            {
+                "ok": False,
+                "mode": "reindex",
+                "error": "Use only one of --preview or --apply with --reindex.",
+            },
+        )
+        return 2
+
+    settings = get_settings()
+    serving_generation = (
+        args.embedding_generation
+        if args.embedding_generation is not None
+        else settings.rag_embedding_generation
+    )
+    chunk_cap = args.chunk_cap if args.chunk_cap is not None else settings.rag_reindex_chunk_cap
+    batch_size = args.batch_size if args.batch_size is not None else settings.rag_reindex_batch_size
+    if serving_generation < 0:
+        _write(
+            args,
+            {
+                "ok": False,
+                "mode": "reindex",
+                "error": "--embedding-generation must be non-negative.",
+            },
+        )
+        return 2
+    if chunk_cap <= 0 or batch_size <= 0:
+        _write(
+            args,
+            {
+                "ok": False,
+                "mode": "reindex",
+                "error": "--chunk-cap and --batch-size must be positive.",
+            },
+        )
+        return 2
+
+    if not args.preview and not args.apply:
+        _write(args, _reindex_plan_payload(args, serving_generation, chunk_cap, batch_size))
+        return 0
+
+    dsn = os.getenv("DB_DSN") or settings.db_dsn
+    if not dsn:
+        _write(args, {"ok": False, "mode": _mode(args), "error": "DB_DSN is not configured."})
+        return 2
+
+    if args.apply:
+        guard_error = _apply_guard_error(args)
+        if guard_error:
+            _write(args, {"ok": False, "mode": "reindex-apply", "error": guard_error})
+            return 2
+
+    started_at = datetime.now(UTC)
+    try:
+        if args.preview:
+            stale = select_stale_chunks(
+                dsn=dsn,
+                serving_generation=serving_generation,
+                limit=chunk_cap,
+                connect_timeout=args.connect_timeout,
+            )
+            _write(
+                args,
+                {
+                    "ok": True,
+                    "mode": "reindex-preview",
+                    "db_mutation": False,
+                    "target": "rag.knowledge_chunks",
+                    "job_name": JOB_NAME,
+                    "embedding_method": args.embedding_method,
+                    "serving_generation": serving_generation,
+                    "stale_count": len(stale),
+                    "preview": [
+                        {
+                            "source_type": chunk.source_type,
+                            "source_id": chunk.source_id,
+                            "reason": chunk.reason,
+                            "stored_generation": chunk.stored_generation,
+                        }
+                        for chunk in stale[:5]
+                    ],
+                },
+            )
+            return 0
+
+        result = reindex_stale_chunks(
+            dsn=dsn,
+            serving_generation=serving_generation,
+            embedding_method=args.embedding_method,
+            batch_size=batch_size,
+            chunk_cap=chunk_cap,
+            connect_timeout=args.connect_timeout,
+        )
+        finished_at = datetime.now(UTC)
+        record_job_run(
+            dsn=dsn,
+            job_name=JOB_NAME,
+            status="succeeded",
+            started_at=started_at,
+            finished_at=finished_at,
+            duration_ms=duration_ms(started_at, finished_at),
+            error_message=None,
+            connect_timeout=args.connect_timeout,
+        )
+        _write(
+            args,
+            {
+                "ok": True,
+                "mode": "reindex-apply",
+                "db_mutation": True,
+                "target": "rag.knowledge_chunks",
+                "job_name": JOB_NAME,
+                "embedding_method": args.embedding_method,
+                "serving_generation": serving_generation,
+                **result.to_dict(),
+            },
+        )
+        return 0
+    except Exception as exc:
+        if args.apply:
+            finished_at = datetime.now(UTC)
+            with contextlib.suppress(Exception):
+                record_job_run(
+                    dsn=dsn,
+                    job_name=JOB_NAME,
+                    status="failed",
+                    started_at=started_at,
+                    finished_at=finished_at,
+                    duration_ms=duration_ms(started_at, finished_at),
+                    error_message=redact_secret_text(
+                        str(exc) or exc.__class__.__name__,
+                        (dsn, settings.azure_openai_key),
+                    ),
+                    connect_timeout=args.connect_timeout,
+                )
+        _write(
+            args,
+            {
+                "ok": False,
+                "mode": _mode(args),
+                "error": redact_secret_text(
+                    str(exc) or exc.__class__.__name__,
+                    (dsn, settings.azure_openai_key),
+                ),
+            },
+        )
+        return 2
+
+
+def _reindex_plan_payload(
+    args: argparse.Namespace,
+    serving_generation: int,
+    chunk_cap: int,
+    batch_size: int,
+) -> dict[str, Any]:
+    return {
+        "ok": True,
+        "mode": "reindex-plan",
+        "db_mutation": False,
+        "target": "rag.knowledge_chunks",
+        "job_name": JOB_NAME,
+        "embedding_method": args.embedding_method,
+        "serving_generation": serving_generation,
+        "chunk_cap": chunk_cap,
+        "batch_size": batch_size,
+        "stale_predicate": "embedding_generation < serving_generation OR embedding IS NULL",
+        "requires": "sql/canonical/064_rag_knowledge_retrieval_metadata.sql (applied)",
+        "note": (
+            "preview/apply require DB_DSN; apply requires --confirm APPLY_RAG_INDEX "
+            "and ALLOW_RAG_INDEX_APPLY=1."
+        ),
+    }
+
+
 def _plan_payload(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "ok": True,
@@ -213,6 +428,12 @@ def _apply_guard_error(args: argparse.Namespace) -> str:
         return f"--apply requires --confirm {CONFIRM_TEXT}."
     if os.getenv(ALLOW_ENV) != "1":
         return f"--apply requires {ALLOW_ENV}=1 in the process environment."
+    # No silent semantic fallback: shared by --apply and --reindex --apply, evaluated before
+    # any DB connection is opened (R1 wiring).
+    try:
+        assert_semantic_embedding_when_live()
+    except RuntimeError as exc:
+        return str(exc)
     return ""
 
 
@@ -274,6 +495,12 @@ def _write(args: argparse.Namespace, payload: dict[str, Any]) -> None:
 
 
 def _mode(args: argparse.Namespace) -> str:
+    if args.reindex:
+        if args.apply:
+            return "reindex-apply"
+        if args.preview:
+            return "reindex-preview"
+        return "reindex-plan"
     if args.apply:
         return "apply"
     if args.preview:
