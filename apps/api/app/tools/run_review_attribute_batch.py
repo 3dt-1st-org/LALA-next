@@ -89,15 +89,39 @@ def main(argv: list[str] | None = None) -> int:
     recheck_model = selected_review_recheck_model(settings)
     bulk_role = resolve("review_bulk", settings)
     recheck_role = resolve("review_recheck", settings)
-    if not dsn:
-        _write(args, {"ok": False, "mode": _mode(args), "error": "DB_DSN is not configured."})
-        return 2
-
     if args.apply:
         guard_error = _apply_guard_error(args)
         if guard_error:
             _write(args, {"ok": False, "mode": "apply", "error": guard_error})
             return 2
+    if args.dry_run_ai and _live_ai_disabled(settings):
+        _write(
+            args,
+            _disabled_payload(
+                bulk_role=bulk_role,
+                recheck_role=recheck_role,
+                reason=_live_ai_disabled_reason(settings),
+            ),
+        )
+        return 0
+    if args.apply and _live_ai_disabled(settings):
+        _write(
+            args,
+            {
+                **_disabled_payload(
+                    bulk_role=bulk_role,
+                    recheck_role=recheck_role,
+                    reason=_live_ai_disabled_reason(settings),
+                ),
+                "ok": False,
+                "mode": "apply",
+                "error": "Live AI is disabled; apply is fail-closed.",
+            },
+        )
+        return 2
+    if not dsn:
+        _write(args, {"ok": False, "mode": _mode(args), "error": "DB_DSN is not configured."})
+        return 2
 
     started_at = datetime.now(UTC)
     live_lane = bool(args.dry_run_ai or args.apply)
@@ -253,6 +277,46 @@ def _plan_payload(args: argparse.Namespace) -> dict[str, Any]:
         ],
         "default_min_organic": args.min_organic,
         "apply_required_env": ["DB_DSN", "OPENAI_API_KEY", "LALA_ENABLE_LIVE_AI", ALLOW_ENV],
+    }
+
+
+def _live_ai_disabled(settings: Any) -> bool:
+    return not bool(getattr(settings, "enable_live_ai", False)) or not bool(
+        getattr(settings, "openai_api_key", "")
+    )
+
+
+def _live_ai_disabled_reason(settings: Any) -> str:
+    missing = []
+    if not getattr(settings, "enable_live_ai", False):
+        missing.append("LALA_ENABLE_LIVE_AI=true")
+    if not getattr(settings, "openai_api_key", ""):
+        missing.append("OPENAI_API_KEY")
+    return "missing_or_disabled:" + ",".join(missing)
+
+
+def _disabled_payload(*, bulk_role: Any, recheck_role: Any, reason: str) -> dict[str, Any]:
+    return {
+        "ok": True,
+        "mode": "disabled",
+        "status": "disabled",
+        "reason": reason,
+        "live_ai_call": False,
+        "db_mutation": False,
+        "target": "community.place_mentions_weekly",
+        "job_name": JOB_NAME,
+        "prompt_version": PROMPT_VERSION,
+        "model_role": "review_bulk",
+        "model_roles": {
+            "review_bulk": bulk_role.as_metadata(),
+            "review_recheck": recheck_role.as_metadata(),
+        },
+        "candidate_count": 0,
+        "generated_count": 0,
+        "updated_rows": 0,
+        "recheck_routed_count": 0,
+        "recheck_upgraded_count": 0,
+        "recheck_failed_count": 0,
     }
 
 

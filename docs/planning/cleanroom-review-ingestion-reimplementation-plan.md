@@ -815,12 +815,15 @@ history via `place_enrichments` generations.
 - **Acceptance (Ops/DB):** an approved source runs plan→preview→apply; every
   aggregate has a resolvable `source_run_id` + `license_class`.
 
-### M3 — Bulk-lane AI classifier + attributes (PARTIALLY implemented)
+### M3 — Bulk-lane AI classifier + attributes (implementation in progress)
 
 - **Implemented:** `review_attribute_batch.py` AI lane + deterministic fallback;
-  category schemas; `review_quality_score`.
-- **Target:** standalone AI ad-classifier second pass (§14); attributes mirrored
-  to `travel.place_enrichments` (G8); broader source coverage.
+  category schemas; strict JSON validation; safe ad/confidence/status metadata;
+  `review_quality_score`; and idempotent aggregate-only mirror SQL for
+  `travel.place_enrichments`.
+- **Target:** broader approved-source coverage and operator-facing quarantine /
+  replay controls. Raw review text remains transient input only and is excluded
+  from persisted attributes, API output, and RAG metadata.
 - **Acceptance (DB):** `review_quality_score` non-null for eligible places, null
   where evidence < 3 organic; attributes present in both `place_mentions_weekly`
   and `place_enrichments`.

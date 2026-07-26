@@ -27,6 +27,7 @@ def test_worker_registry_defines_expected_boundaries():
         "weather-refresh",
         "community-keyword-watchlist",
         "community-post-ingest",
+        "review-attribute-batch",
         "ops-rollup",
     }
     assert jobs["weather-refresh"]["writes"] == ["travel.weather_observations"]
@@ -72,6 +73,16 @@ def test_worker_dry_runs_do_not_require_external_services(monkeypatch):
         assert result["job"]["idempotency_policy"] == job["idempotency_policy"]
         assert result["job"]["poison_policy"] == job["poison_policy"]
         assert marker not in encoded
+        assert (
+            "raw_text_output" not in result["payload"]
+            or result["payload"]["raw_text_output"] is False
+        )
+        if job["job_id"] == "review-attribute-batch":
+            assert result["payload"] == {
+                "candidate_count": 0,
+                "status": "disabled",
+                "raw_text_output": False,
+            }
 
 
 def test_worker_execute_is_blocked_without_mutation_guard(monkeypatch):
@@ -100,6 +111,8 @@ def test_worker_live_preflight_is_secret_safe_and_blocked_until_implemented():
         "DB_DSN": marker,
         "KEY_VAULT_URL": "https://lala-key-vault.vault.azure.net/",
         "EVENT_HUB_NAMESPACE": "lala-next-dev-eventhub",
+        "OPENAI_API_KEY": "test-key",  # pragma: allowlist secret -- fake test fixture
+        "LALA_ENABLE_LIVE_AI": "true",
     }
 
     payload = evaluate_worker_live_preflight(environ=env)

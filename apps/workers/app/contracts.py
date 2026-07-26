@@ -178,6 +178,42 @@ _JOB_DEFINITIONS: tuple[WorkerJobDefinition, ...] = (
         },
     ),
     WorkerJobDefinition(
+        job_id="review-attribute-batch",
+        description=(
+            "Score approved review aggregates with the bulk/recheck model lanes "
+            "without retaining source review text."
+        ),
+        trigger="schedule/manual",
+        writes=(
+            "community.place_mentions_weekly",
+            "travel.place_enrichments",
+            "ops.job_runs",
+        ),
+        retry_policy=RetryPolicy(
+            max_attempts=2,
+            backoff="exponential: 1m, 5m",
+            retryable_errors=("openai_timeout", "rate_limited", "db_connection_error"),
+            non_retryable_errors=("schema_validation_error", "privacy_boundary_violation"),
+        ),
+        idempotency_policy=IdempotencyPolicy(
+            key="week_start + place_id + provider + category + prompt_version",
+            conflict_strategy="reuse governed aggregate and do not duplicate enrichment mirror",
+            duplicate_window="7d",
+        ),
+        poison_policy=PoisonPolicy(
+            threshold=2,
+            destination="community.ingest_quarantine with safe reason metadata",
+            operator_action="review low-confidence or schema-invalid output; never replay raw text",
+        ),
+        dependencies=("DB_DSN", "OPENAI_API_KEY", "LALA_ENABLE_LIVE_AI"),
+        source_systems=("approved normalized review aggregates",),
+        dry_run_payload={
+            "candidate_count": 0,
+            "status": "disabled",
+            "raw_text_output": False,
+        },
+    ),
+    WorkerJobDefinition(
         job_id="ops-rollup",
         description="Roll up dependency and cost telemetry for operations handoff.",
         trigger="schedule/manual",

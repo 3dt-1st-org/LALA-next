@@ -54,6 +54,21 @@ def test_deterministic_preview_builds_review_quality_for_sufficient_evidence():
     assert quality["score"] > 0
 
 
+def test_candidate_public_projection_keeps_source_text_in_memory_only():
+    candidate = _candidate(
+        category="restaurant",
+        organic=3,
+        posts=[{"external_key": "post-1", "title": "원문 제목", "body": "원문 본문"}],
+    )
+
+    public = candidate.to_public_dict()
+    prompt = candidate.to_prompt_record()
+
+    assert "원문 제목" not in json.dumps(public, ensure_ascii=False)
+    assert "원문 본문" not in json.dumps(public, ensure_ascii=False)
+    assert prompt["retained_snippets"]
+
+
 def test_low_evidence_keeps_review_quality_null():
     candidate = _candidate(category="culture_venue", organic=2)
     enrichment = review_attribute_batch.build_deterministic_enrichments([candidate])[0]
@@ -68,20 +83,17 @@ def test_parse_ai_response_filters_category_attributes_and_keeps_ids():
             "results": [
                 {
                     "mention_id": candidate.mention_id,
+                    "schema_version": review_attribute_batch.PROMPT_VERSION,
                     "sentiment_score": 0.4,
                     "sentiment_confidence": 0.8,
                     "attribute_scores": {
                         "cultural_story": 0.9,
-                        "taste": 0.99,
                         "walking_comfort": 0.7,
                     },
                     "attribute_confidence_avg": 0.75,
-                    "evidence_terms": {
-                        "cultural_story": ["전시 동선"],
-                        "taste": ["맛집"],
-                    },
-                    "summary_ko": "전시와 동선 신호가 좋습니다.",
-                    "reason": "official review evidence",
+                    "is_ad": False,
+                    "ad_confidence": 0.05,
+                    "ad_reason": "organic",
                 }
             ]
         },
@@ -97,7 +109,97 @@ def test_parse_ai_response_filters_category_attributes_and_keeps_ids():
         "cultural_story": 0.9,
         "walking_comfort": 0.7,
     }
-    assert "taste" not in parsed.evidence_terms
+    assert parsed.to_attributes_payload()["status"] == "accepted"
+    assert "evidence_terms" not in parsed.to_attributes_payload()
+
+
+def test_ai_contract_is_strict_and_payload_is_aggregate_only():
+    candidate = _candidate(category="restaurant", organic=3)
+    result = {
+        "mention_id": candidate.mention_id,
+        "schema_version": review_attribute_batch.PROMPT_VERSION,
+        "sentiment_score": 0.2,
+        "sentiment_confidence": 0.8,
+        "attribute_scores": {"taste": 0.7},
+        "attribute_confidence_avg": 0.8,
+        "is_ad": False,
+        "ad_confidence": 0.1,
+        "ad_reason": "organic",
+        # These must not be accepted as part of the strict model contract.
+        "summary_ko": "raw-derived summary",
+    }
+
+    with pytest.raises(ValueError, match="exactly one result"):
+        review_attribute_batch.parse_ai_response(json.dumps({"results": []}), [candidate])
+
+    parsed = review_attribute_batch.parse_ai_response(
+        json.dumps(
+            {"results": [{key: value for key, value in result.items() if key != "summary_ko"}]}
+        ),
+        [candidate],
+    )[0]
+    payload = parsed.to_attributes_payload()
+    assert "summary_ko" not in payload
+    assert "evidence_terms" not in payload
+    assert "reason" not in payload
+    assert payload["status"] == "accepted"
+
+
+def test_ai_ad_and_low_confidence_statuses_are_fail_closed():
+    candidate = _candidate(category="restaurant", organic=3)
+    base = {
+        "mention_id": candidate.mention_id,
+        "schema_version": review_attribute_batch.PROMPT_VERSION,
+        "sentiment_score": 0.0,
+        "sentiment_confidence": 0.4,
+        "attribute_scores": {"taste": 0.5},
+        "attribute_confidence_avg": 0.4,
+        "is_ad": True,
+        "ad_confidence": 0.7,
+        "ad_reason": "ambiguous_ad_signal",
+    }
+    parsed = review_attribute_batch.parse_ai_response(json.dumps({"results": [base]}), [candidate])[
+        0
+    ]
+    assert parsed.status == "recheck_required"
+    assert review_attribute_batch.review_quality_payload(candidate, parsed) is None
+
+    filtered = dict(
+        base, sentiment_confidence=0.9, attribute_confidence_avg=0.9, ad_confidence=0.95
+    )
+    parsed_filtered = review_attribute_batch.parse_ai_response(
+        json.dumps({"results": [filtered]}), [candidate]
+    )[0]
+    assert parsed_filtered.status == "ad_filtered"
+
+
+def test_disabled_dry_run_never_reads_db_or_calls_ai(monkeypatch, capsys):
+    _runner_settings(monkeypatch)
+    monkeypatch.setattr(
+        run_review_attribute_batch,
+        "get_settings",
+        lambda: SimpleNamespace(
+            db_dsn="postgresql://must-not-connect",
+            openai_api_key="",
+            openai_base_url="https://api.openai.com/v1",
+            enable_live_ai=False,
+            openai_review_batch_model="gpt-5.4-nano",
+            openai_review_recheck_model="gpt-5.4-mini",
+        ),
+    )
+    monkeypatch.setattr(
+        run_review_attribute_batch,
+        "fetch_review_attribute_candidates",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("DB must not be read")),
+    )
+
+    exit_code = run_review_attribute_batch.main(["--dry-run-ai", "--json"])
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert payload["mode"] == "disabled"
+    assert payload["live_ai_call"] is False
+    assert payload["candidate_count"] == 0
+    assert "must-not-connect" not in json.dumps(payload)
 
 
 def test_apply_requires_guard_before_reading_db(monkeypatch, capsys):
@@ -168,8 +270,11 @@ def test_apply_review_attribute_enrichments_targets_mentions_and_quality(monkeyp
 
     assert updated == 1
     assert "UPDATE community.place_mentions_weekly" in executed[1][0]
+    assert any("INSERT INTO travel.place_enrichments" in sql for sql, _ in executed)
     assert "review_attribute_batch" in executed[1][0]
     assert executed[1][1]["mention_id"] == candidate.mention_id
+    assert "summary_ko" not in executed[1][1]["review_attributes"]
+    assert "evidence_terms" not in executed[1][1]["review_attributes"]
     assert executed[1][1]["review_quality"]["schema_version"] == (
         review_attribute_batch.QUALITY_VERSION
     )
@@ -200,12 +305,9 @@ def test_generate_ai_enrichments_uses_openai_review_batch_model(monkeypatch):
                                                 "service": 0.7,
                                             },
                                             "attribute_confidence_avg": 0.75,
-                                            "evidence_terms": {
-                                                "taste": ["숯불 향"],
-                                                "service": ["친절"],
-                                            },
-                                            "summary_ko": "맛과 서비스가 좋습니다.",
-                                            "reason": "organic review evidence",
+                                            "is_ad": False,
+                                            "ad_confidence": 0.05,
+                                            "ad_reason": "organic",
                                         }
                                     ]
                                 },
@@ -317,7 +419,7 @@ def _runner_settings(monkeypatch) -> None:
         "get_settings",
         lambda: SimpleNamespace(
             db_dsn="postgresql://redacted",
-            openai_api_key="",
+            openai_api_key="test-key",  # pragma: allowlist secret -- fake test fixture
             openai_base_url="https://api.openai.com/v1",
             enable_live_ai=True,
             openai_review_batch_model="gpt-5.4-nano",
