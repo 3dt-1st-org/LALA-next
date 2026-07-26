@@ -48,7 +48,7 @@ running authenticated checks. For OAuth/Entra JWT validation, prefer
 `LALA_SMOKE_BEARER_TOKEN`; the smoke script uses it before falling back to the
 static transition `API_BEARER_TOKEN`, then `IOS_API_KEY`.
 
-For live Azure OpenAI and Speech validation:
+For live OpenAI and Azure Speech validation:
 
 ```powershell
 .\scripts\windows\smoke_api.ps1 -BaseUrl "http://127.0.0.1:8080" -KeyVaultUrl <KEY_VAULT_URL> -PaidDependency

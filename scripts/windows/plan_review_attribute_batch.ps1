@@ -54,9 +54,9 @@ try {
         Write-Host "Planning LALA-next review attribute batch."
         Write-Host "Default mode is dry-run plan only."
         Write-Host "Preview mode reads review mentions and computes deterministic attributes without mutating DB."
-        Write-Host "Dry-run AI mode calls Azure OpenAI but does not mutate DB."
+        Write-Host "Dry-run AI mode calls OpenAI but does not mutate DB."
         Write-Host "Apply mode requires ALLOW_REVIEW_ATTRIBUTE_BATCH_APPLY=1."
-        Write-Host "AZURE_OPENAI_KEY and DB_DSN values are never printed by this script."
+        Write-Host "OPENAI_API_KEY and DB_DSN values are never printed by this script."
     }
 
     $toolArgs = @(

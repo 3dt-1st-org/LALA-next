@@ -50,7 +50,7 @@ fi
 load_lala_key_vault_secrets
 
 if [[ -n "${KEY_VAULT_URL:-}" ]]; then
-  echo "Key Vault secret preload: api_key=$(env_status IOS_API_KEY), bearer_token=$(env_status API_BEARER_TOKEN), oauth_issuer=$(env_status OAUTH_ISSUER), oauth_client_id=$(env_status OAUTH_CLIENT_ID), openai_key=$(env_status AZURE_OPENAI_KEY), speech_key=$(env_status AZURE_SPEECH_KEY), cors_origins=$(env_status CORS_ALLOW_ORIGINS)"
+  echo "Key Vault secret preload: api_key=$(env_status IOS_API_KEY), bearer_token=$(env_status API_BEARER_TOKEN), oauth_issuer=$(env_status OAUTH_ISSUER), oauth_client_id=$(env_status OAUTH_CLIENT_ID), openai_key=$(env_status OPENAI_API_KEY), speech_key=$(env_status AZURE_SPEECH_KEY), cors_origins=$(env_status CORS_ALLOW_ORIGINS)"
 fi
 
 if [[ "$ENABLE_LIVE_AI" == "true" ]]; then
@@ -66,7 +66,7 @@ echo "Python executable: $PYTHON"
 echo "JSONL access log: $(env_status LALA_ACCESS_LOG_PATH)"
 echo "Graceful shutdown timeout: $GRACEFUL_TIMEOUT seconds"
 if [[ "$ENABLE_LIVE_AI" == "true" ]]; then
-  echo "Live Azure OpenAI generation: enabled"
+  echo "Live OpenAI generation: enabled"
 fi
 if [[ "$ENABLE_LIVE_SPEECH" == "true" ]]; then
   echo "Live Azure Speech synthesis: enabled"

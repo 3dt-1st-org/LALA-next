@@ -402,13 +402,12 @@ def test_readyz_reports_degraded_when_postgis_probe_fails(client, monkeypatch):
     assert body["data"]["mode"]["overall"] == "degraded"
 
 
-def test_readyz_reports_db_backed_and_live_azure_runtime_modes(client, monkeypatch):
+def test_readyz_reports_db_backed_and_live_openai_runtime_modes(client, monkeypatch):
     monkeypatch.setenv("API_BEARER_TOKEN", "test-bearer-token")
     monkeypatch.setenv("DB_DSN", "postgresql://db.example/lala")
     monkeypatch.setenv("LALA_ENABLE_LIVE_AI", "true")
-    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://aoai.example.test")
-    monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini")
-    monkeypatch.setenv("AZURE_OPENAI_KEY", "test-openai-key")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
+    monkeypatch.setenv("OPENAI_DOCENT_MODEL", "gpt-5.4-mini")
     monkeypatch.setenv("LALA_ENABLE_LIVE_SPEECH", "true")
     monkeypatch.setenv("AZURE_SPEECH_REGION", "koreacentral")
     monkeypatch.setenv("AZURE_SPEECH_KEY", "test-speech-key")
@@ -444,7 +443,7 @@ def test_readyz_reports_db_backed_and_live_azure_runtime_modes(client, monkeypat
     assert body["data"]["mode"] == {
         "overall": "db-backed",
         "data": "db-backed",
-        "ai": "live-azure",
+        "ai": "live-openai",
         "speech": "live-azure",
         "worker": "dry-run",
     }

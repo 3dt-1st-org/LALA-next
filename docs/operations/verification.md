@@ -519,7 +519,7 @@ reference ingest succeeds, run the franchise identity batch, then regenerate
 `local-value-v2` score snapshots and RAG chunks so the public API reflects the
 new small-merchant signal.
 
-To review Azure OpenAI place enrichment without connecting to a database or
+To review OpenAI place enrichment without connecting to a database or
 calling AI:
 
 ```bash
@@ -532,7 +532,7 @@ scripts/unix/plan_place_ai_enrichment.sh
 
 Default mode is plan-only. It reports the `place-ai-enrichment-v1` prompt
 contract, enriched columns, and target tables without printing `DB_DSN` or
-`AZURE_OPENAI_KEY`. When canonical places are loaded and Azure OpenAI settings
+`OPENAI_API_KEY`. When canonical places are loaded and OpenAI settings
 are configured, dry-run AI previews generated values without updating rows:
 
 ```bash
@@ -1071,9 +1071,8 @@ Server, database, required extension allowlist, or Key Vault `db-dsn` secret
 name is missing.
 
 `docents/script` reads non-expired rows from `travel.docent_scripts` before
-calling Azure OpenAI. The docent generation and QA lane should prefer
-`AZURE_OPENAI_DOCENT_DEPLOYMENT` (`gpt-5.4-mini` recommended) before the
-generic deployment. Successful live Azure OpenAI scripts are written back to
+calling OpenAI. The docent generation and QA lane uses
+`OPENAI_DOCENT_MODEL` (`gpt-5.4-mini` by default). Successful live OpenAI scripts are written back to
 that cache on a best-effort basis. A cache write failure emits a warning log
 without logging the generated script body, but it does not fail the Wave 1 API
 contract.
@@ -1247,7 +1246,7 @@ treating a matrix failure as an API regression.
 
 ## Paid Dependency Checks
 
-Live Azure OpenAI and Azure Speech checks are kept opt-in. Use them only when a
+Live OpenAI and Azure Speech checks are kept opt-in. Use them only when a
 small paid smoke request is acceptable:
 
 ```bash
@@ -1268,7 +1267,7 @@ scripts/unix/smoke_api.sh --base-url http://127.0.0.1:8080 --key-vault-url <KEY_
 .\scripts\windows\smoke_api.ps1 -BaseUrl http://127.0.0.1:8080 -KeyVaultUrl <KEY_VAULT_URL> -PaidDependency
 ```
 
-The paid smoke checks verify that `docents/script` is backed by Azure OpenAI and
+The paid smoke checks verify that `docents/script` is backed by OpenAI and
 that `docents/audio` returns `audio/mpeg` bytes. They do not print secret values
 or generated audio content. With `-PaidDependency`, missing client auth is a
 failure rather than a skipped check.

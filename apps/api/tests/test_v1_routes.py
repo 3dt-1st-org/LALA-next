@@ -999,10 +999,8 @@ def test_docent_script_generation_identity_changes_with_score_context(client, au
 
 def test_docent_script_uses_live_ai_when_enabled(client, auth_headers, monkeypatch):
     monkeypatch.setenv("LALA_ENABLE_LIVE_AI", "true")
-    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.openai.azure.com/")
-    monkeypatch.setenv("AZURE_OPENAI_KEY", "test-key")
-    monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini")
-    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2024-10-21")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_DOCENT_MODEL", "gpt-5.4-mini")
     saved_calls = []
     monkeypatch.setattr(
         "apps.api.app.services.db_repository.fetch_docent_script_cache",
@@ -1035,7 +1033,7 @@ def test_docent_script_uses_live_ai_when_enabled(client, auth_headers, monkeypat
     assert response.status_code == 200
     body = response.json()
     assert body["ok"] is True
-    assert body["data"]["source"] == "azure_openai"
+    assert body["data"]["source"] == "openai"
     assert body["data"]["script"].startswith("AI script for event-2")
     assert "현재 위치에서 약 820m" in body["data"]["script"]
     assert "문화정보원 데이터" in body["data"]["script"]
@@ -1049,10 +1047,8 @@ def test_docent_script_live_ai_placeholder_falls_back_to_curated_script(
     monkeypatch,
 ):
     monkeypatch.setenv("LALA_ENABLE_LIVE_AI", "true")
-    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.openai.azure.com/")
-    monkeypatch.setenv("AZURE_OPENAI_KEY", "test-key")
-    monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini")
-    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2024-10-21")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_DOCENT_MODEL", "gpt-5.4-mini")
     monkeypatch.setattr(
         "apps.api.app.services.db_repository.fetch_docent_script_cache",
         lambda **kwargs: None,
@@ -1109,10 +1105,8 @@ def test_docent_script_live_ai_retryable_failure_falls_back_to_curated_script(
     monkeypatch,
 ):
     monkeypatch.setenv("LALA_ENABLE_LIVE_AI", "true")
-    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.openai.azure.com/")
-    monkeypatch.setenv("AZURE_OPENAI_KEY", "test-key")
-    monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini")
-    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2024-10-21")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_DOCENT_MODEL", "gpt-5.4-mini")
     monkeypatch.setattr(
         "apps.api.app.services.db_repository.fetch_docent_script_cache",
         lambda **kwargs: None,
@@ -1122,7 +1116,7 @@ def test_docent_script_live_ai_retryable_failure_falls_back_to_curated_script(
         raise ServiceError(
             status_code=502,
             code="AI_GENERATION_FAILED",
-            message="Azure OpenAI generation failed.",
+            message="OpenAI generation failed.",
             retryable=True,
         )
 
@@ -1160,10 +1154,8 @@ def test_docent_script_live_ai_score_context_does_not_write_generic_cache(
     monkeypatch,
 ):
     monkeypatch.setenv("LALA_ENABLE_LIVE_AI", "true")
-    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.openai.azure.com/")
-    monkeypatch.setenv("AZURE_OPENAI_KEY", "test-key")
-    monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini")
-    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2024-10-21")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_DOCENT_MODEL", "gpt-5.4-mini")
 
     def fail_if_cache_is_read(**kwargs):
         raise AssertionError("score-aware live AI generation must not use stale cache")
@@ -1202,7 +1194,7 @@ def test_docent_script_live_ai_score_context_does_not_write_generic_cache(
 
     assert response.status_code == 200
     body = response.json()
-    assert body["data"]["source"] == "azure_openai"
+    assert body["data"]["source"] == "openai"
     assert body["data"]["script"].startswith("AI score-aware script")
     assert "내국인 소비" in body["data"]["script"]
     assert "소상공인" in body["data"]["script"]
@@ -1217,10 +1209,8 @@ def test_docent_script_live_ai_adds_route_action_when_ai_only_mentions_next_plac
     monkeypatch,
 ):
     monkeypatch.setenv("LALA_ENABLE_LIVE_AI", "true")
-    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.openai.azure.com/")
-    monkeypatch.setenv("AZURE_OPENAI_KEY", "test-key")
-    monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini")
-    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2024-10-21")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_DOCENT_MODEL", "gpt-5.4-mini")
     monkeypatch.setattr(
         "apps.api.app.services.ai_service.generate_docent_script_text",
         lambda request, **kwargs: (
@@ -1269,10 +1259,8 @@ def test_docent_script_live_ai_requires_grounded_context(
     monkeypatch,
 ):
     monkeypatch.setenv("LALA_ENABLE_LIVE_AI", "true")
-    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.openai.azure.com/")
-    monkeypatch.setenv("AZURE_OPENAI_KEY", "test-key")
-    monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini")
-    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2024-10-21")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_DOCENT_MODEL", "gpt-5.4-mini")
     monkeypatch.setattr(
         "apps.api.app.services.db_repository.fetch_docent_script_cache",
         lambda **kwargs: None,
@@ -1307,10 +1295,8 @@ def test_docent_script_live_ai_receives_rag_grounding_without_cache_write(
     monkeypatch,
 ):
     monkeypatch.setenv("LALA_ENABLE_LIVE_AI", "true")
-    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.openai.azure.com/")
-    monkeypatch.setenv("AZURE_OPENAI_KEY", "test-key")
-    monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini")
-    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2024-10-21")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_DOCENT_MODEL", "gpt-5.4-mini")
     grounding_calls = []
     saved_calls = []
 
@@ -1359,7 +1345,7 @@ def test_docent_script_live_ai_receives_rag_grounding_without_cache_write(
 
     assert response.status_code == 200
     body = response.json()
-    assert body["data"]["source"] == "azure_openai"
+    assert body["data"]["source"] == "openai"
     assert body["data"]["script"].startswith("AI grounded script")
     assert "동선" in body["data"]["script"]
     assert body["data"]["grounding_count"] == 1

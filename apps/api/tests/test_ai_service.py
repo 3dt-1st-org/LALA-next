@@ -113,23 +113,22 @@ def test_generate_docent_script_uses_short_timeout_without_sdk_retries(monkeypat
                 ]
             )
 
-    class FakeAzureOpenAI:
+    class FakeOpenAI:
         def __init__(self, **kwargs):
             captured["client"] = kwargs
             self.chat = SimpleNamespace(completions=FakeCompletions())
 
     fake_openai = types.ModuleType("openai")
-    fake_openai.AzureOpenAI = FakeAzureOpenAI
+    fake_openai.OpenAI = FakeOpenAI
     monkeypatch.setitem(sys.modules, "openai", fake_openai)
     monkeypatch.setattr(
         ai_service,
         "get_settings",
         lambda: SimpleNamespace(
             enable_live_ai=True,
-            azure_openai_endpoint="https://example.openai.azure.com",
-            azure_openai_key="secret",
-            azure_openai_deployment="deployment",
-            azure_openai_api_version="2024-02-15-preview",
+            openai_api_key="secret",
+            openai_base_url="https://api.openai.com/v1",
+            openai_docent_model="gpt-5.4-mini",
         ),
     )
 
@@ -146,10 +145,11 @@ def test_generate_docent_script_uses_short_timeout_without_sdk_retries(monkeypat
     assert text == "검증된 도슨트 문장입니다."
     assert captured["client"]["timeout"] == ai_service.DOCENT_AI_TIMEOUT_SECONDS
     assert captured["client"]["max_retries"] == 0
-    assert captured["completion"]["model"] == "deployment"
+    assert captured["completion"]["model"] == "gpt-5.4-mini"
+    assert captured["client"]["base_url"] == "https://api.openai.com/v1"
 
 
-def test_generate_docent_script_prefers_docent_specific_deployment(monkeypatch):
+def test_generate_docent_script_prefers_docent_specific_model(monkeypatch):
     captured: dict[str, object] = {}
 
     class FakeCompletions:
@@ -159,23 +159,21 @@ def test_generate_docent_script_prefers_docent_specific_deployment(monkeypatch):
                 choices=[SimpleNamespace(message=SimpleNamespace(content="도슨트 스크립트"))]
             )
 
-    class FakeAzureOpenAI:
+    class FakeOpenAI:
         def __init__(self, **kwargs):
             self.chat = SimpleNamespace(completions=FakeCompletions())
 
     fake_openai = types.ModuleType("openai")
-    fake_openai.AzureOpenAI = FakeAzureOpenAI
+    fake_openai.OpenAI = FakeOpenAI
     monkeypatch.setitem(sys.modules, "openai", fake_openai)
     monkeypatch.setattr(
         ai_service,
         "get_settings",
         lambda: SimpleNamespace(
             enable_live_ai=True,
-            azure_openai_endpoint="https://example.openai.azure.com",
-            azure_openai_key="secret",
-            azure_openai_deployment="generic-deployment",
-            azure_openai_docent_deployment="docent-mini-deployment",
-            azure_openai_api_version="2024-02-15-preview",
+            openai_api_key="secret",
+            openai_base_url="https://api.openai.com/v1",
+            openai_docent_model="docent-mini-model",
         ),
     )
 
@@ -189,4 +187,4 @@ def test_generate_docent_script_prefers_docent_specific_deployment(monkeypatch):
 
     ai_service.generate_docent_script_text(request)
 
-    assert captured["completion"]["model"] == "docent-mini-deployment"
+    assert captured["completion"]["model"] == "docent-mini-model"

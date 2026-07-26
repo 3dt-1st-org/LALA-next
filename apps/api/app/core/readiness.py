@@ -59,10 +59,10 @@ def _runtime_mode(checks: dict[str, str]) -> dict[str, str]:
         "ai": _live_dependency_mode(
             enabled=checks.get("live_ai") == "enabled",
             required_statuses=(
-                checks.get("azure_openai_endpoint", "skipped"),
-                checks.get("azure_openai_deployment", "skipped"),
-                checks.get("azure_openai_key", "skipped"),
+                checks.get("openai_docent_model", "skipped"),
+                checks.get("openai_api_key", "skipped"),
             ),
+            provider="openai",
         ),
         "speech": _live_dependency_mode(
             enabled=checks.get("live_speech") == "enabled",
@@ -98,11 +98,13 @@ def _data_mode(
     return "unavailable"
 
 
-def _live_dependency_mode(*, enabled: bool, required_statuses: tuple[str, ...]) -> str:
+def _live_dependency_mode(
+    *, enabled: bool, required_statuses: tuple[str, ...], provider: str = "azure"
+) -> str:
     if not enabled:
         return "disabled"
     if all(status == "configured" for status in required_statuses):
-        return "live-azure"
+        return f"live-{provider}"
     return "degraded"
 
 
@@ -123,7 +125,7 @@ def _overall_runtime_mode(mode: dict[str, str]) -> str:
         return "db-backed"
     if mode["data"] == "public-cache":
         return "public-cache"
-    if mode["ai"] == "live-azure" or mode["speech"] == "live-azure":
+    if mode["ai"] in {"live-openai", "live-azure"} or mode["speech"] == "live-azure":
         return "live-azure"
     return "degraded"
 
@@ -186,9 +188,8 @@ def build_readiness(settings: Settings | None = None) -> dict:
         "postgis": postgis_status,
         "data_freshness": data_freshness_status,
         "key_vault": _status(settings.key_vault_url, required=False),
-        "azure_openai_endpoint": _status(settings.azure_openai_endpoint, required=False),
-        "azure_openai_deployment": _status(settings.azure_openai_deployment, required=False),
-        "azure_openai_key": _status(settings.azure_openai_key, required=False),
+        "openai_api_key": _status(settings.openai_api_key, required=False),
+        "openai_docent_model": _status(settings.openai_docent_model, required=False),
         "live_ai": "enabled" if settings.enable_live_ai else "disabled",
         "azure_speech_region": _status(settings.azure_speech_region, required=False),
         "azure_speech_endpoint": _status(settings.azure_speech_endpoint, required=False),

@@ -121,7 +121,7 @@ def generate_script(request: DocentScriptRequest) -> dict:
                 request,
                 grounding_context=grounding_context,
             )
-            source = "azure_openai"
+            source = "openai"
         except ServiceError as exc:
             if not exc.retryable:
                 raise
@@ -132,7 +132,7 @@ def generate_script(request: DocentScriptRequest) -> dict:
         source = "rule_based_curation"
     script = _sanitize_docent_output(script, language=request.language)
     script = _ensure_docent_quality_context(script, request)
-    if source == "azure_openai" and _docent_output_needs_rule_fallback(script):
+    if source == "openai" and _docent_output_needs_rule_fallback(script):
         script = _rule_based_script(request, grounding_context=grounding_context)
         script = _sanitize_docent_output(script, language=request.language)
         script = _ensure_docent_quality_context(script, request)
