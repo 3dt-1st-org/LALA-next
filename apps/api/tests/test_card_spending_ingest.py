@@ -444,3 +444,80 @@ def test_insert_card_spending_result_targets_source_and_economy_tables(monkeypat
     assert "INSERT INTO economy.card_spending_area_monthly" in executed[3][1]["sql"]
     assert len(executed[3][1]["values"]) == 1
     assert executed[-1] == ("commit", None)
+
+
+def test_insert_card_spending_result_replay_is_idempotent(monkeypatch, tmp_path):
+    # Re-applying the same file must hit the duplicate-check and short-circuit:
+    # the source-file receipt is reused and no fact rows are re-inserted.
+    source = tmp_path / "detail.csv"
+    source.write_text(
+        "기준년월,시군구명,매출금액,매출건수\n202508,수원시,1000,2\n", encoding="utf-8"
+    )
+    result = card_spending_ingest.parse_card_spending_file(path=source)
+    executed = []
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def execute(self, sql, params=None):
+            executed.append((sql, params))
+
+        def fetchone(self):
+            return ("existing-source-id",)  # duplicate-check finds an existing receipt
+
+    class Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def cursor(self):
+            return Cursor()
+
+        def commit(self):
+            executed.append(("commit", None))
+
+    monkeypatch.setitem(
+        sys.modules, "psycopg2", SimpleNamespace(connect=lambda *a, **k: Connection())
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "psycopg2.extras",
+        SimpleNamespace(execute_values=lambda *a, **k: executed.append(("execute_values", None))),
+    )
+
+    payload = card_spending_ingest.insert_card_spending_result(
+        dsn="postgresql://redacted",
+        result=result,
+        connect_timeout=7,
+    )
+
+    assert payload["skipped_duplicate"] is True
+    assert payload["source_file_id"] == "existing-source-id"
+    assert payload["inserted_area_monthly_rows"] == 0
+    # No source_files INSERT and no fact-row bulk insert on replay.
+    assert not any("INSERT INTO ingest.source_files" in sql for sql, _ in executed)
+    assert not any(sql == "execute_values" for sql, _ in executed)
+
+
+def test_card_spending_unknown_region_is_skipped_not_fabricated(tmp_path):
+    # A row whose region cannot be resolved (non-Gyeonggi code, no region name)
+    # must be skipped -- never assigned a fabricated region like "수원시".
+    source = tmp_path / "detail.csv"
+    source.write_text(
+        "기준년월,시군구코드,매출금액\n202508,11000,1000\n",  # 11000 = Seoul, not in the map
+        encoding="utf-8",
+    )
+    result = card_spending_ingest.parse_card_spending_file(path=source)
+
+    assert result.input_row_count == 1
+    assert result.parsed_row_count == 0
+    assert result.skipped_row_count == 1
+    assert result.area_monthly_rows == ()
+    # No region was invented for the unresolvable row.
+    assert all(row.region_name_ko != "수원시" for row in result.area_monthly_rows)

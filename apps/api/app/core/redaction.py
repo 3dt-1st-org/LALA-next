@@ -16,6 +16,12 @@ def redact_secret_text(text: str, explicit_values: tuple[str, ...] = ()) -> str:
         flags=re.IGNORECASE,
     )
     result = re.sub(r"(password=)([^ \t\r\n;]+)", r"\1***", result, flags=re.IGNORECASE)
+    result = re.sub(
+        r"(service[_-]?key=)[^&\s]+",
+        r"\1***",
+        result,
+        flags=re.IGNORECASE,
+    )
     return result
 
 

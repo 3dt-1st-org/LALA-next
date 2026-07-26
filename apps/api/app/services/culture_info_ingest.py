@@ -9,7 +9,19 @@ from datetime import UTC, date, datetime
 from typing import Any
 from xml.etree import ElementTree
 
-from apps.api.app.services.official_media import normalize_official_image_url
+from apps.api.app.services.official_ingest_validation import (
+    OfficialRejectionCounter,
+    validate_official_coordinate,
+)
+from apps.api.app.services.official_media import official_image_url_or_none
+from apps.api.app.services.official_source_errors import (
+    raise_for_official_http_status,
+    raise_for_official_result_code,
+)
+from apps.api.app.services.official_source_receipts import (
+    reconcile_partial_run,
+    record_official_source_receipt,
+)
 from apps.api.app.services.region_catalog import kcisa_sido_names, normalize_province_name_ko
 
 CULTURE_INFO_BASE_URL = "https://apis.data.go.kr/B553457/cultureinfo"
@@ -80,8 +92,15 @@ class CultureInfoFetchResult:
     sido: str
     sidos: tuple[str, ...]
     sigungu: str | None
+    partial_run: bool = False
+    rejected_row_count: int = 0
+    rejection_reason: str | None = None
     source_name: str = DEFAULT_SOURCE_NAME
     dataset_name: str = DEFAULT_DATASET_NAME
+
+    @property
+    def collected_count(self) -> int:
+        return self.raw_count
 
     def to_public_dict(self) -> dict[str, Any]:
         return {
@@ -94,6 +113,10 @@ class CultureInfoFetchResult:
             "request_count": self.request_count,
             "raw_count": self.raw_count,
             "total_count": self.total_count,
+            "collected_count": self.collected_count,
+            "partial_run": self.partial_run,
+            "rejected_row_count": self.rejected_row_count,
+            "rejection_reason": self.rejection_reason,
             "event_count": len(self.events),
             "preview": [item.to_public_dict() for item in self.events[:5]],
         }
@@ -124,6 +147,7 @@ def fetch_culture_info_events(
     request_count = 0
     raw_count = 0
     total_count: int | None = None
+    rejection_counter = OfficialRejectionCounter()
     page_no = 1
     remaining = rows
 
@@ -143,11 +167,14 @@ def fetch_culture_info_events(
             timeout=timeout,
         )
         request_count += 1
-        response.raise_for_status()
+        # Typed, fixed-reason error; the raw upstream URL (which carries
+        # serviceKey=...) is never echoed in the exception message (F2).
+        raise_for_official_http_status(source=DEFAULT_SOURCE_NAME, status_code=response.status_code)
         payload = response.text
         page_events, page_total = parse_culture_info_events(
             payload,
             source_name=DEFAULT_SOURCE_NAME,
+            counter=rejection_counter,
         )
         if page_total is not None:
             total_count = page_total
@@ -158,11 +185,15 @@ def fetch_culture_info_events(
         remaining -= num_rows
         page_no += 1
 
+    partial = reconcile_partial_run(total=total_count, collected=raw_count)
     return CultureInfoFetchResult(
         events=tuple(_dedupe_events(events)),
         request_count=request_count,
         raw_count=raw_count,
-        total_count=total_count,
+        total_count=partial.total,
+        partial_run=partial.partial_run,
+        rejected_row_count=rejection_counter.total,
+        rejection_reason=rejection_counter.summary_reason(),
         operation=operation,
         sido=_normalize_sido(sido),
         sidos=(_normalize_sido(sido),),
@@ -204,11 +235,21 @@ def fetch_culture_info_events_for_sidos(
     total_count: int | None = None
     if all(result.total_count is not None for result in results):
         total_count = sum(result.total_count or 0 for result in results)
+    raw_count = sum(result.raw_count for result in results)
+    partial = reconcile_partial_run(total=total_count, collected=raw_count)
+    rejected_row_count = sum(result.rejected_row_count for result in results)
+    reasons: list[str] = []
+    for result in results:
+        if result.rejection_reason and result.rejection_reason not in reasons:
+            reasons.append(result.rejection_reason)
     return CultureInfoFetchResult(
         events=tuple(_dedupe_events(event for result in results for event in result.events)),
         request_count=sum(result.request_count for result in results),
-        raw_count=sum(result.raw_count for result in results),
+        raw_count=raw_count,
         total_count=total_count,
+        partial_run=partial.partial_run,
+        rejected_row_count=rejected_row_count,
+        rejection_reason="; ".join(reasons) or None,
         operation=operation,
         sido=normalized_sidos[0] if len(normalized_sidos) == 1 else "multi",
         sidos=normalized_sidos,
@@ -220,6 +261,7 @@ def parse_culture_info_events(
     xml_text: str,
     *,
     source_name: str = DEFAULT_SOURCE_NAME,
+    counter: OfficialRejectionCounter | None = None,
 ) -> tuple[list[CultureInfoEvent], int | None]:
     root = ElementTree.fromstring(xml_text)
     _raise_for_error(root)
@@ -228,7 +270,8 @@ def parse_culture_info_events(
     events = [
         event
         for item in items
-        if (event := parse_culture_info_event(item, source_name=source_name)) is not None
+        if (event := parse_culture_info_event(item, source_name=source_name, counter=counter))
+        is not None
     ]
     return events, total_count
 
@@ -237,11 +280,27 @@ def parse_culture_info_event(
     item: ElementTree.Element,
     *,
     source_name: str = DEFAULT_SOURCE_NAME,
+    counter: OfficialRejectionCounter | None = None,
 ) -> CultureInfoEvent | None:
     seq = _find_text(item, "seq", "SEQ", "contentSeq")
     title = _find_text(item, "title", "TITLE", "subject")
     if not (seq and title):
+        if counter is not None:
+            counter.add("missing_required_field")
         return None
+
+    gps_x_raw = _find_text(item, "gpsX", "mapx", "longitude")
+    gps_y_raw = _find_text(item, "gpsY", "mapy", "latitude")
+    gps_x: float | None = None
+    gps_y: float | None = None
+    if gps_x_raw and gps_y_raw:
+        # gps_x is longitude, gps_y is latitude -- validate as (lat, lng).
+        # Coordinates are optional on events, so an out-of-range / null-island
+        # pair is sanitized to None rather than dropping the row -- this is data
+        # hygiene, not a rejection, so the rejection counter is left untouched.
+        coords = validate_official_coordinate(gps_y_raw, gps_x_raw)
+        if coords is not None:
+            gps_y, gps_x = coords
 
     return CultureInfoEvent(
         seq=seq,
@@ -253,13 +312,28 @@ def parse_culture_info_event(
         starts_on=_parse_date(_find_text(item, "startDate", "start", "from")),
         ends_on=_parse_date(_find_text(item, "endDate", "end", "to")),
         url=_find_text(item, "url", "link", "placeUrl"),
-        thumbnail_url=normalize_official_image_url(
-            _find_text(item, "thumbnail", "imgUrl", "image")
-        ),
-        gps_x=_optional_float(_find_text(item, "gpsX", "mapx", "longitude")),
-        gps_y=_optional_float(_find_text(item, "gpsY", "mapy", "latitude")),
+        thumbnail_url=official_image_url_or_none(_find_text(item, "thumbnail", "imgUrl", "image")),
+        gps_x=gps_x,
+        gps_y=gps_y,
         source_name=source_name,
     )
+
+
+def _events_fingerprint(events: tuple[CultureInfoEvent, ...]) -> str:
+    """Content fingerprint over the actual parsed rows (sorted, deterministic).
+
+    Unlike hashing ``to_public_dict()`` counters/params, this changes whenever
+    row CONTENT changes (a corrected date/venue/URL) even when counters
+    (``raw_count``, ``total_count``, ...) stay identical, so an upstream
+    correction is never silently treated as an unchanged replay (F1).
+    """
+    sorted_rows = sorted(
+        (item.to_public_dict() for item in events),
+        key=lambda row: row["event_id"],
+    )
+    return hashlib.sha256(
+        json.dumps(sorted_rows, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    ).hexdigest()
 
 
 def upsert_culture_info_events(
@@ -270,23 +344,8 @@ def upsert_culture_info_events(
 ) -> dict[str, Any]:
     import psycopg2
 
-    source_payload = result.to_public_dict()
-    source_payload["preview"] = []
-    file_sha256 = hashlib.sha256(
-        json.dumps(source_payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
-    ).hexdigest()
+    file_sha256 = _events_fingerprint(result.events)
 
-    source_sql = """
-        INSERT INTO ingest.source_files (
-            source_name,
-            dataset_name,
-            file_name,
-            file_sha256,
-            local_path
-        )
-        VALUES (%s, %s, %s, %s, %s)
-        RETURNING id
-    """
     upsert_sql = """
         INSERT INTO culture.events (
             event_id,
@@ -333,29 +392,33 @@ def upsert_culture_info_events(
 
     inserted_or_updated = 0
     with psycopg2.connect(dsn, connect_timeout=connect_timeout) as conn:
+        receipt = record_official_source_receipt(
+            conn=conn,
+            source_name=result.source_name,
+            dataset_name=result.dataset_name,
+            file_name=_source_file_name(result),
+            file_sha256=file_sha256,
+        )
+        # Idempotent ON CONFLICT upsert always runs -- `replayed` is
+        # receipt/provenance metadata only, never a write gate, so an upstream
+        # content-only correction is never silently dropped (F1).
         with conn.cursor() as cur:
-            cur.execute(
-                source_sql,
-                (
-                    result.source_name,
-                    result.dataset_name,
-                    _source_file_name(result),
-                    file_sha256,
-                    None,
-                ),
-            )
-            source_file_id = str(cur.fetchone()[0])
             for event in result.events:
-                params = event.to_event_row()
-                cur.execute(upsert_sql, params)
+                cur.execute(upsert_sql, event.to_event_row())
                 inserted_or_updated += cur.rowcount
         conn.commit()
 
     return {
         "ok": True,
-        "source_file_id": source_file_id,
+        "source_file_id": receipt.source_file_id,
+        "replayed": receipt.replayed,
         "upserted_rows": inserted_or_updated,
         "event_count": len(result.events),
+        "total_count": result.total_count,
+        "collected_count": result.collected_count,
+        "partial_run": result.partial_run,
+        "rejected_row_count": result.rejected_row_count,
+        "rejection_reason": result.rejection_reason,
     }
 
 
@@ -390,8 +453,12 @@ def _request_params(
 def _raise_for_error(root: ElementTree.Element) -> None:
     result_code = _find_text(root, "resultCode")
     if result_code and result_code not in {"00", "0000"}:
-        result_message = _find_text(root, "resultMsg") or "KCISA culture info request failed."
-        raise RuntimeError(f"KCISA culture info error {result_code}: {result_message}")
+        # Typed, fixed-reason error; the raw upstream resultMsg is never echoed.
+        raise_for_official_result_code(
+            source="kcisa",
+            result_code=result_code,
+            result_message=_find_text(root, "resultMsg"),
+        )
 
 
 def _dedupe_events(events: Iterable[CultureInfoEvent]) -> list[CultureInfoEvent]:
@@ -451,16 +518,6 @@ def _parse_date(value: Any) -> date | None:
     try:
         return date(int(digits[:4]), int(digits[4:6]), int(digits[6:8]))
     except ValueError:
-        return None
-
-
-def _optional_float(value: Any) -> float | None:
-    text = _clean_text(value)
-    if not text:
-        return None
-    try:
-        return float(text)
-    except (TypeError, ValueError):
         return None
 
 

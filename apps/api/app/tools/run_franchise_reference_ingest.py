@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Any
 
 from dotenv import load_dotenv
@@ -17,9 +18,11 @@ from apps.api.app.services.franchise_reference_ingest import (
     fetch_franchise_brand_references,
     insert_franchise_brand_references,
 )
+from apps.api.app.services.job_runs import duration_ms, record_job_run
 
 CONFIRM_TEXT = "APPLY_FRANCHISE_REFERENCE_INGEST"
 ALLOW_ENV = "ALLOW_FRANCHISE_REFERENCE_INGEST_APPLY"
+JOB_NAME = "franchise-reference-ingest"
 
 load_dotenv()
 
@@ -81,6 +84,7 @@ def main(argv: list[str] | None = None) -> int:
             _write(args, {"ok": False, "mode": "apply", "error": guard_error})
             return 2
 
+    started_at = datetime.now(UTC)
     try:
         result = fetch_franchise_brand_references(
             api_key=api_key,
@@ -100,6 +104,21 @@ def main(argv: list[str] | None = None) -> int:
                 connect_timeout=args.connect_timeout,
             )
     except Exception as exc:
+        if args.apply:
+            finished_at = datetime.now(UTC)
+            with contextlib.suppress(Exception):
+                record_job_run(
+                    dsn=dsn,
+                    job_name=JOB_NAME,
+                    status="failed",
+                    started_at=started_at,
+                    finished_at=finished_at,
+                    duration_ms=duration_ms(started_at, finished_at),
+                    error_message=redact_secret_text(
+                        str(exc) or exc.__class__.__name__, (api_key, dsn)
+                    ),
+                    connect_timeout=args.connect_timeout,
+                )
         _write(
             args,
             {
@@ -110,11 +129,26 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
 
+    if args.apply:
+        finished_at = datetime.now(UTC)
+        with contextlib.suppress(Exception):
+            record_job_run(
+                dsn=dsn,
+                job_name=JOB_NAME,
+                status="succeeded",
+                started_at=started_at,
+                finished_at=finished_at,
+                duration_ms=duration_ms(started_at, finished_at),
+                error_message=None,
+                connect_timeout=args.connect_timeout,
+            )
+
     payload = {
         "ok": True,
         "mode": _mode(args),
         "live_api_call": True,
         "db_mutation": bool(args.apply),
+        "job_name": JOB_NAME,
         "target": "economy.franchise_brands",
         "result": result.to_public_dict(),
     }
@@ -130,6 +164,7 @@ def _plan_payload(args: argparse.Namespace) -> dict[str, Any]:
         "mode": "plan",
         "live_api_call": False,
         "db_mutation": False,
+        "job_name": JOB_NAME,
         "source_name": args.source_name,
         "dataset_name": args.dataset_name,
         "source_url": args.api_url,

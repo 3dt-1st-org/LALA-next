@@ -3,11 +3,23 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from typing import Any
 
-from apps.api.app.services.official_media import normalize_official_image_url
+from apps.api.app.services.official_ingest_validation import (
+    OfficialRejectionCounter,
+    validate_official_coordinate,
+)
+from apps.api.app.services.official_media import official_image_url_or_none
+from apps.api.app.services.official_source_errors import (
+    raise_for_official_http_status,
+    raise_for_official_result_code,
+)
+from apps.api.app.services.official_source_receipts import (
+    reconcile_partial_run,
+    record_official_source_receipt,
+)
 from apps.api.app.services.region_catalog import infer_region_name_from_address
 
 TOUR_API_BASE_URL = "https://apis.data.go.kr/B551011/KorService2"
@@ -57,7 +69,7 @@ class TourApiPlace:
             "name_ko": self.title,
             "category": self.category,
             "address_ko": self.address_ko,
-            "image_url": normalize_official_image_url(self.first_image),
+            "image_url": official_image_url_or_none(self.first_image),
             "region_name_ko": self.region_name_ko,
             "province_code": self.area_code,
             "city_code": self.sigungu_code,
@@ -78,9 +90,18 @@ class TourApiFetchResult:
     area_code: str
     area_codes: tuple[str, ...]
     content_type_ids: tuple[str, ...]
+    total_count: int | None = None
+    partial_run: bool = False
+    rejected_row_count: int = 0
+    rejection_reason: str | None = None
+    source_updated_at: str | None = None
     source_name: str = "tour_api"
     dataset_name: str = "한국관광공사_국문 관광정보 서비스_GW"
     operation: str = TOUR_API_OPERATION
+
+    @property
+    def collected_count(self) -> int:
+        return self.raw_count
 
     def to_public_dict(self) -> dict[str, Any]:
         return {
@@ -94,6 +115,12 @@ class TourApiFetchResult:
             "image_request_count": self.image_request_count,
             "image_error_count": self.image_error_count,
             "raw_count": self.raw_count,
+            "total_count": self.total_count,
+            "collected_count": self.collected_count,
+            "partial_run": self.partial_run,
+            "rejected_row_count": self.rejected_row_count,
+            "rejection_reason": self.rejection_reason,
+            "source_updated_at": self.source_updated_at,
             "place_count": len(self.places),
             "preview": [item.to_place_row() for item in self.places[:5]],
         }
@@ -121,11 +148,17 @@ def fetch_tour_api_places(
     places: list[TourApiPlace] = []
     request_count = 0
     raw_count = 0
+    total_count_sum = 0
     per_type_rows = max(1, rows // max(len(content_type_ids), 1))
+    rejection_counter = OfficialRejectionCounter()
 
     for content_type_id in content_type_ids:
         remaining = per_type_rows
         page_no = 1
+        # totalCount is the total matching rows for this (area, content_type)
+        # query and repeats unchanged on every page; capture it once per type so
+        # a complete multi-page pull is not double-counted as partial.
+        type_total: int | None = None
         while remaining > 0:
             num_rows = min(page_size, remaining)
             response = requests.get(
@@ -144,17 +177,25 @@ def fetch_tour_api_places(
                 timeout=timeout,
             )
             request_count += 1
-            response.raise_for_status()
+            # Typed, fixed-reason error; the raw upstream URL (which carries
+            # serviceKey=...) is never echoed in the exception message (F2).
+            raise_for_official_http_status(source="tour_api", status_code=response.status_code)
             payload = response.json()
             items = _extract_items(payload)
+            page_total = _body_total_count(payload)
+            if page_total and (type_total is None or page_total > type_total):
+                type_total = page_total
             raw_count += len(items)
-            places.extend(
-                place for item in items if (place := parse_tour_api_place(item)) is not None
-            )
+            for item in items:
+                place = parse_tour_api_place(item, counter=rejection_counter)
+                if place is not None:
+                    places.append(place)
             if len(items) < num_rows:
                 break
             remaining -= num_rows
             page_no += 1
+        if type_total:
+            total_count_sum += type_total
 
     deduped_places = _dedupe_places(places)
     image_request_count = 0
@@ -171,6 +212,7 @@ def fetch_tour_api_places(
             timeout=timeout,
         )
 
+    partial = reconcile_partial_run(total=total_count_sum or None, collected=raw_count)
     return TourApiFetchResult(
         places=tuple(deduped_places),
         request_count=request_count,
@@ -180,6 +222,11 @@ def fetch_tour_api_places(
         area_code=area_code,
         area_codes=(area_code,),
         content_type_ids=tuple(content_type_ids),
+        total_count=partial.total,
+        partial_run=partial.partial_run,
+        rejected_row_count=rejection_counter.total,
+        rejection_reason=rejection_counter.summary_reason(),
+        source_updated_at=_max_modified_time(deduped_places),
     )
 
 
@@ -204,6 +251,7 @@ def fetch_tour_api_places_for_area_codes(
     image_request_count = 0
     image_error_count = 0
     raw_count = 0
+    per_area_results: list[TourApiFetchResult] = []
     for area_code in unique_area_codes:
         result = fetch_tour_api_places(
             service_key=service_key,
@@ -214,6 +262,7 @@ def fetch_tour_api_places_for_area_codes(
             timeout=timeout,
             fetch_missing_images=fetch_missing_images,
         )
+        per_area_results.append(result)
         places.extend(result.places)
         request_count += result.request_count
         image_request_count += result.image_request_count
@@ -221,6 +270,15 @@ def fetch_tour_api_places_for_area_codes(
         raw_count += result.raw_count
 
     deduped_places = tuple(_dedupe_places(places))
+    totals = [r.total_count for r in per_area_results if r.total_count is not None]
+    total_count = sum(totals) if len(totals) == len(per_area_results) else None
+    rejected_row_count = sum(r.rejected_row_count for r in per_area_results)
+    partial = reconcile_partial_run(total=total_count, collected=raw_count)
+    reasons: list[str] = []
+    for area_result in per_area_results:
+        if area_result.rejection_reason and area_result.rejection_reason not in reasons:
+            reasons.append(area_result.rejection_reason)
+    updated_stamps = [r.source_updated_at for r in per_area_results if r.source_updated_at]
     return TourApiFetchResult(
         places=deduped_places,
         request_count=request_count,
@@ -230,20 +288,38 @@ def fetch_tour_api_places_for_area_codes(
         area_code=unique_area_codes[0] if len(unique_area_codes) == 1 else "multi",
         area_codes=unique_area_codes,
         content_type_ids=tuple(content_type_ids),
+        total_count=total_count,
+        partial_run=partial.partial_run,
+        rejected_row_count=rejected_row_count,
+        rejection_reason="; ".join(reasons) or None,
+        source_updated_at=max(updated_stamps) if updated_stamps else None,
     )
 
 
-def parse_tour_api_place(item: dict[str, Any]) -> TourApiPlace | None:
+def parse_tour_api_place(
+    item: dict[str, Any],
+    *,
+    counter: OfficialRejectionCounter | None = None,
+) -> TourApiPlace | None:
     content_id = _optional_text(item.get("contentid"))
     content_type_id = _optional_text(item.get("contenttypeid"))
     title = _optional_text(item.get("title"))
-    lat = _optional_float(item.get("mapy"))
-    lng = _optional_float(item.get("mapx"))
-    if not (content_id and content_type_id and title and lat is not None and lng is not None):
+    if not (content_id and content_type_id and title):
+        if counter is not None:
+            counter.add("missing_required_field")
         return None
+
+    coords = validate_official_coordinate(item.get("mapy"), item.get("mapx"))
+    if coords is None:
+        if counter is not None:
+            counter.add("invalid_coordinate")
+        return None
+    lat, lng = coords
 
     category = CONTENT_TYPE_CATEGORY.get(content_type_id)
     if not category:
+        if counter is not None:
+            counter.add("unmapped_category")
         return None
 
     return TourApiPlace(
@@ -257,7 +333,7 @@ def parse_tour_api_place(item: dict[str, Any]) -> TourApiPlace | None:
         sigungu_code=_optional_text(item.get("sigungucode")),
         lat=lat,
         lng=lng,
-        first_image=normalize_official_image_url(item.get("firstimage")),
+        first_image=official_image_url_or_none(item.get("firstimage")),
         modified_time=_optional_text(item.get("modifiedtime")),
     )
 
@@ -313,7 +389,11 @@ def _fetch_detail_image_url(
         },
         timeout=timeout,
     )
-    response.raise_for_status()
+    # Typed, fixed-reason error; the raw upstream URL (which carries
+    # serviceKey=...) is never echoed in the exception message (F2). The caller
+    # already treats any exception here as non-fatal (missing image, not a
+    # place-ingest failure).
+    raise_for_official_http_status(source="tour_api", status_code=response.status_code)
     items = _extract_items(response.json())
     return _first_detail_image_url(items)
 
@@ -324,8 +404,28 @@ def _first_detail_image_url(items: Sequence[dict[str, Any]]) -> str | None:
             item.get("smallimageurl")
         )
         if image_url:
-            return normalize_official_image_url(image_url)
+            return official_image_url_or_none(image_url)
     return None
+
+
+def _places_fingerprint(places: tuple[TourApiPlace, ...]) -> str:
+    """Content fingerprint over the actual parsed rows (sorted, deterministic).
+
+    Uses every dataclass field (``asdict``, including ``modified_time``) rather
+    than just the persisted subset, so this changes whenever row CONTENT
+    changes even when counters (``raw_count``, ``total_count``, ...) stay
+    identical -- an upstream correction is never silently treated as an
+    unchanged replay (F1). ``source_updated_at`` on the aggregate result gave
+    only partial protection (it depends on the upstream actually bumping
+    ``modifiedtime``); hashing the rows directly does not.
+    """
+    sorted_rows = sorted(
+        (asdict(item) for item in places),
+        key=lambda row: row["content_id"],
+    )
+    return hashlib.sha256(
+        json.dumps(sorted_rows, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    ).hexdigest()
 
 
 def upsert_tour_api_places(
@@ -336,23 +436,8 @@ def upsert_tour_api_places(
 ) -> dict[str, Any]:
     import psycopg2
 
-    source_payload = result.to_public_dict()
-    source_payload["preview"] = []
-    file_sha256 = hashlib.sha256(
-        json.dumps(source_payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
-    ).hexdigest()
+    file_sha256 = _places_fingerprint(result.places)
 
-    source_sql = """
-        INSERT INTO ingest.source_files (
-            source_name,
-            dataset_name,
-            file_name,
-            file_sha256,
-            local_path
-        )
-        VALUES (%s, %s, %s, %s, %s)
-        RETURNING id
-    """
     upsert_sql = """
         INSERT INTO travel.places (
             place_id,
@@ -398,18 +483,17 @@ def upsert_tour_api_places(
     """
     inserted_or_updated = 0
     with psycopg2.connect(dsn, connect_timeout=connect_timeout) as conn:
+        receipt = record_official_source_receipt(
+            conn=conn,
+            source_name=result.source_name,
+            dataset_name=result.dataset_name,
+            file_name=_source_file_name(result),
+            file_sha256=file_sha256,
+        )
+        # The place upserts are idempotent (ON CONFLICT) and always run --
+        # `replayed` is receipt/provenance metadata only, never a write gate,
+        # so an upstream content-only correction is never silently dropped (F1).
         with conn.cursor() as cur:
-            cur.execute(
-                source_sql,
-                (
-                    result.source_name,
-                    result.dataset_name,
-                    _source_file_name(result),
-                    file_sha256,
-                    None,
-                ),
-            )
-            source_file_id = str(cur.fetchone()[0])
             for place in result.places:
                 cur.execute(upsert_sql, place.to_place_row())
                 inserted_or_updated += cur.rowcount
@@ -417,9 +501,16 @@ def upsert_tour_api_places(
 
     return {
         "ok": True,
-        "source_file_id": source_file_id,
+        "source_file_id": receipt.source_file_id,
+        "replayed": receipt.replayed,
         "upserted_rows": inserted_or_updated,
         "place_count": len(result.places),
+        "total_count": result.total_count,
+        "collected_count": result.collected_count,
+        "partial_run": result.partial_run,
+        "rejected_row_count": result.rejected_row_count,
+        "rejection_reason": result.rejection_reason,
+        "source_updated_at": result.source_updated_at,
     }
 
 
@@ -431,8 +522,13 @@ def _extract_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
     header = (payload.get("response") or {}).get("header") or {}
     result_code = str(header.get("resultCode") or "")
     if result_code and result_code != "0000":
-        result_message = str(header.get("resultMsg") or "TourAPI request failed.")
-        raise RuntimeError(f"TourAPI error {result_code}: {result_message}")
+        # Convert to a typed, fixed-reason error; never echo the raw upstream
+        # resultMsg, which can carry service-key-shaped text.
+        raise_for_official_result_code(
+            source="tour_api",
+            result_code=result_code,
+            result_message=header.get("resultMsg"),
+        )
 
     body = (payload.get("response") or {}).get("body") or {}
     items = (body.get("items") or {}).get("item") if isinstance(body.get("items"), dict) else []
@@ -441,6 +537,21 @@ def _extract_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
     if isinstance(items, list):
         return [item for item in items if isinstance(item, dict)]
     return []
+
+
+def _body_total_count(payload: dict[str, Any]) -> int:
+    body = (payload.get("response") or {}).get("body") or {}
+    try:
+        return int(body.get("totalCount") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _max_modified_time(places: Sequence[TourApiPlace]) -> str | None:
+    stamps = [place.modified_time for place in places if place.modified_time]
+    # TourAPI modifiedtime is a fixed-width numeric timestamp, so lexical max
+    # is also chronological -- the freshest upstream update across the page set.
+    return max(stamps) if stamps else None
 
 
 def _dedupe_places(places: Iterable[TourApiPlace]) -> list[TourApiPlace]:
@@ -466,12 +577,3 @@ def _optional_text(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
-
-
-def _optional_float(value: Any) -> float | None:
-    if value is None:
-        return None
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None

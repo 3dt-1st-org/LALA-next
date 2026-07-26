@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
+from datetime import UTC, datetime
 from typing import Any
 
 from dotenv import load_dotenv
@@ -10,7 +12,9 @@ from dotenv import load_dotenv
 from apps.api.app.core.key_vault import get_secret_if_configured
 from apps.api.app.core.redaction import redact_secret_text
 from apps.api.app.services import region_catalog
+from apps.api.app.services.job_runs import duration_ms, record_job_run
 from apps.api.app.services.tour_api_ingest import (
+    CONTENT_TYPE_CATEGORY,
     DEFAULT_AREA_CODE,
     DEFAULT_CONTENT_TYPE_IDS,
     TOUR_API_BASE_URL,
@@ -23,6 +27,7 @@ from apps.api.app.services.tour_api_ingest import (
 
 CONFIRM_TEXT = "APPLY_TOUR_API_INGEST"
 ALLOW_ENV = "ALLOW_TOUR_API_INGEST_APPLY"
+JOB_NAME = "tour-api-ingest"
 
 load_dotenv()
 
@@ -99,6 +104,7 @@ def main(argv: list[str] | None = None) -> int:
             _write(args, {"ok": False, "mode": "apply", "error": guard_error})
             return 2
 
+    started_at = datetime.now(UTC)
     try:
         if len(area_codes) == 1:
             result = fetch_tour_api_places(
@@ -128,6 +134,22 @@ def main(argv: list[str] | None = None) -> int:
                 connect_timeout=args.connect_timeout,
             )
     except Exception as exc:
+        if args.apply:
+            finished_at = datetime.now(UTC)
+            with contextlib.suppress(Exception):
+                record_job_run(
+                    dsn=dsn,
+                    job_name=JOB_NAME,
+                    status="failed",
+                    started_at=started_at,
+                    finished_at=finished_at,
+                    duration_ms=duration_ms(started_at, finished_at),
+                    error_message=redact_secret_text(
+                        str(exc) or exc.__class__.__name__,
+                        (service_key, dsn),
+                    ),
+                    connect_timeout=args.connect_timeout,
+                )
         _write(
             args,
             {
@@ -141,11 +163,26 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
 
+    if args.apply:
+        finished_at = datetime.now(UTC)
+        with contextlib.suppress(Exception):
+            record_job_run(
+                dsn=dsn,
+                job_name=JOB_NAME,
+                status="succeeded",
+                started_at=started_at,
+                finished_at=finished_at,
+                duration_ms=duration_ms(started_at, finished_at),
+                error_message=None,
+                connect_timeout=args.connect_timeout,
+            )
+
     payload = {
         "ok": True,
         "mode": _mode(args),
         "live_api_call": True,
         "db_mutation": bool(args.apply),
+        "job_name": JOB_NAME,
         "target": "travel.places",
         "result": result.to_public_dict(),
     }
@@ -161,6 +198,7 @@ def _plan_payload(area_codes: tuple[str, ...], content_type_ids: tuple[str, ...]
         "mode": "plan",
         "live_api_call": False,
         "db_mutation": False,
+        "job_name": JOB_NAME,
         "source_name": "tour_api",
         "dataset_name": "한국관광공사_국문 관광정보 서비스_GW",
         "operation": TOUR_API_OPERATION,
@@ -170,7 +208,32 @@ def _plan_payload(area_codes: tuple[str, ...], content_type_ids: tuple[str, ...]
         "area_codes": list(area_codes),
         "content_type_ids": list(content_type_ids),
         "target": "travel.places",
+        "region_scope": "nationwide_sweep" if len(area_codes) > 1 else "single_area",
+        "region_note": (
+            "Default area_code 31 is Gyeonggi; use --all-supported-areas for the "
+            "full 17-province nationwide sweep. No AI translation is performed."
+        ),
+        "image_policy": (
+            "forward-only; store allowlisted official image hosts only "
+            "(tong.visitkorea.or.kr); never download or generate images"
+        ),
+        "validation": {
+            "coordinate_bounds": "lat [-90,90], lng [-180,180]; (0,0) null-island dropped",
+            "category_whitelist": sorted(CONTENT_TYPE_CATEGORY.values()),
+            "rejection_counters": [
+                "invalid_coordinate",
+                "unmapped_category",
+                "missing_required_field",
+            ],
+            "partial_run_flag": True,
+        },
+        "cannot_mutate": [
+            "plan and --preview never write to the DB",
+            "--apply only touches travel.places and ingest.source_files",
+            "no mock or static fallback in the normal runtime path",
+        ],
         "required_env": ["PUBLIC_DATA_SERVICE_KEY"],
+        "apply_required_env": ["DB_DSN", "PUBLIC_DATA_SERVICE_KEY", ALLOW_ENV],
     }
 
 

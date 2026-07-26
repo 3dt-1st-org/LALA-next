@@ -9,7 +9,14 @@ from datetime import UTC, date, datetime, timedelta, timezone
 from typing import Any
 from xml.etree import ElementTree
 
-from apps.api.app.services.official_media import normalize_official_image_url
+from apps.api.app.services.official_ingest_validation import OfficialRejectionCounter
+from apps.api.app.services.official_media import official_image_url_or_none
+from apps.api.app.services.official_source_errors import (
+    OfficialSourceError,
+    raise_for_official_http_status,
+    raise_for_official_result_code,
+)
+from apps.api.app.services.official_source_receipts import record_official_source_receipt
 from apps.api.app.services.region_catalog import (
     infer_region_name_from_text,
     kopis_signgucodes,
@@ -87,9 +94,17 @@ class KopisFetchResult:
     signgucodes: tuple[str, ...]
     signgucodesub: str | None
     prfstate: str | None
+    total_count: int | None = None
+    partial_run: bool = False
+    rejected_row_count: int = 0
+    rejection_reason: str | None = None
     source_name: str = DEFAULT_SOURCE_NAME
     dataset_name: str = DEFAULT_DATASET_NAME
     operation: str = KOPIS_OPERATION
+
+    @property
+    def collected_count(self) -> int:
+        return self.raw_count
 
     def to_public_dict(self) -> dict[str, Any]:
         return {
@@ -104,6 +119,11 @@ class KopisFetchResult:
             "prfstate": self.prfstate,
             "request_count": self.request_count,
             "raw_count": self.raw_count,
+            "total_count": self.total_count,
+            "collected_count": self.collected_count,
+            "partial_run": self.partial_run,
+            "rejected_row_count": self.rejected_row_count,
+            "rejection_reason": self.rejection_reason,
             "performance_count": len(self.performances),
             "preview": [item.to_public_dict() for item in self.performances[:5]],
         }
@@ -139,6 +159,7 @@ def fetch_kopis_performances(
     performances: list[KopisPerformance] = []
     request_count = 0
     raw_count = 0
+    rejection_counter = OfficialRejectionCounter()
     page_no = 1
     remaining = rows
 
@@ -159,8 +180,10 @@ def fetch_kopis_performances(
             timeout=timeout,
         )
         request_count += 1
-        response.raise_for_status()
-        page_items = parse_kopis_performances(response.text)
+        # Typed, fixed-reason error; the raw upstream URL (which carries
+        # serviceKey=...) is never echoed in the exception message (F2).
+        raise_for_official_http_status(source="kopis", status_code=response.status_code)
+        page_items = parse_kopis_performances(response.text, counter=rejection_counter)
         raw_count += len(page_items)
         performances.extend(page_items)
         if len(page_items) < num_rows:
@@ -179,6 +202,11 @@ def fetch_kopis_performances(
         signgucodes=((normalized_signgucode,) if normalized_signgucode else ()),
         signgucodesub=signgucodesub,
         prfstate=prfstate,
+        # KOPIS does not report a total count for the list operation, so a partial
+        # run cannot be proven; collected_count is the honest signal here.
+        total_count=None,
+        rejected_row_count=rejection_counter.total,
+        rejection_reason=rejection_counter.summary_reason(),
     )
 
 
@@ -220,6 +248,11 @@ def fetch_kopis_performances_for_signgucodes(
         )
         for signgucode in normalized_signgucodes
     ]
+    rejected_row_count = sum(result.rejected_row_count for result in results)
+    reasons: list[str] = []
+    for result in results:
+        if result.rejection_reason and result.rejection_reason not in reasons:
+            reasons.append(result.rejection_reason)
     return KopisFetchResult(
         performances=tuple(
             _dedupe_performances(
@@ -234,23 +267,36 @@ def fetch_kopis_performances_for_signgucodes(
         signgucodes=normalized_signgucodes,
         signgucodesub=signgucodesub,
         prfstate=prfstate,
+        total_count=None,
+        rejected_row_count=rejected_row_count,
+        rejection_reason="; ".join(reasons) or None,
     )
 
 
-def parse_kopis_performances(xml_text: str) -> list[KopisPerformance]:
+def parse_kopis_performances(
+    xml_text: str,
+    *,
+    counter: OfficialRejectionCounter | None = None,
+) -> list[KopisPerformance]:
     root = ElementTree.fromstring(xml_text)
     _raise_for_error(root)
     performances: list[KopisPerformance] = []
     for item in root.findall(".//db"):
-        if performance := parse_kopis_performance(item):
+        if performance := parse_kopis_performance(item, counter=counter):
             performances.append(performance)
     return performances
 
 
-def parse_kopis_performance(item: ElementTree.Element) -> KopisPerformance | None:
+def parse_kopis_performance(
+    item: ElementTree.Element,
+    *,
+    counter: OfficialRejectionCounter | None = None,
+) -> KopisPerformance | None:
     mt20id = _find_text(item, "mt20id")
     title = _find_text(item, "prfnm")
     if not (mt20id and title):
+        if counter is not None:
+            counter.add("missing_required_field")
         return None
     return KopisPerformance(
         mt20id=mt20id,
@@ -258,12 +304,29 @@ def parse_kopis_performance(item: ElementTree.Element) -> KopisPerformance | Non
         starts_on=_parse_date(_find_text(item, "prfpdfrom")),
         ends_on=_parse_date(_find_text(item, "prfpdto")),
         venue_name_ko=_find_text(item, "fcltynm"),
-        poster_url=normalize_official_image_url(_find_text(item, "poster")),
+        poster_url=official_image_url_or_none(_find_text(item, "poster")),
         area=_find_text(item, "area"),
         genre_name=_find_text(item, "genrenm"),
         openrun=_find_text(item, "openrun"),
         performance_state=_find_text(item, "prfstate"),
     )
+
+
+def _performances_fingerprint(performances: tuple[KopisPerformance, ...]) -> str:
+    """Content fingerprint over the actual parsed rows (sorted, deterministic).
+
+    Unlike hashing ``to_public_dict()`` counters/params, this changes whenever
+    row CONTENT changes (a corrected date/venue) even when counters
+    (``raw_count``, ``total_count``, ...) stay identical, so an upstream
+    correction is never silently treated as an unchanged replay (F1).
+    """
+    sorted_rows = sorted(
+        (item.to_public_dict() for item in performances),
+        key=lambda row: row["event_id"],
+    )
+    return hashlib.sha256(
+        json.dumps(sorted_rows, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    ).hexdigest()
 
 
 def upsert_kopis_performances(
@@ -274,23 +337,8 @@ def upsert_kopis_performances(
 ) -> dict[str, Any]:
     import psycopg2
 
-    source_payload = result.to_public_dict()
-    source_payload["preview"] = []
-    file_sha256 = hashlib.sha256(
-        json.dumps(source_payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
-    ).hexdigest()
+    file_sha256 = _performances_fingerprint(result.performances)
 
-    source_sql = """
-        INSERT INTO ingest.source_files (
-            source_name,
-            dataset_name,
-            file_name,
-            file_sha256,
-            local_path
-        )
-        VALUES (%s, %s, %s, %s, %s)
-        RETURNING id
-    """
     upsert_sql = """
         INSERT INTO culture.events (
             event_id,
@@ -337,18 +385,17 @@ def upsert_kopis_performances(
 
     inserted_or_updated = 0
     with psycopg2.connect(dsn, connect_timeout=connect_timeout) as conn:
+        receipt = record_official_source_receipt(
+            conn=conn,
+            source_name=result.source_name,
+            dataset_name=result.dataset_name,
+            file_name=_source_file_name(result),
+            file_sha256=file_sha256,
+        )
+        # Idempotent ON CONFLICT upsert always runs -- `replayed` is
+        # receipt/provenance metadata only, never a write gate, so an upstream
+        # content-only correction is never silently dropped (F1).
         with conn.cursor() as cur:
-            cur.execute(
-                source_sql,
-                (
-                    result.source_name,
-                    result.dataset_name,
-                    _source_file_name(result),
-                    file_sha256,
-                    None,
-                ),
-            )
-            source_file_id = str(cur.fetchone()[0])
             for performance in result.performances:
                 cur.execute(upsert_sql, performance.to_event_row())
                 inserted_or_updated += cur.rowcount
@@ -356,9 +403,15 @@ def upsert_kopis_performances(
 
     return {
         "ok": True,
-        "source_file_id": source_file_id,
+        "source_file_id": receipt.source_file_id,
+        "replayed": receipt.replayed,
         "upserted_rows": inserted_or_updated,
         "performance_count": len(result.performances),
+        "total_count": result.total_count,
+        "collected_count": result.collected_count,
+        "partial_run": result.partial_run,
+        "rejected_row_count": result.rejected_row_count,
+        "rejection_reason": result.rejection_reason,
     }
 
 
@@ -418,13 +471,17 @@ def _validate_date_window(stdate: str, eddate: str) -> None:
 def _raise_for_error(root: ElementTree.Element) -> None:
     error_code = _find_text(root, "resultCode", "returnReasonCode", "code")
     if error_code and error_code not in {"00", "0000"}:
-        message = (
-            _find_text(root, "resultMsg", "returnAuthMsg", "message") or "KOPIS request failed."
+        # Typed, fixed-reason error; the raw upstream message is never echoed.
+        raise_for_official_result_code(
+            source="kopis",
+            result_code=error_code,
+            result_message=_find_text(root, "resultMsg", "returnAuthMsg", "message"),
         )
-        raise RuntimeError(f"KOPIS error {error_code}: {message}")
-    error_message = _find_text(root, "returnAuthMsg", "errMsg")
-    if error_message and "SERVICE_KEY" in error_message.upper():
-        raise RuntimeError(f"KOPIS error: {error_message}")
+    # KOPIS surfaces auth failures via returnAuthMsg without a resultCode; classify
+    # the category without echoing the (potentially key-bearing) message text.
+    auth_message = _find_text(root, "returnAuthMsg", "errMsg")
+    if auth_message and "SERVICE_KEY" in auth_message.upper():
+        raise OfficialSourceError(category="auth", source="kopis")
 
 
 def _dedupe_performances(performances: Iterable[KopisPerformance]) -> list[KopisPerformance]:

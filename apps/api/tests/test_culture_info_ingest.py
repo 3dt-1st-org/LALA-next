@@ -4,7 +4,10 @@ import json
 import sys
 from types import SimpleNamespace
 
+import pytest
+
 from apps.api.app.services import culture_info_ingest
+from apps.api.app.services.official_source_errors import OfficialSourceError
 from apps.api.app.tools import run_culture_info_ingest
 
 
@@ -99,6 +102,7 @@ def test_parse_culture_info_event_maps_fields_to_data_dictionary_names():
 
 def test_fetch_culture_info_events_uses_num_ofrows_param(monkeypatch):
     class Response:
+        status_code = 200
         text = """
         <response>
           <header><resultCode>00</resultCode><resultMsg>정상입니다.</resultMsg></header>
@@ -317,6 +321,7 @@ def test_apply_failure_records_redacted_job_run(monkeypatch, capsys):
 
 def test_upsert_culture_info_events_targets_source_files_and_events(monkeypatch):
     executed = []
+    fetchone_results: list = [None, ("source-file-id",)]  # dup-check miss, then INSERT RETURNING id
 
     class Cursor:
         def __enter__(self):
@@ -330,7 +335,7 @@ def test_upsert_culture_info_events_targets_source_files_and_events(monkeypatch)
             self.rowcount = 1
 
         def fetchone(self):
-            return ("source-file-id",)
+            return fetchone_results.pop(0) if fetchone_results else None
 
     class Connection:
         def __enter__(self):
@@ -383,6 +388,237 @@ def test_upsert_culture_info_events_targets_source_files_and_events(monkeypatch)
     )
 
     assert payload["upserted_rows"] == 1
-    assert "INSERT INTO ingest.source_files" in executed[1][0]
-    assert "INSERT INTO culture.events" in executed[2][0]
+    assert payload["source_file_id"] == "source-file-id"
+    assert payload["replayed"] is False
+    # Advisory lock, then receipt dup-check SELECT, source_files INSERT, event upsert.
+    assert "pg_advisory_xact_lock" in executed[1][0]
+    assert "SELECT id" in executed[2][0] and "ingest.source_files" in executed[2][0]
+    assert "INSERT INTO ingest.source_files" in executed[3][0]
+    assert "INSERT INTO culture.events" in executed[4][0]
     assert executed[-1] == ("commit", None)
+
+
+# ---------------------------------------------------------------------------
+# Reliability boundary tests: replay, partial-run, validation, bounded errors
+# ---------------------------------------------------------------------------
+
+
+def test_upsert_culture_info_events_upsert_runs_even_when_replayed(monkeypatch):
+    # F1: replayed is provenance metadata only -- it must never gate the actual,
+    # idempotent ON CONFLICT upsert. An existing receipt row must not stop a
+    # content-only upstream correction from being persisted.
+    executed = []
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def execute(self, sql, params=None):
+            executed.append((sql, params))
+            self.rowcount = 1
+
+        def fetchone(self):
+            return ("existing-source-id",)  # dup-check finds existing -> replay
+
+    class Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def cursor(self):
+            return Cursor()
+
+        def commit(self):
+            executed.append(("commit", None))
+
+    def connect(dsn, connect_timeout):
+        executed.append(("connect", {"dsn": dsn, "connect_timeout": connect_timeout}))
+        return Connection()
+
+    monkeypatch.setitem(sys.modules, "psycopg2", SimpleNamespace(connect=connect))
+    result = culture_info_ingest.CultureInfoFetchResult(
+        events=(
+            culture_info_ingest.CultureInfoEvent(
+                seq="1",
+                title_ko="행사",
+                event_type="공연",
+                venue_name_ko="장소",
+                area="경기도",
+                sigungu="수원시",
+                starts_on=None,
+                ends_on=None,
+                url=None,
+                thumbnail_url=None,
+                gps_x=None,
+                gps_y=None,
+            ),
+        ),
+        request_count=1,
+        raw_count=1,
+        total_count=1,
+        operation="area2",
+        sido="경기",
+        sidos=("경기",),
+        sigungu="수원시",
+    )
+
+    payload = culture_info_ingest.upsert_culture_info_events(
+        dsn="postgresql://redacted",
+        result=result,
+        connect_timeout=7,
+    )
+
+    assert payload["replayed"] is True
+    assert payload["upserted_rows"] == 1
+    # No NEW source_files INSERT (existing receipt reused)...
+    assert not any("INSERT INTO ingest.source_files" in sql for sql, _ in executed)
+    # ...but the event upsert always runs regardless of replay.
+    assert any("INSERT INTO culture.events" in sql for sql, _ in executed)
+
+
+def test_parse_culture_info_event_counts_missing_required_field():
+    counter = culture_info_ingest.OfficialRejectionCounter()
+    xml = "<root><items><item><title>제목</title></item></items></root>"
+    events, _ = culture_info_ingest.parse_culture_info_events(xml, counter=counter)
+    assert events == []
+    assert counter.counts().get("missing_required_field") == 1
+
+
+def test_parse_culture_info_event_nulls_out_of_range_coordinates():
+    counter = culture_info_ingest.OfficialRejectionCounter()
+    xml = (
+        "<root><items><item>"
+        "<seq>1</seq><title>행사</title>"
+        "<gpsX>999.0</gpsX><gpsY>37.0</gpsY>"
+        "</item></items></root>"
+    )
+    events, _ = culture_info_ingest.parse_culture_info_events(xml, counter=counter)
+    # Row is retained -- event coords are optional, so out-of-range coords are
+    # sanitized to None, not counted as a rejection (no "rows skipped" lie).
+    assert len(events) == 1
+    assert events[0].gps_x is None and events[0].gps_y is None
+    assert counter.total == 0
+
+
+def test_parse_culture_info_event_drops_non_allowlisted_thumbnail_host():
+    xml = (
+        "<root><items><item>"
+        "<seq>1</seq><title>행사</title>"
+        "<thumbnail>https://evil.example.com/x.png</thumbnail>"
+        "</item></items></root>"
+    )
+    events, _ = culture_info_ingest.parse_culture_info_events(xml)
+    assert len(events) == 1
+    assert events[0].thumbnail_url is None
+
+
+def test_culture_info_raises_bounded_error_without_raw_upstream_text():
+    raw_message = "ServiceKey echo-do-not-leak internal detail"
+    xml = (
+        f"<root><resultCode>30</resultCode><resultMsg>{raw_message}</resultMsg>"
+        "<totalCount>0</totalCount></root>"
+    )
+    with pytest.raises(OfficialSourceError) as info:
+        culture_info_ingest.parse_culture_info_events(xml)
+    message = str(info.value)
+    assert "echo-do-not-leak" not in message
+    assert "ServiceKey" not in message
+    assert info.value.category == "auth"
+
+
+def test_fetch_culture_info_events_flags_partial_run_when_collected_below_total(monkeypatch):
+    class Response:
+        status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        @property
+        def text(self):
+            return (
+                "<root><resultCode>0000</resultCode><totalCount>10</totalCount>"
+                "<items>"
+                "<item><seq>1</seq><title>행사1</title></item>"
+                "<item><seq>2</seq><title>행사2</title></item>"
+                "</items></root>"
+            )
+
+    monkeypatch.setitem(sys.modules, "requests", SimpleNamespace(get=lambda *a, **k: Response()))
+    result = culture_info_ingest.fetch_culture_info_events(
+        service_key="secret-key",
+        rows=2,
+        page_size=5,
+    )
+    assert result.total_count == 10
+    assert result.collected_count == 2
+    assert result.partial_run is True
+
+
+def _culture_event(seq="1", venue_name_ko="장소"):
+    return culture_info_ingest.CultureInfoEvent(
+        seq=seq,
+        title_ko="행사",
+        event_type="공연",
+        venue_name_ko=venue_name_ko,
+        area="경기도",
+        sigungu="수원시",
+        starts_on=None,
+        ends_on=None,
+        url=None,
+        thumbnail_url=None,
+        gps_x=None,
+        gps_y=None,
+    )
+
+
+def test_events_fingerprint_reflects_row_content_not_only_counters():
+    # F1: a corrected venue (row content) with an identical event count must
+    # change the fingerprint. The old counters-only hash would have been
+    # identical here since raw_count/total_count are unchanged.
+    original = (_culture_event(venue_name_ko="장소"),)
+    corrected = (_culture_event(venue_name_ko="정정된 장소"),)
+
+    assert culture_info_ingest._events_fingerprint(
+        original
+    ) != culture_info_ingest._events_fingerprint(corrected)
+
+
+def test_fetch_culture_info_events_raises_official_error_on_bad_http_status(monkeypatch):
+    # F2: an unsuccessful HTTP status must raise the typed, bounded
+    # OfficialSourceError (via raise_for_official_http_status) instead of
+    # requests' HTTPError, which would embed the full request URL (including
+    # serviceKey=...) in its exception message.
+    class Response:
+        status_code = 500
+        text = ""
+
+        def raise_for_status(self):
+            raise AssertionError(
+                "requests.raise_for_status() must not be called (F2) -- "
+                "raise_for_official_http_status must be used instead"
+            )
+
+    monkeypatch.setitem(sys.modules, "requests", SimpleNamespace(get=lambda *a, **k: Response()))
+
+    with pytest.raises(OfficialSourceError) as info:
+        culture_info_ingest.fetch_culture_info_events(
+            service_key="my-secret-service-key",  # pragma: allowlist secret
+            rows=1,
+            page_size=1,
+        )
+    message = str(info.value)
+    assert "my-secret-service-key" not in message
+    assert "serviceKey" not in message
+
+
+def test_fetch_culture_info_events_raises_on_explicit_zero_result_code():
+    # F4: resultCode="0" is a real failure for this source (only "00"/"0000"
+    # mean success) -- it must raise, not be silently swallowed.
+    xml = "<root><resultCode>0</resultCode><resultMsg>no detail</resultMsg></root>"
+    with pytest.raises(OfficialSourceError):
+        culture_info_ingest.parse_culture_info_events(xml)

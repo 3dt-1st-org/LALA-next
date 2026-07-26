@@ -76,7 +76,6 @@ def main(argv: list[str] | None = None) -> int:
         signgucodes = region_catalog.kopis_signgucodes(province_names=(args.signgucode,)) or (
             args.signgucode.strip(),
         )
-    signgucodes[0] if len(signgucodes) == 1 else "multi"
     signgucodesub = args.signgucodesub.strip() or None
     prfstate = args.prfstate.strip() or None
     if not args.apply and not args.preview:

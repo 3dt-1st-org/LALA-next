@@ -4,7 +4,10 @@ import json
 import sys
 from types import SimpleNamespace
 
+import pytest
+
 from apps.api.app.services import tour_api_ingest
+from apps.api.app.services.official_source_errors import OfficialSourceError
 from apps.api.app.tools import run_tour_api_ingest
 
 
@@ -84,6 +87,8 @@ def test_infer_region_name_accepts_busan_province_alias():
 
 def test_fetch_result_dedupes_content_ids(monkeypatch):
     class Response:
+        status_code = 200
+
         def __init__(self, payload):
             self._payload = payload
 
@@ -131,7 +136,7 @@ def test_fetch_result_dedupes_content_ids(monkeypatch):
                 "items": {
                     "item": {
                         "contentid": "1",
-                        "originimgurl": "https://example.invalid/detail.jpg",
+                        "originimgurl": "https://tong.visitkorea.or.kr/cms/resource/detail.jpg",
                     }
                 }
             },
@@ -165,7 +170,7 @@ def test_fetch_result_dedupes_content_ids(monkeypatch):
     assert result.image_error_count == 0
     assert result.raw_count == 2
     assert len(result.places) == 1
-    assert result.places[0].first_image == "https://example.invalid/detail.jpg"
+    assert result.places[0].first_image == "https://tong.visitkorea.or.kr/cms/resource/detail.jpg"
 
 
 def test_fetch_result_can_sweep_multiple_area_codes(monkeypatch):
@@ -219,6 +224,8 @@ def test_fetch_result_can_sweep_multiple_area_codes(monkeypatch):
 
 def test_fetch_result_skips_detail_image_when_firstimage_exists(monkeypatch):
     class Response:
+        status_code = 200
+
         def raise_for_status(self):
             return None
 
@@ -272,6 +279,8 @@ def test_fetch_result_skips_detail_image_when_firstimage_exists(monkeypatch):
 
 def test_fetch_result_can_skip_missing_detail_image_lookup(monkeypatch):
     class Response:
+        status_code = 200
+
         def raise_for_status(self):
             return None
 
@@ -322,6 +331,8 @@ def test_fetch_result_can_skip_missing_detail_image_lookup(monkeypatch):
 
 def test_fetch_result_keeps_place_when_detail_image_lookup_fails(monkeypatch):
     class Response:
+        status_code = 200
+
         def raise_for_status(self):
             return None
 
@@ -403,8 +414,38 @@ def test_preview_redacts_service_key_on_execution_error(monkeypatch, capsys):
     assert "public-data-secret" not in output
 
 
+def test_apply_stdout_error_never_leaks_service_key_on_bad_http_status(monkeypatch, capsys):
+    # F2 end-to-end: an OfficialSourceError from a bad HTTP status (as raised
+    # by raise_for_official_http_status) must never surface a raw upstream URL
+    # or service key in the CLI's error payload -- the same string is also
+    # what run_tour_api_ingest.py records to ops.job_runs.error_message.
+    monkeypatch.setenv("PUBLIC_DATA_SERVICE_KEY", "test-service-key")
+    monkeypatch.setenv("DB_DSN", "postgresql://redacted")
+    monkeypatch.setenv(run_tour_api_ingest.ALLOW_ENV, "1")
+
+    def fail(**kwargs):
+        from apps.api.app.services.official_source_errors import (
+            raise_for_official_http_status,
+        )
+
+        raise_for_official_http_status(source="tour_api", status_code=500)
+
+    monkeypatch.setattr(run_tour_api_ingest, "fetch_tour_api_places", fail)
+
+    exit_code = run_tour_api_ingest.main(
+        ["--apply", "--confirm", run_tour_api_ingest.CONFIRM_TEXT, "--json"]
+    )
+
+    output = capsys.readouterr().out
+    assert exit_code == 2
+    assert "test-service-key" not in output
+    assert "serviceKey" not in output
+
+
 def test_upsert_tour_api_places_targets_source_files_and_places(monkeypatch):
     executed = []
+    # Receipt duplicate-check misses (None), then the INSERT ... RETURNING id row.
+    fetchone_results: list = [None, ("source-file-id",)]
 
     class Cursor:
         def __enter__(self):
@@ -418,7 +459,7 @@ def test_upsert_tour_api_places_targets_source_files_and_places(monkeypatch):
             self.rowcount = 1
 
         def fetchone(self):
-            return ("source-file-id",)
+            return fetchone_results.pop(0) if fetchone_results else None
 
     class Connection:
         def __enter__(self):
@@ -471,7 +512,407 @@ def test_upsert_tour_api_places_targets_source_files_and_places(monkeypatch):
     )
 
     assert payload["upserted_rows"] == 1
-    assert "INSERT INTO ingest.source_files" in executed[1][0]
-    assert "INSERT INTO travel.places" in executed[2][0]
-    assert "COALESCE(EXCLUDED.image_url, travel.places.image_url)" in executed[2][0]
+    assert payload["source_file_id"] == "source-file-id"
+    assert payload["replayed"] is False
+    # Advisory lock, then receipt duplicate-check SELECT, source_files INSERT, upsert.
+    assert "pg_advisory_xact_lock" in executed[1][0]
+    assert "SELECT id" in executed[2][0]
+    assert "ingest.source_files" in executed[2][0]
+    assert "INSERT INTO ingest.source_files" in executed[3][0]
+    assert "INSERT INTO travel.places" in executed[4][0]
+    assert "COALESCE(EXCLUDED.image_url, travel.places.image_url)" in executed[4][0]
     assert executed[-1] == ("commit", None)
+
+
+# ---------------------------------------------------------------------------
+# Reliability boundary tests: replay, partial-run, validation, bounded errors
+# ---------------------------------------------------------------------------
+
+
+def _place_item(**overrides):
+    base = {
+        "contentid": "1",
+        "contenttypeid": "12",
+        "title": "장소",
+        "addr1": "경기도 수원시 팔달구",
+        "areacode": "31",
+        "sigungucode": "13",
+        "mapx": "127.0",
+        "mapy": "37.0",
+        "firstimage": "http://tong.visitkorea.or.kr/cms/resource/image.jpg",
+    }
+    base.update(overrides)
+    return base
+
+
+def test_upsert_tour_api_places_upsert_runs_even_when_replayed(monkeypatch):
+    # F1: replayed is provenance metadata only -- it must never gate the
+    # actual, idempotent ON CONFLICT upsert. An existing receipt row must not
+    # stop a content-only upstream correction (e.g. a corrected address) from
+    # being persisted.
+    executed = []
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def execute(self, sql, params=None):
+            executed.append((sql, params))
+            self.rowcount = 1
+
+        def fetchone(self):
+            # Duplicate-check finds an existing receipt -> this is a replay.
+            return ("existing-source-id",)
+
+    class Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def cursor(self):
+            return Cursor()
+
+        def commit(self):
+            executed.append(("commit", None))
+
+    def connect(dsn, connect_timeout):
+        executed.append(("connect", {"dsn": dsn, "connect_timeout": connect_timeout}))
+        return Connection()
+
+    monkeypatch.setitem(sys.modules, "psycopg2", SimpleNamespace(connect=connect))
+    result = tour_api_ingest.TourApiFetchResult(
+        places=(
+            tour_api_ingest.TourApiPlace(
+                content_id="1",
+                content_type_id="12",
+                title="장소",
+                category="attraction",
+                addr1="경기도 수원시 팔달구",
+                addr2=None,
+                area_code="31",
+                sigungu_code="13",
+                lat=37.0,
+                lng=127.0,
+                first_image=None,
+                modified_time=None,
+            ),
+        ),
+        request_count=1,
+        image_request_count=0,
+        image_error_count=0,
+        raw_count=1,
+        area_code="31",
+        area_codes=("31",),
+        content_type_ids=("12",),
+    )
+
+    payload = tour_api_ingest.upsert_tour_api_places(
+        dsn="postgresql://redacted",
+        result=result,
+        connect_timeout=7,
+    )
+
+    assert payload["replayed"] is True
+    assert payload["source_file_id"] == "existing-source-id"
+    assert payload["upserted_rows"] == 1
+    # No NEW source_files INSERT (existing receipt reused)...
+    assert not any("INSERT INTO ingest.source_files" in sql for sql, _ in executed)
+    # ...but the place upsert always runs regardless of replay.
+    assert any("INSERT INTO travel.places" in sql for sql, _ in executed)
+    assert executed[-1] == ("commit", None)
+
+
+def test_parse_tour_api_place_rejects_out_of_range_coordinate():
+    counter = tour_api_ingest.OfficialRejectionCounter()
+    place = tour_api_ingest.parse_tour_api_place(
+        _place_item(mapy="999.0", mapx="127.0"),  # latitude out of global bounds
+        counter=counter,
+    )
+    assert place is None
+    assert counter.counts().get("invalid_coordinate") == 1
+
+
+def test_parse_tour_api_place_counts_missing_required_field():
+    counter = tour_api_ingest.OfficialRejectionCounter()
+    place = tour_api_ingest.parse_tour_api_place(
+        _place_item(contentid=""),  # missing required identity
+        counter=counter,
+    )
+    assert place is None
+    assert counter.counts().get("missing_required_field") == 1
+
+
+def test_parse_tour_api_place_drops_non_allowlisted_image_host():
+    place = tour_api_ingest.parse_tour_api_place(
+        _place_item(firstimage="https://evil.example.com/exfil.png")
+    )
+    # The place is still valid; only the non-official image URL is dropped.
+    assert place is not None
+    assert place.first_image is None
+
+
+def test_parse_tour_api_restaurant_preserves_category_without_cuisine_filter():
+    # contenttypeid 39 -> restaurant. No new food/cuisine sub-filter is introduced;
+    # the existing category/evidence policy is preserved (scope item 9 guard).
+    place = tour_api_ingest.parse_tour_api_place(_place_item(contenttypeid="39"))
+    assert place is not None
+    assert place.category == "restaurant"
+
+
+def test_extract_items_raises_bounded_error_without_raw_upstream_text():
+    raw_message = "ServiceKey echo-do-not-leak plus internal upstream detail"
+    payload = {
+        "response": {
+            "header": {"resultCode": "030", "resultMsg": raw_message},
+            "body": {},
+        }
+    }
+    with pytest.raises(OfficialSourceError) as info:
+        tour_api_ingest._extract_items(payload)
+    message = str(info.value)
+    assert "echo-do-not-leak" not in message
+    assert "ServiceKey" not in message
+    assert info.value.category == "auth"
+
+
+def test_fetch_tour_api_places_flags_partial_run_when_collected_below_total(monkeypatch):
+    class Response:
+        status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "response": {
+                    "header": {"resultCode": "0000", "resultMsg": "OK"},
+                    "body": {
+                        "totalCount": 10,
+                        "items": {
+                            "item": [
+                                _place_item(contentid="1"),
+                                _place_item(contentid="2"),
+                            ]
+                        },
+                    },
+                }
+            }
+
+    monkeypatch.setitem(sys.modules, "requests", SimpleNamespace(get=lambda *a, **k: Response()))
+
+    result = tour_api_ingest.fetch_tour_api_places(
+        service_key="secret-key",
+        content_type_ids=("12",),
+        rows=2,
+        page_size=5,
+        fetch_missing_images=False,
+    )
+
+    assert result.total_count == 10
+    assert result.collected_count == 2
+    assert result.partial_run is True
+    assert len(result.places) == 2
+
+
+def _tour_list_response(items, total_count):
+    return {
+        "response": {
+            "header": {"resultCode": "0000", "resultMsg": "OK"},
+            "body": {"totalCount": total_count, "items": {"item": items}},
+        }
+    }
+
+
+class _TourResponse:
+    status_code = 200
+
+    def __init__(self, payload):
+        self._payload = payload
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return self._payload
+
+
+def _tour_item(content_id, content_type_id="12"):
+    return {
+        "contentid": str(content_id),
+        "contenttypeid": content_type_id,
+        "title": f"장소-{content_id}",
+        "addr1": "경기도 수원시 팔달구",
+        "areacode": "31",
+        "sigungucode": "13",
+        "mapx": "127.0",
+        "mapy": "37.0",
+    }
+
+
+def test_complete_multi_page_pull_is_not_partial(monkeypatch):
+    # totalCount repeats unchanged on every page; a full 2-page pull must not be
+    # double-counted as partial (regression for per-page total summing).
+    page1 = _tour_list_response([_tour_item(1), _tour_item(2)], total_count=4)
+    page2 = _tour_list_response([_tour_item(3), _tour_item(4)], total_count=4)
+
+    def get(url, params, timeout):
+        return _TourResponse(page1 if int(params["pageNo"]) == 1 else page2)
+
+    monkeypatch.setitem(sys.modules, "requests", SimpleNamespace(get=get))
+
+    result = tour_api_ingest.fetch_tour_api_places(
+        service_key="secret-key",
+        content_type_ids=("12",),
+        rows=4,
+        page_size=2,
+        fetch_missing_images=False,
+    )
+
+    assert result.raw_count == 4
+    assert result.total_count == 4
+    assert result.partial_run is False
+
+
+def test_truncated_pull_is_partial(monkeypatch):
+    # Upstream reports totalCount=10 but returns 5 then 3 (genuinely truncated).
+    page1 = _tour_list_response([_tour_item(i) for i in range(1, 6)], total_count=10)
+    page2 = _tour_list_response([_tour_item(i) for i in range(6, 9)], total_count=10)
+
+    def get(url, params, timeout):
+        return _TourResponse(page1 if int(params["pageNo"]) == 1 else page2)
+
+    monkeypatch.setitem(sys.modules, "requests", SimpleNamespace(get=get))
+
+    result = tour_api_ingest.fetch_tour_api_places(
+        service_key="secret-key",
+        content_type_ids=("12",),
+        rows=10,
+        page_size=5,
+        fetch_missing_images=False,
+    )
+
+    assert result.raw_count == 8
+    assert result.total_count == 10
+    assert result.partial_run is True
+
+
+def test_multi_type_total_sums_per_type_not_per_page(monkeypatch):
+    # Two content types, each a full 2-page pull with totalCount=4 repeated per
+    # page. Per-page summing would over-count (4 pages * 4 = 16 -> false partial);
+    # per-type summing gives 4 + 4 = 8 == collected.
+    def pages_for(content_type_id):
+        items_p1 = [_tour_item(f"{content_type_id}-{n}", content_type_id) for n in (1, 2)]
+        items_p2 = [_tour_item(f"{content_type_id}-{n}", content_type_id) for n in (3, 4)]
+        return (
+            _tour_list_response(items_p1, total_count=4),
+            _tour_list_response(items_p2, total_count=4),
+        )
+
+    pages_12 = pages_for("12")
+    pages_14 = pages_for("14")
+
+    def get(url, params, timeout):
+        ctype = params["contentTypeId"]
+        page_idx = int(params["pageNo"]) - 1
+        pair = pages_12 if ctype == "12" else pages_14
+        return _TourResponse(pair[page_idx])
+
+    monkeypatch.setitem(sys.modules, "requests", SimpleNamespace(get=get))
+
+    result = tour_api_ingest.fetch_tour_api_places(
+        service_key="secret-key",
+        content_type_ids=("12", "14"),
+        rows=8,
+        page_size=2,
+        fetch_missing_images=False,
+    )
+
+    assert result.raw_count == 8
+    assert result.total_count == 8
+    assert result.partial_run is False
+
+
+def test_places_fingerprint_reflects_row_content_not_only_counters():
+    # F1: a corrected address (row content) with an identical place count must
+    # change the fingerprint. The old counters-only hash (with source_updated_at
+    # unchanged) would have been identical here.
+    original_place = tour_api_ingest.parse_tour_api_place(_place_item(contentid="1"))
+    corrected_place = tour_api_ingest.parse_tour_api_place(
+        _place_item(contentid="1", addr1="경기도 수원시 영통구 정정된주소")
+    )
+
+    assert tour_api_ingest._places_fingerprint(
+        (original_place,)
+    ) != tour_api_ingest._places_fingerprint((corrected_place,))
+
+
+def test_fetch_tour_api_places_raises_official_error_on_bad_http_status(monkeypatch):
+    # F2: an unsuccessful HTTP status on the area-list call must raise the
+    # typed, bounded OfficialSourceError (via raise_for_official_http_status)
+    # instead of requests' HTTPError, which would embed the full request URL
+    # (including serviceKey=...) in its exception message.
+    class Response:
+        status_code = 500
+
+        def raise_for_status(self):
+            raise AssertionError(
+                "requests.raise_for_status() must not be called (F2) -- "
+                "raise_for_official_http_status must be used instead"
+            )
+
+        def json(self):
+            return {}
+
+    monkeypatch.setitem(sys.modules, "requests", SimpleNamespace(get=lambda *a, **k: Response()))
+
+    with pytest.raises(OfficialSourceError) as info:
+        tour_api_ingest.fetch_tour_api_places(
+            service_key="my-secret-service-key",  # pragma: allowlist secret
+            content_type_ids=("12",),
+            rows=1,
+            page_size=1,
+        )
+    message = str(info.value)
+    assert "my-secret-service-key" not in message
+    assert "serviceKey" not in message
+
+
+def test_fetch_detail_image_raises_official_error_on_bad_http_status():
+    # F2: same wiring for the detailImage2 call site (tour_api_ingest.py:387).
+    class Response:
+        status_code = 500
+
+        def raise_for_status(self):
+            raise AssertionError(
+                "requests.raise_for_status() must not be called (F2) -- "
+                "raise_for_official_http_status must be used instead"
+            )
+
+        def json(self):
+            return {}
+
+    class _RequestsModule:
+        @staticmethod
+        def get(*args, **kwargs):
+            return Response()
+
+    with pytest.raises(OfficialSourceError):
+        tour_api_ingest._fetch_detail_image_url(
+            requests_module=_RequestsModule(),
+            service_key="my-secret-service-key",  # pragma: allowlist secret
+            content_id="1",
+            timeout=1,
+        )
+
+
+def test_extract_items_raises_on_explicit_zero_result_code():
+    # F4: resultCode="0" is a real failure for this source (only "0000" means
+    # success) -- it must raise, not be silently swallowed.
+    payload = {"response": {"header": {"resultCode": "0", "resultMsg": "no detail"}, "body": {}}}
+    with pytest.raises(OfficialSourceError):
+        tour_api_ingest._extract_items(payload)

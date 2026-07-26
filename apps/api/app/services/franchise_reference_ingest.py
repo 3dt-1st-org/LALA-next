@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import urllib.parse
@@ -8,6 +9,11 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from apps.api.app.services.franchise_identity import normalize_business_name
+from apps.api.app.services.official_source_errors import raise_for_official_result_code
+from apps.api.app.services.official_source_receipts import (
+    reconcile_partial_run,
+    record_official_source_receipt,
+)
 
 DEFAULT_SOURCE_NAME = "fair_trade_commission"
 DEFAULT_DATASET_NAME = "공정거래위원회_가맹정보_브랜드별 가맹점 현황 제공 서비스"
@@ -43,6 +49,11 @@ class FranchiseReferenceIngestResult:
     parsed_row_count: int
     skipped_row_count: int
     brands: tuple[FranchiseBrandReference, ...]
+    partial_run: bool = False
+
+    @property
+    def collected_count(self) -> int:
+        return self.parsed_row_count
 
     def to_public_dict(self) -> dict[str, Any]:
         return {
@@ -52,8 +63,10 @@ class FranchiseReferenceIngestResult:
             "year": self.year,
             "requested_rows": self.requested_rows,
             "total_count": self.total_count,
+            "collected_count": self.collected_count,
             "parsed_row_count": self.parsed_row_count,
             "skipped_row_count": self.skipped_row_count,
+            "partial_run": self.partial_run,
             "preview": [item.to_public_dict() for item in self.brands[:5]],
         }
 
@@ -117,6 +130,7 @@ def fetch_franchise_brand_references(
     parsed = list(parsed_by_id.values())
     target_rows = total_count if rows == 0 else min(rows, total_count or rows)
     parsed = parsed[:target_rows]
+    partial = reconcile_partial_run(total=total_count or None, collected=len(parsed))
     return FranchiseReferenceIngestResult(
         source_name=source_name,
         dataset_name=dataset_name,
@@ -127,6 +141,7 @@ def fetch_franchise_brand_references(
         parsed_row_count=len(parsed),
         skipped_row_count=skipped,
         brands=tuple(parsed),
+        partial_run=partial.partial_run,
     )
 
 
@@ -187,6 +202,23 @@ def parse_brand_stats_items(
     return records, skipped
 
 
+def _brands_fingerprint(brands: tuple[FranchiseBrandReference, ...]) -> str:
+    """Content fingerprint over the actual parsed rows (sorted, deterministic).
+
+    Unlike hashing ``to_public_dict()`` counters/params, this changes whenever
+    row CONTENT changes (e.g. a corrected franchise store count) even when
+    counters (``parsed_row_count``, ``total_count``, ...) stay identical, so an
+    upstream correction is never silently treated as an unchanged replay (F1).
+    """
+    sorted_rows = sorted(
+        (item.to_public_dict() for item in brands),
+        key=lambda row: row["source_record_id"],
+    )
+    return hashlib.sha256(
+        json.dumps(sorted_rows, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+
+
 def insert_franchise_brand_references(
     *,
     dsn: str,
@@ -196,10 +228,13 @@ def insert_franchise_brand_references(
     if not dsn:
         raise ValueError("DB_DSN is required.")
     if not result.brands:
-        return {"inserted_or_updated_rows": 0}
+        return {"inserted_or_updated_rows": 0, "replayed": False}
 
     import psycopg2
     from psycopg2.extras import execute_values
+
+    file_sha256 = _brands_fingerprint(result.brands)
+    file_name = f"franchise_reference_{result.source_name}_{result.year}.json"
 
     sql = """
         INSERT INTO economy.franchise_brands (
@@ -247,10 +282,29 @@ def insert_franchise_brand_references(
         for item in result.brands
     ]
     with psycopg2.connect(dsn, connect_timeout=connect_timeout) as conn:
+        receipt = record_official_source_receipt(
+            conn=conn,
+            source_name=result.source_name,
+            dataset_name=result.dataset_name,
+            file_name=file_name,
+            file_sha256=file_sha256,
+        )
+        # Decision-input provenance only: chain_scale_score is a deterministic
+        # transform of the upstream store count; main_product stays None (never
+        # invented). The upsert is idempotent (ON CONFLICT) and always runs --
+        # `replayed` is receipt/provenance metadata only, never a write gate,
+        # so an upstream content-only correction is never silently dropped (F1).
         with conn.cursor() as cur:
             execute_values(cur, sql, values, page_size=500)
         conn.commit()
-    return {"inserted_or_updated_rows": len(values)}
+    return {
+        "inserted_or_updated_rows": len(values),
+        "replayed": receipt.replayed,
+        "source_file_id": receipt.source_file_id,
+        "total_count": result.total_count,
+        "collected_count": result.collected_count,
+        "partial_run": result.partial_run,
+    }
 
 
 def _fetch_page(
@@ -274,9 +328,14 @@ def _fetch_page(
     with urllib.request.urlopen(f"{api_url}?{query}", timeout=timeout) as response:
         raw = response.read().decode("utf-8", errors="replace")
     payload = json.loads(raw)
-    if str(payload.get("resultCode")) != "00":
-        message = str(payload.get("resultMsg") or "franchise reference API error")
-        raise ValueError(message)
+    result_code = str(payload.get("resultCode") or "")
+    if result_code != "00":
+        # Typed, fixed-reason error; the raw upstream resultMsg is never echoed.
+        raise_for_official_result_code(
+            source="fair_trade_commission",
+            result_code=result_code or "unknown",
+            result_message=payload.get("resultMsg"),
+        )
     return payload
 
 
