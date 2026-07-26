@@ -46,5 +46,7 @@ worktree and its user-owned dirty files are preserved exactly.
 - Local verification: API `1043 passed, 1 warning`; W0-c targeted `41 passed,
   1 warning`; OpenAPI compatibility + safety `29 passed, 1 warning`; ruff,
   format, pre-commit, and diff check passed.
+- Draft PR CI run `30207498540` is green: API job
+  `89808004443`, Unix job `89808004423`, and Flutter job `89808004436`.
 - Review/CI and merge remain external gates; no live runtime acceptance is
   claimed for this configuration-only slice.
