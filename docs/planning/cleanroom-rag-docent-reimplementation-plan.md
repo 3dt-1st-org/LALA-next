@@ -229,13 +229,14 @@ A new **model-role router** maps logical roles → concrete model ids via config
 
 | Role | Model (target) | Used for | Why this tier |
 | --- | --- | --- | --- |
-| `review_extract` | `gpt-5.4-nano` | high-volume review extraction, normalization, ad classification | high volume, low marginal value per call → cheapest tier |
-| `recheck_low_conf` | `gpt-5.4-mini` | re-extract/re-classify when nano confidence < threshold | nuance where nano is uncertain |
-| `docent_generate` | `gpt-5.4-mini` | all docent script generation (script + reason) | quality/persona + grounding faithfulness |
+| `review_bulk` | `gpt-5.4-nano` | high-volume review extraction, normalization, ad classification | high volume, low marginal value per call → cheapest tier |
+| `review_recheck` | `gpt-5.4-mini` | re-extract/re-classify when nano confidence < threshold | nuance where nano is uncertain |
+| `docent` | `gpt-5.4-mini` | all docent script generation (script + reason) | quality/persona + grounding faithfulness |
 | `docent_qa` | `gpt-5.4-mini` | LLM-judge QA (offline) | judge must outrank the generator tier |
-| `embed` | `text-embedding-3-small` (1536-d) | chunk + query embeddings | matches existing `vector(1536)` schema |
+| `place_enrichment` | `gpt-5.4-mini` | place English/indoor enrichment | quality for structured place fields |
+| `embedding` | `text-embedding-3-small` (1536-d) | chunk + query embeddings | matches existing `vector(1536)` schema |
 
-**Contract (TARGET):** `config.py` gains `model_role_overrides: dict[role,str]` (env: `LALA_MODEL_ROLE_REVIEW_EXTRACT`, etc.). A `model_client.resolve(role)` returns a `(provider, model_id, client)` triple. The current `selected_docent_model`/`selected_review_batch_model` become thin callers of `resolve("docent_generate")` / `resolve("review_extract")`. **No prompts are copied** — only the routing changes; `ai_service`'s clean-room persona copy is reused.
+**Contract (W0-b):** `config.py` provides `model_role_overrides: dict[role,str]` from non-secret env overrides `LALA_MODEL_ROLE_<ROLE>`. A pure `model_client.resolve(role)` returns standard-OpenAI `(provider, model_id, client metadata)` without importing the SDK or creating a client. Existing `OPENAI_*_MODEL` settings remain compatible, and the current selectors are thin callers of `resolve("docent")` / `resolve("review_bulk")`. **No prompts are copied** — only the routing changes; `ai_service`'s clean-room persona copy is reused.
 
 **Clean-room note:** `gpt-5.4-nano`/`gpt-5.4-mini`/`text-embedding-3-small` are public model names (interface facts). Deployment ids/keys remain role-based placeholders.
 
@@ -289,7 +290,7 @@ Every chunk must have a usable `body_en` so EN mode is fully grounded (not KR-on
 
 1. **Real embeddings as serving default.** `embedding_method` for serving = `openai` (config-gated by `enable_live_ai`); `local-hash` remains a **dev/offline fixture** mode only (so tests run without keys). The live path must not silently fall back to hash embeddings when AI is enabled — a startup check asserts the configured method is semantic.
 2. **Version column (migration, additive):** add `embedding_generation int NOT NULL DEFAULT 0` to `rag.knowledge_chunks`, and a config `rag_embedding_generation` (bumped on model/method/dim change). A chunk is "stale" when `embedding_generation < config` **or** `content_sha256` changed since `last_embedded_at`.
-3. **Reindex worker (portable contract §4.3):** selects stale chunks in batches, re-embeds with `build_embedding(method=resolve("embed"))`, upserts via the existing `ON CONFLICT (source_type, source_id) DO UPDATE` (idempotent). Records `ops.job_runs`. **Bounded cost** via batch size + per-run chunk cap; partial progress is resumable (stale predicate is re-evaluated each run).
+3. **Reindex worker (portable contract §4.3):** selects stale chunks in batches, re-embeds with `build_embedding(method=resolve("embedding"))`, upserts via the existing `ON CONFLICT (source_type, source_id) DO UPDATE` (idempotent). Records `ops.job_runs`. **Bounded cost** via batch size + per-run chunk cap; partial progress is resumable (stale predicate is re-evaluated each run).
 4. **Backfill plan:** one-time backfill to generation 1 once real embeddings are enabled; the worker's stale predicate makes this just "run until zero stale."
 5. **ivfflat tuning (TARGET, verify):** `lists=32` is fine for the current scale; add a documented threshold (e.g. >50k rows → retune `lists` / consider HNSW). No index change ships without an `EXPLAIN`/recall check on the eval set (§12).
 
@@ -297,8 +298,8 @@ Every chunk must have a usable `body_en` so EN mode is fully grounded (not KR-on
 
 Two-tier, replacing the current single-deployment path in `review_attribute_batch.py`:
 
-1. **Extract + normalize (nano, `resolve("review_extract")`):** produce `ReviewAttributeEnrichment` (sentiment band, attribute scores, evidence terms, summary line) — same output schema (`schema_version` bump to `review-attributes-v2`), different model tier.
-2. **Low-confidence recheck (mini, `resolve("recheck_low_conf")`):** when nano `confidence < threshold` (config), re-run extraction with mini; keep whichever result has higher self-reported confidence. Deterministic fallback `build_deterministic_enrichments` remains the floor.
+1. **Extract + normalize (nano, `resolve("review_bulk")`):** produce `ReviewAttributeEnrichment` (sentiment band, attribute scores, evidence terms, summary line) — same output schema (`schema_version` bump to `review-attributes-v2`), different model tier.
+2. **Low-confidence recheck (mini, `resolve("review_recheck")`):** when nano `confidence < threshold` (config), re-run extraction with mini; keep whichever result has higher self-reported confidence. Deterministic fallback `build_deterministic_enrichments` remains the floor.
 3. **Ad classification:** keep the keyword-marker method (`AD_MARKERS`) as the cheap first pass; **add** a nano model pass that classifies ambiguous posts as `ad|organic|uncertain` with confidence; `uncertain` → mini recheck. Output stays `is_ad`/`retained`.
 4. **Idempotency:** unchanged `UPDATE WHERE id` + `content_sha256` of the input post determines recompute; a re-run only touches changed/low-confidence rows.
 

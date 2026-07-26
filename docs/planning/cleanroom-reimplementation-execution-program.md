@@ -332,7 +332,7 @@ possible). All migrations are listed in §3.2.
 | Slice | Scope (smallest mergeable) | Tests | Live-data acceptance | Rollback / flag | Risk / dependency |
 | --- | --- | --- | --- | --- | --- |
 | **W0-a Migration-runner contract** | Document/lock the canonical ordering (§3.2); add a CI assertion that `canonical_sql.py` loads `000…066` and `scan_sql_safety` passes on every PR. No new table. | `scan_sql_safety` runs in CI; ordering test green. | N/A (no data). | None (governance only). | Low. Blocks W1–W5 from shipping migrations. |
-| **W0-b Model-role router** | `config.py` `model_role_overrides` (env `LALA_MODEL_ROLE_*`) + `model_client.resolve(role)`; existing `selected_docent_model`/`selected_review_batch_model` become thin callers. **No prompt copy.** | Router resolves each role to a `(provider, model_id, client)` triple; default = current behavior. | `LALA_ENABLE_LIVE_AI=false` keeps offline; resolve() works without keys. | Flag off → current single-deployment path. | Medium. Touched by W2/W3/W4; must land first. |
+| **W0-b Model-role router** | `config.py` `model_role_overrides` (env `LALA_MODEL_ROLE_<ROLE>`) + pure `model_client.resolve(role)` for `review_bulk`, `review_recheck`, `docent`, `docent_qa`, `place_enrichment`, and `embedding`; existing selectors become thin callers. **No prompt copy or SDK client creation during resolve.** | Router resolves each role to standard-OpenAI `(provider, model_id, client metadata)`; defaults remain `gpt-5.4-nano`, `gpt-5.4-mini`, and `text-embedding-3-small`; legacy `OPENAI_*_MODEL` inputs remain compatible. | `LALA_ENABLE_LIVE_AI=false` and no key keep resolution deterministic; Azure OpenAI base URLs are rejected. | No live-call behavior changes until the existing caller boundary is enabled. | Medium. Touched by W2/W3/W4; must land first. |
 | **W0-c Feature-flag registry** | One registry (config + doc table) of every flag this program introduces (§5.x flags), each defaulting to current behavior. | Flag-default test asserts no-op deploy. | N/A. | Flags off = today. | Low. Prevents flag-name collisions across waves. |
 | **W0-d Safety-contract test spine** | Extend `test_safety_contracts.py` with the cross-cutting assertions every wave adds to: no-raw-text-in-RAG, no-PII-in-aggregates, no-secrets-in-logs, no-mock-on-normal-paths, no-scraping-code. | Tests red on the gaps they will close; green on CURRENT invariants. | N/A (contract). | None. | Low. Becomes the §9 DoD backbone. |
 | **W0-e OpenAPI-compat gate in CI** | Wire `check_openapi_compat.py` into CI so any breaking schema delta fails the build. | Compat check runs on schema PRs. | N/A. | None. | Low. Enforces §4.2/§4.3. |
@@ -355,7 +355,7 @@ possible). All migrations are listed in §3.2.
 | **W2-b `travel.place_enrichments` replay-audit uniqueness (`063`)** | **The aggregate receipt + cross-batch dedupe + DB-backed source gate originally proposed here shipped inside `062`/PR #60 (folded into W2-a)** — `ingest.review_ingest_receipts` dedupes on source + external_key + `content_sha256` (no raw text), and the `ingest.review_sources` license gate (`license_class ∈ {licensed, public_processed, approved_export, rejected}`) aborts a `rejected`/disabled/absent source up front (`source_license_rejected`), so this slice is reduced to its remaining target: the additive unique `(place_id, enrichment_type, prompt_version)` on `travel.place_enrichments` (G8 mirror auditing). **No `posts_raw`; no external-provider calls.** | Cross-batch dedupe + transaction-rollback + license-gate-rejection + no-raw-text tests already in PR #60; this slice adds the place_enrichments uniqueness test. | An aggregate resolves to a `source_run_id` + `license_class`; a `rejected` source is recorded but never processed. | Flags `REVIEW_AGGREGATE_RECEIPT` / `REVIEW_LICENSE_GATE` not needed (landed). | Medium. Live acquisition stays BLOCKED_EXTERNAL (DG-1); the gate/receipt are landed. |
 | **W2-c Quarantine / dead-letter (landed) + replay** | `062` ships `community.ingest_quarantine` (typed metadata only — no body column; idempotent dead-letter dedupe via partial unique `(provider, external_key, reason_category) WHERE resolved_at IS NULL`); `review_ingest_governance.py::insert_quarantine_entries` persists. Replay is TARGET: `--since/--window/--provider/--place-id` on the guarded tools, re-reading normalized `community.posts` + the 062 run ledger (**never a raw store** — BLOCKED_EXTERNAL). | Quarantine-routing test (062); replay idempotency test. | A low-confidence/ambiguous signal is quarantined, not scored. | Flag `REVIEW_QUARANTINE`. | Medium. DG-4 review-queue UI owner. |
 | **W2-d Bulk-lane AI ad classifier + attribute mirror** | Second-pass nano classifier `{is_ad, ad_confidence, reason, organic_excerpt}` after deterministic `AD_MARKERS`; mirror attributes to `travel.place_enrichments` (G8). `review_quality_score` null when <3 organic (honest absence). | Ad-classifier test; <3-organic-null test; mirror test. | `place_mentions_weekly` + `place_enrichments` carry aligned attributes. | Flag `REVIEW_AI_CLASSIFIER`; `LALA_ENABLE_LIVE_AI`. | Medium. Cost/quota (DG-10). |
-| **W2-e Low-confidence recheck (mini) + summary-only RAG hand-off** | Uncertain signals → mini recheck (`resolve("recheck_low_conf")`) or quarantine; retire/replace `_community_post_chunk` raw-body embedding with `place_mention` aggregate chunks. | Recheck-escalation test; no-raw-text-in-RAG test (closes G7). | `rag.knowledge_chunks` has no raw review bodies; docent grounds in aggregates. | Flag `REVIEW_RECHECK`; RAG cut last after docent QA (W3). | High. Depends W0-b router, W3 grounding QA. |
+| **W2-e Low-confidence recheck (mini) + summary-only RAG hand-off** | Uncertain signals → mini recheck (`resolve("review_recheck")`) or quarantine; retire/replace `_community_post_chunk` raw-body embedding with `place_mention` aggregate chunks. | Recheck-escalation test; no-raw-text-in-RAG test (closes G7). | `rag.knowledge_chunks` has no raw review bodies; docent grounds in aggregates. | Flag `REVIEW_RECHECK`; RAG cut last after docent QA (W3). | High. Depends W0-b router, W3 grounding QA. |
 
 ### 5.3 Wave 3 — RAG / docent / TTS
 
@@ -444,11 +444,12 @@ in docs or code.
 
 | Role | Model | Used for | Why this tier |
 | --- | --- | --- | --- |
-| `review_extract` | **gpt-5.4-nano** | High-volume review extraction, normalization, ad classification, keyword/attribute first pass, franchise taxonomy normalization, **indoor/hours classification** (W1-e) | High volume, low marginal value per call → cheapest tier. |
-| `recheck_low_conf` | **gpt-5.4-mini** | Re-extract/re-classify when nano confidence < threshold; uncertain review signals; ambiguous ad calls | Nuance where nano is uncertain. |
-| `docent_generate` | **gpt-5.4-mini** | All docent script + reason + planner narration + tour-mode rationale generation | Quality/persona + grounding faithfulness. |
+| `review_bulk` | **gpt-5.4-nano** | High-volume review extraction, normalization, ad classification, keyword/attribute first pass, franchise taxonomy normalization, **indoor/hours classification** (W1-e) | High volume, low marginal value per call → cheapest tier. |
+| `review_recheck` | **gpt-5.4-mini** | Re-extract/re-classify when nano confidence < threshold; uncertain review signals; ambiguous ad calls | Nuance where nano is uncertain. |
+| `docent` | **gpt-5.4-mini** | All docent script + reason + planner narration + tour-mode rationale generation | Quality/persona + grounding faithfulness. |
 | `docent_qa` | **gpt-5.4-mini** | Offline LLM-judge QA; hybrid rerank; summary-line translation | Judge/reranker must outrank or match the generator tier. |
-| `embed` | **text-embedding-3-small** (1536-d) | Chunk + query embeddings | Matches existing `vector(1536)` schema. |
+| `place_enrichment` | **gpt-5.4-mini** | Place English/indoor enrichment | Quality for structured place fields. |
+| `embedding` | **text-embedding-3-small** (1536-d) | Chunk + query embeddings | Matches existing `vector(1536)` schema. |
 
 **Fallback ladder.** Every role degrades deterministically, never to raw text or
 a fabricated value:
@@ -582,10 +583,22 @@ a single PR may carry slices from one owner only (coordinate via §3 pins).
 | P1-9 | W3-d citations + on-demand reason | Docent / API | W3-b. |
 | P1-10 | W3-e audio contract (cache/limit/retry) | TTS / API | None. |
 | P1-11 | W3-f offline mini QA judge | Docent / QA | W0-b. |
+
 | P1-12 | W4-a full 4-slot planner | Planner | W1-a/d + W1-b flags. |
 | P1-13 | W4-b indoor/outdoor substitution (G1 marquee) | Planner / weather | W1-e + W3-d. |
 | P1-14 | W4-c regenerate + accept | Planner / API | W4-a. |
 | P1-15 | W4-d intervention history + travel-time | Planner / DB | **DG-2** travel-time provider choice (**BLOCKED_EXTERNAL**). |
+
+#### W0-b implementation record
+
+- **Start — 2026-07-26:** clean sibling worktree
+  `/tmp/lala-w0b-model-role-router`, branch `codex/w0b-model-role-router`,
+  based on `origin/codex/general-openai-runtime-main` (Draft PR #67).
+- **Scope:** standard OpenAI role metadata resolution only; no SDK client is
+  created by `resolve()`, no live request or deployment is performed, and
+  Azure Speech remains outside this slice.
+- **End:** recorded after focused tests, full repository checks, push, and the
+  stacked Draft PR are complete.
 
 ### 10.3 P2 — discovery surfaces, measurement, rollout (Waves 5–6)
 
