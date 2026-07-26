@@ -51,6 +51,8 @@ def test_registry_has_one_documented_namespace_for_every_program_flag():
     metadata = feature_flag_metadata()
     assert {item["key"] for item in metadata} == EXPECTED_KEYS
     assert all(item["env_name"].startswith("LALA_") for item in metadata)
+    assert feature_flag("rag_embedding_method").allowed_values == ("local-hash", "openai")
+    assert feature_flag("rag_retrieval_mode").allowed_values == ("legacy", "hybrid")
 
 
 def test_empty_environment_is_a_noop_default_contract():
@@ -73,7 +75,7 @@ def test_every_registered_flag_accepts_only_its_canonical_env_input(flag):
         raw_value = str(flag.default + 1)
         expected = flag.default + 1
     else:
-        raw_value = "registry-test"
+        raw_value = flag.allowed_values[0] if flag.allowed_values else "registry-test"
         expected = raw_value
 
     resolved = resolve_feature_flags({flag.env_name: raw_value})
@@ -88,7 +90,7 @@ def test_every_registered_flag_accepts_only_its_canonical_env_input(flag):
         ("WEATHER_EXPLICIT_FLAGS", "1", True),
         ("PLACE_OPEN_HOURS", "off", False),
         ("LALA_ENABLE_LIVE_AI", "yes", True),
-        ("rag_embedding_method", "openai", "openai"),
+        ("rag_embedding_method", "OPENAI", "openai"),
         ("rag_embedding_generation", "7", 7),
         ("rag_retrieval_mode", "HYBRID", "hybrid"),
         ("docent_qa_judge", "true", True),
@@ -119,6 +121,33 @@ def test_invalid_registered_env_override_fails_closed(key, raw_value):
 
     with pytest.raises(ValueError, match=flag.env_name):
         resolve_feature_flags({flag.env_name: raw_value})
+
+
+@pytest.mark.parametrize(
+    ("key", "raw_value"),
+    [
+        ("rag_embedding_method", "sentence-transformers"),
+        ("rag_retrieval_mode", "semantic"),
+    ],
+)
+def test_unknown_string_enum_fails_closed_with_env_name(key, raw_value):
+    flag = feature_flag(key)
+
+    with pytest.raises(ValueError, match=flag.env_name):
+        resolve_feature_flags({flag.env_name: raw_value})
+
+
+@pytest.mark.parametrize(
+    ("key", "raw_value", "expected"),
+    [
+        ("rag_embedding_method", "LoCaL-HaSh", "local-hash"),
+        ("rag_retrieval_mode", "HyBrId", "hybrid"),
+    ],
+)
+def test_string_enum_normalizes_before_validation(key, raw_value, expected):
+    flag = feature_flag(key)
+
+    assert resolve_feature_flags({flag.env_name: raw_value})[key] == expected
 
 
 def test_settings_reads_registry_without_changing_existing_defaults(monkeypatch):

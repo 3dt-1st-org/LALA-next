@@ -357,9 +357,9 @@ run.
 | `REVIEW_AI_CLASSIFIER` | `LALA_REVIEW_AI_CLASSIFIER` | `false` | deterministic review classification | W2-d |
 | `REVIEW_RECHECK` | `LALA_REVIEW_RECHECK` | `false` | no selective recheck | W2-e |
 | `LALA_ENABLE_LIVE_AI` | `LALA_ENABLE_LIVE_AI` | `false` | offline AI and fixtures | W2-d |
-| `rag_embedding_method` | `LALA_RAG_EMBEDDING_METHOD` | `local-hash` | deterministic local-hash embeddings | W3-a |
+| `rag_embedding_method` | `LALA_RAG_EMBEDDING_METHOD` | `local-hash` (`local-hash`/`openai`) | deterministic local-hash embeddings | W3-a |
 | `rag_embedding_generation` | `LALA_RAG_EMBEDDING_GENERATION` | `1` | embedding generation 1 | W3-a |
-| `rag_retrieval_mode` | `LALA_RAG_RETRIEVAL_MODE` | `legacy` | legacy retrieval mode | W3-b |
+| `rag_retrieval_mode` | `LALA_RAG_RETRIEVAL_MODE` | `legacy` (`legacy`/`hybrid`) | legacy retrieval mode | W3-b |
 | `docent_inline_guards` | `LALA_DOCENT_INLINE_GUARDS` | `false` | current docent response path | W3-c |
 | `docent_reason_enabled` | `LALA_DOCENT_REASON_ENABLED` | `false` | no on-demand reason route | W3-d |
 | `docent_audio_cache` | `LALA_DOCENT_AUDIO_CACHE` | `false` | current docent audio path | W3-e |

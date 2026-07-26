@@ -102,14 +102,16 @@ def main(argv: list[str] | None = None) -> int:
         _write(args, _plan_payload(args))
         return 0
 
-    settings = get_settings()
+    settings = _load_settings_or_error(args, _mode(args))
+    if settings is None:
+        return 2
     dsn = os.getenv("DB_DSN") or settings.db_dsn
     if not dsn:
         _write(args, {"ok": False, "mode": _mode(args), "error": "DB_DSN is not configured."})
         return 2
 
     if args.apply:
-        guard_error = _apply_guard_error(args)
+        guard_error = _apply_guard_error(args, settings)
         if guard_error:
             _write(args, {"ok": False, "mode": "apply", "error": guard_error})
             return 2
@@ -235,7 +237,9 @@ def _run_reindex(args: argparse.Namespace) -> int:
         )
         return 2
 
-    settings = get_settings()
+    settings = _load_settings_or_error(args, "reindex")
+    if settings is None:
+        return 2
     serving_generation = (
         args.embedding_generation
         if args.embedding_generation is not None
@@ -274,7 +278,7 @@ def _run_reindex(args: argparse.Namespace) -> int:
         return 2
 
     if args.apply:
-        guard_error = _apply_guard_error(args)
+        guard_error = _apply_guard_error(args, settings)
         if guard_error:
             _write(args, {"ok": False, "mode": "reindex-apply", "error": guard_error})
             return 2
@@ -424,7 +428,21 @@ def _plan_payload(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-def _apply_guard_error(args: argparse.Namespace) -> str:
+def _load_settings_or_error(args: argparse.Namespace, mode: str) -> Any | None:
+    try:
+        return get_settings()
+    except ValueError as exc:
+        error = str(exc)
+        if "LALA_RAG_EMBEDDING_METHOD" in error:
+            method = (os.getenv("LALA_RAG_EMBEDDING_METHOD") or "").strip().lower()
+            error = (
+                f"Unsupported rag_embedding_method={method!r}; expected one of local-hash, openai."
+            )
+        _write(args, {"ok": False, "mode": mode, "error": error})
+        return None
+
+
+def _apply_guard_error(args: argparse.Namespace, settings: Any) -> str:
     if args.confirm != CONFIRM_TEXT:
         return f"--apply requires --confirm {CONFIRM_TEXT}."
     if os.getenv(ALLOW_ENV) != "1":
@@ -435,8 +453,8 @@ def _apply_guard_error(args: argparse.Namespace) -> str:
     # an unhandled traceback; it returns the same {"ok": false, "error": ...} + exit 2 contract
     # as any other guard violation.
     try:
-        resolve_serving_embedding_method()
-        assert_semantic_embedding_when_live()
+        resolve_serving_embedding_method(settings)
+        assert_semantic_embedding_when_live(settings)
     except (RuntimeError, ValueError) as exc:
         return str(exc)
     return ""

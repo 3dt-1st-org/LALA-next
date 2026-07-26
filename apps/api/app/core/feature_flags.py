@@ -24,6 +24,7 @@ class FeatureFlag:
     current_behavior: str
     owner_slice: str
     description: str
+    allowed_values: tuple[str, ...] | None = None
 
 
 def _flag(
@@ -34,6 +35,7 @@ def _flag(
     description: str,
     *,
     env_name: str | None = None,
+    allowed_values: tuple[str, ...] | None = None,
 ) -> FeatureFlag:
     return FeatureFlag(
         key=key,
@@ -42,6 +44,7 @@ def _flag(
         current_behavior=current_behavior,
         owner_slice=owner_slice,
         description=description,
+        allowed_values=allowed_values,
     )
 
 
@@ -119,6 +122,7 @@ FEATURE_FLAG_REGISTRY: tuple[FeatureFlag, ...] = (
         "W3-a",
         "Select the configured serving embedding method.",
         env_name="LALA_RAG_EMBEDDING_METHOD",
+        allowed_values=("local-hash", "openai"),
     ),
     _flag(
         "rag_embedding_generation",
@@ -135,6 +139,7 @@ FEATURE_FLAG_REGISTRY: tuple[FeatureFlag, ...] = (
         "W3-b",
         "Select legacy or future hybrid retrieval behavior.",
         env_name="LALA_RAG_RETRIEVAL_MODE",
+        allowed_values=("legacy", "hybrid"),
     ),
     _flag(
         "docent_inline_guards",
@@ -256,7 +261,11 @@ def _parse_value(flag: FeatureFlag, raw_value: str) -> FeatureFlagValue:
         if parsed < 0:
             raise ValueError(f"Feature flag value for {flag.env_name} must be non-negative.")
         return parsed
-    return raw.lower()
+    normalized = raw.lower()
+    if flag.allowed_values is not None and normalized not in flag.allowed_values:
+        allowed = ", ".join(flag.allowed_values)
+        raise ValueError(f"Invalid value for {flag.env_name}; expected one of: {allowed}.")
+    return normalized
 
 
 def default_feature_flag_values() -> dict[str, FeatureFlagValue]:
@@ -285,7 +294,10 @@ def resolve_feature_flags(
     }
 
 
-def feature_flag_metadata() -> tuple[dict[str, FeatureFlagValue | str], ...]:
+FeatureFlagMetadataValue = FeatureFlagValue | tuple[str, ...] | None
+
+
+def feature_flag_metadata() -> tuple[dict[str, FeatureFlagMetadataValue], ...]:
     """Return safe registry metadata for diagnostics and future readiness use."""
 
     return tuple(
@@ -296,6 +308,7 @@ def feature_flag_metadata() -> tuple[dict[str, FeatureFlagValue | str], ...]:
             "current_behavior": flag.current_behavior,
             "owner_slice": flag.owner_slice,
             "description": flag.description,
+            "allowed_values": flag.allowed_values,
         }
         for flag in FEATURE_FLAG_REGISTRY
     )
