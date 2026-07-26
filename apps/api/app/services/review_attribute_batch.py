@@ -3,16 +3,20 @@ from __future__ import annotations
 import json
 import time
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from typing import Any
 
-from apps.api.app.core.config import get_settings
+from apps.api.app.core.config import get_settings, resolve_openai_base_url_host
 
 PROMPT_VERSION = "review-attributes-v1"
 DETERMINISTIC_VERSION = "review-attributes-deterministic-v1"
 QUALITY_VERSION = "review-quality-v1"
 JOB_NAME = "review-attribute-batch"
+# Improvement B: enrichments whose attribute or sentiment confidence falls below
+# this are routed to the selective mini-model recheck instead of being trusted as
+# bulk output. Below the quality-formula's <10-organic cap of 0.65.
+RECHECK_CONFIDENCE_THRESHOLD = 0.6
 
 ATTRIBUTE_TERMS = {
     "taste": ("맛있", "맛집", "메뉴", "커피", "디저트", "고기", "반찬", "브런치", "향"),
@@ -315,24 +319,13 @@ def generate_ai_enrichments(
     batch_size: int,
     retry_attempts: int,
     retry_delay_sec: float,
+    client: Any | None = None,
 ) -> list[ReviewAttributeEnrichment]:
     if not candidates:
         return []
     settings = get_settings()
-    missing = _missing_aoai_settings(settings)
-    if missing:
-        raise RuntimeError("Azure OpenAI config is missing: " + ", ".join(missing))
-
-    try:
-        from openai import AzureOpenAI
-    except Exception as exc:
-        raise RuntimeError("openai package is required for review attribute AI batch.") from exc
-
-    client = AzureOpenAI(
-        azure_endpoint=settings.azure_openai_endpoint,
-        api_key=settings.azure_openai_key,
-        api_version=settings.azure_openai_api_version,
-    )
+    if client is None:
+        client = _build_openai_client(settings)
     enrichments: list[ReviewAttributeEnrichment] = []
     for start in range(0, len(candidates), batch_size):
         batch = list(candidates[start : start + batch_size])
@@ -357,6 +350,150 @@ def generate_ai_enrichments(
     return enrichments
 
 
+def _build_openai_client(settings: Any) -> Any:
+    """Build the standard OpenAI client from settings, or raise a clear RuntimeError.
+
+    Standard OpenAI only (never Azure). Matches the ``rag_index`` OpenAI
+    convention: requires ``OPENAI_API_KEY`` and ``LALA_ENABLE_LIVE_AI=true``. The
+    key value is never logged or exposed. Extracted so both the bulk lane and the
+    selective recheck lane can share it, and so tests can inject a fake client
+    without constructing one.
+    """
+    missing = _missing_openai_settings(settings)
+    if missing:
+        raise RuntimeError("OpenAI config is missing: " + ", ".join(missing))
+    try:
+        from openai import OpenAI
+    except Exception as exc:
+        raise RuntimeError("openai package is required for review attribute AI batch.") from exc
+    return OpenAI(
+        api_key=settings.openai_api_key,
+        base_url=settings.openai_base_url or "https://api.openai.com/v1",
+    )
+
+
+def selected_review_recheck_model(settings: Any | None = None) -> str:
+    """Standard OpenAI mini model for the low-confidence selective recheck
+    (Improvement B). Resolution is ``openai_review_recheck_model`` with a hard
+    default of ``gpt-5.4-mini`` -- so it always resolves to a mini model even
+    when the env var is unset or empty, and recheck is always available unless a
+    caller overrides this selector. Standard OpenAI only (never Azure).
+    """
+    if settings is None:
+        settings = get_settings()
+    return str(getattr(settings, "openai_review_recheck_model", "") or "gpt-5.4-mini").strip()
+
+
+def route_low_confidence_enrichments(
+    enrichments: Sequence[ReviewAttributeEnrichment],
+    *,
+    threshold: float = RECHECK_CONFIDENCE_THRESHOLD,
+) -> list[ReviewAttributeEnrichment]:
+    """Return the subset of enrichments whose attribute or sentiment confidence
+    is below [threshold] -- eligible for the selective mini-model recheck.
+
+    Improvement B: bulk output is not silently trusted for uncertain rows.
+    """
+    return [
+        item
+        for item in enrichments
+        if item.attribute_confidence_avg < threshold or item.sentiment_confidence < threshold
+    ]
+
+
+def generate_ai_recheck(
+    *,
+    candidates: Sequence[ReviewAttributeCandidate],
+    enrichments: Sequence[ReviewAttributeEnrichment],
+    batch_size: int,
+    retry_attempts: int,
+    retry_delay_sec: float,
+    threshold: float = RECHECK_CONFIDENCE_THRESHOLD,
+    client: Any | None = None,
+    recheck_stats: dict[str, int] | None = None,
+) -> list[ReviewAttributeEnrichment]:
+    """Selective mini-model recheck of low-confidence bulk enrichments.
+
+    Non-negotiables (Improvement B): bulk stays on the nano batch model; only
+    low-confidence rows are re-asked on the mini (recheck/docent) model. The
+    recheck is **best-effort and non-fatal** -- a recheck failure or missing mini
+    config leaves the bulk result in place (the row is still scored, never
+    dropped, never re-admitted as raw text). Returns a new merged list in bulk
+    order where rechecked rows upgrade their result; non-routed rows are untouched.
+
+    Tests inject [client] so no live AI call is made.
+    """
+    if not enrichments:
+        return list(enrichments)
+    settings = get_settings()
+    routed = route_low_confidence_enrichments(enrichments, threshold=threshold)
+    if not routed:
+        return list(enrichments)
+    recheck_model = selected_review_recheck_model(settings)
+    if not recheck_model:
+        # No mini deployment configured: keep bulk results as-is (non-fatal).
+        return list(enrichments)
+    candidate_by_id = {candidate.mention_id: candidate for candidate in candidates}
+    routed_ids = {item.mention_id for item in routed}
+    recheck_candidates = [
+        candidate_by_id[item.mention_id] for item in routed if item.mention_id in candidate_by_id
+    ]
+    if not recheck_candidates:
+        return list(enrichments)
+    if client is None:
+        try:
+            client = _build_openai_client(settings)
+        except RuntimeError:
+            if recheck_stats is not None:
+                recheck_stats["recheck_failed_count"] = (
+                    recheck_stats.get("recheck_failed_count", 0) + 1
+                )
+            return list(enrichments)
+    rechecked_by_id: dict[str, ReviewAttributeEnrichment] = {}
+    for start in range(0, len(recheck_candidates), batch_size):
+        batch = list(recheck_candidates[start : start + batch_size])
+        try:
+            response = _create_chat_completion_with_retry(
+                client=client,
+                model=recheck_model,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {
+                        "role": "user",
+                        "content": json.dumps(
+                            [candidate.to_prompt_record() for candidate in batch],
+                            ensure_ascii=False,
+                        ),
+                    },
+                ],
+                retry_attempts=retry_attempts,
+                retry_delay_sec=retry_delay_sec,
+            )
+            raw = response.choices[0].message.content or ""
+            for enrichment in parse_ai_response(raw, batch):
+                # Mark the lane so downstream provenance shows a recheck upgraded it.
+                rechecked_by_id[enrichment.mention_id] = replace(
+                    enrichment, source_method="openai_recheck"
+                )
+        except Exception:
+            # Best-effort: keep the bulk result for this batch on recheck failure.
+            # This includes malformed, empty, or structurally incomplete replies.
+            if recheck_stats is not None:
+                recheck_stats["recheck_failed_count"] = (
+                    recheck_stats.get("recheck_failed_count", 0) + 1
+                )
+            continue
+    # Merge in bulk order: a routed row that got a rechecked upgrade replaces its
+    # bulk result; everything else (non-routed, or routed but not re-upgraded) is
+    # kept as-is so no evidence is silently dropped.
+    return [
+        rechecked_by_id[item.mention_id]
+        if item.mention_id in routed_ids and item.mention_id in rechecked_by_id
+        else item
+        for item in enrichments
+    ]
+
+
 def parse_ai_response(
     raw: str,
     candidates: Sequence[ReviewAttributeCandidate],
@@ -364,7 +501,7 @@ def parse_ai_response(
     payload = json.loads(_strip_code_fence(raw))
     items = payload.get("results") if isinstance(payload, dict) else None
     if not isinstance(items, list):
-        raise ValueError("Azure OpenAI JSON response did not include a results list.")
+        raise ValueError("OpenAI JSON response did not include a results list.")
     candidate_by_id = {candidate.mention_id: candidate for candidate in candidates}
     parsed: list[ReviewAttributeEnrichment] = []
     for index, item in enumerate(items):
@@ -396,7 +533,7 @@ def parse_ai_response(
                 evidence_terms=_evidence_terms(item.get("evidence_terms"), allowed),
                 summary_ko=_optional_text(item.get("summary_ko")),
                 reason=_optional_text(item.get("reason")),
-                source_method="azure_openai",
+                source_method="openai",
             )
         )
     return parsed
@@ -458,7 +595,7 @@ def apply_review_attribute_enrichments(
                         if row.review_quality is not None
                         else None,
                         "prompt_version": PROMPT_VERSION,
-                        "source_method": source_method,
+                        "source_method": row.source_method,
                     },
                 )
                 updated += cur.rowcount
@@ -589,12 +726,15 @@ def _apply_row(
     source_method: str,
 ) -> ReviewAttributeApplyRow:
     review_attributes = enrichment.to_attributes_payload()
+    # Per-enrichment lane wins so a rechecked row is persisted as "openai_recheck"
+    # (and bulk as "openai", deterministic as "deterministic") rather than a
+    # generic runner-level string. The caller's source_method is only a fallback.
     return ReviewAttributeApplyRow(
         mention_id=enrichment.mention_id,
         sentiment_score=enrichment.sentiment_score,
         review_attributes=review_attributes,
         review_quality=review_quality_payload(candidate, enrichment),
-        source_method=source_method,
+        source_method=enrichment.source_method or source_method,
     )
 
 
@@ -625,7 +765,7 @@ def _create_chat_completion_with_retry(
             time.sleep(delay * attempt)
     if last_exc:
         raise last_exc
-    raise RuntimeError("Azure OpenAI completion failed before a request was attempted.")
+    raise RuntimeError("OpenAI completion failed before a request was attempted.")
 
 
 def _is_retryable_ai_error(exc: Exception) -> bool:
@@ -696,25 +836,28 @@ def _review_category_target(category: str) -> float:
     return 20.0
 
 
-def _missing_aoai_settings(settings: Any) -> list[str]:
+def _missing_openai_settings(settings: Any) -> list[str]:
+    # Standard OpenAI only (never Azure). Matches the rag_index OpenAI convention:
+    # key + live-AI gate + a bulk model name. The key value is never logged.
     missing: list[str] = []
-    if not settings.azure_openai_endpoint:
-        missing.append("AZURE_OPENAI_ENDPOINT")
-    if not settings.azure_openai_key:
-        missing.append("AZURE_OPENAI_KEY")
+    if not getattr(settings, "openai_api_key", ""):
+        missing.append("OPENAI_API_KEY")
+    if not getattr(settings, "enable_live_ai", False):
+        missing.append("LALA_ENABLE_LIVE_AI=true")
     if not selected_review_batch_model(settings):
-        missing.append("AZURE_OPENAI_REVIEW_BATCH_DEPLOYMENT or AZURE_OPENAI_DEPLOYMENT")
-    if not settings.azure_openai_api_version:
-        missing.append("AZURE_OPENAI_API_VERSION")
+        missing.append("OPENAI_REVIEW_BATCH_MODEL")
+    try:
+        resolve_openai_base_url_host(getattr(settings, "openai_base_url", ""))
+    except ValueError as exc:
+        missing.append(str(exc))
     return missing
 
 
 def selected_review_batch_model(settings: Any | None = None) -> str:
+    # Standard OpenAI bulk review model (never Azure). Defaults to gpt-5.4-nano.
     if settings is None:
         settings = get_settings()
-    role_specific = getattr(settings, "azure_openai_review_batch_deployment", "") or ""
-    generic = getattr(settings, "azure_openai_deployment", "") or ""
-    return str(role_specific or generic).strip()
+    return str(getattr(settings, "openai_review_batch_model", "") or "gpt-5.4-nano").strip()
 
 
 def _post_sample(value: dict[str, Any]) -> dict[str, str | None]:

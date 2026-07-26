@@ -72,15 +72,16 @@ details unless the user explicitly opens the score/reason view.
 
 ## Model Role Split
 
-The scoring pipeline now uses an explicit model-role boundary:
+The scoring pipeline uses an explicit model-role boundary on standard OpenAI
+(LALA AI is standard OpenAI only — never Azure):
 
-- `AZURE_OPENAI_REVIEW_BATCH_DEPLOYMENT` is the first-choice deployment for the
-  bulk review lane, with `gpt-5.4-nano` as the recommended backing model;
-- `AZURE_OPENAI_DOCENT_DEPLOYMENT` is reserved for docent generation, docent QA,
-  and judge-facing wording polish, with `gpt-5.4-mini` as the recommended
-  backing model;
-- the default generic fallback remains `AZURE_OPENAI_DEPLOYMENT`, but future
-  shared-dev and production wiring should prefer the role-specific variables.
+- `OPENAI_REVIEW_BATCH_MODEL` (default `gpt-5.4-nano`) is the bulk review lane
+  model for attribute extraction and strict JSON batch work;
+- `OPENAI_REVIEW_RECHECK_MODEL` (default `gpt-5.4-mini`) is the selective
+  low-confidence recheck model, invoked after the bulk lane only for rows below
+  the confidence threshold;
+- docent generation / docent QA stays on the `gpt-5.4-mini` tier (the docent
+  lane's provider wiring is tracked separately).
 
 ## Attribute Schema
 
@@ -175,10 +176,11 @@ Modes:
 
 - `plan`: prints target tables and schema versions only;
 - `--preview`: reads preprocessed mentions and returns candidate attributes;
-- `--dry-run-ai`: calls Azure OpenAI for JSON extraction without DB mutation;
+- `--dry-run-ai`: calls standard OpenAI for JSON extraction without DB mutation;
 - `--apply --confirm APPLY_REVIEW_ATTRIBUTE_BATCH`: writes enrichments and
   weekly aggregate attributes;
-- apply guard: `ALLOW_REVIEW_ATTRIBUTE_BATCH_APPLY=1`.
+- apply guard: `ALLOW_REVIEW_ATTRIBUTE_BATCH_APPLY=1`, plus `OPENAI_API_KEY` and
+  `LALA_ENABLE_LIVE_AI=1` for the live lanes.
 
 The batch should never run inside user-facing API requests.
 
@@ -188,12 +190,13 @@ Current implementation notes:
 - `--preview` reads `community.place_mentions_weekly` and linked
   `community.posts`, then computes deterministic category-aware attributes
   without mutation.
-- `--dry-run-ai` calls Azure OpenAI and validates the JSON contract without DB
-  mutation. It should prefer `AZURE_OPENAI_REVIEW_BATCH_DEPLOYMENT`
-  (`gpt-5.4-nano` recommended) before falling back to the generic deployment.
-- `--apply` calls Azure OpenAI, writes `attributes.review_attributes`,
-  `attributes.review_quality`, and `sentiment_score`, and records
-  `review-attribute-batch` in `ops.job_runs`.
+- `--dry-run-ai` calls standard OpenAI (`OPENAI_REVIEW_BATCH_MODEL`,
+  `gpt-5.4-nano`) and validates the JSON contract without DB mutation;
+  low-confidence rows are then routed to `OPENAI_REVIEW_RECHECK_MODEL`
+  (`gpt-5.4-mini`). It requires `OPENAI_API_KEY` and `LALA_ENABLE_LIVE_AI=1`.
+- `--apply` calls standard OpenAI (bulk nano + selective mini recheck), writes
+  `attributes.review_attributes`, `attributes.review_quality`, and
+  `sentiment_score`, and records `review-attribute-batch` in `ops.job_runs`.
 - The 2026-06-23 shared-dev preview produced 4 sufficient-evidence candidates.
   A live AI dry-run hit provider `429 Too Many Requests`; this is an external
   capacity condition, not a secret/config failure.

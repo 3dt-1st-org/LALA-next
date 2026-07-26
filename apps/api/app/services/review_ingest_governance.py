@@ -106,8 +106,11 @@ QuarantineReasonCode = Literal[
     "schema_invalid_type_error",
     "schema_invalid_extra_field",
     "schema_invalid_attribute_shape",
+    "schema_invalid_non_organic_reason_missing",
+    "schema_invalid_contradictory_organic",
     "source_identity_mismatch",
     "terms_violation_license_class",
+    "terms_violation_non_organic",
     "source_api_failure_upstream",
     "duplicate_suspect_in_batch",
     "low_confidence_match",
@@ -121,6 +124,7 @@ MissingFieldName = Literal[
     "terms_version",
     "content_sha256",
     "received_at",
+    "is_organic",
 ]
 RawTextFieldName = Literal[
     "body",
@@ -146,6 +150,17 @@ AttributeShapeViolation = Literal[
     "unknown_key",
     "raw_text_key",
     "out_of_range",
+]
+# Bounded enumerable reason an approved adapter/export declares a record
+# non-organic (Improvement A). The boundary accepts the declaration as-is (it
+# holds no raw text to re-classify) and quarantines the record; this Literal can
+# never carry free-form text.
+NonOrganicReason = Literal[
+    "advertising",
+    "sponsored",
+    "owner_response",
+    "incentivized",
+    "promotional",
 ]
 # Conservative, explicit metric-key contract for normalized attribute scores
 # (Finding 2). This is the repository's existing review-attribute vocabulary
@@ -232,6 +247,14 @@ REASON_SPEC: dict[QuarantineReasonCode, tuple[QuarantineReasonCategory, str]] = 
         "schema_invalid",
         "normalized_attributes failed the strict metric-score contract",
     ),
+    "schema_invalid_non_organic_reason_missing": (
+        "schema_invalid",
+        "non-organic record did not declare a bounded non_organic_reason",
+    ),
+    "schema_invalid_contradictory_organic": (
+        "schema_invalid",
+        "organic record carried a non_organic_reason (contradictory declaration)",
+    ),
     "source_identity_mismatch": (
         "terms_violation",
         "record provenance does not match the registered source",
@@ -239,6 +262,10 @@ REASON_SPEC: dict[QuarantineReasonCode, tuple[QuarantineReasonCategory, str]] = 
     "terms_violation_license_class": (
         "terms_violation",
         "source license class is not permitted for review ingestion",
+    ),
+    "terms_violation_non_organic": (
+        "terms_violation",
+        "record declared as non-organic (advertising/sponsored) and excluded",
     ),
     "source_api_failure_upstream": (
         "source_api_failure",
@@ -315,6 +342,13 @@ class ReviewSourceRecord(BaseModel):
     received_at: datetime
     category: str | None = None
     match_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    # Improvement A: an approved adapter/export must declare organic status. A
+    # non-organic record (advertising/sponsored/etc.) is quarantined here and
+    # never projected to an aggregate -- it can never become a positive mention,
+    # public score input, or RAG/docent evidence. Missing declarations fail
+    # closed through the structural-validation quarantine path.
+    is_organic: bool
+    non_organic_reason: NonOrganicReason | None = None
     # Approved aggregate attributes only (e.g. {"taste": 0.7}). The contract is
     # strict and bounded (Finding 2): keys are restricted to the repository's
     # metric vocabulary and values are numeric scores in [0.0, 1.0]. No strings,
@@ -392,6 +426,9 @@ class QuarantineSafeMetadata(BaseModel):
     type_error: bool = False
     mismatched_identity_field: IdentityField | None = None
     attribute_shape_violation: AttributeShapeViolation | None = None
+    # Improvement A: records the declared non-organic reason (typed Literal, never
+    # free-form text) when a record is quarantined for being non-organic.
+    non_organic_reason: NonOrganicReason | None = None
     replaced_external_key: bool = False
     received_field_count: int | None = Field(default=None, ge=0)
     attribute_count: int | None = Field(default=None, ge=0)
@@ -547,6 +584,7 @@ def _classify_validation_error(
             "terms_version",
             "content_sha256",
             "received_at",
+            "is_organic",
         }:
             metadata = metadata.model_copy(
                 update={"missing_field_name": loc_leaf}  # type: ignore[arg-type]
@@ -796,6 +834,32 @@ def _bind_record_to_registration(
     )
 
 
+def _organic_consistency_issue(
+    record: ReviewSourceRecord,
+) -> tuple[QuarantineReasonCode, QuarantineSafeMetadata] | None:
+    """Return a (reason_code, metadata) pair when the organic-status declaration
+    is contradictory or incomplete, else None.
+
+      * ``is_organic=False`` without a bounded ``non_organic_reason`` -> incomplete.
+      * ``is_organic=True`` with a ``non_organic_reason`` -> contradictory.
+
+    Both are schema-invalid; neither is ever accepted as an aggregate. A
+    non-organic record that also carries a bounded reason falls through here and
+    is handled by the non-organic quarantine path (terms_violation_non_organic).
+    """
+    if not record.is_organic and record.non_organic_reason is None:
+        return (
+            "schema_invalid_non_organic_reason_missing",
+            QuarantineSafeMetadata(malformed=True),
+        )
+    if record.is_organic and record.non_organic_reason is not None:
+        return (
+            "schema_invalid_contradictory_organic",
+            QuarantineSafeMetadata(malformed=True),
+        )
+    return None
+
+
 def classify_review_records(
     *,
     registration: ReviewSourceRegistration,
@@ -866,6 +930,34 @@ def classify_review_records(
                     reason_code="source_identity_mismatch",
                     safe_metadata=QuarantineSafeMetadata(
                         malformed=True, mismatched_identity_field=mismatched
+                    ),
+                )
+            )
+            continue
+        # Improvement A: a record declared non-organic by the approved
+        # adapter/export is quarantined under the registered identity -- it can
+        # never become an accepted aggregate. We hold no raw text here, so the
+        # boundary enforces the declaration rather than re-deriving it.
+        organic_issue = _organic_consistency_issue(record)
+        if organic_issue is not None:
+            code, metadata = organic_issue
+            quarantined.append(
+                _quarantine_for_code(
+                    raw,
+                    registration=registration,
+                    reason_code=code,
+                    safe_metadata=metadata,
+                )
+            )
+            continue
+        if not record.is_organic:
+            quarantined.append(
+                _quarantine_for_code(
+                    raw,
+                    registration=registration,
+                    reason_code="terms_violation_non_organic",
+                    safe_metadata=QuarantineSafeMetadata(
+                        malformed=False, non_organic_reason=record.non_organic_reason
                     ),
                 )
             )
