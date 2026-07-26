@@ -81,6 +81,13 @@
 - Local verification: focused LS-2/API contract tests `82 passed, 1 warning`; full API suite `1073 passed, 1 warning`; Ruff check/format, pre-commit all-files including detect-secrets, and `git diff --check` passed.
 - Implementation commit: `e17d943107129c516103b28318dc845f55a80287` (`feat(community): add Local Signals LS-2 API policy`). Draft PR: [#72](https://github.com/3dt-1st-org/LALA-next/pull/72). CI run `30210921754` completed green: API tests and safety contracts, Unix wrapper verification, and Flutter app analyze + test. PR remained Draft/Open with `mergeStateStatus=CLEAN`; no merge was performed.
 
+### Android real-device build/verification handoff — secret-safe
+
+- This LS-2 review-fix session did not build, install, or call a live Android device. The later device gate must use the existing Flutter/Logto/Kakao boundaries and must not introduce a mock/demo Local Signals path.
+- If an explicitly approved device verification needs configured values, load only in a subshell from `/Users/geondongkim/LALA-next/.env` with `set -a; source /Users/geondongkim/LALA-next/.env; set +a`; never copy the file into this worktree, commit it, print it, or save raw logs. Pass only named `--dart-define` values and clear the process environment after the run.
+- Secret-safe variable-name handoff: Flutter/API base and auth names are `LALA_API_BASE_URL`, `LALA_API_BEARER_TOKEN`, `LALA_IOS_API_KEY`; native Logto names are `LOGTO_ENDPOINT`, `LOGTO_NATIVE_APP_ID`, `LOGTO_API_AUDIENCE`, `LOGTO_REDIRECT_URI`, and `LOGTO_POST_LOGOUT_REDIRECT_URI`; server JWT names are `OAUTH_ISSUER`, `OAUTH_AUDIENCE`, `OAUTH_JWKS_URL`, and `OAUTH_REQUIRED_SCOPES`; map build configuration is `KAKAO_JAVASCRIPT_KEY`.
+- Android evidence should record build variant, app build SHA, API base host, auth mode (`guest/read-only` or `Logto signed-in`), Local Signals flag state, permission-denied/manual-region behavior, and safe response/error outcomes only. Do not record tokens, environment values, raw signal body, or third-party review text; keep screenshots/build outputs under ignored artifacts.
+
 ### Assumption
 
 - The current idempotency implementation is a process-local seam for this API slice. A durable distributed idempotency store must replace or back it before multi-instance production rollout.

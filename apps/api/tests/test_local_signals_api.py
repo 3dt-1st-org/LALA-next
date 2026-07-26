@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import importlib
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from datetime import UTC, date, datetime
 from pathlib import Path
+from threading import Event, Lock
 from typing import Any
 from uuid import UUID
 
@@ -16,10 +19,13 @@ from apps.api.app.core.rate_limit import (
     enforce_local_signals_rate_limit,
     reset_rate_limit_state_for_tests,
 )
-from apps.api.app.routers.local_signals import get_local_signals_service
+from apps.api.app.routers.local_signals import _idempotency_key, get_local_signals_service
 from apps.api.app.services.local_signals_service import (
     LocalSignalsRepository,
     LocalSignalsService,
+    SignalCursor,
+    decode_signal_cursor,
+    encode_signal_cursor,
     validate_local_signal_policy,
 )
 
@@ -268,6 +274,56 @@ def test_idempotency_replays_without_second_repository_write() -> None:
     assert repository.created == 1
 
 
+def test_idempotency_single_flight_waits_for_same_payload() -> None:
+    class BlockingRepository(FakeLocalSignalsRepository):
+        def __init__(self) -> None:
+            super().__init__()
+            self.first_write_started = Event()
+            self.release_first_write = Event()
+            self.second_write_started = Event()
+            self.write_count = 0
+            self.write_lock = Lock()
+
+        def create_draft(self, **kwargs: Any) -> dict[str, Any]:
+            with self.write_lock:
+                self.write_count += 1
+                write_number = self.write_count
+            if write_number == 1:
+                self.first_write_started.set()
+                assert self.release_first_write.wait(timeout=2)
+            else:
+                self.second_write_started.set()
+            return super().create_draft(**kwargs)
+
+    repository = BlockingRepository()
+    service = LocalSignalsService(repository, settings=_settings())
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(
+            service.create_draft,
+            issuer=AUTHOR_ISSUER,
+            subject=AUTHOR_SUBJECT,
+            values=_draft_values(),
+            idempotency_key="single-flight-key",
+        )
+        assert repository.first_write_started.wait(timeout=1)
+        second = executor.submit(
+            service.create_draft,
+            issuer=AUTHOR_ISSUER,
+            subject=AUTHOR_SUBJECT,
+            values=_draft_values(),
+            idempotency_key="single-flight-key",
+        )
+
+        with pytest.raises(TimeoutError):
+            second.result(timeout=0.2)
+        repository.release_first_write.set()
+        assert first.result(timeout=2) == second.result(timeout=2)
+
+    assert repository.write_count == 1
+    assert not repository.second_write_started.is_set()
+
+
 def test_idempotency_key_reuse_with_different_payload_is_rejected() -> None:
     service = LocalSignalsService(FakeLocalSignalsRepository(), settings=_settings())
     service.create_draft(
@@ -313,6 +369,26 @@ def test_write_ownership_and_invalid_transition_are_enforced() -> None:
             idempotency_key="submit-key",
         )
     assert invalid_transition.value.code == "INVALID_STATUS_TRANSITION"
+
+
+def test_whitespace_idempotency_key_falls_back_to_deterministic_request_key() -> None:
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/api/v1/community/signals",
+            "scheme": "http",
+            "headers": [],
+        }
+    )
+    payload = {"body": "same"}
+
+    first = _idempotency_key(request, "   ", payload)
+    second = _idempotency_key(request, "\t", payload)
+
+    assert first
+    assert first == second
+    assert first != ""
 
 
 def test_feature_flag_off_is_honest_disabled_response(client, api_key, monkeypatch) -> None:
@@ -420,6 +496,214 @@ def test_public_repository_query_is_first_party_projection_only() -> None:
     assert "author_issuer" not in sql
     assert "author_subject" not in sql
     assert "local_signal_aggregate_candidates" not in sql
+
+
+def test_useful_repository_query_matches_useful_cursor_tuple() -> None:
+    executed: list[tuple[str, Any]] = []
+
+    class Cursor:
+        def __enter__(self) -> Cursor:
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def execute(self, sql: str, params: Any = None) -> None:
+            executed.append((sql, params))
+
+        def fetchall(self) -> list[dict[str, Any]]:
+            return []
+
+    class Connection:
+        def __enter__(self) -> Connection:
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def cursor(self, cursor_factory: Any = None) -> Cursor:
+            return Cursor()
+
+        def close(self) -> None:
+            return None
+
+    repository = LocalSignalsRepository(
+        Settings(db_dsn="postgresql://redacted"),
+        connect=lambda **_: Connection(),
+    )
+    repository.list_public_signals(
+        language="ko",
+        region=None,
+        place_id=None,
+        kind=None,
+        limit=5,
+        cursor=SignalCursor(
+            sort="useful",
+            useful_count=2,
+            published_at=NOW,
+            signal_id=SIGNAL_ID,
+        ),
+        sort="useful",
+    )
+
+    sql, params = executed[0]
+    assert "ORDER BY useful_count DESC, p.published_at DESC, p.id DESC" in sql
+    assert sql.count("useful_cursor.reaction_type = 'useful'") == 2
+    assert params[2:4] == (2, 2)
+    assert params[4:6] == (NOW, NOW)
+    assert params[6] == str(SIGNAL_ID)
+
+
+def test_useful_pagination_has_no_duplicate_or_skipped_item() -> None:
+    rows = [
+        _public_row(
+            id=UUID("00000000-0000-0000-0000-000000000201"),
+            useful_count=5,
+            published_at=NOW,
+        ),
+        _public_row(
+            id=UUID("00000000-0000-0000-0000-000000000202"),
+            useful_count=5,
+            published_at=NOW.replace(hour=0),
+        ),
+        _public_row(
+            id=UUID("00000000-0000-0000-0000-000000000203"),
+            useful_count=3,
+            published_at=NOW,
+        ),
+        _public_row(
+            id=UUID("00000000-0000-0000-0000-000000000204"),
+            useful_count=1,
+            published_at=NOW,
+        ),
+    ]
+
+    class PagedRepository(FakeLocalSignalsRepository):
+        def __init__(self) -> None:
+            super().__init__()
+            self.rows = rows
+
+        def list_public_signals(
+            self,
+            *,
+            cursor: Any,
+            limit: int,
+            sort: str,
+            **_: Any,
+        ) -> list[dict[str, Any]]:
+            ordered = sorted(
+                self.rows,
+                key=lambda row: (row["useful_count"], row["published_at"], row["id"].int),
+                reverse=True,
+            )
+            if cursor is not None:
+                ordered = [
+                    row
+                    for row in ordered
+                    if (
+                        row["useful_count"] < cursor.useful_count
+                        or (
+                            row["useful_count"] == cursor.useful_count
+                            and (
+                                row["published_at"] < cursor.published_at
+                                or (
+                                    row["published_at"] == cursor.published_at
+                                    and row["id"].int < cursor.signal_id.int
+                                )
+                            )
+                        )
+                    )
+                ]
+            assert sort == "useful"
+            return ordered[:limit]
+
+    service = LocalSignalsService(PagedRepository(), settings=_settings())
+    first = service.list_public(
+        language="ko",
+        region=None,
+        place_id=None,
+        kind=None,
+        limit=2,
+        cursor=None,
+        sort="useful",
+    )
+    second = service.list_public(
+        language="ko",
+        region=None,
+        place_id=None,
+        kind=None,
+        limit=2,
+        cursor=first["next_cursor"],
+        sort="useful",
+    )
+
+    ids = [item["id"] for item in first["items"] + second["items"]]
+    assert ids == [str(row["id"]) for row in rows]
+    assert len(ids) == len(set(ids))
+    decoded = decode_signal_cursor(first["next_cursor"], sort="useful")
+    assert decoded.useful_count == 5
+
+
+def test_signal_cursor_is_opaque_and_sort_bound() -> None:
+    cursor = encode_signal_cursor(_public_row(useful_count=2), sort="useful")
+
+    with pytest.raises(ServiceError) as mismatch:
+        decode_signal_cursor(cursor, sort="recent")
+    assert mismatch.value.code == "INVALID_CURSOR"
+
+    with pytest.raises(ServiceError) as malformed:
+        decode_signal_cursor(f"{cursor}=", sort="useful")
+    assert malformed.value.code == "INVALID_CURSOR"
+
+
+def test_reaction_and_save_routes_use_actor_scoped_rate_limit(
+    client: TestClient,
+    api_key: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LALA_LOCAL_SIGNALS_WRITE", "true")
+    identity = RequestIdentity(mode="oauth", issuer=AUTHOR_ISSUER, subject=AUTHOR_SUBJECT)
+    client.app.dependency_overrides[require_logto_identity] = lambda: identity
+    client.app.dependency_overrides[get_local_signals_service] = lambda: LocalSignalsService(
+        FakeLocalSignalsRepository(),
+        settings=_settings(read=False, write=True),
+    )
+    local_signals_router = importlib.import_module("apps.api.app.routers.local_signals")
+    calls: list[tuple[str, str, int]] = []
+
+    def reject_rate_limit(
+        request: Request, *, route_key: str, actor_key: str, limit_per_minute: int
+    ) -> None:
+        calls.append((route_key, actor_key, limit_per_minute))
+        raise ApiError(
+            status_code=429,
+            code="RATE_LIMITED",
+            message="Too many Local Signals requests. Please retry shortly.",
+            retryable=True,
+        )
+
+    monkeypatch.setattr(local_signals_router, "enforce_local_signals_rate_limit", reject_rate_limit)
+    headers = {"X-API-Key": api_key}
+    requests = [
+        ("put", f"/api/v1/community/signals/{SIGNAL_ID}/reactions/useful"),
+        ("delete", f"/api/v1/community/signals/{SIGNAL_ID}/reactions/useful"),
+        ("put", f"/api/v1/community/signals/{SIGNAL_ID}/save"),
+        ("delete", f"/api/v1/community/signals/{SIGNAL_ID}/save"),
+    ]
+
+    for method, path in requests:
+        response = getattr(client, method)(path, headers=headers)
+        assert response.status_code == 429
+        assert response.json()["error"]["code"] == "RATE_LIMITED"
+
+    assert [call[0] for call in calls] == [
+        "local-signals-reaction-add",
+        "local-signals-reaction-remove",
+        "local-signals-save-add",
+        "local-signals-save-remove",
+    ]
+    assert all(call[1] == f"{AUTHOR_ISSUER}:{AUTHOR_SUBJECT}" for call in calls)
+    assert all(call[2] == 60 for call in calls)
 
 
 def test_openapi_exposes_safe_read_and_logto_write_boundaries(client) -> None:

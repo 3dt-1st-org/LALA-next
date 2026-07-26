@@ -57,10 +57,15 @@ undisclosed promotional language. Submit can only move an owned draft into the
 pending moderation state. Publication is not a client operation.
 
 Idempotency is keyed by actor, operation, idempotency key, and normalized
-payload. The current implementation provides an in-process seam and must be
-replaced or backed by a durable deployment-level store before multi-instance
-production rollout. Rate limiting and safe event metrics use the same
-replaceable seam; bodies and identity values are not logged or metric labels.
+payload; identical in-flight requests single-flight and replay, while a
+conflicting in-flight payload returns a safe 409. The current implementation
+provides an in-process seam and must be replaced or backed by a durable
+deployment-level store before multi-instance production rollout. Pagination
+cursors are opaque, strict, and sort-bound: recent compares
+`published_at,id`, while useful compares `useful_count,published_at,id`.
+Reaction and save add/remove routes use bounded actor-scoped rate limits. Rate
+limiting and safe event metrics use replaceable seams; bodies and identity
+values are not logged or metric labels.
 
 ## External decisions still required
 

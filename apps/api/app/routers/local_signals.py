@@ -57,8 +57,9 @@ def _idempotency_key(
     supplied: str | None,
     payload: dict,
 ) -> str:
-    if supplied:
-        return supplied.strip()
+    normalized = (supplied or "").strip()
+    if normalized:
+        return normalized
     return request_hash({"path": request.url.path, "payload": payload})
 
 
@@ -260,6 +261,12 @@ def add_reaction(
     identity: Annotated[RequestIdentity, Depends(require_logto_identity)],
     service: Annotated[LocalSignalsService, Depends(get_local_signals_service)] = None,  # type: ignore[assignment]
 ) -> dict:
+    enforce_local_signals_rate_limit(
+        request,
+        route_key="local-signals-reaction-add",
+        actor_key=_actor_key(identity),
+        limit_per_minute=60,
+    )
     payload = service.set_reaction(
         signal_id=signal_id,
         issuer=identity.issuer or "",
@@ -279,6 +286,12 @@ def remove_reaction(
     identity: Annotated[RequestIdentity, Depends(require_logto_identity)],
     service: Annotated[LocalSignalsService, Depends(get_local_signals_service)] = None,  # type: ignore[assignment]
 ) -> dict:
+    enforce_local_signals_rate_limit(
+        request,
+        route_key="local-signals-reaction-remove",
+        actor_key=_actor_key(identity),
+        limit_per_minute=60,
+    )
     payload = service.set_reaction(
         signal_id=signal_id,
         issuer=identity.issuer or "",
@@ -297,6 +310,12 @@ def save_signal(
     identity: Annotated[RequestIdentity, Depends(require_logto_identity)],
     service: Annotated[LocalSignalsService, Depends(get_local_signals_service)] = None,  # type: ignore[assignment]
 ) -> dict:
+    enforce_local_signals_rate_limit(
+        request,
+        route_key="local-signals-save-add",
+        actor_key=_actor_key(identity),
+        limit_per_minute=60,
+    )
     payload = service.set_save(
         signal_id=signal_id,
         issuer=identity.issuer or "",
@@ -314,6 +333,12 @@ def unsave_signal(
     identity: Annotated[RequestIdentity, Depends(require_logto_identity)],
     service: Annotated[LocalSignalsService, Depends(get_local_signals_service)] = None,  # type: ignore[assignment]
 ) -> dict:
+    enforce_local_signals_rate_limit(
+        request,
+        route_key="local-signals-save-remove",
+        actor_key=_actor_key(identity),
+        limit_per_minute=60,
+    )
     payload = service.set_save(
         signal_id=signal_id,
         issuer=identity.issuer or "",

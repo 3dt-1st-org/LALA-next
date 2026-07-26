@@ -8,8 +8,9 @@ import json
 import re
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import closing, contextmanager
-from datetime import datetime
-from threading import Lock
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from threading import Condition, Lock
 from typing import Any
 from uuid import UUID
 
@@ -60,6 +61,7 @@ class LocalSignalsRepository:
             place_id=place_id,
             kind=kind,
             cursor=cursor,
+            sort=sort,
         )
         order_by = (
             "useful_count DESC, p.published_at DESC, p.id DESC"
@@ -169,6 +171,7 @@ class LocalSignalsRepository:
             place_id=None,
             kind=None,
             cursor=None,
+            sort="recent",
         )
         sql = f"""
             SELECT
@@ -679,7 +682,8 @@ def _public_filters(
     region: str | None,
     place_id: str | None,
     kind: str | None,
-    cursor: tuple[datetime, UUID] | None,
+    cursor: SignalCursor | None,
+    sort: str,
 ) -> tuple[list[str], list[Any]]:
     where = [
         "(p.source_language = %s OR EXISTS ("
@@ -688,7 +692,7 @@ def _public_filters(
         "AND available_translation.target_language = %s "
         "AND available_translation.review_state = 'available'))"
     ]
-    params: list[Any] = [language, language]
+    params: list[Any] = []
     if region:
         where.append("p.locality_code = %s")
         params.append(region)
@@ -702,15 +706,57 @@ def _public_filters(
         where.append("p.kind = %s")
         params.append(kind)
     if cursor is not None:
-        where.append("(p.published_at < %s OR (p.published_at = %s AND p.id < %s))")
-        params.extend((cursor[0], cursor[0], str(cursor[1])))
+        if cursor.sort != sort:
+            raise _invalid_cursor()
+        if sort == "useful":
+            if cursor.useful_count is None:
+                raise _invalid_cursor()
+            where.append(
+                "("
+                f"{_USEFUL_COUNT_SQL} < %s "
+                "OR ("
+                f"{_USEFUL_COUNT_SQL} = %s "
+                "AND (p.published_at < %s "
+                "OR (p.published_at = %s AND p.id < %s))"
+                ")"
+                ")"
+            )
+            params.extend(
+                (
+                    cursor.useful_count,
+                    cursor.useful_count,
+                    cursor.published_at,
+                    cursor.published_at,
+                    str(cursor.signal_id),
+                )
+            )
+        else:
+            where.append("(p.published_at < %s OR (p.published_at = %s AND p.id < %s))")
+            params.extend((cursor.published_at, cursor.published_at, str(cursor.signal_id)))
     return where, params
+
+
+@dataclass(frozen=True)
+class SignalCursor:
+    sort: str
+    published_at: datetime
+    signal_id: UUID
+    useful_count: int | None = None
+
+
+_SIGNAL_SORTS = frozenset({"recent", "useful"})
+_USEFUL_COUNT_SQL = """(
+    SELECT count(*)::int
+    FROM community.local_signal_reactions useful_cursor
+    WHERE useful_cursor.signal_id = p.id
+      AND useful_cursor.reaction_type = 'useful'
+)"""
 
 
 class _IdempotencyStore:
     def __init__(self) -> None:
-        self._lock = Lock()
-        self._values: dict[str, tuple[str, dict[str, Any]]] = {}
+        self._condition = Condition(Lock())
+        self._values: dict[str, _IdempotencyEntry] = {}
 
     def run(
         self,
@@ -723,25 +769,51 @@ class _IdempotencyStore:
     ) -> dict[str, Any]:
         key = hashlib.sha256(f"{actor_key}:{operation}:{idempotency_key}".encode()).hexdigest()
         payload_digest = request_hash(dict(payload))
-        with self._lock:
+        with self._condition:
             existing = self._values.get(key)
             if existing is not None:
-                if existing[0] != payload_digest:
+                if existing.payload_digest != payload_digest:
                     raise ServiceError(
                         status_code=409,
                         code="IDEMPOTENCY_KEY_REUSED",
                         message="The idempotency key was already used for another request.",
                         retryable=False,
                     )
-                return copy.deepcopy(existing[1])
-        result = callback()
-        with self._lock:
-            self._values[key] = (payload_digest, copy.deepcopy(result))
+                while not existing.completed:
+                    self._condition.wait()
+                if existing.error is not None:
+                    raise existing.error
+                return copy.deepcopy(existing.result)
+            existing = _IdempotencyEntry(payload_digest=payload_digest)
+            self._values[key] = existing
+
+        try:
+            result = callback()
+        except Exception as exc:
+            with self._condition:
+                existing.error = exc
+                existing.completed = True
+                self._values.pop(key, None)
+                self._condition.notify_all()
+            raise
+
+        with self._condition:
+            existing.result = copy.deepcopy(result)
+            existing.completed = True
+            self._condition.notify_all()
         return result
 
     def clear(self) -> None:
-        with self._lock:
+        with self._condition:
             self._values.clear()
+
+
+@dataclass
+class _IdempotencyEntry:
+    payload_digest: str
+    completed: bool = False
+    result: dict[str, Any] | None = None
+    error: Exception | None = None
 
 
 _IDEMPOTENCY_STORE = _IdempotencyStore()
@@ -858,7 +930,7 @@ class LocalSignalsService:
         sort: str,
     ) -> dict[str, Any]:
         self.ensure_read_enabled()
-        cursor_value = decode_signal_cursor(cursor) if cursor else None
+        cursor_value = decode_signal_cursor(cursor, sort=sort) if cursor else None
         try:
             rows = self._repository.list_public_signals(
                 language=language,
@@ -873,7 +945,7 @@ class LocalSignalsService:
             raise _database_unavailable() from exc
         has_more = len(rows) > limit
         page = rows[:limit]
-        next_cursor = encode_signal_cursor(page[-1]) if has_more and page else None
+        next_cursor = encode_signal_cursor(page[-1], sort=sort) if has_more and page else None
         return {
             "items": [_public_item(row, language) for row in page],
             "next_cursor": next_cursor,
@@ -906,7 +978,7 @@ class LocalSignalsService:
         cursor: str | None,
     ) -> dict[str, Any]:
         self.ensure_read_enabled()
-        cursor_value = decode_signal_cursor(cursor) if cursor else None
+        cursor_value = decode_comment_cursor(cursor) if cursor else None
         try:
             rows = self._repository.list_public_comments(
                 signal_id=signal_id,
@@ -1249,34 +1321,123 @@ class LocalSignalsService:
             )
 
 
-def encode_signal_cursor(row: Mapping[str, Any]) -> str:
-    return _encode_cursor(row["published_at"], row["id"])
+def _encode_signal_cursor(row: Mapping[str, Any], *, sort: str) -> str:
+    if sort not in _SIGNAL_SORTS:
+        raise _invalid_cursor()
+    payload: dict[str, Any] = {
+        "v": 1,
+        "s": sort,
+        "t": _timestamp_to_cursor_value(row["published_at"]),
+        "i": str(row["id"]),
+    }
+    if sort == "useful":
+        useful_count = row.get("useful_count")
+        if not isinstance(useful_count, int) or isinstance(useful_count, bool) or useful_count < 0:
+            raise _invalid_cursor()
+        payload["u"] = useful_count
+    return _encode_opaque_cursor(payload)
+
+
+def encode_signal_cursor(row: Mapping[str, Any], *, sort: str = "recent") -> str:
+    return _encode_signal_cursor(row, sort=sort)
 
 
 def encode_comment_cursor(row: Mapping[str, Any]) -> str:
-    return _encode_cursor(row["created_at"], row["id"])
+    return _encode_opaque_cursor(
+        {
+            "v": 1,
+            "k": "comment",
+            "t": _timestamp_to_cursor_value(row["created_at"]),
+            "i": str(row["id"]),
+        }
+    )
 
 
-def decode_signal_cursor(value: str) -> tuple[datetime, UUID]:
+def decode_signal_cursor(value: str, *, sort: str) -> SignalCursor:
+    if sort not in _SIGNAL_SORTS:
+        raise _invalid_cursor()
+    decoded = _decode_opaque_cursor(value)
+    expected_keys = {"v", "s", "t", "i"}
+    if sort == "useful":
+        expected_keys.add("u")
+    if set(decoded) != expected_keys or decoded.get("v") != 1 or decoded.get("s") != sort:
+        raise _invalid_cursor()
+    try:
+        timestamp = _timestamp_from_cursor_value(decoded["t"])
+        identifier = UUID(decoded["i"])
+        useful_count = decoded.get("u")
+        if sort == "useful" and (
+            not isinstance(useful_count, int) or isinstance(useful_count, bool) or useful_count < 0
+        ):
+            raise ValueError("cursor useful count is invalid")
+        return SignalCursor(
+            sort=sort,
+            published_at=timestamp,
+            signal_id=identifier,
+            useful_count=useful_count,
+        )
+    except (ValueError, TypeError, KeyError, OverflowError) as exc:
+        raise _invalid_cursor() from exc
+
+
+def decode_comment_cursor(value: str) -> tuple[datetime, UUID]:
+    decoded = _decode_opaque_cursor(value)
+    if set(decoded) != {"v", "k", "t", "i"} or decoded.get("v") != 1:
+        raise _invalid_cursor()
+    try:
+        timestamp = _timestamp_from_cursor_value(decoded["t"])
+        if decoded["k"] != "comment":
+            raise ValueError("comment cursor is invalid")
+        return timestamp, UUID(decoded["i"])
+    except (ValueError, TypeError, KeyError, OverflowError) as exc:
+        raise _invalid_cursor() from exc
+
+
+def _encode_opaque_cursor(payload: Mapping[str, Any]) -> str:
+    encoded = json.dumps(dict(payload), separators=(",", ":"), allow_nan=False).encode("utf-8")
+    return base64.urlsafe_b64encode(encoded).decode("ascii").rstrip("=")
+
+
+def _timestamp_to_cursor_value(value: datetime) -> int:
+    if value.tzinfo is None:
+        raise _invalid_cursor()
+    normalized = value.astimezone(UTC)
+    epoch = datetime(1970, 1, 1, tzinfo=UTC)
+    delta = normalized - epoch
+    return (delta.days * 86_400 + delta.seconds) * 1_000_000 + delta.microseconds
+
+
+def _timestamp_from_cursor_value(value: Any) -> datetime:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ValueError("cursor timestamp is invalid")
+    return datetime(1970, 1, 1, tzinfo=UTC) + timedelta(microseconds=value)
+
+
+def _decode_opaque_cursor(value: str) -> dict[str, Any]:
+    if not isinstance(value, str) or not value or len(value) > 128:
+        raise _invalid_cursor()
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", value):
+        raise _invalid_cursor()
     try:
         padded = value + "=" * (-len(value) % 4)
-        decoded = json.loads(base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8"))
-        return datetime.fromisoformat(decoded["time"]), UUID(decoded["id"])
-    except (ValueError, KeyError, TypeError, binascii.Error, json.JSONDecodeError) as exc:
-        raise ServiceError(
-            status_code=422,
-            code="INVALID_CURSOR",
-            message="The pagination cursor is invalid.",
-            retryable=False,
-        ) from exc
+        decoded = json.loads(
+            base64.b64decode(padded.encode("ascii"), altchars=b"-_", validate=True),
+            parse_constant=lambda _: (_ for _ in ()).throw(ValueError("invalid JSON constant")),
+        )
+    except (ValueError, TypeError, binascii.Error, json.JSONDecodeError) as exc:
+        raise _invalid_cursor() from exc
+    if not isinstance(decoded, dict):
+        raise _invalid_cursor()
+    return decoded
 
 
-def _encode_cursor(timestamp: datetime, identifier: UUID) -> str:
-    payload = json.dumps(
-        {"time": timestamp.isoformat(), "id": str(identifier)},
-        separators=(",", ":"),
-    ).encode("utf-8")
-    return base64.urlsafe_b64encode(payload).decode("ascii").rstrip("=")
+def _invalid_cursor() -> ServiceError:
+    return ServiceError(
+        status_code=422,
+        code="INVALID_CURSOR",
+        message="The pagination cursor is invalid.",
+        retryable=False,
+    )
 
 
 def _public_item(row: Mapping[str, Any], language: str) -> dict[str, Any]:
