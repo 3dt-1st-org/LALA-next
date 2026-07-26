@@ -448,7 +448,7 @@ def test_unix_smoke_uses_public_contest_access_without_auth_headers():
 
 def test_unix_smoke_paid_dependency_reuses_script_payload_for_live_checks():
     docent_payload = _live_docent_payload()
-    docent_payload["data"]["source"] = "azure_openai"
+    docent_payload["data"]["source"] = "openai"
 
     server, thread, base_url = _start_server(
         public_access=True,

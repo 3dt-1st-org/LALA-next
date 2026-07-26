@@ -119,15 +119,16 @@ if ($EffectiveKeyVaultUrl) {
     Set-SecretEnvIfMissing -VaultName $VaultName -EnvName "OAUTH_JWKS_URL" -SecretName "oauth-jwks-url"
     Set-SecretEnvIfMissing -VaultName $VaultName -EnvName "OAUTH_CLIENT_ID" -SecretName "oauth-client-id"
     Set-SecretEnvIfMissing -VaultName $VaultName -EnvName "OAUTH_REQUIRED_SCOPES" -SecretName "oauth-required-scopes"
-    Set-SecretEnvIfMissing -VaultName $VaultName -EnvName "AZURE_OPENAI_ENDPOINT" -SecretName "azure-openai-endpoint"
-    Set-SecretEnvIfMissing -VaultName $VaultName -EnvName "AZURE_OPENAI_KEY" -SecretName "azure-openai-key"
-    Set-SecretEnvIfMissing -VaultName $VaultName -EnvName "AZURE_OPENAI_DEPLOYMENT" -SecretName "azure-openai-deployment"
-    Set-SecretEnvIfMissing -VaultName $VaultName -EnvName "AZURE_OPENAI_API_VERSION" -SecretName "azure-openai-api-version"
+    Set-SecretEnvIfMissing -VaultName $VaultName -EnvName "OPENAI_API_KEY" -SecretName "openai-api-key"
+    Set-SecretEnvIfMissing -VaultName $VaultName -EnvName "OPENAI_DOCENT_MODEL" -SecretName "openai-docent-model"
+    Set-SecretEnvIfMissing -VaultName $VaultName -EnvName "OPENAI_PLACE_ENRICHMENT_MODEL" -SecretName "openai-place-enrichment-model"
+    Set-SecretEnvIfMissing -VaultName $VaultName -EnvName "OPENAI_REVIEW_BATCH_MODEL" -SecretName "openai-review-batch-model"
+    Set-SecretEnvIfMissing -VaultName $VaultName -EnvName "OPENAI_REVIEW_RECHECK_MODEL" -SecretName "openai-review-recheck-model"
     Set-SecretEnvIfMissing -VaultName $VaultName -EnvName "AZURE_SPEECH_KEY" -SecretName "azure-speech-key"
     Set-SecretEnvIfMissing -VaultName $VaultName -EnvName "AZURE_SPEECH_REGION" -SecretName "azure-speech-region"
     Set-SecretEnvIfMissing -VaultName $VaultName -EnvName "AZURE_SPEECH_ENDPOINT" -SecretName "azure-speech-endpoint"
     Set-SecretEnvIfMissing -VaultName $VaultName -EnvName "CORS_ALLOW_ORIGINS" -SecretName "cors-allow-origins"
-    Write-Host "Key Vault secret preload: api_key=$(Get-EnvStatus 'IOS_API_KEY'), bearer_token=$(Get-EnvStatus 'API_BEARER_TOKEN'), oauth_issuer=$(Get-EnvStatus 'OAUTH_ISSUER'), oauth_client_id=$(Get-EnvStatus 'OAUTH_CLIENT_ID'), openai_key=$(Get-EnvStatus 'AZURE_OPENAI_KEY'), speech_key=$(Get-EnvStatus 'AZURE_SPEECH_KEY'), cors_origins=$(Get-EnvStatus 'CORS_ALLOW_ORIGINS')"
+    Write-Host "Key Vault secret preload: api_key=$(Get-EnvStatus 'IOS_API_KEY'), bearer_token=$(Get-EnvStatus 'API_BEARER_TOKEN'), oauth_issuer=$(Get-EnvStatus 'OAUTH_ISSUER'), oauth_client_id=$(Get-EnvStatus 'OAUTH_CLIENT_ID'), openai_key=$(Get-EnvStatus 'OPENAI_API_KEY'), speech_key=$(Get-EnvStatus 'AZURE_SPEECH_KEY'), cors_origins=$(Get-EnvStatus 'CORS_ALLOW_ORIGINS')"
 }
 
 if ($EnableLiveAI) {
@@ -143,7 +144,7 @@ Write-Host "Health endpoint: http://127.0.0.1:$Port/healthz"
 Write-Host "Python executable: $Python"
 Write-Host "JSONL access log: $(Get-EnvStatus 'LALA_ACCESS_LOG_PATH')"
 if ($EnableLiveAI) {
-    Write-Host "Live Azure OpenAI generation: enabled"
+    Write-Host "Live OpenAI generation: enabled"
 }
 if ($EnableLiveSpeech) {
     Write-Host "Live Azure Speech synthesis: enabled"

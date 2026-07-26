@@ -86,8 +86,7 @@ def test_repo_docs_and_scripts_do_not_contain_secret_literals():
         re.compile(r"^IOS_API_KEY[ \t]*=[ \t]*[^#\r\n]+", re.MULTILINE),
         re.compile(r"^API_BEARER_TOKEN[ \t]*=[ \t]*[^#\r\n]+", re.MULTILINE),
         re.compile(r"^POSTGRES_PASSWORD[ \t]*=[ \t]*[^#\r\n]+", re.MULTILINE),
-        re.compile(r"^AZURE_OPENAI_API_KEY[ \t]*=[ \t]*[^#\r\n]+", re.MULTILINE),
-        re.compile(r"^AZURE_OPENAI_KEY[ \t]*=[ \t]*[^#\r\n]+", re.MULTILINE),
+        re.compile(r"^OPENAI_API_KEY[ \t]*=[ \t]*[^#\r\n]+", re.MULTILINE),
         re.compile(r"^AZURE_SPEECH_KEY[ \t]*=[ \t]*[^#\r\n]+", re.MULTILINE),
         re.compile("SharedAccessKey" + "=", re.IGNORECASE),
         re.compile(r"BEGIN [A-Z ]*PRIVATE KEY"),
@@ -466,12 +465,12 @@ def test_paid_smoke_requires_authenticated_api_key():
     assert "apps.api.app.tools.run_review_attribute_batch" in review_attribute_batch_script
     assert "ALLOW_REVIEW_ATTRIBUTE_BATCH_APPLY=1" in review_attribute_batch_script
     assert (
-        "AZURE_OPENAI_KEY and DB_DSN values are never printed by this script."
+        "OPENAI_API_KEY and DB_DSN values are never printed by this script."
         in review_attribute_batch_script
     )
     assert "secret show" not in review_attribute_batch_script
     assert "Write-Host $env:DB_DSN" not in review_attribute_batch_script
-    assert "Write-Host $env:AZURE_OPENAI_KEY" not in review_attribute_batch_script
+    assert "Write-Host $env:OPENAI_API_KEY" not in review_attribute_batch_script
     assert "apps.api.app.tools.run_franchise_identity_batch" in franchise_identity_batch_script
     assert "ALLOW_FRANCHISE_IDENTITY_BATCH_APPLY=1" in franchise_identity_batch_script
     assert "DB_DSN value is never printed by this script." in franchise_identity_batch_script
@@ -480,21 +479,21 @@ def test_paid_smoke_requires_authenticated_api_key():
     assert "apps.api.app.tools.run_rag_index" in rag_index_unix_script
     assert "ALLOW_RAG_INDEX_APPLY=1" in rag_index_unix_script
     assert (
-        "DB_DSN and AZURE_OPENAI_KEY values are never printed by this script."
+        "DB_DSN and OPENAI_API_KEY values are never printed by this script."
         in rag_index_unix_script
     )
     assert "secret show" not in rag_index_unix_script
     assert 'echo "$DB_DSN"' not in rag_index_unix_script
-    assert 'echo "$AZURE_OPENAI_KEY"' not in rag_index_unix_script
+    assert 'echo "$OPENAI_API_KEY"' not in rag_index_unix_script
     assert "apps.api.app.tools.enrich_place_ai_columns" in place_ai_enrichment_script
     assert "ALLOW_AI_PLACE_ENRICHMENT_APPLY=1" in place_ai_enrichment_script
     assert (
-        "AZURE_OPENAI_KEY and DB_DSN values are never printed by this script."
+        "OPENAI_API_KEY and DB_DSN values are never printed by this script."
         in place_ai_enrichment_script
     )
     assert "secret show" not in place_ai_enrichment_script
     assert "Write-Host $env:DB_DSN" not in place_ai_enrichment_script
-    assert "Write-Host $env:AZURE_OPENAI_KEY" not in place_ai_enrichment_script
+    assert "Write-Host $env:OPENAI_API_KEY" not in place_ai_enrichment_script
     assert "apps.api.app.tools.enrich_place_local_columns" in place_local_enrichment_script
     assert "ALLOW_LOCAL_PLACE_ENRICHMENT_APPLY=1" in place_local_enrichment_script
     assert "DB_DSN value is never printed by this script." in place_local_enrichment_script
@@ -667,7 +666,7 @@ def test_unix_scripts_have_safe_operational_guards():
     assert "ALLOW_REVIEW_ATTRIBUTE_BATCH_APPLY=1" in scripts["plan_review_attribute_batch.sh"]
     assert "--confirm APPLY_REVIEW_ATTRIBUTE_BATCH" in scripts["plan_review_attribute_batch.sh"]
     assert (
-        "AZURE_OPENAI_KEY and DB_DSN values are never printed by this script."
+        "OPENAI_API_KEY and DB_DSN values are never printed by this script."
         in scripts["plan_review_attribute_batch.sh"]
     )
     assert "run_franchise_identity_batch" in scripts["plan_franchise_identity_batch.sh"]
@@ -714,7 +713,7 @@ def test_unix_scripts_have_safe_operational_guards():
     assert "ALLOW_RAG_INDEX_APPLY=1" in scripts["plan_rag_index.sh"]
     assert "--confirm APPLY_RAG_INDEX" in scripts["plan_rag_index.sh"]
     assert (
-        "DB_DSN and AZURE_OPENAI_KEY values are never printed by this script."
+        "DB_DSN and OPENAI_API_KEY values are never printed by this script."
         in scripts["plan_rag_index.sh"]
     )
     assert "enrich_place_ai_columns" in scripts["plan_place_ai_enrichment.sh"]
@@ -722,7 +721,7 @@ def test_unix_scripts_have_safe_operational_guards():
     assert "ALLOW_AI_PLACE_ENRICHMENT_APPLY=1" in scripts["plan_place_ai_enrichment.sh"]
     assert "--confirm APPLY_AI_PLACE_ENRICHMENT" in scripts["plan_place_ai_enrichment.sh"]
     assert (
-        "AZURE_OPENAI_KEY and DB_DSN values are never printed by this script."
+        "OPENAI_API_KEY and DB_DSN values are never printed by this script."
         in scripts["plan_place_ai_enrichment.sh"]
     )
     assert "enrich_place_local_columns" in scripts["plan_place_local_enrichment.sh"]

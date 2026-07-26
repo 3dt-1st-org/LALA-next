@@ -106,9 +106,9 @@ if [[ "$JSON_STATUS" != "true" ]]; then
   echo "Planning LALA-next review attribute batch."
   echo "Default mode is dry-run plan only."
   echo "Preview mode reads review mentions and computes deterministic attributes without mutating DB."
-  echo "Dry-run AI mode calls Azure OpenAI but does not mutate DB."
+  echo "Dry-run AI mode calls OpenAI but does not mutate DB."
   echo "Apply mode requires ALLOW_REVIEW_ATTRIBUTE_BATCH_APPLY=1."
-  echo "AZURE_OPENAI_KEY and DB_DSN values are never printed by this script."
+  echo "OPENAI_API_KEY and DB_DSN values are never printed by this script."
 fi
 
 ARGS=(

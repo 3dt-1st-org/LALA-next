@@ -128,8 +128,11 @@ def build_key_vault_reuse_plan(
                 reason="Client and integration credentials must be issued for LALA-next, not borrowed from ONMU.",
             ),
             RejectedSecretPattern(
-                pattern="azure-openai, speech, cognitive-services",
-                reason="LALA-next already has dedicated Azure OpenAI and Speech resources.",
+                pattern="azure-openai, openai, speech, cognitive-services",
+                reason=(
+                    "LALA-next uses its own standard OpenAI key and dedicated Azure Speech "
+                    "configuration; neither is borrowed from ONMU."
+                ),
             ),
         ),
         verification_commands=(

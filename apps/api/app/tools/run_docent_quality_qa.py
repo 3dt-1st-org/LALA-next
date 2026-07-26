@@ -143,8 +143,8 @@ def _plan_payload(args: argparse.Namespace) -> dict[str, Any]:
         "target": "output/local/docent-qa",
         "model_role": "docent_generation_and_qa",
         "model_deployment_envs": [
-            "AZURE_OPENAI_DOCENT_DEPLOYMENT",
-            "AZURE_OPENAI_DEPLOYMENT",
+            "OPENAI_DOCENT_MODEL",
+            "OPENAI_API_KEY",
         ],
         "category": args.category,
         "language": args.language,

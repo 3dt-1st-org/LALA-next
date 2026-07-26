@@ -19,7 +19,7 @@ must go further and judge whether the generated docent script is actually good:
 - better than a generic tourism summary.
 
 The docent generation and QA lane should use
-`AZURE_OPENAI_DOCENT_DEPLOYMENT` first, with `gpt-5.4-mini` as the recommended
+`OPENAI_DOCENT_MODEL`, with `gpt-5.4-mini` as the default
 backing model. Bulk review-classification deployments are not the default for
 this lane.
 
@@ -118,7 +118,7 @@ For each selected place:
 2. Generate missing Korean brief scripts into a local-only QA artifact:
    `scripts/unix/plan_docent_quality_qa.sh --write --generate-scripts --limit 50`.
    The preferred AI lane for this generation step is
-   `AZURE_OPENAI_DOCENT_DEPLOYMENT` (`gpt-5.4-mini` recommended).
+   `OPENAI_DOCENT_MODEL` (`gpt-5.4-mini` by default).
 3. For targeted rows, fetch the place through the public API with a real test
    coordinate and fetch weather/PM10/PM2.5 for the same coordinate.
 4. Generate detail scripts or English scripts only when that review lane is

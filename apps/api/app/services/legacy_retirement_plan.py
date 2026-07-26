@@ -165,7 +165,7 @@ def build_legacy_retirement_plan(
             approval_required=False,
             notes=(
                 "Requires an approved local smoke auth token or API key for /api/v1/*.",
-                "Does not call live Azure OpenAI or Speech unless the paid flag is added separately.",
+                "Does not call live OpenAI or Azure Speech unless the paid flag is added separately.",
             ),
         ),
         LegacyRetirementPlanStep(

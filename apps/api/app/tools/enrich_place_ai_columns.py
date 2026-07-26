@@ -9,7 +9,7 @@ from collections.abc import Sequence
 from dataclasses import asdict, dataclass, replace
 from typing import Any
 
-from apps.api.app.core.config import get_settings
+from apps.api.app.core.config import get_settings, resolve_openai_base_url_host
 from apps.api.app.core.redaction import redact_secret_text
 
 CONFIRM_TEXT = "APPLY_AI_PLACE_ENRICHMENT"
@@ -140,7 +140,7 @@ def parse_ai_response(raw: str, candidates: Sequence[PlaceCandidate]) -> list[Pl
     elif isinstance(payload, dict):
         items = _first_list_value(payload)
     else:
-        raise ValueError("Azure OpenAI returned a non-JSON-object response.")
+        raise ValueError("OpenAI returned a non-JSON-object response.")
 
     candidate_ids = {candidate.place_id for candidate in candidates}
     parsed: list[PlaceEnrichment] = []
@@ -282,19 +282,18 @@ def generate_enrichments(
     if not candidates:
         return []
     settings = get_settings()
-    missing = _missing_aoai_settings(settings)
+    missing = _missing_openai_settings(settings)
     if missing:
-        raise RuntimeError("Azure OpenAI config is missing: " + ", ".join(missing))
+        raise RuntimeError("OpenAI config is missing: " + ", ".join(missing))
 
     try:
-        from openai import AzureOpenAI
+        from openai import OpenAI
     except Exception as exc:
         raise RuntimeError("openai package is required for AI enrichment.") from exc
 
-    client = AzureOpenAI(
-        azure_endpoint=settings.azure_openai_endpoint,
-        api_key=settings.azure_openai_key,
-        api_version=settings.azure_openai_api_version,
+    client = OpenAI(
+        api_key=settings.openai_api_key,
+        base_url=settings.openai_base_url or "https://api.openai.com/v1",
     )
 
     enrichments: list[PlaceEnrichment] = []
@@ -303,7 +302,7 @@ def generate_enrichments(
         batch = list(candidates[start : start + batch_size])
         response = _create_chat_completion_with_retry(
             client=client,
-            model=settings.azure_openai_deployment,
+            model=selected_place_enrichment_model(settings),
             messages=[
                 {"role": "system", "content": system_prompt},
                 {
@@ -352,7 +351,7 @@ def _create_chat_completion_with_retry(
             time.sleep(delay * attempt)
     if last_exc:
         raise last_exc
-    raise RuntimeError("Azure OpenAI completion failed before a request was attempted.")
+    raise RuntimeError("OpenAI completion failed before a request was attempted.")
 
 
 def _is_retryable_ai_error(exc: Exception) -> bool:
@@ -428,7 +427,7 @@ def apply_enrichments(
             %(is_indoor)s,
             %(attributes)s::jsonb,
             %(confidence)s,
-            'azure_openai',
+            'openai',
             %(model)s,
             %(version)s
         )
@@ -453,7 +452,7 @@ def apply_enrichments(
                         ensure_ascii=False,
                     ),
                     "confidence": item.confidence,
-                    "model": settings.azure_openai_deployment,
+                    "model": selected_place_enrichment_model(settings),
                     "version": PROMPT_VERSION,
                 }
                 cur.execute(update_sql, params)
@@ -465,17 +464,15 @@ def apply_enrichments(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Plan, preview, or apply Azure OpenAI enrichment for travel.places."
+        description="Plan, preview, or apply OpenAI enrichment for travel.places."
     )
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     parser.add_argument(
         "--dry-run-ai",
         action="store_true",
-        help="Call Azure OpenAI and print a preview without updating rows.",
+        help="Call OpenAI and print a preview without updating rows.",
     )
-    parser.add_argument(
-        "--apply", action="store_true", help="Call Azure OpenAI and update DB rows."
-    )
+    parser.add_argument("--apply", action="store_true", help="Call OpenAI and update DB rows.")
     parser.add_argument("--confirm", default="", help=f"Required with --apply: {CONFIRM_TEXT}")
     parser.add_argument(
         "--category",
@@ -587,7 +584,7 @@ def main(argv: list[str] | None = None) -> int:
                 "mode": _mode(args),
                 "error": redact_secret_text(
                     str(exc) or exc.__class__.__name__,
-                    (dsn, settings.azure_openai_key),
+                    (dsn, settings.openai_api_key),
                 ),
             },
         )
@@ -669,16 +666,24 @@ def _mode(args: argparse.Namespace) -> str:
     return "apply" if args.apply else "dry-run-ai"
 
 
-def _missing_aoai_settings(settings: Any) -> list[str]:
+def selected_place_enrichment_model(settings: Any | None = None) -> str:
+    if settings is None:
+        settings = get_settings()
+    return str(getattr(settings, "openai_place_enrichment_model", "") or "gpt-5.4-mini").strip()
+
+
+def _missing_openai_settings(settings: Any) -> list[str]:
     missing: list[str] = []
-    if not settings.azure_openai_endpoint:
-        missing.append("AZURE_OPENAI_ENDPOINT")
-    if not settings.azure_openai_key:
-        missing.append("AZURE_OPENAI_KEY")
-    if not settings.azure_openai_deployment:
-        missing.append("AZURE_OPENAI_DEPLOYMENT")
-    if not settings.azure_openai_api_version:
-        missing.append("AZURE_OPENAI_API_VERSION")
+    if not getattr(settings, "openai_api_key", ""):
+        missing.append("OPENAI_API_KEY")
+    if not getattr(settings, "enable_live_ai", False):
+        missing.append("LALA_ENABLE_LIVE_AI=true")
+    if not selected_place_enrichment_model(settings):
+        missing.append("OPENAI_PLACE_ENRICHMENT_MODEL")
+    try:
+        resolve_openai_base_url_host(getattr(settings, "openai_base_url", ""))
+    except ValueError as exc:
+        missing.append(str(exc))
     return missing
 
 
@@ -731,7 +736,7 @@ def _first_list_value(payload: dict[str, Any]) -> list[Any]:
     for value in payload.values():
         if isinstance(value, list):
             return value
-    raise ValueError("Azure OpenAI JSON response did not include a results list.")
+    raise ValueError("OpenAI JSON response did not include a results list.")
 
 
 def _strip_code_fence(raw: str) -> str:

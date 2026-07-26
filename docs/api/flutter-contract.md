@@ -121,7 +121,7 @@ request `input` values are removed before the response is returned.
 | GET | `/api/v1/plans/intervention` | Weather/location intervention |
 
 Wave 1 service responses are deterministic when live dependencies are disabled.
-Azure OpenAI and Azure Speech are available as opt-in live paths. DB-backed
+General OpenAI and Azure Speech are available as opt-in live paths. DB-backed
 places, weather, planner, and docent-cache reads are also available when
 `DB_DSN` points at the canonical schema and `/readyz` reports
 `postgis=configured`. Current-location recommendations rely on PostGIS
@@ -458,17 +458,18 @@ DB, KMA, and AirKorea reads are unavailable, the route returns
 
 ## Live AI
 
-Azure OpenAI resources exist for LALA. In shared Azure dev/review, live
-generation is enabled when the LALA Key Vault contains the OpenAI endpoint,
-deployment, API version, and key. Local and isolated runs can opt in with:
+LALA uses the standard OpenAI API for live generation. Runtime configuration is
+`OPENAI_API_KEY`, optional `OPENAI_BASE_URL`, and `OPENAI_DOCENT_MODEL`
+(`gpt-5.4-mini` by default). Azure OpenAI base URLs are rejected. Local and
+isolated runs can opt in with:
 
 ```powershell
 $env:LALA_ENABLE_LIVE_AI = "true"
 ```
 
-When live AI is enabled and Key Vault or environment variables provide the
-OpenAI settings, `POST /api/v1/docents/script` uses the configured deployment
-and returns `source: "azure_openai"`. Otherwise it returns a deterministic
+When live AI is enabled and process environment or the configured secret store
+provides the OpenAI settings, `POST /api/v1/docents/script` uses the configured
+model and returns `source: "openai"`. Otherwise it returns a deterministic
 rule-based local curation script with `source: "rule_based_curation"`.
 Both live and rule-based scripts pass through the same quality guard so current
 location distance, official data grounding, local spending or small-merchant
@@ -478,10 +479,10 @@ request provides those signals.
 If `DB_DSN` is configured, `rag.knowledge_chunks` is checked before generation
 for same-place grounding snippets. If no score or RAG grounding context is
 present and `travel.docent_scripts` has a matching non-expired entry, the script
-route returns the cached script before calling Azure OpenAI. Those cache hits
+route returns the cached script before calling OpenAI. Those cache hits
 return `source: "db_cache"` and `ttl_sec` as the approximate remaining seconds
 until `expires_at`.
-When live Azure OpenAI generation succeeds and `DB_DSN` is configured, the route
+When live OpenAI generation succeeds and `DB_DSN` is configured, the route
 best-effort writes the generated script back to `travel.docent_scripts` only for
 generic, non-score, non-RAG requests. Database write failures do not fail the API
 response.

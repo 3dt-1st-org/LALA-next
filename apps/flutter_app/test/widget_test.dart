@@ -995,7 +995,7 @@ void main() {
     final weatherPillText = tester.widget<Text>(
       find.descendant(
         of: find.byKey(const ValueKey('weather-pill-hit-target')),
-        matching: find.text('14°C · PM10 31 보통 · PM2.5 14 좋음'),
+        matching: find.text('14°C · 공기 보통'),
       ),
     );
     expect(weatherPillText.maxLines, 2);
@@ -2487,7 +2487,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Weather is good'), findsAtLeastNWidgets(1));
-    expect(find.textContaining('PM10 31 Normal'), findsAtLeastNWidgets(1));
+    expect(find.textContaining('Air Normal'), findsAtLeastNWidgets(1));
     expect(find.textContaining('Keep walking'), findsAtLeastNWidgets(1));
     expect(find.textContaining('날씨가 좋아요'), findsNothing);
     expect(

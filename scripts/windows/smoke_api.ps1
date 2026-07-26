@@ -325,11 +325,11 @@ if ($PaidDependency) {
         language = "ko"
         mode = "brief"
     }
-    if ($scriptResult.data.source -ne "azure_openai") {
-        throw "Expected Azure OpenAI script source, got $($scriptResult.data.source)."
+    if ($scriptResult.data.source -ne "openai") {
+        throw "Expected OpenAI script source, got $($scriptResult.data.source)."
     }
     if (-not $scriptResult.data.script) {
-        throw "Azure OpenAI script smoke returned an empty script."
+        throw "OpenAI script smoke returned an empty script."
     }
     Invoke-SmokeAudioPost "/api/v1/docents/audio" -Headers $headers -Body @{
         script = $scriptResult.data.script

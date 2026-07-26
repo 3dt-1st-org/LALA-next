@@ -295,11 +295,11 @@ import os
 
 payload = json.loads(os.environ["JSON_PAYLOAD"])
 data = payload.get("data") or {}
-if data.get("source") != "azure_openai":
-    raise SystemExit(f"Expected Azure OpenAI script source, got {data.get('source')}.")
+if data.get("source") != "openai":
+    raise SystemExit(f"Expected OpenAI script source, got {data.get('source')}.")
 script = data.get("script") or ""
 if not script:
-    raise SystemExit("Azure OpenAI script smoke returned an empty script.")
+    raise SystemExit("OpenAI script smoke returned an empty script.")
 print(script)
 PY
 )"

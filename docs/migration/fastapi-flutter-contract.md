@@ -19,7 +19,7 @@ Implemented Wave 1 boundaries:
 
 - FastAPI owns the public API edge and request/response contract.
 - Azure Key Vault is used as the secret source when `KEY_VAULT_URL` is set.
-- Azure OpenAI and Azure Speech are live-capable but explicitly opt-in with
+- General OpenAI and Azure Speech are live-capable but explicitly opt-in with
   `LALA_ENABLE_LIVE_AI=true` and `LALA_ENABLE_LIVE_SPEECH=true`.
 - Places, weather, planner, and docent-cache services use PostgreSQL-backed
   repository reads when `DB_DSN` is configured and the canonical schema is

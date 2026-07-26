@@ -160,7 +160,7 @@ def test_apply_english_only_replace_local_leaves_indoor_untouched(monkeypatch):
     monkeypatch.setattr(
         enrich_place_ai_columns,
         "get_settings",
-        lambda: SimpleNamespace(azure_openai_deployment="test-model"),
+        lambda: SimpleNamespace(openai_place_enrichment_model="test-model"),
     )
 
     updated = enrich_place_ai_columns.apply_enrichments(

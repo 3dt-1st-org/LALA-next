@@ -484,9 +484,10 @@ Per product owner policy (do not re-derive model assignment):
 | High-volume extraction/normalization/classification | **`gpt-5.4-nano`** | Review extraction & normalization; ad/document classification; keyword/attribute batch extraction in ingest workers (`review_attribute_batch`, `review_mention_ingest`, franchise/category classification). |
 | Low-confidence recheck + all docent generation/QA | **`gpt-5.4-mini`** | `docent_service.generate_script` (all generation); low-confidence extraction recheck; `docent_quality_qa`. |
 
-**Plumbing:** `ai_service.selected_docent_model` already selects a deployment per role
-(`azure_openai_docent_deployment` → `azure_openai_deployment`). Map the two tiers to two
-deployments; keep `live_ai_enabled` opt-in, `DOCENT_AI_TIMEOUT_SECONDS=5.0`,
+**Plumbing:** `ai_service.selected_docent_model` selects the explicit OpenAI model per role
+(`OPENAI_DOCENT_MODEL`, default `gpt-5.4-mini`). Use `OPENAI_REVIEW_BATCH_MODEL`
+(`gpt-5.4-nano`) for high-volume extraction and `OPENAI_REVIEW_RECHECK_MODEL`
+(`gpt-5.4-mini`) for low-confidence rechecks; keep `live_ai_enabled` opt-in, `DOCENT_AI_TIMEOUT_SECONDS=5.0`,
 `max_retries=0` (retry/idempotency handled at the service/cache layer, [§9](#9-retry--idempotency)).
 
 ---

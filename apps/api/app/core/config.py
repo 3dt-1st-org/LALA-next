@@ -40,14 +40,6 @@ class Settings:
     static_snapshot_fallback: bool = False
     db_dsn: str = ""
     key_vault_url: str = ""
-    azure_openai_endpoint: str = ""
-    azure_openai_deployment: str = ""
-    azure_openai_docent_deployment: str = ""
-    azure_openai_review_batch_deployment: str = ""
-    azure_openai_embedding_deployment: str = ""
-    azure_openai_api_version: str = ""
-    azure_openai_embedding_api_version: str = ""
-    azure_openai_key: str = ""
     openai_api_key: str = ""
     openai_base_url: str = ""
     openai_embedding_model: str = ""
@@ -56,6 +48,8 @@ class Settings:
     # Never use Azure OpenAI for LALA AI work.
     openai_review_batch_model: str = ""
     openai_review_recheck_model: str = ""
+    openai_docent_model: str = ""
+    openai_place_enrichment_model: str = ""
     enable_live_ai: bool = False
     azure_speech_region: str = ""
     azure_speech_endpoint: str = ""
@@ -92,26 +86,21 @@ class Settings:
         )
         logto_issuer, logto_jwks_url = derive_logto_oidc_urls(logto_endpoint)
         logto_validation_configured = bool(logto_issuer and logto_jwks_url and logto_api_audience)
-        azure_openai_deployment = _env_or_secret(
-            "AZURE_OPENAI_DEPLOYMENT",
-            "azure-openai-deployment",
-            key_vault_url,
-        )
-        azure_openai_docent_deployment = (
+        openai_docent_model = (
             _env_or_secret(
-                "AZURE_OPENAI_DOCENT_DEPLOYMENT",
-                "azure-openai-docent-deployment",
+                "OPENAI_DOCENT_MODEL",
+                "openai-docent-model",
                 key_vault_url,
             )
-            or azure_openai_deployment
+            or "gpt-5.4-mini"
         )
-        azure_openai_review_batch_deployment = (
+        openai_place_enrichment_model = (
             _env_or_secret(
-                "AZURE_OPENAI_REVIEW_BATCH_DEPLOYMENT",
-                "azure-openai-review-batch-deployment",
+                "OPENAI_PLACE_ENRICHMENT_MODEL",
+                "openai-place-enrichment-model",
                 key_vault_url,
             )
-            or azure_openai_deployment
+            or "gpt-5.4-mini"
         )
         # Improvement B: standard OpenAI chat models for review evidence (never
         # Azure). Bulk -> gpt-5.4-nano, low-confidence recheck -> gpt-5.4-mini.
@@ -204,37 +193,6 @@ class Settings:
             static_snapshot_fallback=_static_snapshot_fallback_enabled(),
             db_dsn=_env_or_secret("DB_DSN", "db-dsn", key_vault_url),
             key_vault_url=key_vault_url,
-            azure_openai_endpoint=_env_or_secret(
-                "AZURE_OPENAI_ENDPOINT",
-                "azure-openai-endpoint",
-                key_vault_url,
-            ),
-            azure_openai_deployment=azure_openai_deployment,
-            azure_openai_docent_deployment=azure_openai_docent_deployment,
-            azure_openai_review_batch_deployment=azure_openai_review_batch_deployment,
-            azure_openai_embedding_deployment=_env_or_secret(
-                "AZURE_OPENAI_EMBEDDING_DEPLOYMENT",
-                "azure-openai-embedding-deployment",
-                key_vault_url,
-            ),
-            azure_openai_api_version=_env_or_secret(
-                "AZURE_OPENAI_API_VERSION",
-                "azure-openai-api-version",
-                key_vault_url,
-            ),
-            azure_openai_embedding_api_version=(
-                _env_or_secret(
-                    "AZURE_OPENAI_EMBEDDING_API_VERSION",
-                    "azure-openai-embedding-api-version",
-                    key_vault_url,
-                )
-                or _env_or_secret(
-                    "AZURE_OPENAI_API_VERSION",
-                    "azure-openai-api-version",
-                    key_vault_url,
-                )
-            ),
-            azure_openai_key=_env_or_secret("AZURE_OPENAI_KEY", "azure-openai-key", key_vault_url),
             openai_api_key=_env_or_secret("OPENAI_API_KEY", "openai-api-key", key_vault_url),
             openai_base_url=(
                 _env_or_secret("OPENAI_BASE_URL", "openai-base-url", key_vault_url)
@@ -246,6 +204,8 @@ class Settings:
             ),
             openai_review_batch_model=openai_review_batch_model,
             openai_review_recheck_model=openai_review_recheck_model,
+            openai_docent_model=openai_docent_model,
+            openai_place_enrichment_model=openai_place_enrichment_model,
             enable_live_ai=_bool_env("LALA_ENABLE_LIVE_AI", default=False),
             azure_speech_region=_env_or_secret(
                 "AZURE_SPEECH_REGION", "azure-speech-region", key_vault_url
@@ -319,8 +279,8 @@ def get_settings() -> Settings:
 def resolve_openai_base_url_host(base_url: str | None) -> str:
     """Return only the safe host metadata for a general OpenAI base URL.
 
-    Review and RAG model lanes must never route through Azure OpenAI. The full
-    URL is intentionally not returned or included in operator payloads.
+    LALA AI model lanes must never route through Azure OpenAI. The full URL is
+    intentionally not returned or included in operator payloads.
     """
     raw_url = (base_url or "https://api.openai.com/v1").strip()
     try:
@@ -331,7 +291,7 @@ def resolve_openai_base_url_host(base_url: str | None) -> str:
     if not host:
         raise ValueError("OPENAI_BASE_URL must include a host.")
     if host == "openai.azure.com" or host.endswith(".openai.azure.com"):
-        raise ValueError("Azure OpenAI base URLs are not supported for review or RAG model paths.")
+        raise ValueError("Azure OpenAI base URLs are not supported for LALA AI model paths.")
     return host
 
 

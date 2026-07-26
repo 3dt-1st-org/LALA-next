@@ -135,6 +135,7 @@ def test_openapi_documents_readyz_runtime_mode(client):
     assert runtime_mode["overall"]["enum"] == [
         "public-cache",
         "db-backed",
+        "live-openai",
         "live-azure",
         "degraded",
     ]
@@ -144,7 +145,7 @@ def test_openapi_documents_readyz_runtime_mode(client):
         "db-backed",
         "degraded",
     ]
-    assert runtime_mode["ai"]["enum"] == ["disabled", "live-azure", "degraded"]
+    assert runtime_mode["ai"]["enum"] == ["disabled", "live-openai", "degraded"]
     assert runtime_mode["speech"]["enum"] == ["disabled", "live-azure", "degraded"]
     assert runtime_mode["worker"]["enum"] == ["dry-run", "degraded"]
     readiness_checks = schemas["ReadinessChecks"]["properties"]
@@ -308,7 +309,7 @@ def test_openapi_documents_v1_success_data_schemas(client):
     assert schemas["DocentScriptData"]["properties"]["source"]["enum"] == [
         "rule_based_curation",
         "db_cache",
-        "azure_openai",
+        "openai",
     ]
     assert schemas["DocentScriptData"]["properties"]["grounding_count"] == {"type": "integer"}
     assert schemas["DocentScriptData"]["properties"]["grounding_sources"] == {

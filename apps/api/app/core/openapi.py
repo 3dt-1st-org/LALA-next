@@ -434,9 +434,8 @@ def _readiness_checks_schema() -> dict[str, Any]:
             "identity_schema",
             "postgis",
             "key_vault",
-            "azure_openai_endpoint",
-            "azure_openai_deployment",
-            "azure_openai_key",
+            "openai_api_key",
+            "openai_docent_model",
             "live_ai",
             "azure_speech_region",
             "azure_speech_endpoint",
@@ -490,9 +489,8 @@ def _readiness_checks_schema() -> dict[str, Any]:
             "identity_schema": configured_skipped_degraded,
             "postgis": configured_skipped_degraded,
             "key_vault": configured_or_skipped,
-            "azure_openai_endpoint": configured_or_skipped,
-            "azure_openai_deployment": configured_or_skipped,
-            "azure_openai_key": configured_or_skipped,
+            "openai_api_key": configured_or_skipped,
+            "openai_docent_model": configured_or_skipped,
             "live_ai": enabled_or_disabled,
             "azure_speech_region": configured_or_skipped,
             "azure_speech_endpoint": configured_or_skipped,
@@ -514,13 +512,13 @@ def _runtime_mode_schema() -> dict[str, Any]:
         "properties": {
             "overall": {
                 "type": "string",
-                "enum": ["public-cache", "db-backed", "live-azure", "degraded"],
+                "enum": ["public-cache", "db-backed", "live-openai", "live-azure", "degraded"],
             },
             "data": {
                 "type": "string",
                 "enum": ["unavailable", "public-cache", "db-backed", "degraded"],
             },
-            "ai": {"type": "string", "enum": ["disabled", "live-azure", "degraded"]},
+            "ai": {"type": "string", "enum": ["disabled", "live-openai", "degraded"]},
             "speech": {
                 "type": "string",
                 "enum": ["disabled", "live-azure", "degraded"],
@@ -820,7 +818,7 @@ def _docent_script_data_schema() -> dict[str, Any]:
             "script": {"type": "string"},
             "source": {
                 "type": "string",
-                "enum": ["rule_based_curation", "db_cache", "azure_openai"],
+                "enum": ["rule_based_curation", "db_cache", "openai"],
             },
             "generated_at": {"type": "string", "nullable": True},
             "ttl_sec": {"type": "integer", "nullable": True},
