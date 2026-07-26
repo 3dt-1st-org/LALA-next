@@ -134,9 +134,9 @@ This is the implemented baseline this plan extends. All **CONFIRMED** by direct 
 6. Sanitize + `_ensure_docent_quality_context` + `_docent_output_needs_rule_fallback`.
 7. Response dict: `place_id, category, language, mode, script, source, generated_at, ttl_sec=604800, grounding_meta, identity`.
 
-**Cache (`travel.docent_scripts`, CONFIRMED):** cols `id, place_id, category, language, mode, script, source_method, generated_at, expires_at`; UNIQUE(place_id, category, language, mode). Cache key (`script_identity`, ≈L1013–1057) = base `{place_id, category, language, mode}` + score fields (if any) + `grounding_hash` (sha of `source_type+source_id+content_sha256` per chunk) + request/weather fields (if any). **TTL 604800s (7 days) is hardcoded** at ≈L129. `source` ∈ {`azure_openai`, `rule_based_curation`, `db_cache`} (note: diverges from legacy's `llm/fallback/cache` enum).
+**Cache (`travel.docent_scripts`, CONFIRMED):** cols `id, place_id, category, language, mode, script, source_method, generated_at, expires_at`; UNIQUE(place_id, category, language, mode). Cache key (`script_identity`, ≈L1013–1057) = base `{place_id, category, language, mode}` + score fields (if any) + `grounding_hash` (sha of `source_type+source_id+content_sha256` per chunk) + request/weather fields (if any). **TTL 604800s (7 days) is hardcoded** at ≈L129. `source` ∈ {`openai`, `rule_based_curation`, `db_cache`} (note: diverges from legacy's `llm/fallback/cache` enum).
 
-**AI client (`ai_service.py::generate_docent_script_text`):** AzureOpenAI, deployment `azure_openai_docent_deployment` else `azure_openai_deployment`; temp 0.4, max_tokens 500, timeout 5s, max_retries 0. Already has LALA-next's own (clean-room) persona copy per category, an attraction food-noise guard (`_ATTRACTION_NOISE_GUARD_KO`), and prompt-level hallucination guards (don't infer weather conditions; don't quote numeric scores/internal names). Grounding injected as top-3 snippets, body truncated to 260 chars (`_grounding_context_prompt`).
+**AI client (`ai_service.py::generate_docent_script_text`):** Standard OpenAI, model `OPENAI_DOCENT_MODEL` (default `gpt-5.4-mini`); temp 0.4, max_tokens 500, timeout 5s, max_retries 0. Already has LALA-next's own (clean-room) persona copy per category, an attraction food-noise guard (`_ATTRACTION_NOISE_GUARD_KO`), and prompt-level hallucination guards (don't infer weather conditions; don't quote numeric scores/internal names). Grounding injected as top-3 snippets, body truncated to 260 chars (`_grounding_context_prompt`).
 
 ### 2.3 QA — `docent_quality_qa.py::evaluate_docent_script` (≈L422–485)
 
@@ -149,7 +149,7 @@ Azure Speech REST, SSML, `audio-16khz-128kbitrate-mono-mp3`; voices `{ko: ko-KR-
 ### 2.5 Review extraction — `review_attribute_batch.py` + `review_mention_ingest.py`
 
 - `review_mention_ingest.py`: reads `community.posts` + `travel.places`; writes `community.place_mentions_weekly` via `ON CONFLICT (week_start, place_name_ko, provider, category) DO UPDATE`.
-- `review_attribute_batch.py`: input `community.place_mentions_weekly` + `community.posts`; output `ReviewAttributeEnrichment` (sentiment_score/confidence, attribute_scores/confidence_avg, evidence_terms, summary_ko, `schema_version="review-attributes-v1"`); model `selected_review_batch_model` (`azure_openai_review_batch_deployment` > `azure_openai_deployment`); **SINGLE tier — no nano-extract + mini-recheck split**; deterministic fallback `build_deterministic_enrichments` (confidence `min(0.78, 0.45 + organic/18)`); food guard `_category_policy`; ad classification `classify_post` + `AD_MARKERS` (keyword markers → `is_ad`, `retained=False`); idempotent via `UPDATE WHERE id`.
+- `review_attribute_batch.py`: input `community.place_mentions_weekly` + `community.posts`; output `ReviewAttributeEnrichment` (sentiment_score/confidence, attribute_scores/confidence_avg, evidence_terms, summary_ko, `schema_version="review-attributes-v1"`); model `OPENAI_REVIEW_BATCH_MODEL` (default `gpt-5.4-nano`) with `OPENAI_REVIEW_RECHECK_MODEL` (default `gpt-5.4-mini`) for low-confidence cases; deterministic fallback `build_deterministic_enrichments` (confidence `min(0.78, 0.45 + organic/18)`); food guard `_category_policy`; ad classification `classify_post` + `AD_MARKERS` (keyword markers → `is_ad`, `retained=False`); idempotent via `UPDATE WHERE id`.
 
 ### 2.6 Routes + schemas — `routers/v1.py`, `schemas/docent.py`
 
@@ -157,7 +157,7 @@ Azure Speech REST, SSML, `audio-16khz-128kbitrate-mono-mp3`; voices `{ko: ko-KR-
 - `POST /api/v1/docents/audio` → **binary MP3** (`audio/mpeg`, not base64/presigned); same auth; rate limit `docent_audio_rate_limit_per_minute` (30); headers `X-Request-ID, X-LALA-Request-Hash, X-LALA-Cache-Key`.
 - **No "why this place" / reason endpoint.**
 - `DocentScriptRequest`: `place_id` (req), `place_name, address, region_ko/en, distance_m, source, upstream_source`, six score fields, eight weather/dust fields, `category` Literal, `language="ko"`, `mode="brief"`. `DocentAudioRequest`: `script` (req), `language="ko"`.
-- Wire `DocentScriptData` (`docent_script_data.dart`): `cache_key, category, generated_at, grounding_count, grounding_sources, language, mode, place_id, request_hash, script, source, ttl_sec`; enums category{attraction,restaurant,event,culture_venue}, language{ko,en}, mode{brief,detail}, source{rule_based_curation,db_cache,azure_openai}.
+- Wire `DocentScriptData` (`docent_script_data.dart`): `cache_key, category, generated_at, grounding_count, grounding_sources, language, mode, place_id, request_hash, script, source, ttl_sec`; enums category{attraction,restaurant,event,culture_venue}, language{ko,en}, mode{brief,detail}, source{rule_based_curation,db_cache,openai}.
 
 ### 2.7 Flutter client — `docent_helpers.dart`
 
