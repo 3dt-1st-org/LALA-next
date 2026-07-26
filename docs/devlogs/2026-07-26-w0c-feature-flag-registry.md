@@ -38,3 +38,13 @@ worktree and its user-owned dirty files are preserved exactly.
   no new migration is needed here.
 - W0-b: merged through PR #68 before this branch was created.
 - W0-d and W0-e remain later W0 prerequisites; this PR does not claim them.
+
+## Draft publication
+
+- Commit: `ade7fc4`.
+- Draft PR: `https://github.com/3dt-1st-org/LALA-next/pull/70`.
+- Local verification: API `1043 passed, 1 warning`; W0-c targeted `41 passed,
+  1 warning`; OpenAPI compatibility + safety `29 passed, 1 warning`; ruff,
+  format, pre-commit, and diff check passed.
+- Review/CI and merge remain external gates; no live runtime acceptance is
+  claimed for this configuration-only slice.

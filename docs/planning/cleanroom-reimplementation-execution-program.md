@@ -634,10 +634,28 @@ a single PR may carry slices from one owner only (coordinate via §3 pins).
 - **Scope:** standard OpenAI role metadata resolution only; no SDK client is
   created by `resolve()`, no live request or deployment is performed, and
   Azure Speech remains outside this slice.
-- **End — 2026-07-26:** commits `64c9926` and `cecf3bd` pushed in stacked Draft
-  [PR #68](https://github.com/3dt-1st-org/LALA-next/pull/68), based on PR #67's
-  head branch. Targeted suite `135 passed, 1 warning`; clean no-`.env` full API
-  suite `997 passed, 1 warning`; ruff, format, pre-commit, and diff check passed.
+- **End — 2026-07-26:** P2 commit `21de48b` was rebased to head `4907efc` and
+  merged through [PR #68](https://github.com/3dt-1st-org/LALA-next/pull/68)
+  with merge commit `bf24ff8a48f23b70d6869e5d560789294b9579f5`. Clean no-`.env`
+  full API suite after P2 was `1002 passed, 1 warning`; ruff, format,
+  pre-commit, and diff check passed. The merged-head CI run was
+  `30207059823` (API, Flutter, and Unix all successful).
+
+#### W0-c implementation record
+
+- **Start — 2026-07-26:** clean sibling worktree
+  `/private/tmp/lala-w0c-feature-flag-registry`, branch
+  `codex/w0c-feature-flag-registry`, based on fresh `origin/main` after PR
+  #67/#68.
+- **Draft evidence — 2026-07-26:** commit `ade7fc4` in
+  [Draft PR #70](https://github.com/3dt-1st-org/LALA-next/pull/70) adds the
+  typed `FEATURE_FLAG_REGISTRY`, `Settings.feature_flags`, the §5.x key/env
+  table, and no-op/default/override/fail-closed tests. Clean no-`.env` API
+  suite `1043 passed, 1 warning`; OpenAPI compatibility + safety tests `29
+  passed, 1 warning`; W0-c targeted tests `41 passed, 1 warning`; ruff,
+  format, pre-commit, and diff check passed.
+- **Boundary:** this Draft does not claim W0-c is CURRENT until review/CI and
+  merge; no flag consumer is enabled by this slice.
 
 ### 10.3 P2 — discovery surfaces, measurement, rollout (Waves 5–6)
 
