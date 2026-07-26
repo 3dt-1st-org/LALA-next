@@ -337,6 +337,43 @@ possible). All migrations are listed in §3.2.
 | **W0-d Safety-contract test spine** | Extend `test_safety_contracts.py` with the cross-cutting assertions every wave adds to: no-raw-text-in-RAG, no-PII-in-aggregates, no-secrets-in-logs, no-mock-on-normal-paths, no-scraping-code. | Tests red on the gaps they will close; green on CURRENT invariants. | N/A (contract). | None. | Low. Becomes the §9 DoD backbone. |
 | **W0-e OpenAPI-compat gate in CI** | Wire `check_openapi_compat.py` into CI so any breaking schema delta fails the build. | Compat check runs on schema PRs. | N/A. | None. | Low. Enforces §4.2/§4.3. |
 
+#### W0-c flag registry contract
+
+`apps/api/app/core/feature_flags.py::FEATURE_FLAG_REGISTRY` is the single
+namespace for the rollout controls named by the W1–W6 slices below. The
+registry is configuration-only in W0-c: an absent variable resolves to the
+listed current behavior and does not enable a new consumer. Values are
+non-secret; invalid typed overrides fail closed before a future consumer can
+run.
+
+| Program key | Environment input | Default | Current behavior | Owner |
+| --- | --- | --- | --- | --- |
+| `REGION_SIGUN_RESOLUTION` | `LALA_REGION_SIGUN_RESOLUTION` | `false` | province-level resolution | W1-a |
+| `WEATHER_EXPLICIT_FLAGS` | `LALA_WEATHER_EXPLICIT_FLAGS` | `false` | legacy weather summary | W1-b |
+| `WEATHER_OPEN_METEO_FALLBACK` | `LALA_WEATHER_OPEN_METEO_FALLBACK` | `false` | current weather source chain | W1-c |
+| `PLACE_OPEN_HOURS` | `LALA_PLACE_OPEN_HOURS` | `false` | legacy operating-state behavior | W1-d |
+| `PLACE_INDOOR_CLASSIFY` | `LALA_PLACE_INDOOR_CLASSIFY` | `false` | current place enrichment | W1-e |
+| `REVIEW_QUARANTINE` | `LALA_REVIEW_QUARANTINE` | `false` | current governed review path | W2-c |
+| `REVIEW_AI_CLASSIFIER` | `LALA_REVIEW_AI_CLASSIFIER` | `false` | deterministic review classification | W2-d |
+| `REVIEW_RECHECK` | `LALA_REVIEW_RECHECK` | `false` | no selective recheck | W2-e |
+| `LALA_ENABLE_LIVE_AI` | `LALA_ENABLE_LIVE_AI` | `false` | offline AI and fixtures | W2-d |
+| `rag_embedding_method` | `LALA_RAG_EMBEDDING_METHOD` | `local-hash` (`local-hash`/`openai`) | deterministic local-hash embeddings | W3-a |
+| `rag_embedding_generation` | `LALA_RAG_EMBEDDING_GENERATION` | `1` | embedding generation 1 | W3-a |
+| `rag_retrieval_mode` | `LALA_RAG_RETRIEVAL_MODE` | `legacy` (`legacy`/`hybrid`) | legacy retrieval mode | W3-b |
+| `docent_inline_guards` | `LALA_DOCENT_INLINE_GUARDS` | `false` | current docent response path | W3-c |
+| `docent_reason_enabled` | `LALA_DOCENT_REASON_ENABLED` | `false` | no on-demand reason route | W3-d |
+| `docent_audio_cache` | `LALA_DOCENT_AUDIO_CACHE` | `false` | current docent audio path | W3-e |
+| `LALA_ENABLE_LIVE_SPEECH` | `LALA_ENABLE_LIVE_SPEECH` | `false` | no live Azure Speech requests | W3-e |
+| `docent_qa_judge` | `LALA_DOCENT_QA_JUDGE` | `false` | deterministic docent QA precheck | W3-f |
+| `PLAN_FULL_SLOTS` | `LALA_PLAN_FULL_SLOTS` | `false` | current planner slot count | W4-a |
+| `PLAN_WEATHER_SUBSTITUTE` | `LALA_PLAN_WEATHER_SUBSTITUTE` | `false` | no weather substitution | W4-b |
+| `PLACES_VIEWPORT_BOUNDS` | `LALA_PLACES_VIEWPORT_BOUNDS` | `false` | circle-based places query | W5-a |
+| `PLACE_FACETS` | `LALA_PLACE_FACETS` | `false` | current place filters | W5-c |
+| `LOCAL_TOUR` | `LALA_LOCAL_TOUR` | `false` | no local restaurant tour | W5-d |
+| `PLACE_CONFIDENCE_SURFACE` | `LALA_PLACE_CONFIDENCE_SURFACE` | `false` | current place response metadata | W5-e |
+| `RECOMMENDATION_FEEDBACK` | `LALA_RECOMMENDATION_FEEDBACK` | `false` | no recommendation feedback writes | W5-f |
+| `MAP_FUNNEL_METRICS` | `LALA_MAP_FUNNEL_METRICS` | `false` | current metrics surface | W6-c |
+
 ### 5.1 Wave 1 — place data + location/weather reliability
 
 | Slice | Scope | Tests | Live-data acceptance | Rollback / flag | Risk / dependency |
@@ -597,10 +634,28 @@ a single PR may carry slices from one owner only (coordinate via §3 pins).
 - **Scope:** standard OpenAI role metadata resolution only; no SDK client is
   created by `resolve()`, no live request or deployment is performed, and
   Azure Speech remains outside this slice.
-- **End — 2026-07-26:** commits `64c9926` and `cecf3bd` pushed in stacked Draft
-  [PR #68](https://github.com/3dt-1st-org/LALA-next/pull/68), based on PR #67's
-  head branch. Targeted suite `135 passed, 1 warning`; clean no-`.env` full API
-  suite `997 passed, 1 warning`; ruff, format, pre-commit, and diff check passed.
+- **End — 2026-07-26:** P2 commit `21de48b` was rebased to head `4907efc` and
+  merged through [PR #68](https://github.com/3dt-1st-org/LALA-next/pull/68)
+  with merge commit `bf24ff8a48f23b70d6869e5d560789294b9579f5`. Clean no-`.env`
+  full API suite after P2 was `1002 passed, 1 warning`; ruff, format,
+  pre-commit, and diff check passed. The merged-head CI run was
+  `30207059823` (API, Flutter, and Unix all successful).
+
+#### W0-c implementation record
+
+- **Start — 2026-07-26:** clean sibling worktree
+  `/private/tmp/lala-w0c-feature-flag-registry`, branch
+  `codex/w0c-feature-flag-registry`, based on fresh `origin/main` after PR
+  #67/#68.
+- **Draft evidence — 2026-07-26:** commit `ade7fc4` in
+  [Draft PR #70](https://github.com/3dt-1st-org/LALA-next/pull/70) adds the
+  typed `FEATURE_FLAG_REGISTRY`, `Settings.feature_flags`, the §5.x key/env
+  table, and no-op/default/override/fail-closed tests. Clean no-`.env` API
+  suite `1043 passed, 1 warning`; OpenAPI compatibility + safety tests `29
+  passed, 1 warning`; W0-c targeted tests `41 passed, 1 warning`; ruff,
+  format, pre-commit, and diff check passed.
+- **Boundary:** this Draft does not claim W0-c is CURRENT until review/CI and
+  merge; no flag consumer is enabled by this slice.
 
 ### 10.3 P2 — discovery surfaces, measurement, rollout (Waves 5–6)
 
