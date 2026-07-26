@@ -50,3 +50,15 @@ worktree and its user-owned dirty files are preserved exactly.
   `89808004443`, Unix job `89808004423`, and Flutter job `89808004436`.
 - Review/CI and merge remain external gates; no live runtime acceptance is
   claimed for this configuration-only slice.
+
+## Enum constraint supplement — 2026-07-27
+
+- Implementation commit: `b7121d0`.
+- `rag_embedding_method` accepts only `local-hash`/`openai`; `rag_retrieval_mode`
+  accepts only `legacy`/`hybrid`, after lower-case normalization. Unknown values
+  fail closed with the canonical environment name; existing RAG CLI JSON/exit-2
+  apply-gate behavior remains intact.
+- Local API suite: `1047 passed, 1 warning`; focused router/RAG/registry suite:
+  `94 passed, 1 warning`; ruff, format, pre-commit, and diff check passed.
+- CI run `30208120115`: API job `89809630138`, Flutter job `89809630084`, and
+  Unix job `89809630710` were successful.
