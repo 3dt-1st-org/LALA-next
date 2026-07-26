@@ -6,6 +6,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 from dotenv import load_dotenv
 
+from apps.api.app.core.feature_flags import FeatureFlagValue, resolve_feature_flags
 from apps.api.app.core.key_vault import get_secret_if_configured
 
 load_dotenv()
@@ -52,6 +53,8 @@ class Settings:
     openai_place_enrichment_model: str = ""
     # Non-secret model-id overrides. Values are read only from LALA_MODEL_ROLE_*.
     model_role_overrides: dict[str, str] = field(default_factory=dict)
+    # Central W0-c registry values. Consumers remain unchanged until their wave.
+    feature_flags: dict[str, FeatureFlagValue] = field(default_factory=dict)
     enable_live_ai: bool = False
     azure_speech_region: str = ""
     azure_speech_endpoint: str = ""
@@ -209,6 +212,7 @@ class Settings:
             openai_docent_model=openai_docent_model,
             openai_place_enrichment_model=openai_place_enrichment_model,
             model_role_overrides=_model_role_overrides_from_env(),
+            feature_flags=resolve_feature_flags(),
             enable_live_ai=_bool_env("LALA_ENABLE_LIVE_AI", default=False),
             azure_speech_region=_env_or_secret(
                 "AZURE_SPEECH_REGION", "azure-speech-region", key_vault_url
