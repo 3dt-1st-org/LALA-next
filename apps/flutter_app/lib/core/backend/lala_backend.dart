@@ -16,6 +16,16 @@ abstract class LalaBackend {
 
   Future<LalaEnvelope<LalaPlacesResponse>> getPlaces();
 
+  /// Public Local Signals projection. [region] is a coarse canonical region
+  /// id; this boundary never accepts device coordinates or author identity.
+  Future<LalaEnvelope<Map<String, dynamic>>> getLocalSignals({
+    String? region,
+    String? placeId,
+    String? kind,
+    String sort = 'recent',
+    String? cursor,
+  });
+
   Future<LalaEnvelope<LalaWeather>> getWeather();
 
   Future<LalaEnvelope<LalaIntervention>> getIntervention();
@@ -65,6 +75,24 @@ class LalaApiBackend implements LalaBackend {
       category: config.category,
       lang: config.lang,
       includeScores: true,
+    );
+  }
+
+  @override
+  Future<LalaEnvelope<Map<String, dynamic>>> getLocalSignals({
+    String? region,
+    String? placeId,
+    String? kind,
+    String sort = 'recent',
+    String? cursor,
+  }) {
+    return _client.getLocalSignals(
+      language: config.lang == 'en' ? 'en' : 'ko',
+      region: region,
+      placeId: placeId,
+      kind: kind,
+      sort: sort,
+      cursor: cursor,
     );
   }
 

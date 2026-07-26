@@ -1,5 +1,5 @@
-// ONMU P0: 하단 네비게이션 3-분기 경로 상수.
-// 각 분기는 하나의 탭(검색 / 지도 / 플랜)에 대응하며 StatefulShellRoute 와 매핑된다.
+// LALA main-shell tab route constants.
+// Each branch maps to one tab (search / map / plan / Local Signals).
 // ONMU P2: 온보딩 4단계 경로(splash/start/language/location) 추가.
 abstract final class LalaRoutePaths {
   const LalaRoutePaths._();
@@ -7,6 +7,7 @@ abstract final class LalaRoutePaths {
   static const String search = '/search';
   static const String mapRoute = '/map-route';
   static const String plan = '/plan';
+  static const String localSignals = '/local-signals';
 
   /// 온보딩 라우트 공통 접두사. redirect 가 온보딩 라우트 여부를 판별하는 데 사용.
   static const String onboardingPrefix = '/onboarding';
