@@ -116,7 +116,7 @@ This is the implemented baseline this plan extends. All **CONFIRMED** by direct 
 
 **Chunk builders (`rag_index.py`):** `_place_profile_chunk` (from `travel.places`+`analytics.place_score_snapshots`), `_culture_event_chunk` (`culture.events`), `_community_post_chunk` (`community.posts`), `_place_mention_chunk` (`community.place_mentions_weekly`), `_weather_context_chunk` (`travel.weather_observations`). Each emits Korean `body_ko`.
 
-**Embedding (`rag_index.py::build_embedding`):** three methods — `local-hash`, `azure-openai`, `openai`. The hash variant `build_local_embedding` is a **feature-hashing trick (blake2b token/char/pair hashing)**, **NOT a semantic model**; it is the **default** and the only one that runs with `enable_live_ai=false`.
+**Embedding (`rag_index.py::build_embedding`):** two methods — `local-hash`, `openai`. The hash variant `build_local_embedding` is a **feature-hashing trick (blake2b token/char/pair hashing)**, **NOT a semantic model**; it is the **default** and the only one that runs with `enable_live_ai=false`.
 
 **Query (`rag_index.py::query_knowledge_chunks`):** ANN via `1-(embedding <=> q::vector)`, ORDER BY `embedding <=> q`, filters by `source` scope + `place_id`. **CONFIRMED: used only by the CLI `run_rag_index.py --query`; NOT called by the live docent path.**
 
@@ -149,7 +149,7 @@ Azure Speech REST, SSML, `audio-16khz-128kbitrate-mono-mp3`; voices `{ko: ko-KR-
 ### 2.5 Review extraction — `review_attribute_batch.py` + `review_mention_ingest.py`
 
 - `review_mention_ingest.py`: reads `community.posts` + `travel.places`; writes `community.place_mentions_weekly` via `ON CONFLICT (week_start, place_name_ko, provider, category) DO UPDATE`.
-- `review_attribute_batch.py`: input `community.place_mentions_weekly` + `community.posts`; output `ReviewAttributeEnrichment` (sentiment_score/confidence, attribute_scores/confidence_avg, evidence_terms, summary_ko, `schema_version="review-attributes-v1"`); model `selected_review_batch_model` (`azure_openai_review_batch_deployment` > `azure_openai_deployment`); **SINGLE tier — no nano-extract + mini-recheck split**; deterministic fallback `build_deterministic_enrichments` (confidence `min(0.78, 0.45 + organic/18)`); food guard `_category_policy`; ad classification `classify_post` + `AD_MARKERS` (keyword markers → `is_ad`, `retained=False`); idempotent via `UPDATE WHERE id`.
+- `review_attribute_batch.py`: input `community.place_mentions_weekly` + `community.posts`; output `ReviewAttributeEnrichment` (sentiment_score/confidence, attribute_scores/confidence_avg, evidence_terms, summary_ko, `schema_version="review-attributes-v1"`); model lanes are general OpenAI `gpt-5.4-nano` bulk plus `gpt-5.4-mini` selective recheck; deterministic fallback `build_deterministic_enrichments` (confidence `min(0.78, 0.45 + organic/18)`); food guard `_category_policy`; ad classification `classify_post` + `AD_MARKERS` (keyword markers → `is_ad`, `retained=False`); idempotent via `UPDATE WHERE id`.
 
 ### 2.6 Routes + schemas — `routers/v1.py`, `schemas/docent.py`
 
@@ -180,7 +180,7 @@ Each target is keyed to the task's domain checklist and to a presentation gate.
 | **3.7** | Hallucination + unsafe-data fallback | Prompt guards + offline QA; **no inline gate**; no unsafe-data (PII/secret/ad-text) scrubber; **no robot-emoji/filler check** | Inline lightweight guardrails (language lock, emoji/filler, length, score-leak) before serve; offline **LLM-judge QA (mini)**; **unsafe-data filter** at ingest + grounding | G3, G4, G6 |
 | **3.8** | Scripted + audio output contracts | Script contract solid; audio thin (no char-limit, no retry, no cache, no honest-unavailable state) | Char-limit guard + idempotent retry + audio cache + honest 503-with-retry + SSML prosody contract | G1, G7 |
 | **3.9** | Language routing | No inline mutual-exclusivity gate (only offline QA + client `singleLanguageText`) | **Inline language lock**: validate single-language before serve; violate → regenerate or fallback | G6 |
-| **3.10** | gpt-5.4-mini generation/QA | Azure OpenAI deployments; **no model-role routing**; QA regex-only | **Portable model-role router**: `nano`→extract/normalize/ad-classify; `mini`→docent gen + low-confidence recheck + QA judge | G1, G4 |
+| **3.10** | gpt-5.4-mini generation/QA | General OpenAI model path; **no model-role routing**; QA regex-only | **Portable model-role router**: `nano`→extract/normalize/ad-classify; `mini`→docent gen + low-confidence recheck + QA judge | G1, G4 |
 | **3.11** | Evaluation set (30–50 places) | None | Curated bilingual eval set (30–50 places × category/region/language) + golden rubric + retrieval/faithfulness meters | all |
 
 ---
@@ -287,7 +287,7 @@ Every chunk must have a usable `body_en` so EN mode is fully grounded (not KR-on
 
 **Problem:** default `local_hash` is non-semantic; live docent doesn't use ANN; no reindex generation. **Targets:**
 
-1. **Real embeddings as serving default.** `embedding_method` for serving = `azure-openai`/`openai` (config-gated by `enable_live_ai`); `local-hash` remains a **dev/offline fixture** mode only (so tests run without keys). The live path must not silently fall back to hash embeddings when AI is enabled — a startup check asserts the configured method is semantic.
+1. **Real embeddings as serving default.** `embedding_method` for serving = `openai` (config-gated by `enable_live_ai`); `local-hash` remains a **dev/offline fixture** mode only (so tests run without keys). The live path must not silently fall back to hash embeddings when AI is enabled — a startup check asserts the configured method is semantic.
 2. **Version column (migration, additive):** add `embedding_generation int NOT NULL DEFAULT 0` to `rag.knowledge_chunks`, and a config `rag_embedding_generation` (bumped on model/method/dim change). A chunk is "stale" when `embedding_generation < config` **or** `content_sha256` changed since `last_embedded_at`.
 3. **Reindex worker (portable contract §4.3):** selects stale chunks in batches, re-embeds with `build_embedding(method=resolve("embed"))`, upserts via the existing `ON CONFLICT (source_type, source_id) DO UPDATE` (idempotent). Records `ops.job_runs`. **Bounded cost** via batch size + per-run chunk cap; partial progress is resumable (stale predicate is re-evaluated each run).
 4. **Backfill plan:** one-time backfill to generation 1 once real embeddings are enabled; the worker's stale predicate makes this just "run until zero stale."

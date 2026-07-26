@@ -315,7 +315,8 @@ in `ops.job_runs`.
 `scripts/windows/plan_review_attribute_batch.ps1` provide the guarded attribute
 scoring path. Plan mode does not connect to the database. Preview reads
 preprocessed mention rows and computes deterministic attributes without mutation.
-`--dry-run-ai` calls Azure OpenAI for JSON extraction but does not write rows.
+`--dry-run-ai` calls the configured general OpenAI review lane for JSON extraction
+but does not write rows.
 Apply requires `ALLOW_REVIEW_ATTRIBUTE_BATCH_APPLY=1` plus
 `--confirm APPLY_REVIEW_ATTRIBUTE_BATCH`, writes `review_attributes` and
 `review_quality` under `attributes`, updates `sentiment_score`, and records the
@@ -368,8 +369,8 @@ LLM 프롬프트에 붙이지 않고, RAG에 필요한 정적/동적 맥락을 �
 | `body_en` | text | No | 영문 보강 본문 |
 | `metadata` | jsonb | No | 점수, 출처, URL, 기간, 리뷰 속성 등 보조 근거 |
 | `embedding` | vector(1536) | No | pgvector cosine 검색용 임베딩 |
-| `embedding_model` | text | No | `local-hash-v1` 또는 Azure 임베딩 배포명 |
-| `embedding_method` | text | Yes | `local-hash`, `azure-openai` |
+| `embedding_model` | text | No | `local-hash-v1` 또는 general OpenAI 임베딩 모델명 |
+| `embedding_method` | text | Yes | `local-hash`, `openai` |
 | `content_sha256` | text | Yes | 청크 내용 해시. 재색인/변경 감지용 |
 | `last_embedded_at` | timestamptz | No | 마지막 임베딩 생성 시각 |
 | `updated_at` | timestamptz | Yes | 청크 갱신 시각 |
@@ -396,8 +397,9 @@ TourAPI/KCISA/KOPIS 같은 공식 API는 수집 주기마다 갱신하고, 리�
 사용자 요청 또는 배치 실행 시 재색인한다.
 
 임베딩 기본값은 로컬 재현성과 오프라인 검증을 위한 `local-hash-v1`이다. 운영 품질을
-올릴 때는 `AZURE_OPENAI_EMBEDDING_DEPLOYMENT`에 `text-embedding-3-small` 계열
-배포명을 넣고 `--embedding-method azure-openai`로 같은 테이블을 재색인한다.
+올릴 때는 general OpenAI의 `OPENAI_EMBEDDING_MODEL`에
+`text-embedding-3-small`을 설정하고 `--embedding-method openai`로 같은 테이블을
+재색인한다. Azure OpenAI endpoint는 RAG 경로에서 허용하지 않는다.
 
 ## `analytics.place_business_identity`
 

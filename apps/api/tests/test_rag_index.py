@@ -21,6 +21,13 @@ def test_local_hash_embedding_is_deterministic_and_pgvector_sized():
     assert rag_index.vector_to_pgvector(first).endswith("]")
 
 
+def test_azure_openai_is_not_an_accepted_rag_embedding_method():
+    with pytest.raises(ValueError, match="expected one of local-hash, openai"):
+        rag_index.resolve_serving_embedding_method(
+            SimpleNamespace(rag_embedding_method="azure-openai")
+        )
+
+
 def test_place_profile_chunk_keeps_public_value_score_context():
     chunk = rag_index._place_profile_chunk(
         {
@@ -697,7 +704,8 @@ def test_rag_index_reindex_plan_is_dry_run_and_does_not_require_dsn(capsys):
     assert payload["mode"] == "reindex-plan"
     assert payload["db_mutation"] is False
     assert payload["serving_generation"] == 1  # default rag_embedding_generation
-    assert payload["requires"].startswith("sql/canonical/064")
+    assert payload["requires"].startswith("sql/operator-pending/064")
+    assert "separately approved" in payload["requires"]
 
 
 def test_rag_index_reindex_apply_requires_guard(monkeypatch, capsys):

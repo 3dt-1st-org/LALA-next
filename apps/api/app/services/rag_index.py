@@ -15,7 +15,7 @@ from apps.api.app.services.review_ingest_governance import enforce_no_raw_review
 
 VECTOR_DIMENSIONS = 1536
 LOCAL_HASH_EMBEDDING_MODEL = "local-hash-v1"
-EmbeddingMethod = Literal["local-hash", "azure-openai", "openai"]
+EmbeddingMethod = Literal["local-hash", "openai"]
 SourceScope = Literal["all", "static", "dynamic"]
 
 STATIC_SOURCE_TYPES = ("place_profile",)
@@ -130,8 +130,6 @@ def build_local_embedding(text: str, *, dimensions: int = VECTOR_DIMENSIONS) -> 
 def build_embedding(text: str, *, method: EmbeddingMethod) -> tuple[list[float], str]:
     if method == "local-hash":
         return build_local_embedding(text), LOCAL_HASH_EMBEDDING_MODEL
-    if method == "azure-openai":
-        return build_azure_openai_embedding(text), _azure_embedding_model_name()
     if method == "openai":
         return build_openai_embedding(text), settings_openai_embedding_model_name()
     raise ValueError(f"Unsupported embedding method: {method}")
@@ -139,21 +137,20 @@ def build_embedding(text: str, *, method: EmbeddingMethod) -> tuple[list[float],
 
 # Methods that produce real semantic vectors. `local-hash` is a deterministic feature-hash
 # fixture (build_local_embedding) for dev/test only — it is NOT a semantic model.
-SEMANTIC_EMBEDDING_METHODS: tuple[EmbeddingMethod, ...] = ("azure-openai", "openai")
+SEMANTIC_EMBEDDING_METHODS: tuple[EmbeddingMethod, ...] = ("openai",)
 
 
 def resolve_serving_embedding_method(settings: Any | None = None) -> EmbeddingMethod:
     """Return the configured serving embedding method, validated against the Literal.
 
-    The contract uses general OpenAI naming (`openai`) for semantic serving; `azure-openai`
-    is retained for compatibility. An unknown value raises so a misconfigure fails fast.
+    The contract uses general OpenAI naming (`openai`) for semantic serving.
+    An unknown value raises so a misconfiguration fails fast.
     """
     settings = settings if settings is not None else get_settings()
     method = (getattr(settings, "rag_embedding_method", "") or "").strip().lower()
-    if method not in ("local-hash", "azure-openai", "openai"):
+    if method not in ("local-hash", "openai"):
         raise ValueError(
-            f"Unsupported rag_embedding_method={method!r}; "
-            "expected one of local-hash, azure-openai, openai."
+            f"Unsupported rag_embedding_method={method!r}; expected one of local-hash, openai."
         )
     return method  # type: ignore[return-value]
 
@@ -170,7 +167,7 @@ def assert_semantic_embedding_when_live(settings: Any | None = None) -> None:
     if method == "local-hash" and not getattr(settings, "rag_allow_local_hash_live", False):
         raise RuntimeError(
             "LALA_ENABLE_LIVE_AI=true requires a semantic rag_embedding_method "
-            "(openai/azure-openai); local-hash is dev/test only. "
+            "(openai); local-hash is dev/test only. "
             "Set LALA_RAG_ALLOW_LOCAL_HASH_LIVE=1 only for local fixtures."
         )
 
@@ -198,37 +195,6 @@ def build_openai_embedding(text: str) -> list[float]:
     )
     response = client.embeddings.create(
         model=settings.openai_embedding_model or "text-embedding-3-small",
-        input=text,
-    )
-    embedding = list(response.data[0].embedding)
-    if len(embedding) != VECTOR_DIMENSIONS:
-        raise RuntimeError(
-            f"Expected {VECTOR_DIMENSIONS} embedding dimensions, got {len(embedding)}."
-        )
-    return [float(value) for value in embedding]
-
-
-def build_azure_openai_embedding(text: str) -> list[float]:
-    settings = get_settings()
-    missing = _missing_azure_embedding_settings(settings)
-    if missing:
-        raise RuntimeError("Azure OpenAI embedding config is missing: " + ", ".join(missing))
-    if not settings.enable_live_ai:
-        raise RuntimeError("Azure OpenAI embedding requires LALA_ENABLE_LIVE_AI=true.")
-
-    try:
-        from openai import AzureOpenAI
-    except Exception as exc:
-        raise RuntimeError("openai package is required for Azure OpenAI embeddings.") from exc
-
-    client = AzureOpenAI(
-        azure_endpoint=settings.azure_openai_endpoint,
-        api_key=settings.azure_openai_key,
-        api_version=settings.azure_openai_embedding_api_version
-        or settings.azure_openai_api_version,
-    )
-    response = client.embeddings.create(
-        model=settings.azure_openai_embedding_deployment,
         input=text,
     )
     embedding = list(response.data[0].embedding)
@@ -1029,24 +995,6 @@ def _text_features(text: str) -> Iterable[str]:
         if len(token) >= 4:
             for start in range(0, len(token) - 2):
                 yield f"pair:{token[start : start + 3]}"
-
-
-def _missing_azure_embedding_settings(settings: Any) -> list[str]:
-    missing: list[str] = []
-    if not settings.azure_openai_endpoint:
-        missing.append("AZURE_OPENAI_ENDPOINT")
-    if not settings.azure_openai_key:
-        missing.append("AZURE_OPENAI_KEY")
-    if not settings.azure_openai_embedding_deployment:
-        missing.append("AZURE_OPENAI_EMBEDDING_DEPLOYMENT")
-    if not (settings.azure_openai_embedding_api_version or settings.azure_openai_api_version):
-        missing.append("AZURE_OPENAI_EMBEDDING_API_VERSION")
-    return missing
-
-
-def _azure_embedding_model_name() -> str:
-    settings = get_settings()
-    return settings.azure_openai_embedding_deployment or "azure-openai-embedding"
 
 
 def _join_sentences(parts: Iterable[str | None]) -> str:

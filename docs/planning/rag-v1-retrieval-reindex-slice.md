@@ -25,18 +25,13 @@ apply, no crawl, no UI work, no model-role router, no online rerank.
      opens a DB connection, rejecting with `{"ok": false, "error": ...}` + exit 2. The legacy
      default (`rag_retrieval_mode=legacy`) never triggers either check — zero behavior change.
 
-2. **Additive canonical SQL (unapplied)** — `sql/canonical/064_rag_knowledge_retrieval_metadata.sql`
+2. **Operator-pending additive SQL** — `sql/operator-pending/064_rag_knowledge_retrieval_metadata.sql`
    - `ALTER TABLE rag.knowledge_chunks ADD COLUMN IF NOT EXISTS embedding_generation int NOT NULL DEFAULT 0`.
    - Stale-selection index on `embedding_generation`; GIN index on `metadata` for hybrid filters.
-   - Non-destructive, `IF NOT EXISTS`, **documented as unapplied** (awaits a separate
-     `ALLOW_CANONICAL_SQL_APPLY=1` rollout). Exact-list canonical test updated (12 → 13 files,
-     ending in `064_rag_knowledge_retrieval_metadata.sql`).
-   - **Merge-order follow-up (unmerged Draft PR #64, `geondongkim/official-data-ingest-reliability`):**
-     that branch adds `sql/canonical/063_official_source_provenance.sql` and also sets the
-     `test_canonical_sql.py` exact-list to 13 files. After PR #64 merges to `main`, this
-     branch (or its merge) must be reconciled so the exact-list contains **both** `063_*` and
-     `064_*` and `file_count == 14`. Do **not** weaken the exact-list assertion (no sorted/
-     partial-match relaxation) to work around this — reconcile the literal list instead.
+   - Non-destructive, `IF NOT EXISTS`, and intentionally outside the canonical
+     runner. The canonical plan continues to contain exactly the pre-existing
+     12 files; pending SQL awaits a separately approved operator migration.
+     Do not rely on comments to suppress canonical execution.
 
 3. **Idempotent stale-chunk selection + reindex** (`rag_index.py`, `run_rag_index.py`)
    - Pure stale predicate: `content_sha256` changed **or** `embedding_generation < serving`.
@@ -81,10 +76,9 @@ apply, no crawl, no UI work, no model-role router, no online rerank.
 
 ## Known follow-ups from independent P0 review (controller, 2026-07-26)
 
-- **R3 — merge-order reconciliation (see item 2 above):** after Draft PR #64 merges, update
-  the `test_canonical_sql.py` exact-list to include both `063_official_source_provenance.sql`
-  and `064_rag_knowledge_retrieval_metadata.sql` (`file_count == 14`). Not done in this PR —
-  PR #64's branch/files are out of scope here.
+- **R3 — canonical honesty:** resolved by keeping both 063 and 064 proposals
+  outside `sql/canonical/`; the exact-list test remains strict at the existing
+  12-file plan.
 - R1, R2, R4, R5 above are addressed in this PR.
 
 ## Explicitly NOT in this slice

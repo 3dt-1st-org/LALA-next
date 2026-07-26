@@ -457,7 +457,7 @@ a fabricated value:
 - Docent: mini generation → one inline regen on guard violation →
   `rule_based_curation` (same language) → **fallback is never cached/reused**
   (legacy invariant, W3-c guarantees + test).
-- Embeddings: semantic (`azure-openai`/`openai`) → `local-hash` **dev/offline
+- Embeddings: semantic (`openai`) → `local-hash` **dev/offline
   fixture only** (never silently used in a live serving path; startup asserts
   semantic method when AI is on).
 - Weather: DB latest → KMA+AirKorea → AirKorea-only → Open-Meteo fallback tier →

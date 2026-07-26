@@ -46,7 +46,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--embedding-method",
-        choices=["local-hash", "azure-openai", "openai"],
+        choices=["local-hash", "openai"],
         default="local-hash",
     )
     parser.add_argument("--place-id", default="", help="Optional query filter for a place_id.")
@@ -179,7 +179,7 @@ def main(argv: list[str] | None = None) -> int:
                     duration_ms=duration_ms(started_at, finished_at),
                     error_message=redact_secret_text(
                         str(exc) or exc.__class__.__name__,
-                        (dsn, settings.azure_openai_key),
+                        (dsn, settings.openai_api_key),
                     ),
                     connect_timeout=args.connect_timeout,
                 )
@@ -190,7 +190,7 @@ def main(argv: list[str] | None = None) -> int:
                 "mode": _mode(args),
                 "error": redact_secret_text(
                     str(exc) or exc.__class__.__name__,
-                    (dsn, settings.azure_openai_key),
+                    (dsn, settings.openai_api_key),
                 ),
             },
         )
@@ -358,7 +358,7 @@ def _run_reindex(args: argparse.Namespace) -> int:
                     duration_ms=duration_ms(started_at, finished_at),
                     error_message=redact_secret_text(
                         str(exc) or exc.__class__.__name__,
-                        (dsn, settings.azure_openai_key),
+                        (dsn, settings.openai_api_key),
                     ),
                     connect_timeout=args.connect_timeout,
                 )
@@ -369,7 +369,7 @@ def _run_reindex(args: argparse.Namespace) -> int:
                 "mode": _mode(args),
                 "error": redact_secret_text(
                     str(exc) or exc.__class__.__name__,
-                    (dsn, settings.azure_openai_key),
+                    (dsn, settings.openai_api_key),
                 ),
             },
         )
@@ -393,7 +393,7 @@ def _reindex_plan_payload(
         "chunk_cap": chunk_cap,
         "batch_size": batch_size,
         "stale_predicate": "embedding_generation < serving_generation OR embedding IS NULL",
-        "requires": "sql/canonical/064_rag_knowledge_retrieval_metadata.sql (applied)",
+        "requires": "sql/operator-pending/064_rag_knowledge_retrieval_metadata.sql (separately approved and applied)",
         "note": (
             "preview/apply require DB_DSN; apply requires --confirm APPLY_RAG_INDEX "
             "and ALLOW_RAG_INDEX_APPLY=1."
