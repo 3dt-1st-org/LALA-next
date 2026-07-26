@@ -549,9 +549,8 @@ def test_useful_repository_query_matches_useful_cursor_tuple() -> None:
     sql, params = executed[0]
     assert "ORDER BY useful_count DESC, p.published_at DESC, p.id DESC" in sql
     assert sql.count("useful_cursor.reaction_type = 'useful'") == 2
-    assert params[2:4] == (2, 2)
-    assert params[4:6] == (NOW, NOW)
-    assert params[6] == str(SIGNAL_ID)
+    assert params == ("ko", "ko", "ko", "ko", 2, 2, NOW, NOW, str(SIGNAL_ID), 5)
+    assert sql.count("%s") == len(params)
 
 
 def test_useful_pagination_has_no_duplicate_or_skipped_item() -> None:

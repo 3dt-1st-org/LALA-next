@@ -692,7 +692,7 @@ def _public_filters(
         "AND available_translation.target_language = %s "
         "AND available_translation.review_state = 'available'))"
     ]
-    params: list[Any] = []
+    params: list[Any] = [language, language]
     if region:
         where.append("p.locality_code = %s")
         params.append(region)
