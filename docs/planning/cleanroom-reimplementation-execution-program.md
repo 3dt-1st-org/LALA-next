@@ -334,7 +334,7 @@ possible). All migrations are listed in §3.2.
 | **W0-a Migration-runner contract** | Document/lock the canonical ordering (§3.2); add a CI assertion that `canonical_sql.py` loads `000…066` and `scan_sql_safety` passes on every PR. No new table. | `scan_sql_safety` runs in CI; ordering test green. | N/A (no data). | None (governance only). | Low. Blocks W1–W5 from shipping migrations. |
 | **W0-b Model-role router** | `config.py` `model_role_overrides` (env `LALA_MODEL_ROLE_<ROLE>`) + pure `model_client.resolve(role)` for `review_bulk`, `review_recheck`, `docent`, `docent_qa`, `place_enrichment`, and `embedding`; existing selectors become thin callers. **No prompt copy or SDK client creation during resolve.** | Router resolves each role to standard-OpenAI `(provider, model_id, client metadata)`; defaults remain `gpt-5.4-nano`, `gpt-5.4-mini`, and `text-embedding-3-small`; legacy `OPENAI_*_MODEL` inputs remain compatible. | `LALA_ENABLE_LIVE_AI=false` and no key keep resolution deterministic; Azure OpenAI base URLs are rejected. | No live-call behavior changes until the existing caller boundary is enabled. | Medium. Touched by W2/W3/W4; must land first. |
 | **W0-c Feature-flag registry** | One registry (config + doc table) of every flag this program introduces (§5.x flags), each defaulting to current behavior. | Flag-default test asserts no-op deploy. | N/A. | Flags off = today. | Low. Prevents flag-name collisions across waves. |
-| **W0-d Safety-contract test spine** | Extend `test_safety_contracts.py` with the cross-cutting assertions every wave adds to: no-raw-text-in-RAG, no-PII-in-aggregates, no-secrets-in-logs, no-mock-on-normal-paths, no-scraping-code. | Tests red on the gaps they will close; green on CURRENT invariants. | N/A (contract). | None. | Low. Becomes the §9 DoD backbone. |
+| **W0-d Safety-contract test spine** | Extend `test_safety_contracts.py` with the cross-cutting assertions every wave adds to: no-raw-text-in-RAG, no-PII-in-aggregates, no-secrets-in-logs, no-mock-on-normal-paths, and no-unauthorized-scraping. Approved licensed/public-processed/export sources may enter the governed ingest and attribute-extraction boundary; only safe aggregates cross into user/RAG/docent paths. | Tests red on the gaps they will close; green on CURRENT invariants. | N/A (contract). | None. | Low. Becomes the §9 DoD backbone. |
 | **W0-e OpenAPI-compat gate in CI** | Wire `check_openapi_compat.py` into CI so any breaking schema delta fails the build. | Compat check runs on schema PRs. | N/A. | None. | Low. Enforces §4.2/§4.3. |
 
 #### W0-c flag registry contract
@@ -656,6 +656,30 @@ a single PR may carry slices from one owner only (coordinate via §3 pins).
   format, pre-commit, and diff check passed.
 - **Boundary:** this Draft does not claim W0-c is CURRENT until review/CI and
   merge; no flag consumer is enabled by this slice.
+
+#### W0-d implementation record
+
+- **Start — 2026-07-27:** clean sibling worktree
+  `/private/tmp/lala-w0d-safety-contract-spine`, branch
+  `codex/w0d-safety-contract-spine`, based on refreshed `origin/main`
+  (`a2e1ed9`). Root dirty user files and existing sibling worktrees remain
+  untouched.
+- **Scope:** contract tests only. The spine exercises the 063 Local Signals
+  public/aggregate view projections, Local Signals schema allowlists, the
+  aggregate-only review governance boundary, `place_mention` RAG projection,
+  docent citation projection, fail-closed DB-backed place reads, and secret/raw
+  input redaction. It explicitly permits an approved `naver_blog` source
+  registration and normalized attribute ingest, while quarantining any raw blog
+  body before it can become an aggregate or downstream payload. First-party
+  Local Signals retain their own `source_kind='first_party'` and author identity
+  boundary; review evidence uses source/provider provenance and never joins that
+  identity into the Local Signals projection.
+- **Boundary:** this slice does not add an ingest consumer, API/schema field,
+  worker, migration, crawl, provider call, DB apply, or deployment. Approved
+  source terms/legal approval and any live acquisition remain external gates;
+  raw review/blog text is not a user, aggregate, RAG, docent, log, or error
+  payload. W0-e OpenAPI compatibility CI remains the next prerequisite before
+  later API-facing waves.
 
 ### 10.3 P2 — discovery surfaces, measurement, rollout (Waves 5–6)
 
