@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from threading import Lock
 from time import monotonic
@@ -50,6 +51,44 @@ def enforce_public_contest_paid_route_limit(
         status_code=429,
         code="PAID_ROUTE_RATE_LIMITED",
         message="Too many paid feature requests. Please retry shortly.",
+        retryable=True,
+    )
+
+
+def enforce_local_signals_rate_limit(
+    request: Request,
+    *,
+    route_key: str,
+    actor_key: str,
+    limit_per_minute: int,
+) -> None:
+    """Apply a bounded, replaceable rate-limit seam without logging identity values.
+
+    The in-process window is intentionally a development/test seam. Production
+    deployment can replace this function with the existing edge/distributed
+    limiter without changing Local Signals route contracts.
+    """
+
+    limit = max(1, limit_per_minute)
+    client_key = _client_key(request)
+    # Hashing keeps the in-process key from becoming an accidental observable
+    # identity record while preserving per-actor and per-client isolation.
+    key_material = f"{route_key}:{actor_key}:{client_key}".encode()
+    key = (route_key, hashlib.sha256(key_material).hexdigest())
+    now = monotonic()
+    with _lock:
+        window = _windows.get(key)
+        if window is None or now - window.started_at >= _WINDOW_SECONDS:
+            _windows[key] = _Window(started_at=now, count=1)
+            return
+        window.count += 1
+        if window.count <= limit:
+            return
+
+    raise ApiError(
+        status_code=429,
+        code="RATE_LIMITED",
+        message="Too many Local Signals requests. Please retry shortly.",
         retryable=True,
     )
 

@@ -4,7 +4,7 @@ from datetime import date, datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from apps.api.app.services.normalization import normalize_language
 
@@ -23,6 +23,7 @@ CommercialDisclosure = Literal["none", "visitor", "owner_or_staff", "paid_or_gif
 PlaceRelation = Literal["primary", "context", "route_stop"]
 TranslationMethod = Literal["human", "machine", "community_reviewed"]
 TranslationState = Literal["pending", "available", "stale", "rejected"]
+LocalSignalReactionType = Literal["useful", "respectful", "needs_confirmation"]
 
 _OPAQUE_REFERENCE = r"^[A-Za-z0-9][A-Za-z0-9:._-]{0,127}$"
 OpaqueReference = Annotated[str, Field(min_length=1, max_length=128, pattern=_OPAQUE_REFERENCE)]
@@ -137,6 +138,11 @@ class LocalSignalPublicItem(BaseModel):
     published_at: datetime
     place_links: list[LocalSignalPublicPlaceLink] = Field(default_factory=list)
     translation: LocalSignalTranslation | None = None
+    # ``body`` is always the single body selected for the requested locale.
+    display_language: LocalSignalLanguage | None = None
+    translation_available: bool = False
+    reaction_count: int = Field(default=0, ge=0)
+    comment_count: int = Field(default=0, ge=0)
 
 
 class LocalSignalFeedContext(BaseModel):
@@ -156,6 +162,109 @@ class LocalSignalFeedResponse(BaseModel):
     next_cursor: OpaqueReference | None = None
     has_more: bool
     context: LocalSignalFeedContext
+
+
+class LocalSignalPublicComment(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID
+    source_language: LocalSignalLanguage
+    body: str
+    created_at: datetime
+
+
+class LocalSignalCommentFeedResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[LocalSignalPublicComment]
+    next_cursor: OpaqueReference | None = None
+    has_more: bool
+    context: LocalSignalFeedContext
+
+
+class LocalSignalMutationResult(BaseModel):
+    """Owner-only mutation receipt; it contains no issuer/subject or capability token."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID
+    kind: LocalSignalKind
+    status: Literal["draft", "submitted", "published", "hidden", "removed", "deleted"]
+    moderation_state: Literal["unreviewed", "pending", "approved", "rejected"]
+    visibility: Literal["private", "pending_review", "public", "unlisted"]
+    source_language: LocalSignalLanguage
+    title: str
+    body: str
+    locality_level: LocalityLevel
+    locality_code: CanonicalRegionCode | None = None
+    commercial_disclosure: CommercialDisclosure
+    observation_date: date
+    place_links: list[LocalSignalPublicPlaceLink] = Field(default_factory=list)
+
+
+class LocalSignalPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: LocalSignalKind | None = None
+    source_language: LocalSignalLanguage | None = None
+    title: str | None = Field(default=None, min_length=1, max_length=160)
+    body: str | None = Field(default=None, min_length=1, max_length=4000)
+    locality_level: LocalityLevel | None = None
+    locality_code: CanonicalRegionCode | None = None
+    commercial_disclosure: CommercialDisclosure | None = None
+    observation_date: date | None = None
+    aggregate_opt_in: bool | None = None
+    route_snapshot_ref: OpaqueReference | None = None
+    place_links: list[LocalSignalPlaceLink] | None = Field(default=None, max_length=8)
+
+    @field_validator("source_language", mode="before")
+    @classmethod
+    def normalize_patch_language(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return _normalize_signal_language(value)
+
+    @field_validator("title", "body")
+    @classmethod
+    def normalize_patch_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return _strip_required_text(value)
+
+    @field_validator("place_links")
+    @classmethod
+    def reject_duplicate_patch_links(
+        cls, value: list[LocalSignalPlaceLink] | None
+    ) -> list[LocalSignalPlaceLink] | None:
+        if value is None:
+            return None
+        keys = [(link.place_id, link.relation) for link in value]
+        if len(keys) != len(set(keys)):
+            raise ValueError("Place links must be unique.")
+        return value
+
+    @model_validator(mode="after")
+    def require_one_change(self) -> LocalSignalPatch:
+        if not self.model_fields_set:
+            raise ValueError("At least one signal field must be provided.")
+        return self
+
+
+class LocalSignalCommentCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_language: LocalSignalLanguage
+    body: str = Field(min_length=1, max_length=1200)
+
+    @field_validator("source_language", mode="before")
+    @classmethod
+    def normalize_comment_language(cls, value: str) -> str:
+        return _normalize_signal_language(value)
+
+    @field_validator("body")
+    @classmethod
+    def normalize_comment_body(cls, value: str) -> str:
+        return _strip_required_text(value)
 
 
 class LocalSignalReportCreate(BaseModel):

@@ -184,6 +184,10 @@ def test_local_signal_views_and_schemas_enforce_downstream_safe_projection():
         "published_at",
         "place_links",
         "translation",
+        "display_language",
+        "translation_available",
+        "reaction_count",
+        "comment_count",
     }
     assert set(LocalSignalPublicItem.model_fields).isdisjoint(
         {"status", "moderation_state", "author_issuer", "author_subject", "latitude", "longitude"}

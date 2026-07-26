@@ -16,6 +16,7 @@ from apps.api.app.core.responses import ensure_request_id, error_envelope, safe_
 from apps.api.app.routers.community import router as community_router
 from apps.api.app.routers.community_chat import router as community_chat_router
 from apps.api.app.routers.health import router as health_router
+from apps.api.app.routers.local_signals import router as local_signals_router
 from apps.api.app.routers.v1 import router as v1_router
 from apps.api.app.services.rag_index import (
     assert_semantic_embedding_when_live,
@@ -121,6 +122,7 @@ def create_app() -> FastAPI:
     app.include_router(v1_router)
     app.include_router(community_router)
     app.include_router(community_chat_router)
+    app.include_router(local_signals_router)
     configure_openapi(app, settings)
     return app
 

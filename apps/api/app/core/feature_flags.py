@@ -237,6 +237,20 @@ FEATURE_FLAG_REGISTRY: tuple[FeatureFlag, ...] = (
         "W6-c",
         "Enable privacy-safe region-level funnel metrics.",
     ),
+    _flag(
+        "LOCAL_SIGNALS_READ",
+        False,
+        "no Local Signals read surface",
+        "LS-2",
+        "Enable the published, approved, public Local Signals read API.",
+    ),
+    _flag(
+        "LOCAL_SIGNALS_WRITE",
+        False,
+        "no Local Signals write surface",
+        "LS-2",
+        "Enable the Logto-authenticated Local Signals draft and policy write API.",
+    ),
 )
 
 

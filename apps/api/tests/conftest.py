@@ -48,11 +48,15 @@ def isolate_db_env(monkeypatch) -> None:
         "LALA_DOCENT_AUDIO_RATE_LIMIT_PER_MINUTE",
         "CORS_ALLOW_ORIGINS",
         "LALA_ACCESS_LOG_PATH",
+        "LALA_LOCAL_SIGNALS_READ",
+        "LALA_LOCAL_SIGNALS_WRITE",
     ):
         monkeypatch.delenv(name, raising=False)
     from apps.api.app.core.rate_limit import reset_rate_limit_state_for_tests
+    from apps.api.app.services.local_signals_service import reset_local_signals_state_for_tests
 
     reset_rate_limit_state_for_tests()
+    reset_local_signals_state_for_tests()
 
 
 @pytest.fixture()
