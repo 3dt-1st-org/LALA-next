@@ -55,6 +55,9 @@ class GeolocatorLalaLocationProvider implements LalaLocationProvider {
 
   static const Duration _permissionTimeout = Duration(seconds: 8);
   static const Duration _positionTimeout = Duration(seconds: 12);
+  static const Duration _postPermissionSettleDelay = Duration(
+    milliseconds: 350,
+  );
 
   @override
   Future<LalaLocationResult> requestCurrentLocation() async {
@@ -74,7 +77,9 @@ class GeolocatorLalaLocationProvider implements LalaLocationProvider {
       var permission = await Geolocator.checkPermission().timeout(
         _permissionTimeout,
       );
+      var requestedPermission = false;
       if (permission == LocationPermission.denied) {
+        requestedPermission = true;
         permission = await Geolocator.requestPermission().timeout(
           _permissionTimeout,
         );
@@ -92,6 +97,15 @@ class GeolocatorLalaLocationProvider implements LalaLocationProvider {
       }
       if (permission == LocationPermission.unableToDetermine) {
         return const LalaLocationResult.unavailable();
+      }
+
+      // Android can resolve requestPermission before the activity has fully
+      // resumed from the system dialog. Starting the first position request in
+      // that same frame occasionally returns unavailable and forces a second
+      // user tap. Wait only after a newly granted request; established grants
+      // keep the normal fast path.
+      if (requestedPermission) {
+        await Future<void>.delayed(_postPermissionSettleDelay);
       }
 
       final position = await Geolocator.getCurrentPosition(

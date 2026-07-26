@@ -2897,6 +2897,44 @@ void main() {
       expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
     },
   );
+
+  testWidgets(
+    'onboarding retries one transient unavailable location result after consent',
+    (tester) async {
+      final locationProvider = RetryAfterUnavailableLocationProvider();
+      await tester.pumpWidget(
+        TestLalaApp(
+          backendFactory: FakeBackend.new,
+          initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+          locationProvider: locationProvider,
+          onboardingCompleted: false,
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('국내 여행'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, '다음'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, '다음'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('현재 위치 사용'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(locationProvider.requests, 2);
+
+      locationProvider.completeRetry(
+        const LalaLocationResult.found(
+          LalaLocation(lat: 37.5665, lng: 126.9780),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(OnboardingState.isCompleted, isTrue);
+      expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
+    },
+  );
 }
 
 class TestLalaApp extends StatelessWidget {
@@ -3031,6 +3069,27 @@ class FakeLocationProvider implements LalaLocationProvider {
   Future<LalaLocationResult> requestCurrentLocation() async {
     requests += 1;
     return result;
+  }
+}
+
+class RetryAfterUnavailableLocationProvider implements LalaLocationProvider {
+  final Completer<LalaLocationResult> _retryCompleter =
+      Completer<LalaLocationResult>();
+  int requests = 0;
+
+  @override
+  Future<LalaLocationResult> requestCurrentLocation() {
+    requests += 1;
+    if (requests == 1) {
+      return Future<LalaLocationResult>.value(
+        const LalaLocationResult.unavailable(),
+      );
+    }
+    return _retryCompleter.future;
+  }
+
+  void completeRetry(LalaLocationResult result) {
+    _retryCompleter.complete(result);
   }
 }
 
