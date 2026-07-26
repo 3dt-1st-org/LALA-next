@@ -58,3 +58,11 @@
 - Implementation commit before this ledger closeout: `b441b60` (`feat(community): add Local Signals schema contract`); the final branch head includes this ledger update as a separate documentation commit.
 - GitHub Actions had not produced a run or check result at the time of this handoff. Local verification above is the available evidence.
 - Do not merge this PR from the implementation session. After merge, LS-2 may begin only as a separate review unit and must consume the frozen `063`/Pydantic contracts.
+
+## PR #69 rebase and CI evidence — 2026-07-27
+
+- Fetched `origin/main` at `bf24ff8a48f23b70d6869e5d560789294b9579f5` and rebased this branch onto it without reset/restore/clean.
+- `git merge-tree` identified `.secrets.baseline` as the only conflict. Both sides' baseline entries were retained; only the conflicting `generated_at` metadata was normalized, then detect-secrets/pre-commit verified the current line positions.
+- Rebase result before this ledger closeout commit: `1a18931`.
+- Post-rebase local evidence: focused `18 passed`; full API `1008 passed, 1 warning`; Ruff check/format passed; all pre-commit hooks passed; `git diff --check` passed.
+- No secret value, source `.env`, live API, DB, crawl, deployment, or paid AI/translation call was read or used. PR remains Draft and merge is prohibited.
