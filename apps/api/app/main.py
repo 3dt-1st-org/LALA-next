@@ -17,11 +17,24 @@ from apps.api.app.routers.community import router as community_router
 from apps.api.app.routers.community_chat import router as community_chat_router
 from apps.api.app.routers.health import router as health_router
 from apps.api.app.routers.v1 import router as v1_router
+from apps.api.app.services.rag_index import (
+    assert_semantic_embedding_when_live,
+    resolve_serving_embedding_method,
+)
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
     logger = configure_logging(settings.log_level)
+    if (settings.rag_retrieval_mode or "legacy").strip().lower() == "hybrid":
+        # Literal validation must complete at boot regardless of enable_live_ai (R9) — R5's
+        # narrowed except in fetch_docent_knowledge_context_hybrid now lets an unsupported
+        # rag_embedding_method's ValueError propagate to request time otherwise.
+        resolve_serving_embedding_method(settings)
+        # No silent semantic fallback: a hybrid-mode boot with a non-semantic serving
+        # embedding method (and no explicit dev/test escape hatch) fails startup with a
+        # clear config error instead of degrading per-request (R1 wiring).
+        assert_semantic_embedding_when_live(settings)
     app = FastAPI(
         title="LALA-next Public API",
         version=settings.app_version,

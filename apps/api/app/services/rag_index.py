@@ -10,12 +10,12 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Literal
 
-from apps.api.app.core.config import get_settings
+from apps.api.app.core.config import get_settings, resolve_openai_base_url_host
 from apps.api.app.services.review_ingest_governance import enforce_no_raw_review_text
 
 VECTOR_DIMENSIONS = 1536
 LOCAL_HASH_EMBEDDING_MODEL = "local-hash-v1"
-EmbeddingMethod = Literal["local-hash", "azure-openai", "openai"]
+EmbeddingMethod = Literal["local-hash", "openai"]
 SourceScope = Literal["all", "static", "dynamic"]
 
 STATIC_SOURCE_TYPES = ("place_profile",)
@@ -75,6 +75,10 @@ class RagSearchResult:
     similarity: float
     embedding_model: str | None
     updated_at: str | None
+    # Optional: populated by the hybrid retrieval leg so the docent grounding seam can build
+    # the same row shape as the legacy SQL path. Absent (None) on the plain ANN query path.
+    body_en: str | None = None
+    content_sha256: str | None = None
 
     @classmethod
     def from_row(cls, row: dict[str, Any]) -> RagSearchResult:
@@ -89,6 +93,8 @@ class RagSearchResult:
             similarity=float(row.get("similarity") or 0.0),
             embedding_model=_optional_text(row.get("embedding_model")),
             updated_at=_isoformat(row.get("updated_at")),
+            body_en=_optional_text(row.get("body_en")),
+            content_sha256=_optional_text(row.get("content_sha256")),
         )
 
     def to_public_dict(self) -> dict[str, Any]:
@@ -124,11 +130,50 @@ def build_local_embedding(text: str, *, dimensions: int = VECTOR_DIMENSIONS) -> 
 def build_embedding(text: str, *, method: EmbeddingMethod) -> tuple[list[float], str]:
     if method == "local-hash":
         return build_local_embedding(text), LOCAL_HASH_EMBEDDING_MODEL
-    if method == "azure-openai":
-        return build_azure_openai_embedding(text), _azure_embedding_model_name()
     if method == "openai":
         return build_openai_embedding(text), settings_openai_embedding_model_name()
     raise ValueError(f"Unsupported embedding method: {method}")
+
+
+# Methods that produce real semantic vectors. `local-hash` is a deterministic feature-hash
+# fixture (build_local_embedding) for dev/test only — it is NOT a semantic model.
+SEMANTIC_EMBEDDING_METHODS: tuple[EmbeddingMethod, ...] = ("openai",)
+
+
+def resolve_serving_embedding_method(settings: Any | None = None) -> EmbeddingMethod:
+    """Return the configured serving embedding method, validated against the Literal.
+
+    The contract uses general OpenAI naming (`openai`) for semantic serving.
+    An unknown value raises so a misconfiguration fails fast.
+    """
+    settings = settings if settings is not None else get_settings()
+    method = (getattr(settings, "rag_embedding_method", "") or "").strip().lower()
+    if method not in ("local-hash", "openai"):
+        raise ValueError(
+            f"Unsupported rag_embedding_method={method!r}; expected one of local-hash, openai."
+        )
+    return method  # type: ignore[return-value]
+
+
+def assert_semantic_embedding_when_live(settings: Any | None = None) -> None:
+    """No silent semantic fallback: when live AI is enabled, the serving embedding method
+    must be semantic. `local-hash` is permitted only behind an explicit dev/test escape hatch
+    so a production config can never accidentally serve non-semantic hash vectors.
+    """
+    settings = settings if settings is not None else get_settings()
+    method = resolve_serving_embedding_method(settings)
+    if method == "openai":
+        # Validate the endpoint even when live AI is disabled so an Azure
+        # routing mistake cannot be hidden until a later serving transition.
+        resolve_openai_base_url_host(getattr(settings, "openai_base_url", ""))
+    if not getattr(settings, "enable_live_ai", False):
+        return
+    if method == "local-hash" and not getattr(settings, "rag_allow_local_hash_live", False):
+        raise RuntimeError(
+            "LALA_ENABLE_LIVE_AI=true requires a semantic rag_embedding_method "
+            "(openai); local-hash is dev/test only. "
+            "Set LALA_RAG_ALLOW_LOCAL_HASH_LIVE=1 only for local fixtures."
+        )
 
 
 def settings_openai_embedding_model_name() -> str:
@@ -138,6 +183,7 @@ def settings_openai_embedding_model_name() -> str:
 
 def build_openai_embedding(text: str) -> list[float]:
     settings = get_settings()
+    resolve_openai_base_url_host(settings.openai_base_url)
     if not settings.openai_api_key:
         raise RuntimeError("OpenAI embedding requires OPENAI_API_KEY.")
     if not settings.enable_live_ai:
@@ -154,37 +200,6 @@ def build_openai_embedding(text: str) -> list[float]:
     )
     response = client.embeddings.create(
         model=settings.openai_embedding_model or "text-embedding-3-small",
-        input=text,
-    )
-    embedding = list(response.data[0].embedding)
-    if len(embedding) != VECTOR_DIMENSIONS:
-        raise RuntimeError(
-            f"Expected {VECTOR_DIMENSIONS} embedding dimensions, got {len(embedding)}."
-        )
-    return [float(value) for value in embedding]
-
-
-def build_azure_openai_embedding(text: str) -> list[float]:
-    settings = get_settings()
-    missing = _missing_azure_embedding_settings(settings)
-    if missing:
-        raise RuntimeError("Azure OpenAI embedding config is missing: " + ", ".join(missing))
-    if not settings.enable_live_ai:
-        raise RuntimeError("Azure OpenAI embedding requires LALA_ENABLE_LIVE_AI=true.")
-
-    try:
-        from openai import AzureOpenAI
-    except Exception as exc:
-        raise RuntimeError("openai package is required for Azure OpenAI embeddings.") from exc
-
-    client = AzureOpenAI(
-        azure_endpoint=settings.azure_openai_endpoint,
-        api_key=settings.azure_openai_key,
-        api_version=settings.azure_openai_embedding_api_version
-        or settings.azure_openai_api_version,
-    )
-    response = client.embeddings.create(
-        model=settings.azure_openai_embedding_deployment,
         input=text,
     )
     embedding = list(response.data[0].embedding)
@@ -480,6 +495,210 @@ def upsert_knowledge_chunks(
                 cur.execute(sql, row)
         conn.commit()
     return len(rows)
+
+
+# ---------------------------------------------------------------------------
+# Reindex lifecycle: stale-chunk selection + idempotent re-embedding.
+#
+# Requires the additive column rag.knowledge_chunks.embedding_generation
+# (sql/canonical/064_rag_knowledge_retrieval_metadata.sql, applied separately). A chunk is
+# stale when its embedding_generation lags the serving generation, or when it has content but
+# no embedding yet. Content-driven re-embed happens through upsert_knowledge_chunks, which
+# stamps the serving generation; the worker here covers the model/method/version change case.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class StaleChunk:
+    source_type: str
+    source_id: str
+    text_for_embedding: str
+    content_sha256: str
+    stored_generation: int
+    reason: str
+
+    def to_public_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class ReindexResult:
+    examined: int
+    reembedded: int
+    capped: bool
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def is_chunk_stale(
+    *,
+    stored_generation: int,
+    serving_generation: int,
+    has_embedding: bool,
+) -> bool:
+    """Pure stale predicate. A chunk needs re-embedding when its embedding generation lags
+    the serving generation, or when it has content but no embedding yet (never embedded)."""
+    if stored_generation < serving_generation:
+        return True
+    return not has_embedding
+
+
+def select_stale_chunks(
+    *,
+    dsn: str,
+    serving_generation: int,
+    limit: int,
+    connect_timeout: int,
+) -> list[StaleChunk]:
+    """Read-only: return knowledge chunks whose embedding lags the serving generation.
+
+    Re-evaluated every run, so partial progress is resumable: a chunk re-embedded and stamped
+    with the serving generation drops out of the next run's stale set. Ordered so the oldest
+    generations re-embed first.
+    """
+    if not dsn:
+        raise ValueError("DB_DSN is required.")
+    if serving_generation < 0:
+        raise ValueError("serving_generation must be non-negative.")
+    if limit <= 0:
+        raise ValueError("limit must be positive.")
+
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+
+    sql = """
+        SELECT
+            source_type,
+            source_id,
+            title_ko,
+            body_ko,
+            body_en,
+            content_sha256,
+            embedding_generation,
+            (embedding IS NULL) AS embedding_is_null
+        FROM rag.knowledge_chunks
+        WHERE NULLIF(TRIM(body_ko), '') IS NOT NULL
+          AND (
+              embedding_generation < %s
+              OR embedding IS NULL
+          )
+        ORDER BY embedding_generation ASC, updated_at ASC, source_id
+        LIMIT %s
+    """
+    with psycopg2.connect(dsn, connect_timeout=connect_timeout) as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(sql, (serving_generation, limit))
+            rows = [dict(row) for row in cur.fetchall()]
+
+    stale: list[StaleChunk] = []
+    for row in rows:
+        title_ko = _optional_text(row.get("title_ko"))
+        body_en = _optional_text(row.get("body_en"))
+        body_ko = str(row.get("body_ko") or "")
+        text = "\n".join(part for part in (title_ko or "", body_ko, body_en or "") if part.strip())
+        stored_generation = int(row.get("embedding_generation") or 0)
+        reason = "generation_lag" if stored_generation < serving_generation else "missing_embedding"
+        stale.append(
+            StaleChunk(
+                source_type=str(row.get("source_type") or ""),
+                source_id=str(row.get("source_id") or ""),
+                text_for_embedding=text,
+                content_sha256=str(row.get("content_sha256") or ""),
+                stored_generation=stored_generation,
+                reason=reason,
+            )
+        )
+    return stale
+
+
+def reindex_stale_chunks(
+    *,
+    dsn: str,
+    serving_generation: int,
+    embedding_method: EmbeddingMethod,
+    batch_size: int,
+    chunk_cap: int,
+    connect_timeout: int,
+) -> ReindexResult:
+    """Re-embed stale knowledge chunks in bounded batches and stamp them with the serving
+    embedding generation.
+
+    Idempotent and resumable: the stale predicate (select_stale_chunks) is re-evaluated each
+    batch, so a retry only touches chunks still lagging the generation. ``chunk_cap`` bounds
+    the total chunks re-embedded in one run; ``batch_size`` bounds each commit. ``capped`` is
+    True when the cap was hit and more stale chunks remain for the next run.
+    """
+    if not dsn:
+        raise ValueError("DB_DSN is required.")
+    if serving_generation < 0:
+        raise ValueError("serving_generation must be non-negative.")
+    if batch_size <= 0:
+        raise ValueError("batch_size must be positive.")
+    if chunk_cap <= 0:
+        raise ValueError("chunk_cap must be positive.")
+
+    import psycopg2
+
+    update_sql = """
+        UPDATE rag.knowledge_chunks
+        SET embedding = %s::vector,
+            embedding_model = %s,
+            embedding_method = %s,
+            embedding_generation = %s,
+            content_sha256 = %s,
+            last_embedded_at = now(),
+            updated_at = now()
+        WHERE source_type = %s AND source_id = %s
+    """
+    reembedded = 0
+    examined = 0
+    remaining = chunk_cap
+    while remaining > 0:
+        take = min(batch_size, remaining)
+        batch = select_stale_chunks(
+            dsn=dsn,
+            serving_generation=serving_generation,
+            limit=take,
+            connect_timeout=connect_timeout,
+        )
+        if not batch:
+            break
+        examined += len(batch)
+        with psycopg2.connect(dsn, connect_timeout=connect_timeout) as conn:
+            with conn.cursor() as cur:
+                for chunk in batch:
+                    embedding, model_name = build_embedding(
+                        chunk.text_for_embedding, method=embedding_method
+                    )
+                    cur.execute(
+                        update_sql,
+                        (
+                            vector_to_pgvector(embedding),
+                            model_name,
+                            embedding_method,
+                            serving_generation,
+                            chunk.content_sha256,
+                            chunk.source_type,
+                            chunk.source_id,
+                        ),
+                    )
+            conn.commit()
+        reembedded += len(batch)
+        remaining -= len(batch)
+        if len(batch) < take:
+            break
+
+    capped = False
+    if reembedded >= chunk_cap:
+        probe = select_stale_chunks(
+            dsn=dsn,
+            serving_generation=serving_generation,
+            limit=1,
+            connect_timeout=connect_timeout,
+        )
+        capped = bool(probe)
+    return ReindexResult(examined=examined, reembedded=reembedded, capped=capped)
 
 
 def query_knowledge_chunks(
@@ -781,24 +1000,6 @@ def _text_features(text: str) -> Iterable[str]:
         if len(token) >= 4:
             for start in range(0, len(token) - 2):
                 yield f"pair:{token[start : start + 3]}"
-
-
-def _missing_azure_embedding_settings(settings: Any) -> list[str]:
-    missing: list[str] = []
-    if not settings.azure_openai_endpoint:
-        missing.append("AZURE_OPENAI_ENDPOINT")
-    if not settings.azure_openai_key:
-        missing.append("AZURE_OPENAI_KEY")
-    if not settings.azure_openai_embedding_deployment:
-        missing.append("AZURE_OPENAI_EMBEDDING_DEPLOYMENT")
-    if not (settings.azure_openai_embedding_api_version or settings.azure_openai_api_version):
-        missing.append("AZURE_OPENAI_EMBEDDING_API_VERSION")
-    return missing
-
-
-def _azure_embedding_model_name() -> str:
-    settings = get_settings()
-    return settings.azure_openai_embedding_deployment or "azure-openai-embedding"
 
 
 def _join_sentences(parts: Iterable[str | None]) -> str:
