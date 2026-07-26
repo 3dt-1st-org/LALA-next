@@ -11,6 +11,7 @@ from typing import Any
 
 from apps.api.app.core.config import get_settings, resolve_openai_base_url_host
 from apps.api.app.core.redaction import redact_secret_text
+from apps.api.app.services.model_client import resolve
 
 CONFIRM_TEXT = "APPLY_AI_PLACE_ENRICHMENT"
 ALLOW_ENV = "ALLOW_AI_PLACE_ENRICHMENT_APPLY"
@@ -667,9 +668,7 @@ def _mode(args: argparse.Namespace) -> str:
 
 
 def selected_place_enrichment_model(settings: Any | None = None) -> str:
-    if settings is None:
-        settings = get_settings()
-    return str(getattr(settings, "openai_place_enrichment_model", "") or "gpt-5.4-mini").strip()
+    return resolve("place_enrichment", settings).model_id
 
 
 def _missing_openai_settings(settings: Any) -> list[str]:
@@ -678,12 +677,18 @@ def _missing_openai_settings(settings: Any) -> list[str]:
         missing.append("OPENAI_API_KEY")
     if not getattr(settings, "enable_live_ai", False):
         missing.append("LALA_ENABLE_LIVE_AI=true")
-    if not selected_place_enrichment_model(settings):
+    try:
+        place_model = selected_place_enrichment_model(settings)
+    except ValueError as exc:
+        missing.append(str(exc))
+        place_model = ""
+    if not place_model:
         missing.append("OPENAI_PLACE_ENRICHMENT_MODEL")
     try:
         resolve_openai_base_url_host(getattr(settings, "openai_base_url", ""))
     except ValueError as exc:
-        missing.append(str(exc))
+        if str(exc) not in missing:
+            missing.append(str(exc))
     return missing
 
 

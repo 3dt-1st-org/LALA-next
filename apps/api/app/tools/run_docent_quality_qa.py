@@ -8,7 +8,6 @@ from typing import Any
 
 from apps.api.app.core.config import get_settings
 from apps.api.app.core.redaction import redact_secret_text
-from apps.api.app.services.ai_service import selected_docent_model
 from apps.api.app.services.docent_quality_qa import (
     build_docent_qa_records,
     fetch_docent_qa_candidates,
@@ -17,6 +16,7 @@ from apps.api.app.services.docent_quality_qa import (
     summarize_qa_records,
     write_local_qa_artifacts,
 )
+from apps.api.app.services.model_client import resolve
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -67,7 +67,8 @@ def main(argv: list[str] | None = None) -> int:
 
     settings = get_settings()
     dsn = os.getenv("DB_DSN") or settings.db_dsn
-    model_deployment = selected_docent_model(settings)
+    model_deployment = resolve("docent", settings).model_id
+    qa_model = resolve("docent_qa", settings)
     if not dsn:
         _write(args, {"ok": False, "mode": _mode(args), "error": "DB_DSN is not configured."})
         return 2
@@ -122,6 +123,10 @@ def main(argv: list[str] | None = None) -> int:
             "script_generation": bool(args.generate_scripts),
             "target": "output/local/docent-qa",
             "model_deployment": model_deployment,
+            "model_roles": {
+                "docent": resolve("docent", settings).as_metadata(),
+                "docent_qa": qa_model.as_metadata(),
+            },
             "input_relations": _input_relations(),
             "candidate_count": len(candidates),
             "sample_count": len(sample),
@@ -134,6 +139,9 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _plan_payload(args: argparse.Namespace) -> dict[str, Any]:
+    settings = get_settings()
+    docent_model = resolve("docent", settings)
+    qa_model = resolve("docent_qa", settings)
     return {
         "ok": True,
         "mode": "plan",
@@ -142,8 +150,12 @@ def _plan_payload(args: argparse.Namespace) -> dict[str, Any]:
         "script_generation": bool(args.generate_scripts),
         "target": "output/local/docent-qa",
         "model_role": "docent_generation_and_qa",
+        "model_roles": {
+            "docent": docent_model.as_metadata(),
+            "docent_qa": qa_model.as_metadata(),
+        },
         "model_deployment_envs": [
-            "OPENAI_DOCENT_MODEL",
+            "LALA_MODEL_ROLE_DOCENT",
             "OPENAI_API_KEY",
         ],
         "category": args.category,
@@ -193,8 +205,6 @@ def _write(args: argparse.Namespace, payload: dict[str, Any]) -> None:
     print(f"target={payload.get('target', 'output/local/docent-qa')}")
     if payload.get("model_role"):
         print(f"model_role={payload['model_role']}")
-    if payload.get("model_deployment"):
-        print(f"model_deployment={payload['model_deployment']}")
     if "db_mutation" in payload:
         print(f"db_mutation={str(payload.get('db_mutation')).lower()}")
     if "file_write" in payload:

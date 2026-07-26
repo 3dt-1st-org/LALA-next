@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from urllib.parse import urlsplit, urlunsplit
 
 from dotenv import load_dotenv
@@ -50,6 +50,8 @@ class Settings:
     openai_review_recheck_model: str = ""
     openai_docent_model: str = ""
     openai_place_enrichment_model: str = ""
+    # Non-secret model-id overrides. Values are read only from LALA_MODEL_ROLE_*.
+    model_role_overrides: dict[str, str] = field(default_factory=dict)
     enable_live_ai: bool = False
     azure_speech_region: str = ""
     azure_speech_endpoint: str = ""
@@ -206,6 +208,7 @@ class Settings:
             openai_review_recheck_model=openai_review_recheck_model,
             openai_docent_model=openai_docent_model,
             openai_place_enrichment_model=openai_place_enrichment_model,
+            model_role_overrides=_model_role_overrides_from_env(),
             enable_live_ai=_bool_env("LALA_ENABLE_LIVE_AI", default=False),
             azure_speech_region=_env_or_secret(
                 "AZURE_SPEECH_REGION", "azure-speech-region", key_vault_url
@@ -307,6 +310,23 @@ def _env_or_secret(env_name: str, secret_name: str, key_vault_url: str = "") -> 
         return aws_value
     # Azure Key Vault (레거시 폴백)
     return get_secret_if_configured(key_vault_url, secret_name)
+
+
+def _model_role_overrides_from_env() -> dict[str, str]:
+    """Read only non-secret role model-id overrides from the process environment."""
+    roles = (
+        "review_bulk",
+        "review_recheck",
+        "docent",
+        "docent_qa",
+        "place_enrichment",
+        "embedding",
+    )
+    return {
+        role: value
+        for role in roles
+        if (value := (os.getenv(f"LALA_MODEL_ROLE_{role.upper()}") or "").strip())
+    }
 
 
 def _bool_env(env_name: str, *, default: bool) -> bool:

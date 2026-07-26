@@ -4,6 +4,7 @@ from apps.api.app.core.config import Settings, get_settings
 from apps.api.app.core.jwt_auth import is_oauth_jwt_validation_configured
 from apps.api.app.services import db_repository, public_mvp_data
 from apps.api.app.services.logto_management import logto_management_configuration_status
+from apps.api.app.services.model_client import resolve_all
 from apps.workers.app import contracts as worker_contracts
 
 
@@ -208,7 +209,19 @@ def build_readiness(settings: Settings | None = None) -> dict:
         "status": _overall_readiness_status(checks=checks, mode=mode),
         "checks": checks,
         "mode": mode,
+        "model_roles": _model_role_metadata(settings),
     }
+
+
+def _model_role_metadata(settings: Settings) -> dict[str, object]:
+    """Return safe role/provider/model metadata without creating SDK clients."""
+    try:
+        return {
+            "status": "configured",
+            "roles": [resolved.as_metadata() for resolved in resolve_all(settings)],
+        }
+    except ValueError as exc:
+        return {"status": "invalid", "error": str(exc)}
 
 
 def _overall_readiness_status(*, checks: dict[str, str], mode: dict[str, str]) -> str:

@@ -8,6 +8,7 @@ from datetime import UTC, date, datetime
 from typing import Any
 
 from apps.api.app.core.config import get_settings, resolve_openai_base_url_host
+from apps.api.app.services.model_client import resolve
 
 PROMPT_VERSION = "review-attributes-v1"
 DETERMINISTIC_VERSION = "review-attributes-deterministic-v1"
@@ -379,9 +380,7 @@ def selected_review_recheck_model(settings: Any | None = None) -> str:
     when the env var is unset or empty, and recheck is always available unless a
     caller overrides this selector. Standard OpenAI only (never Azure).
     """
-    if settings is None:
-        settings = get_settings()
-    return str(getattr(settings, "openai_review_recheck_model", "") or "gpt-5.4-mini").strip()
+    return resolve("review_recheck", settings).model_id
 
 
 def route_low_confidence_enrichments(
@@ -844,20 +843,24 @@ def _missing_openai_settings(settings: Any) -> list[str]:
         missing.append("OPENAI_API_KEY")
     if not getattr(settings, "enable_live_ai", False):
         missing.append("LALA_ENABLE_LIVE_AI=true")
-    if not selected_review_batch_model(settings):
+    try:
+        bulk_model = selected_review_batch_model(settings)
+    except ValueError as exc:
+        missing.append(str(exc))
+        bulk_model = ""
+    if not bulk_model:
         missing.append("OPENAI_REVIEW_BATCH_MODEL")
     try:
         resolve_openai_base_url_host(getattr(settings, "openai_base_url", ""))
     except ValueError as exc:
-        missing.append(str(exc))
+        if str(exc) not in missing:
+            missing.append(str(exc))
     return missing
 
 
 def selected_review_batch_model(settings: Any | None = None) -> str:
     # Standard OpenAI bulk review model (never Azure). Defaults to gpt-5.4-nano.
-    if settings is None:
-        settings = get_settings()
-    return str(getattr(settings, "openai_review_batch_model", "") or "gpt-5.4-nano").strip()
+    return resolve("review_bulk", settings).model_id
 
 
 def _post_sample(value: dict[str, Any]) -> dict[str, str | None]:
