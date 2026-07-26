@@ -295,10 +295,12 @@ reviewed against them.
 ### 4.5 No direct Naver/Daangn scraping without approved source/legal sign-off
 
 - The legacy reliance on unauthenticated Naver/Daangn scraping is **not** carried
-  over. Review/mention acquisition uses only sources marked
-  `licensed | public_processed | approved_export` in `ingest.review_sources`
-  (062, PR #60; enforced by the `review_ingest_governance.py` boundary), after
-  legal sign-off on retention/summarization per source.
+  over. Review/mention acquisition uses only an approved API, licensed data, or
+  static data whose terms explicitly permit this processing. The corresponding
+  `ingest.review_sources` registration (062, PR #60; enforced by the
+  `review_ingest_governance.py` boundary) must carry source-specific legal
+  sign-off on retention/summarization; `public_processed` or `approved_export`
+  labels alone are not permission.
 - No scraping code ships in the repo. This is a code-review gate and a
   BLOCKED_EXTERNAL decision (DG-1, §10) until a first licensed source is
   approved. Community-crawl live execution remains approval-gated (DG-6).
@@ -334,7 +336,7 @@ possible). All migrations are listed in §3.2.
 | **W0-a Migration-runner contract** | Document/lock the canonical ordering (§3.2); add a CI assertion that `canonical_sql.py` loads `000…066` and `scan_sql_safety` passes on every PR. No new table. | `scan_sql_safety` runs in CI; ordering test green. | N/A (no data). | None (governance only). | Low. Blocks W1–W5 from shipping migrations. |
 | **W0-b Model-role router** | `config.py` `model_role_overrides` (env `LALA_MODEL_ROLE_<ROLE>`) + pure `model_client.resolve(role)` for `review_bulk`, `review_recheck`, `docent`, `docent_qa`, `place_enrichment`, and `embedding`; existing selectors become thin callers. **No prompt copy or SDK client creation during resolve.** | Router resolves each role to standard-OpenAI `(provider, model_id, client metadata)`; defaults remain `gpt-5.4-nano`, `gpt-5.4-mini`, and `text-embedding-3-small`; legacy `OPENAI_*_MODEL` inputs remain compatible. | `LALA_ENABLE_LIVE_AI=false` and no key keep resolution deterministic; Azure OpenAI base URLs are rejected. | No live-call behavior changes until the existing caller boundary is enabled. | Medium. Touched by W2/W3/W4; must land first. |
 | **W0-c Feature-flag registry** | One registry (config + doc table) of every flag this program introduces (§5.x flags), each defaulting to current behavior. | Flag-default test asserts no-op deploy. | N/A. | Flags off = today. | Low. Prevents flag-name collisions across waves. |
-| **W0-d Safety-contract test spine** | Extend `test_safety_contracts.py` with the cross-cutting assertions every wave adds to: no-raw-text-in-RAG, no-PII-in-aggregates, no-secrets-in-logs, no-mock-on-normal-paths, and no-unauthorized-scraping. Approved licensed/public-processed/export sources may enter the governed ingest and attribute-extraction boundary; only safe aggregates cross into user/RAG/docent paths. | Tests red on the gaps they will close; green on CURRENT invariants. | N/A (contract). | None. | Low. Becomes the §9 DoD backbone. |
+| **W0-d Safety-contract test spine** | Extend `test_safety_contracts.py` with the cross-cutting assertions every wave adds to: no-raw-text-in-RAG, no-PII-in-aggregates, no-secrets-in-logs, no-mock-on-normal-paths, and no-unauthorized-scraping. Only approved API, licensed data, or static data whose terms explicitly permit processing may enter governed ingest and attribute extraction; only safe aggregates cross into user/RAG/docent paths. | Tests red on the gaps they will close; green on CURRENT invariants. | N/A (contract). | None. | Low. Becomes the §9 DoD backbone. |
 | **W0-e OpenAPI-compat gate in CI** | Wire `check_openapi_compat.py` into CI so any breaking schema delta fails the build. | Compat check runs on schema PRs. | N/A. | None. | Low. Enforces §4.2/§4.3. |
 
 #### W0-c flag registry contract
@@ -525,7 +527,7 @@ misconfigured environment cannot spend or mutate.
 
 | Gate | Requirement | Owner / enforcement |
 | --- | --- | --- |
-| **Licensed data provenance** | Each source recorded in `ingest.review_sources` (062) with `license_class ∈ {licensed, public_processed, approved_export, rejected}`; the governance boundary aborts `rejected`/disabled/absent sources up front with a `source_license_rejected` governance error (before any record is accepted). Card data = public aggregates only (region×industry×month×demographic); community = mention aggregation only; weather = KMA/AirKorea public APIs. | W2-a (landed); `review_ingest_governance.py` (062); code-review gate (§4.5). |
+| **Licensed data provenance** | Each source recorded in `ingest.review_sources` (062) must be backed by an approved API, licensed data, or static data whose terms explicitly permit this processing; `license_class ∈ {licensed, public_processed, approved_export, rejected}` is an auditable label, not blanket permission. The governance boundary aborts `rejected`/disabled/absent sources up front with a `source_license_rejected` governance error (before any record is accepted). Card data = explicitly permitted public aggregates only (region×industry×month×demographic); community = mention aggregation only; weather = KMA/AirKorea public APIs. | W2-a (landed); `review_ingest_governance.py` (062); code-review gate (§4.5). |
 | **Retention / deletion** | **Raw review bodies are not stored at all** (BLOCKED_EXTERNAL, §4.4/DG-11) — no `community.posts_raw` table exists or is created by any current slice; the serve path sees counts/sentiment/attributes/short evidence phrases only. Should a future legal/retention/access decision (DG-11) permit retention, a separate purge schedule applies. | W2-a (`062` aggregate-only, landed); DG-11. |
 | **Secret injection, not docs** | Secrets via Key Vault + env (`DB_DSN`, `KEY_VAULT_URL`, model deployment keys); OIDC secret-zero deploy. No connection strings, keys, vault/registry/resource-group/subscription/tenant/client IDs, queue/event-hub names, DSNs, tokens, or private URLs in docs or code. ONMU vault isolation; `int-cors-origins` is the only mirrored value. | `test_secret_config_contract.py` / `test_aws_secrets.py`; `test_safety_contracts.py`. |
 | **Idempotency / dedupe** | Every write keyed and replay-safe: governance run `run_key = source_name + window + schema_version` (062); normalized posts `content_sha256`; aggregates `(week, place, provider, category)`; enrichments `(place_id, enrichment_type, prompt_version)`; chunks `(source_type, source_id)`; scores `(place_id, formula_version)`; weather `(location, observed_at)`; feedback `(place_id, day)`. No raw layer is keyed because no raw layer exists (BLOCKED_EXTERNAL). | Per-wave upsert tests (§5). |
@@ -701,7 +703,7 @@ a single PR may carry slices from one owner only (coordinate via §3 pins).
 
 | ID | Decision | Why it blocks | Default if unresolved |
 | --- | --- | --- | --- |
-| **DG-1** | First **licensed review/mention source** + legal sign-off on retention/summarization (e.g. Naver Search API discovery within terms, or an approved export). | No source may be marked `licensed` without it and W6-d ingest rollout cannot call external providers. **BLOCKED_EXTERNAL.** | 062 governance foundation landed (PR #60) — DB-backed source gate + aggregate receipt are in place, but no live acquisition; pipeline consumes already-collected `community.posts`; `062`/`063` accept already-normalized records only. |
+| **DG-1** | First review/mention source backed by an approved API, licensed data, or static data whose terms explicitly permit processing, plus legal sign-off on retention/summarization (e.g. Naver Search API discovery within terms). | No source may be marked `licensed` without it and W6-d ingest rollout cannot call external providers. **BLOCKED_EXTERNAL.** | 062 governance foundation landed (PR #60) — DB-backed source gate + aggregate receipt are in place, but no live acquisition; pipeline consumes already-collected `community.posts`; `062`/`063` accept already-normalized records only. |
 | **DG-2** | Travel-time provider: Kakao Mobility vs OSRM (self-hosted). ToS/cost differ. | W4-d travel-time cache + provider. **BLOCKED_EXTERNAL** (vendor/ToS). | Haversine straight-line fallback (legacy parity). |
 | **DG-3** | Wind-threshold two-tier defaults (`discomfort_wind_ms`, `advisory_wind_ms`). | W1-b emits flags using them. | Config values documented as deliberate; flag off. |
 | **DG-4** | Manual-review-queue UI owner for quarantine/ambiguous matches (operator console vs CLI). | W2-c closure. | CLI report; no UI. |
