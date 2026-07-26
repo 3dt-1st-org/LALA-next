@@ -3,9 +3,10 @@
 The official-source lane writes one ``ingest.source_files`` row per pull as a
 provenance receipt. ``ingest.source_files`` has **no** unique constraint today, so
 dedup is a pre-flight SELECT by ``(source_name, dataset_name, file_sha256)``
-guarded by a transaction-scoped advisory lock. Until the canonical 063 unique
-index is applied, that lock -- not the SELECT alone -- is what stops two
-concurrent pulls of the same fingerprint from each inserting a receipt.
+guarded by a transaction-scoped advisory lock. Until a separately approved
+operator migration adds a uniqueness constraint, that lock -- not the SELECT
+alone -- is what stops two concurrent pulls of the same fingerprint from each
+inserting a receipt.
 Re-running the same pull against unchanged upstream data must reuse the
 existing receipt row instead of appending a duplicate.
 """
@@ -93,8 +94,9 @@ def record_official_source_receipt(
 
     with conn.cursor() as cur:
         # Serialize concurrent pulls of the same fingerprint BEFORE the lookup.
-        # Until canonical 063 applies a unique index, this is the only thing
-        # stopping two parallel SELECTs (both empty) from each inserting.
+        # Until a separately approved operator migration adds a unique
+        # constraint, this is the only thing stopping two parallel SELECTs
+        # (both empty) from each inserting.
         cur.execute(_LOCK_SQL, (_receipt_lock_key(source_name, dataset_name, file_sha256),))
         cur.execute(_DUPLICATE_SQL, (source_name, dataset_name, file_sha256))
         existing = cur.fetchone()

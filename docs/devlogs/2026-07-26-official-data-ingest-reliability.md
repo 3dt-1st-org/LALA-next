@@ -58,15 +58,14 @@ Per-source changes (all reuse existing tables/columns):
   a deterministic transform of upstream store count; `main_product` stays
   `None`; no fabricated consumer classification.
 
-## Unapplied additive SQL
+## Operator-pending additive SQL
 
-`sql/canonical/063_official_source_provenance.sql` documents the schema gap and
-is **kept unapplied** (`ADD COLUMN IF NOT EXISTS` / `CREATE UNIQUE INDEX IF NOT
-EXISTS` only; non-destructive): adds `source_url`, `row_count`, `status`,
-`source_updated_at`, `schema_version` and a receipt-identity unique index to
-`ingest.source_files`, and an `image_url` column to `culture.events`. Runtime
-code does not depend on these columns; they await a separate
-`ALLOW_CANONICAL_SQL_APPLY=1` rollout.
+`sql/operator-pending/063_official_source_provenance.sql` documents the schema
+gap and is intentionally **outside `sql/canonical/`**. The canonical runner
+discovers every canonical file, so comments cannot make a proposal “unapplied”.
+The proposal is not executed by CI, startup, or normal application paths and
+requires a separately approved operator migration. Runtime code does not
+depend on these columns.
 
 ## External blockers (documented, not invented)
 
@@ -77,9 +76,9 @@ code does not depend on these columns; they await a separate
   no live calls were made in this slice.
 - **Source file download**: card-spending raw files are an operator step; this
   slice parses already-present files only.
-- **DB apply**: `063_*.sql` is not applied here.
+- **DB apply**: the operator-pending 063 proposal is not applied here.
 - **English enrichment**: explicitly deferred — no AI translation introduced.
-- **`culture.events` image column**: blocked on the unapplied SQL; until then
+- **`culture.events` image column**: blocked on the pending SQL; until then
   KOPIS posters / KCISA thumbnails are carried in the result payload only.
 
 ## Verification

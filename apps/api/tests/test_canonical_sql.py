@@ -53,32 +53,9 @@ def test_load_canonical_sql_plan_is_safe_and_ordered():
         "060_community_tables.sql",
         "061_community_chat_tables.sql",
         "062_review_ingestion_governance.sql",
-        "063_official_source_provenance.sql",
     ]
     assert plan.to_dict()["statement_count"] >= 10
     assert all(len(item.sha256) == 64 for item in plan.files)
-
-
-def test_063_official_source_provenance_index_is_not_unique():
-    # F3: a live environment likely already has duplicate (source_name,
-    # dataset_name, file_sha256) receipts (ingest.source_files never had a
-    # uniqueness constraint, and prior runtime versions inserted a fresh
-    # receipt row on every pull). A CREATE UNIQUE INDEX here would fail and,
-    # because the canonical plan runs every file in one transaction, roll back
-    # the entire rollout -- so this index must be a plain (non-unique) lookup
-    # index only.
-    sql_text = (canonical_sql.CANONICAL_SQL_DIR / "063_official_source_provenance.sql").read_text()
-    executable_lines = [
-        line for line in sql_text.splitlines() if line.strip() and not line.strip().startswith("--")
-    ]
-    executable_sql = "\n".join(executable_lines)
-    assert "idx_source_files_receipt_identity" in executable_sql
-    assert "CREATE UNIQUE INDEX" not in executable_sql
-    assert "CREATE INDEX IF NOT EXISTS idx_source_files_receipt_identity" in executable_sql
-    # The plan as a whole must still be safe (no destructive/secret findings).
-    plan = canonical_sql.load_canonical_sql_plan()
-    assert plan.ok is True
-    assert plan.safety_findings == ()
 
 
 def test_identity_user_migration_has_only_local_identity_columns():
@@ -125,7 +102,7 @@ def test_apply_canonical_sql_cli_defaults_to_plan_json(capsys):
     assert exit_code == 0
     assert output["ok"] is True
     assert output["mode"] == "plan"
-    assert output["plan"]["file_count"] == 13
+    assert output["plan"]["file_count"] == 12
     assert "result" not in output
 
 

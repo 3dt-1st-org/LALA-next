@@ -124,9 +124,10 @@ def test_reconcile_partial_run_honest_when_total_unknown():
 
 
 def test_hashed_receipt_takes_advisory_lock_before_duplicate_lookup():
-    # Until canonical 063 applies a unique index, the SELECT-then-INSERT must be
-    # guarded by a transaction-scoped advisory lock so two concurrent pulls of
-    # the same fingerprint cannot each insert a receipt.
+    # Until a separately approved operator migration adds a unique constraint,
+    # the SELECT-then-INSERT must be guarded by a transaction-scoped advisory
+    # lock so two concurrent pulls of the same fingerprint cannot each insert a
+    # receipt.
     conn = _FakeConn([None, ("locked-new-id",)])
     result = receipts.record_official_source_receipt(
         conn=conn,

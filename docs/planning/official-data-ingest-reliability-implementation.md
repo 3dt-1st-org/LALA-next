@@ -20,8 +20,8 @@ Hard constraints (carry forward from the slice brief):
   read-only and honest — an empty or partial upstream response is reported as
   such, never dressed up as a complete catalog.
 - Reuse existing canonical tables and columns. Schema changes are additive
-  canonical SQL **only**, kept **unapplied** (never run against a live DB in this
-  slice). Runtime code must not depend on unapplied columns.
+  operator-pending SQL **outside `sql/canonical/`** (never run against a live DB
+  in this slice). Runtime code must not depend on pending columns.
 - Keep public CLI payloads and wrapper-script contracts stable. The guarded
   plan/preview/apply style and `ALLOW_*_APPLY=1` + `--confirm APPLY_*` gates stay.
 - Standard OpenAI only where AI is involved (not in this slice — no AI lane is
@@ -110,7 +110,8 @@ Every official ingest must satisfy, within the existing schema and CLI shape:
 ## Bounded Implementation Scope
 
 Work is grouped into small, independently-testable commits. All runtime changes
-reuse existing tables/columns; the only new SQL is additive and unapplied.
+reuse existing tables/columns; the only new SQL is an additive operator proposal
+under `sql/operator-pending/`, outside the canonical runner.
 
 ### I1 — Shared reliability primitives (new focused modules)
 
@@ -191,9 +192,10 @@ reuse existing tables/columns; the only new SQL is additive and unapplied.
   `main_product` stays `None` (never invented). A focused test asserts no
   fabricated consumer classification.
 
-### I7 — Unapplied additive canonical SQL (`sql/canonical/063_official_source_provenance.sql`)
+### I7 — Operator-pending additive SQL (`sql/operator-pending/063_official_source_provenance.sql`)
 
-Documents the schema gap honestly, **kept unapplied**. Non-destructive
+Documents the schema gap honestly and is **kept outside `sql/canonical/`**.
+Non-destructive
 (`ADD COLUMN IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS` only, so it passes the
 shared destructive-statement safety test):
 
@@ -228,10 +230,11 @@ and in existing columns until this SQL is applied in a separate, gated rollout.
   this slice adds no live calls. Operators run `--apply` in their own gated env.
 - **Source file download**: card-spending raw files are an operator download
   step; this slice parses already-present files only.
-- **DB apply / unapplied SQL**: `063_official_source_provenance.sql` is not
-  applied here; it awaits a separate `ALLOW_CANONICAL_SQL_APPLY=1` rollout.
+- **DB apply / pending SQL**: `sql/operator-pending/063_official_source_provenance.sql`
+  is not applied here and is not discovered by the canonical runner. It awaits
+  a separately approved operator migration.
 - **English enrichment**: explicitly deferred — no AI translation is introduced.
-- **`culture.events` image column**: blocked on the unapplied SQL above; until
+- **`culture.events` image column**: blocked on the pending SQL above; until
   then posters/thumbnails are carried in the result payload only.
 
 ## Test Matrix
@@ -261,8 +264,8 @@ Focused tests at every changed boundary (no live API/DB/secret exposure):
   non-Gyeonggi region stays NULL (no fabrication).
 - Extend `test_franchise_identity.py`: restaurants are scored, not filtered by a
   new cuisine requirement; `live_api_call` key present in plan payload.
-- `test_safety_contracts.py` — confirm `063_*.sql` has no destructive statements
-  and no new secret literals enter tracked text files.
+- `test_safety_contracts.py` — canonical safety remains strict; pending SQL is
+  reviewed separately and is not part of the canonical execution plan.
 
 Plus relevant full-API suites and the repo-wide safety contracts; ruff; scoped
 pre-commit on owned files; `git diff --check`.
@@ -271,6 +274,7 @@ pre-commit on owned files; `git diff --check`.
 
 - Any live external call, file download, DB migration apply, deploy, or secret use.
 - AI translation / English enrichment; review/mention lane (separate PR).
-- Onboarding new card-spending regions; applying the unapplied SQL.
+- Onboarding new card-spending regions; separately approving and applying the
+  operator-pending SQL.
 - Changing public CLI argument shapes or wrapper-script guards.
 - Editing `main` directly; merging this Draft PR.
