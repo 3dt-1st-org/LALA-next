@@ -29,17 +29,22 @@ class WeatherMapPill extends StatelessWidget {
       label = pending;
     } else {
       final temp = temperatureLabelOrNull(data.temp);
+      final hasPm = data.dust.pm10.trim().isNotEmpty ||
+          data.dust.pm25.trim().isNotEmpty;
+      final airQuality = hasPm ? dustLabel(data.dust, language).trim() : '';
+      final airLabel = airQuality.isEmpty
+          ? ''
+          : lalaCopy(
+              language,
+              ko: '공기 $airQuality',
+              en: 'Air $airQuality',
+            );
       if (temp == null) {
-        // P1: 온도가 비어있으면 의미 있는 먼지 수치(PM)로만 구성.
-        // PM 마저 없으면 선행/후행 구분자·'-' 없이 중립 대기 문구로.
-        final hasPm = data.dust.pm10.trim().isNotEmpty ||
-            data.dust.pm25.trim().isNotEmpty;
-        final dust = hasPm
-            ? weatherPillDustLabel(data.dust, language).trim()
-            : '';
-        label = dust.isEmpty ? pending : dust;
+        label = airLabel.isEmpty ? pending : airLabel;
       } else {
-        label = '$temp · ${weatherPillDustLabel(data.dust, language)}';
+        // This is a constrained map control. Keep the full PM10/PM2.5 values
+        // in the weather sheet instead of ellipsizing them in the quick status.
+        label = airLabel.isEmpty ? temp : '$temp · $airLabel';
       }
     }
     return SmallStatusPill(

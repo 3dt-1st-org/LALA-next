@@ -2,7 +2,7 @@
 
 ## Build under test
 
-- Source branch: `codex/general-openai-docent-mainline`.
+- Source branch: `codex/general-openai-runtime-main`.
 - Package: `cloud.lalanext.lala_next_app`.
 - Device: USB-connected Samsung SM-S921N (Android 16).
 - Fresh debug APK: previous package uninstalled, then rebuilt and installed with
@@ -19,12 +19,15 @@
    reached the map screen.
 4. The map rendered live Kakao tiles, category-colored place markers, real
    place names/images, current-location recommendation data, and weather/PM
-   values.
+   values. The compact map weather control rendered the complete
+   `26.4°C · 공기 좋음` summary without ellipsis; tapping it remains the path to
+   PM10/PM2.5 detail.
 5. Search rendered real nearby results with official images. The daily-plan
    tab progressed from its honest loading state to a populated plan with weather
    and PM chips.
-6. After force-stopping and relaunching, onboarding stayed completed and the
-   app returned directly to the map with real data and settled weather.
+6. The daily-plan tab rendered a populated plan with separate PM10 and PM2.5
+   chips. After force-stopping and relaunching, onboarding stayed completed and
+   the app returned directly to the map with real data before weather settled.
 
 ## Boundary
 

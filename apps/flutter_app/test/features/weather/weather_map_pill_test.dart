@@ -10,7 +10,7 @@ import 'package:lala_next_app/features/weather/widgets/weather_map_pill.dart';
 import 'package:lala_next_app/shared/widgets/small_status_pill.dart';
 
 void main() {
-  testWidgets('빈 온도 + PM 수치면 PM 만 노출(구분자/대시 없음)', (tester) async {
+  testWidgets('빈 온도 + PM 수치면 잘리지 않는 공기 상태만 노출', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: WeatherMapPill(
@@ -21,7 +21,7 @@ void main() {
       ),
     );
     final label = _pillLabel(tester);
-    expect(label, 'PM10 41 보통 · PM2.5 18 보통');
+    expect(label, '공기 보통');
     expect(label.startsWith('-'), isFalse);
     expect(label.startsWith('·'), isFalse);
     expect(label.endsWith('·'), isFalse);
@@ -41,7 +41,7 @@ void main() {
     expect(_pillLabel(tester), '날씨 데이터 준비 중');
   });
 
-  testWidgets('온도가 있으면 기존대로 온도·먼지 결합(기존 동작 유지)', (tester) async {
+  testWidgets('온도가 있으면 온도와 공기 상태를 짧게 결합한다', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: WeatherMapPill(
@@ -51,7 +51,7 @@ void main() {
         ),
       ),
     );
-    expect(_pillLabel(tester), '14°C · PM10 41 보통 · PM2.5 18 보통');
+    expect(_pillLabel(tester), '14°C · 공기 보통');
   });
 
   testWidgets('날씨 없음(null)은 대기 문구', (tester) async {
