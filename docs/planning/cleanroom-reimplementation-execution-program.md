@@ -597,8 +597,10 @@ a single PR may carry slices from one owner only (coordinate via §3 pins).
 - **Scope:** standard OpenAI role metadata resolution only; no SDK client is
   created by `resolve()`, no live request or deployment is performed, and
   Azure Speech remains outside this slice.
-- **End:** recorded after focused tests, full repository checks, push, and the
-  stacked Draft PR are complete.
+- **End — 2026-07-26:** commits `64c9926` and `cecf3bd` pushed in stacked Draft
+  [PR #68](https://github.com/3dt-1st-org/LALA-next/pull/68), based on PR #67's
+  head branch. Targeted suite `135 passed, 1 warning`; clean no-`.env` full API
+  suite `997 passed, 1 warning`; ruff, format, pre-commit, and diff check passed.
 
 ### 10.3 P2 — discovery surfaces, measurement, rollout (Waves 5–6)
 
