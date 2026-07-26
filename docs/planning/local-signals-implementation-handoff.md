@@ -50,3 +50,11 @@
 - Static verification: Ruff check passed, Ruff format check passed, pre-commit all hooks passed after the expected `.secrets.baseline` line-number refresh, and staged `git diff --check` passed.
 - No DB apply, migration runner, seed, mock/demo fixture, live crawl, paid AI/translation call, deployment, or external review collection was run.
 - Branch is ready for the LS-1 conventional commit and Draft PR step. LS-2 remains blocked on this PR's merge plus the external decisions above; no LS-2 implementation has started.
+
+## Published draft status
+
+- Draft PR: [#69](https://github.com/3dt-1st-org/LALA-next/pull/69)
+- Base/head at PR creation: `main` / `geondongkim/lala-local-signals-implementation`.
+- Implementation commit before this ledger closeout: `b441b60` (`feat(community): add Local Signals schema contract`); the final branch head includes this ledger update as a separate documentation commit.
+- GitHub Actions had not produced a run or check result at the time of this handoff. Local verification above is the available evidence.
+- Do not merge this PR from the implementation session. After merge, LS-2 may begin only as a separate review unit and must consume the frozen `063`/Pydantic contracts.
