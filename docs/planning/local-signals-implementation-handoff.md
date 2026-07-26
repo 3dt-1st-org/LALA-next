@@ -68,3 +68,24 @@
 - GitHub Actions run [`30208098327`](https://github.com/3dt-1st-org/LALA-next/actions/runs/30208098327) completed green: API tests and safety contracts, Unix wrapper verification, and Flutter app analyze + test all succeeded.
 - Last validated code head `eab348f6f7106e5db23545ad2a4c74f76745c1ee` was pushed with `--force-with-lease`. Follow-up GitHub Actions run [`30208293647`](https://github.com/3dt-1st-org/LALA-next/actions/runs/30208293647) completed green for all three required checks; PR #69 reported `mergeStateStatus=CLEAN`, `state=OPEN`, and `isDraft=true` against `origin/main` `bf24ff8`. This line records the last validated code head; the subsequent ledger-only closeout commit does not change LS-1 functionality and is rechecked by CI before handoff.
 - No secret value, source `.env`, live API, DB, crawl, deployment, or paid AI/translation call was read or used. PR remains Draft and merge is prohibited.
+
+## LS-2 API and policy phase — 2026-07-27
+
+### Confirmed
+
+- LS-1 PR #69 is merged into `origin/main` at `a2e1ed939447fb0babedd05fd15a4c48edcc0cae`. LS-2 uses the separate clean worktree `/Users/geondongkim/orca/workspaces/LALA-next/lala-local-signals-ls2` and branch `geondongkim/lala-local-signals-ls2`; the former LS-1 worktree is not reused.
+- Public reads use only `community.local_signal_public`, which requires published + approved + public rows. Public schemas omit Logto issuer/subject, private draft/moderation internals, exact location, capability/report tokens, and third-party review fields.
+- Mutations use `require_logto_identity`; client payloads contain no author identity or client-controlled status. Draft creation/edit, submit-to-pending, owner deletion, reactions, comments, saves, and reports are covered by ownership, transition, deterministic policy, idempotency, and rate-limit seams.
+- `LOCAL_SIGNALS_READ` and `LOCAL_SIGNALS_WRITE` are central registry entries with non-secret default-off values and honest `LOCAL_SIGNALS_DISABLED` responses.
+- Approved Naver Blog API or other lawful review evidence remains a separate review/mention ingestion domain. LS-2 does not ingest or join it; raw blog/review text is excluded from Local Signals public responses, RAG, docent, and operational logs, with only a future governed aggregate lane permitted.
+- Local verification: focused LS-2/API contract tests passed; full API suite `1073 passed, 1 warning`; Ruff/format and `git diff --check` passed. Pre-commit/CI evidence is recorded when available.
+
+### Assumption
+
+- The current idempotency implementation is a process-local seam for this API slice. A durable distributed idempotency store must replace or back it before multi-instance production rollout.
+- Public locale filtering omits a source-language signal when no approved translation exists for the requested KO/EN mode; it does not silently show mixed-language content.
+
+### External decision
+
+- Product/privacy owners still need to decide moderation ownership and SLA, draft/published/report retention and deletion, translation provider/cost/provenance and contributor opt-out, and approved review-evidence retention and aggregate/RAG threshold policy.
+- DB migration apply, seed/mock data, deployment, live Naver/OpenAI/translation calls, crawl, and external review collection were not run in LS-2.

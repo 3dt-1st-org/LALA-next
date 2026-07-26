@@ -37,6 +37,8 @@ EXPECTED_KEYS = {
     "PLACE_CONFIDENCE_SURFACE",
     "RECOMMENDATION_FEEDBACK",
     "MAP_FUNNEL_METRICS",
+    "LOCAL_SIGNALS_READ",
+    "LOCAL_SIGNALS_WRITE",
 }
 
 
@@ -61,6 +63,8 @@ def test_empty_environment_is_a_noop_default_contract():
     assert resolved == default_feature_flag_values()
     assert resolved["LALA_ENABLE_LIVE_AI"] is False
     assert resolved["LALA_ENABLE_LIVE_SPEECH"] is False
+    assert resolved["LOCAL_SIGNALS_READ"] is False
+    assert resolved["LOCAL_SIGNALS_WRITE"] is False
     assert resolved["rag_embedding_method"] == "local-hash"
     assert resolved["rag_retrieval_mode"] == "legacy"
     assert Settings(feature_flags=resolved).feature_flags == resolved
@@ -95,6 +99,8 @@ def test_every_registered_flag_accepts_only_its_canonical_env_input(flag):
         ("rag_retrieval_mode", "HYBRID", "hybrid"),
         ("docent_qa_judge", "true", True),
         ("MAP_FUNNEL_METRICS", "on", True),
+        ("LOCAL_SIGNALS_READ", "true", True),
+        ("LOCAL_SIGNALS_WRITE", "1", True),
     ],
 )
 def test_registered_env_override_is_typed_and_scoped(key, raw_value, expected):

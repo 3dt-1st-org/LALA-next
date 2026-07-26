@@ -11,6 +11,13 @@ AUTH_COUNTER_NAMES = (
     "account_deletion_failure",
 )
 
+LOCAL_SIGNAL_COUNTER_NAMES = (
+    "read",
+    "write",
+    "policy_blocked",
+    "report",
+)
+
 
 READY_STATUSES = frozenset(
     {
@@ -46,6 +53,7 @@ class RuntimeMetrics:
         self._lock = Lock()
         self._routes: dict[tuple[str, str, int], dict[str, float | int]] = {}
         self._auth_counters = {name: 0 for name in AUTH_COUNTER_NAMES}
+        self._local_signal_counters = {name: 0 for name in LOCAL_SIGNAL_COUNTER_NAMES}
 
     def record_request(
         self,
@@ -91,6 +99,16 @@ class RuntimeMetrics:
         with self._lock:
             return dict(self._auth_counters)
 
+    def record_local_signal_event(self, name: str) -> None:
+        if name not in self._local_signal_counters:
+            raise ValueError("Unsupported Local Signals metric name.")
+        with self._lock:
+            self._local_signal_counters[name] += 1
+
+    def local_signal_snapshot(self) -> dict[str, int]:
+        with self._lock:
+            return dict(self._local_signal_counters)
+
 
 def render_prometheus(
     metrics: RuntimeMetrics, readiness: Mapping[str, object] | None = None
@@ -131,6 +149,7 @@ def render_prometheus(
     if readiness is not None:
         lines.extend(_readiness_lines(readiness))
     auth_counters = metrics.auth_snapshot()
+    local_signal_counters = metrics.local_signal_snapshot()
     lines.extend(
         [
             "# HELP lala_next_auth_oauth_success_total Accepted OAuth JWT authentications.",
@@ -142,6 +161,12 @@ def render_prometheus(
             "# HELP lala_next_account_deletion_failure_total Account deletion orchestration failures.",
             "# TYPE lala_next_account_deletion_failure_total counter",
             f"lala_next_account_deletion_failure_total {auth_counters['account_deletion_failure']}",
+            "# HELP lala_next_local_signal_events_total Local Signals events by safe event class.",
+            "# TYPE lala_next_local_signal_events_total counter",
+            *[
+                f'lala_next_local_signal_events_total{{event="{name}"}} {local_signal_counters[name]}'
+                for name in LOCAL_SIGNAL_COUNTER_NAMES
+            ],
         ]
     )
     return "\n".join(lines) + "\n"

@@ -19,6 +19,8 @@ DOCENT_SCRIPT_PATH = "/api/v1/docents/script"
 DAILY_PLAN_PATH = "/api/v1/plans/daily"
 INTERVENTION_PATH = "/api/v1/plans/intervention"
 ME_PATH = "/api/v1/me"
+LOCAL_SIGNALS_PATH_PREFIX = "/api/v1/community/signals"
+LOCAL_SIGNALS_PLACES_PATH_PREFIX = "/api/v1/community/places/"
 
 OPERATION_TIMEOUT_SECONDS = {
     HEALTHZ_PATH: 3,
@@ -119,7 +121,10 @@ def _add_client_auth_security(schema: dict[str, Any]) -> None:
             continue
         for method, operation in path_item.items():
             if isinstance(operation, dict):
-                if path == ME_PATH:
+                is_local_signals = path.startswith(LOCAL_SIGNALS_PATH_PREFIX) or path.startswith(
+                    LOCAL_SIGNALS_PLACES_PATH_PREFIX
+                )
+                if path == ME_PATH or (is_local_signals and method.lower() != "get"):
                     operation["security"] = [{"OAuthBearerAuth": []}]
                     _remove_generated_auth_parameters(operation)
                 else:
@@ -129,6 +134,11 @@ def _add_client_auth_security(schema: dict[str, Any]) -> None:
                         {"MigrationApiKey": []},
                     ]
                 _add_error_envelope_responses(operation)
+                if is_local_signals:
+                    _add_local_signal_error_responses(
+                        operation,
+                        write=method.lower() != "get",
+                    )
                 if path == ME_PATH:
                     _add_account_error_responses(
                         operation,
@@ -199,6 +209,38 @@ def _add_account_error_responses(
         )
 
 
+def _add_local_signal_error_responses(
+    operation: dict[str, Any],
+    *,
+    write: bool,
+) -> None:
+    responses = operation.setdefault("responses", {})
+    statuses = [
+        ("404", "The public Local Signal was not found."),
+        ("503", "Local Signals are unavailable."),
+    ]
+    if write:
+        statuses.extend(
+            [
+                ("403", "The authenticated user does not own this Local Signal."),
+                ("409", "The Local Signal transition or idempotency key is invalid."),
+                ("429", "The Local Signals rate limit was exceeded."),
+            ]
+        )
+    for status_code, description in statuses:
+        responses.setdefault(
+            status_code,
+            {
+                "description": description,
+                "content": {
+                    "application/json": {
+                        "schema": {"$ref": "#/components/schemas/ApiErrorEnvelope"}
+                    }
+                },
+            },
+        )
+
+
 def _fix_docent_audio_success_content(schema: dict[str, Any]) -> None:
     audio_operation = (schema.get("paths") or {}).get(DOCENT_AUDIO_PATH, {}).get("post")
     if not isinstance(audio_operation, dict):
@@ -216,7 +258,7 @@ def _add_success_envelope_responses(schema: dict[str, Any]) -> None:
     for path, path_item in (schema.get("paths") or {}).items():
         if path == DOCENT_AUDIO_PATH or not isinstance(path_item, Mapping):
             continue
-        for operation in path_item.values():
+        for _method, operation in path_item.items():
             if not isinstance(operation, dict):
                 continue
             success_response = (operation.get("responses") or {}).get("200")
@@ -231,13 +273,24 @@ def _add_success_envelope_responses(schema: dict[str, Any]) -> None:
 def _add_operation_contract_extensions(schema: dict[str, Any]) -> None:
     for path, path_item in (schema.get("paths") or {}).items():
         timeout_seconds = OPERATION_TIMEOUT_SECONDS.get(path)
+        if timeout_seconds is None and (
+            path.startswith(LOCAL_SIGNALS_PATH_PREFIX)
+            or path.startswith(LOCAL_SIGNALS_PLACES_PATH_PREFIX)
+        ):
+            timeout_seconds = 12
         if timeout_seconds is None or not isinstance(path_item, Mapping):
             continue
-        for operation in path_item.values():
+        for method, operation in path_item.items():
             if not isinstance(operation, dict):
                 continue
             operation["x-lala-timeout-seconds"] = timeout_seconds
-            operation["x-lala-auth-required"] = path == ME_PATH
+            operation["x-lala-auth-required"] = path == ME_PATH or (
+                (
+                    path.startswith(LOCAL_SIGNALS_PATH_PREFIX)
+                    or path.startswith(LOCAL_SIGNALS_PLACES_PATH_PREFIX)
+                )
+                and method.lower() != "get"
+            )
 
 
 def _add_standard_response_headers(schema: dict[str, Any]) -> None:
