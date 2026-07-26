@@ -149,13 +149,21 @@ def _plan_payload(args: argparse.Namespace) -> dict[str, Any]:
         "file_write": False,
         "script_generation": bool(args.generate_scripts),
         "target": "output/local/docent-qa",
-        "model_role": "docent_generation_and_qa",
+        "model_role": "docent_and_reserved_qa_judge",
         "model_roles": {
             "docent": docent_model.as_metadata(),
             "docent_qa": qa_model.as_metadata(),
         },
+        "model_role_usage": {
+            "docent": "used by --generate-scripts through the normal docent caller",
+            "docent_qa": (
+                "reserved_next_w3_f_qa_judge_consumer; current QA remains deterministic "
+                "precheck and metadata"
+            ),
+        },
         "model_deployment_envs": [
             "LALA_MODEL_ROLE_DOCENT",
+            "LALA_MODEL_ROLE_DOCENT_QA",
             "OPENAI_API_KEY",
         ],
         "category": args.category,

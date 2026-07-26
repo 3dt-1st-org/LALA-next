@@ -16,11 +16,14 @@ def test_docent_quality_qa_plan_names_canonical_inputs(capsys):
     assert payload["ok"] is True
     assert payload["mode"] == "plan"
     assert payload["target"] == "output/local/docent-qa"
-    assert payload["model_role"] == "docent_generation_and_qa"
+    assert payload["model_role"] == "docent_and_reserved_qa_judge"
     assert "LALA_MODEL_ROLE_DOCENT" in payload["model_deployment_envs"]
+    assert "LALA_MODEL_ROLE_DOCENT_QA" in payload["model_deployment_envs"]
     assert payload["model_roles"]["docent"]["provider"] == "openai"
     assert payload["model_roles"]["docent"]["model_id"] == "gpt-5.4-mini"
     assert payload["model_roles"]["docent_qa"]["model_id"] == "gpt-5.4-mini"
+    assert "reserved_next_w3_f_qa_judge_consumer" in payload["model_role_usage"]["docent_qa"]
+    assert "deterministic" in payload["model_role_usage"]["docent_qa"]
     assert payload["db_mutation"] is False
     assert payload["file_write"] is False
     assert "travel.places" in payload["input_relations"]

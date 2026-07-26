@@ -59,11 +59,25 @@ def test_legacy_openai_model_fields_remain_compatible():
     assert model_client.resolve("embedding", settings).model_id == "legacy-embedding"
 
 
-def test_role_env_override_has_precedence_over_legacy_model_fields(monkeypatch):
-    monkeypatch.setenv("LALA_MODEL_ROLE_REVIEW_BULK", "override-bulk")
-    settings = _offline_settings(openai_review_batch_model="legacy-bulk")
+@pytest.mark.parametrize(
+    ("role", "legacy_field"),
+    [
+        ("review_bulk", "openai_review_batch_model"),
+        ("review_recheck", "openai_review_recheck_model"),
+        ("docent", "openai_docent_model"),
+        ("docent_qa", "openai_docent_model"),
+        ("place_enrichment", "openai_place_enrichment_model"),
+        ("embedding", "openai_embedding_model"),
+    ],
+)
+def test_each_canonical_role_env_override_precedes_legacy_input(
+    monkeypatch, role: str, legacy_field: str
+):
+    override = f"override-{role}"
+    monkeypatch.setenv(f"LALA_MODEL_ROLE_{role.upper()}", override)
+    settings = _offline_settings(**{legacy_field: f"legacy-{role}"})
 
-    assert model_client.resolve("review_bulk", settings).model_id == "override-bulk"
+    assert model_client.resolve(role, settings).model_id == override
 
 
 def test_settings_capture_only_non_secret_role_overrides(monkeypatch):
