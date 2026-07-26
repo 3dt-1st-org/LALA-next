@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from apps.api.app.core.config import get_settings
+from apps.api.app.core.config import get_settings, resolve_openai_base_url_host
 from apps.api.app.core.errors import ServiceError
 from apps.api.app.schemas.docent import DocentScriptRequest
 from apps.api.app.services.normalization import display_language, format_celsius_label
@@ -8,12 +8,12 @@ from apps.api.app.services.normalization import display_language, format_celsius
 
 def live_ai_enabled() -> bool:
     settings = get_settings()
+    try:
+        resolve_openai_base_url_host(settings.openai_base_url)
+    except ValueError:
+        return False
     return bool(
-        settings.enable_live_ai
-        and settings.azure_openai_endpoint
-        and settings.azure_openai_key
-        and selected_docent_model(settings)
-        and settings.azure_openai_api_version
+        settings.enable_live_ai and settings.openai_api_key and selected_docent_model(settings)
     )
 
 
@@ -43,9 +43,7 @@ DOCENT_AI_TIMEOUT_SECONDS = 5.0
 def selected_docent_model(settings: object | None = None) -> str:
     if settings is None:
         settings = get_settings()
-    role_specific = getattr(settings, "azure_openai_docent_deployment", "") or ""
-    generic = getattr(settings, "azure_openai_deployment", "") or ""
-    return str(role_specific or generic).strip()
+    return str(getattr(settings, "openai_docent_model", "") or "gpt-5.4-mini").strip()
 
 
 def generate_docent_script_text(
@@ -58,23 +56,22 @@ def generate_docent_script_text(
         raise ServiceError(
             status_code=503,
             code="AI_NOT_CONFIGURED",
-            message="Azure OpenAI live generation is not enabled.",
+            message="OpenAI live generation is not enabled.",
             retryable=False,
         )
     try:
-        from openai import AzureOpenAI
+        from openai import OpenAI
     except Exception as exc:
         raise ServiceError(
             status_code=503,
             code="AI_CLIENT_UNAVAILABLE",
-            message="Azure OpenAI client dependency is unavailable.",
+            message="OpenAI client dependency is unavailable.",
             retryable=False,
         ) from exc
 
-    client = AzureOpenAI(
-        azure_endpoint=settings.azure_openai_endpoint,
-        api_key=settings.azure_openai_key,
-        api_version=settings.azure_openai_api_version,
+    client = OpenAI(
+        api_key=settings.openai_api_key,
+        base_url=settings.openai_base_url or "https://api.openai.com/v1",
         timeout=DOCENT_AI_TIMEOUT_SECONDS,
         max_retries=0,
     )
@@ -133,7 +130,7 @@ def generate_docent_script_text(
         raise ServiceError(
             status_code=502,
             code="AI_GENERATION_FAILED",
-            message="Azure OpenAI generation failed.",
+            message="OpenAI generation failed.",
             retryable=True,
         ) from exc
     text = text.strip()
@@ -141,7 +138,7 @@ def generate_docent_script_text(
         raise ServiceError(
             status_code=502,
             code="AI_EMPTY_RESPONSE",
-            message="Azure OpenAI returned an empty response.",
+            message="OpenAI returned an empty response.",
             retryable=True,
         )
     return text

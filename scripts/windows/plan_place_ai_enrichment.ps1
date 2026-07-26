@@ -53,10 +53,10 @@ try {
 
     if (-not $Json) {
         Write-Host "Planning LALA-next place AI enrichment."
-        Write-Host "Default mode is plan only and does not call Azure OpenAI."
-        Write-Host "Dry-run AI mode reads DB and calls Azure OpenAI but does not update rows."
+        Write-Host "Default mode is plan only and does not call OpenAI."
+        Write-Host "Dry-run AI mode reads DB and calls OpenAI but does not update rows."
         Write-Host "Apply mode requires ALLOW_AI_PLACE_ENRICHMENT_APPLY=1."
-        Write-Host "AZURE_OPENAI_KEY and DB_DSN values are never printed by this script."
+        Write-Host "OPENAI_API_KEY and DB_DSN values are never printed by this script."
     }
 
     $toolArgs = @(

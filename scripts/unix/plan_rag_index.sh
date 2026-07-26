@@ -101,7 +101,7 @@ if [[ "$JSON_STATUS" != "true" ]]; then
   echo "Planning LALA-next RAG knowledge index."
   echo "Default mode is dry-run plan only."
   echo "Apply mode requires ALLOW_RAG_INDEX_APPLY=1."
-  echo "DB_DSN and AZURE_OPENAI_KEY values are never printed by this script."
+  echo "DB_DSN and OPENAI_API_KEY values are never printed by this script."
 fi
 
 ARGS=(
