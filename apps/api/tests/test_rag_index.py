@@ -156,6 +156,51 @@ def test_rag_index_reindex_apply_rejects_live_local_hash_before_db_connect(monke
     assert "LALA_RAG_ALLOW_LOCAL_HASH_LIVE" in payload["error"]
 
 
+def test_rag_index_apply_rejects_unsupported_embedding_method_without_traceback(
+    monkeypatch, capsys
+):
+    # R10: resolve_serving_embedding_method's ValueError must not escape the JSON error
+    # contract as an unhandled traceback — it's rejected with the same ok=false/exit 2 shape
+    # as any other apply-gate violation, before any DB-connecting function runs.
+    monkeypatch.setenv("DB_DSN", "postgresql://redacted")
+    monkeypatch.setenv(run_rag_index.ALLOW_ENV, "1")
+    monkeypatch.setenv("LALA_RAG_EMBEDDING_METHOD", "openai-typo")
+
+    def fail_if_called(**kwargs):
+        raise AssertionError("must not fetch candidate chunks before the guard runs")
+
+    monkeypatch.setattr(run_rag_index, "fetch_candidate_chunks", fail_if_called)
+    monkeypatch.setattr(run_rag_index, "upsert_knowledge_chunks", fail_if_called)
+
+    exit_code = run_rag_index.main(["--apply", "--confirm", run_rag_index.CONFIRM_TEXT, "--json"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 2
+    assert "Unsupported rag_embedding_method" in payload["error"]
+
+
+def test_rag_index_reindex_apply_rejects_unsupported_embedding_method_without_traceback(
+    monkeypatch, capsys
+):
+    monkeypatch.setenv("DB_DSN", "postgresql://redacted")
+    monkeypatch.setenv(run_rag_index.ALLOW_ENV, "1")
+    monkeypatch.setenv("LALA_RAG_EMBEDDING_METHOD", "openai-typo")
+
+    def fail_if_called(**kwargs):
+        raise AssertionError("must not select/reindex stale chunks before the guard runs")
+
+    monkeypatch.setattr(run_rag_index, "select_stale_chunks", fail_if_called)
+    monkeypatch.setattr(run_rag_index, "reindex_stale_chunks", fail_if_called)
+
+    exit_code = run_rag_index.main(
+        ["--reindex", "--apply", "--confirm", run_rag_index.CONFIRM_TEXT, "--json"]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 2
+    assert "Unsupported rag_embedding_method" in payload["error"]
+
+
 def test_rag_index_apply_records_succeeded_job_run(monkeypatch, capsys):
     monkeypatch.setenv("DB_DSN", "postgresql://redacted")
     monkeypatch.setenv(run_rag_index.ALLOW_ENV, "1")
@@ -397,6 +442,22 @@ def test_create_app_boots_for_legacy_default_with_live_ai(monkeypatch):
     monkeypatch.delenv("LALA_RAG_EMBEDDING_METHOD", raising=False)
 
     create_app()  # no raise
+
+
+def test_create_app_boot_fails_for_hybrid_unsupported_method_without_live_ai(monkeypatch):
+    # R9: assert_semantic_embedding_when_live() alone is not enough — it no-ops when
+    # enable_live_ai is false, so a typo'd rag_embedding_method would otherwise boot fine and
+    # only surface as an unhandled ValueError at request time (after R5 narrowed the except
+    # in fetch_docent_knowledge_context_hybrid). The Literal validation must run at boot
+    # unconditionally, independent of enable_live_ai.
+    from apps.api.app.main import create_app
+
+    monkeypatch.setenv("LALA_RAG_RETRIEVAL_MODE", "hybrid")
+    monkeypatch.delenv("LALA_ENABLE_LIVE_AI", raising=False)
+    monkeypatch.setenv("LALA_RAG_EMBEDDING_METHOD", "openai-typo")
+
+    with pytest.raises(ValueError):
+        create_app()
 
 
 # ---------------------------------------------------------------------------
