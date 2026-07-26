@@ -11,6 +11,7 @@ from decimal import Decimal
 from typing import Any, Literal
 
 from apps.api.app.core.config import get_settings, resolve_openai_base_url_host
+from apps.api.app.services.model_client import resolve
 from apps.api.app.services.review_ingest_governance import enforce_no_raw_review_text
 
 VECTOR_DIMENSIONS = 1536
@@ -177,13 +178,12 @@ def assert_semantic_embedding_when_live(settings: Any | None = None) -> None:
 
 
 def settings_openai_embedding_model_name() -> str:
-    settings = get_settings()
-    return settings.openai_embedding_model or "text-embedding-3-small"
+    return resolve("embedding").model_id
 
 
 def build_openai_embedding(text: str) -> list[float]:
     settings = get_settings()
-    resolve_openai_base_url_host(settings.openai_base_url)
+    resolved_model = resolve("embedding", settings)
     if not settings.openai_api_key:
         raise RuntimeError("OpenAI embedding requires OPENAI_API_KEY.")
     if not settings.enable_live_ai:
@@ -199,7 +199,7 @@ def build_openai_embedding(text: str) -> list[float]:
         base_url=settings.openai_base_url or "https://api.openai.com/v1",
     )
     response = client.embeddings.create(
-        model=settings.openai_embedding_model or "text-embedding-3-small",
+        model=resolved_model.model_id,
         input=text,
     )
     embedding = list(response.data[0].embedding)

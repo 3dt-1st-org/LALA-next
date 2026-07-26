@@ -9,6 +9,7 @@ from typing import Any
 
 from apps.api.app.core.config import get_settings, resolve_openai_base_url_host
 from apps.api.app.core.redaction import redact_secret_text
+from apps.api.app.services.model_client import resolve
 from apps.api.app.services.review_attribute_batch import (
     JOB_NAME,
     PROMPT_VERSION,
@@ -86,6 +87,8 @@ def main(argv: list[str] | None = None) -> int:
     dsn = os.getenv("DB_DSN") or settings.db_dsn
     bulk_model = selected_review_batch_model(settings)
     recheck_model = selected_review_recheck_model(settings)
+    bulk_role = resolve("review_bulk", settings)
+    recheck_role = resolve("review_recheck", settings)
     if not dsn:
         _write(args, {"ok": False, "mode": _mode(args), "error": "DB_DSN is not configured."})
         return 2
@@ -202,6 +205,11 @@ def main(argv: list[str] | None = None) -> int:
             "target": "community.place_mentions_weekly",
             "job_name": JOB_NAME,
             "prompt_version": PROMPT_VERSION,
+            "model_role": "review_bulk",
+            "model_roles": {
+                "review_bulk": bulk_role.as_metadata(),
+                "review_recheck": recheck_role.as_metadata(),
+            },
             "bulk_model": bulk_model,
             "recheck_model": recheck_model,
             "recheck_routed_count": recheck_routed_count,
@@ -228,10 +236,10 @@ def _plan_payload(args: argparse.Namespace) -> dict[str, Any]:
         "target": "community.place_mentions_weekly",
         "job_name": JOB_NAME,
         "prompt_version": PROMPT_VERSION,
-        "model_role": "bulk_review_batch",
+        "model_role": "review_bulk",
         "model_envs": {
-            "bulk_review_batch": "OPENAI_REVIEW_BATCH_MODEL (gpt-5.4-nano)",
-            "low_confidence_recheck": "OPENAI_REVIEW_RECHECK_MODEL (gpt-5.4-mini)",
+            "review_bulk": "LALA_MODEL_ROLE_REVIEW_BULK (legacy OPENAI_REVIEW_BATCH_MODEL)",
+            "review_recheck": "LALA_MODEL_ROLE_REVIEW_RECHECK (legacy OPENAI_REVIEW_RECHECK_MODEL)",
         },
         "live_ai_required_env": ["OPENAI_API_KEY", "LALA_ENABLE_LIVE_AI"],
         "input_relations": [
@@ -282,10 +290,6 @@ def _write(args: argparse.Namespace, payload: dict[str, Any]) -> None:
     print(f"prompt_version={payload.get('prompt_version', PROMPT_VERSION)}")
     if payload.get("model_role"):
         print(f"model_role={payload['model_role']}")
-    if payload.get("bulk_model"):
-        print(f"bulk_model={payload['bulk_model']}")
-    if payload.get("recheck_model"):
-        print(f"recheck_model={payload['recheck_model']}")
     if "live_ai_call" in payload:
         print(f"live_ai_call={str(payload.get('live_ai_call')).lower()}")
     if "db_mutation" in payload:

@@ -23,9 +23,9 @@ def test_review_attribute_batch_plan_is_safe(capsys):
     assert payload["live_ai_call"] is False
     assert payload["db_mutation"] is False
     assert payload["target"] == "community.place_mentions_weekly"
-    assert payload["model_role"] == "bulk_review_batch"
-    assert payload["model_envs"]["bulk_review_batch"].startswith("OPENAI_REVIEW_BATCH_MODEL")
-    assert payload["model_envs"]["low_confidence_recheck"].startswith("OPENAI_REVIEW_RECHECK_MODEL")
+    assert payload["model_role"] == "review_bulk"
+    assert payload["model_envs"]["review_bulk"].startswith("LALA_MODEL_ROLE_REVIEW_BULK")
+    assert payload["model_envs"]["review_recheck"].startswith("LALA_MODEL_ROLE_REVIEW_RECHECK")
     assert "community.posts" in payload["input_relations"]
     assert "attributes.review_attributes" in payload["output_attributes"]
     assert run_review_attribute_batch.ALLOW_ENV in payload["apply_required_env"]

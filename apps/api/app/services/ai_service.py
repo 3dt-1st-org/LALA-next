@@ -3,6 +3,7 @@ from __future__ import annotations
 from apps.api.app.core.config import get_settings, resolve_openai_base_url_host
 from apps.api.app.core.errors import ServiceError
 from apps.api.app.schemas.docent import DocentScriptRequest
+from apps.api.app.services.model_client import resolve
 from apps.api.app.services.normalization import display_language, format_celsius_label
 
 
@@ -41,9 +42,7 @@ DOCENT_AI_TIMEOUT_SECONDS = 5.0
 
 
 def selected_docent_model(settings: object | None = None) -> str:
-    if settings is None:
-        settings = get_settings()
-    return str(getattr(settings, "openai_docent_model", "") or "gpt-5.4-mini").strip()
+    return resolve("docent", settings).model_id
 
 
 def generate_docent_script_text(
@@ -52,6 +51,15 @@ def generate_docent_script_text(
     grounding_context: list[dict] | None = None,
 ) -> str:
     settings = get_settings()
+    try:
+        resolved_model = resolve("docent", settings)
+    except ValueError as exc:
+        raise ServiceError(
+            status_code=503,
+            code="AI_NOT_CONFIGURED",
+            message="OpenAI live generation is not enabled.",
+            retryable=False,
+        ) from exc
     if not live_ai_enabled():
         raise ServiceError(
             status_code=503,
@@ -114,7 +122,7 @@ def generate_docent_script_text(
     )
     try:
         completion = client.chat.completions.create(
-            model=selected_docent_model(settings),
+            model=resolved_model.model_id,
             messages=[
                 {
                     "role": "system",
