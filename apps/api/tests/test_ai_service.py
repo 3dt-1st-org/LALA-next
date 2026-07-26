@@ -126,7 +126,7 @@ def test_generate_docent_script_uses_short_timeout_without_sdk_retries(monkeypat
         "get_settings",
         lambda: SimpleNamespace(
             enable_live_ai=True,
-            openai_api_key="secret",
+            openai_api_key="test-openai-key",  # pragma: allowlist secret
             openai_base_url="https://api.openai.com/v1",
             openai_docent_model="gpt-5.4-mini",
         ),
@@ -171,7 +171,7 @@ def test_generate_docent_script_prefers_docent_specific_model(monkeypatch):
         "get_settings",
         lambda: SimpleNamespace(
             enable_live_ai=True,
-            openai_api_key="secret",
+            openai_api_key="test-openai-key",  # pragma: allowlist secret
             openai_base_url="https://api.openai.com/v1",
             openai_docent_model="docent-mini-model",
         ),
