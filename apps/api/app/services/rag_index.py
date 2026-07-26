@@ -11,6 +11,7 @@ from decimal import Decimal
 from typing import Any, Literal
 
 from apps.api.app.core.config import get_settings
+from apps.api.app.services.review_ingest_governance import enforce_no_raw_review_text
 
 VECTOR_DIMENSIONS = 1536
 LOCAL_HASH_EMBEDDING_MODEL = "local-hash-v1"
@@ -684,12 +685,13 @@ def _community_post_chunk(row: dict[str, Any]) -> KnowledgeChunk:
 
 def _place_mention_chunk(row: dict[str, Any]) -> KnowledgeChunk:
     attributes = _json_object(row.get("attributes"))
+    projected_attributes = _project_place_mention_attributes(attributes)
     body = _join_sentences(
         [
             f"{row.get('place_name_ko')}의 주간 로컬 언급 신호입니다.",
             f"전체 언급은 {row.get('mention_count')}회, 광고 필터 후 유기적 언급은 {row.get('organic_mention_count') or '미집계'}회입니다.",
             f"감성 점수는 {row.get('sentiment_score') if row.get('sentiment_score') is not None else '미집계'}입니다.",
-            f"속성 점수는 {_attributes_text(attributes)}입니다.",
+            f"속성 점수는 {_attributes_text(projected_attributes.get('attribute_scores', {}))}입니다.",
             f"공급자는 {row.get('provider') or 'unknown'}입니다.",
         ]
     )
@@ -708,7 +710,7 @@ def _place_mention_chunk(row: dict[str, Any]) -> KnowledgeChunk:
                 "mention_count": row.get("mention_count"),
                 "organic_mention_count": row.get("organic_mention_count"),
                 "sentiment_score": _optional_float(row.get("sentiment_score")),
-                "attributes": attributes,
+                "attributes": projected_attributes,
                 "updated_at": _isoformat(row.get("updated_at")),
             }
         ),
@@ -827,6 +829,74 @@ def _attributes_text(attributes: dict[str, Any]) -> str:
         return "미집계"
     items = [f"{key}={value}" for key, value in sorted(attributes.items())[:6]]
     return ", ".join(items)
+
+
+def _project_place_mention_attributes(attributes: dict[str, Any]) -> dict[str, Any]:
+    """Project review attributes to aggregate/provenance-safe RAG metadata.
+
+    Evidence phrases, summaries, reasons, retained snippets, and source review
+    text are intentionally not copied from the ingest row into the RAG chunk.
+    """
+    review = _json_object(attributes.get("review_attributes"))
+    quality = _json_object(attributes.get("review_quality"))
+    projected_review = {
+        key: value
+        for key in (
+            "schema_version",
+            "source",
+            "attribute_scores",
+            "attribute_mean",
+            "attribute_confidence_avg",
+            "sentiment_score",
+            "sentiment_confidence",
+        )
+        if (value := _safe_review_attribute_value(key, review.get(key))) is not None
+    }
+    projected_quality = {
+        key: value
+        for key in (
+            "schema_version",
+            "source",
+            "score",
+            "organic_review_count",
+            "mention_count",
+            "confidence",
+        )
+        if (value := _safe_review_attribute_value(key, quality.get(key))) is not None
+    }
+    projected: dict[str, Any] = {"review_attributes": projected_review}
+    if projected_quality:
+        projected["review_quality"] = projected_quality
+    enforce_no_raw_review_text(projected, label="place_mention_rag_metadata")
+    return projected
+
+
+def _safe_review_attribute_value(key: str, value: Any) -> Any:
+    if value is None:
+        return None
+    if key == "attribute_scores":
+        return {
+            str(name): number
+            for name, raw_number in _json_object(value).items()
+            if (number := _optional_float(raw_number)) is not None
+        }
+    if key in {"schema_version", "source"}:
+        return _optional_text(value)
+    if key in {
+        "attribute_mean",
+        "attribute_confidence_avg",
+        "sentiment_score",
+        "sentiment_confidence",
+        "score",
+        "confidence",
+    }:
+        return _optional_float(value)
+    if key in {"organic_review_count", "mention_count"}:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+    return None
 
 
 def _optional_text(value: Any) -> str | None:

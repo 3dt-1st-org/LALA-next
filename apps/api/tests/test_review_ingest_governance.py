@@ -51,6 +51,7 @@ def _record_dict(
         "received_at": RECEIVED_AT,
         "category": "restaurant",
         "match_confidence": 0.92,
+        "is_organic": True,
         "normalized_attributes": {"taste": 0.8, "service": 0.7},
     }
     record.update(overrides)

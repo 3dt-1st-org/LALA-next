@@ -7,7 +7,7 @@ import os
 from datetime import UTC, datetime
 from typing import Any
 
-from apps.api.app.core.config import get_settings
+from apps.api.app.core.config import get_settings, resolve_openai_base_url_host
 from apps.api.app.core.redaction import redact_secret_text
 from apps.api.app.services.review_attribute_batch import (
     JOB_NAME,
@@ -101,6 +101,12 @@ def main(argv: list[str] | None = None) -> int:
     source_method = "openai" if live_lane else "deterministic"
     recheck_routed_count = 0
     recheck_upgraded_count = 0
+    recheck_failed_count = 0
+    try:
+        openai_base_url_host = resolve_openai_base_url_host(settings.openai_base_url)
+    except ValueError as exc:
+        _write(args, {"ok": False, "mode": _mode(args), "error": str(exc)})
+        return 2
     try:
         candidates = fetch_review_attribute_candidates(
             dsn=dsn,
@@ -125,13 +131,16 @@ def main(argv: list[str] | None = None) -> int:
             routed = route_low_confidence_enrichments(enrichments)
             recheck_routed_count = len(routed)
             if routed:
+                recheck_stats: dict[str, int] = {}
                 enrichments = generate_ai_recheck(
                     candidates=candidates,
                     enrichments=enrichments,
                     batch_size=args.batch_size,
                     retry_attempts=args.retry_attempts,
                     retry_delay_sec=args.retry_delay_sec,
+                    recheck_stats=recheck_stats,
                 )
+                recheck_failed_count = recheck_stats.get("recheck_failed_count", 0)
                 recheck_upgraded_count = sum(
                     1 for item in enrichments if item.source_method == "openai_recheck"
                 )
@@ -197,6 +206,8 @@ def main(argv: list[str] | None = None) -> int:
             "recheck_model": recheck_model,
             "recheck_routed_count": recheck_routed_count,
             "recheck_upgraded_count": recheck_upgraded_count,
+            "recheck_failed_count": recheck_failed_count,
+            "openai_base_url_host": openai_base_url_host,
             "source_method": source_method,
             "candidate_count": len(candidates),
             "generated_count": len(enrichments),

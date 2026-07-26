@@ -7,7 +7,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from typing import Any
 
-from apps.api.app.core.config import get_settings
+from apps.api.app.core.config import get_settings, resolve_openai_base_url_host
 
 PROMPT_VERSION = "review-attributes-v1"
 DETERMINISTIC_VERSION = "review-attributes-deterministic-v1"
@@ -410,6 +410,7 @@ def generate_ai_recheck(
     retry_delay_sec: float,
     threshold: float = RECHECK_CONFIDENCE_THRESHOLD,
     client: Any | None = None,
+    recheck_stats: dict[str, int] | None = None,
 ) -> list[ReviewAttributeEnrichment]:
     """Selective mini-model recheck of low-confidence bulk enrichments.
 
@@ -443,6 +444,10 @@ def generate_ai_recheck(
         try:
             client = _build_openai_client(settings)
         except RuntimeError:
+            if recheck_stats is not None:
+                recheck_stats["recheck_failed_count"] = (
+                    recheck_stats.get("recheck_failed_count", 0) + 1
+                )
             return list(enrichments)
     rechecked_by_id: dict[str, ReviewAttributeEnrichment] = {}
     for start in range(0, len(recheck_candidates), batch_size):
@@ -464,15 +469,20 @@ def generate_ai_recheck(
                 retry_attempts=retry_attempts,
                 retry_delay_sec=retry_delay_sec,
             )
+            raw = response.choices[0].message.content or ""
+            for enrichment in parse_ai_response(raw, batch):
+                # Mark the lane so downstream provenance shows a recheck upgraded it.
+                rechecked_by_id[enrichment.mention_id] = replace(
+                    enrichment, source_method="openai_recheck"
+                )
         except Exception:
             # Best-effort: keep the bulk result for this batch on recheck failure.
+            # This includes malformed, empty, or structurally incomplete replies.
+            if recheck_stats is not None:
+                recheck_stats["recheck_failed_count"] = (
+                    recheck_stats.get("recheck_failed_count", 0) + 1
+                )
             continue
-        raw = response.choices[0].message.content or ""
-        for enrichment in parse_ai_response(raw, batch):
-            # Mark the lane so downstream provenance shows a recheck upgraded it.
-            rechecked_by_id[enrichment.mention_id] = replace(
-                enrichment, source_method="openai_recheck"
-            )
     # Merge in bulk order: a routed row that got a rechecked upgrade replaces its
     # bulk result; everything else (non-routed, or routed but not re-upgraded) is
     # kept as-is so no evidence is silently dropped.
@@ -836,6 +846,10 @@ def _missing_openai_settings(settings: Any) -> list[str]:
         missing.append("LALA_ENABLE_LIVE_AI=true")
     if not selected_review_batch_model(settings):
         missing.append("OPENAI_REVIEW_BATCH_MODEL")
+    try:
+        resolve_openai_base_url_host(getattr(settings, "openai_base_url", ""))
+    except ValueError as exc:
+        missing.append(str(exc))
     return missing
 
 

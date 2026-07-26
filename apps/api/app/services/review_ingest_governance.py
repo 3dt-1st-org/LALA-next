@@ -124,6 +124,7 @@ MissingFieldName = Literal[
     "terms_version",
     "content_sha256",
     "received_at",
+    "is_organic",
 ]
 RawTextFieldName = Literal[
     "body",
@@ -341,12 +342,12 @@ class ReviewSourceRecord(BaseModel):
     received_at: datetime
     category: str | None = None
     match_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
-    # Improvement A: an approved adapter/export declares organic status. A
+    # Improvement A: an approved adapter/export must declare organic status. A
     # non-organic record (advertising/sponsored/etc.) is quarantined here and
     # never projected to an aggregate -- it can never become a positive mention,
-    # public score input, or RAG/docent evidence. Defaults to organic so
-    # already-valid records keep parsing unchanged.
-    is_organic: bool = True
+    # public score input, or RAG/docent evidence. Missing declarations fail
+    # closed through the structural-validation quarantine path.
+    is_organic: bool
     non_organic_reason: NonOrganicReason | None = None
     # Approved aggregate attributes only (e.g. {"taste": 0.7}). The contract is
     # strict and bounded (Finding 2): keys are restricted to the repository's
@@ -583,6 +584,7 @@ def _classify_validation_error(
             "terms_version",
             "content_sha256",
             "received_at",
+            "is_organic",
         }:
             metadata = metadata.model_copy(
                 update={"missing_field_name": loc_leaf}  # type: ignore[arg-type]

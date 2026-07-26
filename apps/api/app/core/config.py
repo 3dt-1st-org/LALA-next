@@ -278,6 +278,25 @@ def get_settings() -> Settings:
     return Settings.from_env()
 
 
+def resolve_openai_base_url_host(base_url: str | None) -> str:
+    """Return only the safe host metadata for a general OpenAI base URL.
+
+    Review and RAG model lanes must never route through Azure OpenAI. The full
+    URL is intentionally not returned or included in operator payloads.
+    """
+    raw_url = (base_url or "https://api.openai.com/v1").strip()
+    try:
+        parsed = urlsplit(raw_url)
+    except ValueError as exc:
+        raise ValueError("OPENAI_BASE_URL is not a valid URL.") from exc
+    host = (parsed.hostname or "").strip().lower().rstrip(".")
+    if not host:
+        raise ValueError("OPENAI_BASE_URL must include a host.")
+    if host == "openai.azure.com" or host.endswith(".openai.azure.com"):
+        raise ValueError("Azure OpenAI base URLs are not supported for review or RAG model paths.")
+    return host
+
+
 def _env_or_secret(env_name: str, secret_name: str, key_vault_url: str = "") -> str:
     value = (os.getenv(env_name) or "").strip()
     if value:

@@ -15,6 +15,9 @@ import json
 from datetime import UTC, date, datetime
 from types import SimpleNamespace
 
+import pytest
+
+from apps.api.app.core.config import resolve_openai_base_url_host
 from apps.api.app.services import rag_index
 from apps.api.app.services import review_attribute_batch as batch
 from apps.api.app.services import review_ingest_governance as governance
@@ -85,12 +88,26 @@ def test_non_organic_record_is_quarantined_not_accepted():
 def test_organic_record_passes_through_unchanged():
     valid, quarantined = governance.classify_review_records(
         registration=_registration(),
-        records=[_record("post-ok")],  # is_organic defaults to True
+        records=[_record("post-ok")],
     )
 
     assert len(valid) == 1
     assert valid[0].external_key == "post-ok"
     assert quarantined == ()
+
+
+def test_missing_organic_declaration_is_quarantined_fail_closed():
+    raw = _record("post-undeclared")
+    raw.pop("is_organic")
+
+    valid, quarantined = governance.classify_review_records(
+        registration=_registration(), records=[raw]
+    )
+
+    assert valid == ()
+    assert len(quarantined) == 1
+    assert quarantined[0].reason_code == "schema_invalid_missing_field"
+    assert quarantined[0].safe_metadata.missing_field_name == "is_organic"
 
 
 def test_mixed_batch_quarantines_only_non_organic():
@@ -313,6 +330,37 @@ def test_bulk_uses_nano_and_recheck_uses_mini_with_injected_client(monkeypatch):
     assert merged[0].attribute_confidence_avg == 0.9
 
 
+def test_malformed_mini_recheck_keeps_bulk_result_and_records_failure(monkeypatch):
+    monkeypatch.setattr(batch, "get_settings", lambda: _fake_settings())
+
+    class _MalformedClient:
+        @property
+        def chat(self):
+            return self
+
+        @property
+        def completions(self):
+            return self
+
+        def create(self, **kwargs):  # noqa: ANN003
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=""))])
+
+    bulk = [_enrichment("m1", confidence=0.4)]
+    stats: dict[str, int] = {}
+    merged = batch.generate_ai_recheck(
+        candidates=[_candidate("m1")],
+        enrichments=bulk,
+        batch_size=10,
+        retry_attempts=1,
+        retry_delay_sec=0.0,
+        client=_MalformedClient(),
+        recheck_stats=stats,
+    )
+
+    assert merged == bulk
+    assert stats == {"recheck_failed_count": 1}
+
+
 def test_recheck_leaves_high_confidence_rows_untouched(monkeypatch):
     monkeypatch.setattr(batch, "get_settings", lambda: _fake_settings())
 
@@ -474,3 +522,48 @@ def test_community_post_chunk_never_embeds_raw_body_title_or_url():
     # The chunk is still categorical/grounded (not emptied).
     assert chunk.source_type == "community_post"
     assert "수원 카페" in chunk.body_ko or chunk.title_ko == "수원 카페"
+
+
+def test_place_mention_chunk_projects_aggregate_metadata_without_review_phrases():
+    raw_phrase = "SOURCE REVIEW PHRASE MUST NOT PERSIST"
+    chunk = rag_index._place_mention_chunk(
+        {
+            "id": "mention-1",
+            "place_id": "place-1",
+            "place_name_ko": "테스트 식당",
+            "provider": "licensed_provider",
+            "category": "restaurant",
+            "mention_count": 5,
+            "organic_mention_count": 4,
+            "sentiment_score": 0.3,
+            "attributes": {
+                "review_attributes": {
+                    "schema_version": "review-attributes-v1",
+                    "source": "openai",
+                    "attribute_scores": {"taste": 0.8},
+                    "attribute_mean": 0.8,
+                    "attribute_confidence_avg": 0.7,
+                    "sentiment_score": 0.3,
+                    "sentiment_confidence": 0.7,
+                    "evidence_terms": {"taste": [raw_phrase]},
+                    "summary_ko": raw_phrase,
+                    "reason": raw_phrase,
+                },
+                "review_quality": {"score": 0.75, "source": "openai"},
+                "top_terms": [raw_phrase],
+            },
+            "updated_at": RECEIVED_AT,
+        }
+    )
+
+    serialized = json.dumps(chunk.to_public_dict(), ensure_ascii=False)
+    assert raw_phrase not in serialized
+    assert "evidence_terms" not in serialized
+    assert "summary_ko" not in serialized
+    assert chunk.metadata["attributes"]["review_attributes"]["attribute_scores"] == {"taste": 0.8}
+
+
+def test_openai_base_url_reports_safe_host_and_rejects_azure():
+    assert resolve_openai_base_url_host("https://api.openai.com/v1") == "api.openai.com"
+    with pytest.raises(ValueError, match="Azure OpenAI base URLs are not supported"):
+        resolve_openai_base_url_host("https://tenant.openai.azure.com/openai/v1")

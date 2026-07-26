@@ -6,6 +6,8 @@ from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from apps.api.app.services import review_attribute_batch
 from apps.api.app.tools import run_review_attribute_batch
 
@@ -473,11 +475,12 @@ def test_recheck_returning_bulk_preserves_result(monkeypatch, capsys):
         "generate_ai_enrichments",
         lambda **kwargs: [_runner_enrichment("c1", 0.4)],
     )
-    monkeypatch.setattr(
-        run_review_attribute_batch,
-        "generate_ai_recheck",
-        lambda **kwargs: kwargs["enrichments"],
-    )
+
+    def failed_recheck(**kwargs):
+        kwargs["recheck_stats"]["recheck_failed_count"] = 1
+        return kwargs["enrichments"]
+
+    monkeypatch.setattr(run_review_attribute_batch, "generate_ai_recheck", failed_recheck)
 
     exit_code = run_review_attribute_batch.main(["--dry-run-ai", "--json"])
 
@@ -485,6 +488,19 @@ def test_recheck_returning_bulk_preserves_result(monkeypatch, capsys):
     assert exit_code == 0
     assert payload["recheck_routed_count"] == 1  # the row was eligible
     assert payload["recheck_upgraded_count"] == 0  # but nothing was upgraded
+    assert payload["recheck_failed_count"] == 1
+
+
+def test_review_openai_client_rejects_azure_base_url():
+    settings = SimpleNamespace(
+        openai_api_key="dummy",  # pragma: allowlist secret -- fake test fixture
+        openai_base_url="https://tenant.openai.azure.com/openai/v1",
+        enable_live_ai=True,
+        openai_review_batch_model="gpt-5.4-nano",
+    )
+
+    with pytest.raises(RuntimeError, match="Azure OpenAI base URLs are not supported"):
+        review_attribute_batch._build_openai_client(settings)
 
 
 def test_apply_row_provenance_keeps_openai_recheck_tag(monkeypatch):
