@@ -347,8 +347,18 @@ def test_script_identity_is_deterministic_and_sensitive_to_scores() -> None:
 
 
 def _stub_db_grounding(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Pure-helper tests stay DB-free; get_settings stub keeps the live-DB guard dormant.
-    monkeypatch.setattr(docent_service, "get_settings", lambda: SimpleNamespace(db_dsn=""))
+    # Pure-helper tests stay DB-free; get_settings stub keeps the live-DB guard dormant and
+    # carries the RAG V1 defaults so generate_script/script_identity read the new config seam.
+    monkeypatch.setattr(
+        docent_service,
+        "get_settings",
+        lambda: SimpleNamespace(
+            db_dsn="",
+            rag_retrieval_mode="legacy",
+            rag_embedding_generation=1,
+            docent_script_ttl_sec=604800,
+        ),
+    )
     monkeypatch.setattr(
         docent_service.db_repository, "fetch_docent_knowledge_context", lambda **kw: []
     )
@@ -432,3 +442,107 @@ def test_generate_script_produces_rule_based_english_script(
 
     assert result["source"] == "rule_based_curation"
     assert "LALA" in result["script"]
+
+
+# ---------------------------------------------------------------------------
+# RAG V1: retrieval-mode rollback, cache invalidation, provenance-safe citations
+# ---------------------------------------------------------------------------
+
+
+def _grounding_row(source_id: str = "place:place-1", *, source_type: str = "place_profile"):
+    return {
+        "source_type": source_type,
+        "source_id": source_id,
+        "source_table": "travel.places",
+        "title_ko": "수원 화성행궁",
+        "body_ko": "수원 화성행궁은 대표 명소입니다.",
+        "body_en": None,
+        "metadata": {"category": "attraction"},
+        "content_sha256": "sha-" + source_id,
+        "updated_at": "2026-07-26T00:00:00+00:00",
+        "similarity": 0.9,
+    }
+
+
+def test_generate_script_legacy_mode_uses_legacy_grounding(monkeypatch):
+    calls = {"legacy": 0, "hybrid": 0}
+
+    def legacy(**kwargs):
+        calls["legacy"] += 1
+        return [_grounding_row()]
+
+    def hybrid(**kwargs):
+        calls["hybrid"] += 1
+        return [_grounding_row()]
+
+    monkeypatch.setattr(docent_service.db_repository, "fetch_docent_knowledge_context", legacy)
+    monkeypatch.setattr(
+        docent_service.db_repository, "fetch_docent_knowledge_context_hybrid", hybrid
+    )
+
+    result = docent_service.generate_script(_make_request(final_score=0.8))
+
+    assert calls["legacy"] == 1
+    assert calls["hybrid"] == 0
+    # Legacy responses stay backward compatible: no opt-in citation/retrieval fields.
+    assert "citations" not in result
+    assert "retrieval" not in result
+
+
+def test_generate_script_hybrid_mode_uses_hybrid_grounding_and_adds_citations(monkeypatch):
+    monkeypatch.setenv("LALA_RAG_RETRIEVAL_MODE", "hybrid")
+    calls = {"legacy": 0, "hybrid": 0}
+
+    def legacy(**kwargs):
+        calls["legacy"] += 1
+        return []
+
+    def hybrid(**kwargs):
+        calls["hybrid"] += 1
+        return [_grounding_row()]
+
+    monkeypatch.setattr(docent_service.db_repository, "fetch_docent_knowledge_context", legacy)
+    monkeypatch.setattr(
+        docent_service.db_repository, "fetch_docent_knowledge_context_hybrid", hybrid
+    )
+
+    result = docent_service.generate_script(
+        _make_request(final_score=0.8, place_name="수원 화성행궁")
+    )
+
+    assert calls["hybrid"] == 1
+    assert calls["legacy"] == 0
+    assert "citations" in result
+    assert result["retrieval"]["mode"] == "hybrid"
+    assert result["retrieval"]["reranker"] == "rrf"
+    # Provenance-safe: citations carry pointers only, never raw body/review content.
+    for citation in result["citations"]:
+        assert "body_ko" not in citation
+        assert "body_en" not in citation
+        assert "body" not in citation
+    assert result["citations"][0]["source_type"] == "place_profile"
+    assert result["citations"][0]["similarity_band"] == "high"
+
+
+def test_script_identity_changes_when_embedding_generation_bumps(monkeypatch):
+    request = _make_request(final_score=0.8)
+
+    monkeypatch.setenv("LALA_RAG_EMBEDDING_GENERATION", "1")
+    first = docent_service.script_identity(request)
+    monkeypatch.setenv("LALA_RAG_EMBEDDING_GENERATION", "2")
+    second = docent_service.script_identity(request)
+
+    assert first["cache_key"].startswith("docent_script:")
+    assert first["request_hash"] != second["request_hash"]
+
+
+def test_rule_based_fallback_is_grounded_and_never_a_mock():
+    request = _make_request(place_name="수원 화성행궁", region_ko="수원", final_score=0.8)
+
+    script = docent_service._rule_based_script(request, grounding_context=[_grounding_row()])
+
+    assert "수원 화성행궁" in script
+    lowered = script.lower()
+    assert "mock" not in lowered
+    assert "skeleton" not in lowered
+    assert "placeholder" not in lowered

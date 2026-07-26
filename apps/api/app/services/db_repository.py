@@ -841,6 +841,79 @@ def fetch_docent_place_profile_context(*, place_id: str) -> list[dict[str, Any]]
     ]
 
 
+def fetch_docent_knowledge_context_hybrid(
+    *,
+    place_id: str,
+    query: str,
+    category: str | None = None,
+    language: str | None = None,
+    top_k: int = 3,
+    embedding_method: str | None = None,
+) -> list[dict[str, Any]]:
+    """Hybrid (ANN + keyword + RRF) grounding for the docent path.
+
+    Returns the same row shape as fetch_docent_knowledge_context so docent_service can consume
+    either behind rag_retrieval_mode. Place-scoped (primary = place_id, plan §6.1) and degrades
+    to an empty list (→ caller falls back to legacy/profile context) on any infrastructure
+    error, so hybrid never breaks the grounding contract.
+    """
+    settings = get_settings()
+    dsn = settings.db_dsn
+    normalized_place_id = place_id.strip()
+    normalized_query = query.strip()
+    if not dsn or not normalized_place_id or not normalized_query or top_k <= 0:
+        return []
+    try:
+        import psycopg2  # noqa: F401  (probe availability)
+    except Exception:
+        return []
+    from apps.api.app.services import rag_index, rag_retrieval
+
+    method = embedding_method or rag_index.resolve_serving_embedding_method(settings)
+    filters = rag_retrieval.RetrievalFilters(
+        place_id=normalized_place_id,
+        category=category,
+        language=language,
+    )
+    try:
+        candidates = rag_retrieval.fetch_hybrid_candidates(
+            dsn=dsn,
+            query=normalized_query,
+            embedding_method=method,
+            filters=filters,
+            candidate_pool=max(top_k, 10),
+            connect_timeout=3,
+        )
+    except psycopg2.Error:
+        # Infrastructure fault only (DB connection/query failure) — safe empty grounding so
+        # the caller falls back to legacy/profile context. Config errors (unsupported
+        # embedding method, missing live-AI credentials) are RuntimeError/ValueError and are
+        # deliberately NOT caught here, so a misconfiguration surfaces loudly instead of
+        # silently degrading to legacy grounding (R5).
+        return []
+    return _grounding_rows_from_candidates(candidates, top_k=top_k)
+
+
+def _grounding_rows_from_candidates(candidates: list[Any], *, top_k: int) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in candidates[:top_k]:
+        rows.append(
+            {
+                "source_type": item.source_type,
+                "source_id": item.source_id,
+                "source_table": item.source_table,
+                "title_ko": item.title_ko,
+                "body_ko": item.body_ko,
+                "body_en": item.body_en,
+                "metadata": item.metadata,
+                "content_sha256": item.content_sha256,
+                "updated_at": item.updated_at,
+                "similarity": item.similarity,
+            }
+        )
+    return rows
+
+
 def save_docent_script_cache(
     *,
     place_id: str,

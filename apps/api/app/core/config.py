@@ -60,6 +60,14 @@ class Settings:
     docent_script_rate_limit_per_minute: int = 60
     docent_audio_rate_limit_per_minute: int = 30
     weather_freshness_max_hours: int = 24
+    # RAG V1 retrieval + reindex lifecycle (defaults keep a no-op deploy on legacy behavior).
+    rag_embedding_method: str = "local-hash"
+    rag_embedding_generation: int = 1
+    rag_retrieval_mode: str = "legacy"
+    rag_reindex_chunk_cap: int = 500
+    rag_reindex_batch_size: int = 100
+    rag_allow_local_hash_live: bool = False
+    docent_script_ttl_sec: int = 604800
     cors_allow_origins: tuple[str, ...] = ()
     log_level: str = "INFO"
     access_log_path: str = ""
@@ -239,6 +247,36 @@ class Settings:
             weather_freshness_max_hours=_int_env(
                 "LALA_WEATHER_FRESHNESS_MAX_HOURS",
                 default=24,
+                minimum=1,
+            ),
+            rag_embedding_method=(
+                (os.getenv("LALA_RAG_EMBEDDING_METHOD") or "").strip().lower() or "local-hash"
+            ),
+            rag_embedding_generation=_int_env(
+                "LALA_RAG_EMBEDDING_GENERATION",
+                default=1,
+                minimum=0,
+            ),
+            rag_retrieval_mode=(
+                (os.getenv("LALA_RAG_RETRIEVAL_MODE") or "").strip().lower() or "legacy"
+            ),
+            rag_reindex_chunk_cap=_int_env(
+                "LALA_RAG_REINDEX_CHUNK_CAP",
+                default=500,
+                minimum=1,
+            ),
+            rag_reindex_batch_size=_int_env(
+                "LALA_RAG_REINDEX_BATCH_SIZE",
+                default=100,
+                minimum=1,
+            ),
+            rag_allow_local_hash_live=_bool_env(
+                "LALA_RAG_ALLOW_LOCAL_HASH_LIVE",
+                default=False,
+            ),
+            docent_script_ttl_sec=_int_env(
+                "LALA_DOCENT_SCRIPT_TTL_SEC",
+                default=604800,
                 minimum=1,
             ),
             cors_allow_origins=_csv_value(

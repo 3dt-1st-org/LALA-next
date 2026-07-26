@@ -4,6 +4,8 @@ import sys
 import types
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from apps.api.app.services import db_repository
 
 
@@ -706,3 +708,95 @@ def test_english_display_address_never_fabricates_province():
     # under a wrong province; the address stays region-only or empty.
     assert db_repository._english_display_address({"region_ko": "중구"}) == "Jung-gu"
     assert db_repository._english_display_address({}) == ""
+
+
+# ---------------------------------------------------------------------------
+# RAG V1 hybrid grounding seam (maps fused candidates onto the legacy row shape)
+# ---------------------------------------------------------------------------
+
+
+def test_fetch_docent_knowledge_context_hybrid_maps_candidates_to_legacy_shape(monkeypatch):
+    from apps.api.app.services import rag_index, rag_retrieval
+
+    monkeypatch.setenv("DB_DSN", "postgresql://redacted")
+    candidate = rag_index.RagSearchResult(
+        source_type="place_profile",
+        source_id="place:p1",
+        source_table="travel.places",
+        title_ko="수원 화성행궁",
+        body_ko="수원 화성행궁 본문",
+        place_id="p1",
+        metadata={"category": "attraction"},
+        similarity=0.91,
+        embedding_model="local-hash-v1",
+        updated_at="2026-07-26T00:00:00+00:00",
+        body_en=None,
+        content_sha256="sha-p1",
+    )
+    captured: dict = {}
+
+    def fake_hybrid(**kwargs):
+        captured.update(kwargs)
+        return [candidate]
+
+    monkeypatch.setattr(rag_retrieval, "fetch_hybrid_candidates", fake_hybrid)
+
+    rows = db_repository.fetch_docent_knowledge_context_hybrid(
+        place_id="p1", query="수원 명소", category="attraction", language="ko", top_k=3
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["source_type"] == "place_profile"
+    assert rows[0]["similarity"] == 0.91
+    assert rows[0]["content_sha256"] == "sha-p1"
+    assert rows[0]["body_ko"] == "수원 화성행궁 본문"
+    assert captured["filters"].place_id == "p1"
+    # Serving method resolved from settings (local-hash dev/test default).
+    assert captured["embedding_method"] == "local-hash"
+
+
+def test_fetch_docent_knowledge_context_hybrid_returns_empty_without_dsn(monkeypatch):
+    monkeypatch.delenv("DB_DSN", raising=False)
+    rows = db_repository.fetch_docent_knowledge_context_hybrid(
+        place_id="p1", query="수원 명소", top_k=3
+    )
+    assert rows == []
+
+
+def test_fetch_docent_knowledge_context_hybrid_returns_empty_on_infra_error(monkeypatch):
+    # R5: a DB connection/query fault (psycopg2.Error) is an infrastructure error — it must
+    # still degrade safely to [] so the caller falls back to legacy/profile grounding.
+    import psycopg2
+
+    from apps.api.app.services import rag_retrieval
+
+    monkeypatch.setenv("DB_DSN", "postgresql://redacted")
+
+    def fake_hybrid(**kwargs):
+        raise psycopg2.OperationalError("connection refused")
+
+    monkeypatch.setattr(rag_retrieval, "fetch_hybrid_candidates", fake_hybrid)
+
+    rows = db_repository.fetch_docent_knowledge_context_hybrid(
+        place_id="p1", query="수원 명소", top_k=3
+    )
+
+    assert rows == []
+
+
+def test_fetch_docent_knowledge_context_hybrid_propagates_config_error(monkeypatch):
+    # R5: a config error (missing live-AI credentials, unsupported embedding method) must not
+    # be swallowed into a silent legacy-grounding fallback — it propagates.
+    from apps.api.app.services import rag_retrieval
+
+    monkeypatch.setenv("DB_DSN", "postgresql://redacted")
+
+    def fake_hybrid(**kwargs):
+        raise RuntimeError("OpenAI embedding requires OPENAI_API_KEY.")
+
+    monkeypatch.setattr(rag_retrieval, "fetch_hybrid_candidates", fake_hybrid)
+
+    with pytest.raises(RuntimeError):
+        db_repository.fetch_docent_knowledge_context_hybrid(
+            place_id="p1", query="수원 명소", top_k=3
+        )

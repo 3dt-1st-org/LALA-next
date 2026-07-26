@@ -195,6 +195,12 @@ def build_readiness(settings: Settings | None = None) -> dict:
         "azure_speech_key": _status(settings.azure_speech_key, required=False),
         "live_speech": "enabled" if settings.enable_live_speech else "disabled",
         "worker_contracts": _worker_contract_status(),
+        # Report-only RAG serving state (R2): operators can see whether docent grounding is
+        # legacy/hybrid and which embedding method/generation is serving without changing
+        # mode.overall or the existing degraded-status logic below.
+        "rag_retrieval_mode": settings.rag_retrieval_mode or "legacy",
+        "rag_embedding_method": settings.rag_embedding_method or "local-hash",
+        "rag_embedding_generation": settings.rag_embedding_generation,
     }
     mode = _runtime_mode(checks)
     return {
