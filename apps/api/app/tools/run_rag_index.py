@@ -17,6 +17,7 @@ from apps.api.app.services.rag_index import (
     fetch_candidate_chunks,
     query_knowledge_chunks,
     reindex_stale_chunks,
+    resolve_serving_embedding_method,
     select_stale_chunks,
     upsert_knowledge_chunks,
 )
@@ -429,10 +430,14 @@ def _apply_guard_error(args: argparse.Namespace) -> str:
     if os.getenv(ALLOW_ENV) != "1":
         return f"--apply requires {ALLOW_ENV}=1 in the process environment."
     # No silent semantic fallback: shared by --apply and --reindex --apply, evaluated before
-    # any DB connection is opened (R1 wiring).
+    # any DB connection is opened (R1). resolve_serving_embedding_method's Literal validation
+    # runs unconditionally too (R10) — an unsupported rag_embedding_method must not escape as
+    # an unhandled traceback; it returns the same {"ok": false, "error": ...} + exit 2 contract
+    # as any other guard violation.
     try:
+        resolve_serving_embedding_method()
         assert_semantic_embedding_when_live()
-    except RuntimeError as exc:
+    except (RuntimeError, ValueError) as exc:
         return str(exc)
     return ""
 
