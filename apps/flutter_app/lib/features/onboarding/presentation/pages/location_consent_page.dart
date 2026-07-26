@@ -38,6 +38,8 @@ enum _LocationConsentStatus { idle, requesting }
 
 class _OnboardingLocationConsentPageState
     extends State<OnboardingLocationConsentPage> {
+  static const Duration _unavailableRetryDelay = Duration(milliseconds: 500);
+
   _LocationConsentStatus _status = _LocationConsentStatus.idle;
   // OS 영구 거결(permanentlyDenied) 전용 복구 카드 노출 여부. 시스템 다이얼로그 재노출이
   // 불가하므로 일반 denied 와 구분해 설정 유도 + 수동 선택 경로를 안내한다.
@@ -50,6 +52,22 @@ class _OnboardingLocationConsentPageState
 
   bool get _requesting => _status == _LocationConsentStatus.requesting;
 
+  Future<LalaLocationResult> _requestLocationWithResumeRecovery() async {
+    final firstResult = await widget.locationProvider.requestCurrentLocation();
+    if (firstResult.status != LalaLocationResultStatus.unavailable) {
+      return firstResult;
+    }
+
+    // Android may report an unavailable position while the app is resuming from
+    // the just-approved system permission dialog. Retry this transient result
+    // once so the user does not have to press "Use location" a second time.
+    await Future<void>.delayed(_unavailableRetryDelay);
+    if (!mounted) {
+      return firstResult;
+    }
+    return widget.locationProvider.requestCurrentLocation();
+  }
+
   Future<void> _allowLocation() async {
     if (_requesting) {
       return;
@@ -59,7 +77,7 @@ class _OnboardingLocationConsentPageState
       _permanentlyDenied = false;
     });
     try {
-      final result = await widget.locationProvider.requestCurrentLocation();
+      final result = await _requestLocationWithResumeRecovery();
       if (!mounted) {
         return;
       }
