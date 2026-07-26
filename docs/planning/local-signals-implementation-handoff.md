@@ -78,7 +78,8 @@
 - Mutations use `require_logto_identity`; client payloads contain no author identity or client-controlled status. Draft creation/edit, submit-to-pending, owner deletion, reactions, comments, saves, and reports are covered by ownership, transition, deterministic policy, idempotency, and rate-limit seams.
 - `LOCAL_SIGNALS_READ` and `LOCAL_SIGNALS_WRITE` are central registry entries with non-secret default-off values and honest `LOCAL_SIGNALS_DISABLED` responses.
 - Approved Naver Blog API or other lawful review evidence remains a separate review/mention ingestion domain. LS-2 does not ingest or join it; raw blog/review text is excluded from Local Signals public responses, RAG, docent, and operational logs, with only a future governed aggregate lane permitted.
-- Local verification: focused LS-2/API contract tests passed; full API suite `1073 passed, 1 warning`; Ruff/format and `git diff --check` passed. Pre-commit/CI evidence is recorded when available.
+- Local verification: focused LS-2/API contract tests `82 passed, 1 warning`; full API suite `1073 passed, 1 warning`; Ruff check/format, pre-commit all-files including detect-secrets, and `git diff --check` passed.
+- Implementation commit: `e17d943107129c516103b28318dc845f55a80287` (`feat(community): add Local Signals LS-2 API policy`). Draft PR: [#72](https://github.com/3dt-1st-org/LALA-next/pull/72). CI run `30210921754` completed green: API tests and safety contracts, Unix wrapper verification, and Flutter app analyze + test. PR remained Draft/Open with `mergeStateStatus=CLEAN`; no merge was performed.
 
 ### Assumption
 
