@@ -12,11 +12,11 @@
 
 ```
 [프론트엔드 — Vercel]
-  lala-next.cloud / www.lala-next.cloud → A 76.76.21.21 (Vercel, 회색 구름)
+  lala-next.cloud / www.lala-next.cloud → Vercel-managed DNS target (회색 구름)
   Vercel 프로젝트: lala-next (Flutter 웹)
 
 [백엔드 — AWS EC2]
-  api.lala-next.cloud → A 54.160.16.183 (Cloudflare 프록시, 오렌지 구름)
+  api.lala-next.cloud → EC2 Elastic IP (Cloudflare 프록시, 오렌지 구름)
     ↓ HTTPS (443) — Cloudflare Full strict + Let's Encrypt 인증서 종료
   [Nginx (리버스 프록시 + SSL 종료, HTTP→HTTPS 리다이렉트)]
     ↓ 포트 8000
@@ -28,7 +28,7 @@
 **엔드포인트**:
 - 프론트엔드: `https://lala-next.cloud` (Vercel)
 - 백엔드: `https://api.lala-next.cloud` (Cloudflare 프록시 + EC2)
-- 직접 IP: `http://54.160.16.183/` (Elastic IP, 디버깅용)
+- 직접 IP는 public documentation에 기록하지 않습니다. AWS 콘솔 또는 비공개 운영 채널에서 확인합니다.
 
 > **DNS 주의**: 도메인 네임서버는 Cloudflare. 가비아의 레코드는 무시됨 (Cloudflare만 유효). 프론트엔드(Vercel)는 회색 구름, 백엔드(EC2)는 오렌지 구름 — 용도별로 다름.
 
@@ -44,7 +44,7 @@
 | 리전 | `us-east-1` (버지니아 북부) |
 | VPC | `<VPC_ID>` |
 | EC2 인스턴스 | `<EC2_INSTANCE_ID>` |
-| EC2 퍼블릭 IP | `54.160.16.183` (Elastic IP, 고정 — 도메인 DNS로 공개됨) |
+| EC2 퍼블릭 IP | `<EC2_ELASTIC_IP>` — AWS 콘솔 또는 비공개 운영 채널에서 확인 |
 | Elastic IP | `<EIP_ALLOC_ID>` |
 | RDS 인스턴스 | `lala-next-db` |
 | RDS 엔드포인트 | `<RDS_ENDPOINT>:5432` — AWS 콘솔 RDS에서 확인 |
@@ -55,7 +55,7 @@
 | SSH 키 | `~/.ssh/lala-next-key.pem` (user `ec2-user`) |
 | Cloudflare Zone | `<CF_ZONE_ID>` (`lala-next.cloud`) |
 | Cloudflare SSL 모드 | Full (strict) |
-| 도메인 | `api.lala-next.cloud` → A `54.160.16.183` (Proxied) |
+| 도메인 | `api.lala-next.cloud` → `<EC2_ELASTIC_IP>` (Proxied) |
 | SSL 인증서 | Let's Encrypt (EC2 `/etc/letsencrypt/live/api.lala-next.cloud/`, 자동 갱신) |
 | Secrets Manager | `lala-next/rds-master-password` (RDS 마스터 비밀번호, **값은 Secret에서만 조회**) |
 | S3 백업 버킷 | `lala-next-backups-<AWS_ACCOUNT_ID>` (버저닝 + 30일 Glacier) |
@@ -79,7 +79,7 @@
 
 ### SSH 접속
 ```bash
-ssh -i ~/.ssh/lala-next-key.pem ec2-user@54.160.16.183
+ssh -i ~/.ssh/lala-next-key.pem ec2-user@<EC2_ELASTIC_IP>
 ```
 
 ### 헬스체크
@@ -98,7 +98,7 @@ curl https://api.lala-next.cloud/readyz | python3 -m json.tool
 https://api.lala-next.cloud/docs
 ```
 
-> 디버깅 시 Cloudflare 프록시를 우회하려면 직접 IP 사용: `curl -H "Host: api.lala-next.cloud" http://54.160.16.183/healthz`
+> 디버깅 시 Cloudflare 프록시를 우회할 필요가 있으면, 운영자가 비공개 채널에서 제공한 Elastic IP로 `Host` 헤더를 지정합니다. 공개 문서나 이슈에는 IP를 기록하지 않습니다.
 
 ---
 

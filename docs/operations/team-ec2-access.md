@@ -4,17 +4,17 @@ EC2에 SSH(포트 22)가 **폐쇄**되어 있습니다. 대신 **AWS SSM Session
 
 ## 1. AWS 콘솔 로그인
 
-1. **콘솔 URL**: `https://292216133883.signin.aws.amazon.com/console`
-2. 계정: `292216133883` (URL에 포함됨)
+1. **콘솔 URL**: 팀 운영자가 제공한 AWS IAM 로그인 URL
+2. 계정: 팀 운영자가 제공한 AWS 계정
 3. 사용자명 + 임시 비밀번호 입력 (초대받은 값)
 4. 첫 로그인 시 **비밀번호 변경** (강제)
 
-> 🔒 임시 비밀번호는 초대 메시지로 전달됩니다. 본인 AWS 계정이 아닌 **팀 공용 계정(292216133883)** 의 IAM 사용자입니다. 무료 크레딧은 본인이 소비하지 않습니다.
+> 🔒 임시 비밀번호는 초대 메시지로 전달됩니다. 본인 AWS 계정이 아닌 **팀 공용 AWS 계정**의 IAM 사용자입니다. 무료 크레딧은 본인이 소비하지 않습니다.
 
 ## 2. 브라우저로 EC2 셸 접속 (가장 간단, 설치 불필요)
 
 1. 콘솔에서 **EC2** 서비스 → **인스턴스**
-2. `i-0a15ffbfa381a5843` 선택 (LALA-next 운영 서버)
+2. 운영자가 지정한 LALA-next 운영 인스턴스 선택
 3. 상단 **Connect** 버튼 → **Session Manager** 탭 → **Connect**
 4. 브라우저에 터미널이 열립니다 (ec2-user 권한)
 
@@ -32,7 +32,7 @@ aws configure
 
 ### 3-2. 접속
 ```bash
-aws ssm start-session --target i-0a15ffbfa381a5843 --region us-east-1
+aws ssm start-session --target <EC2_INSTANCE_ID> --region <AWS_REGION>
 ```
 
 ## 4. 권한 범위 (최소 권한)
