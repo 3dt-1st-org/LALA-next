@@ -180,3 +180,61 @@
 
 - No secret value, DSN, token, PII, raw review body, precise location, AWS request, DB connection, migration apply, external API, live AI/translation call, crawler, seed/mock data, deployment, or device validation was run or recorded.
 - This phase contains only canonical runner/test regression protection, the shared contract ownership document, and this handoff. Nationwide ingest, review batch, RAG `064`, planner, and Flutter UI work remain out of scope.
+
+## P1-1 official-source inventory and coverage dry-run — 2026-07-28
+
+### CURRENT
+
+- `origin/main` at the start of this independent slice is
+  `46eebed122aa7b76bba4be23d120d43e3638713c`, the squash merge of P1-0 PR
+  #79 (`test(api): reconcile canonical migration ordering contracts (#79)`).
+- Canonical SQL remains the merged 13-file baseline ending at
+  `063_local_signals_contract.sql`; no `064` migration was added, renamed, or
+  assigned an owner.
+- The existing `official_source_receipts.py` and `official_source_errors.py`
+  boundaries remain the receipt/error ownership. No duplicate persistence
+  schema was introduced.
+
+### DRAFT_PR
+
+- Worktree: `/Users/geondongkim/orca/workspaces/LALA-next/lala-official-source-inventory-p1-1`
+- Branch: `geondongkim/lala-official-source-inventory-p1-1`
+- Scope: offline typed source inventory, receipt normalization, deterministic
+  coverage/freshness report, rejection rules, focused synthetic tests, and the
+  P1-1 contract document.
+- The branch is based directly on the merged `origin/main` above. It does not
+  include PR #76, #77, or #78 changes. The new PR remains Draft and must not be
+  merged by this implementation session.
+
+### TARGET
+
+- After review and merge of P1-1, the next independent slice is a
+  source-specific offline parser/normalizer contract using approved fixture
+  shapes and the inventory receipt boundary. It must remain a dry-run contract
+  until source terms/provenance and live-operation authorization are confirmed.
+- Later nationwide ingestion may consume only accepted source receipts and
+  normalized public place fields; no synthetic fixture may enter a normal user
+  flow.
+
+### BLOCKED_EXTERNAL
+
+- #76: merge only after independent review in a controlled main-deploy window.
+- #77: merge only after exact-head Flutter web and real-device smoke.
+- #78: merge only after AWS IAM logical-secret inventory and canary /readyz.
+- source terms/provenance before live ingest;
+  DB owner/backup/apply before migration;
+  AI/TTS quota/cost before live batches;
+  travel-time/opening-hours authority before planner rollout.
+- Daangn scraping is rejected. Raw review retention is prohibited.
+- P1-1 still requires external confirmation of source terms/license, retention
+  and image rights, nationwide data-file access, IAM/secret inventory, source
+  ownership, freshness policy, and later cost/quota decisions before any live
+  ingestion or provider call.
+
+### Not verified
+
+- No AWS Secrets Manager lookup, official API request, external review call,
+  crawl, AI/translation/TTS request, DB connection, migration apply, seed,
+  deployment, Flutter runtime, browser, or device validation was run.
+- No secret value, DSN, token, account/resource identifier, private URL, raw
+  review body, precise location, or raw provider log was read or recorded.
