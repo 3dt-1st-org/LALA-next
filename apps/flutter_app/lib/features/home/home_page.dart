@@ -675,8 +675,13 @@ class _LalaHomePageState extends State<LalaHomePage> {
     });
   }
 
-  void _selectPlace(LalaPlace place) {
+  void _selectPlace(LalaPlace place, {bool ensureVisible = false}) {
     setState(() {
+      if (ensureVisible &&
+          _selectedCategory != 'all' &&
+          _selectedCategory != place.category) {
+        _selectedCategory = place.category;
+      }
       _selectedPlaceId = place.placeId;
       _activeSheet = ActiveMapSheet.detail;
       _docentAudio = null;
@@ -701,7 +706,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
     if (request == null || !mounted || _loading) return;
 
     final place = placeById(
-      _visiblePlacesForCurrentCategory(),
+      _places?.data?.places ?? const <LalaPlace>[],
       request.placeId,
     );
     if (place == null &&
@@ -718,7 +723,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
     }
 
     _localSignalActionRefreshAttempted = false;
-    _selectPlace(place);
+    _selectPlace(place, ensureVisible: true);
     if (request.action == LocalSignalPlaceAction.addToPlan) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _selectedPlaceId == place.placeId) {

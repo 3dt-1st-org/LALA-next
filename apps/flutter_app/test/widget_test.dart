@@ -478,6 +478,47 @@ void main() {
     expect(find.textContaining('화성행궁'), findsAtLeastNWidgets(1));
   });
 
+  testWidgets(
+    'Local Signal actions resolve outside the active category and switch visibility',
+    (tester) async {
+      final actions = LocalSignalActionController();
+      await tester.pumpWidget(
+        TestLalaApp(
+          backendFactory: FakeBackend.new,
+          initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+          localSignalActionController: actions,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('맛집'));
+      await tester.pumpAndSettle();
+      expect(find.text('행궁동 카페거리'), findsAtLeastNWidgets(1));
+      expect(find.text('화성행궁'), findsNothing);
+
+      actions.dispatch(
+        const LocalSignalPlaceActionRequest(
+          placeId: 'hwaseong-haenggung',
+          action: LocalSignalPlaceAction.viewPlace,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('장소 상세'), findsAtLeastNWidgets(1));
+      expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
+      expect(find.text('현재 지도 결과에서 연결된 장소를 찾지 못했어요.'), findsNothing);
+
+      actions.dispatch(
+        const LocalSignalPlaceActionRequest(
+          placeId: 'hwaseong-haenggung',
+          action: LocalSignalPlaceAction.addToPlan,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('하루 일정'), findsAtLeastNWidgets(1));
+      expect(find.text('현재 지도 결과에서 연결된 장소를 찾지 못했어요.'), findsNothing);
+    },
+  );
+
   testWidgets('unresolved Local Signal place action is honest', (tester) async {
     final actions = LocalSignalActionController();
     await tester.pumpWidget(
