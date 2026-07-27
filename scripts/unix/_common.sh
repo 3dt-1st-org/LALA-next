@@ -95,6 +95,11 @@ load_env_file() {
 }
 
 load_env_names_from_file() {
+  # Operational API/worker profiles must use their runtime secret provider;
+  # only an explicitly selected local profile may inspect a dotenv file.
+  if [[ "${LALA_RUNTIME_PROFILE:-local}" != "local" ]]; then
+    return 0
+  fi
   local env_file="$1"
   shift
   [[ -f "$env_file" ]] || return 0
@@ -218,6 +223,9 @@ env_status() {
 }
 
 load_lala_key_vault_secrets() {
+  if [[ "${LALA_RUNTIME_PROFILE:-local}" != "local" ]]; then
+    return 0
+  fi
   local vault_url="${KEY_VAULT_URL:-}"
   local vault_name
   vault_name="$(vault_name_from_lala_url "$vault_url")"

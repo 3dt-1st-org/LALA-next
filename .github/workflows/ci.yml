@@ -9,6 +9,9 @@ on:
 permissions:
   contents: read
 
+env:
+  LALA_RUNTIME_PROFILE: ci
+
 jobs:
   api-tests:
     name: API tests and safety contracts

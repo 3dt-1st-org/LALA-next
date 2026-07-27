@@ -4,6 +4,7 @@ param(
     [string]$Python = "",
     [string]$EnvFile = "",
     [string]$KeyVaultUrl = "",
+    [string]$RuntimeProfile = "",
     [string]$AccessLogPath = "",
     [switch]$EnableLiveAI,
     [switch]$EnableLiveSpeech
@@ -15,6 +16,18 @@ Set-StrictMode -Version Latest
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 Set-Location $RepoRoot
 
+if (-not $RuntimeProfile) {
+    $RuntimeProfile = [Environment]::GetEnvironmentVariable("LALA_RUNTIME_PROFILE", "Process")
+}
+if (-not $RuntimeProfile) {
+    $RuntimeProfile = "api"
+}
+if (@("local", "ci", "api", "worker") -notcontains $RuntimeProfile.ToLowerInvariant()) {
+    throw "Unsupported runtime profile: $RuntimeProfile"
+}
+$RuntimeProfile = $RuntimeProfile.ToLowerInvariant()
+[Environment]::SetEnvironmentVariable("LALA_RUNTIME_PROFILE", $RuntimeProfile, "Process")
+
 if (-not $Python) {
     $VenvPython = Join-Path $RepoRoot ".venv\Scripts\python.exe"
     if (Test-Path $VenvPython) {
@@ -24,26 +37,30 @@ if (-not $Python) {
     }
 }
 
-if ($KeyVaultUrl) {
-    [Environment]::SetEnvironmentVariable("KEY_VAULT_URL", $KeyVaultUrl, "Process")
-}
+if ($RuntimeProfile -eq "local") {
+    if ($KeyVaultUrl) {
+        [Environment]::SetEnvironmentVariable("KEY_VAULT_URL", $KeyVaultUrl, "Process")
+    }
 
-if (-not $EnvFile) {
-    $EnvFile = Join-Path $RepoRoot ".env"
-}
-if (Test-Path $EnvFile) {
-    Get-Content $EnvFile | ForEach-Object {
-        $line = $_.Trim()
-        if (-not $line -or $line.StartsWith("#") -or -not $line.Contains("=")) {
-            return
-        }
-        $name, $value = $line.Split("=", 2)
-        $name = $name.Trim()
-        $value = $value.Trim().Trim('"').Trim("'")
-        if ($name -and -not [Environment]::GetEnvironmentVariable($name, "Process")) {
-            [Environment]::SetEnvironmentVariable($name, $value, "Process")
+    if (-not $EnvFile) {
+        $EnvFile = Join-Path $RepoRoot ".env"
+    }
+    if (Test-Path $EnvFile) {
+        Get-Content $EnvFile | ForEach-Object {
+            $line = $_.Trim()
+            if (-not $line -or $line.StartsWith("#") -or -not $line.Contains("=")) {
+                return
+            }
+            $name, $value = $line.Split("=", 2)
+            $name = $name.Trim()
+            $value = $value.Trim().Trim('"').Trim("'")
+            if ($name -and -not [Environment]::GetEnvironmentVariable($name, "Process")) {
+                [Environment]::SetEnvironmentVariable($name, $value, "Process")
+            }
         }
     }
+} elseif ($KeyVaultUrl -or $EnvFile) {
+    throw "-KeyVaultUrl and -EnvFile are allowed only with -RuntimeProfile local; operational profiles use AWS IAM."
 }
 
 if ($AccessLogPath) {
@@ -110,7 +127,7 @@ function Get-EnvStatus {
 }
 
 $EffectiveKeyVaultUrl = [Environment]::GetEnvironmentVariable("KEY_VAULT_URL", "Process")
-if ($EffectiveKeyVaultUrl) {
+if ($RuntimeProfile -eq "local" -and $EffectiveKeyVaultUrl) {
     $VaultName = Get-LalaVaultNameFromUrl $EffectiveKeyVaultUrl
     Set-SecretEnvIfMissing -VaultName $VaultName -EnvName "IOS_API_KEY" -SecretName "ios-api-key"
     Set-SecretEnvIfMissing -VaultName $VaultName -EnvName "API_BEARER_TOKEN" -SecretName "api-bearer-token"
@@ -140,6 +157,7 @@ if ($EnableLiveSpeech) {
 }
 
 Write-Host "Starting LALA-next API on $HostName`:$Port"
+Write-Host "Runtime profile: $RuntimeProfile"
 Write-Host "Health endpoint: http://127.0.0.1:$Port/healthz"
 Write-Host "Python executable: $Python"
 Write-Host "JSONL access log: $(Get-EnvStatus 'LALA_ACCESS_LOG_PATH')"
