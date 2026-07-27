@@ -12,8 +12,9 @@ def test_secret_registry_has_one_stable_mapping_per_runtime_secret():
     mapping = {item.env_name: item.secret_name for item in runtime_secrets.SECRET_REGISTRY}
 
     assert mapping["DB_DSN"] == "db-dsn"
-    assert mapping["OPENAI_API_KEY"] == "openai-api-key"
-    assert mapping["LOGTO_MANAGEMENT_CLIENT_SECRET"] == "logto-management-client-secret"
+    assert mapping["OPENAI_API_KEY"] == "openai-api-key"  # pragma: allowlist secret
+    expected_management_secret = "logto-management-client-secret"  # pragma: allowlist secret
+    assert mapping["LOGTO_MANAGEMENT_CLIENT_SECRET"] == expected_management_secret
     assert len(mapping) == len(runtime_secrets.SECRET_REGISTRY)
 
 

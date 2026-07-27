@@ -4,6 +4,9 @@ This ledger is the continuation point for the staged Local Signals and LALA
 completion work. It intentionally records contract state and decisions, not
 secret values or runtime credentials.
 
+Status vocabulary follows the final completion playbook: this P0 is
+`DRAFT_PR` and `IMPLEMENTED_NOT_RUNTIME_VERIFIED`, not `CURRENT`.
+
 ## Confirmed
 
 - LS-1 through LS-4 are represented on `origin/main` through PR #75's squash
@@ -45,8 +48,9 @@ secret values or runtime credentials.
 
 ## Phase status and next command
 
-- P0 AWS runtime injection: implemented in this Draft PR; focused runtime
-  contract tests and the full API suite pass locally. Validation also includes
+- P0 AWS runtime injection: `DRAFT_PR` / `IMPLEMENTED_NOT_RUNTIME_VERIFIED` in
+  this Draft PR; focused runtime contract tests and the full API suite pass
+  locally. Validation also includes
   `bash -n scripts/unix/*.sh`, ruff/format, pre-commit with detect-secrets,
   and `git diff --check`. Pending review, CI, and external IAM/secret-inventory
   decisions.
