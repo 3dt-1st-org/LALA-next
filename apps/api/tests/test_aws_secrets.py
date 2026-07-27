@@ -72,6 +72,7 @@ def test_get_aws_sm_secret_respects_already_prefixed(monkeypatch):
 
 def test_env_or_secret_prefers_aws_sm_over_key_vault(monkeypatch):
     """env 값이 없으면 AWS SM을 먼저 조회 (Azure Key Vault보다 우선)."""
+    monkeypatch.setenv("LALA_RUNTIME_PROFILE", "local")
     monkeypatch.delenv("LOGTO_ENDPOINT", raising=False)
     monkeypatch.setenv("LALA_LOCAL_USE_AWS_SECRETS", "1")
 
@@ -91,6 +92,7 @@ def test_env_or_secret_prefers_aws_sm_over_key_vault(monkeypatch):
 
 def test_env_or_secret_falls_back_to_key_vault_when_sm_empty(monkeypatch):
     """AWS SM이 빈 값을 주면 Azure Key Vault로 폴백."""
+    monkeypatch.setenv("LALA_RUNTIME_PROFILE", "local")
     monkeypatch.delenv("OAUTH_CLIENT_ID", raising=False)
     monkeypatch.setenv("LALA_LOCAL_USE_AWS_SECRETS", "1")
     monkeypatch.setattr("apps.api.app.core.aws_secrets.get_aws_sm_secret", lambda sid: "")

@@ -44,6 +44,7 @@ def _settings() -> Settings:
 def test_management_settings_default_endpoint_and_resolve_secrets_from_key_vault(
     monkeypatch,
 ) -> None:
+    monkeypatch.setenv("LALA_RUNTIME_PROFILE", "local")
     monkeypatch.setenv("KEY_VAULT_URL", "https://vault.example")
     monkeypatch.setenv("LOGTO_ENDPOINT", "https://tenant.logto.app")
 
