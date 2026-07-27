@@ -72,7 +72,9 @@ def test_canonical_migration_order_is_numeric_and_deterministic():
         "040_ops_core_tables.sql",
     )
 
-    assert canonical_sql.validate_canonical_migration_order(names, require_baseline=False) == (
+    assert canonical_sql.validate_canonical_migration_order(
+        names, require_baseline=False
+    ) == (
         "005_identity_users.sql",
         "040_ops_core_tables.sql",
         "063_local_signals_contract.sql",
@@ -102,14 +104,19 @@ def test_future_migration_does_not_silently_extend_the_merged_baseline():
 
 
 def test_custom_fake_runner_plan_reports_duplicate_prefix_without_db_access(tmp_path):
-    (tmp_path / "000_first.sql").write_text("CREATE SCHEMA IF NOT EXISTS one;", encoding="utf-8")
-    (tmp_path / "000_second.sql").write_text("CREATE SCHEMA IF NOT EXISTS two;", encoding="utf-8")
+    (tmp_path / "000_first.sql").write_text(
+        "CREATE SCHEMA IF NOT EXISTS one;", encoding="utf-8"
+    )
+    (tmp_path / "000_second.sql").write_text(
+        "CREATE SCHEMA IF NOT EXISTS two;", encoding="utf-8"
+    )
 
     plan = canonical_sql.load_canonical_sql_plan(tmp_path)
 
     assert plan.ok is False
     assert any(
-        "Duplicate canonical migration numeric prefix: 000" in item for item in plan.safety_findings
+        "Duplicate canonical migration numeric prefix: 000" in item
+        for item in plan.safety_findings
     )
 
 
