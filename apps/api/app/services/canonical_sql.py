@@ -11,6 +11,27 @@ CANONICAL_SQL_DIR = REPO_ROOT / "sql" / "canonical"
 DEFAULT_LOCK_TIMEOUT = "5s"
 DEFAULT_STATEMENT_TIMEOUT = "30s"
 
+# This is the merged canonical baseline on origin/main. A future migration is
+# intentionally a contract change: it must update this baseline and its owner
+# documentation in the same independently reviewed PR before it can be run.
+CANONICAL_MIGRATION_ORDER: tuple[str, ...] = (
+    "000_extensions_and_schemas.sql",
+    "005_identity_users.sql",
+    "010_travel_core_tables.sql",
+    "020_travel_domain_tables.sql",
+    "030_community_core_tables.sql",
+    "035_data_pipeline_tables.sql",
+    "036_rag_knowledge_tables.sql",
+    "040_ops_core_tables.sql",
+    "050_views_and_indexes.sql",
+    "060_community_tables.sql",
+    "061_community_chat_tables.sql",
+    "062_review_ingestion_governance.sql",
+    "063_local_signals_contract.sql",
+)
+CANONICAL_MIGRATION_LATEST = CANONICAL_MIGRATION_ORDER[-1]
+_MIGRATION_FILENAME_PATTERN = re.compile(r"^(?P<number>[0-9]{3})_[a-z0-9][a-z0-9_]*\.sql$")
+
 DESTRUCTIVE_PATTERNS = (
     re.compile(r"\bDROP\s+(TABLE|SCHEMA|VIEW|MATERIALIZED\s+VIEW|DATABASE)\b", re.IGNORECASE),
     re.compile(r"\bTRUNCATE\b", re.IGNORECASE),
@@ -68,9 +89,21 @@ class CanonicalSqlPlan:
 
 def load_canonical_sql_plan(sql_dir: Path = CANONICAL_SQL_DIR) -> CanonicalSqlPlan:
     sql_dir = sql_dir.resolve()
-    files = tuple(sorted(sql_dir.glob("*.sql")))
+    candidate_paths = tuple(sql_dir.glob("*.sql"))
     planned: list[CanonicalSqlFile] = []
     findings: list[str] = []
+
+    try:
+        ordered_names = validate_canonical_migration_order(
+            [path.name for path in candidate_paths],
+            require_baseline=sql_dir == CANONICAL_SQL_DIR,
+        )
+    except ValueError as exc:
+        findings.append(str(exc))
+        ordered_names = tuple(sorted(path.name for path in candidate_paths))
+
+    paths_by_name = {path.name: path for path in candidate_paths}
+    files = tuple(paths_by_name[name] for name in ordered_names if name in paths_by_name)
 
     for path in files:
         text = path.read_text(encoding="utf-8")
@@ -89,6 +122,44 @@ def load_canonical_sql_plan(sql_dir: Path = CANONICAL_SQL_DIR) -> CanonicalSqlPl
         findings.append(f"No canonical SQL files found under {sql_dir}.")
 
     return CanonicalSqlPlan(files=tuple(planned), safety_findings=tuple(findings))
+
+
+def validate_canonical_migration_order(
+    names: list[str] | tuple[str, ...],
+    *,
+    require_baseline: bool,
+) -> tuple[str, ...]:
+    """Validate and deterministically order canonical migration filenames.
+
+    The default repository directory must exactly match the merged baseline.
+    Temporary directories used by offline fake-runner tests may use a smaller
+    valid set, but they still must use three-digit numeric prefixes with no
+    duplicate prefix. This keeps test fixtures useful without allowing a
+    malformed or silently reordered production migration plan.
+    """
+
+    normalized = tuple(names)
+    parsed: list[tuple[int, str]] = []
+    for name in normalized:
+        match = _MIGRATION_FILENAME_PATTERN.fullmatch(name)
+        if match is None:
+            raise ValueError(
+                f"Invalid canonical migration filename: {name!r}; expected NNN_name.sql."
+            )
+        parsed.append((int(match.group("number")), name))
+
+    prefixes = [number for number, _ in parsed]
+    duplicates = sorted({number for number in prefixes if prefixes.count(number) > 1})
+    if duplicates:
+        duplicate_text = ", ".join(f"{number:03d}" for number in duplicates)
+        raise ValueError(f"Duplicate canonical migration numeric prefix: {duplicate_text}.")
+
+    ordered = tuple(name for _, name in sorted(parsed, key=lambda item: item[0]))
+    if require_baseline and ordered != CANONICAL_MIGRATION_ORDER:
+        raise ValueError(
+            "Canonical migration baseline drifted; reconcile the ordered list in a separate PR."
+        )
+    return ordered
 
 
 def scan_sql_safety(*, text: str, label: str) -> list[str]:
