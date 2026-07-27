@@ -238,3 +238,59 @@
   deployment, Flutter runtime, browser, or device validation was run.
 - No secret value, DSN, token, account/resource identifier, private URL, raw
   review body, precise location, or raw provider log was read or recorded.
+
+## P1-2 source-specific offline parser/normalizer — 2026-07-28
+
+### CURRENT
+
+- P1-1 PR #80 was squash-merged. Merge SHA:
+  `a96a0b641bb2ae80663a50ada633bf10e94c3aa1`; `origin/main` contains this
+  merge.
+- Canonical SQL remains unchanged at the 13-file baseline ending in
+  `063_local_signals_contract.sql`. No migration, receipt table, or public API
+  schema was added.
+- Existing source-specific parser/domain and receipt/error services remain the
+  owners. The new adapter only calls pure parser functions on supplied payloads.
+
+### DRAFT_PR
+
+- Worktree: `/Users/geondongkim/orca/workspaces/LALA-next/lala-source-parser-normalizer-p1-2`
+- Branch: `geondongkim/lala-source-parser-normalizer-p1-2`
+- Scope: one typed offline adapter for tourism, culture, performance,
+  franchise-reference, and aggregate card-spending fixtures; safe public-field
+  normalization; stable dedupe; freshness/coverage metadata; rejection tests;
+  and this P1-2 contract document.
+- No fetch, upsert, receipt persistence, worker, API, Flutter, RAG, docent,
+  planner, score, startup, or normal-user fixture wiring was added.
+- The new PR remains Draft and must not be merged by this implementation
+  session.
+
+### TARGET
+
+- P1-3: source-governance review and accepted fixture registry contract, after
+  P1-2 review/merge. It must remain offline until source terms/provenance and
+  explicit live-operation authorization are confirmed.
+- Later live ingestion may consume only accepted source receipts and normalized
+  public records; raw provider payloads and raw review text remain prohibited.
+
+### BLOCKED_EXTERNAL
+
+- #76: independent review plus controlled main-deploy window.
+- #77: latest-main rebase, CI, exact-head Flutter web and real-device smoke.
+- #78: latest-main rebase, CI, AWS IAM logical-secret inventory, and canary
+  /readyz before merge.
+- source terms/provenance before live ingest;
+  DB owner/backup/apply before migration;
+  AI/TTS quota/cost before live batches;
+  travel-time/opening-hours authority before planner rollout.
+- Daangn scraping is rejected. Raw review retention is prohibited.
+- #77 and #78 are behind `main` and require separate rebase/remediation work;
+  neither was merged or modified in this phase.
+
+### Not verified
+
+- No DB connection, migration apply, AWS lookup, `.env`/`.env.local` read,
+  external API/provider call, AI/TTS request, crawl, deployment,
+  browser/device test, or live data operation was run.
+- No secret value, DSN, account/resource identifier, private URL, raw review,
+  provider payload, or raw log was read or recorded.
