@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
@@ -67,6 +68,61 @@ def test_candidate_public_projection_keeps_source_text_in_memory_only():
     assert "원문 제목" not in json.dumps(public, ensure_ascii=False)
     assert "원문 본문" not in json.dumps(public, ensure_ascii=False)
     assert prompt["retained_snippets"]
+
+
+def test_candidate_fetch_requires_active_registered_source_provenance(monkeypatch):
+    executed = []
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def execute(self, sql, params=None):
+            executed.append((sql, params))
+
+        def fetchall(self):
+            return []
+
+    class Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def cursor(self, **kwargs):
+            return Cursor()
+
+    monkeypatch.setitem(
+        sys.modules,
+        "psycopg2",
+        SimpleNamespace(connect=lambda *args, **kwargs: Connection()),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "psycopg2.extras",
+        SimpleNamespace(RealDictCursor=object()),
+    )
+
+    assert (
+        review_attribute_batch.fetch_review_attribute_candidates(
+            dsn="postgresql://redacted",
+            category="all",
+            min_organic=3,
+            limit=10,
+            connect_timeout=5,
+        )
+        == []
+    )
+    sql = executed[0][0]
+    assert "JOIN ingest.review_sources sources" in sql
+    assert "sources.source_status = 'active'" in sql
+    assert "sources.license_class IN" in sql
+    assert "sources.terms_version = NULLIF" in sql
+    assert "{preprocess,source_name}" in sql
 
 
 def test_low_evidence_keeps_review_quality_null():
@@ -173,6 +229,15 @@ def test_ai_ad_and_low_confidence_statuses_are_fail_closed():
     assert parsed_filtered.status == "ad_filtered"
 
 
+def test_ambiguous_ad_is_routed_to_selective_recheck():
+    low_ad = _runner_enrichment("ambiguous", 0.95)
+    low_ad = replace(low_ad, is_ad=True, ad_confidence=0.2)
+
+    routed = review_attribute_batch.route_low_confidence_enrichments([low_ad])
+
+    assert [item.mention_id for item in routed] == ["ambiguous"]
+
+
 def test_disabled_dry_run_never_reads_db_or_calls_ai(monkeypatch, capsys):
     _runner_settings(monkeypatch)
     monkeypatch.setattr(
@@ -200,6 +265,21 @@ def test_disabled_dry_run_never_reads_db_or_calls_ai(monkeypatch, capsys):
     assert payload["live_ai_call"] is False
     assert payload["candidate_count"] == 0
     assert "must-not-connect" not in json.dumps(payload)
+
+
+def test_dry_run_ai_requires_explicit_live_operation_guard(monkeypatch, capsys):
+    _runner_settings(monkeypatch)
+    monkeypatch.setattr(
+        run_review_attribute_batch,
+        "fetch_review_attribute_candidates",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("DB must not be read")),
+    )
+
+    exit_code = run_review_attribute_batch.main(["--dry-run-ai", "--json"])
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 2
+    assert payload["live_ai_call"] is False
+    assert "--allow-live-ai" in payload["error"]
 
 
 def test_apply_requires_guard_before_reading_db(monkeypatch, capsys):
@@ -279,6 +359,65 @@ def test_apply_review_attribute_enrichments_targets_mentions_and_quality(monkeyp
         review_attribute_batch.QUALITY_VERSION
     )
     assert executed[-1] == ("commit", None)
+
+
+def test_nonaccepted_enrichment_clears_canonical_outputs_and_skips_mirror(monkeypatch):
+    executed = []
+    candidate = _candidate(category="restaurant", organic=3)
+    enrichment = replace(
+        review_attribute_batch.build_deterministic_enrichments([candidate])[0],
+        status="recheck_required",
+        is_ad=True,
+        ad_confidence=0.4,
+    )
+
+    class Cursor:
+        rowcount = 1
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def execute(self, sql, params=None):
+            executed.append((sql, params))
+
+    class Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def cursor(self):
+            return Cursor()
+
+        def commit(self):
+            executed.append(("commit", None))
+
+    monkeypatch.setitem(
+        sys.modules, "psycopg2", SimpleNamespace(connect=lambda *a, **k: Connection())
+    )
+    monkeypatch.setitem(sys.modules, "psycopg2.extras", SimpleNamespace(Json=lambda value: value))
+
+    assert (
+        review_attribute_batch.apply_review_attribute_enrichments(
+            dsn="postgresql://redacted",
+            candidates=[candidate],
+            enrichments=[enrichment],
+            source_method="openai",
+            connect_timeout=7,
+        )
+        == 1
+    )
+    update_sql, params = executed[0]
+    assert "attributes - 'review_quality'" in update_sql
+    assert params["sentiment_score"] is None
+    assert params["review_quality"] is None
+    assert params["review_attributes"]["status"] == "recheck_required"
+    assert "attribute_scores" not in params["review_attributes"]
+    assert not any("INSERT INTO travel.place_enrichments" in sql for sql, _ in executed)
 
 
 def test_generate_ai_enrichments_uses_openai_review_batch_model(monkeypatch):
@@ -477,7 +616,7 @@ def test_dry_run_invokes_recheck_after_bulk_when_low_confidence_present(monkeypa
 
     monkeypatch.setattr(run_review_attribute_batch, "generate_ai_recheck", fake_recheck)
 
-    exit_code = run_review_attribute_batch.main(["--dry-run-ai", "--json"])
+    exit_code = run_review_attribute_batch.main(["--dry-run-ai", "--allow-live-ai", "--json"])
 
     payload = json.loads(capsys.readouterr().out)
     assert exit_code == 0
@@ -509,7 +648,7 @@ def test_dry_run_skips_recheck_when_no_low_confidence_rows(monkeypatch, capsys):
     )
     monkeypatch.setattr(run_review_attribute_batch, "generate_ai_recheck", boom_recheck)
 
-    exit_code = run_review_attribute_batch.main(["--dry-run-ai", "--json"])
+    exit_code = run_review_attribute_batch.main(["--dry-run-ai", "--allow-live-ai", "--json"])
 
     payload = json.loads(capsys.readouterr().out)
     assert exit_code == 0
@@ -584,7 +723,7 @@ def test_recheck_returning_bulk_preserves_result(monkeypatch, capsys):
 
     monkeypatch.setattr(run_review_attribute_batch, "generate_ai_recheck", failed_recheck)
 
-    exit_code = run_review_attribute_batch.main(["--dry-run-ai", "--json"])
+    exit_code = run_review_attribute_batch.main(["--dry-run-ai", "--allow-live-ai", "--json"])
 
     payload = json.loads(capsys.readouterr().out)
     assert exit_code == 0

@@ -10,6 +10,7 @@ from typing import Any
 
 from apps.api.app.core.config import get_settings, resolve_openai_base_url_host
 from apps.api.app.services.model_client import resolve
+from apps.api.app.services.review_ingest_governance import ALLOWED_LICENSE_CLASSES
 
 PROMPT_VERSION = "review-attributes-v1"
 RECHECK_PROMPT_VERSION = "review-attributes-recheck-v1"
@@ -153,6 +154,9 @@ class ReviewAttributeCandidate:
     attributes: dict[str, Any]
     posts: tuple[dict[str, str | None], ...]
     source_content_sha256: str = ""
+    source_name: str = ""
+    license_class: str = ""
+    terms_version: str = ""
 
     @classmethod
     def from_row(cls, row: dict[str, Any]) -> ReviewAttributeCandidate:
@@ -177,6 +181,9 @@ class ReviewAttributeCandidate:
                 provider=str(row.get("provider") or ""),
                 posts=posts,
             ),
+            source_name=str(row.get("source_name") or ""),
+            license_class=str(row.get("license_class") or ""),
+            terms_version=str(row.get("terms_version") or ""),
         )
 
     def to_prompt_record(self) -> dict[str, Any]:
@@ -193,6 +200,9 @@ class ReviewAttributeCandidate:
             "category_policy": self.attributes.get("category_policy"),
             "allowed_attributes": list(attribute_names_for_category(self.category)),
             "source_content_sha256": self.source_content_sha256,
+            "source_name": self.source_name,
+            "license_class": self.license_class,
+            "terms_version": self.terms_version,
             "retained_snippets": [
                 _compact_text(
                     sample.get("title"),
@@ -216,6 +226,9 @@ class ReviewAttributeCandidate:
             "top_terms": self.attributes.get("top_terms") or [],
             "post_sample_count": len(self.posts),
             "source_content_sha256": self.source_content_sha256,
+            "source_name": self.source_name,
+            "license_class": self.license_class,
+            "terms_version": self.terms_version,
         }
 
 
@@ -288,6 +301,7 @@ class ReviewAttributeApplyRow:
     review_attributes: dict[str, Any]
     review_quality: dict[str, Any] | None
     source_method: str
+    accepted: bool
 
 
 def attribute_names_for_category(category: str) -> tuple[str, ...]:
@@ -309,7 +323,10 @@ def fetch_review_attribute_candidates(
     import psycopg2
     from psycopg2.extras import RealDictCursor
 
-    sql = """
+    allowed_license_classes = ", ".join(
+        f"'{license_class}'" for license_class in ALLOWED_LICENSE_CLASSES
+    )
+    sql = f"""
         SELECT
             mentions.id,
             mentions.week_start,
@@ -321,6 +338,9 @@ def fetch_review_attribute_candidates(
             mentions.organic_mention_count,
             mentions.sentiment_score,
             mentions.attributes,
+            sources.source_name,
+            sources.license_class,
+            sources.terms_version,
             COALESCE(
                 jsonb_agg(
                     DISTINCT jsonb_build_object(
@@ -332,6 +352,19 @@ def fetch_review_attribute_candidates(
                 '[]'::jsonb
             ) AS posts
         FROM community.place_mentions_weekly mentions
+        JOIN ingest.review_sources sources
+          ON sources.source_name = NULLIF(
+                 mentions.attributes #>> '{{preprocess,source_name}}', ''
+             )
+         AND sources.provider = mentions.provider
+         AND sources.source_status = 'active'
+         AND sources.license_class IN ({allowed_license_classes})
+         AND sources.license_class = NULLIF(
+                 mentions.attributes #>> '{{preprocess,license_class}}', ''
+             )
+         AND sources.terms_version = NULLIF(
+                 mentions.attributes #>> '{{preprocess,terms_version}}', ''
+             )
         LEFT JOIN LATERAL jsonb_array_elements_text(
             COALESCE(
                 mentions.attributes->'preprocess'->'retained_external_keys',
@@ -355,10 +388,13 @@ def fetch_review_attribute_candidates(
             mentions.organic_mention_count,
             mentions.sentiment_score,
             mentions.attributes,
+            sources.source_name,
+            sources.license_class,
+            sources.terms_version,
             mentions.updated_at
         ORDER BY
             CASE
-                WHEN mentions.attributes #>> '{review_attributes,schema_version}'
+                WHEN mentions.attributes #>> '{{review_attributes,schema_version}}'
                      = %s THEN 1
                 ELSE 0
             END,
@@ -464,7 +500,11 @@ def route_low_confidence_enrichments(
     return [
         item
         for item in enrichments
-        if item.attribute_confidence_avg < threshold or item.sentiment_confidence < threshold
+        if (
+            item.attribute_confidence_avg < threshold
+            or item.sentiment_confidence < threshold
+            or (item.is_ad and item.ad_confidence < AD_CONFIDENCE_FILTER_THRESHOLD)
+        )
     ]
 
 
@@ -672,8 +712,12 @@ def apply_review_attribute_enrichments(
     sql = """
         UPDATE community.place_mentions_weekly
         SET
-            sentiment_score = COALESCE(%(sentiment_score)s, sentiment_score),
-            attributes = attributes
+            sentiment_score = CASE
+                WHEN %(accepted)s THEN COALESCE(%(sentiment_score)s, sentiment_score)
+                ELSE NULL
+            END,
+            attributes = (
+                attributes - 'review_quality'
                 || jsonb_build_object(
                     'review_attributes',
                     %(review_attributes)s::jsonb,
@@ -685,9 +729,11 @@ def apply_review_attribute_enrichments(
                     )
                 )
                 || CASE
-                    WHEN %(review_quality)s::jsonb IS NULL THEN '{}'::jsonb
-                    ELSE jsonb_build_object('review_quality', %(review_quality)s::jsonb)
-                END,
+                    WHEN %(accepted)s AND %(review_quality)s::jsonb IS NOT NULL
+                    THEN jsonb_build_object('review_quality', %(review_quality)s::jsonb)
+                    ELSE '{}'::jsonb
+                END
+            ),
             updated_at = now()
         WHERE id = %(mention_id)s::uuid
     """
@@ -704,11 +750,14 @@ def apply_review_attribute_enrichments(
                         "review_quality": Json(row.review_quality)
                         if row.review_quality is not None
                         else None,
+                        "accepted": row.accepted,
                         "prompt_version": PROMPT_VERSION,
                         "source_method": row.source_method,
                     },
                 )
                 updated += cur.rowcount
+                if not row.accepted:
+                    continue
                 cur.execute(
                     """
                     INSERT INTO travel.place_enrichments (
@@ -883,15 +932,30 @@ def _apply_row(
     source_method: str,
 ) -> ReviewAttributeApplyRow:
     review_attributes = enrichment.to_attributes_payload()
+    if enrichment.status != "accepted":
+        review_attributes = {
+            key: value
+            for key in (
+                "schema_version",
+                "source",
+                "source_content_sha256",
+                "is_ad",
+                "ad_confidence",
+                "ad_reason",
+                "status",
+            )
+            if (value := review_attributes.get(key)) is not None
+        }
     # Per-enrichment lane wins so a rechecked row is persisted as "openai_recheck"
     # (and bulk as "openai", deterministic as "deterministic") rather than a
     # generic runner-level string. The caller's source_method is only a fallback.
     return ReviewAttributeApplyRow(
         mention_id=enrichment.mention_id,
-        sentiment_score=enrichment.sentiment_score,
+        sentiment_score=enrichment.sentiment_score if enrichment.status == "accepted" else None,
         review_attributes=review_attributes,
         review_quality=review_quality_payload(candidate, enrichment),
         source_method=enrichment.source_method or source_method,
+        accepted=enrichment.status == "accepted",
     )
 
 

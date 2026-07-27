@@ -9,6 +9,7 @@ PYTHON_ARG=""
 JSON_STATUS="false"
 PREVIEW="false"
 DRY_RUN_AI="false"
+ALLOW_LIVE_AI="false"
 APPLY="false"
 CONFIRM=""
 KEY_VAULT_URL_ARG=""
@@ -28,6 +29,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --dry-run-ai)
       DRY_RUN_AI="true"
+      shift
+      ;;
+    --allow-live-ai)
+      ALLOW_LIVE_AI="true"
       shift
       ;;
     --apply)
@@ -79,7 +84,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     -h|--help)
-      echo "Usage: scripts/unix/plan_review_attribute_batch.sh [--preview|--dry-run-ai|--apply --confirm APPLY_REVIEW_ATTRIBUTE_BATCH] [--category NAME] [--limit N] [--min-organic N] [--key-vault-url URL] [--json] [--python PATH]"
+      echo "Usage: scripts/unix/plan_review_attribute_batch.sh [--preview|--dry-run-ai --allow-live-ai|--apply --confirm APPLY_REVIEW_ATTRIBUTE_BATCH] [--category NAME] [--limit N] [--min-organic N] [--key-vault-url URL] [--json] [--python PATH]"
       exit 0
       ;;
     *)
@@ -98,7 +103,11 @@ if [[ -n "$KEY_VAULT_URL_ARG" ]]; then
 else
   load_env_names_from_file "$ROOT/.env" KEY_VAULT_URL LALA_ALLOWED_KEY_VAULT_HOSTS
 fi
-if [[ "$PREVIEW" == "true" || "$DRY_RUN_AI" == "true" || "$APPLY" == "true" ]]; then
+if [[ "$DRY_RUN_AI" == "true" && "$ALLOW_LIVE_AI" != "true" ]]; then
+  echo "--dry-run-ai requires --allow-live-ai; no external call was made." >&2
+  exit 2
+fi
+if [[ "$PREVIEW" == "true" || ("$DRY_RUN_AI" == "true" && "$ALLOW_LIVE_AI" == "true") || "$APPLY" == "true" ]]; then
   load_lala_key_vault_secrets
 fi
 
@@ -129,6 +138,9 @@ if [[ "$PREVIEW" == "true" ]]; then
 fi
 if [[ "$DRY_RUN_AI" == "true" ]]; then
   ARGS+=(--dry-run-ai)
+fi
+if [[ "$ALLOW_LIVE_AI" == "true" ]]; then
+  ARGS+=(--allow-live-ai)
 fi
 if [[ "$APPLY" == "true" ]]; then
   ARGS+=(--apply --confirm "$CONFIRM")

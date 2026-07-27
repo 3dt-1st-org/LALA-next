@@ -42,7 +42,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--dry-run-ai",
         action="store_true",
-        help="Read DB candidates and call standard OpenAI (bulk nano + mini recheck) without DB writes.",
+        help="Read governed DB candidates and call standard OpenAI without DB writes.",
+    )
+    parser.add_argument(
+        "--allow-live-ai",
+        action="store_true",
+        help="Explicit live-operation guard required with --dry-run-ai.",
     )
     parser.add_argument(
         "--apply",
@@ -89,6 +94,18 @@ def main(argv: list[str] | None = None) -> int:
     recheck_model = selected_review_recheck_model(settings)
     bulk_role = resolve("review_bulk", settings)
     recheck_role = resolve("review_recheck", settings)
+    if args.dry_run_ai and not args.allow_live_ai and not _live_ai_disabled(settings):
+        _write(
+            args,
+            {
+                "ok": False,
+                "mode": "dry-run-ai",
+                "live_ai_call": False,
+                "db_mutation": False,
+                "error": "--dry-run-ai requires --allow-live-ai; no external call was made.",
+            },
+        )
+        return 2
     if args.apply:
         guard_error = _apply_guard_error(args)
         if guard_error:
@@ -266,9 +283,11 @@ def _plan_payload(args: argparse.Namespace) -> dict[str, Any]:
             "review_recheck": "LALA_MODEL_ROLE_REVIEW_RECHECK (legacy OPENAI_REVIEW_RECHECK_MODEL)",
         },
         "live_ai_required_env": ["OPENAI_API_KEY", "LALA_ENABLE_LIVE_AI"],
+        "live_operation_guard": "--allow-live-ai is required with --dry-run-ai",
         "input_relations": [
             "community.place_mentions_weekly",
             "community.posts",
+            "ingest.review_sources",
         ],
         "output_attributes": [
             "attributes.review_attributes",

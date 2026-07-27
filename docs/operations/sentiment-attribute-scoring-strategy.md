@@ -176,7 +176,8 @@ Modes:
 
 - `plan`: prints target tables and schema versions only;
 - `--preview`: reads preprocessed mentions and returns candidate attributes;
-- `--dry-run-ai`: calls standard OpenAI for JSON extraction without DB mutation;
+- `--dry-run-ai --allow-live-ai`: calls standard OpenAI for JSON extraction
+  without DB mutation; the explicit guard is required for any external call;
 - `--apply --confirm APPLY_REVIEW_ATTRIBUTE_BATCH`: writes enrichments and
   weekly aggregate attributes;
 - apply guard: `ALLOW_REVIEW_ATTRIBUTE_BATCH_APPLY=1`, plus `OPENAI_API_KEY` and
@@ -190,13 +191,15 @@ Current implementation notes:
 - `--preview` reads `community.place_mentions_weekly` and linked
   `community.posts`, then computes deterministic category-aware attributes
   without mutation.
-- `--dry-run-ai` calls standard OpenAI (`OPENAI_REVIEW_BATCH_MODEL`,
+- `--dry-run-ai --allow-live-ai` calls standard OpenAI (`OPENAI_REVIEW_BATCH_MODEL`,
   `gpt-5.4-nano`) and validates the JSON contract without DB mutation;
   low-confidence rows are then routed to `OPENAI_REVIEW_RECHECK_MODEL`
-  (`gpt-5.4-mini`). It requires `OPENAI_API_KEY` and `LALA_ENABLE_LIVE_AI=1`.
+  (`gpt-5.4-mini`). It requires the active registered source provenance,
+  `OPENAI_API_KEY`, `LALA_ENABLE_LIVE_AI=1`, and the explicit guard.
 - `--apply` calls standard OpenAI (bulk nano + selective mini recheck), writes
-  `attributes.review_attributes`, `attributes.review_quality`, and
-  `sentiment_score`, and records `review-attribute-batch` in `ops.job_runs`.
+  accepted-only `attributes.review_attributes`, `attributes.review_quality`,
+  and `sentiment_score`; nonaccepted status rows clear stale quality and do not
+  mirror to `travel.place_enrichments`.
 - The 2026-06-23 shared-dev preview produced 4 sufficient-evidence candidates.
   A live AI dry-run hit provider `429 Too Many Requests`; this is an external
   capacity condition, not a secret/config failure.
