@@ -97,3 +97,49 @@
 
 - Product/privacy owners still need to decide moderation ownership and SLA, draft/published/report retention and deletion, translation provider/cost/provenance and contributor opt-out, and approved review-evidence retention and aggregate/RAG threshold policy.
 - DB migration apply, seed/mock data, deployment, live Naver/OpenAI/translation calls, crawl, and external review collection were not run in LS-2.
+
+## LS-3 Flutter public read phase — 2026-07-27
+
+### Confirmed
+
+- LS-3 uses the clean sibling worktree `/Users/geondongkim/orca/workspaces/LALA-next/lala-local-signals-ls3` from `origin/main` `fc6ffa448ed13c668f6e36d827b95734e803412b5`; the older LS-1 worktree and `/Users/geondongkim/LALA-next` were not edited.
+- The main shell now has four branches in the existing order: search, map, plan, and Local Signals. The fourth tab is `/local-signals`; KO/EN labels are exclusive to the configured mode.
+- The Flutter reference client calls only `GET /api/v1/community/signals` through the existing Dio/auth/error boundary. Its app model retains only the public projection: first-party title/body, language/translation availability, coarse locality, observation/publication date, canonical place links, and disclosure. Author issuer/subject, private/moderation fields, precise location, capability/report tokens, scores, and third-party review bodies are not represented in client state.
+- Guest/public reads remain read-only. LS-3 does not expose write, reaction, save, sign-in, or capability controls because LS-2 write capability is not part of this PR; the screen discloses `Public reading` instead of implying an unavailable action.
+- RegionContextStore remains the single location boundary. Only a manually selected coarse `regionId` is sent as `region`; live `current` coordinates and the synthetic `current` id are never sent. The existing ManualLocationSheet remains the region selector. No Kakao map, Geolocator/browser import, planner, weather, or parallel location state was added.
+- `LOCAL_SIGNALS_READ` remains default-off. A server `LOCAL_SIGNALS_DISABLED`/503 response renders an honest disabled state; no demo, mock, seed, placeholder card, or fallback signal is used. Enabled responses cover loading, empty, safe error, loaded, and opaque-cursor load-more UI states.
+
+### Assumption
+
+- A visible fourth tab with an honest disabled state is the least surprising readiness behavior: the existing three tabs remain unchanged while the server flag is off, and the Local Signals surface does not claim data readiness. Product may later choose to hide the branch entirely if the central feature-flag/readiness contract gains an explicit client-safe capability signal.
+- Translation execution is not part of LS-3. `translation_available` is display metadata only; no paid provider or bulk translation call is made.
+
+### External decision
+
+- LS-4 must define the canonical place-detail/map-selection entry point and plan-action contract before this tab adds any map or schedule action. It must preserve the existing Kakao marker/cluster and planner/weather/location invariants.
+- Before enabling `LOCAL_SIGNALS_READ` for a client environment, operations must confirm the published/approved/public data source, safe error/readiness policy, and client-safe feature-flag rollout. LS-3 did not apply migration `063`, seed data, deploy, call live review/translation/OpenAI services, crawl, authenticate a real Logto user, or run a real device.
+
+### LS-3 phase evidence
+
+- Added public client/backend boundary, safe projection parser, four-tab route/nav, coarse manual-region filter, loading/empty/disabled/error/loaded states, and focused safety/route tests.
+- Focused Flutter verification: `7 passed` in `test/features/local_signals/local_signals_page_test.dart` and `test/shared/lala_bottom_nav_bar_test.dart`.
+- Flutter client verification includes the public Local Signals query/cursor/auth-boundary test in `clients/flutter/test/lala_api_client_test.dart`.
+- Full verification: Flutter `analyze` passed and `flutter test` passed with `192` tests; the Flutter reference client suite passed with `27` tests; API suite passed with `1084 passed, 1 warning` under `KEY_VAULT_URL=` offline-safe settings. Ruff check/format, pre-commit including detect-secrets, and `git diff --check` passed.
+- Draft PR evidence: commit `c8b3c40872763bda4081aab924e7649011717b73` was pushed to [PR #75](https://github.com/3dt-1st-org/LALA-next/pull/75). Initial CI run [`30221120823`](https://github.com/3dt-1st-org/LALA-next/actions/runs/30221120823) passed API tests and safety contracts, Unix wrapper verification, and Flutter app analyze + test. The PR remains Draft/Open; no merge was performed.
+
+## LS-3 contract correction follow-up — 2026-07-27
+
+### Confirmed
+
+- PR #74 was already merged before this follow-up. The LS-3 branch was rebased onto `origin/main` `fe0026709362e66403c686fd1de520c64c8918864`; the only rebase conflict was `.secrets.baseline`, which was reconciled from both sides and revalidated with `detect-secrets` without reading or printing secret values.
+- The Flutter public projection now accepts only the API `kind` enum (`place_tip`, `route_note`, `local_question`, `accessibility_note`, `seasonal_update`, `correction`, `local_story`) and `commercial_disclosure` enum (`none`, `visitor`, `owner_or_staff`, `paid_or_gifted`). Each kind has exclusive KO/EN labels, and every non-`none` disclosure renders an explicit notice. The legacy boolean disclosure shape is rejected.
+- Region changes use a request-generation guard so an older in-flight region response cannot replace the latest region's list. The regression test completes the old response first and asserts it remains absent.
+- Follow-up local verification: focused Flutter `analyze` and Local Signals widget tests passed (`11` tests); full Flutter tests passed (`195` tests); Flutter reference client tests passed (`27` tests); full API tests passed (`1092 passed, 1 warning`); pre-commit including `detect-secrets` and `git diff --check` passed.
+
+### Assumption
+
+- The existing visible fourth tab remains the client readiness behavior: when the server read flag is off, it shows an honest disabled state and never inserts demo/mock signals. No LS-4 map, place-detail, schedule, or location state was added in this correction.
+
+### External decision
+
+- After the rebased follow-up is pushed, CI must be green before PR #75 is marked ready and squash-merged. LS-4 still owns place/map/plan action contracts; device validation, DB apply, deployment, live external review/translation/OpenAI calls, crawl, and real Logto authentication remain outside this work.

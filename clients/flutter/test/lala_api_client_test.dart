@@ -593,6 +593,68 @@ void main() {
     );
   });
 
+  test('getLocalSignals keeps the public query contract and opaque cursor',
+      () async {
+    late RequestOptions captured;
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test/base'),
+      accessTokenProvider: () async => 'guest-read-token',
+      dio: _dio((request) async {
+        captured = request;
+        return _json({
+          'ok': true,
+          'data': {
+            'items': [
+              {
+                'id': 'signal-1',
+                'kind': 'place_tip',
+                'source_language': 'ko',
+                'title': '공개 신호',
+                'body': '날짜가 있는 first-party body',
+                'locality_level': 'district',
+                'locality_code': 'busan-haeundae',
+                'commercial_disclosure': 'none',
+                'place_links': [
+                  {'place_id': 'place-1', 'relation': 'nearby'},
+                ],
+              },
+            ],
+            'next_cursor': 'opaque-next-cursor',
+            'has_more': true,
+            'context': {'language': 'ko'},
+          },
+          'meta': <String, Object?>{},
+          'error': null,
+        });
+      }),
+    );
+
+    final response = await client.getLocalSignals(
+      language: 'ko',
+      region: 'busan-haeundae',
+      placeId: 'place-1',
+      kind: 'place_tip',
+      sort: 'recent',
+      limit: 20,
+      cursor: 'opaque-cursor',
+    );
+
+    expect(captured.method, 'GET');
+    expect(captured.uri.path, '/base/api/v1/community/signals');
+    expect(captured.uri.queryParameters, {
+      'language': 'ko',
+      'region': 'busan-haeundae',
+      'place_id': 'place-1',
+      'kind': 'place_tip',
+      'sort': 'recent',
+      'limit': '20',
+      'cursor': 'opaque-cursor',
+    });
+    expect(_h(captured, 'authorization'), 'Bearer guest-read-token');
+    expect(response.data?['items'], isA<List<Object?>>());
+    expect(response.data?['next_cursor'], 'opaque-next-cursor');
+  });
+
   test('createDocentScript falls back to migration API key auth', () async {
     late RequestOptions captured;
     final client = LalaApiClient(

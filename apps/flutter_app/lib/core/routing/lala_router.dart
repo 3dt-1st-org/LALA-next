@@ -24,6 +24,7 @@ import 'package:lala_next_app/features/onboarding/presentation/pages/start_page.
 import 'package:lala_next_app/features/map_route/presentation/pages/map_route_page.dart';
 import 'package:lala_next_app/features/plan/presentation/pages/plan_page.dart';
 import 'package:lala_next_app/features/search/presentation/pages/search_page.dart';
+import 'package:lala_next_app/features/local_signals/presentation/pages/local_signals_page.dart';
 import 'package:lala_next_app/features/community/presentation/pages/community_feed_page.dart';
 import 'package:lala_next_app/features/community/presentation/pages/community_post_detail_page.dart';
 import 'package:lala_next_app/features/community/presentation/pages/community_create_post_page.dart';
@@ -42,8 +43,9 @@ GoRouter createLalaRouter({
     refreshListenable: OnboardingState.completedListenable,
     redirect: (BuildContext context, GoRouterState state) {
       final completed = OnboardingState.isCompleted;
-      final isOnboarding = state.matchedLocation
-          .startsWith(LalaRoutePaths.onboardingPrefix);
+      final isOnboarding = state.matchedLocation.startsWith(
+        LalaRoutePaths.onboardingPrefix,
+      );
       // 온보딩 미완료 시 메인 라우트를 스플래시로 차단.
       if (!completed && !isOnboarding) {
         return LalaRoutePaths.onboardingSplash;
@@ -76,12 +78,19 @@ GoRouter createLalaRouter({
         builder: (BuildContext context, GoRouterState state) =>
             OnboardingLocationConsentPage(locationProvider: locationProvider),
       ),
-      // --- 메인 쉘(검색/지도/플랜 3-탭) ---
+      // --- Main shell (search/map/plan/Local Signals) ---
       StatefulShellRoute.indexedStack(
-        builder: (BuildContext context, GoRouterState state,
-            StatefulNavigationShell navigationShell) {
-          return LalaMainShell(navigationShell: navigationShell);
-        },
+        builder:
+            (
+              BuildContext context,
+              GoRouterState state,
+              StatefulNavigationShell navigationShell,
+            ) {
+              return LalaMainShell(
+                navigationShell: navigationShell,
+                language: initialConfig.lang == 'en' ? 'en' : 'ko',
+              );
+            },
         branches: <StatefulShellBranch>[
           StatefulShellBranch(
             routes: <RouteBase>[
@@ -114,6 +123,18 @@ GoRouter createLalaRouter({
                 path: LalaRoutePaths.plan,
                 builder: (BuildContext context, GoRouterState state) =>
                     const PlanPage(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: LalaRoutePaths.localSignals,
+                builder: (BuildContext context, GoRouterState state) =>
+                    LocalSignalsPage(
+                      backendFactory: backendFactory,
+                      initialConfig: initialConfig,
+                    ),
               ),
             ],
           ),

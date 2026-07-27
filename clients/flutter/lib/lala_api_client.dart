@@ -176,6 +176,50 @@ class LalaApiClient {
     );
   }
 
+  /// Local Signals public projection. The server returns only published,
+  /// approved, public first-party signal data; callers must not broaden this
+  /// parser into author, moderation, location, or third-party evidence fields.
+  Future<LalaEnvelope<Map<String, dynamic>>> getLocalSignals({
+    String language = 'ko',
+    String? region,
+    String? placeId,
+    String? kind,
+    String sort = 'recent',
+    int limit = 20,
+    String? cursor,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final query = <String, dynamic>{
+      'language': language,
+      'sort': sort,
+      'limit': '$limit',
+    };
+    if (region != null && region.trim().isNotEmpty) {
+      query['region'] = region.trim();
+    }
+    if (placeId != null && placeId.trim().isNotEmpty) {
+      query['place_id'] = placeId.trim();
+    }
+    if (kind != null && kind.trim().isNotEmpty) {
+      query['kind'] = kind.trim();
+    }
+    if (cursor != null && cursor.trim().isNotEmpty) {
+      query['cursor'] = cursor.trim();
+    }
+    final resp = await _request(
+      'GET',
+      '/api/v1/community/signals',
+      query: query,
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+    );
+    return _envelopeFromResponse<Map<String, dynamic>>(
+      resp,
+      parseData: _asMap,
+    );
+  }
+
   Future<LalaEnvelope<LalaWeather>> getWeather({
     required double lat,
     required double lng,
