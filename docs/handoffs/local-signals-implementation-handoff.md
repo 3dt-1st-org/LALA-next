@@ -7,6 +7,34 @@ secret values or runtime credentials.
 Status vocabulary follows the final completion playbook: this P0 is
 `DRAFT_PR` and `IMPLEMENTED_NOT_RUNTIME_VERIFIED`, not `CURRENT`.
 
+## P0 session record (2026-07-28 KST)
+
+- Phase: P0 AWS Secrets Manager runtime contract
+- Branch/PR: `geondongkim/lala-secrets-runtime-p0`,
+  https://github.com/3dt-1st-org/LALA-next/pull/78 (Draft)
+- Base/Head SHA: `906543d` / `f0a560367e9ebeef96ae082c8baeaefaf29cd735`
+- Current: central registry, AWS-only `api`/`worker` required resolution,
+  explicit `local`/`ci` boundaries, safe readiness metadata, entrypoint
+  profile wiring, and offline tests are implemented.
+- Not verified: real IAM-role/AWS Secrets Manager lookup, production
+  readiness, deployment, DB, external API, live AI, and device/browser runtime.
+- External boundary: IAM policy, logical secret inventory, region/prefix,
+  rotation/retention, and production enablement remain operator decisions.
+- Commands/results: `LALA_RUNTIME_PROFILE=ci uv run pytest apps/api/tests`
+  -> 1,101 passed; `uv run pytest apps/api/tests` -> 1,101 passed;
+  `bash -n scripts/unix/*.sh` -> passed; `uv run pre-commit run --all-files`
+  -> passed including detect-secrets; `git diff --check` -> passed.
+- CI evidence: run
+  https://github.com/3dt-1st-org/LALA-next/actions/runs/30282804463,
+  API job 90033133219, Unix job 90033133332, Flutter job 90033133299;
+  all passed for the head above.
+- Security: no secret value, DSN, token, full ARN, PII, raw review body, AWS
+  request, DB apply, deployment, live AI/translation, crawl, or external
+  collection was run or recorded.
+- Next instruction: keep PR #78 Draft until independent review and IAM/secret
+  inventory decisions; after merge, create the P1 clean sibling worktree from
+  the then-current `origin/main` using the command below.
+
 ## Confirmed
 
 - LS-1 through LS-4 are represented on `origin/main` through PR #75's squash
