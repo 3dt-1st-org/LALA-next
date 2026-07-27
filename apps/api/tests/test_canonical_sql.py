@@ -4,8 +4,27 @@ import json
 import sys
 from types import SimpleNamespace
 
+import pytest
+
 from apps.api.app.services import canonical_sql
 from apps.api.app.tools import apply_canonical_sql
+
+
+EXPECTED_CANONICAL_MIGRATION_ORDER = (
+    "000_extensions_and_schemas.sql",
+    "005_identity_users.sql",
+    "010_travel_core_tables.sql",
+    "020_travel_domain_tables.sql",
+    "030_community_core_tables.sql",
+    "035_data_pipeline_tables.sql",
+    "036_rag_knowledge_tables.sql",
+    "040_ops_core_tables.sql",
+    "050_views_and_indexes.sql",
+    "060_community_tables.sql",
+    "061_community_chat_tables.sql",
+    "062_review_ingestion_governance.sql",
+    "063_local_signals_contract.sql",
+)
 
 
 class FakeCursor:
@@ -40,23 +59,66 @@ def test_load_canonical_sql_plan_is_safe_and_ordered():
     plan = canonical_sql.load_canonical_sql_plan()
 
     assert plan.ok is True
-    assert [item.name for item in plan.files] == [
-        "000_extensions_and_schemas.sql",
-        "005_identity_users.sql",
-        "010_travel_core_tables.sql",
-        "020_travel_domain_tables.sql",
-        "030_community_core_tables.sql",
-        "035_data_pipeline_tables.sql",
-        "036_rag_knowledge_tables.sql",
-        "040_ops_core_tables.sql",
-        "050_views_and_indexes.sql",
-        "060_community_tables.sql",
-        "061_community_chat_tables.sql",
-        "062_review_ingestion_governance.sql",
-        "063_local_signals_contract.sql",
-    ]
+    assert tuple(item.name for item in plan.files) == EXPECTED_CANONICAL_MIGRATION_ORDER
+    assert canonical_sql.CANONICAL_MIGRATION_ORDER == EXPECTED_CANONICAL_MIGRATION_ORDER
+    assert canonical_sql.CANONICAL_MIGRATION_LATEST == "063_local_signals_contract.sql"
     assert plan.to_dict()["statement_count"] >= 10
     assert all(len(item.sha256) == 64 for item in plan.files)
+
+
+def test_canonical_migration_order_is_numeric_and_deterministic():
+    names = (
+        "063_local_signals_contract.sql",
+        "005_identity_users.sql",
+        "040_ops_core_tables.sql",
+    )
+
+    assert canonical_sql.validate_canonical_migration_order(
+        names, require_baseline=False
+    ) == (
+        "005_identity_users.sql",
+        "040_ops_core_tables.sql",
+        "063_local_signals_contract.sql",
+    )
+
+
+@pytest.mark.parametrize(
+    "names",
+    [
+        ("010_first.sql", "010_second.sql"),
+        ("10_missing_zero.sql",),
+        ("010_bad-name.sql",),
+    ],
+)
+def test_canonical_migration_filename_contract_rejects_duplicate_or_invalid_prefixes(names):
+    with pytest.raises(ValueError):
+        canonical_sql.validate_canonical_migration_order(names, require_baseline=False)
+
+
+def test_future_migration_does_not_silently_extend_the_merged_baseline():
+    future_names = EXPECTED_CANONICAL_MIGRATION_ORDER[:-1] + (
+        "064_rag_knowledge_retrieval_metadata.sql",
+    )
+
+    with pytest.raises(ValueError, match="baseline drifted"):
+        canonical_sql.validate_canonical_migration_order(future_names, require_baseline=True)
+
+
+def test_custom_fake_runner_plan_reports_duplicate_prefix_without_db_access(tmp_path):
+    (tmp_path / "000_first.sql").write_text(
+        "CREATE SCHEMA IF NOT EXISTS one;", encoding="utf-8"
+    )
+    (tmp_path / "000_second.sql").write_text(
+        "CREATE SCHEMA IF NOT EXISTS two;", encoding="utf-8"
+    )
+
+    plan = canonical_sql.load_canonical_sql_plan(tmp_path)
+
+    assert plan.ok is False
+    assert any(
+        "Duplicate canonical migration numeric prefix: 000" in item
+        for item in plan.safety_findings
+    )
 
 
 def test_identity_user_migration_has_only_local_identity_columns():
