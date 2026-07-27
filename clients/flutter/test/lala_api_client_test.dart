@@ -607,12 +607,13 @@ void main() {
             'items': [
               {
                 'id': 'signal-1',
-                'kind': 'tip',
+                'kind': 'place_tip',
                 'source_language': 'ko',
                 'title': '공개 신호',
                 'body': '날짜가 있는 first-party body',
                 'locality_level': 'district',
                 'locality_code': 'busan-haeundae',
+                'commercial_disclosure': 'none',
                 'place_links': [
                   {'place_id': 'place-1', 'relation': 'nearby'},
                 ],
@@ -632,7 +633,7 @@ void main() {
       language: 'ko',
       region: 'busan-haeundae',
       placeId: 'place-1',
-      kind: 'tip',
+      kind: 'place_tip',
       sort: 'recent',
       limit: 20,
       cursor: 'opaque-cursor',
@@ -644,7 +645,7 @@ void main() {
       'language': 'ko',
       'region': 'busan-haeundae',
       'place_id': 'place-1',
-      'kind': 'tip',
+      'kind': 'place_tip',
       'sort': 'recent',
       'limit': '20',
       'cursor': 'opaque-cursor',

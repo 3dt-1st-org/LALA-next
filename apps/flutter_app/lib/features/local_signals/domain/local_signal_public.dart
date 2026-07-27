@@ -3,6 +3,68 @@
 /// This model intentionally has no author identity, moderation state, score,
 /// capability token, coordinates, or third-party review fields. Unknown wire
 /// fields are ignored so private server-side data cannot enter app state.
+enum LocalSignalKind {
+  placeTip('place_tip'),
+  routeNote('route_note'),
+  localQuestion('local_question'),
+  accessibilityNote('accessibility_note'),
+  seasonalUpdate('seasonal_update'),
+  correction('correction'),
+  localStory('local_story');
+
+  const LocalSignalKind(this.wireValue);
+
+  final String wireValue;
+
+  static LocalSignalKind? fromWire(Object? value) {
+    for (final kind in values) {
+      if (kind.wireValue == value) return kind;
+    }
+    return null;
+  }
+
+  String label(String language) => switch (this) {
+    LocalSignalKind.placeTip => language == 'en' ? 'Place tip' : '장소 팁',
+    LocalSignalKind.routeNote => language == 'en' ? 'Route note' : '동선 메모',
+    LocalSignalKind.localQuestion =>
+      language == 'en' ? 'Local question' : '로컬 질문',
+    LocalSignalKind.accessibilityNote =>
+      language == 'en' ? 'Accessibility' : '접근성 메모',
+    LocalSignalKind.seasonalUpdate =>
+      language == 'en' ? 'Seasonal update' : '계절 업데이트',
+    LocalSignalKind.correction => language == 'en' ? 'Correction' : '정정',
+    LocalSignalKind.localStory => language == 'en' ? 'Local story' : '로컬 이야기',
+  };
+}
+
+enum LocalSignalCommercialDisclosure {
+  none('none'),
+  visitor('visitor'),
+  ownerOrStaff('owner_or_staff'),
+  paidOrGifted('paid_or_gifted');
+
+  const LocalSignalCommercialDisclosure(this.wireValue);
+
+  final String wireValue;
+
+  static LocalSignalCommercialDisclosure? fromWire(Object? value) {
+    for (final disclosure in values) {
+      if (disclosure.wireValue == value) return disclosure;
+    }
+    return null;
+  }
+
+  String label(String language) => switch (this) {
+    LocalSignalCommercialDisclosure.none => '',
+    LocalSignalCommercialDisclosure.visitor =>
+      language == 'en' ? 'Visitor disclosure' : '방문객 경험 기반 고지',
+    LocalSignalCommercialDisclosure.ownerOrStaff =>
+      language == 'en' ? 'Owner/staff disclosure' : '운영자·직원 관여 고지',
+    LocalSignalCommercialDisclosure.paidOrGifted =>
+      language == 'en' ? 'Paid or gifted disclosure' : '유료·제공 혜택 고지',
+  };
+}
+
 class LocalSignalPublicItem {
   const LocalSignalPublicItem({
     required this.id,
@@ -21,13 +83,13 @@ class LocalSignalPublicItem {
   });
 
   final String id;
-  final String kind;
+  final LocalSignalKind kind;
   final String sourceLanguage;
   final String title;
   final String body;
   final String? localityLevel;
   final String? localityCode;
-  final bool commercialDisclosure;
+  final LocalSignalCommercialDisclosure commercialDisclosure;
   final String? observationDate;
   final String? publishedAt;
   final List<LocalSignalPlaceLink> placeLinks;
@@ -38,11 +100,21 @@ class LocalSignalPublicItem {
     if (value is! Map) return null;
     final json = value.map((key, value) => MapEntry('$key', value));
     final id = _requiredString(json['id']);
-    final kind = _requiredString(json['kind']);
+    final kind = LocalSignalKind.fromWire(json['kind']);
     final sourceLanguage = _requiredString(json['source_language']);
     final title = _requiredString(json['title']);
     final body = _requiredString(json['body']);
-    if ([id, kind, sourceLanguage, title, body].any((value) => value == null)) {
+    final commercialDisclosure = LocalSignalCommercialDisclosure.fromWire(
+      json['commercial_disclosure'],
+    );
+    if ([
+      id,
+      kind,
+      sourceLanguage,
+      title,
+      body,
+      commercialDisclosure,
+    ].any((value) => value == null)) {
       return null;
     }
     final rawLinks = json['place_links'];
@@ -60,7 +132,7 @@ class LocalSignalPublicItem {
       body: body!,
       localityLevel: _optionalString(json['locality_level']),
       localityCode: _optionalString(json['locality_code']),
-      commercialDisclosure: json['commercial_disclosure'] == true,
+      commercialDisclosure: commercialDisclosure!,
       observationDate: _optionalString(json['observation_date']),
       publishedAt: _optionalString(json['published_at']),
       placeLinks: links,

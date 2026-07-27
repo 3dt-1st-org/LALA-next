@@ -126,3 +126,20 @@
 - Flutter client verification includes the public Local Signals query/cursor/auth-boundary test in `clients/flutter/test/lala_api_client_test.dart`.
 - Full verification: Flutter `analyze` passed and `flutter test` passed with `192` tests; the Flutter reference client suite passed with `27` tests; API suite passed with `1084 passed, 1 warning` under `KEY_VAULT_URL=` offline-safe settings. Ruff check/format, pre-commit including detect-secrets, and `git diff --check` passed.
 - Draft PR evidence: commit `c8b3c40872763bda4081aab924e7649011717b73` was pushed to [PR #75](https://github.com/3dt-1st-org/LALA-next/pull/75). Initial CI run [`30221120823`](https://github.com/3dt-1st-org/LALA-next/actions/runs/30221120823) passed API tests and safety contracts, Unix wrapper verification, and Flutter app analyze + test. The PR remains Draft/Open; no merge was performed.
+
+## LS-3 contract correction follow-up — 2026-07-27
+
+### Confirmed
+
+- PR #74 was already merged before this follow-up. The LS-3 branch was rebased onto `origin/main` `fe0026709362e66403c686fd1de520c64c8918864`; the only rebase conflict was `.secrets.baseline`, which was reconciled from both sides and revalidated with `detect-secrets` without reading or printing secret values.
+- The Flutter public projection now accepts only the API `kind` enum (`place_tip`, `route_note`, `local_question`, `accessibility_note`, `seasonal_update`, `correction`, `local_story`) and `commercial_disclosure` enum (`none`, `visitor`, `owner_or_staff`, `paid_or_gifted`). Each kind has exclusive KO/EN labels, and every non-`none` disclosure renders an explicit notice. The legacy boolean disclosure shape is rejected.
+- Region changes use a request-generation guard so an older in-flight region response cannot replace the latest region's list. The regression test completes the old response first and asserts it remains absent.
+- Follow-up local verification: focused Flutter `analyze` and Local Signals widget tests passed (`11` tests); full Flutter tests passed (`195` tests); Flutter reference client tests passed (`27` tests); full API tests passed (`1092 passed, 1 warning`); pre-commit including `detect-secrets` and `git diff --check` passed.
+
+### Assumption
+
+- The existing visible fourth tab remains the client readiness behavior: when the server read flag is off, it shows an honest disabled state and never inserts demo/mock signals. No LS-4 map, place-detail, schedule, or location state was added in this correction.
+
+### External decision
+
+- After the rebased follow-up is pushed, CI must be green before PR #75 is marked ready and squash-merged. LS-4 still owns place/map/plan action contracts; device validation, DB apply, deployment, live external review/translation/OpenAI calls, crawl, and real Logto authentication remain outside this work.

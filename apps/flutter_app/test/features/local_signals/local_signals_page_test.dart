@@ -46,6 +46,21 @@ void main() {
     expect(find.textContaining('Naver'), findsNothing);
   });
 
+  testWidgets('non-none commercial disclosure is shown as a real notice', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _app(
+        _SignalsBackend.loaded(
+          feed: _feed(disclosure: LocalSignalCommercialDisclosure.paidOrGifted),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('유료·제공 혜택 고지'), findsOneWidget);
+  });
+
   testWidgets('loading uses neutral skeletons and no placeholder copy', (
     tester,
   ) async {
@@ -106,9 +121,67 @@ void main() {
     expect(item.body, 'A dated first-party observation.');
     expect(item.placeLinks.single.placeId, 'place-1');
   });
+
+  test('public model rejects the legacy boolean disclosure shape', () {
+    expect(
+      LocalSignalPublicItem.fromJson(<String, dynamic>{
+        ..._itemJson(),
+        'commercial_disclosure': true,
+      }),
+      isNull,
+    );
+  });
+
+  test('schema enum values have exclusive KO and EN labels', () {
+    expect(
+      LocalSignalKind.values.map((kind) => kind.wireValue).toList(),
+      <String>[
+        'place_tip',
+        'route_note',
+        'local_question',
+        'accessibility_note',
+        'seasonal_update',
+        'correction',
+        'local_story',
+      ],
+    );
+    for (final kind in LocalSignalKind.values) {
+      expect(kind.label('ko'), isNotEmpty);
+      expect(kind.label('en'), isNotEmpty);
+      expect(kind.label('ko'), isNot(kind.label('en')));
+    }
+    expect(
+      LocalSignalCommercialDisclosure.values
+          .map((disclosure) => disclosure.wireValue)
+          .toList(),
+      <String>['none', 'visitor', 'owner_or_staff', 'paid_or_gifted'],
+    );
+  });
+
+  testWidgets('a stale region response cannot overwrite the latest region', (
+    tester,
+  ) async {
+    final backend = _RegionRaceBackend();
+    RegionContextStore.set(RegionContext.manual(_busanOption));
+    await tester.pumpWidget(_app(backend));
+    await tester.pump();
+
+    RegionContextStore.set(RegionContext.manual(_seoulOption));
+    await tester.pump();
+    expect(backend.requestedRegions, <String?>['busan-haeundae', 'seoul-jung']);
+
+    backend.complete('busan-haeundae', _feed(title: 'Old Busan response'));
+    await tester.pump();
+    expect(find.text('Old Busan response'), findsNothing);
+
+    backend.complete('seoul-jung', _feed(title: 'Latest Seoul response'));
+    await tester.pumpAndSettle();
+    expect(find.text('Latest Seoul response'), findsOneWidget);
+    expect(find.text('Old Busan response'), findsNothing);
+  });
 }
 
-Widget _app(_SignalsBackend backend) {
+Widget _app(LalaBackend backend) {
   return MaterialApp(
     home: Scaffold(
       body: LocalSignalsPage(
@@ -129,6 +202,17 @@ final ManualLocationOption _busanOption = const ManualLocationOption(
   labelEn: 'Haeundae-gu',
   lat: 35.16,
   lng: 129.16,
+);
+
+final ManualLocationOption _seoulOption = const ManualLocationOption(
+  id: 'seoul-jung',
+  provinceId: 'seoul',
+  provinceKo: '서울특별시',
+  provinceEn: 'Seoul',
+  labelKo: '중구',
+  labelEn: 'Jung-gu',
+  lat: 37.56,
+  lng: 126.99,
 );
 
 class _SignalsBackend implements LalaBackend {
@@ -203,6 +287,37 @@ class _SignalsBackend implements LalaBackend {
       throw UnimplementedError('not used in Local Signals test');
 }
 
+class _RegionRaceBackend implements LalaBackend {
+  final Map<String, Completer<LalaEnvelope<Map<String, dynamic>>>> _pending =
+      <String, Completer<LalaEnvelope<Map<String, dynamic>>>>{};
+  final List<String?> requestedRegions = <String?>[];
+
+  void complete(String region, LocalSignalsFeed feed) {
+    _pending[region]!.complete(_envelope(feed));
+  }
+
+  @override
+  Future<LalaEnvelope<Map<String, dynamic>>> getLocalSignals({
+    String? region,
+    String? placeId,
+    String? kind,
+    String sort = 'recent',
+    String? cursor,
+  }) {
+    requestedRegions.add(region);
+    final completer = Completer<LalaEnvelope<Map<String, dynamic>>>();
+    _pending[region!] = completer;
+    return completer.future;
+  }
+
+  @override
+  void close() {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError('not used in region race test');
+}
+
 LalaEnvelope<Map<String, dynamic>> _envelope(LocalSignalsFeed feed) {
   return LalaEnvelope<Map<String, dynamic>>(
     ok: true,
@@ -218,17 +333,21 @@ LalaEnvelope<Map<String, dynamic>> _envelope(LocalSignalsFeed feed) {
   );
 }
 
-LocalSignalsFeed _feed() => LocalSignalsFeed(
+LocalSignalsFeed _feed({
+  LocalSignalCommercialDisclosure disclosure =
+      LocalSignalCommercialDisclosure.none,
+  String title = 'Local Signals A',
+}) => LocalSignalsFeed(
   items: <LocalSignalPublicItem>[
     LocalSignalPublicItem(
       id: 'signal-1',
-      kind: 'tip',
+      kind: LocalSignalKind.placeTip,
       sourceLanguage: 'en',
-      title: 'Local Signals A',
+      title: title,
       body: 'A dated first-party observation.',
       localityLevel: 'district',
       localityCode: 'Suwon',
-      commercialDisclosure: false,
+      commercialDisclosure: disclosure,
       observationDate: '2026-07-27',
       publishedAt: '2026-07-27T09:00:00Z',
       placeLinks: const <LocalSignalPlaceLink>[
@@ -250,13 +369,13 @@ LocalSignalsFeed _emptyFeed() => const LocalSignalsFeed(
 
 Map<String, dynamic> _itemJson() => <String, dynamic>{
   'id': 'signal-1',
-  'kind': 'tip',
+  'kind': 'place_tip',
   'source_language': 'en',
   'title': 'Local Signals A',
   'body': 'A dated first-party observation.',
   'locality_level': 'district',
   'locality_code': 'Suwon',
-  'commercial_disclosure': false,
+  'commercial_disclosure': 'none',
   'observation_date': '2026-07-27',
   'published_at': '2026-07-27T09:00:00Z',
   'place_links': [
@@ -270,13 +389,13 @@ Map<String, dynamic> _itemToJson(
   LocalSignalPublicItem item,
 ) => <String, dynamic>{
   'id': item.id,
-  'kind': item.kind,
+  'kind': item.kind.wireValue,
   'source_language': item.sourceLanguage,
   'title': item.title,
   'body': item.body,
   'locality_level': item.localityLevel,
   'locality_code': item.localityCode,
-  'commercial_disclosure': item.commercialDisclosure,
+  'commercial_disclosure': item.commercialDisclosure.wireValue,
   'observation_date': item.observationDate,
   'published_at': item.publishedAt,
   'place_links': item.placeLinks

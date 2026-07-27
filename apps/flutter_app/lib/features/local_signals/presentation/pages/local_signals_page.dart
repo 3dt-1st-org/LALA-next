@@ -33,6 +33,7 @@ class _LocalSignalsPageState extends State<LocalSignalsPage> {
   bool _hasMore = false;
   bool _loadingMore = false;
   bool _disposed = false;
+  int _requestGeneration = 0;
 
   String get _language => widget.initialConfig.lang == 'en' ? 'en' : 'ko';
 
@@ -68,12 +69,14 @@ class _LocalSignalsPageState extends State<LocalSignalsPage> {
 
   Future<void> _load({bool append = false}) async {
     if (_loadingMore && append) return;
+    final generation = ++_requestGeneration;
     if (!append && mounted) {
       setState(() {
         _status = _LocalSignalsStatus.loading;
         _items = const <LocalSignalPublicItem>[];
         _nextCursor = null;
         _hasMore = false;
+        _loadingMore = false;
       });
     }
     if (append && mounted) setState(() => _loadingMore = true);
@@ -87,7 +90,7 @@ class _LocalSignalsPageState extends State<LocalSignalsPage> {
       final data = response.data;
       if (data == null) throw const FormatException('Missing feed data.');
       final feed = LocalSignalsFeed.fromJson(data);
-      if (!mounted) return;
+      if (!mounted || generation != _requestGeneration) return;
       setState(() {
         _items = append
             ? <LocalSignalPublicItem>[..._items, ...feed.items]
@@ -100,7 +103,7 @@ class _LocalSignalsPageState extends State<LocalSignalsPage> {
             : _LocalSignalsStatus.loaded;
       });
     } on LalaApiException catch (error) {
-      if (!mounted) return;
+      if (!mounted || generation != _requestGeneration) return;
       setState(() {
         _loadingMore = false;
         _status = error.code == 'LOCAL_SIGNALS_DISABLED'
@@ -108,7 +111,7 @@ class _LocalSignalsPageState extends State<LocalSignalsPage> {
             : _LocalSignalsStatus.error;
       });
     } on Object {
-      if (!mounted) return;
+      if (!mounted || generation != _requestGeneration) return;
       setState(() {
         _loadingMore = false;
         _status = _LocalSignalsStatus.error;
@@ -421,7 +424,7 @@ class _SignalCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final metadata = <String>[
-      _kindLabel(signal.kind, language),
+      signal.kind.label(language),
       if (signal.localityCode != null) signal.localityCode!,
       if (_dateLabel(signal.observationDate ?? signal.publishedAt) != null)
         _dateLabel(signal.observationDate ?? signal.publishedAt)!,
@@ -451,14 +454,11 @@ class _SignalCard extends StatelessWidget {
             ),
             const SizedBox(height: 7),
             Text(signal.body, style: theme.textTheme.bodyMedium),
-            if (signal.commercialDisclosure) ...<Widget>[
+            if (signal.commercialDisclosure !=
+                LocalSignalCommercialDisclosure.none) ...<Widget>[
               const SizedBox(height: 10),
               Text(
-                lalaCopy(
-                  language,
-                  ko: '상업적 이해관계 표시',
-                  en: 'Commercial disclosure',
-                ),
+                signal.commercialDisclosure.label(language),
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -470,15 +470,6 @@ class _SignalCard extends StatelessWidget {
     );
   }
 }
-
-String _kindLabel(String kind, String language) => switch (kind) {
-  'tip' => lalaCopy(language, ko: '팁', en: 'Tip'),
-  'observation' => lalaCopy(language, ko: '관찰', en: 'Observation'),
-  'accessibility' => lalaCopy(language, ko: '접근성', en: 'Accessibility'),
-  'crowding' => lalaCopy(language, ko: '혼잡', en: 'Crowding'),
-  'local_experience' => lalaCopy(language, ko: '로컬 경험', en: 'Local experience'),
-  _ => lalaCopy(language, ko: '로컬 신호', en: 'Local signal'),
-};
 
 String? _dateLabel(String? value) {
   if (value == null) return null;
