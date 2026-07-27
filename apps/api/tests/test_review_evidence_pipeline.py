@@ -269,11 +269,14 @@ def test_bulk_uses_nano_and_recheck_uses_mini_with_injected_client(monkeypatch):
             "results": [
                 {
                     "mention_id": "m1",
+                    "schema_version": batch.PROMPT_VERSION,
                     "attribute_scores": {"taste": 0.5},
                     "attribute_confidence_avg": 0.4,
                     "sentiment_confidence": 0.4,
                     "sentiment_score": 0.2,
-                    "evidence_terms": {},
+                    "is_ad": False,
+                    "ad_confidence": 0.1,
+                    "ad_reason": "organic",
                 }
             ]
         },
@@ -284,11 +287,15 @@ def test_bulk_uses_nano_and_recheck_uses_mini_with_injected_client(monkeypatch):
             "results": [
                 {
                     "mention_id": "m1",
+                    "schema_version": batch.RECHECK_PROMPT_VERSION,
+                    "decision": "confirmed",
                     "attribute_scores": {"taste": 0.85},
                     "attribute_confidence_avg": 0.9,
                     "sentiment_confidence": 0.9,
                     "sentiment_score": 0.6,
-                    "evidence_terms": {},
+                    "is_ad": False,
+                    "ad_confidence": 0.1,
+                    "ad_reason": "organic",
                 }
             ]
         },

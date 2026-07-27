@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import time
 from collections.abc import Sequence
@@ -9,8 +10,10 @@ from typing import Any
 
 from apps.api.app.core.config import get_settings, resolve_openai_base_url_host
 from apps.api.app.services.model_client import resolve
+from apps.api.app.services.review_ingest_governance import ALLOWED_LICENSE_CLASSES
 
 PROMPT_VERSION = "review-attributes-v1"
+RECHECK_PROMPT_VERSION = "review-attributes-recheck-v1"
 DETERMINISTIC_VERSION = "review-attributes-deterministic-v1"
 QUALITY_VERSION = "review-quality-v1"
 JOB_NAME = "review-attribute-batch"
@@ -18,6 +21,16 @@ JOB_NAME = "review-attribute-batch"
 # this are routed to the selective mini-model recheck instead of being trusted as
 # bulk output. Below the quality-formula's <10-organic cap of 0.65.
 RECHECK_CONFIDENCE_THRESHOLD = 0.6
+AD_CONFIDENCE_FILTER_THRESHOLD = 0.8
+SAFE_AD_REASONS = frozenset(
+    {
+        "organic",
+        "advertising_suspected",
+        "sponsored_suspected",
+        "ambiguous_ad_signal",
+        "insufficient_evidence",
+    }
+)
 
 ATTRIBUTE_TERMS = {
     "taste": ("맛있", "맛집", "메뉴", "커피", "디저트", "고기", "반찬", "브런치", "향"),
@@ -64,7 +77,7 @@ EVENT_ATTRIBUTES = (
     "crowding",
 )
 
-SYSTEM_PROMPT = """\
+BULK_SYSTEM_PROMPT = """\
 You extract structured review attributes for LALA, a Korean local travel app.
 
 Return ONLY a JSON object:
@@ -77,9 +90,9 @@ Return ONLY a JSON object:
       "sentiment_confidence": 0.0 to 1.0,
       "attribute_scores": {"attribute_name": 0.0 to 1.0},
       "attribute_confidence_avg": 0.0 to 1.0,
-      "evidence_terms": {"attribute_name": ["short Korean evidence phrase"]},
-      "summary_ko": "one concise Korean summary",
-      "reason": "short reason"
+      "is_ad": true or false,
+      "ad_confidence": 0.0 to 1.0,
+      "ad_reason": "organic|advertising_suspected|sponsored_suspected|ambiguous_ad_signal|insufficient_evidence"
     }
   ]
 }
@@ -90,9 +103,41 @@ Rules:
 3. Restaurants may use taste, menu, service, price, atmosphere, cleanliness, and wait/crowding evidence.
 4. Attractions and culture venues must not treat unrelated food/cafe text as place quality.
 5. Events should prioritize program quality, access, family/foreign visitor fit, weather/indoor fit, and crowding.
-6. Evidence phrases must be short and must not quote long review text.
-7. Return every input mention_id exactly once.
+6. Do not return evidence phrases, summaries, raw text, or free-form reasons.
+7. Return every input mention_id exactly once, with all required fields.
 """
+
+# Recheck is deliberately a resolution lane, not a docent or final-QA lane.
+RECHECK_SYSTEM_PROMPT = """\
+You selectively recheck uncertain structured review attributes for LALA.
+
+Return ONLY a JSON object with one result per input mention:
+{
+  "results": [
+    {
+      "mention_id": "same id as input",
+      "schema_version": "review-attributes-recheck-v1",
+      "decision": "confirmed|still_uncertain|rejected",
+      "sentiment_score": -1.0 to 1.0,
+      "sentiment_confidence": 0.0 to 1.0,
+      "attribute_scores": {"attribute_name": 0.0 to 1.0},
+      "attribute_confidence_avg": 0.0 to 1.0,
+      "is_ad": true or false,
+      "ad_confidence": 0.0 to 1.0,
+      "ad_reason": "organic|advertising_suspected|sponsored_suspected|ambiguous_ad_signal|insufficient_evidence"
+    }
+  ]
+}
+
+Use only the supplied retained organic snippets and aggregate terms. Do not
+return evidence phrases, summaries, raw text, or free-form reasons. A
+still_uncertain or rejected result is quarantined and is not a user, RAG, or
+quality-score output. This is only a selective review recheck; it must not
+generate docent content or replace final docent QA.
+"""
+
+# Compatibility name for callers that imported the old bulk prompt.
+SYSTEM_PROMPT = BULK_SYSTEM_PROMPT
 
 
 @dataclass(frozen=True)
@@ -108,6 +153,10 @@ class ReviewAttributeCandidate:
     sentiment_score: float | None
     attributes: dict[str, Any]
     posts: tuple[dict[str, str | None], ...]
+    source_content_sha256: str = ""
+    source_name: str = ""
+    license_class: str = ""
+    terms_version: str = ""
 
     @classmethod
     def from_row(cls, row: dict[str, Any]) -> ReviewAttributeCandidate:
@@ -128,6 +177,13 @@ class ReviewAttributeCandidate:
             sentiment_score=_optional_sentiment(row.get("sentiment_score")),
             attributes=_json_object(row.get("attributes")),
             posts=tuple(_post_sample(item) for item in posts if isinstance(item, dict)),
+            source_content_sha256=_source_content_hash(
+                provider=str(row.get("provider") or ""),
+                posts=posts,
+            ),
+            source_name=str(row.get("source_name") or ""),
+            license_class=str(row.get("license_class") or ""),
+            terms_version=str(row.get("terms_version") or ""),
         )
 
     def to_prompt_record(self) -> dict[str, Any]:
@@ -143,6 +199,10 @@ class ReviewAttributeCandidate:
             "top_terms": self.attributes.get("top_terms") or [],
             "category_policy": self.attributes.get("category_policy"),
             "allowed_attributes": list(attribute_names_for_category(self.category)),
+            "source_content_sha256": self.source_content_sha256,
+            "source_name": self.source_name,
+            "license_class": self.license_class,
+            "terms_version": self.terms_version,
             "retained_snippets": [
                 _compact_text(
                     sample.get("title"),
@@ -165,6 +225,10 @@ class ReviewAttributeCandidate:
             "organic_mention_count": self.organic_mention_count,
             "top_terms": self.attributes.get("top_terms") or [],
             "post_sample_count": len(self.posts),
+            "source_content_sha256": self.source_content_sha256,
+            "source_name": self.source_name,
+            "license_class": self.license_class,
+            "terms_version": self.terms_version,
         }
 
 
@@ -180,6 +244,11 @@ class ReviewAttributeEnrichment:
     summary_ko: str | None
     reason: str | None
     source_method: str
+    source_content_sha256: str = ""
+    is_ad: bool = False
+    ad_confidence: float = 0.0
+    ad_reason: str = "organic"
+    status: str = "accepted"
 
     def attribute_mean(self) -> float | None:
         if not self.attribute_scores:
@@ -187,17 +256,25 @@ class ReviewAttributeEnrichment:
         return round(sum(self.attribute_scores.values()) / len(self.attribute_scores), 4)
 
     def to_attributes_payload(self) -> dict[str, Any]:
+        """Return only persisted aggregate/provenance-safe fields.
+
+        ``evidence_terms``, ``summary_ko``, and ``reason`` are transient model
+        fields. They may exist while parsing an older injected fixture, but are
+        never allowed across the DB/API/RAG boundary.
+        """
         return {
             "schema_version": self.schema_version,
             "source": self.source_method,
+            "source_content_sha256": self.source_content_sha256 or None,
             "attribute_scores": self.attribute_scores,
             "attribute_mean": self.attribute_mean(),
             "attribute_confidence_avg": self.attribute_confidence_avg,
             "sentiment_score": self.sentiment_score,
             "sentiment_confidence": self.sentiment_confidence,
-            "evidence_terms": self.evidence_terms,
-            "summary_ko": self.summary_ko,
-            "reason": self.reason,
+            "is_ad": self.is_ad,
+            "ad_confidence": self.ad_confidence,
+            "ad_reason": self.ad_reason,
+            "status": self.status,
         }
 
     def to_public_dict(self) -> dict[str, Any]:
@@ -208,8 +285,12 @@ class ReviewAttributeEnrichment:
             "attribute_mean": self.attribute_mean(),
             "attribute_confidence_avg": self.attribute_confidence_avg,
             "attribute_scores": self.attribute_scores,
-            "summary_ko": self.summary_ko,
             "source_method": self.source_method,
+            "source_content_sha256": self.source_content_sha256 or None,
+            "is_ad": self.is_ad,
+            "ad_confidence": self.ad_confidence,
+            "ad_reason": self.ad_reason,
+            "status": self.status,
         }
 
 
@@ -220,6 +301,7 @@ class ReviewAttributeApplyRow:
     review_attributes: dict[str, Any]
     review_quality: dict[str, Any] | None
     source_method: str
+    accepted: bool
 
 
 def attribute_names_for_category(category: str) -> tuple[str, ...]:
@@ -241,7 +323,10 @@ def fetch_review_attribute_candidates(
     import psycopg2
     from psycopg2.extras import RealDictCursor
 
-    sql = """
+    allowed_license_classes = ", ".join(
+        f"'{license_class}'" for license_class in ALLOWED_LICENSE_CLASSES
+    )
+    sql = f"""
         SELECT
             mentions.id,
             mentions.week_start,
@@ -253,6 +338,9 @@ def fetch_review_attribute_candidates(
             mentions.organic_mention_count,
             mentions.sentiment_score,
             mentions.attributes,
+            sources.source_name,
+            sources.license_class,
+            sources.terms_version,
             COALESCE(
                 jsonb_agg(
                     DISTINCT jsonb_build_object(
@@ -264,6 +352,19 @@ def fetch_review_attribute_candidates(
                 '[]'::jsonb
             ) AS posts
         FROM community.place_mentions_weekly mentions
+        JOIN ingest.review_sources sources
+          ON sources.source_name = NULLIF(
+                 mentions.attributes #>> '{{preprocess,source_name}}', ''
+             )
+         AND sources.provider = mentions.provider
+         AND sources.source_status = 'active'
+         AND sources.license_class IN ({allowed_license_classes})
+         AND sources.license_class = NULLIF(
+                 mentions.attributes #>> '{{preprocess,license_class}}', ''
+             )
+         AND sources.terms_version = NULLIF(
+                 mentions.attributes #>> '{{preprocess,terms_version}}', ''
+             )
         LEFT JOIN LATERAL jsonb_array_elements_text(
             COALESCE(
                 mentions.attributes->'preprocess'->'retained_external_keys',
@@ -287,10 +388,13 @@ def fetch_review_attribute_candidates(
             mentions.organic_mention_count,
             mentions.sentiment_score,
             mentions.attributes,
+            sources.source_name,
+            sources.license_class,
+            sources.terms_version,
             mentions.updated_at
         ORDER BY
             CASE
-                WHEN mentions.attributes #>> '{review_attributes,schema_version}'
+                WHEN mentions.attributes #>> '{{review_attributes,schema_version}}'
                      = %s THEN 1
                 ELSE 0
             END,
@@ -334,7 +438,7 @@ def generate_ai_enrichments(
             client=client,
             model=selected_review_batch_model(settings),
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": BULK_SYSTEM_PROMPT},
                 {
                     "role": "user",
                     "content": json.dumps(
@@ -396,7 +500,11 @@ def route_low_confidence_enrichments(
     return [
         item
         for item in enrichments
-        if item.attribute_confidence_avg < threshold or item.sentiment_confidence < threshold
+        if (
+            item.attribute_confidence_avg < threshold
+            or item.sentiment_confidence < threshold
+            or (item.is_ad and item.ad_confidence < AD_CONFIDENCE_FILTER_THRESHOLD)
+        )
     ]
 
 
@@ -456,7 +564,7 @@ def generate_ai_recheck(
                 client=client,
                 model=recheck_model,
                 messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "system", "content": RECHECK_SYSTEM_PROMPT},
                     {
                         "role": "user",
                         "content": json.dumps(
@@ -469,7 +577,7 @@ def generate_ai_recheck(
                 retry_delay_sec=retry_delay_sec,
             )
             raw = response.choices[0].message.content or ""
-            for enrichment in parse_ai_response(raw, batch):
+            for enrichment in parse_ai_response(raw, batch, lane="recheck"):
                 # Mark the lane so downstream provenance shows a recheck upgraded it.
                 rechecked_by_id[enrichment.mention_id] = replace(
                     enrichment, source_method="openai_recheck"
@@ -496,45 +604,88 @@ def generate_ai_recheck(
 def parse_ai_response(
     raw: str,
     candidates: Sequence[ReviewAttributeCandidate],
+    *,
+    lane: str = "bulk",
 ) -> list[ReviewAttributeEnrichment]:
-    payload = json.loads(_strip_code_fence(raw))
+    if lane not in {"bulk", "recheck"}:
+        raise ValueError(f"OpenAI response lane is unsupported: {lane}.")
+    try:
+        payload = json.loads(_strip_code_fence(raw))
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise ValueError("OpenAI JSON response was not valid JSON.") from exc
     items = payload.get("results") if isinstance(payload, dict) else None
     if not isinstance(items, list):
         raise ValueError("OpenAI JSON response did not include a results list.")
+    if len(items) != len(candidates):
+        raise ValueError("OpenAI JSON response must contain exactly one result per input.")
     candidate_by_id = {candidate.mention_id: candidate for candidate in candidates}
+    expected_schema = PROMPT_VERSION if lane == "bulk" else RECHECK_PROMPT_VERSION
+    seen_ids: set[str] = set()
     parsed: list[ReviewAttributeEnrichment] = []
-    for index, item in enumerate(items):
+    for item in items:
         if not isinstance(item, dict):
-            continue
-        fallback_id = candidates[index].mention_id if index < len(candidates) else ""
-        mention_id = str(item.get("mention_id") or item.get("id") or fallback_id)
+            raise ValueError("OpenAI JSON response contained a non-object result.")
+        mention_id = str(item.get("mention_id") or "").strip()
+        if not mention_id or mention_id in seen_ids:
+            raise ValueError("OpenAI JSON response contained a missing or duplicate mention_id.")
         candidate = candidate_by_id.get(mention_id)
-        if candidate is None and index < len(candidates):
-            candidate = candidates[index]
-            mention_id = candidate.mention_id
         if candidate is None:
-            continue
+            raise ValueError("OpenAI JSON response contained an unknown mention_id.")
+        if item.get("schema_version") != expected_schema:
+            raise ValueError(f"OpenAI JSON response schema_version must be {expected_schema}.")
+        forbidden_fields = {"evidence_terms", "summary_ko", "reason", "organic_excerpt"}
+        if forbidden_fields.intersection(item):
+            raise ValueError("OpenAI JSON response must not contain raw-derived text fields.")
+        if lane == "recheck" and item.get("decision") not in {
+            "confirmed",
+            "still_uncertain",
+            "rejected",
+        }:
+            raise ValueError("OpenAI recheck response contained an unsupported decision.")
         allowed = set(attribute_names_for_category(candidate.category))
-        scores = _attribute_scores(item.get("attribute_scores"), allowed)
-        if not scores:
-            scores = _deterministic_enrichment(candidate).attribute_scores
+        scores = _strict_attribute_scores(item.get("attribute_scores"), allowed)
+        sentiment_score = _strict_sentiment(item.get("sentiment_score"))
+        sentiment_confidence = _strict_unit(
+            item.get("sentiment_confidence"), "sentiment_confidence"
+        )
+        attribute_confidence = _strict_unit(
+            item.get("attribute_confidence_avg"), "attribute_confidence_avg"
+        )
+        is_ad = item.get("is_ad")
+        if not isinstance(is_ad, bool):
+            raise ValueError("OpenAI JSON response is_ad must be boolean.")
+        ad_confidence = _strict_unit(item.get("ad_confidence"), "ad_confidence")
+        ad_reason = str(item.get("ad_reason") or "").strip()
+        if ad_reason not in SAFE_AD_REASONS:
+            raise ValueError("OpenAI JSON response contained an unsupported ad_reason.")
+        decision = item.get("decision") if lane == "recheck" else None
+        status = _enrichment_status(
+            is_ad=is_ad,
+            ad_confidence=ad_confidence,
+            sentiment_confidence=sentiment_confidence,
+            attribute_confidence=attribute_confidence,
+            decision=decision,
+        )
         parsed.append(
             ReviewAttributeEnrichment(
                 mention_id=mention_id,
-                schema_version=PROMPT_VERSION,
-                sentiment_score=_optional_sentiment(item.get("sentiment_score")),
-                sentiment_confidence=_optional_unit(item.get("sentiment_confidence"), default=0.55),
+                schema_version=expected_schema,
+                sentiment_score=sentiment_score,
+                sentiment_confidence=sentiment_confidence,
                 attribute_scores=scores,
-                attribute_confidence_avg=_optional_unit(
-                    item.get("attribute_confidence_avg"),
-                    default=0.55,
-                ),
-                evidence_terms=_evidence_terms(item.get("evidence_terms"), allowed),
-                summary_ko=_optional_text(item.get("summary_ko")),
-                reason=_optional_text(item.get("reason")),
-                source_method="openai",
+                attribute_confidence_avg=attribute_confidence,
+                evidence_terms={},
+                summary_ko=None,
+                reason=None,
+                source_method="openai_recheck" if lane == "recheck" else "openai",
+                source_content_sha256=candidate.source_content_sha256,
+                is_ad=is_ad,
+                ad_confidence=ad_confidence,
+                ad_reason=ad_reason,
+                status=status,
             )
         )
+        seen_ids.add(mention_id)
     return parsed
 
 
@@ -561,8 +712,12 @@ def apply_review_attribute_enrichments(
     sql = """
         UPDATE community.place_mentions_weekly
         SET
-            sentiment_score = COALESCE(%(sentiment_score)s, sentiment_score),
-            attributes = attributes
+            sentiment_score = CASE
+                WHEN %(accepted)s THEN COALESCE(%(sentiment_score)s, sentiment_score)
+                ELSE NULL
+            END,
+            attributes = (
+                attributes - 'review_quality'
                 || jsonb_build_object(
                     'review_attributes',
                     %(review_attributes)s::jsonb,
@@ -574,9 +729,11 @@ def apply_review_attribute_enrichments(
                     )
                 )
                 || CASE
-                    WHEN %(review_quality)s::jsonb IS NULL THEN '{}'::jsonb
-                    ELSE jsonb_build_object('review_quality', %(review_quality)s::jsonb)
-                END,
+                    WHEN %(accepted)s AND %(review_quality)s::jsonb IS NOT NULL
+                    THEN jsonb_build_object('review_quality', %(review_quality)s::jsonb)
+                    ELSE '{}'::jsonb
+                END
+            ),
             updated_at = now()
         WHERE id = %(mention_id)s::uuid
     """
@@ -593,11 +750,57 @@ def apply_review_attribute_enrichments(
                         "review_quality": Json(row.review_quality)
                         if row.review_quality is not None
                         else None,
+                        "accepted": row.accepted,
                         "prompt_version": PROMPT_VERSION,
                         "source_method": row.source_method,
                     },
                 )
                 updated += cur.rowcount
+                if not row.accepted:
+                    continue
+                cur.execute(
+                    """
+                    INSERT INTO travel.place_enrichments (
+                        place_id,
+                        enrichment_type,
+                        attributes,
+                        confidence,
+                        source_method,
+                        model_name,
+                        prompt_version
+                    )
+                    SELECT
+                        %(place_id)s,
+                        'review_attributes',
+                        %(review_attributes)s::jsonb,
+                        %(confidence)s,
+                        %(source_method)s,
+                        %(model_name)s,
+                        %(prompt_version)s
+                    WHERE NOT EXISTS (
+                        SELECT 1
+                        FROM travel.place_enrichments existing
+                        WHERE existing.place_id = %(place_id)s
+                          AND existing.enrichment_type = 'review_attributes'
+                          AND existing.source_method = %(source_method)s
+                          AND existing.prompt_version = %(prompt_version)s
+                    )
+                    """,
+                    {
+                        "place_id": candidate_by_id[row.mention_id].place_id,
+                        "review_attributes": Json(row.review_attributes),
+                        "confidence": _enrichment_confidence(row.review_attributes),
+                        "source_method": row.source_method,
+                        "model_name": (
+                            row.review_attributes.get("model_name")
+                            if isinstance(row.review_attributes, dict)
+                            else None
+                        ),
+                        "prompt_version": row.review_attributes.get(
+                            "schema_version", PROMPT_VERSION
+                        ),
+                    },
+                )
         conn.commit()
     return updated
 
@@ -638,6 +841,8 @@ def review_quality_payload(
     candidate: ReviewAttributeCandidate,
     enrichment: ReviewAttributeEnrichment,
 ) -> dict[str, Any] | None:
+    if enrichment.status not in {"accepted"}:
+        return None
     organic_count = candidate.organic_mention_count
     if organic_count < 3:
         return None
@@ -715,6 +920,8 @@ def _deterministic_enrichment(
         summary_ko=summary,
         reason="deterministic keyword evidence from retained mentions",
         source_method="deterministic",
+        source_content_sha256=candidate.source_content_sha256,
+        status="accepted",
     )
 
 
@@ -725,15 +932,30 @@ def _apply_row(
     source_method: str,
 ) -> ReviewAttributeApplyRow:
     review_attributes = enrichment.to_attributes_payload()
+    if enrichment.status != "accepted":
+        review_attributes = {
+            key: value
+            for key in (
+                "schema_version",
+                "source",
+                "source_content_sha256",
+                "is_ad",
+                "ad_confidence",
+                "ad_reason",
+                "status",
+            )
+            if (value := review_attributes.get(key)) is not None
+        }
     # Per-enrichment lane wins so a rechecked row is persisted as "openai_recheck"
     # (and bulk as "openai", deterministic as "deterministic") rather than a
     # generic runner-level string. The caller's source_method is only a fallback.
     return ReviewAttributeApplyRow(
         mention_id=enrichment.mention_id,
-        sentiment_score=enrichment.sentiment_score,
+        sentiment_score=enrichment.sentiment_score if enrichment.status == "accepted" else None,
         review_attributes=review_attributes,
         review_quality=review_quality_payload(candidate, enrichment),
         source_method=enrichment.source_method or source_method,
+        accepted=enrichment.status == "accepted",
     )
 
 
@@ -794,6 +1016,73 @@ def _attribute_scores(value: Any, allowed: set[str]) -> dict[str, float]:
             continue
         scores[name] = _optional_unit(raw_score, default=0.5)
     return scores
+
+
+def _strict_attribute_scores(value: Any, allowed: set[str]) -> dict[str, float]:
+    if not isinstance(value, dict) or not value:
+        raise ValueError("OpenAI JSON response attribute_scores must be a non-empty object.")
+    scores: dict[str, float] = {}
+    for key, raw_score in value.items():
+        name = str(key)
+        if name not in allowed:
+            raise ValueError(f"OpenAI JSON response contained unsupported attribute: {name}.")
+        scores[name] = _strict_unit(raw_score, f"attribute_scores.{name}")
+    return scores
+
+
+def _strict_unit(value: Any, field_name: str) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"OpenAI JSON response {field_name} must be a number from 0 to 1.")
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"OpenAI JSON response {field_name} must be a number from 0 to 1."
+        ) from exc
+    if not 0.0 <= parsed <= 1.0:
+        raise ValueError(f"OpenAI JSON response {field_name} must be a number from 0 to 1.")
+    return round(parsed, 4)
+
+
+def _strict_sentiment(value: Any) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise ValueError("OpenAI JSON response sentiment_score must be a number from -1 to 1.")
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "OpenAI JSON response sentiment_score must be a number from -1 to 1."
+        ) from exc
+    if not -1.0 <= parsed <= 1.0:
+        raise ValueError("OpenAI JSON response sentiment_score must be a number from -1 to 1.")
+    return round(parsed, 4)
+
+
+def _enrichment_status(
+    *,
+    is_ad: bool,
+    ad_confidence: float,
+    sentiment_confidence: float,
+    attribute_confidence: float,
+    decision: str | None,
+) -> str:
+    if decision == "rejected":
+        return "quarantined"
+    if decision == "still_uncertain":
+        return "quarantined"
+    if is_ad and ad_confidence >= AD_CONFIDENCE_FILTER_THRESHOLD:
+        return "ad_filtered"
+    if decision == "confirmed":
+        return "accepted"
+    if (
+        sentiment_confidence < RECHECK_CONFIDENCE_THRESHOLD
+        or attribute_confidence < RECHECK_CONFIDENCE_THRESHOLD
+        or (is_ad and ad_confidence < AD_CONFIDENCE_FILTER_THRESHOLD)
+    ):
+        return "recheck_required"
+    return "accepted"
 
 
 def _evidence_terms(value: Any, allowed: set[str]) -> dict[str, list[str]]:
@@ -869,6 +1158,32 @@ def _post_sample(value: dict[str, Any]) -> dict[str, str | None]:
         "title": _optional_text(value.get("title")),
         "body": _optional_text(value.get("body")),
     }
+
+
+def _source_content_hash(*, provider: str, posts: Any) -> str:
+    """Hash in-memory source content without retaining it in an output shape."""
+    safe_posts = posts if isinstance(posts, list) else []
+    material = [provider]
+    for item in safe_posts:
+        if not isinstance(item, dict):
+            continue
+        material.extend(
+            [
+                str(item.get("external_key") or ""),
+                str(item.get("title") or ""),
+                str(item.get("body") or ""),
+            ]
+        )
+    return hashlib.sha256("\x1f".join(material).encode("utf-8")).hexdigest()
+
+
+def _enrichment_confidence(attributes: dict[str, Any]) -> float | None:
+    values = [
+        attributes.get("attribute_confidence_avg"),
+        attributes.get("sentiment_confidence"),
+    ]
+    numeric = [float(value) for value in values if isinstance(value, (int, float))]
+    return round(min(numeric), 4) if numeric else None
 
 
 def _json_object(value: Any) -> dict[str, Any]:

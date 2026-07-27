@@ -3,6 +3,7 @@ param(
     [string]$KeyVaultUrl = "",
     [switch]$Preview,
     [switch]$DryRunAi,
+    [switch]$AllowLiveAi,
     [switch]$Apply,
     [string]$Confirm = "",
     [string]$Category = "all",
@@ -21,6 +22,9 @@ Set-StrictMode -Version Latest
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 Push-Location $RepoRoot
 try {
+    if ($DryRunAi -and -not $AllowLiveAi) {
+        throw "-DryRunAi requires -AllowLiveAi; no external call was made."
+    }
     if (-not $Python) {
         $VenvPython = Join-Path $RepoRoot ".venv\Scripts\python.exe"
         if (Test-Path $VenvPython) {
@@ -54,7 +58,7 @@ try {
         Write-Host "Planning LALA-next review attribute batch."
         Write-Host "Default mode is dry-run plan only."
         Write-Host "Preview mode reads review mentions and computes deterministic attributes without mutating DB."
-        Write-Host "Dry-run AI mode calls OpenAI but does not mutate DB."
+        Write-Host "Dry-run AI mode requires -AllowLiveAi and does not mutate DB."
         Write-Host "Apply mode requires ALLOW_REVIEW_ATTRIBUTE_BATCH_APPLY=1."
         Write-Host "OPENAI_API_KEY and DB_DSN values are never printed by this script."
     }
@@ -85,6 +89,9 @@ try {
     }
     if ($DryRunAi) {
         $toolArgs += "--dry-run-ai"
+    }
+    if ($AllowLiveAi) {
+        $toolArgs += "--allow-live-ai"
     }
     if ($Apply) {
         $toolArgs += "--apply"

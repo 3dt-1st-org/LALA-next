@@ -220,7 +220,7 @@ For attractions/culture venues, keep the rejection evidence:
 |---|---|---|
 | M1. Plan and preview tool | Add the tool and wrappers with no DB mutation by default. | Implemented. `scripts/unix/plan_review_mention_ingest.sh` is included in repo verification and prints no secrets. |
 | M2. Deterministic filters | HTML cleanup, dedup, ad phrases, category-specific food noise policy. | Implemented. Unit tests cover ad filtering, attraction food-only rejection, and restaurant food-term retention. |
-| M3. AI classifier | JSON-only ad/relevance classifier with prompt versioning and bulk-model routing. | Pending. Deterministic `review-mention-preprocess-v1` metadata is stored first; the preferred bulk lane is `OPENAI_REVIEW_BATCH_MODEL` (`gpt-5.4-nano`). |
+| M3. AI classifier | JSON-only ad/relevance classifier with prompt versioning and bulk-model routing. | Implementation in progress. The strict `review_bulk` lane uses `gpt-5.4-nano`; bounded aggregate attributes/status are persisted while raw review text remains transient. Eligible evidence is limited to approved API, licensed data, or terms-permitted static data. |
 | M4. Place matching | Confidence-ranked matching against `travel.places`. | Partially implemented. Exact-name matches are scored; ambiguous rows keep `organic_mention_count=0`. |
 | M5. Apply path | Guarded upsert to weekly aggregate table. | Implemented. Apply requires `ALLOW_REVIEW_MENTION_INGEST_APPLY=1` and logs `ops.job_runs`. |
 | M6. Integration | Feed sentiment/attribute scoring and RAG regeneration. | Score/RAG preview shows new review-derived inputs. |

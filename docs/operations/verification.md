@@ -376,15 +376,15 @@ scripts/unix/plan_review_attribute_batch.sh --preview --limit 50
 .\scripts\windows\plan_review_attribute_batch.ps1 -Preview -Limit 50
 ```
 
-Dry-run AI calls Azure OpenAI for JSON attribute extraction but does not write
-rows:
+Dry-run AI calls the standard OpenAI lane for JSON attribute extraction only
+with the explicit live-operation guard, and does not write rows:
 
 ```bash
-scripts/unix/plan_review_attribute_batch.sh --dry-run-ai --limit 20
+scripts/unix/plan_review_attribute_batch.sh --dry-run-ai --allow-live-ai --limit 20
 ```
 
 ```powershell
-.\scripts\windows\plan_review_attribute_batch.ps1 -DryRunAi -Limit 20
+.\scripts\windows\plan_review_attribute_batch.ps1 -DryRunAi -AllowLiveAi -Limit 20
 ```
 
 Apply writes `attributes.review_attributes`, `attributes.review_quality`, and

@@ -315,12 +315,15 @@ in `ops.job_runs`.
 `scripts/windows/plan_review_attribute_batch.ps1` provide the guarded attribute
 scoring path. Plan mode does not connect to the database. Preview reads
 preprocessed mention rows and computes deterministic attributes without mutation.
-`--dry-run-ai` calls the configured general OpenAI review lane for JSON extraction
-but does not write rows.
+`--dry-run-ai --allow-live-ai` calls the configured general OpenAI review lane
+for JSON extraction but does not write rows. The explicit guard is required;
+without it the runner fails closed before reading candidates. Candidates also
+require active `ingest.review_sources` provenance, permitted `license_class`,
+and matching `terms_version`.
 Apply requires `ALLOW_REVIEW_ATTRIBUTE_BATCH_APPLY=1` plus
-`--confirm APPLY_REVIEW_ATTRIBUTE_BATCH`, writes `review_attributes` and
-`review_quality` under `attributes`, updates `sentiment_score`, and records the
-run in `ops.job_runs`.
+`--confirm APPLY_REVIEW_ATTRIBUTE_BATCH`. Only accepted results write
+`review_attributes`, `review_quality`, or `sentiment_score`; nonaccepted
+results clear stale quality and are not mirrored to `travel.place_enrichments`.
 
 | Column | Type | Required | Description |
 |---|---:|---:|---|

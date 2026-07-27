@@ -1040,19 +1040,29 @@ def _project_place_mention_attributes(attributes: dict[str, Any]) -> dict[str, A
     """
     review = _json_object(attributes.get("review_attributes"))
     quality = _json_object(attributes.get("review_quality"))
+    review_status = _optional_text(review.get("status"))
+    review_is_approved = review_status in {None, "accepted"}
     projected_review = {
         key: value
         for key in (
             "schema_version",
             "source",
+            "source_content_sha256",
             "attribute_scores",
             "attribute_mean",
             "attribute_confidence_avg",
             "sentiment_score",
             "sentiment_confidence",
+            "is_ad",
+            "ad_confidence",
+            "ad_reason",
+            "status",
         )
-        if (value := _safe_review_attribute_value(key, review.get(key))) is not None
+        if review_is_approved
+        and (value := _safe_review_attribute_value(key, review.get(key))) is not None
     }
+    if not review_is_approved and review_status:
+        projected_review = {"status": review_status}
     projected_quality = {
         key: value
         for key in (
@@ -1081,7 +1091,7 @@ def _safe_review_attribute_value(key: str, value: Any) -> Any:
             for name, raw_number in _json_object(value).items()
             if (number := _optional_float(raw_number)) is not None
         }
-    if key in {"schema_version", "source"}:
+    if key in {"schema_version", "source", "source_content_sha256", "ad_reason", "status"}:
         return _optional_text(value)
     if key in {
         "attribute_mean",
@@ -1090,8 +1100,11 @@ def _safe_review_attribute_value(key: str, value: Any) -> Any:
         "sentiment_confidence",
         "score",
         "confidence",
+        "ad_confidence",
     }:
         return _optional_float(value)
+    if key == "is_ad":
+        return value if isinstance(value, bool) else None
     if key in {"organic_review_count", "mention_count"}:
         try:
             return int(value)
