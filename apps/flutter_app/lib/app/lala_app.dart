@@ -9,6 +9,7 @@ import 'package:lala_next_app/auth/logto_auth_gateway.dart';
 import 'package:lala_next_app/core/backend/lala_backend.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
+import 'package:lala_next_app/core/navigation/local_signal_action.dart';
 import 'package:lala_next_app/app/map_sheet_visibility.dart';
 import 'package:lala_next_app/core/routing/lala_router.dart';
 
@@ -26,6 +27,7 @@ class LalaApp extends StatefulWidget {
     this.locationProvider = const GeolocatorLalaLocationProvider(),
     this.recommendationRecoveryDelays = _defaultRecommendationRecoveryDelays,
     this.authControllerFactory = createLalaAuthController,
+    this.localSignalActionController,
   });
 
   final LalaBackendFactory backendFactory;
@@ -33,6 +35,7 @@ class LalaApp extends StatefulWidget {
   final LalaLocationProvider locationProvider;
   final List<Duration> recommendationRecoveryDelays;
   final LalaAuthControllerFactory authControllerFactory;
+  final LocalSignalActionController? localSignalActionController;
 
   @override
   State<LalaApp> createState() => _LalaAppState();
@@ -46,6 +49,7 @@ class _LalaAppState extends State<LalaApp> {
     locationProvider: widget.locationProvider,
     recommendationRecoveryDelays: widget.recommendationRecoveryDelays,
     authControllerFactory: widget.authControllerFactory,
+    localSignalActionController: widget.localSignalActionController,
   );
 
   @override

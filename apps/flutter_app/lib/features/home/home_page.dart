@@ -17,6 +17,7 @@ import 'package:lala_next_app/core/geo/geo_helpers.dart';
 import 'package:lala_next_app/core/location/app_settings_opener.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
 import 'package:lala_next_app/core/location/region_context.dart';
+import 'package:lala_next_app/core/navigation/local_signal_action.dart';
 import 'package:lala_next_app/features/location/widgets/manual_location_sheet.dart';
 import 'package:lala_next_app/features/location/widgets/permanently_denied_recovery.dart';
 import 'package:lala_next_app/features/map/domain/active_map_sheet.dart';
@@ -42,6 +43,7 @@ class LalaHomePage extends StatefulWidget {
     required this.locationProvider,
     required this.recommendationRecoveryDelays,
     required this.authControllerFactory,
+    this.localSignalActionController,
     super.key,
   });
 
@@ -50,6 +52,7 @@ class LalaHomePage extends StatefulWidget {
   final LalaLocationProvider locationProvider;
   final List<Duration> recommendationRecoveryDelays;
   final LalaAuthControllerFactory authControllerFactory;
+  final LocalSignalActionController? localSignalActionController;
 
   @override
   State<LalaHomePage> createState() => _LalaHomePageState();
@@ -123,6 +126,8 @@ class _LalaHomePageState extends State<LalaHomePage> {
   double _fontScale = 1.0;
   int _recommendationRecoveryAttempts = 0;
   bool _recommendationRecoveryInFlight = false;
+  LocalSignalPlaceActionRequest? _pendingLocalSignalAction;
+  bool _localSignalActionRefreshAttempted = false;
 
   @override
   void initState() {
@@ -141,6 +146,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
     );
     _lastAuthStatus = _authController.state.status;
     _authController.addListener(_handleAuthStateChanged);
+    widget.localSignalActionController?.addListener(_handleLocalSignalAction);
     _backend = widget.backendFactory(_currentConfig());
     unawaited(_initializeAuth());
     if (!config.requireLocationStartConfirmation) {
@@ -158,6 +164,9 @@ class _LalaHomePageState extends State<LalaHomePage> {
     _interventionToastTimer?.cancel();
     _recommendationRecoveryTimer?.cancel();
     _authController.removeListener(_handleAuthStateChanged);
+    widget.localSignalActionController?.removeListener(
+      _handleLocalSignalAction,
+    );
     _authController.dispose();
     _backend.close();
     super.dispose();
@@ -511,6 +520,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
           _loading = false;
         });
       }
+      _tryResolveLocalSignalAction();
     }
   }
 
@@ -676,6 +686,58 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _mapFocusLng = place.lng;
       _mapLevel = _focusedPlaceMapLevel;
     });
+  }
+
+  void _handleLocalSignalAction() {
+    final request = widget.localSignalActionController?.takePending();
+    if (request == null || !mounted) return;
+    _pendingLocalSignalAction = request;
+    _localSignalActionRefreshAttempted = false;
+    _tryResolveLocalSignalAction();
+  }
+
+  void _tryResolveLocalSignalAction() {
+    final request = _pendingLocalSignalAction;
+    if (request == null || !mounted || _loading) return;
+
+    final place = placeById(
+      _visiblePlacesForCurrentCategory(),
+      request.placeId,
+    );
+    if (place == null &&
+        _places == null &&
+        !_localSignalActionRefreshAttempted) {
+      _localSignalActionRefreshAttempted = true;
+      unawaited(_refresh(forceWeather: true));
+      return;
+    }
+    _pendingLocalSignalAction = null;
+    if (place == null) {
+      _showLocalSignalActionUnavailable();
+      return;
+    }
+
+    _localSignalActionRefreshAttempted = false;
+    _selectPlace(place);
+    if (request.action == LocalSignalPlaceAction.addToPlan) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _selectedPlaceId == place.placeId) {
+          _openSheet(ActiveMapSheet.planner);
+        }
+      });
+    }
+  }
+
+  void _showLocalSignalActionUnavailable() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _uiLanguage == 'en'
+              ? 'This place is not available in the current map results.'
+              : '현재 지도 결과에서 연결된 장소를 찾지 못했어요.',
+        ),
+      ),
+    );
   }
 
   void _clearPlaceSelection() {

@@ -6,6 +6,7 @@ import 'package:lala_next_app/auth/logto_auth_gateway.dart';
 import 'package:lala_next_app/core/backend/lala_backend.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
+import 'package:lala_next_app/core/navigation/local_signal_action.dart';
 import 'package:lala_next_app/features/home/home_page.dart';
 
 class MapRoutePage extends StatelessWidget {
@@ -15,6 +16,7 @@ class MapRoutePage extends StatelessWidget {
     required this.locationProvider,
     required this.recommendationRecoveryDelays,
     required this.authControllerFactory,
+    required this.localSignalActionController,
     super.key,
   });
 
@@ -23,6 +25,7 @@ class MapRoutePage extends StatelessWidget {
   final LalaLocationProvider locationProvider;
   final List<Duration> recommendationRecoveryDelays;
   final LalaAuthControllerFactory authControllerFactory;
+  final LocalSignalActionController localSignalActionController;
 
   @override
   Widget build(BuildContext context) {
@@ -32,6 +35,7 @@ class MapRoutePage extends StatelessWidget {
       locationProvider: locationProvider,
       recommendationRecoveryDelays: recommendationRecoveryDelays,
       authControllerFactory: authControllerFactory,
+      localSignalActionController: localSignalActionController,
     );
   }
 }

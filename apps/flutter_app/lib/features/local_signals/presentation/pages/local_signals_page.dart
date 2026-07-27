@@ -4,6 +4,7 @@ import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 import '../../../../core/backend/lala_backend.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/location/region_context.dart';
+import '../../../../core/navigation/local_signal_action.dart';
 import '../../../../features/location/widgets/manual_location_sheet.dart';
 import '../../../../manual_location_options.dart';
 import '../../../../shared/l10n/lala_copy.dart';
@@ -16,11 +17,13 @@ class LocalSignalsPage extends StatefulWidget {
   const LocalSignalsPage({
     required this.backendFactory,
     required this.initialConfig,
+    this.onPlaceAction,
     super.key,
   });
 
   final LalaBackendFactory backendFactory;
   final LalaAppConfig initialConfig;
+  final ValueChanged<LocalSignalPlaceActionRequest>? onPlaceAction;
 
   @override
   State<LocalSignalsPage> createState() => _LocalSignalsPageState();
@@ -193,6 +196,7 @@ class _LocalSignalsPageState extends State<LocalSignalsPage> {
                   key: ValueKey('local-signal-${_items[index].id}'),
                   signal: _items[index],
                   language: language,
+                  onPlaceAction: widget.onPlaceAction,
                 ),
               );
             }
@@ -415,10 +419,16 @@ class _StatusCard extends StatelessWidget {
 }
 
 class _SignalCard extends StatelessWidget {
-  const _SignalCard({required this.signal, required this.language, super.key});
+  const _SignalCard({
+    required this.signal,
+    required this.language,
+    required this.onPlaceAction,
+    super.key,
+  });
 
   final LocalSignalPublicItem signal;
   final String language;
+  final ValueChanged<LocalSignalPlaceActionRequest>? onPlaceAction;
 
   @override
   Widget build(BuildContext context) {
@@ -462,6 +472,41 @@ class _SignalCard extends StatelessWidget {
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
+              ),
+            ],
+            if (signal.placeLinks.isNotEmpty && onPlaceAction != null) ...[
+              const SizedBox(height: 13),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: <Widget>[
+                  OutlinedButton.icon(
+                    key: ValueKey('local-signal-place-action-${signal.id}'),
+                    onPressed: () => onPlaceAction!(
+                      LocalSignalPlaceActionRequest(
+                        placeId: signal.placeLinks.first.placeId,
+                        action: LocalSignalPlaceAction.viewPlace,
+                      ),
+                    ),
+                    icon: const Icon(Icons.place_outlined, size: 18),
+                    label: Text(
+                      lalaCopy(language, ko: '장소 보기', en: 'View place'),
+                    ),
+                  ),
+                  TextButton.icon(
+                    key: ValueKey('local-signal-plan-action-${signal.id}'),
+                    onPressed: () => onPlaceAction!(
+                      LocalSignalPlaceActionRequest(
+                        placeId: signal.placeLinks.first.placeId,
+                        action: LocalSignalPlaceAction.addToPlan,
+                      ),
+                    ),
+                    icon: const Icon(Icons.route_outlined, size: 18),
+                    label: Text(
+                      lalaCopy(language, ko: '일정에서 보기', en: 'Open plan'),
+                    ),
+                  ),
+                ],
               ),
             ],
           ],

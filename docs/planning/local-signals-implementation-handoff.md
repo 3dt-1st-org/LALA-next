@@ -294,3 +294,31 @@
   browser/device test, or live data operation was run.
 - No secret value, DSN, account/resource identifier, private URL, raw review,
   provider payload, or raw log was read or recorded.
+## LS-4 map and planner action phase — design note — 2026-07-27
+
+### Confirmed
+
+- LS-4 starts from `origin/main` `906543d71ff03eba7ffdced0dbdb6886f2e6829b` in the new sibling worktree `/Users/geondongkim/orca/workspaces/LALA-next/lala-local-signals-ls4` on `geondongkim/lala-local-signals-ls4`. The former LS-1/LS-2/LS-3 worktrees and `/Users/geondongkim/LALA-next` are read-only for this phase.
+- The existing map selection/detail owner is `LalaHomePage` (`_selectPlace`, `_activeSheet`, Kakao `LegacyMapCanvas`); the existing save and plan-entry controls are owned by `FeaturedPlacePanel` and `PlannerSheetContent`. `RegionContextStore` remains the only shared region boundary, and the Local Signals page continues to send only a coarse manual `regionId`.
+- The LS-2 public projection already exposes only canonical `place_links[].place_id` plus relation. The action boundary will carry only that opaque canonical ID and a typed intent; it will never carry coordinates, identity, moderation data, scores, raw review text, or tokens. A signal without a place link renders no place action.
+
+### Assumption
+
+- Because the current `/places` contract has no place-by-ID endpoint, a place action resolves against the real places already loaded by the map's existing query. A pending intent waits for that query to finish; if the canonical place is not present, the UI reports an honest localized unavailable state and does not fabricate a marker or detail. No new API or migration is introduced.
+- “Add to plan” is an entry into the existing selected-place planner sheet; it does not claim a new itinerary item until the existing planner has produced one. “View place” lands on the existing detail sheet, where the existing save and plan controls remain authoritative. Duplicate intent dispatch is collapsed by the typed controller.
+
+### External decision
+
+- LS-4 does not perform device/runtime verification, DB apply, seed/mock data, deployment, live API/OpenAI/translation/review calls, crawl, or authentication login. Controller-owned iOS verification is documented as a separate handoff: clean `origin/main` `906543d` on iPhone 17 Pro / iOS 26.5; only API base host, domain-restricted Kakao JS key, and build SHA defines; onboarding, iOS permission prompt, simulated then live location/map/place/weather/plan, honest Local Signals empty state, and cold restart were verified. No secret values are recorded, and simulator coordinate setup after permission is not an app fallback.
+
+### LS-4 phase evidence
+
+- Implementation branch: `geondongkim/lala-local-signals-ls4`, based on `origin/main` `906543d71ff03eba7ffdced0dbdb6886f2e6829b`, in `/Users/geondongkim/orca/workspaces/LALA-next/lala-local-signals-ls4`.
+- Implementation commit: `21b50ef` (`feat(flutter): connect Local Signals place actions`); this handoff closeout follows as a documentation-only commit. Draft PR: [#77](https://github.com/3dt-1st-org/LALA-next/pull/77).
+- Focused verification: Local Signals page + action controller `15` tests passed; map/detail/planner action widget tests `2` passed.
+- Full Flutter verification: `flutter analyze` passed and `flutter test` passed with `202` tests. `uv run pre-commit run --all-files` including detect-secrets and `git diff --check` passed. No API/client suite was changed or required.
+
+### LS-5 / LS-6 remaining
+
+- LS-5 owns translation provenance/version, policy-gated KO/EN display and translation availability, delayed aggregate trust/freshness, and the aggregate-only RAG/docent handoff. No translation or aggregation was implemented in LS-4.
+- LS-6 owns static Android/iOS/Web verification matrices, accessibility/responsive assertions, observability/runbook, real-device evidence, and rollout gates. The controller-owned iOS note above is handoff context only; this LS-4 session did not run a device, emulator, simulator, deployment, or live service.

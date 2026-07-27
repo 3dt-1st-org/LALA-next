@@ -15,6 +15,7 @@ import 'package:lala_next_app/auth/logto_auth_gateway.dart';
 import 'package:lala_next_app/core/backend/lala_backend.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
+import 'package:lala_next_app/core/navigation/local_signal_action.dart';
 import 'package:lala_next_app/core/routing/lala_route_paths.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/features/onboarding/presentation/pages/language_page.dart';
@@ -37,7 +38,10 @@ GoRouter createLalaRouter({
   required LalaLocationProvider locationProvider,
   required List<Duration> recommendationRecoveryDelays,
   required LalaAuthControllerFactory authControllerFactory,
+  LocalSignalActionController? localSignalActionController,
 }) {
+  final signalActionController =
+      localSignalActionController ?? LocalSignalActionController();
   return GoRouter(
     initialLocation: LalaRoutePaths.mapRoute,
     refreshListenable: OnboardingState.completedListenable,
@@ -113,6 +117,7 @@ GoRouter createLalaRouter({
                       recommendationRecoveryDelays:
                           recommendationRecoveryDelays,
                       authControllerFactory: authControllerFactory,
+                      localSignalActionController: signalActionController,
                     ),
               ),
             ],
@@ -134,6 +139,10 @@ GoRouter createLalaRouter({
                     LocalSignalsPage(
                       backendFactory: backendFactory,
                       initialConfig: initialConfig,
+                      onPlaceAction: (request) {
+                        signalActionController.dispatch(request);
+                        context.go(LalaRoutePaths.mapRoute);
+                      },
                     ),
               ),
             ],

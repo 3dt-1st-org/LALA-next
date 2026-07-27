@@ -7,6 +7,7 @@ import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 import 'package:lala_next_app/core/backend/lala_backend.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/location/region_context.dart';
+import 'package:lala_next_app/core/navigation/local_signal_action.dart';
 import 'package:lala_next_app/features/local_signals/domain/local_signal_public.dart';
 import 'package:lala_next_app/features/local_signals/presentation/pages/local_signals_page.dart';
 import 'package:lala_next_app/manual_location_options.dart';
@@ -59,6 +60,55 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('유료·제공 혜택 고지'), findsOneWidget);
+  });
+
+  testWidgets('canonical place links expose map and planner actions', (
+    tester,
+  ) async {
+    final requests = <LocalSignalPlaceActionRequest>[];
+    await tester.pumpWidget(
+      _app(_SignalsBackend.loaded(), onPlaceAction: requests.add),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('local-signal-place-action-signal-1')),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('local-signal-plan-action-signal-1')),
+    );
+
+    expect(requests, <LocalSignalPlaceActionRequest>[
+      const LocalSignalPlaceActionRequest(
+        placeId: 'place-1',
+        action: LocalSignalPlaceAction.viewPlace,
+      ),
+      const LocalSignalPlaceActionRequest(
+        placeId: 'place-1',
+        action: LocalSignalPlaceAction.addToPlan,
+      ),
+    ]);
+  });
+
+  testWidgets('signals without canonical place links expose no action', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _app(
+        _SignalsBackend.loaded(feed: _feed(placeLinks: const [])),
+        onPlaceAction: (_) {},
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('local-signal-place-action-signal-1')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('local-signal-plan-action-signal-1')),
+      findsNothing,
+    );
   });
 
   testWidgets('loading uses neutral skeletons and no placeholder copy', (
@@ -181,13 +231,17 @@ void main() {
   });
 }
 
-Widget _app(LalaBackend backend) {
+Widget _app(
+  LalaBackend backend, {
+  ValueChanged<LocalSignalPlaceActionRequest>? onPlaceAction,
+}) {
   return MaterialApp(
     home: Scaffold(
       body: LocalSignalsPage(
         key: ValueKey(backend),
         initialConfig: const LalaAppConfig(baseUri: 'https://api.example.test'),
         backendFactory: (_) => backend,
+        onPlaceAction: onPlaceAction,
       ),
     ),
   );
@@ -337,6 +391,9 @@ LocalSignalsFeed _feed({
   LocalSignalCommercialDisclosure disclosure =
       LocalSignalCommercialDisclosure.none,
   String title = 'Local Signals A',
+  List<LocalSignalPlaceLink> placeLinks = const <LocalSignalPlaceLink>[
+    LocalSignalPlaceLink(placeId: 'place-1', relation: 'nearby'),
+  ],
 }) => LocalSignalsFeed(
   items: <LocalSignalPublicItem>[
     LocalSignalPublicItem(
@@ -350,9 +407,7 @@ LocalSignalsFeed _feed({
       commercialDisclosure: disclosure,
       observationDate: '2026-07-27',
       publishedAt: '2026-07-27T09:00:00Z',
-      placeLinks: const <LocalSignalPlaceLink>[
-        LocalSignalPlaceLink(placeId: 'place-1', relation: 'nearby'),
-      ],
+      placeLinks: placeLinks,
       translationAvailable: true,
       displayLanguage: 'ko',
     ),

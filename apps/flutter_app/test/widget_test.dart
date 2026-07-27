@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lala_next_app/auth/auth_controller.dart';
 import 'package:lala_next_app/auth/logto_auth_gateway.dart';
 import 'package:lala_next_app/core/location/region_context.dart';
+import 'package:lala_next_app/core/navigation/local_signal_action.dart';
 import 'package:lala_next_app/features/local_signals/presentation/pages/local_signals_page.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/features/plan/presentation/pages/plan_page.dart';
@@ -437,6 +438,66 @@ void main() {
     expect(find.textContaining('날씨'), findsWidgets);
     expect(find.textContaining('스냅샷'), findsNothing);
     expect(find.textContaining('데모'), findsNothing);
+  });
+
+  testWidgets('Local Signal place actions reuse map detail and planner flow', (
+    tester,
+  ) async {
+    final actions = LocalSignalActionController();
+    await tester.pumpWidget(
+      TestLalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+        localSignalActionController: actions,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    actions.dispatch(
+      const LocalSignalPlaceActionRequest(
+        placeId: 'hwaseong-haenggung',
+        action: LocalSignalPlaceAction.viewPlace,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('장소 상세'), findsAtLeastNWidgets(1));
+    expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
+
+    await tester.tap(find.byTooltip('저장').first);
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('저장됨'), findsAtLeastNWidgets(1));
+
+    actions.dispatch(
+      const LocalSignalPlaceActionRequest(
+        placeId: 'hwaseong-haenggung',
+        action: LocalSignalPlaceAction.addToPlan,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('하루 일정'), findsAtLeastNWidgets(1));
+    expect(find.textContaining('화성행궁'), findsAtLeastNWidgets(1));
+  });
+
+  testWidgets('unresolved Local Signal place action is honest', (tester) async {
+    final actions = LocalSignalActionController();
+    await tester.pumpWidget(
+      TestLalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+        localSignalActionController: actions,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    actions.dispatch(
+      const LocalSignalPlaceActionRequest(
+        placeId: 'not-in-current-map-results',
+        action: LocalSignalPlaceAction.viewPlace,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('현재 지도 결과에서 연결된 장소를 찾지 못했어요.'), findsOneWidget);
   });
 
   testWidgets('requests current location before loading recommendations', (
@@ -3199,6 +3260,7 @@ class TestLalaApp extends StatelessWidget {
     this.requireLocationStartConfirmation = false,
     this.recommendationRecoveryDelays,
     this.authControllerFactory,
+    this.localSignalActionController,
     this.onboardingCompleted = true,
     super.key,
   });
@@ -3209,6 +3271,7 @@ class TestLalaApp extends StatelessWidget {
   final bool requireLocationStartConfirmation;
   final List<Duration>? recommendationRecoveryDelays;
   final LalaAuthControllerFactory? authControllerFactory;
+  final LocalSignalActionController? localSignalActionController;
 
   /// ONMU P2: 기존 라이브 지도 테스트는 온보딩이 완료된 상태를 가정한다.
   /// 온보딩 플로우 자체를 검증할 때만 false 로 넘겨 reset 한다.
@@ -3241,6 +3304,7 @@ class TestLalaApp extends StatelessWidget {
             ),
           ),
       authControllerFactory: authControllerFactory ?? createLalaAuthController,
+      localSignalActionController: localSignalActionController,
     );
   }
 }
