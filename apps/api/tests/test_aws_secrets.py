@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from apps.api.app.core import aws_secrets, config
 
 
@@ -40,6 +42,20 @@ def test_get_aws_sm_secret_returns_empty_on_exception(monkeypatch):
     assert aws_secrets.get_aws_sm_secret("missing") == ""
 
 
+def test_get_aws_sm_secret_required_fails_closed_without_exposing_provider_error(monkeypatch):
+    class FakeClient:
+        def get_secret_value(self, SecretId):
+            raise Exception("provider detail must not escape")
+
+    monkeypatch.setattr(aws_secrets, "_client", lambda: FakeClient())
+
+    with pytest.raises(aws_secrets.AwsSecretLookupError) as exc_info:
+        aws_secrets.get_aws_sm_secret("db-dsn", required=True)
+
+    assert str(exc_info.value) == "AWS Secrets Manager lookup failed."
+    assert "provider detail" not in str(exc_info.value)
+
+
 def test_get_aws_sm_secret_respects_already_prefixed(monkeypatch):
     """'/' 가 포함된 secret_id는 접두사를 붙이지 않음."""
     captured = {}
@@ -57,6 +73,7 @@ def test_get_aws_sm_secret_respects_already_prefixed(monkeypatch):
 def test_env_or_secret_prefers_aws_sm_over_key_vault(monkeypatch):
     """env 값이 없으면 AWS SM을 먼저 조회 (Azure Key Vault보다 우선)."""
     monkeypatch.delenv("LOGTO_ENDPOINT", raising=False)
+    monkeypatch.setenv("LALA_LOCAL_USE_AWS_SECRETS", "1")
 
     seen = {}
 
@@ -75,6 +92,7 @@ def test_env_or_secret_prefers_aws_sm_over_key_vault(monkeypatch):
 def test_env_or_secret_falls_back_to_key_vault_when_sm_empty(monkeypatch):
     """AWS SM이 빈 값을 주면 Azure Key Vault로 폴백."""
     monkeypatch.delenv("OAUTH_CLIENT_ID", raising=False)
+    monkeypatch.setenv("LALA_LOCAL_USE_AWS_SECRETS", "1")
     monkeypatch.setattr("apps.api.app.core.aws_secrets.get_aws_sm_secret", lambda sid: "")
     monkeypatch.setattr(config, "get_secret_if_configured", lambda url, name: "from-azure-kv")
 
