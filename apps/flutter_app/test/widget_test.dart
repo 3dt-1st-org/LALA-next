@@ -482,9 +482,13 @@ void main() {
     'Local Signal actions resolve outside the active category and switch visibility',
     (tester) async {
       final actions = LocalSignalActionController();
+      final placeRequestConfigs = <LalaAppConfig>[];
       await tester.pumpWidget(
         TestLalaApp(
-          backendFactory: FakeBackend.new,
+          backendFactory: (config) {
+            placeRequestConfigs.add(config);
+            return FakeBackend(config, categoryScopedPlaces: true);
+          },
           initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
           localSignalActionController: actions,
         ),
@@ -495,6 +499,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('행궁동 카페거리'), findsAtLeastNWidgets(1));
       expect(find.text('화성행궁'), findsNothing);
+      expect(
+        placeRequestConfigs.map((config) => config.category),
+        contains('restaurant'),
+      );
 
       actions.dispatch(
         const LocalSignalPlaceActionRequest(
@@ -506,6 +514,10 @@ void main() {
       expect(find.text('장소 상세'), findsAtLeastNWidgets(1));
       expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
       expect(find.text('현재 지도 결과에서 연결된 장소를 찾지 못했어요.'), findsNothing);
+      expect(
+        placeRequestConfigs.map((config) => config.category),
+        contains('all'),
+      );
 
       actions.dispatch(
         const LocalSignalPlaceActionRequest(
@@ -516,6 +528,15 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('하루 일정'), findsAtLeastNWidgets(1));
       expect(find.text('현재 지도 결과에서 연결된 장소를 찾지 못했어요.'), findsNothing);
+
+      actions.dispatch(
+        const LocalSignalPlaceActionRequest(
+          placeId: 'genuinely-absent-place',
+          action: LocalSignalPlaceAction.viewPlace,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('현재 지도 결과에서 연결된 장소를 찾지 못했어요.'), findsOneWidget);
     },
   );
 
@@ -540,6 +561,43 @@ void main() {
 
     expect(find.text('현재 지도 결과에서 연결된 장소를 찾지 못했어요.'), findsOneWidget);
   });
+
+  testWidgets(
+    'unusable canonical Local Signal lookup is not treated as absence',
+    (tester) async {
+      final actions = LocalSignalActionController();
+      var categoryRefreshStarted = false;
+      await tester.pumpWidget(
+        TestLalaApp(
+          backendFactory: (config) {
+            if (config.category == 'restaurant') {
+              categoryRefreshStarted = true;
+            }
+            if (config.category == 'all' && categoryRefreshStarted) {
+              return NullPlacesPayloadBackend(config);
+            }
+            return FakeBackend(config, categoryScopedPlaces: true);
+          },
+          initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+          localSignalActionController: actions,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('맛집'));
+      await tester.pumpAndSettle();
+      actions.dispatch(
+        const LocalSignalPlaceActionRequest(
+          placeId: 'hwaseong-haenggung',
+          action: LocalSignalPlaceAction.viewPlace,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('현재 지도 결과에서 연결된 장소를 찾지 못했어요.'), findsNothing);
+      expect(find.text('장소 정보를 지금 확인하지 못했어요.'), findsOneWidget);
+    },
+  );
 
   testWidgets('requests current location before loading recommendations', (
     tester,
@@ -3479,6 +3537,7 @@ class FakeBackend implements LalaBackend {
     this.failDocentScriptLoad = false,
     this.shouldIntervene = false,
     this.liveSpeech = true,
+    this.categoryScopedPlaces = false,
     this.places,
     this.weather,
     this.healthDelay = Duration.zero,
@@ -3499,6 +3558,7 @@ class FakeBackend implements LalaBackend {
   final bool failDocentScriptLoad;
   final bool shouldIntervene;
   final bool liveSpeech;
+  final bool categoryScopedPlaces;
   final List<LalaPlace>? places;
   final LalaWeather? weather;
   final Duration healthDelay;
@@ -3583,8 +3643,10 @@ class FakeBackend implements LalaBackend {
         requestId: 'failed-auth-route',
       );
     }
-    final responsePlaces =
-        places ?? [_place(), _culturePlace(), _restaurantPlace()];
+    final catalog = places ?? [_place(), _culturePlace(), _restaurantPlace()];
+    final responsePlaces = categoryScopedPlaces && config.category != 'all'
+        ? catalog.where((place) => place.category == config.category).toList()
+        : catalog;
     return _envelope(
       LalaPlacesResponse(
         count: responsePlaces.length,
@@ -3750,6 +3812,23 @@ class FakeBackend implements LalaBackend {
 Future<void> _delayIfNeeded(Duration delay) async {
   if (delay > Duration.zero) {
     await Future<void>.delayed(delay);
+  }
+}
+
+class NullPlacesPayloadBackend extends FakeBackend {
+  NullPlacesPayloadBackend(super.config);
+
+  @override
+  Future<LalaEnvelope<LalaPlacesResponse>> getPlaces() async {
+    placesRequestConfigs.add(config);
+    return const LalaEnvelope<LalaPlacesResponse>(
+      ok: true,
+      data: null,
+      meta: <String, dynamic>{'request_id': 'null-places-payload'},
+      error: null,
+      statusCode: 200,
+      requestId: 'null-places-payload',
+    );
   }
 }
 

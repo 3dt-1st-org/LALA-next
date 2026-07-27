@@ -128,6 +128,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
   bool _recommendationRecoveryInFlight = false;
   LocalSignalPlaceActionRequest? _pendingLocalSignalAction;
   bool _localSignalActionRefreshAttempted = false;
+  bool _localSignalActionCanonicalLookupAttempted = false;
 
   @override
   void initState() {
@@ -675,8 +676,15 @@ class _LalaHomePageState extends State<LalaHomePage> {
     });
   }
 
-  void _selectPlace(LalaPlace place, {bool ensureVisible = false}) {
+  void _selectPlace(
+    LalaPlace place, {
+    bool ensureVisible = false,
+    LalaEnvelope<LalaPlacesResponse>? loadedPlaces,
+  }) {
     setState(() {
+      if (loadedPlaces != null) {
+        _places = loadedPlaces;
+      }
       if (ensureVisible &&
           _selectedCategory != 'all' &&
           _selectedCategory != place.category) {
@@ -698,6 +706,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
     if (request == null || !mounted) return;
     _pendingLocalSignalAction = request;
     _localSignalActionRefreshAttempted = false;
+    _localSignalActionCanonicalLookupAttempted = false;
     _tryResolveLocalSignalAction();
   }
 
@@ -716,13 +725,22 @@ class _LalaHomePageState extends State<LalaHomePage> {
       unawaited(_refresh(forceWeather: true));
       return;
     }
-    _pendingLocalSignalAction = null;
     if (place == null) {
+      final loadedCategory = _places?.data?.query.category;
+      if (loadedCategory != 'all' &&
+          !_localSignalActionCanonicalLookupAttempted) {
+        _localSignalActionCanonicalLookupAttempted = true;
+        unawaited(_resolveLocalSignalPlaceAcrossCategories(request));
+        return;
+      }
+      _pendingLocalSignalAction = null;
       _showLocalSignalActionUnavailable();
       return;
     }
 
+    _pendingLocalSignalAction = null;
     _localSignalActionRefreshAttempted = false;
+    _localSignalActionCanonicalLookupAttempted = false;
     _selectPlace(place, ensureVisible: true);
     if (request.action == LocalSignalPlaceAction.addToPlan) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -731,6 +749,65 @@ class _LalaHomePageState extends State<LalaHomePage> {
         }
       });
     }
+  }
+
+  Future<void> _resolveLocalSignalPlaceAcrossCategories(
+    LocalSignalPlaceActionRequest request,
+  ) async {
+    final lookupBackend = widget.backendFactory(
+      _currentConfig().copyWith(category: 'all'),
+    );
+    try {
+      final response = await lookupBackend.getPlaces();
+      final payload = response.data;
+      if (!response.ok ||
+          response.statusCode < 200 ||
+          response.statusCode >= 300 ||
+          payload == null ||
+          payload.query.category != 'all') {
+        throw StateError('Canonical place lookup was not usable.');
+      }
+      final places = payload.places;
+      final place = placeById(places, request.placeId);
+      if (!mounted || _pendingLocalSignalAction != request) {
+        return;
+      }
+      if (place == null) {
+        _pendingLocalSignalAction = null;
+        _showLocalSignalActionUnavailable();
+        return;
+      }
+
+      _pendingLocalSignalAction = null;
+      _localSignalActionCanonicalLookupAttempted = false;
+      _selectPlace(place, ensureVisible: true, loadedPlaces: response);
+      if (request.action == LocalSignalPlaceAction.addToPlan) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _selectedPlaceId == place.placeId) {
+            _openSheet(ActiveMapSheet.planner);
+          }
+        });
+      }
+    } on Object catch (error) {
+      if (mounted && _pendingLocalSignalAction == request) {
+        _pendingLocalSignalAction = null;
+        _showLocalSignalActionLookupError(error);
+      }
+    } finally {
+      lookupBackend.close();
+    }
+  }
+
+  void _showLocalSignalActionLookupError(Object error) {
+    final message = _safeErrorMessage(
+      error,
+      fallbackMessage: (_) => _uiLanguage == 'en'
+          ? 'This place could not be confirmed right now.'
+          : '장소 정보를 지금 확인하지 못했어요.',
+    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _showLocalSignalActionUnavailable() {
