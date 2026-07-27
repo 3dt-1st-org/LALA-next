@@ -143,3 +143,40 @@
 ### External decision
 
 - After the rebased follow-up is pushed, CI must be green before PR #75 is marked ready and squash-merged. LS-4 still owns place/map/plan action contracts; device validation, DB apply, deployment, live external review/translation/OpenAI calls, crawl, and real Logto authentication remain outside this work.
+
+## P1-0 canonical contract reconciliation — 2026-07-28
+
+### Confirmed
+
+- Worktree: `/Users/geondongkim/orca/workspaces/LALA-next/lala-contract-reconciliation-p1-0`
+- Branch: `geondongkim/lala-contract-reconciliation-p1-0`
+- Base SHA: `906543d71ff03eba7ffdced0dbdb6886f2e6829b` (`origin/main`)
+- Validated implementation/document parent head: `def0c43ba84d3f84b51a409fbb1fd17e32581372`
+- `apps/api/app/services/canonical_sql.py` now owns an explicit 13-file merged baseline, validates three-digit numeric prefixes, rejects duplicate prefixes, orders custom offline fixtures deterministically, and reports production baseline drift through an unsafe plan.
+- `apps/api/tests/test_canonical_sql.py` protects the exact latest baseline `063_local_signals_contract.sql`, duplicate/invalid prefixes, future `064` drift, and fake-runner failure without DB access.
+- `docs/planning/p1-contract-reconciliation.md` records SQL/API/worker/Flutter/test ownership and CURRENT/DRAFT_PR/TARGET/BLOCKED_EXTERNAL status for the shared contracts.
+- PR #76, #77, and #78 remain Draft and were not modified. The root RAG WIP `064_rag_knowledge_retrieval_metadata.sql` was not added, renamed, applied, rebased, or assigned an owner.
+
+### Not verified
+
+- Real DB schema, migration apply, API runtime, worker execution, AWS Secrets Manager/IAM, official source API, live AI/translation/TTS, crawl, deployment, Flutter runtime, and physical device/browser behavior were not run.
+- `064` and later migration ownership remains unresolved by design.
+
+### External decision
+
+- P1-1 is limited to an official data source inventory and coverage dry-run contract: provenance/terms metadata, cursor/dedupe normalization, place identity/region/category/image URL rules, and synthetic coverage fixtures. It must not include bulk ingest or DB apply.
+- P1-1 remains blocked on official source terms/license, data-file access, IAM/secret inventory, DB ownership/numbering, cost/quota, and freshness/coverage policy.
+
+### Validation
+
+- `uv sync --extra dev` completed in this clean worktree without reading `.env` or `.env.local`.
+- `uv run pytest apps/api/tests/test_canonical_sql.py apps/api/tests/test_openapi_contract.py` -> `24 passed, 1 warning`.
+- `uv run ruff check .` -> passed.
+- `uv run ruff format --check .` -> passed.
+- `uv run pre-commit run --all-files` -> hooks passed after the expected detect-secrets baseline line-number refresh and trailing-whitespace cleanup.
+- `git diff --check` -> passed.
+
+### Security and scope
+
+- No secret value, DSN, token, PII, raw review body, precise location, AWS request, DB connection, migration apply, external API, live AI/translation call, crawler, seed/mock data, deployment, or device validation was run or recorded.
+- This phase contains only canonical runner/test regression protection, the shared contract ownership document, and this handoff. Nationwide ingest, review batch, RAG `064`, planner, and Flutter UI work remain out of scope.

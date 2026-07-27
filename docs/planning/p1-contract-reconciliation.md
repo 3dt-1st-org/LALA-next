@@ -1,7 +1,7 @@
 # P1-0 Shared Contract Reconciliation
 
-Date: 2026-07-28 KST  
-Phase: P1-0 — canonical migration ordering and shared contract reconciliation  
+Date: 2026-07-28 KST
+Phase: P1-0 — canonical migration ordering and shared contract reconciliation
 Base: `origin/main` `906543d71ff03eba7ffdced0dbdb6886f2e6829b`
 
 This document is a contract ledger for the independent P1-0 slice. It freezes
