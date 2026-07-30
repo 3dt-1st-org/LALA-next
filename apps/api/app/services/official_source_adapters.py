@@ -62,7 +62,7 @@ PublicScalar = str | int | float | None
 PublicField = tuple[str, PublicScalar]
 
 _SOURCE_DEFINITIONS: Final[dict[str, tuple[SourceAdapterKind, str]]] = {
-    "tour_api": ("tourism_place", "한국관광공사_국문 관광정보 서비스_GW"),
+    "tour_api": ("tourism_place", tour_api_ingest.DEFAULT_DATASET_NAME),
     "kcisa": ("culture_event", culture_info_ingest.DEFAULT_DATASET_NAME),
     "kopis": ("performance_event", kopis_ingest.DEFAULT_DATASET_NAME),
     "fair_trade_commission": (

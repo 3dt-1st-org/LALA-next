@@ -28,6 +28,12 @@ TOUR_API_DETAIL_IMAGE_OPERATION = "detailImage2"
 DEFAULT_AREA_CODE = "31"
 DEFAULT_CONTENT_TYPE_IDS = ("12", "14", "15", "39")
 
+# Single source of truth for the TourAPI dataset name. The official-source
+# adapter and any coverage/governance registry import this constant instead of
+# duplicating the literal, so the dataset identity cannot drift between the
+# parser, the fetch result, and the registry.
+DEFAULT_DATASET_NAME = "한국관광공사_국문 관광정보 서비스_GW"
+
 CONTENT_TYPE_CATEGORY = {
     "12": "attraction",
     "14": "culture_venue",
@@ -96,7 +102,7 @@ class TourApiFetchResult:
     rejection_reason: str | None = None
     source_updated_at: str | None = None
     source_name: str = "tour_api"
-    dataset_name: str = "한국관광공사_국문 관광정보 서비스_GW"
+    dataset_name: str = DEFAULT_DATASET_NAME
     operation: str = TOUR_API_OPERATION
 
     @property
