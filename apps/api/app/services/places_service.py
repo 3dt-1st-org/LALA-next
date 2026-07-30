@@ -62,6 +62,9 @@ def list_places(
             },
             "source": "db",
             "location_engine": "postgis",
+            # Honest absence: without a live DB max(updated_at) probe we must not
+            # invent a data-as-of, so the UI shows no freshness label here.
+            "data_as_of": None,
         }
 
     if settings.static_snapshot_fallback:
@@ -90,6 +93,8 @@ def list_places(
                 },
                 "source": public_mvp_data.SOURCE_NAME,
                 "location_engine": "static_snapshot",
+                # Truthful snapshot build timestamp (or honest None if absent).
+                "data_as_of": public_mvp_data.snapshot_generated_at(),
             }
 
     return {
@@ -106,6 +111,8 @@ def list_places(
         },
         "source": "db",
         "location_engine": "postgis" if settings.db_dsn else "none",
+        # No results → no data-as-of (honest absence).
+        "data_as_of": None,
     }
 
 

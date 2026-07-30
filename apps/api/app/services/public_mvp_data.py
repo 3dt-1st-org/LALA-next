@@ -20,6 +20,18 @@ def snapshot_status() -> str:
     return "configured" if _load_snapshot().get("places") else "missing"
 
 
+def snapshot_generated_at() -> str | None:
+    """정직한 snapshot build timestamp. 없으면 None(honest absence).
+
+    Normal routes must never fabricate/invent a data-as-of value; callers show
+    the freshness label only when this returns a real build timestamp.
+    """
+    value = _load_snapshot().get("generated_at")
+    if isinstance(value, str) and value.strip():
+        return value
+    return None
+
+
 def fetch_places(
     *,
     lat: float,

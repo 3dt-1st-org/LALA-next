@@ -31,9 +31,9 @@ import 'package:lala_next_app/smoke_state.dart';
 
 const String _buildSha = String.fromEnvironment('LALA_BUILD_SHA');
 
-
 class Dashboard extends StatelessWidget {
-  const Dashboard({super.key,
+  const Dashboard({
+    super.key,
     required this.loading,
     required this.error,
     required this.health,
@@ -172,6 +172,9 @@ class Dashboard extends StatelessWidget {
     final hasLivePlaces = apiPlaces.isNotEmpty;
     // 정상 경로에서는 라이브 응답만 소스로 사용. 응답 전/에러 시 source 도 중립(null).
     final effectiveSource = hasLivePlaces ? places?.data?.source : null;
+    // P6H truthfulness: 실제 snapshot generated_at 만 사용. 모르면 null → UI 는 정직한
+    // 부재(신선도 라벨 미표시). 절대 fabricate/invent/mok timestamp 사용 금지.
+    final effectiveDataAsOf = hasLivePlaces ? places?.data?.dataAsOf : null;
     final visibleError = localizedUiMessage(error, uiLanguage);
     final displayedError = visibleError == null
         ? null
@@ -216,6 +219,7 @@ class Dashboard extends StatelessWidget {
       'recommendationRecoveryPending': recommendationRecoveryPending,
       'recommendationRecoveryAttempt': recommendationRecoveryAttempt,
       'mapLevel': mapLevel,
+      'dataAsOf': effectiveDataAsOf ?? '',
     });
     void selectPlaceById(String placeId) {
       final place = placeById(topPlaces, placeId);
@@ -402,6 +406,7 @@ class Dashboard extends StatelessWidget {
                     isWide: isWide,
                     places: topPlaces,
                     source: effectiveSource,
+                    dataAsOf: effectiveDataAsOf,
                     topPlace: topPlace,
                     uiLanguage: uiLanguage,
                     height: bottomDockHeight,

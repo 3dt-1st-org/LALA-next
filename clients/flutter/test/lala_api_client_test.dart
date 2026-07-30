@@ -524,6 +524,7 @@ void main() {
               },
               'source': 'db',
               'location_engine': 'postgis',
+              'data_as_of': '2026-06-19T02:24:44.557686+00:00',
             },
             'meta': {'request_id': 'server-request-id'},
             'error': null,
@@ -562,6 +563,7 @@ void main() {
     expect(envelope.requestId, 'server-request-id');
     expect(envelope.data?.source, 'db');
     expect(envelope.data?.locationEngine, 'postgis');
+    expect(envelope.data?.dataAsOf, '2026-06-19T02:24:44.557686+00:00');
     expect(envelope.data?.count, 1);
     expect(envelope.data?.query.radiusM, 1200);
     expect(envelope.data?.query.limit, 80);
@@ -1092,8 +1094,8 @@ void main() {
     expect(envelope.data?.count, 2);
     expect(envelope.data?.total, 5);
     expect(envelope.data?.rooms.length, 2);
-    expect(envelope.data?.rooms.first.id,
-        '11111111-1111-1111-1111-111111111111');
+    expect(
+        envelope.data?.rooms.first.id, '11111111-1111-1111-1111-111111111111');
     expect(envelope.data?.rooms.first.name, '수원 채팅방');
     expect(envelope.data?.rooms.last.createdAt, '2026-07-21T11:30:00Z');
   });
@@ -1193,7 +1195,8 @@ void main() {
     expect(wsUri.path, '/api/v1/community/chat/rooms/room-9/ws');
     expect(wsUri.queryParameters['token'], 'abc.def.ghi');
 
-    final secure = LalaApiClient(baseUri: Uri.parse('https://api.example.test'));
+    final secure =
+        LalaApiClient(baseUri: Uri.parse('https://api.example.test'));
     final wssUri = secure.chatWebSocketUri(roomId: 'r', token: 't');
     expect(wssUri.scheme, 'wss');
     expect(wssUri.path, '/api/v1/community/chat/rooms/r/ws');

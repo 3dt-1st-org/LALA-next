@@ -757,6 +757,10 @@ def _places_data_schema() -> dict[str, Any]:
                 "type": "string",
                 "enum": ["postgis", "static_snapshot", "none"],
             },
+            "data_as_of": {
+                "anyOf": [{"type": "string"}, {"type": "null"}],
+                "description": "Honest data-as-of (snapshot build timestamp) or null.",
+            },
         },
         "additionalProperties": False,
     }

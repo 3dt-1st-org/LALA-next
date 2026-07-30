@@ -15,6 +15,7 @@ class MapBottomDock extends StatelessWidget {
     required this.isWide,
     required this.places,
     required this.source,
+    required this.dataAsOf,
     required this.topPlace,
     required this.uiLanguage,
     required this.height,
@@ -37,6 +38,9 @@ class MapBottomDock extends StatelessWidget {
   final bool isWide;
   final List<LalaPlace> places;
   final String? source;
+
+  /// 정직한 data-as-of(snapshot build timestamp). present 일 때만 신선도 라벨 표시.
+  final String? dataAsOf;
   final LalaPlace? topPlace;
   final String uiLanguage;
   final double height;
@@ -152,6 +156,9 @@ class MapBottomDock extends StatelessWidget {
                     TinyMeta(placeRegionLabel(currentPlace, uiLanguage)),
                     TinyMeta('${currentPlace.distanceM}m'),
                     TinyMeta(sourceLabel(source, language: uiLanguage)),
+                    if (_freshnessLabel(dataAsOf, uiLanguage)
+                        case final String label)
+                      TinyMeta(label),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -175,4 +182,17 @@ class MapBottomDock extends StatelessWidget {
       ),
     );
   }
+}
+
+final RegExp _freshnessDateOnly = RegExp(r'^(\d{4}-\d{2}-\d{2})');
+
+/// 정직한 신선도 라벨: 실제 snapshot generated_at 의 날짜(YYYY-MM-DD) 부분만 사용.
+/// [dataAsOf] 가 없거나 날짜 파식 불가 → null(honest absence, 라벨 미표시).
+/// 절대 fabricate/invent/mok timestamp 를 넣지 않는다.
+String? _freshnessLabel(String? dataAsOf, String language) {
+  if (dataAsOf == null) return null;
+  final match = _freshnessDateOnly.firstMatch(dataAsOf);
+  if (match == null) return null;
+  final date = match.group(1)!;
+  return language == 'en' ? 'Data as of: $date' : '데이터 기준: $date';
 }
