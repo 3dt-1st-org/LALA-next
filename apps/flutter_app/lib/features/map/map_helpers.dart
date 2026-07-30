@@ -62,7 +62,15 @@ List<KakaoMapPlace> clusterMapPlacesForMap({
   final selectedMarkers = <KakaoMapPlace>[];
   final expandedMarkers = <KakaoMapPlace>[];
   final buckets = <String, List<LalaPlace>>{};
-  final shouldUseClusters = places.length >= 80 && mapLevel >= 10;
+  // P6A §03/§13.1 pin-first cluster policy: cluster when candidates >= 80 OR
+  // the Kakao level is sufficiently far (>= 10 — the code's existing zoom-out
+  // boundary, shared with expandedPinFloor). This is the OR rule from the P6A
+  // contract; the previous AND gate clustered too rarely. Kakao-level semantic,
+  // not a target-derived pixel value.
+  const clusterCountThreshold = 80;
+  const clusterFarLevel = 10;
+  final shouldUseClusters =
+      places.length >= clusterCountThreshold || mapLevel >= clusterFarLevel;
   var expandedPinCount = 0;
   final orderedPlaces = [...places]
     ..sort((a, b) {
