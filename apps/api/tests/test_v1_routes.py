@@ -1542,13 +1542,12 @@ def test_daily_plan_normalizes_english_language(client, auth_headers):
     assert response.status_code == 200
     body = response.json()
     assert body["data"]["language"] == "en"
-    assert body["data"]["slots"] == [
-        {
-            "period": "afternoon",
-            "title": "Adjust by weather",
-            "weather_hint": "unknown",
-        }
-    ]
+    slots = body["data"]["slots"]
+    # P5A: exact 4-period contract (EN), no places → honest unavailable everywhere.
+    assert [s["period"] for s in slots] == ["morning", "lunch", "afternoon", "dinner"]
+    assert [s["title"] for s in slots] == ["Morning", "Lunch", "Afternoon", "Dinner"]
+    assert all(s["place"] is None for s in slots)
+    assert all(s["unavailable_reason"] == "Not enough nearby options" for s in slots)
 
 
 def test_daily_plan_generation_identity_is_deterministic(client, auth_headers):
@@ -1649,13 +1648,12 @@ def test_daily_plan_handles_empty_place_candidates(client, auth_headers, monkeyp
     assert response.status_code == 200
     body = response.json()
     assert body["ok"] is True
-    assert body["data"]["slots"] == [
-        {
-            "period": "afternoon",
-            "title": "날씨에 맞춰 조정",
-            "weather_hint": "unknown",
-        }
-    ]
+    slots = body["data"]["slots"]
+    # P5A: exact 4-period contract (KO), no candidates → honest unavailable everywhere.
+    assert [s["period"] for s in slots] == ["morning", "lunch", "afternoon", "dinner"]
+    assert [s["title"] for s in slots] == ["오전", "점심", "오후", "저녁"]
+    assert all(s["place"] is None for s in slots)
+    assert all(s["unavailable_reason"] == "추천 장소가 부족해요" for s in slots)
 
 
 def test_daily_plan_uses_public_snapshot_radius_in_snapshot_fallback(client, monkeypatch):

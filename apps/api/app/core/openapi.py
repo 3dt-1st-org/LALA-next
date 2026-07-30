@@ -897,6 +897,43 @@ def _daily_plan_slot_schema() -> dict[str, Any]:
             "title": {"type": "string"},
             "place": {"$ref": "#/components/schemas/Place"},
             "weather_hint": {"type": "string", "nullable": True},
+            "start_time": {
+                "anyOf": [{"type": "string"}, {"type": "null"}],
+                "description": "Clock/travel authority absent → null (honest unavailable).",
+            },
+            "stay_duration_minutes": {
+                "anyOf": [{"type": "integer"}, {"type": "null"}],
+                "description": "Stay-duration authority absent → null.",
+            },
+            "travel_time_from_previous_minutes": {
+                "anyOf": [{"type": "integer"}, {"type": "null"}],
+                "description": "Travel-time authority absent → null (first slot too).",
+            },
+            "opening_hours_valid": {
+                "anyOf": [{"type": "boolean"}, {"type": "null"}],
+                "description": "Opening-hours authority absent → null.",
+            },
+            "indoor_outdoor": {
+                "anyOf": [{"type": "string"}, {"type": "null"}],
+                "description": "Indoor/outdoor provenance absent → null.",
+            },
+            "recommendation_reason": {
+                "anyOf": [{"type": "string"}, {"type": "null"}],
+                "description": "Short category-based reason when a place is assigned, else null.",
+            },
+            "local_franchise_confidence": {
+                "anyOf": [{"type": "string"}, {"type": "null"}],
+                "description": "Franchise-data authority absent → null.",
+            },
+            "swappable_alternatives": {
+                "type": "array",
+                "items": {"$ref": "#/components/schemas/Place"},
+                "description": "Empty until swap-authority is available.",
+            },
+            "unavailable_reason": {
+                "anyOf": [{"type": "string"}, {"type": "null"}],
+                "description": "Honest reason when no place is assigned, else null.",
+            },
         },
         "additionalProperties": False,
     }

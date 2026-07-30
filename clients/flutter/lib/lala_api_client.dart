@@ -1363,12 +1363,34 @@ class LalaPlanSlot {
     required this.title,
     this.place,
     this.weatherHint,
+    this.startTime,
+    this.stayDurationMinutes,
+    this.travelTimeFromPreviousMinutes,
+    this.openingHoursValid,
+    this.indoorOutdoor,
+    this.recommendationReason,
+    this.localFranchiseConfidence,
+    this.swappableAlternatives = const <LalaPlace>[],
+    this.unavailableReason,
   });
 
   final String period;
   final String title;
   final LalaPlace? place;
   final String? weatherHint;
+
+  /// Honest-unavailable authority fields (P5A §12.3). Null when the
+  /// corresponding live authority (clock/travel/opening-hours/franchise/...)
+  /// is absent — the UI shows an honest absence rather than a fabricated value.
+  final String? startTime;
+  final int? stayDurationMinutes;
+  final int? travelTimeFromPreviousMinutes;
+  final bool? openingHoursValid;
+  final String? indoorOutdoor;
+  final String? recommendationReason;
+  final String? localFranchiseConfidence;
+  final List<LalaPlace> swappableAlternatives;
+  final String? unavailableReason;
 
   static LalaPlanSlot fromJsonObject(Object? value) {
     return LalaPlanSlot.fromJson(_asMap(value));
@@ -1383,6 +1405,20 @@ class LalaPlanSlot {
           ? LalaPlace.fromJson(rawPlace)
           : null,
       weatherHint: _asOptionalString(json['weather_hint']),
+      startTime: _asOptionalString(json['start_time']),
+      stayDurationMinutes: _asOptionalInt(json['stay_duration_minutes']),
+      travelTimeFromPreviousMinutes:
+          _asOptionalInt(json['travel_time_from_previous_minutes']),
+      openingHoursValid: _asOptionalBool(json['opening_hours_valid']),
+      indoorOutdoor: _asOptionalString(json['indoor_outdoor']),
+      recommendationReason: _asOptionalString(json['recommendation_reason']),
+      localFranchiseConfidence:
+          _asOptionalString(json['local_franchise_confidence']),
+      swappableAlternatives: _asList(json['swappable_alternatives'])
+          .whereType<Map<String, dynamic>>()
+          .map(LalaPlace.fromJson)
+          .toList(),
+      unavailableReason: _asOptionalString(json['unavailable_reason']),
     );
   }
 }

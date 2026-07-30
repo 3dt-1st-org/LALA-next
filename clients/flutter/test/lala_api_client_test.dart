@@ -772,13 +772,29 @@ void main() {
               'slots': [
                 {
                   'period': 'morning',
-                  'title': 'Start near a landmark',
+                  'title': 'Morning',
                   'place': _placePayload(),
+                  'weather_hint': 'unknown',
+                  'recommendation_reason': 'Recommended as a local attraction',
+                  'unavailable_reason': null,
+                },
+                {
+                  'period': 'lunch',
+                  'title': 'Lunch',
+                  'weather_hint': 'unknown',
+                  'unavailable_reason': 'Not enough nearby options',
                 },
                 {
                   'period': 'afternoon',
-                  'title': 'Adjust by weather',
+                  'title': 'Afternoon',
                   'weather_hint': 'unknown',
+                  'unavailable_reason': 'Not enough nearby options',
+                },
+                {
+                  'period': 'dinner',
+                  'title': 'Dinner',
+                  'weather_hint': 'unknown',
+                  'unavailable_reason': 'Not enough nearby options',
                 },
               ],
               'source': 'db',
@@ -824,6 +840,27 @@ void main() {
     expect(plan.data?.weather.outdoorStatus, 'unknown');
     expect(plan.data?.slots.first.place?.name, '수원화성');
     expect(plan.data?.slots.last.weatherHint, 'unknown');
+    // P5A: 4-period contract + new honest-unavailable authority fields.
+    expect(plan.data?.slots.map((s) => s.period).toList(), [
+      'morning',
+      'lunch',
+      'afternoon',
+      'dinner',
+    ]);
+    expect(plan.data?.slots.length, 4);
+    expect(
+      plan.data?.slots.first.recommendationReason,
+      'Recommended as a local attraction',
+    );
+    expect(plan.data?.slots.first.unavailableReason, isNull);
+    expect(plan.data?.slots.first.startTime, isNull);
+    expect(plan.data?.slots.first.openingHoursValid, isNull);
+    expect(plan.data?.slots.first.swappableAlternatives, isEmpty);
+    expect(plan.data?.slots.last.place, isNull);
+    expect(
+      plan.data?.slots.last.unavailableReason,
+      'Not enough nearby options',
+    );
     expect(plan.data?.requestHash, startsWith('abcdef'));
     expect(plan.data?.cacheKey, startsWith('daily_plan:'));
     expect(intervention.data?.shouldIntervene, isFalse);
