@@ -4,6 +4,7 @@ import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 import '../../../shared/l10n/lala_copy.dart';
 import '../../../shared/l10n/place_labels.dart';
 import '../../../shared/widgets/inline_icon_text.dart';
+import '../../place/place_helpers.dart';
 import '../docent_helpers.dart';
 
 /// 독 하단 도슨트 미리보기(C3 추출 — main.dart 의 _DockDocentPreview).
@@ -124,7 +125,35 @@ class DockDocentPreview extends StatelessWidget {
                   ),
               ],
             ),
-            const SizedBox(height: 8),
+            // P6E §13.3: compact identity meta — category(토큰색 점+라벨) · 도보 거리.
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: categoryColor(place.category),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const SizedBox(width: 9, height: 9),
+                  ),
+                  const SizedBox(width: 5),
+                  Flexible(
+                    child: Text(
+                      '${categoryLabel(place.category, language: language)} · ${lalaCopy(language, ko: '도보 ${place.distanceM}m', en: '${place.distanceM}m walk')}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF64748B),
+                        fontWeight: FontWeight.w800,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
             Text(
               body,
               maxLines: 2,
@@ -200,7 +229,11 @@ class DockDocentPreview extends StatelessWidget {
                   width: 44,
                   height: 44,
                   child: IconButton.filledTonal(
-                    tooltip: lalaCopy(language, ko: '상세 열기', en: 'Open details'),
+                    tooltip: lalaCopy(
+                      language,
+                      ko: '상세 열기',
+                      en: 'Open details',
+                    ),
                     onPressed: onOpenDetail,
                     icon: const Icon(Icons.keyboard_arrow_up),
                     style: IconButton.styleFrom(
