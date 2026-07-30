@@ -172,16 +172,23 @@ All paths below exist in this worktree and were read directly.
 - `ops.job_runs` (job_name, status, started_at, finished_at, duration_ms,
   error_message) — `040_ops_core_tables.sql`.
 - **Review-ingestion governance foundation (PR #60,
-  `062_review_ingestion_governance.sql`, additive/re-runnable):**
+  `062_review_ingestion_governance.sql`, additive/re-runnable; **none of these
+  tables retains raw review bodies**):**
   `ingest.review_sources` (source_name PK, provider, license_class ∈ {licensed,
   public_processed, approved_export, rejected}, terms_version,
   collection_method, retention_policy, redaction_policy, source_status); a
   governance extension to `community.ingest_runs` (run_key partial unique index,
   source_name, license_class, terms_version, schema_version, received/processed/
-  duplicate/quarantined counters, failure_category); and
-  `community.ingest_quarantine` dead-letter (provider, external_key,
-  content_sha256, reason_category, reason, safe_metadata jsonb — **no raw-body
-  column by design**). Service boundary: `apps/api/app/services/review_ingest_governance.py`.
+  duplicate/quarantined counters, failure_category);
+  `ingest.review_ingest_receipts` (the aggregate-only persistent receipt/dedupe —
+  PK `source_name`/`external_key`/`content_sha256`, first/last run id + seen-at,
+  **no raw text**); and `community.ingest_quarantine` dead-letter (provider,
+  external_key, content_sha256, reason_category, reason, safe_metadata jsonb —
+  **no raw-body column by design**). Service boundary:
+  `apps/api/app/services/review_ingest_governance.py`, which performs the
+  DB-authoritative source-registration lookup and runs receipt dedupe →
+  quarantine insert → run finalize inside a single transaction boundary, with no
+  external-provider calls.
   > Note: `062` lands via the sibling PR #60 worktree
   > (`lala-review-ingestion-foundation`); it is not yet present in this plan-only
   > branch but is the authoritative foundation this plan is reconciled against.
