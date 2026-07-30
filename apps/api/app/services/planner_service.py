@@ -32,7 +32,8 @@ def daily_plan(request: DailyPlanRequest) -> dict:
     }
 
 
-def intervention(*, lat: float, lng: float, radius_m: int) -> dict:
+def intervention(*, lat: float, lng: float, radius_m: int, language: str = "en") -> dict:
+    normalized = normalize_language(language)
     weather = current_weather(lat=lat, lng=lng)
     places = list_places(
         lat=lat,
@@ -43,23 +44,61 @@ def intervention(*, lat: float, lng: float, radius_m: int) -> dict:
     )
     candidate = (places.get("places") or [None])[0]
     source = _combined_source(places.get("source"), weather.get("source"))
-    candidate_name = (candidate or {}).get("name") or "nearby local places"
-    is_bad_weather = weather["outdoor_status"] == "bad"
+    candidate_name = (candidate or {}).get("name") or _fallback_candidate_name(normalized)
+    outdoor_status = weather["outdoor_status"]
+    is_bad_weather = outdoor_status == "bad"
+    # P5B §12.4: observable trigger classification + honest-unavailable fields.
+    # authority(travel-time/indoor-outdoor)가 없으면 값을 차단할 뿐 contract 는 유지.
     return {
         "center": {"lat": lat, "lng": lng},
         "radius_m": radius_m,
         "should_intervene": is_bad_weather,
         "reason": _intervention_reason(
-            weather_status=weather["outdoor_status"],
+            weather_status=outdoor_status,
             candidate_name=candidate_name,
+            language=normalized,
         ),
         "recommended_action": _recommended_action(
-            weather_status=weather["outdoor_status"],
+            weather_status=outdoor_status,
             candidate_name=candidate_name,
+            language=normalized,
         ),
         "place": candidate,
         "source": source,
+        # 기존 추천을 slot 구조로 옮김(P5A _plan_slot 재사용, period=afternoon).
+        "original_slot": _plan_slot(
+            period="afternoon",
+            title=("오후" if normalized == "ko" else "Afternoon"),
+            place=candidate,
+            weather_hint=outdoor_status,
+            unavailable_reason=(
+                "추천 장소가 부족해요" if normalized == "ko" else "Not enough nearby options"
+            ),
+            language=normalized,
+        ),
+        # indoor/outdoor provenance 부재 → honest null (발명된 대체 장소 금지).
+        "alternative_slot": None,
+        # observable trigger 만. good/unknown → null. 발명 금지.
+        "trigger_type": "bad_weather" if is_bad_weather else None,
+        "trigger_factors": _intervention_trigger_factors(outdoor_status=outdoor_status),
+        # travel-time authority 부재 → 거리/이동시간 비교 불가(honest null).
+        "distance_comparison": None,
+        # contract boundary: API 는 항상 default. 실제 상태 관리는 P5C UI/persistence.
+        "user_decision": "pending",
+        "apply_state": "not_applied",
+        "history": [],
     }
+
+
+def _fallback_candidate_name(language: str) -> str:
+    return "근처 로컬 장소" if language == "ko" else "nearby local places"
+
+
+def _intervention_trigger_factors(*, outdoor_status: str) -> list[dict]:
+    """관측가능 trigger 요소만. 발명된 factor 없음(honest)."""
+    if outdoor_status == "bad":
+        return [{"factor": "weather_outdoor_status", "value": "bad"}]
+    return []
 
 
 def _combined_source(place_source: str | None, weather_source: str | None) -> str:
@@ -207,23 +246,49 @@ def _plan_slot(
     }
 
 
-def _intervention_reason(*, weather_status: str, candidate_name: str) -> str:
+def _intervention_reason(*, weather_status: str, candidate_name: str, language: str = "en") -> str:
+    ko = language == "ko"
     if weather_status == "good":
-        return f"Weather is suitable, so keep the current route toward {candidate_name}."
+        return (
+            f"날씨가 좋아 {candidate_name} 방향으로 일정을 유지해요."
+            if ko
+            else f"Weather is suitable, so keep the current route toward {candidate_name}."
+        )
     if weather_status == "unknown":
-        return f"Weather data is still pending, so keep {candidate_name} as the current option."
+        return (
+            f"날씨 정보를 확인 중이에요. {candidate_name}을(를) 우선 유지해요."
+            if ko
+            else f"Weather data is still pending, so keep {candidate_name} as the current option."
+        )
     return (
-        "Weather is not ideal; prioritize short-walk or indoor-friendly "
-        f"options near {candidate_name}."
+        f"날씨가 좋지 않아요. {candidate_name} 근처의 가까운 실내 동선을 우선해요."
+        if ko
+        else (
+            "Weather is not ideal; prioritize short-walk or indoor-friendly "
+            f"options near {candidate_name}."
+        )
     )
 
 
-def _recommended_action(*, weather_status: str, candidate_name: str) -> str:
+def _recommended_action(*, weather_status: str, candidate_name: str, language: str = "en") -> str:
+    ko = language == "ko"
     if weather_status == "good":
-        return f"Keep {candidate_name} as the primary local stop."
+        return (
+            f"{candidate_name}을(를) 우선 추천해요."
+            if ko
+            else f"Keep {candidate_name} as the primary local stop."
+        )
     if weather_status == "unknown":
-        return f"Keep {candidate_name} while weather data is pending."
-    return f"Show indoor or short-walk alternatives around {candidate_name}."
+        return (
+            f"날씨 확인까지 {candidate_name}을(를) 유지해요."
+            if ko
+            else f"Keep {candidate_name} while weather data is pending."
+        )
+    return (
+        f"{candidate_name} 주변의 실내 또는 가까운 동선을 보여줘요."
+        if ko
+        else f"Show indoor or short-walk alternatives around {candidate_name}."
+    )
 
 
 def daily_plan_identity(

@@ -483,3 +483,140 @@ def test_intervention_uses_fallback_name_when_no_places(monkeypatch) -> None:
     assert result["recommended_action"] == (
         "Keep nearby local places while weather data is pending."
     )
+
+
+def test_intervention_retains_original_and_alternative_slots(monkeypatch) -> None:
+    monkeypatch.setattr(
+        planner_service,
+        "current_weather",
+        lambda **kwargs: {"source": "db", "outdoor_status": "bad"},
+    )
+    monkeypatch.setattr(
+        planner_service,
+        "list_places",
+        lambda **kwargs: {
+            "source": "db",
+            "places": [{"place_id": "p1", "name": "행궁동 카페", "category": "restaurant"}],
+        },
+    )
+
+    result = planner_service.intervention(lat=37.2, lng=127.0, radius_m=2000)
+
+    # original_slot carries the candidate in the P5A _plan_slot shape.
+    assert result["original_slot"]["period"] == "afternoon"
+    assert result["original_slot"]["place"]["place_id"] == "p1"
+    # alternative_slot is null without indoor/outdoor provenance (honest).
+    assert result["alternative_slot"] is None
+    # backward-compat: top-level place still present.
+    assert result["place"]["place_id"] == "p1"
+
+
+def test_intervention_trigger_type_reflects_bad_weather(monkeypatch) -> None:
+    monkeypatch.setattr(
+        planner_service,
+        "current_weather",
+        lambda **kwargs: {"source": "db", "outdoor_status": "bad"},
+    )
+    monkeypatch.setattr(
+        planner_service, "list_places", lambda **kwargs: {"source": "db", "places": []}
+    )
+
+    bad = planner_service.intervention(lat=37.2, lng=127.0, radius_m=2000)
+    assert bad["trigger_type"] == "bad_weather"
+    assert bad["trigger_factors"] == [{"factor": "weather_outdoor_status", "value": "bad"}]
+
+    monkeypatch.setattr(
+        planner_service,
+        "current_weather",
+        lambda **kwargs: {"source": "db", "outdoor_status": "good"},
+    )
+    good = planner_service.intervention(lat=37.2, lng=127.0, radius_m=2000)
+    assert good["trigger_type"] is None
+    assert good["trigger_factors"] == []
+
+
+def test_intervention_distance_comparison_null_without_authority(monkeypatch) -> None:
+    monkeypatch.setattr(
+        planner_service,
+        "current_weather",
+        lambda **kwargs: {"source": "db", "outdoor_status": "bad"},
+    )
+    monkeypatch.setattr(
+        planner_service,
+        "list_places",
+        lambda **kwargs: {
+            "source": "db",
+            "places": [{"place_id": "p1", "name": "x"}],
+        },
+    )
+
+    result = planner_service.intervention(lat=37.2, lng=127.0, radius_m=2000)
+
+    # travel-time authority absent → honest null (no fabricated comparison).
+    assert result["distance_comparison"] is None
+
+
+def test_intervention_decision_default_pending_not_applied(monkeypatch) -> None:
+    monkeypatch.setattr(
+        planner_service,
+        "current_weather",
+        lambda **kwargs: {"source": "db", "outdoor_status": "bad"},
+    )
+    monkeypatch.setattr(
+        planner_service, "list_places", lambda **kwargs: {"source": "db", "places": []}
+    )
+
+    result = planner_service.intervention(lat=37.2, lng=127.0, radius_m=2000)
+
+    # contract boundary: API never forces a user decision.
+    assert result["user_decision"] == "pending"
+    assert result["apply_state"] == "not_applied"
+    assert result["history"] == []
+
+
+def test_intervention_observable_factors_only(monkeypatch) -> None:
+    monkeypatch.setattr(
+        planner_service,
+        "current_weather",
+        lambda **kwargs: {"source": "db", "outdoor_status": "bad"},
+    )
+    monkeypatch.setattr(
+        planner_service, "list_places", lambda **kwargs: {"source": "db", "places": []}
+    )
+
+    result = planner_service.intervention(lat=37.2, lng=127.0, radius_m=2000)
+
+    factors = result["trigger_factors"]
+    # exactly one observable factor; no invented authority factors leak in.
+    assert len(factors) == 1
+    assert factors[0]["factor"] == "weather_outdoor_status"
+    invented = {"air_quality", "closed", "event_ended", "transit_impaired"}
+    assert all(factor["factor"] not in invented for factor in factors)
+
+
+def test_intervention_ko_en_exclusive_reasons(monkeypatch) -> None:
+    monkeypatch.setattr(
+        planner_service,
+        "current_weather",
+        lambda **kwargs: {"source": "db", "outdoor_status": "bad"},
+    )
+    monkeypatch.setattr(
+        planner_service,
+        "list_places",
+        lambda **kwargs: {
+            "source": "db",
+            "places": [{"place_id": "p1", "name": "행궁동 카페"}],
+        },
+    )
+
+    ko = planner_service.intervention(lat=37.2, lng=127.0, radius_m=2000, language="ko")
+    en = planner_service.intervention(lat=37.2, lng=127.0, radius_m=2000, language="en")
+
+    # KO·EN reason/action are mutually exclusive.
+    assert "날씨가 좋지 않아요" in ko["reason"]
+    assert "Weather is not ideal" in en["reason"]
+    assert "날씨가 좋지 않아요" not in en["reason"]
+    assert "Weather is not ideal" not in ko["reason"]
+    # original_slot title follows the selected language only.
+    assert ko["original_slot"]["title"] == "오후"
+    assert en["original_slot"]["title"] == "Afternoon"

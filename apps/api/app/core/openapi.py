@@ -994,6 +994,54 @@ def _intervention_data_schema() -> dict[str, Any]:
                 "type": "string",
                 "enum": ["unavailable", "public_mvp_snapshot", "db", "mixed"],
             },
+            "original_slot": {
+                "anyOf": [
+                    {"$ref": "#/components/schemas/DailyPlanSlot"},
+                    {"type": "null"},
+                ],
+                "description": "Original recommended slot (P5A _plan_slot shape).",
+            },
+            "alternative_slot": {
+                "anyOf": [
+                    {"$ref": "#/components/schemas/DailyPlanSlot"},
+                    {"type": "null"},
+                ],
+                "description": "Alternative slot, or null without indoor/outdoor provenance.",
+            },
+            "trigger_type": {
+                "anyOf": [{"type": "string"}, {"type": "null"}],
+                "description": "Observable trigger (e.g. bad_weather) or null.",
+            },
+            "trigger_factors": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": ["factor", "value"],
+                    "properties": {
+                        "factor": {"type": "string"},
+                        "value": {"type": "string"},
+                    },
+                    "additionalProperties": False,
+                },
+                "description": "Observable trigger factors only (never invented).",
+            },
+            "distance_comparison": {
+                "anyOf": [{"type": "object"}, {"type": "null"}],
+                "description": "Distance/travel comparison, null without travel authority.",
+            },
+            "user_decision": {
+                "type": "string",
+                "description": "Contract boundary — always 'pending' from the API.",
+            },
+            "apply_state": {
+                "type": "string",
+                "description": "Contract boundary — always 'not_applied' from the API.",
+            },
+            "history": {
+                "type": "array",
+                "items": {"type": "object"},
+                "description": "Empty on a fresh response; filled by the persistence layer.",
+            },
         },
         "additionalProperties": False,
     }
