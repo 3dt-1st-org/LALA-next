@@ -6,7 +6,7 @@
 
 ## Headline metadata
 - **Base SHA**: `f28a3353b7236a1f4c5ecceecc35f9e166529209` (`origin/main`)
-- **Head SHA**: _(recorded in the P6A rebase/handoff commit; see git log of this branch)_
+- **Head SHA**: `f81730f95d6983148063080377178107c521e2e0`
 - **Branch**: `geondongkim/lala-p6a-visual-contract-20260728`
 - **Canonical visual source**: `output/imagegen/lala-presentation-target-20260728/`
   (`01_target_map.png`, `02_target_local_signals.png`, `03_target_plan.png`,
