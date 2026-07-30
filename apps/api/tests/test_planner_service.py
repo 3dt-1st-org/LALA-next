@@ -77,28 +77,17 @@ def test_intervention_messaging_branches_on_weather_status(
 
 
 @pytest.mark.parametrize(
-    ("language", "place_candidates", "expected_periods", "expected_titles"),
+    ("language", "place_candidates", "expected_titles"),
     [
-        ("ko", [], ["afternoon"], ["날씨에 맞춰 조정"]),
-        ("en", [], ["afternoon"], ["Adjust by weather"]),
-        (
-            "ko",
-            [{"name": "경복궁"}],
-            ["morning", "afternoon"],
-            ["첫 장소 추천", "날씨에 맞춰 조정"],
-        ),
-        (
-            "en",
-            [{"name": "Gyeongbokgung"}],
-            ["morning", "afternoon"],
-            ["Start near a landmark", "Adjust by weather"],
-        ),
+        ("ko", [], ["오전", "점심", "오후", "저녁"]),
+        ("en", [], ["Morning", "Lunch", "Afternoon", "Dinner"]),
+        ("ko", [{"name": "경복궁"}], ["오전", "점심", "오후", "저녁"]),
+        ("en", [{"name": "Gyeongbokgung"}], ["Morning", "Lunch", "Afternoon", "Dinner"]),
     ],
 )
 def test_daily_plan_slots_shape_by_language_and_candidates(
     language: str,
     place_candidates: list[dict],
-    expected_periods: list[str],
     expected_titles: list[str],
 ) -> None:
     weather = {"outdoor_status": "good"}
@@ -109,15 +98,149 @@ def test_daily_plan_slots_shape_by_language_and_candidates(
         language=language,
     )
 
-    assert [slot["period"] for slot in slots] == expected_periods
+    # P5A: 항상 4 period 고정 순서.
+    assert [slot["period"] for slot in slots] == [
+        "morning",
+        "lunch",
+        "afternoon",
+        "dinner",
+    ]
     assert [slot["title"] for slot in slots] == expected_titles
-    assert slots[-1] == {
-        "period": "afternoon",
-        "title": expected_titles[-1],
-        "weather_hint": "good",
-    }
+    # weather_hint 는 모든 slot 에 전달.
+    assert all(slot["weather_hint"] == "good" for slot in slots)
     if place_candidates:
         assert slots[0]["place"] == place_candidates[0]
+
+
+def _cand(place_id: str, category: str = "attraction") -> dict:
+    """A truthful test candidate: real place_id + category, nothing invented."""
+    return {"place_id": place_id, "category": category, "name": place_id}
+
+
+def test_daily_plan_slots_always_emits_exactly_four_periods() -> None:
+    weather = {"outdoor_status": "good"}
+    for candidates in [
+        [],
+        [_cand("a")],
+        [_cand("a"), _cand("b")],
+        [_cand("a"), _cand("b"), _cand("c")],
+        [_cand("a"), _cand("b"), _cand("c"), _cand("d")],
+        [_cand("a"), _cand("b"), _cand("c"), _cand("d"), _cand("e"), _cand("f")],
+    ]:
+        slots = planner_service._daily_plan_slots(
+            place_candidates=candidates, weather=weather, language="ko"
+        )
+        assert [s["period"] for s in slots] == [
+            "morning",
+            "lunch",
+            "afternoon",
+            "dinner",
+        ]
+        assert len(slots) == 4
+
+
+def test_daily_plan_slots_restaurants_prefer_meal_slots() -> None:
+    # restaurant 후보는 lunch/dinner 에, non-restaurant 후보는 morning/afternoon 에.
+    candidates = [
+        _cand("r1", "restaurant"),
+        _cand("n1", "attraction"),
+        _cand("r2", "restaurant"),
+        _cand("n2", "culture_venue"),
+    ]
+    slots = planner_service._daily_plan_slots(
+        place_candidates=candidates, weather={"outdoor_status": "good"}, language="ko"
+    )
+    by_period = {s["period"]: (s["place"] or {}).get("place_id") for s in slots}
+
+    assert by_period["morning"] == "n1"
+    assert by_period["lunch"] == "r1"
+    assert by_period["afternoon"] == "n2"
+    assert by_period["dinner"] == "r2"
+
+
+def test_daily_plan_slots_dedupe_no_place_repeats() -> None:
+    # 동일 place_id 가 restaurant/non-restaurant 양쪽에 있어도 한 번만 배정.
+    candidates = [
+        _cand("dup", "attraction"),
+        _cand("dup", "restaurant"),
+        _cand("uniq", "attraction"),
+    ]
+    slots = planner_service._daily_plan_slots(
+        place_candidates=candidates, weather={"outdoor_status": "good"}, language="ko"
+    )
+    assigned = [s["place"]["place_id"] for s in slots if s["place"]]
+
+    assert assigned == ["dup", "uniq"]
+    assert len(assigned) == len(set(assigned))
+
+
+def test_daily_plan_slots_partial_fill_honest_unavailable() -> None:
+    candidates = [_cand("a", "attraction"), _cand("b", "restaurant")]
+    slots = planner_service._daily_plan_slots(
+        place_candidates=candidates, weather={"outdoor_status": "good"}, language="ko"
+    )
+    filled = [s for s in slots if s["place"] is not None]
+    unfilled = [s for s in slots if s["place"] is None]
+
+    assert len(filled) == 2
+    assert len(unfilled) == 2
+    for slot in filled:
+        assert slot["unavailable_reason"] is None
+        assert slot["recommendation_reason"] is not None
+    for slot in unfilled:
+        assert slot["unavailable_reason"] == "추천 장소가 부족해요"
+        assert slot["recommendation_reason"] is None
+
+
+def test_daily_plan_slots_empty_all_unavailable() -> None:
+    slots = planner_service._daily_plan_slots(
+        place_candidates=[], weather={"outdoor_status": "unknown"}, language="en"
+    )
+
+    assert len(slots) == 4
+    assert all(slot["place"] is None for slot in slots)
+    assert all(slot["unavailable_reason"] == "Not enough nearby options" for slot in slots)
+
+
+def test_daily_plan_slots_authority_fields_null_without_live_data() -> None:
+    candidates = [
+        _cand("a", "attraction"),
+        _cand("b", "restaurant"),
+        _cand("c"),
+        _cand("d", "restaurant"),
+    ]
+    slots = planner_service._daily_plan_slots(
+        place_candidates=candidates, weather={"outdoor_status": "good"}, language="ko"
+    )
+
+    assert len(slots) == 4
+    for slot in slots:
+        # authority 부재 → honest unavailable (전부 null, 빈 배열).
+        assert slot["start_time"] is None
+        assert slot["stay_duration_minutes"] is None
+        assert slot["travel_time_from_previous_minutes"] is None
+        assert slot["opening_hours_valid"] is None
+        assert slot["indoor_outdoor"] is None
+        assert slot["local_franchise_confidence"] is None
+        assert slot["swappable_alternatives"] == []
+
+
+def test_daily_plan_slots_ko_en_exclusive_copy() -> None:
+    candidates = [_cand("r", "restaurant")]
+    ko = planner_service._daily_plan_slots(
+        place_candidates=candidates, weather={"outdoor_status": "good"}, language="ko"
+    )
+    en = planner_service._daily_plan_slots(
+        place_candidates=candidates, weather={"outdoor_status": "good"}, language="en"
+    )
+
+    assert [s["title"] for s in ko] == ["오전", "점심", "오후", "저녁"]
+    assert [s["title"] for s in en] == ["Morning", "Lunch", "Afternoon", "Dinner"]
+    # KO·EN 배타: 이유 문구도 각 언어에 맞게, 혼용 없음.
+    ko_reason = next(s["recommendation_reason"] for s in ko if s["place"])
+    en_reason = next(s["recommendation_reason"] for s in en if s["place"])
+    assert ko_reason == "맛집으로 추천해요"
+    assert en_reason == "Recommended as a local restaurant"
 
 
 def test_daily_plan_identity_emits_hash_and_cache_key() -> None:
@@ -211,7 +334,12 @@ def test_daily_plan_combines_weather_and_places_with_correct_sources(
         "category": "all",
         "language": "ko",
     }
-    assert [slot["period"] for slot in plan["slots"]] == ["morning", "afternoon"]
+    assert [slot["period"] for slot in plan["slots"]] == [
+        "morning",
+        "lunch",
+        "afternoon",
+        "dinner",
+    ]
     assert plan["slots"][0]["place"] == {"name": "경복궁", "category": "landmark"}
     assert plan["slots"][1]["weather_hint"] == "good"
     assert (
@@ -237,8 +365,8 @@ def test_daily_plan_normalizes_language_and_translates_slots(monkeypatch) -> Non
     plan = planner_service.daily_plan(request)
 
     assert plan["language"] == "en"
-    assert plan["slots"][0]["title"] == "Start near a landmark"
-    assert plan["slots"][1]["title"] == "Adjust by weather"
+    assert plan["slots"][0]["title"] == "Morning"
+    assert plan["slots"][1]["title"] == "Lunch"
     assert plan["slots"][1]["weather_hint"] == "bad"
 
 
@@ -258,7 +386,12 @@ def test_daily_plan_handles_unavailable_sources(monkeypatch) -> None:
     plan = planner_service.daily_plan(request)
 
     assert plan["source"] == "unavailable"
-    assert [slot["period"] for slot in plan["slots"]] == ["afternoon"]
+    assert [slot["period"] for slot in plan["slots"]] == [
+        "morning",
+        "lunch",
+        "afternoon",
+        "dinner",
+    ]
     assert plan["slots"][0]["weather_hint"] == "unknown"
 
 
