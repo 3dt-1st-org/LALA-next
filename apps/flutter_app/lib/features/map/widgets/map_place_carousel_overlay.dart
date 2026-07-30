@@ -3,6 +3,7 @@ import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import '../../../shared/l10n/lala_copy.dart';
 import '../../../shared/labels/source_label.dart';
+import '../../place/widgets/empty_place_state.dart';
 import '../../place/widgets/map_rail_place_card.dart';
 import '../map_helpers.dart';
 
@@ -77,8 +78,16 @@ class MapPlaceCarouselOverlay extends StatelessWidget {
                     const SizedBox(width: 4),
                     Text(
                       expanded
-                          ? lalaCopy(language, ko: '추천 장소 접기', en: 'Hide places')
-                          : lalaCopy(language, ko: '추천 장소 보기', en: 'Show places'),
+                          ? lalaCopy(
+                              language,
+                              ko: '추천 장소 접기',
+                              en: 'Hide places',
+                            )
+                          : lalaCopy(
+                              language,
+                              ko: '추천 장소 보기',
+                              en: 'Show places',
+                            ),
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
                         color: const Color(0xFF374151),
                         fontWeight: FontWeight.w900,
@@ -112,51 +121,55 @@ class MapPlaceCarouselOverlay extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const SizedBox(height: 8),
-                    SizedBox(
-                      key: const ValueKey('recommendation-rail-list'),
-                      height: railHeight,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.82),
-                          borderRadius: BorderRadius.circular(22),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.72),
-                          ),
-                          boxShadow: const [
-                            BoxShadow(
-                              blurRadius: 18,
-                              offset: Offset(0, 8),
-                              color: Color(0x16000000),
+                    if (items.isEmpty)
+                      EmptyPlaceState(language: language)
+                    else
+                      SizedBox(
+                        key: const ValueKey('recommendation-rail-list'),
+                        height: railHeight,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.82),
+                            borderRadius: BorderRadius.circular(22),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.72),
                             ),
-                          ],
-                        ),
-                        child: ListView.separated(
-                          padding: const EdgeInsets.all(6),
-                          scrollDirection: Axis.horizontal,
-                          itemCount: items.length,
-                          separatorBuilder: (_, _) => const SizedBox(width: 10),
-                          itemBuilder: (context, index) {
-                            final place = items[index];
-                            final selected =
-                                (selectedPlaceId == null && index == 0) ||
-                                selectedPlaceId == place.placeId;
-                            final explicitlySelected =
-                                explicitSelectedPlaceId == place.placeId;
-                            return MapRailPlaceCard(
-                              place: place,
-                              language: language,
-                              selected: selected,
-                              compact: compact,
-                              onTap: explicitlySelected
-                                  ? onReselectSelectedPlace
-                                  : selected
-                                  ? null
-                                  : () => onSelectPlace(place),
-                            );
-                          },
+                            boxShadow: const [
+                              BoxShadow(
+                                blurRadius: 18,
+                                offset: Offset(0, 8),
+                                color: Color(0x16000000),
+                              ),
+                            ],
+                          ),
+                          child: ListView.separated(
+                            padding: const EdgeInsets.all(6),
+                            scrollDirection: Axis.horizontal,
+                            itemCount: items.length,
+                            separatorBuilder: (_, _) =>
+                                const SizedBox(width: 10),
+                            itemBuilder: (context, index) {
+                              final place = items[index];
+                              final selected =
+                                  (selectedPlaceId == null && index == 0) ||
+                                  selectedPlaceId == place.placeId;
+                              final explicitlySelected =
+                                  explicitSelectedPlaceId == place.placeId;
+                              return MapRailPlaceCard(
+                                place: place,
+                                language: language,
+                                selected: selected,
+                                compact: compact,
+                                onTap: explicitlySelected
+                                    ? onReselectSelectedPlace
+                                    : selected
+                                    ? null
+                                    : () => onSelectPlace(place),
+                              );
+                            },
+                          ),
                         ),
                       ),
-                    ),
                   ],
                 )
               : const SizedBox.shrink(
