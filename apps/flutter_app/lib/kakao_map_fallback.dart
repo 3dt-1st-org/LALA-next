@@ -205,9 +205,9 @@ class _FallbackMarker extends StatelessWidget {
                   ),
                   child: Icon(
                     _markerIcon(place.category),
-                    color: place.category == 'restaurant'
-                        ? const Color(0xFF1A202C)
-                        : Colors.white,
+                    // P6A §2.3 on-fill contrast: restaurant -> restaurantInk,
+                    // otherwise white. Uses the shared resolver (no raw hex).
+                    color: categoryOnTextColor(place.category),
                     size: place.selected ? 18 : 16,
                   ),
                 ),

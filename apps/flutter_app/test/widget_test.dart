@@ -148,106 +148,121 @@ void main() {
     },
   );
 
-  test('map clustering waits for dense point count and zoom threshold', () {
-    final places = [
-      _clusterRestaurant('cluster-food-a', '클러스터 맛집 A', 210),
-      _clusterRestaurant('cluster-food-b', '클러스터 맛집 B', 260),
-      _clusterRestaurant('cluster-food-c', '클러스터 맛집 C', 310),
-    ];
+  test(
+    'map clustering follows pin-first OR rule (>=80 candidates or far zoom)',
+    () {
+      final places = [
+        _clusterRestaurant('cluster-food-a', '클러스터 맛집 A', 210),
+        _clusterRestaurant('cluster-food-b', '클러스터 맛집 B', 260),
+        _clusterRestaurant('cluster-food-c', '클러스터 맛집 C', 310),
+      ];
 
-    final defaultLevelMarkers = clusterMapPlacesForMap(
-      places: places,
-      selected: null,
-      mapLevel: 4,
-      language: 'ko',
-    );
-    expect(defaultLevelMarkers.where((marker) => marker.isCluster), isEmpty);
-    expect(
-      defaultLevelMarkers.map((marker) => marker.id),
-      containsAll(['cluster-food-a', 'cluster-food-b', 'cluster-food-c']),
-    );
+      final defaultLevelMarkers = clusterMapPlacesForMap(
+        places: places,
+        selected: null,
+        mapLevel: 4,
+        language: 'ko',
+      );
+      expect(defaultLevelMarkers.where((marker) => marker.isCluster), isEmpty);
+      expect(
+        defaultLevelMarkers.map((marker) => marker.id),
+        containsAll(['cluster-food-a', 'cluster-food-b', 'cluster-food-c']),
+      );
 
-    final mediumZoomMarkers = clusterMapPlacesForMap(
-      places: places,
-      selected: null,
-      mapLevel: 7,
-      language: 'ko',
-    );
-    expect(mediumZoomMarkers.where((marker) => marker.isCluster), isEmpty);
+      final mediumZoomMarkers = clusterMapPlacesForMap(
+        places: places,
+        selected: null,
+        mapLevel: 7,
+        language: 'ko',
+      );
+      expect(mediumZoomMarkers.where((marker) => marker.isCluster), isEmpty);
 
-    final densePlaces = List<LalaPlace>.generate(
-      30,
-      (index) => _clusterRestaurant(
-        'cluster-food-$index',
-        '클러스터 맛집 ${index + 1}',
-        210 + index,
-      ),
-    );
-    final defaultDenseMarkers = clusterMapPlacesForMap(
-      places: densePlaces,
-      selected: null,
-      mapLevel: 7,
-      language: 'ko',
-    );
-    expect(defaultDenseMarkers.where((marker) => marker.isCluster), isEmpty);
-    expect(
-      defaultDenseMarkers.map((marker) => marker.id),
-      containsAll(densePlaces.map((place) => place.placeId)),
-    );
+      final densePlaces = List<LalaPlace>.generate(
+        30,
+        (index) => _clusterRestaurant(
+          'cluster-food-$index',
+          '클러스터 맛집 ${index + 1}',
+          210 + index,
+        ),
+      );
+      final defaultDenseMarkers = clusterMapPlacesForMap(
+        places: densePlaces,
+        selected: null,
+        mapLevel: 7,
+        language: 'ko',
+      );
+      expect(defaultDenseMarkers.where((marker) => marker.isCluster), isEmpty);
+      expect(
+        defaultDenseMarkers.map((marker) => marker.id),
+        containsAll(densePlaces.map((place) => place.placeId)),
+      );
 
-    final zoomedOutMarkers = clusterMapPlacesForMap(
-      places: densePlaces,
-      selected: null,
-      mapLevel: 8,
-      language: 'ko',
-    );
-    expect(zoomedOutMarkers.where((marker) => marker.isCluster), isEmpty);
+      final zoomedOutMarkers = clusterMapPlacesForMap(
+        places: densePlaces,
+        selected: null,
+        mapLevel: 8,
+        language: 'ko',
+      );
+      expect(zoomedOutMarkers.where((marker) => marker.isCluster), isEmpty);
 
-    final veryDensePlaces = List<LalaPlace>.generate(
-      90,
-      (index) => _clusterRestaurant(
-        'very-dense-food-$index',
-        '클러스터 맛집 ${index + 1}',
-        210 + index,
-      ),
-    );
-    final zoomedFarOutMarkers = clusterMapPlacesForMap(
-      places: veryDensePlaces,
-      selected: null,
-      mapLevel: 9,
-      language: 'ko',
-    );
-    expect(zoomedFarOutMarkers.where((marker) => marker.isCluster), isEmpty);
-    expect(
-      zoomedFarOutMarkers.map((marker) => marker.id),
-      veryDensePlaces.take(60).map((place) => place.placeId),
-    );
+      final veryDensePlaces = List<LalaPlace>.generate(
+        90,
+        (index) => _clusterRestaurant(
+          'very-dense-food-$index',
+          '클러스터 맛집 ${index + 1}',
+          210 + index,
+        ),
+      );
+      // P6C OR rule: >=80 candidates cluster even below the far-zoom level
+      // (count branch). At level 9 (<10) the expanded-pin floor is 48, so the
+      // 60 taken places yield 48 individual pins plus one cluster of 12 overflow.
+      final denseCloseZoomMarkers = clusterMapPlacesForMap(
+        places: veryDensePlaces,
+        selected: null,
+        mapLevel: 9,
+        language: 'ko',
+      );
+      expect(
+        denseCloseZoomMarkers.where((marker) => marker.isCluster),
+        isNotEmpty,
+      );
+      expect(
+        denseCloseZoomMarkers
+            .firstWhere((marker) => marker.isCluster)
+            .clusterCount,
+        12,
+      );
 
-    final fullyZoomedOutMarkers = clusterMapPlacesForMap(
-      places: veryDensePlaces,
-      selected: null,
-      mapLevel: 10,
-      language: 'ko',
-    );
-    expect(
-      fullyZoomedOutMarkers
-          .where((marker) => !marker.isCluster)
-          .map((marker) => marker.id),
-      veryDensePlaces.take(36).map((place) => place.placeId),
-    );
-    expect(
-      fullyZoomedOutMarkers.where((marker) => marker.isCluster),
-      hasLength(1),
-    );
-    final cluster = fullyZoomedOutMarkers.singleWhere(
-      (marker) => marker.isCluster,
-    );
-    expect(cluster.clusterCount, 24);
-    expect(
-      cluster.clusterMemberIds,
-      veryDensePlaces.skip(36).take(24).map((place) => place.placeId).toList(),
-    );
-  });
+      final fullyZoomedOutMarkers = clusterMapPlacesForMap(
+        places: veryDensePlaces,
+        selected: null,
+        mapLevel: 10,
+        language: 'ko',
+      );
+      expect(
+        fullyZoomedOutMarkers
+            .where((marker) => !marker.isCluster)
+            .map((marker) => marker.id),
+        veryDensePlaces.take(36).map((place) => place.placeId),
+      );
+      expect(
+        fullyZoomedOutMarkers.where((marker) => marker.isCluster),
+        hasLength(1),
+      );
+      final cluster = fullyZoomedOutMarkers.singleWhere(
+        (marker) => marker.isCluster,
+      );
+      expect(cluster.clusterCount, 24);
+      expect(
+        cluster.clusterMemberIds,
+        veryDensePlaces
+            .skip(36)
+            .take(24)
+            .map((place) => place.placeId)
+            .toList(),
+      );
+    },
+  );
 
   test(
     'map clustering keeps nearest places expanded when API order shifts',
