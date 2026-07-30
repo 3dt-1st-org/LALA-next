@@ -4,6 +4,9 @@ Date: 2026-07-30 KST
 Role: implementation (single slice)
 Base: `origin/main` `3fd52b55061511e5827979623c54f3be6e52478f` (after PR #81)
 Branch: `geondongkim/lala-p1-3-source-governance-registry`
+Head: `8bc5789a28179e6541ea5a856c591d6c01351b3c`
+Draft PR: https://github.com/3dt-1st-org/LALA-next/pull/82
+CI (head): API tests + safety contracts `pass`; Flutter analyze + test `pass`; Unix wrapper verification `pass` (not self-declared; CI is the gate).
 
 This slice adds two offline registries and one SSOT cleanup. It performs **no**
 network, crawl, DB write, migration apply, seed, deploy, AI/TTS, or secret
