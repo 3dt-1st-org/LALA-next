@@ -283,6 +283,79 @@ def test_list_places_keeps_scores_in_static_snapshot_when_requested(monkeypatch)
     assert result["places"][0]["score"] == 0.92
 
 
+def test_list_places_snapshot_path_reports_honest_data_as_of(monkeypatch) -> None:
+    # Truthfulness: data_as_of on the snapshot path is the real snapshot
+    # generated_at string (never fabricated). We pin the helper to a known
+    # value so the assertion is deterministic and independent of the fixture.
+    monkeypatch.setattr(
+        places_service,
+        "get_settings",
+        lambda: _fake_settings(static_snapshot_fallback=True, db_dsn=""),
+    )
+    _patch_db_fetch_places(
+        monkeypatch,
+        raises=places_service.db_repository.DatabaseReadError("places_query_failed"),
+    )
+    monkeypatch.setattr(
+        places_service.public_mvp_data,
+        "fetch_places",
+        lambda **kwargs: [{"name": "경복궁", "score": 0.92}],
+    )
+    monkeypatch.setattr(
+        places_service.public_mvp_data,
+        "snapshot_generated_at",
+        lambda: "2026-06-19T02:24:44.557686+00:00",
+    )
+
+    result = places_service.list_places(
+        lat=37.5665,
+        lng=126.978,
+        radius_m=1000,
+        category="attraction",
+        language="ko",
+    )
+
+    assert result["source"] == places_service.public_mvp_data.SOURCE_NAME
+    assert result["data_as_of"] == "2026-06-19T02:24:44.557686+00:00"
+
+
+def test_list_places_db_path_reports_honest_null_data_as_of(monkeypatch) -> None:
+    # DB path: without a live max(updated_at) probe we must not invent a value.
+    monkeypatch.setattr(places_service, "get_settings", lambda: _fake_settings())
+    _patch_db_fetch_places(monkeypatch, places=[{"name": "경복궁", "score": 0.9}])
+
+    result = places_service.list_places(
+        lat=37.5665,
+        lng=126.978,
+        radius_m=1000,
+        category="attraction",
+        language="ko",
+    )
+
+    assert result["source"] == "db"
+    assert result["data_as_of"] is None
+
+
+def test_list_places_empty_path_reports_honest_null_data_as_of(monkeypatch) -> None:
+    monkeypatch.setattr(
+        places_service,
+        "get_settings",
+        lambda: _fake_settings(static_snapshot_fallback=False, db_dsn=""),
+    )
+    _patch_db_fetch_places(monkeypatch, places=[])
+
+    result = places_service.list_places(
+        lat=37.5665,
+        lng=126.978,
+        radius_m=1000,
+        category="all",
+        language="ko",
+    )
+
+    assert result["count"] == 0
+    assert result["data_as_of"] is None
+
+
 def test_list_places_returns_empty_payload_when_no_results_and_no_fallback(
     monkeypatch,
 ) -> None:

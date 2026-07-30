@@ -632,8 +632,7 @@ class LalaApiClient {
     final basePath = baseUri.path.endsWith('/')
         ? baseUri.path.substring(0, baseUri.path.length - 1)
         : baseUri.path;
-    final routePath =
-        '/api/v1/community/chat/rooms/$roomId/ws';
+    final routePath = '/api/v1/community/chat/rooms/$roomId/ws';
     final mergedPath = basePath == '/' ? routePath : '$basePath$routePath';
     return baseUri.replace(
       scheme: scheme,
@@ -676,19 +675,21 @@ class LalaApiClient {
 
     final uri = _uri(path, query: query);
     try {
-      return await _dio.requestUri<dynamic>(
-        uri,
-        data: body,
-        options: Options(
-          method: method,
-          headers: headers,
-          responseType: responseType,
-          contentType: contentType,
-          validateStatus: (_) => true,
-          receiveTimeout: null,
-          sendTimeout: null,
-        ),
-      ).timeout(timeout);
+      return await _dio
+          .requestUri<dynamic>(
+            uri,
+            data: body,
+            options: Options(
+              method: method,
+              headers: headers,
+              responseType: responseType,
+              contentType: contentType,
+              validateStatus: (_) => true,
+              receiveTimeout: null,
+              sendTimeout: null,
+            ),
+          )
+          .timeout(timeout);
     } on TimeoutException {
       throw LalaApiException(
         code: 'REQUEST_TIMEOUT',
@@ -729,7 +730,8 @@ class LalaApiClient {
     final raw = resp.data;
     if (raw is! Map<String, dynamic>) {
       throw LalaApiException(
-        code: status < 200 || status >= 300 ? 'HTTP_$status' : 'INVALID_RESPONSE',
+        code:
+            status < 200 || status >= 300 ? 'HTTP_$status' : 'INVALID_RESPONSE',
         message: 'Expected a JSON object response.',
         statusCode: status,
         retryable: status >= 500,
@@ -960,6 +962,7 @@ class LalaPlacesResponse {
     required this.query,
     required this.source,
     required this.locationEngine,
+    this.dataAsOf,
   });
 
   final int count;
@@ -967,6 +970,10 @@ class LalaPlacesResponse {
   final LalaPlacesQuery query;
   final String source;
   final String locationEngine;
+
+  /// Honest data-as-of (snapshot build timestamp) or null when unknown.
+  /// The UI shows a freshness label only when this is present.
+  final String? dataAsOf;
 
   static LalaPlacesResponse fromJsonObject(Object? value) {
     return LalaPlacesResponse.fromJson(_asMap(value));
@@ -979,6 +986,7 @@ class LalaPlacesResponse {
       query: LalaPlacesQuery.fromJson(_asMap(json['query'])),
       source: _asString(json['source']),
       locationEngine: _asString(json['location_engine']),
+      dataAsOf: _asOptionalString(json['data_as_of']),
     );
   }
 }
