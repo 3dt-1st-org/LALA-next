@@ -25,13 +25,22 @@ import 'package:lala_next_app/shared/widgets/lala_skeleton.dart';
 
 /// 플랜 탭: 하루 일정을 생성해 타임라인으로 보여준다.
 class PlanPage extends StatefulWidget {
-  const PlanPage({this.locationProvider, this.backendFactory, super.key});
+  const PlanPage({
+    this.locationProvider,
+    this.backendFactory,
+    this.initialConfig = const LalaAppConfig.fromEnvironment(),
+    super.key,
+  });
 
   /// 테스트 주입용 위치 프로바이더(기본 = Geolocator 하이브리드).
   final LalaLocationProvider? locationProvider;
 
   /// 테스트 주입용 백엔드 팩토리(기본 = LalaApiBackend).
   final LalaBackendFactory? backendFactory;
+
+  /// UI/언어 config 주입용 선택적 시드(기본 = 컴파일타임 환경).
+  /// LocalSignalsPage 와 동일한 주입 패턴 — `const PlanPage()` 호출부는 불변.
+  final LalaAppConfig initialConfig;
 
   @override
   State<PlanPage> createState() => _PlanPageState();
@@ -67,7 +76,7 @@ class _PlanPageState extends State<PlanPage> {
   @override
   void initState() {
     super.initState();
-    _baseConfig = LalaAppConfig.fromEnvironment();
+    _baseConfig = widget.initialConfig;
     _config = _baseConfig;
     _locationProvider =
         widget.locationProvider ?? const GeolocatorLalaLocationProvider();
