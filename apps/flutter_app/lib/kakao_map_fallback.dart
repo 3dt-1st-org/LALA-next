@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'features/place/place_helpers.dart';
 import 'kakao_map_models.dart';
 
 class KakaoMapFallbackView extends StatelessWidget {
@@ -334,25 +335,16 @@ class _FallbackMapPainter extends CustomPainter {
 }
 
 Color _markerColor(String category) {
-  return switch (category) {
-    'attraction' => const Color(0xFFC53030),
-    'restaurant' => const Color(0xFFF5C842),
-    'event' => const Color(0xFF2B6CB0),
-    'culture_venue' => const Color(0xFF0F766E),
-    _ => const Color(0xFF1A202C),
-  };
+  // P6A §2.3: marker fill uses the shared category-color SSOT (chip/card/marker 동일 토큰).
+  return categoryColor(category);
 }
 
 Color _markerTextColor(String category) {
   if (category == 'restaurant') {
     return const Color(0xFF6B4F0D);
   }
-  return switch (category) {
-    'event' => const Color(0xFF2B6CB0),
-    'culture_venue' => const Color(0xFF0F766E),
-    'attraction' => const Color(0xFFC53030),
-    _ => const Color(0xFF1A202C),
-  };
+  // P6A §2.3: 비-restaurant 텍스트 색도 동일 카테고리 토큰에서 파생.
+  return categoryColor(category);
 }
 
 IconData _markerIcon(String category) {
