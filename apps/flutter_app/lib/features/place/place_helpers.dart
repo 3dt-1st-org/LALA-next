@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
+import '../../app/lala_visual_tokens.dart';
 import '../../shared/l10n/lala_copy.dart';
 import '../../shared/l10n/multi_language_text.dart';
 
@@ -54,15 +55,36 @@ String railCategoryLabel(LalaPlace place, String language) {
   return '$category · $status';
 }
 
-/// 카테고리 색상(C3 추출 — main.dart 의 최상위 _categoryColor).
+/// 카테고리 색상(P6A §2.3 단일 SSOT — 칩·카드·마커가 동일 토큰 사용).
+/// 기존 Color(0xFF...) 리터럴을 LalaVisualColors 토큰으로 일원화; 값은 동일.
 Color categoryColor(String category) {
   return switch (category) {
-    'attraction' => const Color(0xFFC53030),
-    'restaurant' => const Color(0xFFF5C842),
-    'event' => const Color(0xFF2B6CB0),
-    'culture_venue' => const Color(0xFF0F766E),
-    _ => const Color(0xFF1A202C),
+    'attraction' => LalaVisualColors.attraction,
+    'restaurant' => LalaVisualColors.restaurant,
+    'event' => LalaVisualColors.event,
+    'culture_venue' => LalaVisualColors.culture,
+    _ => LalaVisualColors.ink,
   };
+}
+
+/// 카테고리 칩/배지/마커 위 텍스트 색(P6A §2.3 — restaurant 만 restaurantInk, 나머지 흰색).
+Color categoryOnTextColor(String category) {
+  return category == 'restaurant'
+      ? LalaVisualColors.restaurantInk
+      : const Color(0xFFFFFFFF);
+}
+
+/// 카테고리 색의 #RRGGBB 문자열(Kakao Web JS 마커 경로 SSOT — 토큰에서 파생, 중복 리터럴 금지).
+String categoryColorHex(String category) =>
+    _hexFromColor(categoryColor(category));
+
+String categoryOnTextColorHex(String category) =>
+    _hexFromColor(categoryOnTextColor(category));
+
+String _hexFromColor(Color color) {
+  String two(double channel) =>
+      (channel * 255).round().toRadixString(16).padLeft(2, '0');
+  return '#${two(color.r)}${two(color.g)}${two(color.b)}'.toUpperCase();
 }
 
 /// 장소 이미지 URI 정규화(C3 추출 — main.dart 의 _normalizedPlaceImageUri).

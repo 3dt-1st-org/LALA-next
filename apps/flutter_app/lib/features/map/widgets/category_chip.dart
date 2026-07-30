@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../app/lala_visual_tokens.dart';
+
 /// 지도 상단 카테고리 필터 칩.
 // 모바일 비주얼 계약 remediation C1: 360..430dp 에서 5개 칩 + 44dp 설정 아이콘이
 // 모두 잘림 없이 보이도록 컴팩트 고정 폭으로 한다(초기 스크롤 위치에 의존하지 않는다).
@@ -45,8 +47,8 @@ class CategoryChip extends StatelessWidget {
               label,
               style: TextStyle(
                 color: active
-                    ? (color == const Color(0xFFF5C842)
-                          ? const Color(0xFF1A202C)
+                    ? (color == LalaVisualColors.restaurant
+                          ? LalaVisualColors.restaurantInk
                           : Colors.white)
                     : const Color(0xFF0F172A),
                 fontSize: 13,

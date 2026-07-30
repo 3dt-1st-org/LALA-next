@@ -6,6 +6,7 @@ import 'dart:html' as html;
 
 import 'package:flutter/material.dart';
 
+import 'features/place/place_helpers.dart';
 import 'kakao_map_models.dart';
 
 const _backgroundMapId = 'lala-kakao-background-map';
@@ -245,15 +246,15 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
     var renderedClusters = 0;
 
     function colorFor(category) {
-      if (category === "attraction") return "#C53030";
-      if (category === "restaurant") return "#F5C842";
-      if (category === "event") return "#2B6CB0";
-      if (category === "culture_venue") return "#0F766E";
-      return "#1A202C";
+      if (category === "attraction") return "${categoryColorHex('attraction')}";
+      if (category === "restaurant") return "${categoryColorHex('restaurant')}";
+      if (category === "event") return "${categoryColorHex('event')}";
+      if (category === "culture_venue") return "${categoryColorHex('culture_venue')}";
+      return "${categoryColorHex('other')}";
     }
 
     function markerTextColorFor(category) {
-      return category === "restaurant" ? "#1A202C" : "#ffffff";
+      return category === "restaurant" ? "${categoryOnTextColorHex('restaurant')}" : "#ffffff";
     }
 
     function clusterTextColorFor(category) {
@@ -620,23 +621,16 @@ void _drawFallbackMap(
 }
 
 String _fallbackMarkerColor(String category) {
-  return switch (category) {
-    'attraction' => '#C53030',
-    'restaurant' => '#F5C842',
-    'event' => '#2B6CB0',
-    'culture_venue' => '#0F766E',
-    _ => '#1A202C',
-  };
+  // P6A §2.3: web fallback marker fill uses the shared SSOT hex (칩/카드/마커 동일 토큰).
+  return categoryColorHex(category);
 }
 
 String _fallbackMarkerTextColorHex(String category) {
-  return switch (category) {
-    'restaurant' => '#6B4F0D',
-    'event' => '#2B6CB0',
-    'culture_venue' => '#0F766E',
-    'attraction' => '#C53030',
-    _ => '#1A202C',
-  };
+  if (category == 'restaurant') {
+    return '#6B4F0D';
+  }
+  // P6A §2.3: 비-restaurant 텍스트 색도 동일 카테고리 토큰에서 파생.
+  return categoryColorHex(category);
 }
 
 String _fallbackMarkerIconColorHex(String category) {
