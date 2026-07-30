@@ -160,6 +160,105 @@ void main() {
     },
   );
 
+  // ---- P6G: Plan empty state ("make a plan" CTA) ----
+  // honest empty branch(dailyPlan == null || visibleSlots.isEmpty) 검증.
+  // dailyPlan == null 은 로드 실패(ERROR) 상태로 별도 분기이므로, 여기서는
+  // visibleSlots 가 비는 도달 가능한 두 경로(빈 slots / 필터링된 placeholder
+  // slot)로 empty UI 가 독점 표시되는지 확인한다.
+
+  testWidgets(
+    'plan with no slots shows the empty message and regenerate action',
+    (tester) async {
+      final backend = _EmptySlotsBackend();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlanPage(
+            locationProvider: _FoundLocationProvider(),
+            backendFactory: (config) => backend,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // empty visibleSlots → honest empty 안내문 + regenerate 버튼.
+      expect(find.text('표시할 일정이 없어요.'), findsOneWidget);
+      expect(find.text('일정 다시 만들기'), findsOneWidget);
+      // 로딩 카드/스켈레톤과 중복 표시 없음(empty 분기 독점).
+      expect(find.byKey(const ValueKey('planner-loading-card')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('plan-timeline-skeleton')),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
+    'plan whose only slot is a hidden preparing placeholder shows the empty state',
+    (tester) async {
+      // slot 은 존재하지만 hasVisiblePlanSlot 로 필터링되어 visibleSlots 가 비는 경로.
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlanPage(
+            locationProvider: _FoundLocationProvider(),
+            backendFactory: (config) => _HiddenSlotsBackend(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('표시할 일정이 없어요.'), findsOneWidget);
+      expect(find.text('일정 다시 만들기'), findsOneWidget);
+    },
+  );
+
+  testWidgets('tapping the regenerate action reloads the plan exactly once', (
+    tester,
+  ) async {
+    final backend = _EmptySlotsBackend();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PlanPage(
+          locationProvider: _FoundLocationProvider(),
+          backendFactory: (config) => backend,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // 초기 로드로 createDailyPlan 이 1회 호출되었다.
+    expect(backend.planRequests, 1);
+
+    await tester.tap(find.widgetWithText(OutlinedButton, '일정 다시 만들기'));
+    await tester.pumpAndSettle();
+
+    // onRegenerate(_load) 가 정확히 한 번 더 실행되었다(총 2회).
+    expect(backend.planRequests, 2);
+  });
+
+  testWidgets(
+    'english config shows the exclusive English empty copy and action',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlanPage(
+            initialConfig: const LalaAppConfig(
+              baseUri: 'http://test',
+              lang: 'en',
+            ),
+            locationProvider: _FoundLocationProvider(),
+            backendFactory: (config) => _EmptySlotsBackend(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('No plan slots to show.'), findsOneWidget);
+      expect(find.text('Regenerate plan'), findsOneWidget);
+      // KO·EN 배타: 한국어 카피가 섞이지 않는다.
+      expect(find.text('표시할 일정이 없어요.'), findsNothing);
+      expect(find.text('일정 다시 만들기'), findsNothing);
+    },
+  );
+
   tearDown(RegionContextStore.clear);
 }
 
@@ -215,6 +314,63 @@ class _LoadedPlanBackend implements LalaBackend {
       // 저엔트로피 테스트 값(detect-secrets 허위 양성 회피; 실제 키/해시 아님).
       requestHash: 'test-plan-request-hash',
       cacheKey: 'daily_plan:test-plan',
+    ),
+  );
+
+  @override
+  void close() {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError('not used in plan: ${invocation.memberName}');
+}
+
+/// 표시할 슬롯이 없는(빈 slots) 테스트용 백엔드. createDailyPlan 호출 수를 센다
+/// (regenerate 액션이 정확히 한 번 더 로드하는지 검증용).
+class _EmptySlotsBackend implements LalaBackend {
+  int planRequests = 0;
+
+  @override
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan() async {
+    planRequests += 1;
+    return _envelope(
+      LalaDailyPlan(
+        language: 'ko',
+        center: const LalaCoordinate(lat: 37.2636, lng: 127.0286),
+        radiusM: 3000,
+        weather: _weather(),
+        slots: const <LalaPlanSlot>[],
+        source: 'db',
+        // 저엔트로피 테스트 값(허위 양성 회피; 실제 키/해시 아님).
+        requestHash: 'test-plan-empty-hash',
+        cacheKey: 'daily_plan:test-empty',
+      ),
+    );
+  }
+
+  @override
+  void close() {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError('not used in plan: ${invocation.memberName}');
+}
+
+/// 표시 가능한 슬롯이 없는(preparing placeholder 만 → 필터링됨) 테스트용 백엔드.
+class _HiddenSlotsBackend implements LalaBackend {
+  @override
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan() async => _envelope(
+    LalaDailyPlan(
+      language: 'ko',
+      center: const LalaCoordinate(lat: 37.2636, lng: 127.0286),
+      radiusM: 3000,
+      weather: _weather(),
+      slots: const <LalaPlanSlot>[
+        LalaPlanSlot(period: 'afternoon', title: '일정 준비 중'),
+      ],
+      source: 'db',
+      requestHash: 'test-plan-hidden-hash',
+      cacheKey: 'daily_plan:test-hidden',
     ),
   );
 
