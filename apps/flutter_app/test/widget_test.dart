@@ -2074,6 +2074,84 @@ void main() {
     },
   );
 
+  // P6F §13.5 반응형 code-conformance: 360/430/768dp 에서 5 칩+설정 접근 가능,
+  // 지도 컨트롤 스택과 하단 dock 의 세로 영역이 겹치지 않는다(동작 규칙만 고정).
+  Future<void> pumpMapChromeAt(WidgetTester tester, double width) async {
+    tester.view.physicalSize = Size(width, 852);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      TestLalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets(
+    'map layout keeps 5 chips+settings and no control/dock overlap at 360dp',
+    (tester) async {
+      await pumpMapChromeAt(tester, 360);
+      expect(find.text('전체'), findsOneWidget);
+      expect(find.text('문화'), findsOneWidget);
+      expect(find.byKey(const ValueKey('settings-button')), findsOneWidget);
+      final dockRect = tester.getRect(
+        find.byKey(const ValueKey('map-bottom-dock')),
+      );
+      final voiceRect = tester.getRect(
+        find.byKey(const ValueKey('voice-toggle')),
+      );
+      expect(voiceRect.bottom, lessThanOrEqualTo(dockRect.top));
+      final railRect = tester.getRect(
+        find.byKey(const ValueKey('recommendation-rail-list')),
+      );
+      expect(railRect.bottom, lessThan(voiceRect.top));
+    },
+  );
+
+  testWidgets(
+    'map layout keeps 5 chips+settings and no control/dock overlap at 430dp',
+    (tester) async {
+      await pumpMapChromeAt(tester, 430);
+      expect(find.text('전체'), findsOneWidget);
+      expect(find.text('문화'), findsOneWidget);
+      expect(find.byKey(const ValueKey('settings-button')), findsOneWidget);
+      final dockRect = tester.getRect(
+        find.byKey(const ValueKey('map-bottom-dock')),
+      );
+      final voiceRect = tester.getRect(
+        find.byKey(const ValueKey('voice-toggle')),
+      );
+      expect(voiceRect.bottom, lessThanOrEqualTo(dockRect.top));
+      final railRect = tester.getRect(
+        find.byKey(const ValueKey('recommendation-rail-list')),
+      );
+      expect(railRect.bottom, lessThan(voiceRect.top));
+    },
+  );
+
+  testWidgets(
+    'map chrome keeps 5 chips+settings reachable at 768dp desktop/iPad',
+    (tester) async {
+      tester.view.physicalSize = const Size(768, 1024);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        TestLalaApp(
+          backendFactory: FakeBackend.new,
+          initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('전체'), findsOneWidget);
+      expect(find.text('문화'), findsOneWidget);
+      expect(find.byKey(const ValueKey('settings-button')), findsOneWidget);
+    },
+  );
+
   testWidgets('bottom navigation shows contracted Korean labels', (
     tester,
   ) async {

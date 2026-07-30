@@ -26,33 +26,46 @@ class CategoryChip extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(999),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(999),
-          onTap: onTap,
-          child: Container(
-            constraints: const BoxConstraints(minHeight: 40),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-            decoration: BoxDecoration(
-              color: active ? color : Colors.white.withValues(alpha: 0.95),
+        // P6F §13.5: screen-reader label + selected state as a non-color cue
+        // (활성 상태가 색으로만 전달되지 않도록 Semantics.selected 사용).
+        child: Tooltip(
+          message: label,
+          child: Semantics(
+            button: true,
+            label: label,
+            selected: active,
+            child: InkWell(
               borderRadius: BorderRadius.circular(999),
-              boxShadow: const [
-                BoxShadow(
-                  blurRadius: 12,
-                  offset: Offset(0, 4),
-                  color: Color(0x12000000),
+              onTap: onTap,
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 40),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 9,
                 ),
-              ],
-            ),
-            child: Text(
-              label,
-              style: TextStyle(
-                color: active
-                    ? (color == LalaVisualColors.restaurant
-                          ? LalaVisualColors.restaurantInk
-                          : Colors.white)
-                    : const Color(0xFF0F172A),
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
+                decoration: BoxDecoration(
+                  color: active ? color : Colors.white.withValues(alpha: 0.95),
+                  borderRadius: BorderRadius.circular(999),
+                  boxShadow: const [
+                    BoxShadow(
+                      blurRadius: 12,
+                      offset: Offset(0, 4),
+                      color: Color(0x12000000),
+                    ),
+                  ],
+                ),
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: active
+                        ? (color == LalaVisualColors.restaurant
+                              ? LalaVisualColors.restaurantInk
+                              : Colors.white)
+                        : const Color(0xFF0F172A),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
               ),
             ),
           ),
