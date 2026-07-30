@@ -6,7 +6,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lala_next_app/auth/auth_controller.dart';
 import 'package:lala_next_app/auth/logto_auth_gateway.dart';
 import 'package:lala_next_app/core/location/region_context.dart';
+import 'package:lala_next_app/features/local_signals/presentation/pages/local_signals_page.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
+import 'package:lala_next_app/features/plan/presentation/pages/plan_page.dart';
+import 'package:lala_next_app/features/search/presentation/pages/search_page.dart';
 import 'package:lala_next_app/kakao_map_fallback.dart';
 import 'package:lala_next_app/kakao_map_models.dart';
 import 'package:lala_next_app/main.dart';
@@ -2073,6 +2076,242 @@ void main() {
       expect(cultureChip.right, lessThan(393));
     },
   );
+
+  // P6F §13.5 반응형 code-conformance: 360/430/768dp 에서 5 칩+설정 접근 가능,
+  // 지도 컨트롤 스택과 하단 dock 의 세로 영역이 겹치지 않는다(동작 규칙만 고정).
+  Future<void> pumpMapChromeAt(WidgetTester tester, double width) async {
+    tester.view.physicalSize = Size(width, 852);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      TestLalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets(
+    'map layout keeps 5 chips+settings and no control/dock overlap at 360dp',
+    (tester) async {
+      await pumpMapChromeAt(tester, 360);
+      expect(find.text('전체'), findsOneWidget);
+      expect(find.text('문화'), findsOneWidget);
+      expect(find.byKey(const ValueKey('settings-button')), findsOneWidget);
+      final dockRect = tester.getRect(
+        find.byKey(const ValueKey('map-bottom-dock')),
+      );
+      final voiceRect = tester.getRect(
+        find.byKey(const ValueKey('voice-toggle')),
+      );
+      expect(voiceRect.bottom, lessThanOrEqualTo(dockRect.top));
+      final railRect = tester.getRect(
+        find.byKey(const ValueKey('recommendation-rail-list')),
+      );
+      expect(railRect.bottom, lessThan(voiceRect.top));
+    },
+  );
+
+  testWidgets(
+    'map layout keeps 5 chips+settings and no control/dock overlap at 430dp',
+    (tester) async {
+      await pumpMapChromeAt(tester, 430);
+      expect(find.text('전체'), findsOneWidget);
+      expect(find.text('문화'), findsOneWidget);
+      expect(find.byKey(const ValueKey('settings-button')), findsOneWidget);
+      final dockRect = tester.getRect(
+        find.byKey(const ValueKey('map-bottom-dock')),
+      );
+      final voiceRect = tester.getRect(
+        find.byKey(const ValueKey('voice-toggle')),
+      );
+      expect(voiceRect.bottom, lessThanOrEqualTo(dockRect.top));
+      final railRect = tester.getRect(
+        find.byKey(const ValueKey('recommendation-rail-list')),
+      );
+      expect(railRect.bottom, lessThan(voiceRect.top));
+    },
+  );
+
+  testWidgets(
+    'map chrome keeps 5 chips+settings reachable at 768dp desktop/iPad',
+    (tester) async {
+      tester.view.physicalSize = const Size(768, 1024);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        TestLalaApp(
+          backendFactory: FakeBackend.new,
+          initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('전체'), findsOneWidget);
+      expect(find.text('문화'), findsOneWidget);
+      expect(find.byKey(const ValueKey('settings-button')), findsOneWidget);
+    },
+  );
+
+  // P6F §13.5 반응형 code-conformance: Search/Plan/Local Signals 탭 본문이
+  // 360/430/768dp 에서 텍스트 오버플로 없이 주요 컨트롤에 도달 가능한지 검증한다.
+  // FakeBackend 주입 + 진실된 fixture(추천 장소/오늘 일정/로컬 신호 비활성 상태)만
+  // 사용한다. 라이브 호출/장비 검증은 없다.
+  Future<void> pumpTabAt(
+    WidgetTester tester,
+    double width,
+    Widget child,
+  ) async {
+    tester.view.physicalSize = Size(width, 852);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(MaterialApp(home: child));
+    await tester.pumpAndSettle();
+  }
+
+  Widget searchTab() => SearchPage(
+    backendFactory: FakeBackend.new,
+    locationProvider: FakeLocationProvider(
+      LalaLocationResult.found(const LalaLocation(lat: 37.2819, lng: 127.0142)),
+    ),
+  );
+
+  Widget planTab() => PlanPage(
+    backendFactory: FakeBackend.new,
+    locationProvider: FakeLocationProvider(
+      LalaLocationResult.found(const LalaLocation(lat: 37.2819, lng: 127.0142)),
+    ),
+  );
+
+  Widget localSignalsTab() => Scaffold(
+    body: LocalSignalsPage(
+      backendFactory: FakeBackend.new,
+      initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+    ),
+  );
+
+  group('Search tab responsive (P6F §13.5)', () {
+    testWidgets('360dp keeps header, filter and a result tile reachable', (
+      tester,
+    ) async {
+      await pumpTabAt(tester, 360, searchTab());
+      expect(find.text('장소·지역 검색'), findsOneWidget);
+      expect(find.byTooltip('필터'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('search-place-tile-hwaseong-haenggung')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('430dp keeps header, filter and a result tile reachable', (
+      tester,
+    ) async {
+      await pumpTabAt(tester, 430, searchTab());
+      expect(find.text('장소·지역 검색'), findsOneWidget);
+      expect(find.byTooltip('필터'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('search-place-tile-hwaseong-haenggung')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('768dp keeps header, filter and a result tile reachable', (
+      tester,
+    ) async {
+      await pumpTabAt(tester, 768, searchTab());
+      expect(find.text('장소·지역 검색'), findsOneWidget);
+      expect(find.byTooltip('필터'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('search-place-tile-hwaseong-haenggung')),
+        findsOneWidget,
+      );
+    });
+  });
+
+  group('Plan tab responsive (P6F §13.5)', () {
+    testWidgets('360dp keeps header, calendar and the slot reachable', (
+      tester,
+    ) async {
+      await pumpTabAt(tester, 360, planTab());
+      expect(find.text('오늘 일정'), findsOneWidget);
+      expect(find.byTooltip('달력'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('plan-slot-hwaseong-haenggung')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('430dp keeps header, calendar and the slot reachable', (
+      tester,
+    ) async {
+      await pumpTabAt(tester, 430, planTab());
+      expect(find.text('오늘 일정'), findsOneWidget);
+      expect(find.byTooltip('달력'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('plan-slot-hwaseong-haenggung')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('768dp keeps header, calendar and the slot reachable', (
+      tester,
+    ) async {
+      await pumpTabAt(tester, 768, planTab());
+      expect(find.text('오늘 일정'), findsOneWidget);
+      expect(find.byTooltip('달력'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('plan-slot-hwaseong-haenggung')),
+        findsOneWidget,
+      );
+    });
+  });
+
+  group('Local Signals tab responsive (P6F §13.5)', () {
+    testWidgets('360dp keeps region picker and disabled state reachable', (
+      tester,
+    ) async {
+      await pumpTabAt(tester, 360, localSignalsTab());
+      expect(
+        find.byKey(const ValueKey('local-signals-region-picker')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('local-signals-disabled')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('430dp keeps region picker and disabled state reachable', (
+      tester,
+    ) async {
+      await pumpTabAt(tester, 430, localSignalsTab());
+      expect(
+        find.byKey(const ValueKey('local-signals-region-picker')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('local-signals-disabled')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('768dp keeps region picker and disabled state reachable', (
+      tester,
+    ) async {
+      await pumpTabAt(tester, 768, localSignalsTab());
+      expect(
+        find.byKey(const ValueKey('local-signals-region-picker')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('local-signals-disabled')),
+        findsOneWidget,
+      );
+    });
+  });
 
   testWidgets('bottom navigation shows contracted Korean labels', (
     tester,
