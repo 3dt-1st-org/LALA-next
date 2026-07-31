@@ -152,155 +152,50 @@ void main() {
     },
   );
 
-  test(
-    'map clustering follows pin-first OR rule (>=80 candidates or far zoom)',
-    () {
-      final places = [
-        _clusterRestaurant('cluster-food-a', '클러스터 맛집 A', 210),
-        _clusterRestaurant('cluster-food-b', '클러스터 맛집 B', 260),
-        _clusterRestaurant('cluster-food-c', '클러스터 맛집 C', 310),
-      ];
+  test('map clustering keeps sparse pins and bounds dense API-cap results', () {
+    final sparsePlaces = List<LalaPlace>.generate(
+      8,
+      (index) => _clusterRestaurant(
+        'sparse-food-$index',
+        '근처 맛집 ${index + 1}',
+        210 + index,
+      ),
+    );
+    final sparseMarkers = clusterMapPlacesForMap(
+      places: sparsePlaces,
+      selected: null,
+      mapLevel: 6,
+      language: 'ko',
+    );
+    expect(sparseMarkers.where((marker) => marker.isCluster), isEmpty);
+    expect(sparseMarkers, hasLength(8));
 
-      final defaultLevelMarkers = clusterMapPlacesForMap(
-        places: places,
-        selected: null,
-        mapLevel: 4,
-        language: 'ko',
-      );
-      expect(defaultLevelMarkers.where((marker) => marker.isCluster), isEmpty);
-      expect(
-        defaultLevelMarkers.map((marker) => marker.id),
-        containsAll(['cluster-food-a', 'cluster-food-b', 'cluster-food-c']),
-      );
+    final densePlaces = List<LalaPlace>.generate(
+      60,
+      (index) => _clusterRestaurant(
+        'dense-food-$index',
+        '클러스터 맛집 ${index + 1}',
+        210 + index,
+      ),
+    );
+    final denseMarkers = clusterMapPlacesForMap(
+      places: densePlaces,
+      selected: null,
+      mapLevel: 6,
+      language: 'ko',
+    );
+    expect(denseMarkers.where((marker) => marker.isCluster), isNotEmpty);
+    expect(denseMarkers, hasLength(lessThanOrEqualTo(16)));
 
-      final mediumZoomMarkers = clusterMapPlacesForMap(
-        places: places,
-        selected: null,
-        mapLevel: 7,
-        language: 'ko',
-      );
-      expect(mediumZoomMarkers.where((marker) => marker.isCluster), isEmpty);
-
-      final densePlaces = List<LalaPlace>.generate(
-        30,
-        (index) => _clusterRestaurant(
-          'cluster-food-$index',
-          '클러스터 맛집 ${index + 1}',
-          210 + index,
-        ),
-      );
-      final defaultDenseMarkers = clusterMapPlacesForMap(
-        places: densePlaces,
-        selected: null,
-        mapLevel: 7,
-        language: 'ko',
-      );
-      expect(defaultDenseMarkers.where((marker) => marker.isCluster), isEmpty);
-      expect(
-        defaultDenseMarkers.map((marker) => marker.id),
-        containsAll(densePlaces.map((place) => place.placeId)),
-      );
-
-      final zoomedOutMarkers = clusterMapPlacesForMap(
-        places: densePlaces,
-        selected: null,
-        mapLevel: 8,
-        language: 'ko',
-      );
-      expect(zoomedOutMarkers.where((marker) => marker.isCluster), isEmpty);
-
-      final veryDensePlaces = List<LalaPlace>.generate(
-        90,
-        (index) => _clusterRestaurant(
-          'very-dense-food-$index',
-          '클러스터 맛집 ${index + 1}',
-          210 + index,
-        ),
-      );
-      // P6C OR rule: >=80 candidates cluster even below the far-zoom level
-      // (count branch). At level 9 (<10) the expanded-pin floor is 48, so the
-      // 60 taken places yield 48 individual pins plus one cluster of 12 overflow.
-      final denseCloseZoomMarkers = clusterMapPlacesForMap(
-        places: veryDensePlaces,
-        selected: null,
-        mapLevel: 9,
-        language: 'ko',
-      );
-      expect(
-        denseCloseZoomMarkers.where((marker) => marker.isCluster),
-        isNotEmpty,
-      );
-      expect(
-        denseCloseZoomMarkers
-            .firstWhere((marker) => marker.isCluster)
-            .clusterCount,
-        12,
-      );
-
-      final fullyZoomedOutMarkers = clusterMapPlacesForMap(
-        places: veryDensePlaces,
-        selected: null,
-        mapLevel: 10,
-        language: 'ko',
-      );
-      expect(
-        fullyZoomedOutMarkers
-            .where((marker) => !marker.isCluster)
-            .map((marker) => marker.id),
-        veryDensePlaces.take(36).map((place) => place.placeId),
-      );
-      expect(
-        fullyZoomedOutMarkers.where((marker) => marker.isCluster),
-        hasLength(1),
-      );
-      final cluster = fullyZoomedOutMarkers.singleWhere(
-        (marker) => marker.isCluster,
-      );
-      expect(cluster.clusterCount, 24);
-      expect(
-        cluster.clusterMemberIds,
-        veryDensePlaces
-            .skip(36)
-            .take(24)
-            .map((place) => place.placeId)
-            .toList(),
-      );
-    },
-  );
-
-  test(
-    'map clustering keeps nearest places expanded when API order shifts',
-    () {
-      final places = List<LalaPlace>.generate(
-        90,
-        (index) => _clusterRestaurant(
-          'distance-sorted-food-$index',
-          '거리 맛집 ${index + 1}',
-          200 + index,
-        ),
-      ).reversed.toList(growable: false);
-
-      final markers = clusterMapPlacesForMap(
-        places: places,
-        selected: null,
-        mapLevel: 10,
-        language: 'ko',
-      );
-
-      final pinIds = markers
-          .where((marker) => !marker.isCluster)
-          .map((marker) => marker.id)
-          .toList();
-
-      expect(
-        pinIds,
-        containsAll(
-          List.generate(36, (index) => 'distance-sorted-food-$index'),
-        ),
-      );
-      expect(markers.where((marker) => marker.isCluster), hasLength(1));
-    },
-  );
+    final farMarkers = clusterMapPlacesForMap(
+      places: sparsePlaces,
+      selected: null,
+      mapLevel: 10,
+      language: 'ko',
+    );
+    expect(farMarkers.where((marker) => marker.isCluster), hasLength(1));
+    expect(farMarkers.single.clusterCount, 8);
+  });
 
   testWidgets('map fallback does not invent places when data is empty', (
     tester,
@@ -2543,6 +2438,15 @@ void main() {
     expect(find.text('Daily Plan'), findsOneWidget);
     expect(find.text('전체'), findsNothing);
     expect(find.text('하루 일정'), findsNothing);
+    expect(find.text('Search'), findsOneWidget);
+    expect(find.text('Map'), findsOneWidget);
+    expect(find.text('Plan'), findsOneWidget);
+    expect(find.text('Local Signals'), findsOneWidget);
+    expect(find.text('검색'), findsNothing);
+    expect(find.text('지도'), findsNothing);
+    expect(find.text('일정'), findsNothing);
+    expect(find.text('로컬 신호'), findsNothing);
+    expect(OnboardingState.language, 'en');
     expect(configs.last.lang, 'en');
   });
 
@@ -3231,7 +3135,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(OnboardingState.isCompleted, isTrue);
-      expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
+      expect(find.text('Hwaseong Haenggung'), findsAtLeastNWidgets(1));
+      expect(find.textContaining('화성행궁'), findsNothing);
     },
   );
 
@@ -3379,6 +3284,10 @@ class TestLalaApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (onboardingCompleted) {
+      // Direct widget tests do not run bootstrapAppState. Seed the same SSOT
+      // from the test config before mounting; production always restores it
+      // from OnboardingPreferences before runApp.
+      OnboardingState.selectLanguage(initialConfig.lang);
       OnboardingState.markCompleted();
     } else {
       OnboardingState.reset();

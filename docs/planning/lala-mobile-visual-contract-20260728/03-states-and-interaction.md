@@ -38,8 +38,9 @@ approval data. Source: target README ("mock 또는 임의의 값으로 화면을
 - **`일정에 넣기`**: enters the existing selected-place planner sheet; does not
   create a new itinerary until the planner produces one. `Source: target README`
   + `code: planner sheet` reuse.
-- **Pin-first clustering**: individual markers at close zoom; cluster only at far
-  zoom or ≥ 80 places. `Source: target README P5` + `00` §3 invariants.
+- **Pin-first clustering**: sparse close results stay individual; a bounded
+  geographic grid clusters at far zoom or ≥ 24 places, below the API cap of 60.
+  `Source: runtime remediation` + `00` §3 invariants.
 - **Honest "no image"**: a place without an image shows the no-image state, never
   a random substitute. `Source: target README P5`.
 

@@ -15,6 +15,7 @@ import 'package:lala_next_app/features/home/home_view_helpers.dart'
     show interventionToastLabel;
 import 'package:lala_next_app/features/intervention/widgets/intervention_toast.dart';
 import 'package:lala_next_app/features/location/widgets/default_region_indicator.dart';
+import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/features/place/widgets/empty_place_state.dart';
 import 'package:lala_next_app/features/planner/planner_helpers.dart';
 import 'package:lala_next_app/features/planner/widgets/plan_slot_tile.dart';
@@ -38,8 +39,8 @@ class PlanPage extends StatefulWidget {
   /// 테스트 주입용 백엔드 팩토리(기본 = LalaApiBackend).
   final LalaBackendFactory? backendFactory;
 
-  /// UI/언어 config 주입용 선택적 시드(기본 = 컴파일타임 환경).
-  /// LocalSignalsPage 와 동일한 주입 패턴 — `const PlanPage()` 호출부는 불변.
+  /// API/좌표 config 주입용 선택적 시드(기본 = 컴파일타임 환경).
+  /// UI 언어는 persisted [OnboardingState] 가 유일한 권위다.
   final LalaAppConfig initialConfig;
 
   @override
@@ -49,7 +50,7 @@ class PlanPage extends StatefulWidget {
 enum _PlanLoadStatus { loading, data, error }
 
 class _PlanPageState extends State<PlanPage> {
-  late final LalaAppConfig _baseConfig;
+  late LalaAppConfig _baseConfig;
   late LalaAppConfig _config;
   late final LalaLocationProvider _locationProvider;
   late final LalaBackendFactory _backendFactory;
@@ -70,13 +71,14 @@ class _PlanPageState extends State<PlanPage> {
   // write results so a late response cannot clobber a newer context.
   int _loadGeneration = 0;
   late final VoidCallback _onRegionChanged;
+  late final VoidCallback _onLanguageChanged;
 
   String? _error;
 
   @override
   void initState() {
     super.initState();
-    _baseConfig = widget.initialConfig;
+    _baseConfig = widget.initialConfig.copyWith(lang: OnboardingState.language);
     _config = _baseConfig;
     _locationProvider =
         widget.locationProvider ?? const GeolocatorLalaLocationProvider();
@@ -97,6 +99,17 @@ class _PlanPageState extends State<PlanPage> {
       _reloadFromStore(next);
     };
     RegionContextStore.listenable.addListener(_onRegionChanged);
+    _onLanguageChanged = () {
+      if (!mounted) {
+        return;
+      }
+      final next = OnboardingState.language;
+      if (next == _language) {
+        return;
+      }
+      _reloadForLanguage(next);
+    };
+    OnboardingState.languageListenable.addListener(_onLanguageChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _load();
@@ -107,6 +120,7 @@ class _PlanPageState extends State<PlanPage> {
   @override
   void dispose() {
     RegionContextStore.listenable.removeListener(_onRegionChanged);
+    OnboardingState.languageListenable.removeListener(_onLanguageChanged);
     _backend.close();
     super.dispose();
   }
@@ -189,6 +203,22 @@ class _PlanPageState extends State<PlanPage> {
     final lat = context?.lat ?? _baseConfig.lat;
     final lng = context?.lng ?? _baseConfig.lng;
     _config = _baseConfig.copyWith(lat: lat, lng: lng);
+    _backend.close();
+    _backend = _backendFactory(_config);
+    _fetchPlan(generation);
+  }
+
+  /// Rebuilds the plan request and visible copy from the persisted language
+  /// SSOT while retaining the active region and skipping geolocation.
+  void _reloadForLanguage(String language) {
+    final generation = ++_loadGeneration;
+    setState(() {
+      _baseConfig = _baseConfig.copyWith(lang: language);
+      _config = _config.copyWith(lang: language);
+      _status = _PlanLoadStatus.loading;
+      _error = null;
+      _interventionDismissed = false;
+    });
     _backend.close();
     _backend = _backendFactory(_config);
     _fetchPlan(generation);

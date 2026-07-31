@@ -6,6 +6,7 @@ import '../../../../core/config/app_config.dart';
 import '../../../../core/location/region_context.dart';
 import '../../../../core/navigation/local_signal_action.dart';
 import '../../../../features/location/widgets/manual_location_sheet.dart';
+import '../../../../features/onboarding/onboarding_state.dart';
 import '../../../../manual_location_options.dart';
 import '../../../../shared/l10n/lala_copy.dart';
 import '../../../../shared/widgets/lala_skeleton.dart';
@@ -38,12 +39,13 @@ class _LocalSignalsPageState extends State<LocalSignalsPage> {
   bool _disposed = false;
   int _requestGeneration = 0;
 
-  String get _language => widget.initialConfig.lang == 'en' ? 'en' : 'ko';
+  String get _language => OnboardingState.language;
 
   @override
   void initState() {
     super.initState();
     RegionContextStore.listenable.addListener(_onRegionChanged);
+    OnboardingState.languageListenable.addListener(_onLanguageChanged);
     _load();
   }
 
@@ -51,10 +53,16 @@ class _LocalSignalsPageState extends State<LocalSignalsPage> {
   void dispose() {
     _disposed = true;
     RegionContextStore.listenable.removeListener(_onRegionChanged);
+    OnboardingState.languageListenable.removeListener(_onLanguageChanged);
     super.dispose();
   }
 
   void _onRegionChanged() {
+    if (_disposed) return;
+    _load();
+  }
+
+  void _onLanguageChanged() {
     if (_disposed) return;
     _load();
   }
@@ -84,7 +92,9 @@ class _LocalSignalsPageState extends State<LocalSignalsPage> {
     }
     if (append && mounted) setState(() => _loadingMore = true);
 
-    final backend = widget.backendFactory(widget.initialConfig);
+    final backend = widget.backendFactory(
+      widget.initialConfig.copyWith(lang: _language),
+    );
     try {
       final response = await backend.getLocalSignals(
         region: _coarseRegion,

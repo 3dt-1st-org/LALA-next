@@ -235,9 +235,10 @@ Each wave must publish these stable names so siblings can depend on them:
   `check_openapi_compat.py` guards backward compatibility.
 - **Plan slot schema** = `{period, window, role, place?, weather_fit,
   distance_m, travel_time_min, reason}` in `LalaDailyPlan.slots` (W4).
-- **Viewport/cluster contract** = server returns **places**; clustering is the
-  Flutter policy `clusterMapPlacesForMap` (`places ≥ 80 && mapLevel ≥ 10`;
-  selected pin always individual) (W5).
+- **Viewport/cluster contract** = server returns at most **60 places**; the
+  Flutter policy `clusterMapPlacesForMap` keeps sparse close results individual
+  and uses a bounded geographic grid for `places ≥ 24` or `mapLevel ≥ 10`;
+  selected pin always individual (W5).
 
 ## 4. Collision-Resolution Rules (non-negotiable)
 
@@ -423,7 +424,7 @@ run.
 | Slice | Scope | Tests | Live-data acceptance | Rollback / flag | Risk / dependency |
 | --- | --- | --- | --- | --- | --- |
 | **W5-a Viewport-bounds query** | Optional `bounds=minLat,minLng,maxLat,maxLng` on `/places` (index-covered; circle query retained for rail). Pin-first: API returns places, clustering stays client-side. | In-rectangle-only test; circle-parity test. | Panning re-queries the visible rectangle as individual pins. | Flag `PLACES_VIEWPORT_BOUNDS`. | Low. No schema change. |
-| **W5-b Pin-first + cluster-policy hardening** | Re-affirm `clusterMapPlacesForMap` (`≥80/≥10`); selected-pin-individual invariant; `<80 ⇒ pins`. | Clustering-policy test (selected stays individual). | Map renders individual pins until threshold. | None (current truth). | Low. G6. |
+| **W5-b Pin-first + cluster-policy hardening** | Bound `clusterMapPlacesForMap` to a 4x4 close / 3x3 far geographic grid for `≥24` candidates or level `≥10`; selected pin remains individual and sparse 8 stays pin-first. | Sparse 8, dense API-cap 60, selected, and far-zoom clustering tests. | Dense default results are legible without losing real cluster membership. | None (current truth). | Low. G6. |
 | **W5-c Cuisine/meal/diet/indoor facets + taxonomies** | `066` `travel.places.cuisine_taxonomy`/`cuisine_code` (re-derived, not legacy term list); `/places?cuisine&meal&diet&indoor`; `/api/v1/taxonomies` for data-driven chips. Invalid facet → `400`. | Facet-filter test; invalid-facet-400 test; empty=honest `count:0`. | Restaurants+Cafes chips show ≥3 live café pins. | Flag `PLACE_FACETS`. | Medium. Depends W1 geo. |
 | **W5-d Local Restaurant Tour** | First-class "지역 식당 투어" screen: data-driven chips (W5-c), ≤5-stop walking route from live `/places`, per-stop grounded narration + tour-mode docent reason. | Tour screen test; honest-empty test; bilingual test. | Tour screen: chip selected, ≥3 live stops, rationale visible. | Flag `LOCAL_TOUR`. | Medium. Depends W3-d reason, W5-c facets. |
 | **W5-e Franchise confidence surfacing** | Expose data-basis/`missing_signals` + `franchise_match_confidence`/`unknown` in `/places` so UI shows "partial signals"/"limited review signal" honestly. | Confidence-surfacing test; unknown-fallback test. | A low-signal place shows an honest basis note. | Flag `PLACE_CONFIDENCE_SURFACE`. | Low. |
@@ -460,7 +461,7 @@ real-device capture on live API/DB — never a mock, never a fallback map.
 | **G-MAPLOOP / G6** | Map loop legible on first use: locate → category-aware places → grounded recommendation → add to plan; no permanent score/reason panels (behind `점수/근거`). | W5 | Rail/sheet default shows no score; widget tests assert absence. |
 | **G5 — real-device evidence** | Acceptance requires **real Android/iOS/Web captures** from live API; a map fallback or mock is `blocked`, never `passed`. | W6 | Captures in §5.6/W6-b, each tied to a live API call. |
 | **Location + nationwide manual selection** | Current location is opt-in; **manual nationwide selection is always reachable**, never hidden behind a permission failure; denial still yields a valid plan from the selected region. | W1, W5 | Denial path → compact notice with `재시도`/`지역 선택`; valid plan returns. |
-| **Kakao map: pin-first then genuine clustering** | Individual category-colored pins first; clusters only under the re-derived policy; selected pin always individual. | W5 | `<80 ⇒ pins`; `≥80 && level≥10 ⇒ cluster`; selected-individual test. |
+| **Kakao map: pin-first then genuine clustering** | Individual category-colored pins for sparse close results; bounded geographic clusters at `≥24` candidates or far zoom; selected pin always individual. | W5 | Sparse 8 pins; dense 60 bounded clusters; far-zoom cluster; selected-individual test. |
 | **Weather/air visible, no placeholder dash** | Compact pill (`outdoor_status` + temp + dust grade); unavailable → concise unavailable state with retry, never a fake value. | W1, W5 | `weather_map_pill` good/bad/unknown/unavailable states. |
 | **Four-slot day plan w/ indoor/outdoor substitution + explicit reason** | Full timed day; weather-driven swap; per-slot reason in the active language. | W4 | `/plans/daily` 4 slots; slide-8 pair. |
 | **Score/reason only on demand** | Scores and reasons behind a user action; never always-on. | W3, W5 | `점수/근거` action is the only trigger; default UI has no score. |

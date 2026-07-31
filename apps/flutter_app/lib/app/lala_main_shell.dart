@@ -5,17 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:lala_next_app/app/map_sheet_visibility.dart';
+import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/shared/widgets/lala_bottom_nav_bar.dart';
 
 class LalaMainShell extends StatelessWidget {
-  const LalaMainShell({
-    required this.navigationShell,
-    required this.language,
-    super.key,
-  });
+  const LalaMainShell({required this.navigationShell, super.key});
 
   final StatefulNavigationShell navigationShell;
-  final String language;
 
   @override
   Widget build(BuildContext context) {
@@ -28,9 +24,14 @@ class LalaMainShell extends StatelessWidget {
             // 시트가 네비게이션 바 위까지 덮도록 영역을 비운다.
             return const SizedBox.shrink();
           }
-          return LalaBottomNavBar(
-            navigationShell: navigationShell,
-            language: language,
+          return ValueListenableBuilder<String>(
+            valueListenable: OnboardingState.languageListenable,
+            builder: (BuildContext context, String language, Widget? _) {
+              return LalaBottomNavBar(
+                navigationShell: navigationShell,
+                language: language,
+              );
+            },
           );
         },
       ),

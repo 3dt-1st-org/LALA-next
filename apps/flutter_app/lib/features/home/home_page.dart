@@ -22,6 +22,7 @@ import 'package:lala_next_app/features/location/widgets/manual_location_sheet.da
 import 'package:lala_next_app/features/location/widgets/permanently_denied_recovery.dart';
 import 'package:lala_next_app/features/map/domain/active_map_sheet.dart';
 import 'package:lala_next_app/features/map/map_helpers.dart';
+import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/features/settings/widgets/user_settings_sheet.dart';
 import 'package:lala_next_app/features/tour/tour_helpers.dart';
 import 'package:lala_next_app/features/weather/weather_helpers.dart';
@@ -140,20 +141,28 @@ class _LalaHomePageState extends State<LalaHomePage> {
     final region = RegionContextStore.current;
     _queryLat = region?.lat ?? config.lat;
     _queryLng = region?.lng ?? config.lng;
-    _uiLanguage = config.lang;
+    _uiLanguage = OnboardingState.language;
     _locationStartPromptVisible = config.requireLocationStartConfirmation;
     _authController = widget.authControllerFactory(
       LalaAppAuthDependencies(apiBaseUri: Uri.parse(config.baseUri)),
     );
     _lastAuthStatus = _authController.state.status;
     _authController.addListener(_handleAuthStateChanged);
+    OnboardingState.languageListenable.addListener(_handleUiLanguageChanged);
     widget.localSignalActionController?.addListener(_handleLocalSignalAction);
     _backend = widget.backendFactory(_currentConfig());
     unawaited(_initializeAuth());
     if (!config.requireLocationStartConfirmation) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          _requestLocationThenRefresh(initial: true);
+          if (region?.source == RegionSource.manual) {
+            // A restored manual region is an explicit durable choice. Start the
+            // map from it without asking for live coordinates; the current-
+            // location control remains the only action that may replace it.
+            _refresh(forceWeather: true);
+          } else {
+            _requestLocationThenRefresh(initial: true);
+          }
         }
       });
     }
@@ -165,6 +174,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
     _interventionToastTimer?.cancel();
     _recommendationRecoveryTimer?.cancel();
     _authController.removeListener(_handleAuthStateChanged);
+    OnboardingState.languageListenable.removeListener(_handleUiLanguageChanged);
     widget.localSignalActionController?.removeListener(
       _handleLocalSignalAction,
     );
@@ -1116,7 +1126,12 @@ class _LalaHomePageState extends State<LalaHomePage> {
   }
 
   void _setUiLanguage(String language) {
-    if (_uiLanguage == language) {
+    OnboardingState.selectLanguage(language);
+  }
+
+  void _handleUiLanguageChanged() {
+    final language = OnboardingState.language;
+    if (!mounted || _uiLanguage == language) {
       return;
     }
     setState(() {
