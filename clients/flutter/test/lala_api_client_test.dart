@@ -816,6 +816,19 @@ void main() {
             'recommended_action': 'Show nearby alternatives.',
             'place': _placePayload(),
             'source': 'db',
+            'original_slot': {
+              'period': 'afternoon',
+              'title': 'Afternoon',
+              'place': _placePayload(),
+              'weather_hint': 'good',
+            },
+            'alternative_slot': null,
+            'trigger_type': null,
+            'trigger_factors': <Map<String, dynamic>>[],
+            'distance_comparison': null,
+            'user_decision': 'pending',
+            'apply_state': 'not_applied',
+            'history': <Map<String, dynamic>>[],
           },
           'meta': {'request_id': 'intervention-request-id'},
           'error': null,
@@ -866,6 +879,16 @@ void main() {
     expect(intervention.data?.shouldIntervene, isFalse);
     expect(intervention.data?.recommendedAction, 'Show nearby alternatives.');
     expect(intervention.data?.place?.placeId, 'tour-api-126508');
+    // P5B: original/alternative + trigger + decision boundary parsing.
+    expect(intervention.data?.originalSlot?.period, 'afternoon');
+    expect(intervention.data?.originalSlot?.place?.placeId, 'tour-api-126508');
+    expect(intervention.data?.alternativeSlot, isNull);
+    expect(intervention.data?.triggerType, isNull);
+    expect(intervention.data?.triggerFactors, isEmpty);
+    expect(intervention.data?.distanceComparison, isNull);
+    expect(intervention.data?.userDecision, 'pending');
+    expect(intervention.data?.applyState, 'not_applied');
+    expect(intervention.data?.history, isEmpty);
   });
 
   test('createDailyPlan sends the selected radius and language', () async {

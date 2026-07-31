@@ -1432,6 +1432,14 @@ class LalaIntervention {
     required this.recommendedAction,
     required this.source,
     this.place,
+    this.originalSlot,
+    this.alternativeSlot,
+    this.triggerType,
+    this.triggerFactors = const <Map<String, dynamic>>[],
+    this.distanceComparison,
+    this.userDecision = 'pending',
+    this.applyState = 'not_applied',
+    this.history = const <Map<String, dynamic>>[],
   });
 
   final LalaCoordinate center;
@@ -1441,6 +1449,18 @@ class LalaIntervention {
   final String recommendedAction;
   final String source;
   final LalaPlace? place;
+
+  /// P5B §12.4 additive contract fields. authority-absent values stay null /
+  /// empty (honest unavailable); the API always returns the decision boundary
+  /// defaults.
+  final LalaPlanSlot? originalSlot;
+  final LalaPlanSlot? alternativeSlot;
+  final String? triggerType;
+  final List<Map<String, dynamic>> triggerFactors;
+  final Map<String, dynamic>? distanceComparison;
+  final String userDecision;
+  final String applyState;
+  final List<Map<String, dynamic>> history;
 
   static LalaIntervention fromJsonObject(Object? value) {
     return LalaIntervention.fromJson(_asMap(value));
@@ -1457,6 +1477,23 @@ class LalaIntervention {
       place: json['place'] is Map<String, dynamic>
           ? LalaPlace.fromJson(_asMap(json['place']))
           : null,
+      originalSlot: json['original_slot'] is Map<String, dynamic>
+          ? LalaPlanSlot.fromJson(_asMap(json['original_slot']))
+          : null,
+      alternativeSlot: json['alternative_slot'] is Map<String, dynamic>
+          ? LalaPlanSlot.fromJson(_asMap(json['alternative_slot']))
+          : null,
+      triggerType: _asOptionalString(json['trigger_type']),
+      triggerFactors: _asList(json['trigger_factors'])
+          .whereType<Map<String, dynamic>>()
+          .toList(),
+      distanceComparison: json['distance_comparison'] is Map<String, dynamic>
+          ? json['distance_comparison'] as Map<String, dynamic>
+          : null,
+      userDecision: _asOptionalString(json['user_decision']) ?? 'pending',
+      applyState: _asOptionalString(json['apply_state']) ?? 'not_applied',
+      history:
+          _asList(json['history']).whereType<Map<String, dynamic>>().toList(),
     );
   }
 }
