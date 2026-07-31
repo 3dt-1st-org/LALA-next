@@ -8,6 +8,7 @@ import 'package:lala_next_app/auth/logto_auth_gateway.dart';
 import 'package:lala_next_app/core/location/region_context.dart';
 import 'package:lala_next_app/core/navigation/local_signal_action.dart';
 import 'package:lala_next_app/features/local_signals/presentation/pages/local_signals_page.dart';
+import 'package:lala_next_app/features/map/widgets/top_map_chrome.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/features/plan/presentation/pages/plan_page.dart';
 import 'package:lala_next_app/features/search/presentation/pages/search_page.dart';
@@ -2134,7 +2135,11 @@ void main() {
 
   // P6F §13.5 반응형 code-conformance: 360/430/768dp 에서 5 칩+설정 접근 가능,
   // 지도 컨트롤 스택과 하단 dock 의 세로 영역이 겹치지 않는다(동작 규칙만 고정).
-  Future<void> pumpMapChromeAt(WidgetTester tester, double width) async {
+  Future<void> pumpMapChromeAt(
+    WidgetTester tester,
+    double width, {
+    String language = 'ko',
+  }) async {
     tester.view.physicalSize = Size(width, 852);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -2142,10 +2147,34 @@ void main() {
     await tester.pumpWidget(
       TestLalaApp(
         backendFactory: FakeBackend.new,
-        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+        initialConfig: LalaAppConfig(
+          baseUri: 'http://api.test',
+          lang: language,
+        ),
       ),
     );
     await tester.pumpAndSettle();
+  }
+
+  Future<void> pumpEnglishMapChromeAt(WidgetTester tester, double width) async {
+    tester.view.physicalSize = Size(width, 852);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TopMapChrome(
+            loading: false,
+            language: 'en',
+            selectedCategory: 'all',
+            onSelectCategory: (_) {},
+            onOpenSettings: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
   }
 
   testWidgets(
@@ -2189,6 +2218,49 @@ void main() {
       expect(railRect.bottom, lessThan(voiceRect.top));
     },
   );
+
+  for (final width in <double>[360, 393, 430]) {
+    testWidgets(
+      'English map chrome keeps every chip and settings inside ${width.toInt()}dp',
+      (tester) async {
+        await pumpEnglishMapChromeAt(tester, width);
+        expect(tester.takeException(), isNull);
+
+        final viewport = Rect.fromLTWH(0, 0, width, 852);
+        const labelsByKey = <String, String>{
+          'map-category-all': 'All',
+          'map-category-attraction': 'Sights',
+          'map-category-restaurant': 'Food',
+          'map-category-event': 'Events',
+          'map-category-culture_venue': 'Culture',
+        };
+        final chipRects = <Rect>[];
+        for (final entry in labelsByKey.entries) {
+          final chip = find.byKey(ValueKey(entry.key));
+          expect(chip, findsOneWidget);
+          expect(
+            find.descendant(of: chip, matching: find.text(entry.value)),
+            findsOneWidget,
+          );
+          final rect = tester.getRect(chip);
+          expect(rect.left, greaterThanOrEqualTo(viewport.left));
+          expect(rect.top, greaterThanOrEqualTo(viewport.top));
+          expect(rect.right, lessThanOrEqualTo(viewport.right));
+          expect(rect.bottom, lessThanOrEqualTo(viewport.bottom));
+          chipRects.add(rect);
+        }
+
+        final settingsRect = tester.getRect(
+          find.byKey(const ValueKey('settings-button')),
+        );
+        expect(settingsRect.left, greaterThanOrEqualTo(viewport.left));
+        expect(settingsRect.top, greaterThanOrEqualTo(viewport.top));
+        expect(settingsRect.right, lessThanOrEqualTo(viewport.right));
+        expect(settingsRect.bottom, lessThanOrEqualTo(viewport.bottom));
+        expect(chipRects.last.right, lessThanOrEqualTo(settingsRect.left));
+      },
+    );
+  }
 
   testWidgets(
     'map chrome keeps 5 chips+settings reachable at 768dp desktop/iPad',
@@ -2434,7 +2506,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('All'), findsOneWidget);
-    expect(find.text('Attractions'), findsOneWidget);
+    expect(find.text('Sights'), findsOneWidget);
     expect(find.text('Daily Plan'), findsOneWidget);
     expect(find.text('전체'), findsNothing);
     expect(find.text('하루 일정'), findsNothing);
@@ -2545,7 +2617,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Restaurants').first);
+    await tester.tap(find.text('Food').first);
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('tour-pill-hit-target')));
     await tester.pumpAndSettle();

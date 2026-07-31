@@ -34,7 +34,7 @@ class MapRoundButton extends StatelessWidget {
               side: BorderSide(color: Color(0xFFE2E8F0), width: 1.4),
             ),
             child: SizedBox.square(
-              dimension: 46,
+              dimension: 44,
               child: Icon(icon, size: 22, color: const Color(0xFF1A202C)),
             ),
           ),

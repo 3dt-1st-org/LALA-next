@@ -5,6 +5,20 @@ import '../../place/place_helpers.dart';
 import 'category_chip.dart';
 import 'map_round_button.dart';
 
+String _mapCategoryLabel(String category, String language) {
+  if (language != 'en') {
+    return categoryFilterLabel(category, language);
+  }
+  return switch (category) {
+    'all' => 'All',
+    'attraction' => 'Sights',
+    'restaurant' => 'Food',
+    'event' => 'Events',
+    'culture_venue' => 'Culture',
+    _ => categoryFilterLabel(category, language),
+  };
+}
+
 /// 지도 상단 크롬(카테고리 필터 + 설정 버튼 + 로딩 바)(C3 추출 — main.dart 의 _TopMapChrome).
 class TopMapChrome extends StatelessWidget {
   const TopMapChrome({
@@ -39,31 +53,41 @@ class TopMapChrome extends StatelessWidget {
                   child: Row(
                     children: [
                       CategoryChip(
-                        label: categoryFilterLabel('all', language),
+                        key: const ValueKey('map-category-all'),
+                        label: _mapCategoryLabel('all', language),
+                        width: 36,
                         active: selectedCategory == 'all',
                         color: categoryColor('all'),
                         onTap: () => onSelectCategory('all'),
                       ),
                       CategoryChip(
-                        label: categoryFilterLabel('attraction', language),
+                        key: const ValueKey('map-category-attraction'),
+                        label: _mapCategoryLabel('attraction', language),
+                        width: 52,
                         active: selectedCategory == 'attraction',
                         color: categoryColor('attraction'),
                         onTap: () => onSelectCategory('attraction'),
                       ),
                       CategoryChip(
-                        label: categoryFilterLabel('restaurant', language),
+                        key: const ValueKey('map-category-restaurant'),
+                        label: _mapCategoryLabel('restaurant', language),
+                        width: 44,
                         active: selectedCategory == 'restaurant',
                         color: categoryColor('restaurant'),
                         onTap: () => onSelectCategory('restaurant'),
                       ),
                       CategoryChip(
-                        label: categoryFilterLabel('event', language),
+                        key: const ValueKey('map-category-event'),
+                        label: _mapCategoryLabel('event', language),
+                        width: 52,
                         active: selectedCategory == 'event',
                         color: categoryColor('event'),
                         onTap: () => onSelectCategory('event'),
                       ),
                       CategoryChip(
-                        label: categoryFilterLabel('culture_venue', language),
+                        key: const ValueKey('map-category-culture_venue'),
+                        label: _mapCategoryLabel('culture_venue', language),
+                        width: 56,
                         active: selectedCategory == 'culture_venue',
                         color: categoryColor('culture_venue'),
                         onTap: () => onSelectCategory('culture_venue'),
@@ -72,7 +96,7 @@ class TopMapChrome extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 6),
               MapRoundButton(
                 buttonKey: const ValueKey('settings-button'),
                 tooltip: lalaCopy(language, ko: '설정', en: 'Settings'),
