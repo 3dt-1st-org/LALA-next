@@ -412,6 +412,10 @@ and the current Docker macOS runbook at
 
 See [docs/operations/verification.md](docs/operations/verification.md).
 
+For team AWS Secrets Manager roles, safe dotenv synchronization, and the
+least-privilege Flutter build path, see
+[docs/operations/aws-secrets-manager-team-handoff.md](docs/operations/aws-secrets-manager-team-handoff.md).
+
 Worker and batch producer boundaries are described in
 [docs/operations/worker-batch-boundary.md](docs/operations/worker-batch-boundary.md).
 Observability planning is described in
