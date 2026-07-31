@@ -69,6 +69,8 @@ class Dashboard extends StatelessWidget {
     required this.recommendationRecoveryPending,
     required this.recommendationRecoveryAttempt,
     required this.focusedClusterMemberIds,
+    required this.queryLat,
+    required this.queryLng,
     required this.mapFocusLat,
     required this.mapFocusLng,
     required this.mapLevel,
@@ -131,6 +133,8 @@ class Dashboard extends StatelessWidget {
   final bool recommendationRecoveryPending;
   final int recommendationRecoveryAttempt;
   final List<String> focusedClusterMemberIds;
+  final double queryLat;
+  final double queryLng;
   final double? mapFocusLat;
   final double? mapFocusLng;
   final int mapLevel;
@@ -265,6 +269,8 @@ class Dashboard extends StatelessWidget {
                 weather: currentWeather,
                 kakaoJavascriptKey: kakaoJavascriptKey,
                 language: uiLanguage,
+                fallbackCenterLat: queryLat,
+                fallbackCenterLng: queryLng,
                 mapFocusLat: mapFocusLat,
                 mapFocusLng: mapFocusLng,
                 mapLevel: mapLevel,

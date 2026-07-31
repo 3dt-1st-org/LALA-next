@@ -13,6 +13,8 @@ class LegacyMapCanvas extends StatelessWidget {
     required this.weather,
     required this.kakaoJavascriptKey,
     required this.language,
+    required this.fallbackCenterLat,
+    required this.fallbackCenterLng,
     required this.mapFocusLat,
     required this.mapFocusLng,
     required this.mapLevel,
@@ -26,6 +28,8 @@ class LegacyMapCanvas extends StatelessWidget {
   final LalaWeather? weather;
   final String kakaoJavascriptKey;
   final String language;
+  final double fallbackCenterLat;
+  final double fallbackCenterLng;
   final double? mapFocusLat;
   final double? mapFocusLng;
   final int mapLevel;
@@ -36,8 +40,8 @@ class LegacyMapCanvas extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selected = selectedPlace;
-    final centerLat = mapFocusLat ?? selected?.lat ?? 37.2823;
-    final centerLng = mapFocusLng ?? selected?.lng ?? 127.0179;
+    final centerLat = mapFocusLat ?? selected?.lat ?? fallbackCenterLat;
+    final centerLng = mapFocusLng ?? selected?.lng ?? fallbackCenterLng;
     final mapPlaces = clusterMapPlacesForMap(
       places: places,
       selected: selected,

@@ -12,17 +12,19 @@ class CategoryChip extends StatelessWidget {
     required this.active,
     required this.color,
     required this.onTap,
+    this.width,
   });
 
   final String label;
   final bool active;
   final Color color;
   final VoidCallback onTap;
+  final double? width;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(right: 6),
+      padding: const EdgeInsets.only(right: 4),
       child: Material(
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(999),
@@ -38,11 +40,9 @@ class CategoryChip extends StatelessWidget {
               borderRadius: BorderRadius.circular(999),
               onTap: onTap,
               child: Container(
+                width: width,
                 constraints: const BoxConstraints(minHeight: 40),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 9,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 9),
                 decoration: BoxDecoration(
                   color: active ? color : Colors.white.withValues(alpha: 0.95),
                   borderRadius: BorderRadius.circular(999),
@@ -62,7 +62,7 @@ class CategoryChip extends StatelessWidget {
                               ? LalaVisualColors.restaurantInk
                               : Colors.white)
                         : const Color(0xFF0F172A),
-                    fontSize: 13,
+                    fontSize: 12,
                     fontWeight: FontWeight.w800,
                   ),
                 ),

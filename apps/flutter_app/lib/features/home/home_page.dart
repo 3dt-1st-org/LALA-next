@@ -1379,6 +1379,8 @@ class _LalaHomePageState extends State<LalaHomePage> {
                   recommendationRecoveryAttempt:
                       _recommendationRecoveryAttempts,
                   focusedClusterMemberIds: _focusedClusterMemberIds,
+                  queryLat: _queryLat,
+                  queryLng: _queryLng,
                   mapFocusLat: _mapFocusLat,
                   mapFocusLng: _mapFocusLng,
                   mapLevel: _mapLevel,

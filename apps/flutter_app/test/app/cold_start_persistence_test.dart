@@ -361,7 +361,7 @@ void main() {
     );
 
     testWidgets(
-      'restored manual Busan starts Home without requesting current location',
+      'restored manual Busan centers an empty Home map without requesting location',
       (tester) async {
         final backend = _MemoryBackend();
         await OnboardingPreferences(backend).writeOnboarding(
@@ -374,6 +374,8 @@ void main() {
         ).writeManualRegionId('busan-haeundae');
         await bootstrapAppState(preferences: OnboardingPreferences(backend));
 
+        const initialConfig = LalaAppConfig(baseUri: 'http://api.test');
+        final manualRegion = _busanHaeundae();
         final configs = <LalaAppConfig>[];
         final locationProvider = _CountingLocationProvider(
           const LalaLocationResult.found(
@@ -387,7 +389,7 @@ void main() {
                 configs.add(config);
                 return _NoopBackend();
               },
-              initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+              initialConfig: initialConfig,
               locationProvider: locationProvider,
               recommendationRecoveryDelays: const <Duration>[],
               authControllerFactory: createLalaAuthController,
@@ -402,6 +404,26 @@ void main() {
         expect(configs.last.lng, 129.16792);
         expect(RegionContextStore.current?.regionId, 'busan-haeundae');
         expect(RegionContextStore.current?.source, RegionSource.manual);
+        expect(
+          find.byKey(
+            ValueKey(
+              'kakao-map-fallback-center-'
+              '${manualRegion.lat.toStringAsFixed(4)}-'
+              '${manualRegion.lng.toStringAsFixed(4)}',
+            ),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(
+            ValueKey(
+              'kakao-map-fallback-center-'
+              '${initialConfig.lat.toStringAsFixed(4)}-'
+              '${initialConfig.lng.toStringAsFixed(4)}',
+            ),
+          ),
+          findsNothing,
+        );
 
         // Dispose Home/auth/map state explicitly so no controller or timer can
         // keep the focused Flutter test process alive.
