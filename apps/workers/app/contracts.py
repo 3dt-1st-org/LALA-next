@@ -4,6 +4,15 @@ import os
 from dataclasses import dataclass, field
 from typing import Any
 
+from apps.api.app.core.runtime_secrets import (
+    SECRET_REGISTRY,
+    RuntimeSecretError,
+    SecretContractStatus,
+    get_runtime_profile,
+    required_secret_names,
+    resolve_runtime_secret,
+)
+
 
 class WorkerExecutionError(RuntimeError):
     """Raised when a worker job cannot be executed safely."""
@@ -107,7 +116,7 @@ _JOB_DEFINITIONS: tuple[WorkerJobDefinition, ...] = (
             destination="ops.dependency_checks with status=failed",
             operator_action="record dependency failure and leave API on offline/latest-cache fallback",
         ),
-        dependencies=("DB_DSN", "KEY_VAULT_URL"),
+        dependencies=("DB_DSN",),
         source_systems=("legacy weather_air_func", "Azure Function candidate"),
         dry_run_payload={
             "sample_region": "suwon",
@@ -139,7 +148,7 @@ _JOB_DEFINITIONS: tuple[WorkerJobDefinition, ...] = (
             destination="ops.job_runs with status=failed",
             operator_action="mark crawl run failed and review crawler quota or selector drift",
         ),
-        dependencies=("DB_DSN", "KEY_VAULT_URL"),
+        dependencies=("DB_DSN",),
         source_systems=("legacy community collector",),
         dry_run_payload={
             "sample_window": "current ISO week",
@@ -170,7 +179,7 @@ _JOB_DEFINITIONS: tuple[WorkerJobDefinition, ...] = (
             destination="future dead-letter store before any Event Hub live binding is enabled",
             operator_action="quarantine malformed event, preserve metadata, and alert worker owner",
         ),
-        dependencies=("DB_DSN", "KEY_VAULT_URL", "EVENT_HUB_NAMESPACE"),
+        dependencies=("DB_DSN", "EVENT_HUB_NAMESPACE"),
         source_systems=("Azure Event Hub", "Azure Stream Analytics"),
         dry_run_payload={
             "sample_batch": "no live queue read in Wave 1",
@@ -237,7 +246,7 @@ _JOB_DEFINITIONS: tuple[WorkerJobDefinition, ...] = (
             destination="ops.job_runs with status=failed",
             operator_action="keep /metrics process-local and review Azure cost/readiness source manually",
         ),
-        dependencies=("DB_DSN", "KEY_VAULT_URL"),
+        dependencies=("DB_DSN",),
         source_systems=("API readiness", "Azure cost export candidate"),
         dry_run_payload={
             "sample_status": "degraded-safe",
@@ -297,6 +306,12 @@ def run_worker_job(
             "Worker mutation is disabled. Use dry-run or set ALLOW_WORKER_MUTATION=1 only after live DB/queue wiring is approved.",
         )
 
+    if get_runtime_profile() == "worker":
+        try:
+            ensure_worker_runtime_secrets(job.job_id)
+        except RuntimeSecretError as exc:
+            raise WorkerExecutionError("runtime_secrets_unavailable", str(exc)) from None
+
     raise WorkerExecutionError(
         "not_implemented",
         "Live worker execution is not implemented in Wave 1. Keep Azure Functions/Event Hub producer wiring behind a later rollout decision.",
@@ -311,6 +326,24 @@ def evaluate_worker_live_preflight(
     env = environ if environ is not None else os.environ
     jobs = (get_worker_job(job_id),) if job_id else _JOB_DEFINITIONS
     mutation_enabled = env.get("ALLOW_WORKER_MUTATION") == "1"
+
+    secret_contract: dict[str, Any] = {
+        "profile": get_runtime_profile(env),
+        "status": "not_required",
+        "required_names": [],
+        "configured_names": [],
+        "missing_names": [],
+    }
+    if secret_contract["profile"] == "worker":
+        try:
+            statuses = [ensure_worker_runtime_secrets(job.job_id, environ=env) for job in jobs]
+            secret_contract = _merge_secret_statuses(statuses)
+        except RuntimeSecretError as exc:
+            secret_contract = {
+                **secret_contract,
+                "status": "error",
+                "error": str(exc),
+            }
 
     job_results = [_preflight_job(job, env=env, mutation_enabled=mutation_enabled) for job in jobs]
     missing_dependencies = sorted(
@@ -345,18 +378,56 @@ def evaluate_worker_live_preflight(
     ]
 
     return {
-        "ok": True,
+        "ok": secret_contract["status"] in {"ok", "not_required"},
         "mode": "live_preflight",
         "ready": False,
         "global_checks": global_checks,
         "missing_dependencies": missing_dependencies,
         "jobs": job_results,
+        "secret_contract": secret_contract,
         "risk_gates": [
             "DB_DSN and canonical schema approval",
             "queue/Event Hub binding approval for ingest jobs",
             "live retry/idempotency/poison implementation",
             "persistent worker logs, metrics, and alerts",
         ],
+    }
+
+
+def ensure_worker_runtime_secrets(
+    job_id: str,
+    *,
+    environ: dict[str, str] | None = None,
+) -> SecretContractStatus:
+    env = environ if environ is not None else os.environ
+    profile = get_runtime_profile(env)
+    if profile != "worker":
+        return SecretContractStatus(profile, "not_required")
+    job = get_worker_job(job_id)
+    values: dict[str, object] = {
+        "enable_live_ai": env.get("LALA_ENABLE_LIVE_AI") == "1"
+        or env.get("LALA_ENABLE_LIVE_AI", "").lower() == "true",
+    }
+    names = required_secret_names(profile, worker_job_id=job.job_id, values=values)
+    configured: list[str] = []
+    for env_name in names:
+        spec = next(item for item in SECRET_REGISTRY if item.env_name == env_name)
+        resolve_runtime_secret(spec.env_name, spec.secret_name, environ=env, required=True)
+        configured.append(env_name)
+    return SecretContractStatus(profile, "ok", names, tuple(configured), ())
+
+
+def _merge_secret_statuses(statuses: list[SecretContractStatus]) -> dict[str, Any]:
+    required = tuple(dict.fromkeys(name for status in statuses for name in status.required_names))
+    configured = tuple(
+        dict.fromkeys(name for status in statuses for name in status.configured_names)
+    )
+    return {
+        "profile": "worker",
+        "status": "ok",
+        "required_names": list(required),
+        "configured_names": list(configured),
+        "missing_names": [],
     }
 
 

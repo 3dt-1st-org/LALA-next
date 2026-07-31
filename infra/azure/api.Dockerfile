@@ -6,6 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PORT=8000
 
 WORKDIR /app
+ENV LALA_RUNTIME_PROFILE=api
 
 RUN python -m pip install --upgrade pip \
     && python -m pip install uv

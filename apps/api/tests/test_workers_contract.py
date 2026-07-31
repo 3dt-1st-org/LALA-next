@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from apps.api.app.core.runtime_secrets import RuntimeSecretLookupError
 from apps.workers.app.contracts import (
     WorkerExecutionError,
     evaluate_worker_live_preflight,
@@ -109,7 +110,6 @@ def test_worker_live_preflight_is_secret_safe_and_blocked_until_implemented():
     env = {
         "ALLOW_WORKER_MUTATION": "1",
         "DB_DSN": marker,
-        "KEY_VAULT_URL": "https://lala-key-vault.vault.azure.net/",
         "EVENT_HUB_NAMESPACE": "lala-next-dev-eventhub",
         "OPENAI_API_KEY": "test-key",  # pragma: allowlist secret -- fake test fixture
         "LALA_ENABLE_LIVE_AI": "true",
@@ -121,6 +121,7 @@ def test_worker_live_preflight_is_secret_safe_and_blocked_until_implemented():
     assert payload["ok"] is True
     assert payload["mode"] == "live_preflight"
     assert payload["ready"] is False
+    assert payload["secret_contract"]["status"] == "not_required"
     assert payload["missing_dependencies"] == []
     assert payload["jobs"][0]["ready"] is False
     assert "live_implementation_missing" in payload["jobs"][0]["blockers"]
@@ -133,7 +134,7 @@ def test_worker_live_preflight_reports_missing_dependencies_without_values():
 
     assert payload["ready"] is False
     assert "DB_DSN" in payload["missing_dependencies"]
-    assert "KEY_VAULT_URL" in payload["missing_dependencies"]
+    assert "KEY_VAULT_URL" not in payload["missing_dependencies"]
     ingest = next(job for job in payload["jobs"] if job["job_id"] == "community-post-ingest")
     assert "missing_dependency:EVENT_HUB_NAMESPACE" in ingest["blockers"]
 
@@ -209,7 +210,6 @@ def test_worker_cli_preflight_json_is_secret_safe_and_does_not_enable_live_execu
     env = os.environ.copy()
     env["ALLOW_WORKER_MUTATION"] = "1"
     env["DB_DSN"] = marker
-    env["KEY_VAULT_URL"] = "https://lala-key-vault.vault.azure.net/"
     env["EVENT_HUB_NAMESPACE"] = "lala-next-dev-eventhub"
 
     result = subprocess.run(
@@ -227,6 +227,24 @@ def test_worker_cli_preflight_json_is_secret_safe_and_does_not_enable_live_execu
     assert payload["ready"] is False
     assert marker not in result.stdout
     assert "live_implementation_missing" in result.stdout
+
+
+def test_worker_profile_fails_closed_without_aws_contract(monkeypatch):
+    monkeypatch.setenv("LALA_RUNTIME_PROFILE", "worker")
+    monkeypatch.setenv("ALLOW_WORKER_MUTATION", "1")
+    monkeypatch.setattr(
+        "apps.workers.app.contracts.resolve_runtime_secret",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            RuntimeSecretLookupError("AWS lookup failed for db-dsn")
+        ),
+    )
+
+    with pytest.raises(WorkerExecutionError) as exc_info:
+        run_worker_job("weather-refresh", dry_run=False)
+
+    assert exc_info.value.code == "runtime_secrets_unavailable"
+    assert "db-dsn" in exc_info.value.message
+    assert "AWS lookup failed" in exc_info.value.message
 
 
 def test_worker_rollout_plan_is_secret_safe_and_non_mutating():

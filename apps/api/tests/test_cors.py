@@ -76,6 +76,7 @@ def test_cors_origin_list_trims_spaces_and_trailing_slashes(monkeypatch):
 
 
 def test_cors_origin_list_can_load_from_lala_key_vault(monkeypatch):
+    monkeypatch.setenv("LALA_RUNTIME_PROFILE", "local")
     monkeypatch.delenv("CORS_ALLOW_ORIGINS", raising=False)
     monkeypatch.setenv("KEY_VAULT_URL", "https://lala-key-vault.vault.azure.net/")
 

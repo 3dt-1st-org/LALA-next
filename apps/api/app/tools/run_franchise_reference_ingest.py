@@ -7,10 +7,13 @@ import os
 from datetime import UTC, date, datetime
 from typing import Any
 
-from dotenv import load_dotenv
-
 from apps.api.app.core.key_vault import get_secret_if_configured
 from apps.api.app.core.redaction import redact_secret_text
+from apps.api.app.core.runtime_secrets import (
+    get_runtime_profile,
+    load_runtime_environment,
+    resolve_runtime_secret,
+)
 from apps.api.app.services.franchise_reference_ingest import (
     DEFAULT_API_URL,
     DEFAULT_DATASET_NAME,
@@ -24,7 +27,7 @@ CONFIRM_TEXT = "APPLY_FRANCHISE_REFERENCE_INGEST"
 ALLOW_ENV = "ALLOW_FRANCHISE_REFERENCE_INGEST_APPLY"
 JOB_NAME = "franchise-reference-ingest"
 
-load_dotenv()
+load_runtime_environment()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -189,10 +192,14 @@ def _apply_guard_error(args: argparse.Namespace) -> str:
 
 
 def _env_or_secret(env_name: str, secret_name: str) -> str:
-    value = (os.getenv(env_name) or "").strip()
-    if value:
-        return value
-    return get_secret_if_configured((os.getenv("KEY_VAULT_URL") or "").strip(), secret_name)
+    return resolve_runtime_secret(
+        env_name,
+        secret_name,
+        key_vault_loader=lambda _url, name: get_secret_if_configured(
+            (os.getenv("KEY_VAULT_URL") or "").strip(), name
+        ),
+        required=get_runtime_profile() in {"api", "worker"},
+    )
 
 
 def _write(args: argparse.Namespace, payload: dict[str, Any]) -> None:

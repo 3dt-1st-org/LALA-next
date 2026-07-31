@@ -203,6 +203,8 @@ def build_readiness(settings: Settings | None = None) -> dict:
         "rag_retrieval_mode": settings.rag_retrieval_mode or "legacy",
         "rag_embedding_method": settings.rag_embedding_method or "local-hash",
         "rag_embedding_generation": settings.rag_embedding_generation,
+        "runtime_profile": settings.runtime_profile,
+        "secret_contract": settings.secret_contract.to_dict(),
     }
     mode = _runtime_mode(checks)
     return {
@@ -228,6 +230,12 @@ def _overall_readiness_status(*, checks: dict[str, str], mode: dict[str, str]) -
     if checks["client_auth"] == "missing":
         return "degraded"
     if checks["identity_schema"] == "degraded":
+        return "degraded"
+    secret_contract = checks.get("secret_contract", {})
+    if isinstance(secret_contract, dict) and secret_contract.get("status") not in {
+        "ok",
+        "not_required",
+    }:
         return "degraded"
     if mode["overall"] == "degraded":
         return "degraded"

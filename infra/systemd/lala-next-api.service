@@ -1,0 +1,19 @@
+[Unit]
+Description=LALA-next API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ec2-user
+Group=ec2-user
+WorkingDirectory=/opt/lala-next
+Environment=LALA_RUNTIME_PROFILE=api
+ExecStart=/opt/lala-next/scripts/unix/start_api.sh --runtime-profile api
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

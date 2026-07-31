@@ -1,15 +1,20 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from urllib.parse import urlsplit, urlunsplit
-
-from dotenv import load_dotenv
 
 from apps.api.app.core.feature_flags import FeatureFlagValue, resolve_feature_flags
 from apps.api.app.core.key_vault import get_secret_if_configured
+from apps.api.app.core.runtime_secrets import (
+    SecretContractStatus,
+    get_runtime_profile,
+    load_runtime_environment,
+    resolve_runtime_secret,
+    validate_secret_contract,
+)
 
-load_dotenv()
+load_runtime_environment()
 
 
 @dataclass(frozen=True)
@@ -75,6 +80,10 @@ class Settings:
     cors_allow_origins: tuple[str, ...] = ()
     log_level: str = "INFO"
     access_log_path: str = ""
+    runtime_profile: str = "local"
+    secret_contract: SecretContractStatus = field(
+        default_factory=lambda: SecretContractStatus("local", "not_required")
+    )
 
     @property
     def guest_access_enabled(self) -> bool:
@@ -82,6 +91,7 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> Settings:
+        profile = get_runtime_profile()
         key_vault_url = (os.getenv("KEY_VAULT_URL") or "").strip()
         logto_endpoint = _env_or_secret("LOGTO_ENDPOINT", "logto-endpoint", key_vault_url)
         logto_api_audience = _env_or_secret(
@@ -125,7 +135,7 @@ class Settings:
             )
             or "gpt-5.4-mini"
         )
-        return cls(
+        settings = cls(
             ios_api_key=_env_or_secret("IOS_API_KEY", "ios-api-key", key_vault_url),
             api_bearer_token=_env_or_secret("API_BEARER_TOKEN", "api-bearer-token", key_vault_url),
             logto_endpoint=logto_endpoint,
@@ -277,6 +287,23 @@ class Settings:
             log_level=(os.getenv("LOG_LEVEL") or "INFO").strip(),
             access_log_path=(os.getenv("LALA_ACCESS_LOG_PATH") or "").strip(),
         )
+        secret_values = {
+            "ios_api_key": settings.ios_api_key,
+            "api_bearer_token": settings.api_bearer_token,
+            "oauth_issuer": settings.oauth_issuer,
+            "oauth_audience": settings.oauth_audience,
+            "oauth_jwks_url": settings.oauth_jwks_url,
+            "db_dsn": settings.db_dsn,
+            "openai_api_key": settings.openai_api_key,
+            "enable_live_ai": settings.enable_live_ai,
+            "enable_live_speech": settings.enable_live_speech,
+            "azure_speech_key": settings.azure_speech_key,
+            "azure_speech_region": settings.azure_speech_region,
+            "guest_access": settings.guest_access,
+            "public_contest_access": settings.public_contest_access,
+        }
+        contract = validate_secret_contract(profile, secret_values, environ=os.environ)
+        return replace(settings, runtime_profile=profile, secret_contract=contract)
 
 
 def get_settings() -> Settings:
@@ -303,17 +330,11 @@ def resolve_openai_base_url_host(base_url: str | None) -> str:
 
 
 def _env_or_secret(env_name: str, secret_name: str, key_vault_url: str = "") -> str:
-    value = (os.getenv(env_name) or "").strip()
-    if value:
-        return value
-    # AWS Secrets Manager (AWS 운영 환경 우선)
-    from apps.api.app.core.aws_secrets import get_aws_sm_secret
-
-    aws_value = get_aws_sm_secret(secret_name)
-    if aws_value:
-        return aws_value
-    # Azure Key Vault (레거시 폴백)
-    return get_secret_if_configured(key_vault_url, secret_name)
+    return resolve_runtime_secret(
+        env_name,
+        secret_name,
+        key_vault_loader=lambda _url, name: get_secret_if_configured(key_vault_url, name),
+    )
 
 
 def _model_role_overrides_from_env() -> dict[str, str]:

@@ -8,7 +8,7 @@ Type=oneshot
 User=ec2-user
 Group=ec2-user
 WorkingDirectory=/opt/lala-next
-EnvironmentFile=/opt/lala-next/.env
+Environment=LALA_RUNTIME_PROFILE=worker
 Environment=ALLOW_TOUR_API_INGEST_APPLY=1
 Environment=ALLOW_CULTURE_INFO_INGEST_APPLY=1
 Environment=ALLOW_KOPIS_INGEST_APPLY=1
