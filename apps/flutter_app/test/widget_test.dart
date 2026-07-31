@@ -2238,11 +2238,25 @@ void main() {
         for (final entry in labelsByKey.entries) {
           final chip = find.byKey(ValueKey(entry.key));
           expect(chip, findsOneWidget);
-          expect(
-            find.descendant(of: chip, matching: find.text(entry.value)),
-            findsOneWidget,
+          final label = find.descendant(
+            of: chip,
+            matching: find.text(entry.value),
           );
+          expect(label, findsOneWidget);
+          final labelWidget = tester.widget<Text>(label);
+          expect(labelWidget.maxLines, 1);
+          expect(labelWidget.softWrap, isFalse);
+          expect(labelWidget.overflow, TextOverflow.visible);
+
+          final fittedLabel = find.descendant(
+            of: chip,
+            matching: find.byType(FittedBox),
+          );
+          expect(fittedLabel, findsOneWidget);
+          expect(tester.widget<FittedBox>(fittedLabel).fit, BoxFit.scaleDown);
+
           final rect = tester.getRect(chip);
+          expect(rect.height, 40);
           expect(rect.left, greaterThanOrEqualTo(viewport.left));
           expect(rect.top, greaterThanOrEqualTo(viewport.top));
           expect(rect.right, lessThanOrEqualTo(viewport.right));
@@ -2258,6 +2272,7 @@ void main() {
         expect(settingsRect.right, lessThanOrEqualTo(viewport.right));
         expect(settingsRect.bottom, lessThanOrEqualTo(viewport.bottom));
         expect(chipRects.last.right, lessThanOrEqualTo(settingsRect.left));
+        expect(chipRects.map((rect) => rect.height).toSet(), <double>{40});
       },
     );
   }

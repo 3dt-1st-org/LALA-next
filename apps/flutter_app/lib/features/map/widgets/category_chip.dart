@@ -41,8 +41,8 @@ class CategoryChip extends StatelessWidget {
               onTap: onTap,
               child: Container(
                 width: width,
-                constraints: const BoxConstraints(minHeight: 40),
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 9),
+                height: 40,
+                padding: const EdgeInsets.symmetric(horizontal: 7),
                 decoration: BoxDecoration(
                   color: active ? color : Colors.white.withValues(alpha: 0.95),
                   borderRadius: BorderRadius.circular(999),
@@ -54,16 +54,24 @@ class CategoryChip extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    color: active
-                        ? (color == LalaVisualColors.restaurant
-                              ? LalaVisualColors.restaurantInk
-                              : Colors.white)
-                        : const Color(0xFF0F172A),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
+                child: Center(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.visible,
+                      style: TextStyle(
+                        color: active
+                            ? (color == LalaVisualColors.restaurant
+                                  ? LalaVisualColors.restaurantInk
+                                  : Colors.white)
+                            : const Color(0xFF0F172A),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ),
                 ),
               ),
