@@ -13,13 +13,17 @@ import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
 import 'package:lala_next_app/core/location/region_context.dart';
 import 'package:lala_next_app/features/plan/presentation/pages/plan_page.dart';
+import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/manual_location_options.dart';
 
 void main() {
   // RegionContextStore is a process-local singleton; reset it before each test
   // so a manual/current choice from another test cannot leak into this tab's
   // seed coordinates.
-  setUp(RegionContextStore.clear);
+  setUp(() {
+    RegionContextStore.clear();
+    OnboardingState.selectLanguage('ko');
+  });
 
   testWidgets(
     'plan pending shows one generating card and a skeleton timeline, then clears',
@@ -237,6 +241,7 @@ void main() {
   testWidgets(
     'english config shows the exclusive English empty copy and action',
     (tester) async {
+      OnboardingState.selectLanguage('en');
       await tester.pumpWidget(
         MaterialApp(
           home: PlanPage(
@@ -259,7 +264,39 @@ void main() {
     },
   );
 
-  tearDown(RegionContextStore.clear);
+  testWidgets('selected language updates Plan immediately and reloads in EN', (
+    tester,
+  ) async {
+    RegionContextStore.set(RegionContext.manual(_busanOption()));
+    final configs = <LalaAppConfig>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PlanPage(
+          locationProvider: _CountingLocationProvider(
+            const LalaLocationResult.unavailable(),
+          ),
+          backendFactory: (config) {
+            configs.add(config);
+            return _LoadedPlanBackend();
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('오늘 일정'), findsOneWidget);
+
+    OnboardingState.selectLanguage('en');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Today\'s Plan'), findsOneWidget);
+    expect(find.text('오늘 일정'), findsNothing);
+    expect(configs.last.lang, 'en');
+  });
+
+  tearDown(() {
+    RegionContextStore.clear();
+    OnboardingState.reset();
+  });
 }
 
 class _FoundLocationProvider implements LalaLocationProvider {

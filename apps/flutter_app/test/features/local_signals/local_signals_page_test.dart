@@ -10,11 +10,18 @@ import 'package:lala_next_app/core/location/region_context.dart';
 import 'package:lala_next_app/core/navigation/local_signal_action.dart';
 import 'package:lala_next_app/features/local_signals/domain/local_signal_public.dart';
 import 'package:lala_next_app/features/local_signals/presentation/pages/local_signals_page.dart';
+import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/manual_location_options.dart';
 
 void main() {
-  setUp(RegionContextStore.clear);
-  tearDown(RegionContextStore.clear);
+  setUp(() {
+    RegionContextStore.clear();
+    OnboardingState.selectLanguage('ko');
+  });
+  tearDown(() {
+    RegionContextStore.clear();
+    OnboardingState.reset();
+  });
 
   testWidgets('disabled API shows honest state without demo cards', (
     tester,
@@ -228,6 +235,37 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Latest Seoul response'), findsOneWidget);
     expect(find.text('Old Busan response'), findsNothing);
+  });
+
+  testWidgets('selected language updates Local Signals and its request in EN', (
+    tester,
+  ) async {
+    final backend = _SignalsBackend.loaded();
+    final configs = <LalaAppConfig>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: LocalSignalsPage(
+            initialConfig: const LalaAppConfig(
+              baseUri: 'https://api.example.test',
+            ),
+            backendFactory: (config) {
+              configs.add(config);
+              return backend;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('로컬 신호'), findsOneWidget);
+
+    OnboardingState.selectLanguage('en');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Local Signals'), findsOneWidget);
+    expect(find.text('로컬 신호'), findsNothing);
+    expect(configs.last.lang, 'en');
   });
 }
 

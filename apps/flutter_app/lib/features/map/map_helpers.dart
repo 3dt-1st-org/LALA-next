@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import '../../kakao_map_view.dart';
@@ -58,20 +60,19 @@ List<KakaoMapPlace> clusterMapPlacesForMap({
   required String language,
 }) {
   final selectedId = selected?.placeId;
-  final expandedPinFloor = mapLevel >= 10 ? 36 : 48;
   final selectedMarkers = <KakaoMapPlace>[];
-  final expandedMarkers = <KakaoMapPlace>[];
   final buckets = <String, List<LalaPlace>>{};
-  // P6A §03/§13.1 pin-first cluster policy: cluster when candidates >= 80 OR
-  // the Kakao level is sufficiently far (>= 10 — the code's existing zoom-out
-  // boundary, shared with expandedPinFloor). This is the OR rule from the P6A
-  // contract; the previous AND gate clustered too rarely. Kakao-level semantic,
-  // not a target-derived pixel value.
-  const clusterCountThreshold = 80;
+  // The places endpoint is capped at 60. A prior count gate of 80 was therefore
+  // unreachable in production, leaving a full response as dozens of overlapping
+  // iOS pins. Treat 24+ visible candidates as dense (while sparse results such as
+  // eight nearby places remain individual), or cluster at the existing far-zoom
+  // boundary. The adaptive 4x4/3x3 geographic grid bounds the marker set to
+  // 16/9 cells plus the selected individual pin; every cluster contains real
+  // member ids and uses their geographic centroid.
+  const clusterCountThreshold = 24;
   const clusterFarLevel = 10;
   final shouldUseClusters =
       places.length >= clusterCountThreshold || mapLevel >= clusterFarLevel;
-  var expandedPinCount = 0;
   final orderedPlaces = [...places]
     ..sort((a, b) {
       final selectedCompare = _selectedPlaceSortValue(
@@ -102,34 +103,71 @@ List<KakaoMapPlace> clusterMapPlacesForMap({
     );
   }
 
-  for (final place in orderedPlaces.take(60)) {
+  final visiblePlaces = orderedPlaces.take(60).toList(growable: false);
+  if (!shouldUseClusters) {
+    return visiblePlaces
+        .map(
+          (place) => toMapPlace(place, selected: place.placeId == selectedId),
+        )
+        .toList(growable: false);
+  }
+
+  final clusterCandidates = visiblePlaces
+      .where((place) => place.placeId != selectedId)
+      .toList(growable: false);
+  for (final place in visiblePlaces) {
     if (place.placeId == selectedId) {
       selectedMarkers.add(toMapPlace(place, selected: true));
-      continue;
     }
-    if (!shouldUseClusters) {
-      selectedMarkers.add(toMapPlace(place));
-      continue;
+  }
+
+  if (clusterCandidates.isEmpty) {
+    return selectedMarkers;
+  }
+
+  final minLat = clusterCandidates.map((place) => place.lat).reduce(math.min);
+  final maxLat = clusterCandidates.map((place) => place.lat).reduce(math.max);
+  final minLng = clusterCandidates.map((place) => place.lng).reduce(math.min);
+  final maxLng = clusterCandidates.map((place) => place.lng).reduce(math.max);
+  final gridAxis = mapLevel >= clusterFarLevel ? 3 : 4;
+
+  int cellIndex(double value, double min, double max) {
+    final span = max - min;
+    if (span.abs() < 0.000001) {
+      return 0;
     }
-    if (expandedPinCount < expandedPinFloor) {
-      expandedMarkers.add(toMapPlace(place));
-      expandedPinCount += 1;
-      continue;
-    }
-    final latBucket = (place.lat * 180).round();
-    final lngBucket = (place.lng * 180).round();
-    final key = '${place.category}:$latBucket:$lngBucket';
+    final scaled = ((value - min) / span * gridAxis).floor();
+    return math.max(0, math.min(gridAxis - 1, scaled));
+  }
+
+  for (final place in clusterCandidates) {
+    final latCell = cellIndex(place.lat, minLat, maxLat);
+    final lngCell = cellIndex(place.lng, minLng, maxLng);
+    final key = '$latCell:$lngCell';
     buckets.putIfAbsent(key, () => <LalaPlace>[]).add(place);
   }
 
   final clustered = <KakaoMapPlace>[];
   for (final entry in buckets.entries) {
     final group = entry.value;
-    if (group.length >= 3) {
+    if (group.length >= 2) {
       final lat =
           group.fold<double>(0, (sum, place) => sum + place.lat) / group.length;
       final lng =
           group.fold<double>(0, (sum, place) => sum + place.lng) / group.length;
+      final categoryCounts = <String, int>{};
+      for (final place in group) {
+        categoryCounts.update(
+          place.category,
+          (count) => count + 1,
+          ifAbsent: () => 1,
+        );
+      }
+      final categories = categoryCounts.keys.toList()
+        ..sort((a, b) {
+          final countCompare = categoryCounts[b]!.compareTo(categoryCounts[a]!);
+          return countCompare != 0 ? countCompare : a.compareTo(b);
+        });
       clustered.add(
         KakaoMapPlace(
           id: 'cluster-${entry.key}',
@@ -138,7 +176,7 @@ List<KakaoMapPlace> clusterMapPlacesForMap({
             ko: '${group.length}곳',
             en: '${group.length} places',
           ),
-          category: group.first.category,
+          category: categories.first,
           lat: lat,
           lng: lng,
           clusterCount: group.length,
@@ -152,5 +190,5 @@ List<KakaoMapPlace> clusterMapPlacesForMap({
     }
   }
 
-  return [...clustered, ...expandedMarkers, ...selectedMarkers];
+  return [...clustered, ...selectedMarkers];
 }

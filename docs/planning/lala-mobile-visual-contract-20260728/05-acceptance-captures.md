@@ -14,7 +14,7 @@ under `output/verification/lala-p6a-20260728/<screen>/<state>-<viewport>-<lang>.
 | State | Viewport | Language | Must show |
 | --- | --- | --- | --- |
 | Loaded (markers+rail) | 393 dp (iPhone 14) | KO | Kakao tiles, individual category markers, recommended rail, planner/weather pills |
-| Loaded (cluster) | 393 dp | KO | Cluster at far zoom or ≥ 80 places |
+| Loaded (cluster) | 393 dp | KO | Bounded real clusters at far zoom or ≥ 24 places |
 | Selected place | 393 dp | EN | Marker↔card bidirectional selection; detail sheet (radius 20) |
 | Empty (no nearby place) | 393 dp | KO | Honest empty — no invented POIs |
 | Unavailable (map/geo fail) | 360 dp (SE) | KO | Map-unavailable surface, manual region fallback |

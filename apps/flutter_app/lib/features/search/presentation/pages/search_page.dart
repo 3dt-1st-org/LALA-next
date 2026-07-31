@@ -14,6 +14,7 @@ import 'package:lala_next_app/core/location/region_context.dart';
 import 'package:lala_next_app/features/home/home_view_helpers.dart'
     show filterPlaces;
 import 'package:lala_next_app/features/location/widgets/default_region_indicator.dart';
+import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/features/place/place_helpers.dart';
 import 'package:lala_next_app/features/place/widgets/category_badge.dart';
 import 'package:lala_next_app/features/place/widgets/empty_place_state.dart';
@@ -50,7 +51,7 @@ const List<String> _kSearchCategories = <String>[
 class _SearchPageState extends State<SearchPage> {
   static const int _radiusM = 2000;
 
-  late final LalaAppConfig _baseConfig;
+  late LalaAppConfig _baseConfig;
   late LalaAppConfig _config;
   late final LalaLocationProvider _locationProvider;
   late final LalaBackendFactory _backendFactory;
@@ -70,6 +71,7 @@ class _SearchPageState extends State<SearchPage> {
   // write results so a late response cannot clobber a newer context.
   int _loadGeneration = 0;
   late final VoidCallback _onRegionChanged;
+  late final VoidCallback _onLanguageChanged;
 
   String _selectedCategory = 'all';
   String _query = '';
@@ -78,7 +80,9 @@ class _SearchPageState extends State<SearchPage> {
   @override
   void initState() {
     super.initState();
-    _baseConfig = LalaAppConfig.fromEnvironment();
+    _baseConfig = LalaAppConfig.fromEnvironment().copyWith(
+      lang: OnboardingState.language,
+    );
     _config = _baseConfig.copyWith(radiusM: _radiusM);
     _locationProvider =
         widget.locationProvider ?? const GeolocatorLalaLocationProvider();
@@ -100,6 +104,17 @@ class _SearchPageState extends State<SearchPage> {
       _reloadFromStore(next);
     };
     RegionContextStore.listenable.addListener(_onRegionChanged);
+    _onLanguageChanged = () {
+      if (!mounted) {
+        return;
+      }
+      final next = OnboardingState.language;
+      if (next == _language) {
+        return;
+      }
+      _reloadForLanguage(next);
+    };
+    OnboardingState.languageListenable.addListener(_onLanguageChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _load();
@@ -110,6 +125,7 @@ class _SearchPageState extends State<SearchPage> {
   @override
   void dispose() {
     RegionContextStore.listenable.removeListener(_onRegionChanged);
+    OnboardingState.languageListenable.removeListener(_onLanguageChanged);
     _searchController.dispose();
     _backend.close();
     super.dispose();
@@ -181,6 +197,21 @@ class _SearchPageState extends State<SearchPage> {
     final lat = context?.lat ?? _baseConfig.lat;
     final lng = context?.lng ?? _baseConfig.lng;
     _config = _baseConfig.copyWith(lat: lat, lng: lng, radiusM: _radiusM);
+    _backend.close();
+    _backend = _backendFactory(_config);
+    _fetchPlaces(generation);
+  }
+
+  /// Rebuilds both UI and request config from the persisted language SSOT.
+  /// Location is retained and geolocation is not re-requested.
+  void _reloadForLanguage(String language) {
+    final generation = ++_loadGeneration;
+    setState(() {
+      _baseConfig = _baseConfig.copyWith(lang: language);
+      _config = _config.copyWith(lang: language);
+      _status = _SearchLoadStatus.loading;
+      _error = null;
+    });
     _backend.close();
     _backend = _backendFactory(_config);
     _fetchPlaces(generation);

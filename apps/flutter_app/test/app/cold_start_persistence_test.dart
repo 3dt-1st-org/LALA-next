@@ -23,6 +23,7 @@ import 'package:lala_next_app/core/persistence/onboarding_preferences.dart';
 import 'package:lala_next_app/core/routing/lala_router.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/features/onboarding/presentation/pages/splash_page.dart';
+import 'package:lala_next_app/features/home/home_page.dart';
 import 'package:lala_next_app/features/plan/presentation/pages/plan_page.dart';
 import 'package:lala_next_app/features/search/presentation/pages/search_page.dart';
 import 'package:lala_next_app/manual_location_options.dart';
@@ -331,6 +332,82 @@ void main() {
         // Drain the map tab's first-refresh retry timers so no timer is pending
         // at teardown.
         await tester.pumpAndSettle(const Duration(seconds: 2));
+      },
+    );
+
+    test(
+      'persisted English restores from the language SSOT on cold restart',
+      () async {
+        final backend = _MemoryBackend();
+        await OnboardingPreferences(backend).writeOnboarding(
+          completed: true,
+          language: 'ko',
+          touristTypeCode: kTouristTypeCodeLocal,
+        );
+        await bootstrapAppState(preferences: OnboardingPreferences(backend));
+
+        OnboardingState.selectLanguage('en');
+        await _drainWrites();
+
+        // Simulate a new process without clearing the durable backend.
+        OnboardingState.detachPersistence();
+        RegionContextStore.detachPersistence();
+        OnboardingState.reset();
+        RegionContextStore.clear();
+        await bootstrapAppState(preferences: OnboardingPreferences(backend));
+        expect(OnboardingState.language, 'en');
+        expect(OnboardingState.languageListenable.value, 'en');
+      },
+    );
+
+    testWidgets(
+      'restored manual Busan starts Home without requesting current location',
+      (tester) async {
+        final backend = _MemoryBackend();
+        await OnboardingPreferences(backend).writeOnboarding(
+          completed: true,
+          language: 'ko',
+          touristTypeCode: kTouristTypeCodeLocal,
+        );
+        await OnboardingPreferences(
+          backend,
+        ).writeManualRegionId('busan-haeundae');
+        await bootstrapAppState(preferences: OnboardingPreferences(backend));
+
+        final configs = <LalaAppConfig>[];
+        final locationProvider = _CountingLocationProvider(
+          const LalaLocationResult.found(
+            LalaLocation(lat: 37.5665, lng: 126.978),
+          ),
+        );
+        await tester.pumpWidget(
+          MaterialApp(
+            home: LalaHomePage(
+              backendFactory: (config) {
+                configs.add(config);
+                return _NoopBackend();
+              },
+              initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+              locationProvider: locationProvider,
+              recommendationRecoveryDelays: const <Duration>[],
+              authControllerFactory: createLalaAuthController,
+            ),
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+
+        expect(locationProvider.requests, 0);
+        expect(configs.last.lat, 35.16665);
+        expect(configs.last.lng, 129.16792);
+        expect(RegionContextStore.current?.regionId, 'busan-haeundae');
+        expect(RegionContextStore.current?.source, RegionSource.manual);
+
+        // Dispose Home/auth/map state explicitly so no controller or timer can
+        // keep the focused Flutter test process alive.
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
       },
     );
 

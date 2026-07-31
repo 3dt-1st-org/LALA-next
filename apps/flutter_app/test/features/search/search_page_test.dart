@@ -13,6 +13,7 @@ import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
 import 'package:lala_next_app/core/location/region_context.dart';
 import 'package:lala_next_app/features/place/widgets/place_thumb.dart';
+import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/features/search/presentation/pages/search_page.dart';
 import 'package:lala_next_app/manual_location_options.dart';
 
@@ -20,7 +21,10 @@ void main() {
   // RegionContextStore is a process-local singleton; reset it before each test
   // so a manual/current choice from another test cannot leak into this tab's
   // seed coordinates.
-  setUp(RegionContextStore.clear);
+  setUp(() {
+    RegionContextStore.clear();
+    OnboardingState.selectLanguage('ko');
+  });
 
   testWidgets(
     'search pending shows exactly three neutral skeleton rows then removes them',
@@ -150,7 +154,40 @@ void main() {
     },
   );
 
-  tearDown(RegionContextStore.clear);
+  testWidgets(
+    'selected language updates Search immediately and reloads in EN',
+    (tester) async {
+      RegionContextStore.set(RegionContext.manual(_busanOption()));
+      final configs = <LalaAppConfig>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SearchPage(
+            locationProvider: _CountingLocationProvider(
+              const LalaLocationResult.unavailable(),
+            ),
+            backendFactory: (config) {
+              configs.add(config);
+              return _LoadedPlacesBackend();
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('장소·지역 검색'), findsOneWidget);
+
+      OnboardingState.selectLanguage('en');
+      await tester.pumpAndSettle();
+
+      expect(find.text('Search places or areas'), findsOneWidget);
+      expect(find.text('장소·지역 검색'), findsNothing);
+      expect(configs.last.lang, 'en');
+    },
+  );
+
+  tearDown(() {
+    RegionContextStore.clear();
+    OnboardingState.reset();
+  });
 }
 
 class _FoundLocationProvider implements LalaLocationProvider {

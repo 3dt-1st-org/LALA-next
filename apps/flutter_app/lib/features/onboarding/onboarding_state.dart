@@ -22,7 +22,7 @@ class OnboardingState {
   OnboardingState._();
 
   static final ValueNotifier<bool> _completed = ValueNotifier<bool>(false);
-  static String _language = 'ko';
+  static final ValueNotifier<String> _language = ValueNotifier<String>('ko');
   static OnboardingTouristType _touristType =
       OnboardingTouristType.localTourist;
 
@@ -38,7 +38,10 @@ class OnboardingState {
   static bool get isCompleted => _completed.value;
 
   /// 현재 선택된 언어 코드(ko/en). start 단계 선택의 기본값이 반영된다.
-  static String get language => _language;
+  static String get language => _language.value;
+
+  /// 런타임 UI가 구독하는 선택 언어 SSOT.
+  static ValueListenable<String> get languageListenable => _language;
 
   /// 현재 선택된 관광객 유형.
   static OnboardingTouristType get touristType => _touristType;
@@ -54,13 +57,15 @@ class OnboardingState {
   /// - 내국인 관광객 → 한국어(ko)
   static void selectTouristType(OnboardingTouristType type) {
     _touristType = type;
-    _language = type == OnboardingTouristType.foreignTourist ? 'en' : 'ko';
+    _language.value = type == OnboardingTouristType.foreignTourist
+        ? 'en'
+        : 'ko';
     _persist();
   }
 
   /// 언어를 직접 변경(language 단계에서 start 기본값을 덮어쓸 수 있다).
   static void selectLanguage(String language) {
-    _language = language == 'en' ? 'en' : 'ko';
+    _language.value = language == 'en' ? 'en' : 'ko';
     _persist();
   }
 
@@ -85,7 +90,7 @@ class OnboardingState {
     try {
       await prefs.writeOnboarding(
         completed: true,
-        language: _language,
+        language: _language.value,
         touristTypeCode: _encodeTouristType(_touristType),
       );
     } on Object {
@@ -98,7 +103,7 @@ class OnboardingState {
   /// Cold start: 영속화된 스냅샷으로 인메모리 상태를 복원한다. 역직렬화는
   /// 이미 안전한 기본값으로 정규화되어 있으므로 추가 검증 없이 적용한다.
   static void applySnapshot(OnboardingSnapshot snapshot) {
-    _language = snapshot.language == 'en' ? 'en' : 'ko';
+    _language.value = snapshot.language == 'en' ? 'en' : 'ko';
     _touristType = _decodeTouristType(snapshot.touristTypeCode);
     _completed.value = snapshot.completed;
   }
@@ -117,7 +122,7 @@ class OnboardingState {
     try {
       await prefs.writeOnboarding(
         completed: _completed.value,
-        language: _language,
+        language: _language.value,
         touristTypeCode: _encodeTouristType(_touristType),
       );
     } on Object {
@@ -130,7 +135,7 @@ class OnboardingState {
   /// 부활하지 않도록 한다. region 영속화는 RegionContextStore.clear() 가 담당.
   static void reset() {
     _touristType = OnboardingTouristType.localTourist;
-    _language = 'ko';
+    _language.value = 'ko';
     _completed.value = false;
     final prefs = _prefs;
     if (prefs == null) {

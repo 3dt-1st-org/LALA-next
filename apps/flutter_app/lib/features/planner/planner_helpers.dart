@@ -80,37 +80,41 @@ String? planSlotDetail(LalaPlanSlot slot, String language) {
 
 /// 시간대 라벨(C3 추출 — main.dart 의 _periodLabel).
 String periodLabel(String period, {String language = 'ko'}) {
+  final normalized = period.trim().toLowerCase();
   if (isLalaEnglish(language)) {
-    return switch (period) {
-      'morning' => 'Morning',
-      'afternoon' => 'Afternoon',
-      'evening' => 'Evening',
-      _ => period.isEmpty
-          ? '-'
-          : period.length <= 3
-          ? period
-          : period.substring(0, 3),
+    return switch (normalized) {
+      'morning' || 'am' || 'mo' || '오전' || '아침' => 'Morning',
+      'lunch' || 'noon' || 'midday' || 'lu' || '점심' => 'Lunch',
+      'afternoon' || 'pm' || 'af' || '오후' => 'Afternoon',
+      'dinner' || 'evening' || 'night' || 'di' || '저녁' || '밤' => 'Dinner',
+      _ => normalized.isEmpty ? '-' : 'Period',
     };
   }
-  return switch (period) {
-    'morning' => '오전',
-    'afternoon' => '오후',
-    'evening' => '저녁',
-    _ => period.isEmpty
-        ? '-'
-        : period.length <= 2
-        ? period
-        : period.substring(0, 2),
+  return switch (normalized) {
+    'morning' || 'am' || 'mo' || '오전' || '아침' => '아침',
+    'lunch' || 'noon' || 'midday' || 'lu' || '점심' => '점심',
+    'afternoon' || 'pm' || 'af' || '오후' => '오후',
+    'dinner' || 'evening' || 'night' || 'di' || '저녁' || '밤' => '저녁',
+    _ => normalized.isEmpty ? '-' : '시간대',
   };
 }
 
 /// 시간대 아이콘(C3 추출 — main.dart 의 _periodIcon).
 IconData periodIcon(String period) {
-  return switch (period) {
-    'morning' || '오전' => Icons.wb_twilight_outlined,
-    'lunch' || '점심' => Icons.restaurant_outlined,
-    'afternoon' || '오후' => Icons.wb_sunny_outlined,
-    'evening' || '저녁' || 'night' => Icons.nights_stay_outlined,
+  return switch (period.trim().toLowerCase()) {
+    'morning' || 'am' || 'mo' || '오전' || '아침' => Icons.wb_twilight_outlined,
+    'lunch' ||
+    'noon' ||
+    'midday' ||
+    'lu' ||
+    '점심' => Icons.lunch_dining_outlined,
+    'afternoon' || 'pm' || 'af' || '오후' => Icons.wb_sunny_outlined,
+    'dinner' ||
+    'evening' ||
+    'night' ||
+    'di' ||
+    '저녁' ||
+    '밤' => Icons.dinner_dining_outlined,
     _ => Icons.place_outlined,
   };
 }

@@ -90,10 +90,7 @@ GoRouter createLalaRouter({
               GoRouterState state,
               StatefulNavigationShell navigationShell,
             ) {
-              return LalaMainShell(
-                navigationShell: navigationShell,
-                language: initialConfig.lang == 'en' ? 'en' : 'ko',
-              );
+              return LalaMainShell(navigationShell: navigationShell);
             },
         branches: <StatefulShellBranch>[
           StatefulShellBranch(

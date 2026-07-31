@@ -1,8 +1,7 @@
-// P6C: pin-first / cluster 문턱(OR 규칙) + marker text 대비 회귀.
-// P6A §03/§13.1: 개별 핀 우선, cluster 는 (후보 >= 80) OR (Kakao level >= 10) 일 때만.
-//  - 후보 < 80 + 근접 level → 개별 pin(cluster 없음)
-//  - 후보 >= 80 (임의 level) → cluster
-//  - 원거리 level(>=10, 임의 후보 수) → cluster
+// Runtime remediation: API 최대 60개에 맞춘 bounded clustering + 대비 회귀.
+//  - sparse 8 + 근접 level → 개별 pin
+//  - dense 60 + 기본 level → 실제 cluster, 최대 16 marker
+//  - 원거리 level(>=10) → 실제 cluster
 //  - 선택 마커는 cluster 활성 시에도 개별 핀으로 유지(01-flow §F2.5)
 //  - 비-restaurant pin icon = white, restaurant pin icon = restaurantInk (P6A §2.3)
 import 'package:flutter/material.dart';
@@ -15,65 +14,32 @@ import 'package:lala_next_app/kakao_map_fallback.dart';
 import 'package:lala_next_app/kakao_map_models.dart';
 
 void main() {
-  group('pin-first cluster policy (OR rule)', () {
-    test(
-      '<80 candidates at a CLOSE level render individual pins, no cluster',
-      () {
-        final places = List<LalaPlace>.generate(79, (i) => _place('pin-$i'));
-        final markers = clusterMapPlacesForMap(
-          places: places,
-          selected: null,
-          mapLevel: 6,
-          language: 'ko',
-        );
-        expect(markers.where((m) => m.isCluster), isEmpty);
-        expect(markers.where((m) => !m.isCluster), hasLength(60));
-      },
-    );
-
-    test(
-      '>=80 candidates cluster even at a close level (count branch of OR)',
-      () {
-        final places = List<LalaPlace>.generate(80, (i) => _place('dense-$i'));
-        final markers = clusterMapPlacesForMap(
-          places: places,
-          selected: null,
-          mapLevel: 6,
-          language: 'ko',
-        );
-        expect(markers.where((m) => m.isCluster), isNotEmpty);
-        expect(
-          markers.firstWhere((m) => m.isCluster).clusterCount,
-          greaterThan(1),
-        );
-      },
-    );
-
-    test('<80 candidates at a FAR level cluster (far-zoom branch of OR)', () {
-      // 50 co-located places at level 10 → far-zoom gate open; overflow beyond
-      // the expanded-pin floor (36 at level>=10) forms a real cluster bubble.
-      final places = List<LalaPlace>.generate(50, (i) => _place('far-$i'));
+  group('bounded cluster policy', () {
+    test('sparse 8 nearby candidates stay as individual pins', () {
+      final places = List<LalaPlace>.generate(8, (i) => _place('pin-$i'));
       final markers = clusterMapPlacesForMap(
         places: places,
         selected: null,
-        mapLevel: 10,
+        mapLevel: 6,
         language: 'ko',
       );
-      expect(markers.where((m) => m.isCluster), isNotEmpty);
+      expect(markers.where((m) => m.isCluster), isEmpty);
+      expect(markers, hasLength(8));
     });
 
-    test('>=80 candidates at a far level cluster (both OR branches)', () {
-      final places = List<LalaPlace>.generate(80, (i) => _place('dense-$i'));
+    test('dense 60 produces real clusters and a bounded marker set', () {
+      final places = List<LalaPlace>.generate(60, (i) => _place('dense-$i'));
       final markers = clusterMapPlacesForMap(
         places: places,
         selected: null,
-        mapLevel: 10,
+        mapLevel: 6,
         language: 'ko',
       );
       expect(markers.where((m) => m.isCluster), isNotEmpty);
+      expect(markers, hasLength(lessThanOrEqualTo(16)));
       expect(
-        markers.firstWhere((m) => m.isCluster).clusterCount,
-        greaterThan(1),
+        markers.fold<int>(0, (sum, marker) => sum + (marker.clusterCount ?? 1)),
+        60,
       );
     });
 
@@ -88,7 +54,7 @@ void main() {
     });
 
     test('selected marker stays individual while clustering is active', () {
-      final places = List<LalaPlace>.generate(80, (i) => _place('sel-$i'));
+      final places = List<LalaPlace>.generate(60, (i) => _place('sel-$i'));
       final selected = places.first;
       final markers = clusterMapPlacesForMap(
         places: places,
@@ -100,6 +66,20 @@ void main() {
       expect(selectedMarkers, isNotEmpty);
       expect(selectedMarkers.every((m) => !m.isCluster), isTrue);
       expect(selectedMarkers.any((m) => m.selected), isTrue);
+      expect(markers.where((m) => m.isCluster), isNotEmpty);
+      expect(markers, hasLength(lessThanOrEqualTo(17)));
+    });
+
+    test('far zoom clusters a sparse co-located result', () {
+      final places = List<LalaPlace>.generate(8, (i) => _place('far-$i'));
+      final markers = clusterMapPlacesForMap(
+        places: places,
+        selected: null,
+        mapLevel: 10,
+        language: 'ko',
+      );
+      expect(markers.where((m) => m.isCluster), hasLength(1));
+      expect(markers.single.clusterCount, 8);
     });
   });
 

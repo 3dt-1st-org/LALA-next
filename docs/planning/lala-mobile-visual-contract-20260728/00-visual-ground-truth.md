@@ -100,8 +100,9 @@ so chip ↔ card ↔ marker stay consistent across every screen.
 - **No score / raw review / PII / moderation state / capability token** in the
   user-facing surface or RAG context (matches
   063_local_signals_contract + local_signal_public.dart).
-- Markers first; cluster only at far zoom **or ≥ 80 places** (§13.1 / target
-  README P5). Honest "no image" state; never substitute a random photo.
+- Markers first for sparse close results; use bounded geographic clusters at
+  far zoom **or ≥ 24 places** (the places API caps results at 60). Honest "no
+  image" state; never substitute a random photo.
 - Recommendations score / internal ranking formula are **hidden by default**;
   rationale ("왜 지금 추천해요?") is opt-in.
 
