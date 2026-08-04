@@ -10,6 +10,7 @@ Addressed independent audit findings with minimal fixes:
 - **Schema version**: Added strict validation requiring exact SCHEMA_VERSION match
 - **Fail-closed logic**: Implemented strict decision/confidence validation with recheck requirements
 - **Construction validation**: Added frozen dataclass __post_init__ validation enforcing bounded schema with generic errors
+- **Confidence runtime types**: Fixed strict confidence type enforcement - reject bool/strings, normalize int/float to canonical float values
 
 ## Implementation Date
 2026-08-05
@@ -102,7 +103,7 @@ All AI interactions are mocked using `MockAIResponse` helpers. The contract defi
 - **<0.5**: Effectively rejected as too uncertain
 
 ## Test Coverage
-63 comprehensive test cases covering:
+68 comprehensive test cases covering:
 - Model-role resolution and configuration
 - System prompt building and versioning
 - JSON parsing with strict validation
@@ -129,11 +130,11 @@ This implementation is complete for the **offline contract only**. Remaining wor
 
 ## Files Created
 - `apps/api/app/services/review_ai_classifier.py` - Main implementation
-- `apps/api/tests/test_review_ai_classifier.py` - Comprehensive test suite (63 tests)
+- `apps/api/tests/test_review_ai_classifier.py` - Comprehensive test suite (68 tests)
 - `docs/devlogs/p3-m3-ai-classifier-contract.md` - This documentation
 
 ## Verification
-- ✅ All 63 tests passing
+- ✅ All 68 tests passing
 - ✅ Ruff linting passed with auto-fixes applied
 - ✅ Pre-commit hooks passed (ruff, format, detect-secrets, trailing whitespace, EOF)
 - ✅ No live AI calls (all mocks)

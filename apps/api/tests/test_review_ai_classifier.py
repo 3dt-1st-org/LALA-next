@@ -644,6 +644,136 @@ class TestDirectConstructionValidation:
         assert "SECRET" not in public_str
         assert "secret" not in public_str
 
+    def test_boolean_confidence_rejected(self):
+        """Boolean confidence values must be rejected."""
+        # Test True confidence
+        with pytest.raises(AIClassifierValidationError) as exc_info:
+            AIClassificationResult(
+                schema_version="review-ai-classifier-v1",
+                decision="organic",
+                is_ad=False,
+                is_relevant=True,
+                ad_confidence=True,  # type: ignore
+                relevance_confidence=0.9,
+                reason_code="organic_mention",
+            )
+
+        error_message = str(exc_info.value)
+        assert error_message == "Invalid AI classifier response"
+        assert "True" not in error_message
+        assert "bool" not in error_message.lower()
+
+        # Test False confidence
+        with pytest.raises(AIClassifierValidationError) as exc_info:
+            AIClassificationResult(
+                schema_version="review-ai-classifier-v1",
+                decision="organic",
+                is_ad=False,
+                is_relevant=True,
+                ad_confidence=0.9,
+                relevance_confidence=False,  # type: ignore
+                reason_code="organic_mention",
+            )
+
+        error_message = str(exc_info.value)
+        assert error_message == "Invalid AI classifier response"
+        assert "False" not in error_message
+
+    def test_numeric_string_confidence_rejected(self):
+        """Numeric string confidence must be rejected."""
+        with pytest.raises(AIClassifierValidationError) as exc_info:
+            AIClassificationResult(
+                schema_version="review-ai-classifier-v1",
+                decision="organic",
+                is_ad=False,
+                is_relevant=True,
+                ad_confidence="0.75",  # type: ignore
+                relevance_confidence=0.9,
+                reason_code="organic_mention",
+            )
+
+        error_message = str(exc_info.value)
+        assert error_message == "Invalid AI classifier response"
+        assert "0.75" not in error_message
+        assert "string" not in error_message.lower()
+
+    def test_non_numeric_string_confidence_rejected(self):
+        """Non-numeric string confidence must be rejected."""
+        with pytest.raises(AIClassifierValidationError) as exc_info:
+            AIClassificationResult(
+                schema_version="review-ai-classifier-v1",
+                decision="organic",
+                is_ad=False,
+                is_relevant=True,
+                ad_confidence="high",  # type: ignore
+                relevance_confidence=0.9,
+                reason_code="organic_mention",
+            )
+
+        error_message = str(exc_info.value)
+        assert error_message == "Invalid AI classifier response"
+        assert "high" not in error_message
+
+    def test_integer_confidence_normalized_to_float(self):
+        """Integer confidence must be accepted and normalized to float."""
+        result = AIClassificationResult(
+            schema_version="review-ai-classifier-v1",
+            decision="organic",
+            is_ad=False,
+            is_relevant=True,
+            ad_confidence=1,  # type: ignore
+            relevance_confidence=0,  # type: ignore
+            reason_code="organic_mention",
+        )
+
+        # Should be normalized to float
+        assert isinstance(result.ad_confidence, float)
+        assert isinstance(result.relevance_confidence, float)
+        assert result.ad_confidence == 1.0
+        assert result.relevance_confidence == 0.0
+
+        # Public dict should also emit float
+        public = result.to_public_dict()
+        assert isinstance(public["ad_confidence"], float)
+        assert isinstance(public["relevance_confidence"], float)
+        assert public["ad_confidence"] == 1.0
+        assert public["relevance_confidence"] == 0.0
+
+        # Attributes payload should also emit float
+        payload = result.to_attributes_payload()
+        assert isinstance(payload["ad_confidence"], float)
+        assert isinstance(payload["relevance_confidence"], float)
+
+    def test_float_confidence_preserved(self):
+        """Float confidence must be accepted and preserved."""
+        result = AIClassificationResult(
+            schema_version="review-ai-classifier-v1",
+            decision="organic",
+            is_ad=False,
+            is_relevant=True,
+            ad_confidence=0.75,
+            relevance_confidence=0.85,
+            reason_code="organic_mention",
+        )
+
+        # Should remain as float
+        assert isinstance(result.ad_confidence, float)
+        assert isinstance(result.relevance_confidence, float)
+        assert result.ad_confidence == 0.75
+        assert result.relevance_confidence == 0.85
+
+        # Public dict should emit float
+        public = result.to_public_dict()
+        assert isinstance(public["ad_confidence"], float)
+        assert isinstance(public["relevance_confidence"], float)
+        assert public["ad_confidence"] == 0.75
+        assert public["relevance_confidence"] == 0.85
+
+        # Attributes payload should emit float
+        payload = result.to_attributes_payload()
+        assert isinstance(payload["ad_confidence"], float)
+        assert isinstance(payload["relevance_confidence"], float)
+
 
 def _create_decision(
     retained: bool = True,

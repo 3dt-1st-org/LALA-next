@@ -124,6 +124,13 @@ class AIClassificationResult:
             raise AIClassifierValidationError("Invalid AI classifier response")
 
         # Validate confidence values - must be finite floats in [0, 1]
+        # Reject boolean values explicitly (bool is a subclass of int in Python)
+        # Reject all strings, even numeric ones - only accept int/float (excluding bool)
+        if isinstance(self.ad_confidence, bool) or isinstance(self.relevance_confidence, bool):
+            raise AIClassifierValidationError("Invalid AI classifier response")
+        if isinstance(self.ad_confidence, str) or isinstance(self.relevance_confidence, str):
+            raise AIClassifierValidationError("Invalid AI classifier response")
+
         try:
             ad_conf = float(self.ad_confidence)
             rel_conf = float(self.relevance_confidence)
@@ -135,6 +142,10 @@ class AIClassificationResult:
             raise AIClassifierValidationError("Invalid AI classifier response")
         if not (0.0 <= rel_conf <= 1.0 and rel_conf == rel_conf):  # NaN check
             raise AIClassifierValidationError("Invalid AI classifier response")
+
+        # Normalize to canonical float values in the frozen dataclass
+        object.__setattr__(self, "ad_confidence", ad_conf)
+        object.__setattr__(self, "relevance_confidence", rel_conf)
 
         # Validate reason_code - must be in allowed set
         if not isinstance(self.reason_code, str):
