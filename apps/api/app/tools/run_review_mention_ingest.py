@@ -18,6 +18,14 @@ from apps.api.app.services.review_mention_ingest import (
     record_job_run,
 )
 
+# Date format validation
+DATE_FORMATS = [
+    "%Y-%m-%d",
+    "%Y-%m-%dT%H:%M:%SZ",
+    "%Y-%m-%dT%H:%M:%S",
+    "%Y-%m-%d %H:%M:%S",
+]
+
 CONFIRM_TEXT = "APPLY_REVIEW_MENTION_INGEST"
 ALLOW_ENV = "ALLOW_REVIEW_MENTION_INGEST_APPLY"
 
@@ -41,6 +49,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--provider", default="all")
     parser.add_argument("--limit", type=int, default=500)
     parser.add_argument("--connect-timeout", type=int, default=5)
+    parser.add_argument(
+        "--since", help="Inclusive lower bound date (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ)"
+    )
+    parser.add_argument(
+        "--until", help="Exclusive upper bound date (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ)"
+    )
+    parser.add_argument("--place-id", help="Filter by canonical place_id")
     args = parser.parse_args(argv)
 
     if args.limit <= 0:
@@ -52,6 +67,18 @@ def main(argv: list[str] | None = None) -> int:
     if not args.apply and not args.preview:
         _write(args, _plan_payload())
         return 0
+
+    # Validate date filters
+    date_error = _validate_date_filters(args)
+    if date_error:
+        _write(args, {"ok": False, "mode": _mode(args), "error": date_error})
+        return 2
+
+    # Validate place_id filter
+    place_id_error = _validate_place_id_filter(args)
+    if place_id_error:
+        _write(args, {"ok": False, "mode": _mode(args), "error": place_id_error})
+        return 2
 
     settings = get_settings()
     dsn = os.getenv("DB_DSN") or settings.db_dsn
@@ -72,6 +99,9 @@ def main(argv: list[str] | None = None) -> int:
             limit=args.limit,
             provider=args.provider,
             connect_timeout=args.connect_timeout,
+            since=args.since,
+            until=args.until,
+            place_id=args.place_id,
         )
         result = build_review_mention_result(posts=posts, places=places, limit=args.limit)
         inserted_rows = 0
@@ -128,6 +158,9 @@ def main(argv: list[str] | None = None) -> int:
             "prompt_version": PROMPT_VERSION,
             "input_relations": ["community.posts", "travel.places"],
             "provider": args.provider,
+            "since": args.since,
+            "until": args.until,
+            "place_id": args.place_id,
             "inserted_rows": inserted_rows,
             "result": result.to_public_dict(),
         },
@@ -154,6 +187,72 @@ def _plan_payload() -> dict[str, Any]:
     }
 
 
+def _validate_date_filters(args: argparse.Namespace) -> str | None:
+    """Validate date filter formats and logical consistency."""
+    since_dt: datetime | None = None
+    until_dt: datetime | None = None
+
+    # Parse and validate --since
+    if args.since:
+        since_dt = _parse_date(args.since)
+        if since_dt is None:
+            return f"Invalid --since date format: '{args.since}'. Expected YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ"
+
+    # Parse and validate --until
+    if args.until:
+        until_dt = _parse_date(args.until)
+        if until_dt is None:
+            return f"Invalid --until date format: '{args.until}'. Expected YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ"
+
+    # Validate range logic
+    if since_dt and until_dt and until_dt <= since_dt:
+        return f"Invalid date range: --until ({args.until}) must be after --since ({args.since})"
+
+    return None
+
+
+def _validate_place_id_filter(args: argparse.Namespace) -> str | None:
+    """Validate place_id filter for safety and format."""
+    if args.place_id is None:
+        return None
+
+    place_id = args.place_id.strip()
+
+    # Reject blank/empty
+    if not place_id:
+        return "--place-id cannot be blank or empty"
+
+    # Reject unsafe characters to prevent SQL injection
+    # Only allow alphanumeric, underscore, hyphen, and common separators
+    import re
+
+    if not re.match(r"^[A-Za-z0-9_\-:/]+$", place_id):
+        return f"Invalid --place-id format: '{args.place_id}'. Only alphanumeric, underscore, hyphen, colon, and slash characters are allowed"
+
+    # Reject obviously dangerous patterns
+    dangerous_patterns = ["'", '"', ";", "--", "/*", "*/", "xp_", "sp_"]
+    place_id_upper = place_id.upper()
+    for pattern in dangerous_patterns:
+        if pattern in place_id or pattern.upper() in place_id_upper:
+            return f"Unsafe characters in --place-id: '{args.place_id}'. Contains potentially dangerous pattern: {pattern}"
+
+    return None
+
+
+def _parse_date(date_str: str) -> datetime | None:
+    """Parse date string using multiple known formats."""
+    for fmt in DATE_FORMATS:
+        try:
+            parsed = datetime.strptime(date_str, fmt)
+            # Ensure timezone-aware for datetime formats
+            if "T" in date_str and parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=UTC)
+            return parsed
+        except ValueError:
+            continue
+    return None
+
+
 def _apply_guard_error(args: argparse.Namespace) -> str:
     if args.confirm != CONFIRM_TEXT:
         return f"--apply requires --confirm {CONFIRM_TEXT}."
@@ -174,6 +273,14 @@ def _write(args: argparse.Namespace, payload: dict[str, Any]) -> None:
     print(f"prompt_version={payload.get('prompt_version', PROMPT_VERSION)}")
     if "db_mutation" in payload:
         print(f"db_mutation={str(payload.get('db_mutation')).lower()}")
+    if payload.get("provider") and payload.get("provider") != "all":
+        print(f"provider={payload.get('provider')}")
+    if payload.get("since"):
+        print(f"since={payload.get('since')}")
+    if payload.get("until"):
+        print(f"until={payload.get('until')}")
+    if payload.get("place_id"):
+        print(f"place_id={payload.get('place_id')}")
     if payload.get("error"):
         print(f"error={payload['error']}")
         return
