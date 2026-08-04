@@ -189,3 +189,100 @@ def test_apply_english_only_replace_local_leaves_indoor_untouched(monkeypatch):
     assert "local_romanization" in update_sql
     assert "is_indoor =" not in update_sql
     assert insert_params["is_indoor"] is None
+
+
+def test_same_key_place_profile_rerun_is_idempotent(monkeypatch):
+    """Verify that same-key place_profile reruns are idempotent and don't break place updates."""
+    executed = []
+
+    class Cursor:
+        rowcount = 1
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def execute(self, sql, params=None):
+            executed.append((sql, params))
+
+    class Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def cursor(self):
+            return Cursor()
+
+        def commit(self):
+            executed.append(("commit", None))
+
+    def connect(dsn, connect_timeout):
+        executed.append(("connect", {"dsn": dsn, "connect_timeout": connect_timeout}))
+        return Connection()
+
+    monkeypatch.setitem(sys.modules, "psycopg2", SimpleNamespace(connect=connect))
+    monkeypatch.setattr(
+        enrich_place_ai_columns,
+        "get_settings",
+        lambda: SimpleNamespace(openai_place_enrichment_model="test-model"),
+    )
+
+    # First run: create place enrichment
+    updated_first = enrich_place_ai_columns.apply_enrichments(
+        dsn="postgresql://redacted",
+        enrichments=[
+            enrich_place_ai_columns.PlaceEnrichment(
+                place_id="tour-api-1",
+                name_en="Suwon Hwaseong",
+                address_en="Suwon-si, Gyeonggi-do",
+                region_name_en="Suwon-si",
+                is_indoor=False,
+                confidence=0.9,
+            )
+        ],
+        connect_timeout=3,
+        fields="all",
+        replace_local=False,
+    )
+
+    # Second run with same key (same place_id, enrichment_type, prompt_version)
+    updated_second = enrich_place_ai_columns.apply_enrichments(
+        dsn="postgresql://redacted",
+        enrichments=[
+            enrich_place_ai_columns.PlaceEnrichment(
+                place_id="tour-api-1",
+                name_en="Suwon Hwaseong",
+                address_en="Suwon-si, Gyeonggi-do",
+                region_name_en="Suwon-si",
+                is_indoor=False,
+                confidence=0.9,
+            )
+        ],
+        connect_timeout=3,
+        fields="all",
+        replace_local=False,
+    )
+
+    # Both runs should update the place successfully
+    assert updated_first == 1
+    assert updated_second == 1
+
+    # Verify both runs executed UPDATE statements
+    update_statements = [sql for sql, _ in executed if "UPDATE travel.places" in sql]
+    assert len(update_statements) == 2
+
+    # Verify both runs attempted INSERT with ON CONFLICT DO NOTHING
+    insert_statements = [
+        sql for sql, _ in executed if "INSERT INTO travel.place_enrichments" in sql
+    ]
+    assert len(insert_statements) == 2
+
+    for insert_sql in insert_statements:
+        assert "ON CONFLICT (place_id, enrichment_type, prompt_version) DO NOTHING" in insert_sql
+
+    # Verify place update is still happening (place_enrichments conflict doesn't prevent it)
+    assert all("UPDATE travel.places AS places" in sql for sql in update_statements)

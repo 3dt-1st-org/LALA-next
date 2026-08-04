@@ -24,8 +24,8 @@ def test_local_signals_migration_is_next_ordered_additive_contract():
 
     assert plan.ok is True
     assert [item.name for item in plan.files][-2:] == [
-        "062_review_ingestion_governance.sql",
         "063_local_signals_contract.sql",
+        "064_place_enrichment_replay_uniqueness.sql",
     ]
     sql = LOCAL_SIGNALS_SQL.read_text(encoding="utf-8")
     assert not re.search(r"\b(DROP|TRUNCATE|DELETE\s+FROM)\b", sql, re.IGNORECASE)

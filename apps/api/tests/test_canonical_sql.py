@@ -95,7 +95,7 @@ def test_canonical_migration_filename_contract_rejects_duplicate_or_invalid_pref
 
 def test_future_migration_does_not_silently_extend_the_merged_baseline():
     future_names = EXPECTED_CANONICAL_MIGRATION_ORDER[:-1] + (
-        "064_rag_knowledge_retrieval_metadata.sql",
+        "065_rag_knowledge_retrieval_metadata.sql",
     )
 
     with pytest.raises(ValueError, match="baseline drifted"):

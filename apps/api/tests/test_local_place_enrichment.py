@@ -97,3 +97,81 @@ def test_build_local_enrichment_can_refresh_local_values() -> None:
     )
 
     assert enrichment.name_en == "2025 7th BMF Black Music Festival"
+
+
+def test_apply_local_enrichments_replace_existing_updates_enrichment(monkeypatch):
+    """Verify replace_existing=True updates existing enrichment on conflict."""
+    import sys
+    from types import SimpleNamespace
+
+    executed: list = []
+
+    class Cursor:
+        rowcount = 1
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def execute(self, sql, params=None):
+            executed.append((sql, params))
+
+    class Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def cursor(self):
+            return Cursor()
+
+        def commit(self):
+            executed.append(("commit", None))
+
+    def connect(dsn, connect_timeout):
+        executed.append(("connect", {"dsn": dsn, "connect_timeout": connect_timeout}))
+        return Connection()
+
+    class Json:
+        def __init__(self, obj):
+            self.obj = obj
+
+    extras = SimpleNamespace(Json=Json)
+    psycopg2_module = SimpleNamespace(connect=connect, extras=extras)
+
+    monkeypatch.setitem(sys.modules, "psycopg2", psycopg2_module)
+    monkeypatch.setitem(sys.modules, "psycopg2.extras", extras)
+
+    enrichment = local_place_enrichment.LocalPlaceEnrichment(
+        place_id="test-place-1",
+        name_en="Updated Name",
+        address_en="Updated Address",
+        region_name_en="Updated Region",
+        confidence=0.62,
+        reason="Test enrichment",
+    )
+
+    result = local_place_enrichment.apply_local_enrichments(
+        dsn="postgresql://redacted",
+        enrichments=[enrichment],
+        connect_timeout=5,
+        replace_existing=True,
+    )
+
+    assert result == 1
+
+    # Find the INSERT INTO travel.place_enrichments statement
+    insert_statements = [
+        sql for sql, params in executed if "INSERT INTO travel.place_enrichments" in sql
+    ]
+    assert len(insert_statements) == 1
+    insert_sql = insert_statements[0]
+
+    assert "ON CONFLICT (place_id, enrichment_type, prompt_version)" in insert_sql
+    assert "DO UPDATE SET" in insert_sql
+    assert "name_en = EXCLUDED.name_en" in insert_sql
+    assert "address_en = EXCLUDED.address_en" in insert_sql
+    assert "region_name_en = EXCLUDED.region_name_en" in insert_sql

@@ -225,7 +225,7 @@ def apply_local_enrichments(
             updated_at = now()
         WHERE place_id = %(place_id)s
     """
-    insert_sql = """
+    insert_merge_sql = """
         INSERT INTO travel.place_enrichments (
             place_id,
             enrichment_type,
@@ -252,6 +252,39 @@ def apply_local_enrichments(
         )
         ON CONFLICT (place_id, enrichment_type, prompt_version) DO NOTHING
     """
+    insert_replace_sql = """
+        INSERT INTO travel.place_enrichments (
+            place_id,
+            enrichment_type,
+            name_en,
+            address_en,
+            region_name_en,
+            attributes,
+            confidence,
+            source_method,
+            model_name,
+            prompt_version
+        )
+        VALUES (
+            %(place_id)s,
+            'english_text',
+            %(name_en)s,
+            %(address_en)s,
+            %(region_name_en)s,
+            %(attributes)s::jsonb,
+            %(confidence)s,
+            'local_romanization',
+            NULL,
+            %(prompt_version)s
+        )
+        ON CONFLICT (place_id, enrichment_type, prompt_version)
+        DO UPDATE SET
+            name_en = EXCLUDED.name_en,
+            address_en = EXCLUDED.address_en,
+            region_name_en = EXCLUDED.region_name_en,
+            attributes = EXCLUDED.attributes,
+            confidence = EXCLUDED.confidence
+    """
     updated = 0
     with psycopg2.connect(dsn, connect_timeout=connect_timeout) as conn:
         with conn.cursor() as cur:
@@ -269,7 +302,7 @@ def apply_local_enrichments(
                 }
                 cur.execute(replace_update_sql if replace_existing else merge_update_sql, params)
                 updated += cur.rowcount
-                cur.execute(insert_sql, params)
+                cur.execute(insert_replace_sql if replace_existing else insert_merge_sql, params)
         conn.commit()
     return updated
 

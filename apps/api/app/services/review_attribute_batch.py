@@ -758,7 +758,7 @@ def apply_review_attribute_enrichments(
                 updated += cur.rowcount
                 if not row.accepted:
                     continue
-                    cur.execute(
+                cur.execute(
                     """
                     INSERT INTO travel.place_enrichments (
                         place_id,
