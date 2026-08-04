@@ -1439,13 +1439,16 @@ def register_review_source(
     *,
     dsn: str,
     registration: ReviewSourceRegistration,
-    connect_timeout: int,
+    connect_timeout: int = 5,
 ) -> None:
     """Idempotently upsert a review-source registration row.
 
     Internal/admin only: there is intentionally no public endpoint. This runs
     in its own transaction (separate from any ingest run) because registration
-    is an operator action, not part of the worker batch boundary.
+    is an operator action, not part of the worker batch boundary. The
+    connection lifecycle mirrors :func:`persist_review_ingest_run`:
+    ``closing(conn)`` owns the connection, ``with conn:`` owns the transaction
+    (commit on success, rollback on error).
     """
     if not dsn:
         raise ValueError("DB_DSN is required.")
@@ -1475,19 +1478,20 @@ def register_review_source(
             source_status = EXCLUDED.source_status,
             updated_at = now()
     """
-    with psycopg2.connect(dsn, connect_timeout=connect_timeout) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                sql,
-                (
-                    registration.source_name,
-                    registration.provider,
-                    registration.license_class,
-                    registration.terms_version,
-                    registration.collection_method,
-                    registration.retention_policy,
-                    registration.redaction_policy,
-                    registration.source_status,
-                ),
-            )
-        conn.commit()
+    conn = psycopg2.connect(dsn, connect_timeout=connect_timeout)
+    with closing(conn):
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    sql,
+                    (
+                        registration.source_name,
+                        registration.provider,
+                        registration.license_class,
+                        registration.terms_version,
+                        registration.collection_method,
+                        registration.retention_policy,
+                        registration.redaction_policy,
+                        registration.source_status,
+                    ),
+                )
