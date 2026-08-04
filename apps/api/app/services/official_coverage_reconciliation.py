@@ -10,7 +10,6 @@ for full-ingest preparation and validation.
 
 from __future__ import annotations
 
-from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -30,6 +29,18 @@ ReconciliationGap = Literal[
 ]
 
 # Bounded public-safe category keys for quality metrics
+# Define canonical set as frozen set for validation
+CANONICAL_QUALITY_CATEGORIES = frozenset(
+    [
+        "attraction",
+        "culture_venue",
+        "lodging",
+        "restaurant",
+        "shopping",
+        "transport",
+    ]
+)
+
 QUALITY_CATEGORY_KEYS = Literal[
     "attraction",
     "culture_venue",
@@ -38,6 +49,27 @@ QUALITY_CATEGORY_KEYS = Literal[
     "shopping",
     "transport",
 ]
+
+# Canonical 17-province set for nationwide coverage validation
+CANONICAL_NATIONWIDE_REGIONS = (
+    "seoul",
+    "gyeonggi",
+    "incheon",
+    "busan",
+    "daegu",
+    "gwangju",
+    "daejeon",
+    "ulsan",
+    "sejong",
+    "gangwon",
+    "chungbuk",
+    "chungnam",
+    "jeonbuk",
+    "jeonnam",
+    "gyeongbuk",
+    "gyeongnam",
+    "jeju",
+)
 
 
 @dataclass(frozen=True)
@@ -78,6 +110,9 @@ class CoverageQualityMetrics:
     quarantined_count: int | None = None
     failed_validation_count: int | None = None
     total_quality_checked: int | None = None  # denominator for quality metrics
+    duplicate_rate: float | None = None  # computed only when total_quality_checked > 0
+    quarantined_rate: float | None = None  # computed only when total_quality_checked > 0
+    failed_validation_rate: float | None = None  # computed only when total_quality_checked > 0
 
     # Database comparison (metadata only, never a DB call)
     db_comparison_count: int | None = None  # None if unavailable, count if mismatch metadata
@@ -103,6 +138,20 @@ class CoverageQualityMetrics:
             value = getattr(self, field_name)
             if value is not None and value < 0:
                 raise ValueError(f"{field_name} must be non-negative, got {value}")
+
+        # Validate category keys against canonical set
+        if self.category_counts:
+            for category_key in self.category_counts:
+                if category_key not in CANONICAL_QUALITY_CATEGORIES:
+                    raise ValueError(f"Invalid category key: {category_key}")
+
+        # Validate category counts are non-negative
+        if self.category_counts:
+            for category_key, count in self.category_counts.items():
+                if count is not None and count < 0:
+                    raise ValueError(
+                        f"Category count for {category_key} must be non-negative, got {count}"
+                    )
 
         # Validate numerator <= denominator for coordinate quality
         if (
@@ -169,6 +218,9 @@ class CoverageQualityMetrics:
             "valid_coordinate_rate": None,
             "image_rights_ready_rate": None,
             "operating_hours_available_rate": None,
+            "duplicate_rate": None,
+            "quarantined_rate": None,
+            "failed_validation_rate": None,
         }
 
         # Compute coordinate rate only when both counts present and denominator > 0
@@ -200,6 +252,17 @@ class CoverageQualityMetrics:
             rates["operating_hours_available_rate"] = (
                 self.operating_hours_available_count / self.total_operating_hours_count
             )
+
+        # Compute quality issue rates only when total_quality_checked > 0
+        if self.total_quality_checked is not None and self.total_quality_checked > 0:
+            if self.duplicate_count is not None:
+                rates["duplicate_rate"] = self.duplicate_count / self.total_quality_checked
+            if self.quarantined_count is not None:
+                rates["quarantined_rate"] = self.quarantined_count / self.total_quality_checked
+            if self.failed_validation_count is not None:
+                rates["failed_validation_rate"] = (
+                    self.failed_validation_count / self.total_quality_checked
+                )
 
         return CoverageQualityMetrics(**{**self.__dict__, **rates})
 
@@ -271,6 +334,9 @@ class CoverageQualityMetrics:
                     "quarantined_count": self.quarantined_count,
                     "failed_validation_count": self.failed_validation_count,
                     "total_checked": self.total_quality_checked,
+                    "duplicate_rate": self.duplicate_rate,
+                    "quarantined_rate": self.quarantined_rate,
+                    "failed_validation_rate": self.failed_validation_rate,
                 }
                 if any(
                     x is not None
@@ -279,6 +345,9 @@ class CoverageQualityMetrics:
                         self.quarantined_count,
                         self.failed_validation_count,
                         self.total_quality_checked,
+                        self.duplicate_rate,
+                        self.quarantined_rate,
+                        self.failed_validation_rate,
                     ]
                 )
                 else None
@@ -424,25 +493,7 @@ def build_reconciliation_report(
     *,
     source_inventory: Sequence[inventory.OfficialSourceInventory],
     receipts: Sequence[OfficialCoverageReceipt],
-    expected_regions: tuple[str, ...] = (
-        "seoul",
-        "gyeonggi",
-        "incheon",
-        "busan",
-        "daegu",
-        "gwangju",
-        "daejeon",
-        "ulsan",
-        "sejong",
-        "gangwon",
-        "chungbuk",
-        "chungnam",
-        "jeonbuk",
-        "jeonnam",
-        "gyeongbuk",
-        "gyeongnam",
-        "jeju",
-    ),
+    expected_regions: tuple[str, ...] = CANONICAL_NATIONWIDE_REGIONS,
     generated_at: datetime | None = None,
     quality_metrics: Sequence[CoverageQualityMetrics] | None = None,
 ) -> ReconciliationReport:
@@ -472,8 +523,22 @@ def build_reconciliation_report(
         inventory=source_inventory, receipts=receipts, generated_at=generated_at
     )
 
-    # Initialize gaps list before quality metrics processing
+    # Initialize gaps list before processing
     gaps: list[CoverageGap] = []
+
+    # Validate expected_regions against canonical set
+    if set(expected_regions) != set(CANONICAL_NATIONWIDE_REGIONS):
+        # Non-canonical region set: reject if trying to validate nationwide coverage
+        gaps.append(
+            CoverageGap(
+                gap_type="scope_mismatch",
+                source_name="region_validation",
+                dataset_name="expected_regions",
+                description="Non-canonical region set provided for nationwide coverage validation",
+                expected_regions=CANONICAL_NATIONWIDE_REGIONS,
+                actual_regions=expected_regions,
+            )
+        )
 
     # Process quality metrics if provided
     validated_metrics: tuple[CoverageQualityMetrics, ...] = ()
@@ -501,21 +566,19 @@ def build_reconciliation_report(
                 else:
                     computed_metrics.append(computed_metric)
 
-            except ValueError as e:
-                # Reject invalid metrics without failing the entire report
+            except ValueError:
+                # Reject invalid metrics without exposing raw exception details
                 gaps.append(
                     CoverageGap(
                         gap_type="scope_mismatch",
                         source_name=metric.source_name,
                         dataset_name=metric.dataset_name,
-                        description=f"Invalid quality metrics: {e}",
+                        description="Invalid quality metrics rejected during validation",
                     )
                 )
         validated_metrics = tuple(computed_metrics)
+
     regional_coverage: dict[str, RegionalCoverageBreakdown] = {}
-    source_status_by_region: dict[str, dict[str, CoverageState]] = defaultdict(
-        lambda: defaultdict(str)
-    )
 
     usable_count = 0
     blocked_count = 0
@@ -589,16 +652,8 @@ def build_reconciliation_report(
                 )
             )
 
-        # Regional coverage analysis for nationwide sources
-        if source_summary.coverage_scope == "nationwide" and source_summary.readiness == "usable":
-            covered_regions = set(source_summary.covered_regions)
-            for region in expected_regions:
-                source_status_by_region[region][source_summary.source_name] = (
-                    "usable" if region in covered_regions else "unknown"
-                )
-
-    # Build regional breakdown
-    for region in expected_regions:
+    # Build regional breakdown for canonical regions only
+    for region in CANONICAL_NATIONWIDE_REGIONS:
         region_has_coverage = False
         region_sources: list[str] = []
 
@@ -621,7 +676,7 @@ def build_reconciliation_report(
 
     # Check for missing expected regions (nationwide coverage gap)
     covered_regions = set(rb.region_code for rb in regional_coverage.values() if rb.has_coverage)
-    missing_regions = set(expected_regions) - covered_regions
+    missing_regions = set(CANONICAL_NATIONWIDE_REGIONS) - covered_regions
     if missing_regions:
         gaps.append(
             CoverageGap(
@@ -629,7 +684,7 @@ def build_reconciliation_report(
                 source_name="nationwide",
                 dataset_name="aggregate",
                 description=f"Expected nationwide coverage missing {len(missing_regions)} regions",
-                expected_regions=expected_regions,
+                expected_regions=CANONICAL_NATIONWIDE_REGIONS,
                 actual_regions=tuple(sorted(covered_regions)),
             )
         )
@@ -645,7 +700,8 @@ def build_reconciliation_report(
         total_gaps=len(gaps),
         gaps=tuple(gaps),
         regional_breakdown=tuple(regional_coverage.values()),
-        nationwide_coverage_complete=len(missing_regions) == 0,
+        nationwide_coverage_complete=len(missing_regions) == 0
+        and set(expected_regions) == set(CANONICAL_NATIONWIDE_REGIONS),
         total_source_scoped_record_count=total_records,
         quality_metrics=validated_metrics,
     )

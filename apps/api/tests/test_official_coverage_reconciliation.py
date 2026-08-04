@@ -807,3 +807,233 @@ def test_all_five_state_distinctions_preserved():
     assert report.rejected_sources == 1  # rejected_source
     assert report.stale_sources == 1  # stale_source
     assert report.unknown_sources == 0  # All have receipts or governance status
+
+
+def test_quality_metrics_rejects_unknown_category_key():
+    """Quality metrics reject unknown category keys not in canonical set."""
+    import pytest
+
+    from apps.api.app.services.official_coverage_reconciliation import CoverageQualityMetrics
+
+    with pytest.raises(ValueError, match="Invalid category key"):
+        CoverageQualityMetrics(
+            source_name="test_source",
+            dataset_name="Test Dataset",
+            category_counts={"unknown_category": 10},  # Not in canonical set
+            total_category_count=10,
+        )
+
+
+def test_quality_metrics_rejects_negative_category_count():
+    """Quality metrics reject negative category counts."""
+    import pytest
+
+    from apps.api.app.services.official_coverage_reconciliation import CoverageQualityMetrics
+
+    with pytest.raises(ValueError, match="must be non-negative"):
+        CoverageQualityMetrics(
+            source_name="test_source",
+            dataset_name="Test Dataset",
+            category_counts={"attraction": -5},  # Negative count
+            total_category_count=10,
+        )
+
+
+def test_quality_metrics_valid_category_keys_accepted():
+    """Quality metrics accept valid category keys from canonical set."""
+    from apps.api.app.services.official_coverage_reconciliation import CoverageQualityMetrics
+
+    # Use multiple valid categories
+    valid_metric = CoverageQualityMetrics(
+        source_name="test_source",
+        dataset_name="Test Dataset",
+        category_counts={
+            "attraction": 10,
+            "restaurant": 20,
+            "lodging": 15,
+        },
+        total_category_count=45,
+    )
+
+    computed = valid_metric.compute_rates()
+    assert computed.category_counts == {
+        "attraction": 10,
+        "restaurant": 20,
+        "lodging": 15,
+    }
+    assert computed.total_category_count == 45
+
+
+def test_quality_metrics_rates_with_valid_denominator():
+    """Quality metrics compute all rates when total_quality_checked has valid denominator."""
+    from apps.api.app.services.official_coverage_reconciliation import CoverageQualityMetrics
+
+    valid_metric = CoverageQualityMetrics(
+        source_name="test_source",
+        dataset_name="Test Dataset",
+        duplicate_count=10,
+        quarantined_count=5,
+        failed_validation_count=3,
+        total_quality_checked=100,  # Valid denominator > 0
+    )
+
+    computed = valid_metric.compute_rates()
+
+    # All rates should be computed
+    assert computed.duplicate_rate == 0.1  # 10/100
+    assert computed.quarantined_rate == 0.05  # 5/100
+    assert computed.failed_validation_rate == 0.03  # 3/100
+
+    # Check public projection includes rates
+    public = computed.to_public_dict()
+    assert public["data_quality"]["duplicate_rate"] == 0.1
+    assert public["data_quality"]["quarantined_rate"] == 0.05
+    assert public["data_quality"]["failed_validation_rate"] == 0.03
+
+
+def test_quality_metrics_rates_with_zero_denominator():
+    """Quality metrics return None rates when total_quality_checked is zero."""
+    from apps.api.app.services.official_coverage_reconciliation import CoverageQualityMetrics
+
+    zero_denom_metric = CoverageQualityMetrics(
+        source_name="test_source",
+        dataset_name="Test Dataset",
+        duplicate_count=0,
+        quarantined_count=0,
+        failed_validation_count=0,
+        total_quality_checked=0,  # Zero denominator
+    )
+
+    computed = zero_denom_metric.compute_rates()
+
+    # All rates should be None (avoid division by zero)
+    assert computed.duplicate_rate is None
+    assert computed.quarantined_rate is None
+    assert computed.failed_validation_rate is None
+
+
+def test_quality_metrics_rates_with_missing_denominator():
+    """Quality metrics return None rates when total_quality_checked is missing."""
+    from apps.api.app.services.official_coverage_reconciliation import CoverageQualityMetrics
+
+    missing_denom_metric = CoverageQualityMetrics(
+        source_name="test_source",
+        dataset_name="Test Dataset",
+        duplicate_count=10,
+        quarantined_count=5,
+        failed_validation_count=3,
+        # total_quality_checked=None - denominator missing
+    )
+
+    computed = missing_denom_metric.compute_rates()
+
+    # All rates should be None when denominator is missing
+    assert computed.duplicate_rate is None
+    assert computed.quarantined_rate is None
+    assert computed.failed_validation_rate is None
+
+
+def test_quality_metrics_partial_quality_issue_rates():
+    """Quality metrics compute rates for only the issue types that have counts."""
+    from apps.api.app.services.official_coverage_reconciliation import CoverageQualityMetrics
+
+    partial_metric = CoverageQualityMetrics(
+        source_name="test_source",
+        dataset_name="Test Dataset",
+        duplicate_count=10,
+        quarantined_count=None,  # Missing
+        failed_validation_count=5,
+        total_quality_checked=100,
+    )
+
+    computed = partial_metric.compute_rates()
+
+    # Only rates for present counts should be computed
+    assert computed.duplicate_rate == 0.1  # 10/100
+    assert computed.quarantined_rate is None  # No count provided
+    assert computed.failed_validation_rate == 0.05  # 5/100
+
+    # Check public projection
+    public = computed.to_public_dict()
+    assert public["data_quality"]["duplicate_rate"] == 0.1
+    assert public["data_quality"]["quarantined_rate"] is None
+    assert public["data_quality"]["failed_validation_rate"] == 0.05
+
+
+def test_custom_region_list_rejects_nationwide_coverage():
+    """Custom reduced region list cannot approve nationwide coverage."""
+    # Try to pass a reduced region list (only 2 regions)
+    reduced_regions = ("seoul", "busan")
+
+    # Create a receipt that covers the reduced regions
+    partial_receipt = _receipt(
+        covered_regions=reduced_regions, record_ids=tuple(f"record:{i}" for i in range(50))
+    )
+
+    report = reconciliation.build_reconciliation_report(
+        source_inventory=[_entry()],
+        receipts=[partial_receipt],
+        expected_regions=reduced_regions,  # Non-canonical set
+        generated_at=GENERATED_AT,
+    )
+
+    # Should have scope_mismatch gap for non-canonical regions
+    assert any(
+        g.gap_type == "scope_mismatch"
+        and g.source_name == "region_validation"
+        and g.dataset_name == "expected_regions"
+        for g in report.gaps
+    )
+
+    # Nationwide coverage must be incomplete for non-canonical sets
+    assert not report.nationwide_coverage_complete
+
+    # Regional breakdown should still be canonical (17 regions)
+    assert len(report.regional_breakdown) == 17
+
+    # Validation should fail for nationwide requirements
+    validation = reconciliation.validate_full_ingest_dry_run(
+        reconciliation_report=report,
+        require_nationwide_coverage=True,
+        validation_timestamp=GENERATED_AT,
+    )
+
+    assert not validation.is_approved
+    assert any("Nationwide coverage incomplete" in b for b in validation.blockers)
+
+
+def test_custom_region_list_incomplete_cannot_approve():
+    """Even with all reduced regions covered, cannot approve true nationwide."""
+    # Try with 3 regions instead of canonical 17
+    custom_regions = ("seoul", "busan", "daegu")
+
+    # Create receipt that covers all custom regions
+    full_custom_receipt = _receipt(
+        covered_regions=custom_regions, record_ids=tuple(f"record:{i}" for i in range(100))
+    )
+
+    report = reconciliation.build_reconciliation_report(
+        source_inventory=[_entry()],
+        receipts=[full_custom_receipt],
+        expected_regions=custom_regions,
+        generated_at=GENERATED_AT,
+    )
+
+    # Should still have scope_mismatch for non-canonical regions
+    assert any(
+        g.gap_type == "scope_mismatch" and g.source_name == "region_validation" for g in report.gaps
+    ), "Non-canonical region list must create scope_mismatch gap"
+
+    # Nationwide coverage must be False even though all custom regions are covered
+    assert not report.nationwide_coverage_complete, (
+        "Non-canonical region sets cannot approve nationwide coverage"
+    )
+
+    # Regional breakdown preserves all 17 canonical regions
+    assert len(report.regional_breakdown) == 17
+    seoul_breakdown = next(rb for rb in report.regional_breakdown if rb.region_code == "seoul")
+    assert seoul_breakdown.has_coverage is True
+
+    # Other canonical regions should show no coverage
+    gangwon_breakdown = next(rb for rb in report.regional_breakdown if rb.region_code == "gangwon")
+    assert gangwon_breakdown.has_coverage is False
