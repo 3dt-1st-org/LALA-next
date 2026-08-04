@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from functools import lru_cache
@@ -60,7 +61,9 @@ class AwsSecretLookupResult:
 
     def __repr__(self) -> str:
         """Secret-safe representation that never includes the value field."""
-        return f"AwsSecretLookupResult(outcome={self.outcome!r}, logical_name={self.logical_name!r})"
+        return (
+            f"AwsSecretLookupResult(outcome={self.outcome!r}, logical_name={self.logical_name!r})"
+        )
 
     def __str__(self) -> str:
         """Secret-safe string representation that never includes the value field."""
@@ -159,9 +162,14 @@ def get_aws_sm_secret_structured(secret_id: str) -> AwsSecretLookupResult:
         outcome = _classify_aws_exception(exc)
         return AwsSecretLookupResult(outcome=outcome, logical_name=logical_name)
 
+    # Validate response structure before accessing fields
+    if not isinstance(resp, Mapping):
+        return AwsSecretLookupResult(outcome="invalid", logical_name=logical_name)
+
     secret_string = resp.get("SecretString")
-    if secret_string is None:
-        # Binary secret is not supported (app config is all strings)
+
+    # Validate secret_string is a string before calling strip()
+    if not isinstance(secret_string, str):
         return AwsSecretLookupResult(outcome="invalid", logical_name=logical_name)
 
     # Check for empty or whitespace-only secrets

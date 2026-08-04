@@ -392,7 +392,9 @@ def test_get_aws_sm_secret_required_invalid_raises_structured_error(monkeypatch)
 def test_structured_lookup_repr_str_are_secret_safe():
     """repr() and str() never include the secret value, using sentinel for verification."""
     # Use a unique sentinel that would never appear in real code
-    sentinel_value = "SENTINEL_SECRET_VALUE_8f4a2c9b-1d3e-4a5b-9f8c-2d7e6a3b1c9f"  # pragma: allowlist secret
+    sentinel_value = (
+        "SENTINEL_SECRET_VALUE_8f4a2c9b-1d3e-4a5b-9f8c-2d7e6a3b1c9f"  # pragma: allowlist secret
+    )
     result = aws_secrets.AwsSecretLookupResult(
         outcome="found", logical_name="test-secret", value=sentinel_value
     )
@@ -417,3 +419,82 @@ def test_structured_lookup_repr_str_are_secret_safe():
     assert "value" not in result_dict
     assert result_dict["outcome"] == "found"
     assert result_dict["logical_name"] == "test-secret"
+
+
+def test_structured_lookup_classifies_non_mapping_response_as_invalid(monkeypatch):
+    """Non-mapping response (e.g., list, string, int) classified as invalid outcome."""
+
+    class FakeClient:
+        def get_secret_value(self, SecretId):
+            # Return a non-mapping response that would cause .get() to fail
+            return ["not", "a", "dict"]
+
+    monkeypatch.setattr(aws_secrets, "_client", lambda: FakeClient())
+    result = aws_secrets.get_aws_sm_secret_structured("malformed-response-secret")
+
+    assert result.outcome == "invalid"
+    assert result.logical_name == "malformed-response-secret"
+    assert result.value == ""
+
+
+def test_structured_lookup_classifies_non_string_secret_string_as_invalid(monkeypatch):
+    """Non-string SecretString (e.g., int, list, dict) classified as invalid outcome."""
+
+    class FakeClient:
+        def get_secret_value(self, SecretId):
+            # Return a dict but SecretString is not a string
+            return {"SecretString": 12345}
+
+    monkeypatch.setattr(aws_secrets, "_client", lambda: FakeClient())
+    result = aws_secrets.get_aws_sm_secret_structured("non-string-secret")
+
+    assert result.outcome == "invalid"
+    assert result.logical_name == "non-string-secret"
+    assert result.value == ""
+
+
+def test_structured_lookup_classifies_list_secret_string_as_invalid(monkeypatch):
+    """List SecretString classified as invalid outcome."""
+
+    class FakeClient:
+        def get_secret_value(self, SecretId):
+            return {"SecretString": ["not", "a", "string"]}
+
+    monkeypatch.setattr(aws_secrets, "_client", lambda: FakeClient())
+    result = aws_secrets.get_aws_sm_secret_structured("list-secret")
+
+    assert result.outcome == "invalid"
+    assert result.logical_name == "list-secret"
+    assert result.value == ""
+
+
+def test_runtime_contract_exception_is_values_free(monkeypatch):
+    """Runtime contract failure exception contains only logical names and categories."""
+
+    class FakeClient:
+        def get_secret_value(self, SecretId):
+            raise Exception("provider sensitive error text must not leak")
+
+    monkeypatch.setattr(aws_secrets, "_client", lambda: FakeClient())
+
+    try:
+        aws_secrets.get_aws_sm_secret("db-dsn", required=True)
+        pytest.fail("Should have raised AwsSecretLookupError")
+    except aws_secrets.AwsSecretLookupError as exc:
+        error_msg = str(exc)
+        # Should contain logical name
+        assert "db-dsn" in error_msg
+
+        # Should contain safe category
+        assert any(
+            category in error_msg for category in ["missing", "denied", "unavailable", "invalid"]
+        )
+
+        # Should NOT contain provider text
+        assert "provider sensitive error text" not in error_msg
+        assert "ARN" not in error_msg
+        assert "account" not in error_msg.lower()
+
+        # Verify no raw exception content
+        assert "Exception" not in error_msg
+        assert "must not leak" not in error_msg
