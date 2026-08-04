@@ -128,28 +128,15 @@
 - ✅ PR #99 created as Draft
 
 **CI Status**:
-- ⚠️ First remote Unix CI attempt failed due to devlog formatting hooks (trailing whitespace and final newline)
-- 🔄 Minimal correction commit required to resolve formatting issues
-- 🔄 Re-run verification locally after correction before claiming green CI
+- ✅ First remote Unix CI attempt failed due to devlog formatting hooks (trailing whitespace and final newline)
+- ✅ Formatting correction committed and pushed (commit `cc1806b`)
+- ✅ Final CI run `30942767998` green for all three jobs: `API tests and safety contracts`, `Flutter app analyze + test`, `Unix wrapper verification`
+- ✅ Local verification passed: focused canonical SQL tests, ruff check, ruff format check, pre-commit hooks, `git diff --check origin/main...HEAD`
+- ✅ PR #99 ready for team review (Draft status, head `cc1806b`)
 
 ## Next Steps
 
-1. **CI Correction**:
-   - Minimal commit to fix devlog formatting (trailing whitespace and final newline)
-   - Re-run verification tests locally: `pytest apps/api/tests/test_canonical_sql.py -q`
-   - Re-run linting and formatting checks: `ruff check .`, `ruff format --check .`
-   - Re-run pre-commit hooks: `pre-commit run --all-files`
-   - Verify git diff is clean: `git diff --check origin/main...HEAD`
-
-2. **Final Push**:
-   - Push corrections with non-destructive fast-forward update
-   - Leave PR #99 as Draft
-   - Document final CI status in both P1-0 documents
-
-3. **Post-Correction Validation**:
-   - Confirm remote head matches expected commit
-   - Verify CI checks pass after formatting fixes
-   - Document final local/remote head in commit message
+**PR #99 Review**: This P1-0 slice is now ready for human/team review of Draft PR #99. The only next action is team review; do not claim merge or runtime verification.
 
 ## Security and Scope Compliance
 
@@ -189,4 +176,4 @@
 
 ---
 
-**Session Summary**: Successfully rebased P1-0 contract reconciliation work onto latest origin/main (18ef242), resolved conflicts, verified canonical SQL baseline integrity, updated planning documentation with current facts, and maintained strict scope compliance. First remote Unix CI failed due to devlog formatting hooks; minimal correction commit applied to resolve trailing whitespace and final newline issues. Ready for verification tests and final push.
+**Session Summary**: Successfully rebased P1-0 contract reconciliation work onto latest origin/main (18ef242), resolved conflicts, verified canonical SQL baseline integrity, updated planning documentation with current facts, and maintained strict scope compliance. First remote Unix CI failed due to devlog formatting hooks; formatting correction was committed and pushed. Final CI run 30942767998 is green for all three jobs. PR #99 is ready for team review with Draft status and head commit cc1806b.
