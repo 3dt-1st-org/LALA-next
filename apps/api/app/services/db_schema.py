@@ -81,6 +81,11 @@ REQUIRED_UNIQUE_CONSTRAINTS = {
         "deleted_users",
         ("identity_digest",),
     ),
+    "travel.place_enrichments(place_id,enrichment_type,prompt_version)": (
+        "travel",
+        "place_enrichments",
+        ("place_id", "enrichment_type", "prompt_version"),
+    ),
 }
 
 

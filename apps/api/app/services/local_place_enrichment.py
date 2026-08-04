@@ -250,6 +250,7 @@ def apply_local_enrichments(
             NULL,
             %(prompt_version)s
         )
+        ON CONFLICT (place_id, enrichment_type, prompt_version) DO NOTHING
     """
     updated = 0
     with psycopg2.connect(dsn, connect_timeout=connect_timeout) as conn:

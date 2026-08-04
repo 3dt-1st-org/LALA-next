@@ -23,6 +23,7 @@ EXPECTED_CANONICAL_MIGRATION_ORDER = (
     "061_community_chat_tables.sql",
     "062_review_ingestion_governance.sql",
     "063_local_signals_contract.sql",
+    "064_place_enrichment_replay_uniqueness.sql",
 )
 
 
@@ -60,7 +61,7 @@ def test_load_canonical_sql_plan_is_safe_and_ordered():
     assert plan.ok is True
     assert tuple(item.name for item in plan.files) == EXPECTED_CANONICAL_MIGRATION_ORDER
     assert canonical_sql.CANONICAL_MIGRATION_ORDER == EXPECTED_CANONICAL_MIGRATION_ORDER
-    assert canonical_sql.CANONICAL_MIGRATION_LATEST == "063_local_signals_contract.sql"
+    assert canonical_sql.CANONICAL_MIGRATION_LATEST == "064_place_enrichment_replay_uniqueness.sql"
     assert plan.to_dict()["statement_count"] >= 10
     assert all(len(item.sha256) == 64 for item in plan.files)
 
@@ -157,7 +158,7 @@ def test_apply_canonical_sql_cli_defaults_to_plan_json(capsys):
     assert exit_code == 0
     assert output["ok"] is True
     assert output["mode"] == "plan"
-    assert output["plan"]["file_count"] == 13
+    assert output["plan"]["file_count"] == 14
     assert "result" not in output
 
 

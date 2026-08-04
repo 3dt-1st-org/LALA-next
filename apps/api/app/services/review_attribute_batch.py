@@ -758,7 +758,7 @@ def apply_review_attribute_enrichments(
                 updated += cur.rowcount
                 if not row.accepted:
                     continue
-                cur.execute(
+                    cur.execute(
                     """
                     INSERT INTO travel.place_enrichments (
                         place_id,
@@ -769,7 +769,7 @@ def apply_review_attribute_enrichments(
                         model_name,
                         prompt_version
                     )
-                    SELECT
+                    VALUES (
                         %(place_id)s,
                         'review_attributes',
                         %(review_attributes)s::jsonb,
@@ -777,14 +777,8 @@ def apply_review_attribute_enrichments(
                         %(source_method)s,
                         %(model_name)s,
                         %(prompt_version)s
-                    WHERE NOT EXISTS (
-                        SELECT 1
-                        FROM travel.place_enrichments existing
-                        WHERE existing.place_id = %(place_id)s
-                          AND existing.enrichment_type = 'review_attributes'
-                          AND existing.source_method = %(source_method)s
-                          AND existing.prompt_version = %(prompt_version)s
                     )
+                    ON CONFLICT (place_id, enrichment_type, prompt_version) DO NOTHING
                     """,
                     {
                         "place_id": candidate_by_id[row.mention_id].place_id,
