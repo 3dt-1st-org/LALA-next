@@ -1,8 +1,8 @@
 # P1-0 Shared Contract Reconciliation
 
-Date: 2026-07-28 KST
+Date: 2026-08-05 KST
 Phase: P1-0 — canonical migration ordering and shared contract reconciliation
-Base: `origin/main` `906543d71ff03eba7ffdced0dbdb6886f2e6829b`
+Base: `origin/main` `18ef2426d2c2c1b4aacb532d6a614a7051ca0e39`
 
 This document is a contract ledger for the independent P1-0 slice. It freezes
 ownership and status without applying SQL, adding a future migration, running a
@@ -23,7 +23,7 @@ runtime verification are prohibited.
 
 ## Canonical migration baseline
 
-The only canonical SQL files in `origin/main=906543d` are the following, in
+The only canonical SQL files in `origin/main=18ef242` are the following, in
 this exact order:
 
 ```text
@@ -71,20 +71,25 @@ reconciliation evidence.
 
 ## PR and branch dependencies
 
-The following PRs remain Draft and are not dependencies to modify in this
-branch:
+The following PRs have been merged and are now part of the `origin/main` baseline:
 
-- [PR #76](https://github.com/3dt-1st-org/LALA-next/pull/76), head
-  `736a9ac846636d83d690cdc0172a3e9d596d0bd7`: AWS team handoff and local
-  helper documentation.
-- [PR #77](https://github.com/3dt-1st-org/LALA-next/pull/77), head
-  `8935f3847e5b3620413b8f258473208823dcc9dd`: Flutter LS-4 map/place/plan
-  action boundary.
-- [PR #78](https://github.com/3dt-1st-org/LALA-next/pull/78), head
-  `56dbaff63545b077c3f20c45d768c7ac7e42ad20`: P0 AWS runtime secret
-  contract; Draft/CLEAN with green CI, but not merged.
+- [PR #76](https://github.com/3dt-1st-org/LALA-next/pull/76) (MERGED): AWS team
+  handoff and local helper documentation.
+- [PR #77](https://github.com/3dt-1st-org/LALA-next/pull/77) (MERGED): Flutter LS-4
+  map/place/plan action boundary.
+- [PR #78](https://github.com/3dt-1st-org/LALA-next/pull/78) (MERGED): P0 AWS runtime
+  secret contract.
 
-P1-0 is based directly on `origin/main=906543d` and does not import or modify
+Current open Draft PRs that are not dependencies of this P1-0 slice:
+
+- [PR #96](https://github.com/3dt-1st-org/LALA-next/pull/96), head
+  `18ef242`: P0 runtime secret contract checkpoint.
+- [PR #97](https://github.com/3dt-1st-org/LALA-next/pull/97): P2 official media
+  probe contract.
+- [PR #98](https://github.com/3dt-1st-org/LALA-next/pull/98): AWS deployment runtime
+  contract.
+
+P1-0 is based directly on `origin/main=18ef242` and does not import or modify
 any of those PRs. P1-0 also does not consume the root checkout's RAG WIP
 064 migration. P1-1 may start only as a new branch after this P1-0 contract
 PR is reviewed and merged.
