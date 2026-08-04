@@ -444,3 +444,132 @@ Added comprehensive offline tests in `test_ai_service.py`:
 - **Backward compatibility:** All existing tests pass without modification
 - **Code quality:** No linting or formatting issues
 - **Security:** Role-specific validation maintained
+
+## P1-7 Correction 4 Fixes (2026-08-05)
+
+### Overview
+Fixed lint and format gate issues identified by static analysis tools. The test file had improper assertion patterns and formatting inconsistencies that failed CI quality checks.
+
+### Problems Fixed
+
+**1. Ruff B011 Error - Unsafe Assertion**
+- **Issue:** `test_rerank_docent_candidates_fails_when_rerank_gate_disabled` used `assert False, "Expected ServiceError"` pattern
+- **Location:** `apps/api/tests/test_ai_service.py:353`
+- **Problem:** `assert False` calls are removed by Python's `-O` optimization flag, making the test ineffective in production environments
+- **Fix:** Replaced try/except with `pytest.raises(ServiceError)` context manager pattern
+
+**2. Ruff Format - Inconsistent Formatting**
+- **Issue:** Fake completion response structure was inconsistently formatted across multiple lines
+- **Location:** `apps/api/tests/test_ai_service.py:314-317`
+- **Problem:** Line length and formatting didn't match project style guidelines
+- **Fix:** Applied ruff formatter to consolidate onto single line
+
+**3. Import Organization**
+- **Issue:** Missing `pytest` import at top of file, local import in test function
+- **Problem:** ServiceError was imported inside test function instead of module top
+- **Fix:** Added `pytest` import and moved `ServiceError` import to top of file
+
+### Solution Implemented
+
+**Before:**
+```python
+def test_rerank_docent_candidates_fails_when_rerank_gate_disabled(monkeypatch):
+    # ... setup code ...
+    from apps.api.app.core.errors import ServiceError
+    
+    try:
+        ai_service.rerank_docent_candidates("Test prompt")
+        assert False, "Expected ServiceError"
+    except ServiceError as exc:
+        assert exc.code == "AI_NOT_CONFIGURED"
+        assert exc.retryable is False
+        assert "reranking is not enabled" in exc.message.lower()
+```
+
+**After:**
+```python
+import pytest
+from apps.api.app.core.errors import ServiceError
+
+def test_rerank_docent_candidates_fails_when_rerank_gate_disabled(monkeypatch):
+    # ... setup code ...
+    
+    with pytest.raises(ServiceError) as exc_info:
+        ai_service.rerank_docent_candidates("Test prompt")
+    
+    assert exc_info.value.code == "AI_NOT_CONFIGURED"
+    assert exc_info.value.retryable is False
+    assert "reranking is not enabled" in exc_info.value.message.lower()
+```
+
+### Benefits
+
+1. **Test Reliability:** Assertions not removed by Python optimization
+2. **Code Style:** Consistent with pytest best practices
+3. **Readability:** Context manager pattern clearly shows exception expectation
+4. **Maintainability:** Import organization follows project conventions
+5. **CI Compliance:** All static quality gates now pass
+
+### Verification Checks Run
+
+✅ **All tests passing:** 14/14 AI service tests
+✅ **Ruff check:** No linting errors (B011 fixed)
+✅ **Ruff format:** Code properly formatted
+✅ **Pre-commit:** All hooks passing
+✅ **Git diff check:** No trailing whitespace in changes
+✅ **Focused test:** Modified test passes correctly
+
+### Static Gate Status
+
+**Before Correction 4:**
+- ❌ `uv run ruff check .` - B011 error at line 353
+- ❌ `uv run ruff format --check .` - reformatting needed around line 314
+
+**After Correction 4:**
+- ✅ `uv run ruff check .` - All checks passed
+- ✅ `uv run ruff format --check .` - 357 files already formatted
+- ✅ `uv run pre-commit run --all-files` - All hooks passed
+- ✅ `git diff --check` - No whitespace issues
+
+### Files Modified
+
+1. `apps/api/tests/test_ai_service.py`
+   - Added `pytest` import at module level
+   - Moved `ServiceError` import to module level
+   - Replaced `assert False` pattern with `pytest.raises()` context manager
+   - Applied ruff auto-fix for import sorting
+   - Applied ruff formatter for consistent code style
+
+### Test Quality Improvements
+
+**Exception Testing Pattern:**
+- Clear intent: `with pytest.raises(ServiceError)` shows expected exception
+- Better assertions: `exc_info.value` provides direct access to exception attributes
+- No optimization risks: Works correctly with `python -O`
+
+**Import Organization:**
+- Module-level imports follow project conventions
+- Easier to identify dependencies
+- Better IDE autocomplete support
+
+### Lessons Learned
+
+1. **Static Analysis Value:** Automated tools catch unsafe patterns that manual review misses
+2. **Test Safety:** `assert False` is an anti-pattern that compromises test integrity
+3. **pytest Best Practices:** Context managers are the preferred exception testing approach
+4. **Quality Gates:** Pre-commit hooks prevent issues from reaching code review
+
+### Backward Compatibility
+
+✅ **No functional changes:** Test behavior identical, only implementation improved
+✅ **All existing tests pass:** No impact on other test functions
+✅ **API contracts unchanged:** ServiceError behavior preserved
+✅ **Configuration unaffected:** No environment or settings changes
+
+### Success Metrics
+
+- **Static compliance:** All ruff checks pass
+- **Format consistency:** Code matches project style guidelines  
+- **Test reliability:** Assertions work in all Python optimization modes
+- **Best practices:** Follows pytest recommended patterns
+- **CI readiness:** All quality gates pass for PR merge
