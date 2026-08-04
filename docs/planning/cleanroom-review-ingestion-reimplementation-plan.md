@@ -172,8 +172,8 @@ All paths below exist in this worktree and were read directly.
 - `ops.job_runs` (job_name, status, started_at, finished_at, duration_ms,
   error_message) — `040_ops_core_tables.sql`.
 - **Review-ingestion governance foundation (PR #60,
-  `062_review_ingestion_governance.sql`, additive/re-runnable; **none of these
-  tables retains raw review bodies**):**
+  `062_review_ingestion_governance.sql`, additive/re-runnable; none of these
+  tables retains raw review bodies):**
   `ingest.review_sources` (source_name PK, provider, license_class ∈ {licensed,
   public_processed, approved_export, rejected}, terms_version,
   collection_method, retention_policy, redaction_policy, source_status); a
@@ -805,7 +805,11 @@ history via `place_enrichments` generations.
 - **Implemented:** `review_mention_ingest.py` deterministic clean/dedup/ad/
   category/match/aggregate; `community.posts` → `place_mentions_weekly`;
   `ops.job_runs` provenance; guarded plan/preview/apply CLI.
-- **Target:** raw/normalized/provenance split (§10); cross-batch dedup index.
+- **Implemented (062/PR #60):** provenance split (`ingest.review_sources` +
+  governance run ledger) and cross-run aggregate dedupe
+  (`ingest.review_ingest_receipts`).
+- **Target:** normalized-layer cross-batch dedup index (§12); raw retention
+  remains BLOCKED_EXTERNAL (§10).
 - **Acceptance (DB):** `place_mentions_weekly` has organic counts + attributes
   for representative attraction/restaurant/event/culture places; ambiguous
   matches excluded from organic counts.
@@ -832,10 +836,12 @@ history via `place_enrichments` generations.
   where evidence < 3 organic; attributes present in both `place_mentions_weekly`
   and `place_enrichments`.
 
-### M4 — Uncertainty/recheck + quarantine + replay (TARGET)
+### M4 — Uncertainty/recheck + quarantine + replay (PARTIALLY implemented)
 
-- **Target:** gpt-5.4-mini recheck lane (§16); `ingest_quarantine` (§19);
-  `--since/--window` replay (§20).
+- **Implemented (062/PR #60):** `community.ingest_quarantine` dead-letter table
+  + typed `safe_metadata` persistence and the single-transaction quarantine
+  insert boundary (§19) — quarantine is a live surface, not a future table.
+- **Target:** gpt-5.4-mini recheck lane (§16); `--since/--window` replay (§20).
 - **Acceptance (Ops/DB):** low-confidence signals quarantined, not scored;
   replay of a window is idempotent and audited.
 
