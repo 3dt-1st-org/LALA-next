@@ -22,18 +22,18 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::292216133883:role/lala-next-github-deploy
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: us-east-1
 
       - name: Deploy via SSM Run Command
         env:
-          INSTANCE_ID: i-0a15ffbfa381a5843
+          INSTANCE_ID: ${{ vars.AWS_EC2_INSTANCE_ID }}
         run: |
           set -euo pipefail
           CMD_ID=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
-            --parameters workingDirectory=/opt/lala-next,commands='["set -euo pipefail","export HOME=/root","git config --global --add safe.directory /opt/lala-next","git fetch origin main","git reset --hard origin/main","source .venv/bin/activate","pip install -e . -q","systemctl restart lala-next"]' \
+            --parameters workingDirectory=/opt/lala-next,commands='["set -euo pipefail","export HOME=/root","git config --global --add safe.directory /opt/lala-next","git fetch origin main","git reset --hard origin/main","source .venv/bin/activate","pip install -e . -q","sudo cp infra/systemd/lala-next-api.service /etc/systemd/system/lala-next.service","sudo chmod 644 /etc/systemd/system/lala-next.service","sudo systemctl daemon-reload","sudo systemctl restart lala-next","sudo systemctl is-active lala-next"]' \
             --query 'Command.CommandId' --output text)
           echo "SSM command: $CMD_ID"
           # 결과 대기 (최대 180초)
@@ -60,7 +60,7 @@ jobs:
           for i in $(seq 1 15); do
             if curl -sf https://api.lala-next.cloud/healthz > /dev/null 2>&1; then
               echo "Health check OK"
-              curl -s https://api.lala-next.cloud/readyz | python3 -c "import sys,json;d=json.loads(sys.stdin.read());print('overall:', d['data']['mode']['overall'])"
+              curl -s https://api.lala-next.cloud/readyz | python3 -c "import sys,json; d=json.loads(sys.stdin.read()); assert d['data']['status']=='ok', f\"status not ok: {d['data']['status']}\"; assert d['data']['mode']['overall']=='db-backed', f\"mode not db-backed: {d['data']['mode']['overall']}\"; assert d['data']['checks']['runtime_profile']=='api', f\"runtime_profile not api: {d['data']['checks']['runtime_profile']}\"; assert d['data']['checks']['static_snapshot_fallback']=='disabled', f\"static_snapshot_fallback not disabled: {d['data']['checks']['static_snapshot_fallback']}\"; print('readyz contract OK')"
               exit 0
             fi
             sleep 2

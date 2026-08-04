@@ -529,3 +529,100 @@ def test_post_merge_auth_guide_is_numbered_copy_safe_and_matches_supported_login
     assert "export VERCEL_PROJECT_ID=<" not in guide
     assert "LalaNext2024" not in guide
     assert not re.search(r"postgres(?:ql)?://[^\s<>]+", guide)
+
+
+def test_aws_deploy_yml_contains_no_literal_account_or_resource_identifiers():
+    deploy_yml = _text(".github/workflows/deploy.yml")
+
+    # No literal 12-digit AWS account numbers
+    assert not re.search(r"\b\d{12}\b", deploy_yml), (
+        "AWS deploy workflow must not contain literal 12-digit account numbers"
+    )
+    # No literal role ARNs with account numbers
+    assert not re.search(r"arn:aws:iam::\d{12}:role/", deploy_yml), (
+        "AWS deploy workflow must not contain literal role ARNs"
+    )
+    # No literal EC2 instance IDs (i-*)
+    assert not re.search(r"\bi-[0-9a-f]{17}\b", deploy_yml), (
+        "AWS deploy workflow must not contain literal EC2 instance IDs"
+    )
+    # Must reference GitHub Actions variables
+    assert "${{ vars.AWS_DEPLOY_ROLE_ARN }}" in deploy_yml, (
+        "AWS deploy workflow must reference AWS_DEPLOY_ROLE_ARN variable"
+    )
+    assert "${{ vars.AWS_EC2_INSTANCE_ID }}" in deploy_yml, (
+        "AWS deploy workflow must reference AWS_EC2_INSTANCE_ID variable"
+    )
+
+
+def test_aws_deploy_yml_installs_systemd_unit_and_enforces_runtime_contract():
+    deploy_yml = _text(".github/workflows/deploy.yml")
+
+    # Must install the tracked systemd unit
+    assert "infra/systemd/lala-next-api.service" in deploy_yml, (
+        "Deploy workflow must install tracked systemd unit"
+    )
+    assert "/etc/systemd/system/lala-next.service" in deploy_yml, (
+        "Deploy workflow must install to system path"
+    )
+    assert "systemctl daemon-reload" in deploy_yml, "Deploy workflow must run daemon-reload"
+    assert "systemctl restart lala-next" in deploy_yml, (
+        "Deploy workflow must restart lala-next service"
+    )
+    assert "systemctl is-active lala-next" in deploy_yml, (
+        "Deploy workflow must verify service is active"
+    )
+
+    # Must enforce runtime contract in health check
+    assert "['runtime_profile']=='api'" in deploy_yml, (
+        "Health check must enforce runtime_profile=api"
+    )
+    assert "['static_snapshot_fallback']=='disabled'" in deploy_yml, (
+        "Health check must enforce static_snapshot_fallback=disabled"
+    )
+    assert "['overall']=='db-backed'" in deploy_yml, "Health check must enforce db-backed mode"
+
+
+def test_aws_runbook_documents_github_actions_variables_and_runtime_profile():
+    aws = _text("docs/operations/aws-deployment-runbook.md")
+
+    # Must document GitHub Actions variables by name
+    assert "AWS_DEPLOY_ROLE_ARN" in aws, "AWS runbook must document AWS_DEPLOY_ROLE_ARN variable"
+    assert "AWS_EC2_INSTANCE_ID" in aws, "AWS runbook must document AWS_EC2_INSTANCE_ID variable"
+
+    # Must state runtime profile usage
+    assert "runtime profile api" in aws or "runtime_profile=api" in aws, (
+        "AWS runbook must document api runtime profile"
+    )
+    assert "Secrets Manager" in aws, "AWS runbook must mention Secrets Manager"
+
+    # Must state that actual values must not be committed
+    assert (
+        "must not be committed" in aws.lower()
+        or "must not appear in" in aws.lower()
+        or "실제 값은" in aws
+    ), "AWS runbook must state that values must not be committed"
+
+
+def test_aws_runbook_delegates_secret_management_to_secrets_manager():
+    aws = _text("docs/operations/aws-deployment-runbook.md")
+
+    # Should not imply /opt/lala-next/.env is the normal secret source for API runtime
+    # The runbook should mention Secrets Manager as the source
+    assert "Secrets Manager" in aws or "secretsmanager" in aws.lower(), (
+        "AWS runbook should reference Secrets Manager"
+    )
+    # Check that .env is not positioned as the primary secret source in the configuration table
+    config_section = aws[aws.find("## 6. 구성 파일 위치") : aws.find("## 7. 보안 주의사항")]
+    env_lines = [line for line in config_section.split("\n") if ".env" in line.lower()]
+    if env_lines:
+        # Ensure .env mentions in config table are about configuration, not secrets
+        for line in env_lines:
+            assert "password" not in line.lower(), (
+                f"Config table .env line must not mention passwords: {line}"
+            )
+            # Allow "비밀이 아닌" (not secret) as it explicitly denies .env contains secrets
+            if "비밀" in line:
+                assert "아닌" in line, (
+                    f"Config table .env line with '비밀' must explicitly deny it (include '아닌'): {line}"
+                )

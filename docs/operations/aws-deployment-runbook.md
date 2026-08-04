@@ -37,15 +37,18 @@
 ## 2. 핵심 리소스 ID
 
 > ⚠️ **민감값 정책**: 이 문서는 public repo에 있습니다. 계정 ID, 리소스 ID, 엔드포인트, 비밀번호 등은 placeholder로 표기합니다. **실제 값은 AWS 콘솔 또는 팀 내 private 운영 문서에서 확인**하세요. RDS 비밀번호는 AWS Secrets Manager(`lala-next/rds-master-password`)에서만 조회 — 문서에 평문을 기록하지 않습니다.
+>
+> **GitHub Actions 변수**: `.github/workflows/deploy.yml`은 리포지토리 변수 `AWS_DEPLOY_ROLE_ARN`과 `AWS_EC2_INSTANCE_ID`를 참조합니다. 실제 ARN과 인스턴스 ID는 GitHub Actions 설정(Repository secrets/variables)에서 관리하며, 결코 커밋되지 않아야 합니다.
 
 | 리소스 | ID / 값 |
 |--------|---------|
 | AWS 계정 | `<AWS_ACCOUNT_ID>` (12개월 무료티어) — 콘솔에서 확인 |
 | 리전 | `us-east-1` (버지니아 북부) |
 | VPC | `<VPC_ID>` |
-| EC2 인스턴스 | `<EC2_INSTANCE_ID>` |
+| EC2 인스턴스 | `<EC2_INSTANCE_ID>` — GitHub Actions 변수 `AWS_EC2_INSTANCE_ID`로 관리 |
 | EC2 퍼블릭 IP | `<EC2_ELASTIC_IP>` — AWS 콘솔 또는 비공개 운영 채널에서 확인 |
 | Elastic IP | `<EIP_ALLOC_ID>` |
+| GitHub Actions Role ARN | `<AWS_DEPLOY_ROLE_ARN>` — GitHub Actions 변수 `AWS_DEPLOY_ROLE_ARN`으로 관리 |
 | RDS 인스턴스 | `lala-next-db` |
 | RDS 엔드포인트 | `<RDS_ENDPOINT>:5432` — AWS 콘솔 RDS에서 확인 |
 | RDS 데이터베이스 | `lalanext` (user `lalaadmin`) |
@@ -168,12 +171,15 @@ done
 |------|------|------|
 | 앱 코드 | `/opt/lala-next/` | git clone (main 브랜치) |
 | 가상환경 | `/opt/lala-next/.venv/` | Python 3.11 + 의존성 |
-| 환경변수 | `/opt/lala-next/.env` | DB_DSN, LALA_PUBLIC_CONTEST_ACCESS 등 |
-| systemd 서비스 | `/etc/systemd/system/lala-next.service` | uvicorn workers=2 |
+| 환경변수 | `/opt/lala-next/.env` | CORS_ALLOW_ORIGINS 등 비밀이 아닌 구성만 포함 |
+| systemd 서비스 | `/etc/systemd/system/lala-next.service` | uvicorn workers=2, runtime_profile=api |
 | Nginx 설정 | `/etc/nginx/conf.d/lala-next.conf` | SSL 종료 + 443→8000 프록시 + HTTP 리다이렉트 |
 | SSL 인증서 | `/etc/letsencrypt/live/api.lala-next.cloud/` | Let's Encrypt, certbot-renew.timer가 매일 갱신 체크 |
 | 백업 스크립트 | `/opt/lala-next/scripts/backup_to_s3.sh` | RDS→S3, lala-next-backup.timer 매일 03:17 |
 | 액세스 로그 | `/var/log/lala-next/access.log` | |
+| 시크릿 관리 | AWS Secrets Manager + EC2 IAM role | RDS 비밀번호, API 키 등 |
+
+> **런타임 프로필**: API 서비스는 `runtime_profile=api`로 실행되며, Secrets Manager와 EC2 IAM role을 통해 시크릿을 획득합니다. `/opt/lala-next/.env`는 CORS_ALLOW_ORIGINS 같은 비밀이 아닌 구성만 포함하며, RDS 비밀번호나 API 키는 포함하지 않습니다.
 
 ---
 
@@ -185,9 +191,10 @@ done
 1. 새 강력한 비밀번호 생성: `aws secretsmanager get-random-password --exclude-characters "\"'\\\`" --password-length 32`
 2. RDS 적용: `aws rds modify-db-instance --db-instance-identifier lala-next-db --master-user-password '<NEW>' --apply-immediately` (적용까지 수 분)
 3. Secrets Manager 갱신: `aws secretsmanager put-secret-value --secret-id lala-next/rds-master-password --secret-string '{"password":"<NEW>"}'`
-4. EC2 `.env`의 `DB_DSN` 비밀번호 부분을 새 값으로 갱신 → `sudo systemctl restart lala-next`
-   - ⚠️ **ssh는 환경변수를 원격으로 전달하지 않습니다** — 비밀번호를 `ssh "..."` 안의 변수로 넣으면 빈 값이 들어가 잠시 장애(degraded) 발생. 대신 **파일로 안전 전송**: 로컬에서 `DB_DSN=...` 파일 작성 → `scp` → EC2에서 `sed`로 갱신 → 파일 삭제.
+4. API 서비스 재시작: EC2에서 `sudo systemctl restart lala-next` (런타임 프로필 `api`가 Secrets Manager에서 새 비밀번호를 읽음)
 5. `/readyz`로 `db-backed` 유지 확인
+
+> ⚠️ **중요**: `.env` 파일에 RDS 비밀번호나 API 키를 저장하지 마세요. API 서비스는 `runtime_profile=api`로 실행되며 Secrets Manager와 EC2 IAM role을 통해 시크릿을 획득합니다.
 
 기타:
 - EC2 보안그룹 SSH 규칙을 특정 IP로 제한 (현재 단일 IP로 제한됨)
