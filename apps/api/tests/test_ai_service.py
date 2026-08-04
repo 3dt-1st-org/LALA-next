@@ -4,6 +4,9 @@ import sys
 import types
 from types import SimpleNamespace
 
+import pytest
+
+from apps.api.app.core.errors import ServiceError
 from apps.api.app.schemas.docent import DocentScriptRequest
 from apps.api.app.services import ai_service
 
@@ -311,9 +314,7 @@ def test_rerank_docent_candidates_uses_rerank_gate(monkeypatch):
             return SimpleNamespace(
                 choices=[
                     SimpleNamespace(
-                        message=SimpleNamespace(
-                            content='{"reranked_ids": ["id1", "id2", "id3"]}'
-                        )
+                        message=SimpleNamespace(content='{"reranked_ids": ["id1", "id2", "id3"]}')
                     )
                 ]
             )
@@ -346,12 +347,9 @@ def test_rerank_docent_candidates_fails_when_rerank_gate_disabled(monkeypatch):
     )
     monkeypatch.setattr(ai_service, "rerank_ai_enabled", lambda s: False)
 
-    from apps.api.app.core.errors import ServiceError
-
-    try:
+    with pytest.raises(ServiceError) as exc_info:
         ai_service.rerank_docent_candidates("Test prompt")
-        assert False, "Expected ServiceError"
-    except ServiceError as exc:
-        assert exc.code == "AI_NOT_CONFIGURED"
-        assert exc.retryable is False
-        assert "reranking is not enabled" in exc.message.lower()
+
+    assert exc_info.value.code == "AI_NOT_CONFIGURED"
+    assert exc_info.value.retryable is False
+    assert "reranking is not enabled" in exc_info.value.message.lower()
