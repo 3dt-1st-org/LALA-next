@@ -90,7 +90,7 @@ Current open Draft PRs that are not dependencies of this P1-0 slice:
 - [PR #98](https://github.com/3dt-1st-org/LALA-next/pull/98), head
   `3b5a050`: feat(security): implement P0 runtime secret contract checkpoint.
 - [PR #99](https://github.com/3dt-1st-org/LALA-next/pull/99), head
-  `cc1806b`: docs: fix P1-0 devlog formatting and update facts (OPEN Draft).
+  `95d5c3d`: docs: correct P1-0 PR #99 final CI facts and status (OPEN Draft).
 
 P1-0 is based directly on `origin/main=18ef242` and does not import or modify
 any of those PRs. P1-0 also does not consume the root checkout's RAG WIP
@@ -99,11 +99,11 @@ PR is reviewed and merged.
 
 **PR #99 CI Status**: The first remote Unix CI attempt failed only because
 the devlog formatting hooks modified the file (trailing whitespace and final
-newline). The formatting correction was committed and pushed. Final CI run
+newline). The formatting correction was committed at `cc1806b`. CI run
 `30942767998` is green for all three jobs: `API tests and safety contracts`,
-`Flutter app analyze + test`, and `Unix wrapper verification`. Local focused
-canonical SQL tests, ruff check, ruff format check, pre-commit, and
-`git diff --check origin/main...HEAD` passed. The only next action for this
+`Flutter app analyze + test`, and `Unix wrapper verification`. The current
+head `95d5c3d` is a documentation-only fact correction with a newly triggered
+CI run that is currently pending verification. The only next action for this
 P1-0 slice is human/team review of Draft PR #99; do not claim merge or runtime
 verification.
 

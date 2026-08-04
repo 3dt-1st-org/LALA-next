@@ -130,9 +130,10 @@
 **CI Status**:
 - ✅ First remote Unix CI attempt failed due to devlog formatting hooks (trailing whitespace and final newline)
 - ✅ Formatting correction committed and pushed (commit `cc1806b`)
-- ✅ Final CI run `30942767998` green for all three jobs: `API tests and safety contracts`, `Flutter app analyze + test`, `Unix wrapper verification`
+- ✅ CI run `30942767998` green for all three jobs: `API tests and safety contracts`, `Flutter app analyze + test`, `Unix wrapper verification`
+- ✅ Current head `95d5c3d` is documentation-only fact correction with newly triggered CI run pending verification
 - ✅ Local verification passed: focused canonical SQL tests, ruff check, ruff format check, pre-commit hooks, `git diff --check origin/main...HEAD`
-- ✅ PR #99 ready for team review (Draft status, head `cc1806b`)
+- ✅ PR #99 ready for team review (Draft status, head `95d5c3d`)
 
 ## Next Steps
 
@@ -176,4 +177,4 @@
 
 ---
 
-**Session Summary**: Successfully rebased P1-0 contract reconciliation work onto latest origin/main (18ef242), resolved conflicts, verified canonical SQL baseline integrity, updated planning documentation with current facts, and maintained strict scope compliance. First remote Unix CI failed due to devlog formatting hooks; formatting correction was committed and pushed. Final CI run 30942767998 is green for all three jobs. PR #99 is ready for team review with Draft status and head commit cc1806b.
+**Session Summary**: Successfully rebased P1-0 contract reconciliation work onto latest origin/main (18ef242), resolved conflicts, verified canonical SQL baseline integrity, updated planning documentation with current facts, and maintained strict scope compliance. First remote Unix CI failed due to devlog formatting hooks; formatting correction was committed and pushed (cc1806b). CI run 30942767998 is green for all three jobs. Current head 95d5c3d is documentation-only fact correction with newly triggered CI run pending verification. PR #99 is ready for team review with Draft status and head commit 95d5c3d.
