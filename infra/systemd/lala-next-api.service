@@ -9,7 +9,9 @@ User=ec2-user
 Group=ec2-user
 WorkingDirectory=/opt/lala-next
 Environment=LALA_RUNTIME_PROFILE=api
-ExecStart=/opt/lala-next/scripts/unix/start_api.sh --runtime-profile api
+Environment=LALA_PUBLIC_CONTEST_ACCESS=true
+Environment=LALA_STATIC_SNAPSHOT_FALLBACK=false
+ExecStart=/opt/lala-next/scripts/unix/start_api.sh --runtime-profile api --port 8000 --enable-live-ai
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal

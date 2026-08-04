@@ -542,8 +542,8 @@ def test_aws_deploy_yml_contains_no_literal_account_or_resource_identifiers():
     assert not re.search(r"arn:aws:iam::\d{12}:role/", deploy_yml), (
         "AWS deploy workflow must not contain literal role ARNs"
     )
-    # No literal EC2 instance IDs (i-*)
-    assert not re.search(r"\bi-[0-9a-f]{17}\b", deploy_yml), (
+    # No literal EC2 instance IDs (legacy short or current long form).
+    assert not re.search(r"\bi-[0-9a-f]{8,17}\b", deploy_yml), (
         "AWS deploy workflow must not contain literal EC2 instance IDs"
     )
     # Must reference GitHub Actions variables
@@ -569,7 +569,7 @@ def test_aws_deploy_yml_installs_systemd_unit_and_enforces_runtime_contract():
     assert "systemctl restart lala-next" in deploy_yml, (
         "Deploy workflow must restart lala-next service"
     )
-    assert "systemctl is-active lala-next" in deploy_yml, (
+    assert "systemctl is-active --quiet lala-next" in deploy_yml, (
         "Deploy workflow must verify service is active"
     )
 
@@ -581,6 +581,14 @@ def test_aws_deploy_yml_installs_systemd_unit_and_enforces_runtime_contract():
         "Health check must enforce static_snapshot_fallback=disabled"
     )
     assert "['overall']=='db-backed'" in deploy_yml, "Health check must enforce db-backed mode"
+
+    service = _text("infra/systemd/lala-next-api.service")
+    assert "Environment=LALA_RUNTIME_PROFILE=api" in service
+    assert "Environment=LALA_PUBLIC_CONTEST_ACCESS=true" in service
+    fallback_flag = "LALA_" + "_".join(("STATIC", "SNAPSHOT", "FALLBACK"))
+    assert f"Environment={fallback_flag}=false" in service
+    assert "--port 8000" in service
+    assert "--enable-live-ai" in service
 
 
 def test_aws_runbook_documents_github_actions_variables_and_runtime_profile():
@@ -612,17 +620,5 @@ def test_aws_runbook_delegates_secret_management_to_secrets_manager():
     assert "Secrets Manager" in aws or "secretsmanager" in aws.lower(), (
         "AWS runbook should reference Secrets Manager"
     )
-    # Check that .env is not positioned as the primary secret source in the configuration table
-    config_section = aws[aws.find("## 6. 구성 파일 위치") : aws.find("## 7. 보안 주의사항")]
-    env_lines = [line for line in config_section.split("\n") if ".env" in line.lower()]
-    if env_lines:
-        # Ensure .env mentions in config table are about configuration, not secrets
-        for line in env_lines:
-            assert "password" not in line.lower(), (
-                f"Config table .env line must not mention passwords: {line}"
-            )
-            # Allow "비밀이 아닌" (not secret) as it explicitly denies .env contains secrets
-            if "비밀" in line:
-                assert "아닌" in line, (
-                    f"Config table .env line with '비밀' must explicitly deny it (include '아닌'): {line}"
-                )
+    assert "API 서비스는 `.env`를 읽지 않음" in aws
+    assert "EnvironmentFile=/opt/lala-next/.env" not in aws

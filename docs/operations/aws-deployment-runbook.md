@@ -171,7 +171,7 @@ done
 |------|------|------|
 | 앱 코드 | `/opt/lala-next/` | git clone (main 브랜치) |
 | 가상환경 | `/opt/lala-next/.venv/` | Python 3.11 + 의존성 |
-| 환경변수 | `/opt/lala-next/.env` | CORS_ALLOW_ORIGINS 등 비밀이 아닌 구성만 포함 |
+| 로컬 환경 파일 | `/opt/lala-next/.env` | 레거시·수동 로컬 실행 전용. 정상 API 서비스는 `.env`를 읽지 않음 |
 | systemd 서비스 | `/etc/systemd/system/lala-next.service` | uvicorn workers=2, runtime_profile=api |
 | Nginx 설정 | `/etc/nginx/conf.d/lala-next.conf` | SSL 종료 + 443→8000 프록시 + HTTP 리다이렉트 |
 | SSL 인증서 | `/etc/letsencrypt/live/api.lala-next.cloud/` | Let's Encrypt, certbot-renew.timer가 매일 갱신 체크 |
@@ -179,7 +179,7 @@ done
 | 액세스 로그 | `/var/log/lala-next/access.log` | |
 | 시크릿 관리 | AWS Secrets Manager + EC2 IAM role | RDS 비밀번호, API 키 등 |
 
-> **런타임 프로필**: API 서비스는 `runtime_profile=api`로 실행되며, Secrets Manager와 EC2 IAM role을 통해 시크릿을 획득합니다. `/opt/lala-next/.env`는 CORS_ALLOW_ORIGINS 같은 비밀이 아닌 구성만 포함하며, RDS 비밀번호나 API 키는 포함하지 않습니다.
+> **런타임 프로필**: API 서비스는 `runtime_profile=api`로 실행되며, Secrets Manager와 EC2 IAM role을 통해 시크릿을 획득합니다. 정상 API 서비스는 `/opt/lala-next/.env`를 읽지 않습니다. 공모전 공개 접근, snapshot 비활성화 같은 비민감 운영 플래그는 추적되는 systemd unit에 명시합니다.
 
 ---
 
@@ -273,7 +273,7 @@ sudo systemctl list-timers | grep lala-next
 | `lala-next-pipeline.timer` | 일요일 04:00 | 전체 DAG (tour→score→rag→weather) | `run_weekly_pipeline.sh` |
 | `lala-next-pipeline-card.timer` | 매월 1일 02:00 | 최신 카드 zip 자동 탐색 후 적재 | `run_monthly_card.sh` |
 
-- `ALLOW_*_APPLY=1` 가드는 unit 파일의 `Environment=`에서 주입 (시크릿 아님). API 키는 `EnvironmentFile=/opt/lala-next/.env`로 로드.
+- `ALLOW_*_APPLY=1` 가드는 unit 파일의 `Environment=`에서 주입합니다. API 키와 DB DSN은 `worker` profile이 EC2 IAM role로 Secrets Manager에서 조회합니다.
 - RAG 임베딩만 `LALA_ENABLE_LIVE_AI=true` (래퍼 내 export/unset, FastAPI 런타임과 격리).
 - 로그: `sudo journalctl -u lala-next-pipeline -n 100` 및 `/opt/lala-next/runtime/logs/`.
 - 수동 트리거: `sudo systemctl start lala-next-pipeline-daily.service`.
