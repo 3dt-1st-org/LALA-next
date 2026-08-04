@@ -499,11 +499,19 @@ def test_generate_script_hybrid_mode_uses_hybrid_grounding_and_adds_citations(mo
 
     def hybrid(**kwargs):
         calls["hybrid"] += 1
-        return [_grounding_row()]
+        return {
+            "rows": [_grounding_row()],
+            "retrieval": {
+                "mode": "hybrid",
+                "reranker": "rrf",
+                "candidate_pool": 1,
+                "fallback_reason": "",
+            }
+        }
 
     monkeypatch.setattr(docent_service.db_repository, "fetch_docent_knowledge_context", legacy)
     monkeypatch.setattr(
-        docent_service.db_repository, "fetch_docent_knowledge_context_hybrid", hybrid
+        docent_service.db_repository, "fetch_docent_knowledge_context_hybrid_result", hybrid
     )
 
     result = docent_service.generate_script(

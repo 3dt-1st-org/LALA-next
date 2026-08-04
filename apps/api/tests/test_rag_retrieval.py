@@ -169,3 +169,151 @@ def test_fetch_hybrid_candidates_rejects_blank_query():
             embedding_method="local-hash",
             filters=rag_retrieval.RetrievalFilters(),
         )
+
+
+# ---------------------------------------------------------------------------
+# P1-7: Mini rerank with OpenAI completion
+# ---------------------------------------------------------------------------
+
+
+def test_parse_rerank_response_valid_json():
+    raw = '{"reranked_ids": ["place:a", "place:b", "place:c"]}'
+    result = rag_retrieval.parse_rerank_response(raw)
+    assert result == ["place:a", "place:b", "place:c"]
+
+
+def test_parse_rerank_response_rejects_missing_field():
+    raw = '{"ids": ["a", "b"]}'
+    with pytest.raises(ValueError, match="must contain 'reranked_ids'"):
+        rag_retrieval.parse_rerank_response(raw)
+
+
+def test_parse_rerank_response_rejects_non_list():
+    raw = '{"reranked_ids": "not_a_list"}'
+    with pytest.raises(ValueError, match="must be a list"):
+        rag_retrieval.parse_rerank_response(raw)
+
+
+def test_parse_rerank_response_rejects_empty_string_id():
+    raw = '{"reranked_ids": ["a", "", "c"]}'
+    with pytest.raises(ValueError, match="must be a non-empty string"):
+        rag_retrieval.parse_rerank_response(raw)
+
+
+def test_parse_rerank_response_rejects_non_string_id():
+    raw = '{"reranked_ids": ["a", 123, "c"]}'
+    with pytest.raises(ValueError, match="must be a non-empty string"):
+        rag_retrieval.parse_rerank_response(raw)
+
+
+def test_parse_rerank_response_strips_whitespace():
+    raw = '{"reranked_ids": ["  place:a  ", " place:b ", "place:c"]}'
+    result = rag_retrieval.parse_rerank_response(raw)
+    assert result == ["place:a", "place:b", "place:c"]
+
+
+def test_rerank_candidates_with_completion_function(monkeypatch):
+    candidates = [
+        _result("place_profile", "a", similarity=0.9),
+        _result("place_profile", "b", similarity=0.8),
+        _result("place_profile", "c", similarity=0.7),
+    ]
+    
+    def fake_completion(prompt):
+        # Simulate AI reordering: b should come first
+        return '{"reranked_ids": ["b", "a", "c"]}'
+    
+    reranked, reranker_type = rag_retrieval.rerank_candidates(
+        candidates=candidates,
+        query="수원 명소",
+        completion_fn=fake_completion,
+    )
+    
+    assert reranker_type == "mini"
+    assert [c.source_id for c in reranked] == ["b", "a", "c"]
+
+
+def test_rerank_candidates_falls_back_on_completion_error(monkeypatch):
+    candidates = [
+        _result("place_profile", "a", similarity=0.9),
+        _result("place_profile", "b", similarity=0.8),
+    ]
+    
+    def fake_completion(prompt):
+        raise ValueError("AI service unavailable")
+    
+    reranked, reranker_type = rag_retrieval.rerank_candidates(
+        candidates=candidates,
+        query="수원 명소",
+        completion_fn=fake_completion,
+    )
+    
+    assert reranker_type == "rrf"
+    assert [c.source_id for c in reranked] == ["a", "b"]
+
+
+def test_rerank_candidates_falls_back_on_invalid_json(monkeypatch):
+    candidates = [
+        _result("place_profile", "a", similarity=0.9),
+        _result("place_profile", "b", similarity=0.8),
+    ]
+    
+    def fake_completion(prompt):
+        return "INVALID JSON {{{"
+    
+    reranked, reranker_type = rag_retrieval.rerank_candidates(
+        candidates=candidates,
+        query="수원 명소",
+        completion_fn=fake_completion,
+    )
+    
+    assert reranker_type == "rrf"
+    assert [c.source_id for c in reranked] == ["a", "b"]
+
+
+def test_rerank_candidates_without_completion_function():
+    candidates = [
+        _result("place_profile", "a", similarity=0.9),
+        _result("place_profile", "b", similarity=0.8),
+    ]
+    
+    reranked, reranker_type = rag_retrieval.rerank_candidates(
+        candidates=candidates,
+        query="수원 명소",
+        completion_fn=None,
+    )
+    
+    assert reranker_type == "rrf"
+    assert [c.source_id for c in reranked] == ["a", "b"]
+
+
+def test_rerank_candidates_preserves_unranked_candidates(monkeypatch):
+    candidates = [
+        _result("place_profile", "a", similarity=0.9),
+        _result("place_profile", "b", similarity=0.8),
+        _result("place_profile", "c", similarity=0.7),
+    ]
+    
+    def fake_completion(prompt):
+        # AI only returns top 2, third should be appended in original order
+        return '{"reranked_ids": ["b", "a"]}'
+    
+    reranked, reranker_type = rag_retrieval.rerank_candidates(
+        candidates=candidates,
+        query="수원 명소",
+        completion_fn=fake_completion,
+    )
+    
+    assert reranker_type == "mini"
+    assert [c.source_id for c in reranked] == ["b", "a", "c"]
+
+
+def test_rerank_candidates_empty_candidates():
+    reranked, reranker_type = rag_retrieval.rerank_candidates(
+        candidates=[],
+        query="수원 명소",
+        completion_fn=lambda p: "{}",
+    )
+    
+    assert reranker_type == "rrf"
+    assert reranked == []
