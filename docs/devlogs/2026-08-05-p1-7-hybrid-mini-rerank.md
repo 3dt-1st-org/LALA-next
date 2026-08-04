@@ -474,9 +474,7 @@ Fixed lint and format gate issues identified by static analysis tools. The test 
 **Before:**
 ```python
 def test_rerank_docent_candidates_fails_when_rerank_gate_disabled(monkeypatch):
-    # ... setup code ...
     from apps.api.app.core.errors import ServiceError
-    
     try:
         ai_service.rerank_docent_candidates("Test prompt")
         assert False, "Expected ServiceError"
@@ -492,11 +490,8 @@ import pytest
 from apps.api.app.core.errors import ServiceError
 
 def test_rerank_docent_candidates_fails_when_rerank_gate_disabled(monkeypatch):
-    # ... setup code ...
-    
     with pytest.raises(ServiceError) as exc_info:
         ai_service.rerank_docent_candidates("Test prompt")
-    
     assert exc_info.value.code == "AI_NOT_CONFIGURED"
     assert exc_info.value.retryable is False
     assert "reranking is not enabled" in exc_info.value.message.lower()
@@ -569,7 +564,7 @@ def test_rerank_docent_candidates_fails_when_rerank_gate_disabled(monkeypatch):
 ### Success Metrics
 
 - **Static compliance:** All ruff checks pass
-- **Format consistency:** Code matches project style guidelines  
+- **Format consistency:** Code matches project style guidelines
 - **Test reliability:** Assertions work in all Python optimization modes
 - **Best practices:** Follows pytest recommended patterns
 - **CI readiness:** All quality gates pass for PR merge
