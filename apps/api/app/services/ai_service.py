@@ -339,23 +339,23 @@ def _canonical_grounding_title(grounding_context: list[dict]) -> str | None:
 
 def rerank_docent_candidates(prompt: str) -> str:
     """Execute live OpenAI completion for docent candidate reranking.
-    
+
     This function provides the standard OpenAI completion seam used by the reranker.
     It returns the raw completion string that will be parsed and validated by
     parse_rerank_response in rag_retrieval.py.
-    
+
     Args:
         prompt: The reranking prompt with candidate context
-        
+
     Returns:
         Raw completion string from OpenAI
-        
+
     Raises:
         ServiceError: If AI completion is not configured or fails
     """
     settings = get_settings()
     try:
-        resolved_model = resolve("docent", settings)
+        resolved_model = resolve("docent_qa", settings)
     except ValueError as exc:
         raise ServiceError(
             status_code=503,
@@ -363,7 +363,7 @@ def rerank_docent_candidates(prompt: str) -> str:
             message="OpenAI reranking is not enabled.",
             retryable=False,
         ) from exc
-    
+
     if not live_ai_enabled():
         raise ServiceError(
             status_code=503,
@@ -371,7 +371,7 @@ def rerank_docent_candidates(prompt: str) -> str:
             message="OpenAI reranking is not enabled.",
             retryable=False,
         )
-    
+
     try:
         from openai import OpenAI
     except Exception as exc:
@@ -381,14 +381,14 @@ def rerank_docent_candidates(prompt: str) -> str:
             message="OpenAI client dependency is unavailable.",
             retryable=False,
         ) from exc
-    
+
     client = OpenAI(
         api_key=settings.openai_api_key,
         base_url=settings.openai_base_url or "https://api.openai.com/v1",
         timeout=DOCENT_AI_TIMEOUT_SECONDS,
         max_retries=0,
     )
-    
+
     try:
         completion = client.chat.completions.create(
             model=resolved_model.model_id,
@@ -400,7 +400,7 @@ def rerank_docent_candidates(prompt: str) -> str:
                 {"role": "user", "content": prompt},
             ],
             temperature=0.1,  # Low temperature for deterministic ranking
-            max_tokens=200,   # Only need IDs in response
+            max_tokens=200,  # Only need IDs in response
         )
         text = completion.choices[0].message.content or ""
     except Exception as exc:
@@ -410,7 +410,7 @@ def rerank_docent_candidates(prompt: str) -> str:
             message="OpenAI reranking failed.",
             retryable=True,
         ) from exc
-    
+
     text = text.strip()
     if not text:
         raise ServiceError(

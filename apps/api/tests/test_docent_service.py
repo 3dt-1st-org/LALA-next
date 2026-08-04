@@ -506,7 +506,7 @@ def test_generate_script_hybrid_mode_uses_hybrid_grounding_and_adds_citations(mo
                 "reranker": "rrf",
                 "candidate_pool": 1,
                 "fallback_reason": "",
-            }
+            },
         }
 
     monkeypatch.setattr(docent_service.db_repository, "fetch_docent_knowledge_context", legacy)

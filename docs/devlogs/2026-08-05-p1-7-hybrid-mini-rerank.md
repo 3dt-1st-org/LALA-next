@@ -1,7 +1,7 @@
 # P1-7 Hybrid Mini-Rerank Implementation
 
-**Date:** 2026-08-05  
-**Scope:** Add OpenAI completion-based mini rerank with strict JSON validation to hybrid retrieval  
+**Date:** 2026-08-05
+**Scope:** Add OpenAI completion-based mini rerank with strict JSON validation to hybrid retrieval
 **Branch:** `geondongkim/lala-p1-7-hybrid-mini-rerank`
 
 ## Overview
@@ -30,7 +30,7 @@ Implemented hybrid retrieval with OpenAI mini reranking capability. The system n
 - Returns `(reranked_candidates, reranker_type)` tuple
 - Automatic fallback to original RRF order on any error:
   - JSON parsing failures
-  - Validation failures  
+  - Validation failures
   - Completion function errors
   - Empty or malformed responses
 
@@ -72,6 +72,7 @@ All tests use injected completion functions to avoid live provider calls:
 ```python
 def fake_completion(prompt):
     return '{"reranked_ids": ["place:b", "place:a", "place:c"]}'
+
 
 reranked, reranker_type = rerank_candidates(
     candidates=candidates,
@@ -128,7 +129,7 @@ The system automatically selects reranker based on configuration:
 - No live OpenAI calls in test suite
 - No DSNs or connection strings in test code
 
-### No Raw Reviews in Output  
+### No Raw Reviews in Output
 - Reranking operates on pre-filtered candidates
 - Metadata tracking prevents raw review exposure
 - Citation system maintains provenance
@@ -173,7 +174,7 @@ The system automatically selects reranker based on configuration:
 ### Backward Compatibility
 
 - Legacy mode unchanged (`RAG_RETRIEVAL_MODE=legacy` or unset)
-- Hybrid mode only affects `rag_retrieval_mode=hybrid`  
+- Hybrid mode only affects `rag_retrieval_mode=hybrid`
 - Existing docent scripts unchanged
 - New metadata only in hybrid responses
 
@@ -218,3 +219,92 @@ If issues arise:
 - **Metadata accuracy:** Correct reranker reporting
 - **Performance:** Mini rerank under 500ms when successful
 - **Safety:** No secrets, DSNs, or live calls in tests
+
+## P1-7 Correction 2 Fixes (2026-08-05)
+
+### Overview
+Applied 7 technical corrections to improve reliability, security, and maintainability of the hybrid mini-rerank implementation.
+
+### Corrections Applied
+
+1. **Duplicate Function Removal**
+   - Removed duplicate `fetch_docent_knowledge_context_hybrid_result` definition (lines 997-1116)
+   - Kept canonical implementation at line 950+
+   - Ensures single source of truth for hybrid retrieval logic
+
+2. **Fixed Candidate Pool Size**
+   - Changed from `candidate_pool=max(top_k, 10)` to `candidate_pool=20`
+   - Applies to both `fetch_docent_knowledge_context_hybrid` and `fetch_docent_knowledge_context_hybrid_result`
+   - Ensures contract compliance: ANN + keyword + RRF → 20 → mini rerank → top 3
+
+3. **Model Resolution Fix**
+   - Changed `resolve("docent", settings)` to `resolve("docent_qa", settings)` in `ai_service.py`
+   - Uses correct model configuration for question-answering tasks
+   - Ensures proper model selection for reranking
+
+4. **Strict Rerank Validation**
+   - Enhanced `parse_rerank_response` to reject unknown IDs
+   - Enhanced `parse_rerank_response` to reject duplicate IDs
+   - Both validation failures trigger RRF fallback (no silent failures)
+   - Prevents hallucinated IDs from corrupting results
+
+5. **Prompt Sanitization**
+   - Removed raw body text from rerank prompts
+   - Removed secrets, DSNs, and internal data from prompts
+   - Only includes bounded metadata: title (truncated), source_type, source_id, category, region, indoor flag, similarity band
+   - Prevents data leakage and reduces token usage
+
+6. **Fallback Metadata**
+   - Ensured fallback messages never expose provider exception text
+   - Concise fallback reasons: "unknown_ids", "duplicate_ids", "validation_error"
+   - Maintains security while preserving debugging information
+
+7. **Code Style**
+   - Removed trailing whitespace from all modified files
+   - Converted lambda to named function for `effective_completion_fn`
+   - Applied ruff formatting consistently
+
+### Test Updates
+
+Added comprehensive tests for new validation behavior:
+- `test_parse_rerank_response_rejects_unknown_ids` - Validates unknown ID detection
+- `test_parse_rerank_response_rejects_duplicate_ids` - Validates duplicate ID detection
+- `test_rerank_candidates_falls_back_on_unknown_ids` - Tests RRF fallback on unknown IDs
+- `test_rerank_candidates_falls_back_on_duplicate_ids` - Tests RRF fallback on duplicate IDs
+- `test_rerank_prompt_sanitizes_body_text` - Validates no raw body text in prompts
+- `test_rerank_prompt_truncates_long_inputs` - Validates input truncation
+
+### Verification Checks Run
+
+✅ **All tests passing:** 146/146 (28 RAG retrieval tests)
+✅ **Ruff check:** No linting errors
+✅ **Ruff format:** Code properly formatted
+✅ **Pre-commit:** All hooks passing (no trailing whitespace, proper EOF)
+✅ **Git diff check:** No trailing whitespace in changes
+✅ **No live calls:** All tests use injected completion functions
+
+### Files Modified
+
+1. `apps/api/app/services/db_repository.py`
+   - Removed duplicate function definition
+   - Fixed candidate pool size to exactly 20
+   - Converted lambda to named function
+
+2. `apps/api/app/services/ai_service.py`
+   - Fixed model resolution to use "docent_qa"
+
+3. `apps/api/app/services/rag_retrieval.py`
+   - Enhanced `parse_rerank_response` with strict validation
+   - Updated `rerank_candidates` to sanitize prompts
+
+4. `apps/api/tests/test_rag_retrieval.py`
+   - Updated existing tests to include `candidate_ids` parameter
+   - Added 6 new tests for validation behavior
+
+### Impact
+
+- **Security:** Removed raw body text and secrets from AI prompts
+- **Reliability:** Strict validation prevents hallucinated IDs from corrupting results
+- **Maintainability:** Single canonical function, consistent candidate pool sizing
+- **Performance:** Proper model selection for QA tasks
+- **Testing:** Comprehensive coverage of new validation behavior

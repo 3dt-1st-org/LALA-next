@@ -71,7 +71,9 @@ def generate_script(request: DocentScriptRequest) -> dict:
             language=request.language,
             top_k=3,
             reranker="mini" if ai_service.live_ai_enabled() else "rrf",
-            completion_fn=ai_service.rerank_docent_candidates if ai_service.live_ai_enabled() else None,
+            completion_fn=ai_service.rerank_docent_candidates
+            if ai_service.live_ai_enabled()
+            else None,
         )
         grounding_context = hybrid_result["rows"]
         retrieval_meta = hybrid_result["retrieval"]
