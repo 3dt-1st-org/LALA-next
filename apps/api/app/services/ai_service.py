@@ -18,6 +18,33 @@ def live_ai_enabled() -> bool:
     )
 
 
+def rerank_ai_enabled(settings: object | None = None) -> bool:
+    """Check if the docent_qa reranker is enabled with role-specific configuration.
+
+    This gate is separate from live_ai_enabled() to ensure that a docent-generation
+    override cannot accidentally disable or enable the docent_qa reranker. The reranker
+    resolves the docent_qa role and requires both the explicit live-AI flag and a
+    valid OpenAI API key.
+
+    Args:
+        settings: Optional settings object for testing; defaults to get_settings()
+
+    Returns:
+        True if reranking is enabled, False otherwise. Returns false on configuration
+        errors without exposing sensitive values.
+    """
+    settings = settings or get_settings()
+    try:
+        resolve_openai_base_url_host(settings.openai_base_url)
+    except ValueError:
+        return False
+    try:
+        resolve("docent_qa", settings)
+    except ValueError:
+        return False
+    return bool(settings.enable_live_ai and settings.openai_api_key)
+
+
 _REVIEW_SOURCE_HINTS = (
     "review",
     "visitor",
@@ -364,7 +391,7 @@ def rerank_docent_candidates(prompt: str) -> str:
             retryable=False,
         ) from exc
 
-    if not live_ai_enabled():
+    if not rerank_ai_enabled(settings):
         raise ServiceError(
             status_code=503,
             code="AI_NOT_CONFIGURED",

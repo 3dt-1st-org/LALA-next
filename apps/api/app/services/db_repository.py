@@ -979,12 +979,16 @@ def fetch_docent_knowledge_context_hybrid_result(
 
     # Use provided completion function for mini rerank, otherwise determine from settings
     effective_completion_fn = completion_fn
-    if not effective_completion_fn and reranker == "mini" and settings.openai_api_key:
+    if not effective_completion_fn and reranker == "mini":
         # Import ai_service only when needed to avoid circular imports
         from apps.api.app.services import ai_service
 
-        def effective_completion_fn(prompt: str) -> str:
-            return ai_service.rerank_docent_candidates(prompt)
+        # Require the rerank-specific gate; an explicitly injected offline completion
+        # function remains usable in tests without any live provider call
+        if ai_service.rerank_ai_enabled(settings):
+
+            def effective_completion_fn(prompt: str) -> str:
+                return ai_service.rerank_docent_candidates(prompt)
 
     try:
         candidates, reranker_type, fallback_reason = (
