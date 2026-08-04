@@ -84,6 +84,10 @@ class AIClassificationResult:
 
     All fields are strictly typed and bounded. No raw text or free-form
     content from the AI response is included in the persisted result.
+
+    Construction validation is enforced via __post_init__ to ensure all
+    fields meet strict bounded requirements, preventing direct construction
+    with invalid values.
     """
 
     schema_version: str
@@ -93,6 +97,50 @@ class AIClassificationResult:
     ad_confidence: float
     relevance_confidence: float
     reason_code: str
+
+    def __post_init__(self) -> None:
+        """Validate all fields at construction time.
+
+        Enforces strict bounds on all fields without exposing input values
+        in error messages. All validation failures raise the same generic
+        AIClassifierValidationError without echoing any input data.
+        """
+        # Validate schema_version - must match exactly
+        if not isinstance(self.schema_version, str):
+            raise AIClassifierValidationError("Invalid AI classifier response")
+        if self.schema_version != SCHEMA_VERSION:
+            raise AIClassifierValidationError("Invalid AI classifier response")
+
+        # Validate decision - must be in allowed set
+        if not isinstance(self.decision, str):
+            raise AIClassifierValidationError("Invalid AI classifier response")
+        if self.decision not in ALLOWED_DECISIONS:
+            raise AIClassifierValidationError("Invalid AI classifier response")
+
+        # Validate booleans - must be actual bool type
+        if not isinstance(self.is_ad, bool):
+            raise AIClassifierValidationError("Invalid AI classifier response")
+        if not isinstance(self.is_relevant, bool):
+            raise AIClassifierValidationError("Invalid AI classifier response")
+
+        # Validate confidence values - must be finite floats in [0, 1]
+        try:
+            ad_conf = float(self.ad_confidence)
+            rel_conf = float(self.relevance_confidence)
+        except (TypeError, ValueError):
+            raise AIClassifierValidationError("Invalid AI classifier response") from None
+
+        # Check for finiteness and range
+        if not (0.0 <= ad_conf <= 1.0 and ad_conf == ad_conf):  # NaN check
+            raise AIClassifierValidationError("Invalid AI classifier response")
+        if not (0.0 <= rel_conf <= 1.0 and rel_conf == rel_conf):  # NaN check
+            raise AIClassifierValidationError("Invalid AI classifier response")
+
+        # Validate reason_code - must be in allowed set
+        if not isinstance(self.reason_code, str):
+            raise AIClassifierValidationError("Invalid AI classifier response")
+        if self.reason_code not in ALLOWED_REASON_CODES:
+            raise AIClassifierValidationError("Invalid AI classifier response")
 
     def to_public_dict(self) -> dict[str, Any]:
         """Return a safe public representation without sensitive data."""

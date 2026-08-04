@@ -382,6 +382,269 @@ class TestBoundedFields:
         assert "content" not in str(public).lower()
 
 
+class TestDirectConstructionValidation:
+    """Test direct construction validation of AIClassificationResult.
+
+    These tests verify that __post_init__ enforces strict bounds on all fields
+    without exposing input values in error messages. All invalid inputs must
+    raise the same generic AIClassifierValidationError.
+    """
+
+    def test_valid_construction_succeeds(self):
+        """Valid construction should succeed with proper field values."""
+        result = AIClassificationResult(
+            schema_version="review-ai-classifier-v1",
+            decision="organic",
+            is_ad=False,
+            is_relevant=True,
+            ad_confidence=0.9,
+            relevance_confidence=0.9,
+            reason_code="organic_mention",
+        )
+        assert result.schema_version == "review-ai-classifier-v1"
+        assert result.decision == "organic"
+
+    def test_invalid_schema_version_rejected(self):
+        """Invalid schema version should raise generic error without exposing value."""
+        secret_version = "SECRET_SCHEMA_VERSION_XYZ"  # pragma: allowlist secret
+
+        with pytest.raises(AIClassifierValidationError) as exc_info:
+            AIClassificationResult(
+                schema_version=secret_version,
+                decision="organic",
+                is_ad=False,
+                is_relevant=True,
+                ad_confidence=0.9,
+                relevance_confidence=0.9,
+                reason_code="organic_mention",
+            )
+
+        error_message = str(exc_info.value)
+        assert error_message == "Invalid AI classifier response"
+        assert secret_version not in error_message
+        assert "schema" not in error_message.lower()
+        assert "version" not in error_message.lower()
+
+    def test_invalid_decision_rejected(self):
+        """Invalid decision should raise generic error without exposing value."""
+        secret_decision = "SECRET_DECISION_VALUE_123"  # pragma: allowlist secret
+
+        with pytest.raises(AIClassifierValidationError) as exc_info:
+            AIClassificationResult(
+                schema_version="review-ai-classifier-v1",
+                decision=secret_decision,
+                is_ad=False,
+                is_relevant=True,
+                ad_confidence=0.9,
+                relevance_confidence=0.9,
+                reason_code="organic_mention",
+            )
+
+        error_message = str(exc_info.value)
+        assert error_message == "Invalid AI classifier response"
+        assert secret_decision not in error_message
+        assert "decision" not in error_message.lower()
+
+    def test_invalid_reason_code_rejected(self):
+        """Invalid reason code should raise generic error without exposing value."""
+        secret_reason = "SECRET_REASON_CODE_ABC"  # pragma: allowlist secret
+
+        with pytest.raises(AIClassifierValidationError) as exc_info:
+            AIClassificationResult(
+                schema_version="review-ai-classifier-v1",
+                decision="organic",
+                is_ad=False,
+                is_relevant=True,
+                ad_confidence=0.9,
+                relevance_confidence=0.9,
+                reason_code=secret_reason,
+            )
+
+        error_message = str(exc_info.value)
+        assert error_message == "Invalid AI classifier response"
+        assert secret_reason not in error_message
+        assert "reason" not in error_message.lower()
+        assert "code" not in error_message.lower()
+
+    def test_invalid_confidence_high_rejected(self):
+        """Confidence > 1.0 should raise generic error without exposing value."""
+        secret_confidence = 999.99  # pragma: allowlist secret
+
+        with pytest.raises(AIClassifierValidationError) as exc_info:
+            AIClassificationResult(
+                schema_version="review-ai-classifier-v1",
+                decision="organic",
+                is_ad=False,
+                is_relevant=True,
+                ad_confidence=secret_confidence,
+                relevance_confidence=0.9,
+                reason_code="organic_mention",
+            )
+
+        error_message = str(exc_info.value)
+        assert error_message == "Invalid AI classifier response"
+        assert str(secret_confidence) not in error_message
+        assert "999" not in error_message
+        assert "confidence" not in error_message.lower()
+
+    def test_invalid_confidence_low_rejected(self):
+        """Confidence < 0.0 should raise generic error without exposing value."""
+        secret_confidence = -50.0  # pragma: allowlist secret
+
+        with pytest.raises(AIClassifierValidationError) as exc_info:
+            AIClassificationResult(
+                schema_version="review-ai-classifier-v1",
+                decision="organic",
+                is_ad=False,
+                is_relevant=True,
+                ad_confidence=secret_confidence,
+                relevance_confidence=0.9,
+                reason_code="organic_mention",
+            )
+
+        error_message = str(exc_info.value)
+        assert error_message == "Invalid AI classifier response"
+        assert str(secret_confidence) not in error_message
+        assert "-50" not in error_message
+
+    def test_invalid_confidence_nan_rejected(self):
+        """NaN confidence should raise generic error without exposing value."""
+        with pytest.raises(AIClassifierValidationError) as exc_info:
+            AIClassificationResult(
+                schema_version="review-ai-classifier-v1",
+                decision="organic",
+                is_ad=False,
+                is_relevant=True,
+                ad_confidence=float("nan"),
+                relevance_confidence=0.9,
+                reason_code="organic_mention",
+            )
+
+        error_message = str(exc_info.value)
+        assert error_message == "Invalid AI classifier response"
+        assert "nan" not in error_message.lower()
+
+    def test_invalid_confidence_infinite_rejected(self):
+        """Infinite confidence should raise generic error without exposing value."""
+        with pytest.raises(AIClassifierValidationError) as exc_info:
+            AIClassificationResult(
+                schema_version="review-ai-classifier-v1",
+                decision="organic",
+                is_ad=False,
+                is_relevant=True,
+                ad_confidence=float("inf"),
+                relevance_confidence=0.9,
+                reason_code="organic_mention",
+            )
+
+        error_message = str(exc_info.value)
+        assert error_message == "Invalid AI classifier response"
+        assert "inf" not in error_message.lower()
+
+    def test_invalid_bool_type_rejected(self):
+        """Non-boolean is_ad should raise generic error without exposing value."""
+        with pytest.raises(AIClassifierValidationError) as exc_info:
+            AIClassificationResult(
+                schema_version="review-ai-classifier-v1",
+                decision="organic",
+                is_ad="not_a_bool",  # type: ignore
+                is_relevant=True,
+                ad_confidence=0.9,
+                relevance_confidence=0.9,
+                reason_code="organic_mention",
+            )
+
+        error_message = str(exc_info.value)
+        assert error_message == "Invalid AI classifier response"
+        assert "not_a_bool" not in error_message
+        assert "bool" not in error_message.lower()
+
+    def test_invalid_is_relevant_type_rejected(self):
+        """Non-boolean is_relevant should raise generic error without exposing value."""
+        with pytest.raises(AIClassifierValidationError) as exc_info:
+            AIClassificationResult(
+                schema_version="review-ai-classifier-v1",
+                decision="organic",
+                is_ad=False,
+                is_relevant=123,  # type: ignore
+                ad_confidence=0.9,
+                relevance_confidence=0.9,
+                reason_code="organic_mention",
+            )
+
+        error_message = str(exc_info.value)
+        assert error_message == "Invalid AI classifier response"
+        assert "123" not in error_message
+
+    def test_non_numeric_confidence_rejected(self):
+        """Non-numeric confidence should raise generic error without exposing value."""
+        secret_confidence = "SECRET_CONF_STRING"  # pragma: allowlist secret
+
+        with pytest.raises(AIClassifierValidationError) as exc_info:
+            AIClassificationResult(
+                schema_version="review-ai-classifier-v1",
+                decision="organic",
+                is_ad=False,
+                is_relevant=True,
+                ad_confidence=secret_confidence,  # type: ignore
+                relevance_confidence=0.9,
+                reason_code="organic_mention",
+            )
+
+        error_message = str(exc_info.value)
+        assert error_message == "Invalid AI classifier response"
+        assert secret_confidence not in error_message
+        assert "string" not in error_message.lower()
+
+    def test_no_secret_input_in_exception_or_output(self):
+        """Secret-shaped inputs must not appear in exceptions or public output."""
+        # Test with secret-shaped values in all fields
+        inputs = {
+            "schema_version": "SECRET_SCHEMA_123",  # pragma: allowlist secret
+            "decision": "SECRET_DECISION_456",  # pragma: allowlist secret
+            "reason_code": "SECRET_REASON_789",  # pragma: allowlist secret
+        }
+
+        for field, secret_value in inputs.items():
+            with pytest.raises(AIClassifierValidationError) as exc_info:
+                AIClassificationResult(
+                    schema_version="SECRET_SCHEMA_123"
+                    if field == "schema_version"
+                    else "review-ai-classifier-v1",  # pragma: allowlist secret
+                    decision="SECRET_DECISION_456"
+                    if field == "decision"
+                    else "organic",  # pragma: allowlist secret
+                    is_ad=False,
+                    is_relevant=True,
+                    ad_confidence=0.9,
+                    relevance_confidence=0.9,
+                    reason_code="SECRET_REASON_789"
+                    if field == "reason_code"
+                    else "organic_mention",  # pragma: allowlist secret
+                )
+
+            error_message = str(exc_info.value)
+            assert error_message == "Invalid AI classifier response"
+            assert secret_value not in error_message
+
+        # Test that valid objects don't contain secrets in public output
+        result = AIClassificationResult(
+            schema_version="review-ai-classifier-v1",
+            decision="organic",
+            is_ad=False,
+            is_relevant=True,
+            ad_confidence=0.9,
+            relevance_confidence=0.9,
+            reason_code="organic_mention",
+        )
+
+        public = result.to_public_dict()
+        public_str = str(public)
+        # Should not contain any of our secret test values
+        assert "SECRET" not in public_str
+        assert "secret" not in public_str
+
+
 def _create_decision(
     retained: bool = True,
     is_ad: bool = False,

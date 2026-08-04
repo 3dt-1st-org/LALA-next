@@ -9,6 +9,7 @@ Addressed independent audit findings with minimal fixes:
 - **Error messages**: Made all parser errors generic without input details
 - **Schema version**: Added strict validation requiring exact SCHEMA_VERSION match
 - **Fail-closed logic**: Implemented strict decision/confidence validation with recheck requirements
+- **Construction validation**: Added frozen dataclass __post_init__ validation enforcing bounded schema with generic errors
 
 ## Implementation Date
 2026-08-05
@@ -45,7 +46,7 @@ All AI interactions are mocked using `MockAIResponse` helpers. This is an offlin
 - Supports `LALA_MODEL_ROLE_REVIEW_BULK` environment override
 - Provider-agnostic design (OpenAI only, Azure rejected at base URL level)
 
-### 4. Immutable Classification Results  
+### 4. Immutable Classification Results
 - `AIClassificationResult` frozen dataclass with bounded fields:
   - `schema_version`, `decision`, `is_ad`, `is_relevant`
   - `ad_confidence`, `relevance_confidence`, `reason_code`
@@ -86,7 +87,7 @@ All AI interactions are mocked using `MockAIResponse` helpers. This is an offlin
 ### Offline Boundary
 All AI interactions are mocked using `MockAIResponse` helpers. The contract defines:
 - What inputs the AI receives (structured prompts)
-- What outputs the AI must produce (schema-compliant JSON)  
+- What outputs the AI must produce (schema-compliant JSON)
 - How to validate and apply those outputs deterministically
 
 ### Model-Role Split
@@ -101,7 +102,7 @@ All AI interactions are mocked using `MockAIResponse` helpers. The contract defi
 - **<0.5**: Effectively rejected as too uncertain
 
 ## Test Coverage
-48 comprehensive test cases covering:
+63 comprehensive test cases covering:
 - Model-role resolution and configuration
 - System prompt building and versioning
 - JSON parsing with strict validation
@@ -115,11 +116,12 @@ All AI interactions are mocked using `MockAIResponse` helpers. The contract defi
   - Generic error messages (no input leakage)
   - Schema version strictness
   - Fail-closed decision/confidence application
+  - Direct construction validation (invalid schema/version/decision/reason/confidence)
 
 ## Remaining Gates
 This implementation is complete for the **offline contract only**. Remaining work for production:
 1. **Live AI Integration**: Wire up actual OpenAI client calls
-2. **Worker Integration**: Add to batch processing workflow  
+2. **Worker Integration**: Add to batch processing workflow
 3. **DB Schema**: Add AI classification fields to attributes table
 4. **Monitoring**: Add metrics for confidence distribution, recheck rate
 5. **Prompt Engineering**: Iterate on prompt based on production data
@@ -127,11 +129,11 @@ This implementation is complete for the **offline contract only**. Remaining wor
 
 ## Files Created
 - `apps/api/app/services/review_ai_classifier.py` - Main implementation
-- `apps/api/tests/test_review_ai_classifier.py` - Comprehensive test suite (48 tests)
+- `apps/api/tests/test_review_ai_classifier.py` - Comprehensive test suite (63 tests)
 - `docs/devlogs/p3-m3-ai-classifier-contract.md` - This documentation
 
 ## Verification
-- ✅ All 39 tests passing
+- ✅ All 63 tests passing
 - ✅ Ruff linting passed with auto-fixes applied
 - ✅ Pre-commit hooks passed (ruff, format, detect-secrets, trailing whitespace, EOF)
 - ✅ No live AI calls (all mocks)
