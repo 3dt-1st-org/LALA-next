@@ -605,3 +605,87 @@ def test_service_without_filters_uses_default_behavior(monkeypatch):
     # Check places query doesn't have place_id filter
     places_params = executed[1][1]
     assert "place_id" not in places_params
+
+
+def test_plan_mode_validates_invalid_date_and_exits_2(capsys):
+    """Test that plan mode validates date filters and exits 2 for invalid dates."""
+    exit_code = run_review_mention_ingest.main(["--since", "not-a-date", "--json"])
+
+    assert exit_code == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert "Invalid --since date format" in payload["error"]
+    # Ensure error message doesn't echo the supplied invalid value
+    assert "not-a-date" not in payload["error"]
+
+
+def test_plan_mode_validates_inverted_range_and_exits_2(capsys):
+    """Test that plan mode validates date filters and exits 2 for inverted ranges."""
+    exit_code = run_review_mention_ingest.main(
+        ["--since", "2026-06-30", "--until", "2026-06-01", "--json"]
+    )
+
+    assert exit_code == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert "Invalid --until date range" in payload["error"]
+    # Ensure error message doesn't echo the supplied date values
+    assert "2026-06-30" not in payload["error"]
+    assert "2026-06-01" not in payload["error"]
+
+
+def test_plan_mode_with_valid_filters_includes_metadata_and_no_db_call(capsys, monkeypatch):
+    """Test that plan mode with valid filters includes normalized metadata and doesn't call DB."""
+    db_called = False
+
+    def connect(dsn, connect_timeout):
+        nonlocal db_called
+        db_called = True
+        raise RuntimeError("DB should not be called in plan mode")
+
+    monkeypatch.setitem(sys.modules, "psycopg2", SimpleNamespace(connect=connect))
+
+    exit_code = run_review_mention_ingest.main(
+        ["--since", "2026-06-01", "--until", "2026-06-30", "--place-id", "museum-123", "--json"]
+    )
+
+    assert exit_code == 0
+    assert not db_called, "Plan mode should not connect to database"
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["mode"] == "plan"
+    assert payload["since"] == "2026-06-01"
+    assert payload["until"] == "2026-06-30"
+    assert payload["place_id"] == "museum-123"
+
+
+def test_plan_mode_without_filters_remains_compatible(capsys, monkeypatch):
+    """Test that plan mode without filters remains backward compatible."""
+    db_called = False
+
+    def connect(dsn, connect_timeout):
+        nonlocal db_called
+        db_called = True
+        raise RuntimeError("DB should not be called in plan mode")
+
+    monkeypatch.setitem(sys.modules, "psycopg2", SimpleNamespace(connect=connect))
+
+    exit_code = run_review_mention_ingest.main(["--json"])
+
+    assert exit_code == 0
+    assert not db_called, "Plan mode should not connect to database"
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["mode"] == "plan"
+    # Old plan payload keys should still be present
+    assert "target" in payload
+    assert "job_name" in payload
+    assert "prompt_version" in payload
+    assert "apply_required_env" in payload
+    assert "review_rules" in payload
+    # No filter keys should be present
+    assert "since" not in payload
+    assert "until" not in payload
+    assert "place_id" not in payload

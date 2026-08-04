@@ -64,21 +64,22 @@ def main(argv: list[str] | None = None) -> int:
     if args.apply and args.preview:
         _write(args, {"ok": False, "mode": "plan", "error": "Use either --apply or --preview."})
         return 2
-    if not args.apply and not args.preview:
-        _write(args, _plan_payload())
-        return 0
 
-    # Validate date filters
+    # Validate date filters (for all modes including plan)
     date_error = _validate_date_filters(args)
     if date_error:
         _write(args, {"ok": False, "mode": _mode(args), "error": date_error})
         return 2
 
-    # Validate place_id filter
+    # Validate place_id filter (for all modes including plan)
     place_id_error = _validate_place_id_filter(args)
     if place_id_error:
         _write(args, {"ok": False, "mode": _mode(args), "error": place_id_error})
         return 2
+
+    if not args.apply and not args.preview:
+        _write(args, _plan_payload(args))
+        return 0
 
     settings = get_settings()
     dsn = os.getenv("DB_DSN") or settings.db_dsn
@@ -168,8 +169,8 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def _plan_payload() -> dict[str, Any]:
-    return {
+def _plan_payload(args: argparse.Namespace | None = None) -> dict[str, Any]:
+    payload = {
         "ok": True,
         "mode": "plan",
         "db_mutation": False,
@@ -185,6 +186,17 @@ def _plan_payload() -> dict[str, Any]:
             "ambiguous_match",
         ],
     }
+
+    # Include normalized filter metadata if provided
+    if args:
+        if args.since:
+            payload["since"] = args.since
+        if args.until:
+            payload["until"] = args.until
+        if args.place_id:
+            payload["place_id"] = args.place_id
+
+    return payload
 
 
 def _validate_date_filters(args: argparse.Namespace) -> str | None:
