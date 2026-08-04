@@ -133,7 +133,7 @@ uv run pytest apps/api/tests/
 
 - **Operational profiles** (api/worker): Must use AWS Secrets Manager, no Key Vault fallback
 - **Required secrets**: Raise `AwsSecretLookupError` with safe messages based on outcome
-- **Readiness checks**: Return "degraded" status for any contract violation
+- **Invalid operational startup**: Contract violations in `Settings.from_env()` cause startup to fail before `/readyz` is reachable; any separately constructed status/observability object remains values-free
 - **No silent failures**: All secret lookup failures are categorized and exposed
 
 ## Operational Impact

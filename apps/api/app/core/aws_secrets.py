@@ -21,7 +21,7 @@ class AwsSecretLookupError(RuntimeError):
 class AwsSecretOutcome(StrEnum):
     """Structured lookup outcome categories for AWS Secrets Manager.
 
-    These categories represent the 4 safe outcomes specified in the P0 runtime
+    These categories represent the 5 safe outcomes specified in the P0 runtime
     secret contract. They deliberately exclude provider error text, secret values,
     DSNs, ARNs, account IDs, and resource identifiers.
 
@@ -97,7 +97,7 @@ def _classify_aws_exception(
 ) -> Literal["missing", "denied", "unavailable", "invalid"]:  # noqa: UP007
     """Classify AWS exception into structured outcome without exposing provider text.
 
-    This function safely categorizes failures into the 4 outcomes required by
+    This function safely categorizes failures into the 5 outcomes required by
     the P0 runtime secret contract. Provider-specific error messages are never
     exposed in the result.
     """
