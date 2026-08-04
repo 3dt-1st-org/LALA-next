@@ -49,7 +49,7 @@ def fetch_review_mention_inputs(
 - `%Y-%m-%d %H:%M:%S` (e.g., `2026-06-15 14:30:00`)
 
 **Input Validation:**
-- ✅ Rejects malformed date formats with clear error messages
+- ✅ Rejects malformed date formats with generic error messages
 - ✅ Rejects inverted ranges (`until <= since`)
 - ✅ Rejects non-positive limits (`limit <= 0`)
 - ✅ Rejects blank/empty place_id values
@@ -63,7 +63,7 @@ def fetch_review_mention_inputs(
 
 ## Testing
 
-**New Test Coverage (16 total tests):**
+**New Test Coverage:**
 
 1. **CLI Validation Tests:**
    - Invalid date format rejection
@@ -81,8 +81,12 @@ def fetch_review_mention_inputs(
    - Place_id filter in places query
    - Backward compatibility (no filters)
 
+**File-by-File Breakdown:**
+- `apps/api/tests/test_review_mention_ingest.py`: 21 test functions (14 new filtering/plan-mode tests relative to `origin/main`)
+- `apps/api/tests/test_devlog_p3m4.py`: 2 documentation guard tests
+
 **Test Results:**
-- ✅ All 16 tests pass
+- ✅ Focused replay/governance/devlog suite passes (pytest, ruff, pre-commit)
 - ✅ Ruff linting passes
 - ✅ Ruff formatting passes
 - ✅ Pre-commit hooks pass
@@ -163,7 +167,7 @@ python -m apps.api.app.tools.run_review_mention_ingest \
    - Input validation functions
 
 3. **Tests:** `apps/api/tests/test_review_mention_ingest.py`
-   - 9 new test functions for filtering functionality
+   - 14 new test functions for filtering functionality
    - Mock fixtures for SQL query verification
    - Validation logic testing
 
@@ -182,7 +186,7 @@ python -m apps.api.app.tools.run_review_mention_ingest \
 **Security-First Validation:**
 - Validate place_id before database connection
 - Multiple layers of safety (regex + dangerous patterns)
-- Clear error messages for invalid input
+- Generic error messages for invalid input (no value echoing)
 - Fail-fast validation before expensive operations
 
 ## Compliance with Requirements
