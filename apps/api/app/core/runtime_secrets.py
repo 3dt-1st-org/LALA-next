@@ -82,6 +82,9 @@ class SecretContractStatus:
     required_names: tuple[str, ...] = ()
     configured_names: tuple[str, ...] = ()
     missing_names: tuple[str, ...] = ()
+    denied_names: tuple[str, ...] = ()
+    unavailable_names: tuple[str, ...] = ()
+    invalid_names: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -90,6 +93,9 @@ class SecretContractStatus:
             "required_names": list(self.required_names),
             "configured_names": list(self.configured_names),
             "missing_names": list(self.missing_names),
+            "denied_names": list(self.denied_names),
+            "unavailable_names": list(self.unavailable_names),
+            "invalid_names": list(self.invalid_names),
         }
 
 
@@ -135,10 +141,11 @@ def resolve_runtime_secret(
     if profile in {"api", "worker"}:
         try:
             value = aws_secrets.get_aws_sm_secret(spec.secret_name, required=required)
-        except AwsSecretLookupError:
+        except AwsSecretLookupError as exc:
+            # Re-raise as RuntimeSecretLookupError with safe message
             raise RuntimeSecretLookupError(
-                f"AWS Secrets Manager lookup failed for {spec.secret_name}."
-            ) from None
+                f"Required runtime secret lookup failed: {spec.secret_name}"
+            ) from exc
         if required and not _usable_secret(value):
             raise RuntimeSecretLookupError(
                 f"Required runtime secret is unavailable: {spec.secret_name}."
@@ -156,6 +163,8 @@ def resolve_runtime_secret(
         value = aws_secrets.get_aws_sm_secret(spec.secret_name)
         if value:
             return value.strip()
+    # Key Vault fallback is only for local/ci profiles when explicitly allowed
+    # Operational profiles (api/worker) pass key_vault_loader=None to prevent fallback
     if key_vault_loader is not None:
         return (
             key_vault_loader((env.get("KEY_VAULT_URL") or "").strip(), spec.secret_name) or ""
@@ -198,16 +207,63 @@ def validate_secret_contract(
     environ: Mapping[str, str] | None = None,
     worker_job_id: str | None = None,
 ) -> SecretContractStatus:
+    if profile not in {"api", "worker"}:
+        return SecretContractStatus(profile, "not_required")
+
     required = required_secret_names(profile, worker_job_id=worker_job_id, values=values)
-    configured = tuple(
-        name for name in required if _usable_secret(str(values.get(_env_for_secret(name), "")))
-    )
-    missing = tuple(name for name in required if name not in configured)
-    if missing:
+    configured = []
+    missing = []
+    denied = []
+    unavailable = []
+    invalid = []
+
+    for env_name in required:
+        spec = _REGISTRY_BY_ENV.get(env_name)
+        if spec is None:
+            continue
+
+        # Check if value exists and is usable
+        value = str(values.get(env_name, ""))
+        if _usable_secret(value):
+            configured.append(env_name)
+            continue
+
+        # Use structured AWS lookup to classify the failure
+        result = aws_secrets.get_aws_sm_secret_structured(spec.secret_name)
+        outcome = result.outcome
+
+        if outcome == "found":
+            configured.append(env_name)
+        elif outcome == "missing":
+            missing.append(env_name)
+        elif outcome == "denied":
+            denied.append(env_name)
+        elif outcome == "unavailable":
+            unavailable.append(env_name)
+        elif outcome == "invalid":
+            invalid.append(env_name)
+
+    # Any failure outcomes constitute contract violation
+    all_failures = [*missing, *denied, *unavailable, *invalid]
+    if all_failures:
         raise RuntimeSecretContractError(
-            f"Runtime secret contract failed for profile {profile}; missing: {', '.join(missing)}."
+            f"Runtime secret contract failed for profile {profile}; "
+            f"missing: {', '.join(missing)}, "
+            f"denied: {', '.join(denied)}, "
+            f"unavailable: {', '.join(unavailable)}, "
+            f"invalid: {', '.join(invalid)}."
         )
-    return SecretContractStatus(profile, "ok", required, configured, missing)
+
+    return SecretContractStatus(
+        profile=profile,
+        status="ok",
+        required_names=tuple(required),
+        configured_names=tuple(configured),
+        missing_names=tuple(missing),
+        denied_names=tuple(denied),
+        unavailable_names=tuple(unavailable),
+        invalid_names=tuple(invalid),
+    )
 
 
 def _spec_for(env_name: str, secret_name: str) -> SecretSpec:

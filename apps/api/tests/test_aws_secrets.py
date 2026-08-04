@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from apps.api.app.core import aws_secrets, config
@@ -52,7 +54,7 @@ def test_get_aws_sm_secret_required_fails_closed_without_exposing_provider_error
     with pytest.raises(aws_secrets.AwsSecretLookupError) as exc_info:
         aws_secrets.get_aws_sm_secret("db-dsn", required=True)
 
-    assert str(exc_info.value) == "AWS Secrets Manager lookup failed."
+    assert "db-dsn" in str(exc_info.value)
     assert "provider detail" not in str(exc_info.value)
 
 
@@ -102,3 +104,212 @@ def test_env_or_secret_falls_back_to_key_vault_when_sm_empty(monkeypatch):
         "OAUTH_CLIENT_ID", "oauth-client-id", "https://kv.vault.azure.net"
     )
     assert result == "from-azure-kv"
+
+
+def test_structured_lookup_returns_found_for_valid_secret(monkeypatch):
+    """Valid secret string returns found outcome with value."""
+
+    class FakeClient:
+        def get_secret_value(self, SecretId):
+            return {"SecretString": "actual-secret-value"}  # pragma: allowlist secret
+
+    monkeypatch.setattr(aws_secrets, "_client", lambda: FakeClient())
+    result = aws_secrets.get_aws_sm_secret_structured("valid-secret")
+
+    assert result.outcome == "found"
+    assert result.logical_name == "valid-secret"
+    assert result.value == "actual-secret-value"
+
+
+def test_structured_lookup_classifies_resource_not_found_as_missing(monkeypatch):
+    """ResourceNotFoundException classified as missing outcome."""
+
+    class ResourceNotFoundException(Exception):
+        pass
+
+    class FakeClient:
+        def get_secret_value(self, SecretId):
+            raise ResourceNotFoundException("ResourceNotFoundException")
+
+    monkeypatch.setattr(aws_secrets, "_client", lambda: FakeClient())
+    result = aws_secrets.get_aws_sm_secret_structured("missing-secret")
+
+    assert result.outcome == "missing"
+    assert result.logical_name == "missing-secret"
+    assert result.value == ""
+
+
+def test_structured_lookup_classifies_not_found_as_missing(monkeypatch):
+    """Generic 'not found' error classified as missing outcome."""
+
+    class FakeClient:
+        def get_secret_value(self, SecretId):
+            raise Exception("Secret not found in secretsmanager")
+
+    monkeypatch.setattr(aws_secrets, "_client", lambda: FakeClient())
+    result = aws_secrets.get_aws_sm_secret_structured("not-found-secret")
+
+    assert result.outcome == "missing"
+
+
+def test_structured_lookup_classifies_access_denied_as_denied(monkeypatch):
+    """AccessDeniedException classified as denied outcome."""
+
+    class AccessDeniedException(Exception):
+        pass
+
+    class FakeClient:
+        def get_secret_value(self, SecretId):
+            raise AccessDeniedException("AccessDenied")
+
+    monkeypatch.setattr(aws_secrets, "_client", lambda: FakeClient())
+    result = aws_secrets.get_aws_sm_secret_structured("denied-secret")
+
+    assert result.outcome == "denied"
+    assert result.logical_name == "denied-secret"
+    assert result.value == ""
+
+
+def test_structured_lookup_classifies_access_denied_text_as_denied(monkeypatch):
+    """Generic 'access denied' error classified as denied outcome."""
+
+    class FakeClient:
+        def get_secret_value(self, SecretId):
+            raise Exception("User is not authorized to access this secret")
+
+    monkeypatch.setattr(aws_secrets, "_client", lambda: FakeClient())
+    result = aws_secrets.get_aws_sm_secret_structured("unauthorized-secret")
+
+    assert result.outcome == "denied"
+
+
+def test_structured_lookup_classifies_unavailable_as_unavailable(monkeypatch):
+    """Client unavailable classified as unavailable outcome."""
+    monkeypatch.setattr(aws_secrets, "_client", lambda: None)
+    result = aws_secrets.get_aws_sm_secret_structured("unavailable-secret")
+
+    assert result.outcome == "unavailable"
+    assert result.logical_name == "unavailable-secret"
+    assert result.value == ""
+
+
+def test_structured_lookup_classifies_transient_error_as_unavailable(monkeypatch):
+    """Generic exceptions classified as unavailable outcome."""
+
+    class FakeClient:
+        def get_secret_value(self, SecretId):
+            raise Exception("InternalFailure")
+
+    monkeypatch.setattr(aws_secrets, "_client", lambda: FakeClient())
+    result = aws_secrets.get_aws_sm_secret_structured("transient-error-secret")
+
+    assert result.outcome == "unavailable"
+
+
+def test_structured_lookup_classifies_binary_secret_as_invalid(monkeypatch):
+    """Binary secret (no SecretString) classified as invalid outcome."""
+
+    class FakeClient:
+        def get_secret_value(self, SecretId):
+            return {"SecretBinary": b"binary-data"}
+
+    monkeypatch.setattr(aws_secrets, "_client", lambda: FakeClient())
+    result = aws_secrets.get_aws_sm_secret_structured("binary-secret")
+
+    assert result.outcome == "invalid"
+    assert result.logical_name == "binary-secret"
+    assert result.value == ""
+
+
+def test_structured_lookup_classifies_empty_secret_as_invalid(monkeypatch):
+    """Empty or whitespace-only secret classified as invalid outcome."""
+
+    class FakeClient:
+        def get_secret_value(self, SecretId):
+            return {"SecretString": "   "}
+
+    monkeypatch.setattr(aws_secrets, "_client", lambda: FakeClient())
+    result = aws_secrets.get_aws_sm_secret_structured("empty-secret")
+
+    assert result.outcome == "invalid"
+    assert result.logical_name == "empty-secret"
+
+
+def test_structured_lookup_result_is_secret_safe():
+    """Structured result never exposes provider text, ARNs, or resource identifiers."""
+    result = aws_secrets.AwsSecretLookupResult(
+        outcome="found", logical_name="db-dsn", value="secret-value"
+    )
+
+    encoded = json.dumps(result.to_dict() if hasattr(result, "to_dict") else result.__dict__)
+    assert "arn:" not in encoded.lower()
+    assert "account" not in encoded.lower()
+    assert "resource" not in encoded.lower()
+    assert "provider" not in encoded.lower()
+    # But logical name and safe outcome should be present
+    assert "db-dsn" in encoded
+    assert "found" in encoded
+
+
+def test_get_aws_sm_secret_required_raises_structured_error(monkeypatch):
+    """required=True raises AwsSecretLookupError with safe message based on outcome."""
+
+    class FakeClient:
+        def get_secret_value(self, SecretId):
+            raise Exception("AccessDenied")
+
+    monkeypatch.setattr(aws_secrets, "_client", lambda: FakeClient())
+
+    with pytest.raises(aws_secrets.AwsSecretLookupError) as exc_info:
+        aws_secrets.get_aws_sm_secret("db-dsn", required=True)
+
+    assert "db-dsn" in str(exc_info.value)
+    assert "AccessDenied" not in str(exc_info.value)
+    assert "provider" not in str(exc_info.value).lower()
+
+
+def test_get_aws_sm_secret_required_missing_raises_structured_error(monkeypatch):
+    """required=True with ResourceNotFound raises safe missing error."""
+
+    class ResourceNotFoundException(Exception):
+        pass
+
+    class FakeClient:
+        def get_secret_value(self, SecretId):
+            raise ResourceNotFoundException("ResourceNotFoundException")
+
+    monkeypatch.setattr(aws_secrets, "_client", lambda: FakeClient())
+
+    with pytest.raises(aws_secrets.AwsSecretLookupError) as exc_info:
+        aws_secrets.get_aws_sm_secret("openai-api-key", required=True)
+
+    assert "openai-api-key" in str(exc_info.value)
+    assert "not found" in str(exc_info.value).lower()
+    assert "ResourceNotFoundException" not in str(exc_info.value)
+
+
+def test_get_aws_sm_secret_required_unavailable_raises_structured_error(monkeypatch):
+    """required=True with unavailable client raises safe unavailable error."""
+    monkeypatch.setattr(aws_secrets, "_client", lambda: None)
+
+    with pytest.raises(aws_secrets.AwsSecretLookupError) as exc_info:
+        aws_secrets.get_aws_sm_secret("db-dsn", required=True)
+
+    assert "db-dsn" in str(exc_info.value)
+    assert "unavailable" in str(exc_info.value).lower()
+
+
+def test_get_aws_sm_secret_required_invalid_raises_structured_error(monkeypatch):
+    """required=True with invalid secret raises safe invalid error."""
+
+    class FakeClient:
+        def get_secret_value(self, SecretId):
+            return {"SecretString": ""}
+
+    monkeypatch.setattr(aws_secrets, "_client", lambda: FakeClient())
+
+    with pytest.raises(aws_secrets.AwsSecretLookupError) as exc_info:
+        aws_secrets.get_aws_sm_secret("db-dsn", required=True)
+
+    assert "db-dsn" in str(exc_info.value)
+    assert "invalid" in str(exc_info.value).lower()
