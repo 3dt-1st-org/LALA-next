@@ -3,16 +3,26 @@
 ## Summary
 Implemented a provider-neutral, offline-testable contract for the second-stage AI ad/relevance classifier. This is the second-stage AI classifier that processes deterministic preprocessing results to detect ads and determine relevance with strict fail-closed behavior.
 
+## Security Corrections (2026-08-05)
+Addressed independent audit findings with minimal fixes:
+- **Privacy**: Removed all raw/normalized review text from prompt builder return value
+- **Error messages**: Made all parser errors generic without input details
+- **Schema version**: Added strict validation requiring exact SCHEMA_VERSION match
+- **Fail-closed logic**: Implemented strict decision/confidence validation with recheck requirements
+
 ## Implementation Date
 2026-08-05
 
 ## Scope and Boundaries
-**OFFLINE-ONLY IMPLEMENTATION** - This implementation deliberately excludes:
+**OFFLINE CONTRACT ONLY** - This implementation deliberately excludes:
+- Live OpenAI API calls (uses Standard OpenAI bulk role: `review_bulk`, recommended `gpt-5.4-nano`)
 - Naver acquisition/scraping
-- Worker/DB migration  
-- Live OpenAI API calls (all tests use mocks)
+- Worker/DB migration
 - Apply mode integration
 - API route exposure
+- Recheck execution workflow
+
+All AI interactions are mocked using `MockAIResponse` helpers. This is an offline contract definition only.
 
 ## Core Contract Requirements Implemented
 
@@ -91,7 +101,7 @@ All AI interactions are mocked using `MockAIResponse` helpers. The contract defi
 - **<0.5**: Effectively rejected as too uncertain
 
 ## Test Coverage
-39 comprehensive test cases covering:
+48 comprehensive test cases covering:
 - Model-role resolution and configuration
 - System prompt building and versioning
 - JSON parsing with strict validation
@@ -100,6 +110,11 @@ All AI interactions are mocked using `MockAIResponse` helpers. The contract defi
 - Deterministic rejection preservation
 - Category policy preservation
 - Mock response helpers for all scenarios
+- **Security-focused tests**:
+  - Prompt builder privacy (no raw text exposure)
+  - Generic error messages (no input leakage)
+  - Schema version strictness
+  - Fail-closed decision/confidence application
 
 ## Remaining Gates
 This implementation is complete for the **offline contract only**. Remaining work for production:
@@ -112,8 +127,8 @@ This implementation is complete for the **offline contract only**. Remaining wor
 
 ## Files Created
 - `apps/api/app/services/review_ai_classifier.py` - Main implementation
-- `apps/api/tests/test_review_ai_classifier.py` - Comprehensive test suite
-- `devlogs/p3-m3-ai-classifier-contract.md` - This documentation
+- `apps/api/tests/test_review_ai_classifier.py` - Comprehensive test suite (48 tests)
+- `docs/devlogs/p3-m3-ai-classifier-contract.md` - This documentation
 
 ## Verification
 - ✅ All 39 tests passing

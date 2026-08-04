@@ -127,8 +127,13 @@ class AIClassifierPrompt:
     ) -> dict[str, Any]:
         """Build structured input for AI classification.
 
-        The returned dict contains only the structured fields needed for
-        classification, not the full prompt text.
+        The returned dict contains only bounded metadata needed for
+        an offline contract. No raw text, excerpts, URLs, account data,
+        or caller-controlled content is included.
+
+        This is an in-memory private input boundary for AI model consumption.
+        The returned dict must never be persisted, logged, or exposed through
+        public APIs or tests.
         """
         return {
             "schema_version": self.version,
@@ -136,15 +141,13 @@ class AIClassifierPrompt:
                 {
                     "external_key": decision.post.external_key,
                     "provider": decision.post.provider,
-                    "normalized_text": decision.normalized_text[:280],  # Truncated for safety
                     "place_id": decision.place.place_id if decision.place else None,
-                    "place_name_ko": decision.place.name_ko if decision.place else None,
                     "category": decision.place.category if decision.place else None,
                     "deterministic_is_ad": decision.is_ad,
                     "deterministic_is_relevant": decision.is_relevant,
-                    "deterministic_reason": decision.reason,
                     "match_confidence": decision.match_confidence,
                     "category_policy": decision.category_policy,
+                    "content_hash": decision.content_sha256,
                 }
                 for decision in decisions
             ],
@@ -177,27 +180,30 @@ def build_system_prompt() -> str:
     The prompt is designed to be secret-free and focused on the classification
     task without exposing implementation details or sensitive data.
     """
-    return """\
+    return f"""\
 You are a strict review classifier for LALA, a Korean travel app.
 
 Classify each review decision as JSON with EXACTLY these fields:
-{
+{{
+  "schema_version": "{SCHEMA_VERSION}",
   "decision": "organic|ad_filtered|irrelevant|uncertain",
   "is_ad": boolean,
   "is_relevant": boolean,
   "ad_confidence": 0.0-1.0,
   "relevance_confidence": 0.0-1.0,
   "reason_code": "organic_mention|advertising_detected|sponsored_content|insufficient_place_evidence|off_topic_content|low_confidence|ambiguous_signal"
-}
+}}
 
 Rules:
-1. Return ONLY the JSON object, no markdown fences or extra text.
-2. Use the provided deterministic classification as a baseline signal.
-3. Mark as ad_filtered only with strong advertising evidence (sponsor markers, excessive price/coupon language).
-4. Mark as irrelevant only when content clearly doesn't describe place experience.
-5. Preserve category policy: restaurant food terms are valid, attraction food-only reviews are not.
-6. When uncertain, set confidence < 0.6 and decision=uncertain.
-7. Never return raw text, excerpts, or free-form reasons in the result.
+1. Return ONLY a JSON object with a "results" array containing exactly the fields above.
+2. Do NOT use markdown fences (```), formatting, or any extra text.
+3. Use the provided deterministic classification as a baseline signal.
+4. Mark as ad_filtered only with strong advertising evidence (sponsor markers, excessive price/coupon language).
+5. Mark as irrelevant only when content clearly doesn't describe place experience.
+6. Preserve category policy: restaurant food terms are valid, attraction food-only reviews are not.
+7. When uncertain, set confidence < 0.6 and decision=uncertain.
+8. Never return raw text, excerpts, or free-form reasons in the result.
+9. Always include schema_version with exactly "{SCHEMA_VERSION}".
 """
 
 
@@ -221,47 +227,41 @@ def parse_ai_response(
     Raises:
         AIClassifierValidationError: If response structure is invalid.
     """
-    # Strip potential markdown fences
+    # Reject markdown fences - strict JSON only
     cleaned = raw_response.strip()
-    if cleaned.startswith("```"):
-        lines = cleaned.splitlines()
-        if len(lines) >= 2 and lines[-1].strip() == "```":
-            cleaned = "\n".join(lines[1:-1]).strip()
-        cleaned = cleaned.lstrip("json").strip()
+    if cleaned.startswith("```") or "```" in cleaned:
+        raise AIClassifierValidationError("Invalid AI classifier response")
 
     # Parse JSON with strict validation
     try:
         payload = json.loads(cleaned)
     except json.JSONDecodeError as exc:
-        raise AIClassifierValidationError("AI response was not valid JSON") from exc
+        raise AIClassifierValidationError("Invalid AI classifier response") from exc
 
     if not isinstance(payload, dict):
-        raise AIClassifierValidationError("AI response root must be a JSON object")
+        raise AIClassifierValidationError("Invalid AI classifier response")
 
     results = payload.get("results")
     if not isinstance(results, list):
-        raise AIClassifierValidationError("AI response must contain a 'results' list")
+        raise AIClassifierValidationError("Invalid AI classifier response")
 
     if len(results) != expected_count:
-        raise AIClassifierValidationError(
-            f"AI response contained {len(results)} results, expected {expected_count}"
-        )
+        raise AIClassifierValidationError("Invalid AI classifier response")
 
     parsed_results: list[AIClassificationResult] = []
     seen_indices = set()
 
     for idx, item in enumerate(results):
         if not isinstance(item, dict):
-            raise AIClassifierValidationError(f"Result {idx} is not a JSON object")
+            raise AIClassifierValidationError("Invalid AI classifier response")
 
         # Check for required fields and no extra fields
         fields = set(item.keys())
         if fields != DECISION_FIELDS:
-            raise AIClassifierValidationError(
-                f"Result {idx} has invalid fields: {fields - DECISION_FIELDS}"
-            )
+            raise AIClassifierValidationError("Invalid AI classifier response")
 
         # Validate and extract each field with strict bounds
+        schema_version = _validate_schema_version(item.get("schema_version"), idx)
         decision = _validate_decision(item.get("decision"), idx)
         is_ad = _validate_bool(item.get("is_ad"), "is_ad", idx)
         is_relevant = _validate_bool(item.get("is_relevant"), "is_relevant", idx)
@@ -273,7 +273,7 @@ def parse_ai_response(
 
         parsed_results.append(
             AIClassificationResult(
-                schema_version=SCHEMA_VERSION,
+                schema_version=schema_version,
                 decision=decision,
                 is_ad=is_ad,
                 is_relevant=is_relevant,
@@ -285,7 +285,7 @@ def parse_ai_response(
         seen_indices.add(idx)
 
     if len(seen_indices) != expected_count:
-        raise AIClassifierValidationError("Duplicate or missing result indices detected")
+        raise AIClassifierValidationError("Invalid AI classifier response")
 
     return parsed_results
 
@@ -302,7 +302,11 @@ def apply_ai_classification(
     - If the deterministic filter marked as ad, it stays ad (AI can only confirm)
     - Category policy is always preserved
 
-    Low confidence results get recheck_required status with retained=False.
+    Fail-closed behavior:
+    - decision == "uncertain" always becomes retained=False, reason="recheck_required"
+    - Confidence in [0.5, 0.7) becomes recheck_required, not organic approval
+    - Inconsistent decision/flag combinations are rejected at parse time or fail closed
+    - Existing deterministic rejection/category-policy precedence remains absolute
 
     Args:
         decision: The original deterministic classification result.
@@ -319,92 +323,147 @@ def apply_ai_classification(
     if decision.is_ad and not ai_result.is_ad:
         return decision
 
-    # High confidence ad detection: filter it
-    if ai_result.is_ad and ai_result.ad_confidence >= CONFIDENCE_THRESHOLD:
-        return _create_modified_decision(
-            decision,
-            retained=False,
-            is_ad=True,
-            reason="advertising_filtered",
-        )
-
-    # High confidence irrelevant content: filter it
-    if not ai_result.is_relevant and ai_result.relevance_confidence >= CONFIDENCE_THRESHOLD:
-        return _create_modified_decision(
-            decision,
-            retained=False,
-            is_relevant=False,
-            reason="ai_classified_irrelevant",
-        )
-
-    # Check confidence thresholds for recheck
-    if (
-        ai_result.ad_confidence < RECHECK_THRESHOLD
-        or ai_result.relevance_confidence < RECHECK_THRESHOLD
-    ):
-        # Low confidence: mark for recheck but don't retain
+    # Fail-closed: uncertain always requires recheck regardless of confidence
+    if ai_result.decision == "uncertain":
         return _create_modified_decision(
             decision,
             retained=False,
             reason="recheck_required",
         )
 
-    # Organic, relevant content: keep it
+    # Fail-closed: reject inconsistent decision/flag combinations
+    # High confidence ad detection: filter it (only if consistent)
+    if ai_result.is_ad and ai_result.ad_confidence >= CONFIDENCE_THRESHOLD:
+        # Verify decision is consistent with ad classification
+        if ai_result.decision not in ("ad_filtered", "uncertain"):
+            # Inconsistent: high ad confidence but non-ad filtered decision
+            return _create_modified_decision(
+                decision,
+                retained=False,
+                reason="recheck_required",
+            )
+        return _create_modified_decision(
+            decision,
+            retained=False,
+            is_ad=True,
+            is_relevant=False,  # Consistent with ad classification
+            reason="advertising_filtered",
+        )
+
+    # High confidence irrelevant content: filter it (only if consistent)
+    if not ai_result.is_relevant and ai_result.relevance_confidence >= CONFIDENCE_THRESHOLD:
+        # Verify decision is consistent with irrelevant classification
+        if ai_result.decision not in ("irrelevant", "uncertain"):
+            # Inconsistent: high relevance_confidence but relevant decision
+            return _create_modified_decision(
+                decision,
+                retained=False,
+                reason="recheck_required",
+            )
+        return _create_modified_decision(
+            decision,
+            retained=False,
+            is_ad=decision.is_ad,  # Preserve original ad classification
+            is_relevant=False,
+            reason="ai_classified_irrelevant",
+        )
+
+    # Fail-closed: non-definitive confidence band [0.5, 0.7) requires recheck
+    if (
+        RECHECK_THRESHOLD <= ai_result.ad_confidence < CONFIDENCE_THRESHOLD
+        or RECHECK_THRESHOLD <= ai_result.relevance_confidence < CONFIDENCE_THRESHOLD
+    ):
+        return _create_modified_decision(
+            decision,
+            retained=False,
+            reason="recheck_required",
+        )
+
+    # Check very low confidence thresholds for recheck
+    if (
+        ai_result.ad_confidence < RECHECK_THRESHOLD
+        or ai_result.relevance_confidence < RECHECK_THRESHOLD
+    ):
+        # Very low confidence: mark for recheck but don't retain
+        return _create_modified_decision(
+            decision,
+            retained=False,
+            reason="recheck_required",
+        )
+
+    # Fail-closed: reject inconsistent organic decision with filtering flags
+    if ai_result.decision == "organic" and (ai_result.is_ad or not ai_result.is_relevant):
+        # Inconsistent: organic decision but ad/irrelevant flags set
+        return _create_modified_decision(
+            decision,
+            retained=False,
+            reason="recheck_required",
+        )
+
+    # Organic, relevant content: keep it (only if consistent)
+    if ai_result.decision == "organic" and not ai_result.is_ad and ai_result.is_relevant:
+        return _create_modified_decision(
+            decision,
+            retained=True,
+            reason="ai_confirmed_organic",
+        )
+
+    # Default to recheck for any other edge cases
     return _create_modified_decision(
         decision,
-        retained=True,
-        reason="ai_confirmed_organic",
+        retained=False,
+        reason="recheck_required",
     )
+
+
+def _validate_schema_version(value: Any, idx: int) -> str:
+    """Validate schema_version field matches exactly."""
+    if not isinstance(value, str):
+        raise AIClassifierValidationError("Invalid AI classifier response")
+    version = value.strip()
+    if version != SCHEMA_VERSION:
+        raise AIClassifierValidationError("Invalid AI classifier response")
+    return version
 
 
 def _validate_decision(value: Any, idx: int) -> str:
     """Validate decision field."""
     if not isinstance(value, str):
-        raise AIClassifierValidationError(f"Result {idx}: decision must be a string")
+        raise AIClassifierValidationError("Invalid AI classifier response")
     decision = value.strip()
     if decision not in ALLOWED_DECISIONS:
-        raise AIClassifierValidationError(
-            f"Result {idx}: invalid decision '{decision}'. Must be one of {ALLOWED_DECISIONS}"
-        )
+        raise AIClassifierValidationError("Invalid AI classifier response")
     return decision
 
 
 def _validate_bool(value: Any, field_name: str, idx: int) -> bool:
     """Validate boolean field."""
     if not isinstance(value, bool):
-        raise AIClassifierValidationError(
-            f"Result {idx}: {field_name} must be a boolean, got {type(value).__name__}"
-        )
+        raise AIClassifierValidationError("Invalid AI classifier response")
     return value
 
 
 def _validate_confidence(value: Any, field_name: str, idx: int) -> float:
     """Validate confidence field is a float between 0 and 1."""
     if isinstance(value, bool):
-        raise AIClassifierValidationError(
-            f"Result {idx}: {field_name} must be a number, not boolean"
-        )
+        raise AIClassifierValidationError("Invalid AI classifier response")
     try:
         parsed = float(value)
     except (TypeError, ValueError) as exc:
-        raise AIClassifierValidationError(f"Result {idx}: {field_name} must be a number") from exc
+        raise AIClassifierValidationError("Invalid AI classifier response") from exc
 
     if not 0.0 <= parsed <= 1.0:
-        raise AIClassifierValidationError(
-            f"Result {idx}: {field_name} must be between 0.0 and 1.0, got {parsed}"
-        )
+        raise AIClassifierValidationError("Invalid AI classifier response")
     return round(parsed, 4)
 
 
 def _validate_reason_code(value: Any, idx: int) -> str:
     """Validate reason_code field."""
     if not isinstance(value, str):
-        raise AIClassifierValidationError(f"Result {idx}: reason_code must be a string")
+        raise AIClassifierValidationError("Invalid AI classifier response")
     code = value.strip()
     if code not in ALLOWED_REASON_CODES:
-        raise AIClassifierValidationError(
-            f"Result {idx}: invalid reason_code '{code}'. Must be one of {ALLOWED_REASON_CODES}"
-        )
+        raise AIClassifierValidationError("Invalid AI classifier response")
     return code
 
 

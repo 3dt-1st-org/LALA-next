@@ -157,28 +157,28 @@ class TestJSONParsingStrict:
         """Should raise validation error for malformed JSON."""
         response = MockAIResponse.malformed()
 
-        with pytest.raises(AIClassifierValidationError, match="valid JSON"):
+        with pytest.raises(AIClassifierValidationError, match="Invalid AI classifier response"):
             parse_ai_response(response.raw, expected_count=1)
 
     def test_fail_on_missing_required_fields(self):
         """Should raise validation error for missing required fields."""
         response = MockAIResponse.missing_fields()
 
-        with pytest.raises(AIClassifierValidationError):
+        with pytest.raises(AIClassifierValidationError, match="Invalid AI classifier response"):
             parse_ai_response(response.raw, expected_count=1)
 
     def test_fail_on_extra_forbidden_fields(self):
         """Should raise validation error for extra fields."""
         response = MockAIResponse.extra_fields()
 
-        with pytest.raises(AIClassifierValidationError, match="invalid fields"):
+        with pytest.raises(AIClassifierValidationError, match="Invalid AI classifier response"):
             parse_ai_response(response.raw, expected_count=1)
 
     def test_fail_on_wrong_result_count(self):
         """Should raise validation error for incorrect result count."""
         response = MockAIResponse.organic()
 
-        with pytest.raises(AIClassifierValidationError, match="expected 2"):
+        with pytest.raises(AIClassifierValidationError, match="Invalid AI classifier response"):
             parse_ai_response(response.raw, expected_count=2)
 
     def test_fail_on_invalid_decision_value(self):
@@ -201,7 +201,7 @@ class TestJSONParsingStrict:
             }
         )
 
-        with pytest.raises(AIClassifierValidationError, match="invalid decision"):
+        with pytest.raises(AIClassifierValidationError, match="Invalid AI classifier response"):
             parse_ai_response(response, expected_count=1)
 
     def test_fail_on_invalid_confidence_range(self):
@@ -224,7 +224,7 @@ class TestJSONParsingStrict:
             }
         )
 
-        with pytest.raises(AIClassifierValidationError, match="between 0.0 and 1.0"):
+        with pytest.raises(AIClassifierValidationError, match="Invalid AI classifier response"):
             parse_ai_response(response, expected_count=1)
 
     def test_fail_on_wrong_confidence_type(self):
@@ -247,18 +247,8 @@ class TestJSONParsingStrict:
             }
         )
 
-        with pytest.raises(AIClassifierValidationError, match="must be a number"):
+        with pytest.raises(AIClassifierValidationError, match="Invalid AI classifier response"):
             parse_ai_response(response, expected_count=1)
-
-    def test_strip_markdown_fences(self):
-        """Should strip markdown code fences from response."""
-        markdown_wrapped = f"""```json
-{MockAIResponse.organic().raw}
-```"""
-
-        results = parse_ai_response(markdown_wrapped, expected_count=1)
-        assert len(results) == 1
-        assert results[0].decision == "organic"
 
     def test_fail_on_non_object_root(self):
         """Should raise validation error for non-object root."""
@@ -266,7 +256,7 @@ class TestJSONParsingStrict:
 
         response = json.dumps(["not", "an", "object"])
 
-        with pytest.raises(AIClassifierValidationError, match="root must be"):
+        with pytest.raises(AIClassifierValidationError, match="Invalid AI classifier response"):
             parse_ai_response(response, expected_count=1)
 
     def test_fail_on_missing_results_list(self):
@@ -275,7 +265,7 @@ class TestJSONParsingStrict:
 
         response = json.dumps({"not_results": []})
 
-        with pytest.raises(AIClassifierValidationError, match="must contain"):
+        with pytest.raises(AIClassifierValidationError, match="Invalid AI classifier response"):
             parse_ai_response(response, expected_count=1)
 
     def test_fail_on_non_list_results(self):
@@ -284,7 +274,7 @@ class TestJSONParsingStrict:
 
         response = json.dumps({"results": "not a list"})
 
-        with pytest.raises(AIClassifierValidationError, match="must contain"):
+        with pytest.raises(AIClassifierValidationError, match="Invalid AI classifier response"):
             parse_ai_response(response, expected_count=1)
 
     def test_fail_on_non_object_result_item(self):
@@ -293,7 +283,7 @@ class TestJSONParsingStrict:
 
         response = json.dumps({"results": ["not an object"]})
 
-        with pytest.raises(AIClassifierValidationError, match="not a JSON object"):
+        with pytest.raises(AIClassifierValidationError, match="Invalid AI classifier response"):
             parse_ai_response(response, expected_count=1)
 
 
@@ -435,6 +425,345 @@ def _create_decision(
     )
 
 
+class TestPromptBuilderSecurity:
+    """Test that prompt builder doesn't expose sensitive data."""
+
+    def test_no_raw_text_in_classification_input(self):
+        """Classification input must not contain raw or normalized review text."""
+        from apps.api.app.services.review_ai_classifier import AIClassifierPrompt
+
+        # Create a decision with a unique secret-shaped review string
+        secret_review = (
+            "SECRET_REVIEW_CONTENT_12345678_UNIQUE_IDENTIFIER"  # pragma: allowlist secret
+        )
+
+        post = ReviewMentionPost(
+            provider="test_provider",
+            external_key="test_key",
+            keyword=None,
+            region_slug=None,
+            title=None,
+            body=secret_review,
+            post_url=None,
+            created_at_source=datetime.now(UTC),
+            collected_at=datetime.now(UTC),
+        )
+
+        place = ReviewMentionPlace(
+            place_id="test_place",
+            name_ko="테스트 장소",
+            category="attraction",
+            region_name_ko="서울",
+        )
+
+        decision = ReviewMentionDecision(
+            post=post,
+            place=place,
+            normalized_text=secret_review,
+            content_sha256="abc123",
+            is_ad=False,
+            is_relevant=True,
+            retained=True,
+            reason="organic_retained",
+            match_confidence=0.9,
+            match_method="exact_name_in_text",
+            category_policy="place_experience_terms_retained",
+            week_start=datetime.now(UTC).date(),
+            top_terms=(),
+        )
+
+        prompt = AIClassifierPrompt()
+        result = prompt.build_classification_input([decision])
+
+        # Assert the secret is NOT present in the result
+        result_str = str(result)
+        assert secret_review not in result_str
+
+        # Assert no text fields are present
+        assert "normalized_text" not in result_str
+        assert "text" not in result_str
+        # "content_hash" is OK (just hash), but not "content" fields with actual data
+        assert "body" not in result_str
+        assert "excerpt" not in result_str
+
+        # Assert only bounded metadata fields are present
+        assert "external_key" in result_str
+        assert "provider" in result_str
+        assert "place_id" in result_str
+        assert "category" in result_str
+        assert "content_hash" in result_str
+
+
+class TestGenericErrorMessages:
+    """Test that all validation errors use generic messages."""
+
+    def test_error_messages_do_not_contain_input_details(self):
+        """Generic error messages must not expose input values, field names, or indices."""
+        import json
+
+        secret_value = "SECRET_INPUT_98765_ZYXW"  # pragma: allowlist secret
+
+        # Test with unknown key containing secret
+        response_with_secret = json.dumps(
+            {
+                "results": [
+                    {
+                        "schema_version": "review-ai-classifier-v1",
+                        "decision": "organic",
+                        "is_ad": False,
+                        "is_relevant": True,
+                        "ad_confidence": 0.9,
+                        "relevance_confidence": 0.9,
+                        "reason_code": "organic_mention",
+                        secret_value: "should_not_appear",  # Unknown field  # pragma: allowlist secret
+                    }
+                ]
+            }
+        )
+
+        with pytest.raises(AIClassifierValidationError) as exc_info:
+            parse_ai_response(response_with_secret, expected_count=1)
+
+        error_message = str(exc_info.value)
+        # Assert the generic message is used
+        assert error_message == "Invalid AI classifier response"
+
+        # Assert the secret does NOT appear in the error message
+        assert secret_value not in error_message
+        assert "should_not_appear" not in error_message
+
+        # Assert no field names, indices, or technical details appear
+        assert "Result" not in error_message
+        assert "field" not in error_message.lower()
+        assert "decision" not in error_message
+        assert "confidence" not in error_message
+        assert "0" not in error_message  # No indices
+        assert "1" not in error_message
+
+    def test_invalid_decision_shows_generic_error(self):
+        """Invalid decision value must not appear in error message."""
+        import json
+
+        response = json.dumps(
+            {
+                "results": [
+                    {
+                        "schema_version": "review-ai-classifier-v1",
+                        "decision": "INVALID_SECRET_DECISION_VALUE",  # pragma: allowlist secret
+                        "is_ad": False,
+                        "is_relevant": True,
+                        "ad_confidence": 0.9,
+                        "relevance_confidence": 0.9,
+                        "reason_code": "organic_mention",
+                    }
+                ]
+            }
+        )
+
+        with pytest.raises(AIClassifierValidationError) as exc_info:
+            parse_ai_response(response, expected_count=1)
+
+        error_message = str(exc_info.value)
+        assert error_message == "Invalid AI classifier response"
+        assert "INVALID_SECRET_DECISION_VALUE" not in error_message
+        assert "invalid decision" not in error_message.lower()
+
+    def test_invalid_confidence_shows_generic_error(self):
+        """Invalid confidence value must not appear in error message."""
+        import json
+
+        response = json.dumps(
+            {
+                "results": [
+                    {
+                        "schema_version": "review-ai-classifier-v1",
+                        "decision": "organic",
+                        "is_ad": False,
+                        "is_relevant": True,
+                        "ad_confidence": "INVALID_SECRET_CONFIDENCE",  # pragma: allowlist secret
+                        "relevance_confidence": 0.9,
+                        "reason_code": "organic_mention",
+                    }
+                ]
+            }
+        )
+
+        with pytest.raises(AIClassifierValidationError) as exc_info:
+            parse_ai_response(response, expected_count=1)
+
+        error_message = str(exc_info.value)
+        assert error_message == "Invalid AI classifier response"
+        assert "INVALID_SECRET_CONFIDENCE" not in error_message
+
+
+class TestSchemaVersionStrictness:
+    """Test strict schema version validation."""
+
+    def test_exact_schema_version_required(self):
+        """Schema version must match exactly."""
+        import json
+
+        response = json.dumps(
+            {
+                "results": [
+                    {
+                        "schema_version": "review-ai-classifier-v1",
+                        "decision": "organic",
+                        "is_ad": False,
+                        "is_relevant": True,
+                        "ad_confidence": 0.9,
+                        "relevance_confidence": 0.9,
+                        "reason_code": "organic_mention",
+                    }
+                ]
+            }
+        )
+
+        results = parse_ai_response(response, expected_count=1)
+        assert results[0].schema_version == "review-ai-classifier-v1"
+
+    def test_missing_schema_version_rejected(self):
+        """Missing schema version must be rejected."""
+        import json
+
+        response = json.dumps(
+            {
+                "results": [
+                    {
+                        "decision": "organic",
+                        "is_ad": False,
+                        "is_relevant": True,
+                        "ad_confidence": 0.9,
+                        "relevance_confidence": 0.9,
+                        "reason_code": "organic_mention",
+                    }
+                ]
+            }
+        )
+
+        with pytest.raises(AIClassifierValidationError, match="Invalid AI classifier response"):
+            parse_ai_response(response, expected_count=1)
+
+    def test_wrong_schema_version_rejected(self):
+        """Wrong schema version must be rejected."""
+        import json
+
+        response = json.dumps(
+            {
+                "results": [
+                    {
+                        "schema_version": "wrong-version-v2",
+                        "decision": "organic",
+                        "is_ad": False,
+                        "is_relevant": True,
+                        "ad_confidence": 0.9,
+                        "relevance_confidence": 0.9,
+                        "reason_code": "organic_mention",
+                    }
+                ]
+            }
+        )
+
+        with pytest.raises(AIClassifierValidationError, match="Invalid AI classifier response"):
+            parse_ai_response(response, expected_count=1)
+
+    def test_schema_version_in_prompt(self):
+        """System prompt must show the required schema version field."""
+        from apps.api.app.services.review_ai_classifier import SCHEMA_VERSION
+
+        prompt = build_system_prompt()
+        assert "schema_version" in prompt
+        assert SCHEMA_VERSION in prompt
+
+
+class TestFailClosedApplication:
+    """Test fail-closed decision and confidence application."""
+
+    def test_uncertain_always_recheck_required(self):
+        """Decision 'uncertain' must always become recheck_required regardless of confidence."""
+        deterministic = _create_decision(retained=True)
+        ai_result = AIClassificationResult(
+            schema_version="review-ai-classifier-v1",
+            decision="uncertain",
+            is_ad=False,
+            is_relevant=True,
+            ad_confidence=0.9,  # High confidence but uncertain decision
+            relevance_confidence=0.9,
+            reason_code="low_confidence",
+        )
+
+        result = apply_ai_classification(deterministic, ai_result)
+
+        assert result.retained is False
+        assert result.reason == "recheck_required"
+
+    def test_non_definitive_confidence_requires_recheck(self):
+        """Confidence in [0.5, 0.7) must become recheck_required, not organic."""
+        deterministic = _create_decision(retained=True)
+        ai_result = AIClassificationResult(
+            schema_version="review-ai-classifier-v1",
+            decision="organic",
+            is_ad=False,
+            is_relevant=True,
+            ad_confidence=0.6,  # In non-definitive band
+            relevance_confidence=0.8,  # Above threshold
+            reason_code="organic_mention",
+        )
+
+        result = apply_ai_classification(deterministic, ai_result)
+
+        # Must be recheck_required, not retained as organic
+        assert result.retained is False
+        assert result.reason == "recheck_required"
+
+    def test_inconsistent_ad_flag_rejected(self):
+        """High ad_confidence with non-ad_filtered decision must fail closed."""
+        deterministic = _create_decision(retained=True)
+        ai_result = AIClassificationResult(
+            schema_version="review-ai-classifier-v1",
+            decision="organic",  # Inconsistent with is_ad=True
+            is_ad=True,  # Inconsistent with organic decision
+            is_relevant=True,
+            ad_confidence=0.9,
+            relevance_confidence=0.9,
+            reason_code="organic_mention",
+        )
+
+        result = apply_ai_classification(deterministic, ai_result)
+
+        # Must fail closed to recheck, not promote to organic
+        assert result.retained is False
+        assert result.reason == "recheck_required"
+
+    def test_inconsistent_irrelevant_flag_rejected(self):
+        """High relevance_confidence with irrelevant decision must fail closed."""
+        deterministic = _create_decision(retained=True)
+        ai_result = AIClassificationResult(
+            schema_version="review-ai-classifier-v1",
+            decision="organic",  # Inconsistent with is_relevant=False
+            is_ad=False,
+            is_relevant=False,  # Inconsistent with organic decision
+            ad_confidence=0.9,
+            relevance_confidence=0.9,
+            reason_code="organic_mention",
+        )
+
+        result = apply_ai_classification(deterministic, ai_result)
+
+        # Must fail closed to recheck, not promote to organic
+        assert result.retained is False
+        assert result.reason == "recheck_required"
+
+    def test_markdown_fences_rejected(self):
+        """Markdown fences must be rejected, not stripped."""
+        markdown_wrapped = f"""```json
+{MockAIResponse.organic().raw}
+```"""
+
+        with pytest.raises(AIClassifierValidationError, match="Invalid AI classifier response"):
+            parse_ai_response(markdown_wrapped, expected_count=1)
+
+
 class TestApplyAIClassification:
     """Test application of AI classification to deterministic results."""
 
@@ -509,6 +838,7 @@ class TestApplyAIClassification:
         result = apply_ai_classification(deterministic, ai_result)
 
         assert result.retained is False
+        # is_ad should be True based on AI result, not deterministic (original is_ad=False)
         assert result.is_ad is True
         assert result.reason == "advertising_filtered"
 
