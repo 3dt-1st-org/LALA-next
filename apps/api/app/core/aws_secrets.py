@@ -58,6 +58,14 @@ class AwsSecretLookupResult:
             "logical_name": self.logical_name,
         }
 
+    def __repr__(self) -> str:
+        """Secret-safe representation that never includes the value field."""
+        return f"AwsSecretLookupResult(outcome={self.outcome!r}, logical_name={self.logical_name!r})"
+
+    def __str__(self) -> str:
+        """Secret-safe string representation that never includes the value field."""
+        return f"AwsSecretLookupResult(outcome={self.outcome}, logical_name={self.logical_name})"
+
 
 @lru_cache(maxsize=1)
 def _client():  # pragma: no cover - 외부 SDK 래핑
@@ -103,11 +111,22 @@ def _classify_aws_exception(
         or "access denied" in exception_str
         or "unauthorized" in exception_str
         or "not authorized" in exception_str
+        or "unrecognizedclient" in exception_type_name.lower()
+        or "invalidclienttokenid" in exception_type_name.lower()
+        or "expiredtoken" in exception_type_name.lower()
+        or "invalid client" in exception_str
+        or "expired token" in exception_str
     ):
         return "denied"
 
-    # InvalidParameterException / InvalidRequest: client or request invalid
-    if "invalid" in exception_type_name.lower() or "invalid" in exception_str:
+    # InvalidParameterException / InvalidRequest / MalformedResponse: invalid request or response
+    if (
+        "invalid" in exception_type_name.lower()
+        or "invalid" in exception_str
+        or "malformed" in exception_type_name.lower()
+        or "malformed" in exception_str
+        or "parse" in exception_str
+    ):
         return "invalid"
 
     # All other exceptions are classified as unavailable (transient or unknown)

@@ -183,6 +183,80 @@ def test_structured_lookup_classifies_access_denied_text_as_denied(monkeypatch):
     assert result.outcome == "denied"
 
 
+def test_structured_lookup_classifies_unrecognized_client_as_denied(monkeypatch):
+    """UnrecognizedClientException classified as denied outcome."""
+
+    class UnrecognizedClientException(Exception):
+        pass
+
+    class FakeClient:
+        def get_secret_value(self, SecretId):
+            raise UnrecognizedClientException("UnrecognizedClientException")
+
+    monkeypatch.setattr(aws_secrets, "_client", lambda: FakeClient())
+    result = aws_secrets.get_aws_sm_secret_structured("bad-creds-secret")
+
+    assert result.outcome == "denied"
+
+
+def test_structured_lookup_classifies_invalid_client_token_id_as_denied(monkeypatch):
+    """InvalidClientTokenIdException classified as denied outcome."""
+
+    class InvalidClientTokenIdException(Exception):
+        pass
+
+    class FakeClient:
+        def get_secret_value(self, SecretId):
+            raise InvalidClientTokenIdException("InvalidClientTokenId")
+
+    monkeypatch.setattr(aws_secrets, "_client", lambda: FakeClient())
+    result = aws_secrets.get_aws_sm_secret_structured("invalid-token-secret")
+
+    assert result.outcome == "denied"
+
+
+def test_structured_lookup_classifies_expired_token_as_denied(monkeypatch):
+    """ExpiredTokenException classified as denied outcome."""
+
+    class ExpiredTokenException(Exception):
+        pass
+
+    class FakeClient:
+        def get_secret_value(self, SecretId):
+            raise ExpiredTokenException("ExpiredToken")
+
+    monkeypatch.setattr(aws_secrets, "_client", lambda: FakeClient())
+    result = aws_secrets.get_aws_sm_secret_structured("expired-token-secret")
+
+    assert result.outcome == "denied"
+
+
+def test_structured_lookup_classifies_invalid_client_text_as_denied(monkeypatch):
+    """Generic 'invalid client' error classified as denied outcome."""
+
+    class FakeClient:
+        def get_secret_value(self, SecretId):
+            raise Exception("Invalid client token provided")
+
+    monkeypatch.setattr(aws_secrets, "_client", lambda: FakeClient())
+    result = aws_secrets.get_aws_sm_secret_structured("invalid-client-secret")
+
+    assert result.outcome == "denied"
+
+
+def test_structured_lookup_classifies_malformed_response_as_invalid(monkeypatch):
+    """Malformed response classified as invalid outcome."""
+
+    class FakeClient:
+        def get_secret_value(self, SecretId):
+            raise Exception("Malformed response from AWS")
+
+    monkeypatch.setattr(aws_secrets, "_client", lambda: FakeClient())
+    result = aws_secrets.get_aws_sm_secret_structured("malformed-secret")
+
+    assert result.outcome == "invalid"
+
+
 def test_structured_lookup_classifies_unavailable_as_unavailable(monkeypatch):
     """Client unavailable classified as unavailable outcome."""
     monkeypatch.setattr(aws_secrets, "_client", lambda: None)
@@ -313,3 +387,33 @@ def test_get_aws_sm_secret_required_invalid_raises_structured_error(monkeypatch)
 
     assert "db-dsn" in str(exc_info.value)
     assert "invalid" in str(exc_info.value).lower()
+
+
+def test_structured_lookup_repr_str_are_secret_safe():
+    """repr() and str() never include the secret value, using sentinel for verification."""
+    # Use a unique sentinel that would never appear in real code
+    sentinel_value = "SENTINEL_SECRET_VALUE_8f4a2c9b-1d3e-4a5b-9f8c-2d7e6a3b1c9f"  # pragma: allowlist secret
+    result = aws_secrets.AwsSecretLookupResult(
+        outcome="found", logical_name="test-secret", value=sentinel_value
+    )
+
+    # Test repr
+    result_repr = repr(result)
+    assert sentinel_value not in result_repr
+    assert "value=" not in result_repr
+    assert "outcome='found'" in result_repr
+    assert "logical_name='test-secret'" in result_repr
+
+    # Test str
+    result_str = str(result)
+    assert sentinel_value not in result_str
+    assert "value=" not in result_str
+    assert "outcome=found" in result_str
+    assert "logical_name=test-secret" in result_str
+
+    # Test to_dict serialization
+    result_dict = result.to_dict()
+    assert sentinel_value not in str(result_dict)
+    assert "value" not in result_dict
+    assert result_dict["outcome"] == "found"
+    assert result_dict["logical_name"] == "test-secret"
