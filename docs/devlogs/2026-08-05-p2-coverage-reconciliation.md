@@ -63,7 +63,7 @@ The initial implementation was useful but the independent audit found both CI de
 
 ## Comprehensive offline testing
 
-Added `apps/api/tests/test_official_coverage_reconciliation.py` with 28 focused unit tests using synthetic in-memory fixtures:
+Added `apps/api/tests/test_official_coverage_reconciliation.py` with 38 focused unit tests using synthetic in-memory fixtures:
 
 - **Source counting**: `test_reconciliation_report_counts_all_sources`, `test_total_source_scoped_record_count_aggregates_all_sources`, `test_all_five_state_distinctions_preserved`
 - **Governance gaps**: `test_reconciliation_report_identifies_governance_blocked_sources`, `test_rejected_sources_create_specific_gaps`
@@ -97,7 +97,7 @@ This contract maintains explicit boundaries:
 
 ## Verification
 
-All 28 unit tests pass with synthetic fixtures. No external dependencies, network calls, or database operations. The contract is fully deterministic and offline-only. All ruff checks pass with clean formatting and no unused imports.
+All 38 unit tests pass with synthetic fixtures. No external dependencies, network calls, or database operations. The contract is fully deterministic and offline-only. All ruff checks pass with clean formatting and no unused imports.
 
 ## Follow-up work
 

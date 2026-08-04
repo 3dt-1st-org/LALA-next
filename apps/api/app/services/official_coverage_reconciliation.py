@@ -137,21 +137,19 @@ class CoverageQualityMetrics:
         ]:
             value = getattr(self, field_name)
             if value is not None and value < 0:
-                raise ValueError(f"{field_name} must be non-negative, got {value}")
+                raise ValueError("Invalid quality metrics")
 
         # Validate category keys against canonical set
         if self.category_counts:
             for category_key in self.category_counts:
                 if category_key not in CANONICAL_QUALITY_CATEGORIES:
-                    raise ValueError(f"Invalid category key: {category_key}")
+                    raise ValueError("Invalid quality metrics")
 
         # Validate category counts are non-negative
         if self.category_counts:
-            for category_key, count in self.category_counts.items():
+            for _category_key, count in self.category_counts.items():
                 if count is not None and count < 0:
-                    raise ValueError(
-                        f"Category count for {category_key} must be non-negative, got {count}"
-                    )
+                    raise ValueError("Invalid quality metrics")
 
         # Validate numerator <= denominator for coordinate quality
         if (
@@ -159,10 +157,7 @@ class CoverageQualityMetrics:
             and self.total_coordinate_count is not None
             and self.valid_coordinate_count > self.total_coordinate_count
         ):
-            raise ValueError(
-                f"valid_coordinate_count ({self.valid_coordinate_count}) cannot exceed "
-                f"total_coordinate_count ({self.total_coordinate_count})"
-            )
+            raise ValueError("Invalid quality metrics")
 
         # Validate numerator <= denominator for image rights
         if (
@@ -170,10 +165,7 @@ class CoverageQualityMetrics:
             and self.total_image_count is not None
             and self.image_rights_ready_count > self.total_image_count
         ):
-            raise ValueError(
-                f"image_rights_ready_count ({self.image_rights_ready_count}) cannot exceed "
-                f"total_image_count ({self.total_image_count})"
-            )
+            raise ValueError("Invalid quality metrics")
 
         # Validate numerator <= denominator for operating hours
         if (
@@ -181,10 +173,7 @@ class CoverageQualityMetrics:
             and self.total_operating_hours_count is not None
             and self.operating_hours_available_count > self.total_operating_hours_count
         ):
-            raise ValueError(
-                f"operating_hours_available_count ({self.operating_hours_available_count}) cannot exceed "
-                f"total_operating_hours_count ({self.total_operating_hours_count})"
-            )
+            raise ValueError("Invalid quality metrics")
 
         # Validate quality issue counts against total
         if self.total_quality_checked is not None:
@@ -196,10 +185,7 @@ class CoverageQualityMetrics:
                 ]
             )
             if total_issues > self.total_quality_checked:
-                raise ValueError(
-                    f"Total quality issues ({total_issues}) cannot exceed "
-                    f"total_quality_checked ({self.total_quality_checked})"
-                )
+                raise ValueError("Invalid quality metrics")
 
         # Validate category counts against total
         if (
@@ -207,10 +193,7 @@ class CoverageQualityMetrics:
             and self.total_category_count is not None
             and sum(self.category_counts.values()) > self.total_category_count
         ):
-            raise ValueError(
-                f"Sum of category counts ({sum(self.category_counts.values())}) cannot exceed "
-                f"total_category_count ({self.total_category_count})"
-            )
+            raise ValueError("Invalid quality metrics")
 
     def compute_rates(self) -> CoverageQualityMetrics:
         """Return a new instance with computed rates filled in where possible."""

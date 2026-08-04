@@ -637,7 +637,7 @@ def test_quality_metrics_rejects_negative_counts():
 
     from apps.api.app.services.official_coverage_reconciliation import CoverageQualityMetrics
 
-    with pytest.raises(ValueError, match="must be non-negative"):
+    with pytest.raises(ValueError, match="Invalid quality metrics"):
         CoverageQualityMetrics(
             source_name="test_source",
             dataset_name="Test Dataset",
@@ -652,7 +652,7 @@ def test_quality_metrics_rejects_impossible_numerator():
 
     from apps.api.app.services.official_coverage_reconciliation import CoverageQualityMetrics
 
-    with pytest.raises(ValueError, match="cannot exceed"):
+    with pytest.raises(ValueError, match="Invalid quality metrics"):
         CoverageQualityMetrics(
             source_name="test_source",
             dataset_name="Test Dataset",
@@ -696,7 +696,7 @@ def test_quality_metrics_invalid_rejected_during_instantiation():
 
     from apps.api.app.services.official_coverage_reconciliation import CoverageQualityMetrics
 
-    with pytest.raises(ValueError, match="cannot exceed"):
+    with pytest.raises(ValueError, match="Invalid quality metrics"):
         CoverageQualityMetrics(
             source_name="source_a",
             dataset_name="Dataset A",
@@ -815,7 +815,7 @@ def test_quality_metrics_rejects_unknown_category_key():
 
     from apps.api.app.services.official_coverage_reconciliation import CoverageQualityMetrics
 
-    with pytest.raises(ValueError, match="Invalid category key"):
+    with pytest.raises(ValueError, match="Invalid quality metrics"):
         CoverageQualityMetrics(
             source_name="test_source",
             dataset_name="Test Dataset",
@@ -830,7 +830,7 @@ def test_quality_metrics_rejects_negative_category_count():
 
     from apps.api.app.services.official_coverage_reconciliation import CoverageQualityMetrics
 
-    with pytest.raises(ValueError, match="must be non-negative"):
+    with pytest.raises(ValueError, match="Invalid quality metrics"):
         CoverageQualityMetrics(
             source_name="test_source",
             dataset_name="Test Dataset",
@@ -862,6 +862,29 @@ def test_quality_metrics_valid_category_keys_accepted():
         "lodging": 15,
     }
     assert computed.total_category_count == 45
+
+
+def test_quality_metrics_exception_hides_secret_category_key():
+    """Exception messages never include unknown/secret-shaped category keys."""
+    import pytest
+
+    from apps.api.app.services.official_coverage_reconciliation import CoverageQualityMetrics
+
+    # Test with a secret-shaped unknown category key
+    secret_key = "secret_api_key_abc123"  # pragma: allowlist secret
+
+    with pytest.raises(ValueError) as exc_info:
+        CoverageQualityMetrics(
+            source_name="test_source",
+            dataset_name="Test Dataset",
+            category_counts={secret_key: 10},  # Secret-shaped unknown key
+            total_category_count=10,
+        )
+
+    # Verify the secret key never appears in the exception string
+    exception_str = str(exc_info.value)
+    assert secret_key not in exception_str, "Secret category key must not appear in exception"
+    assert exception_str == "Invalid quality metrics"
 
 
 def test_quality_metrics_rates_with_valid_denominator():
