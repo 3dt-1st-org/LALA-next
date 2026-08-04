@@ -236,6 +236,8 @@ def test_cli_date_filter_validation_rejects_invalid_format(capsys):
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is False
     assert "Invalid --since date format" in payload["error"]
+    # Ensure error message doesn't echo the supplied invalid value
+    assert "not-a-date" not in payload["error"]
 
 
 def test_cli_date_filter_validation_rejects_inverted_range(capsys):
@@ -247,7 +249,10 @@ def test_cli_date_filter_validation_rejects_inverted_range(capsys):
     assert exit_code == 2
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is False
-    assert "must be after --since" in payload["error"]
+    assert "Invalid --until date range" in payload["error"]
+    # Ensure error message doesn't echo the supplied date values
+    assert "2026-06-30" not in payload["error"]
+    assert "2026-06-01" not in payload["error"]
 
 
 def test_cli_place_id_validation_rejects_blank(capsys):
@@ -257,7 +262,7 @@ def test_cli_place_id_validation_rejects_blank(capsys):
     assert exit_code == 2
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is False
-    assert "cannot be blank or empty" in payload["error"]
+    assert "Invalid --place-id value" in payload["error"]
 
 
 def test_cli_place_id_validation_rejects_unsafe_characters(capsys):
@@ -269,9 +274,66 @@ def test_cli_place_id_validation_rejects_unsafe_characters(capsys):
     assert exit_code == 2
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is False
-    assert (
-        "Invalid --place-id format" in payload["error"] or "Unsafe characters" in payload["error"]
+    assert "Invalid --place-id format" in payload["error"]
+    # Ensure error message doesn't echo the supplied unsafe value or attack marker
+    assert "museum" not in payload["error"]
+    assert "DROP" not in payload["error"]
+    assert "'" not in payload["error"]
+
+
+def test_cli_trims_whitespace_padded_place_id(monkeypatch, capsys):
+    """Test that CLI trims whitespace from valid place_id before passing to service."""
+    executed = []
+
+    class Cursor:
+        def __init__(self):
+            self.rows = []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def execute(self, sql, params=None):
+            executed.append((sql, params))
+            self.rows = []
+
+        def fetchall(self):
+            return self.rows
+
+    class Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def cursor(self, cursor_factory=None):
+            return Cursor()
+
+    def connect(dsn, connect_timeout):
+        return Connection()
+
+    monkeypatch.setenv("DB_DSN", "postgresql://redacted")
+    monkeypatch.setitem(sys.modules, "psycopg2", SimpleNamespace(connect=connect))
+    monkeypatch.setitem(
+        sys.modules,
+        "psycopg2.extras",
+        SimpleNamespace(RealDictCursor=Cursor),
     )
+
+    exit_code = run_review_mention_ingest.main(
+        ["--preview", "--place-id", "  hoam-museum-123  ", "--json"]
+    )
+
+    assert exit_code == 0
+    # Verify place_id filter was passed to places query as trimmed value
+    places_query = executed[1]
+    assert "places" in places_query[0].lower()
+    params = places_query[1]
+    assert "place_id" in params
+    assert params["place_id"] == "hoam-museum-123"  # trimmed, not "  hoam-museum-123  "
 
 
 def test_cli_accepts_valid_date_filters(monkeypatch, capsys):

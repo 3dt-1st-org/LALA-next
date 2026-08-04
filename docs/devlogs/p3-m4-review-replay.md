@@ -3,7 +3,7 @@
 **Date:** 2026-08-05
 **Checkpoint:** P3-M4
 **Status:** ✅ Complete
-**PR:** #96 (Draft)
+**PR:** #102 (Draft)
 
 ## Overview
 
@@ -23,7 +23,7 @@ def fetch_review_mention_inputs(
     provider: str,
     connect_timeout: int,
     since: str | None = None,          # NEW: inclusive lower bound
-    until: str | None = None,          # NEW: exclusive upper bound  
+    until: str | None = None,          # NEW: exclusive upper bound
     place_id: str | None = None,       # NEW: canonical place filter
 ) -> tuple[list[ReviewMentionPost], list[ReviewMentionPlace]]
 ```
@@ -39,7 +39,7 @@ def fetch_review_mention_inputs(
 
 **New Arguments:**
 - `--since YYYY-MM-DD` - Inclusive lower bound date
-- `--until YYYY-MM-DD` - Exclusive upper bound date  
+- `--until YYYY-MM-DD` - Exclusive upper bound date
 - `--place-id <id>` - Filter by canonical place_id
 
 **Supported Date Formats:**
@@ -67,7 +67,7 @@ def fetch_review_mention_inputs(
 
 1. **CLI Validation Tests:**
    - Invalid date format rejection
-   - Inverted range rejection  
+   - Inverted range rejection
    - Blank place_id rejection
    - Unsafe character rejection
 
@@ -84,7 +84,7 @@ def fetch_review_mention_inputs(
 **Test Results:**
 - ✅ All 16 tests pass
 - ✅ Ruff linting passes
-- ✅ Ruff formatting passes  
+- ✅ Ruff formatting passes
 - ✅ Pre-commit hooks pass
 - ✅ No security warnings
 
@@ -190,7 +190,7 @@ python -m apps.api.app.tools.run_review_mention_ingest \
 ✅ **All P3-M4 requirements met:**
 - [x] Extend `fetch_review_mention_inputs` with optional filters
 - [x] Keep SQL parameterized and preserve existing behavior
-- [x] Add CLI options with proper validation  
+- [x] Add CLI options with proper validation
 - [x] Reject malformed dates, inverted ranges, unsafe place IDs
 - [x] Ensure selection is replay/preview boundary only
 - [x] Include filter metadata in JSON/text output
@@ -203,9 +203,9 @@ python -m apps.api.app.tools.run_review_mention_ingest \
 ## Next Steps
 
 1. ✅ Implementation complete
-2. ✅ Testing complete  
+2. ✅ Testing complete
 3. ✅ Verification complete
 4. ✅ Documentation complete
-5. 🔄 PR creation (Draft #96)
+5. 🔄 PR creation (Draft #102)
 6. ⏳ Code review pending
 7. ⏳ Merge to main pending approval

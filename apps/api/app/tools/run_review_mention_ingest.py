@@ -196,17 +196,17 @@ def _validate_date_filters(args: argparse.Namespace) -> str | None:
     if args.since:
         since_dt = _parse_date(args.since)
         if since_dt is None:
-            return f"Invalid --since date format: '{args.since}'. Expected YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ"
+            return "Invalid --since date format."
 
     # Parse and validate --until
     if args.until:
         until_dt = _parse_date(args.until)
         if until_dt is None:
-            return f"Invalid --until date format: '{args.until}'. Expected YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ"
+            return "Invalid --until date format."
 
     # Validate range logic
     if since_dt and until_dt and until_dt <= since_dt:
-        return f"Invalid date range: --until ({args.until}) must be after --since ({args.since})"
+        return "Invalid --until date range."
 
     return None
 
@@ -220,21 +220,24 @@ def _validate_place_id_filter(args: argparse.Namespace) -> str | None:
 
     # Reject blank/empty
     if not place_id:
-        return "--place-id cannot be blank or empty"
+        return "Invalid --place-id value."
 
     # Reject unsafe characters to prevent SQL injection
     # Only allow alphanumeric, underscore, hyphen, and common separators
     import re
 
     if not re.match(r"^[A-Za-z0-9_\-:/]+$", place_id):
-        return f"Invalid --place-id format: '{args.place_id}'. Only alphanumeric, underscore, hyphen, colon, and slash characters are allowed"
+        return "Invalid --place-id format."
 
     # Reject obviously dangerous patterns
     dangerous_patterns = ["'", '"', ";", "--", "/*", "*/", "xp_", "sp_"]
     place_id_upper = place_id.upper()
     for pattern in dangerous_patterns:
         if pattern in place_id or pattern.upper() in place_id_upper:
-            return f"Unsafe characters in --place-id: '{args.place_id}'. Contains potentially dangerous pattern: {pattern}"
+            return "Invalid --place-id format."
+
+    # Normalize the place_id by stripping whitespace
+    args.place_id = place_id
 
     return None
 
