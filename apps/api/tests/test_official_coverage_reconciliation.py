@@ -7,19 +7,16 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-import pytest
-
 from apps.api.app.services import official_coverage_reconciliation as reconciliation
 from apps.api.app.services.official_source_inventory import (
+    ImageUrlPolicy,
     OfficialCoverageReceipt,
     OfficialSourceInventory,
+    PlaceAcceptancePolicy,
     SourceGovernance,
     SourcePaginationPolicy,
-    ImageUrlPolicy,
-    PlaceAcceptancePolicy,
     SourceRecordIdentityPolicy,
     SourceRefreshPolicy,
-    CoordinatePrecision,
 )
 
 GENERATED_AT = datetime(2026, 8, 5, 0, 0, tzinfo=UTC)
@@ -28,7 +25,7 @@ GENERATED_AT = datetime(2026, 8, 5, 0, 0, tzinfo=UTC)
 def _entry(**overrides):
     """Create synthetic source inventory entry."""
     from dataclasses import replace
-    
+
     entry = OfficialSourceInventory(
         source_name="tour_api",
         dataset_name="Official Places",
@@ -72,7 +69,7 @@ def _entry(**overrides):
 def _receipt(**overrides):
     """Create synthetic coverage receipt."""
     from dataclasses import replace
-    
+
     receipt = OfficialCoverageReceipt(
         receipt_id="receipt:abcdef123456",
         source_name="tour_api",
@@ -187,12 +184,28 @@ def test_regional_breakdown_identifies_missing_regions():
 def test_regional_breakdown_complete_coverage():
     """Complete nationwide coverage yields no region gaps."""
     all_regions = (
-        "seoul", "gyeonggi", "incheon", "busan", "daegu", "gwangju",
-        "daejeon", "ulsan", "sejong", "gangwon", "chungbuk", "chungnam",
-        "jeonbuk", "jeonnam", "gyeongbuk", "gyeongnam", "jeju",
+        "seoul",
+        "gyeonggi",
+        "incheon",
+        "busan",
+        "daegu",
+        "gwangju",
+        "daejeon",
+        "ulsan",
+        "sejong",
+        "gangwon",
+        "chungbuk",
+        "chungnam",
+        "jeonbuk",
+        "jeonnam",
+        "gyeongbuk",
+        "gyeongnam",
+        "jeju",
     )
 
-    full_coverage_receipt = _receipt(covered_regions=all_regions, record_ids=tuple(f"record:{i}" for i in range(100)))
+    full_coverage_receipt = _receipt(
+        covered_regions=all_regions, record_ids=tuple(f"record:{i}" for i in range(100))
+    )
 
     report = reconciliation.build_reconciliation_report(
         source_inventory=[_entry()],
@@ -235,7 +248,7 @@ def test_full_ingest_validation_fails_on_governance_blocked():
             provenance_policy=None,
             image_rights_status="unknown",
             source_status="blocked_external",
-        )
+        ),
     )
 
     report = reconciliation.build_reconciliation_report(
@@ -367,13 +380,13 @@ def test_multiple_nationwide_sources_aggregate_regional_coverage():
     source_a_receipt = _receipt(
         source_name="source_a",
         covered_regions=("seoul", "gyeonggi", "busan", "daegu"),
-        record_ids=tuple(f"source_a:{i}" for i in range(40))
+        record_ids=tuple(f"source_a:{i}" for i in range(40)),
     )
 
     source_b_receipt = _receipt(
         source_name="source_b",
         covered_regions=("busan", "daegu", "gwangju", "incheon"),
-        record_ids=tuple(f"source_b:{i}" for i in range(40))
+        record_ids=tuple(f"source_b:{i}" for i in range(40)),
     )
 
     report = reconciliation.build_reconciliation_report(
@@ -395,10 +408,14 @@ def test_multiple_nationwide_sources_aggregate_regional_coverage():
     assert "source_b" not in seoul_breakdown.sources_covered
 
 
-def test_total_distinct_records_aggregates_all_sources():
-    """Total distinct records sums across all usable sources."""
-    source_a_receipt = _receipt(source_name="source_a", record_ids=tuple(f"a:{i}" for i in range(20)))
-    source_b_receipt = _receipt(source_name="source_b", record_ids=tuple(f"b:{i}" for i in range(30)))
+def test_total_source_scoped_record_count_aggregates_all_sources():
+    """Total source-scoped record count sums across all usable sources."""
+    source_a_receipt = _receipt(
+        source_name="source_a", record_ids=tuple(f"a:{i}" for i in range(20))
+    )
+    source_b_receipt = _receipt(
+        source_name="source_b", record_ids=tuple(f"b:{i}" for i in range(30))
+    )
 
     report = reconciliation.build_reconciliation_report(
         source_inventory=[_entry(source_name="source_a"), _entry(source_name="source_b")],
@@ -406,24 +423,19 @@ def test_total_distinct_records_aggregates_all_sources():
         generated_at=GENERATED_AT,
     )
 
-    assert report.total_distinct_records == 50
+    assert report.total_source_scoped_record_count == 50
 
 
 def test_validation_respects_max_stale_threshold():
     """Validation allows configurable threshold for stale sources."""
     # Create 2 stale receipts and 1 usable receipt
     stale_receipt_1 = _receipt(
-        source_name="source_a",
-        observed_at=datetime(2026, 8, 1, 0, 0, tzinfo=UTC)
+        source_name="source_a", observed_at=datetime(2026, 8, 1, 0, 0, tzinfo=UTC)
     )
     stale_receipt_2 = _receipt(
-        source_name="source_b",
-        observed_at=datetime(2026, 8, 1, 0, 0, tzinfo=UTC)
+        source_name="source_b", observed_at=datetime(2026, 8, 1, 0, 0, tzinfo=UTC)
     )
-    usable_receipt = _receipt(
-        source_name="source_c",
-        observed_at=GENERATED_AT
-    )
+    usable_receipt = _receipt(source_name="source_c", observed_at=GENERATED_AT)
 
     report = reconciliation.build_reconciliation_report(
         source_inventory=[
@@ -473,3 +485,325 @@ def test_warnings_for_non_critical_issues():
     assert validation.is_approved
     assert len(validation.warnings) > 0
     assert any("unknown" in w.lower() for w in validation.warnings)
+
+
+def test_regional_counts_remain_none_with_only_global_record_ids():
+    """Regional record counts must be None when only global record IDs are available."""
+    receipt_with_global_ids = _receipt(
+        source_name="source_a",
+        covered_regions=("seoul", "gyeonggi", "busan"),
+        record_ids=tuple(f"global_record:{i}" for i in range(100)),
+    )
+
+    report = reconciliation.build_reconciliation_report(
+        source_inventory=[_entry(source_name="source_a")],
+        receipts=[receipt_with_global_ids],
+        generated_at=GENERATED_AT,
+    )
+
+    # Check that all regional breakdowns have None for record_count
+    for regional_breakdown in report.regional_breakdown:
+        assert regional_breakdown.record_count is None, (
+            f"Region {regional_breakdown.region_code} should have None record_count"
+        )
+
+
+def test_regional_counts_preserve_empty_rows():
+    """Empty/unknown regional rows are preserved without claiming coverage."""
+    partial_coverage_receipt = _receipt(
+        source_name="source_a",
+        covered_regions=("seoul", "gyeonggi"),  # Only covers 2 regions
+        record_ids=tuple(f"record:{i}" for i in range(50)),
+    )
+
+    report = reconciliation.build_reconciliation_report(
+        source_inventory=[_entry(source_name="source_a")],
+        receipts=[partial_coverage_receipt],
+        generated_at=GENERATED_AT,
+    )
+
+    # Check that seoul and gyeonggi have coverage
+    seoul_breakdown = next(rb for rb in report.regional_breakdown if rb.region_code == "seoul")
+    assert seoul_breakdown.has_coverage is True
+    assert seoul_breakdown.record_count is None  # No per-region evidence
+
+    gyeonggi_breakdown = next(
+        rb for rb in report.regional_breakdown if rb.region_code == "gyeonggi"
+    )
+    assert gyeonggi_breakdown.has_coverage is True
+    assert gyeonggi_breakdown.record_count is None  # No per-region evidence
+
+    # Check that busan has no coverage
+    busan_breakdown = next(rb for rb in report.regional_breakdown if rb.region_code == "busan")
+    assert busan_breakdown.has_coverage is False
+    assert busan_breakdown.record_count is None  # No per-region evidence
+
+
+def test_rejected_sources_create_specific_gaps():
+    """Rejected sources create rejected_source gaps and are counted separately."""
+    rejected_entry = _entry(
+        source_name="rejected_source",
+        governance=SourceGovernance(
+            license_class="public_processed",
+            terms_version="terms-v1",
+            retention_policy="aggregate-receipt-only",
+            provenance_policy="source-record-hash",
+            image_rights_status="verified",
+            source_status="rejected",  # Explicitly rejected
+        ),
+    )
+
+    report = reconciliation.build_reconciliation_report(
+        source_inventory=[rejected_entry],
+        receipts=[],
+        generated_at=GENERATED_AT,
+    )
+
+    assert report.rejected_sources == 1
+    assert any(g.gap_type == "rejected_source" for g in report.gaps)
+    assert report.usable_sources == 0
+    assert report.blocked_sources == 0
+    assert report.stale_sources == 0
+
+
+def test_reconcile_specific_source_rejected_state():
+    """Specific source reconciliation returns rejected_source gap for rejected sources."""
+    rejected_entry = _entry(
+        source_name="rejected_source",
+        governance=SourceGovernance(
+            license_class="public_processed",
+            terms_version="terms-v1",
+            retention_policy="aggregate-receipt-only",
+            provenance_policy="source-record-hash",
+            image_rights_status="verified",
+            source_status="rejected",
+        ),
+    )
+
+    gap = reconciliation.reconcile_receipt_coverage(
+        source_name="rejected_source",
+        dataset_name="Official Places",
+        source_inventory=[rejected_entry],
+        receipts=[],
+    )
+
+    assert gap is not None
+    assert gap.gap_type == "rejected_source"
+    assert "rejected" in gap.description.lower()
+
+
+def test_quality_metrics_missing_denominator_returns_unknown():
+    """Quality metrics without denominators return None/unknown, never inferred percentages."""
+    from apps.api.app.services.official_coverage_reconciliation import CoverageQualityMetrics
+
+    # Metric with only numerator (no denominator)
+    partial_metric = CoverageQualityMetrics(
+        source_name="test_source",
+        dataset_name="Test Dataset",
+        valid_coordinate_count=80,
+        # total_coordinate_count=None - denominator missing
+    )
+
+    computed = partial_metric.compute_rates()
+
+    assert computed.valid_coordinate_rate is None  # Should not infer 100%
+
+    public = computed.to_public_dict()
+    assert public["coordinate_quality"]["valid_rate"] is None
+
+
+def test_quality_metrics_valid_denominator_computes_rate():
+    """Quality metrics with valid denominators compute rates correctly."""
+    from apps.api.app.services.official_coverage_reconciliation import CoverageQualityMetrics
+
+    valid_metric = CoverageQualityMetrics(
+        source_name="test_source",
+        dataset_name="Test Dataset",
+        valid_coordinate_count=80,
+        total_coordinate_count=100,
+        image_rights_ready_count=90,
+        total_image_count=100,
+    )
+
+    computed = valid_metric.compute_rates()
+
+    assert computed.valid_coordinate_rate == 0.8
+    assert computed.image_rights_ready_rate == 0.9
+
+
+def test_quality_metrics_rejects_negative_counts():
+    """Quality metrics reject negative count values."""
+    import pytest
+
+    from apps.api.app.services.official_coverage_reconciliation import CoverageQualityMetrics
+
+    with pytest.raises(ValueError, match="must be non-negative"):
+        CoverageQualityMetrics(
+            source_name="test_source",
+            dataset_name="Test Dataset",
+            valid_coordinate_count=-1,  # Invalid negative count
+            total_coordinate_count=100,
+        )
+
+
+def test_quality_metrics_rejects_impossible_numerator():
+    """Quality metrics reject numerators that exceed denominators."""
+    import pytest
+
+    from apps.api.app.services.official_coverage_reconciliation import CoverageQualityMetrics
+
+    with pytest.raises(ValueError, match="cannot exceed"):
+        CoverageQualityMetrics(
+            source_name="test_source",
+            dataset_name="Test Dataset",
+            valid_coordinate_count=150,  # More than total
+            total_coordinate_count=100,
+        )
+
+
+def test_quality_metrics_included_in_report():
+    """Quality metrics are included in reconciliation report and public projection."""
+    from apps.api.app.services.official_coverage_reconciliation import CoverageQualityMetrics
+
+    quality_metrics = [
+        CoverageQualityMetrics(
+            source_name="source_a",
+            dataset_name="Official Places",  # Must match inventory dataset_name
+            valid_coordinate_count=95,
+            total_coordinate_count=100,
+        )
+    ]
+
+    report = reconciliation.build_reconciliation_report(
+        source_inventory=[_entry(source_name="source_a")],
+        receipts=[_receipt(source_name="source_a")],
+        generated_at=GENERATED_AT,
+        quality_metrics=quality_metrics,
+    )
+
+    assert len(report.quality_metrics) == 1
+    assert report.quality_metrics[0].source_name == "source_a"
+
+    public = report.to_public_dict()
+    assert "quality_metrics" in public
+    assert len(public["quality_metrics"]) == 1
+    assert public["quality_metrics"][0]["coordinate_quality"]["valid_rate"] == 0.95
+
+
+def test_quality_metrics_invalid_rejected_during_instantiation():
+    """Invalid quality metrics are rejected during instantiation with clear error."""
+    import pytest
+
+    from apps.api.app.services.official_coverage_reconciliation import CoverageQualityMetrics
+
+    with pytest.raises(ValueError, match="cannot exceed"):
+        CoverageQualityMetrics(
+            source_name="source_a",
+            dataset_name="Dataset A",
+            valid_coordinate_count=150,  # Invalid: exceeds total
+            total_coordinate_count=100,
+        )
+
+
+def test_quality_metrics_scope_mismatch_creates_gap():
+    """Valid metrics but source not in inventory create scope_mismatch gap."""
+    from apps.api.app.services.official_coverage_reconciliation import CoverageQualityMetrics
+
+    orphan_metrics = [
+        CoverageQualityMetrics(
+            source_name="unknown_source",  # Not in inventory
+            dataset_name="Orphan Dataset",
+            valid_coordinate_count=80,
+            total_coordinate_count=100,
+        )
+    ]
+
+    report = reconciliation.build_reconciliation_report(
+        source_inventory=[_entry(source_name="source_a")],
+        receipts=[_receipt(source_name="source_a")],
+        generated_at=GENERATED_AT,
+        quality_metrics=orphan_metrics,
+    )
+
+    # Should have a gap for orphaned metrics
+    assert any(
+        g.gap_type == "scope_mismatch"
+        and g.source_name == "unknown_source"
+        and g.dataset_name == "Orphan Dataset"
+        for g in report.gaps
+    )
+
+    # Quality metrics tuple should be empty (orphans rejected)
+    assert len(report.quality_metrics) == 0
+
+
+def test_all_five_state_distinctions_preserved():
+    """All five state distinctions are preserved: usable, blocked_external, rejected, stale, unknown."""
+    from apps.api.app.services.official_source_inventory import SourceGovernance
+
+    usable_entry = _entry(
+        source_name="usable_source",
+        governance=SourceGovernance(
+            license_class="public_processed",
+            terms_version="terms-v1",
+            retention_policy="aggregate-receipt-only",
+            provenance_policy="source-record-hash",
+            image_rights_status="verified",
+            source_status="approved",
+        ),
+    )
+
+    blocked_entry = _entry(
+        source_name="blocked_source",
+        governance=SourceGovernance(
+            license_class=None,
+            terms_version=None,
+            retention_policy=None,
+            provenance_policy=None,
+            image_rights_status="unknown",
+            source_status="blocked_external",
+        ),
+    )
+
+    rejected_entry = _entry(
+        source_name="rejected_source",
+        governance=SourceGovernance(
+            license_class="public_processed",
+            terms_version="terms-v1",
+            retention_policy="aggregate-receipt-only",
+            provenance_policy="source-record-hash",
+            image_rights_status="verified",
+            source_status="rejected",
+        ),
+    )
+
+    # Fresh receipt for usable source
+    fresh_receipt = _receipt(
+        source_name="usable_source",
+        observed_at=GENERATED_AT,
+    )
+
+    # Stale receipt for rejected source (to make it stale instead of rejected)
+    stale_receipt = _receipt(
+        source_name="stale_source",
+        observed_at=datetime(2026, 8, 1, 0, 0, tzinfo=UTC),  # 4 days old
+    )
+
+    report = reconciliation.build_reconciliation_report(
+        source_inventory=[
+            usable_entry,
+            blocked_entry,
+            rejected_entry,
+            _entry(source_name="stale_source"),
+        ],
+        receipts=[fresh_receipt, stale_receipt],
+        generated_at=GENERATED_AT,
+    )
+
+    # Verify all five state counts are preserved
+    assert report.total_sources == 4
+    assert report.usable_sources == 1  # usable_source
+    assert report.blocked_sources == 1  # blocked_source
+    assert report.rejected_sources == 1  # rejected_source
+    assert report.stale_sources == 1  # stale_source
+    assert report.unknown_sources == 0  # All have receipts or governance status

@@ -10,19 +10,288 @@ for full-ingest preparation and validation.
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections import defaultdict
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field, replace
+from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Final, Literal
+from typing import Any, Literal
 
 from apps.api.app.services import official_source_inventory as inventory
 from apps.api.app.services.official_source_inventory import OfficialCoverageReceipt
 
 CoverageState = Literal["usable", "blocked_external", "rejected", "stale", "unknown"]
-ReconciliationGap = Literal["missing_source", "no_coverage", "stale_coverage", "governance_blocked", "scope_mismatch"]
+ReconciliationGap = Literal[
+    "missing_source",
+    "no_coverage",
+    "stale_coverage",
+    "governance_blocked",
+    "rejected_source",
+    "scope_mismatch",
+]
+
+# Bounded public-safe category keys for quality metrics
+QUALITY_CATEGORY_KEYS = Literal[
+    "attraction",
+    "culture_venue",
+    "lodging",
+    "restaurant",
+    "shopping",
+    "transport",
+]
+
+
+@dataclass(frozen=True)
+class CoverageQualityMetrics:
+    """Denominator-safe quality metrics for coverage validation.
+
+    All metrics are optional and only reported when explicit denominators are supplied.
+    Numerator must not exceed denominator. Both must be non-negative.
+    When metrics are absent, reports None/unknown, never inferred percentages.
+
+    This type contains NO raw row data, only aggregated counts and rates.
+    """
+
+    source_name: str
+    dataset_name: str
+
+    # Category coverage (all optional, denominator-safe)
+    category_counts: dict[str, int] | None = None  # category -> count
+    total_category_count: int | None = None  # denominator for category coverage
+
+    # Coordinate quality
+    valid_coordinate_count: int | None = None
+    total_coordinate_count: int | None = None
+    valid_coordinate_rate: float | None = None  # computed only when both counts present
+
+    # Image rights readiness
+    image_rights_ready_count: int | None = None
+    total_image_count: int | None = None
+    image_rights_ready_rate: float | None = None  # computed only when both counts present
+
+    # Operating hours availability
+    operating_hours_available_count: int | None = None
+    total_operating_hours_count: int | None = None
+    operating_hours_available_rate: float | None = None  # computed only when both counts present
+
+    # Data quality issues (all optional)
+    duplicate_count: int | None = None
+    quarantined_count: int | None = None
+    failed_validation_count: int | None = None
+    total_quality_checked: int | None = None  # denominator for quality metrics
+
+    # Database comparison (metadata only, never a DB call)
+    db_comparison_count: int | None = None  # None if unavailable, count if mismatch metadata
+    db_comparison_status: Literal["unavailable", "matched", "mismatch"] | None = None
+
+    def __post_init__(self) -> None:
+        """Validate metric constraints."""
+        # Validate non-negative counts
+        for field_name in [
+            "total_category_count",
+            "valid_coordinate_count",
+            "total_coordinate_count",
+            "image_rights_ready_count",
+            "total_image_count",
+            "operating_hours_available_count",
+            "total_operating_hours_count",
+            "duplicate_count",
+            "quarantined_count",
+            "failed_validation_count",
+            "total_quality_checked",
+            "db_comparison_count",
+        ]:
+            value = getattr(self, field_name)
+            if value is not None and value < 0:
+                raise ValueError(f"{field_name} must be non-negative, got {value}")
+
+        # Validate numerator <= denominator for coordinate quality
+        if (
+            self.valid_coordinate_count is not None
+            and self.total_coordinate_count is not None
+            and self.valid_coordinate_count > self.total_coordinate_count
+        ):
+            raise ValueError(
+                f"valid_coordinate_count ({self.valid_coordinate_count}) cannot exceed "
+                f"total_coordinate_count ({self.total_coordinate_count})"
+            )
+
+        # Validate numerator <= denominator for image rights
+        if (
+            self.image_rights_ready_count is not None
+            and self.total_image_count is not None
+            and self.image_rights_ready_count > self.total_image_count
+        ):
+            raise ValueError(
+                f"image_rights_ready_count ({self.image_rights_ready_count}) cannot exceed "
+                f"total_image_count ({self.total_image_count})"
+            )
+
+        # Validate numerator <= denominator for operating hours
+        if (
+            self.operating_hours_available_count is not None
+            and self.total_operating_hours_count is not None
+            and self.operating_hours_available_count > self.total_operating_hours_count
+        ):
+            raise ValueError(
+                f"operating_hours_available_count ({self.operating_hours_available_count}) cannot exceed "
+                f"total_operating_hours_count ({self.total_operating_hours_count})"
+            )
+
+        # Validate quality issue counts against total
+        if self.total_quality_checked is not None:
+            total_issues = sum(
+                [
+                    self.duplicate_count or 0,
+                    self.quarantined_count or 0,
+                    self.failed_validation_count or 0,
+                ]
+            )
+            if total_issues > self.total_quality_checked:
+                raise ValueError(
+                    f"Total quality issues ({total_issues}) cannot exceed "
+                    f"total_quality_checked ({self.total_quality_checked})"
+                )
+
+        # Validate category counts against total
+        if (
+            self.category_counts
+            and self.total_category_count is not None
+            and sum(self.category_counts.values()) > self.total_category_count
+        ):
+            raise ValueError(
+                f"Sum of category counts ({sum(self.category_counts.values())}) cannot exceed "
+                f"total_category_count ({self.total_category_count})"
+            )
+
+    def compute_rates(self) -> CoverageQualityMetrics:
+        """Return a new instance with computed rates filled in where possible."""
+        rates = {
+            "valid_coordinate_rate": None,
+            "image_rights_ready_rate": None,
+            "operating_hours_available_rate": None,
+        }
+
+        # Compute coordinate rate only when both counts present and denominator > 0
+        if (
+            self.valid_coordinate_count is not None
+            and self.total_coordinate_count is not None
+            and self.total_coordinate_count > 0
+        ):
+            rates["valid_coordinate_rate"] = (
+                self.valid_coordinate_count / self.total_coordinate_count
+            )
+
+        # Compute image rights rate only when both counts present and denominator > 0
+        if (
+            self.image_rights_ready_count is not None
+            and self.total_image_count is not None
+            and self.total_image_count > 0
+        ):
+            rates["image_rights_ready_rate"] = (
+                self.image_rights_ready_count / self.total_image_count
+            )
+
+        # Compute operating hours rate only when both counts present and denominator > 0
+        if (
+            self.operating_hours_available_count is not None
+            and self.total_operating_hours_count is not None
+            and self.total_operating_hours_count > 0
+        ):
+            rates["operating_hours_available_rate"] = (
+                self.operating_hours_available_count / self.total_operating_hours_count
+            )
+
+        return CoverageQualityMetrics(**{**self.__dict__, **rates})
+
+    def to_public_dict(self) -> dict[str, Any]:
+        """Public-safe projection omitting internal metadata."""
+        return {
+            "source_name": self.source_name,
+            "dataset_name": self.dataset_name,
+            "category_coverage": (
+                {
+                    "categories": list((self.category_counts or {}).keys()),
+                    "counts": self.category_counts or {},
+                    "total_count": self.total_category_count,
+                }
+                if self.category_counts or self.total_category_count is not None
+                else None
+            ),
+            "coordinate_quality": (
+                {
+                    "valid_count": self.valid_coordinate_count,
+                    "total_count": self.total_coordinate_count,
+                    "valid_rate": self.valid_coordinate_rate,
+                }
+                if any(
+                    x is not None
+                    for x in [
+                        self.valid_coordinate_count,
+                        self.total_coordinate_count,
+                        self.valid_coordinate_rate,
+                    ]
+                )
+                else None
+            ),
+            "image_rights": (
+                {
+                    "ready_count": self.image_rights_ready_count,
+                    "total_count": self.total_image_count,
+                    "ready_rate": self.image_rights_ready_rate,
+                }
+                if any(
+                    x is not None
+                    for x in [
+                        self.image_rights_ready_count,
+                        self.total_image_count,
+                        self.image_rights_ready_rate,
+                    ]
+                )
+                else None
+            ),
+            "operating_hours": (
+                {
+                    "available_count": self.operating_hours_available_count,
+                    "total_count": self.total_operating_hours_count,
+                    "available_rate": self.operating_hours_available_rate,
+                }
+                if any(
+                    x is not None
+                    for x in [
+                        self.operating_hours_available_count,
+                        self.total_operating_hours_count,
+                        self.operating_hours_available_rate,
+                    ]
+                )
+                else None
+            ),
+            "data_quality": (
+                {
+                    "duplicate_count": self.duplicate_count,
+                    "quarantined_count": self.quarantined_count,
+                    "failed_validation_count": self.failed_validation_count,
+                    "total_checked": self.total_quality_checked,
+                }
+                if any(
+                    x is not None
+                    for x in [
+                        self.duplicate_count,
+                        self.quarantined_count,
+                        self.failed_validation_count,
+                        self.total_quality_checked,
+                    ]
+                )
+                else None
+            ),
+            "database_comparison": (
+                {
+                    "count": self.db_comparison_count,
+                    "status": self.db_comparison_status,
+                }
+                if self.db_comparison_count is not None or self.db_comparison_status is not None
+                else None
+            ),
+        }
 
 
 @dataclass(frozen=True)
@@ -50,7 +319,9 @@ class CoverageGap:
             "actual_regions": self.actual_regions,
             "expected_record_count": self.expected_record_count,
             "actual_record_count": self.actual_record_count,
-            "latest_receipt_at": self.latest_receipt_at.isoformat() if self.latest_receipt_at else None,
+            "latest_receipt_at": self.latest_receipt_at.isoformat()
+            if self.latest_receipt_at
+            else None,
         }
 
 
@@ -73,6 +344,7 @@ class ReconciliationReport:
     - Gap analysis vs expected coverage targets
     - Regional breakdown for nationwide validation
     - Freshness and governance reconciliation
+    - Denominator-safe quality metrics
     - Deterministic, offline-only, JSON-safe output
     """
 
@@ -80,13 +352,15 @@ class ReconciliationReport:
     total_sources: int
     usable_sources: int
     blocked_sources: int
+    rejected_sources: int
     stale_sources: int
     unknown_sources: int
     total_gaps: int
     gaps: tuple[CoverageGap, ...]
     regional_breakdown: tuple[RegionalCoverageBreakdown, ...]
     nationwide_coverage_complete: bool
-    total_distinct_records: int
+    total_source_scoped_record_count: int
+    quality_metrics: tuple[CoverageQualityMetrics, ...] = ()
 
     def to_public_dict(self) -> dict[str, Any]:
         """Metadata-only public projection safe for external reporting."""
@@ -96,11 +370,12 @@ class ReconciliationReport:
                 "total_sources": self.total_sources,
                 "usable_sources": self.usable_sources,
                 "blocked_sources": self.blocked_sources,
+                "rejected_sources": self.rejected_sources,
                 "stale_sources": self.stale_sources,
                 "unknown_sources": self.unknown_sources,
                 "total_gaps": self.total_gaps,
                 "nationwide_coverage_complete": self.nationwide_coverage_complete,
-                "total_distinct_records": self.total_distinct_records,
+                "total_source_scoped_record_count": self.total_source_scoped_record_count,
             },
             "gaps": [gap.to_public_dict() for gap in self.gaps],
             "regional_breakdown": [
@@ -113,6 +388,7 @@ class ReconciliationReport:
                 }
                 for r in self.regional_breakdown
             ],
+            "quality_metrics": [m.to_public_dict() for m in self.quality_metrics],
         }
 
 
@@ -168,6 +444,7 @@ def build_reconciliation_report(
         "jeju",
     ),
     generated_at: datetime | None = None,
+    quality_metrics: Sequence[CoverageQualityMetrics] | None = None,
 ) -> ReconciliationReport:
     """Build focused reconciliation report for full-ingest preparation.
 
@@ -175,15 +452,17 @@ def build_reconciliation_report(
     - Gap analysis against expected 17-province coverage
     - Regional breakdown for nationwide validation
     - Governance and freshness reconciliation
+    - Denominator-safe quality metrics (optional)
 
     Args:
         source_inventory: Official source inventory entries
         receipts: Coverage receipts to reconcile
         expected_regions: 17 provinces for nationwide coverage validation
         generated_at: Report generation timestamp (defaults to now)
+        quality_metrics: Optional denominator-safe quality metrics keyed by (source_name, dataset_name)
 
     Returns:
-        ReconciliationReport with gap analysis and regional breakdown
+        ReconciliationReport with gap analysis, regional breakdown, and quality metrics
     """
     if generated_at is None:
         generated_at = datetime.now(UTC)
@@ -193,13 +472,54 @@ def build_reconciliation_report(
         inventory=source_inventory, receipts=receipts, generated_at=generated_at
     )
 
-    # Analyze gaps and regional coverage
+    # Initialize gaps list before quality metrics processing
     gaps: list[CoverageGap] = []
+
+    # Process quality metrics if provided
+    validated_metrics: tuple[CoverageQualityMetrics, ...] = ()
+    if quality_metrics:
+        computed_metrics = []
+        # Build inventory lookup for scope validation
+        inventory_sources = {(entry.source_name, entry.dataset_name) for entry in source_inventory}
+
+        for metric in quality_metrics:
+            try:
+                # Compute rates and validate constraints
+                computed_metric = metric.compute_rates()
+
+                # Check if metric source exists in inventory
+                metric_key = (computed_metric.source_name, computed_metric.dataset_name)
+                if metric_key not in inventory_sources:
+                    gaps.append(
+                        CoverageGap(
+                            gap_type="scope_mismatch",
+                            source_name=computed_metric.source_name,
+                            dataset_name=computed_metric.dataset_name,
+                            description=f"Quality metrics provided for source not in inventory: {computed_metric.source_name}",
+                        )
+                    )
+                else:
+                    computed_metrics.append(computed_metric)
+
+            except ValueError as e:
+                # Reject invalid metrics without failing the entire report
+                gaps.append(
+                    CoverageGap(
+                        gap_type="scope_mismatch",
+                        source_name=metric.source_name,
+                        dataset_name=metric.dataset_name,
+                        description=f"Invalid quality metrics: {e}",
+                    )
+                )
+        validated_metrics = tuple(computed_metrics)
     regional_coverage: dict[str, RegionalCoverageBreakdown] = {}
-    source_status_by_region: dict[str, dict[str, CoverageState]] = defaultdict(lambda: defaultdict(str))
+    source_status_by_region: dict[str, dict[str, CoverageState]] = defaultdict(
+        lambda: defaultdict(str)
+    )
 
     usable_count = 0
     blocked_count = 0
+    rejected_count = 0
     stale_count = 0
     unknown_count = 0
     total_records = 0
@@ -210,6 +530,8 @@ def build_reconciliation_report(
             usable_count += 1
         elif source_summary.readiness == "blocked_external":
             blocked_count += 1
+        elif source_summary.readiness == "rejected":
+            rejected_count += 1
         elif source_summary.readiness == "stale":
             stale_count += 1
         else:
@@ -227,6 +549,18 @@ def build_reconciliation_report(
                     source_name=source_summary.source_name,
                     dataset_name=source_summary.dataset_name,
                     description="Source governance blocks ingest approval",
+                    latest_receipt_at=source_summary.latest_receipt_at,
+                )
+            )
+
+        # Check for rejected sources
+        if source_summary.readiness == "rejected":
+            gaps.append(
+                CoverageGap(
+                    gap_type="rejected_source",
+                    source_name=source_summary.source_name,
+                    dataset_name=source_summary.dataset_name,
+                    description="Source rejected from ingest pipeline",
                     latest_receipt_at=source_summary.latest_receipt_at,
                 )
             )
@@ -266,7 +600,6 @@ def build_reconciliation_report(
     # Build regional breakdown
     for region in expected_regions:
         region_has_coverage = False
-        region_record_count: int | None = None
         region_sources: list[str] = []
 
         for source_summary in p1_report.sources:
@@ -277,16 +610,11 @@ def build_reconciliation_report(
             ):
                 region_has_coverage = True
                 region_sources.append(source_summary.source_name)
-                if source_summary.distinct_record_count is not None:
-                    if region_record_count is None:
-                        region_record_count = 0
-                    # Approximate regional count as proportional share
-                    region_record_count += source_summary.distinct_record_count // len(source_summary.covered_regions or [1])
 
         regional_coverage[region] = RegionalCoverageBreakdown(
             region_code=region,
             has_coverage=region_has_coverage,
-            record_count=region_record_count,
+            record_count=None,  # No proven per-region count available
             source_status="usable" if region_has_coverage else "unknown",
             sources_covered=tuple(region_sources),
         )
@@ -311,13 +639,15 @@ def build_reconciliation_report(
         total_sources=len(p1_report.sources),
         usable_sources=usable_count,
         blocked_sources=blocked_count,
+        rejected_sources=rejected_count,
         stale_sources=stale_count,
         unknown_sources=unknown_count,
         total_gaps=len(gaps),
         gaps=tuple(gaps),
         regional_breakdown=tuple(regional_coverage.values()),
         nationwide_coverage_complete=len(missing_regions) == 0,
-        total_distinct_records=total_records,
+        total_source_scoped_record_count=total_records,
+        quality_metrics=validated_metrics,
     )
 
 
@@ -352,9 +682,7 @@ def validate_full_ingest_dry_run(
     # Check nationwide coverage requirement
     if require_nationwide_coverage and not reconciliation_report.nationwide_coverage_complete:
         missing_regions = [
-            rb.region_code
-            for rb in reconciliation_report.regional_breakdown
-            if not rb.has_coverage
+            rb.region_code for rb in reconciliation_report.regional_breakdown if not rb.has_coverage
         ]
         blockers.append(
             f"Nationwide coverage incomplete: {len(missing_regions)} regions missing coverage ({', '.join(sorted(missing_regions))})"
@@ -362,11 +690,17 @@ def validate_full_ingest_dry_run(
 
     # Check all sources usable requirement
     if require_all_sources_usable:
-        non_usable = reconciliation_report.blocked_sources + reconciliation_report.stale_sources + reconciliation_report.unknown_sources
+        non_usable = (
+            reconciliation_report.blocked_sources
+            + reconciliation_report.rejected_sources
+            + reconciliation_report.stale_sources
+            + reconciliation_report.unknown_sources
+        )
         if non_usable > 0:
             blockers.append(
                 f"Require all sources usable: {non_usable} sources not usable "
                 f"({reconciliation_report.blocked_sources} blocked, "
+                f"{reconciliation_report.rejected_sources} rejected, "
                 f"{reconciliation_report.stale_sources} stale, "
                 f"{reconciliation_report.unknown_sources} unknown)"
             )
@@ -381,14 +715,23 @@ def validate_full_ingest_dry_run(
     governance_gaps = [g for g in reconciliation_report.gaps if g.gap_type == "governance_blocked"]
     if governance_gaps:
         blocked_source_names = sorted(set(g.source_name for g in governance_gaps))
-        blockers.append(f"Governance blocks {len(blocked_source_names)} sources: {', '.join(blocked_source_names)}")
+        blockers.append(
+            f"Governance blocks {len(blocked_source_names)} sources: {', '.join(blocked_source_names)}"
+        )
 
     # Add warnings for non-critical issues
     if reconciliation_report.unknown_sources > 0:
-        warnings.append(f"{reconciliation_report.unknown_sources} sources have unknown coverage status")
+        warnings.append(
+            f"{reconciliation_report.unknown_sources} sources have unknown coverage status"
+        )
 
     total_approved = reconciliation_report.usable_sources
-    total_blocked = reconciliation_report.blocked_sources + reconciliation_report.stale_sources + reconciliation_report.unknown_sources
+    total_blocked = (
+        reconciliation_report.blocked_sources
+        + reconciliation_report.rejected_sources
+        + reconciliation_report.stale_sources
+        + reconciliation_report.unknown_sources
+    )
 
     return FullIngestDryRunValidation(
         is_approved=len(blockers) == 0,
@@ -422,7 +765,11 @@ def reconcile_receipt_coverage(
         CoverageGap if a gap is identified, None if coverage is adequate
     """
     # Build P1 report for this specific source
-    matching_inventory = [inv for inv in source_inventory if inv.source_name == source_name and inv.dataset_name == dataset_name]
+    matching_inventory = [
+        inv
+        for inv in source_inventory
+        if inv.source_name == source_name and inv.dataset_name == dataset_name
+    ]
     if not matching_inventory:
         return CoverageGap(
             gap_type="missing_source",
@@ -445,28 +792,58 @@ def reconcile_receipt_coverage(
 
     summary = p1_report.sources[0]
 
-    # Check readiness state
-    if summary.readiness != "usable":
+    # Check readiness state with deterministic mapping
+    if summary.readiness == "blocked_external":
         return CoverageGap(
-            gap_type="governance_blocked" if summary.readiness == "blocked_external" else "stale_coverage",
+            gap_type="governance_blocked",
             source_name=source_name,
             dataset_name=dataset_name,
-            description=f"Source readiness is {summary.readiness}, not usable",
+            description="Source readiness is blocked_external, not usable",
+            actual_record_count=summary.distinct_record_count,
+            latest_receipt_at=summary.latest_receipt_at,
+        )
+    if summary.readiness == "rejected":
+        return CoverageGap(
+            gap_type="rejected_source",
+            source_name=source_name,
+            dataset_name=dataset_name,
+            description="Source readiness is rejected, not usable",
+            actual_record_count=summary.distinct_record_count,
+            latest_receipt_at=summary.latest_receipt_at,
+        )
+    if summary.readiness == "stale":
+        return CoverageGap(
+            gap_type="stale_coverage",
+            source_name=source_name,
+            dataset_name=dataset_name,
+            description="Source readiness is stale, not usable",
+            actual_record_count=summary.distinct_record_count,
+            latest_receipt_at=summary.latest_receipt_at,
+        )
+    if summary.readiness == "unknown":
+        return CoverageGap(
+            gap_type="no_coverage",
+            source_name=source_name,
+            dataset_name=dataset_name,
+            description="Source readiness is unknown, no coverage",
             actual_record_count=summary.distinct_record_count,
             latest_receipt_at=summary.latest_receipt_at,
         )
 
     # Check minimum record count
-    if expected_minimum_records is not None and summary.distinct_record_count is not None:
-        if summary.distinct_record_count < expected_minimum_records:
-            return CoverageGap(
-                gap_type="scope_mismatch",
-                source_name=source_name,
-                dataset_name=dataset_name,
-                description=f"Record count below minimum: {summary.distinct_record_count} < {expected_minimum_records}",
-                expected_record_count=expected_minimum_records,
-                actual_record_count=summary.distinct_record_count,
-                latest_receipt_at=summary.latest_receipt_at,
-            )
+    if (
+        expected_minimum_records is not None
+        and summary.distinct_record_count is not None
+        and summary.distinct_record_count < expected_minimum_records
+    ):
+        return CoverageGap(
+            gap_type="scope_mismatch",
+            source_name=source_name,
+            dataset_name=dataset_name,
+            description=f"Record count below minimum: {summary.distinct_record_count} < {expected_minimum_records}",
+            expected_record_count=expected_minimum_records,
+            actual_record_count=summary.distinct_record_count,
+            latest_receipt_at=summary.latest_receipt_at,
+        )
 
     return None
