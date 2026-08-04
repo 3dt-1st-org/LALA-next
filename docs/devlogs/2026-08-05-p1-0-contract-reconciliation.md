@@ -1,8 +1,8 @@
 # P1-0 Contract Reconciliation Phase Devlog
 
-**Date**: 2026-08-05  
-**Phase**: P1-0 — canonical migration ordering and shared contract reconciliation  
-**Base**: `origin/main` `18ef242`  
+**Date**: 2026-08-05
+**Phase**: P1-0 — canonical migration ordering and shared contract reconciliation
+**Base**: `origin/main` `18ef242`
 **Worktree**: `geondongkim/lala-contract-reconciliation-p1-0-refresh`
 
 ## Session Goals
@@ -105,7 +105,7 @@
 | **API** | Local Signals public read | Backend team | IMPLEMENTED_NOT_RUNTIME_VERIFIED |
 | **API** | Review ingestion governance | Backend team | CURRENT |
 | **Worker** | Review enrichment pipeline | Worker team | TARGET |
-| **Flutter** | Local Signals actions | Mobile team | DRAFT_PR (#77) |
+| **Flutter** | Local Signals actions | Mobile team | IMPLEMENTED_NOT_RUNTIME_VERIFIED |
 | **Test** | Canonical SQL tests | QA team | CURRENT |
 | **Test** | API schema/safety tests | QA team | CURRENT |
 
@@ -123,35 +123,33 @@
 - ✅ Planning documentation updates
 - ✅ PR status corrections to reflect merged state
 - ✅ Phase devlog creation
+- ✅ Local verification tests passed
+- ✅ Branch pushed to origin
+- ✅ PR #99 created as Draft
 
-**In Progress**:
-- 🔄 Running verification tests
-- 🔄 Final git diff checks
-- 🔄 Branch push and PR creation
-
-**Pending**:
-- ⏳ Push to origin
-- ⏳ Create/update Draft PR to main
-- ⏳ Final review and approval
+**CI Status**:
+- ⚠️ First remote Unix CI attempt failed due to devlog formatting hooks (trailing whitespace and final newline)
+- 🔄 Minimal correction commit required to resolve formatting issues
+- 🔄 Re-run verification locally after correction before claiming green CI
 
 ## Next Steps
 
-1. **Run Verification Tests**:
-   - `pytest apps/api/tests/test_canonical_sql.py -v`
-   - Full test suite execution
-   - `ruff check` and `ruff format --check`
-   - `pre-commit run --all-files`
-   - `git diff --check`
+1. **CI Correction**:
+   - Minimal commit to fix devlog formatting (trailing whitespace and final newline)
+   - Re-run verification tests locally: `pytest apps/api/tests/test_canonical_sql.py -q`
+   - Re-run linting and formatting checks: `ruff check .`, `ruff format --check .`
+   - Re-run pre-commit hooks: `pre-commit run --all-files`
+   - Verify git diff is clean: `git diff --check origin/main...HEAD`
 
-2. **Push and PR**:
-   - Push branch `geondongkim/lala-contract-reconciliation-p1-0-refresh` to origin
-   - Create/update single Draft PR to main
-   - Include comprehensive description with rebase details and verification results
+2. **Final Push**:
+   - Push corrections with non-destructive fast-forward update
+   - Leave PR #99 as Draft
+   - Document final CI status in both P1-0 documents
 
-3. **Final Validation**:
-   - Ensure all CI checks pass
-   - Verify PR description accurately reflects work performed
-   - Confirm no prohibited operations included (P1-1/P1-2/P1-3, bulk ingest, live API calls, database writes, deployment)
+3. **Post-Correction Validation**:
+   - Confirm remote head matches expected commit
+   - Verify CI checks pass after formatting fixes
+   - Document final local/remote head in commit message
 
 ## Security and Scope Compliance
 
@@ -191,4 +189,4 @@
 
 ---
 
-**Session Summary**: Successfully rebased P1-0 contract reconciliation work onto latest origin/main (18ef242), resolved conflicts, verified canonical SQL baseline integrity, updated planning documentation with current facts, and maintained strict scope compliance. Ready for verification tests and final PR creation.
+**Session Summary**: Successfully rebased P1-0 contract reconciliation work onto latest origin/main (18ef242), resolved conflicts, verified canonical SQL baseline integrity, updated planning documentation with current facts, and maintained strict scope compliance. First remote Unix CI failed due to devlog formatting hooks; minimal correction commit applied to resolve trailing whitespace and final newline issues. Ready for verification tests and final push.

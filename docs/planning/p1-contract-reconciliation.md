@@ -67,7 +67,7 @@ reconciliation evidence.
 | RAG chunk, embedding generation, and citation | `036_rag_knowledge_tables.sql` current schema | `db_repository` retrieval context and docent service | `rag_index.py`/reindex tooling; future owner not fixed for WIP 064 | Docent client receives safe script/audio only | RAG index/retrieval/docent safety tests | Current chunk path is `IMPLEMENTED_NOT_RUNTIME_VERIFIED`; metadata expansion and WIP 064 are `TARGET` with owner unresolved | No 064 migration or reindex until the owner, raw-body exclusion, metadata schema, and canonical number are approved |
 | Docent script/audio | Current docent tables in `020_travel_domain_tables.sql`; no new P1 migration | `docent_service.py`; `/api/v1/docents/script` and `/audio` | Docent generation/QA role contracts | `LalaBackend.createDocentScript/createDocentAudio` | `test_docent_service.py`, API/OpenAPI tests | `IMPLEMENTED_NOT_RUNTIME_VERIFIED`; live AI/TTS is `BLOCKED_EXTERNAL` | Additive cache/metadata migration requires model-role, provenance, language, and cost decisions |
 | Plan slot, weather intervention, travel time | `020_travel_domain_tables.sql` current weather/place data | `planner_service.daily_plan`, intervention routes | `weather_observation_refresh.py`; future travel-time worker seam | `plan_page.dart`; generated `DailyPlanSlot` | `test_planner_service.py`, weather refresh tests | Current thin plan is `IMPLEMENTED_NOT_RUNTIME_VERIFIED`; four slots/travel time are `TARGET` and provider is `BLOCKED_EXTERNAL` | New plan migration only after slot schema, opening-hours source, region precision, and provider decision |
-| Local Signals canonical `category=all` lookup, translation, freshness | `063_local_signals_contract.sql`; first-party only | `LocalSignalRepository.list_public_signals`; public Local Signals schemas/routes | No translation or aggregate worker in P1-0 | `LalaApiBackend.getLocalSignals`; cross-category place action remains in PR #77 | Local Signals API/schema/safety tests; #77 Flutter tests remain Draft | Public read baseline is `IMPLEMENTED_NOT_RUNTIME_VERIFIED`; #77 action is `DRAFT_PR`; translation/freshness enrichment is `TARGET` | No migration change without preserving canonical place IDs, coarse region, locale exclusivity, and safe public projection |
+| Local Signals canonical `category=all` lookup, translation, freshness | `063_local_signals_contract.sql`; first-party only | `LocalSignalRepository.list_public_signals`; public Local Signals schemas/routes | No translation or aggregate worker in P1-0 | `LalaApiBackend.getLocalSignals`; cross-category place action merged in PR #77 | Local Signals API/schema/safety tests; #77 Flutter tests are merged | Public read baseline is `IMPLEMENTED_NOT_RUNTIME_VERIFIED`; #77 action is `IMPLEMENTED_NOT_RUNTIME_VERIFIED`; translation/freshness enrichment is `TARGET` | No migration change without preserving canonical place IDs, coarse region, locale exclusivity, and safe public projection |
 
 ## PR and branch dependencies
 
@@ -83,16 +83,24 @@ The following PRs have been merged and are now part of the `origin/main` baselin
 Current open Draft PRs that are not dependencies of this P1-0 slice:
 
 - [PR #96](https://github.com/3dt-1st-org/LALA-next/pull/96), head
-  `18ef242`: P0 runtime secret contract checkpoint.
-- [PR #97](https://github.com/3dt-1st-org/LALA-next/pull/97): P2 official media
-  probe contract.
-- [PR #98](https://github.com/3dt-1st-org/LALA-next/pull/98): AWS deployment runtime
-  contract.
+  `cff0e65`: fix(infra): remove literal AWS identifiers and enforce runtime
+  contract in deployment.
+- [PR #97](https://github.com/3dt-1st-org/LALA-next/pull/97), head
+  `054ce6c`: feat(api): P2 official media probe contract.
+- [PR #98](https://github.com/3dt-1st-org/LALA-next/pull/98), head
+  `3b5a050`: feat(security): implement P0 runtime secret contract checkpoint.
+- [PR #99](https://github.com/3dt-1st-org/LALA-next/pull/99), head
+  `9c6c6fa`: docs: finalize P1-0 contract reconciliation phase.
 
 P1-0 is based directly on `origin/main=18ef242` and does not import or modify
 any of those PRs. P1-0 also does not consume the root checkout's RAG WIP
 064 migration. P1-1 may start only as a new branch after this P1-0 contract
 PR is reviewed and merged.
+
+**PR #99 CI Status**: The first remote Unix CI attempt failed only because
+the devlog formatting hooks modified the file (trailing whitespace and final
+newline). A minimal correction commit was applied to resolve these formatting
+issues. Verification must be re-run locally before claiming green CI.
 
 ## P1-1 next slice
 
