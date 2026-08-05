@@ -169,3 +169,300 @@ def test_fetch_hybrid_candidates_rejects_blank_query():
             embedding_method="local-hash",
             filters=rag_retrieval.RetrievalFilters(),
         )
+
+
+# ---------------------------------------------------------------------------
+# P1-7: Mini rerank with OpenAI completion
+# ---------------------------------------------------------------------------
+
+
+def test_parse_rerank_response_valid_json():
+    raw = '{"reranked_ids": ["place:a", "place:b", "place:c"]}'
+    candidate_ids = {"place:a", "place:b", "place:c"}
+    result = rag_retrieval.parse_rerank_response(raw, candidate_ids)
+    assert result == ["place:a", "place:b", "place:c"]
+
+
+def test_parse_rerank_response_rejects_missing_field():
+    raw = '{"ids": ["a", "b"]}'
+    candidate_ids = {"place:a", "place:b"}
+    with pytest.raises(ValueError, match="must contain 'reranked_ids'"):
+        rag_retrieval.parse_rerank_response(raw, candidate_ids)
+
+
+def test_parse_rerank_response_rejects_non_list():
+    raw = '{"reranked_ids": "not_a_list"}'
+    candidate_ids = {"place:a", "place:b"}
+    with pytest.raises(ValueError, match="must be a list"):
+        rag_retrieval.parse_rerank_response(raw, candidate_ids)
+
+
+def test_parse_rerank_response_rejects_empty_string_id():
+    raw = '{"reranked_ids": ["a", "", "c"]}'
+    candidate_ids = {"a", "c"}
+    with pytest.raises(ValueError, match="must be a non-empty string"):
+        rag_retrieval.parse_rerank_response(raw, candidate_ids)
+
+
+def test_parse_rerank_response_rejects_non_string_id():
+    raw = '{"reranked_ids": ["a", 123, "c"]}'
+    candidate_ids = {"a", "c"}
+    with pytest.raises(ValueError, match="must be a non-empty string"):
+        rag_retrieval.parse_rerank_response(raw, candidate_ids)
+
+
+def test_parse_rerank_response_strips_whitespace():
+    raw = '{"reranked_ids": ["  place:a  ", " place:b ", "place:c"]}'
+    candidate_ids = {"place:a", "place:b", "place:c"}
+    result = rag_retrieval.parse_rerank_response(raw, candidate_ids)
+    assert result == ["place:a", "place:b", "place:c"]
+
+
+def test_parse_rerank_response_rejects_unknown_ids():
+    raw = '{"reranked_ids": ["place:a", "unknown:x", "place:b"]}'
+    candidate_ids = {"place:a", "place:b"}
+    with pytest.raises(ValueError, match="Unknown source_ids"):
+        rag_retrieval.parse_rerank_response(raw, candidate_ids)
+
+
+def test_parse_rerank_response_rejects_duplicate_ids():
+    raw = '{"reranked_ids": ["place:a", "place:b", "place:a"]}'
+    candidate_ids = {"place:a", "place:b"}
+    with pytest.raises(ValueError, match="Duplicate source_ids"):
+        rag_retrieval.parse_rerank_response(raw, candidate_ids)
+
+
+def test_rerank_candidates_with_completion_function(monkeypatch):
+    candidates = [
+        _result("place_profile", "a", similarity=0.9),
+        _result("place_profile", "b", similarity=0.8),
+        _result("place_profile", "c", similarity=0.7),
+    ]
+
+    def fake_completion(prompt):
+        # Simulate AI reordering: b should come first
+        return '{"reranked_ids": ["b", "a", "c"]}'
+
+    reranked, reranker_type = rag_retrieval.rerank_candidates(
+        candidates=candidates,
+        query="수원 명소",
+        completion_fn=fake_completion,
+    )
+
+    assert reranker_type == "mini"
+    assert [c.source_id for c in reranked] == ["b", "a", "c"]
+
+
+def test_rerank_candidates_falls_back_on_completion_error(monkeypatch):
+    candidates = [
+        _result("place_profile", "a", similarity=0.9),
+        _result("place_profile", "b", similarity=0.8),
+    ]
+
+    def fake_completion(prompt):
+        raise ValueError("AI service unavailable")
+
+    reranked, reranker_type = rag_retrieval.rerank_candidates(
+        candidates=candidates,
+        query="수원 명소",
+        completion_fn=fake_completion,
+    )
+
+    assert reranker_type == "rrf"
+    assert [c.source_id for c in reranked] == ["a", "b"]
+
+
+def test_rerank_candidates_falls_back_on_invalid_json(monkeypatch):
+    candidates = [
+        _result("place_profile", "a", similarity=0.9),
+        _result("place_profile", "b", similarity=0.8),
+    ]
+
+    def fake_completion(prompt):
+        return "INVALID JSON {{{"
+
+    reranked, reranker_type = rag_retrieval.rerank_candidates(
+        candidates=candidates,
+        query="수원 명소",
+        completion_fn=fake_completion,
+    )
+
+    assert reranker_type == "rrf"
+    assert [c.source_id for c in reranked] == ["a", "b"]
+
+
+def test_rerank_candidates_without_completion_function():
+    candidates = [
+        _result("place_profile", "a", similarity=0.9),
+        _result("place_profile", "b", similarity=0.8),
+    ]
+
+    reranked, reranker_type = rag_retrieval.rerank_candidates(
+        candidates=candidates,
+        query="수원 명소",
+        completion_fn=None,
+    )
+
+    assert reranker_type == "rrf"
+    assert [c.source_id for c in reranked] == ["a", "b"]
+
+
+def test_rerank_candidates_preserves_unranked_candidates(monkeypatch):
+    candidates = [
+        _result("place_profile", "a", similarity=0.9),
+        _result("place_profile", "b", similarity=0.8),
+        _result("place_profile", "c", similarity=0.7),
+    ]
+
+    def fake_completion(prompt):
+        # AI only returns top 2, third should be appended in original order
+        return '{"reranked_ids": ["b", "a"]}'
+
+    reranked, reranker_type = rag_retrieval.rerank_candidates(
+        candidates=candidates,
+        query="수원 명소",
+        completion_fn=fake_completion,
+    )
+
+    assert reranker_type == "mini"
+    assert [c.source_id for c in reranked] == ["b", "a", "c"]
+
+
+def test_rerank_candidates_empty_candidates():
+    reranked, reranker_type = rag_retrieval.rerank_candidates(
+        candidates=[],
+        query="수원 명소",
+        completion_fn=lambda p: "{}",
+    )
+
+    assert reranker_type == "rrf"
+    assert reranked == []
+
+
+def test_rerank_candidates_falls_back_on_unknown_ids(monkeypatch):
+    candidates = [
+        _result("place_profile", "a", similarity=0.9),
+        _result("place_profile", "b", similarity=0.8),
+    ]
+
+    def fake_completion(prompt):
+        # AI returns unknown ID
+        return '{"reranked_ids": ["unknown_id", "a"]}'
+
+    reranked, reranker_type = rag_retrieval.rerank_candidates(
+        candidates=candidates,
+        query="수원 명소",
+        completion_fn=fake_completion,
+    )
+
+    # Should fall back to RRF on unknown IDs
+    assert reranker_type == "rrf"
+    assert [c.source_id for c in reranked] == ["a", "b"]
+
+
+def test_rerank_candidates_falls_back_on_duplicate_ids(monkeypatch):
+    candidates = [
+        _result("place_profile", "a", similarity=0.9),
+        _result("place_profile", "b", similarity=0.8),
+    ]
+
+    def fake_completion(prompt):
+        # AI returns duplicate IDs
+        return '{"reranked_ids": ["a", "b", "a"]}'
+
+    reranked, reranker_type = rag_retrieval.rerank_candidates(
+        candidates=candidates,
+        query="수원 명소",
+        completion_fn=fake_completion,
+    )
+
+    # Should fall back to RRF on duplicate IDs
+    assert reranker_type == "rrf"
+    assert [c.source_id for c in reranked] == ["a", "b"]
+
+
+def test_rerank_prompt_sanitizes_body_text(monkeypatch):
+    """Test that rerank prompt does not include raw body text or secrets."""
+    candidates = [
+        _result("place_profile", "place:a", similarity=0.9, category="attraction"),
+        _result("place_profile", "place:b", similarity=0.8, category="restaurant"),
+    ]
+
+    prompt_captures = []
+
+    def fake_completion(prompt):
+        prompt_captures.append(prompt)
+        return '{"reranked_ids": ["place:a", "place:b"]}'
+
+    rag_retrieval.rerank_candidates(
+        candidates=candidates,
+        query="수원에서 가볼만한 곳",
+        completion_fn=fake_completion,
+    )
+
+    prompt = prompt_captures[0]
+
+    # Should NOT contain raw body text from candidates
+    assert "본문" not in prompt
+    assert "body_ko" not in prompt
+    assert "body_en" not in prompt
+
+    # Should NOT contain secrets or internal patterns
+    assert "password" not in prompt.lower()
+    assert "secret" not in prompt.lower()
+    assert "dsn" not in prompt.lower()
+    assert "api_key" not in prompt.lower()
+
+    # Should contain safe metadata fields
+    assert "place:a" in prompt
+    assert "place:b" in prompt
+    assert "attraction" in prompt or "restaurant" in prompt
+    assert "ID:" in prompt
+    assert "type:" in prompt or "source_type" in prompt
+    assert "relevance:" in prompt
+
+
+def test_rerank_prompt_truncates_long_inputs(monkeypatch):
+    """Test that rerank prompt truncates long titles and queries."""
+    # Create candidate with long title directly
+    long_title = "A" * 200
+    candidate = rag_retrieval.RagSearchResult(
+        source_type="place_profile",
+        source_id="a",
+        source_table="travel.places",
+        title_ko=long_title,
+        body_ko="a 본문",
+        place_id=None,
+        metadata={},
+        similarity=0.9,
+        embedding_model="local-hash-v1",
+        updated_at="2026-07-26T00:00:00+00:00",
+    )
+
+    prompt_captures = []
+
+    def fake_completion(prompt):
+        prompt_captures.append(prompt)
+        return '{"reranked_ids": ["a"]}'
+
+    rag_retrieval.rerank_candidates(
+        candidates=[candidate],
+        query="수원" + "에서 가볼만한 곳" * 50,  # Very long query
+        completion_fn=fake_completion,
+    )
+
+    prompt = prompt_captures[0]
+
+    # Title should be truncated to 100 chars (full 200 should not be present)
+    full_200_as = "A" * 200
+    assert full_200_as not in prompt
+
+    # Truncated 100 A's should be present
+    truncated_100_as = "A" * 100
+    assert truncated_100_as in prompt
+
+    # Query should be truncated to ~200 chars
+    lines = prompt.split("\n")
+    query_line = [line for line in lines if line.startswith("Query:")]
+    assert len(query_line) == 1
+    assert len(query_line[0]) < 300  # Query prefix + truncated content

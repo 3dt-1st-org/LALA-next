@@ -64,18 +64,25 @@ def generate_script(request: DocentScriptRequest) -> dict:
     settings = get_settings()
     retrieval_mode = (settings.rag_retrieval_mode or "legacy").strip().lower()
     if retrieval_mode == "hybrid":
-        grounding_context = db_repository.fetch_docent_knowledge_context_hybrid(
+        hybrid_result = db_repository.fetch_docent_knowledge_context_hybrid_result(
             place_id=request.place_id,
             query=_retrieval_query(request),
             category=request.category,
             language=request.language,
             top_k=3,
+            reranker="mini" if ai_service.rerank_ai_enabled() else "rrf",
+            completion_fn=ai_service.rerank_docent_candidates
+            if ai_service.rerank_ai_enabled()
+            else None,
         )
+        grounding_context = hybrid_result["rows"]
+        retrieval_meta = hybrid_result["retrieval"]
     else:
         grounding_context = db_repository.fetch_docent_knowledge_context(
             place_id=request.place_id,
             limit=3,
         )
+        retrieval_meta = None
     if not grounding_context:
         grounding_context = db_repository.fetch_docent_place_profile_context(
             place_id=request.place_id,
@@ -152,12 +159,14 @@ def generate_script(request: DocentScriptRequest) -> dict:
     }
     if retrieval_mode == "hybrid":
         # Opt-in, provenance-safe: citation pointers + retrieval meta appear only in hybrid
-        # mode (legacy responses are unchanged). RRF-only — no online mini rerank in this slice.
+        # mode (legacy responses are unchanged). Supports both RRF and mini reranker.
         response["citations"] = build_citations(grounding_context)
         response["retrieval"] = {
             "mode": "hybrid",
-            "reranker": "rrf",
+            "reranker": retrieval_meta.get("reranker", "rrf") if retrieval_meta else "rrf",
             "selected": len(grounding_context),
+            "candidate_pool": retrieval_meta.get("candidate_pool", 0) if retrieval_meta else 0,
+            "fallback_reason": retrieval_meta.get("fallback_reason") if retrieval_meta else None,
             "embedding_generation": settings.rag_embedding_generation,
         }
     return response

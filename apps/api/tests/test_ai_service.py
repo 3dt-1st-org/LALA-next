@@ -4,6 +4,9 @@ import sys
 import types
 from types import SimpleNamespace
 
+import pytest
+
+from apps.api.app.core.errors import ServiceError
 from apps.api.app.schemas.docent import DocentScriptRequest
 from apps.api.app.services import ai_service
 
@@ -188,3 +191,165 @@ def test_generate_docent_script_prefers_docent_specific_model(monkeypatch):
     ai_service.generate_docent_script_text(request)
 
     assert captured["completion"]["model"] == "docent-mini-model"
+
+
+def test_rerank_ai_enabled_resolves_docent_qa_role(monkeypatch):
+    """rerank_ai_enabled resolves docent_qa role with valid configuration."""
+    monkeypatch.setattr(
+        ai_service,
+        "get_settings",
+        lambda: SimpleNamespace(
+            enable_live_ai=True,
+            openai_api_key="test-openai-key",  # pragma: allowlist secret
+            openai_base_url="https://api.openai.com/v1",
+            openai_docent_model="gpt-5.4-mini",
+        ),
+    )
+
+    assert ai_service.rerank_ai_enabled() is True
+
+
+def test_rerank_ai_enabled_requires_explicit_flag(monkeypatch):
+    """rerank_ai_enabled requires enable_live_ai flag."""
+    monkeypatch.setattr(
+        ai_service,
+        "get_settings",
+        lambda: SimpleNamespace(
+            enable_live_ai=False,
+            openai_api_key="test-openai-key",  # pragma: allowlist secret
+            openai_base_url="https://api.openai.com/v1",
+            openai_docent_model="gpt-5.4-mini",
+        ),
+    )
+
+    assert ai_service.rerank_ai_enabled() is False
+
+
+def test_rerank_ai_enabled_requires_api_key(monkeypatch):
+    """rerank_ai_enabled requires OpenAI API key."""
+    monkeypatch.setattr(
+        ai_service,
+        "get_settings",
+        lambda: SimpleNamespace(
+            enable_live_ai=True,
+            openai_api_key="",  # Empty key
+            openai_base_url="https://api.openai.com/v1",
+            openai_docent_model="gpt-5.4-mini",
+        ),
+    )
+
+    assert ai_service.rerank_ai_enabled() is False
+
+
+def test_rerank_ai_enabled_rejects_azure_openai_host(monkeypatch):
+    """rerank_ai_enabled rejects Azure OpenAI base URLs."""
+    monkeypatch.setattr(
+        ai_service,
+        "get_settings",
+        lambda: SimpleNamespace(
+            enable_live_ai=True,
+            openai_api_key="test-openai-key",  # pragma: allowlist secret
+            openai_base_url="https://test.openai.azure.com/v1",
+            openai_docent_model="gpt-5.4-mini",
+        ),
+    )
+
+    assert ai_service.rerank_ai_enabled() is False
+
+
+def test_rerank_ai_enabled_rejects_invalid_base_url(monkeypatch):
+    """rerank_ai_enabled rejects invalid base URL."""
+    monkeypatch.setattr(
+        ai_service,
+        "get_settings",
+        lambda: SimpleNamespace(
+            enable_live_ai=True,
+            openai_api_key="test-openai-key",  # pragma: allowlist secret
+            openai_base_url="not-a-valid-url",
+            openai_docent_model="gpt-5.4-mini",
+        ),
+    )
+
+    assert ai_service.rerank_ai_enabled() is False
+
+
+def test_rerank_ai_enabled_accepts_custom_settings(monkeypatch):
+    """rerank_ai_enabled accepts custom settings for testing."""
+    custom_settings = SimpleNamespace(
+        enable_live_ai=True,
+        openai_api_key="custom-test-key",  # pragma: allowlist secret
+        openai_base_url="https://api.openai.com/v1",
+        openai_docent_model="gpt-5.4-mini",
+    )
+
+    assert ai_service.rerank_ai_enabled(custom_settings) is True
+
+    # Custom settings without flag
+    custom_settings.enable_live_ai = False
+    assert ai_service.rerank_ai_enabled(custom_settings) is False
+
+
+def test_rerank_docent_candidates_uses_rerank_gate(monkeypatch):
+    """rerank_docent_candidates uses rerank_ai_enabled gate."""
+    called: list[str] = []
+
+    def fake_completion(prompt: str) -> str:
+        called.append(prompt)
+        return '{"reranked_ids": ["id1", "id2", "id3"]}'
+
+    monkeypatch.setattr(
+        ai_service,
+        "get_settings",
+        lambda: SimpleNamespace(
+            enable_live_ai=True,
+            openai_api_key="test-openai-key",  # pragma: allowlist secret
+            openai_base_url="https://api.openai.com/v1",
+            openai_docent_model="gpt-5.4-mini",
+        ),
+    )
+    monkeypatch.setattr(ai_service, "rerank_ai_enabled", lambda s: True)
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            return SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(content='{"reranked_ids": ["id1", "id2", "id3"]}')
+                    )
+                ]
+            )
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs):
+            self.chat = SimpleNamespace(completions=FakeCompletions())
+
+    fake_openai = types.ModuleType("openai")
+    fake_openai.OpenAI = FakeOpenAI
+    monkeypatch.setitem(sys.modules, "openai", fake_openai)
+
+    prompt = "Test rerank prompt"
+    result = ai_service.rerank_docent_candidates(prompt)
+
+    assert result == '{"reranked_ids": ["id1", "id2", "id3"]}'
+
+
+def test_rerank_docent_candidates_fails_when_rerank_gate_disabled(monkeypatch):
+    """rerank_docent_candidates raises error when rerank_ai_enabled is False."""
+    monkeypatch.setattr(
+        ai_service,
+        "get_settings",
+        lambda: SimpleNamespace(
+            enable_live_ai=False,
+            openai_api_key="test-openai-key",  # pragma: allowlist secret
+            openai_base_url="https://api.openai.com/v1",
+            openai_docent_model="gpt-5.4-mini",
+        ),
+    )
+    monkeypatch.setattr(ai_service, "rerank_ai_enabled", lambda s: False)
+
+    with pytest.raises(ServiceError) as exc_info:
+        ai_service.rerank_docent_candidates("Test prompt")
+
+    assert exc_info.value.code == "AI_NOT_CONFIGURED"
+    assert exc_info.value.retryable is False
+    assert "reranking is not enabled" in exc_info.value.message.lower()
