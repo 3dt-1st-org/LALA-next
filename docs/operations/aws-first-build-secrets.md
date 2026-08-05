@@ -30,10 +30,16 @@ LALA-next Flutter 빌드 시크릿 해결은 **AWS Systems Manager Parameter Sto
    - IAM 권한: `secretsmanager:GetSecretValue`
    - **매핑 상태**: 원격 시크릿 매핑 미확인
 
-3. **로컬 dotenv 파일** (최종)
+3. **프로세스 환경 변수** (폴백)
+   - 이미 내보낸(exported) 프로세스 환경 변수는 AWS 원본 소스를 사용할 수 없을 때만 폴백으로 사용됨
+   - AWS SSM/SM이 사용 가능한 경우, 프로세스 환경 변수가 우선순위에서 패배함
+   - 이는 로컬 개발 환경에서 원격 소스를 일시적으로 우회하는 데 사용할 수 있음
+
+4. **로컬 dotenv 파일** (최종)
    - `.env.local` (우선)
    - `.env` (차선)
-   - 이미 설정된 환경 변수는 덮어쓰지 않음
+
+5. **Fail-closed**
 
 4. **Fail-closed**
    - 모든 소스에서 값이 없으면 빌드 실패
@@ -78,6 +84,26 @@ LALA-next Flutter 빌드 시크릿 해결은 **AWS Systems Manager Parameter Sto
 # .env.local 또는 .env
 KAKAO_JAVASCRIPT_KEY=your-local-development-key
 ```
+
+### 프로세스 환경 변수 동작
+
+이미 내보낸(exported) 프로세스 환경 변수는 **폴백**으로 처리되며 **오버라이드**가 아닙니다:
+
+- **AWS SSM/SM 사용 가능**: 원격 값이 프로세스 환경 변수보다 우선함
+- **AWS SSM/SM 사용 불가능**: 프로세스 환경 변수가 dotenv 파일보다 우선함
+
+```bash
+# 예제: 프로세스 환경 변수 설정
+export KAKAO_JAVASCRIPT_KEY="pre-existing-value"
+
+# SSM이 사용 가능한 경우:
+# load_flutter_build_secrets는 SSM 값을 사용함 (pre-existing-value 무시)
+
+# SSM이 사용 불가능한 경우:
+# load_flutter_build_secrets는 pre-existing-value를 유지함
+```
+
+이는 CI/CD 환경에서 일시적으로 원격 소스를 우회하거나, 로컬 개발에서 테스트를 위해 유용합니다.
 
 ### AWS 자격증명 없이 로컬 빌드
 

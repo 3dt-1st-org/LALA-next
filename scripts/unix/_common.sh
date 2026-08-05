@@ -309,14 +309,15 @@ load_flutter_build_secrets() {
   # Priority order:
   # 1. AWS Systems Manager Parameter Store SecureString (using LALA_AWS_SSM_PARAMETER_NAME if set, otherwise LALA_AWS_SSM_PREFIX or default /lala-next/)
   # 2. AWS Secrets Manager (using LALA_AWS_SM_PREFIX or default lala-next/)
-  # 3. Local dotenv files (.env.local, then .env)
-  # 4. Fail closed if no source provides a value
+  # 3. Preserve already-exported process value (fallback, not override)
+  # 4. Local dotenv files (.env.local, then .env)
+  # 5. Fail closed if no source provides a value
 
   local env_name="$1"
   local secret_id="$2"
 
-  # Skip if already set in environment
-  [[ -z "${!env_name:-}" ]] || return 0
+  # Preserve existing process value as potential fallback (not override)
+  local existing_process_value="${!env_name:-}"
 
   local aws_value=""
   if command -v aws >/dev/null 2>&1; then
@@ -334,7 +335,13 @@ load_flutter_build_secrets() {
     return 0
   fi
 
-  # 3. Fall back to local dotenv files
+  # 3. Use existing process value as fallback if remote sources unavailable
+  if [[ -n "$existing_process_value" ]]; then
+    export "$env_name=$existing_process_value"
+    return 0
+  fi
+
+  # 4. Fall back to local dotenv files
   local root
   root="$(repo_root)"
   # Try .env.local first, then .env
@@ -347,7 +354,7 @@ load_flutter_build_secrets() {
     load_env_names_from_file "$root/.env" "$env_name"
   fi
 
-  # 4. Fail closed - if still empty, return non-zero
+  # 5. Fail closed - if still empty, return non-zero
   [[ -n "${!env_name:-}" ]]
 }
 

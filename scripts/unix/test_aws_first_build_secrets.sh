@@ -67,16 +67,33 @@ else
   test_fail "load_flutter_build_secrets function not found"
 fi
 
-# Test 4: Already set variable is not overwritten
-test_start "Already set variable should not be overwritten"
-test_no_overwrite() {
-  local test_value="pre-existing-test-value"
-  export KAKAO_JAVASCRIPT_KEY="$test_value"
+# Test 4: Pre-existing value is preserved when AWS unavailable
+test_start "Pre-existing value is preserved when AWS unavailable"
+test_process_value_preserved_without_aws() {
+  local temp_dir
+  temp_dir="$(mktemp -d)"
+
+  # Create .env.local with fallback value
+  echo "KAKAO_JAVASCRIPT_KEY=dotenv-fallback-key" > "$temp_dir/.env.local"
+
+  # Remove aws from PATH to simulate unavailable AWS
+  local original_path="$PATH"
+  PATH="/usr/bin:/bin:/usr/sbin:/sbin"
+
+  # Mock repo_root to return temp_dir
+  repo_root() {
+    echo "$temp_dir"
+  }
+  export -f repo_root
+
+  # Pre-set process environment value
+  export KAKAO_JAVASCRIPT_KEY="pre-existing-process-value"
 
   local stdout_file stderr_file
   stdout_file="$(mktemp)"
   stderr_file="$(mktemp)"
 
+  # Run the function (should preserve pre-existing value)
   load_flutter_build_secrets "KAKAO_JAVASCRIPT_KEY" "kakao-javascript-key" >"$stdout_file" 2>"$stderr_file"
   local result=$?
 
@@ -84,26 +101,31 @@ test_no_overwrite() {
   stdout_content="$(cat "$stdout_file")"
   stderr_content="$(cat "$stderr_file")"
 
-  # Check for success and no leakage
-  if [[ $result -eq 0 ]]; then
-    if [[ "${KAKAO_JAVASCRIPT_KEY}" == "$test_value" ]]; then
+  # Check for success and pre-existing value preserved
+  if [[ $result -eq 0 && "${KAKAO_JAVASCRIPT_KEY:-}" == "pre-existing-process-value" ]]; then
+    # Verify pre-existing value won over dotenv
+    if [[ "${KAKAO_JAVASCRIPT_KEY}" != "dotenv-fallback-key" ]]; then
       if check_secrets_not_leaked "$stdout_content" "stdout" && check_secrets_not_leaked "$stderr_content" "stderr"; then
         test_pass
       else
         test_fail "Secret leaked to output stream"
       fi
     else
-      test_fail "Variable was overwritten: ${KAKAO_JAVASCRIPT_KEY}"
+      test_fail "Dotenv incorrectly won over pre-existing process value"
     fi
   else
-    test_fail "Function failed when it should have succeeded with existing value"
+    test_fail "Process value preservation failed: ${KAKAO_JAVASCRIPT_KEY:-empty}"
   fi
 
+  # Cleanup
   rm -f "$stdout_file" "$stderr_file"
+  unset repo_root
+  PATH="$original_path"
+  rm -rf "$temp_dir"
   unset KAKAO_JAVASCRIPT_KEY
 }
 
-test_no_overwrite
+test_process_value_preserved_without_aws
 
 # Test 5: Fail-closed behavior when no AWS CLI available
 test_start "Should fail closed when AWS CLI unavailable and no dotenv"
@@ -612,6 +634,156 @@ AWS_EOF
 }
 
 test_explicit_parameter_name
+
+# Test 14: Already-exported value does NOT prevent mocked SSM from winning (critical fix)
+test_start "Already-exported local value should not prevent mocked SSM from winning"
+test_process_env_does_not_block_ssm() {
+  local temp_dir
+  temp_dir="$(mktemp -d)"
+
+  # Create .env.local with fallback value
+  echo "KAKAO_JAVASCRIPT_KEY=dotenv-fallback-key" > "$temp_dir/.env.local"
+
+  # Create a fake aws binary that returns SSM value
+  local fake_bin_dir="$temp_dir/bin"
+  mkdir -p "$fake_bin_dir"
+
+  cat > "$fake_bin_dir/aws" <<'AWS_EOF'
+#!/usr/bin/env bash
+# Fake AWS CLI that returns SSM value
+if [[ "$*" == *"ssm get-parameter"* ]] && [[ "$*" == *"kakao-javascript-key"* ]]; then
+  echo "ssm-wins-key"
+  exit 0
+fi
+exit 1
+AWS_EOF
+  chmod +x "$fake_bin_dir/aws"
+
+  # Save and modify PATH to include our fake aws
+  local original_path="$PATH"
+  PATH="$fake_bin_dir:$PATH"
+  export PATH
+
+  # Mock repo_root to return temp_dir
+  repo_root() {
+    echo "$temp_dir"
+  }
+  export -f repo_root
+
+  # Pre-set process environment value (this should lose to SSM)
+  export KAKAO_JAVASCRIPT_KEY="pre-existing-process-value"
+
+  local stdout_file stderr_file
+  stdout_file="$(mktemp)"
+  stderr_file="$(mktemp)"
+
+  # Run the function
+  load_flutter_build_secrets "KAKAO_JAVASCRIPT_KEY" "kakao-javascript-key" >"$stdout_file" 2>"$stderr_file"
+  local result=$?
+
+  local stdout_content stderr_content
+  stdout_content="$(cat "$stdout_file")"
+  stderr_content="$(cat "$stderr_file")"
+
+  # Check for success and SSM value (should win over pre-existing value)
+  if [[ $result -eq 0 && "${KAKAO_JAVASCRIPT_KEY:-}" == "ssm-wins-key" ]]; then
+    # Verify SSM won over pre-existing process value and dotenv
+    if [[ "${KAKAO_JAVASCRIPT_KEY}" != "pre-existing-process-value" ]] && [[ "${KAKAO_JAVASCRIPT_KEY}" != "dotenv-fallback-key" ]]; then
+      if check_secrets_not_leaked "$stdout_content" "stdout" && check_secrets_not_leaked "$stderr_content" "stderr"; then
+        test_pass
+      else
+        test_fail "Secret leaked in process env vs SSM test"
+      fi
+    else
+      test_fail "Pre-existing process value incorrectly won over SSM - THIS IS THE BUG"
+    fi
+  else
+    test_fail "SSM precedence failed or wrong value: ${KAKAO_JAVASCRIPT_KEY:-empty} (expected ssm-wins-key)"
+  fi
+
+  # Cleanup
+  rm -f "$stdout_file" "$stderr_file"
+  unset repo_root
+  PATH="$original_path"
+  export PATH
+  rm -rf "$temp_dir"
+  unset KAKAO_JAVASCRIPT_KEY
+}
+
+test_process_env_does_not_block_ssm
+
+# Test 15: When SSM/SM unavailable, already-exported value remains usable (fallback behavior)
+test_start "When SSM/SM unavailable, already-exported value should remain usable"
+test_process_env_fallback_when_aws_unavailable() {
+  local temp_dir
+  temp_dir="$(mktemp -d)"
+
+  # Create .env.local with fallback value
+  echo "KAKAO_JAVASCRIPT_KEY=dotenv-fallback-key" > "$temp_dir/.env.local"
+
+  # Create a fake aws binary that always fails
+  local fake_bin_dir="$temp_dir/bin"
+  mkdir -p "$fake_bin_dir"
+
+  cat > "$fake_bin_dir/aws" <<'AWS_EOF'
+#!/usr/bin/env bash
+# Fake AWS CLI that always fails
+exit 1
+AWS_EOF
+  chmod +x "$fake_bin_dir/aws"
+
+  # Save and modify PATH to include our fake aws
+  local original_path="$PATH"
+  PATH="$fake_bin_dir:$PATH"
+  export PATH
+
+  # Mock repo_root to return temp_dir
+  repo_root() {
+    echo "$temp_dir"
+  }
+  export -f repo_root
+
+  # Pre-set process environment value (this should be preserved)
+  export KAKAO_JAVASCRIPT_KEY="pre-existing-process-value"
+
+  local stdout_file stderr_file
+  stdout_file="$(mktemp)"
+  stderr_file="$(mktemp)"
+
+  # Run the function
+  load_flutter_build_secrets "KAKAO_JAVASCRIPT_KEY" "kakao-javascript-key" >"$stdout_file" 2>"$stderr_file"
+  local result=$?
+
+  local stdout_content stderr_content
+  stdout_content="$(cat "$stdout_file")"
+  stderr_content="$(cat "$stderr_file")"
+
+  # Check for success and pre-existing value (should be preserved)
+  if [[ $result -eq 0 && "${KAKAO_JAVASCRIPT_KEY:-}" == "pre-existing-process-value" ]]; then
+    # Verify pre-existing value won over dotenv
+    if [[ "${KAKAO_JAVASCRIPT_KEY}" != "dotenv-fallback-key" ]]; then
+      if check_secrets_not_leaked "$stdout_content" "stdout" && check_secrets_not_leaked "$stderr_content" "stderr"; then
+        test_pass
+      else
+        test_fail "Secret leaked in process env fallback test"
+      fi
+    else
+      test_fail "Dotenv incorrectly won over pre-existing process value"
+    fi
+  else
+    test_fail "Process env fallback failed or wrong value: ${KAKAO_JAVASCRIPT_KEY:-empty}"
+  fi
+
+  # Cleanup
+  rm -f "$stdout_file" "$stderr_file"
+  unset repo_root
+  PATH="$original_path"
+  export PATH
+  rm -rf "$temp_dir"
+  unset KAKAO_JAVASCRIPT_KEY
+}
+
+test_process_env_fallback_when_aws_unavailable
 
 # Run all tests
 echo "Running AWS-first build secret resolution tests..."
