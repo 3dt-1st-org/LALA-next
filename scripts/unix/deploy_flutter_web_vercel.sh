@@ -24,11 +24,11 @@ case "${1:-}" in
     ;;
 esac
 
-# Load KAKAO_JAVASCRIPT_KEY using AWS-first resolution
-# AWS-first resolution for build secrets; must run before other loaders
+# Load KAKAO_JAVASCRIPT_KEY using SSM-first resolution
+# SSM-first resolution for build secrets; must run before other loaders
 if ! load_flutter_build_secrets "KAKAO_JAVASCRIPT_KEY" "kakao-javascript-key"; then
   echo "KAKAO_JAVASCRIPT_KEY is required for a production Flutter web build." >&2
-  echo "Load it from AWS Secrets Manager or the approved local secret source, then rerun this command." >&2
+  echo "Load it from AWS SSM Parameter Store, Secrets Manager, or the approved local secret source, then rerun this command." >&2
   exit 2
 fi
 # Local dotenv and Azure Key Vault for other non-build configuration only

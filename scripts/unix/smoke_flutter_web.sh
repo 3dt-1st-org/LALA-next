@@ -105,7 +105,7 @@ API_LOG="/tmp/lala-next-flutter-web-api-smoke-$PORT-$API_PORT.log"
 WEB_LOG="/tmp/lala-next-flutter-web-smoke-$PORT.log"
 SMOKE_API_KEY="lala-web-smoke-key"
 
-# AWS-first resolution for build secrets; must run before other loaders
+# SSM-first resolution for build secrets; must run before other loaders
 load_flutter_build_secrets "KAKAO_JAVASCRIPT_KEY" "kakao-javascript-key"
 # Local dotenv and Azure Key Vault for other non-build configuration only
 load_env_file "$ROOT/.env"

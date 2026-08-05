@@ -1,21 +1,22 @@
 #!/usr/bin/env bash
 #
-# Flutter build environment wrapper with AWS-first secret resolution.
+# Flutter build environment wrapper with SSM-first secret resolution.
 # This shared wrapper provides a unified interface for building Flutter apps
-# with proper build-time secret injection using AWS-first resolution.
+# with proper build-time secret injection using SSM-first resolution.
 #
 # Usage:
-#   scripts/unix/flutter_with_build_env.sh [--source-env env_file] [--region region] [--prefix prefix] [--api-base-url url] [flutter_args...]
+#   scripts/unix/flutter_with_build_env.sh [--source-env env_file] [--ssm-parameter-name name] [--ssm-prefix prefix] [--sm-prefix prefix] [--api-base-url url] [flutter_args...]
 #
 # Options:
-#   --source-env env_file   Additional env file to load (after AWS and .env.local/.env)
-#   --region region         AWS region for Secrets Manager (default: AWS_REGION or us-east-1)
-#   --prefix prefix         AWS Secrets Manager prefix (default: LALA_AWS_SM_PREFIX or lala-next/)
-#   --api-base-url url      API base URL to inject via --dart-define
-#   --build-sha sha         Build SHA to inject via --dart-define
+#   --source-env env_file         Additional env file to load (after AWS and .env.local/.env)
+#   --ssm-parameter-name name     Explicit SSM parameter name (overrides LALA_AWS_SSM_PARAMETER_NAME)
+#   --ssm-prefix prefix           AWS SSM prefix (default: LALA_AWS_SSM_PREFIX or /lala-next/)
+#   --sm-prefix prefix            AWS Secrets Manager prefix (default: LALA_AWS_SM_PREFIX or lala-next/)
+#   --api-base-url url            API base URL to inject via --dart-define
+#   --build-sha sha               Build SHA to inject via --dart-define
 #
 # This wrapper:
-# 1. Resolves build secrets from AWS Secrets Manager first
+# 1. Resolves build secrets from AWS SSM Parameter Store first, then Secrets Manager, then dotenv
 # 2. Falls back to .env.local, then .env (and optional --source-env)
 # 3. Fails closed if no source provides required secrets
 # 4. Injects only allowlisted Dart defines (KAKAO_JAVASCRIPT_KEY, LALA_API_BASE_URL, LALA_BUILD_SHA)
@@ -29,7 +30,8 @@ source "$SCRIPT_DIR/_common.sh"
 
 # Default options
 SOURCE_ENV_FILE=""
-AWS_REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-}}"
+SSM_PARAMETER_NAME="${LALA_AWS_SSM_PARAMETER_NAME:-}"
+SSM_PREFIX="${LALA_AWS_SSM_PREFIX:-}"
 SM_PREFIX="${LALA_AWS_SM_PREFIX:-}"
 API_BASE_URL="${LALA_API_BASE_URL:-}"
 BUILD_SHA="${GITHUB_SHA:-}"
@@ -42,11 +44,15 @@ while [[ $# -gt 0 ]]; do
       SOURCE_ENV_FILE="$2"
       shift 2
       ;;
-    --region)
-      AWS_REGION="$2"
+    --ssm-parameter-name)
+      SSM_PARAMETER_NAME="$2"
       shift 2
       ;;
-    --prefix)
+    --ssm-prefix)
+      SSM_PREFIX="$2"
+      shift 2
+      ;;
+    --sm-prefix)
       SM_PREFIX="$2"
       shift 2
       ;;
@@ -77,17 +83,20 @@ if [[ ${#FLUTTER_ARGS[@]} -eq 0 ]]; then
 fi
 
 # Export AWS configuration for the helper
-if [[ -n "$AWS_REGION" ]]; then
-  export AWS_REGION
+if [[ -n "$SSM_PARAMETER_NAME" ]]; then
+  export LALA_AWS_SSM_PARAMETER_NAME="$SSM_PARAMETER_NAME"
+fi
+if [[ -n "$SSM_PREFIX" ]]; then
+  export LALA_AWS_SSM_PREFIX="$SSM_PREFIX"
 fi
 if [[ -n "$SM_PREFIX" ]]; then
   export LALA_AWS_SM_PREFIX="$SM_PREFIX"
 fi
 
-# AWS-first resolution for build secrets; must run before other loaders
+# SSM-first resolution for build secrets; must run before other loaders
 if ! load_flutter_build_secrets "KAKAO_JAVASCRIPT_KEY" "kakao-javascript-key"; then
   echo "Error: KAKAO_JAVASCRIPT_KEY could not be resolved from any source." >&2
-  echo "Required for Flutter build. Configure AWS Secrets Manager or approved local secret source." >&2
+  echo "Required for Flutter build. Configure AWS SSM Parameter Store, Secrets Manager, or approved local secret source." >&2
   exit 2
 fi
 

@@ -1,13 +1,13 @@
 # AWS-First Build Secret Resolution
 
 **최종 업데이트**: 2026-08-06
-**상태**: 구현 완료 (AWS SSM 우선, Secrets Manager 폴백, dotenv 최종)
+**상태**: 코드 경로 구현 완료, 원격 매핑 미확인
 
 ---
 
 ## 개요
 
-LALA-next Flutter 빌드 시크릿 해결은 **AWS Systems Manager Parameter Store 우선, AWS Secrets Manager 폴백, 로컬 dotenv 최종** 순서를 따릅니다. 이는 프로덕션 환경에서 안전한 중앙화된 비밀 관리를 보장하면서 로컬 개발 환경에서도 유연하게 작동하도록 합니다.
+LALA-next Flutter 빌드 시크릿 해결은 **AWS Systems Manager Parameter Store 우선, AWS Secrets Manager 폴백, 로컬 dotenv 최종** 순서를 따릅니다. 코드 경로는 SSM-first 해결을 구현하지만, 정확한 승인된 파라미터 매핑/권한은 외부 구성 단계로 남아 있습니다.
 
 ---
 
@@ -18,16 +18,17 @@ LALA-next Flutter 빌드 시크릿 해결은 **AWS Systems Manager Parameter Sto
 1. **AWS Systems Manager Parameter Store** (우선)
    - 논리 이름: `kakao-javascript-key`
    - 전체 경로: `/lala-next/kakao-javascript-key` (접두사 `LALA_AWS_SSM_PREFIX`로 구성 가능)
+   - 또는 `LALA_AWS_SSM_PARAMETER_NAME` 환경변수로 명시적 파라미터 이름 지정 가능
    - 리전: `AWS_REGION` 또는 `AWS_DEFAULT_REGION` (기본값: `us-east-1`)
    - IAM 권한: `ssm:GetParameter`
-   - **현재 구성된 원격 소스**: ❌ 미구성
+   - **매핑 상태**: 원격 파라미터 매핑 미확인
 
 2. **AWS Secrets Manager** (폴백)
    - 논리 이름: `kakao-javascript-key`
    - 전체 경로: `lala-next/kakao-javascript-key` (접두사 `LALA_AWS_SM_PREFIX`로 구성 가능)
    - 리전: `AWS_REGION` 또는 `AWS_DEFAULT_REGION` (기본값: `us-east-1`)
    - IAM 권한: `secretsmanager:GetSecretValue`
-   - **현재 구성된 원격 소스**: ❌ 미구성
+   - **매핑 상태**: 원격 시크릿 매핑 미확인
 
 3. **로컬 dotenv 파일** (최종)
    - `.env.local` (우선)
@@ -93,32 +94,22 @@ flutter build web --release --dart-define="KAKAO_JAVASCRIPT_KEY=$KAKAO_JAVASCRIP
 
 ### AWS Systems Manager Parameter Store 설정
 
-프로덕션 환경에서는 AWS SSM Parameter Store에 시크릿을 저장하세요:
+프로덕션 환경에서는 팀의 승인된 시크릿 관리 워크플로우를 통해 AWS SSM Parameter Store에 SecureString 파라미터를 프로비저닝하세요:
 
-```bash
-aws ssm put-parameter \
-  --name "/lala-next/kakao-javascript-key" \
-  --value "your-production-key" \
-  --type "SecureString" \
-  --description "Kakao JavaScript Key for Flutter Web build" \
-  --region us-east-1
-```
+- 파라미터 이름: `/lala-next/kakao-javascript-key` (또는 `LALA_AWS_SSM_PARAMETER_NAME` 환경변수로 지정)
+- 유형: SecureString
+- 권한 요구사항: `ssm:GetParameter`
+
+**중요**: 시크릿 값을 셸 기록이나 프로세스 인자에 노출하지 마세요. `--value` 또는 `--secret-string` 인자에 직접 값을 붙여넣지 마세요.
 
 ### AWS Secrets Manager 설정 (선택적 폴백)
 
 SSM 사용을 선호하지 않는 경우 Secrets Manager를 사용할 수 있습니다:
 
-```bash
-aws secretsmanager create-secret \
-  --name lala-next/kakao-javascript-key \
-  --description "Kakao JavaScript Key for Flutter Web build" \
-  --region us-east-1
+- 시크릿 이름: `lala-next/kakao-javascript-key` (또는 `LALA_AWS_SM_PREFIX` 환경변수로 지정)
+- 권한 요구사항: `secretsmanager:GetSecretValue`
 
-aws secretsmanager put-secret-value \
-  --secret-id lala-next/kakao-javascript-key \
-  --secret-string "your-production-key" \
-  --region us-east-1
-```
+**중요**: 승인된 시크릿 관리 프로세스를 통해 프로비저닝하세요. CLI 인자에 직접 값을 붙여넣지 마세요.
 
 ### 배포 스크립트 사용
 
@@ -192,8 +183,8 @@ scripts/unix/test_aws_first_build_secrets.sh
 **원인**: IAM 권한 부족 또는 자격증명 없음
 
 **해결**:
-1. AWS CLI 자격증명 확인: `aws sts get-caller-identity`
-2. IAM 정책에 `secretsmanager:GetSecretValue` 추가
+1. IAM 정책에 `ssm:GetParameter` 및 `secretsmanager:GetSecretValue` 권한 확인
+2. AWS CLI 자격증명 확인 (없으면 dotenv로 자동 폴백)
 3. 또는 dotenv 파일 사용 (자동 폴백)
 
 ### 값이 로드되지 않음

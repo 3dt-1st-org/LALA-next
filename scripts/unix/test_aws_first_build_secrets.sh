@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Focused offline tests for AWS-first build secret resolution.
+# Focused offline tests for SSM-first build secret resolution.
 # These tests verify call order and fail-closed behavior without contacting AWS
 # or requiring local secret files.
 
@@ -526,6 +526,92 @@ AWS_EOF
 }
 
 test_all_aws_fail_to_dotenv
+
+# Test 13: Explicit LALA_AWS_SSM_PARAMETER_NAME takes precedence over prefix convention
+test_start "Explicit LALA_AWS_SSM_PARAMETER_NAME should take precedence over prefix"
+test_explicit_parameter_name() {
+  local temp_dir
+  temp_dir="$(mktemp -d)"
+
+  # Create .env.local with a different value to ensure explicit name wins
+  echo "KAKAO_JAVASCRIPT_KEY=dotenv-fallback-key" > "$temp_dir/.env.local"  # pragma: allowlist secret
+
+  # Create a fake aws binary that returns different values based on parameter name
+  local fake_bin_dir="$temp_dir/bin"
+  mkdir -p "$fake_bin_dir"
+
+  cat > "$fake_bin_dir/aws" <<'AWS_EOF'
+#!/usr/bin/env bash
+# Fake AWS CLI that checks for explicit parameter name
+# If called with the explicit name, return that value; otherwise use prefix
+for arg in "$@"; do
+  if [[ "$arg" == "/lala-next/explicit-kakao-key" ]]; then
+    echo "explicit-parameter-key"  # pragma: allowlist secret
+    exit 0
+  fi
+  if [[ "$arg" == *"/lala-next/kakao-javascript-key"* ]]; then
+    echo "prefix-convention-key"  # pragma: allowlist secret
+    exit 0
+  fi
+done
+exit 1
+AWS_EOF
+  chmod +x "$fake_bin_dir/aws"
+
+  # Save and modify PATH to include our fake aws
+  local original_path="$PATH"
+  PATH="$fake_bin_dir:$PATH"
+  export PATH
+
+  # Mock repo_root to return temp_dir
+  repo_root() {
+    echo "$temp_dir"
+  }
+  export -f repo_root
+
+  # Test with explicit parameter name set
+  export LALA_AWS_SSM_PARAMETER_NAME="/lala-next/explicit-kakao-key"
+  unset KAKAO_JAVASCRIPT_KEY
+
+  local stdout_file stderr_file
+  stdout_file="$(mktemp)"
+  stderr_file="$(mktemp)"
+
+  # Run the function with explicit name
+  load_flutter_build_secrets "KAKAO_JAVASCRIPT_KEY" "kakao-javascript-key" >"$stdout_file" 2>"$stderr_file"
+  local result=$?
+
+  local stdout_content stderr_content
+  stdout_content="$(cat "$stdout_file")"
+  stderr_content="$(cat "$stderr_file")"
+
+  # Check for success and explicit parameter value
+  if [[ $result -eq 0 && "${KAKAO_JAVASCRIPT_KEY:-}" == "explicit-parameter-key" ]]; then  # pragma: allowlist secret
+    # Verify explicit name won over prefix convention and dotenv
+    if [[ "${KAKAO_JAVASCRIPT_KEY}" != "prefix-convention-key" ]] && [[ "${KAKAO_JAVASCRIPT_KEY}" != "dotenv-fallback-key" ]]; then  # pragma: allowlist secret
+      if check_secrets_not_leaked "$stdout_content" "stdout" && check_secrets_not_leaked "$stderr_content" "stderr"; then
+        test_pass
+      else
+        test_fail "Secret leaked in explicit parameter name test"
+      fi
+    else
+      test_fail "Prefix convention or dotenv won over explicit parameter name - precedence order violated"
+    fi
+  else
+    test_fail "Explicit parameter name lookup failed or wrong value: ${KAKAO_JAVASCRIPT_KEY:-empty}"
+  fi
+
+  # Cleanup
+  rm -f "$stdout_file" "$stderr_file"
+  unset repo_root
+  unset LALA_AWS_SSM_PARAMETER_NAME
+  PATH="$original_path"
+  export PATH
+  rm -rf "$temp_dir"
+  unset KAKAO_JAVASCRIPT_KEY
+}
+
+test_explicit_parameter_name
 
 # Run all tests
 echo "Running AWS-first build secret resolution tests..."

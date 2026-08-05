@@ -212,12 +212,18 @@ aws_ssm_secret_get() {
   local secret_id="$1"
   local aws_region="${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}"
   local ssm_prefix="${LALA_AWS_SSM_PREFIX:-/lala-next/}"
+  local explicit_name="${LALA_AWS_SSM_PARAMETER_NAME:-}"
 
-  # Add prefix if secret_id doesn't already start with /
+  # Use explicit parameter name if provided; otherwise use prefix convention
   local full_id
-  if [[ "$secret_id" == /* ]]; then
+  if [[ -n "$explicit_name" ]]; then
+    # LALA_AWS_SSM_PARAMETER_NAME takes precedence - use exact name without prefix
+    full_id="$explicit_name"
+  elif [[ "$secret_id" == /* ]]; then
+    # Already a full path
     full_id="$secret_id"
   else
+    # Add prefix convention
     full_id="${ssm_prefix}${secret_id}"
   fi
 
@@ -299,9 +305,9 @@ load_lala_key_vault_secrets() {
 }
 
 load_flutter_build_secrets() {
-  # Load Flutter build-time secrets with AWS-first resolution.
+  # Load Flutter build-time secrets with SSM-first resolution.
   # Priority order:
-  # 1. AWS Systems Manager Parameter Store SecureString (using LALA_AWS_SSM_PREFIX or default /lala-next/)
+  # 1. AWS Systems Manager Parameter Store SecureString (using LALA_AWS_SSM_PARAMETER_NAME if set, otherwise LALA_AWS_SSM_PREFIX or default /lala-next/)
   # 2. AWS Secrets Manager (using LALA_AWS_SM_PREFIX or default lala-next/)
   # 3. Local dotenv files (.env.local, then .env)
   # 4. Fail closed if no source provides a value
@@ -314,7 +320,7 @@ load_flutter_build_secrets() {
 
   local aws_value=""
   if command -v aws >/dev/null 2>&1; then
-    # 1. Try AWS Systems Manager Parameter Store first
+    # 1. Try AWS Systems Manager Parameter Store first (SSM-first)
     aws_value="$(aws_ssm_secret_get "$secret_id")"
 
     # 2. Fall back to AWS Secrets Manager if SSM fails
