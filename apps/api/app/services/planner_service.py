@@ -4,6 +4,10 @@ from apps.api.app.schemas.planner import DailyPlanRequest
 from apps.api.app.services.normalization import normalize_language
 from apps.api.app.services.places_service import list_places
 from apps.api.app.services.request_identity import generation_identity
+from apps.api.app.services.travel_time_service import (
+    estimate_walking_minutes,
+    period_start_time,
+)
 from apps.api.app.services.weather_service import current_weather
 
 
@@ -190,6 +194,24 @@ def _daily_plan_slots(*, place_candidates: list[dict], weather: dict, language: 
         "afternoon": afternoon,
         "dinner": dinner,
     }
+
+    # Consecutive-slot estimated walking time (Haversine ÷ 4 km/h).
+    # First slot has no previous → null. Slots without place → null.
+    prev_place: dict | None = None
+    travel_times: dict[str, int | None] = {}
+    for period in _PERIOD_ORDER:
+        place = assigned[period]
+        if prev_place is not None and place is not None:
+            travel_times[period] = estimate_walking_minutes(
+                float(prev_place.get("lat") or 0),
+                float(prev_place.get("lng") or 0),
+                float(place.get("lat") or 0),
+                float(place.get("lng") or 0),
+            )
+        else:
+            travel_times[period] = None
+        prev_place = place if place is not None else prev_place
+
     return [
         _plan_slot(
             period=period,
@@ -198,6 +220,7 @@ def _daily_plan_slots(*, place_candidates: list[dict], weather: dict, language: 
             weather_hint=weather_hint,
             unavailable_reason=unavailable_reason,
             language=language,
+            travel_time=travel_times[period],
         )
         for period in _PERIOD_ORDER
     ]
@@ -227,16 +250,20 @@ def _plan_slot(
     weather_hint: str | None,
     unavailable_reason: str,
     language: str,
+    travel_time: int | None = None,
 ) -> dict:
-    # authority(travel-time/opening-hours/franchise/indoor-outdoor) 부재 → null.
+    # start_time: 관용적 시간대 시작 시각(09:00/12:00/14:00/18:00). opening-hours authority
+    # 확보 전까지 표준 관례 기반 추정값.
+    # travel_time: Haversine 직선거리 기반 도보 추정(분). routing authority 확보 전까지 추정.
+    # stay_duration/opening_hours_valid/indoor_outdoor/franchise: authority 부재 → null.
     return {
         "period": period,
         "title": title,
         "place": place,
         "weather_hint": weather_hint,
-        "start_time": None,
+        "start_time": period_start_time(period),
         "stay_duration_minutes": None,
-        "travel_time_from_previous_minutes": None,
+        "travel_time_from_previous_minutes": travel_time,
         "opening_hours_valid": None,
         "indoor_outdoor": None,
         "recommendation_reason": (_recommendation_reason(place, language) if place else None),
