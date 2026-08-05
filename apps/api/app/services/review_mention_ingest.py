@@ -388,11 +388,33 @@ def fetch_review_mention_inputs(
     limit: int,
     provider: str,
     connect_timeout: int,
+    since: str | None = None,
+    until: str | None = None,
+    place_id: str | None = None,
 ) -> tuple[list[ReviewMentionPost], list[ReviewMentionPlace]]:
     import psycopg2
     from psycopg2.extras import RealDictCursor
 
-    provider_filter = "" if provider == "all" else "WHERE provider = %(provider)s"
+    # Build WHERE clauses for filters
+    where_clauses = []
+    params: dict[str, Any] = {"provider": provider, "limit": limit}
+
+    if provider != "all":
+        where_clauses.append("provider = %(provider)s")
+
+    if since:
+        where_clauses.append("coalesce(created_at_source, collected_at) >= %(since)s")
+        params["since"] = since
+
+    if until:
+        where_clauses.append("coalesce(created_at_source, collected_at) < %(until)s")
+        params["until"] = until
+
+    # Combine WHERE clauses
+    where_sql = ""
+    if where_clauses:
+        where_sql = "WHERE " + " AND ".join(where_clauses)
+
     post_sql = f"""
         SELECT
             provider,
@@ -405,21 +427,30 @@ def fetch_review_mention_inputs(
             created_at_source,
             collected_at
         FROM community.posts
-        {provider_filter}
+        {where_sql}
         ORDER BY coalesce(created_at_source, collected_at) DESC, external_key
         LIMIT %(limit)s
     """
-    place_sql = """
+
+    # Add place_id filter to places query
+    place_where_sql = "WHERE name_ko IS NOT NULL"
+    place_params: dict[str, Any] = {}
+    if place_id:
+        place_where_sql += " AND place_id = %(place_id)s"
+        place_params["place_id"] = place_id
+
+    place_sql = f"""
         SELECT place_id, name_ko, category, region_name_ko
         FROM travel.places
-        WHERE name_ko IS NOT NULL
+        {place_where_sql}
         ORDER BY name_ko
     """
+
     with psycopg2.connect(dsn, connect_timeout=connect_timeout) as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(post_sql, {"provider": provider, "limit": limit})
+            cur.execute(post_sql, params)
             posts = [_post_from_row(row) for row in cur.fetchall()]
-            cur.execute(place_sql)
+            cur.execute(place_sql, place_params)
             places = [_place_from_row(row) for row in cur.fetchall()]
     return posts, places
 
