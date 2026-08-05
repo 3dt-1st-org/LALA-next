@@ -1,11 +1,11 @@
 # Multi-Session Orchestration Runbook
 
 > **Scope**: LALA-next final completion implementation and verification
-> 
+>
 > **Status**: Operational standard
-> 
+>
 > **Last updated**: 2026-08-05
-> 
+>
 > **Base integration branch**: `integration/lala-consolidation-20260805` (fa5717ed5ad0ae839932d666875b8299d5629b9e)
 
 This runbook defines the orchestration contract for multi-agent, multi-session LALA completion work. It implements the control-plane separation between Controller, Implementer, Verifier, and Integrator roles described in the final completion playbook.
@@ -428,8 +428,8 @@ flutter build apk --dart-define="LALA_API_BASE_URL=https://api.example.com"
 # WRONG: Printing secret value
 aws secretsmanager get-secret-value --secret-id lala/production/api --output text
 
-# WRONG: Logging complete DSN
-echo "Database connected: postgresql://user:password@host:5432/db"
+# CORRECT: Checking secret metadata without printing values
+aws secretsmanager describe-secret --secret-id lala/production/api
 ```
 
 ### OpenAI vs Azure Distinction

@@ -1,9 +1,9 @@
 # Agent Controller Handoff
 
 > **Scope**: LALA-next multi-agent orchestration boundaries
-> 
+>
 > **Last updated**: 2026-08-05
-> 
+>
 > **Base runbook**: See `multi-session-orchestration-runbook.md`
 
 This document defines the handoff contract between agents in the LALA-next orchestration system. It aligns the Controller, Implementer, Verifier, and Integrator boundaries with the multi-session orchestration runbook.
