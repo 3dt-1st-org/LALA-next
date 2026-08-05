@@ -1,6 +1,87 @@
 # Verification
 
-This repository keeps Wave 1 verification lightweight and repeatable. The checks
+> **Multi-Session Orchestration Alignment**: This document defines the verification procedures executed by the **Verifier Steward** role in the LALA-next orchestration system. See `multi-session-orchestration-runbook.md` for role boundaries, state machine, and runtime validation checkpoints.
+
+## Verifier Steward Role
+
+The **Verifier Steward** is an independent verification agent responsible for:
+
+- **Diff Review**: Confirming changes match phase scope only
+- **Evidence Collection**: Gathering screenshots, logs, metrics, and test results
+- **Runtime Validation**: Executing runtime validation checkpoints
+- **Verdict Issuance**: Issuing PASS, CORRECTION_REQUIRED, or BLOCKED_EXTERNAL verdicts
+
+### Verdict Categories
+
+**PASS**: All verification gates satisfied
+- All tests pass (unit, integration, runtime)
+- CI green at exact head SHA
+- Runtime checkpoints validated
+- No secret values exposed
+- No scope violations
+- No mock/demo in normal path
+
+**CORRECTION_REQUIRED**: Specific issues identified
+- Test failures or coverage regression
+- Scope creep or unrelated changes
+- Secret values detected in diff/logs
+- CI failures at exact SHA
+- Mock/demo data in production path
+- Runtime checkpoint failures
+
+**BLOCKED_EXTERNAL**: External dependency unavailable
+- External API/service down
+- Missing credentials or access
+- Third-party dependency issues
+- Approval required for live operations
+
+### Evidence Requirements
+
+All verifier verdicts MUST include:
+
+1. **Exact Head SHA** - The commit tested, not PR number
+2. **Diff Evidence** - Files changed with specific issues identified
+3. **Test Results** - Pass/fail counts with specific failure reasons
+4. **CI Status** - Current CI check results at exact SHA
+5. **Runtime Evidence** - Screenshots, logs, metrics for runtime gates
+6. **Safety Confirmation** - No secret values, no unsupported operations
+
+### Runtime Validation Checkpoints
+
+**Checkpoint 1**: Post Offline Review/Data Integration (P1-P3)
+- Database schema verification
+- Data ingest pipeline smoke test
+- Review processing worker contract
+- Local Signals aggregate generation
+
+**Checkpoint 2**: Post RAG Integration (P4)
+- RAG index generation (test mode)
+- Embedding provider connectivity
+- Docent generation contract
+- Retrieval quality evaluation
+
+**Checkpoint 3**: Pre-Integration Promotion (All phases)
+- iOS simulator non-destructive testing
+- Browser testing
+- Location services
+- Map rendering
+- Weather services
+- Search functionality
+- Plan generation
+- Docent display
+
+**Checkpoint 4**: Production Readiness (Before deployment)
+- AWS Secrets Manager access (IAM role)
+- Database connectivity
+- RAG serving generation health
+- Live AI provider connectivity (if enabled)
+- Speech provider connectivity (if enabled)
+
+---
+
+## Local Verification
+
+This repository keeps verification lightweight and repeatable. The checks
 are intentionally local-first so controller, implementation, and verification
 sessions can run the same commands without requiring live Azure or database
 dependencies.
