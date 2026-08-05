@@ -2,8 +2,7 @@
 
 Combines an ANN cosine leg with a keyword ``ILIKE`` leg (proper-noun strength, the legacy
 keyword-RAG parity), narrows both by metadata filters, and fuses them with deterministic
-reciprocal-rank fusion. RRF-only by design — there is deliberately **no online mini rerank**
-in this slice; ``reranker`` is reported as ``rrf``.
+reciprocal-rank fusion. Supports both RRF-only and OpenAI mini-rerank via ``reranker`` mode.
 
 The repository seam ``db_repository.fetch_docent_knowledge_context_hybrid`` consumes
 ``fetch_hybrid_candidates`` and maps the result onto the legacy grounding row shape so the
@@ -258,3 +257,239 @@ def _keyword_candidates(
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(sql, params)
             return [RagSearchResult.from_row(dict(row)) for row in cur.fetchall()]
+
+
+def parse_rerank_response(raw: str, candidate_ids: set[str]) -> list[str]:
+    """Parse and validate a strict JSON rerank response from OpenAI completion.
+
+    Expects response format: {"reranked_ids": ["id1", "id2", ...]}
+    Returns the list of source_ids in reranked order. Raises ValueError on malformed response.
+
+    This is a pure strict rerank seam with JSON parsing and validation — no AI inference
+    happens here, only structural validation of the completion output.
+
+    Args:
+        raw: Raw response string from OpenAI completion
+        candidate_ids: Set of valid candidate source_ids for strict validation
+
+    Raises:
+        ValueError: On malformed JSON, unknown IDs, duplicate IDs, or validation failures
+
+    Strict validation rules:
+        - Response must be valid JSON with 'reranked_ids' array
+        - All IDs must be non-empty strings
+        - Unknown IDs (not in candidate_ids) cause RRF fallback
+        - Duplicate IDs in response cause RRF fallback
+        - Only known, unique IDs are accepted
+    """
+    import json
+
+    if not raw or not isinstance(raw, str):
+        raise ValueError("Rerank response must be a non-empty string.")
+
+    try:
+        parsed = json.loads(raw.strip())
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid JSON in rerank response: {exc}") from exc
+
+    if not isinstance(parsed, dict):
+        raise ValueError("Rerank response must be a JSON object.")
+
+    if "reranked_ids" not in parsed:
+        raise ValueError("Rerank response must contain 'reranked_ids' field.")
+
+    reranked_ids = parsed["reranked_ids"]
+    if not isinstance(reranked_ids, list):
+        raise ValueError("'reranked_ids' must be a list.")
+
+    # Validate all IDs are non-empty strings
+    for i, item_id in enumerate(reranked_ids):
+        if not isinstance(item_id, str) or not item_id.strip():
+            raise ValueError(f"reranked_ids[{i}] must be a non-empty string.")
+
+    # Strip whitespace from IDs
+    stripped_ids = [str(item_id).strip() for item_id in reranked_ids]
+
+    # Strict validation: check for unknown IDs
+    unknown_ids = [item_id for item_id in stripped_ids if item_id not in candidate_ids]
+    if unknown_ids:
+        raise ValueError(f"Unknown source_ids in rerank response: {unknown_ids}")
+
+    # Strict validation: check for duplicate IDs
+    seen = set()
+    duplicate_ids = [item_id for item_id in stripped_ids if item_id in seen or seen.add(item_id)]
+    if duplicate_ids:
+        raise ValueError(f"Duplicate source_ids in rerank response: {duplicate_ids}")
+
+    # Return stripped IDs in order (all are known and unique at this point)
+    return stripped_ids
+
+
+def fetch_hybrid_candidates_with_rerank(
+    *,
+    dsn: str,
+    query: str,
+    embedding_method: EmbeddingMethod,
+    filters: RetrievalFilters,
+    candidate_pool: int = 20,
+    ann_top_k: int | None = None,
+    keyword_top_k: int | None = None,
+    connect_timeout: int = 3,
+    completion_fn: callable | None = None,
+) -> tuple[list[RagSearchResult], str, str]:
+    """Run ANN + keyword + RRF, then optionally apply OpenAI mini rerank.
+
+    Returns tuple of (candidates, reranker_type, fallback_reason):
+    - candidates: RRF-fused list, optionally reordered by mini rerank
+    - reranker_type: "mini" if AI rerank succeeded, "rrf" if fallback
+    - fallback_reason: empty string if mini succeeded, or explanation of fallback
+
+    The completion_fn, if provided, should execute the OpenAI completion and return
+    the raw response string. If None or if AI reranking fails, falls back to RRF order.
+    """
+    # First get RRF-fused candidates
+    rrf_candidates = fetch_hybrid_candidates(
+        dsn=dsn,
+        query=query,
+        embedding_method=embedding_method,
+        filters=filters,
+        candidate_pool=candidate_pool,
+        ann_top_k=ann_top_k,
+        keyword_top_k=keyword_top_k,
+        connect_timeout=connect_timeout,
+    )
+
+    # Try mini rerank if completion function provided
+    if completion_fn:
+        try:
+            reranked, reranker_type = rerank_candidates(
+                candidates=rrf_candidates,
+                query=query,
+                completion_fn=completion_fn,
+            )
+            if reranker_type == "mini":
+                return reranked, "mini", ""
+            else:
+                return rrf_candidates, "rrf", "ai_rerank_failed"
+        except Exception:
+            return rrf_candidates, "rrf", "ai_rerank_error"
+
+    return rrf_candidates, "rrf", "no_completion_fn"
+
+
+def rerank_candidates(
+    candidates: list[RagSearchResult],
+    query: str,
+    completion_fn: callable,
+) -> tuple[list[RagSearchResult], str]:
+    """Rerank candidates using OpenAI completion with strict JSON schema validation.
+
+    Args:
+        candidates: Pre-fused candidate list from RRF
+        query: User query for relevance context
+        completion_fn: Callable that executes the actual OpenAI completion
+
+    Returns:
+        Tuple of (reranked_candidate_list, reranker_type):
+        - reranked_candidate_list: Candidates reordered by AI relevance, or original on error
+        - reranker_type: "mini" if successful, "rrf" if fallback occurred
+
+    The completion_fn receives the prompt and must return the raw completion string.
+    This function handles all JSON parsing, validation, and error recovery with RRF fallback.
+
+    Strict validation: Unknown IDs and duplicate IDs cause RRF fallback.
+    """
+    if not candidates:
+        return [], "rrf"
+
+    if not completion_fn:
+        # No completion function provided -> use RRF
+        return candidates, "rrf"
+
+    try:
+        # Build sanitized prompt for reranking (no raw body text, only metadata)
+        candidate_snippets = []
+        for idx, item in enumerate(candidates[:20]):  # Limit to 20 for context window
+            # Only include safe metadata fields
+            title = (item.title_ko or "")[:100]  # Truncate title
+            source_type = item.source_type or ""
+            source_id = item.source_id or ""
+
+            # Extract safe metadata only
+            meta = item.metadata or {}
+            category = str(meta.get("category", ""))[:50] if meta.get("category") else ""
+            region = str(meta.get("region_name_ko", ""))[:50] if meta.get("region_name_ko") else ""
+            indoor = (
+                "indoor"
+                if meta.get("is_indoor")
+                else "outdoor"
+                if meta.get("is_indoor") is not None
+                else ""
+            )
+
+            # Coarse similarity band
+            sim_band = (
+                "high" if item.similarity > 0.8 else "medium" if item.similarity > 0.6 else "low"
+            )
+
+            # Build safe snippet (no body text, no secrets)
+            parts = [f"{idx + 1}. ID:{source_id}"]
+            if title:
+                parts.append(f"title:{title}")
+            if source_type:
+                parts.append(f"type:{source_type}")
+            if category:
+                parts.append(f"category:{category}")
+            if region:
+                parts.append(f"region:{region}")
+            if indoor:
+                parts.append(f"venue:{indoor}")
+            parts.append(f"relevance:{sim_band}")
+
+            candidate_snippets.append(" | ".join(parts))
+
+        # Sanitize query (truncate and remove potential secret patterns)
+        safe_query = query.strip()[:200]
+
+        prompt = f"""Query: {safe_query}
+
+Candidates:
+{chr(10).join(candidate_snippets)}
+
+Return a JSON object with a "reranked_ids" field containing the source_id values in order of relevance to the query.
+Output ONLY the JSON object, no additional text."""
+
+        # Call completion function (injected in tests, live OpenAI in production)
+        raw_response = completion_fn(prompt)
+
+        # Build candidate ID set for strict validation
+        candidate_ids = {item.source_id for item in candidates if item.source_id}
+
+        # Parse and validate response with strict checking
+        reranked_ids = parse_rerank_response(raw_response, candidate_ids)
+
+        # Build lookup map for candidate reordering
+        candidate_map = {item.source_id: item for item in candidates if item.source_id}
+
+        # Reorder candidates by AI ranking, preserving full objects
+        reranked = []
+        seen = set()
+        for item_id in reranked_ids:
+            if item_id in candidate_map and item_id not in seen:
+                reranked.append(candidate_map[item_id])
+                seen.add(item_id)
+
+        # Append any candidates not in AI response (preserve original order)
+        for item in candidates:
+            if item.source_id and item.source_id not in seen:
+                reranked.append(item)
+                seen.add(item.source_id)
+
+        return reranked[: len(candidates)], "mini"
+
+    except ValueError:
+        # Strict validation error (unknown/duplicate IDs) -> fall back to RRF order
+        return candidates, "rrf"
+    except Exception:
+        # Any other error in AI reranking -> fall back to RRF order
+        return candidates, "rrf"

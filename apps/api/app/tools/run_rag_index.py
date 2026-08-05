@@ -47,7 +47,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--embedding-method",
         choices=["local-hash", "openai"],
-        default="local-hash",
+        default=None,
+        help="Embedding method (default: rag_embedding_method from settings).",
     )
     parser.add_argument("--place-id", default="", help="Optional query filter for a place_id.")
     parser.add_argument("--limit", type=int, default=500, help="Chunk candidate limit.")
@@ -98,20 +99,22 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
 
-    if not args.apply and not args.preview and not args.query.strip():
-        _write(args, _plan_payload(args))
-        return 0
-
     settings = _load_settings_or_error(args, _mode(args))
     if settings is None:
         return 2
+    # Resolve embedding method from settings when CLI arg is omitted
+    embedding_method = _resolve_embedding_method(args, settings)
+
+    if not args.apply and not args.preview and not args.query.strip():
+        _write(args, _plan_payload(embedding_method, args))
+        return 0
     dsn = os.getenv("DB_DSN") or settings.db_dsn
     if not dsn:
         _write(args, {"ok": False, "mode": _mode(args), "error": "DB_DSN is not configured."})
         return 2
 
     if args.apply:
-        guard_error = _apply_guard_error(args, settings)
+        guard_error = _apply_guard_error(args, settings, embedding_method)
         if guard_error:
             _write(args, {"ok": False, "mode": "apply", "error": guard_error})
             return 2
@@ -124,7 +127,7 @@ def main(argv: list[str] | None = None) -> int:
                 query=args.query,
                 source=args.source,
                 top_k=args.top_k,
-                embedding_method=args.embedding_method,
+                embedding_method=embedding_method,
                 connect_timeout=args.connect_timeout,
                 place_id=args.place_id.strip() or None,
             )
@@ -136,7 +139,7 @@ def main(argv: list[str] | None = None) -> int:
                     "db_mutation": False,
                     "target": "rag.knowledge_chunks",
                     "source": args.source,
-                    "embedding_method": args.embedding_method,
+                    "embedding_method": embedding_method,
                     "result_count": len(results),
                     "results": [item.to_public_dict() for item in results],
                 },
@@ -154,7 +157,7 @@ def main(argv: list[str] | None = None) -> int:
             upserted_rows = upsert_knowledge_chunks(
                 dsn=dsn,
                 chunks=chunks,
-                embedding_method=args.embedding_method,
+                embedding_method=embedding_method,
                 connect_timeout=args.connect_timeout,
             )
             finished_at = datetime.now(UTC)
@@ -207,7 +210,7 @@ def main(argv: list[str] | None = None) -> int:
             "target": "rag.knowledge_chunks",
             "job_name": JOB_NAME,
             "source": args.source,
-            "embedding_method": args.embedding_method,
+            "embedding_method": embedding_method,
             "candidate_count": len(chunks),
             "upserted_rows": upserted_rows,
             "preview": [item.to_public_dict() for item in chunks[:5]],
@@ -240,6 +243,8 @@ def _run_reindex(args: argparse.Namespace) -> int:
     settings = _load_settings_or_error(args, "reindex")
     if settings is None:
         return 2
+    # Resolve embedding method from settings when CLI arg is omitted
+    embedding_method = _resolve_embedding_method(args, settings)
     serving_generation = (
         args.embedding_generation
         if args.embedding_generation is not None
@@ -269,7 +274,9 @@ def _run_reindex(args: argparse.Namespace) -> int:
         return 2
 
     if not args.preview and not args.apply:
-        _write(args, _reindex_plan_payload(args, serving_generation, chunk_cap, batch_size))
+        _write(
+            args, _reindex_plan_payload(embedding_method, serving_generation, chunk_cap, batch_size)
+        )
         return 0
 
     dsn = os.getenv("DB_DSN") or settings.db_dsn
@@ -278,7 +285,7 @@ def _run_reindex(args: argparse.Namespace) -> int:
         return 2
 
     if args.apply:
-        guard_error = _apply_guard_error(args, settings)
+        guard_error = _apply_guard_error(args, settings, embedding_method)
         if guard_error:
             _write(args, {"ok": False, "mode": "reindex-apply", "error": guard_error})
             return 2
@@ -300,7 +307,7 @@ def _run_reindex(args: argparse.Namespace) -> int:
                     "db_mutation": False,
                     "target": "rag.knowledge_chunks",
                     "job_name": JOB_NAME,
-                    "embedding_method": args.embedding_method,
+                    "embedding_method": embedding_method,
                     "serving_generation": serving_generation,
                     "stale_count": len(stale),
                     "preview": [
@@ -319,7 +326,7 @@ def _run_reindex(args: argparse.Namespace) -> int:
         result = reindex_stale_chunks(
             dsn=dsn,
             serving_generation=serving_generation,
-            embedding_method=args.embedding_method,
+            embedding_method=embedding_method,
             batch_size=batch_size,
             chunk_cap=chunk_cap,
             connect_timeout=args.connect_timeout,
@@ -343,7 +350,7 @@ def _run_reindex(args: argparse.Namespace) -> int:
                 "db_mutation": True,
                 "target": "rag.knowledge_chunks",
                 "job_name": JOB_NAME,
-                "embedding_method": args.embedding_method,
+                "embedding_method": embedding_method,
                 "serving_generation": serving_generation,
                 **result.to_dict(),
             },
@@ -381,7 +388,7 @@ def _run_reindex(args: argparse.Namespace) -> int:
 
 
 def _reindex_plan_payload(
-    args: argparse.Namespace,
+    embedding_method: str,
     serving_generation: int,
     chunk_cap: int,
     batch_size: int,
@@ -392,7 +399,7 @@ def _reindex_plan_payload(
         "db_mutation": False,
         "target": "rag.knowledge_chunks",
         "job_name": JOB_NAME,
-        "embedding_method": args.embedding_method,
+        "embedding_method": embedding_method,
         "serving_generation": serving_generation,
         "chunk_cap": chunk_cap,
         "batch_size": batch_size,
@@ -405,7 +412,7 @@ def _reindex_plan_payload(
     }
 
 
-def _plan_payload(args: argparse.Namespace) -> dict[str, Any]:
+def _plan_payload(embedding_method: str, args: argparse.Namespace) -> dict[str, Any]:
     return {
         "ok": True,
         "mode": "plan",
@@ -413,7 +420,7 @@ def _plan_payload(args: argparse.Namespace) -> dict[str, Any]:
         "target": "rag.knowledge_chunks",
         "job_name": JOB_NAME,
         "source": args.source,
-        "embedding_method": args.embedding_method,
+        "embedding_method": embedding_method,
         "static_source_types": STATIC_SOURCE_TYPES,
         "dynamic_source_types": DYNAMIC_SOURCE_TYPES,
         "input_relations": [
@@ -426,6 +433,14 @@ def _plan_payload(args: argparse.Namespace) -> dict[str, Any]:
         ],
         "retrieval": "pgvector cosine search",
     }
+
+
+def _resolve_embedding_method(args: argparse.Namespace, settings: Any) -> str:
+    """Resolve the embedding method from CLI arg or settings default."""
+    if args.embedding_method is not None:
+        return args.embedding_method
+    # Resolve from settings when CLI arg is omitted
+    return resolve_serving_embedding_method(settings)
 
 
 def _load_settings_or_error(args: argparse.Namespace, mode: str) -> Any | None:
@@ -442,7 +457,7 @@ def _load_settings_or_error(args: argparse.Namespace, mode: str) -> Any | None:
         return None
 
 
-def _apply_guard_error(args: argparse.Namespace, settings: Any) -> str:
+def _apply_guard_error(args: argparse.Namespace, settings: Any, embedding_method: str) -> str:
     if args.confirm != CONFIRM_TEXT:
         return f"--apply requires --confirm {CONFIRM_TEXT}."
     if os.getenv(ALLOW_ENV) != "1":
@@ -453,8 +468,17 @@ def _apply_guard_error(args: argparse.Namespace, settings: Any) -> str:
     # an unhandled traceback; it returns the same {"ok": false, "error": ...} + exit 2 contract
     # as any other guard violation.
     try:
-        resolve_serving_embedding_method(settings)
-        assert_semantic_embedding_when_live(settings)
+        # Validate the embedding method (whether from CLI arg or resolved from settings)
+        if embedding_method not in ("local-hash", "openai"):
+            raise ValueError(
+                f"Unsupported embedding_method={embedding_method!r}; expected one of local-hash, openai."
+            )
+        # For live-AI guard, create a temporary settings object with the resolved method
+        # This ensures the guard validates the actual method that will be used
+        from dataclasses import replace
+
+        guard_settings = replace(settings, rag_embedding_method=embedding_method)
+        assert_semantic_embedding_when_live(guard_settings)
     except (RuntimeError, ValueError) as exc:
         return str(exc)
     return ""
@@ -470,7 +494,7 @@ def _write(args: argparse.Namespace, payload: dict[str, Any]) -> None:
     print(f"status={'ok' if payload.get('ok') else 'degraded'}")
     print(f"target={payload.get('target', 'rag.knowledge_chunks')}")
     print(f"source={payload.get('source', args.source)}")
-    print(f"embedding_method={payload.get('embedding_method', args.embedding_method)}")
+    print(f"embedding_method={payload.get('embedding_method', 'local-hash')}")
     if "db_mutation" in payload:
         print(f"db_mutation={str(payload.get('db_mutation')).lower()}")
     if payload.get("error"):

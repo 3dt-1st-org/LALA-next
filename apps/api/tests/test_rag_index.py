@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from types import SimpleNamespace
 
@@ -776,3 +777,198 @@ def test_rag_index_reindex_preview_is_read_only(monkeypatch, capsys):
     assert payload["mode"] == "reindex-preview"
     assert payload["db_mutation"] is False
     assert payload["stale_count"] == 1
+
+
+# ---------------------------------------------------------------------------
+# P1-6: Embedding method defaults from settings (CLI omission resolution)
+# ---------------------------------------------------------------------------
+
+
+def test_rag_index_plan_resolves_embedding_method_from_settings_when_omitted(monkeypatch, capsys):
+    # P1-6: When --embedding-method is omitted, resolve from settings.rag_embedding_method
+    monkeypatch.setenv("LALA_RAG_EMBEDDING_METHOD", "openai")
+    exit_code = run_rag_index.main(["--json"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert payload["embedding_method"] == "openai"
+
+
+def test_rag_index_plan_honors_explicit_embedding_method(monkeypatch, capsys):
+    # P1-6: When --embedding-method is explicitly provided, honor it over settings
+    monkeypatch.setenv("LALA_RAG_EMBEDDING_METHOD", "openai")
+    exit_code = run_rag_index.main(["--embedding-method", "local-hash", "--json"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert payload["embedding_method"] == "local-hash"
+
+
+def test_rag_index_reindex_plan_resolves_embedding_method_from_settings(monkeypatch, capsys):
+    # P1-6: --reindex plan also resolves from settings when CLI arg is omitted
+    monkeypatch.setenv("LALA_RAG_EMBEDDING_METHOD", "openai")
+    exit_code = run_rag_index.main(["--reindex", "--json"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert payload["embedding_method"] == "openai"
+
+
+def test_rag_index_apply_resolves_embedding_method_and_reports(monkeypatch, capsys):
+    # P1-6: Apply mode resolves method and reports it in payload
+    monkeypatch.setenv("DB_DSN", "postgresql://redacted")
+    monkeypatch.setenv(run_rag_index.ALLOW_ENV, "1")
+    monkeypatch.setenv("LALA_RAG_EMBEDDING_METHOD", "openai")
+    recorded = []
+
+    def fake_fetch(**kwargs):
+        return [
+            rag_index.KnowledgeChunk(
+                source_type="place_profile",
+                source_id="place:1",
+                source_table="travel.places",
+                place_id="place-1",
+                title_ko="Test",
+                body_ko="Test body",
+            )
+        ]
+
+    def fake_upsert(**kwargs):
+        # Verify the resolved method is passed to upsert
+        assert kwargs["embedding_method"] == "openai"
+        return 1
+
+    monkeypatch.setattr(run_rag_index, "fetch_candidate_chunks", fake_fetch)
+    monkeypatch.setattr(run_rag_index, "upsert_knowledge_chunks", fake_upsert)
+    monkeypatch.setattr(run_rag_index, "record_job_run", lambda **kwargs: recorded.append(kwargs))
+
+    exit_code = run_rag_index.main(["--apply", "--confirm", run_rag_index.CONFIRM_TEXT, "--json"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert payload["embedding_method"] == "openai"
+    assert payload["upserted_rows"] == 1
+
+
+def test_rag_index_reindex_apply_resolves_embedding_method_and_reports(monkeypatch, capsys):
+    # P1-6: Reindex apply resolves method and reports it in payload
+    monkeypatch.setenv("DB_DSN", "postgresql://redacted")
+    monkeypatch.setenv(run_rag_index.ALLOW_ENV, "1")
+    monkeypatch.setenv("LALA_RAG_EMBEDDING_METHOD", "openai")
+    recorded = []
+
+    def fake_reindex(**kwargs):
+        # Verify the resolved method is passed to reindex
+        assert kwargs["embedding_method"] == "openai"
+        return rag_index.ReindexResult(examined=1, reembedded=1, capped=False)
+
+    monkeypatch.setattr(run_rag_index, "reindex_stale_chunks", fake_reindex)
+    monkeypatch.setattr(run_rag_index, "record_job_run", lambda **kwargs: recorded.append(kwargs))
+
+    exit_code = run_rag_index.main(
+        ["--reindex", "--apply", "--confirm", run_rag_index.CONFIRM_TEXT, "--json"]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert payload["embedding_method"] == "openai"
+    assert payload["reembedded"] == 1
+
+
+def test_rag_index_resolved_method_still_enforces_live_ai_guard(monkeypatch, capsys):
+    # P1-6: Resolved method from settings still goes through live-AI guard
+    monkeypatch.setenv("DB_DSN", "postgresql://redacted")
+    monkeypatch.setenv(run_rag_index.ALLOW_ENV, "1")
+    monkeypatch.setenv("LALA_ENABLE_LIVE_AI", "true")
+    monkeypatch.setenv("LALA_RAG_EMBEDDING_METHOD", "local-hash")
+    monkeypatch.delenv("LALA_RAG_ALLOW_LOCAL_HASH_LIVE", raising=False)
+
+    exit_code = run_rag_index.main(["--apply", "--confirm", run_rag_index.CONFIRM_TEXT, "--json"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 2
+    assert "LALA_RAG_ALLOW_LOCAL_HASH_LIVE" in payload["error"]
+
+
+def test_rag_index_explicit_method_still_enforces_live_ai_guard(monkeypatch, capsys):
+    # P1-6: Explicit method also goes through live-AI guard
+    monkeypatch.setenv("DB_DSN", "postgresql://redacted")
+    monkeypatch.setenv(run_rag_index.ALLOW_ENV, "1")
+    monkeypatch.setenv("LALA_ENABLE_LIVE_AI", "true")
+    # Set settings to openai but override to local-hash via CLI
+    monkeypatch.setenv("LALA_RAG_EMBEDDING_METHOD", "openai")
+    monkeypatch.delenv("LALA_RAG_ALLOW_LOCAL_HASH_LIVE", raising=False)
+
+    exit_code = run_rag_index.main(
+        [
+            "--embedding-method",
+            "local-hash",
+            "--apply",
+            "--confirm",
+            run_rag_index.CONFIRM_TEXT,
+            "--json",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 2
+    assert "LALA_RAG_ALLOW_LOCAL_HASH_LIVE" in payload["error"]
+
+
+def test_rag_index_openai_redaction_uses_standard_api_key_field(monkeypatch, capsys):
+    # P1-6: Verify exception redaction uses standard settings.openai_api_key
+    monkeypatch.setenv("DB_DSN", "postgresql://user:secret@host/db")  # pragma: allowlist secret
+    monkeypatch.setenv(run_rag_index.ALLOW_ENV, "1")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-secret-key")  # pragma: allowlist secret
+    recorded = []
+
+    def fail_upsert(**kwargs):
+        raise RuntimeError(
+            f"Failed with OPENAI_API_KEY={os.getenv('OPENAI_API_KEY')} and DSN={kwargs['dsn']}"
+        )
+
+    monkeypatch.setattr(run_rag_index, "fetch_candidate_chunks", lambda **kwargs: [])
+    monkeypatch.setattr(run_rag_index, "upsert_knowledge_chunks", fail_upsert)
+    monkeypatch.setattr(run_rag_index, "record_job_run", lambda **kwargs: recorded.append(kwargs))
+
+    exit_code = run_rag_index.main(["--apply", "--confirm", run_rag_index.CONFIRM_TEXT, "--json"])
+
+    output = capsys.readouterr().out
+    payload = json.loads(output)
+    assert exit_code == 2
+    assert "[redacted]" in payload["error"]
+    assert "sk-test-secret-key" not in output
+    assert "postgresql://user:secret@host/db" not in output  # pragma: allowlist secret
+    assert len(recorded) == 1
+    assert recorded[0]["status"] == "failed"
+    assert "[redacted]" in recorded[0]["error_message"]
+
+
+def test_rag_index_reindex_openai_redaction_uses_standard_api_key_field(monkeypatch, capsys):
+    # P1-6: Verify reindex exception redaction uses standard settings.openai_api_key
+    monkeypatch.setenv("DB_DSN", "postgresql://user:secret@host/db")  # pragma: allowlist secret
+    monkeypatch.setenv(run_rag_index.ALLOW_ENV, "1")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-secret-key")  # pragma: allowlist secret
+    recorded = []
+
+    def fail_reindex(**kwargs):
+        raise RuntimeError(
+            f"Failed with OPENAI_API_KEY={os.getenv('OPENAI_API_KEY')} and DSN={kwargs['dsn']}"
+        )
+
+    monkeypatch.setattr(run_rag_index, "reindex_stale_chunks", fail_reindex)
+    monkeypatch.setattr(run_rag_index, "record_job_run", lambda **kwargs: recorded.append(kwargs))
+
+    exit_code = run_rag_index.main(
+        ["--reindex", "--apply", "--confirm", run_rag_index.CONFIRM_TEXT, "--json"]
+    )
+
+    output = capsys.readouterr().out
+    payload = json.loads(output)
+    assert exit_code == 2
+    assert "[redacted]" in payload["error"]
+    assert "sk-test-secret-key" not in output
+    assert "postgresql://user:secret@host/db" not in output  # pragma: allowlist secret
+    assert len(recorded) == 1
+    assert recorded[0]["status"] == "failed"
+    assert "[redacted]" in recorded[0]["error_message"]

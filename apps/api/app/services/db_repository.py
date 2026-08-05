@@ -881,7 +881,7 @@ def fetch_docent_knowledge_context_hybrid(
             query=normalized_query,
             embedding_method=method,
             filters=filters,
-            candidate_pool=max(top_k, 10),
+            candidate_pool=20,  # Fixed candidate pool before top_k slice
             connect_timeout=3,
         )
     except psycopg2.Error:
@@ -912,6 +912,118 @@ def _grounding_rows_from_candidates(candidates: list[Any], *, top_k: int) -> lis
             }
         )
     return rows
+
+
+def fetch_docent_knowledge_context_hybrid_result(
+    *,
+    place_id: str,
+    query: str,
+    category: str | None = None,
+    language: str | None = None,
+    top_k: int = 3,
+    embedding_method: str | None = None,
+    reranker: str | None = None,
+    completion_fn: callable | None = None,
+) -> dict[str, Any]:
+    """Hybrid (ANN + keyword + RRF + optional mini rerank) grounding with result object.
+
+    Returns a dict with 'rows' (grounding context) and 'retrieval' (provenance metadata).
+    The 'retrieval' dict includes mode, reranker type, candidate pool size, and fallback reason.
+    This enables docent_service to report the actual reranker used (mini vs rrf) instead of
+    always reporting 'rrf' (R5 §3.1).
+
+    Args:
+        place_id: The place ID for grounding
+        query: The retrieval query
+        category: Optional category filter
+        language: Optional language filter
+        top_k: Number of results to return
+        embedding_method: Optional embedding method override
+        reranker: Optional reranker type hint ('mini' or 'rrf')
+        completion_fn: Optional completion function for mini reranking
+    """
+    settings = get_settings()
+    dsn = settings.db_dsn
+    normalized_place_id = place_id.strip()
+    normalized_query = query.strip()
+    if not dsn or not normalized_place_id or not normalized_query or top_k <= 0:
+        return {
+            "rows": [],
+            "retrieval": {
+                "mode": "hybrid",
+                "reranker": "rrf",
+                "candidate_pool": 0,
+                "fallback_reason": "invalid_input",
+            },
+        }
+    try:
+        import psycopg2  # noqa: F401  (probe availability)
+    except Exception:
+        return {
+            "rows": [],
+            "retrieval": {
+                "mode": "hybrid",
+                "reranker": "rrf",
+                "candidate_pool": 0,
+                "fallback_reason": "psycopg2_unavailable",
+            },
+        }
+    from apps.api.app.services import rag_index, rag_retrieval
+
+    method = embedding_method or rag_index.resolve_serving_embedding_method(settings)
+    filters = rag_retrieval.RetrievalFilters(
+        place_id=normalized_place_id,
+        category=category,
+        language=language,
+    )
+
+    # Use provided completion function for mini rerank, otherwise determine from settings
+    effective_completion_fn = completion_fn
+    if not effective_completion_fn and reranker == "mini":
+        # Import ai_service only when needed to avoid circular imports
+        from apps.api.app.services import ai_service
+
+        # Require the rerank-specific gate; an explicitly injected offline completion
+        # function remains usable in tests without any live provider call
+        if ai_service.rerank_ai_enabled(settings):
+
+            def effective_completion_fn(prompt: str) -> str:
+                return ai_service.rerank_docent_candidates(prompt)
+
+    try:
+        candidates, reranker_type, fallback_reason = (
+            rag_retrieval.fetch_hybrid_candidates_with_rerank(
+                dsn=dsn,
+                query=normalized_query,
+                embedding_method=method,
+                filters=filters,
+                candidate_pool=20,  # Fixed candidate pool: ANN + keyword + RRF -> ~20 -> mini rerank -> top 3
+                connect_timeout=3,
+                completion_fn=effective_completion_fn,
+            )
+        )
+    except psycopg2.Error:
+        return {
+            "rows": [],
+            "retrieval": {
+                "mode": "hybrid",
+                "reranker": "rrf",
+                "candidate_pool": 0,
+                "fallback_reason": "db_error",
+            },
+        }
+    except (RuntimeError, ValueError):
+        # Config errors (unsupported embedding method, missing live-AI credentials) surface loudly
+        raise
+
+    rows = _grounding_rows_from_candidates(candidates, top_k=top_k)
+    retrieval_meta = {
+        "mode": "hybrid",
+        "reranker": reranker_type,
+        "candidate_pool": len(candidates),
+        "fallback_reason": fallback_reason or "",
+    }
+    return {"rows": rows, "retrieval": retrieval_meta}
 
 
 def save_docent_script_cache(

@@ -157,7 +157,7 @@ def test_insert_review_mention_aggregates_targets_community_table(monkeypatch):
         def __exit__(self, *args):
             return None
 
-        def cursor(self):
+        def cursor(self, cursor_factory=None):
             return Cursor()
 
         def commit(self):
@@ -226,3 +226,466 @@ def _place(
         category=category,
         region_name_ko="용인시",
     )
+
+
+def test_cli_date_filter_validation_rejects_invalid_format(capsys):
+    """Test that CLI rejects invalid date formats."""
+    exit_code = run_review_mention_ingest.main(["--preview", "--since", "not-a-date", "--json"])
+
+    assert exit_code == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert "Invalid --since date format" in payload["error"]
+    # Ensure error message doesn't echo the supplied invalid value
+    assert "not-a-date" not in payload["error"]
+
+
+def test_cli_date_filter_validation_rejects_inverted_range(capsys):
+    """Test that CLI rejects inverted date ranges."""
+    exit_code = run_review_mention_ingest.main(
+        ["--preview", "--since", "2026-06-30", "--until", "2026-06-01", "--json"]
+    )
+
+    assert exit_code == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert "Invalid --until date range" in payload["error"]
+    # Ensure error message doesn't echo the supplied date values
+    assert "2026-06-30" not in payload["error"]
+    assert "2026-06-01" not in payload["error"]
+
+
+def test_cli_place_id_validation_rejects_blank(capsys):
+    """Test that CLI rejects blank place_id."""
+    exit_code = run_review_mention_ingest.main(["--preview", "--place-id", "", "--json"])
+
+    assert exit_code == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert "Invalid --place-id value" in payload["error"]
+
+
+def test_cli_place_id_validation_rejects_unsafe_characters(capsys):
+    """Test that CLI rejects unsafe characters in place_id."""
+    exit_code = run_review_mention_ingest.main(
+        ["--preview", "--place-id", "museum'; DROP TABLE--", "--json"]
+    )
+
+    assert exit_code == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert "Invalid --place-id format" in payload["error"]
+    # Ensure error message doesn't echo the supplied unsafe value or attack marker
+    assert "museum" not in payload["error"]
+    assert "DROP" not in payload["error"]
+    assert "'" not in payload["error"]
+
+
+def test_cli_trims_whitespace_padded_place_id(monkeypatch, capsys):
+    """Test that CLI trims whitespace from valid place_id before passing to service."""
+    executed = []
+
+    class Cursor:
+        def __init__(self):
+            self.rows = []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def execute(self, sql, params=None):
+            executed.append((sql, params))
+            self.rows = []
+
+        def fetchall(self):
+            return self.rows
+
+    class Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def cursor(self, cursor_factory=None):
+            return Cursor()
+
+    def connect(dsn, connect_timeout):
+        return Connection()
+
+    monkeypatch.setenv("DB_DSN", "postgresql://redacted")
+    monkeypatch.setitem(sys.modules, "psycopg2", SimpleNamespace(connect=connect))
+    monkeypatch.setitem(
+        sys.modules,
+        "psycopg2.extras",
+        SimpleNamespace(RealDictCursor=Cursor),
+    )
+
+    exit_code = run_review_mention_ingest.main(
+        ["--preview", "--place-id", "  hoam-museum-123  ", "--json"]
+    )
+
+    assert exit_code == 0
+    # Verify place_id filter was passed to places query as trimmed value
+    places_query = executed[1]
+    assert "places" in places_query[0].lower()
+    params = places_query[1]
+    assert "place_id" in params
+    assert params["place_id"] == "hoam-museum-123"  # trimmed, not "  hoam-museum-123  "
+
+
+def test_cli_accepts_valid_date_filters(monkeypatch, capsys):
+    """Test that CLI accepts valid date filters and passes them to service."""
+    executed = []
+
+    class Cursor:
+        def __init__(self):
+            self.rows = []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def execute(self, sql, params=None):
+            executed.append((sql, params))
+            self.rows = []
+
+        def fetchall(self):
+            return self.rows
+
+    class Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def cursor(self, cursor_factory=None):
+            return Cursor()
+
+    def connect(dsn, connect_timeout):
+        return Connection()
+
+    monkeypatch.setenv("DB_DSN", "postgresql://redacted")
+    monkeypatch.setitem(sys.modules, "psycopg2", SimpleNamespace(connect=connect))
+    monkeypatch.setitem(
+        sys.modules,
+        "psycopg2.extras",
+        SimpleNamespace(RealDictCursor=Cursor),
+    )
+
+    exit_code = run_review_mention_ingest.main(
+        ["--preview", "--since", "2026-06-01", "--until", "2026-06-30", "--json"]
+    )
+
+    assert exit_code == 0
+    # Verify date filters were passed to the query
+    assert len(executed) >= 2  # At least posts and places queries
+    posts_query = executed[0]
+    assert "posts" in posts_query[0].lower()
+    # Check that date parameters were included
+    params = posts_query[1]
+    assert "since" in params
+    assert "until" in params
+    assert params["since"] == "2026-06-01"
+    assert params["until"] == "2026-06-30"
+
+
+def test_cli_accepts_valid_place_id_filter(monkeypatch, capsys):
+    """Test that CLI accepts valid place_id filter and passes it to service."""
+    executed = []
+
+    class Cursor:
+        def __init__(self):
+            self.rows = []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def execute(self, sql, params=None):
+            executed.append((sql, params))
+            self.rows = []
+
+        def fetchall(self):
+            return self.rows
+
+    class Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def cursor(self, cursor_factory=None):
+            return Cursor()
+
+    def connect(dsn, connect_timeout):
+        return Connection()
+
+    monkeypatch.setenv("DB_DSN", "postgresql://redacted")
+    monkeypatch.setitem(sys.modules, "psycopg2", SimpleNamespace(connect=connect))
+    monkeypatch.setitem(
+        sys.modules,
+        "psycopg2.extras",
+        SimpleNamespace(RealDictCursor=Cursor),
+    )
+
+    exit_code = run_review_mention_ingest.main(
+        ["--preview", "--place-id", "hoam-museum-123", "--json"]
+    )
+
+    assert exit_code == 0
+    # Verify place_id filter was passed to places query
+    places_query = executed[1]
+    assert "places" in places_query[0].lower()
+    params = places_query[1]
+    assert "place_id" in params
+    assert params["place_id"] == "hoam-museum-123"
+
+
+def test_date_parsing_supports_multiple_formats():
+    """Test that _parse_date supports various date formats."""
+    # YYYY-MM-DD format
+    result = run_review_mention_ingest._parse_date("2026-06-15")
+    assert result is not None
+    assert result.year == 2026
+    assert result.month == 6
+    assert result.day == 15
+
+    # ISO datetime format
+    result = run_review_mention_ingest._parse_date("2026-06-15T14:30:00Z")
+    assert result is not None
+    assert result.year == 2026
+    assert result.month == 6
+    assert result.day == 15
+    assert result.hour == 14
+    assert result.minute == 30
+
+    # Space-separated datetime format
+    result = run_review_mention_ingest._parse_date("2026-06-15 14:30:00")
+    assert result is not None
+    assert result.year == 2026
+    assert result.month == 6
+    assert result.day == 15
+    assert result.hour == 14
+    assert result.minute == 30
+
+    # Invalid format
+    result = run_review_mention_ingest._parse_date("invalid")
+    assert result is None
+
+
+def test_service_includes_date_filters_in_query(monkeypatch):
+    """Test that fetch_review_mention_inputs properly applies date filters in SQL."""
+    executed = []
+
+    class Cursor:
+        def __init__(self):
+            self.rows = []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def execute(self, sql, params=None):
+            executed.append((sql, params))
+            self.rows = []
+
+        def fetchall(self):
+            return self.rows
+
+    class Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def cursor(self, cursor_factory=None):
+            return Cursor()
+
+    def connect(dsn, connect_timeout):
+        return Connection()
+
+    monkeypatch.setitem(sys.modules, "psycopg2", SimpleNamespace(connect=connect))
+    monkeypatch.setitem(
+        sys.modules,
+        "psycopg2.extras",
+        SimpleNamespace(RealDictCursor=Cursor),
+    )
+
+    review_mention_ingest.fetch_review_mention_inputs(
+        dsn="postgresql://redacted",
+        limit=100,
+        provider="naver_blog",
+        connect_timeout=5,
+        since="2026-06-01",
+        until="2026-06-30",
+        place_id="test-place",
+    )
+
+    # Check posts query has date filters
+    posts_query = executed[0][0]
+    posts_params = executed[0][1]
+    assert ">=" in posts_query
+    assert "<" in posts_query
+    assert posts_params["since"] == "2026-06-01"
+    assert posts_params["until"] == "2026-06-30"
+
+    # Check places query has place_id filter
+    places_query = executed[1][0]
+    places_params = executed[1][1]
+    assert "place_id" in places_query
+    assert places_params["place_id"] == "test-place"
+
+
+def test_service_without_filters_uses_default_behavior(monkeypatch):
+    """Test that fetch_review_mention_inputs works without filters (backward compatibility)."""
+    executed = []
+
+    class Cursor:
+        def __init__(self):
+            self.rows = []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def execute(self, sql, params=None):
+            executed.append((sql, params))
+            self.rows = []
+
+        def fetchall(self):
+            return self.rows
+
+    class Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def cursor(self, cursor_factory=None):
+            return Cursor()
+
+    def connect(dsn, connect_timeout):
+        return Connection()
+
+    monkeypatch.setitem(sys.modules, "psycopg2", SimpleNamespace(connect=connect))
+    monkeypatch.setitem(
+        sys.modules,
+        "psycopg2.extras",
+        SimpleNamespace(RealDictCursor=Cursor),
+    )
+
+    review_mention_ingest.fetch_review_mention_inputs(
+        dsn="postgresql://redacted",
+        limit=100,
+        provider="all",
+        connect_timeout=5,
+    )
+
+    # Check posts query doesn't have date filters
+    posts_params = executed[0][1]
+    assert "since" not in posts_params
+    assert "until" not in posts_params
+    assert "place_id" not in posts_params
+
+    # Check places query doesn't have place_id filter
+    places_params = executed[1][1]
+    assert "place_id" not in places_params
+
+
+def test_plan_mode_validates_invalid_date_and_exits_2(capsys):
+    """Test that plan mode validates date filters and exits 2 for invalid dates."""
+    exit_code = run_review_mention_ingest.main(["--since", "not-a-date", "--json"])
+
+    assert exit_code == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert "Invalid --since date format" in payload["error"]
+    # Ensure error message doesn't echo the supplied invalid value
+    assert "not-a-date" not in payload["error"]
+
+
+def test_plan_mode_validates_inverted_range_and_exits_2(capsys):
+    """Test that plan mode validates date filters and exits 2 for inverted ranges."""
+    exit_code = run_review_mention_ingest.main(
+        ["--since", "2026-06-30", "--until", "2026-06-01", "--json"]
+    )
+
+    assert exit_code == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert "Invalid --until date range" in payload["error"]
+    # Ensure error message doesn't echo the supplied date values
+    assert "2026-06-30" not in payload["error"]
+    assert "2026-06-01" not in payload["error"]
+
+
+def test_plan_mode_with_valid_filters_includes_metadata_and_no_db_call(capsys, monkeypatch):
+    """Test that plan mode with valid filters includes normalized metadata and doesn't call DB."""
+    db_called = False
+
+    def connect(dsn, connect_timeout):
+        nonlocal db_called
+        db_called = True
+        raise RuntimeError("DB should not be called in plan mode")
+
+    monkeypatch.setitem(sys.modules, "psycopg2", SimpleNamespace(connect=connect))
+
+    exit_code = run_review_mention_ingest.main(
+        ["--since", "2026-06-01", "--until", "2026-06-30", "--place-id", "museum-123", "--json"]
+    )
+
+    assert exit_code == 0
+    assert not db_called, "Plan mode should not connect to database"
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["mode"] == "plan"
+    assert payload["since"] == "2026-06-01"
+    assert payload["until"] == "2026-06-30"
+    assert payload["place_id"] == "museum-123"
+
+
+def test_plan_mode_without_filters_remains_compatible(capsys, monkeypatch):
+    """Test that plan mode without filters remains backward compatible."""
+    db_called = False
+
+    def connect(dsn, connect_timeout):
+        nonlocal db_called
+        db_called = True
+        raise RuntimeError("DB should not be called in plan mode")
+
+    monkeypatch.setitem(sys.modules, "psycopg2", SimpleNamespace(connect=connect))
+
+    exit_code = run_review_mention_ingest.main(["--json"])
+
+    assert exit_code == 0
+    assert not db_called, "Plan mode should not connect to database"
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["mode"] == "plan"
+    # Old plan payload keys should still be present
+    assert "target" in payload
+    assert "job_name" in payload
+    assert "prompt_version" in payload
+    assert "apply_required_env" in payload
+    assert "review_rules" in payload
+    # No filter keys should be present
+    assert "since" not in payload
+    assert "until" not in payload
+    assert "place_id" not in payload
