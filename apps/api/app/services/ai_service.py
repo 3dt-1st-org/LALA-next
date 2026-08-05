@@ -158,7 +158,7 @@ def generate_docent_script_text(
                 {"role": "user", "content": prompt},
             ],
             temperature=0.4,
-            max_tokens=500,
+            max_completion_tokens=500,
         )
         text = completion.choices[0].message.content or ""
     except Exception as exc:
@@ -427,7 +427,7 @@ def rerank_docent_candidates(prompt: str) -> str:
                 {"role": "user", "content": prompt},
             ],
             temperature=0.1,  # Low temperature for deterministic ranking
-            max_tokens=200,  # Only need IDs in response
+            max_completion_tokens=200,  # Only need IDs in response
         )
         text = completion.choices[0].message.content or ""
     except Exception as exc:
