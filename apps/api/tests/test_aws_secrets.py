@@ -498,3 +498,58 @@ def test_runtime_contract_exception_is_values_free(monkeypatch):
         # Verify no raw exception content
         assert "Exception" not in error_msg
         assert "must not leak" not in error_msg
+
+
+def test_no_literal_cloud_identifiers_in_core_aws_secrets_module():
+    """Core AWS secrets module must not contain literal cloud identifiers (regions, ARNs, account IDs)."""
+    import inspect
+
+    # Read the actual source file
+    aws_secrets_source = inspect.getsource(aws_secrets)
+
+    # Check for literal AWS region patterns like "us-east-1", "eu-west-2", etc.
+    aws_regions = [
+        "us-east-1",
+        "us-east-2",
+        "us-west-1",
+        "us-west-2",
+        "eu-west-1",
+        "eu-west-2",
+        "eu-west-3",
+        "eu-central-1",
+        "eu-central-2",
+        "ap-northeast-1",
+        "ap-northeast-2",
+        "ap-northeast-3",
+        "ap-southeast-1",
+        "ap-southeast-2",
+        "ap-south-1",
+        "ca-central-1",
+        "sa-east-1",
+        "us-gov-west-1",
+        "us-gov-east-1",
+    ]
+
+    for region in aws_regions:
+        assert region not in aws_secrets_source, (
+            f"AWS region literal '{region}' found in source code"
+        )
+
+    # Check for ARN patterns
+    assert "arn:" not in aws_secrets_source.lower(), "ARN literal found in source code"
+
+    # Check for account ID patterns (12-digit numbers that look like AWS account IDs)
+    # This is a basic heuristic - actual validation would need more sophisticated parsing
+    lines = aws_secrets_source.split("\n")
+    for line in lines:
+        # Skip comments
+        if line.strip().startswith("#"):
+            continue
+        # Look for potential 12-digit account IDs
+        words = line.split()
+        for word in words:
+            # Remove quotes and punctuation for checking
+            clean_word = word.strip("\"',(){}[]")
+            if clean_word.isdigit() and len(clean_word) == 12:
+                # Check if it's not part of a larger number or identifier
+                raise AssertionError(f"Potential AWS account ID found in source: {line.strip()}")

@@ -76,7 +76,7 @@ def _client():  # pragma: no cover - 외부 SDK 래핑
         import boto3
     except Exception:
         return None
-    region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION") or "us-east-1"
+    region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION")
     try:
         return boto3.client("secretsmanager", region_name=region)
     except Exception:
