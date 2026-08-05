@@ -5,7 +5,10 @@
 # map bridge cannot silently fall back to its unavailable state.
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+source "$SCRIPT_DIR/_common.sh"
+
+ROOT_DIR="$(repo_root)"
 APP_DIR="$ROOT_DIR/apps/flutter_app"
 STAGING_DIR="$ROOT_DIR/static-output"
 API_BASE_URL="${LALA_API_BASE_URL:-https://api.lala-next.cloud}"
@@ -21,11 +24,16 @@ case "${1:-}" in
     ;;
 esac
 
-if [[ -z "${KAKAO_JAVASCRIPT_KEY:-}" ]]; then
+# Load KAKAO_JAVASCRIPT_KEY using AWS-first resolution
+# AWS-first resolution for build secrets; must run before other loaders
+if ! load_flutter_build_secrets "KAKAO_JAVASCRIPT_KEY" "kakao-javascript-key"; then
   echo "KAKAO_JAVASCRIPT_KEY is required for a production Flutter web build." >&2
-  echo "Load it from the approved local secret source, then rerun this command." >&2
+  echo "Load it from AWS Secrets Manager or the approved local secret source, then rerun this command." >&2
   exit 2
 fi
+# Local dotenv and Azure Key Vault for other non-build configuration only
+load_env_file "$ROOT_DIR/.env"
+load_lala_key_vault_secrets
 
 if ! command -v flutter >/dev/null 2>&1; then
   echo "flutter is required but was not found on PATH." >&2

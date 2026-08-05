@@ -26,6 +26,9 @@ done
 
 ROOT="$(repo_root)"
 APP_DIR="$ROOT/apps/flutter_app"
+# AWS-first resolution for build secrets; must run before other loaders
+load_flutter_build_secrets "KAKAO_JAVASCRIPT_KEY" "kakao-javascript-key"
+# Local dotenv and Azure Key Vault for other non-build configuration only
 load_env_file "$ROOT/.env"
 load_lala_key_vault_secrets
 
