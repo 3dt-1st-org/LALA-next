@@ -899,7 +899,7 @@ def _daily_plan_slot_schema() -> dict[str, Any]:
             "weather_hint": {"type": "string", "nullable": True},
             "start_time": {
                 "anyOf": [{"type": "string"}, {"type": "null"}],
-                "description": "Clock/travel authority absent → null (honest unavailable).",
+                "description": "Conventional period start time (09:00/12:00/14:00/18:00) or null.",
             },
             "stay_duration_minutes": {
                 "anyOf": [{"type": "integer"}, {"type": "null"}],
@@ -907,7 +907,7 @@ def _daily_plan_slot_schema() -> dict[str, Any]:
             },
             "travel_time_from_previous_minutes": {
                 "anyOf": [{"type": "integer"}, {"type": "null"}],
-                "description": "Travel-time authority absent → null (first slot too).",
+                "description": "Estimated walking minutes from previous slot (Haversine ÷ 4 km/h), or null for first slot / no place.",
             },
             "opening_hours_valid": {
                 "anyOf": [{"type": "boolean"}, {"type": "null"}],

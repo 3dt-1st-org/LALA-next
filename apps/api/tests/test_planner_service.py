@@ -214,15 +214,41 @@ def test_daily_plan_slots_authority_fields_null_without_live_data() -> None:
     )
 
     assert len(slots) == 4
+    # start_time: 관용적 시간대 시각(추정). opening-hours authority 부재 시에도
+    # 표준 관례(09:00/12:00/14:00/18:00)로 제공.
+    assert [s["start_time"] for s in slots] == ["09:00", "12:00", "14:00", "18:00"]
+    # 첫 slot 은 이전 장소가 없으므로 travel_time = None.
+    assert slots[0]["travel_time_from_previous_minutes"] is None
     for slot in slots:
-        # authority 부재 → honest unavailable (전부 null, 빈 배열).
-        assert slot["start_time"] is None
+        # authority 부재 → 여전히 null (추정값이 아닌 진짜 authority 필드).
         assert slot["stay_duration_minutes"] is None
-        assert slot["travel_time_from_previous_minutes"] is None
         assert slot["opening_hours_valid"] is None
         assert slot["indoor_outdoor"] is None
         assert slot["local_franchise_confidence"] is None
         assert slot["swappable_alternatives"] == []
+
+
+def test_daily_plan_slots_travel_time_estimated_between_consecutive_places() -> None:
+    """Consecutive slots have estimated walking time; first slot is None."""
+    from apps.api.app.services.travel_time_service import haversine_distance_m
+
+    # Two places ~1km apart in Seoul.
+    candidates = [
+        {"place_id": "p1", "category": "attraction", "lat": 37.5665, "lng": 126.9780, "name": "A"},
+        {"place_id": "p2", "category": "restaurant", "lat": 37.5745, "lng": 126.9880, "name": "B"},
+    ]
+    slots = planner_service._daily_plan_slots(
+        place_candidates=candidates, weather={"outdoor_status": "good"}, language="ko"
+    )
+
+    # morning gets p1, lunch gets p2. travel_time for lunch = Haversine(p1→p2) ÷ 67.
+    assert slots[0]["travel_time_from_previous_minutes"] is None
+    assert slots[1]["travel_time_from_previous_minutes"] is not None
+    expected_distance = haversine_distance_m(37.5665, 126.9780, 37.5745, 126.9880)
+    expected_minutes = max(1, round(expected_distance / 67))
+    assert slots[1]["travel_time_from_previous_minutes"] == expected_minutes
+    # afternoon/dinner have no place → travel_time stays None (no consecutive pair).
+    assert slots[2]["travel_time_from_previous_minutes"] is None
 
 
 def test_daily_plan_slots_ko_en_exclusive_copy() -> None:
