@@ -15,19 +15,21 @@ This document defines the handoff contract between agents in the LALA-next orche
 **Scope**: State management and session coordination only
 
 **Responsibilities**:
-- Create and manage worktrees for implementation phases
-- Dispatch implementer sessions with clear scope
-- Collect and route verification results
-- Manage integrator promotion decisions
-- Maintain session ledger and handoff documents
+- Read-only git/PR/worktree/CI/runtime state inspection
+- Queue ordering, worker dispatch, verdict comparison, and checkpoint decisions
+- Session lifecycle management and handoff coordination
 
 **Never Does**:
 - Direct code implementation
 - Secret value access or display
 - Runtime validation execution
 - External API calls or migrations
+- Code/doc edits, commit/push, rebase/cherry-pick/conflict resolution
+- PR retarget/merge/close or mutable worktree management
 
 **Handoff To**: Implementer (with phase scope)
+
+**Important**: Implementer performs all code/doc changes; integrator performs retarget/rebase/merge/close after verifier PASS. Required tools and examples must not tell a controller to run mutable Git/worktree operations.
 
 ### Implementer (Implementation Agent)
 
@@ -99,9 +101,15 @@ Controller → Implementer → Verifier → (Integrator → Controller | Impleme
 | `IMPLEMENTED` | Implementer creates Draft PR | Verifier | Implementer |
 | `VERIFIED_PASS` | Verifier issues PASS | Integrator | Verifier |
 | `VERIFIED_CORRECTION` | Verifier issues CORRECTION_REQUIRED | Implementer | Verifier |
+| `INTEGRATION_VERIFIED` | Verifier PASS, integration-branch verification complete | Integrator review for main promotion | Verifier |
 | `INTEGRATION_READY` | Integrator creates promotion PR | Controller | Integrator |
 | `COMPLETE` | Controller updates ledger | End | Controller |
 | `BLOCKED_EXTERNAL` | External dependency identified | Controller | Verifier |
+
+**Important**:
+- `INTEGRATION_VERIFIED` is a distinct state after verifier PASS and integration-branch verification
+- Main promotion is a separate Draft/review step requiring explicit user/ops authorization
+- No automatic main merge, deploy, or production readiness claim
 
 ---
 

@@ -6,7 +6,7 @@
 >
 > **Last updated**: 2026-08-05
 >
-> **Base integration branch**: `integration/lala-consolidation-20260805` (fa5717ed5ad0ae839932d666875b8299d5629b9e)
+> **Base integration branch**: `integration/lala-consolidation-20260805` (<EXACT_BASE_SHA>)
 
 This runbook defines the orchestration contract for multi-agent, multi-session LALA completion work. It implements the control-plane separation between Controller, Implementer, Verifier, and Integrator roles described in the final completion playbook.
 
@@ -30,23 +30,29 @@ This runbook defines the orchestration contract for multi-agent, multi-session L
 ### Controller (Control-Plane Only)
 
 **Responsibilities:**
-- State restoration and session handoff
-- Worktree and git state management
-- Verification dispatch and result collection
-- Integrator promotion decisions
-- Session lifecycle management
+- Read-only git/PR/worktree/CI/runtime state inspection
+- Queue ordering, worker dispatch, verdict comparison, and checkpoint decisions
+- Session lifecycle management and handoff coordination
 
 **Never Does:**
 - Direct code implementation in controller sessions
 - Secret value access or display
 - Runtime validation execution
 - External API calls or migrations
+- Code/doc edits, commit/push, rebase/cherry-pick/conflict resolution
+- PR retarget/merge/close or mutable worktree management
+- No controller code/doc edits, commit/push, rebase/cherry-pick/conflict resolution, PR retarget/merge/close, or mutable worktree management
 
 **Required Tools:**
-- `git` for worktree and branch management
-- `gh` for PR inspection and creation
+- `git` for read-only worktree and branch inspection
+- `gh` for read-only PR inspection
 - Terminal process management for Orca sessions
 - File system access to handoff docs and ledgers
+
+**Implementation Operations:**
+- Implementer performs all code/doc changes
+- Integrator performs retarget/rebase/merge/close after verifier PASS
+- Required tools and examples must not tell a controller to run mutable Git/worktree operations
 
 ### Implementer (Implementation Agent)
 
@@ -113,7 +119,7 @@ This runbook defines the orchestration contract for multi-agent, multi-session L
 ### Implementation Flow
 
 ```
-IMPLEMENTER → VERIFIER STEWARD → CORRECTION_REQUIRED loop → INTEGRATOR → (PASS | BLOCKED_EXTERNAL)
+IMPLEMENTER → VERIFIER STEWARD → CORRECTION_REQUIRED loop → INTEGRATOR → INTEGRATION_VERIFIED → (PASS | BLOCKED_EXTERNAL)
 ```
 
 ### State Definitions
@@ -121,11 +127,17 @@ IMPLEMENTER → VERIFIER STEWARD → CORRECTION_REQUIRED loop → INTEGRATOR →
 | State | Entry | Exit | Next States |
 |-------|-------|------|-------------|
 | `TARGET` | Controller creates phase plan | Implementer assigned | `IMPLEMENTED_NOT_RUNTIME_VERIFIED` |
-| `IMPLEMENTED_NOT_RUNTIME_VERIFIED` | Implementer creates Draft PR | Verifier assigned | `CURRENT`, `CORRECTION_REQUIRED` |
+| `IMPLEMENTED_NOT_RUNTIME_VERIFIED` | Implementer creates Draft PR | Verifier assigned | `INTEGRATION_VERIFIED`, `CORRECTION_REQUIRED` |
 | `CORRECTION_REQUIRED` | Verifier issues correction request | Implementer addresses issues | `IMPLEMENTED_NOT_RUNTIME_VERIFIED` |
-| `CURRENT` | Integrator promotes to main | Runtime verified in production | Complete |
+| `INTEGRATION_VERIFIED` | Verifier PASS, integration-branch verification complete | Integrator review | Draft PR for integration→main (separate step) |
 | `BLOCKED_EXTERNAL` | External blocker identified | External resolution | `TARGET` (when unblocked) |
 | `REJECTED` | Contract/security violation | N/A | Complete (not merged) |
+
+**Important**:
+- `INTEGRATION_VERIFIED` is a distinct state after verifier PASS and integration-branch verification
+- Do not define `CURRENT` as an automatic integrator-to-main promotion state
+- Main promotion is a separate Draft/review step requiring explicit user/ops authorization plus deploy, DB migration, runtime, secret/IAM, and live-provider gates
+- No automatic main merge, deploy, or production readiness claim
 
 ### Phase Progression
 
@@ -139,13 +151,17 @@ Each phase must reach `CURRENT` state before next phase begins. Stacked PRs requ
 
 ### Canonical Verifier Worktree
 
-**Location**: Designated long-lived worktree for verification sessions
+**Location**: `/Users/geondongkim/orca/workspaces/LALA-next/lala-zai-verification`
 
 **Purpose**: Persistent verification state across sessions
 
-**Ledger Location**: `docs/operations/verification-ledger.md`
+**Session Management**: One visible terminal/session titled "ZCode VERIFICATION STEWARD GLM-4.7"
+- Bootstrap once; subsequent requests resume the same persisted session using `/Users/geondongkim/.local/bin/zcode-visible-run <worktree> <prompt-file> --continue`
+- One verifier worktree/session, no per-PR verifier proliferation
 
-**Ledger Schema**:
+**Ledger Location**: `output/local/verification-steward-ledger-20260805.md` (local/untracked, do not edit tracked docs/operations/verification-ledger.md)
+
+**Ledger Schema** (tracked docs may define stable secret-free schema):
 ```markdown
 ## Session {SESSION_ID}
 
@@ -157,11 +173,16 @@ Each phase must reach `CURRENT` state before next phase begins. Stacked PRs requ
 | Worktree Path | /path/to/verifier/worktree |
 | Target Branch | branch-name |
 | Target Head SHA | exact SHA |
-| Base SHA | exact SHA |
+| Expected Base SHA | exact SHA |
 | Verdict | PASS | CORRECTION_REQUIRED | BLOCKED_EXTERNAL |
-| Evidence | links to artifacts |
+| Evidence Paths | paths to artifacts |
+| Tests/CI | CI status at exact SHA |
 | Next Checkpoint | next session entry point |
+| Blocker Class | external | internal | scope | safety |
+| Terminal/Worktree References | operational placeholders |
 ```
+
+**Important**: The mutable live ledger is local/untracked at `output/local/verification-steward-ledger-20260805.md`. Do not claim a tracked `docs/operations/verification-ledger.md` exists or should be edited. Do not place live session IDs, secret values, tokens, raw env values, or mutable runtime state in tracked docs or PR body.
 
 ### Controller Worktree Management
 
@@ -773,18 +794,21 @@ PASS | CORRECTION_REQUIRED | BLOCKED_EXTERNAL
 
 ## Appendix: Current State Examples
 
-### Generic State Example
+### Generic State Example (Historical Evidence Pattern)
 
 ```markdown
-## Current Phase Status
+## Phase Status - Historical Evidence
 
 **Phase**: P3 - Review/Local Signals
 **Branch**: codex/p3-review-local-signals
-**Base SHA**: fa5717ed5ad0ae839932d666875b8299d5629b9e
-**Current SHA**: {actual-sha-when-current}
+**Base SHA**: <EXACT_BASE_SHA>
+**Head SHA**: <EXACT_HEAD_SHA>
 **State**: IMPLEMENTED_NOT_RUNTIME_VERIFIED
 **Draft PR**: #{number}
 **CI**: [link to CI run]
+
+**Note**: Current operational state must be queried live. Use placeholders like <EXACT_HEAD_SHA> in templates and require the controller/verifier to query live state at each checkpoint.
+```
 
 ### Completed
 - Review ingest worker contract
