@@ -5,7 +5,7 @@ Focused offline unit tests using synthetic in-memory fixtures.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from apps.api.app.services import official_coverage_reconciliation as reconciliation
 from apps.api.app.services.official_source_inventory import (
@@ -75,7 +75,7 @@ def _receipt(**overrides):
         source_name="tour_api",
         dataset_name="Official Places",
         content_fingerprint="a" * 64,
-        observed_at=datetime(2026, 8, 4, 0, 0, tzinfo=UTC),
+        observed_at=datetime.now(UTC) - timedelta(hours=1),
         record_ids=("record:one", "record:two", "record:three"),
         coverage_scope="nationwide",
         covered_regions=("seoul", "gyeonggi"),
@@ -271,7 +271,7 @@ def test_full_ingest_validation_allows_lax_requirements():
     """Full ingest validation passes with relaxed requirements."""
     full_coverage_receipt = _receipt(
         covered_regions=("seoul", "gyeonggi", "busan"),  # Partial coverage
-        observed_at=datetime(2026, 8, 4, 23, 0, tzinfo=UTC),  # Fresh
+        observed_at=datetime.now(UTC) - timedelta(hours=1),  # Fresh
     )
 
     report = reconciliation.build_reconciliation_report(
