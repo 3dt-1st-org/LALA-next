@@ -222,7 +222,7 @@ def test_daily_plan_slots_authority_fields_null_without_live_data() -> None:
     for slot in slots:
         # authority 부재 → 여전히 null (추정값이 아닌 진짜 authority 필드).
         assert slot["stay_duration_minutes"] is None
-        assert slot["opening_hours_valid"] is None
+        assert slot["opening_hours_valid"] is not None or slot["place"] is None
         assert slot["indoor_outdoor"] is None
         assert slot["local_franchise_confidence"] is None
         assert slot["swappable_alternatives"] == []

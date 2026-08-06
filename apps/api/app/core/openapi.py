@@ -911,7 +911,8 @@ def _daily_plan_slot_schema() -> dict[str, Any]:
             },
             "opening_hours_valid": {
                 "anyOf": [{"type": "boolean"}, {"type": "null"}],
-                "description": "Opening-hours authority absent → null.",
+                "description": "True if slot start within estimated hours.",
+                "estimated_opening_hours": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Category-based estimate (e.g. 11:00-22:00)."},
             },
             "indoor_outdoor": {
                 "anyOf": [{"type": "string"}, {"type": "null"}],
