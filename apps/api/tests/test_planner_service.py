@@ -654,8 +654,12 @@ def test_intervention_bad_weather_finds_indoor_alternative(monkeypatch):
         {"place_id": "p1", "name": "야외 공원", "category": "attraction", "is_indoor": False},
         {"place_id": "p2", "name": "실내 미술관", "category": "culture_venue", "is_indoor": True},
     ]
-    monkeypatch.setattr(planner_service, "list_places", lambda **kw: {"source": "db", "places": places})
-    monkeypatch.setattr(planner_service, "current_weather", lambda **kw: {"outdoor_status": "bad", "source": "kma"})
+    monkeypatch.setattr(
+        planner_service, "list_places", lambda **kw: {"source": "db", "places": places}
+    )
+    monkeypatch.setattr(
+        planner_service, "current_weather", lambda **kw: {"outdoor_status": "bad", "source": "kma"}
+    )
 
     result = planner_service.intervention(lat=37.5, lng=127.0, radius_m=3000, language="ko")
 
@@ -673,8 +677,12 @@ def test_intervention_bad_weather_no_indoor_alternative(monkeypatch):
         {"place_id": "p1", "name": "야외 공원", "category": "attraction", "is_indoor": False},
         {"place_id": "p2", "name": "야외 카페", "category": "restaurant", "is_indoor": False},
     ]
-    monkeypatch.setattr(planner_service, "list_places", lambda **kw: {"source": "db", "places": places})
-    monkeypatch.setattr(planner_service, "current_weather", lambda **kw: {"outdoor_status": "bad", "source": "kma"})
+    monkeypatch.setattr(
+        planner_service, "list_places", lambda **kw: {"source": "db", "places": places}
+    )
+    monkeypatch.setattr(
+        planner_service, "current_weather", lambda **kw: {"outdoor_status": "bad", "source": "kma"}
+    )
 
     result = planner_service.intervention(lat=37.5, lng=127.0, radius_m=3000, language="ko")
 
@@ -687,8 +695,12 @@ def test_intervention_good_weather_no_alternative(monkeypatch):
     places = [
         {"place_id": "p1", "name": "실내 미술관", "category": "culture_venue", "is_indoor": True},
     ]
-    monkeypatch.setattr(planner_service, "list_places", lambda **kw: {"source": "db", "places": places})
-    monkeypatch.setattr(planner_service, "current_weather", lambda **kw: {"outdoor_status": "good", "source": "kma"})
+    monkeypatch.setattr(
+        planner_service, "list_places", lambda **kw: {"source": "db", "places": places}
+    )
+    monkeypatch.setattr(
+        planner_service, "current_weather", lambda **kw: {"outdoor_status": "good", "source": "kma"}
+    )
 
     result = planner_service.intervention(lat=37.5, lng=127.0, radius_m=3000, language="ko")
 
@@ -702,11 +714,17 @@ def test_intervention_excludes_original_from_alternatives(monkeypatch):
         {"place_id": "p1", "name": "미술관 A", "category": "culture_venue", "is_indoor": True},
         {"place_id": "p2", "name": "미술관 B", "category": "culture_venue", "is_indoor": True},
     ]
-    monkeypatch.setattr(planner_service, "list_places", lambda **kw: {"source": "db", "places": places})
-    monkeypatch.setattr(planner_service, "current_weather", lambda **kw: {"outdoor_status": "bad", "source": "kma"})
+    monkeypatch.setattr(
+        planner_service, "list_places", lambda **kw: {"source": "db", "places": places}
+    )
+    monkeypatch.setattr(
+        planner_service, "current_weather", lambda **kw: {"outdoor_status": "bad", "source": "kma"}
+    )
 
     result = planner_service.intervention(lat=37.5, lng=127.0, radius_m=3000, language="ko")
 
     alt = result["alternative_slot"]
     assert alt is not None
-    assert alt["place"]["place_id"] != result["place"]["place_id"], "alternative must differ from original"
+    assert alt["place"]["place_id"] != result["place"]["place_id"], (
+        "alternative must differ from original"
+    )
