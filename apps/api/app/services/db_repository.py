@@ -270,6 +270,7 @@ def fetch_places(
                 ELSE NULL
             END AS is_ongoing,
             false AS is_approximate_location,
+            enrichment.is_indoor AS is_indoor,
             latest_scores.local_spending_score,
             latest_scores.small_merchant_fit_score,
             latest_scores.demand_dispersion_score,
@@ -296,6 +297,14 @@ def fetch_places(
                 updated_at DESC
             LIMIT 1
         ) linked_event ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT is_indoor
+            FROM travel.place_enrichments
+            WHERE place_id = ranked_places.place_id
+            AND is_indoor IS NOT NULL
+            ORDER BY generated_at DESC
+            LIMIT 1
+        ) enrichment ON TRUE
         ORDER BY FLOOR(distance_m / 500.0) ASC, COALESCE(latest_scores.final_score, 0) DESC, distance_m ASC, updated_at DESC
         LIMIT %s
     """
@@ -356,6 +365,7 @@ def fetch_places(
                 "event_url": row.get("event_url"),
                 "is_ongoing": row.get("is_ongoing"),
                 "is_approximate_location": row.get("is_approximate_location"),
+                "is_indoor": row.get("is_indoor"),
                 "distance_m": int(round(distance_m)),
                 "source": "db",
                 "upstream_source": row.get("source") or "canonical",

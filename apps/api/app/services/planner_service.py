@@ -80,8 +80,18 @@ def intervention(*, lat: float, lng: float, radius_m: int, language: str = "en")
             ),
             language=normalized,
         ),
-        # indoor/outdoor provenance 부재 → honest null (발명된 대체 장소 금지).
-        "alternative_slot": None,
+        # indoor/outdoor provenance: bad weather 시 실내 대체 장소 검색(AI enrichment 기반).
+        "alternative_slot": _find_indoor_alternative(
+            place_candidates=places.get("places") or [],
+            exclude_place_id=(candidate or {}).get("place_id"),
+            language=normalized,
+            weather_hint=outdoor_status,
+            unavailable_reason=(
+                "추천 장소가 부족해요" if normalized == "ko" else "Not enough nearby options"
+            ),
+        )
+        if is_bad_weather
+        else None,
         # observable trigger 만. good/unknown → null. 발명 금지.
         "trigger_type": "bad_weather" if is_bad_weather else None,
         "trigger_factors": _intervention_trigger_factors(outdoor_status=outdoor_status),
@@ -103,6 +113,33 @@ def _intervention_trigger_factors(*, outdoor_status: str) -> list[dict]:
     if outdoor_status == "bad":
         return [{"factor": "weather_outdoor_status", "value": "bad"}]
     return []
+
+
+def _find_indoor_alternative(
+    *,
+    place_candidates: list[dict],
+    exclude_place_id: str | None,
+    language: str,
+    weather_hint: str | None,
+    unavailable_reason: str,
+) -> dict | None:
+    """AI enrichment is_indoor=true 인 첫 번째 대체 장소를 slot 으로 반환.
+
+    provenance 없거나 실내 장소가 없으면 None(honest). 발명된 대체 금지.
+    """
+    for place in place_candidates:
+        if place.get("place_id") == exclude_place_id:
+            continue
+        if place.get("is_indoor") is True:
+            return _plan_slot(
+                period="afternoon",
+                title="오후" if language == "ko" else "Afternoon",
+                place=place,
+                weather_hint=weather_hint,
+                unavailable_reason=unavailable_reason,
+                language=language,
+            )
+    return None
 
 
 def _combined_source(place_source: str | None, weather_source: str | None) -> str:
@@ -256,6 +293,9 @@ def _plan_slot(
     # 확보 전까지 표준 관례 기반 추정값.
     # travel_time: Haversine 직선거리 기반 도보 추정(분). routing authority 확보 전까지 추정.
     # stay_duration/opening_hours_valid/indoor_outdoor/franchise: authority 부재 → null.
+    indoor_outdoor = None
+    if place and place.get("is_indoor") is not None:
+        indoor_outdoor = "indoor" if place["is_indoor"] else "outdoor"
     return {
         "period": period,
         "title": title,
@@ -265,7 +305,7 @@ def _plan_slot(
         "stay_duration_minutes": None,
         "travel_time_from_previous_minutes": travel_time,
         "opening_hours_valid": None,
-        "indoor_outdoor": None,
+        "indoor_outdoor": indoor_outdoor,
         "recommendation_reason": (_recommendation_reason(place, language) if place else None),
         "local_franchise_confidence": None,
         "swappable_alternatives": [],
