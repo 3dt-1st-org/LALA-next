@@ -214,10 +214,7 @@ class LalaApiClient {
       requestId: requestId,
       timeout: timeout ?? readTimeout,
     );
-    return _envelopeFromResponse<Map<String, dynamic>>(
-      resp,
-      parseData: _asMap,
-    );
+    return _envelopeFromResponse<Map<String, dynamic>>(resp, parseData: _asMap);
   }
 
   Future<LalaEnvelope<LalaWeather>> getWeather({
@@ -442,10 +439,7 @@ class LalaApiClient {
     String? requestId,
     Duration? timeout,
   }) async {
-    final payload = <String, dynamic>{
-      'title': title,
-      'body': body,
-    };
+    final payload = <String, dynamic>{'title': title, 'body': body};
     if (tags != null && tags.isNotEmpty) {
       payload['tags'] = tags;
     }
@@ -623,10 +617,7 @@ class LalaApiClient {
 
   /// ONMU P3c: 채팅방 WebSocket URI 를 구성(baseUri 의 scheme 을 ws/wss 로 변환).
   /// [token] 은 query param ?token= 로 전달(브라우저 핸드셰이크는 헤더 미지원).
-  Uri chatWebSocketUri({
-    required String roomId,
-    required String token,
-  }) {
+  Uri chatWebSocketUri({required String roomId, required String token}) {
     final isSecure = baseUri.scheme == 'https' || baseUri.scheme == 'wss';
     final scheme = isSecure ? 'wss' : 'ws';
     final basePath = baseUri.path.endsWith('/')
@@ -730,8 +721,9 @@ class LalaApiClient {
     final raw = resp.data;
     if (raw is! Map<String, dynamic>) {
       throw LalaApiException(
-        code:
-            status < 200 || status >= 300 ? 'HTTP_$status' : 'INVALID_RESPONSE',
+        code: status < 200 || status >= 300
+            ? 'HTTP_$status'
+            : 'INVALID_RESPONSE',
         message: 'Expected a JSON object response.',
         statusCode: status,
         retryable: status >= 500,
@@ -897,8 +889,9 @@ class LalaEnvelope<T> {
     T Function(Object?)? parseData,
   }) {
     final rawMeta = json['meta'];
-    final meta =
-        rawMeta is Map<String, dynamic> ? rawMeta : <String, dynamic>{};
+    final meta = rawMeta is Map<String, dynamic>
+        ? rawMeta
+        : <String, dynamic>{};
     final rawData = json['data'];
     final data = parseData == null
         ? (rawData is T ? rawData : null)
@@ -933,9 +926,7 @@ class LalaMe {
     if (value is! Map) {
       throw const FormatException('Expected /api/v1/me data object.');
     }
-    return LalaMe.fromJson(
-      value.map((key, value) => MapEntry('$key', value)),
-    );
+    return LalaMe.fromJson(value.map((key, value) => MapEntry('$key', value)));
   }
 
   factory LalaMe.fromJson(Map<String, dynamic> json) {
@@ -1041,6 +1032,7 @@ class LalaPlace {
     this.eventUrl,
     this.isOngoing,
     this.isApproximateLocation,
+    this.isIndoor,
     this.score,
   });
 
@@ -1063,6 +1055,7 @@ class LalaPlace {
   final String? eventUrl;
   final bool? isOngoing;
   final bool? isApproximateLocation;
+  final bool? isIndoor;
   final LalaPlaceScore? score;
 
   static LalaPlace fromJsonObject(Object? value) {
@@ -1090,6 +1083,7 @@ class LalaPlace {
       eventUrl: _asOptionalString(json['event_url']),
       isOngoing: _asOptionalBool(json['is_ongoing']),
       isApproximateLocation: _asOptionalBool(json['is_approximate_location']),
+      isIndoor: _asOptionalBool(json['is_indoor']),
       score: json['score'] is Map<String, dynamic>
           ? LalaPlaceScore.fromJson(_asMap(json['score']))
           : null,
@@ -1154,9 +1148,7 @@ class LalaPlaceScoreComponents {
       weatherFitScore: _asOptionalDouble(json['weather_fit_score']),
       reviewQualityScore: _asOptionalDouble(json['review_quality_score']),
       cultureRelevanceScore: _asOptionalDouble(json['culture_relevance_score']),
-      accessibilityFitScore: _asOptionalDouble(
-        json['accessibility_fit_score'],
-      ),
+      accessibilityFitScore: _asOptionalDouble(json['accessibility_fit_score']),
     );
   }
 }
@@ -1407,17 +1399,18 @@ class LalaPlanSlot {
       weatherHint: _asOptionalString(json['weather_hint']),
       startTime: _asOptionalString(json['start_time']),
       stayDurationMinutes: _asOptionalInt(json['stay_duration_minutes']),
-      travelTimeFromPreviousMinutes:
-          _asOptionalInt(json['travel_time_from_previous_minutes']),
+      travelTimeFromPreviousMinutes: _asOptionalInt(
+        json['travel_time_from_previous_minutes'],
+      ),
       openingHoursValid: _asOptionalBool(json['opening_hours_valid']),
       indoorOutdoor: _asOptionalString(json['indoor_outdoor']),
       recommendationReason: _asOptionalString(json['recommendation_reason']),
-      localFranchiseConfidence:
-          _asOptionalString(json['local_franchise_confidence']),
-      swappableAlternatives: _asList(json['swappable_alternatives'])
-          .whereType<Map<String, dynamic>>()
-          .map(LalaPlace.fromJson)
-          .toList(),
+      localFranchiseConfidence: _asOptionalString(
+        json['local_franchise_confidence'],
+      ),
+      swappableAlternatives: _asList(
+        json['swappable_alternatives'],
+      ).whereType<Map<String, dynamic>>().map(LalaPlace.fromJson).toList(),
       unavailableReason: _asOptionalString(json['unavailable_reason']),
     );
   }
@@ -1484,16 +1477,17 @@ class LalaIntervention {
           ? LalaPlanSlot.fromJson(_asMap(json['alternative_slot']))
           : null,
       triggerType: _asOptionalString(json['trigger_type']),
-      triggerFactors: _asList(json['trigger_factors'])
-          .whereType<Map<String, dynamic>>()
-          .toList(),
+      triggerFactors: _asList(
+        json['trigger_factors'],
+      ).whereType<Map<String, dynamic>>().toList(),
       distanceComparison: json['distance_comparison'] is Map<String, dynamic>
           ? json['distance_comparison'] as Map<String, dynamic>
           : null,
       userDecision: _asOptionalString(json['user_decision']) ?? 'pending',
       applyState: _asOptionalString(json['apply_state']) ?? 'not_applied',
-      history:
-          _asList(json['history']).whereType<Map<String, dynamic>>().toList(),
+      history: _asList(
+        json['history'],
+      ).whereType<Map<String, dynamic>>().toList(),
     );
   }
 }
@@ -1764,9 +1758,9 @@ class CommunityPostsResponse {
     return CommunityPostsResponse(
       count: _asInt(json['count']),
       total: _asInt(json['total']),
-      posts: _asList(json['posts'])
-          .map(CommunityPost.fromJsonObject)
-          .toList(growable: false),
+      posts: _asList(
+        json['posts'],
+      ).map(CommunityPost.fromJsonObject).toList(growable: false),
     );
   }
 }
@@ -1825,9 +1819,9 @@ class CommunityCommentsResponse {
     return CommunityCommentsResponse(
       count: _asInt(json['count']),
       total: _asInt(json['total']),
-      comments: _asList(json['comments'])
-          .map(CommunityComment.fromJsonObject)
-          .toList(growable: false),
+      comments: _asList(
+        json['comments'],
+      ).map(CommunityComment.fromJsonObject).toList(growable: false),
     );
   }
 }
@@ -1907,9 +1901,9 @@ class ChatRoomsResponse {
     return ChatRoomsResponse(
       count: _asInt(json['count']),
       total: _asInt(json['total']),
-      rooms: _asList(json['rooms'])
-          .map(ChatRoom.fromJsonObject)
-          .toList(growable: false),
+      rooms: _asList(
+        json['rooms'],
+      ).map(ChatRoom.fromJsonObject).toList(growable: false),
     );
   }
 }
@@ -1966,9 +1960,9 @@ class ChatMessagesResponse {
     return ChatMessagesResponse(
       count: _asInt(json['count']),
       total: _asInt(json['total']),
-      messages: _asList(json['messages'])
-          .map(ChatMessage.fromJsonObject)
-          .toList(growable: false),
+      messages: _asList(
+        json['messages'],
+      ).map(ChatMessage.fromJsonObject).toList(growable: false),
     );
   }
 }
