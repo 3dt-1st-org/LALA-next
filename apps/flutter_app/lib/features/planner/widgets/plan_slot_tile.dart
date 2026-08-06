@@ -12,11 +12,15 @@ class PlanSlotTile extends StatelessWidget {
     required this.slot,
     required this.language,
     required this.onSelectPlace,
+    this.swapReason,
   });
 
   final LalaPlanSlot slot;
   final String language;
   final ValueChanged<LalaPlace> onSelectPlace;
+
+  /// 날씨 교체 사유(P6A §04 Screen 04 swapped 상태). null 이면 일반 표시.
+  final String? swapReason;
 
   @override
   Widget build(BuildContext context) {
@@ -108,6 +112,41 @@ class PlanSlotTile extends StatelessWidget {
                   height: 1.18,
                 ),
               ),
+              if (swapReason != null) ...[
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEBF4FE),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.swap_horiz,
+                        size: 12,
+                        color: const Color(0xFF2B6CB0),
+                      ),
+                      const SizedBox(width: 3),
+                      Expanded(
+                        child: Text(
+                          swapReason!,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                color: const Color(0xFF2B6CB0),
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               if (subtitle != null) ...[
                 const SizedBox(height: 3),
                 Text(
