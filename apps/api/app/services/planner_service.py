@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from apps.api.app.schemas.planner import DailyPlanRequest
 from apps.api.app.services.normalization import normalize_language
+from apps.api.app.services.opening_hours_service import (
+    estimated_opening_hours,
+    is_within_hours,
+)
 from apps.api.app.services.places_service import list_places
 from apps.api.app.services.request_identity import generation_identity
 from apps.api.app.services.travel_time_service import (
@@ -296,6 +300,12 @@ def _plan_slot(
     indoor_outdoor = None
     if place and place.get("is_indoor") is not None:
         indoor_outdoor = "indoor" if place["is_indoor"] else "outdoor"
+
+    # opening_hours: 카테고리 기반 추정 운영시간 (authority 아님, estimated).
+    open_t, close_t = estimated_opening_hours(place.get("category", "") if place else "")
+    start_t = period_start_time(period)
+    oh_valid = is_within_hours(start_t, open_t, close_t) if place else None
+
     return {
         "period": period,
         "title": title,
@@ -304,7 +314,8 @@ def _plan_slot(
         "start_time": period_start_time(period),
         "stay_duration_minutes": None,
         "travel_time_from_previous_minutes": travel_time,
-        "opening_hours_valid": None,
+        "opening_hours_valid": oh_valid,
+        "estimated_opening_hours": f"{open_t}-{close_t}" if place else None,
         "indoor_outdoor": indoor_outdoor,
         "recommendation_reason": (_recommendation_reason(place, language) if place else None),
         "local_franchise_confidence": None,
