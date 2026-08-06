@@ -71,6 +71,30 @@ class PlanSlotTile extends StatelessWidget {
                       ),
                     ),
                   ],
+                  if (slot.indoorOutdoor != null) ...[
+                    if (weatherHint == null) const Spacer(),
+                    Icon(
+                      slot.indoorOutdoor == 'indoor'
+                          ? Icons.home_work_outlined
+                          : Icons.park_outlined,
+                      size: 13,
+                      color: slot.indoorOutdoor == 'indoor'
+                          ? const Color(0xFF0F766E)
+                          : const Color(0xFFC53030),
+                    ),
+                    const SizedBox(width: 2),
+                    Text(
+                      slot.indoorOutdoor == 'indoor'
+                          ? (language == 'ko' ? '실내' : 'Indoor')
+                          : (language == 'ko' ? '야외' : 'Outdoor'),
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: slot.indoorOutdoor == 'indoor'
+                            ? const Color(0xFF0F766E)
+                            : const Color(0xFFC53030),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
                 ],
               ),
               const SizedBox(height: 6),
