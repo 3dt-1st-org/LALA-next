@@ -9,8 +9,8 @@ row and every emitted record carries place_id/region/category provenance.
 
 Failures are typed via AcquisitionOutcome (auth_missing / quota_exceeded /
 network_error / parse_error / empty) — never swallowed, never resembling honest
-zero-result success. external_key is an opaque digest token
-(naver_<provider>_sha256:<hex16>), never the raw post URL.
+zero-result success. external_key is an opaque, place-aware digest token
+(naver_<provider>_sha256:<hex64>) using the full sha256, never the raw post URL.
 """
 
 from __future__ import annotations
@@ -128,21 +128,41 @@ def _parse_date(s: str | None) -> datetime | None:
 # --- opaque identity helpers (never persist the raw URL) ---
 
 
-def _opaque_external_key(provider: str, link: str, postdate: str) -> str:
-    """Digest-derived token: naver_<provider>_sha256:<hex16>.
+def _opaque_external_key(*, provider: str, link: str, postdate: str, place_id: str) -> str:
+    """Place-aware opaque token: naver_<provider>_sha256:<full hex64>.
 
-    The raw URL is hashed into the digest and never appears in the output. Same
-    provider+link+postdate always produces the same token.
+    Full 64-hex sha256 over (provider + link + postdate + place_id). The raw URL
+    is hashed and never appears. Place-awareness means the same post for two
+    distinct places yields two distinct keys (P1b fix). Full digest means no
+    preventable 64-bit collision domain at place×post scale (P2 fix).
     """
-    material = f"{provider}|{link}|{postdate}"
-    digest = hashlib.sha256(material.encode("utf-8")).hexdigest()[:16]
+    material = f"{provider}|{link}|{postdate}|{place_id}"
+    digest = hashlib.sha256(material.encode("utf-8")).hexdigest()
     return f"naver_{provider}_sha256:{digest}"
 
 
-def _content_sha256(title: str | None, description: str | None) -> str:
-    """sha256 of cleaned title+description — the only retained content identity."""
-    cleaned = clean_review_text(title or "", description or "")
-    return hashlib.sha256(cleaned.encode("utf-8")).hexdigest()
+def _content_sha256(
+    *,
+    provider: str,
+    link: str,
+    postdate: str,
+    place_id: str,
+    title: str | None,
+    description: str | None,
+) -> str:
+    """Place-aware full 64-hex content digest — the only retained content identity.
+
+    sha256 over (provider + link + postdate + place_id + cleaned-title-hash +
+    cleaned-desc-hash). Raw text is hashed in memory and discarded; only the
+    64-char hex digest escapes. Place-aware: same post for two places yields two
+    distinct digests so both get independent receipts/aggregates (P1b fix).
+    """
+    cleaned_title = clean_review_text(title or "")
+    cleaned_desc = clean_review_text(description or "")
+    title_hash = hashlib.sha256(cleaned_title.encode("utf-8")).hexdigest()
+    desc_hash = hashlib.sha256(cleaned_desc.encode("utf-8")).hexdigest()
+    material = f"{provider}|{link}|{postdate}|{place_id}|{title_hash}|{desc_hash}"
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
 def _naver_credentials() -> tuple[str, str]:
@@ -191,7 +211,9 @@ def _build_transient_post(
     description = _clean(item.get("description")) or ""
     return TransientNaverPost(
         provider=provider,
-        external_key=_opaque_external_key(provider, link, postdate),
+        external_key=_opaque_external_key(
+            provider=provider, link=link, postdate=postdate, place_id=place_id
+        ),
         keyword=keyword,
         place_id=place_id,
         region=region,
@@ -201,7 +223,14 @@ def _build_transient_post(
         link=link,
         postdate=postdate,
         created_at_source=_parse_date(item.get("postdate")),
-        content_sha256=_content_sha256(title, description),
+        content_sha256=_content_sha256(
+            provider=provider,
+            link=link,
+            postdate=postdate,
+            place_id=place_id,
+            title=title,
+            description=description,
+        ),
     )
 
 

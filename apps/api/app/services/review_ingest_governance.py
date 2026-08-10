@@ -491,6 +491,12 @@ class ReviewIngestResult(BaseModel):
 
     run: ReviewIngestRunSummary
     accepted: tuple[ApprovedReviewAggregate, ...]
+    # The NEW (non-replay) ReviewSourceRecord objects, carrying full identity
+    # (source_name, provider, external_key, license_class, terms_version,
+    # content_sha256, category, match_confidence). No raw text — safe to expose.
+    # Lets the collector map accepted records back to places by full content_sha256
+    # instead of the truncated aggregate_key (P1b/P2 fix).
+    accepted_records: tuple[ReviewSourceRecord, ...] = ()
     quarantined: tuple[ReviewQuarantineEntry, ...]
 
 
@@ -1302,6 +1308,88 @@ def _finalize_ingest_run(
     )
 
 
+def govern_review_ingest_on_cursor(
+    cur,
+    *,
+    source_name: str,
+    expected_provider: str,
+    expected_terms_version: str,
+    records: Sequence[Mapping[str, Any]],
+    window_start: date | None = None,
+) -> ReviewIngestResult:
+    """Cursor-based governance boundary — runs on the CALLER's transaction.
+
+    Performs the full gate → classify → run create/resume → receipt dedupe →
+    quarantine → finalize sequence on the caller's cursor. Does NOT commit or
+    rollback; the caller owns the transaction boundary. This lets the collector
+    run receipts + weekly aggregates in ONE atomic transaction (P1a fix): if the
+    aggregate upsert fails, the caller's ``with conn:`` rolls back receipts too.
+
+    Returns ``accepted_records`` (the new, non-replay ReviewSourceRecord objects)
+    so the collector can map by full ``content_sha256`` instead of the truncated
+    ``aggregate_key`` (P1b/P2 fix).
+    """
+    run_key = build_run_key(
+        source_name=source_name,
+        window_start=window_start,
+        schema_version=GOVERNANCE_SCHEMA_VERSION,
+    )
+    received_count = len(records)
+    registration = load_active_review_source(
+        cur,
+        source_name=source_name,
+        expected_provider=expected_provider,
+        expected_terms_version=expected_terms_version,
+    )
+    valid_records, quarantined = classify_review_records(
+        registration=registration,
+        records=records,
+    )
+    run_id = _create_or_resume_ingest_run(
+        cur,
+        run_key=run_key,
+        registration=registration,
+        received_count=received_count,
+    )
+    new_records, replay_records = _record_review_receipts(
+        cur,
+        run_id=run_id,
+        source_name=registration.source_name,
+        records=valid_records,
+    )
+    accepted = tuple(approved_aggregate_from_record(record) for record in new_records)
+    _insert_quarantine_entries(cur, entries=quarantined, run_id=run_id)
+    failure_category: FailureCategory = (
+        "none" if not quarantined else _dominant_reason_category(quarantined)
+    )
+    _finalize_ingest_run(
+        cur,
+        run_id=run_id,
+        status="succeeded",
+        processed_count=len(new_records),
+        duplicate_count=len(replay_records),
+        quarantined_count=len(quarantined),
+        failure_category=failure_category,
+        error_message=None,
+    )
+    run_summary = build_run_summary(
+        run_key=run_key,
+        registration=registration,
+        received_count=received_count,
+        processed_count=len(new_records),
+        duplicate_count=len(replay_records),
+        quarantined_count=len(quarantined),
+        failure_category=failure_category,
+        status="succeeded",
+    )
+    return ReviewIngestResult(
+        run=run_summary,
+        accepted=accepted,
+        accepted_records=new_records,
+        quarantined=quarantined,
+    )
+
+
 def persist_review_ingest_run(
     *,
     dsn: str,
@@ -1314,93 +1402,27 @@ def persist_review_ingest_run(
 ) -> ReviewIngestResult:
     """One-transaction governance + persistence boundary (Finding 5).
 
-    Inside a single ``with conn:`` block (commit on success, rollback on any
-    error):
-
-      1. ``load_active_review_source`` -- DB-backed source gate (Finding 1).
-         Any gate failure raises and aborts the whole batch before a run row or
-         a receipt is written.
-      2. ``classify_review_records`` -- pure validation; builds typed
-         quarantines for malformed/unsafe records (Finding 4).
-      3. ``_create_or_resume_ingest_run`` -- idempotent run accounting row,
-         linked to the registered source via ``review_source_name`` (Finding 2).
-      4. ``_record_review_receipts`` -- persistent cross-run dedupe; only new
-         (non-replay) records become aggregates (Finding 3).
-      5. ``_insert_quarantine_entries`` -- typed dead-letter persistence.
-      6. ``_finalize_ingest_run`` -- absolute, retry-safe counter overwrite.
-
-    Aggregates are only returned after the transaction commits, so a partial
-    failure never exposes accepted aggregates to a downstream caller.
+    Thin wrapper around :func:`govern_review_ingest_on_cursor` that owns its own
+    connection and transaction. Behavior is byte-identical to the previous
+    monolithic implementation so all existing callers and tests are unaffected.
     """
     if not dsn:
         raise ValueError("DB_DSN is required.")
 
     import psycopg2
 
-    run_key = build_run_key(
-        source_name=source_name,
-        window_start=window_start,
-        schema_version=GOVERNANCE_SCHEMA_VERSION,
-    )
-    received_count = len(records)
     conn = psycopg2.connect(dsn, connect_timeout=connect_timeout)
-    # ``closing`` owns connection lifecycle; the inner ``with conn:`` owns the
-    # transaction (commit on clean exit, rollback on exception).
     with closing(conn):
         with conn:
             with conn.cursor() as cur:
-                registration = load_active_review_source(
+                return govern_review_ingest_on_cursor(
                     cur,
                     source_name=source_name,
                     expected_provider=expected_provider,
                     expected_terms_version=expected_terms_version,
-                )
-                valid_records, quarantined = classify_review_records(
-                    registration=registration,
                     records=records,
+                    window_start=window_start,
                 )
-                run_id = _create_or_resume_ingest_run(
-                    cur,
-                    run_key=run_key,
-                    registration=registration,
-                    received_count=received_count,
-                )
-                new_records, replay_records = _record_review_receipts(
-                    cur,
-                    run_id=run_id,
-                    source_name=registration.source_name,
-                    records=valid_records,
-                )
-                accepted = tuple(approved_aggregate_from_record(record) for record in new_records)
-                _insert_quarantine_entries(cur, entries=quarantined, run_id=run_id)
-                failure_category: FailureCategory = (
-                    "none" if not quarantined else _dominant_reason_category(quarantined)
-                )
-                _finalize_ingest_run(
-                    cur,
-                    run_id=run_id,
-                    status="succeeded",
-                    processed_count=len(new_records),
-                    duplicate_count=len(replay_records),
-                    quarantined_count=len(quarantined),
-                    failure_category=failure_category,
-                    error_message=None,
-                )
-                run_summary = build_run_summary(
-                    run_key=run_key,
-                    registration=registration,
-                    received_count=received_count,
-                    processed_count=len(new_records),
-                    duplicate_count=len(replay_records),
-                    quarantined_count=len(quarantined),
-                    failure_category=failure_category,
-                    status="succeeded",
-                )
-    return ReviewIngestResult(
-        run=run_summary,
-        accepted=accepted,
-        quarantined=quarantined,
-    )
 
 
 def register_review_source(

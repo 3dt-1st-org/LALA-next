@@ -4,17 +4,24 @@ Mirrors run_review_mention_ingest.py's structure: --preview/--apply,
 --confirm APPLY_NAVER_REVIEW_COLLECT, ALLOW_NAVER_REVIEW_COLLECT_APPLY=1, JSON
 stdout, DSN via the app settings loader.
 
-DG-1 gate is checked BEFORE any network call. The gate refuses acquisition until
-an operator registers ingest.review_sources with source_name='naver_search',
-provider='naver', terms_version='naver-search-openapi-terms-v1', an allowed
-license_class, and source_status='active'.
+**Atomicity (P1a fix):** apply runs receipts + weekly aggregates in ONE
+``with conn:`` transaction via ``govern_review_ingest_on_cursor`` +
+``insert_review_mention_aggregates_on_cursor``. If the aggregate upsert fails,
+receipts roll back together — a clean re-run re-accepts and re-aggregates.
+
+**Place-aware full digests (P1b/P2 fix):** ``content_sha256`` and
+``external_key`` are place-aware (include ``place_id``) and use the full 64-hex
+sha256. Accepted records are mapped by full ``content_sha256``, not the
+truncated ``aggregate_key``, so the same post for two places yields two
+distinct, non-colliding signals.
+
+**Partial-failure degradation (P-add):** if any provider returns
+auth_missing/quota_exceeded/network_error/parse_error or governance quarantines
+records, the top-level status is ``degraded``. If all providers fail, ``failed``.
 
 Raw provider text (title/body/url) is NEVER persisted, logged, or written to
-community.posts. Only content_sha256 + opaque external_key + provenance reach the
-governance boundary; only aggregate counts reach community.place_mentions_weekly.
-
-Counts come from the governance boundary's rowcount-backed ReviewIngestResult,
-never from len(results).
+community.posts. Only content_sha256 + opaque external_key + provenance reach
+the governance boundary; only aggregate counts reach community.place_mentions_weekly.
 """
 
 from __future__ import annotations
@@ -24,7 +31,8 @@ import contextlib
 import json
 import os
 from collections import defaultdict
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from typing import Any
 
@@ -40,8 +48,8 @@ from apps.api.app.services.naver_search_service import (
 from apps.api.app.services.review_ingest_governance import (
     ReviewGovernanceError,
     ReviewSourceRegistration,
+    govern_review_ingest_on_cursor,
     load_active_review_source,
-    persist_review_ingest_run,
 )
 from apps.api.app.services.review_mention_ingest import (
     PROMPT_VERSION,
@@ -51,7 +59,7 @@ from apps.api.app.services.review_mention_ingest import (
     ReviewMentionWeeklyAggregate,
     _week_start,
     classify_post,
-    insert_review_mention_aggregates,
+    insert_review_mention_aggregates_on_cursor,
     record_job_run,
 )
 
@@ -59,16 +67,34 @@ CONFIRM_TEXT = "APPLY_NAVER_REVIEW_COLLECT"
 ALLOW_ENV = "ALLOW_NAVER_REVIEW_COLLECT_APPLY"
 JOB_NAME = "naver-review-collect"
 
+# Categories that degrade (but don't necessarily fail) a run. "empty" is an
+# honest zero-result success, NOT a failure.
+_DEGRADING_CATEGORIES = frozenset(
+    {"auth_missing", "quota_exceeded", "network_error", "parse_error"}
+)
+
 
 @dataclass(frozen=True)
 class _AggregateProvenance:
-    """Maps a content_sha256 to the place/provider used for aggregate rebuild."""
+    """Maps a full content_sha256 to the place/provider for aggregate rebuild."""
 
     place_id: str
     place_name_ko: str
     sub_provider: str
     category: str
     week_start: date
+
+
+@dataclass(frozen=True)
+class _AcquireResult:
+    """Structured result of acquire + classify across all places."""
+
+    failure_tally: dict[str, dict[str, int]]
+    candidates: int
+    ad_filtered: int
+    organic_records: list[dict[str, Any]] = field(default_factory=list)
+    sha_lookup: dict[str, _AggregateProvenance] = field(default_factory=dict)
+    places_count: int = 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -82,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--apply",
         action="store_true",
-        help="Govern through review_ingest_governance + upsert place_mentions_weekly.",
+        help="Govern + upsert place_mentions_weekly in ONE atomic transaction.",
     )
     parser.add_argument("--confirm", default="", help=f"Required with --apply: {CONFIRM_TEXT}")
     parser.add_argument("--limit", type=int, default=50, help="Max places to process.")
@@ -112,29 +138,192 @@ def main(argv: list[str] | None = None) -> int:
         _write(args, {"ok": False, "mode": _mode(args), "error": "DB_DSN is not configured."})
         return 2
 
-    # DG-1 gate (fail-closed, read-only). No acquisition until this passes.
+    if args.apply:
+        return _run_apply(args, dsn)
+    return _run_preview(args, dsn)
+
+
+# --- preview: read-only gate + places, then in-memory acquire + classify ---
+
+
+def _run_preview(args: argparse.Namespace, dsn: str) -> int:
+    conn = _open_connection(dsn, args.connect_timeout)
     try:
-        registration = _check_gate(dsn=dsn, connect_timeout=args.connect_timeout)
+        with conn:
+            with conn.cursor() as cur:
+                registration = load_active_review_source(
+                    cur,
+                    source_name=SOURCE_NAME,
+                    expected_provider=EXPECTED_PROVIDER,
+                    expected_terms_version=EXPECTED_TERMS_VERSION,
+                )
+                places = _read_places_on_cursor(cur, args.limit)
     except ReviewGovernanceError as exc:
         _write(
             args,
             {
                 "ok": False,
-                "mode": _mode(args),
+                "mode": "preview",
                 "error": exc.message,
                 "governance_code": exc.code,
             },
         )
         return 2
+    finally:
+        conn.close()
 
-    places = _read_places(dsn=dsn, limit=args.limit, connect_timeout=args.connect_timeout)
+    batch = _acquire_and_classify(places=places, display=args.display, registration=registration)
+    status = _compute_status(batch.failure_tally, 0)
+    _write(
+        args,
+        {
+            "ok": True,
+            "status": status,
+            "mode": "preview",
+            "source_name": SOURCE_NAME,
+            "places": batch.places_count,
+            "candidates": batch.candidates,
+            "ad_filtered_out": batch.ad_filtered,
+            "organic": len(batch.organic_records),
+            "failure_tally": batch.failure_tally,
+        },
+    )
+    return 0
 
-    # Acquire + classify in memory (no DB writes in this block).
+
+# --- apply: ONE atomic transaction for gate + acquire + govern + aggregate ---
+
+
+def _run_apply(args: argparse.Namespace, dsn: str) -> int:
+    started_at = datetime.now(UTC)
+    window_start = _week_start(started_at)
+    conn = _open_connection(dsn, args.connect_timeout)
+
+    batch: _AcquireResult | None = None
+    ingest_result = None
+    aggregates: list[ReviewMentionWeeklyAggregate] = []
+    inserted_rows = 0
+
+    try:
+        # Why one ``with conn:`` block: receipts (governance) and weekly
+        # aggregates must commit or roll back TOGETHER (P1a fix). If the
+        # aggregate upsert fails, the rollback undoes every receipt so a clean
+        # re-run re-accepts and re-aggregates — full recovery.
+        with conn:
+            with conn.cursor() as cur:
+                registration = load_active_review_source(
+                    cur,
+                    source_name=SOURCE_NAME,
+                    expected_provider=EXPECTED_PROVIDER,
+                    expected_terms_version=EXPECTED_TERMS_VERSION,
+                )
+                places = _read_places_on_cursor(cur, args.limit)
+                batch = _acquire_and_classify(
+                    places=places, display=args.display, registration=registration
+                )
+                ingest_result = govern_review_ingest_on_cursor(
+                    cur,
+                    source_name=SOURCE_NAME,
+                    expected_provider=EXPECTED_PROVIDER,
+                    expected_terms_version=EXPECTED_TERMS_VERSION,
+                    records=batch.organic_records,
+                    window_start=window_start,
+                )
+                aggregates = _build_weekly_aggregates(
+                    accepted_records=ingest_result.accepted_records,
+                    sha_lookup=batch.sha_lookup,
+                )
+                inserted_rows = insert_review_mention_aggregates_on_cursor(cur, aggregates)
+    except ReviewGovernanceError as exc:
+        _best_effort_job_run(args, dsn, started_at, "failed", exc.message)
+        _write(
+            args,
+            {
+                "ok": False,
+                "mode": "apply",
+                "error": exc.message,
+                "governance_code": exc.code,
+            },
+        )
+        return 2
+    except Exception as exc:
+        error_msg = redact_secret_text(str(exc) or exc.__class__.__name__, (dsn,))
+        _best_effort_job_run(args, dsn, started_at, "failed", error_msg)
+        _write(args, {"ok": False, "mode": "apply", "error": error_msg})
+        return 2
+    finally:
+        conn.close()
+
+    status = _compute_status(batch.failure_tally, ingest_result.run.quarantined_count)
+    _best_effort_job_run(args, dsn, started_at, status, None)
+
+    _write(
+        args,
+        {
+            "ok": status != "failed",
+            "status": status,
+            "mode": "apply",
+            "source_name": SOURCE_NAME,
+            "places": batch.places_count,
+            "candidates": batch.candidates,
+            "ad_filtered_out": batch.ad_filtered,
+            "organic": len(batch.organic_records),
+            "processed": ingest_result.run.processed_count,
+            "duplicate": ingest_result.run.duplicate_count,
+            "quarantined": ingest_result.run.quarantined_count,
+            "aggregated": len(aggregates),
+            "inserted_rows": inserted_rows,
+            "window_start": window_start.isoformat(),
+            "failure_tally": batch.failure_tally,
+        },
+    )
+    return 0
+
+
+# --- connection / DB helpers ---
+
+
+def _open_connection(dsn: str, connect_timeout: int):
+    """Open a psycopg2 connection. Extracted for test injection."""
+    import psycopg2
+
+    return psycopg2.connect(dsn, connect_timeout=connect_timeout)
+
+
+def _read_places_on_cursor(cur, limit: int) -> list[ReviewMentionPlace]:
+    sql = """
+        SELECT place_id, name_ko, category, region_name_ko
+        FROM travel.places
+        WHERE name_ko IS NOT NULL
+        ORDER BY place_id
+        LIMIT %s
+    """
+    cur.execute(sql, (limit,))
+    return [
+        ReviewMentionPlace(
+            place_id=str(row[0]),
+            name_ko=str(row[1]),
+            category=str(row[2] or "attraction"),
+            region_name_ko=row[3],
+        )
+        for row in cur.fetchall()
+    ]
+
+
+# --- in-memory acquire + classify (shared by preview and apply) ---
+
+
+def _acquire_and_classify(
+    *,
+    places: list[ReviewMentionPlace],
+    display: int,
+    registration: ReviewSourceRegistration,
+) -> _AcquireResult:
     failure_tally: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     candidates = 0
     ad_filtered = 0
     organic_records: list[dict[str, Any]] = []
-    aggregate_lookup: dict[str, _AggregateProvenance] = {}
+    sha_lookup: dict[str, _AggregateProvenance] = {}
 
     for place in places:
         if not place.name_ko or len(place.name_ko) < 2:
@@ -144,7 +333,7 @@ def main(argv: list[str] | None = None) -> int:
             place_name=place.name_ko,
             region=place.region_name_ko or "",
             category=place.category,
-            display=args.display,
+            display=display,
         )
         for outcome in result.outcomes:
             failure_tally[outcome.provider][outcome.category] += 1
@@ -160,7 +349,8 @@ def main(argv: list[str] | None = None) -> int:
                     post=post, decision=decision, registration=registration
                 )
                 organic_records.append(record)
-                aggregate_lookup[_aggregate_key(record["content_sha256"])] = _AggregateProvenance(
+                # Key by FULL content_sha256 — no truncation (P1b/P2 fix).
+                sha_lookup[record["content_sha256"]] = _AggregateProvenance(
                     place_id=place.place_id,
                     place_name_ko=place.name_ko,
                     sub_provider=post.provider,
@@ -168,129 +358,14 @@ def main(argv: list[str] | None = None) -> int:
                     week_start=decision.week_start,
                 )
 
-    summary: dict[str, Any] = {
-        "ok": True,
-        "mode": _mode(args),
-        "source_name": SOURCE_NAME,
-        "expected_provider": EXPECTED_PROVIDER,
-        "expected_terms_version": EXPECTED_TERMS_VERSION,
-        "places": len(places),
-        "candidates": candidates,
-        "ad_filtered_out": ad_filtered,
-        "organic": len(organic_records),
-        "failure_tally": {k: dict(v) for k, v in failure_tally.items()},
-    }
-
-    if args.preview:
-        # Preview is fully non-mutating: counts only, no DB writes.
-        _write(args, summary)
-        return 0
-
-    # --- Apply: govern + aggregate (single governance transaction) ---
-    window_start = _week_start(datetime.now(UTC))
-    started_at = datetime.now(UTC)
-    try:
-        ingest_result = persist_review_ingest_run(
-            dsn=dsn,
-            source_name=SOURCE_NAME,
-            expected_provider=EXPECTED_PROVIDER,
-            expected_terms_version=EXPECTED_TERMS_VERSION,
-            records=organic_records,
-            window_start=window_start,
-            connect_timeout=args.connect_timeout,
-        )
-        aggregates = _build_weekly_aggregates(
-            accepted=ingest_result.accepted,
-            aggregate_lookup=aggregate_lookup,
-        )
-        inserted_rows = insert_review_mention_aggregates(
-            dsn=dsn,
-            aggregates=aggregates,
-            connect_timeout=args.connect_timeout,
-        )
-        finished_at = datetime.now(UTC)
-        record_job_run(
-            dsn=dsn,
-            status="succeeded",
-            started_at=started_at,
-            finished_at=finished_at,
-            duration_ms=_duration_ms(started_at, finished_at),
-            error_message=None,
-            connect_timeout=args.connect_timeout,
-        )
-    except Exception as exc:
-        finished_at = datetime.now(UTC)
-        with contextlib.suppress(Exception):
-            record_job_run(
-                dsn=dsn,
-                status="failed",
-                started_at=started_at,
-                finished_at=finished_at,
-                duration_ms=_duration_ms(started_at, finished_at),
-                error_message=redact_secret_text(str(exc) or exc.__class__.__name__, (dsn,)),
-                connect_timeout=args.connect_timeout,
-            )
-        _write(
-            args,
-            {
-                "ok": False,
-                "mode": "apply",
-                "error": redact_secret_text(str(exc) or exc.__class__.__name__, (dsn,)),
-            },
-        )
-        return 2
-
-    summary["processed"] = ingest_result.run.processed_count
-    summary["duplicate"] = ingest_result.run.duplicate_count
-    summary["quarantined"] = ingest_result.run.quarantined_count
-    summary["aggregated"] = len(aggregates)
-    summary["inserted_rows"] = inserted_rows
-    summary["window_start"] = window_start.isoformat()
-    _write(args, summary)
-    return 0
-
-
-# --- DB helpers (read-only gate + place list; write helpers delegate to services) ---
-
-
-def _check_gate(*, dsn: str, connect_timeout: int) -> ReviewSourceRegistration:
-    """DG-1 fail-closed source gate. Opens a read-only connection; writes nothing."""
-    import psycopg2
-
-    with psycopg2.connect(dsn, connect_timeout=connect_timeout) as conn:
-        with conn.cursor() as cur:
-            return load_active_review_source(
-                cur,
-                source_name=SOURCE_NAME,
-                expected_provider=EXPECTED_PROVIDER,
-                expected_terms_version=EXPECTED_TERMS_VERSION,
-            )
-
-
-def _read_places(*, dsn: str, limit: int, connect_timeout: int) -> list[ReviewMentionPlace]:
-    import psycopg2
-    from psycopg2.extras import RealDictCursor
-
-    sql = """
-        SELECT place_id, name_ko, category, region_name_ko
-        FROM travel.places
-        WHERE name_ko IS NOT NULL
-        ORDER BY place_id
-        LIMIT %s
-    """
-    with psycopg2.connect(dsn, connect_timeout=connect_timeout) as conn:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(sql, (limit,))
-            rows = cur.fetchall()
-    return [
-        ReviewMentionPlace(
-            place_id=str(row["place_id"]),
-            name_ko=str(row["name_ko"]),
-            category=str(row["category"] or "attraction"),
-            region_name_ko=row.get("region_name_ko"),
-        )
-        for row in rows
-    ]
+    return _AcquireResult(
+        failure_tally={k: dict(v) for k, v in failure_tally.items()},
+        candidates=candidates,
+        ad_filtered=ad_filtered,
+        organic_records=organic_records,
+        sha_lookup=sha_lookup,
+        places_count=len(places),
+    )
 
 
 # --- in-memory record + aggregate builders (no raw text) ---
@@ -317,12 +392,7 @@ def _build_governed_record(
     decision: ReviewMentionDecision,
     registration: ReviewSourceRegistration,
 ) -> dict[str, Any]:
-    """Build a no-raw-text record dict for the governance boundary.
-
-    Only content_sha256 + opaque external_key + provenance + registration-bound
-    identity. No body/title/url fields — ReviewSourceRecord.extra='forbid'
-    rejects them if accidentally added.
-    """
+    """Build a no-raw-text record dict for the governance boundary."""
     return {
         "source_name": registration.source_name,
         "provider": registration.provider,
@@ -337,24 +407,19 @@ def _build_governed_record(
     }
 
 
-def _aggregate_key(content_sha256: str) -> str:
-    """Mirror ApprovedReviewAggregate.aggregate_key for reverse mapping."""
-    return f"sha256:{content_sha256[:16]}"
-
-
 def _build_weekly_aggregates(
     *,
-    accepted: tuple,
-    aggregate_lookup: dict[str, _AggregateProvenance],
+    accepted_records: tuple,
+    sha_lookup: dict[str, _AggregateProvenance],
 ) -> list[ReviewMentionWeeklyAggregate]:
-    """Map accepted governance aggregates back to places and group by week.
+    """Map accepted records to places by FULL content_sha256 and group by week.
 
-    mention_count = organic accepted count per (week_start, place, provider,
-    category). Raw text never appears — only counts and provenance.
+    No truncation — each accepted record's full 64-hex content_sha256 is looked
+    up directly in sha_lookup (P1b/P2 fix). Raw text never appears.
     """
     grouped: dict[tuple[Any, ...], int] = defaultdict(int)
-    for agg in accepted:
-        prov = aggregate_lookup.get(agg.aggregate_key)
+    for record in accepted_records:
+        prov = sha_lookup.get(record.content_sha256)
         if prov is None:
             continue
         key = (
@@ -390,7 +455,43 @@ def _build_weekly_aggregates(
     return aggregates
 
 
-# --- output / guards ---
+# --- status / output / guards ---
+
+
+def _compute_status(failure_tally: Mapping[str, Mapping[str, int]], quarantined_count: int) -> str:
+    """succeeded / degraded / failed based on acquisition + quarantine health."""
+    total_calls = 0
+    failure_calls = 0
+    for tallies in failure_tally.values():
+        for cat, count in tallies.items():
+            total_calls += count
+            if cat in _DEGRADING_CATEGORIES:
+                failure_calls += count
+    if total_calls > 0 and failure_calls == total_calls:
+        return "failed"
+    if failure_calls > 0 or quarantined_count > 0:
+        return "degraded"
+    return "succeeded"
+
+
+def _best_effort_job_run(
+    args: argparse.Namespace,
+    dsn: str,
+    started_at: datetime,
+    status: str,
+    error_message: str | None,
+) -> None:
+    finished_at = datetime.now(UTC)
+    with contextlib.suppress(Exception):
+        record_job_run(
+            dsn=dsn,
+            status=status,
+            started_at=started_at,
+            finished_at=finished_at,
+            duration_ms=_duration_ms(started_at, finished_at),
+            error_message=error_message,
+            connect_timeout=args.connect_timeout,
+        )
 
 
 def _plan_payload() -> dict[str, Any]:
@@ -421,8 +522,9 @@ def _plan_payload() -> dict[str, Any]:
             "official_api_only_no_scraping_no_daangn",
             "advertising_filtered",
             "aggregate_only_no_raw_text",
-            "opaque_digest_identity",
+            "place_aware_full_digest_identity",
             "accurate_rowcount_counts",
+            "one_transaction_atomic_receipts_aggregates",
         ],
     }
 
@@ -443,7 +545,9 @@ def _write(args: argparse.Namespace, payload: dict[str, Any]) -> None:
     mode = payload.get("mode", "plan")
     print("LALA-next Naver review/mention collection (governed)")
     print(f"mode={mode}")
-    print(f"status={'ok' if payload.get('ok') else 'degraded'}")
+    print(f"ok={str(payload.get('ok', False)).lower()}")
+    if payload.get("status"):
+        print(f"status={payload['status']}")
     print(f"source_name={SOURCE_NAME}")
     if payload.get("error"):
         print(f"error={payload['error']}")

@@ -57,47 +57,58 @@ counts leave the lane.
    A network/auth/quota failure must never look like an honest zero-result
    success.
 
-4. **Stable opaque identity.** `external_key` is a digest-derived token of the
-   form `naver_<provider>_sha256:<hex16>` (reusing the governance module's
-   digest approach), **never** the raw post URL. Same input ⇒ same digest;
-   collision-resistant; the URL never persists.
+4. **Stable opaque place-aware identity.** `external_key` is a place-aware,
+   full-digest token of the form `naver_<provider>_sha256:<hex64>` — the full
+   64-hex sha256 over (provider + link + postdate + place_id), **never** the raw
+   post URL and **never** truncated. Same input + place ⇒ same digest; the same
+   post for two distinct places yields two distinct keys so both get independent
+   receipts and aggregates. The URL never persists.
 
 5. **Provenance preserved.** Acquisition is keyed on a concrete
    `travel.places` row. Every emitted record and every aggregate carries
-   `place_id`, `region_slug`, and `category` from that row. The query, keyword,
-   and place identity are deterministic and auditable.
+   `place_id`, `region_name_ko` (the actual column on `travel.places`), and
+   `category` from that row. The query, keyword, and place identity are
+   deterministic and auditable.
 
 6. **No raw text stored, served, or logged (DG-11/G-TRUST).**
    - The tool **must not** write `title`/`body`/`post_url` to
      `community.posts` (or anywhere). Those fields are read into memory solely
      to hash and to run the deterministic filters, then dropped.
-   - `content_sha256` (sha256 of cleaned title+description) is the only
-     retained identity for dedupe.
+   - `content_sha256` (place-aware full sha256 over provider + link + postdate
+     + place_id + cleaned-title-hash + cleaned-desc-hash) is the only retained
+     identity for dedupe. Same post for two places yields two distinct digests.
    - Preview output is **counts only** (places, candidates, ad-filtered,
      organic, aggregated, per-provider failure categories/counts). Titles,
      snippets, and full URLs are never printed or logged.
 
-7. **Feed the existing filters + aggregate Local Signals path.** Reuse
-   `review_mention_ingest.clean_review_text` and `classify_post` (deterministic
-   ad / category / food-noise policy) in memory, then route the normalized,
-   organic-only batch through
-   `review_ingest_governance.persist_review_ingest_run` (gate + cross-run
-   receipt dedupe + quarantine + single-transaction accounting), and finally
-   map the accepted `ApprovedReviewAggregate` outputs into
-   `community.place_mentions_weekly` via the existing guarded aggregate upsert.
-   Local Signals read `place_mentions_weekly`; nothing reads a raw Naver body.
+7. **Feed the existing filters + ONE-transaction aggregate Local Signals path.**
+   Reuse `review_mention_ingest.clean_review_text` and `classify_post`
+   (deterministic ad / category / food-noise policy) in memory, then route the
+   normalized, organic-only batch through
+   `review_ingest_governance.govern_review_ingest_on_cursor` (gate + cross-run
+   receipt dedupe + quarantine + accounting, on the caller's cursor), and
+   finally map the accepted `ReviewIngestResult.accepted_records` (by full
+   `content_sha256`) into `community.place_mentions_weekly` via
+   `review_mention_ingest.insert_review_mention_aggregates_on_cursor` — all
+   inside ONE `with conn:` block so receipts + aggregates commit or roll back
+   TOGETHER. A failed aggregate upsert rolls back every receipt; a clean re-run
+   re-accepts and re-aggregates (full recovery). `record_job_run` is a separate
+   best-effort accounting write outside the data transaction.
 
-8. **Transactionally accurate counts.** One DB connection, one transaction.
-   `inserted`/`duplicate`/`quarantined` come from the governance boundary's
-   rowcount-backed result (`ReviewIngestResult.run`), never from
-   `len(results)`. The tool also reports `candidates`, `ad_filtered_out`, and
-   per-provider failure tallies. `review_mention_ingest.record_job_run` records
-   the run. No per-place connection, no partial commits.
+8. **Transactionally accurate counts.** `inserted`/`duplicate`/`quarantined`
+   come from the governance boundary's rowcount-backed result
+   (`ReviewIngestResult.run`), never from `len(results)`. The tool also reports
+   `candidates`, `ad_filtered_out`, and per-provider failure tallies.
 
-9. **Apply guardrails.** `--preview` is non-mutating (no DB writes, counts
-   only). `--apply` requires `--confirm APPLY_NAVER_REVIEW_COLLECT` **and**
-   `ALLOW_NAVER_REVIEW_COLLECT_APPLY=1` **and** a passing DG-1 source gate. Any
-   missing ⇒ fail closed, write nothing.
+9. **Apply guardrails + visible partial-failure degradation.** `--preview` is
+   non-mutating (no DB writes, counts only). `--apply` requires `--confirm
+   APPLY_NAVER_REVIEW_COLLECT` **and** `ALLOW_NAVER_REVIEW_COLLECT_APPLY=1`
+   **and** a passing DG-1 source gate. Any missing ⇒ fail closed, write nothing.
+   If ANY provider acquisition returns auth_missing / quota_exceeded /
+   network_error / parse_error OR governance quarantines records, the top-level
+   status is `degraded` (not unconditional success), carrying per-provider
+   failure categories + counts. If ALL providers fail, status is `failed`.
+   Only a fully clean run (all ok/empty, zero quarantine) is `succeeded`.
 
 ## Required tests (focused; reconcile PR body count with reality)
 
@@ -106,12 +117,21 @@ counts leave the lane.
 - Honest failures: auth_missing / quota_exceeded / network_error / parse_error
   / empty each reported with correct category; none swallowed; no raw payload
   in the outcome.
-- Opaque identity: identical input ⇒ identical digest; raw URL never appears in
-  `external_key` or any persisted/logged field.
+- Opaque place-aware identity: identical input+place ⇒ identical digest; raw
+  URL never appears in `external_key` or any persisted/logged field; digest is
+  full 64 hex (not truncated); same post for two places yields distinct keys.
 - Provenance: every record/aggregate carries the source row's place_id +
-  region_slug + category.
-- Idempotency: re-running the same window ⇒ 0 new aggregates, accurate
-  duplicate count.
+  region_name_ko + category.
+- Atomicity/idempotency: inject a failure at the aggregate-upsert step ⇒ NO
+  rows in receipts AND none in `place_mentions_weekly` (rollback). Re-run
+  without failure ⇒ both present (full recovery). Re-running the same window
+  ⇒ 0 new aggregates, accurate duplicate count.
+- Two-place same-post: the same Naver post for two distinct places yields two
+  distinct `content_sha256`/`external_key`, two accepted records, and BOTH
+  places get an aggregate.
+- Partial-failure degradation: one provider fails ⇒ status `degraded` with the
+  failure category surfaced; all providers fail ⇒ status `failed`; clean run ⇒
+  `succeeded`.
 - Redaction: preview/apply stdout and logs contain no title/body/url
   (asserted by substring absence on a captured ad-bearing fixture).
 - Accurate counts: inserted/duplicate/quarantined match rowcount, not
