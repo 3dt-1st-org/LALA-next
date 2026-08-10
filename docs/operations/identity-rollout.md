@@ -32,7 +32,20 @@ for:
 
 ## Key Vault Boundary
 
-OAuth rollout configuration belongs in `lala-key-vault`:
+OAuth rollout configuration belongs in `lala-key-vault`. The authoritative path
+is Logto-derived: `LOGTO_ENDPOINT` + `LOGTO_API_AUDIENCE` make the API derive the
+issuer (`<endpoint>/oidc`) and JWKS URL (`<endpoint>/oidc/jwks`) via
+`derive_logto_oidc_urls`, so issuer/audience/JWKS are NOT separately registered.
+
+- `logto-endpoint` (authoritative; issuer + JWKS are derived from it)
+- `logto-api-audience` (authoritative)
+- `logto-management-endpoint` (optional; falls back to `logto-endpoint`)
+- Flutter client identifiers + redirect URIs (`LOGTO_WEB_APP_ID` /
+  `LOGTO_NATIVE_APP_ID`), configured via dart-defines / build config rather than
+  the API secret store.
+
+Legacy `oauth-*` secrets remain available as a fallback only when the Logto
+endpoint is not set:
 
 - `oauth-issuer`
 - `oauth-audience`

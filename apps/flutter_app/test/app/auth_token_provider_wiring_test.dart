@@ -6,7 +6,8 @@
 // The invariant: LalaHomePage wires the auth controller's `accessToken` tear-off
 // into the main backend config's `accessTokenProvider` such that:
 //  (a) a disabled / not-configured Logto controller resolves to null — the
-//      contest/guest build sends no token and raises no login wall; and
+//      contest/guest build wires a null token provider so no bearer token is
+//      attached; and
 //  (b) an authenticated Logto controller resolves to the SDK access token.
 //
 // The provider is a method tear-off, so it reflects the controller's live state
@@ -46,7 +47,7 @@ void main() {
   group('LalaHomePage auth token-provider wiring', () {
     testWidgets(
       'disabled Logto config keeps the guest token provider null '
-      '(contest/guest build sends no token, no login wall)',
+      '(contest/guest build attaches no bearer token)',
       (tester) async {
         final configs = <LalaAppConfig>[];
         await tester.pumpWidget(
