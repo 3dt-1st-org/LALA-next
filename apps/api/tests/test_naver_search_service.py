@@ -29,6 +29,7 @@ from apps.api.app.services.review_ingest_governance import (
     ReviewIngestRunSummary,
     ReviewSourceRecord,
     ReviewSourceRegistration,
+    approved_aggregate_from_record,
 )
 from apps.api.app.services.review_mention_ingest import ReviewMentionPlace
 from apps.api.app.tools import run_naver_review_collect as tool
@@ -176,7 +177,7 @@ def _fake_ingest_result(
     accepted = tuple(
         ApprovedReviewAggregate(
             source_name=svc.SOURCE_NAME,
-            aggregate_key=f"sha256:{sha[:16]}",
+            aggregate_key=f"sha256:{sha}",
             category="attraction",
             match_confidence=0.92,
         )
@@ -905,3 +906,68 @@ def test_clean_run_succeeded(monkeypatch, capsys):
     assert rc == 0
     out = json.loads(capsys.readouterr().out)
     assert out["status"] == "succeeded"
+
+
+# == Governance: aggregate_key full digest (residual P2 fix) ==================
+
+
+def test_aggregate_key_is_full_hex64():
+    """ApprovedReviewAggregate.aggregate_key must be the full 64-hex digest,
+    never truncated to 16."""
+    record = ReviewSourceRecord(
+        source_name=svc.SOURCE_NAME,
+        provider=svc.EXPECTED_PROVIDER,
+        external_key="naver_naver_blog_sha256:" + "a" * 64,
+        license_class="licensed",
+        terms_version=svc.EXPECTED_TERMS_VERSION,
+        content_sha256="f" * 64,
+        received_at=datetime(2026, 8, 1, tzinfo=UTC),
+        category="attraction",
+        match_confidence=0.92,
+        is_organic=True,
+    )
+    aggregate = approved_aggregate_from_record(record)
+    assert aggregate.aggregate_key == f"sha256:{'f' * 64}"
+    assert len(aggregate.aggregate_key) == 71  # "sha256:" (7) + 64 hex
+
+
+# == Tool: no DB connection during acquisition (Defect B fix) =================
+
+
+def test_no_db_connection_during_acquisition(monkeypatch, capsys):
+    """No DB connection/transaction is open during Naver provider I/O.
+
+    The preflight connection (gate + places) is closed before acquisition
+    begins, and the write-transaction connection is opened only after
+    acquisition completes.
+    """
+    lifecycle = {"open": 0, "close": 0, "acquire_unclosed": -1}
+
+    class _TrackingConn(_FakeConn):
+        def __init__(self):
+            super().__init__()
+            lifecycle["open"] += 1
+
+        def close(self):
+            lifecycle["close"] += 1
+
+    def fake_collect(**kw):
+        lifecycle["acquire_unclosed"] = lifecycle["open"] - lifecycle["close"]
+        return _make_collection()
+
+    _setup_tool_monkeypatch(monkeypatch, collection_fn=fake_collect)
+    monkeypatch.setattr(tool, "_open_connection", lambda dsn, ct: _TrackingConn())
+    monkeypatch.setattr(
+        tool,
+        "govern_review_ingest_on_cursor",
+        lambda cur, **kw: _fake_ingest_result(),
+    )
+    monkeypatch.setattr(tool, "insert_review_mention_aggregates_on_cursor", lambda cur, aggs: 0)
+    monkeypatch.setattr(tool, "record_job_run", lambda **kw: None)
+    monkeypatch.setenv(tool.ALLOW_ENV, "1")
+
+    rc = tool.main(["--apply", "--json", "--confirm", tool.CONFIRM_TEXT])
+    assert rc == 0
+    assert lifecycle["acquire_unclosed"] == 0
+    assert lifecycle["open"] == 2
+    assert lifecycle["close"] == 2

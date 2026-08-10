@@ -57,12 +57,17 @@ counts leave the lane.
    A network/auth/quota failure must never look like an honest zero-result
    success.
 
-4. **Stable opaque place-aware identity.** `external_key` is a place-aware,
-   full-digest token of the form `naver_<provider>_sha256:<hex64>` — the full
-   64-hex sha256 over (provider + link + postdate + place_id), **never** the raw
-   post URL and **never** truncated. Same input + place ⇒ same digest; the same
-   post for two distinct places yields two distinct keys so both get independent
-   receipts and aggregates. The URL never persists.
+4. **Stable opaque place-aware identity — full digests everywhere.**
+   `external_key` is a place-aware, full-digest token of the form
+   `naver_<provider>_sha256:<hex64>` — the full 64-hex sha256 over (provider +
+   link + postdate + place_id), **never** the raw post URL and **never**
+   truncated. `content_sha256` is a full 64-hex sha256 over (provider + link +
+   postdate + place_id + cleaned-title-hash + cleaned-desc-hash).
+   `ApprovedReviewAggregate.aggregate_key` is `sha256:<full 64-hex>` — no
+   `[:16]` truncation in any identity, dedupe, receipt, or audit path. Same
+   input + place ⇒ same digest; the same post for two distinct places yields two
+   distinct keys so both get independent receipts and aggregates. The URL never
+   persists.
 
 5. **Provenance preserved.** Acquisition is keyed on a concrete
    `travel.places` row. Every emitted record and every aggregate carries
@@ -81,19 +86,25 @@ counts leave the lane.
      organic, aggregated, per-provider failure categories/counts). Titles,
      snippets, and full URLs are never printed or logged.
 
-7. **Feed the existing filters + ONE-transaction aggregate Local Signals path.**
-   Reuse `review_mention_ingest.clean_review_text` and `classify_post`
-   (deterministic ad / category / food-noise policy) in memory, then route the
-   normalized, organic-only batch through
-   `review_ingest_governance.govern_review_ingest_on_cursor` (gate + cross-run
-   receipt dedupe + quarantine + accounting, on the caller's cursor), and
-   finally map the accepted `ReviewIngestResult.accepted_records` (by full
-   `content_sha256`) into `community.place_mentions_weekly` via
-   `review_mention_ingest.insert_review_mention_aggregates_on_cursor` — all
-   inside ONE `with conn:` block so receipts + aggregates commit or roll back
-   TOGETHER. A failed aggregate upsert rolls back every receipt; a clean re-run
-   re-accepts and re-aggregates (full recovery). `record_job_run` is a separate
-   best-effort accounting write outside the data transaction.
+7. **Three-phase apply: preflight gate → acquire (no DB) → atomic write.**
+   The apply path NEVER holds a DB transaction open during Naver network I/O.
+
+   - **Phase 1 (preflight, short-lived):** open a connection, call
+     `load_active_review_source` (DG-1 fail-fast before any network call), read
+     `travel.places` with provenance, close the connection.
+   - **Phase 2 (acquire, NO connection):** run the Naver acquisition loop +
+     in-memory deterministic filtering (`clean_review_text`/`classify_post`) +
+     build governed records, with zero PostgreSQL connections open.
+   - **Phase 3 (atomic write transaction):** open ONE connection, `with conn:` →
+     `govern_review_ingest_on_cursor(cur, records=organic, ...)` which
+     RE-CHECKS the DG-1 gate inside the transaction (authoritative fail-closed),
+     writes receipts/quarantine/accounting; then
+     `insert_review_mention_aggregates_on_cursor(cur, aggregates)`; commit once.
+     Any failure rolls back receipts + aggregates together. `record_job_run` is
+     a separate best-effort accounting write outside the data transaction.
+
+   The gate is checked twice: once read-only before network I/O (fail fast),
+   once authoritatively inside the write transaction (fail-closed).
 
 8. **Transactionally accurate counts.** `inserted`/`duplicate`/`quarantined`
    come from the governance boundary's rowcount-backed result

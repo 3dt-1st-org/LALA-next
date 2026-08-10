@@ -191,36 +191,62 @@ def _run_preview(args: argparse.Namespace, dsn: str) -> int:
     return 0
 
 
-# --- apply: ONE atomic transaction for gate + acquire + govern + aggregate ---
+# --- apply: preflight gate → acquire (no DB) → atomic write transaction ---
 
 
 def _run_apply(args: argparse.Namespace, dsn: str) -> int:
     started_at = datetime.now(UTC)
     window_start = _week_start(started_at)
-    conn = _open_connection(dsn, args.connect_timeout)
 
-    batch: _AcquireResult | None = None
+    # Phase 1: Preflight gate + read places (short-lived, NO held transaction).
+    # Fail-fast before any Naver API call: if the source isn't registered/active,
+    # don't waste network calls. The connection is CLOSED before Phase 2.
+    registration: ReviewSourceRegistration | None = None
+    places: list[ReviewMentionPlace] = []
+    try:
+        preflight_conn = _open_connection(dsn, args.connect_timeout)
+        try:
+            with preflight_conn:
+                with preflight_conn.cursor() as cur:
+                    registration = load_active_review_source(
+                        cur,
+                        source_name=SOURCE_NAME,
+                        expected_provider=EXPECTED_PROVIDER,
+                        expected_terms_version=EXPECTED_TERMS_VERSION,
+                    )
+                    places = _read_places_on_cursor(cur, args.limit)
+        finally:
+            preflight_conn.close()
+    except ReviewGovernanceError as exc:
+        _best_effort_job_run(args, dsn, started_at, "failed", exc.message)
+        _write(
+            args,
+            {
+                "ok": False,
+                "mode": "apply",
+                "error": exc.message,
+                "governance_code": exc.code,
+            },
+        )
+        return 2
+
+    # Phase 2: Acquire + classify OUTSIDE any DB transaction.
+    # No PostgreSQL connection is open during Naver network I/O — avoids
+    # idle-in-transaction timeouts, bloat, and lock contention at scale.
+    batch = _acquire_and_classify(places=places, display=args.display, registration=registration)
+
+    # Phase 3: Atomic write transaction (ONE connection, ONE ``with conn:``).
+    # govern_review_ingest_on_cursor RE-CHECKS the DG-1 gate inside this
+    # transaction (authoritative fail-closed). Receipts + aggregates commit or
+    # roll back TOGETHER (P1a fix). If the aggregate upsert fails, the rollback
+    # undoes every receipt so a clean re-run fully recovers.
+    conn = _open_connection(dsn, args.connect_timeout)
     ingest_result = None
     aggregates: list[ReviewMentionWeeklyAggregate] = []
     inserted_rows = 0
-
     try:
-        # Why one ``with conn:`` block: receipts (governance) and weekly
-        # aggregates must commit or roll back TOGETHER (P1a fix). If the
-        # aggregate upsert fails, the rollback undoes every receipt so a clean
-        # re-run re-accepts and re-aggregates — full recovery.
         with conn:
             with conn.cursor() as cur:
-                registration = load_active_review_source(
-                    cur,
-                    source_name=SOURCE_NAME,
-                    expected_provider=EXPECTED_PROVIDER,
-                    expected_terms_version=EXPECTED_TERMS_VERSION,
-                )
-                places = _read_places_on_cursor(cur, args.limit)
-                batch = _acquire_and_classify(
-                    places=places, display=args.display, registration=registration
-                )
                 ingest_result = govern_review_ingest_on_cursor(
                     cur,
                     source_name=SOURCE_NAME,

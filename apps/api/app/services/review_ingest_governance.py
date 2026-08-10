@@ -547,8 +547,9 @@ def approved_aggregate_from_record(
     """
     return ApprovedReviewAggregate(
         source_name=record.source_name,
-        # Identity for dedupe/audit, derived from the content hash -- not raw text.
-        aggregate_key=f"sha256:{record.content_sha256[:16]}",
+        # Identity for dedupe/audit, derived from the content hash -- not raw
+        # text. Full 64-hex digest: no truncation, no preventable collision domain.
+        aggregate_key=f"sha256:{record.content_sha256}",
         category=record.category,
         match_confidence=record.match_confidence,
         sentiment_score=None,
