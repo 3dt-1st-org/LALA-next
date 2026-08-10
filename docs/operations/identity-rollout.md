@@ -4,8 +4,9 @@ Wave 1 still protects `/api/v1/*` with static transition credentials:
 `API_BEARER_TOKEN` or `IOS_API_KEY`. OAuth/Entra configuration can also be
 planned, surfaced in readiness, and used for signed RS256 JWT validation when
 the issuer, audience, JWKS URL, and required scopes are configured. Flutter
-token acquisition and static credential retirement remain later approval-gated
-work.
+token acquisition via the Logto dart SDK is implemented (merged PRs e9abd91,
+c701b99, e9a3566); static credential retirement and external activation remain
+approval-gated work.
 
 Generate the non-mutating plan:
 
@@ -26,8 +27,8 @@ for:
 - Flutter public client app registration review.
 - LALA-next Key Vault secret names for OAuth configuration.
 - Static-plus-OAuth transition smoke checks.
-- Static auth retirement only after JWT validation, Flutter token acquisition,
-  and rollback are approved.
+- Static auth retirement only after JWT validation, Logto SDK token
+  acquisition is activated for the rollout build, and rollback are approved.
 
 ## Key Vault Boundary
 
@@ -65,8 +66,8 @@ configuration to validate presented bearer JWTs. In `oauth-configured` mode,
 `/api/v1/*` requires a valid signed JWT with all required scopes.
 
 During the transition window, keep `API_BEARER_TOKEN` or `IOS_API_KEY`
-available until Flutter token acquisition has been implemented and rollback has
-been approved.
+available until the Logto SDK token acquisition path has been activated for the
+rollout build and rollback has been approved.
 
 For operator smoke with an already-issued OAuth/Entra token, set
 `LALA_SMOKE_BEARER_TOKEN` in the smoke-shell environment. Do not reuse
@@ -81,7 +82,7 @@ local-only test keys and a local JWKS server.
 
 - Do not create Entra registrations without owner approval.
 - Do not add Flutter client secrets; Flutter is a public client.
-- Do not remove static credentials until API JWT validation, Flutter token
-  acquisition, smoke tests, and rollback are approved together.
+- Do not remove static credentials until API JWT validation, activated Logto
+  SDK token acquisition, smoke tests, and rollback are approved together.
 - Do not commit tenant IDs, client IDs tied to private environments, tokens, or
   screenshots containing credentials.
