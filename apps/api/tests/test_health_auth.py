@@ -636,22 +636,34 @@ def test_v1_requires_present_credentials_when_oauth_is_configured(client, monkey
     assert body["error"]["code"] == "UNAUTHORIZED"
 
 
-def test_v1_guest_access_coexists_with_oauth_jwt_validation_unauthenticated(client, monkeypatch):
-    # Coexistence contract: contest/guest access AND Logto/OAuth JWT validation
-    # configured simultaneously must not block unauthenticated requests. A contest
-    # reviewer with no Logto token still resolves to public mode; the oauth path
-    # only activates when a bearer token is actually presented. No JWKS server is
-    # exercised because the unauthenticated request never reaches JWT validation.
+def test_v1_guest_access_coexists_with_logto_derived_jwt_validation_unauthenticated(
+    client, monkeypatch
+):
+    # Exercises the AUTHORITATIVE Logto-derived JWT validation path, not the
+    # legacy OAUTH_* fallback. LOGTO_ENDPOINT + LOGTO_API_AUDIENCE drive
+    # derive_logto_oidc_urls() (issuer <endpoint>/oidc, jwks <endpoint>/oidc/jwks);
+    # with both set, oauth_issuer/audience/jwks_url are DERIVED from Logto. Legacy
+    # OAUTH_* are explicitly unset to prove this is not the fallback. The /readyz
+    # check asserts jwt_validation=="configured" via that derivation alone; the
+    # unauthenticated /api/v1/places request proves guest/contest public mode wins
+    # (the oauth path only activates when a bearer token is actually presented, so
+    # it never reaches a JWKS fetch). No JWKS server or network is required.
     monkeypatch.delenv("IOS_API_KEY", raising=False)
     monkeypatch.delenv("API_BEARER_TOKEN", raising=False)
+    monkeypatch.delenv("OAUTH_ISSUER", raising=False)
+    monkeypatch.delenv("OAUTH_AUDIENCE", raising=False)
+    monkeypatch.delenv("OAUTH_JWKS_URL", raising=False)
+    monkeypatch.delenv("OAUTH_CLIENT_ID", raising=False)
+    monkeypatch.delenv("OAUTH_REQUIRED_SCOPES", raising=False)
+    monkeypatch.setenv("LOGTO_ENDPOINT", "https://auth.example.com")
+    monkeypatch.setenv("LOGTO_API_AUDIENCE", "https://api.example.com")
     monkeypatch.setenv("LALA_PUBLIC_CONTEST_ACCESS", "true")
-    monkeypatch.setenv("OAUTH_ISSUER", "https://login.microsoftonline.com/tenant/v2.0")
-    monkeypatch.setenv("OAUTH_AUDIENCE", "api://lala-next-dev")
-    monkeypatch.setenv(
-        "OAUTH_JWKS_URL", "https://login.microsoftonline.com/tenant/discovery/v2.0/keys"
-    )
-    monkeypatch.setenv("OAUTH_CLIENT_ID", "00000000-0000-0000-0000-000000000000")
-    monkeypatch.setenv("OAUTH_REQUIRED_SCOPES", "access_as_user")
+
+    readiness_response = client.get("/readyz")
+    assert readiness_response.status_code == 200
+    # Logto-derived: legacy OAUTH_* are unset, so "configured" can only come from
+    # derive_logto_oidc_urls() populating oauth_issuer/audience/jwks_url.
+    assert readiness_response.json()["data"]["checks"]["jwt_validation"] == "configured"
 
     response = client.get("/api/v1/places?lat=37.2636&lng=127.0286&radius_m=50000")
 
