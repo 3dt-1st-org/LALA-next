@@ -1,4 +1,4 @@
-from apps.api.app.services.naver_search_service import NaverSearchResult, _clean, _parse_date
+from apps.api.app.services.naver_search_service import _clean, _parse_date
 
 
 def test_clean():
