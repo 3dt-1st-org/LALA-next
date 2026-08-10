@@ -636,6 +636,30 @@ def test_v1_requires_present_credentials_when_oauth_is_configured(client, monkey
     assert body["error"]["code"] == "UNAUTHORIZED"
 
 
+def test_v1_guest_access_coexists_with_oauth_jwt_validation_unauthenticated(client, monkeypatch):
+    # Coexistence contract: contest/guest access AND Logto/OAuth JWT validation
+    # configured simultaneously must not block unauthenticated requests. A contest
+    # reviewer with no Logto token still resolves to public mode; the oauth path
+    # only activates when a bearer token is actually presented. No JWKS server is
+    # exercised because the unauthenticated request never reaches JWT validation.
+    monkeypatch.delenv("IOS_API_KEY", raising=False)
+    monkeypatch.delenv("API_BEARER_TOKEN", raising=False)
+    monkeypatch.setenv("LALA_PUBLIC_CONTEST_ACCESS", "true")
+    monkeypatch.setenv("OAUTH_ISSUER", "https://login.microsoftonline.com/tenant/v2.0")
+    monkeypatch.setenv("OAUTH_AUDIENCE", "api://lala-next-dev")
+    monkeypatch.setenv(
+        "OAUTH_JWKS_URL", "https://login.microsoftonline.com/tenant/discovery/v2.0/keys"
+    )
+    monkeypatch.setenv("OAUTH_CLIENT_ID", "00000000-0000-0000-0000-000000000000")
+    monkeypatch.setenv("OAUTH_REQUIRED_SCOPES", "access_as_user")
+
+    response = client.get("/api/v1/places?lat=37.2636&lng=127.0286&radius_m=50000")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is True
+
+
 def test_v1_rejects_invalid_api_key(client, api_key):
     response = client.get("/api/v1/places", headers={"X-API-Key": "wrong"})
 
