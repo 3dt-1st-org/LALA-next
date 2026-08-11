@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+import 'package:fake_async/fake_async.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 import 'package:test/test.dart';
 
@@ -1073,6 +1074,51 @@ void main() {
             ),
       ),
     );
+  });
+
+  test(
+      'getWeather default budget tolerates the backend DB+AirKorea cold path',
+      () {
+    // The weather endpoint does a DB lookup plus an external AirKorea call in
+    // sequence; a cold response (~8.5s observed in production) outlasts the
+    // generic 8s readTimeout. Its default budget must therefore be larger than
+    // readTimeout, or the map pins a permanent "weather preparing" pill because
+    // the swallowed REQUEST_TIMEOUT leaves the client with no weather.
+    fakeAsync((async) {
+      final client = LalaApiClient(
+        baseUri: Uri.parse('http://api.example.test'),
+        dio: _dio((request) async {
+          await Future<void>.delayed(const Duration(seconds: 9));
+          return _json({
+            'ok': true,
+            'data': _weatherPayload(),
+            'meta': {'request_id': 'slow-weather-id'},
+            'error': null,
+          });
+        }),
+      );
+
+      LalaEnvelope<LalaWeather>? result;
+      Object? error;
+      unawaited(
+        client.getWeather(lat: 37.2, lng: 127.0).then((value) {
+          result = value;
+        }).catchError((Object e) {
+          error = e;
+        }),
+      );
+
+      // 9s > readTimeout (8s) but < weatherTimeout (16s): a read-sized budget
+      // would have timed out here; the weather-sized budget resolves.
+      async.elapse(const Duration(seconds: 9));
+      expect(error, isNull);
+      expect(result, isNotNull);
+      expect(
+        result?.data?.source,
+        'kma_ultra_srt_ncst+airkorea_sido_realtime',
+      );
+      client.close();
+    });
   });
 
   test(

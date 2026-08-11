@@ -42,6 +42,11 @@ class LalaApiClient {
   static const Duration healthTimeout = Duration(seconds: 3);
   static const Duration readinessTimeout = Duration(seconds: 3);
   static const Duration readTimeout = Duration(seconds: 8);
+  // Backend weather does a DB lookup plus an external AirKorea call (its own 8s
+  // upstream budget) in sequence, so a cold response (~8.5s observed) outlasts
+  // the generic 8s read budget and would otherwise time the client out into a
+  // permanent "weather preparing" pill. Size it like the planner path.
+  static const Duration weatherTimeout = Duration(seconds: 16);
   static const Duration generationTimeout = Duration(seconds: 24);
   static const Duration audioTimeout = Duration(seconds: 24);
   static const Duration plannerTimeout = Duration(seconds: 16);
@@ -229,7 +234,7 @@ class LalaApiClient {
       '/api/v1/weather',
       query: {'lat': '$lat', 'lng': '$lng', 'force': '$force'},
       requestId: requestId,
-      timeout: timeout ?? readTimeout,
+      timeout: timeout ?? weatherTimeout,
     );
     return _envelopeFromResponse<LalaWeather>(
       resp,
