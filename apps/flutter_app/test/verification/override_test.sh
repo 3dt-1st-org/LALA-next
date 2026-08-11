@@ -1,17 +1,21 @@
 #!/bin/bash
-# True compiled dart-define verification for LALA_API_BASE_URL.
+# True compiled dart-define verification for LALA_API_BASE_URL and
+# KAKAO_JAVASCRIPT_KEY.
 #
 # String.fromEnvironment is resolved at compile time, so override behavior can
 # only be proven by compiling the test binary with the dart-define baked in.
-# This script compiles test/core/config/app_config_test.dart twice:
+# This script compiles test/core/config/app_config_test.dart three times:
 #
-#   1. Default  — no LALA_API_BASE_URL define (static public fallback expected).
-#   2. Override — explicit LALA_API_BASE_URL, with a matching
-#      TEST_EXPECTED_API_BASE_URL the compiled test asserts against.
+#   1. Default       — no dart-define (static public fallback / empty key).
+#   2. API override  — explicit LALA_API_BASE_URL, with a matching
+#                      TEST_EXPECTED_API_BASE_URL the compiled test asserts.
+#   3. Key override  — explicit KAKAO_JAVASCRIPT_KEY (non-secret placeholder),
+#                      with a matching TEST_EXPECTED_KAKAO_JAVASCRIPT_KEY.
 #
-# Both cases use the same data-driven test; only the compile-time constants
+# All cases use the same data-driven tests; only the compile-time constants
 # differ. No secrets, tokens, or cloud identifiers are used — only a public
-# endpoint and a loopback address. Run from anywhere; it resolves the app root.
+# endpoint, a loopback address, and an obvious placeholder. Run from anywhere;
+# it resolves the app root.
 #
 #   bash apps/flutter_app/test/verification/override_test.sh
 
@@ -50,6 +54,17 @@ run_case "default (no dart-define → public fallback)"
 run_case "explicit local override (loopback)" \
   --dart-define "LALA_API_BASE_URL=http://127.0.0.1:8080" \
   --dart-define "TEST_EXPECTED_API_BASE_URL=http://127.0.0.1:8080"
+
+# Case 3: Explicit KAKAO_JAVASCRIPT_KEY override. This boundary has no static
+# default, so a build that omits the dart-define silently disables the Kakao
+# map (the original runtime-recovery symptom). An obvious non-secret placeholder
+# is baked into both KAKAO_JAVASCRIPT_KEY and TEST_EXPECTED_KAKAO_JAVASCRIPT_KEY
+# so the compiled test proves the dart-define flowed into
+# config.kakaoJavascriptKey. No real key is ever used.
+_LALA_PLACEHOLDER_KEY="nonsecret-mapkey-placeholder-000000" # pragma: allowlist secret
+run_case "explicit kakao key override (non-secret placeholder)" \
+  --dart-define "KAKAO_JAVASCRIPT_KEY=${_LALA_PLACEHOLDER_KEY}" \
+  --dart-define "TEST_EXPECTED_KAKAO_JAVASCRIPT_KEY=${_LALA_PLACEHOLDER_KEY}"
 
 echo ""
 echo "Results: ${PASS_COUNT} passed, ${FAIL_COUNT} failed"

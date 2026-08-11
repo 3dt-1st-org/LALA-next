@@ -22,6 +22,29 @@ void main() {
             'config.baseUri must equal the dart-define compiled into this test',
       );
     });
+
+    // KAKAO_JAVASCRIPT_KEY has no static default, so an iOS build that forgets
+    // the dart-define silently leaves the key empty and the map degrades to the
+    // decorative fallback with no build-time signal. This compiled assertion
+    // proves the dart-define flows into config.kakaoJavascriptKey; the
+    // verification script also compiles the default (no-define → empty) case.
+    test(
+      'kakaoJavascriptKey equals the dart-define compiled into the test',
+      () {
+        final config = const LalaAppConfig.fromEnvironment();
+        const String expectedKey = String.fromEnvironment(
+          'TEST_EXPECTED_KAKAO_JAVASCRIPT_KEY',
+          defaultValue: '',
+        );
+        expect(
+          config.kakaoJavascriptKey,
+          expectedKey,
+          reason:
+              'config.kakaoJavascriptKey must equal the KAKAO_JAVASCRIPT_KEY '
+              'dart-define compiled into this test',
+        );
+      },
+    );
   });
 
   // The defaults below are not wired to LALA_API_BASE_URL, so they hold under
@@ -38,11 +61,15 @@ void main() {
       expect(config.requireLocationStartConfirmation, isFalse);
     });
 
+    // bearerToken and apiKey are real secrets with no dart-define wiring, so they
+    // stay empty under every compilation. kakaoJavascriptKey is also empty by
+    // default but IS dart-define-wired; its empty-vs-overridden boundary is
+    // proven by the compiled test above, so it is not re-asserted here (the
+    // override compilation deliberately sets it to a non-empty placeholder).
     test('credential fields default to empty (no bundled secrets)', () {
       final config = const LalaAppConfig.fromEnvironment();
       expect(config.bearerToken, isEmpty);
       expect(config.apiKey, isEmpty);
-      expect(config.kakaoJavascriptKey, isEmpty);
     });
 
     test('base URI is always an absolute http(s) URI', () {
