@@ -25,17 +25,28 @@ for:
 - Entra API app registration naming.
 - Delegated API scope review.
 - Flutter public client app registration review.
-- LALA-next Key Vault secret names for OAuth configuration.
+- OAuth/Logto secret names (AWS Secrets Manager in operational profiles; Azure
+  Key Vault in local/ci).
 - Static-plus-OAuth transition smoke checks.
 - Static auth retirement only after JWT validation, Logto SDK token
   acquisition is activated for the rollout build, and rollback are approved.
 
-## Key Vault Boundary
+## OAuth Secret Boundary
 
-OAuth rollout configuration belongs in `lala-key-vault`. The authoritative path
-is Logto-derived: `LOGTO_ENDPOINT` + `LOGTO_API_AUDIENCE` make the API derive the
-issuer (`<endpoint>/oidc`) and JWKS URL (`<endpoint>/oidc/jwks`) via
-`derive_logto_oidc_urls`, so issuer/audience/JWKS are NOT separately registered.
+In operational profiles (`api`/`worker`), OAuth/Logto secrets resolve from
+**AWS Secrets Manager** with secret ids prefixed `lala-next/`
+(e.g. `lala-next/logto-endpoint`, `lala-next/logto-api-audience`). The API reads
+them fail-closed via `resolve_runtime_secret(..., key_vault_loader=None)` — there
+is **no Key Vault fallback** in `api`/`worker` profiles. Azure Key Vault
+(`lala-key-vault`) is a `local`/`ci`-only developer fallback, per the
+`_env_or_secret` profile branching in `config.py`; it is **not** the operational
+secret source.
+
+The authoritative identity is Logto-derived: `LOGTO_ENDPOINT` +
+`LOGTO_API_AUDIENCE` make the API derive the issuer (`<endpoint>/oidc`) and JWKS
+URL (`<endpoint>/oidc/jwks`) via `derive_logto_oidc_urls`, so
+issuer/audience/JWKS are NOT separately registered. The Logto secret ids below
+are the AWS Secrets Manager secret names used in operational profiles:
 
 - `logto-endpoint` (authoritative; issuer + JWKS are derived from it)
 - `logto-api-audience` (authoritative)
