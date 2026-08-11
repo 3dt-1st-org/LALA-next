@@ -1174,6 +1174,7 @@ def _finalize_ingest_run(
     *,
     run_id: str,
     status: Literal["running", "succeeded", "failed"],
+    received_count: int,
     processed_count: int,
     duplicate_count: int,
     quarantined_count: int,
@@ -1183,11 +1184,17 @@ def _finalize_ingest_run(
     """Write final counters/status to the run accounting row.
 
     Idempotent *accounting* (not immutability): retry-safe absolute overwrite
-    of counters so re-running a batch converges rather than accumulates.
+    of EVERY counter -- including ``received_count`` -- so re-running a batch
+    converges rather than accumulates. Without overwriting ``received_count``
+    here, a resumed run (same ``run_key``) would keep the first attempt's stale
+    value forever, diverging from the processed/duplicate/quarantined counters
+    that are refreshed every time. Finalize is the single retry-safe source of
+    truth for the whole accounting row.
     """
     sql = """
         UPDATE community.ingest_runs
         SET status = %s,
+            received_count = %s,
             processed_count = %s,
             duplicate_count = %s,
             quarantined_count = %s,
@@ -1200,6 +1207,7 @@ def _finalize_ingest_run(
         sql,
         (
             status,
+            received_count,
             processed_count,
             duplicate_count,
             quarantined_count,
@@ -1288,6 +1296,7 @@ def persist_review_ingest_run(
                     cur,
                     run_id=run_id,
                     status="succeeded",
+                    received_count=received_count,
                     processed_count=len(new_records),
                     duplicate_count=len(replay_records),
                     quarantined_count=len(quarantined),
