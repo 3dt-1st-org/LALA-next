@@ -365,12 +365,18 @@ The governance boundary (`apps/api/app/services/review_ingest_governance.py`)
 refuses any source whose `license_class` is not in `{licensed,
 public_processed, approved_export}` — the `rejected` class is registrable (so an
 operator can record a blocked source) but is never accepted for ingestion. The
-DB-authoritative source gate loads the row from `ingest.review_sources` and
-**aborts** a `rejected`/disabled/absent (or provider/terms-mismatch) batch with a
-`source_license_rejected` governance error **before any record is accepted** — it
-does not route records to quarantine. (The `terms_violation` quarantine reason
-is reserved for the future per-record refinement lane and is not emitted by this
-foundation.) This closes the provenance gap noted in
+DB-authoritative source gate (`load_active_review_source`) loads the row from
+`ingest.review_sources` and **aborts** the batch **before any record is
+accepted**, emitting a distinct governance code per source-level failure
+(`source_not_registered` for an absent source, `source_disabled`,
+`source_license_rejected` for a `rejected` license class,
+`source_provider_mismatch`, `source_terms_mismatch`); source-level failures do
+not route records to quarantine. Per record, `classify_review_records`
+quarantines any record whose `source_name`/`provider`/`license_class`/
+`terms_version` does not exactly match the loaded registration under the
+`terms_violation` category (`source_identity_mismatch` reason code), so the
+`terms_violation` category is live for per-record provenance mismatches rather
+than deferred to a future lane. This closes the provenance gap noted in
 `docs/operations/review-mention-preprocessing-strategy.md`.
 
 ## 10. Storage Model: Provenance / Normalized (raw retention BLOCKED)
@@ -558,16 +564,17 @@ inputs yields the same rows (no duplicates, no lost higher-tier enrichments).
 ## 19. Quarantine / Dead-Letter (IMPLEMENTED in 062; typed metadata only)
 
 - **Table (IMPLEMENTED in 062):** `community.ingest_quarantine` —
-  `(id, source_run_id, provider, external_key, content_sha256, reason,
+  `(id, source_run_id, source_name, provider, external_key, content_sha256,
   reason_category ∈ {schema_invalid, terms_violation, source_api_failure,
-  duplicate_suspect, low_confidence, ambiguous_match}, safe_metadata jsonb,
-  received_at, quarantined_at, resolved_at, resolution ∈ {approved, rejected,
-  retried})`. **No `raw_payload_ref` and no body column by design** — a record is
-  diagnosable from identity + content hash + reason + the typed `safe_metadata`
-  jsonb alone. This is the "typed safe quarantine metadata" the next slice
-  persists via `review_ingest_governance.py::insert_quarantine_entries`. (The
-  earlier draft's `ai_failure` reason and `raw_payload_ref` pointer are removed:
-  neither exists in 062.)
+  duplicate_suspect, low_confidence, ambiguous_match}, reason_code, reason,
+  safe_metadata jsonb, received_at, quarantined_at, resolved_at, resolution ∈
+  {approved, rejected, retried})`. **No `raw_payload_ref` and no body column by
+  design** — a record is diagnosable from identity + content hash + the
+  code-backed `reason_code`/`reason` + the typed `safe_metadata` jsonb alone.
+  This is the "typed safe quarantine metadata" the next slice persists via
+  `review_ingest_governance.py::_insert_quarantine_entries`. (The earlier
+  draft's `ai_failure` reason and `raw_payload_ref` pointer are removed: neither
+  exists in 062.)
 - **Idempotent dead-letter:** partial unique index on
   `(provider, external_key, reason_category) WHERE resolved_at IS NULL` means
   retrying a failed batch does not duplicate dead-letter rows.
