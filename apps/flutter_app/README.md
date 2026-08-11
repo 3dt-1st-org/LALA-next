@@ -124,5 +124,32 @@ handling or isolated local checks.
 Do not commit client tokens or API keys. After the contest window, replace
 public contest access with OAuth or a backend-for-frontend proxy rather than
 shipping static credentials in the web bundle.
+## Build Input Resolution
+
+Build inputs (API keys, service endpoints, and configuration values) are resolved
+in the following priority order:
+
+1. **SSM First:** AWS Systems Manager Parameter Store is the preferred configuration
+   source for guest builds and CI/CD pipelines using the existing authenticated AWS
+   profile and authorized guest-build parameters.
+
+2. **Local Fallback:** If SSM is unavailable, local `.env` or `.env.local` files
+   may be used **only inside an isolated build subshell** for development builds.
+   These files must never be committed, copied, or referenced in production builds.
+
+3. **No Temporary/Fake Values:** Build systems must not invent or substitute placeholder
+   values. If a required configuration value is unavailable, the build should fail
+   rather than proceed with a fake endpoint.
+
+4. **Safe Public Default:** The `LALA_API_BASE_URL` configuration has a safe static
+   default (`https://api.lala-next.cloud`) that exists only as a guest-safe fallback.
+   This default allows the app to function for public read-only flows without
+   requiring explicit configuration. Explicit dart-define values always override
+   this default unchanged, including `http://127.0.0.1:8080` for local development.
+
+**Security:** Never print, grep, copy, attach, log, commit, or expose secret values,
+secret paths, secret names, AWS identifiers, or environment variable content in
+build output or documentation.
+
 The Kakao JavaScript key is embedded in web and native WebView map loads by
 design and must be protected by Kakao's JavaScript SDK domain allowlist.

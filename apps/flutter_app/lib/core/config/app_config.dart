@@ -21,7 +21,7 @@ class LalaAppConfig {
   const LalaAppConfig.fromEnvironment()
     : baseUri = const String.fromEnvironment(
         'LALA_API_BASE_URL',
-        defaultValue: 'http://127.0.0.1:8080',
+        defaultValue: 'https://api.lala-next.cloud',
       ),
       bearerToken = const String.fromEnvironment('LALA_API_BEARER_TOKEN'),
       apiKey = const String.fromEnvironment('LALA_IOS_API_KEY'),
