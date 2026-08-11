@@ -1,0 +1,1023 @@
+<title>LALA &#8212; Screen Mockups</title>
+<style>
+  /* ============ DOCUMENT TOKENS ============ */
+  :root{
+    --doc-bg:#F4F7F4; --doc-panel:#FFFFFF; --doc-ink:#16211E; --doc-ink-2:#5C6F68;
+    --doc-ink-3:#8B9A94; --doc-line:#DDE6E0; --doc-jade:#2E7D6B; --doc-hot:#D8451C;
+    --doc-shadow:0 18px 40px -22px rgba(22,45,38,0.35);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --doc-bg:#121917; --doc-panel:#18211F; --doc-ink:#E8EFEA; --doc-ink-2:#9DAFA8;
+      --doc-ink-3:#71837C; --doc-line:#2A3733; --doc-jade:#5FBBA2; --doc-hot:#F2724C;
+      --doc-shadow:0 18px 40px -22px rgba(0,0,0,0.7);
+    }
+  }
+  :root[data-theme="dark"]{
+    --doc-bg:#121917; --doc-panel:#18211F; --doc-ink:#E8EFEA; --doc-ink-2:#9DAFA8;
+    --doc-ink-3:#71837C; --doc-line:#2A3733; --doc-jade:#5FBBA2; --doc-hot:#F2724C;
+    --doc-shadow:0 18px 40px -22px rgba(0,0,0,0.7);
+  }
+  :root[data-theme="light"]{
+    --doc-bg:#F4F7F4; --doc-panel:#FFFFFF; --doc-ink:#16211E; --doc-ink-2:#5C6F68;
+    --doc-ink-3:#8B9A94; --doc-line:#DDE6E0; --doc-jade:#2E7D6B; --doc-hot:#D8451C;
+    --doc-shadow:0 18px 40px -22px rgba(22,45,38,0.35);
+  }
+
+  /* ============ APP TOKENS (the app is light; never inverts) ============ */
+  .device,.comp{
+    --paper:#FAFBF9; --surface:#FFFFFF; --pale-2:#F1F6F2;
+    --ink:#16211E; --ink-2:#61736C; --ink-3:#9AA8A2; --line:#E2EAE5;
+    --jade:#2E7D6B; --jade-deep:#1F5C4E; --visitor:#CBD5D0;
+
+    /* the one hot accent: audio / docent only */
+    --audio:#D8451C; --audio-soft:#FCEAE4;
+
+    /* category system &#8212; carried over from the live app's own colour language */
+    --c-attr:#A8412C;   --c-attr-bg:#F8E7E2;
+    --c-food:#8C6516;   --c-food-bg:#FAF0DA;
+    --c-event:#37568C;  --c-event-bg:#E4EBF7;
+    --c-cult:#1F5C4E;   --c-cult-bg:#DFEFE7;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{background:var(--doc-bg);color:var(--doc-ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue","Segoe UI",Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;overflow-x:hidden;}
+  .wrap{max-width:1200px;margin:0 auto;padding:56px 26px 90px;}
+  h1,h2,h3,h4{font-family:"Avenir Next Condensed","Avenir Next","Helvetica Neue",sans-serif;
+    font-weight:600;text-wrap:balance;margin:0;letter-spacing:0.01em;}
+  p{margin:0;}
+  .mono{font-family:ui-monospace,"SF Mono",Menlo,monospace;}
+  a:focus-visible,button:focus-visible{outline:2px solid var(--doc-hot);outline-offset:3px;}
+
+  /* ---------- masthead ---------- */
+  .masthead{display:grid;grid-template-columns:1.2fr 0.8fr;gap:44px;align-items:end;
+    padding-bottom:34px;border-bottom:1px solid var(--doc-line);}
+  .eyebrow{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11px;letter-spacing:0.16em;
+    text-transform:uppercase;color:var(--doc-jade);display:flex;align-items:center;gap:9px;margin-bottom:14px;}
+  .eyebrow::before{content:"";width:20px;height:2px;background:var(--doc-hot);}
+  .masthead h1{font-size:clamp(32px,4.4vw,50px);line-height:1.02;}
+  .masthead h1 em{font-style:normal;color:var(--doc-hot);}
+  .read{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12.5px;line-height:1.65;
+    color:var(--doc-ink-2);border-left:2px solid var(--doc-hot);padding-left:14px;margin-top:20px;max-width:56ch;}
+  .masthead .brief{font-size:15px;line-height:1.7;color:var(--doc-ink-2);max-width:44ch;}
+  .masthead .brief b{color:var(--doc-ink);font-weight:600;}
+
+  /* ---------- system ---------- */
+  .system{display:grid;grid-template-columns:1.5fr 1fr;gap:28px;padding:34px 0 44px;
+    border-bottom:1px solid var(--doc-line);}
+  .lbl{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:10.5px;letter-spacing:0.14em;
+    text-transform:uppercase;color:var(--doc-ink-3);margin-bottom:14px;}
+  .swatches{display:flex;gap:8px;flex-wrap:wrap;}
+  .sw{flex:1 1 88px;min-width:88px;}
+  .sw .cap{height:46px;border-radius:9px;border:1px solid rgba(0,0,0,0.06);}
+  .sw .nm{font-size:11.5px;font-weight:600;margin-top:7px;}
+  .sw .hx{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:9.5px;color:var(--doc-ink-3);}
+  .sw .rl{font-size:10.5px;color:var(--doc-ink-2);line-height:1.45;margin-top:3px;}
+  .catlist{display:flex;flex-direction:column;gap:9px;}
+  .catrow{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--doc-ink-2);}
+  .catpill{font-size:11px;font-weight:700;padding:3.5px 10px;border-radius:6px;flex-shrink:0;min-width:74px;text-align:center;}
+  .catrow .kr{font-family:"Apple SD Gothic Neo","Malgun Gothic",sans-serif;color:var(--doc-ink-3);}
+
+  /* ---------- screen blocks ---------- */
+  .screen-block{display:grid;grid-template-columns:330px 1fr;gap:52px;padding:56px 0;
+    border-bottom:1px solid var(--doc-line);align-items:start;}
+  .screen-block.flag{background:linear-gradient(180deg,rgba(216,69,28,0.045),transparent 60%);
+    border-radius:20px;padding:44px 26px 56px;margin:0 -26px;}
+  .notes h2{font-size:26px;margin-bottom:5px;}
+  .notes h2 em{font-style:normal;color:var(--doc-hot);}
+  .role{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:10.5px;letter-spacing:0.13em;
+    text-transform:uppercase;color:var(--doc-jade);margin-bottom:16px;}
+  .role.hot{color:var(--doc-hot);}
+  .notes > p{font-size:15px;line-height:1.7;color:var(--doc-ink-2);max-width:60ch;}
+  .notelist{display:flex;flex-direction:column;gap:14px;margin-top:24px;}
+  .note{display:grid;grid-template-columns:22px 1fr;gap:13px;align-items:start;}
+  .note .dot{width:22px;height:22px;border-radius:50%;background:var(--doc-jade);color:#fff;
+    font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:10px;display:flex;
+    align-items:center;justify-content:center;margin-top:1px;}
+  .note.hot .dot{background:var(--doc-hot);}
+  .note.warn .dot{background:#B0761C;}
+  .note p{font-size:14px;line-height:1.6;color:var(--doc-ink-2);}
+  .note p b{color:var(--doc-ink);font-weight:600;}
+
+  /* ============ DEVICE ============ */
+  .device{width:330px;background:#DCE4DF;border-radius:42px;padding:10px;
+    box-shadow:var(--doc-shadow);position:sticky;top:24px;}
+  .device .glass{background:var(--paper);border-radius:33px;overflow:hidden;height:680px;
+    display:flex;flex-direction:column;position:relative;color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;}
+  .statusbar{height:32px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;
+    padding:0 20px;font-size:12px;font-weight:600;z-index:20;}
+  .statusbar.onart{color:#fff;}
+  .icons{display:flex;align-items:center;gap:5px;}
+  .bar-sig{display:flex;align-items:flex-end;gap:1.5px;}
+  .bar-sig i{width:2.5px;border-radius:1px;display:block;background:currentColor;}
+  .batt{width:20px;height:10px;border:1.2px solid currentColor;border-radius:3px;padding:1.4px;}
+  .batt span{display:block;height:100%;width:72%;background:currentColor;border-radius:1px;}
+  .kr{font-family:"Apple SD Gothic Neo","Malgun Gothic",sans-serif;}
+  .tnum{font-variant-numeric:tabular-nums;}
+
+  /* --- category pills --- */
+  .pill{font-size:9.5px;font-weight:700;padding:3px 8px;border-radius:5px;display:inline-block;letter-spacing:0.01em;}
+  .pill.attr{background:var(--c-attr-bg);color:var(--c-attr);}
+  .pill.food{background:var(--c-food-bg);color:var(--c-food);}
+  .pill.event{background:var(--c-event-bg);color:var(--c-event);}
+  .pill.cult{background:var(--c-cult-bg);color:var(--c-cult);}
+
+  /* --- top controls --- */
+  .toprow{display:flex;gap:9px;align-items:center;padding:0 14px;margin-bottom:9px;}
+  .searchpill{height:38px;border-radius:19px;background:var(--surface);border:1px solid var(--line);
+    display:flex;align-items:center;gap:9px;padding:0 13px;flex:1;
+    box-shadow:0 2px 8px -4px rgba(22,45,38,0.18);}
+  .searchpill span{font-size:13px;color:var(--ink-3);}
+  .iconbtn{width:38px;height:38px;border-radius:50%;background:var(--surface);border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;
+    box-shadow:0 2px 8px -4px rgba(22,45,38,0.18);}
+  .chips{display:flex;gap:5px;padding:0 14px 9px;overflow:hidden;}
+  .chip{font-size:11.5px;padding:5px 10px;border-radius:14px;background:var(--surface);
+    border:1px solid var(--line);color:var(--ink-2);white-space:nowrap;display:flex;align-items:center;gap:5px;}
+  .chip i{width:6px;height:6px;border-radius:50%;display:block;}
+  .chip.on{background:var(--ink);border-color:var(--ink);color:#fff;font-weight:600;}
+
+  /* --- map --- */
+  .maparea{flex:1;position:relative;overflow:hidden;}
+  .maparea svg{position:absolute;inset:0;width:100%;height:100%;}
+  .pin{position:absolute;width:29px;height:29px;border-radius:50%;background:var(--surface);
+    border:2px solid var(--jade);display:flex;align-items:center;justify-content:center;
+    box-shadow:0 3px 8px -2px rgba(22,45,38,0.3);transform:translate(-50%,-50%);}
+  .pin.p-attr{border-color:var(--c-attr);}
+  .pin.p-food{border-color:var(--c-food);}
+  .pin.p-event{border-color:var(--c-event);}
+  .pin.p-cult{border-color:var(--c-cult);}
+  .pin.sel{width:37px;height:37px;background:var(--c-cult);border-color:var(--c-cult);
+    box-shadow:0 0 0 5px rgba(31,92,78,0.18),0 4px 10px -2px rgba(22,45,38,0.35);}
+  .pin.sel .eq{display:flex;align-items:flex-end;gap:1.7px;height:13px;}
+  .pin.sel .eq i{width:2.4px;background:#fff;border-radius:1px;display:block;}
+  .userdot{position:absolute;width:15px;height:15px;border-radius:50%;background:#2F6FD0;
+    border:2.5px solid #fff;box-shadow:0 0 0 7px rgba(47,111,208,0.16);transform:translate(-50%,-50%);}
+  .maplabel{position:absolute;font-size:8.5px;color:#7E8D87;transform:translate(-50%,-50%);
+    white-space:nowrap;font-weight:500;}
+  .fab{position:absolute;right:13px;width:38px;height:38px;border-radius:50%;background:var(--surface);
+    border:1px solid var(--line);display:flex;align-items:center;justify-content:center;
+    box-shadow:0 4px 12px -4px rgba(22,45,38,0.32);}
+
+  /* --- carousel card --- */
+  .carousel{position:absolute;left:0;right:0;bottom:10px;display:flex;gap:9px;padding:0 14px;align-items:flex-end;}
+  .pcard{background:var(--surface);border-radius:16px;padding:9px;border:1px solid var(--line);
+    box-shadow:0 8px 22px -10px rgba(22,45,38,0.35);flex-shrink:0;}
+  .pcard.main{width:216px;}
+  .pcard.peek{width:94px;}
+  .pcard .thumb{width:100%;height:66px;border-radius:11px;position:relative;overflow:hidden;
+    background:linear-gradient(150deg,#B9CBBE,#8FA898 55%,#6E8578);}
+  .pcard.peek .thumb{height:50px;background:linear-gradient(150deg,#D8C39A,#BA9A63);}
+  .thumb .pill{position:absolute;top:6px;left:6px;background:rgba(255,255,255,0.94);}
+  .pcard h5{font-size:13px;font-weight:700;margin:7px 0 1px;letter-spacing:-0.01em;}
+  .pcard .krname{font-size:10px;color:var(--ink-3);}
+  .pcard .meta{font-size:10px;color:var(--ink-2);margin-top:2px;}
+  .pcard.peek h5{font-size:10.5px;margin-top:6px;}
+
+  /* THE listen row &#8212; primary action on every card */
+  .listen{display:flex;align-items:center;gap:8px;margin-top:8px;padding:6px 8px;border-radius:11px;
+    background:var(--audio-soft);}
+  .listen .go{width:26px;height:26px;border-radius:50%;background:var(--audio);flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;}
+  .listen .txt{font-size:11px;font-weight:700;color:var(--audio);line-height:1.2;}
+  .listen .sub{font-size:9px;color:#A8654F;margin-top:1px;}
+  .listen.mini{padding:5px 6px;gap:6px;margin-top:6px;}
+  .listen.mini .go{width:21px;height:21px;}
+  .listen.mini .txt{font-size:9.5px;}
+
+  .microbar{display:flex;align-items:center;gap:6px;margin-top:7px;}
+  .microbar .track{flex:1;height:5px;border-radius:3px;background:var(--visitor);overflow:hidden;}
+  .microbar .fill{height:100%;background:var(--jade);}
+  .microbar .val{font-size:9.5px;font-weight:700;color:var(--jade-deep);}
+
+  /* --- mini player docked above tab bar --- */
+  .miniplayer{flex-shrink:0;display:flex;align-items:center;gap:9px;padding:8px 12px;
+    background:var(--ink);color:#fff;}
+  .miniplayer .art{width:34px;height:34px;border-radius:8px;flex-shrink:0;
+    background:linear-gradient(150deg,#A9BFB1,#5E766A);}
+  .miniplayer .mid{flex:1;min-width:0;}
+  .miniplayer .nm{font-size:11.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .miniplayer .st{font-size:9.5px;color:#9BB0A8;margin-top:1px;}
+  .miniplayer .pausebtn{width:30px;height:30px;border-radius:50%;background:var(--audio);
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .miniprog{height:2px;background:#34433E;flex-shrink:0;}
+  .miniprog i{display:block;height:100%;width:38%;background:var(--audio);}
+
+  /* --- tab bar --- */
+  .tabbar{flex-shrink:0;display:flex;justify-content:space-around;align-items:center;
+    padding:8px 0 12px;background:var(--surface);border-top:1px solid var(--line);}
+  .tab{display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--ink-3);}
+  .tab span{font-size:9.5px;font-weight:600;}
+  .tab.on{color:var(--audio);}
+
+  /* ============ FULL DOCENT PLAYER ============ */
+  .art{height:206px;flex-shrink:0;position:relative;
+    background:linear-gradient(157deg,#8FA898,#5E766A 55%,#3C4E45);}
+  .art .topctl{position:absolute;top:8px;left:12px;right:12px;display:flex;justify-content:space-between;}
+  .roundglass{width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,0.22);
+    display:flex;align-items:center;justify-content:center;}
+  .autobadge{position:absolute;left:14px;bottom:13px;display:flex;align-items:center;gap:6px;
+    background:rgba(18,25,23,0.72);padding:5px 10px;border-radius:14px;}
+  .autobadge .sparkle{width:13px;height:13px;flex-shrink:0;}
+  .autobadge span{font-size:9.5px;font-weight:700;color:#fff;letter-spacing:0.03em;}
+  .art .pill{position:absolute;right:14px;bottom:13px;}
+
+  .playerbody{flex:1;padding:13px 15px;display:flex;flex-direction:column;gap:11px;overflow:hidden;}
+  .ptitle-en{font-size:19px;font-weight:700;letter-spacing:-0.02em;line-height:1.15;}
+  .ptitle-kr{font-size:12px;color:var(--ink-2);margin-top:2px;}
+
+  .ctxline{display:flex;align-items:flex-start;gap:7px;padding:8px 10px;border-radius:11px;
+    background:var(--pale-2);border:1px solid #CFE2D6;}
+  .ctxline p{font-size:10.5px;line-height:1.45;color:var(--jade-deep);font-weight:600;}
+  .ctxline p b{color:var(--ink);}
+
+  .scrub{display:flex;flex-direction:column;gap:6px;}
+  .bigwave{display:flex;align-items:center;gap:2.5px;height:38px;}
+  .bigwave i{display:block;width:3px;border-radius:2px;background:var(--audio);}
+  .bigwave i.q{background:#DCC7C0;}
+  .times{display:flex;justify-content:space-between;font-size:10px;color:var(--ink-3);}
+
+  .transport{display:flex;align-items:center;justify-content:center;gap:26px;}
+  .tbtn{display:flex;align-items:center;justify-content:center;color:var(--ink-2);}
+  .bigplay{width:58px;height:58px;border-radius:50%;background:var(--audio);
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 8px 20px -6px rgba(216,69,28,0.6);}
+
+  .chapters{display:flex;flex-direction:column;gap:1px;}
+  .chapters .head{font-size:9.5px;font-weight:700;letter-spacing:0.09em;text-transform:uppercase;
+    color:var(--ink-3);margin-bottom:6px;}
+  .chap{display:flex;align-items:center;gap:9px;padding:6px 0;border-bottom:1px solid var(--line);}
+  .chap:last-child{border-bottom:none;}
+  .chap .idx{width:5px;height:5px;border-radius:50%;background:var(--visitor);flex-shrink:0;}
+  .chap.on .idx{background:var(--audio);}
+  .chap .cn{flex:1;font-size:11.5px;color:var(--ink-2);}
+  .chap.on .cn{color:var(--ink);font-weight:700;}
+  .chap .ct{font-size:9.5px;color:var(--ink-3);}
+
+  /* --- detail sheet --- */
+  .hero{height:96px;position:relative;flex-shrink:0;
+    background:linear-gradient(150deg,#A9BFB1,#7E978A 50%,#5E766A);}
+  .hero .roundglass{position:absolute;top:10px;background:rgba(255,255,255,0.9);}
+  .sheetbody{flex:1;overflow:hidden;padding:10px 13px;display:flex;flex-direction:column;gap:7px;}
+  .titleblock h3{font-family:inherit;font-size:18px;font-weight:700;letter-spacing:-0.02em;line-height:1.15;margin-top:6px;}
+  .titleblock .krname{font-size:11.5px;color:var(--ink-2);margin-top:2px;}
+  .titleblock .meta{font-size:10.5px;color:var(--ink-3);margin-top:3px;}
+
+  .docentcard{border-radius:14px;padding:11px;background:var(--audio-soft);border:1px solid #F2CFC4;}
+  .docentcard .dhead{display:flex;align-items:center;gap:6px;margin-bottom:8px;}
+  .docentcard .dhead span{font-size:9.5px;font-weight:700;letter-spacing:0.06em;
+    text-transform:uppercase;color:var(--audio);}
+  .docentcard .drow{display:flex;align-items:center;gap:10px;}
+  .docentcard .dplay{width:40px;height:40px;border-radius:50%;background:var(--audio);flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;box-shadow:0 5px 14px -5px rgba(216,69,28,0.65);}
+  .docentcard .dtext{flex:1;min-width:0;}
+  .docentcard .dtitle{font-size:12.5px;font-weight:700;line-height:1.25;}
+  .docentcard .dmeta{font-size:9.5px;color:#A8654F;margin-top:2px;}
+
+  .panel{border:1px solid var(--line);border-radius:14px;padding:10px 11px;background:var(--surface);}
+  .panel .ptl{font-size:12px;font-weight:700;margin-bottom:7px;}
+  .claimrow{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;}
+  .claimrow .c1{font-size:12.5px;font-weight:700;}
+  .claimrow .c2{font-size:10px;color:var(--ink-3);}
+  .ratio .track{display:flex;height:8px;border-radius:5px;overflow:hidden;background:var(--visitor);}
+  .ratio .fill{background:var(--jade);}
+  .ratio .legend{display:flex;justify-content:space-between;font-size:9.5px;color:var(--ink-2);margin-top:4px;}
+  .ratio .legend b{color:var(--jade-deep);font-weight:700;}
+  .ratio.lg .track{height:11px;}
+  .ratio.lg .legend{font-size:11.5px;}
+  .source{font-size:9px;color:var(--ink-3);margin-top:6px;display:flex;align-items:center;gap:4px;}
+
+  .wchips{display:flex;flex-wrap:wrap;gap:5px;}
+  .wchip{font-size:10.5px;padding:4px 8px;border-radius:6px;background:var(--pale-2);
+    color:var(--jade-deep);font-weight:600;}
+  .wchip.no{background:#F5F0EE;color:#9A7A70;}
+
+  .cta{height:41px;border-radius:12px;background:var(--ink);color:#fff;display:flex;
+    align-items:center;justify-content:center;gap:7px;font-size:13.5px;font-weight:600;flex-shrink:0;}
+
+  /* --- discover rows --- */
+  .sortrow{display:flex;justify-content:space-between;align-items:center;padding:0 14px 7px;}
+  .sortrow .lab{font-size:10.5px;color:var(--ink-3);}
+  .sortrow .val{font-size:11.5px;font-weight:700;display:flex;align-items:center;gap:4px;}
+  .listwrap{flex:1;overflow:hidden;padding:0 14px;display:flex;flex-direction:column;gap:6px;}
+  .lrow{display:flex;gap:9px;background:var(--surface);border:1px solid var(--line);
+    border-radius:13px;padding:7px;align-items:center;}
+  .lrow .th{width:46px;height:46px;border-radius:9px;flex-shrink:0;}
+  .lrow .body{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+  .lrow h5{font-size:12.5px;font-weight:700;letter-spacing:-0.01em;}
+  .lrow .krname{font-size:9.5px;color:var(--ink-3);}
+  .lrow .meta{font-size:9.5px;color:var(--ink-2);}
+  .rowplay{width:32px;height:32px;border-radius:50%;background:var(--audio-soft);flex-shrink:0;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;}
+  .rowplay .d{font-size:7px;font-weight:700;color:var(--audio);margin-top:1px;}
+
+  /* --- plan --- */
+  .daybar{padding:0 14px 9px;}
+  .daybar h4{font-size:18px;font-weight:700;letter-spacing:-0.02em;font-family:inherit;}
+  .daybar .sub{font-size:10.5px;color:var(--ink-3);margin-top:3px;}
+  .listenall{margin:0 14px 11px;padding:9px 11px;border-radius:12px;background:var(--audio-soft);
+    border:1px solid #F2CFC4;display:flex;align-items:center;gap:9px;}
+  .listenall .go{width:30px;height:30px;border-radius:50%;background:var(--audio);flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;}
+  .listenall .t1{font-size:11.5px;font-weight:700;color:var(--audio);}
+  .listenall .t2{font-size:9.5px;color:#A8654F;margin-top:1px;}
+  .tl{padding:0 14px;flex:1;overflow:hidden;}
+  .tl-item{display:grid;grid-template-columns:14px 1fr;gap:10px;}
+  .tl-rail{display:flex;flex-direction:column;align-items:center;}
+  .tl-dot{width:9px;height:9px;border-radius:50%;background:var(--audio);margin-top:5px;flex-shrink:0;}
+  .tl-dot.q{background:var(--visitor);}
+  .tl-line{width:1.5px;flex:1;background:var(--line);}
+  .tl-card{padding-bottom:3px;}
+  .tl-slot{font-size:9px;font-weight:700;letter-spacing:0.09em;text-transform:uppercase;color:var(--ink-3);}
+  .tl-name{font-size:13px;font-weight:700;letter-spacing:-0.01em;margin-top:1px;}
+  .tl-tags{display:flex;gap:5px;margin-top:4px;align-items:center;flex-wrap:wrap;}
+  .tl-aud{font-size:9px;font-weight:700;color:var(--audio);background:var(--audio-soft);
+    padding:2px 6px;border-radius:4px;display:flex;align-items:center;gap:3px;}
+  .tl-loc{font-size:9px;font-weight:700;color:var(--jade-deep);background:var(--pale-2);padding:2px 6px;border-radius:4px;}
+  .hop{display:flex;align-items:center;gap:6px;font-size:9.5px;color:var(--ink-2);padding:6px 0 7px;}
+  .hop .b2{background:#E8EDF5;color:#3A5A94;font-weight:700;padding:2px 6px;border-radius:4px;font-size:9px;}
+
+  /* ---------- components ---------- */
+  .comps{padding:56px 0;border-bottom:1px solid var(--doc-line);}
+  .comp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px;margin-top:30px;}
+  .comp{background:var(--paper);border:1px solid var(--doc-line);border-radius:16px;padding:18px;color:var(--ink);}
+  .comp .cname{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:10px;letter-spacing:0.12em;
+    text-transform:uppercase;color:var(--doc-hot);margin-bottom:14px;}
+  .comp .cdesc{font-size:12.5px;color:var(--ink-2);line-height:1.6;margin-top:14px;}
+
+  /* ---------- rollout ---------- */
+  .rollout{padding:52px 0 0;}
+  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--doc-line);
+    border:1px solid var(--doc-line);border-radius:16px;overflow:hidden;margin-top:26px;}
+  .step{background:var(--doc-panel);padding:24px 20px;}
+  .step .n{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:11px;color:#fff;
+    background:var(--doc-hot);width:22px;height:22px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;margin-bottom:13px;}
+  .step h4{font-size:16px;margin-bottom:7px;}
+  .step p{font-size:13.5px;line-height:1.6;color:var(--doc-ink-2);}
+  footer{margin-top:44px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;
+    font-size:12.5px;color:var(--doc-ink-3);}
+  footer b{color:var(--doc-ink-2);}
+
+  @media (max-width:900px){
+    .masthead,.system{grid-template-columns:1fr;}
+    .screen-block{grid-template-columns:1fr;gap:30px;}
+    .device{position:static;margin:0 auto;}
+    .steps{grid-template-columns:1fr;}
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div>
+      <div class="eyebrow">LALA &middot; screen mockups &middot; v3 &mdash; docent-led</div>
+      <h1>A guide that writes<br>itself, <em>for right now</em>.</h1>
+      <p class="read">Reading this as: an audio-guide product that happens to have a map &mdash; docent promoted to the top surface, category colour restored from the live app, celadon reserved for the local-spend evidence that backs each pick.</p>
+    </div>
+    <div class="brief">
+      <p>Correcting the previous pass: the <b>auto-generated docent</b> is the product, not the local score. It now has its own full screen, a play control on every card and row, and a mini-player that follows you across all three tabs. The score demotes to supporting evidence.</p>
+    </div>
+  </header>
+
+  <section class="system">
+    <div>
+      <div class="lbl">Palette &mdash; one hot accent, reserved for audio</div>
+      <div class="swatches">
+        <div class="sw"><div class="cap" style="background:#FAFBF9"></div><div class="nm">Hanji</div><div class="hx">#FAFBF9</div><div class="rl">Ground. Paper, not screen-white.</div></div>
+        <div class="sw"><div class="cap" style="background:#16211E"></div><div class="nm">Pine ink</div><div class="hx">#16211E</div><div class="rl">Text, mini-player. Green-biased.</div></div>
+        <div class="sw"><div class="cap" style="background:#D8451C"></div><div class="nm">Docent flame</div><div class="hx">#D8451C</div><div class="rl">Audio only. Never used for anything else.</div></div>
+        <div class="sw"><div class="cap" style="background:#2E7D6B"></div><div class="nm">Celadon</div><div class="hx">#2E7D6B</div><div class="rl">Local-spend evidence.</div></div>
+        <div class="sw"><div class="cap" style="background:#CBD5D0"></div><div class="nm">Visitor grey</div><div class="hx">#CBD5D0</div><div class="rl">Deliberately quiet.</div></div>
+      </div>
+    </div>
+    <div>
+      <div class="lbl">Category colour &mdash; kept from the live app</div>
+      <div class="catlist">
+        <div class="catrow"><span class="catpill" style="background:#F8E7E2;color:#A8412C">Attractions</span> <span class="kr">&#47749;&#49548;</span> &middot; clay red</div>
+        <div class="catrow"><span class="catpill" style="background:#FAF0DA;color:#8C6516">Food</span> <span class="kr">&#47579;&#51665;</span> &middot; ochre</div>
+        <div class="catrow"><span class="catpill" style="background:#E4EBF7;color:#37568C">Events</span> <span class="kr">&#54665;&#49324;</span> &middot; indigo</div>
+        <div class="catrow"><span class="catpill" style="background:#DFEFE7;color:#1F5C4E">Culture</span> <span class="kr">&#47928;&#54868;</span> &middot; celadon</div>
+      </div>
+      <p style="font-size:12px;color:var(--doc-ink-2);line-height:1.6;margin-top:14px">Tinted backgrounds, darker text &mdash; pills stay quiet labels so the flame-coloured play control is always the loudest thing on a card.</p>
+    </div>
+  </section>
+
+  <!-- ============ SCREEN 1: MAP ============ -->
+  <div class="screen-block">
+    <div class="device"><div class="glass">
+      <div class="statusbar">
+        <span class="tnum">9:41</span>
+        <span class="icons">
+          <span class="bar-sig"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:10px"></i></span>
+          <svg width="14" height="11" viewBox="0 0 14 11" fill="none"><path d="M1 4.2a8.5 8.5 0 0 1 12 0M3.4 6.6a5 5 0 0 1 7.2 0M7 9.2h.01" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          <span class="batt"><span></span></span>
+        </span>
+      </div>
+
+      <div class="toprow">
+        <div class="searchpill">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="#9AA8A2" stroke-width="1.6"/><path d="M11 11l3 3" stroke="#9AA8A2" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <span>Search places or areas</span>
+        </div>
+        <div class="iconbtn">
+          <svg width="17" height="17" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="2.6" stroke="#16211E" stroke-width="1.5"/><path d="M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M15.3 4.7l-1.4 1.4M6.1 13.9l-1.4 1.4" stroke="#16211E" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </div>
+      </div>
+
+      <div class="chips">
+        <span class="chip on">All</span>
+        <span class="chip"><i style="background:#A8412C"></i>Attractions</span>
+        <span class="chip"><i style="background:#8C6516"></i>Food</span>
+        <span class="chip"><i style="background:#37568C"></i>Events</span>
+      </div>
+
+      <div class="maparea">
+        <svg viewBox="0 0 310 420" preserveAspectRatio="xMidYMid slice" aria-label="Map of central Suwon">
+          <rect width="310" height="420" fill="#EDF2EE"/>
+          <path d="M0 300 Q80 285 150 305 T310 292 L310 420 L0 420 Z" fill="#E4EDE6"/>
+          <ellipse cx="52" cy="132" rx="66" ry="52" fill="#D9E9DC"/>
+          <ellipse cx="262" cy="352" rx="58" ry="44" fill="#D9E9DC"/>
+          <path d="M-5 232 Q70 220 140 238 T315 226" stroke="#D5E5EC" stroke-width="17" fill="none" stroke-linecap="round"/>
+          <g stroke="#FBFCFB" stroke-linecap="round" fill="none">
+            <path d="M-5 96 H315" stroke-width="11"/><path d="M-5 186 H315" stroke-width="8"/>
+            <path d="M-5 300 H315" stroke-width="10"/><path d="M-5 378 H315" stroke-width="7"/>
+            <path d="M62 -5 V425" stroke-width="9"/><path d="M158 -5 V425" stroke-width="11"/>
+            <path d="M242 -5 V425" stroke-width="7"/><path d="M8 -5 L110 425" stroke-width="6"/>
+          </g>
+          <g fill="#E3EAE5">
+            <rect x="72" y="106" width="34" height="26" rx="3"/><rect x="114" y="106" width="30" height="26" rx="3"/>
+            <rect x="172" y="106" width="28" height="30" rx="3"/><rect x="210" y="112" width="24" height="24" rx="3"/>
+            <rect x="72" y="200" width="30" height="28" rx="3"/><rect x="110" y="200" width="36" height="28" rx="3"/>
+            <rect x="176" y="196" width="26" height="32" rx="3"/><rect x="252" y="120" width="30" height="34" rx="3"/>
+            <rect x="76" y="312" width="32" height="26" rx="3"/><rect x="120" y="312" width="28" height="26" rx="3"/>
+          </g>
+          <path d="M96 152 C104 112 150 96 190 106 C232 116 250 152 244 190 C238 228 206 250 168 246 C124 241 96 214 92 186 C90 172 92 162 96 152 Z"
+                fill="none" stroke="#B9CFC0" stroke-width="2.4" stroke-dasharray="7 4"/>
+          <text x="168" y="141" fill="#8FA79A" font-size="8.5" font-family="-apple-system,sans-serif" font-weight="600" letter-spacing="0.5">HWASEONG FORTRESS</text>
+        </svg>
+
+        <span class="maplabel" style="left:24%;top:9%">Janganmun Gate</span>
+        <span class="maplabel" style="left:74%;top:47%">Paldal Police Stn.</span>
+        <span class="maplabel" style="left:22%;top:72%">Suwon Stn. area</span>
+
+        <div class="pin sel" style="left:53%;top:31%">
+          <span class="eq"><i style="height:5px"></i><i style="height:11px"></i><i style="height:7px"></i><i style="height:13px"></i></span>
+        </div>
+        <div class="pin p-food" style="left:31%;top:50%">
+          <svg width="13" height="13" viewBox="0 0 20 20" fill="none"><path d="M6 2.5v15M3.6 2.5v4.2a2.4 2.4 0 0 0 4.8 0V2.5M14.4 17.5V11c2.6 0 3.1-2.2 3.1-4.6 0-2-1.2-3.9-3.1-3.9s-3.1 1.9-3.1 3.9c0 2.4.5 4.6 3.1 4.6Z" stroke="#8C6516" stroke-width="1.6" stroke-linecap="round"/></svg>
+        </div>
+        <div class="pin p-attr" style="left:70%;top:25%">
+          <svg width="13" height="13" viewBox="0 0 20 20" fill="none"><path d="M10 17.5s6.5-5.4 6.5-9.6a6.5 6.5 0 1 0-13 0c0 4.2 6.5 9.6 6.5 9.6Z" stroke="#A8412C" stroke-width="1.6" stroke-linejoin="round"/><circle cx="10" cy="8" r="2.2" stroke="#A8412C" stroke-width="1.6"/></svg>
+        </div>
+        <div class="pin p-event" style="left:44%;top:64%">
+          <svg width="13" height="13" viewBox="0 0 20 20" fill="none"><rect x="3" y="4.5" width="14" height="13" rx="2" stroke="#37568C" stroke-width="1.6"/><path d="M3 8.5h14M7 2.5v3.5M13 2.5v3.5" stroke="#37568C" stroke-width="1.6" stroke-linecap="round"/></svg>
+        </div>
+        <div class="pin p-food" style="left:80%;top:58%">
+          <svg width="13" height="13" viewBox="0 0 20 20" fill="none"><path d="M6 2.5v15M3.6 2.5v4.2a2.4 2.4 0 0 0 4.8 0V2.5M14.4 17.5V11c2.6 0 3.1-2.2 3.1-4.6 0-2-1.2-3.9-3.1-3.9s-3.1 1.9-3.1 3.9c0 2.4.5 4.6 3.1 4.6Z" stroke="#8C6516" stroke-width="1.6" stroke-linecap="round"/></svg>
+        </div>
+        <div class="userdot" style="left:37%;top:57%"></div>
+
+        <div class="fab" style="top:10px">
+          <svg width="17" height="17" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="3.2" stroke="#16211E" stroke-width="1.5"/><circle cx="10" cy="10" r="7" stroke="#16211E" stroke-width="1.5"/><path d="M10 1v2M10 17v2M1 10h2M17 10h2" stroke="#16211E" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </div>
+
+        <div class="carousel">
+          <div class="pcard main">
+            <div class="thumb"><span class="pill cult">Culture</span></div>
+            <h5>Suwon Hwaseong Museum</h5>
+            <div class="krname kr">&#49688;&#50896;&#54868;&#49457;&#48149;&#47932;&#44288;</div>
+            <div class="meta tnum">18 min walk &middot; Paldal-gu</div>
+            <div class="listen">
+              <span class="go"><svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M3.6 2.3 9.4 6l-5.8 3.7V2.3Z" fill="#fff"/></svg></span>
+              <span>
+                <div class="txt">Listen &middot; 2:14</div>
+                <div class="sub">Auto-written for this afternoon</div>
+              </span>
+            </div>
+            <div class="microbar">
+              <span class="track"><span class="fill" style="width:82%"></span></span>
+              <span class="val tnum">82% local</span>
+            </div>
+          </div>
+          <div class="pcard peek">
+            <div class="thumb"><span class="pill food">Food</span></div>
+            <h5>Himalaya&#8230;</h5>
+            <div class="listen mini">
+              <span class="go"><svg width="9" height="9" viewBox="0 0 12 12" fill="none"><path d="M3.6 2.3 9.4 6l-5.8 3.7V2.3Z" fill="#fff"/></svg></span>
+              <span class="txt">1:48</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="miniprog"><i></i></div>
+      <div class="miniplayer">
+        <span class="art"></span>
+        <span class="mid">
+          <div class="nm">Nahyeseok Street docent</div>
+          <div class="st tnum">0:41 / 1:52 &middot; auto-generated</div>
+        </span>
+        <span class="pausebtn"><svg width="11" height="11" viewBox="0 0 12 12" fill="none"><rect x="3" y="2.4" width="2.3" height="7.2" rx="1" fill="#fff"/><rect x="6.7" y="2.4" width="2.3" height="7.2" rx="1" fill="#fff"/></svg></span>
+      </div>
+
+      <div class="tabbar">
+        <div class="tab">
+          <svg width="20" height="20" viewBox="0 0 22 22" fill="none"><circle cx="9.5" cy="9.5" r="6.5" stroke="currentColor" stroke-width="1.7"/><path d="M14.5 14.5 19 19" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          <span>Discover</span>
+        </div>
+        <div class="tab on">
+          <svg width="20" height="20" viewBox="0 0 22 22" fill="none"><path d="M2.5 5.5 8 3.2v13.3l-5.5 2.3V5.5ZM8 3.2l6 2.4v13.2L8 16.5V3.2ZM14 5.6l5.5-2.4v13.3L14 18.8V5.6Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+          <span>Map</span>
+        </div>
+        <div class="tab">
+          <svg width="20" height="20" viewBox="0 0 22 22" fill="none"><rect x="3" y="4.5" width="16" height="15" rx="2.4" stroke="currentColor" stroke-width="1.7"/><path d="M3 9h16M7.5 2.5v3.6M14.5 2.5v3.6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          <span>Plan</span>
+        </div>
+      </div>
+    </div></div>
+
+    <div class="notes">
+      <div class="role">Home &mdash; the map</div>
+      <h2>Play is the primary action, not a detail-sheet afterthought</h2>
+      <p>Previously the docent sat five panels deep inside an opened place sheet &mdash; two taps and a scroll from the map. Here the flame-coloured Listen control is the largest element on the card, the local bar shrinks to a single supporting line, and a mini-player docks above the tab bar the moment audio starts.</p>
+      <div class="notelist">
+        <div class="note hot"><span class="dot">1</span><p><b>Listen &middot; 2:14 with a subtitle that sells the mechanic:</b> &#8220;Auto-written for this afternoon.&#8221; The generation is the feature, so the interface says so out loud.</p></div>
+        <div class="note hot"><span class="dot">2</span><p><b>The mini-player follows you across all three tabs</b> &mdash; browse the map, open Plan, keep listening. Audio is never something you navigate back to.</p></div>
+        <div class="note"><span class="dot">3</span><p><b>Category colour restored</b> to the live app&#8217;s own mapping &mdash; clay red, ochre, indigo, celadon &mdash; on pills, map pins, and filter dots alike.</p></div>
+        <div class="note"><span class="dot">4</span><p><b>The selected pin shows an equaliser,</b> not a building icon. On a map full of pins, the one that&#8217;s talking should be obvious.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SCREEN 2: THE PLAYER ============ -->
+  <div class="screen-block flag">
+    <div class="device"><div class="glass">
+      <div class="art">
+        <div class="statusbar onart">
+          <span class="tnum">9:41</span>
+          <span class="icons">
+            <span class="bar-sig"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:10px"></i></span>
+            <svg width="14" height="11" viewBox="0 0 14 11" fill="none"><path d="M1 4.2a8.5 8.5 0 0 1 12 0M3.4 6.6a5 5 0 0 1 7.2 0M7 9.2h.01" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+            <span class="batt"><span></span></span>
+          </span>
+        </div>
+        <div class="topctl">
+          <span class="roundglass"><svg width="14" height="14" viewBox="0 0 18 18" fill="none"><path d="M11.5 3.5 6 9l5.5 5.5" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="roundglass"><svg width="14" height="14" viewBox="0 0 18 18" fill="none"><path d="M9 11.5V2.5M5.8 5.7 9 2.5l3.2 3.2M3 11v3.5h12V11" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </div>
+        <div class="autobadge">
+          <svg class="sparkle" viewBox="0 0 16 16" fill="none"><path d="M8 1.5 9.3 5.4l3.9 1.3-3.9 1.3L8 11.9 6.7 8 2.8 6.7 6.7 5.4 8 1.5Z" fill="#FF8A5C"/><path d="M13 10.5l.6 1.7 1.7.6-1.7.6-.6 1.7-.6-1.7-1.7-.6 1.7-.6.6-1.7Z" fill="#FF8A5C"/></svg>
+          <span>AUTO-GENERATED &middot; JUST NOW</span>
+        </div>
+        <span class="pill cult">Culture</span>
+      </div>
+
+      <div class="playerbody">
+        <div>
+          <div class="ptitle-en">Suwon Hwaseong Museum</div>
+          <div class="ptitle-kr kr">&#49688;&#50896;&#54868;&#49457;&#48149;&#47932;&#44288; &middot; &#54036;&#45804;&#44396;</div>
+        </div>
+
+        <div class="ctxline">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" style="flex-shrink:0;margin-top:1px"><circle cx="8" cy="8" r="3.1" stroke="#1F5C4E" stroke-width="1.4"/><path d="M8 1.2v1.6M8 13.2v1.6M1.2 8h1.6M13.2 8h1.6M3.3 3.3l1.1 1.1M11.6 11.6l1.1 1.1M12.7 3.3l-1.1 1.1M4.4 11.6l-1.1 1.1" stroke="#1F5C4E" stroke-width="1.4" stroke-linecap="round"/></svg>
+          <p>Written for <b>right now</b> &mdash; 25.2&deg;C, clear, Tuesday afternoon. Rewrites if the weather turns.</p>
+        </div>
+
+        <div class="scrub">
+          <div class="bigwave">
+            <i style="height:9px"></i><i style="height:19px"></i><i style="height:12px"></i><i style="height:27px"></i><i style="height:15px"></i>
+            <i style="height:22px"></i><i style="height:10px"></i><i style="height:30px"></i><i style="height:17px"></i><i style="height:24px"></i>
+            <i style="height:13px"></i><i style="height:20px"></i>
+            <i class="q" style="height:11px"></i><i class="q" style="height:25px"></i><i class="q" style="height:14px"></i>
+            <i class="q" style="height:21px"></i><i class="q" style="height:9px"></i><i class="q" style="height:28px"></i>
+            <i class="q" style="height:16px"></i><i class="q" style="height:12px"></i><i class="q" style="height:23px"></i>
+            <i class="q" style="height:10px"></i><i class="q" style="height:18px"></i><i class="q" style="height:14px"></i>
+          </div>
+          <div class="times tnum"><span>0:52</span><span>-1:22</span></div>
+        </div>
+
+        <div class="transport">
+          <span class="tbtn"><svg width="24" height="24" viewBox="0 0 26 26" fill="none"><path d="M13 5.5a7.5 7.5 0 1 1-7.3 9.2" stroke="#61736C" stroke-width="1.9" stroke-linecap="round"/><path d="M13 2.4 9.4 5.5 13 8.6" stroke="#61736C" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><text x="13" y="17" text-anchor="middle" font-size="7.5" font-weight="700" fill="#61736C" font-family="-apple-system,sans-serif">15</text></svg></span>
+          <span class="bigplay"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="6" y="4.5" width="4" height="15" rx="1.6" fill="#fff"/><rect x="14" y="4.5" width="4" height="15" rx="1.6" fill="#fff"/></svg></span>
+          <span class="tbtn"><svg width="24" height="24" viewBox="0 0 26 26" fill="none"><path d="M13 5.5a7.5 7.5 0 1 0 7.3 9.2" stroke="#61736C" stroke-width="1.9" stroke-linecap="round"/><path d="M13 2.4l3.6 3.1L13 8.6" stroke="#61736C" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><text x="13" y="17" text-anchor="middle" font-size="7.5" font-weight="700" fill="#61736C" font-family="-apple-system,sans-serif">15</text></svg></span>
+        </div>
+
+        <div class="chapters">
+          <div class="head">Chapters &mdash; generated from this place</div>
+          <div class="chap"><span class="idx"></span><span class="cn">Why a king built a city wall here</span><span class="ct tnum">0:00</span></div>
+          <div class="chap on"><span class="idx"></span><span class="cn">The tomb road that changed Suwon</span><span class="ct tnum">0:48</span></div>
+          <div class="chap"><span class="idx"></span><span class="cn">What to look at first inside</span><span class="ct tnum">1:31</span></div>
+        </div>
+      </div>
+
+      <div class="tabbar">
+        <div class="tab">
+          <svg width="20" height="20" viewBox="0 0 22 22" fill="none"><circle cx="9.5" cy="9.5" r="6.5" stroke="currentColor" stroke-width="1.7"/><path d="M14.5 14.5 19 19" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          <span>Discover</span>
+        </div>
+        <div class="tab on">
+          <svg width="20" height="20" viewBox="0 0 22 22" fill="none"><path d="M2.5 5.5 8 3.2v13.3l-5.5 2.3V5.5ZM8 3.2l6 2.4v13.2L8 16.5V3.2ZM14 5.6l5.5-2.4v13.3L14 18.8V5.6Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+          <span>Map</span>
+        </div>
+        <div class="tab">
+          <svg width="20" height="20" viewBox="0 0 22 22" fill="none"><rect x="3" y="4.5" width="16" height="15" rx="2.4" stroke="currentColor" stroke-width="1.7"/><path d="M3 9h16M7.5 2.5v3.6M14.5 2.5v3.6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          <span>Plan</span>
+        </div>
+      </div>
+    </div></div>
+
+    <div class="notes">
+      <div class="role hot">The docent player &mdash; flagship screen</div>
+      <h2>The screen the <em>whole product</em> is for</h2>
+      <p>One tap from any card, and it stands on its own rather than living inside a place sheet. Everything here exists to make the generation visible: it announces when it was written, what it was written for, and breaks itself into chapters no human editor produced.</p>
+      <div class="notelist">
+        <div class="note hot"><span class="dot">1</span><p><b>&#8220;Auto-generated &middot; just now&#8221;</b> sits on the artwork. A traveller should never mistake this for a pre-recorded track someone uploaded in 2019.</p></div>
+        <div class="note hot"><span class="dot">2</span><p><b>&#8220;Written for right now &mdash; 25.2&deg;C, clear.&#8221;</b> Your live build already writes weather into the script &mdash; the current docent text references today&#8217;s conditions. Surfacing that makes the freshness undeniable.</p></div>
+        <div class="note hot"><span class="dot">3</span><p><b>Auto-chapters prove the generation.</b> Three headings drawn from the place itself do more to demonstrate the AI than any badge reading &#8220;AI-powered&#8221; ever would.</p></div>
+        <div class="note"><span class="dot">4</span><p><b>Speech is already built</b> and sitting <span class="mono">disabled</span> in <span class="mono">/readyz</span>. This screen is a config flip plus a player, not new infrastructure.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SCREEN 3: DETAIL ============ -->
+  <div class="screen-block">
+    <div class="device"><div class="glass">
+      <div class="statusbar">
+        <span class="tnum">9:41</span>
+        <span class="icons">
+          <span class="bar-sig"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:10px"></i></span>
+          <svg width="14" height="11" viewBox="0 0 14 11" fill="none"><path d="M1 4.2a8.5 8.5 0 0 1 12 0M3.4 6.6a5 5 0 0 1 7.2 0M7 9.2h.01" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          <span class="batt"><span></span></span>
+        </span>
+      </div>
+
+      <div class="hero">
+        <span class="roundglass" style="left:11px"><svg width="14" height="14" viewBox="0 0 18 18" fill="none"><path d="M11 3 5 9l6 6" stroke="#16211E" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="roundglass" style="right:11px"><svg width="14" height="14" viewBox="0 0 18 18" fill="none"><path d="M9 15.2S2.4 11.3 2.4 6.9A3.6 3.6 0 0 1 9 5a3.6 3.6 0 0 1 6.6 1.9c0 4.4-6.6 8.3-6.6 8.3Z" stroke="#16211E" stroke-width="1.5" stroke-linejoin="round"/></svg></span>
+      </div>
+
+      <div class="sheetbody">
+        <div class="titleblock">
+          <span class="pill cult">Culture</span>
+          <h3>Suwon Hwaseong Museum</h3>
+          <div class="krname kr">&#49688;&#50896;&#54868;&#49457;&#48149;&#47932;&#44288;</div>
+          <div class="meta tnum">18 min walk &middot; Paldal-gu, Suwon-si</div>
+        </div>
+
+        <div class="docentcard">
+          <div class="dhead">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 1.5 9.3 5.4l3.9 1.3-3.9 1.3L8 11.9 6.7 8 2.8 6.7 6.7 5.4 8 1.5Z" fill="#D8451C"/></svg>
+            <span>Docent &middot; auto-generated</span>
+          </div>
+          <div class="drow">
+            <span class="dplay"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M4.2 2.6 11 7l-6.8 4.4V2.6Z" fill="#fff"/></svg></span>
+            <span class="dtext">
+              <div class="dtitle">Listen to this place &middot; 2:14</div>
+              <div class="dmeta">Written for 25.2&deg;C and clear skies, 3 min ago</div>
+            </span>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="claimrow">
+            <span class="c1">Mostly locals, few tourists</span>
+            <span class="c2 tnum">82 / 18</span>
+          </div>
+          <div class="ratio">
+            <div class="track"><div class="fill" style="width:82%"></div></div>
+            <div class="legend"><span><b>82% local spend</b></span><span class="tnum">18% visitor</span></div>
+          </div>
+          <div class="source">
+            <svg width="9" height="9" viewBox="0 0 12 12" fill="none"><path d="M2 6.2 4.6 8.8 10 3.4" stroke="#9AA8A2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Korea Tourism Organization card-spend data
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="ptl">Can I walk in here?</div>
+          <div class="wchips">
+            <span class="wchip">English signage</span>
+            <span class="wchip">Card ok</span>
+            <span class="wchip">Solo fine</span>
+            <span class="wchip no">Cash preferred</span>
+          </div>
+        </div>
+
+        <div class="cta">
+          <svg width="14" height="14" viewBox="0 0 18 18" fill="none"><path d="M9 3.5v11M3.5 9h11" stroke="#fff" stroke-width="1.9" stroke-linecap="round"/></svg>
+          Add to today&#8217;s plan
+        </div>
+      </div>
+    </div></div>
+
+    <div class="notes">
+      <div class="role">Place detail</div>
+      <h2>Docent above the fold, score below it</h2>
+      <p>The order is the argument. The docent card sits directly under the title with nothing between them; the local-spend ratio, which led the previous pass, now reads as the evidence that justifies why this place got a docent worth listening to.</p>
+      <div class="notelist">
+        <div class="note hot"><span class="dot">1</span><p><b>&#8220;Written for 25.2&deg;C and clear skies, 3 min ago.&#8221;</b> A timestamp and a reason, on the card itself &mdash; the cheapest possible proof that nothing here is canned.</p></div>
+        <div class="note"><span class="dot">2</span><p><b>The ratio compresses to one panel</b> with the raw 82/18 as a quiet numeral. Still the strongest evidence in the category, just no longer competing with the hero action.</p></div>
+        <div class="note warn"><span class="dot">!</span><p><b>Hero images still need a quality gate</b> &mdash; the live build serves a photo of a restroom for this museum. One bad image undercuts every trust signal above.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SCREEN 4: DISCOVER ============ -->
+  <div class="screen-block">
+    <div class="device"><div class="glass">
+      <div class="statusbar">
+        <span class="tnum">9:41</span>
+        <span class="icons">
+          <span class="bar-sig"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:10px"></i></span>
+          <svg width="14" height="11" viewBox="0 0 14 11" fill="none"><path d="M1 4.2a8.5 8.5 0 0 1 12 0M3.4 6.6a5 5 0 0 1 7.2 0M7 9.2h.01" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          <span class="batt"><span></span></span>
+        </span>
+      </div>
+
+      <div class="toprow">
+        <div class="searchpill">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="#9AA8A2" stroke-width="1.6"/><path d="M11 11l3 3" stroke="#9AA8A2" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <span>Search places or areas</span>
+        </div>
+      </div>
+
+      <div class="chips">
+        <span class="chip on">Locals only</span>
+        <span class="chip">Open now</span>
+        <span class="chip">Under &#8361;15,000</span>
+      </div>
+
+      <div class="sortrow">
+        <span class="lab tnum">14 places within 3 km</span>
+        <span class="val">Most local
+          <svg width="9" height="9" viewBox="0 0 12 12" fill="none"><path d="M2.5 4.5 6 8l3.5-3.5" stroke="#16211E" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+      </div>
+
+      <div class="listwrap">
+        <div class="lrow">
+          <div class="th" style="background:linear-gradient(150deg,#C9AE7E,#9A7C4A)"></div>
+          <div class="body">
+            <span class="pill food" style="align-self:flex-start">Food</span>
+            <h5>Hanguk-gwan</h5>
+            <div class="krname kr">&#54620;&#44397;&#44288;</div>
+            <div class="meta tnum">709 m &middot; 91% local</div>
+          </div>
+          <div class="rowplay">
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M3.6 2.3 9.4 6l-5.8 3.7V2.3Z" fill="#D8451C"/></svg>
+            <span class="d tnum">1:36</span>
+          </div>
+        </div>
+        <div class="lrow">
+          <div class="th" style="background:linear-gradient(150deg,#A9BFB1,#6E8578)"></div>
+          <div class="body">
+            <span class="pill cult" style="align-self:flex-start">Culture</span>
+            <h5>Suwon Hwaseong Museum</h5>
+            <div class="krname kr">&#49688;&#50896;&#54868;&#49457;&#48149;&#47932;&#44288;</div>
+            <div class="meta tnum">2.2 km &middot; 82% local</div>
+          </div>
+          <div class="rowplay">
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M3.6 2.3 9.4 6l-5.8 3.7V2.3Z" fill="#D8451C"/></svg>
+            <span class="d tnum">2:14</span>
+          </div>
+        </div>
+        <div class="lrow">
+          <div class="th" style="background:linear-gradient(150deg,#B6C4CE,#7E919E)"></div>
+          <div class="body">
+            <span class="pill attr" style="align-self:flex-start">Attractions</span>
+            <h5>Nahyeseok Street</h5>
+            <div class="krname kr">&#45208;&#54812;&#49437;&#44144;&#47532;</div>
+            <div class="meta tnum">520 m &middot; 68% local</div>
+          </div>
+          <div class="rowplay">
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M3.6 2.3 9.4 6l-5.8 3.7V2.3Z" fill="#D8451C"/></svg>
+            <span class="d tnum">1:52</span>
+          </div>
+        </div>
+        <div class="lrow">
+          <div class="th" style="background:linear-gradient(150deg,#C3B7D2,#8E7FA8)"></div>
+          <div class="body">
+            <span class="pill event" style="align-self:flex-start">Events</span>
+            <h5>Art &amp; Culture Festival</h5>
+            <div class="krname kr">&#47928;&#54868;&#50696;&#49696;&#54168;&#49828;&#54000;&#48268;</div>
+            <div class="meta tnum">695 m &middot; ends Sunday</div>
+          </div>
+          <div class="rowplay">
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M3.6 2.3 9.4 6l-5.8 3.7V2.3Z" fill="#D8451C"/></svg>
+            <span class="d tnum">0:58</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="tabbar">
+        <div class="tab on">
+          <svg width="20" height="20" viewBox="0 0 22 22" fill="none"><circle cx="9.5" cy="9.5" r="6.5" stroke="currentColor" stroke-width="1.7"/><path d="M14.5 14.5 19 19" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          <span>Discover</span>
+        </div>
+        <div class="tab">
+          <svg width="20" height="20" viewBox="0 0 22 22" fill="none"><path d="M2.5 5.5 8 3.2v13.3l-5.5 2.3V5.5ZM8 3.2l6 2.4v13.2L8 16.5V3.2ZM14 5.6l5.5-2.4v13.3L14 18.8V5.6Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+          <span>Map</span>
+        </div>
+        <div class="tab">
+          <svg width="20" height="20" viewBox="0 0 22 22" fill="none"><rect x="3" y="4.5" width="16" height="15" rx="2.4" stroke="currentColor" stroke-width="1.7"/><path d="M3 9h16M7.5 2.5v3.6M14.5 2.5v3.6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          <span>Plan</span>
+        </div>
+      </div>
+    </div></div>
+
+    <div class="notes">
+      <div class="role">Discover &mdash; replaces Search</div>
+      <h2>Every row is a track you can start</h2>
+      <p>A play control with its runtime sits at the end of each row, so the list reads like a queue rather than a directory. Sorting still defaults to most-local, and the coloured pill does the category work that a monochrome list can&#8217;t.</p>
+      <div class="notelist">
+        <div class="note hot"><span class="dot">1</span><p><b>Duration under every play button.</b> &#8220;1:36&#8221; tells a traveller the commitment before they tap &mdash; the single most effective thing you can do to raise play rate.</p></div>
+        <div class="note"><span class="dot">2</span><p><b>Four categories, four colours,</b> scannable down the left edge. This is the app&#8217;s existing colour language, restored rather than invented.</p></div>
+        <div class="note warn"><span class="dot">!</span><p><b>This tab is fully untranslated today</b> &mdash; in English mode it still renders &#51109;&#49548;&#183;&#51648;&#50669; &#44160;&#49353; and &#51204;&#52404;&#183;&#47749;&#49548;&#183;&#47579;&#51665;. Only the Map tab currently localises.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SCREEN 5: PLAN ============ -->
+  <div class="screen-block">
+    <div class="device"><div class="glass">
+      <div class="statusbar">
+        <span class="tnum">9:41</span>
+        <span class="icons">
+          <span class="bar-sig"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:10px"></i></span>
+          <svg width="14" height="11" viewBox="0 0 14 11" fill="none"><path d="M1 4.2a8.5 8.5 0 0 1 12 0M3.4 6.6a5 5 0 0 1 7.2 0M7 9.2h.01" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          <span class="batt"><span></span></span>
+        </span>
+      </div>
+
+      <div class="daybar">
+        <h4>Tuesday, 11 August</h4>
+        <div class="sub tnum">Suwon-si &middot; 4 stops &middot; saved offline</div>
+      </div>
+
+      <div class="listenall">
+        <span class="go"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3.6 2.3 9.4 6l-5.8 3.7V2.3Z" fill="#fff"/></svg></span>
+        <span>
+          <div class="t1">Play the whole day &middot; 7:24</div>
+          <div class="t2">Four docents, in walking order</div>
+        </span>
+      </div>
+
+      <div class="tl">
+        <div class="tl-item">
+          <div class="tl-rail"><div class="tl-dot"></div><div class="tl-line"></div></div>
+          <div class="tl-card">
+            <div class="tl-slot">Morning</div>
+            <div class="tl-name">Nahyeseok Street</div>
+            <div class="tl-tags">
+              <span class="pill attr">Attractions</span>
+              <span class="tl-aud"><svg width="7" height="7" viewBox="0 0 12 12" fill="none"><path d="M3.6 2.3 9.4 6l-5.8 3.7V2.3Z" fill="#D8451C"/></svg>1:52</span>
+              <span class="tl-loc tnum">68%</span>
+            </div>
+          </div>
+        </div>
+        <div class="hop"><span class="b2">Walk</span><span class="tnum">18 min &middot; 1.3 km</span></div>
+
+        <div class="tl-item">
+          <div class="tl-rail"><div class="tl-dot"></div><div class="tl-line"></div></div>
+          <div class="tl-card">
+            <div class="tl-slot">Lunch</div>
+            <div class="tl-name">Himalaya Garden</div>
+            <div class="tl-tags">
+              <span class="pill food">Food</span>
+              <span class="tl-aud"><svg width="7" height="7" viewBox="0 0 12 12" fill="none"><path d="M3.6 2.3 9.4 6l-5.8 3.7V2.3Z" fill="#D8451C"/></svg>1:48</span>
+              <span class="tl-loc tnum">74%</span>
+            </div>
+          </div>
+        </div>
+        <div class="hop"><span class="b2">Bus 82</span><span class="tnum">11 min &middot; 4 stops</span></div>
+
+        <div class="tl-item">
+          <div class="tl-rail"><div class="tl-dot"></div><div class="tl-line"></div></div>
+          <div class="tl-card">
+            <div class="tl-slot">Afternoon</div>
+            <div class="tl-name">Suwon Hwaseong Museum</div>
+            <div class="tl-tags">
+              <span class="pill cult">Culture</span>
+              <span class="tl-aud"><svg width="7" height="7" viewBox="0 0 12 12" fill="none"><path d="M3.6 2.3 9.4 6l-5.8 3.7V2.3Z" fill="#D8451C"/></svg>2:14</span>
+              <span class="tl-loc tnum">82%</span>
+            </div>
+          </div>
+        </div>
+        <div class="hop"><span class="b2">Walk</span><span class="tnum">6 min &middot; 450 m</span></div>
+
+        <div class="tl-item">
+          <div class="tl-rail"><div class="tl-dot q"></div></div>
+          <div class="tl-card">
+            <div class="tl-slot">Dinner</div>
+            <div class="tl-name">Hanguk-gwan</div>
+            <div class="tl-tags">
+              <span class="pill food">Food</span>
+              <span class="tl-aud"><svg width="7" height="7" viewBox="0 0 12 12" fill="none"><path d="M3.6 2.3 9.4 6l-5.8 3.7V2.3Z" fill="#D8451C"/></svg>1:36</span>
+              <span class="tl-loc tnum">91%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tabbar">
+        <div class="tab">
+          <svg width="20" height="20" viewBox="0 0 22 22" fill="none"><circle cx="9.5" cy="9.5" r="6.5" stroke="currentColor" stroke-width="1.7"/><path d="M14.5 14.5 19 19" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          <span>Discover</span>
+        </div>
+        <div class="tab">
+          <svg width="20" height="20" viewBox="0 0 22 22" fill="none"><path d="M2.5 5.5 8 3.2v13.3l-5.5 2.3V5.5ZM8 3.2l6 2.4v13.2L8 16.5V3.2ZM14 5.6l5.5-2.4v13.3L14 18.8V5.6Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+          <span>Map</span>
+        </div>
+        <div class="tab on">
+          <svg width="20" height="20" viewBox="0 0 22 22" fill="none"><rect x="3" y="4.5" width="16" height="15" rx="2.4" stroke="currentColor" stroke-width="1.7"/><path d="M3 9h16M7.5 2.5v3.6M14.5 2.5v3.6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          <span>Plan</span>
+        </div>
+      </div>
+    </div></div>
+
+    <div class="notes">
+      <div class="role">Day plan</div>
+      <h2>A day is a playlist with walking in between</h2>
+      <p>&#8220;Play the whole day &middot; 7:24&#8221; turns four separate places into a single continuous piece of audio, sequenced in walking order. The transit hops on the rail are the connective tissue the live build omits entirely.</p>
+      <div class="notelist">
+        <div class="note hot"><span class="dot">1</span><p><b>One control plays the entire itinerary,</b> auto-advancing between stops. This is the feature that makes an auto-generated docent feel like a tour rather than a lookup.</p></div>
+        <div class="note"><span class="dot">2</span><p><b>Every stop carries its runtime and its local share,</b> colour-coded by category &mdash; enough to judge the shape of a day at a glance.</p></div>
+        <div class="note warn"><span class="dot">!</span><p><b>Raw slot keys are leaking</b> into the live build &mdash; cards render <span class="mono">&#8220;lu&#8221;</span> and <span class="mono">&#8220;di&#8221;</span> beside &#51216;&#49900;/&#51200;&#45377;. Worth fixing before any visual work lands.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ COMPONENTS ============ -->
+  <section class="comps">
+    <div class="role hot">Components, full size</div>
+    <h2 style="font-size:27px">Three pieces, one hierarchy</h2>
+    <div class="comp-grid">
+      <div class="comp">
+        <div class="cname">Listen control &mdash; primary</div>
+        <div class="listen" style="margin-top:0">
+          <span class="go" style="width:34px;height:34px"><svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M3.6 2.3 9.4 6l-5.8 3.7V2.3Z" fill="#fff"/></svg></span>
+          <span>
+            <div class="txt" style="font-size:13px">Listen &middot; 2:14</div>
+            <div class="sub" style="font-size:10.5px">Auto-written for this afternoon</div>
+          </span>
+        </div>
+        <p class="cdesc">Ships on map cards, list rows, detail sheets, and plan stops. Flame is used for this and nothing else in the entire app, so the eye learns it in one session.</p>
+      </div>
+
+      <div class="comp">
+        <div class="cname">Category pills</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          <span class="pill attr" style="font-size:11px;padding:4px 10px">Attractions</span>
+          <span class="pill food" style="font-size:11px;padding:4px 10px">Food</span>
+          <span class="pill event" style="font-size:11px;padding:4px 10px">Events</span>
+          <span class="pill cult" style="font-size:11px;padding:4px 10px">Culture</span>
+        </div>
+        <p class="cdesc">Tinted ground, darker text of the same hue &mdash; enough separation to scan a mixed list, quiet enough that four of them on one screen never compete with the play control.</p>
+      </div>
+
+      <div class="comp">
+        <div class="cname">Local-spend evidence &mdash; supporting</div>
+        <div class="claimrow"><span class="c1" style="font-size:13px">Mostly locals, few tourists</span><span class="c2 tnum">82 / 18</span></div>
+        <div class="ratio lg">
+          <div class="track"><div class="fill" style="width:82%"></div></div>
+          <div class="legend"><span><b>82% local spend</b></span><span class="tnum">18% visitor</span></div>
+        </div>
+        <p class="cdesc">Demoted from hero to evidence. It still answers &#8220;why this place and not the one next door,&#8221; but it no longer competes with the reason people opened the app.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ROLLOUT ============ -->
+  <section class="rollout">
+    <div class="role hot">Build order</div>
+    <h2 style="font-size:27px">Where a small team starts</h2>
+    <div class="steps">
+      <div class="step">
+        <div class="n">1</div>
+        <h4>Turn speech on, ship the player</h4>
+        <p>Flip the disabled Speech config and build the full-screen player with the auto-generated badge and chapters. The feature already exists &mdash; it just has no surface worth opening.</p>
+      </div>
+      <div class="step">
+        <div class="n">2</div>
+        <h4>Play control everywhere, mini-player docked</h4>
+        <p>Cards, rows, plan stops, and a persistent bar above the tab bar. Audio stops being a destination and becomes the app&#8217;s default state.</p>
+      </div>
+      <div class="step">
+        <div class="n">3</div>
+        <h4>Finish English mode</h4>
+        <p>Discover and Plan are still fully Korean in English mode, and the tab bar never translates. Mostly string-table work, and nothing else matters to a traveller who can&#8217;t read the screen.</p>
+      </div>
+    </div>
+
+    <footer>
+      <span>Mockups only &mdash; <b>nothing here is wired to the app.</b> Places, distances and scores drawn from live data at api.lala-next.cloud.</span>
+      <span>Flame is reserved for audio; category colour carried over from the existing app.</span>
+    </footer>
+  </section>
+
+</div>
