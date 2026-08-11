@@ -127,6 +127,9 @@ echo "Planning legacy Flask replacement or retirement..."
 echo "Planning local-only dev seed/reset SQL..."
 "$ROOT/scripts/unix/plan_dev_reset.sh" --python "$PYTHON"
 
+echo "Verifying Flutter build-env key resolution order (SSM -> Secrets Manager -> isolated dotenv)..."
+"$ROOT/scripts/unix/tests/test_flutter_with_build_env.sh"
+
 echo "Checking Unix shell script syntax..."
 while IFS= read -r script; do
   bash -n "$script"
