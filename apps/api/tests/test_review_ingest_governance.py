@@ -909,6 +909,7 @@ def test_finalize_ingest_run_writes_retry_safe_absolute_counters():
         cur,
         run_id="run-1",
         status="succeeded",
+        received_count=3,
         processed_count=2,
         duplicate_count=1,
         quarantined_count=0,
@@ -917,10 +918,14 @@ def test_finalize_ingest_run_writes_retry_safe_absolute_counters():
     )
     sql = store["executed"][0][0]  # type: ignore[index]
     assert "UPDATE community.ingest_runs" in sql
+    assert "received_count = %s" in sql  # retry-safe: overwritten, not just INSERT-time
     assert "processed_count = %s" in sql
     assert "duplicate_count = %s" in sql
     assert "failure_category = %s" in sql
     assert "WHERE id = %s" in sql
+    # params[0]=status, params[1]=received_count -> the value is persisted.
+    params = store["executed"][0][1]  # type: ignore[index]
+    assert params[1] == 3
 
 
 # --- atomic orchestrator (Finding 5): single transaction boundary ---
@@ -1095,3 +1100,61 @@ def test_persist_review_ingest_run_rolls_back_on_late_failure(monkeypatch):
     # the single transaction boundary rolled back rather than committing.
     assert store.get("rolled_back") is True
     assert store.get("committed") is not True
+
+
+# --- retry-safe accounting on resume (Finding 2) ---
+
+
+def test_persist_review_ingest_run_received_count_is_retry_safe_on_resume(monkeypatch):
+    """received_count must be retry-safe idempotent accounting (Finding 2).
+
+    A resumed run (same ``run_key``) with an *expanded* record set must
+    overwrite the DB accounting row's ``received_count`` with the latest
+    value, exactly like processed/duplicate/quarantined counts. Finalize is
+    the single retry-safe source of truth for the whole row -- the INSERT-time
+    value must not survive a resume and go stale.
+    """
+    store: dict[str, object] = {}
+    _install_fake_psycopg2(monkeypatch, store)
+    _prime_happy_source(store)
+
+    single = _record_dict("post-1", seed="stable content")
+    governance.persist_review_ingest_run(
+        dsn="postgresql://redacted",
+        source_name=FICTIONAL_SOURCE_NAME,
+        expected_provider=FICTIONAL_PROVIDER,
+        expected_terms_version=TERMS_VERSION,
+        records=[single],
+        window_start=date(2026, 7, 20),
+    )
+    # First run finalized with received_count=1.
+    finalized = [
+        params for sql, params in store["executed"] if "status" in sql and "WHERE id" in sql
+    ]  # type: ignore[union-attr]
+    assert finalized, "finalize UPDATE should have executed"
+    assert finalized[-1][1] == 1  # received_count is params[1] in the finalize UPDATE
+
+    # Resume the SAME window (same run_key) with an expanded batch of 3 records.
+    expanded = [
+        single,  # exact replay (already receipted)
+        _record_dict("post-2", seed="new content a"),  # new
+        _record_dict("post-3", seed="new content b"),  # new
+    ]
+    result = governance.persist_review_ingest_run(
+        dsn="postgresql://redacted",
+        source_name=FICTIONAL_SOURCE_NAME,
+        expected_provider=FICTIONAL_PROVIDER,
+        expected_terms_version=TERMS_VERSION,
+        records=expanded,
+        window_start=date(2026, 7, 20),  # SAME window -> resume same run_key
+    )
+    # The returned summary reflects this attempt's input (3 received).
+    assert result.run.received_count == 3
+    assert result.run.processed_count == 2  # post-2/post-3 are new content
+    assert result.run.duplicate_count == 1  # post-1 is an exact replay
+    # The DB accounting row's received_count was overwritten to 3 (not stale at 1).
+    finalized = [
+        params for sql, params in store["executed"] if "status" in sql and "WHERE id" in sql
+    ]  # type: ignore[union-attr]
+    assert finalized[-1][1] == 3
+
