@@ -25,6 +25,7 @@ class RecommendedPlaceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = _categoryColor(place.category);
     final hasImage = hasOfficialPlaceImage(place);
+    final freshness = placeFreshnessText(place);
     return Container(
       key: ValueKey('recommended-place-card-${place.placeId}'),
       width: hasImage ? 270 : 232,
@@ -59,10 +60,22 @@ class RecommendedPlaceCard extends StatelessWidget {
                       '${place.distanceM}m',
                       style: Theme.of(context).textTheme.labelSmall,
                     ),
-                    // V1-RC2: per-place 신선도(검색 타일과 동일 원문/스타일).
-                    if (placeFreshnessText(place) != null) ...[
+                    if (freshness != null) ...[
                       const SizedBox(width: 8),
-                      PlaceFreshnessText(place: place),
+                      // V1-RC §13.5: freshness 는 가변 폭 후미 세그먼트 — Flexible+ellipsis
+                      // 로 메타 Row overflow 를 흡수(카테고리/거리는 고정 폭, 신선도가 먼저 잘린다).
+                      Flexible(
+                        child: Text(
+                          freshness,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                color: const Color(0xFF64748B),
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                      ),
                     ],
                   ],
                 ),
