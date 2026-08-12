@@ -470,11 +470,15 @@ def test_places_without_scores_handles_empty_list() -> None:
 
 
 def test_derive_place_reason_all_signals_present() -> None:
-    # 모든 신호가 있는 경우: 운영중 + 날씨 적합 + 근접 + 공식 데이터
+    # 모든 신호가 있는 경우: canonical order로 결합
+    # [operating] · [weather(S3)] · [activity(S2)] · [event(D4)] · [proximity] · [source(S1)]
     place = {
         "category": "restaurant",
         "distance_m": 300,
-        "upstream_source": "korean_tourism_org",
+        "upstream_source": "tour_api",
+        "_local_activity_band": "active",  # S2 min-sample-gated token (Lane 1)
+        "_has_linked_event": True,  # D4 linked event for any category (Lane 1)
+        "is_ongoing": True,
     }
     current_weather = {
         "outdoor_status": "bad",  # 비/미세먼지로 실내 우선
@@ -487,8 +491,10 @@ def test_derive_place_reason_all_signals_present() -> None:
         slot_time=slot_time,
     )
 
-    # 모든 신호가 결합된 결정론적 결과
-    assert result == "영업중 · 실내활동 적합 · 근접 · 공식 데이터"
+    # 모든 신호가 canonical order로 결합된 결정론적 결과
+    assert result == (
+        "영업중 · 실내활동 적합 · 로컬 소비 활발 · 진행 중인 행사 · 근접 · 한국관광공사 데이터"
+    )
 
 
 def test_derive_place_reason_only_open_nearby() -> None:
@@ -515,7 +521,7 @@ def test_derive_place_reason_honest_empty_closed() -> None:
     place = {
         "category": "restaurant",
         "distance_m": 100,
-        "upstream_source": "official",
+        "upstream_source": "kopis",
     }
     current_weather = {"outdoor_status": "good"}
     slot_time = "23:00"  # 영업시간 외
@@ -526,8 +532,8 @@ def test_derive_place_reason_honest_empty_closed() -> None:
         slot_time=slot_time,
     )
 
-    # closed면 운영 reason 추가 안 함 (honest empty)
-    assert result == "근접 · 공식 데이터"
+    # closed면 운영 reason 추가 안 함 (honest empty); D2 per-source phrase
+    assert result == "근접 · 공연예술통합전산망 데이터"
 
 
 def test_derive_place_reason_honest_empty_all_bad_signals() -> None:
@@ -777,8 +783,8 @@ def test_list_places_db_path_binds_reason_and_honest_none_freshness(monkeypatch)
     )
 
     place = result["places"][0]
-    # Reason derived from signals (운영중 + 근접 + 공식 데이터); weather good → no indoor line.
-    assert place["reason"] == "영업중 · 근접 · 공식 데이터"
+    # Reason derived from signals (운영중 + 근접 + per-source S1 phrase); weather good → no indoor line.
+    assert place["reason"] == "영업중 · 근접 · 한국관광공사 데이터"
     # DB payload omits updated_at → honest None freshness (no fabrication).
     assert place["freshness"] is None
     # Score compatibility preserved.
@@ -891,3 +897,289 @@ def test_list_places_snapshot_path_does_not_invoke_live_weather_provider(monkeyp
 
     assert result["source"] == places_service.public_mvp_data.SOURCE_NAME
     assert result["count"] == 1
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# V1 three-signals Lane 2 — reason composer + internal-key stripping
+# (contract §1a/§3/§4/§8). Developed in isolation off the base: the place dict
+# from db_repository does NOT yet carry the internal keys, so these unit tests
+# exercise the composer + stripping with SYNTHETIC dicts that DO set them.
+# ─────────────────────────────────────────────────────────────────────────
+
+# KO branch of the client externalSourceLabel (home_view_helpers.dart) — the
+# reference the server S1 phrase must agree with for the real sources (§8).
+_CLIENT_SOURCE_LABELS = {
+    "tour_api": "한국관광공사",
+    "kcisa": "문화정보원",
+    "kopis": "공연예술통합전산망",
+}
+
+
+# --- _upstream_source_reason_phrase (S1, D2) ---
+
+
+@pytest.mark.parametrize(
+    ("upstream_source", "expected"),
+    [
+        ("tour_api", "한국관광공사 데이터"),
+        ("kcisa", "문화정보원 데이터"),
+        ("kopis", "공연예술통합전산망 데이터"),
+        # canonical/empty/unknown → honest omit (no generic "공식 데이터" stamp)
+        ("canonical", None),
+        ("", None),
+        ("unknown_source", None),
+        ("korean_tourism_org", None),
+    ],
+)
+def test_upstream_source_reason_phrase(upstream_source: str, expected) -> None:
+    assert places_service._upstream_source_reason_phrase(upstream_source) == expected
+
+
+def test_source_phrase_agrees_with_client_external_source_label() -> None:
+    # §8 consistency over {tour_api, kcisa, kopis, canonical, ''}: the server S1
+    # label for each real source must equal the client externalSourceLabel KO
+    # branch (the phrase is "<label> 데이터"). canonical/'' are intentionally
+    # STRICTER on the server — it omits where the client evidence panel may still
+    # label canonical ("공식 장소"); that asymmetry is the accepted D2 cost of
+    # dropping the generic stamp, asserted here rather than hidden as drift.
+    for source, client_label in _CLIENT_SOURCE_LABELS.items():
+        assert places_service._upstream_source_reason_phrase(source) == f"{client_label} 데이터"
+    assert places_service._upstream_source_reason_phrase("canonical") is None
+    assert places_service._upstream_source_reason_phrase("") is None
+
+
+# --- _local_activity_reason_phrase (S2, D1) ---
+
+
+@pytest.mark.parametrize(
+    ("band", "expected"),
+    [
+        ("active", "로컬 소비 활발"),
+        ("ACTIVE", "로컬 소비 활발"),  # any truthy token = above min-sample gate
+        (None, None),
+        ("", None),  # degenerate/empty band → honest omit
+    ],
+)
+def test_local_activity_reason_phrase(band, expected) -> None:
+    assert places_service._local_activity_reason_phrase(band) == expected
+
+
+# --- _weather_band_phrase (S3, D3) ---
+
+
+@pytest.mark.parametrize(
+    ("weather", "category", "expected"),
+    [
+        # No cached weather → omit (honest; never fabricated).
+        ({}, "restaurant", None),
+        # bad ∧ indoor-pref → retained indoor-fit bit.
+        ({"outdoor_status": "bad"}, "restaurant", "실내활동 적합"),
+        ({"outdoor_status": "bad"}, "culture_venue", "실내활동 적합"),
+        # bad ∧ outdoor category → honest silence (a bad-weather stamp is not useful).
+        ({"outdoor_status": "bad"}, "attraction", None),
+        ({"outdoor_status": "bad"}, "event", None),
+        # Good weather, unparseable/absent temp → omit.
+        ({"outdoor_status": "good"}, "attraction", None),
+        ({"outdoor_status": "good", "temp": ""}, "attraction", None),
+        # Good weather comfort band from temp (half-open thresholds).
+        ({"outdoor_status": "good", "temp": "2"}, "attraction", "추운 날씨"),
+        ({"outdoor_status": "good", "temp": "5"}, "attraction", "선선한 날씨"),
+        ({"outdoor_status": "good", "temp": "15.5"}, "attraction", "선선한 날씨"),
+        ({"outdoor_status": "good", "temp": "18"}, "attraction", "따뜻한 날씨"),
+        ({"outdoor_status": "good", "temp": "26"}, "attraction", "따뜻한 날씨"),
+        ({"outdoor_status": "good", "temp": "27"}, "attraction", "더운 날씨"),
+        ({"outdoor_status": "good", "temp": "30"}, "attraction", "더운 날씨"),
+        # temp as int / numeric string variants parse the same.
+        ({"outdoor_status": "good", "temp": 10}, "restaurant", "선선한 날씨"),
+    ],
+)
+def test_weather_band_phrase(weather, category, expected) -> None:
+    assert places_service._weather_band_phrase(weather, category=category) == expected
+
+
+def test_weather_band_is_a_phrase_not_numbers() -> None:
+    # §1a: the list band is a coarse phrase, never the publicWeatherSummary numbers.
+    phrase = places_service._weather_band_phrase(
+        {"outdoor_status": "good", "temp": "15", "pm10": 40, "pm25": 20},
+        category="attraction",
+    )
+    assert phrase == "선선한 날씨"
+    # No per-card number (temp/dust) leaks into the band phrase.
+    assert not any(ch.isdigit() for ch in phrase)
+
+
+# --- _linked_event_reason_phrase (D4) ---
+
+
+@pytest.mark.parametrize(
+    ("has_linked_event", "is_ongoing", "expected"),
+    [
+        (True, True, "진행 중인 행사"),
+        (True, False, "행사 연계"),
+        (True, None, "행사 연계"),  # linked but not known ongoing
+        (False, True, None),  # no linked event → omit regardless of is_ongoing
+        (None, True, None),
+    ],
+)
+def test_linked_event_reason_phrase(has_linked_event, is_ongoing, expected) -> None:
+    assert (
+        places_service._linked_event_reason_phrase(has_linked_event, is_ongoing=is_ongoing)
+        == expected
+    )
+
+
+# --- _derive_place_reason: canonical order, honest-empty, no-score ---
+
+
+def test_derive_place_reason_canonical_order_full() -> None:
+    # All six segments present → joined in canonical order (§3).
+    place = {
+        "category": "culture_venue",
+        "distance_m": 200,
+        "upstream_source": "kcisa",
+        "_local_activity_band": "active",
+        "_has_linked_event": True,
+        "is_ongoing": False,
+    }
+    current_weather = {"outdoor_status": "good", "temp": "16"}
+    result = places_service._derive_place_reason(
+        place=place, current_weather=current_weather, slot_time="11:00"
+    )
+    # [operating] · [weather] · [activity] · [event] · [proximity] · [source]
+    assert result == (
+        "영업중 · 선선한 날씨 · 로컬 소비 활발 · 행사 연계 · 근접 · 문화정보원 데이터"
+    )
+
+
+def test_derive_place_reason_all_null_is_honest_empty() -> None:
+    # Every signal null/absent → "" (rendered as nothing, never "이유 없음").
+    place = {
+        "category": "attraction",
+        "distance_m": 2000,  # not 근접
+        "upstream_source": "canonical",  # omit
+        "_local_activity_band": None,
+        "_has_linked_event": None,
+    }
+    result = places_service._derive_place_reason(
+        place=place,
+        current_weather={},
+        slot_time="23:00",  # closed (attraction 09-18)
+    )
+    assert result == ""
+
+
+def test_derive_place_reason_never_leaks_score_number_or_components() -> None:
+    # §4.1/§8: the reason carries PHRASES ONLY — the score number, formula,
+    # component values, and raw transaction count are unreachable from it.
+    place = {
+        "category": "restaurant",
+        "distance_m": 120,
+        "upstream_source": "tour_api",
+        "_local_activity_band": "active",
+        "_has_linked_event": True,
+        "is_ongoing": True,
+        # Score-bearing fields that MUST NOT surface in the reason string.
+        "final_score": 0.88,
+        "score": 0.88,
+        "local_spending_score": 0.5,
+        "region_transaction_count": 12345,
+        "region_spend_amount": 9876543,
+    }
+    current_weather = {"outdoor_status": "bad"}
+    result = places_service._derive_place_reason(
+        place=place, current_weather=current_weather, slot_time="12:30"
+    )
+    assert result == (
+        "영업중 · 실내활동 적합 · 로컬 소비 활발 · 진행 중인 행사 · 근접 · 한국관광공사 데이터"
+    )
+    # No digit survives (no score/transaction count leaked).
+    assert not any(ch.isdigit() for ch in result), result
+    # No forbidden component/formula token either.
+    lowered = result.lower()
+    for forbidden in ("score", "final_score", "component", "transaction", "spend"):
+        assert forbidden not in lowered, (forbidden, result)
+
+
+# --- list_places: internal keys stripped from the serialized payload (§8) ---
+
+
+def _place_with_internal_keys() -> dict:
+    # Synthetic place carrying Lane-1 internal reason inputs (not yet projected
+    # by db_repository at this base). The composer reads them; serialization strips them.
+    return {
+        "place_id": "p1",
+        "name": "합격점 식당",
+        "category": "restaurant",
+        "distance_m": 200,
+        "upstream_source": "tour_api",
+        "_local_activity_band": "active",
+        "_has_linked_event": True,
+        "is_ongoing": True,
+        "score": 0.9,
+        "final_score": 0.9,
+    }
+
+
+def test_list_places_db_path_strips_internal_reason_inputs(monkeypatch) -> None:
+    monkeypatch.setattr(places_service, "get_settings", lambda: _fake_settings())
+    _freeze_service_now(monkeypatch, fixed=datetime(2026, 8, 13, 12, 0, 0, tzinfo=UTC))
+    _patch_db_fetch_places(monkeypatch, places=[_place_with_internal_keys()])
+
+    result = places_service.list_places(
+        lat=37.5665,
+        lng=126.978,
+        radius_m=1000,
+        category="restaurant",
+        language="ko",
+        include_scores=True,
+    )
+
+    serialized = result["places"][0]
+    # §8: neither internal key is serialized.
+    assert "_local_activity_band" not in serialized
+    assert "_has_linked_event" not in serialized
+    # But the composer did consume them (activity + event phrases present).
+    assert "로컬 소비 활발" in serialized["reason"]
+    assert "진행 중인 행사" in serialized["reason"]
+
+
+def test_list_places_snapshot_path_strips_internal_reason_inputs(monkeypatch) -> None:
+    monkeypatch.setattr(
+        places_service,
+        "get_settings",
+        lambda: _fake_settings(static_snapshot_fallback=True, db_dsn=""),
+    )
+    _patch_db_fetch_places(
+        monkeypatch,
+        raises=places_service.db_repository.DatabaseReadError("places_query_failed"),
+    )
+    monkeypatch.setattr(
+        places_service.public_mvp_data,
+        "fetch_places",
+        lambda **kwargs: [_place_with_internal_keys()],
+    )
+
+    result = places_service.list_places(
+        lat=37.5665,
+        lng=126.978,
+        radius_m=1000,
+        category="restaurant",
+        language="ko",
+        include_scores=False,
+    )
+
+    serialized = result["places"][0]
+    assert "_local_activity_band" not in serialized
+    assert "_has_linked_event" not in serialized
+    # The score field is nullified via _places_without_scores; internal keys still stripped.
+    assert serialized["score"] is None
+
+
+def test_strip_internal_reason_inputs_is_idempotent_and_safe() -> None:
+    place = {"name": "x", "_local_activity_band": "active", "_has_linked_event": True}
+    places_service._strip_internal_reason_inputs(place)
+    assert "_local_activity_band" not in place
+    assert "_has_linked_event" not in place
+    # Idempotent: a second pass is a no-op (no KeyError on absent keys).
+    places_service._strip_internal_reason_inputs(place)
+    assert place == {"name": "x"}
