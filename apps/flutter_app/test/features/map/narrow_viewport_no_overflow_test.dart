@@ -8,6 +8,7 @@ import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 import 'package:lala_next_app/app/lala_visual_tokens.dart';
 import 'package:lala_next_app/features/docent/widgets/dock_docent_preview.dart';
 import 'package:lala_next_app/features/map/widgets/category_chip.dart';
+import 'package:lala_next_app/features/map/widgets/map_bottom_dock.dart';
 import 'package:lala_next_app/features/map/widgets/map_place_carousel_overlay.dart';
 import 'package:lala_next_app/features/place/widgets/map_rail_place_card.dart';
 
@@ -39,6 +40,33 @@ LalaPlace _longPlace({
     regionEn: region,
     reason: reason,
     freshness: freshness,
+  );
+}
+
+/// V1-RC3 overflow gate: 독 날씨 줄 바인딩용 실측 날씨 픽스처(긴 dust 라벨 유발).
+LalaWeather _dockWeather() {
+  return LalaWeather(
+    lat: 37.2636,
+    lng: 127.0286,
+    temp: '23',
+    icon: 'partly-cloudy',
+    dust: LalaDust(
+      pm10: '30',
+      pm25: '25',
+      grade: 'normal',
+      gradeKo: '보통',
+      pm10Grade: 'normal',
+      pm10GradeKo: '보통',
+      pm25Grade: 'good',
+      pm25GradeKo: '좋음',
+    ),
+    forecast: const <LalaForecastItem>[],
+    outdoorStatus: 'normal',
+    force: false,
+    source: 'kma_ultra_srt_ncst',
+    location: 'Suwon',
+    recordTime: '2026-07-24T09:00:00+09:00',
+    locationMatch: true,
   );
 }
 
@@ -278,4 +306,89 @@ void main() {
       );
     });
   });
+
+  // V1-RC3: 독 날씨 요약·출처 1줄(PlaceWeatherSourceLine)이 좁은 뷰포트에서
+  // RenderFlex overflow 를 발생시키지 않는다(1줄 ellipsis + SingleChildScrollView).
+  group('MapBottomDock narrow viewport no overflow (V1-RC3 weather line)', () {
+    testWidgets('360dp with weather line + long reason/dust', (tester) async {
+      await _pumpAndCaptureOverflow(
+        tester,
+        360,
+        widget: SizedBox(
+          width: 360,
+          child: MapBottomDock(
+            isWide: false,
+            places: <LalaPlace>[_dockPlace()],
+            source: 'db',
+            weather: _dockWeather(),
+            dataAsOf: '2026-06-19T02:24:44.557686+00:00',
+            topPlace: _dockPlace(),
+            uiLanguage: 'ko',
+            height: 196,
+            docentScript: null,
+            docentAudio: null,
+            docentAction: null,
+            audioLoading: false,
+            audioError: null,
+            canFetchAudio: false,
+            showEvidence: false,
+            error: null,
+            placeFailureKind: null,
+            recommendationRecoveryPending: false,
+            onFetchAudio: () {},
+            onAddToPlan: () {},
+            onOpenDetail: () {},
+            onRefresh: () {},
+            onToggleEvidence: () {},
+          ),
+        ),
+      );
+    });
+
+    testWidgets('393dp base viewport with weather line', (tester) async {
+      await _pumpAndCaptureOverflow(
+        tester,
+        393,
+        widget: SizedBox(
+          width: 393,
+          child: MapBottomDock(
+            isWide: false,
+            places: <LalaPlace>[_dockPlace()],
+            source: 'db',
+            weather: _dockWeather(),
+            dataAsOf: '2026-06-19T02:24:44.557686+00:00',
+            topPlace: _dockPlace(),
+            uiLanguage: 'ko',
+            height: 196,
+            docentScript: null,
+            docentAudio: null,
+            docentAction: null,
+            audioLoading: false,
+            audioError: null,
+            canFetchAudio: false,
+            showEvidence: false,
+            error: null,
+            placeFailureKind: null,
+            recommendationRecoveryPending: false,
+            onFetchAudio: () {},
+            onAddToPlan: () {},
+            onOpenDetail: () {},
+            onRefresh: () {},
+            onToggleEvidence: () {},
+          ),
+        ),
+      );
+    });
+  });
+}
+
+/// V1-RC3 dock overflow fixture: 긴 지역/이름/사유로 Wrap·reason·weather 줄을 동시에 압박.
+LalaPlace _dockPlace() {
+  return _longPlace(
+    name: '아주아주긴이름의카페와레스토랑이있는장소입니다더길게테스트하기위한이름',
+    region: '수원시팔달구매산로일가아주오래된긴동네이름입니다',
+    address: '경기도 수원시 팔달구 매산로1가 아주오래된긴주소이름동',
+    reason: '영업중 · 실내활동 적합 · 근접 · 공식 데이터 · 아주긴추가이유텍스트',
+    freshness: '방금 전',
+  );
 }
