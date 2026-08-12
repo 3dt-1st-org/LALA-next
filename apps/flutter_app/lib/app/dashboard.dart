@@ -36,6 +36,7 @@ class Dashboard extends StatelessWidget {
     super.key,
     required this.loading,
     required this.error,
+    required this.placeFailureKind,
     required this.health,
     required this.readiness,
     required this.places,
@@ -100,6 +101,9 @@ class Dashboard extends StatelessWidget {
 
   final bool loading;
   final String? error;
+  // 추천(places) 로드 실패의 honest 종류(unavailable vs error). null = 실패 없음.
+  // error 문자열만으로는 도달 실패와 서비스 오류를 구분할 수 없어 별도 전달(§13.5).
+  final RecommendationFailureKind? placeFailureKind;
   final LalaEnvelope<Map<String, dynamic>>? health;
   final LalaEnvelope<LalaReadiness>? readiness;
   final LalaEnvelope<LalaPlacesResponse>? places;
@@ -180,8 +184,13 @@ class Dashboard extends StatelessWidget {
     // 부재(신선도 라벨 미표시). 절대 fabricate/invent/mok timestamp 사용 금지.
     final effectiveDataAsOf = hasLivePlaces ? places?.data?.dataAsOf : null;
     final visibleError = localizedUiMessage(error, uiLanguage);
+    // §13.5 honest states: 실패 종류(unavailable vs error)에 따라 distinct 안내문을
+    // 고른다. 종류를 알 수 없으면 기존 recovery/status 안내문으로 폴백. 빈 상태(no-data)
+    // 카피와 절대 겹치지 않는다.
     final displayedError = visibleError == null
         ? null
+        : placeFailureKind != null
+        ? recommendationFailureMessage(uiLanguage, placeFailureKind!)
         : recommendationStatusMessage(
             uiLanguage,
             recoveryPending: recommendationRecoveryPending,
@@ -333,16 +342,34 @@ class Dashboard extends StatelessWidget {
                 top: isWide ? 88 : 118,
                 child: SizedBox(
                   width: isWide ? 420 : null,
-                  child: MapToast(
-                    icon: Icons.error_outline,
-                    label: displayedError,
-                    actionLabel: lalaCopy(
+                  // §13.5: 아이콘을 색상과 함께 써 색상 단독 신호를 피한다.
+                  // unavailable = wifi_off, error = error_outline. 시맨틱 라벨로 종류 전달.
+                  child: Semantics(
+                    container: true,
+                    label: recommendationFailureSemanticsLabel(
                       uiLanguage,
-                      ko: '지금 다시 시도',
-                      en: 'Retry now',
+                      placeFailureKind ?? RecommendationFailureKind.error,
+                      displayedError,
                     ),
-                    onAction: onRefresh,
-                    color: Theme.of(context).colorScheme.errorContainer,
+                    child: MapToast(
+                      key: ValueKey(
+                        placeFailureKind == RecommendationFailureKind.unavailable
+                            ? 'map-unavailable-toast'
+                            : 'map-error-toast',
+                      ),
+                      icon: placeFailureKind ==
+                              RecommendationFailureKind.unavailable
+                          ? Icons.wifi_off_rounded
+                          : Icons.error_outline,
+                      label: displayedError,
+                      actionLabel: lalaCopy(
+                        uiLanguage,
+                        ko: '지금 다시 시도',
+                        en: 'Retry now',
+                      ),
+                      onAction: onRefresh,
+                      color: Theme.of(context).colorScheme.errorContainer,
+                    ),
                   ),
                 ),
               ),
@@ -439,6 +466,7 @@ class Dashboard extends StatelessWidget {
                         !detailDocentPlayedPlaceIds.contains(topPlace.placeId),
                     showEvidence: showEvidence,
                     error: displayedError,
+                    placeFailureKind: placeFailureKind,
                     recommendationRecoveryPending:
                         recommendationRecoveryPending,
                     onFetchAudio: onFetchAudio,

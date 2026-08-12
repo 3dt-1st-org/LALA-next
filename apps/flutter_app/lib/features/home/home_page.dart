@@ -78,6 +78,9 @@ class _LalaHomePageState extends State<LalaHomePage> {
 
   bool _loading = false;
   String? _error;
+  // 추천(places) 로드 실패의 honest 종류(unavailable vs error). _error 문자열만으로는
+  // 도달 실패와 서비스 오류를 구분할 수 없어 별도로 보존한다(§13.5). null = 실패 없음.
+  RecommendationFailureKind? _placeFailureKind;
   LalaEnvelope<Map<String, dynamic>>? _health;
   LalaEnvelope<LalaReadiness>? _readiness;
   LalaEnvelope<LalaPlacesResponse>? _places;
@@ -337,6 +340,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _loading = true;
       if (!fromAutoRecovery) {
         _error = null;
+        _placeFailureKind = null;
       }
       _audioError = null;
       _docentAudio = null;
@@ -388,14 +392,26 @@ class _LalaHomePageState extends State<LalaHomePage> {
       final previousPlaces = _places;
       final previousWeather = _weather;
       final previousIntervention = _intervention;
-      final placesFuture = loadOptional(
-        () => loadWithSingleRetry(
-          _backend.getPlaces,
-          shouldRetry: true,
-          retryDelay: _recommendationRequestRetryDelay,
-        ),
-        fallbackMessage: (_) => recommendationLoadFailureMessage(config.lang),
-      );
+      // places 실패 종류(unavailable vs error)를 honest 하게 구분하기 위해 예외를
+      // 별도 캡처한다(§13.5). loadOptional 은 메시지로 평탄화해 종류가 사라지므로,
+      // 로더 자체를 감싸 throw 를 포착한다.
+      Object? placesFailure;
+      Future<LalaEnvelope<LalaPlacesResponse>?> loadPlacesCapture() async {
+        try {
+          return await loadWithSingleRetry(
+            _backend.getPlaces,
+            shouldRetry: true,
+            retryDelay: _recommendationRequestRetryDelay,
+          );
+        } on Object catch (error) {
+          placesFailure = error;
+          // loadOptional 과 동일한 fallback 메시지를 loadErrors 에 반영한다.
+          loadErrors.add(recommendationLoadFailureMessage(config.lang));
+          return null;
+        }
+      }
+
+      final placesFuture = loadPlacesCapture();
       final health = (await healthFuture) ?? previousHealth;
       final readiness = (await readinessFuture) ?? previousReadiness;
       final places = await placesFuture;
@@ -421,6 +437,11 @@ class _LalaHomePageState extends State<LalaHomePage> {
         _readiness = readiness;
         _syncSpeechCapabilityFromReadiness(readiness);
         _places = places ?? previousPlaces;
+        // places 가 새로 로드되었으면 실패 종류를 지운다(성공). 그렇지 않고 포착된
+        // 예외가 있으면 unavailable/error 로 분류해 보존한다(§13.5 honest states).
+        _placeFailureKind = places != null
+            ? null
+            : (placesFailure == null ? _placeFailureKind : recommendationFailureKind(placesFailure));
         _docentAudio = null;
         _tourAudio = null;
         _audioError = null;
@@ -1345,6 +1366,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
                 builder: (context) => Dashboard(
                   loading: _loading,
                   error: _error,
+                  placeFailureKind: _placeFailureKind,
                   health: _health,
                   readiness: _readiness,
                   places: _places,

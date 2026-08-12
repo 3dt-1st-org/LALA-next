@@ -108,6 +108,64 @@ String recommendationStatusMessage(
   );
 }
 
+/// 지도/추천 로드 실패의 두 가지 honest 종류(playbook §2/§13.5).
+/// unavailable = 서비스에 도달하지 못함(네트워크/타임아웃); error = 서비스가 오류로 응답.
+/// 두 종류는 빈 상태(no-data) 카피와 절대 겹치지 않는다.
+enum RecommendationFailureKind { unavailable, error }
+
+/// 캡처된 예외를 도달 실패(unavailable) / 오류 응답(error)으로 분류한다.
+/// LalaApiException 의 code/statusCode 가 없으면 서비스 도달과 무관하므로 error.
+RecommendationFailureKind recommendationFailureKind(Object? failure) {
+  if (failure is LalaApiException) {
+    final code = failure.code;
+    final networkUnreachable = code == 'NETWORK_ERROR' ||
+        code == 'REQUEST_TIMEOUT' ||
+        failure.statusCode == 0;
+    return networkUnreachable
+        ? RecommendationFailureKind.unavailable
+        : RecommendationFailureKind.error;
+  }
+  return RecommendationFailureKind.error;
+}
+
+/// 실패 종류에 따른 distinct 안내문. 빈 상태(no-data) 카피와 구분된다.
+String recommendationFailureMessage(
+  String language,
+  RecommendationFailureKind kind,
+) {
+  switch (kind) {
+    case RecommendationFailureKind.unavailable:
+      return lalaCopy(
+        language,
+        ko: '일시적으로 서버에 연결할 수 없어요. 네트워크를 확인 후 다시 시도해 주세요.',
+        en: 'Could not reach the service. Check your connection and try again.',
+      );
+    case RecommendationFailureKind.error:
+      return lalaCopy(
+        language,
+        ko: '추천 장소를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.',
+        en: 'Could not load recommendations. Please try again shortly.',
+      );
+  }
+}
+
+/// 실패 종류에 따른 시맨틱/아이콘 라벨(화면 읽기 + 색상 단독 신호 회피용).
+String recommendationFailureSemanticsLabel(
+  String language,
+  RecommendationFailureKind kind,
+  String message,
+) {
+  return lalaCopy(
+    language,
+    ko: kind == RecommendationFailureKind.unavailable
+        ? '서버 연결 불가. $message'
+        : '추천 불러오기 실패. $message',
+    en: kind == RecommendationFailureKind.unavailable
+        ? 'Service unreachable. $message'
+        : 'Failed to load recommendations. $message',
+  );
+}
+
 String? localizedUiMessage(String? value, String language) {
   final localized = singleLanguageText(value, language);
   if (localized != null && localized.isNotEmpty) {

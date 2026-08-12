@@ -5,6 +5,7 @@ import '../../../shared/l10n/place_labels.dart';
 import '../../../shared/labels/source_label.dart';
 import '../../../shared/widgets/tiny_meta.dart';
 import '../../docent/widgets/dock_docent_preview.dart';
+import '../../home/home_view_helpers.dart';
 import '../../place/widgets/category_badge.dart';
 import 'empty_dock_content.dart';
 
@@ -27,6 +28,7 @@ class MapBottomDock extends StatelessWidget {
     required this.canFetchAudio,
     required this.showEvidence,
     required this.error,
+    required this.placeFailureKind,
     required this.recommendationRecoveryPending,
     required this.onFetchAudio,
     required this.onAddToPlan,
@@ -52,6 +54,8 @@ class MapBottomDock extends StatelessWidget {
   final bool canFetchAudio;
   final bool showEvidence;
   final String? error;
+  // 추천 로드 실패의 honest 종류(unavailable vs error). null = 실패 없음(준비 중).
+  final RecommendationFailureKind? placeFailureKind;
   final bool recommendationRecoveryPending;
   final VoidCallback onFetchAudio;
   final VoidCallback onAddToPlan;
@@ -111,6 +115,7 @@ class MapBottomDock extends StatelessWidget {
                 EmptyDockContent(
                   language: uiLanguage,
                   errorLabel: error,
+                  failureKind: placeFailureKind,
                   recoveryPending: recommendationRecoveryPending,
                   onRetry: onRefresh,
                 )

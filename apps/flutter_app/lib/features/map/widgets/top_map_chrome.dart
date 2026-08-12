@@ -107,9 +107,18 @@ class TopMapChrome extends StatelessWidget {
           ),
           if (loading) ...[
             const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(999),
-              child: const LinearProgressIndicator(minHeight: 3),
+            // 시맨틱: 지도 추천 로딩 중임을 화면 읽기 사용자에게 알린다(§13.5).
+            Semantics(
+              container: true,
+              label: lalaCopy(
+                language,
+                ko: '추천 장소를 불러오는 중',
+                en: 'Loading recommendations',
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(999),
+                child: const LinearProgressIndicator(minHeight: 3),
+              ),
             ),
           ],
         ],

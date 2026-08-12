@@ -43,6 +43,7 @@ MapBottomDock _dock({String? dataAsOf, String uiLanguage = 'ko'}) {
     canFetchAudio: false,
     showEvidence: false,
     error: null,
+    placeFailureKind: null,
     recommendationRecoveryPending: false,
     onFetchAudio: () {},
     onAddToPlan: () {},

@@ -41,7 +41,7 @@ class CategoryChip extends StatelessWidget {
               onTap: onTap,
               child: Container(
                 width: width,
-                height: 40,
+                height: 44,
                 padding: const EdgeInsets.symmetric(horizontal: 7),
                 decoration: BoxDecoration(
                   color: active ? color : Colors.white.withValues(alpha: 0.95),

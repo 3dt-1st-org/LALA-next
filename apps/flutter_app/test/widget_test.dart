@@ -1730,7 +1730,8 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('추천 연결이 잠시 지연되고 있어요'), findsOneWidget);
+    // §13.5: 실패 종류(error)의 honest 안내문(빈 상태/도달 실패 카피와 구분).
+    expect(find.textContaining('추천 장소를 불러오지 못했어요'), findsOneWidget);
     expect(find.textContaining('요청을 처리하지 못했습니다'), findsNothing);
     expect(
       find.text('UPSTREAM_UNAVAILABLE: Authenticated route failed.'),
@@ -1776,7 +1777,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.textContaining('Recommendations are taking longer than expected'),
+      find.textContaining('Could not load recommendations'),
       findsOneWidget,
     );
     expect(find.textContaining('Unable to complete the request'), findsNothing);
@@ -2256,7 +2257,8 @@ void main() {
           expect(tester.widget<FittedBox>(fittedLabel).fit, BoxFit.scaleDown);
 
           final rect = tester.getRect(chip);
-          expect(rect.height, 40);
+          // §13.5: 카테고리 칩은 최소 44dp 터치 타겟(기존 40dp 컴팩트 계약에서 상향).
+          expect(rect.height, 44);
           expect(rect.left, greaterThanOrEqualTo(viewport.left));
           expect(rect.top, greaterThanOrEqualTo(viewport.top));
           expect(rect.right, lessThanOrEqualTo(viewport.right));
@@ -2272,7 +2274,8 @@ void main() {
         expect(settingsRect.right, lessThanOrEqualTo(viewport.right));
         expect(settingsRect.bottom, lessThanOrEqualTo(viewport.bottom));
         expect(chipRects.last.right, lessThanOrEqualTo(settingsRect.left));
-        expect(chipRects.map((rect) => rect.height).toSet(), <double>{40});
+        // §13.5: 모든 카테고리 칩이 44dp 최소 터치 타겟(기존 40dp 에서 상향).
+        expect(chipRects.map((rect) => rect.height).toSet(), <double>{44});
       },
     );
   }
@@ -2955,7 +2958,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('추천 연결이 잠시 지연되고 있어요'), findsOneWidget);
+    // §13.5: 실패 종류(error)에 따른 honest 안내문. 언어는 한국어만 표시(혼합 금지).
+    expect(find.textContaining('추천 장소를 불러오지 못했어요'), findsOneWidget);
     expect(find.textContaining('Places failed'), findsNothing);
     expect(_visibleMixedLanguageTexts(tester), isEmpty);
 
@@ -2967,7 +2971,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.textContaining('Recommendations are taking longer than expected'),
+      find.textContaining('Could not load recommendations'),
       findsOneWidget,
     );
     expect(find.textContaining('추천 연결이 잠시 지연되고 있어요'), findsNothing);
