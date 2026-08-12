@@ -11,6 +11,7 @@ import 'package:lala_next_app/features/map/widgets/category_chip.dart';
 import 'package:lala_next_app/features/map/widgets/map_bottom_dock.dart';
 import 'package:lala_next_app/features/map/widgets/map_place_carousel_overlay.dart';
 import 'package:lala_next_app/features/place/widgets/map_rail_place_card.dart';
+import 'package:lala_next_app/features/place/widgets/recommended_place_card.dart';
 
 Widget _wrap(Widget child) => MaterialApp(
   home: Scaffold(body: Center(child: child)),
@@ -107,6 +108,12 @@ Future<void> _pumpAndCaptureOverflow(
     FlutterError.onError = originalOnError;
   }
 }
+
+/// V1 three-signals(§3/§6) Lane 3: reason 이 정식 6세그먼트로 풍부해진 현실 최장 케이스.
+/// 정준 순서 — 영업중(S0) · 날씨 밴드(D3) · 로컬 소비 활발(D1) · 진행 중인 행사(D4) ·
+/// 근접 · 출처 구문(D2). ellipsis 가 꼬리만 자르므로 신규 overflow 벡터가 없다(§6).
+const _enrichedSixSegmentReason =
+    '영업중 · 선선한 날씨 · 로컬 소비 활발 · 진행 중인 행사 · 근접 · 한국관광공사 데이터';
 
 void main() {
   group('MapRailPlaceCard narrow viewport no overflow', () {
@@ -419,6 +426,94 @@ void main() {
           ),
         ),
       );
+    });
+  });
+
+  // V1 three-signals §6/§8 (Lane 3 overflow gate): reason 이 정식 6세그먼트(정준 순서,
+  // 현실 최장)로 풍부해져도 PlaceReasonLine(Row>Expanded>Text maxLines:1 ellipsis) 가
+  // 좁은 뷰포트에서 RenderFlex overflow 를 발생시키지 않는다. MapRailPlaceCard +
+  // RecommendedPlaceCard 양 표면 × 360/393dp — 계약 §8 presentation 게이트.
+  group('V1 three-signals six-segment reason no overflow '
+      '(MapRailPlaceCard + RecommendedPlaceCard)', () {
+    testWidgets('MapRailPlaceCard 360dp with full six-segment reason', (
+      tester,
+    ) async {
+      await _pumpAndCaptureOverflow(
+        tester,
+        360,
+        widget: MapRailPlaceCard(
+          place: _longPlace(
+            region: '수원시팔달구매산로일가아주오래된긴동네이름입니다더길게만듭니다',
+            reason: _enrichedSixSegmentReason,
+            freshness: '방금 전 데이터 신선도 표시용 약간 긴 문자열입니다',
+          ),
+          language: 'ko',
+          selected: false,
+          compact: true,
+        ),
+      );
+      // §6/§8: 현실 최장 reason 도 예외 없이 ellipsis truncation 만 발생한다.
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('MapRailPlaceCard 393dp with full six-segment reason', (
+      tester,
+    ) async {
+      await _pumpAndCaptureOverflow(
+        tester,
+        393,
+        widget: MapRailPlaceCard(
+          place: _longPlace(
+            region: '수원시팔달구매산로일가아주오래된긴동네이름입니다더길게만듭니다',
+            reason: _enrichedSixSegmentReason,
+            freshness: '방금 전 데이터 신선도 표시용 약간 긴 문자열입니다',
+          ),
+          language: 'ko',
+          selected: true,
+          compact: true,
+        ),
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('RecommendedPlaceCard 360dp with full six-segment reason', (
+      tester,
+    ) async {
+      await _pumpAndCaptureOverflow(
+        tester,
+        360,
+        widget: RecommendedPlaceCard(
+          place: _longPlace(
+            region: '수원시팔달구매산로일가아주오래된긴동네이름입니다더길게만듭니다',
+            reason: _enrichedSixSegmentReason,
+            // freshness 생략: 본 게이트는 reason 줄(§6/§8)이 대상. RecommendedPlaceCard
+            // 메타 Row(line 54)는 Expanded/ellipsis 미보호라 긴 freshness 에 별도 overflow
+            // 벡터가 있으나, reason 과 무관한 사전 취약점(본 레인 범위 밖).
+          ),
+          language: 'ko',
+          selected: false,
+        ),
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('RecommendedPlaceCard 393dp with full six-segment reason', (
+      tester,
+    ) async {
+      await _pumpAndCaptureOverflow(
+        tester,
+        393,
+        widget: RecommendedPlaceCard(
+          place: _longPlace(
+            region: '수원시팔달구매산로일가아주오래된긴동네이름입니다더길게만듭니다',
+            reason: _enrichedSixSegmentReason,
+            // freshness 생략(위 360dp 케이스 주석 참조) — reason 줄 게이트만 격리.
+          ),
+          language: 'ko',
+          selected: true,
+        ),
+      );
+      expect(tester.takeException(), isNull);
     });
   });
 }
