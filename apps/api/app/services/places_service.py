@@ -8,7 +8,6 @@ from apps.api.app.services import (
     db_repository,
     opening_hours_service,
     public_mvp_data,
-    weather_service,
 )
 from apps.api.app.services.normalization import normalize_language
 
@@ -59,7 +58,10 @@ def list_places(
 
     # Collect current signals for reason/freshness derivation
     current_time = datetime.now(UTC)
-    current_weather = weather_service.current_weather(lat=lat, lng=lng)
+    # Local DB-cached weather only — place search must never trigger the live
+    # KMA/AirKorea provider. When nothing is cached the indoor-fit reason is
+    # honestly omitted (current_weather stays {}); never fabricated.
+    current_weather = db_repository.fetch_latest_weather(lat=lat, lng=lng) or {}
     slot_time = current_time.strftime("%H:%M")
 
     # Enrich places with reason and freshness
@@ -222,7 +224,7 @@ def _format_freshness(updated_at: str | None, now: datetime) -> str | None:
     - <1 minute → "방금 전"
     - <1 hour → "N분 전"
     - <1 day → "N시간 전"
-    - ≥1 day → "오늘"
+    - ≥1 day → "N일 전" (truthful elapsed days; never the misleading "오늘")
     - Parse errors → None (honest degradation)
 
     Returns:
@@ -259,7 +261,8 @@ def _format_freshness(updated_at: str | None, now: datetime) -> str | None:
             hours = int(total_seconds / 3600)
             return f"{hours}시간 전"
         else:
-            return "오늘"
+            days = int(total_seconds / 86400)
+            return f"{days}일 전"
 
     except (ValueError, AttributeError):
         return None

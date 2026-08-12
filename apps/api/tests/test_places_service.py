@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from apps.api.app.core.errors import ServiceError
-from apps.api.app.services import places_service
+from apps.api.app.services import places_service, weather_service
 
 
 def _fake_settings(*, static_snapshot_fallback: bool = False, db_dsn: str = ""):
@@ -34,26 +34,21 @@ def _patch_db_fetch_places(monkeypatch, *, places=None, raises=None):
     return captured
 
 
-def _patch_weather(
-    monkeypatch,
-    *,
-    outdoor_status: str = "good",
-) -> None:
-    """Stub ``weather_service.current_weather`` so list_places derivation stays hermetic.
+def _freeze_service_now(monkeypatch, *, fixed: datetime) -> None:
+    """Pin the wall-clock ``list_places`` reads via ``datetime.now``.
 
-    list_places now reads current weather to derive the indoor-fit reason, so any
-    test exercising a non-empty places path must keep this off the live KMA/AirKorea
-    providers. Returns a minimal deterministic payload mirroring the real shape.
+    ``list_places`` derives ``slot_time`` (the operating-status check) and the
+    freshness ``now`` from ``datetime.now(UTC)``. Without freezing, an assertion
+    on a category's "영업중" reason flickers with the CI run's UTC hour.
+    ``fixed`` must be timezone-aware.
     """
-    monkeypatch.setattr(
-        places_service.weather_service,
-        "current_weather",
-        lambda *, lat, lng: {
-            "outdoor_status": outdoor_status,
-            "source": "test_stub",
-            "icon": "partly-cloudy",
-        },
-    )
+
+    class _FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fixed.astimezone(tz) if tz else fixed.replace(tzinfo=None)
+
+    monkeypatch.setattr(places_service, "datetime", _FrozenDateTime)
 
 
 @pytest.mark.parametrize(
@@ -190,7 +185,6 @@ def test_list_places_forwards_query_params_to_repository(monkeypatch) -> None:
 
 def test_list_places_returns_db_payload_when_db_has_places(monkeypatch) -> None:
     monkeypatch.setattr(places_service, "get_settings", lambda: _fake_settings())
-    _patch_weather(monkeypatch)
     places = [
         {"name": "경복궁", "score": 0.9},
         {"name": "남산타워", "score": 0.8},
@@ -254,7 +248,6 @@ def test_list_places_falls_back_to_static_snapshot_without_scores(monkeypatch) -
         "get_settings",
         lambda: _fake_settings(static_snapshot_fallback=True, db_dsn=""),
     )
-    _patch_weather(monkeypatch)
     _patch_db_fetch_places(
         monkeypatch,
         raises=places_service.db_repository.DatabaseReadError("places_query_failed"),
@@ -293,7 +286,6 @@ def test_list_places_keeps_scores_in_static_snapshot_when_requested(monkeypatch)
         "get_settings",
         lambda: _fake_settings(static_snapshot_fallback=True),
     )
-    _patch_weather(monkeypatch)
     _patch_db_fetch_places(
         monkeypatch,
         raises=places_service.db_repository.DatabaseReadError("psycopg2_unavailable"),
@@ -327,7 +319,6 @@ def test_list_places_snapshot_path_reports_honest_data_as_of(monkeypatch) -> Non
         "get_settings",
         lambda: _fake_settings(static_snapshot_fallback=True, db_dsn=""),
     )
-    _patch_weather(monkeypatch)
     _patch_db_fetch_places(
         monkeypatch,
         raises=places_service.db_repository.DatabaseReadError("places_query_failed"),
@@ -645,30 +636,105 @@ def test_format_freshness_hours_ago() -> None:
     assert result == "4시간 전"
 
 
-def test_format_freshness_today() -> None:
-    # 하루 이상: "오늘"
+def test_format_freshness_one_day_ago_is_truthful_days_not_today() -> None:
+    # Regression: ≥1 day must report elapsed days ("N일 전"), never the
+    # misleading "오늘". 33h elapsed → 1 day.
     now = datetime(2026, 8, 12, 18, 0, 0, tzinfo=UTC)
     updated_at = "2026-08-11T09:00:00Z"
 
     result = places_service._format_freshness(updated_at, now)
 
-    assert result == "오늘"
+    assert result == "1일 전"
 
 
-def test_format_freshness_honest_none() -> None:
-    # updated_at 없음: honest None
+@pytest.mark.parametrize(
+    ("updated_at", "expected"),
+    [
+        # 1s short of 24h → still hours (boundary is exclusive on the day side).
+        ("2026-08-12T12:00:01Z", "23시간 전"),
+        # Exactly 24h → first day bucket.
+        ("2026-08-12T12:00:00Z", "1일 전"),
+        # 24h + 1s → first day bucket (floor, no rounding up).
+        ("2026-08-12T11:59:59Z", "1일 전"),
+    ],
+)
+def test_format_freshness_24_hour_boundary(updated_at: str, expected: str) -> None:
+    now = datetime(2026, 8, 13, 12, 0, 0, tzinfo=UTC)
+
+    result = places_service._format_freshness(updated_at, now)
+
+    assert result == expected
+
+
+@pytest.mark.parametrize(
+    ("updated_at", "expected"),
+    [
+        ("2026-08-10T12:00:00Z", "3일 전"),
+        ("2026-07-14T12:00:00Z", "30일 전"),
+    ],
+)
+def test_format_freshness_multiple_days(updated_at: str, expected: str) -> None:
+    now = datetime(2026, 8, 13, 12, 0, 0, tzinfo=UTC)
+
+    result = places_service._format_freshness(updated_at, now)
+
+    assert result == expected
+
+
+def test_format_freshness_future_timestamp_clamps_to_now() -> None:
+    # A future source timestamp is corruption; clamp honestly to "방금 전"
+    # rather than fabricating a negative/elapsed label.
+    now = datetime(2026, 8, 13, 12, 0, 0, tzinfo=UTC)
+    updated_at = "2026-08-13T13:00:00Z"  # 1h in the future
+
+    result = places_service._format_freshness(updated_at, now)
+
+    assert result == "방금 전"
+
+
+def test_format_freshness_naive_input_treated_as_utc() -> None:
+    # Naive (tz-less) timestamps are assumed UTC so the comparison is defined.
+    now = datetime(2026, 8, 13, 12, 0, 0, tzinfo=UTC)
+    updated_at = "2026-08-13 11:55:00"  # 5 minutes before, no offset
+
+    result = places_service._format_freshness(updated_at, now)
+
+    assert result == "5분 전"
+
+
+def test_format_freshness_aware_offset_normalized_to_utc() -> None:
+    # 20:55+09:00 == 11:55 UTC, so an offset-aware value must land at 5 min ago,
+    # not be misread as later-than-now by the naive comparison.
+    now = datetime(2026, 8, 13, 12, 0, 0, tzinfo=UTC)
+    updated_at = "2026-08-13T20:55:00+09:00"
+
+    result = places_service._format_freshness(updated_at, now)
+
+    assert result == "5분 전"
+
+
+@pytest.mark.parametrize(
+    "updated_at",
+    [None, "", "   "],
+)
+def test_format_freshness_missing_or_blank_is_honest_none(updated_at) -> None:
+    # No source timestamp → never fabricate freshness.
     now = datetime(2026, 8, 12, 10, 30, 0, tzinfo=UTC)
 
-    result = places_service._format_freshness(None, now)
+    result = places_service._format_freshness(updated_at, now)
 
     assert result is None
 
 
-def test_format_freshness_invalid_format() -> None:
-    # 파싱 불가능한 형식: honest None
+@pytest.mark.parametrize(
+    "updated_at",
+    ["invalid-date", "2026-13-40T99:99:99Z", 12345, ["not", "a", "timestamp"]],
+)
+def test_format_freshness_malformed_or_wrong_type_is_honest_none(updated_at) -> None:
+    # Unparseable / wrong-typed source → degrade honestly to None.
     now = datetime(2026, 8, 12, 10, 30, 0, tzinfo=UTC)
 
-    result = places_service._format_freshness("invalid-date", now)
+    result = places_service._format_freshness(updated_at, now)
 
     assert result is None
 
@@ -683,7 +749,10 @@ def test_list_places_db_path_binds_reason_and_honest_none_freshness(monkeypatch)
     # so freshness must degrade to honest None (never fabricated). reason is
     # derived from real signals (category + open hours + proximity + source).
     monkeypatch.setattr(places_service, "get_settings", lambda: _fake_settings())
-    _patch_weather(monkeypatch, outdoor_status="good")
+    # Freeze the wall-clock list_places reads so the operating-status check
+    # (slot_time vs attraction hours 09:00-18:00) is deterministic; otherwise the
+    # asserted "영업중" flickers with the CI run's UTC hour.
+    _freeze_service_now(monkeypatch, fixed=datetime(2026, 8, 13, 12, 0, 0, tzinfo=UTC))
     # attraction is open during day hours; near + non-canonical upstream source.
     places = [
         {
@@ -719,7 +788,6 @@ def test_list_places_db_path_binds_reason_and_honest_none_freshness(monkeypatch)
 def test_list_places_db_path_freshness_from_updated_at_when_present(monkeypatch) -> None:
     # If a future payload carries updated_at, freshness is formatted truthfully.
     monkeypatch.setattr(places_service, "get_settings", lambda: _fake_settings())
-    _patch_weather(monkeypatch, outdoor_status="good")
     now = datetime.now(UTC)
     recent = (now - timedelta(minutes=5)).isoformat()
     places = [
@@ -747,3 +815,79 @@ def test_list_places_db_path_freshness_from_updated_at_when_present(monkeypatch)
     # ~5 minutes old → "N분 전".
     assert place["freshness"] is not None
     assert place["freshness"].endswith("분 전")
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# V1-RC1 regression: place search must stay offline (no live weather provider)
+# ─────────────────────────────────────────────────────────────────────────
+
+
+def _fail_if_live_weather_invoked(*args, **kwargs):
+    raise AssertionError("list_places must not call the live weather provider (KMA/AirKorea)")
+
+
+def test_list_places_db_path_does_not_invoke_live_weather_provider(monkeypatch) -> None:
+    # Regression: the DB search path must source weather only from the local DB
+    # cache. If the live entry point or either provider fetcher were ever reached
+    # on this path the sentinel raises, proving search stays offline.
+    monkeypatch.setattr(weather_service, "current_weather", _fail_if_live_weather_invoked)
+    monkeypatch.setattr(
+        weather_service, "_fetch_kma_ultra_short_nowcast", _fail_if_live_weather_invoked
+    )
+    monkeypatch.setattr(
+        weather_service, "_fetch_airkorea_sido_air_quality", _fail_if_live_weather_invoked
+    )
+    monkeypatch.setattr(places_service, "get_settings", lambda: _fake_settings())
+    # No cached local weather → indoor-fit reason is honestly omitted, still no provider call.
+    monkeypatch.setattr(places_service.db_repository, "fetch_latest_weather", lambda **kw: None)
+    _patch_db_fetch_places(
+        monkeypatch, places=[{"name": "경복궁", "category": "event", "score": 0.9}]
+    )
+
+    result = places_service.list_places(
+        lat=37.5665,
+        lng=126.978,
+        radius_m=1000,
+        category="event",
+        language="ko",
+    )
+
+    assert result["source"] == "db"
+    assert result["count"] == 1
+
+
+def test_list_places_snapshot_path_does_not_invoke_live_weather_provider(monkeypatch) -> None:
+    # Regression: the static-snapshot fallback path must likewise stay offline.
+    monkeypatch.setattr(weather_service, "current_weather", _fail_if_live_weather_invoked)
+    monkeypatch.setattr(
+        weather_service, "_fetch_kma_ultra_short_nowcast", _fail_if_live_weather_invoked
+    )
+    monkeypatch.setattr(
+        weather_service, "_fetch_airkorea_sido_air_quality", _fail_if_live_weather_invoked
+    )
+    monkeypatch.setattr(
+        places_service,
+        "get_settings",
+        lambda: _fake_settings(static_snapshot_fallback=True, db_dsn=""),
+    )
+    monkeypatch.setattr(places_service.db_repository, "fetch_latest_weather", lambda **kw: None)
+    _patch_db_fetch_places(
+        monkeypatch,
+        raises=places_service.db_repository.DatabaseReadError("places_query_failed"),
+    )
+    monkeypatch.setattr(
+        places_service.public_mvp_data,
+        "fetch_places",
+        lambda **kwargs: [{"name": "경복궁", "score": 0.92}],
+    )
+
+    result = places_service.list_places(
+        lat=37.5665,
+        lng=126.978,
+        radius_m=1000,
+        category="attraction",
+        language="ko",
+    )
+
+    assert result["source"] == places_service.public_mvp_data.SOURCE_NAME
+    assert result["count"] == 1
