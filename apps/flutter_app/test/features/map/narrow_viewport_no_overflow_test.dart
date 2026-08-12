@@ -165,6 +165,47 @@ void main() {
         ),
       );
     });
+
+    // V1-RC4 §13.2/§13.5: category 라벨이 메타 줄에 병치되고 freshness 줄이 추가된 상태에서
+    // 가장 긴 category 라벨(Restaurant)·긴 region·reason·freshness 가 좁은 뷰포트에서
+    // overflow 를 발생시키지 않는다(메타 줄 1줄 ellipsis).
+    testWidgets('360dp with longest category label + freshness no overflow', (
+      tester,
+    ) async {
+      await _pumpAndCaptureOverflow(
+        tester,
+        360,
+        widget: MapRailPlaceCard(
+          place: _longPlace(
+            region: '수원시팔달구매산로일가아주오래된긴동네이름입니다더길게만듭니다',
+            reason: '영업중 · 실내활동 적합 · 근접 · 공식 데이터 · 아주긴추가이유텍스트',
+            freshness: '방금 전 데이터 신선도 표시용 약간 긴 문자열입니다',
+          ),
+          language: 'en', // 'Restaurant' = longest category display name
+          selected: false,
+          compact: true,
+        ),
+      );
+    });
+
+    testWidgets('393dp with longest category label + freshness no overflow', (
+      tester,
+    ) async {
+      await _pumpAndCaptureOverflow(
+        tester,
+        393,
+        widget: MapRailPlaceCard(
+          place: _longPlace(
+            region: '수원시팔달구매산로일가아주오래된긴동네이름입니다더길게만듭니다',
+            reason: '영업중 · 실내활동 적합 · 근접 · 공식 데이터 · 아주긴추가이유텍스트',
+            freshness: '방금 전 데이터 신선도 표시용 약간 긴 문자열입니다',
+          ),
+          language: 'en',
+          selected: true,
+          compact: true,
+        ),
+      );
+    });
   });
 
   group('CategoryChip narrow viewport no overflow', () {

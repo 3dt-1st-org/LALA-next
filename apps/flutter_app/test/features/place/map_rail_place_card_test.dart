@@ -16,6 +16,7 @@ LalaPlace _place({
   String? imageUrl,
   int distanceM = 210,
   String? regionKo = '수원',
+  String? freshness,
 }) {
   return LalaPlace(
     placeId: id,
@@ -31,6 +32,7 @@ LalaPlace _place({
     imageUrl: imageUrl,
     regionKo: regionKo,
     regionEn: 'Suwon',
+    freshness: freshness,
   );
 }
 
@@ -58,10 +60,13 @@ void main() {
         );
 
         expect(find.text('행궁동 카페'), findsOneWidget); // name
+        // V1-RC4 §13.5: category is conveyed as TEXT in the meta line
+        // (맛집 · region · distance), not color-only. Category label reuses the
+        // CategoryBadge/semantics SSOT (categoryLabel) — no invented string.
         expect(
-          find.text('수원 · 도보 210m'),
+          find.text('맛집 · 수원 · 도보 210m'),
           findsOneWidget,
-        ); // region · walk distance
+        ); // category · region · walk distance
         // category color dot (decorated circle in the category token color)
         expect(
           find.byWidgetPredicate(
@@ -90,7 +95,8 @@ void main() {
           ),
         ),
       );
-      expect(find.text('Suwon · 210m walk'), findsOneWidget);
+      // V1-RC4: category label follows language and heads the meta line (Food · ...).
+      expect(find.text('Food · Suwon · 210m walk'), findsOneWidget);
       expect(find.textContaining('도보'), findsNothing);
     });
 
@@ -118,6 +124,46 @@ void main() {
         ); // card still renders honestly
       },
     );
+
+    // V1-RC4 §13.2: compact freshness on the card. Same SSOT value the tile/dock/
+    // detail use (placeFreshnessText). Honest-omit when null — never fabricate a time.
+    testWidgets('shows compact freshness when present; omits when null', (
+      tester,
+    ) async {
+      final withFresh = _place(
+        imageUrl: 'https://tong.visitkorea.or.kr/cms/resource/fresh.jpg',
+        freshness: '방금 전',
+      );
+      await tester.pumpWidget(
+        _wrap(
+          MapRailPlaceCard(
+            place: withFresh,
+            language: 'ko',
+            selected: false,
+            compact: true,
+          ),
+        ),
+      );
+      expect(find.text('방금 전'), findsOneWidget);
+
+      final noFresh = _place(
+        imageUrl: 'https://tong.visitkorea.or.kr/cms/resource/nofresh.jpg',
+      ); // freshness defaults null
+      await tester.pumpWidget(
+        _wrap(
+          MapRailPlaceCard(
+            place: noFresh,
+            language: 'ko',
+            selected: false,
+            compact: true,
+          ),
+        ),
+      );
+      expect(
+        find.text('방금 전'),
+        findsNothing,
+      ); // honest omit, no fabricated time
+    });
   });
 
   group('MapRailPlaceCard selection (P6A §2.3 / §03)', () {
@@ -144,6 +190,8 @@ void main() {
       expect(border.top.color, const Color(0xFFC53030));
       expect(border.top.width, 1);
       expect(border.bottom.width, 1);
+      // V1-RC4: category text (명소) still present in the meta line alongside the border.
+      expect(find.textContaining('명소'), findsOneWidget);
     });
 
     testWidgets('card tap fires selection (card -> marker binding)', (
