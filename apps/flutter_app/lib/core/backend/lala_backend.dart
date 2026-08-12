@@ -76,11 +76,9 @@ class LalaApiBackend implements LalaBackend {
 
   @override
   Future<LalaEnvelope<LalaPlacesResponse>> getPlaces() {
-    // Bounds are prepared here; forwarding is blocked on Lane A's regenerated
-    // client (PR #133). The discard keeps the wiring live without an unused
-    // local while the four named args are not yet on the generated signature.
-    final _ = _placesBounds();
-    // TODO(bounds-LaneB): forward swLat/swLng/neLat/neLng to _client.getPlaces once Lane A's regenerated client lands (pinned names sw_lat→swLat, sw_lng→swLng, ne_lat→neLat, ne_lng→neLng).
+    final bounds = _placesBounds();
+    // V1 bounds-query (D4): forward viewport rectangle when present; null → server
+    // falls back to the center+radius circle (state B2).
     return _client.getPlaces(
       lat: config.lat,
       lng: config.lng,
@@ -89,6 +87,10 @@ class LalaApiBackend implements LalaBackend {
       category: config.category,
       lang: config.lang,
       includeScores: true,
+      swLat: bounds.swLat,
+      swLng: bounds.swLng,
+      neLat: bounds.neLat,
+      neLng: bounds.neLng,
     );
   }
 
