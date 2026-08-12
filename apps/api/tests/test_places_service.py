@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -31,6 +32,28 @@ def _patch_db_fetch_places(monkeypatch, *, places=None, raises=None):
 
     monkeypatch.setattr(places_service.db_repository, "fetch_places", fake_fetch_places)
     return captured
+
+
+def _patch_weather(
+    monkeypatch,
+    *,
+    outdoor_status: str = "good",
+) -> None:
+    """Stub ``weather_service.current_weather`` so list_places derivation stays hermetic.
+
+    list_places now reads current weather to derive the indoor-fit reason, so any
+    test exercising a non-empty places path must keep this off the live KMA/AirKorea
+    providers. Returns a minimal deterministic payload mirroring the real shape.
+    """
+    monkeypatch.setattr(
+        places_service.weather_service,
+        "current_weather",
+        lambda *, lat, lng: {
+            "outdoor_status": outdoor_status,
+            "source": "test_stub",
+            "icon": "partly-cloudy",
+        },
+    )
 
 
 @pytest.mark.parametrize(
@@ -167,6 +190,7 @@ def test_list_places_forwards_query_params_to_repository(monkeypatch) -> None:
 
 def test_list_places_returns_db_payload_when_db_has_places(monkeypatch) -> None:
     monkeypatch.setattr(places_service, "get_settings", lambda: _fake_settings())
+    _patch_weather(monkeypatch)
     places = [
         {"name": "경복궁", "score": 0.9},
         {"name": "남산타워", "score": 0.8},
@@ -183,7 +207,16 @@ def test_list_places_returns_db_payload_when_db_has_places(monkeypatch) -> None:
     )
 
     assert result["count"] == 2
-    assert result["places"] == places
+    # V1-RC1: result places now include reason/freshness fields
+    assert len(result["places"]) == 2
+    assert result["places"][0]["name"] == "경복궁"
+    assert result["places"][1]["name"] == "남산타워"
+    # Original scores preserved
+    assert result["places"][0]["score"] == 0.9
+    assert result["places"][1]["score"] == 0.8
+    # New V1-RC1 fields present
+    assert "reason" in result["places"][0]
+    assert "freshness" in result["places"][0]
     assert result["source"] == "db"
     assert result["location_engine"] == "postgis"
     assert result["query"]["include_scores"] is True
@@ -221,6 +254,7 @@ def test_list_places_falls_back_to_static_snapshot_without_scores(monkeypatch) -
         "get_settings",
         lambda: _fake_settings(static_snapshot_fallback=True, db_dsn=""),
     )
+    _patch_weather(monkeypatch)
     _patch_db_fetch_places(
         monkeypatch,
         raises=places_service.db_repository.DatabaseReadError("places_query_failed"),
@@ -259,6 +293,7 @@ def test_list_places_keeps_scores_in_static_snapshot_when_requested(monkeypatch)
         "get_settings",
         lambda: _fake_settings(static_snapshot_fallback=True),
     )
+    _patch_weather(monkeypatch)
     _patch_db_fetch_places(
         monkeypatch,
         raises=places_service.db_repository.DatabaseReadError("psycopg2_unavailable"),
@@ -292,6 +327,7 @@ def test_list_places_snapshot_path_reports_honest_data_as_of(monkeypatch) -> Non
         "get_settings",
         lambda: _fake_settings(static_snapshot_fallback=True, db_dsn=""),
     )
+    _patch_weather(monkeypatch)
     _patch_db_fetch_places(
         monkeypatch,
         raises=places_service.db_repository.DatabaseReadError("places_query_failed"),
@@ -435,3 +471,279 @@ def test_places_without_scores_does_not_mutate_input() -> None:
 
 def test_places_without_scores_handles_empty_list() -> None:
     assert places_service._places_without_scores([]) == []
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# V1-RC1: reason/freshness 도출 테스트
+# ─────────────────────────────────────────────────────────────────────────
+
+
+def test_derive_place_reason_all_signals_present() -> None:
+    # 모든 신호가 있는 경우: 운영중 + 날씨 적합 + 근접 + 공식 데이터
+    place = {
+        "category": "restaurant",
+        "distance_m": 300,
+        "upstream_source": "korean_tourism_org",
+    }
+    current_weather = {
+        "outdoor_status": "bad",  # 비/미세먼지로 실내 우선
+    }
+    slot_time = "12:30"  # 영업시간 내
+
+    result = places_service._derive_place_reason(
+        place=place,
+        current_weather=current_weather,
+        slot_time=slot_time,
+    )
+
+    # 모든 신호가 결합된 결정론적 결과
+    assert result == "영업중 · 실내활동 적합 · 근접 · 공식 데이터"
+
+
+def test_derive_place_reason_only_open_nearby() -> None:
+    # 날씨 좋고 근접: 운영중 + 근접만
+    place = {
+        "category": "attraction",
+        "distance_m": 400,
+        "upstream_source": "canonical",
+    }
+    current_weather = {"outdoor_status": "good"}  # 날씨 good → 추가 안 함
+    slot_time = "14:00"
+
+    result = places_service._derive_place_reason(
+        place=place,
+        current_weather=current_weather,
+        slot_time=slot_time,
+    )
+
+    assert result == "영업중 · 근접"
+
+
+def test_derive_place_reason_honest_empty_closed() -> None:
+    # 폐장 상태: 운영 관련 reason 없음 (honest empty)
+    place = {
+        "category": "restaurant",
+        "distance_m": 100,
+        "upstream_source": "official",
+    }
+    current_weather = {"outdoor_status": "good"}
+    slot_time = "23:00"  # 영업시간 외
+
+    result = places_service._derive_place_reason(
+        place=place,
+        current_weather=current_weather,
+        slot_time=slot_time,
+    )
+
+    # closed면 운영 reason 추가 안 함 (honest empty)
+    assert result == "근접 · 공식 데이터"
+
+
+def test_derive_place_reason_honest_empty_all_bad_signals() -> None:
+    # 모든 신호가 부적합한 경우: 완전한 honest empty
+    place = {
+        "category": "attraction",
+        "distance_m": 2000,  # 근접 아님
+        "upstream_source": "canonical",  # 공식 아님
+    }
+    current_weather = {"outdoor_status": "good"}  # 날씨 good → 추가 안 함
+    slot_time = "22:00"  # 폐장 가정
+
+    result = places_service._derive_place_reason(
+        place=place,
+        current_weather=current_weather,
+        slot_time=slot_time,
+    )
+
+    assert result == ""  # honest empty, never "이유 없음"
+
+
+def test_derive_place_reason_indoor_only_bad_weather() -> None:
+    # 실내 우선 카테고리 + bad weather만
+    place = {
+        "category": "culture_venue",
+        "distance_m": 1200,
+        "upstream_source": "canonical",
+    }
+    current_weather = {"outdoor_status": "bad"}
+    slot_time = "15:00"
+
+    result = places_service._derive_place_reason(
+        place=place,
+        current_weather=current_weather,
+        slot_time=slot_time,
+    )
+
+    assert result == "영업중 · 실내활동 적합"
+
+
+def test_derive_place_reason_proximity_under_500m() -> None:
+    # 500m 이하만 근접 표시
+    place = {
+        "category": "event",
+        "distance_m": 500,
+        "upstream_source": "canonical",
+    }
+    current_weather = {"outdoor_status": "good"}
+    slot_time = "10:00"
+
+    result = places_service._derive_place_reason(
+        place=place,
+        current_weather=current_weather,
+        slot_time=slot_time,
+    )
+
+    assert result == "영업중 · 근접"
+
+
+def test_derive_place_reason_proximity_over_500m() -> None:
+    # 500m 초과는 근접 reason 없음
+    place = {
+        "category": "restaurant",
+        "distance_m": 501,
+        "upstream_source": "canonical",
+    }
+    current_weather = {"outdoor_status": "good"}
+    slot_time = "12:00"
+
+    result = places_service._derive_place_reason(
+        place=place,
+        current_weather=current_weather,
+        slot_time=slot_time,
+    )
+
+    assert result == "영업중"  # 근접 없음
+
+
+def test_format_freshness_now() -> None:
+    # 방금 전 (1분 미만)
+    now = datetime(2026, 8, 12, 10, 30, 0, tzinfo=UTC)
+    updated_at = "2026-08-12T10:29:45Z"
+
+    result = places_service._format_freshness(updated_at, now)
+
+    assert result == "방금 전"
+
+
+def test_format_freshness_minutes_ago() -> None:
+    # N분 전
+    now = datetime(2026, 8, 12, 10, 30, 0, tzinfo=UTC)
+    updated_at = "2026-08-12T10:25:00Z"
+
+    result = places_service._format_freshness(updated_at, now)
+
+    assert result == "5분 전"
+
+
+def test_format_freshness_hours_ago() -> None:
+    # N시간 전
+    now = datetime(2026, 8, 12, 14, 30, 0, tzinfo=UTC)
+    updated_at = "2026-08-12T10:00:00Z"
+
+    result = places_service._format_freshness(updated_at, now)
+
+    assert result == "4시간 전"
+
+
+def test_format_freshness_today() -> None:
+    # 하루 이상: "오늘"
+    now = datetime(2026, 8, 12, 18, 0, 0, tzinfo=UTC)
+    updated_at = "2026-08-11T09:00:00Z"
+
+    result = places_service._format_freshness(updated_at, now)
+
+    assert result == "오늘"
+
+
+def test_format_freshness_honest_none() -> None:
+    # updated_at 없음: honest None
+    now = datetime(2026, 8, 12, 10, 30, 0, tzinfo=UTC)
+
+    result = places_service._format_freshness(None, now)
+
+    assert result is None
+
+
+def test_format_freshness_invalid_format() -> None:
+    # 파싱 불가능한 형식: honest None
+    now = datetime(2026, 8, 12, 10, 30, 0, tzinfo=UTC)
+
+    result = places_service._format_freshness("invalid-date", now)
+
+    assert result is None
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# V1-RC1: list_places end-to-end reason/freshness 바인딩 검증
+# ─────────────────────────────────────────────────────────────────────────
+
+
+def test_list_places_db_path_binds_reason_and_honest_none_freshness(monkeypatch) -> None:
+    # DB payload shape: db_repository.fetch_places does NOT return updated_at,
+    # so freshness must degrade to honest None (never fabricated). reason is
+    # derived from real signals (category + open hours + proximity + source).
+    monkeypatch.setattr(places_service, "get_settings", lambda: _fake_settings())
+    _patch_weather(monkeypatch, outdoor_status="good")
+    # attraction is open during day hours; near + non-canonical upstream source.
+    places = [
+        {
+            "place_id": "p1",
+            "name": "근처 명소",
+            "category": "attraction",
+            "distance_m": 300,
+            "source": "db",
+            "upstream_source": "tour_api",
+            "score": 0.9,
+        }
+    ]
+    _patch_db_fetch_places(monkeypatch, places=places)
+
+    result = places_service.list_places(
+        lat=37.5665,
+        lng=126.978,
+        radius_m=1000,
+        category="attraction",
+        language="ko",
+        include_scores=True,
+    )
+
+    place = result["places"][0]
+    # Reason derived from signals (운영중 + 근접 + 공식 데이터); weather good → no indoor line.
+    assert place["reason"] == "영업중 · 근접 · 공식 데이터"
+    # DB payload omits updated_at → honest None freshness (no fabrication).
+    assert place["freshness"] is None
+    # Score compatibility preserved.
+    assert place["score"] == 0.9
+
+
+def test_list_places_db_path_freshness_from_updated_at_when_present(monkeypatch) -> None:
+    # If a future payload carries updated_at, freshness is formatted truthfully.
+    monkeypatch.setattr(places_service, "get_settings", lambda: _fake_settings())
+    _patch_weather(monkeypatch, outdoor_status="good")
+    now = datetime.now(UTC)
+    recent = (now - timedelta(minutes=5)).isoformat()
+    places = [
+        {
+            "place_id": "p2",
+            "name": "방금 갱신된 장소",
+            "category": "event",
+            "distance_m": 200,
+            "source": "db",
+            "upstream_source": "tour_api",
+            "updated_at": recent,
+        }
+    ]
+    _patch_db_fetch_places(monkeypatch, places=places)
+
+    result = places_service.list_places(
+        lat=37.5665,
+        lng=126.978,
+        radius_m=1000,
+        category="event",
+        language="ko",
+    )
+
+    place = result["places"][0]
+    # ~5 minutes old → "N분 전".
+    assert place["freshness"] is not None
+    assert place["freshness"].endswith("분 전")

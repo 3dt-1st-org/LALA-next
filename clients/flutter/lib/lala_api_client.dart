@@ -1039,6 +1039,8 @@ class LalaPlace {
     this.isApproximateLocation,
     this.isIndoor,
     this.score,
+    this.reason,
+    this.freshness,
   });
 
   final String placeId;
@@ -1062,6 +1064,8 @@ class LalaPlace {
   final bool? isApproximateLocation;
   final bool? isIndoor;
   final LalaPlaceScore? score;
+  final String? reason;
+  final String? freshness;
 
   static LalaPlace fromJsonObject(Object? value) {
     return LalaPlace.fromJson(_asMap(value));
@@ -1092,6 +1096,8 @@ class LalaPlace {
       score: json['score'] is Map<String, dynamic>
           ? LalaPlaceScore.fromJson(_asMap(json['score']))
           : null,
+      reason: _asOptionalString(json['reason']),
+      freshness: _asOptionalString(json['freshness']),
     );
   }
 }

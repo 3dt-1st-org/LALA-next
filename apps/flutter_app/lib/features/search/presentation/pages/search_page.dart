@@ -784,15 +784,17 @@ class _SearchPlaceTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasImage = hasOfficialPlaceImage(place);
-    // 접근성(§13.5): 장소명/카테고리/거리/지역을 하나의 시맨틱 라벨로 합쳐 전달.
+    // 접근성(§13.5): 장소명/카테고리/거리/지역/reason을 하나의 시맨틱 라벨로 합쳐 전달.
     final name = placeDisplayName(place, language);
     final region = placeRegionLabel(place, language);
     final distance = place.distanceM > 0 ? '${place.distanceM}m' : null;
-    final semanticsLabel = <String>[
+    final reason = place.reason;
+    final semanticsLabel = [
       name,
       categoryFilterLabel(place.category, language),
       ?distance,
-      region,
+      if (region.isNotEmpty) region,
+      if (reason != null && reason.isNotEmpty) reason,
     ].join(', ');
     return Semantics(
       container: true,
@@ -836,6 +838,15 @@ class _SearchPlaceTile extends StatelessWidget {
                             fontWeight: FontWeight.w800,
                           ),
                         ),
+                      if (place.freshness != null && place.freshness!.isNotEmpty)
+                        Text(
+                          place.freshness!,
+                          style:
+                              Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: const Color(0xFF64748B),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -871,6 +882,25 @@ class _SearchPlaceTile extends StatelessWidget {
                       ),
                     ],
                   ),
+                  if (place.reason != null && place.reason!.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            place.reason!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: const Color(0xFF64748B),
+                              fontWeight: FontWeight.w600,
+                              height: 1.2,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
