@@ -157,21 +157,41 @@ class LalaApiClient {
     String category = 'all',
     String lang = 'ko',
     bool includeScores = false,
+    double? swLat,
+    double? swLng,
+    double? neLat,
+    double? neLng,
     String? requestId,
     Duration? timeout,
   }) async {
+    final query = <String, dynamic>{
+      'lat': '$lat',
+      'lng': '$lng',
+      'radius_m': '$radiusM',
+      'limit': '$limit',
+      'category': category,
+      'lang': lang,
+      'include_scores': '$includeScores',
+    };
+    // Optional viewport bounds (contract §7 D3). Omitted when null so the server
+    // falls back to the center+radius circle; the rectangle runs only when the
+    // PLACES_VIEWPORT_BOUNDS flag is on AND all four are sent.
+    if (swLat != null) {
+      query['sw_lat'] = '$swLat';
+    }
+    if (swLng != null) {
+      query['sw_lng'] = '$swLng';
+    }
+    if (neLat != null) {
+      query['ne_lat'] = '$neLat';
+    }
+    if (neLng != null) {
+      query['ne_lng'] = '$neLng';
+    }
     final resp = await _request(
       'GET',
       '/api/v1/places',
-      query: {
-        'lat': '$lat',
-        'lng': '$lng',
-        'radius_m': '$radiusM',
-        'limit': '$limit',
-        'category': category,
-        'lang': lang,
-        'include_scores': '$includeScores',
-      },
+      query: query,
       requestId: requestId,
       timeout: timeout ?? readTimeout,
     );

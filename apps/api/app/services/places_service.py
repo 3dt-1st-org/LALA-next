@@ -35,6 +35,10 @@ def list_places(
     radius_m: int,
     category: str,
     language: str,
+    sw_lat: float | None = None,
+    sw_lng: float | None = None,
+    ne_lat: float | None = None,
+    ne_lng: float | None = None,
     include_scores: bool = False,
     limit: int = 60,
 ) -> dict:
@@ -48,6 +52,32 @@ def list_places(
             message="category must be all|attraction|restaurant|event|culture_venue.",
             retryable=False,
         )
+    # Bounds (contract §3 / §7 D3): validated and echoed only while the flag is on.
+    # Flag-off ignores bounds entirely (B3: no 400, no echo, circle path) so a client
+    # may start sending bounds before the rollout flips without breaking.
+    # getattr: real Settings always carries feature_flags (config.py); the fallback
+    # only covers incomplete test doubles that omit it, keeping their behavior intact.
+    feature_flags = getattr(settings, "feature_flags", None) or {}
+    bounds_values = (sw_lat, sw_lng, ne_lat, ne_lng)
+    bounds_active = False
+    if bool(feature_flags.get("PLACES_VIEWPORT_BOUNDS", False)) and any(
+        value is not None for value in bounds_values
+    ):
+        if not all(value is not None for value in bounds_values):
+            raise ServiceError(
+                status_code=400,
+                code="INVALID_BOUNDS",
+                message="bounds must be all-or-none: sw_lat,sw_lng,ne_lat,ne_lng.",
+                retryable=False,
+            )
+        if sw_lat > ne_lat or sw_lng > ne_lng:
+            raise ServiceError(
+                status_code=400,
+                code="INVALID_BOUNDS",
+                message="bounds require sw_lat<=ne_lat and sw_lng<=ne_lng.",
+                retryable=False,
+            )
+        bounds_active = True
     try:
         db_places = db_repository.fetch_places(
             lat=lat,
@@ -55,6 +85,10 @@ def list_places(
             radius_m=radius_m,
             category=category,
             language=language,
+            sw_lat=sw_lat,
+            sw_lng=sw_lng,
+            ne_lat=ne_lat,
+            ne_lng=ne_lng,
             include_scores=include_scores,
             limit=limit,
         )
@@ -67,6 +101,24 @@ def list_places(
                 retryable=True,
             ) from exc
         db_places = []
+
+    # Single source for the /places query echo: the existing 7 keys always, plus
+    # the four optional bounds keys only while bounds mode is actually in effect
+    # (B3: flag-off or bounds-absent stays byte-for-byte today's shape).
+    query_echo = {
+        "lat": lat,
+        "lng": lng,
+        "radius_m": radius_m,
+        "category": category,
+        "language": language,
+        "include_scores": include_scores,
+        "limit": limit,
+    }
+    if bounds_active:
+        query_echo["sw_lat"] = sw_lat
+        query_echo["sw_lng"] = sw_lng
+        query_echo["ne_lat"] = ne_lat
+        query_echo["ne_lng"] = ne_lng
 
     # Collect current signals for reason/freshness derivation
     current_time = datetime.now(UTC)
@@ -96,15 +148,7 @@ def list_places(
         return {
             "count": len(enriched_places),
             "places": enriched_places,
-            "query": {
-                "lat": lat,
-                "lng": lng,
-                "radius_m": radius_m,
-                "category": category,
-                "language": language,
-                "include_scores": include_scores,
-                "limit": limit,
-            },
+            "query": query_echo,
             "source": "db",
             "location_engine": "postgis",
             # Honest absence: without a live DB max(updated_at) probe we must not
@@ -143,15 +187,7 @@ def list_places(
                 "places": enriched_public
                 if include_scores
                 else _places_without_scores(enriched_public),
-                "query": {
-                    "lat": lat,
-                    "lng": lng,
-                    "radius_m": radius_m,
-                    "category": category,
-                    "language": language,
-                    "include_scores": include_scores,
-                    "limit": limit,
-                },
+                "query": query_echo,
                 "source": public_mvp_data.SOURCE_NAME,
                 "location_engine": "static_snapshot",
                 # Truthful snapshot build timestamp (or honest None if absent).
@@ -161,15 +197,7 @@ def list_places(
     return {
         "count": 0,
         "places": [],
-        "query": {
-            "lat": lat,
-            "lng": lng,
-            "radius_m": radius_m,
-            "category": category,
-            "language": language,
-            "include_scores": include_scores,
-            "limit": limit,
-        },
+        "query": query_echo,
         "source": "db",
         "location_engine": "postgis" if settings.db_dsn else "none",
         # No results → no data-as-of (honest absence).

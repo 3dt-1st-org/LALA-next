@@ -188,10 +188,15 @@ def fetch_places(
     radius_m: int,
     category: str,
     language: str,
+    sw_lat: float | None = None,
+    sw_lng: float | None = None,
+    ne_lat: float | None = None,
+    ne_lng: float | None = None,
     include_scores: bool = False,
     limit: int = 60,
 ) -> list[dict[str, Any]]:
-    dsn = get_settings().db_dsn
+    settings = get_settings()
+    dsn = settings.db_dsn
     if not dsn:
         return []
     try:
@@ -200,11 +205,32 @@ def fetch_places(
     except Exception:
         raise DatabaseReadError("psycopg2_unavailable") from None
 
-    min_lat, max_lat, min_lng, max_lng = _coordinate_radius_bounds(
-        lat=lat,
-        lng=lng,
-        radius_m=radius_m,
+    # Bounds mode (contract §3 B1 / §7 D2): the viewport rectangle runs only when
+    # PLACES_VIEWPORT_BOUNDS is on AND all four corners are present. When the flag
+    # is off or bounds are absent, the existing center+radius circle runs unchanged
+    # (B2/B3). The service pre-validates sw<=ne before calling, so presence + flag
+    # is the only check here.
+    use_bounds = bool(settings.feature_flags.get("PLACES_VIEWPORT_BOUNDS", False)) and all(
+        value is not None for value in (sw_lat, sw_lng, ne_lat, ne_lng)
     )
+    if use_bounds:
+        # Rectangle = exact viewport corners; skip the center+radius bbox derivation.
+        min_lat, max_lat, min_lng, max_lng = sw_lat, ne_lat, sw_lng, ne_lng
+        circle_clause = ""
+    else:
+        min_lat, max_lat, min_lng, max_lng = _coordinate_radius_bounds(
+            lat=lat,
+            lng=lng,
+            radius_m=radius_m,
+        )
+        circle_clause = """
+              AND ST_DWithin(
+                    ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography,
+                    query_point.geog,
+                    %s
+              )
+        """
+
     score_projection = _place_score_projection(include_scores=include_scores)
     sql = f"""
         WITH query_point AS (
@@ -233,11 +259,7 @@ def fetch_places(
             WHERE (%s = 'all' OR category = %s)
               AND lat BETWEEN %s AND %s
               AND lng BETWEEN %s AND %s
-              AND ST_DWithin(
-                    ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography,
-                    query_point.geog,
-                    %s
-              )
+              {circle_clause}
         )
         , latest_scores AS (
             SELECT DISTINCT ON (score_snapshot.place_id)
@@ -310,7 +332,9 @@ def fetch_places(
         ORDER BY FLOOR(distance_m / 500.0) ASC, COALESCE(latest_scores.final_score, 0) DESC, distance_m ASC, updated_at DESC
         LIMIT %s
     """
-    params = (
+    # Bounds mode drops the radius_m SQL argument (the ST_DWithin circle is
+    # omitted), so the params tuple shrinks from 10 to 9 in that branch.
+    base_params = [
         lng,
         lat,
         category,
@@ -319,9 +343,11 @@ def fetch_places(
         max_lat,
         min_lng,
         max_lng,
-        radius_m,
-        max(1, min(limit, 100)),
-    )
+    ]
+    if use_bounds:
+        params = (*base_params, max(1, min(limit, 100)))
+    else:
+        params = (*base_params, radius_m, max(1, min(limit, 100)))
     try:
         with closing(psycopg2.connect(dsn, connect_timeout=3)) as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -333,7 +359,9 @@ def fetch_places(
     places: list[dict[str, Any]] = []
     for row in rows:
         distance_m = float(row.get("distance_m") or 0)
-        if distance_m > radius_m:
+        # Bounds mode (rectangle) is the exact filter — the circle overshoot gate
+        # would wrongly drop viewport-edge places, so it runs only on the circle path.
+        if not use_bounds and distance_m > radius_m:
             continue
         name = (
             row.get("name_en")
