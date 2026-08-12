@@ -6,16 +6,19 @@ import 'package:lala_next_app/features/home/home_view_helpers.dart';
 import 'package:lala_next_app/features/place/widgets/context_fact_chip.dart';
 
 class PlaceContextCard extends StatelessWidget {
-  const PlaceContextCard({super.key,
+  const PlaceContextCard({
+    super.key,
     required this.place,
     required this.language,
     required this.weather,
+    required this.source,
     required this.showEvidence,
   });
 
   final LalaPlace place;
   final String language;
   final LalaWeather? weather;
+  final String? source;
   final bool showEvidence;
 
   @override
@@ -24,6 +27,7 @@ class PlaceContextCard extends StatelessWidget {
       place: place,
       language: language,
       weather: weather,
+      source: source,
       includeEvidence: showEvidence,
     );
     return Container(
@@ -71,8 +75,7 @@ class PlaceContextCard extends StatelessWidget {
             runSpacing: 8,
             children: facts
                 .map(
-                  (fact) =>
-                      ContextFactChip(icon: fact.icon, label: fact.label),
+                  (fact) => ContextFactChip(icon: fact.icon, label: fact.label),
                 )
                 .toList(growable: false),
           ),

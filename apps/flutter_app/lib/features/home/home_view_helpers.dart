@@ -118,7 +118,8 @@ enum RecommendationFailureKind { unavailable, error }
 RecommendationFailureKind recommendationFailureKind(Object? failure) {
   if (failure is LalaApiException) {
     final code = failure.code;
-    final networkUnreachable = code == 'NETWORK_ERROR' ||
+    final networkUnreachable =
+        code == 'NETWORK_ERROR' ||
         code == 'REQUEST_TIMEOUT' ||
         failure.statusCode == 0;
     return networkUnreachable
@@ -318,8 +319,16 @@ LalaPlace? placeById(List<LalaPlace> places, String? placeId) {
 String placeContextTitle(String category, String language) {
   return switch (category) {
     'event' => lalaCopy(language, ko: '행사 맥락', en: 'Event context'),
-    'restaurant' => lalaCopy(language, ko: '맛집 로컬 맥락', en: 'Food local context'),
-    'culture_venue' => lalaCopy(language, ko: '문화 연계 맥락', en: 'Culture context'),
+    'restaurant' => lalaCopy(
+      language,
+      ko: '맛집 로컬 맥락',
+      en: 'Food local context',
+    ),
+    'culture_venue' => lalaCopy(
+      language,
+      ko: '문화 연계 맥락',
+      en: 'Culture context',
+    ),
     _ => lalaCopy(language, ko: '로컬 맥락', en: 'Local context'),
   };
 }
@@ -337,6 +346,7 @@ List<ContextFact> placeContextFacts({
   required LalaPlace place,
   required String language,
   required LalaWeather? weather,
+  required String? source,
   required bool includeEvidence,
 }) {
   final score = place.score;
@@ -402,25 +412,20 @@ List<ContextFact> placeContextFacts({
     );
   }
 
-  if (weather != null) {
-    // P1: 빈 온도는 '야외 상태 · -' 로 보이지 않도록 온도 파트를 생략한다.
-    final outdoor = outdoorLabel(weather.outdoorStatus, language: language);
-    final temp = temperatureLabelOrNull(weather.temp);
-    add(Icons.wb_cloudy_outlined, temp == null ? outdoor : '$outdoor · $temp');
+  // RC3: 날씨 요약·귀속은 독과 같은 SSOT(publicWeatherSummary)에서 한 쌍.
+  // placeholder/fallback 이면 둘 다 null → 날씨 칩과 날씨소스 칩이 함께 생략된다.
+  final weatherSummary = publicWeatherSummary(weather, language);
+  if (weatherSummary.summary != null) {
+    add(Icons.wb_cloudy_outlined, weatherSummary.summary);
+    add(Icons.cloud_outlined, weatherSummary.source);
   }
 
-  if (includeEvidence) {
-    add(
-      Icons.verified_outlined,
-      externalSourceLabel(
-            place.upstreamSource ?? features['primary_source'],
-            language: language,
-          ) ??
-          sourceLabel(place.source, language: language),
-    );
-  }
+  // RC3: 추천 소스는 showEvidence 와 무관한 일반 경로 정직 정보('-' 면 add 가 생략).
+  // 출처 provenance(externalSourceLabel)는 PublicDataProofRow 가 증거 경로에서 동일 SSOT 으로
+  // 더 자세히 보여주므로 카드에서는 위임(중복 제거) — §1a deep-proof 분리, D-Cap 노출로 드러난 중복.
+  add(Icons.bolt_outlined, sourceLabel(source, language: language));
 
-  return facts.take(5).toList(growable: false);
+  return facts.take(8).toList(growable: false);
 }
 
 bool isLiveSpeechEnabled(LalaReadiness? readiness) {
