@@ -9,10 +9,16 @@ from apps.api.app.core.errors import ServiceError
 from apps.api.app.services import places_service, weather_service
 
 
-def _fake_settings(*, static_snapshot_fallback: bool = False, db_dsn: str = ""):
+def _fake_settings(
+    *,
+    static_snapshot_fallback: bool = False,
+    db_dsn: str = "",
+    feature_flags: dict | None = None,
+):
     return SimpleNamespace(
         static_snapshot_fallback=static_snapshot_fallback,
         db_dsn=db_dsn,
+        feature_flags=feature_flags or {},
     )
 
 
@@ -1183,3 +1189,241 @@ def test_strip_internal_reason_inputs_is_idempotent_and_safe() -> None:
     # Idempotent: a second pass is a no-op (no KeyError on absent keys).
     places_service._strip_internal_reason_inputs(place)
     assert place == {"name": "x"}
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# V1 bounds query (Lane A) — service validation + query-echo gating
+# (contract §3 B1–B4 / §7 D3). Bounds are validated and echoed ONLY while the
+# PLACES_VIEWPORT_BOUNDS flag is on; flag-off ignores bounds entirely (B3: no
+# 400, no echo, circle path) so a client may send bounds before the rollout
+# flips without breaking. lat/lng/radius_m stay required (sort origin + fallback).
+# ─────────────────────────────────────────────────────────────────────────
+
+
+def test_list_places_echoes_bounds_when_flag_on_and_all_present(monkeypatch) -> None:
+    # B1: flag on + all four bounds -> echoed in `query` and threaded to the repo.
+    monkeypatch.setattr(
+        places_service,
+        "get_settings",
+        lambda: _fake_settings(feature_flags={"PLACES_VIEWPORT_BOUNDS": True}),
+    )
+    captured = _patch_db_fetch_places(monkeypatch, places=[{"name": "장소"}])
+
+    result = places_service.list_places(
+        lat=37.0,
+        lng=127.0,
+        radius_m=1000,
+        category="all",
+        language="ko",
+        sw_lat=36.5,
+        sw_lng=126.5,
+        ne_lat=37.5,
+        ne_lng=127.5,
+    )
+
+    query = result["query"]
+    assert query["sw_lat"] == 36.5
+    assert query["sw_lng"] == 126.5
+    assert query["ne_lat"] == 37.5
+    assert query["ne_lng"] == 127.5
+    # Existing echo keys preserved (lat/lng/radius_m remain the sort origin).
+    assert query["lat"] == 37.0
+    assert query["lng"] == 127.0
+    assert query["radius_m"] == 1000
+    # Threaded through to the repository.
+    assert captured[0]["sw_lat"] == 36.5
+    assert captured[0]["sw_lng"] == 126.5
+    assert captured[0]["ne_lat"] == 37.5
+    assert captured[0]["ne_lng"] == 127.5
+
+
+def test_list_places_omits_bounds_keys_when_flag_off(monkeypatch) -> None:
+    # B3: flag off + bounds sent -> NO echo, NO 400; query stays byte-for-byte
+    # today's shape. Bounds are still threaded (the repo gates the SQL shape).
+    monkeypatch.setattr(
+        places_service,
+        "get_settings",
+        lambda: _fake_settings(feature_flags={"PLACES_VIEWPORT_BOUNDS": False}),
+    )
+    _patch_db_fetch_places(monkeypatch, places=[{"name": "장소"}])
+
+    result = places_service.list_places(
+        lat=37.0,
+        lng=127.0,
+        radius_m=1000,
+        category="all",
+        language="ko",
+        sw_lat=36.5,
+        sw_lng=126.5,
+        ne_lat=37.5,
+        ne_lng=127.5,
+    )
+
+    query = result["query"]
+    assert "sw_lat" not in query
+    assert "sw_lng" not in query
+    assert "ne_lat" not in query
+    assert "ne_lng" not in query
+    assert set(query) == {
+        "lat",
+        "lng",
+        "radius_m",
+        "category",
+        "language",
+        "include_scores",
+        "limit",
+    }
+
+
+def test_list_places_omits_bounds_keys_when_bounds_absent(monkeypatch) -> None:
+    # B2: flag on + no bounds -> circle path; query has no bounds keys.
+    monkeypatch.setattr(
+        places_service,
+        "get_settings",
+        lambda: _fake_settings(feature_flags={"PLACES_VIEWPORT_BOUNDS": True}),
+    )
+    _patch_db_fetch_places(monkeypatch, places=[{"name": "장소"}])
+
+    result = places_service.list_places(
+        lat=37.0, lng=127.0, radius_m=1000, category="all", language="ko"
+    )
+
+    query = result["query"]
+    assert "sw_lat" not in query
+    assert "ne_lat" not in query
+    assert set(query) == {
+        "lat",
+        "lng",
+        "radius_m",
+        "category",
+        "language",
+        "include_scores",
+        "limit",
+    }
+
+
+def test_list_places_bounds_empty_rectangle_returns_honest_empty(monkeypatch) -> None:
+    # B4: flag on + bounds + no places in viewport -> count 0, places [], no
+    # fabrication; bounds are still echoed (the rectangle was the actual query).
+    monkeypatch.setattr(
+        places_service,
+        "get_settings",
+        lambda: _fake_settings(feature_flags={"PLACES_VIEWPORT_BOUNDS": True}),
+    )
+    _patch_db_fetch_places(monkeypatch, places=[])
+
+    result = places_service.list_places(
+        lat=37.0,
+        lng=127.0,
+        radius_m=1000,
+        category="all",
+        language="ko",
+        sw_lat=36.5,
+        sw_lng=126.5,
+        ne_lat=37.5,
+        ne_lng=127.5,
+    )
+
+    assert result["count"] == 0
+    assert result["places"] == []
+    assert result["query"]["sw_lat"] == 36.5
+
+
+@pytest.mark.parametrize(
+    ("sw_lat", "sw_lng", "ne_lat", "ne_lng"),
+    [
+        (36.5, 126.5, None, 127.5),
+        (36.5, 126.5, 37.5, None),
+        (None, 126.5, 37.5, 127.5),
+        (36.5, None, 37.5, 127.5),
+    ],
+)
+def test_list_places_rejects_partial_bounds(
+    sw_lat, sw_lng, ne_lat, ne_lng, monkeypatch
+) -> None:
+    # All-or-none: any-but-not-all -> 400 INVALID_BOUNDS (flag on).
+    monkeypatch.setattr(
+        places_service,
+        "get_settings",
+        lambda: _fake_settings(feature_flags={"PLACES_VIEWPORT_BOUNDS": True}),
+    )
+    _patch_db_fetch_places(monkeypatch, places=[])
+
+    with pytest.raises(ServiceError) as exc_info:
+        places_service.list_places(
+            lat=37.0,
+            lng=127.0,
+            radius_m=1000,
+            category="all",
+            language="ko",
+            sw_lat=sw_lat,
+            sw_lng=sw_lng,
+            ne_lat=ne_lat,
+            ne_lng=ne_lng,
+        )
+
+    err = exc_info.value
+    assert err.status_code == 400
+    assert err.code == "INVALID_BOUNDS"
+    assert err.retryable is False
+
+
+@pytest.mark.parametrize(
+    ("sw_lat", "sw_lng", "ne_lat", "ne_lng"),
+    [
+        (37.5, 126.5, 36.5, 127.5),  # sw_lat > ne_lat
+        (36.5, 127.5, 37.5, 126.5),  # sw_lng > ne_lng
+    ],
+)
+def test_list_places_rejects_inverted_bounds(
+    sw_lat, sw_lng, ne_lat, ne_lng, monkeypatch
+) -> None:
+    # sw<=ne violation -> 400 INVALID_BOUNDS (flag on).
+    monkeypatch.setattr(
+        places_service,
+        "get_settings",
+        lambda: _fake_settings(feature_flags={"PLACES_VIEWPORT_BOUNDS": True}),
+    )
+    _patch_db_fetch_places(monkeypatch, places=[])
+
+    with pytest.raises(ServiceError) as exc_info:
+        places_service.list_places(
+            lat=37.0,
+            lng=127.0,
+            radius_m=1000,
+            category="all",
+            language="ko",
+            sw_lat=sw_lat,
+            sw_lng=sw_lng,
+            ne_lat=ne_lat,
+            ne_lng=ne_lng,
+        )
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.code == "INVALID_BOUNDS"
+
+
+def test_list_places_malformed_bounds_ignored_when_flag_off(monkeypatch) -> None:
+    # B3 forward-compat: flag off + partial/inverted bounds -> ignored entirely
+    # (no 400); validation only runs while the flag is on.
+    monkeypatch.setattr(
+        places_service,
+        "get_settings",
+        lambda: _fake_settings(feature_flags={"PLACES_VIEWPORT_BOUNDS": False}),
+    )
+    _patch_db_fetch_places(monkeypatch, places=[{"name": "장소"}])
+
+    result = places_service.list_places(
+        lat=37.0,
+        lng=127.0,
+        radius_m=1000,
+        category="all",
+        language="ko",
+        sw_lat=99.0,
+        sw_lng=None,
+        ne_lat=-99.0,
+        ne_lng=None,
+    )
+
+    assert result["count"] == 1
+    assert "sw_lat" not in result["query"]

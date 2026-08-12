@@ -955,3 +955,119 @@ def test_has_linked_event_does_not_widen_event_field_category_guard(monkeypatch)
     # The new internal has_linked_event is projected for ALL categories: its line carries no
     # `ranked_places.category = 'event'` predicate (distinct from the gated event_* CASEs).
     assert "(linked_event.place_id IS NOT NULL) AS _has_linked_event" in sql
+
+
+# ---------------------------------------------------------------------------
+# V1 bounds query (Lane A) — viewport rectangle behind PLACES_VIEWPORT_BOUNDS.
+# The rectangle reuses the existing lat/lng BETWEEN prefilter, re-sourced from
+# the SW/NE corners, and DROPS the ST_DWithin circle + post-fetch radius gate
+# (contract §3 B1 / §7 D2). Flag-off / bounds-absent keeps the circle path
+# byte-for-byte (B2/B3).
+# ---------------------------------------------------------------------------
+
+
+def test_fetch_places_bounds_branch_drops_circle_when_flag_on(monkeypatch):
+    # B1: flag on + all four bounds -> rectangle SQL (no ST_DWithin); 9 params
+    # (radius_m dropped from the param list); min/max sourced directly from SW/NE.
+    captured = _install_fake_places_db(monkeypatch, [_place_row()])
+    monkeypatch.setenv("LALA_PLACES_VIEWPORT_BOUNDS", "true")
+
+    db_repository.fetch_places(
+        lat=37.0,
+        lng=127.0,
+        radius_m=3000,
+        category="all",
+        language="ko",
+        sw_lat=36.5,
+        sw_lng=126.5,
+        ne_lat=37.5,
+        ne_lng=127.5,
+    )
+
+    sql = captured["sql"]
+    params = captured["params"]
+    # Rectangle prefilter retained; circle predicate dropped.
+    assert "AND lat BETWEEN %s AND %s" in sql
+    assert "AND lng BETWEEN %s AND %s" in sql
+    assert "ST_DWithin(" not in sql
+    # ORDER BY / LIMIT unchanged (contract §6: cost ≤ today, cap preserved).
+    assert "ORDER BY FLOOR(distance_m / 500.0) ASC" in sql
+    assert "LIMIT %s" in sql
+    # 9 params (radius_m absent); SW/NE feed the BETWEEN corners directly.
+    assert len(params) == 9
+    assert params[:4] == (127.0, 37.0, "all", "all")
+    assert params[4:8] == (36.5, 37.5, 126.5, 127.5)
+    assert params[-1] == 60
+
+
+def test_fetch_places_bounds_branch_keeps_circle_when_flag_off(monkeypatch):
+    # B3: flag off + bounds sent -> bounds IGNORED, the existing circle SQL runs.
+    captured = _install_fake_places_db(monkeypatch, [_place_row()])
+    monkeypatch.setenv("LALA_PLACES_VIEWPORT_BOUNDS", "false")
+
+    db_repository.fetch_places(
+        lat=37.0,
+        lng=127.0,
+        radius_m=3000,
+        category="all",
+        language="ko",
+        sw_lat=36.5,
+        sw_lng=126.5,
+        ne_lat=37.5,
+        ne_lng=127.5,
+    )
+
+    # Identical to the pre-change circle path: ST_DWithin present, 10 params
+    # (radius_m + limit tail), bbox still from _coordinate_radius_bounds.
+    assert "ST_DWithin(" in captured["sql"]
+    assert len(captured["params"]) == 10
+    assert captured["params"][-2:] == (3000, 60)
+
+
+def test_fetch_places_bounds_branch_keeps_circle_when_bounds_absent(monkeypatch):
+    # B2: flag on + no bounds -> circle path UNCHANGED.
+    captured = _install_fake_places_db(monkeypatch, [_place_row()])
+    monkeypatch.setenv("LALA_PLACES_VIEWPORT_BOUNDS", "true")
+
+    db_repository.fetch_places(
+        lat=37.0, lng=127.0, radius_m=3000, category="all", language="ko"
+    )
+
+    assert "ST_DWithin(" in captured["sql"]
+    assert len(captured["params"]) == 10
+    assert captured["params"][-2:] == (3000, 60)
+
+
+def test_fetch_places_bounds_branch_skips_radius_overshoot_gate(monkeypatch):
+    # D2: in bounds mode a place farther than radius_m is NOT dropped (the
+    # rectangle is the exact filter); the circle path still drops it post-fetch.
+    far_row = _place_row(place_id="far", distance_m=9_000.0)  # > radius_m (3000)
+    captured = _install_fake_places_db(monkeypatch, [far_row])
+
+    # Bounds mode: retained despite distance_m > radius_m.
+    monkeypatch.setenv("LALA_PLACES_VIEWPORT_BOUNDS", "true")
+    places = db_repository.fetch_places(
+        lat=37.0,
+        lng=127.0,
+        radius_m=3000,
+        category="all",
+        language="ko",
+        sw_lat=36.0,
+        sw_lng=126.0,
+        ne_lat=38.0,
+        ne_lng=128.0,
+    )
+    assert any(p["place_id"] == "far" for p in places)
+    assert "ST_DWithin(" not in captured["sql"]
+
+    # Circle mode: the post-fetch `distance_m > radius_m` gate drops the far row.
+    monkeypatch.setenv("LALA_PLACES_VIEWPORT_BOUNDS", "false")
+    places_circle = db_repository.fetch_places(
+        lat=37.0,
+        lng=127.0,
+        radius_m=3000,
+        category="all",
+        language="ko",
+    )
+    assert all(p["place_id"] != "far" for p in places_circle)
+    assert "ST_DWithin(" in captured["sql"]
