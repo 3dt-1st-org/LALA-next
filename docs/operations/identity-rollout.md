@@ -4,8 +4,9 @@ Wave 1 still protects `/api/v1/*` with static transition credentials:
 `API_BEARER_TOKEN` or `IOS_API_KEY`. OAuth/Entra configuration can also be
 planned, surfaced in readiness, and used for signed RS256 JWT validation when
 the issuer, audience, JWKS URL, and required scopes are configured. Flutter
-token acquisition and static credential retirement remain later approval-gated
-work.
+token acquisition via the Logto dart SDK is implemented (merged PRs e9abd91,
+c701b99, e9a3566); static credential retirement and external activation remain
+approval-gated work.
 
 Generate the non-mutating plan:
 
@@ -24,14 +25,38 @@ for:
 - Entra API app registration naming.
 - Delegated API scope review.
 - Flutter public client app registration review.
-- LALA-next Key Vault secret names for OAuth configuration.
+- OAuth/Logto secret names (AWS Secrets Manager in operational profiles; Azure
+  Key Vault in local/ci).
 - Static-plus-OAuth transition smoke checks.
-- Static auth retirement only after JWT validation, Flutter token acquisition,
-  and rollback are approved.
+- Static auth retirement only after JWT validation, Logto SDK token
+  acquisition is activated for the rollout build, and rollback are approved.
 
-## Key Vault Boundary
+## OAuth Secret Boundary
 
-OAuth rollout configuration belongs in `lala-key-vault`:
+In operational profiles (`api`/`worker`), OAuth/Logto secrets resolve from
+**AWS Secrets Manager** with secret ids prefixed `lala-next/`
+(e.g. `lala-next/logto-endpoint`, `lala-next/logto-api-audience`). The API reads
+them fail-closed via `resolve_runtime_secret(..., key_vault_loader=None)` — there
+is **no Key Vault fallback** in `api`/`worker` profiles. Azure Key Vault
+(`lala-key-vault`) is a `local`/`ci`-only developer fallback, per the
+`_env_or_secret` profile branching in `config.py`; it is **not** the operational
+secret source.
+
+The authoritative identity is Logto-derived: `LOGTO_ENDPOINT` +
+`LOGTO_API_AUDIENCE` make the API derive the issuer (`<endpoint>/oidc`) and JWKS
+URL (`<endpoint>/oidc/jwks`) via `derive_logto_oidc_urls`, so
+issuer/audience/JWKS are NOT separately registered. The Logto secret ids below
+are the AWS Secrets Manager secret names used in operational profiles:
+
+- `logto-endpoint` (authoritative; issuer + JWKS are derived from it)
+- `logto-api-audience` (authoritative)
+- `logto-management-endpoint` (optional; falls back to `logto-endpoint`)
+- Flutter client identifiers + redirect URIs (`LOGTO_WEB_APP_ID` /
+  `LOGTO_NATIVE_APP_ID`), configured via dart-defines / build config rather than
+  the API secret store.
+
+Legacy `oauth-*` secrets remain available as a fallback only when the Logto
+endpoint is not set:
 
 - `oauth-issuer`
 - `oauth-audience`
@@ -65,8 +90,8 @@ configuration to validate presented bearer JWTs. In `oauth-configured` mode,
 `/api/v1/*` requires a valid signed JWT with all required scopes.
 
 During the transition window, keep `API_BEARER_TOKEN` or `IOS_API_KEY`
-available until Flutter token acquisition has been implemented and rollback has
-been approved.
+available until the Logto SDK token acquisition path has been activated for the
+rollout build and rollback has been approved.
 
 For operator smoke with an already-issued OAuth/Entra token, set
 `LALA_SMOKE_BEARER_TOKEN` in the smoke-shell environment. Do not reuse
@@ -81,7 +106,7 @@ local-only test keys and a local JWKS server.
 
 - Do not create Entra registrations without owner approval.
 - Do not add Flutter client secrets; Flutter is a public client.
-- Do not remove static credentials until API JWT validation, Flutter token
-  acquisition, smoke tests, and rollback are approved together.
+- Do not remove static credentials until API JWT validation, activated Logto
+  SDK token acquisition, smoke tests, and rollback are approved together.
 - Do not commit tenant IDs, client IDs tied to private environments, tokens, or
   screenshots containing credentials.
