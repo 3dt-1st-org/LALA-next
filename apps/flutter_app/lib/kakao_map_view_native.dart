@@ -166,15 +166,9 @@ class _KakaoMapNativeWebViewState extends State<_KakaoMapNativeWebView> {
       decoded = null;
     }
     if (decoded is Map<String, dynamic>) {
-      if (decoded['type'] == 'cameraIdle') {
-        final lat = _asDouble(decoded['lat']);
-        final lng = _asDouble(decoded['lng']);
-        final level = _asInt(decoded['level']);
-        if (lat != null && lng != null && level != null) {
-          widget.onCameraIdle?.call(
-            KakaoMapCamera(lat: lat, lng: lng, level: level),
-          );
-        }
+      final camera = decodeKakaoCameraIdlePayload(decoded);
+      if (camera != null) {
+        widget.onCameraIdle?.call(camera);
         return;
       }
       final placeId = decoded['placeId']?.toString().trim();
@@ -184,23 +178,6 @@ class _KakaoMapNativeWebViewState extends State<_KakaoMapNativeWebView> {
       return;
     }
     widget.onPlaceTap?.call(trimmed);
-  }
-
-  double? _asDouble(Object? value) {
-    if (value is num) {
-      return value.toDouble();
-    }
-    return double.tryParse(value?.toString() ?? '');
-  }
-
-  int? _asInt(Object? value) {
-    if (value is int) {
-      return value;
-    }
-    if (value is num) {
-      return value.round();
-    }
-    return int.tryParse(value?.toString() ?? '');
   }
 }
 

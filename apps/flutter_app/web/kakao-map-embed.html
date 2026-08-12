@@ -169,13 +169,38 @@
 
           function postCameraIdle() {
             const nextCenter = map.getCenter();
+            // V1 bounds-query (D4): the map's getBounds() is the SSOT for the
+            // viewport rectangle. Guarded — if the Kakao binding is unavailable
+            // the four fields are omitted and the Dart side falls back to the
+            // existing center+radius circle (state B2).
+            var bounds = null;
+            if (typeof map.getBounds === "function") {
+              try {
+                var b = map.getBounds();
+                bounds = {
+                  swLat: b.getSouthWest().getLat(),
+                  swLng: b.getSouthWest().getLng(),
+                  neLat: b.getNorthEast().getLat(),
+                  neLng: b.getNorthEast().getLng()
+                };
+              } catch (e) {
+                bounds = null;
+              }
+            }
             if (window.LalaMap && window.LalaMap.postMessage) {
-              window.LalaMap.postMessage(JSON.stringify({
+              var payload = {
                 type: "cameraIdle",
                 lat: nextCenter.getLat(),
                 lng: nextCenter.getLng(),
                 level: map.getLevel()
-              }));
+              };
+              if (bounds) {
+                payload.sw_lat = bounds.swLat;
+                payload.sw_lng = bounds.swLng;
+                payload.ne_lat = bounds.neLat;
+                payload.ne_lng = bounds.neLng;
+              }
+              window.LalaMap.postMessage(JSON.stringify(payload));
             }
           }
 
