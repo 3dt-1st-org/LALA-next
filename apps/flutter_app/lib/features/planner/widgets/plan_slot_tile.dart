@@ -32,6 +32,12 @@ class PlanSlotTile extends StatelessWidget {
     final subtitle = place == null ? null : placeRegionLabel(place, language);
     final weatherHint = singleLanguageText(slot.weatherHint ?? '', language);
     final detail = planSlotDetail(slot, language);
+    final travelTimeLabel = planSlotTravelTimeLabel(slot, language);
+    final estimatedHoursLabel = planSlotEstimatedHoursLabel(slot, language);
+    final metaEntries = <String>[
+      ?travelTimeLabel,
+      ?estimatedHoursLabel,
+    ];
     return Material(
       color: const Color(0xFFF8FAFC),
       borderRadius: BorderRadius.circular(12),
@@ -172,6 +178,26 @@ class PlanSlotTile extends StatelessWidget {
                   ),
                 ),
               ],
+              if (metaEntries.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Semantics(
+                  container: true,
+                  label: metaEntries.join(', '),
+                  child: Padding(
+                    // Keep the meta row clear of the 44dp tap target below/above.
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        for (final entry in metaEntries)
+                          _PlanSlotMetaChip(text: entry),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
               if (place != null) ...[
                 const SizedBox(height: 7),
                 Align(
@@ -185,6 +211,36 @@ class PlanSlotTile extends StatelessWidget {
               ],
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 일정 슬롯 부가 메타(도보 이동시간 / 추정 운영시간)용 컴팩트 칩.
+/// 기존 타일의 slate 토큰(배경/보더/텍스트 색)만 재사용하고 새 토큰을 만들지 않는다.
+/// §12.3: 추정 운영시간은 authority 가 아니므로 항상 (추정)/(est.) 마커와 함께 표시.
+class _PlanSlotMetaChip extends StatelessWidget {
+  const _PlanSlotMetaChip({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: const Color(0xFF475569),
+          fontWeight: FontWeight.w700,
         ),
       ),
     );

@@ -78,6 +78,37 @@ String? planSlotDetail(LalaPlanSlot slot, String language) {
   return detail;
 }
 
+/// 이전 슬롯으로부터의 도보 이동 시간(분) 라인.
+/// §12.3: travel_time_from_previous_minutes 는 null(첫 슬롯/장소 없음)이면 표시하지
+/// 않는다. Haversine 기반 추정값이므로 별도의 "추정" 마커 없이 도보 N분 / N min walk.
+String? planSlotTravelTimeLabel(LalaPlanSlot slot, String language) {
+  final minutes = slot.travelTimeFromPreviousMinutes;
+  if (minutes == null || minutes < 0) {
+    return null;
+  }
+  return lalaCopy(
+    language,
+    ko: '도보 $minutes분',
+    en: '$minutes min walk',
+  );
+}
+
+/// 카테고리 기반 추정 운영시간 라인.
+/// §12.3: estimated_opening_hours 는 authority 가 아닌 추정값이므로 항상 (추정)/(est.)
+/// 마커를 붙인다. null(장소 없음)이면 표시하지 않는다. opening_hours_valid 는 authority
+/// 부재 시 null 이므로 authoritative 하게 표시하지 않는다.
+String? planSlotEstimatedHoursLabel(LalaPlanSlot slot, String language) {
+  final hours = slot.estimatedOpeningHours;
+  if (hours == null || hours.trim().isEmpty) {
+    return null;
+  }
+  return lalaCopy(
+    language,
+    ko: '영업 $hours (추정)',
+    en: 'Open $hours (est.)',
+  );
+}
+
 /// 시간대 라벨(C3 추출 — main.dart 의 _periodLabel).
 String periodLabel(String period, {String language = 'ko'}) {
   final normalized = period.trim().toLowerCase();
