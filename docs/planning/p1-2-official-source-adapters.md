@@ -20,9 +20,9 @@ persist, seed, publish, or expose real source data.
 - Canonical SQL remains the 13-file baseline ending at
   `063_local_signals_contract.sql`; this PR adds no migration.
 
-### DRAFT_PR
+### IMPLEMENTED_NOT_RUNTIME_VERIFIED
 
-`official_source_adapters.py` defines one typed
+Merged PR #81 (head 3fd52b5). `official_source_adapters.py` defines one typed
 `normalize_official_source_fixture` contract and maps these registered source
 names to existing pure parsers and domain models:
 

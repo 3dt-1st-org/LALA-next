@@ -87,7 +87,7 @@ fixtures are not seeds, startup data, API responses, or normal user-flow data.
 
 | Area | Status | Evidence or next condition |
 |---|---|---|
-| P1-1 offline inventory/report contract | `DRAFT_PR` | This branch and its focused tests/docs; no runtime path |
+| P1-1 offline inventory/report contract | `IMPLEMENTED_NOT_RUNTIME_VERIFIED` | Merged PR #80 (head a96a0b6); code/tests present, real runtime path not verified |
 | Nationwide official inventory | `TARGET` | Requires accepted source governance, data access, cursor, and coverage policy |
 | Live official ingestion | `BLOCKED_EXTERNAL` | Requires terms/license, retention, image rights, owner, and explicitly authorized execution |
 | Canonical SQL change | `CURRENT` | No migration was needed; 063 baseline remains unchanged |
