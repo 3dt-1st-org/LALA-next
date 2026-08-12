@@ -1363,6 +1363,7 @@ class LalaPlanSlot {
     this.startTime,
     this.stayDurationMinutes,
     this.travelTimeFromPreviousMinutes,
+    this.estimatedOpeningHours,
     this.openingHoursValid,
     this.indoorOutdoor,
     this.recommendationReason,
@@ -1382,6 +1383,9 @@ class LalaPlanSlot {
   final String? startTime;
   final int? stayDurationMinutes;
   final int? travelTimeFromPreviousMinutes;
+  // Category-based estimate (e.g. "09:00-18:00") from the planner; NOT
+  // authoritative hours — the UI must always show the "(추정)/(est.)" marker.
+  final String? estimatedOpeningHours;
   final bool? openingHoursValid;
   final String? indoorOutdoor;
   final String? recommendationReason;
@@ -1406,6 +1410,9 @@ class LalaPlanSlot {
       stayDurationMinutes: _asOptionalInt(json['stay_duration_minutes']),
       travelTimeFromPreviousMinutes: _asOptionalInt(
         json['travel_time_from_previous_minutes'],
+      ),
+      estimatedOpeningHours: _asOptionalString(
+        json['estimated_opening_hours'],
       ),
       openingHoursValid: _asOptionalBool(json['opening_hours_valid']),
       indoorOutdoor: _asOptionalString(json['indoor_outdoor']),
