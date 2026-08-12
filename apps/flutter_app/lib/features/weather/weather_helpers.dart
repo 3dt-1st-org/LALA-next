@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import '../../shared/l10n/lala_copy.dart';
+import '../../shared/l10n/place_labels.dart';
+import '../../shared/labels/dust_label.dart';
 import '../../shared/labels/source_label.dart';
 import 'widgets/weather_forecast_chart_painter.dart';
 
@@ -35,6 +37,32 @@ String? temperatureLabelOrNull(String value) {
 
 /// 하위 호환 포매터. 빈 값은 '-' 폴백(표시용 caller 는 temperatureLabelOrNull 사용).
 String temperatureLabel(String value) => temperatureLabelOrNull(value) ?? '-';
+
+/// V1-RC3: 독·상세가 공유하는 날씨 요약 SSOT. placeholder/fallback 은
+/// publicWeatherOrNull 에서 이미 null 처리되어 여기엔 실측값만 들어온다.
+/// summary 가 비면 source 도 null — 값 없는 귀속 표시는 오해를 끼쳐서 한 쌍으로 둔다.
+({String? summary, String? source}) publicWeatherSummary(
+  LalaWeather? weather,
+  String language,
+) {
+  final data = publicWeatherOrNull(weather);
+  if (data == null) return (summary: null, source: null);
+
+  final outdoor = outdoorLabel(data.outdoorStatus, language: language).trim();
+  final temp = temperatureLabelOrNull(data.temp);
+  final dust = weatherPillDustLabel(data.dust, language).trim();
+  final summary = [
+    if (outdoor.isNotEmpty) outdoor,
+    ?temp,
+    if (dust.isNotEmpty) dust,
+  ].join(' · ');
+  if (summary.isEmpty) return (summary: null, source: null);
+
+  return (
+    summary: summary,
+    source: weatherSourceLabel(data.source, language: language),
+  );
+}
 
 double? _temperatureValue(String value) {
   final match = RegExp(r'-?\d+(?:\.\d+)?').firstMatch(value.trim());
