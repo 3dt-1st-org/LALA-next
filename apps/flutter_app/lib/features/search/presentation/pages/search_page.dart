@@ -18,6 +18,7 @@ import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/features/place/place_helpers.dart';
 import 'package:lala_next_app/features/place/widgets/category_badge.dart';
 import 'package:lala_next_app/features/place/widgets/empty_place_state.dart';
+import 'package:lala_next_app/features/place/widgets/place_reason_freshness.dart';
 import 'package:lala_next_app/features/place/widgets/place_thumb.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 import 'package:lala_next_app/shared/l10n/place_labels.dart';
@@ -259,7 +260,8 @@ class _SearchPageState extends State<SearchPage> {
   _SearchLoadStatus _searchFailureStatus(Object failure) {
     if (failure is LalaApiException) {
       final code = failure.code;
-      final networkUnreachable = code == 'NETWORK_ERROR' ||
+      final networkUnreachable =
+          code == 'NETWORK_ERROR' ||
           code == 'REQUEST_TIMEOUT' ||
           failure.statusCode == 0;
       return networkUnreachable
@@ -273,15 +275,15 @@ class _SearchPageState extends State<SearchPage> {
   String _failureCopy(_SearchLoadStatus status) {
     return switch (status) {
       _SearchLoadStatus.unavailable => lalaCopy(
-          _language,
-          ko: '일시적으로 서버에 연결할 수 없어요. 네트워크를 확인 후 다시 시도해 주세요.',
-          en: 'Could not reach the service. Check your connection and try again.',
-        ),
+        _language,
+        ko: '일시적으로 서버에 연결할 수 없어요. 네트워크를 확인 후 다시 시도해 주세요.',
+        en: 'Could not reach the service. Check your connection and try again.',
+      ),
       _SearchLoadStatus.error => lalaCopy(
-          _language,
-          ko: '추천 장소를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.',
-          en: 'Could not load recommendations. Please try again shortly.',
-        ),
+        _language,
+        ko: '추천 장소를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.',
+        en: 'Could not load recommendations. Please try again shortly.',
+      ),
       _SearchLoadStatus.loading ||
       _SearchLoadStatus.loaded ||
       _SearchLoadStatus.empty => '',
@@ -371,10 +373,7 @@ class _SearchPageState extends State<SearchPage> {
           },
         );
       case _SearchLoadStatus.loaded:
-        return _SearchResultsView(
-          places: _visiblePlaces,
-          language: _language,
-        );
+        return _SearchResultsView(places: _visiblePlaces, language: _language);
     }
   }
 }
@@ -613,17 +612,17 @@ class _SearchFailureView extends StatelessWidget {
   Widget build(BuildContext context) {
     final isUnavailable = kind == _SearchFailureKind.unavailable;
     // 아이콘과 색상을 함께 써 색상 단독 신호를 피한다.
-    final icon =
-        isUnavailable ? Icons.wifi_off_rounded : Icons.error_outline_rounded;
-    final accent =
-        isUnavailable ? const Color(0xFF475569) : const Color(0xFFB45309);
+    final icon = isUnavailable
+        ? Icons.wifi_off_rounded
+        : Icons.error_outline_rounded;
+    final accent = isUnavailable
+        ? const Color(0xFF475569)
+        : const Color(0xFFB45309);
     final retryLabel = lalaCopy(language, ko: '재시도', en: 'Retry');
     // 시맨틱: 화면 읽기 사용자에게 상태 종류까지 전달.
     final semanticsLabel = lalaCopy(
       language,
-      ko: isUnavailable
-          ? '서버 연결 불가. $message'
-          : '추천 불러오기 실패. $message',
+      ko: isUnavailable ? '서버 연결 불가. $message' : '추천 불러오기 실패. $message',
       en: isUnavailable
           ? 'Service unreachable. $message'
           : 'Failed to load recommendations. $message',
@@ -694,18 +693,16 @@ class _SearchEmptyView extends StatelessWidget {
       // "loading" or failure state. Copy is distinct from both the skeleton and
       // any failure message.
       ko: hasQuery ? '조건에 맞는 장소가 없어요.' : '이 주변엔 아직 추천이 없어요.',
-      en: hasQuery ? 'No places match your search.' : 'No recommendations here yet.',
+      en: hasQuery
+          ? 'No places match your search.'
+          : 'No recommendations here yet.',
     );
     final semanticsLabel = lalaCopy(
       language,
       ko: '빈 추천. $message',
       en: 'Empty recommendations. $message',
     );
-    final actionLabel = lalaCopy(
-      language,
-      ko: '필터 초기화',
-      en: 'Reset filters',
-    );
+    final actionLabel = lalaCopy(language, ko: '필터 초기화', en: 'Reset filters');
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -784,21 +781,13 @@ class _SearchPlaceTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasImage = hasOfficialPlaceImage(place);
-    // 접근성(§13.5): 장소명/카테고리/거리/지역/reason을 하나의 시맨틱 라벨로 합쳐 전달.
     final name = placeDisplayName(place, language);
     final region = placeRegionLabel(place, language);
-    final distance = place.distanceM > 0 ? '${place.distanceM}m' : null;
-    final reason = place.reason;
-    final semanticsLabel = [
-      name,
-      categoryFilterLabel(place.category, language),
-      ?distance,
-      if (region.isNotEmpty) region,
-      if (reason != null && reason.isNotEmpty) reason,
-    ].join(', ');
     return Semantics(
       container: true,
-      label: semanticsLabel,
+      // 접근성(§13.5): 장소명/카테고리/거리/지역/reason을 하나의 시맨틱 라벨로 합쳐 전달
+      // (placeCardSemanticsLabel SSOT — 다른 표면과 동일 문구 보증).
+      label: placeCardSemanticsLabel(place, language),
       child: Container(
         key: ValueKey('search-place-tile-${place.placeId}'),
         // 최소 44dp 터치 타겟 보장(내용이 짧아도 타일 전체 높이 하한선).
@@ -828,25 +817,22 @@ class _SearchPlaceTile extends StatelessWidget {
                     runSpacing: 6,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      CategoryBadge(category: place.category, language: language),
+                      CategoryBadge(
+                        category: place.category,
+                        language: language,
+                      ),
                       if (place.distanceM > 0)
                         Text(
                           '${place.distanceM}m',
-                          style:
-                              Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: const Color(0xFF64748B),
-                            fontWeight: FontWeight.w800,
-                          ),
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                color: const Color(0xFF64748B),
+                                fontWeight: FontWeight.w800,
+                              ),
                         ),
-                      if (place.freshness != null && place.freshness!.isNotEmpty)
-                        Text(
-                          place.freshness!,
-                          style:
-                              Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: const Color(0xFF64748B),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                      if (place.freshness != null &&
+                          place.freshness!.isNotEmpty)
+                        PlaceFreshnessText(place: place),
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -873,33 +859,18 @@ class _SearchPlaceTile extends StatelessWidget {
                           region,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: const Color(0xFF475569),
-                            fontWeight: FontWeight.w700,
-                          ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: const Color(0xFF475569),
+                                fontWeight: FontWeight.w700,
+                              ),
                         ),
                       ),
                     ],
                   ),
                   if (place.reason != null && place.reason!.isNotEmpty) ...[
                     const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            place.reason!,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: const Color(0xFF64748B),
-                              fontWeight: FontWeight.w600,
-                              height: 1.2,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                    PlaceReasonLine(place: place),
                   ],
                 ],
               ),

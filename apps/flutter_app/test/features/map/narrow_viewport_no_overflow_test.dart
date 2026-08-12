@@ -21,6 +21,8 @@ LalaPlace _longPlace({
   String region = '수원시팔달구매산로일가아주오래된긴동네이름입니다',
   String address = '경기도 수원시 팔달구 매산로1가 아주오래된긴주소이름동 건물층호',
   int distanceM = 1234,
+  String? reason,
+  String? freshness,
 }) {
   return LalaPlace(
     placeId: 'long-place',
@@ -35,6 +37,8 @@ LalaPlace _longPlace({
     imageUrl: 'https://tong.visitkorea.or.kr/cms/resource/x.jpg',
     regionKo: region,
     regionEn: region,
+    reason: reason,
+    freshness: freshness,
   );
 }
 
@@ -62,13 +66,14 @@ Future<void> _pumpAndCaptureOverflow(
     await tester.pumpAndSettle();
 
     // Assert no overflow errors
-    final overflowErrors = errors.where((e) =>
-      e.exceptionAsString().contains('overflowed')
+    final overflowErrors = errors.where(
+      (e) => e.exceptionAsString().contains('overflowed'),
     );
     expect(
       overflowErrors,
       isEmpty,
-      reason: 'RenderFlex overflow detected at ${viewportWidth.toInt()}dp viewport',
+      reason:
+          'RenderFlex overflow detected at ${viewportWidth.toInt()}dp viewport',
     );
   } finally {
     FlutterError.onError = originalOnError;
@@ -77,7 +82,9 @@ Future<void> _pumpAndCaptureOverflow(
 
 void main() {
   group('MapRailPlaceCard narrow viewport no overflow', () {
-    testWidgets('360dp with very long place name, region, address', (tester) async {
+    testWidgets('360dp with very long place name, region, address', (
+      tester,
+    ) async {
       await _pumpAndCaptureOverflow(
         tester,
         360,
@@ -106,6 +113,26 @@ void main() {
           ),
           language: 'ko',
           selected: true,
+          compact: true,
+        ),
+      );
+    });
+
+    // V1-RC2: 새로 바인딩된 reason 줄이 compact carousel card 에서 overflow 를
+    // 발생시키지 않는다(PlaceReasonLine 의 1줄 ellipsis).
+    testWidgets('360dp with long reason line does not overflow', (
+      tester,
+    ) async {
+      await _pumpAndCaptureOverflow(
+        tester,
+        360,
+        widget: MapRailPlaceCard(
+          place: _longPlace(
+            reason: '영업중 · 실내활동 적합 · 근접 · 공식 데이터 · 아주긴추가이유텍스트',
+            freshness: '방금 전',
+          ),
+          language: 'ko',
+          selected: false,
           compact: true,
         ),
       );
@@ -233,7 +260,10 @@ void main() {
         widget: SizedBox(
           width: 393,
           child: MapPlaceCarouselOverlay(
-            places: [_longPlace(), _longPlace(name: '또다른긴이름')],
+            places: [
+              _longPlace(),
+              _longPlace(name: '또다른긴이름'),
+            ],
             source: '긴출처',
             language: 'ko',
             selectedPlaceId: null,

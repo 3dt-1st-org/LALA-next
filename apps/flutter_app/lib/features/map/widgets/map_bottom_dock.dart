@@ -6,7 +6,9 @@ import '../../../shared/labels/source_label.dart';
 import '../../../shared/widgets/tiny_meta.dart';
 import '../../docent/widgets/dock_docent_preview.dart';
 import '../../home/home_view_helpers.dart';
+import '../../place/place_helpers.dart';
 import '../../place/widgets/category_badge.dart';
+import '../../place/widgets/place_reason_freshness.dart';
 import 'empty_dock_content.dart';
 
 /// 지도 하단 독(선택 장소 요약 + 도슨트 미리보기)(C3 추출 — main.dart 의 _MapBottomDock).
@@ -161,11 +163,17 @@ class MapBottomDock extends StatelessWidget {
                     TinyMeta(placeRegionLabel(currentPlace, uiLanguage)),
                     TinyMeta('${currentPlace.distanceM}m'),
                     TinyMeta(sourceLabel(source, language: uiLanguage)),
+                    // V1-RC2(D-2): per-place 신선도(장소 단위). 아래 _freshnessLabel 칩은
+                    // 데이터셋 기준(dataAsOf)으로 별개 — 이름/개념 다르게 유지.
+                    if (placeFreshnessText(currentPlace) case final String f)
+                      TinyMeta(f),
                     if (_freshnessLabel(dataAsOf, uiLanguage)
                         case final String label)
                       TinyMeta(label),
                   ],
                 ),
+                // V1-RC2: per-place reason(reason 없으면 PlaceReasonLine 이 렌더 생략 → 빈 공간 없음).
+                PlaceReasonLine(place: currentPlace, topSpacing: 8),
                 const SizedBox(height: 12),
                 DockDocentPreview(
                   place: currentPlace,

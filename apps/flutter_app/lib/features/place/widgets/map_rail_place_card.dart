@@ -5,12 +5,14 @@ import '../../../shared/l10n/lala_copy.dart';
 import '../../../shared/l10n/place_labels.dart';
 import '../place_helpers.dart';
 import 'place_image.dart';
+import 'place_reason_freshness.dart';
 
 /// 지도 레일용 장소 카드.
 // 모바일 비주얼 계약(20260728) §13.2 / 01 Map 추천 rail: 사진 중심 compact card.
-// card 내용 = 이름 · 지역 · 도보 거리 · category. 선택 시 카테고리색 1px 테두리 하나만.
-// 공식 이미지가 없으면 중성 빈 슬롯(임의 사진 금지). freshness 는 LalaPlace 에 필드가
-// 없어 honest-empty 로 생략한다(날짜를 발명하지 않는다).
+// card 내용 = 이름 · 지역 · 도보 거리 · category · reason. 선택 시 카테고리색 1px 테두리 하나.
+// 공식 이미지가 없으면 중성 빈 슬롯(임의 사진 금지). V1-RC2(D-1): reason 은 하단 오버레이
+// 1줄(PlaceReasonLine, 없으면 honest 생략). freshness 필드는 LalaPlace 에 존재하지만 compact
+// 공간 제약으로 여기선 생략 — 타일/독/상세헤더에서 동일 텍스트로 표시(날짜 발명 금지 유지).
 class MapRailPlaceCard extends StatelessWidget {
   const MapRailPlaceCard({
     super.key,
@@ -46,7 +48,8 @@ class MapRailPlaceCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         onTap: onTap,
         child: Semantics(
-          label: name,
+          // V1-RC2: 검색 타일과 동일 SSOT 라벨(장소명/카테고리/거리/지역/reason).
+          label: placeCardSemanticsLabel(place, language),
           selected: selected,
           button: onTap != null,
           child: Container(
@@ -140,6 +143,18 @@ class MapRailPlaceCard extends StatelessWidget {
                               '$region · $distance',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                height: 1.15,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            // V1-RC2(D-1): per-place reason, 같은 오버레이 스타일(흰색/10px/w600).
+                            // place.reason 이 null/빈이면 PlaceReasonLine 이 스스로 렌더하지 않는다.
+                            PlaceReasonLine(
+                              place: place,
+                              topSpacing: 2,
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 10,

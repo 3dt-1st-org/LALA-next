@@ -8,6 +8,7 @@ import '../../../shared/widgets/inline_icon_text.dart';
 import '../place_helpers.dart';
 import 'category_badge.dart';
 import 'place_image.dart';
+import 'place_reason_freshness.dart';
 
 /// 추천 장소 상세 헤더(C3 추출 — main.dart 의 _FeaturedPlaceHeader).
 class FeaturedPlaceHeader extends StatelessWidget {
@@ -103,6 +104,8 @@ class FeaturedPlaceHeader extends StatelessWidget {
               icon: Icons.directions_walk,
               label: '${place.distanceM}m',
             ),
+            // V1-RC2: per-place 신선도(텍스트만 — 검색 타일과 동일 스타일/원문).
+            PlaceFreshnessText(place: place),
             if (!showEvidence)
               InlineIconText(
                 icon: Icons.explore_outlined,
@@ -133,6 +136,8 @@ class FeaturedPlaceHeader extends StatelessWidget {
             ],
           ],
         ),
+        // V1-RC2: per-place reason(없으면 PlaceReasonLine 이 렌더 생략).
+        PlaceReasonLine(place: place, topSpacing: 8),
       ],
     );
   }

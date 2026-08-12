@@ -5,6 +5,7 @@ import '../../../shared/l10n/multi_language_text.dart';
 import '../../../shared/l10n/place_labels.dart';
 import '../place_helpers.dart';
 import 'category_badge.dart';
+import 'place_reason_freshness.dart';
 import 'place_thumb.dart';
 
 /// 추천 장소 가로 카드(C3 추출 — main.dart 의 _RecommendedPlaceCard).
@@ -52,15 +53,17 @@ class RecommendedPlaceCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    CategoryBadge(
-                      category: place.category,
-                      language: language,
-                    ),
+                    CategoryBadge(category: place.category, language: language),
                     const SizedBox(width: 8),
                     Text(
                       '${place.distanceM}m',
                       style: Theme.of(context).textTheme.labelSmall,
                     ),
+                    // V1-RC2: per-place 신선도(검색 타일과 동일 원문/스타일).
+                    if (placeFreshnessText(place) != null) ...[
+                      const SizedBox(width: 8),
+                      PlaceFreshnessText(place: place),
+                    ],
                   ],
                 ),
                 const SizedBox(height: 10),
@@ -82,6 +85,8 @@ class RecommendedPlaceCard extends StatelessWidget {
                     color: const Color(0xFF475569),
                   ),
                 ),
+                // V1-RC2: per-place reason(없으면 PlaceReasonLine 이 렌더 생략).
+                PlaceReasonLine(place: place, topSpacing: 6),
               ],
             ),
           ),
