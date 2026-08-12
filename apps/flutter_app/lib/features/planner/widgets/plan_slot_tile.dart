@@ -34,79 +34,103 @@ class PlanSlotTile extends StatelessWidget {
     final detail = planSlotDetail(slot, language);
     final travelTimeLabel = planSlotTravelTimeLabel(slot, language);
     final estimatedHoursLabel = planSlotEstimatedHoursLabel(slot, language);
+    final indoorOutdoorLabel = slot.indoorOutdoor == null
+        ? null
+        : (slot.indoorOutdoor == 'indoor'
+              ? (language == 'ko' ? '실내' : 'Indoor')
+              : (language == 'ko' ? '야외' : 'Outdoor'));
     final metaEntries = <String>[
       ?travelTimeLabel,
       ?estimatedHoursLabel,
     ];
-    return Material(
-      color: const Color(0xFFF8FAFC),
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        key: ValueKey('planner-slot-${place?.placeId ?? slot.period}'),
+    // 접근성(§13.5): 슬롯 메타(시간대/실내·야외/이동시간/추정시간)를 하나의
+    // 시맨틱 라벨로 합쳐 화면 읽기 사용자에게 전달. 색상 단독 신호를 피하기 위해
+    // 실내·야외는 아이콘+텍스트+라벨 삼중으로 표현한다.
+    final semanticsParts = <String>[
+      periodLabelText,
+      title,
+      ?subtitle,
+      ?indoorOutdoorLabel,
+      ?weatherHint,
+      ...metaEntries,
+    ];
+    return Semantics(
+      container: true,
+      button: place != null,
+      label: semanticsParts.join(', '),
+      child: Material(
+        color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(12),
-        onTap: place == null ? null : () => onSelectPlace(place),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    periodIcon(slot.period),
-                    size: 17,
-                    color: const Color(0xFF64748B),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    periodLabelText,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: const Color(0xFF64748B),
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  if (weatherHint != null) ...[
-                    const Spacer(),
-                    Text(
-                      weatherHint,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: const Color(0xFF94A3B8),
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                  if (slot.indoorOutdoor != null) ...[
-                    if (weatherHint == null) const Spacer(),
-                    Icon(
-                      slot.indoorOutdoor == 'indoor'
-                          ? Icons.home_work_outlined
-                          : Icons.park_outlined,
-                      size: 13,
-                      color: slot.indoorOutdoor == 'indoor'
-                          ? const Color(0xFF0F766E)
-                          : const Color(0xFFC53030),
-                    ),
-                    const SizedBox(width: 2),
-                    Text(
-                      slot.indoorOutdoor == 'indoor'
-                          ? (language == 'ko' ? '실내' : 'Indoor')
-                          : (language == 'ko' ? '야외' : 'Outdoor'),
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: slot.indoorOutdoor == 'indoor'
-                            ? const Color(0xFF0F766E)
-                            : const Color(0xFFC53030),
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
-                ],
+        child: InkWell(
+          key: ValueKey('planner-slot-${place?.placeId ?? slot.period}'),
+          borderRadius: BorderRadius.circular(12),
+          onTap: place == null ? null : () => onSelectPlace(place),
+          // 최소 44dp 터치 타겟 보장(내용이 짧아도 타일 전체 높이 하한선).
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 44),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        periodIcon(slot.period),
+                        size: 17,
+                        color: const Color(0xFF64748B),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        periodLabelText,
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(
+                              color: const Color(0xFF64748B),
+                              fontWeight: FontWeight.w900,
+                            ),
+                      ),
+                      if (weatherHint != null) ...[
+                        const Spacer(),
+                        Text(
+                          weatherHint,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                color: const Color(0xFF94A3B8),
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                      ],
+                      if (slot.indoorOutdoor != null) ...[
+                        if (weatherHint == null) const Spacer(),
+                        Icon(
+                          slot.indoorOutdoor == 'indoor'
+                              ? Icons.home_work_outlined
+                              : Icons.park_outlined,
+                          size: 13,
+                          color: slot.indoorOutdoor == 'indoor'
+                              ? const Color(0xFF0F766E)
+                              : const Color(0xFFC53030),
+                        ),
+                        const SizedBox(width: 2),
+                        Text(
+                          indoorOutdoorLabel!,
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                color: slot.indoorOutdoor == 'indoor'
+                                    ? const Color(0xFF0F766E)
+                                    : const Color(0xFFC53030),
+                                fontWeight: FontWeight.w800,
+                              ),
+                        ),
+                      ],
+                    ],
+                  ),
               const SizedBox(height: 6),
               Text(
                 title,
@@ -210,6 +234,8 @@ class PlanSlotTile extends StatelessWidget {
                 ),
               ],
             ],
+          ),
+        ),
           ),
         ),
       ),

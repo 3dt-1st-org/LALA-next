@@ -105,22 +105,34 @@ class PlannerOverviewCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          OutlinedButton.icon(
-            key: const ValueKey('planner-regenerate'),
-            onPressed: loading ? null : onRegenerate,
-            icon: loading
-                ? const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.refresh, size: 17),
-            label: Text(lalaCopy(language, ko: '일정 재생성', en: 'Regenerate')),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFF2B6CB0),
-              side: const BorderSide(color: Color(0xFFB9D4F3)),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-              textStyle: const TextStyle(fontWeight: FontWeight.w900),
+          // 접근성(§13.5): 최소 44dp 터치 타겟 + 시맨틱 라벨. 비활성(loading) 시
+          // 버튼 텍스트만으로 상태를 알리지 않고 disabled 로 명확히 구분한다.
+          Semantics(
+            container: true,
+            label: lalaCopy(
+              language,
+              ko: loading ? '일정 생성 중' : '일정 재생성',
+              en: loading ? 'Generating plan' : 'Regenerate plan',
+            ),
+            button: true,
+            child: OutlinedButton.icon(
+              key: const ValueKey('planner-regenerate'),
+              onPressed: loading ? null : onRegenerate,
+              icon: loading
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh, size: 17),
+              label: Text(lalaCopy(language, ko: '일정 재생성', en: 'Regenerate')),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF2B6CB0),
+                side: const BorderSide(color: Color(0xFFB9D4F3)),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                minimumSize: const Size(44, 44),
+                textStyle: const TextStyle(fontWeight: FontWeight.w900),
+              ),
             ),
           ),
         ],
