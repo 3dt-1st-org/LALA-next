@@ -57,6 +57,45 @@ class LalaHomePage extends StatefulWidget {
 
   @override
   State<LalaHomePage> createState() => _LalaHomePageState();
+
+  /// Test-only seam (D4/D5): simulates the Kakao map firing a camera-idle
+  /// event, driving the real debounce → _refresh path so the bounds-threading
+  /// and request-epoch guard can be exercised without a live map platform.
+  @visibleForTesting
+  static void simulateCameraIdleForTesting(
+    BuildContext context,
+    KakaoMapCamera camera,
+  ) {
+    final state = context.findAncestorStateOfType<_LalaHomePageState>();
+    state?._handleMapCameraIdle(camera);
+  }
+
+  /// Test-only seam (D5 response-ordering): dispatches a _refresh directly
+  /// (bypassing the camera-idle gate/debounce) so two overlapping queries with
+  /// out-of-order resolution can exercise the request-epoch guard. Fire-and-
+  /// forget, matching the real debounce call site (the refresh suspends at the
+  /// places await and is resolved later by the test's completer).
+  @visibleForTesting
+  static void simulateRefreshForTesting(BuildContext context) {
+    final state = context.findAncestorStateOfType<_LalaHomePageState>();
+    state?._refresh();
+  }
+
+  /// Test-only diagnostic (D5): the loaded places' first name + count, so the
+  /// request-epoch guard can be verified against the candidate SET held in
+  /// state (the newer result) rather than via fragile text-finding.
+  @visibleForTesting
+  static ({int count, String? firstName, bool loading}) placesStateForTesting(
+    BuildContext context,
+  ) {
+    final state = context.findAncestorStateOfType<_LalaHomePageState>();
+    final places = state?._places?.data?.places ?? const <LalaPlace>[];
+    return (
+      count: places.length,
+      firstName: places.isEmpty ? null : places.first.name,
+      loading: state?._loading ?? false,
+    );
+  }
 }
 
 class _LalaHomePageState extends State<LalaHomePage> {
@@ -116,6 +155,16 @@ class _LalaHomePageState extends State<LalaHomePage> {
   String? _lastAutoDocentPlaceId;
   double? _lastPlacesFetchLat;
   double? _lastPlacesFetchLng;
+  // V1 bounds-query (D5): track the map level at the last successful places
+  // fetch so a pure zoom (center unchanged) still triggers a reload.
+  int? _lastPlacesFetchLevel;
+  // V1 bounds-query (D4): latest viewport rectangle from the camera; threaded
+  // into _currentConfig() → LalaAppConfig.bounds. null → center+radius (B2).
+  KakaoMapBounds? _latestMapBounds;
+  // V1 bounds-query (D5 response-ordering): monotonic epoch captured per
+  // _refresh dispatch; a stale earlier reply is discarded when a newer query
+  // has fired. Additive — also hardens the existing center+radius path.
+  int _refreshEpoch = 0;
   DateTime? _lastWeatherFetchAt;
   double? _lastWeatherFetchLat;
   double? _lastWeatherFetchLng;
@@ -193,6 +242,9 @@ class _LalaHomePageState extends State<LalaHomePage> {
       category: _selectedCategory,
       lang: _uiLanguage,
       accessTokenProvider: _authController.accessToken,
+      // V1 bounds-query (D4): carry the latest viewport rectangle into the
+      // /places call site; null preserves the center+radius fallback (B2).
+      bounds: _latestMapBounds,
     );
   }
 
@@ -335,6 +387,9 @@ class _LalaHomePageState extends State<LalaHomePage> {
     if (!fromAutoRecovery) {
       _resetRecommendationRecoveryState();
     }
+    // D5 response-ordering: capture a monotonic epoch for this dispatch; result
+    // application is skipped if a newer _refresh has since fired (stale discard).
+    final epoch = ++_refreshEpoch;
     final config = _currentConfig();
     setState(() {
       _loading = true;
@@ -429,7 +484,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
           ? null
           : loadErrors.toSet().take(2).join(' / ');
 
-      if (!mounted) {
+      if (!mounted || epoch != _refreshEpoch) {
         return;
       }
       setState(() {
@@ -441,7 +496,9 @@ class _LalaHomePageState extends State<LalaHomePage> {
         // 예외가 있으면 unavailable/error 로 분류해 보존한다(§13.5 honest states).
         _placeFailureKind = places != null
             ? null
-            : (placesFailure == null ? _placeFailureKind : recommendationFailureKind(placesFailure));
+            : (placesFailure == null
+                  ? _placeFailureKind
+                  : recommendationFailureKind(placesFailure));
         _docentAudio = null;
         _tourAudio = null;
         _audioError = null;
@@ -452,6 +509,9 @@ class _LalaHomePageState extends State<LalaHomePage> {
         if (places != null) {
           _lastPlacesFetchLat = config.lat;
           _lastPlacesFetchLng = config.lng;
+          // D5: record the map level at this successful fetch so a later pure
+          // zoom (center unchanged) is detected as a level change.
+          _lastPlacesFetchLevel = _mapLevel;
         }
         if (autoDocentPlace != null) {
           _applyAutoDocentPlace(autoDocentPlace, closeActiveSheet: false);
@@ -486,7 +546,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
             ? null
             : loadErrors.toSet().take(2).join(' / ');
 
-        if (!mounted) {
+        if (!mounted || epoch != _refreshEpoch) {
           return;
         }
         setState(() {
@@ -521,7 +581,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
           ? null
           : loadErrors.toSet().take(2).join(' / ');
 
-      if (!mounted) {
+      if (!mounted || epoch != _refreshEpoch) {
         return;
       }
       setState(() {
@@ -535,7 +595,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
         _error = loadError;
       });
     } on Object catch (error) {
-      if (!mounted) {
+      if (!mounted || epoch != _refreshEpoch) {
         return;
       }
       setState(() {
@@ -547,7 +607,9 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _cancelInterventionToastTimer();
       _scheduleRecommendationRecovery(reason: 'refresh-exception');
     } finally {
-      if (mounted) {
+      // D5: a stale dispatch must not clear the loading indicator while a newer
+      // query is still in flight.
+      if (mounted && epoch == _refreshEpoch) {
         setState(() {
           _loading = false;
         });
@@ -888,6 +950,10 @@ class _LalaHomePageState extends State<LalaHomePage> {
       currentLat: camera.lat,
       currentLng: camera.lng,
       thresholdMeters: _placesReloadThresholdMeters,
+      // V1 bounds-query (D5): reload on a pure zoom too (center unchanged but
+      // map level changed) so the viewport rectangle refreshes on zoom.
+      lastFetchLevel: _lastPlacesFetchLevel,
+      currentLevel: normalizedLevel,
     );
     setState(() {
       _queryLat = camera.lat;
@@ -895,6 +961,9 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _mapFocusLat = camera.lat;
       _mapFocusLng = camera.lng;
       _mapLevel = normalizedLevel;
+      // V1 bounds-query (D4): keep the latest viewport rectangle for the next
+      // _refresh; null (map without getBounds) restores the center+radius path.
+      _latestMapBounds = camera.bounds;
       if (shouldReloadPlaces) {
         _selectedPlaceId = null;
         _focusedClusterMemberIds = const <String>[];
