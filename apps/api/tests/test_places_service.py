@@ -1338,9 +1338,7 @@ def test_list_places_bounds_empty_rectangle_returns_honest_empty(monkeypatch) ->
         (36.5, None, 37.5, 127.5),
     ],
 )
-def test_list_places_rejects_partial_bounds(
-    sw_lat, sw_lng, ne_lat, ne_lng, monkeypatch
-) -> None:
+def test_list_places_rejects_partial_bounds(sw_lat, sw_lng, ne_lat, ne_lng, monkeypatch) -> None:
     # All-or-none: any-but-not-all -> 400 INVALID_BOUNDS (flag on).
     monkeypatch.setattr(
         places_service,
@@ -1375,9 +1373,7 @@ def test_list_places_rejects_partial_bounds(
         (36.5, 127.5, 37.5, 126.5),  # sw_lng > ne_lng
     ],
 )
-def test_list_places_rejects_inverted_bounds(
-    sw_lat, sw_lng, ne_lat, ne_lng, monkeypatch
-) -> None:
+def test_list_places_rejects_inverted_bounds(sw_lat, sw_lng, ne_lat, ne_lng, monkeypatch) -> None:
     # sw<=ne violation -> 400 INVALID_BOUNDS (flag on).
     monkeypatch.setattr(
         places_service,

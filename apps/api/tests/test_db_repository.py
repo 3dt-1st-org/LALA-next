@@ -1029,9 +1029,7 @@ def test_fetch_places_bounds_branch_keeps_circle_when_bounds_absent(monkeypatch)
     captured = _install_fake_places_db(monkeypatch, [_place_row()])
     monkeypatch.setenv("LALA_PLACES_VIEWPORT_BOUNDS", "true")
 
-    db_repository.fetch_places(
-        lat=37.0, lng=127.0, radius_m=3000, category="all", language="ko"
-    )
+    db_repository.fetch_places(lat=37.0, lng=127.0, radius_m=3000, category="all", language="ko")
 
     assert "ST_DWithin(" in captured["sql"]
     assert len(captured["params"]) == 10
