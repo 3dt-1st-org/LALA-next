@@ -94,15 +94,19 @@ class MapPlaceCarouselOverlay extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Text(
-                      lalaCopy(
-                        language,
-                        ko: '${items.length}곳 · ${sourceLabel(source, language: language)}',
-                        en: '${items.length} places · ${sourceLabel(source, language: language)}',
-                      ),
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: const Color(0xFF64748B),
-                        fontWeight: FontWeight.w800,
+                    Flexible(
+                      child: Text(
+                        lalaCopy(
+                          language,
+                          ko: '${items.length}곳 · ${sourceLabel(source, language: language)}',
+                          en: '${items.length} places · ${sourceLabel(source, language: language)}',
+                        ),
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: const Color(0xFF64748B),
+                          fontWeight: FontWeight.w800,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
                       ),
                     ),
                   ],
