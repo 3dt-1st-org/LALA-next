@@ -9,6 +9,7 @@ import '../../home/home_view_helpers.dart';
 import '../../place/place_helpers.dart';
 import '../../place/widgets/category_badge.dart';
 import '../../place/widgets/place_reason_freshness.dart';
+import '../../place/widgets/place_weather_source_line.dart';
 import 'empty_dock_content.dart';
 
 /// 지도 하단 독(선택 장소 요약 + 도슨트 미리보기)(C3 추출 — main.dart 의 _MapBottomDock).
@@ -18,6 +19,7 @@ class MapBottomDock extends StatelessWidget {
     required this.isWide,
     required this.places,
     required this.source,
+    this.weather,
     required this.dataAsOf,
     required this.topPlace,
     required this.uiLanguage,
@@ -42,6 +44,10 @@ class MapBottomDock extends StatelessWidget {
   final bool isWide;
   final List<LalaPlace> places;
   final String? source;
+
+  /// V1-RC3: 선택 장소 날씨(이미 dashboard 의 currentWeather = publicWeatherOrNull 통과).
+  /// 새 fetch 없이 독에만 포크. null/placeholder/fallback 이면 날씨 줄이 정직하게 생략된다.
+  final LalaWeather? weather;
 
   /// 정직한 data-as-of(snapshot build timestamp). present 일 때만 신선도 라벨 표시.
   final String? dataAsOf;
@@ -162,7 +168,11 @@ class MapBottomDock extends StatelessWidget {
                   children: [
                     TinyMeta(placeRegionLabel(currentPlace, uiLanguage)),
                     TinyMeta('${currentPlace.distanceM}m'),
-                    TinyMeta(sourceLabel(source, language: uiLanguage)),
+                    // V1-RC3(D-Src): sourceLabel 이 '-'(null/빈 source) 이면 칩을 생략한다
+                    // (독·상세가 bare '-' 대신 정직한 부재로 일치).
+                    if (sourceLabel(source, language: uiLanguage)
+                        case final String src when src != '-')
+                      TinyMeta(src),
                     // V1-RC2(D-2): per-place 신선도(장소 단위). 아래 _freshnessLabel 칩은
                     // 데이터셋 기준(dataAsOf)으로 별개 — 이름/개념 다르게 유지.
                     if (placeFreshnessText(currentPlace) case final String f)
@@ -174,6 +184,12 @@ class MapBottomDock extends StatelessWidget {
                 ),
                 // V1-RC2: per-place reason(reason 없으면 PlaceReasonLine 이 렌더 생략 → 빈 공간 없음).
                 PlaceReasonLine(place: currentPlace, topSpacing: 8),
+                // V1-RC3: 날씨 요약 · 날씨 출처 1줄(weather null/fallback 이면 생략 → 빈 공간 없음).
+                PlaceWeatherSourceLine(
+                  weather: weather,
+                  language: uiLanguage,
+                  topSpacing: 4,
+                ),
                 const SizedBox(height: 12),
                 DockDocentPreview(
                   place: currentPlace,

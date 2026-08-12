@@ -353,11 +353,13 @@ class Dashboard extends StatelessWidget {
                     ),
                     child: MapToast(
                       key: ValueKey(
-                        placeFailureKind == RecommendationFailureKind.unavailable
+                        placeFailureKind ==
+                                RecommendationFailureKind.unavailable
                             ? 'map-unavailable-toast'
                             : 'map-error-toast',
                       ),
-                      icon: placeFailureKind ==
+                      icon:
+                          placeFailureKind ==
                               RecommendationFailureKind.unavailable
                           ? Icons.wifi_off_rounded
                           : Icons.error_outline,
@@ -439,6 +441,7 @@ class Dashboard extends StatelessWidget {
                     isWide: isWide,
                     places: topPlaces,
                     source: effectiveSource,
+                    weather: currentWeather,
                     dataAsOf: effectiveDataAsOf,
                     topPlace: topPlace,
                     uiLanguage: uiLanguage,
