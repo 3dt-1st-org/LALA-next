@@ -1396,6 +1396,9 @@ class LalaPlanSlot {
     this.localFranchiseConfidence,
     this.swappableAlternatives = const <LalaPlace>[],
     this.unavailableReason,
+    this.forecastWindow,
+    this.airQualityBad,
+    this.closureState,
   });
 
   final String period;
@@ -1418,6 +1421,15 @@ class LalaPlanSlot {
   final String? localFranchiseConfidence;
   final List<LalaPlace> swappableAlternatives;
   final String? unavailableReason;
+
+  // V3 additive OPTIONAL projections (PLAN_FULL_SLOTS). Null when the flag is off or
+  // the underlying data is unavailable (honest empty states, never fabricated).
+  // forecastWindow: nearest-time projection from the plan-level forecast (D2).
+  // airQualityBad: outdoor-only bad-AQ flag from plan dust grade (D3).
+  // closureState: "open"|"closed"|"unknown" projection of the hours estimate (D4).
+  final LalaForecastItem? forecastWindow;
+  final bool? airQualityBad;
+  final String? closureState;
 
   static LalaPlanSlot fromJsonObject(Object? value) {
     return LalaPlanSlot.fromJson(_asMap(value));
@@ -1450,6 +1462,11 @@ class LalaPlanSlot {
         json['swappable_alternatives'],
       ).whereType<Map<String, dynamic>>().map(LalaPlace.fromJson).toList(),
       unavailableReason: _asOptionalString(json['unavailable_reason']),
+      forecastWindow: json['forecast_window'] is Map<String, dynamic>
+          ? LalaForecastItem.fromJson(_asMap(json['forecast_window']))
+          : null,
+      airQualityBad: _asOptionalBool(json['air_quality_bad']),
+      closureState: _asOptionalString(json['closure_state']),
     );
   }
 }

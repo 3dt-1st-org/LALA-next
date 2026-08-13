@@ -39,20 +39,41 @@ class PlanSlotTile extends StatelessWidget {
         : (slot.indoorOutdoor == 'indoor'
               ? (language == 'ko' ? '실내' : 'Indoor')
               : (language == 'ko' ? '야외' : 'Outdoor'));
+    // V3-C D2/D3/D4 투영: forecast_window(예보) · air_quality_bad(야외 먼지) ·
+    // closure_state(운영 상태). null 은 honest-empty(placeholder 없음/unknown).
+    final forecastWindowText = planSlotForecastWindowLabel(slot, language);
+    final airQualityBadText = planSlotAirQualityBadLabel(slot, language);
+    final closureStateText = planSlotClosureStateLabel(slot, language);
+    // D4 배지 색/아이콘은 원천 state 기반(null → unknown).
+    final closureStateKey = (slot.closureState ?? 'unknown').trim().toLowerCase();
+    // 기존 토큰만 재사용(teal=open/positive, red=closed/bad, slate=unknown/neutral).
+    final closureBadgeColor = switch (closureStateKey) {
+      'open' => const Color(0xFF0F766E),
+      'closed' => const Color(0xFFC53030),
+      _ => const Color(0xFF64748B),
+    };
+    final closureBadgeIcon = switch (closureStateKey) {
+      'open' => Icons.check_circle_outline,
+      'closed' => Icons.cancel_outlined,
+      _ => Icons.help_outline,
+    };
     final metaEntries = <String>[
       ?travelTimeLabel,
       ?estimatedHoursLabel,
     ];
-    // 접근성(§13.5): 슬롯 메타(시간대/실내·야외/이동시간/추정시간)를 하나의
-    // 시맨틱 라벨로 합쳐 화면 읽기 사용자에게 전달. 색상 단독 신호를 피하기 위해
-    // 실내·야외는 아이콘+텍스트+라벨 삼중으로 표현한다.
+    // 접근성(§13.5): 슬롯 메타(시간대/실내·야외/이동시간/추정시간/운영상태/예보/대기질)를
+    // 하나의 시맨틱 라벨로 합쳐 화면 읽기 사용자에게 전달. 색상 단독 신호를 피하기 위해
+    // 실내·야외·운영상태는 모두 아이콘+텍스트+라벨 삼중으로 표현한다.
     final semanticsParts = <String>[
       periodLabelText,
       title,
       ?subtitle,
+      closureStateText,
       ?indoorOutdoorLabel,
       ?weatherHint,
+      ?forecastWindowText,
       ...metaEntries,
+      ?airQualityBadText,
     ];
     return Semantics(
       container: true,
@@ -106,8 +127,27 @@ class PlanSlotTile extends StatelessWidget {
                               ),
                         ),
                       ],
-                      if (slot.indoorOutdoor != null) ...[
+                      if (forecastWindowText != null) ...[
+                        // D2: 예보가 확보된 슬롯에만 "time · temp" 표시.
+                        // null 이면 줄 자리 없이 숨긴다(placeholder/spinner 없음).
                         if (weatherHint == null) const Spacer(),
+                        if (weatherHint != null) const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            forecastWindowText,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(
+                                  color: const Color(0xFF475569),
+                                  fontWeight: FontWeight.w800,
+                                ),
+                          ),
+                        ),
+                      ],
+                      if (slot.indoorOutdoor != null) ...[
+                        if (weatherHint == null && forecastWindowText == null)
+                          const Spacer(),
                         Icon(
                           slot.indoorOutdoor == 'indoor'
                               ? Icons.home_work_outlined
@@ -140,6 +180,39 @@ class PlanSlotTile extends StatelessWidget {
                   color: const Color(0xFF1E293B),
                   fontWeight: FontWeight.w900,
                   height: 1.18,
+                ),
+              ),
+              // D4: 운영 상태 배지(open/closed/unknown). 색상 단독 신호를 피하려고
+              // 아이콘+텍스트+시맨틱 라벨 삼중 표시(실내·야외 패턴과 동일). null→unknown.
+              // 기존 칩 배경/보더 토큰에 상태색 보더+아이콘+텍스트만 입힌다(색 토큰 추가 없음).
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: closureBadgeColor),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(closureBadgeIcon, size: 11, color: closureBadgeColor),
+                      const SizedBox(width: 3),
+                      Text(
+                        closureStateText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: closureBadgeColor,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               if (swapReason != null) ...[
@@ -220,6 +293,33 @@ class PlanSlotTile extends StatelessWidget {
                       ],
                     ),
                   ),
+                ),
+              ],
+              if (airQualityBadText != null) ...[
+                // D3: 야외 슬롯에만 먼지 나쁨 마커 표시. null/false/실내면 숨긴다
+                // (null 을 "나쁨"으로 조작하지 않는다 — honest-empty). 빨강 토큰 재사용.
+                const SizedBox(height: 6),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.warning_amber_rounded,
+                      size: 13,
+                      color: Color(0xFFC53030),
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        airQualityBadText,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: const Color(0xFFC53030),
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
               if (place != null) ...[

@@ -223,6 +223,10 @@ String interventionToastLabel(LalaIntervention intervention, String language) {
   final localizedReason = singleLanguageText(reason, language);
   final localizedAction = singleLanguageText(action, language);
 
+  // API 가 reason/recommendedAction 을 항상 채워 보내므로, 우선 순위는 기존과
+  // 동일하게 reason/action 카피를 그대로 쓴다. 아래쪽 trigger-aware fallback 은
+  // API 가 빈 카피를 보낸 honest-empty 경우에만 발동한다.
+
   if (isLalaEnglish(language)) {
     if (localizedReason != null && localizedAction != null) {
       return '$localizedReason · $localizedAction';
@@ -233,10 +237,7 @@ String interventionToastLabel(LalaIntervention intervention, String language) {
     if (localizedAction != null) {
       return localizedAction;
     }
-    if (place != null) {
-      return 'Weather changed. Adjust the route near $place.';
-    }
-    return 'Weather changed. Review today\'s route.';
+    return _interventionFallbackCopy(intervention.triggerType, place, language);
   }
 
   if (localizedReason != null) {
@@ -245,10 +246,55 @@ String interventionToastLabel(LalaIntervention intervention, String language) {
   if (localizedAction != null) {
     return localizedAction;
   }
-  if (place != null) {
-    return '날씨가 바뀌었어요. $place 중심으로 동선을 다시 확인해보세요.';
+  return _interventionFallbackCopy(intervention.triggerType, place, language);
+}
+
+/// triggerType 에 따른 honest fallback 카피(KO/EN 배타). API 카피가 비었을 때만
+/// 쓰인다. bad_weather/null 은 기존 weather 카피와 동일(역호환), closure_detected
+/// 와 bad_weather_and_closure 는 새 카피. 대체 장소가 없어도 위조하지 않는다.
+String _interventionFallbackCopy(String? trigger, String? place, String language) {
+  switch (trigger) {
+    case 'closure_detected':
+      return place != null
+          ? lalaCopy(
+              language,
+              ko: '선택한 장소가 영업 중이 아닐 수 있어요. $place 근처 다른 옵션을 확인해 보세요.',
+              en: 'The chosen place may be closed. Check other options near $place.',
+            )
+          : lalaCopy(
+              language,
+              ko: '선택한 장소가 영업 중이 아닐 수 있어요. 동선을 다시 확인해 보세요.',
+              en: 'The chosen place may be closed. Review the route.',
+            );
+    case 'bad_weather_and_closure':
+      return place != null
+          ? lalaCopy(
+              language,
+              ko: '날씨가 좋지 않고 $place 도 영업 중이 아닐 수 있어요. 실내 대안을 확인해 보세요.',
+              en: 'Weather is poor and $place may be closed. Check indoor alternatives.',
+            )
+          : lalaCopy(
+              language,
+              ko: '날씨가 좋지 않고 일부 장소가 영업 중이 아닐 수 있어요. 실내 대안을 확인해 보세요.',
+              en: 'Weather is poor and some places may be closed. Check indoor alternatives.',
+            );
+    case 'bad_weather':
+    default:
+      // null / 알 수 없는 트리거도 기존 weather 카피와 동일(역호환) — V3 이전
+      // triggerType 은 항상 null/bad_weather 이었고 기존 토스트는 weather 카피를
+      // 썼으므로, dashboard 경로(widget_test)의 기대 문구를 보존한다.
+      return place != null
+          ? lalaCopy(
+              language,
+              ko: '날씨가 바뀌었어요. $place 중심으로 동선을 다시 확인해보세요.',
+              en: 'Weather changed. Adjust the route near $place.',
+            )
+          : lalaCopy(
+              language,
+              ko: '날씨가 바뀌었어요. 하루 일정을 다시 확인해보세요.',
+              en: 'Weather changed. Review today\'s route.',
+            );
   }
-  return '날씨가 바뀌었어요. 하루 일정을 다시 확인해보세요.';
 }
 
 List<LalaPlace> filterPlaces(List<LalaPlace> places, String category) {

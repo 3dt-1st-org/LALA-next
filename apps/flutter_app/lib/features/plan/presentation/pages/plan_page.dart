@@ -23,6 +23,7 @@ import 'package:lala_next_app/features/planner/widgets/plan_slot_tile.dart';
 import 'package:lala_next_app/features/planner/widgets/planner_loading_card.dart';
 import 'package:lala_next_app/features/planner/widgets/planner_overview_card.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
+import 'package:lala_next_app/shared/l10n/place_labels.dart';
 import 'package:lala_next_app/shared/widgets/lala_skeleton.dart';
 
 /// 플랜 탭: 하루 일정을 생성해 타임라인으로 보여준다.
@@ -176,6 +177,55 @@ class _PlanPageState extends State<PlanPage> {
       _intervention != null &&
       _intervention!.shouldIntervene &&
       !_interventionDismissed;
+
+  // V3-D: 트리터 종류를 한 줄 배지로 표시(KO/EN 배타). null/알 수 없음은 배지 없음.
+  String? _interventionTriggerBadge(LalaIntervention intervention) {
+    switch (intervention.triggerType) {
+      case 'closure_detected':
+        return lalaCopy(_language, ko: '폐업 의심', en: 'Possible closure');
+      case 'bad_weather_and_closure':
+        return lalaCopy(_language, ko: '날씨 + 폐업', en: 'Weather + closure');
+      case 'bad_weather':
+        return lalaCopy(_language, ko: '날씨 변화', en: 'Weather change');
+      default:
+        return null;
+    }
+  }
+
+  // 대체 장소(swap) 버튼 라벨. alternativeSlot 이 있을 때만. 위조 금지 — null 이면 null.
+  String? _interventionSwapLabel(LalaIntervention intervention) {
+    final alt = intervention.alternativeSlot;
+    if (alt == null) {
+      return null;
+    }
+    final name = alt.place != null
+        ? placeDisplayName(alt.place!, _language)
+        : alt.title;
+    return lalaCopy(_language, ko: '대체 ▸ $name', en: 'Swap ▸ $name');
+  }
+
+  // swap 탭 — alternativeSlot 의 장소를 노출만 한다(스낵바). PlanContextStore 의
+  // 슬롯 치환은 별도 후속 작업(V3-D 데이터 범위 밖). 위조/변이 없다.
+  void _onSwapAlternative(LalaPlanSlot alternative) {
+    if (!mounted) {
+      return;
+    }
+    final name = alternative.place != null
+        ? placeDisplayName(alternative.place!, _language)
+        : alternative.title;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 2),
+        content: Text(
+          lalaCopy(
+            _language,
+            ko: '대체 장소 $name 을(를) 확인해 보세요.',
+            en: 'Check the alternative: $name.',
+          ),
+        ),
+      ),
+    );
+  }
 
   Future<void> _load() async {
     final generation = ++_loadGeneration;
@@ -388,6 +438,24 @@ class _PlanPageState extends State<PlanPage> {
                 child: InterventionToast(
                   label: interventionToastLabel(_intervention!, _language),
                   language: _language,
+                  triggerBadge: _interventionTriggerBadge(_intervention!),
+                  swapLabel: _interventionSwapLabel(_intervention!),
+                  onSwap: _intervention!.alternativeSlot != null
+                      ? () => _onSwapAlternative(_intervention!.alternativeSlot!)
+                      : null,
+                  regenerateLabel: lalaCopy(
+                    _language,
+                    ko: '일정 다시 짜기',
+                    en: 'Regenerate',
+                  ),
+                  onRegenerate: _load,
+                  noAlternativeLabel: _intervention!.alternativeSlot == null
+                      ? lalaCopy(
+                          _language,
+                          ko: '지금은 대체 장소가 없어요.',
+                          en: 'No alternative right now.',
+                        )
+                      : null,
                   onOpenPlanner: () {
                     if (!mounted) {
                       return;
