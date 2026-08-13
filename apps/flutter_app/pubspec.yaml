@@ -30,6 +30,9 @@ dependencies:
   # Cold-start persistence for onboarding completion + chosen language/tourist
   # type/manual region. Precise device coordinates are never stored.
   shared_preferences: ^2.3.2
+  # V4-B: docent narration playback. Plays only real LalaAudioResponse.bytes;
+  # provider-agnostic. Pinned exactly for reproducible resolution.
+  audioplayers: 6.8.1
 
 dev_dependencies:
   flutter_test:

@@ -1,0 +1,780 @@
+[
+  {
+    "place_id": "eval_attraction_01",
+    "category": "attraction",
+    "region_ko": "서울",
+    "region_en": "Seoul",
+    "place_name_ko": "별빛 언덕 전망대",
+    "place_name_en": "Starlight Hill Observatory",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "별빛 언덕 전망대는 서울 근교의 야경 명소라는 공식 프로필이 있다."
+    ],
+    "scores": {
+      "final_score": 0.82,
+      "local_spending_score": 0.7,
+      "small_merchant_fit_score": 0.65,
+      "weather_fit_score": 0.6
+    },
+    "weather": {
+      "weather_temp": "21",
+      "weather_icon": "partly-cloudy",
+      "weather_outdoor_status": "good"
+    },
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_attraction_02",
+    "category": "attraction",
+    "region_ko": "부산",
+    "region_en": "Busan",
+    "place_name_ko": "바다소리 방파제",
+    "place_name_en": "Sea-Sound Breakwater",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "바다소리 방파제는 해안 산책과 낚시 동선으로 알려져 있다."
+    ],
+    "scores": {
+      "final_score": 0.78,
+      "demand_dispersion_score": 0.66,
+      "culture_relevance_score": 0.7
+    },
+    "weather": null,
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_attraction_03",
+    "category": "attraction",
+    "region_ko": "제주",
+    "region_en": "Jeju",
+    "place_name_ko": "솔바람 해안길",
+    "place_name_en": "Pine-Breeze Coastal Trail",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "솔바람 해안길은 제주 동해안의 대표 산책로라는 방문객 언급이 있다."
+    ],
+    "scores": {
+      "final_score": 0.8,
+      "weather_fit_score": 0.72,
+      "small_merchant_fit_score": 0.6
+    },
+    "weather": {
+      "weather_temp": "24",
+      "weather_icon": "sunny",
+      "weather_outdoor_status": "good"
+    },
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_attraction_04",
+    "category": "attraction",
+    "region_ko": "경기",
+    "region_en": "Gyeonggi",
+    "place_name_ko": "달빛 습지 공원",
+    "place_name_en": "Moonlit Wetland Park",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "달빛 습지 공원은 생태 관찰과 가족 산책으로 소개되는 공식 명소다."
+    ],
+    "scores": {
+      "final_score": 0.71,
+      "local_spending_score": 0.62
+    },
+    "weather": null,
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_attraction_05",
+    "category": "attraction",
+    "region_ko": "강원",
+    "region_en": "Gangwon",
+    "place_name_ko": "청령 산책로",
+    "place_name_en": "Cheongnyeong Walking Path",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "청령 산책로는 계곡과 숲길이 이어지는 자연 명소라는 공식 프로필이 있다."
+    ],
+    "scores": {
+      "final_score": 0.76,
+      "culture_relevance_score": 0.6,
+      "demand_dispersion_score": 0.7
+    },
+    "weather": null,
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_attraction_06",
+    "category": "attraction",
+    "region_ko": "전남",
+    "region_en": "Jeonnam",
+    "place_name_ko": "갈대밭 하구 둑길",
+    "place_name_en": "Reed-Field Estuary Trail",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "갈대밭 하구 둑길은 철새 관찰과 늦가을 풍경으로 언급된다."
+    ],
+    "scores": {
+      "final_score": 0.69,
+      "weather_fit_score": 0.6
+    },
+    "weather": {
+      "weather_temp": "15",
+      "weather_icon": "cloudy",
+      "weather_outdoor_status": "fair"
+    },
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_attraction_07",
+    "category": "attraction",
+    "region_ko": "경남",
+    "region_en": "Gyeongnam",
+    "place_name_ko": "돌고래 전망 바위",
+    "place_name_en": "Dolphin View Rock",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "돌고래 전망 바위는 해안 절경과 사진 촬영지로 소개된다."
+    ],
+    "scores": {
+      "final_score": 0.74,
+      "small_merchant_fit_score": 0.7
+    },
+    "weather": null,
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_attraction_08",
+    "category": "attraction",
+    "region_ko": "충남",
+    "region_en": "Chungnam",
+    "place_name_ko": "갯벌 생태 통로",
+    "place_name_en": "Tidal Flat Eco Corridor",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "갯벌 생태 통로는 생태 체험과 산책이 함께하는 명소라는 공식 프로필이 있다."
+    ],
+    "scores": {
+      "final_score": 0.67,
+      "local_spending_score": 0.6,
+      "demand_dispersion_score": 0.64
+    },
+    "weather": null,
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_attraction_09",
+    "category": "attraction",
+    "region_ko": "대구",
+    "region_en": "Daegu",
+    "place_name_ko": "골목 벽화 거리",
+    "place_name_en": "Mural Alley Street",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "골목 벽화 거리는 도심 산책과 사진 명소로 방문객에게 언급된다."
+    ],
+    "scores": {
+      "final_score": 0.72,
+      "culture_relevance_score": 0.66
+    },
+    "weather": null,
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_minimal_context_00",
+    "category": "attraction",
+    "region_ko": "",
+    "region_en": "",
+    "place_name_ko": "",
+    "place_name_en": "",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [],
+    "expect_nonempty": false
+  },
+  {
+    "place_id": "eval_restaurant_01",
+    "category": "restaurant",
+    "region_ko": "서울",
+    "region_en": "Seoul",
+    "place_name_ko": "토박이골목식당",
+    "place_name_en": "Tobagi Alley Table",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "토박이골목식당은 골목 단골이 많은 로컬 식당이라는 언급이 있다."
+    ],
+    "scores": {
+      "final_score": 0.83,
+      "local_spending_score": 0.78,
+      "small_merchant_fit_score": 0.8
+    },
+    "weather": null,
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_restaurant_02",
+    "category": "restaurant",
+    "region_ko": "부산",
+    "region_en": "Busan",
+    "place_name_ko": "해포항 조개찜",
+    "place_name_en": "Haepohang Clam Steam",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "해포항 조개찜은 항구 인근의 대표 해산물 식당으로 소개된다."
+    ],
+    "scores": {
+      "final_score": 0.79,
+      "small_merchant_fit_score": 0.72
+    },
+    "weather": null,
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_restaurant_03",
+    "category": "restaurant",
+    "region_ko": "제주",
+    "region_en": "Jeju",
+    "place_name_ko": "흑돼기 골목집",
+    "place_name_en": "Black-Pork Alley House",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "흑돼기 골목집은 제주 흑돼지를 다루는 골목 식당이라는 언급이 있다."
+    ],
+    "scores": {
+      "final_score": 0.85,
+      "local_spending_score": 0.74,
+      "demand_dispersion_score": 0.6
+    },
+    "weather": {
+      "weather_temp": "19",
+      "weather_icon": "partly-cloudy",
+      "weather_outdoor_status": "good"
+    },
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_restaurant_04",
+    "category": "restaurant",
+    "region_ko": "경기",
+    "region_en": "Gyeonggi",
+    "place_name_ko": "도넴 콩국수",
+    "place_name_en": "Donem Cold Noodle",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "도넴 콩국수는 여름철 단골이 많은 로컬 식당으로 알려져 있다."
+    ],
+    "scores": {
+      "final_score": 0.7,
+      "small_merchant_fit_score": 0.68
+    },
+    "weather": null,
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_restaurant_05",
+    "category": "restaurant",
+    "region_ko": "강원",
+    "region_en": "Gangwon",
+    "place_name_ko": "산채비빔밥 가게",
+    "place_name_en": "Mountain-Veg Bibimbap Shop",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "산채비빔밥 가게는 산나물 재료가 특징인 로컬 식당이라는 언급이 있다."
+    ],
+    "scores": {
+      "final_score": 0.73,
+      "local_spending_score": 0.6
+    },
+    "weather": null,
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_restaurant_06",
+    "category": "restaurant",
+    "region_ko": "전남",
+    "region_en": "Jeonnam",
+    "place_name_ko": "갯장어구이 판",
+    "place_name_en": "Grilled Eel Plate",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "갯장어구이 판은 갯장어를 다루는 해안 로컬 식당으로 소개된다."
+    ],
+    "scores": {
+      "final_score": 0.71,
+      "small_merchant_fit_score": 0.7
+    },
+    "weather": null,
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_restaurant_07",
+    "category": "restaurant",
+    "region_ko": "경남",
+    "region_en": "Gyeongnam",
+    "place_name_ko": "돌문어 샤브집",
+    "place_name_en": "Octopus Shabu House",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "돌문어 샤브집은 산지 직송 문어를 다루는 식당이라는 언급이 있다."
+    ],
+    "scores": {
+      "final_score": 0.77,
+      "local_spending_score": 0.65
+    },
+    "weather": null,
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_restaurant_08",
+    "category": "restaurant",
+    "region_ko": "충남",
+    "region_en": "Chungnam",
+    "place_name_ko": "톳비빔밥 식당",
+    "place_name_en": "Seaweed Bibimbap Table",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "톳비빔밥 식당은 갯벌 톳을 활용하는 로컬 식당으로 소개된다."
+    ],
+    "scores": {
+      "final_score": 0.68,
+      "small_merchant_fit_score": 0.62
+    },
+    "weather": null,
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_restaurant_09",
+    "category": "restaurant",
+    "region_ko": "인천",
+    "region_en": "Incheon",
+    "place_name_ko": "소래뗏장 해산물",
+    "place_name_en": "Sorae Raft Seafood",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "소래뗏장 해산물은 갯벌 해산물을 다루는 항구 식당이라는 언급이 있다."
+    ],
+    "scores": {
+      "final_score": 0.74,
+      "demand_dispersion_score": 0.6
+    },
+    "weather": null,
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_event_01",
+    "category": "event",
+    "region_ko": "서울",
+    "region_en": "Seoul",
+    "place_name_ko": "한겨울 등불 축제",
+    "place_name_en": "Midwinter Lantern Festival",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "한겨울 등불 축제는 계절 야간 행사라는 공식 일정이 있다."
+    ],
+    "scores": {
+      "final_score": 0.81,
+      "culture_relevance_score": 0.78,
+      "weather_fit_score": 0.6
+    },
+    "weather": {
+      "weather_temp": "-2",
+      "weather_icon": "snow",
+      "weather_outdoor_status": "fair"
+    },
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_event_02",
+    "category": "event",
+    "region_ko": "부산",
+    "region_en": "Busan",
+    "place_name_ko": "항구 노래 마당",
+    "place_name_en": "Port Song Courtyard",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "항구 노래 마당은 항구 인근 야외 공연 행사로 소개된다."
+    ],
+    "scores": {
+      "final_score": 0.72,
+      "culture_relevance_score": 0.7
+    },
+    "weather": null,
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_event_03",
+    "category": "event",
+    "region_ko": "제주",
+    "region_en": "Jeju",
+    "place_name_ko": "봄꽃 들판 축제",
+    "place_name_en": "Spring-Bloom Field Festival",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "봄꽃 들판 축제는 계절 들판 행사라는 공식 프로필이 있다."
+    ],
+    "scores": {
+      "final_score": 0.79,
+      "weather_fit_score": 0.74
+    },
+    "weather": {
+      "weather_temp": "18",
+      "weather_icon": "sunny",
+      "weather_outdoor_status": "good"
+    },
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_event_04",
+    "category": "event",
+    "region_ko": "경기",
+    "region_en": "Gyeonggi",
+    "place_name_ko": "강변 영화 상영회",
+    "place_name_en": "Riverside Film Screening",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "강변 영화 상영회는 야외 상영 행사로 방문객에게 언급된다."
+    ],
+    "scores": {
+      "final_score": 0.7,
+      "culture_relevance_score": 0.64
+    },
+    "weather": null,
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_event_05",
+    "category": "event",
+    "region_ko": "강원",
+    "region_en": "Gangwon",
+    "place_name_ko": "눈꽃 야시장",
+    "place_name_en": "Snowflower Night Market",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "눈꽃 야시장은 겨울 계절 야시장 행사라는 공식 일정이 있다."
+    ],
+    "scores": {
+      "final_score": 0.75,
+      "local_spending_score": 0.7,
+      "small_merchant_fit_score": 0.72
+    },
+    "weather": {
+      "weather_temp": "-4",
+      "weather_icon": "snow",
+      "weather_outdoor_status": "fair"
+    },
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_event_06",
+    "category": "event",
+    "region_ko": "전남",
+    "region_en": "Jeonnam",
+    "place_name_ko": "갈대 썰매 잔치",
+    "place_name_en": "Reed Sleigh Feast",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "갈대 썰매 잔치는 늦가을 계절 행사로 소개된다."
+    ],
+    "scores": {
+      "final_score": 0.68,
+      "culture_relevance_score": 0.6
+    },
+    "weather": null,
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_event_07",
+    "category": "event",
+    "region_ko": "대구",
+    "region_en": "Daegu",
+    "place_name_ko": "골목 공연 축제",
+    "place_name_en": "Alley Performance Festival",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "골목 공연 축제는 도심 골목에서 열리는 공연 행사라는 언급이 있다."
+    ],
+    "scores": {
+      "final_score": 0.73,
+      "culture_relevance_score": 0.66,
+      "small_merchant_fit_score": 0.6
+    },
+    "weather": null,
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_culture_venue_01",
+    "category": "culture_venue",
+    "region_ko": "서울",
+    "region_en": "Seoul",
+    "place_name_ko": "새벽미술관",
+    "place_name_en": "Dawn Art Museum",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "새벽미술관은 근현대 미술 전시를 다루는 공식 문화공간이다."
+    ],
+    "scores": {
+      "final_score": 0.84,
+      "culture_relevance_score": 0.82
+    },
+    "weather": null,
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_culture_venue_02",
+    "category": "culture_venue",
+    "region_ko": "부산",
+    "region_en": "Busan",
+    "place_name_ko": "항구역사자료관",
+    "place_name_en": "Port History Archive",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "항구역사자료관은 항만 역사 전시 공간으로 소개된다."
+    ],
+    "scores": {
+      "final_score": 0.77,
+      "culture_relevance_score": 0.74
+    },
+    "weather": null,
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_culture_venue_03",
+    "category": "culture_venue",
+    "region_ko": "제주",
+    "region_en": "Jeju",
+    "place_name_ko": "돌하르방 전시관",
+    "place_name_en": "Stone-Statue Exhibit Hall",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "돌하르방 전시관은 제주 석상 문화를 다루는 전시 공간이라는 언급이 있다."
+    ],
+    "scores": {
+      "final_score": 0.76,
+      "culture_relevance_score": 0.7,
+      "weather_fit_score": 0.6
+    },
+    "weather": {
+      "weather_temp": "22",
+      "weather_icon": "partly-cloudy",
+      "weather_outdoor_status": "good"
+    },
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_culture_venue_04",
+    "category": "culture_venue",
+    "region_ko": "경기",
+    "region_en": "Gyeonggi",
+    "place_name_ko": "도자체험 공방",
+    "place_name_en": "Ceramic Workshop",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "도자체험 공방은 손도자기 체험을 제공하는 문화공간으로 소개된다."
+    ],
+    "scores": {
+      "final_score": 0.72,
+      "small_merchant_fit_score": 0.7
+    },
+    "weather": null,
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_culture_venue_05",
+    "category": "culture_venue",
+    "region_ko": "강원",
+    "region_en": "Gangwon",
+    "place_name_ko": "산골문화도서관",
+    "place_name_en": "Mountain Village Library",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "산골문화도서관은 마을 독서와 문화 프로그램을 다루는 공간이라는 언급이 있다."
+    ],
+    "scores": {
+      "final_score": 0.69,
+      "culture_relevance_score": 0.62
+    },
+    "weather": null,
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_culture_venue_06",
+    "category": "culture_venue",
+    "region_ko": "전남",
+    "region_en": "Jeonnam",
+    "place_name_ko": "소리극장",
+    "place_name_en": "Sound Theater",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "소리극장은 국악과 공연을 다루는 소규모 문화공간으로 소개된다."
+    ],
+    "scores": {
+      "final_score": 0.8,
+      "culture_relevance_score": 0.79
+    },
+    "weather": null,
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_culture_venue_07",
+    "category": "culture_venue",
+    "region_ko": "경남",
+    "region_en": "Gyeongnam",
+    "place_name_ko": "학봉미술관",
+    "place_name_en": "Hakbong Art Museum",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "학봉미술관은 지역 작가 전시를 다루는 공식 문화공간이라는 언급이 있다."
+    ],
+    "scores": {
+      "final_score": 0.74,
+      "culture_relevance_score": 0.7
+    },
+    "weather": null,
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_culture_venue_08",
+    "category": "culture_venue",
+    "region_ko": "충남",
+    "region_en": "Chungnam",
+    "place_name_ko": "염전체험관",
+    "place_name_en": "Salt-Field Heritage Hall",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "염전체험관은 갯벌 염전 역사를 다루는 전시 공간으로 소개된다."
+    ],
+    "scores": {
+      "final_score": 0.71,
+      "culture_relevance_score": 0.64,
+      "demand_dispersion_score": 0.6
+    },
+    "weather": null,
+    "expect_nonempty": true
+  },
+  {
+    "place_id": "eval_culture_venue_09",
+    "category": "culture_venue",
+    "region_ko": "인천",
+    "region_en": "Incheon",
+    "place_name_ko": "개항거리 갤러리",
+    "place_name_en": "Open-Port Street Gallery",
+    "language_samples": [
+      "ko",
+      "en"
+    ],
+    "grounding_anchors": [
+      "개항거리 갤러리는 근대사 전시를 다루는 골목 문화공간이라는 언급이 있다."
+    ],
+    "scores": {
+      "final_score": 0.78,
+      "culture_relevance_score": 0.73,
+      "small_merchant_fit_score": 0.6
+    },
+    "weather": {
+      "weather_temp": "17",
+      "weather_icon": "cloudy",
+      "weather_outdoor_status": "fair"
+    },
+    "expect_nonempty": true
+  }
+]
