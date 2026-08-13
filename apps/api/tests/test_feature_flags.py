@@ -28,6 +28,7 @@ EXPECTED_KEYS = {
     "docent_reason_enabled",
     "docent_audio_cache",
     "LALA_ENABLE_LIVE_SPEECH",
+    "LALA_ENABLE_LIVE_ROUTING",
     "docent_qa_judge",
     "PLAN_FULL_SLOTS",
     "PLAN_WEATHER_SUBSTITUTE",
