@@ -436,6 +436,144 @@ class LalaApiClient {
     );
   }
 
+  // V5-A planning actions. Auth-scoped /me endpoints; the bearer/oauth credential
+  // is attached per-request by _request (includeAuth defaults to true). Bodies are
+  // plain Maps, so no generated request builder is needed and the regen SSOT
+  // (clients/flutter_generated) is not touched.
+
+  Future<LalaEnvelope<LalaSavedPlacesData>> listSavedPlaces({
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'GET',
+      '/api/v1/me/saved-places',
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+    );
+    return _envelopeFromResponse<LalaSavedPlacesData>(
+      resp,
+      parseData: LalaSavedPlacesData.fromJsonObject,
+    );
+  }
+
+  Future<LalaEnvelope<LalaSaveToggleResult>> savePlace({
+    required String placeId,
+    String source = 'public_mvp_snapshot',
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'PUT',
+      '/api/v1/me/saved-places/$placeId',
+      body: {'source': source},
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+      contentType: 'application/json',
+    );
+    return _envelopeFromResponse<LalaSaveToggleResult>(
+      resp,
+      parseData: LalaSaveToggleResult.fromJsonObject,
+    );
+  }
+
+  Future<LalaEnvelope<LalaSaveToggleResult>> unsavePlace({
+    required String placeId,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'DELETE',
+      '/api/v1/me/saved-places/$placeId',
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+    );
+    return _envelopeFromResponse<LalaSaveToggleResult>(
+      resp,
+      parseData: LalaSaveToggleResult.fromJsonObject,
+    );
+  }
+
+  Future<LalaEnvelope<LalaPersistedPlanSummary>> savePersistedPlan({
+    required String planDate,
+    required Map<String, dynamic> plan,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'PUT',
+      '/api/v1/me/plans/$planDate',
+      body: {'plan': plan},
+      requestId: requestId,
+      timeout: timeout ?? plannerTimeout,
+      contentType: 'application/json',
+    );
+    return _envelopeFromResponse<LalaPersistedPlanSummary>(
+      resp,
+      parseData: LalaPersistedPlanSummary.fromJsonObject,
+    );
+  }
+
+  Future<LalaEnvelope<LalaPersistedPlan?>> loadPersistedPlan({
+    required String planDate,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'GET',
+      '/api/v1/me/plans/$planDate',
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+    );
+    // Honest null: an absent/corrupt/version-mismatched plan returns null data.
+    return _envelopeFromResponse<LalaPersistedPlan?>(
+      resp,
+      parseData: (value) =>
+          value == null ? null : LalaPersistedPlan.fromJsonObject(value),
+    );
+  }
+
+  Future<LalaEnvelope<LalaSlotVisitsData>> listSlotVisits({
+    required String planDate,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'GET',
+      '/api/v1/me/plans/$planDate/visits',
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+    );
+    return _envelopeFromResponse<LalaSlotVisitsData>(
+      resp,
+      parseData: LalaSlotVisitsData.fromJsonObject,
+    );
+  }
+
+  Future<LalaEnvelope<LalaSlotVisit>> checkInSlot({
+    required String planDate,
+    required String slotPeriod,
+    String status = 'visited',
+    String? placeId,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final body = <String, dynamic>{'status': status};
+    if (placeId != null) body['place_id'] = placeId;
+    final resp = await _request(
+      'PUT',
+      '/api/v1/me/plans/$planDate/visits/$slotPeriod',
+      body: body,
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+      contentType: 'application/json',
+    );
+    return _envelopeFromResponse<LalaSlotVisit>(
+      resp,
+      parseData: LalaSlotVisit.fromJsonObject,
+    );
+  }
+
   /// ONMU P3b: 커뮤니티 게시판 — 목록 조회(페이지네이션). 클라이언트 인증.
   Future<LalaEnvelope<CommunityPostsResponse>> getCommunityPosts({
     int limit = 20,
@@ -746,9 +884,8 @@ class LalaApiClient {
     final raw = resp.data;
     if (raw is! Map<String, dynamic>) {
       throw LalaApiException(
-        code: status < 200 || status >= 300
-            ? 'HTTP_$status'
-            : 'INVALID_RESPONSE',
+        code:
+            status < 200 || status >= 300 ? 'HTTP_$status' : 'INVALID_RESPONSE',
         message: 'Expected a JSON object response.',
         statusCode: status,
         retryable: status >= 500,
@@ -914,9 +1051,8 @@ class LalaEnvelope<T> {
     T Function(Object?)? parseData,
   }) {
     final rawMeta = json['meta'];
-    final meta = rawMeta is Map<String, dynamic>
-        ? rawMeta
-        : <String, dynamic>{};
+    final meta =
+        rawMeta is Map<String, dynamic> ? rawMeta : <String, dynamic>{};
     final rawData = json['data'];
     final data = parseData == null
         ? (rawData is T ? rawData : null)
@@ -2098,4 +2234,167 @@ bool? _asOptionalBool(Object? value) {
 
 bool _validScore(double? value) {
   return value != null && value >= 0 && value <= 1;
+}
+
+// V5-A planning action models. Parser-only (fromJson); an outbound encoder is
+// owned by the store layer, never by these models, preserving the generated
+// client SSOT discipline.
+
+class LalaSavedPlace {
+  const LalaSavedPlace({
+    required this.placeId,
+    required this.source,
+    this.savedAt,
+  });
+
+  final String placeId;
+  final String source;
+  final String? savedAt;
+
+  static LalaSavedPlace fromJsonObject(Object? value) {
+    return LalaSavedPlace.fromJson(_asMap(value));
+  }
+
+  factory LalaSavedPlace.fromJson(Map<String, dynamic> json) {
+    return LalaSavedPlace(
+      placeId: _asString(json['place_id']),
+      source: _asString(json['source']),
+      savedAt: _asOptionalString(json['saved_at']),
+    );
+  }
+}
+
+class LalaSavedPlacesData {
+  const LalaSavedPlacesData({required this.items});
+
+  final List<LalaSavedPlace> items;
+
+  static LalaSavedPlacesData fromJsonObject(Object? value) {
+    return LalaSavedPlacesData.fromJson(_asMap(value));
+  }
+
+  factory LalaSavedPlacesData.fromJson(Map<String, dynamic> json) {
+    return LalaSavedPlacesData(
+      items: _asList(json['items']).map(LalaSavedPlace.fromJsonObject).toList(),
+    );
+  }
+}
+
+class LalaSaveToggleResult {
+  const LalaSaveToggleResult({
+    required this.placeId,
+    required this.saved,
+    required this.changed,
+  });
+
+  final String placeId;
+  final bool saved;
+  final bool changed;
+
+  static LalaSaveToggleResult fromJsonObject(Object? value) {
+    return LalaSaveToggleResult.fromJson(_asMap(value));
+  }
+
+  factory LalaSaveToggleResult.fromJson(Map<String, dynamic> json) {
+    return LalaSaveToggleResult(
+      placeId: _asString(json['place_id']),
+      saved: _asBool(json['saved']),
+      changed: _asBool(json['changed']),
+    );
+  }
+}
+
+class LalaPersistedPlanSummary {
+  const LalaPersistedPlanSummary({
+    required this.planDate,
+    required this.schemaVersion,
+    this.updatedAt,
+  });
+
+  final String planDate;
+  final int schemaVersion;
+  final String? updatedAt;
+
+  static LalaPersistedPlanSummary fromJsonObject(Object? value) {
+    return LalaPersistedPlanSummary.fromJson(_asMap(value));
+  }
+
+  factory LalaPersistedPlanSummary.fromJson(Map<String, dynamic> json) {
+    return LalaPersistedPlanSummary(
+      planDate: _asString(json['plan_date']),
+      schemaVersion: _asInt(json['schema_version']),
+      updatedAt: _asOptionalString(json['updated_at']),
+    );
+  }
+}
+
+class LalaPersistedPlan {
+  const LalaPersistedPlan({
+    required this.planDate,
+    required this.schemaVersion,
+    this.plan,
+    this.updatedAt,
+  });
+
+  final String planDate;
+  final int schemaVersion;
+  final LalaDailyPlan? plan;
+  final String? updatedAt;
+
+  static LalaPersistedPlan fromJsonObject(Object? value) {
+    return LalaPersistedPlan.fromJson(_asMap(value));
+  }
+
+  factory LalaPersistedPlan.fromJson(Map<String, dynamic> json) {
+    final rawPlan = json['plan'];
+    return LalaPersistedPlan(
+      planDate: _asString(json['plan_date']),
+      schemaVersion: _asInt(json['schema_version']),
+      plan: rawPlan == null ? null : LalaDailyPlan.fromJsonObject(rawPlan),
+      updatedAt: _asOptionalString(json['updated_at']),
+    );
+  }
+}
+
+class LalaSlotVisit {
+  const LalaSlotVisit({
+    required this.slotPeriod,
+    required this.status,
+    this.placeId,
+    this.visitedAt,
+  });
+
+  final String slotPeriod;
+  final String status;
+  final String? placeId;
+  final String? visitedAt;
+
+  static LalaSlotVisit fromJsonObject(Object? value) {
+    return LalaSlotVisit.fromJson(_asMap(value));
+  }
+
+  factory LalaSlotVisit.fromJson(Map<String, dynamic> json) {
+    return LalaSlotVisit(
+      slotPeriod: _asString(json['slot_period']),
+      status: _asString(json['status']),
+      placeId: _asOptionalString(json['place_id']),
+      visitedAt: _asOptionalString(json['visited_at']),
+    );
+  }
+}
+
+class LalaSlotVisitsData {
+  const LalaSlotVisitsData({required this.items});
+
+  final List<LalaSlotVisit> items;
+
+  static LalaSlotVisitsData fromJsonObject(Object? value) {
+    return LalaSlotVisitsData.fromJson(_asMap(value));
+  }
+
+  factory LalaSlotVisitsData.fromJson(Map<String, dynamic> json) {
+    return LalaSlotVisitsData(
+      items: _asList(json['items']).map(LalaSlotVisit.fromJsonObject).toList(),
+    );
+  }
 }

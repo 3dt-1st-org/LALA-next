@@ -1076,8 +1076,7 @@ void main() {
     );
   });
 
-  test(
-      'getWeather default budget tolerates the backend DB+AirKorea cold path',
+  test('getWeather default budget tolerates the backend DB+AirKorea cold path',
       () {
     // The weather endpoint does a DB lookup plus an external AirKorea call in
     // sequence; a cold response (~8.5s observed in production) outlasts the
@@ -1325,6 +1324,172 @@ void main() {
 
     final none = LalaApiClient(baseUri: Uri.parse('http://api.example.test'));
     expect(await none.resolveWebSocketToken(), '');
+  });
+
+  // V5-A planning action models + endpoints.
+
+  test('V5-A action models parse their wire shapes and stay null-honest', () {
+    final saved = LalaSavedPlace.fromJsonObject(const {
+      'place_id': 'p1',
+      'source': 'db',
+      'saved_at': '2026-08-14T00:00:00Z',
+    });
+    expect(saved.placeId, 'p1');
+    expect(saved.source, 'db');
+    expect(saved.savedAt, '2026-08-14T00:00:00Z');
+
+    final toggle = LalaSaveToggleResult.fromJsonObject(const {
+      'place_id': 'p1',
+      'saved': false,
+      'changed': false,
+    });
+    expect(toggle.saved, isFalse);
+    expect(toggle.changed, isFalse);
+
+    final visit = LalaSlotVisit.fromJsonObject(const {
+      'slot_period': 'morning',
+      'status': 'visited',
+      'place_id': null,
+      'visited_at': null,
+    });
+    expect(visit.slotPeriod, 'morning');
+    expect(visit.status, 'visited');
+    expect(visit.placeId, isNull);
+
+    final savesData = LalaSavedPlacesData.fromJsonObject(
+        const {'items': <Map<String, dynamic>>[]});
+    expect(savesData.items, isEmpty);
+
+    final visitsData = LalaSlotVisitsData.fromJsonObject(const {
+      'items': <Map<String, dynamic>>[
+        {'slot_period': 'lunch', 'status': 'planned'},
+      ],
+    });
+    expect(visitsData.items.single.slotPeriod, 'lunch');
+    expect(visitsData.items.single.status, 'planned');
+
+    // A persisted plan with no embedded plan degrades to a null plan field.
+    final persisted = LalaPersistedPlan.fromJsonObject(const {
+      'plan_date': '2026-08-14',
+      'schema_version': 1,
+      'plan': null,
+      'updated_at': null,
+    });
+    expect(persisted.planDate, '2026-08-14');
+    expect(persisted.schemaVersion, 1);
+    expect(persisted.plan, isNull);
+  });
+
+  test('listSavedPlaces sends bearer auth and parses saved-place items',
+      () async {
+    final requests = <RequestOptions>[];
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      bearerToken: 'save-token',
+      dio: _dio(
+        (request) async => _json({
+          'ok': true,
+          'data': {
+            'items': [
+              {'place_id': 'p1', 'source': 'db', 'saved_at': null},
+              {
+                'place_id': 'p2',
+                'source': 'public_mvp_snapshot',
+                'saved_at': null
+              },
+            ],
+          },
+          'meta': {'request_id': 'saves-id'},
+          'error': null,
+        }),
+        sink: requests.add,
+      ),
+    );
+
+    final envelope = await client.listSavedPlaces();
+
+    expect(requests.single.method, 'GET');
+    expect(requests.single.uri.path, '/api/v1/me/saved-places');
+    expect(requests.single.headers['authorization'], 'Bearer save-token');
+    expect(envelope.data?.items.map((p) => p.placeId), ['p1', 'p2']);
+    expect(envelope.data?.items.first.savedAt, isNull);
+  });
+
+  test('savePlace sends a PUT with the source body to the place path',
+      () async {
+    final requests = <RequestOptions>[];
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      bearerToken: 'save-token',
+      dio: _dio(
+        (request) async => _json({
+          'ok': true,
+          'data': {'place_id': 'p1', 'saved': true, 'changed': true},
+          'meta': {'request_id': 'save-id'},
+          'error': null,
+        }),
+        sink: requests.add,
+      ),
+    );
+
+    final envelope = await client.savePlace(placeId: 'p1', source: 'db');
+
+    expect(requests.single.method, 'PUT');
+    expect(requests.single.uri.path, '/api/v1/me/saved-places/p1');
+    expect(envelope.data?.saved, isTrue);
+    expect(envelope.data?.changed, isTrue);
+  });
+
+  test('loadPersistedPlan stays honest-null when the plan is absent', () async {
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      bearerToken: 'plan-token',
+      dio: _dio((request) async => _json({
+            'ok': true,
+            'data': null,
+            'meta': {'request_id': 'plan-id'},
+            'error': null,
+          })),
+    );
+
+    final envelope = await client.loadPersistedPlan(planDate: '2026-08-14');
+
+    expect(envelope.ok, isTrue);
+    expect(envelope.data, isNull); // honest null, never a thrown parse
+  });
+
+  test('checkInSlot PUTs the status body to the slot visit path', () async {
+    final requests = <RequestOptions>[];
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      bearerToken: 'visit-token',
+      dio: _dio(
+        (request) async => _json({
+          'ok': true,
+          'data': {
+            'slot_period': 'morning',
+            'place_id': 'p1',
+            'status': 'visited',
+            'visited_at': null,
+          },
+          'meta': {'request_id': 'visit-id'},
+          'error': null,
+        }),
+        sink: requests.add,
+      ),
+    );
+
+    final envelope = await client.checkInSlot(
+      planDate: '2026-08-14',
+      slotPeriod: 'morning',
+      placeId: 'p1',
+    );
+
+    expect(requests.single.method, 'PUT');
+    expect(
+        requests.single.uri.path, '/api/v1/me/plans/2026-08-14/visits/morning');
+    expect(envelope.data?.status, 'visited');
+    expect(envelope.data?.slotPeriod, 'morning');
   });
 }
 
