@@ -123,43 +123,8 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
     }
   }
 
-  KakaoMapCamera? _cameraFromDetail(Object? detail) {
-    Object? payload = detail;
-    if (detail is String) {
-      try {
-        payload = jsonDecode(detail);
-      } on FormatException {
-        return null;
-      }
-    }
-    if (payload is! Map) {
-      return null;
-    }
-    final lat = _asDouble(payload['lat']);
-    final lng = _asDouble(payload['lng']);
-    final level = _asInt(payload['level']);
-    if (lat == null || lng == null || level == null) {
-      return null;
-    }
-    return KakaoMapCamera(lat: lat, lng: lng, level: level);
-  }
-
-  double? _asDouble(Object? value) {
-    if (value is num) {
-      return value.toDouble();
-    }
-    return double.tryParse(value?.toString() ?? '');
-  }
-
-  int? _asInt(Object? value) {
-    if (value is int) {
-      return value;
-    }
-    if (value is num) {
-      return value.round();
-    }
-    return int.tryParse(value?.toString() ?? '');
-  }
+  KakaoMapCamera? _cameraFromDetail(Object? detail) =>
+      decodeKakaoCameraIdlePayload(detail);
 
   @override
   Widget build(BuildContext context) {
@@ -397,12 +362,36 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
 
     function dispatchCameraIdle() {
       var nextCenter = map.getCenter();
+      // V1 bounds-query (D4): SSOT = the map's getBounds(); posted alongside
+      // {lat,lng,level}. Guarded — absent when the binding is unavailable so
+      // the Dart bridge falls back to center+radius (state B2).
+      var bounds = null;
+      if (typeof map.getBounds === "function") {
+        try {
+          var b = map.getBounds();
+          bounds = {
+            sw_lat: b.getSouthWest().getLat(),
+            sw_lng: b.getSouthWest().getLng(),
+            ne_lat: b.getNorthEast().getLat(),
+            ne_lng: b.getNorthEast().getLng()
+          };
+        } catch (e) {
+          bounds = null;
+        }
+      }
+      var payload = {
+        lat: nextCenter.getLat(),
+        lng: nextCenter.getLng(),
+        level: map.getLevel()
+      };
+      if (bounds) {
+        payload.sw_lat = bounds.sw_lat;
+        payload.sw_lng = bounds.sw_lng;
+        payload.ne_lat = bounds.ne_lat;
+        payload.ne_lng = bounds.ne_lng;
+      }
       window.dispatchEvent(new CustomEvent("lala-map-camera-idle", {
-        detail: JSON.stringify({
-          lat: nextCenter.getLat(),
-          lng: nextCenter.getLng(),
-          level: map.getLevel()
-        })
+        detail: JSON.stringify(payload)
       }));
     }
 

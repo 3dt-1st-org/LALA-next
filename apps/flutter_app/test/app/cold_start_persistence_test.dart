@@ -8,9 +8,12 @@
 //  - RegionSource.current is never persisted; manual persists and supersedes cleanly
 //  - reset/clear wipe persisted onboarding + region state (re-onboarding)
 //  - completeAndFlush is durable before navigation and still completes on storage failure
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:lala_next_app/app/bootstrap.dart';
 import 'package:lala_next_app/app/lala_main_shell.dart';
@@ -19,8 +22,11 @@ import 'package:lala_next_app/core/backend/lala_backend.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
 import 'package:lala_next_app/core/location/region_context.dart';
+import 'package:lala_next_app/core/persistence/cross_tab_preferences.dart';
 import 'package:lala_next_app/core/persistence/onboarding_preferences.dart';
 import 'package:lala_next_app/core/routing/lala_router.dart';
+import 'package:lala_next_app/core/state/plan_context_store.dart';
+import 'package:lala_next_app/core/state/selected_place_store.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/features/onboarding/presentation/pages/splash_page.dart';
 import 'package:lala_next_app/features/home/home_page.dart';
@@ -29,14 +35,21 @@ import 'package:lala_next_app/features/search/presentation/pages/search_page.dar
 import 'package:lala_next_app/manual_location_options.dart';
 
 void main() {
-  // The onboarding + region holders are process-local singletons. Detach + reset
-  // before/after each case so an attached prefs or a completed flag can never leak
-  // between tests.
+  // The onboarding + region + cross-tab holders are process-local singletons.
+  // Detach + reset before/after each case so an attached prefs, a completed
+  // flag, or a persisted selection can never leak between tests.
   setUp(() {
+    // Prevent SharedPreferences.getInstance() (called by createDefault() when
+    // a test doesn't inject crossTabPreferences) from hanging on the missing
+    // platform channel. Resets the singleton cache between tests.
+    SharedPreferences.setMockInitialValues(<String, Object>{});
     OnboardingState.detachPersistence();
     RegionContextStore.detachPersistence();
     OnboardingState.reset();
     RegionContextStore.clear();
+    CrossTabPersistence.detach();
+    SelectedPlaceStore.clear();
+    PlanContextStore.clear();
   });
 
   tearDown(() {
@@ -44,6 +57,9 @@ void main() {
     RegionContextStore.detachPersistence();
     OnboardingState.reset();
     RegionContextStore.clear();
+    CrossTabPersistence.detach();
+    SelectedPlaceStore.clear();
+    PlanContextStore.clear();
   });
 
   group('bootstrapAppState hydration', () {
@@ -517,6 +533,194 @@ void main() {
       },
     );
   });
+
+  group('cross-tab persistence + cold-start hydration', () {
+    test(
+      'restores the persisted selected-place id into SelectedPlaceStore',
+      () async {
+        final key = '${kCrossTabStoragePrefix}selectedPlaceId';
+        final backend = _MemoryBackend(<String, Object?>{
+          key: 'seed-test-cafe',
+        });
+        await bootstrapAppState(
+          preferences: OnboardingPreferences(backend),
+          crossTabPreferences: CrossTabPreferences(backend),
+        );
+        expect(SelectedPlaceStore.current, 'seed-test-cafe');
+      },
+    );
+
+    test('persisted plan DTO round-trips on cold restart', () async {
+      final backend = _MemoryBackend();
+      final plan = _sampleCrossTabPlan();
+      // Simulate a prior session's write-through.
+      await CrossTabPreferences(backend).writePlan(plan);
+
+      await bootstrapAppState(
+        preferences: OnboardingPreferences(backend),
+        crossTabPreferences: CrossTabPreferences(backend),
+      );
+
+      final restored = PlanContextStore.current;
+      expect(restored, isNotNull);
+      expect(restored!.language, plan.language);
+      expect(restored.center.lat, plan.center.lat);
+      expect(restored.center.lng, plan.center.lng);
+      expect(restored.radiusM, plan.radiusM);
+      expect(restored.source, plan.source);
+      expect(restored.requestHash, plan.requestHash);
+      expect(restored.cacheKey, plan.cacheKey);
+      expect(restored.slots.length, plan.slots.length);
+      expect(restored.slots.first.period, plan.slots.first.period);
+      expect(restored.slots.first.title, plan.slots.first.title);
+      expect(restored.slots.first.place?.placeId, 'seed-test-cafe');
+      expect(restored.slots.first.place?.name, '해운대 카페');
+      expect(restored.weather.lat, plan.weather.lat);
+      expect(restored.weather.temp, plan.weather.temp);
+    });
+
+    test(
+      'corrupt plan JSON degrades to null (graceful; app still starts; no throw)',
+      () async {
+        final planKey = '${kCrossTabStoragePrefix}plan';
+        final corruptInputs = <String>[
+          '{not valid json', // malformed JSON
+          '{"v": 1}', // missing 'plan'
+          '{"plan": {}}', // missing 'v'
+          '{"v": "bad", "plan": {}}', // wrong 'v' type
+          '', // empty string
+        ];
+        for (final corrupt in corruptInputs) {
+          CrossTabPersistence.detach();
+          SelectedPlaceStore.clear();
+          PlanContextStore.clear();
+          final backend = _MemoryBackend(<String, Object?>{planKey: corrupt});
+          await bootstrapAppState(
+            preferences: OnboardingPreferences(backend),
+            crossTabPreferences: CrossTabPreferences(backend),
+          );
+          expect(
+            PlanContextStore.current,
+            isNull,
+            reason: 'should degrade to null for input: "$corrupt"',
+          );
+        }
+      },
+    );
+
+    test('version-mismatch plan degrades to null', () async {
+      final planKey = '${kCrossTabStoragePrefix}plan';
+      final backend = _MemoryBackend(<String, Object>{
+        planKey: '{"v": 99, "plan": {"language": "ko"}}',
+      });
+      await bootstrapAppState(
+        preferences: OnboardingPreferences(backend),
+        crossTabPreferences: CrossTabPreferences(backend),
+      );
+      expect(PlanContextStore.current, isNull);
+    });
+
+    test(
+      'stale hydration is suppressed by the epoch guard (fresh set during load wins)',
+      () async {
+        final loadStarted = Completer<void>();
+        final gate = Completer<void>();
+        final key = '${kCrossTabStoragePrefix}selectedPlaceId';
+        final backend = _GatedBackend(
+          seed: <String, Object?>{key: 'stale-id'},
+          loadStarted: loadStarted,
+          gate: gate,
+        );
+
+        final boot = bootstrapAppState(
+          preferences: OnboardingPreferences(backend),
+          crossTabPreferences: CrossTabPreferences(backend),
+        );
+
+        // Wait until the cross-tab load is in flight (listeners are attached,
+        // the persisted-id read is blocked on the gate).
+        await loadStarted.future;
+
+        // A fresh selection lands while the stale persisted id is still loading.
+        SelectedPlaceStore.set('fresh-id');
+
+        // Release the load; the stale persisted id must NOT clobber the fresh one.
+        gate.complete();
+        await boot;
+
+        expect(SelectedPlaceStore.current, 'fresh-id');
+      },
+    );
+
+    test(
+      'privacy: writes only lala.crosstab.v1.* keys; no coordinate/PII keys',
+      () async {
+        final backend = _MemoryBackend();
+        await bootstrapAppState(
+          preferences: OnboardingPreferences(backend),
+          crossTabPreferences: CrossTabPreferences(backend),
+        );
+        SelectedPlaceStore.set('seed-test-cafe');
+        PlanContextStore.set(_sampleCrossTabPlan());
+        await _drainWrites();
+
+        final crossTabKeys = backend.store.keys
+            .where((k) => k.startsWith(kCrossTabStoragePrefix))
+            .toSet();
+        // Exactly the two sanctioned cross-tab keys — no coordinate/PII keys.
+        expect(crossTabKeys, {
+          '${kCrossTabStoragePrefix}selectedPlaceId',
+          '${kCrossTabStoragePrefix}plan',
+        });
+
+        // No key outside the sanctioned onboarding/crosstab prefixes.
+        for (final key in backend.store.keys) {
+          final sanctioned =
+              key.startsWith(kOnboardingStoragePrefix) ||
+              key.startsWith(kCrossTabStoragePrefix);
+          expect(
+            sanctioned,
+            isTrue,
+            reason: 'unexpected non-sanctioned key: $key',
+          );
+        }
+      },
+    );
+
+    test(
+      'clearing selection/plan removes the key; clean store hydrates to null',
+      () async {
+        final backend = _MemoryBackend();
+        await bootstrapAppState(
+          preferences: OnboardingPreferences(backend),
+          crossTabPreferences: CrossTabPreferences(backend),
+        );
+        // A clean store hydrates to nothing.
+        expect(SelectedPlaceStore.current, isNull);
+        expect(PlanContextStore.current, isNull);
+
+        // Selecting persists the id.
+        final idKey = '${kCrossTabStoragePrefix}selectedPlaceId';
+        SelectedPlaceStore.set('seed-test-cafe');
+        await _drainWrites();
+        expect(backend.store[idKey], 'seed-test-cafe');
+
+        // Clearing removes the key (null => remove).
+        SelectedPlaceStore.clear();
+        await _drainWrites();
+        expect(backend.store.containsKey(idKey), isFalse);
+
+        // Same contract for the plan.
+        final planKey = '${kCrossTabStoragePrefix}plan';
+        PlanContextStore.set(_sampleCrossTabPlan());
+        await _drainWrites();
+        expect(backend.store[planKey], isNotNull);
+        PlanContextStore.clear();
+        await _drainWrites();
+        expect(backend.store.containsKey(planKey), isFalse);
+      },
+    );
+  });
 }
 
 /// Drain the unawaited persistence microtasks fired by set/clear/reset/markCompleted.
@@ -537,8 +741,10 @@ ManualLocationOption _busanHaeundae() {
   return manualLocationOptions.firstWhere((o) => o.id == 'busan-haeundae');
 }
 
-/// In-memory OnboardingPreferencesBackend for deterministic, plugin-free tests.
-class _MemoryBackend implements OnboardingPreferencesBackend {
+/// In-memory backend for deterministic, plugin-free tests. Implements both
+/// backends so a single instance backs onboarding + cross-tab in a test.
+class _MemoryBackend
+    implements OnboardingPreferencesBackend, CrossTabPreferencesBackend {
   _MemoryBackend([Map<String, Object?>? seed])
     : store = Map<String, Object?>.from(seed ?? <String, Object?>{});
 
@@ -567,7 +773,8 @@ class _MemoryBackend implements OnboardingPreferencesBackend {
 }
 
 /// OnboardingPreferencesBackend whose store is permanently unavailable.
-class _FailingBackend implements OnboardingPreferencesBackend {
+class _FailingBackend
+    implements OnboardingPreferencesBackend, CrossTabPreferencesBackend {
   Future<Never> _fail() async => throw StateError('storage unavailable');
 
   @override
@@ -592,7 +799,8 @@ class _FailingBackend implements OnboardingPreferencesBackend {
 /// without flaky wall-clock timing: an awaited write settles before the caller
 /// resumes (it is in the store the instant the await returns), while a
 /// fire-and-forget write is still pending the instant set() returns.
-class _DelayedBackend implements OnboardingPreferencesBackend {
+class _DelayedBackend
+    implements OnboardingPreferencesBackend, CrossTabPreferencesBackend {
   _DelayedBackend([Map<String, Object?>? seed])
     : store = Map<String, Object?>.from(seed ?? <String, Object?>{});
 
@@ -837,4 +1045,74 @@ LalaEnvelope<T> _envelope<T>(T data) {
 
 LalaEnvelope<Map<String, dynamic>> _rawEnvelope(Map<String, dynamic> data) {
   return _envelope<Map<String, dynamic>>(data);
+}
+
+/// A plan exercising the nested types the app-owned encoder must round-trip
+/// (center, weather with dust/forecast, and a slot carrying a place).
+LalaDailyPlan _sampleCrossTabPlan() {
+  return LalaDailyPlan(
+    language: 'ko',
+    center: const LalaCoordinate(lat: 35.16665, lng: 129.16792),
+    radiusM: 3000,
+    weather: _weather(),
+    slots: <LalaPlanSlot>[
+      LalaPlanSlot(period: 'morning', title: '해운대 산책 코스', place: _cafe()),
+    ],
+    source: 'db',
+    // 저엔트로피 테스트 값(detect-secrets 허위 양성 회피; 실제 키/해시 아님).
+    requestHash: 'test-crosstab-req-hash',
+    cacheKey: 'daily_plan:crosstab-test',
+  );
+}
+
+/// Backend whose cross-tab reads block on a [gate] completer. Used to model the
+/// stale-hydration race deterministically: the cross-tab load is held in flight
+/// while a fresh set() lands, proving the epoch guard suppresses the stale
+/// persisted value. Implements both backends so a single instance backs
+/// onboarding + cross-tab.
+class _GatedBackend
+    implements OnboardingPreferencesBackend, CrossTabPreferencesBackend {
+  _GatedBackend({
+    Map<String, Object?>? seed,
+    required this.loadStarted,
+    required this.gate,
+  }) : store = Map<String, Object?>.from(seed ?? <String, Object?>{});
+
+  final Map<String, Object?> store;
+  final Completer<void> loadStarted;
+  final Completer<void> gate;
+
+  @override
+  Future<bool?> getBool(String key) async => store[key] as bool?;
+
+  @override
+  Future<String?> getString(String key) async {
+    if (key.startsWith(kCrossTabStoragePrefix)) {
+      // Capture at call time so a listener write during the gate window does
+      // not rewrite what the in-flight load returns — the real race the epoch
+      // guard protects against.
+      final captured = store[key] as String?;
+      if (!loadStarted.isCompleted) {
+        loadStarted.complete();
+      }
+      await gate.future;
+      return captured;
+    }
+    return store[key] as String?;
+  }
+
+  @override
+  Future<void> setBool(String key, bool value) async {
+    store[key] = value;
+  }
+
+  @override
+  Future<void> setString(String key, String value) async {
+    store[key] = value;
+  }
+
+  @override
+  Future<void> remove(String key) async {
+    store.remove(key);
+  }
 }

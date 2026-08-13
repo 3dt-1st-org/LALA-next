@@ -729,6 +729,10 @@ def _places_query_schema() -> dict[str, Any]:
             "lat": {"type": "number", "format": "double"},
             "lng": {"type": "number", "format": "double"},
             "radius_m": {"type": "integer"},
+            "sw_lat": {"type": "number", "format": "double", "nullable": True},
+            "sw_lng": {"type": "number", "format": "double", "nullable": True},
+            "ne_lat": {"type": "number", "format": "double", "nullable": True},
+            "ne_lng": {"type": "number", "format": "double", "nullable": True},
             "category": {
                 "type": "string",
                 "enum": ["all", "attraction", "restaurant", "event", "culture_venue"],

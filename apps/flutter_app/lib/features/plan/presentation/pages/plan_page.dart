@@ -11,6 +11,7 @@ import 'package:lala_next_app/core/backend/lala_backend.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
 import 'package:lala_next_app/core/location/region_context.dart';
+import 'package:lala_next_app/core/state/plan_context_store.dart';
 import 'package:lala_next_app/features/home/home_view_helpers.dart'
     show interventionToastLabel;
 import 'package:lala_next_app/features/intervention/widgets/intervention_toast.dart';
@@ -78,6 +79,9 @@ class _PlanPageState extends State<PlanPage> {
   int _loadGeneration = 0;
   late final VoidCallback _onRegionChanged;
   late final VoidCallback _onLanguageChanged;
+  // Cross-tab plan SSOT (§13.4): adopts a timeline published by the map tab so
+  // both tabs show the same plan without the plan tab refetching.
+  late final VoidCallback _onPlanChanged;
 
   // 안내문은 unavailable/error 상태에서만 사용. empty(no-data) 는 별도 copy.
   String _failureMessage = '';
@@ -117,6 +121,26 @@ class _PlanPageState extends State<PlanPage> {
       _reloadForLanguage(next);
     };
     OnboardingState.languageListenable.addListener(_onLanguageChanged);
+    // Plan: adopt a non-null timeline published by another tab (e.g. the map tab's
+    // createDailyPlan). No-op-skip our own publishes (same instance) and external
+    // clears (null) so our view is never wiped by another tab's transient null.
+    _onPlanChanged = () {
+      if (!mounted) {
+        return;
+      }
+      final next = PlanContextStore.current;
+      if (next == null || next == _dailyPlan) {
+        return;
+      }
+      setState(() {
+        _dailyPlan = next;
+        _failureMessage = '';
+        _status = _visibleSlotsFrom(next).isEmpty
+            ? _PlanLoadStatus.empty
+            : _PlanLoadStatus.loaded;
+      });
+    };
+    PlanContextStore.listenable.addListener(_onPlanChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _load();
@@ -128,6 +152,7 @@ class _PlanPageState extends State<PlanPage> {
   void dispose() {
     RegionContextStore.listenable.removeListener(_onRegionChanged);
     OnboardingState.languageListenable.removeListener(_onLanguageChanged);
+    PlanContextStore.listenable.removeListener(_onPlanChanged);
     _backend.close();
     super.dispose();
   }
@@ -254,8 +279,7 @@ class _PlanPageState extends State<PlanPage> {
       }
     }
 
-    final (loaded, intervention) =
-        await (loadPlan(), loadIntervention()).wait;
+    final (loaded, intervention) = await (loadPlan(), loadIntervention()).wait;
     final plan = loaded.plan;
 
     if (generation != _loadGeneration || !mounted) {
@@ -284,13 +308,17 @@ class _PlanPageState extends State<PlanPage> {
           ? _PlanLoadStatus.empty
           : _PlanLoadStatus.loaded;
     });
+    // Cross-tab plan SSOT (§13.4): publish the generated plan so the map tab and
+    // any other reader share this timeline instead of fetching independently.
+    PlanContextStore.set(plan);
   }
 
   /// 도달 실패(unavailable)와 오류 응답(error)을 예외 코드로 구분한다.
   _PlanLoadStatus _planFailureStatus(Object? failure) {
     if (failure is LalaApiException) {
       final code = failure.code;
-      final networkUnreachable = code == 'NETWORK_ERROR' ||
+      final networkUnreachable =
+          code == 'NETWORK_ERROR' ||
           code == 'REQUEST_TIMEOUT' ||
           failure.statusCode == 0;
       return networkUnreachable
@@ -494,11 +522,7 @@ class _PlanLoadingView extends StatelessWidget {
     // 시맨틱: 로딩 상태를 화면 읽기 사용자에게 알린다(진행률/단계 주장 없이).
     return Semantics(
       container: true,
-      label: lalaCopy(
-        language,
-        ko: '일정을 준비하고 있어요',
-        en: 'Preparing your plan',
-      ),
+      label: lalaCopy(language, ko: '일정을 준비하고 있어요', en: 'Preparing your plan'),
       child: ListView(
         key: const ValueKey('plan-loading-view'),
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -637,8 +661,11 @@ class _PlanEmptyView extends StatelessWidget {
       ko: '표시할 일정이 없어요.',
       en: 'No plan slots to show.',
     );
-    final actionLabel =
-        lalaCopy(language, ko: '일정 다시 만들기', en: 'Regenerate plan');
+    final actionLabel = lalaCopy(
+      language,
+      ko: '일정 다시 만들기',
+      en: 'Regenerate plan',
+    );
     final semanticsLabel = lalaCopy(
       language,
       ko: '빈 일정. $message',

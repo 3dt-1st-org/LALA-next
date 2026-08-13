@@ -800,3 +800,272 @@ def test_fetch_docent_knowledge_context_hybrid_propagates_config_error(monkeypat
         db_repository.fetch_docent_knowledge_context_hybrid(
             place_id="p1", query="수원 명소", top_k=3
         )
+
+
+# ---------------------------------------------------------------------------
+# Three-signals Lane 1 — internal reason-composer inputs projected from the DB
+# (contract §10 Lane 1). `_local_activity_band` is a SQL min-sample gate over the
+# score snapshot's features aggregate; `_has_linked_event` is derived from the
+# already-joined LATERAL for ALL categories. Both are internal (underscore-prefixed)
+# and consumed+stripped by the reason composer (places_service, Lane 2) — never
+# serialized as-is.
+#
+# The band gate runs in SQL (contract §4: the raw aggregate never leaves the DB
+# layer), so the unit harness (fake cursor, no live Postgres) verifies the gate at
+# the SQL-encoding level — the same way the existing fetch_places test asserts on
+# captured["sql"] — plus dict-surfacing through the fake-row path.
+# ---------------------------------------------------------------------------
+
+
+def _install_fake_places_db(monkeypatch, rows):
+    """Fake psycopg2 so fetch_places returns `rows` without a live DB.
+
+    Mirrors the harness in test_fetch_places_uses_radius_bound_ranking_query; returns the
+    captured {sql, params} dict so callers can assert on the generated projection SQL.
+    """
+    captured = {}
+
+    class FakeCursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def execute(self, sql, params):
+            captured["sql"] = sql
+            captured["params"] = params
+
+        def fetchall(self):
+            return rows
+
+    class FakeConnection:
+        def cursor(self, cursor_factory=None):
+            return FakeCursor()
+
+        def close(self):
+            return None
+
+    psycopg2_module = types.ModuleType("psycopg2")
+    psycopg2_module.connect = lambda dsn, connect_timeout: FakeConnection()
+    extras_module = types.ModuleType("psycopg2.extras")
+    extras_module.RealDictCursor = object()
+    monkeypatch.setitem(sys.modules, "psycopg2", psycopg2_module)
+    monkeypatch.setitem(sys.modules, "psycopg2.extras", extras_module)
+    monkeypatch.setenv("DB_DSN", "postgresql://db.example/lala")
+    return captured
+
+
+def _place_row(**overrides):
+    row = {
+        "place_id": "p1",
+        "name_ko": "장소",
+        "name_en": "Place",
+        "category": "attraction",
+        "address_ko": "주소",
+        "address_en": "address",
+        "region_ko": "수원",
+        "region_en": "Suwon",
+        "lat": 37.2,
+        "lng": 127.0,
+        "source": "canonical",
+        "updated_at": datetime.now(UTC),
+        "distance_m": 100.0,
+        "is_approximate_location": False,
+        "is_indoor": None,
+        "event_start_date": None,
+        "event_end_date": None,
+        "event_url": None,
+        "is_ongoing": None,
+        "final_score": None,
+        "score_features": {},
+        "_local_activity_band": None,
+        "_has_linked_event": None,
+    }
+    row.update(overrides)
+    return row
+
+
+def test_local_activity_band_surfaces_and_stays_score_independent(monkeypatch):
+    # include_scores defaults False (the normal path): the band must still project.
+    rows = [
+        _place_row(place_id="active-place", _local_activity_band="active"),
+        _place_row(place_id="quiet-place", _local_activity_band=None),
+    ]
+    captured = _install_fake_places_db(monkeypatch, rows)
+
+    places = db_repository.fetch_places(
+        lat=37.2, lng=127.0, radius_m=3000, category="all", language="ko"
+    )
+
+    by_id = {p["place_id"]: p for p in places}
+    assert by_id["active-place"]["_local_activity_band"] == "active"
+    assert by_id["quiet-place"]["_local_activity_band"] is None
+    # Gate is score-independent: band present even though scores are off (score is None).
+    assert by_id["active-place"]["score"] is None
+    assert "local_activity_band" in captured["sql"]
+
+
+def test_local_activity_band_gate_boundary_encoded_score_independent():
+    # Boundary (contract §4): region_transaction_count >= MIN_SAMPLE -> 'active', else NULL.
+    assert db_repository._LOCAL_ACTIVITY_MIN_SAMPLE == 50
+
+    for include_scores in (True, False):
+        projection = db_repository._place_score_projection(include_scores=include_scores)
+        # Reads the raw features aggregate directly — not the projected `features` alias that the
+        # False branch NULLs — so the gate resolves regardless of the score flag.
+        assert "(score_snapshot.features->>'region_transaction_count')" in projection
+        # Regex guard: a missing/non-numeric count falls through to ELSE NULL, never raises.
+        assert "~ '^[0-9]+$'" in projection
+        # MIN_SAMPLE boundary encoded as >= 50 (50 active, 49 null).
+        assert ">= 50" in projection
+        assert "THEN 'active'" in projection
+        assert "ELSE NULL" in projection
+        assert "AS local_activity_band" in projection
+
+
+def test_has_linked_event_surfaces_for_non_event_category(monkeypatch):
+    rows = [
+        _place_row(place_id="attraction-with-event", category="attraction", _has_linked_event=True),
+        _place_row(place_id="restaurant-no-event", category="restaurant", _has_linked_event=False),
+    ]
+    captured = _install_fake_places_db(monkeypatch, rows)
+
+    places = db_repository.fetch_places(
+        lat=37.2, lng=127.0, radius_m=3000, category="all", language="ko"
+    )
+
+    by_id = {p["place_id"]: p for p in places}
+    # A NON-event place with a linked event surfaces the flag (the LATERAL join is all-category).
+    assert by_id["attraction-with-event"]["_has_linked_event"] is True
+    assert by_id["restaurant-no-event"]["_has_linked_event"] is False
+    # Derived from the existing LATERAL for ALL categories — bare IS NOT NULL, no category guard.
+    assert "(linked_event.place_id IS NOT NULL) AS _has_linked_event" in captured["sql"]
+
+
+def test_has_linked_event_does_not_widen_event_field_category_guard(monkeypatch):
+    captured = _install_fake_places_db(monkeypatch, [_place_row()])
+
+    db_repository.fetch_places(lat=37.2, lng=127.0, radius_m=3000, category="all", language="ko")
+    sql = captured["sql"]
+
+    # The four shared event_* fields stay category='event'-gated — unchanged by Lane 1
+    # (zero blast radius into Flutter detail/evidence consumers).
+    assert sql.count("ranked_places.category = 'event' AND linked_event.place_id IS NOT NULL") == 4
+    # The new internal has_linked_event is projected for ALL categories: its line carries no
+    # `ranked_places.category = 'event'` predicate (distinct from the gated event_* CASEs).
+    assert "(linked_event.place_id IS NOT NULL) AS _has_linked_event" in sql
+
+
+# ---------------------------------------------------------------------------
+# V1 bounds query (Lane A) — viewport rectangle behind PLACES_VIEWPORT_BOUNDS.
+# The rectangle reuses the existing lat/lng BETWEEN prefilter, re-sourced from
+# the SW/NE corners, and DROPS the ST_DWithin circle + post-fetch radius gate
+# (contract §3 B1 / §7 D2). Flag-off / bounds-absent keeps the circle path
+# byte-for-byte (B2/B3).
+# ---------------------------------------------------------------------------
+
+
+def test_fetch_places_bounds_branch_drops_circle_when_flag_on(monkeypatch):
+    # B1: flag on + all four bounds -> rectangle SQL (no ST_DWithin); 9 params
+    # (radius_m dropped from the param list); min/max sourced directly from SW/NE.
+    captured = _install_fake_places_db(monkeypatch, [_place_row()])
+    monkeypatch.setenv("LALA_PLACES_VIEWPORT_BOUNDS", "true")
+
+    db_repository.fetch_places(
+        lat=37.0,
+        lng=127.0,
+        radius_m=3000,
+        category="all",
+        language="ko",
+        sw_lat=36.5,
+        sw_lng=126.5,
+        ne_lat=37.5,
+        ne_lng=127.5,
+    )
+
+    sql = captured["sql"]
+    params = captured["params"]
+    # Rectangle prefilter retained; circle predicate dropped.
+    assert "AND lat BETWEEN %s AND %s" in sql
+    assert "AND lng BETWEEN %s AND %s" in sql
+    assert "ST_DWithin(" not in sql
+    # ORDER BY / LIMIT unchanged (contract §6: cost ≤ today, cap preserved).
+    assert "ORDER BY FLOOR(distance_m / 500.0) ASC" in sql
+    assert "LIMIT %s" in sql
+    # 9 params (radius_m absent); SW/NE feed the BETWEEN corners directly.
+    assert len(params) == 9
+    assert params[:4] == (127.0, 37.0, "all", "all")
+    assert params[4:8] == (36.5, 37.5, 126.5, 127.5)
+    assert params[-1] == 60
+
+
+def test_fetch_places_bounds_branch_keeps_circle_when_flag_off(monkeypatch):
+    # B3: flag off + bounds sent -> bounds IGNORED, the existing circle SQL runs.
+    captured = _install_fake_places_db(monkeypatch, [_place_row()])
+    monkeypatch.setenv("LALA_PLACES_VIEWPORT_BOUNDS", "false")
+
+    db_repository.fetch_places(
+        lat=37.0,
+        lng=127.0,
+        radius_m=3000,
+        category="all",
+        language="ko",
+        sw_lat=36.5,
+        sw_lng=126.5,
+        ne_lat=37.5,
+        ne_lng=127.5,
+    )
+
+    # Identical to the pre-change circle path: ST_DWithin present, 10 params
+    # (radius_m + limit tail), bbox still from _coordinate_radius_bounds.
+    assert "ST_DWithin(" in captured["sql"]
+    assert len(captured["params"]) == 10
+    assert captured["params"][-2:] == (3000, 60)
+
+
+def test_fetch_places_bounds_branch_keeps_circle_when_bounds_absent(monkeypatch):
+    # B2: flag on + no bounds -> circle path UNCHANGED.
+    captured = _install_fake_places_db(monkeypatch, [_place_row()])
+    monkeypatch.setenv("LALA_PLACES_VIEWPORT_BOUNDS", "true")
+
+    db_repository.fetch_places(lat=37.0, lng=127.0, radius_m=3000, category="all", language="ko")
+
+    assert "ST_DWithin(" in captured["sql"]
+    assert len(captured["params"]) == 10
+    assert captured["params"][-2:] == (3000, 60)
+
+
+def test_fetch_places_bounds_branch_skips_radius_overshoot_gate(monkeypatch):
+    # D2: in bounds mode a place farther than radius_m is NOT dropped (the
+    # rectangle is the exact filter); the circle path still drops it post-fetch.
+    far_row = _place_row(place_id="far", distance_m=9_000.0)  # > radius_m (3000)
+    captured = _install_fake_places_db(monkeypatch, [far_row])
+
+    # Bounds mode: retained despite distance_m > radius_m.
+    monkeypatch.setenv("LALA_PLACES_VIEWPORT_BOUNDS", "true")
+    places = db_repository.fetch_places(
+        lat=37.0,
+        lng=127.0,
+        radius_m=3000,
+        category="all",
+        language="ko",
+        sw_lat=36.0,
+        sw_lng=126.0,
+        ne_lat=38.0,
+        ne_lng=128.0,
+    )
+    assert any(p["place_id"] == "far" for p in places)
+    assert "ST_DWithin(" not in captured["sql"]
+
+    # Circle mode: the post-fetch `distance_m > radius_m` gate drops the far row.
+    monkeypatch.setenv("LALA_PLACES_VIEWPORT_BOUNDS", "false")
+    places_circle = db_repository.fetch_places(
+        lat=37.0,
+        lng=127.0,
+        radius_m=3000,
+        category="all",
+        language="ko",
+    )
+    assert all(p["place_id"] != "far" for p in places_circle)
+    assert "ST_DWithin(" in captured["sql"]

@@ -9,8 +9,19 @@ bool shouldReloadPlacesForMapMove({
   required double currentLat,
   required double currentLng,
   double thresholdMeters = 250,
+  // V1 bounds-query (D5): optional level tracking. When both are supplied a
+  // pure zoom (center unchanged) still reloads — closing the prior gap where a
+  // zoom kept the center and skipped refresh. Null (existing callers) keeps the
+  // legacy distance-only behavior, so existing tests/assertions are unchanged.
+  int? lastFetchLevel,
+  int? currentLevel,
 }) {
   if (!hasAnyPlaces || lastFetchLat == null || lastFetchLng == null) {
+    return true;
+  }
+  if (lastFetchLevel != null &&
+      currentLevel != null &&
+      lastFetchLevel != currentLevel) {
     return true;
   }
   return distanceMeters(lastFetchLat, lastFetchLng, currentLat, currentLng) >=

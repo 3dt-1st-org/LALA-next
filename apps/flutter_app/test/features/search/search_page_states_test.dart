@@ -2,6 +2,8 @@
 // 표시 + 접근성(최소 44dp 터치 타겟, Semantics 라벨, 393dp 오버플로 없음) 검증.
 // 어떤 상태도 mock/demo 데이터를 쓰지 않으며, API 실패 카피는 빈 상태(no-data)
 // 카피와 절대 겹치지 않는다(unavailable vs error 도 서로 구분).
+//
+// V1-RC1: reason/freshness 표시 + honest empty + 접근성(semantics) 검증.
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -257,6 +259,62 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  // ───────────────────────────────────────────────────────────────────────
+  // V1-RC1: reason/freshness 표시 + 접근성 테스트
+  // ───────────────────────────────────────────────────────────────────────
+
+  testWidgets('V1-RC1: loaded place with reason shows reason line and freshness',
+      (tester) async {
+    await _pumpSearch(tester, backend: _LoadedSearchBackend());
+    await tester.pumpAndSettle();
+
+    // reason 텍스트 표시
+    expect(find.text('영업중 · 근접'), findsOneWidget);
+    // freshness 텍스트 표시
+    expect(find.text('5분 전'), findsOneWidget);
+  });
+
+  testWidgets('V1-RC1: loaded place without reason does not show reason line',
+      (tester) async {
+    await _pumpSearch(tester, backend: _ReasonEmptyBackend());
+    await tester.pumpAndSettle();
+
+    // reason 없으면 관련 텍스트 없음 (honest empty)
+    expect(find.text('영업중'), findsNothing);
+    expect(find.text('근접'), findsNothing);
+  });
+
+  testWidgets('V1-RC1: semantics label includes reason when present',
+      (tester) async {
+    await _pumpSearch(tester, backend: _LoadedSearchBackend());
+    await tester.pumpAndSettle();
+
+    // reason이 semantics label에 포함
+    expect(_hasSemanticsLabel(tester, containing: '영업중 · 근접'), isTrue);
+  });
+
+  testWidgets('V1-RC1: semantics label excludes reason when absent',
+      (tester) async {
+    await _pumpSearch(tester, backend: _ReasonEmptyBackend());
+    await tester.pumpAndSettle();
+
+    // reason 없으면 semantics label에도 없음
+    expect(_hasSemanticsLabel(tester, containing: '영업중'), isFalse);
+  });
+
+  testWidgets('V1-RC1: narrow viewport (320dp) does not overflow with long reason',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(320, 600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await _pumpSearch(tester, backend: _LongReasonBackend());
+    await tester.pumpAndSettle();
+
+    // 긴 reason도 한 줄 ellipsis로 표시, overflow 없음
+    expect(find.text('영업중 · 실내활동 적합 · 근접 · 공식 데이터'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   tearDown(() {
     RegionContextStore.clear();
     OnboardingState.reset();
@@ -405,6 +463,9 @@ LalaPlace _cafe() {
     distanceM: 320,
     source: 'db',
     upstreamSource: 'tour_api',
+    // V1-RC1: 검색 타일에 바인딩되는 reason/freshness(신호 기반 결정론적 값).
+    reason: '영업중 · 근접',
+    freshness: '5분 전',
   );
 }
 
@@ -417,4 +478,98 @@ LalaEnvelope<T> _envelope<T>(T data) {
     statusCode: 200,
     requestId: 'test-request-id',
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// V1-RC1 테스트용 백엔드/플레이스
+// ─────────────────────────────────────────────────────────────────────────
+
+class _ReasonEmptyBackend implements LalaBackend {
+  @override
+  Future<LalaEnvelope<LalaPlacesResponse>> getPlaces() async => _envelope(
+        LalaPlacesResponse(
+          count: 1,
+          places: <LalaPlace>[
+            LalaPlace(
+              placeId: 'reason-empty-test',
+              name: '원미래 카페',
+              nameKo: '원미래 카페',
+              nameEn: 'Wonmirae Cafe',
+              category: 'restaurant',
+              lat: 37.2828,
+              lng: 127.0101,
+              address: '경기도 수원시 팔달구',
+              regionKo: '수원',
+              regionEn: 'Suwon',
+              distanceM: 2000,
+              source: 'db',
+              upstreamSource: 'canonical',
+              reason: null,  // reason 없음 (honest empty)
+              freshness: null,
+            ),
+          ],
+          query: const LalaPlacesQuery(
+            lat: 37.2636,
+            lng: 127.0286,
+            radiusM: 2000,
+            limit: 60,
+            category: 'all',
+            language: 'ko',
+          ),
+          source: 'db',
+          locationEngine: 'postgis',
+        ),
+      );
+
+  @override
+  void close() {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError('not used: ${invocation.memberName}');
+}
+
+class _LongReasonBackend implements LalaBackend {
+  @override
+  Future<LalaEnvelope<LalaPlacesResponse>> getPlaces() async => _envelope(
+        LalaPlacesResponse(
+          count: 1,
+          places: <LalaPlace>[
+            LalaPlace(
+              placeId: 'long-reason-test',
+              name: '장소 이름',
+              nameKo: '장소 이름',
+              nameEn: 'Place Name',
+              category: 'culture_venue',
+              lat: 37.2828,
+              lng: 127.0101,
+              address: '경기도 수원시',
+              regionKo: '수원',
+              regionEn: 'Suwon',
+              distanceM: 300,
+              source: 'db',
+              upstreamSource: 'official_source',
+              reason: '영업중 · 실내활동 적합 · 근접 · 공식 데이터',  // 긴 reason
+              freshness: '10분 전',
+            ),
+          ],
+          query: const LalaPlacesQuery(
+            lat: 37.2636,
+            lng: 127.0286,
+            radiusM: 2000,
+            limit: 60,
+            category: 'all',
+            language: 'ko',
+          ),
+          source: 'db',
+          locationEngine: 'postgis',
+        ),
+      );
+
+  @override
+  void close() {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError('not used: ${invocation.memberName}');
 }

@@ -14,7 +14,8 @@ import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 import 'package:lala_next_app/shared/widgets/muted_sheet_card.dart';
 
 class FeaturedPlacePanel extends StatelessWidget {
-  const FeaturedPlacePanel({super.key,
+  const FeaturedPlacePanel({
+    super.key,
     required this.place,
     required this.language,
     required this.weather,
@@ -88,6 +89,7 @@ class FeaturedPlacePanel extends StatelessWidget {
           place: currentPlace,
           language: language,
           weather: weather,
+          source: source,
           showEvidence: showEvidence,
         ),
         if (shouldShowEventInfo(currentPlace)) ...[

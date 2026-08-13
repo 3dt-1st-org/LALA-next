@@ -4,6 +4,7 @@ import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 import '../../app/lala_visual_tokens.dart';
 import '../../shared/l10n/lala_copy.dart';
 import '../../shared/l10n/multi_language_text.dart';
+import '../../shared/l10n/place_labels.dart';
 
 /// 장소 카테고리 표시 라벨(C3 추출 — main.dart 의 _categoryLabel).
 String categoryLabel(String category, {String language = 'ko'}) {
@@ -184,4 +185,39 @@ String? eventDateRangeText(LalaPlace place, String language) {
     return lalaCopy(language, ko: '$start부터', en: 'From $start');
   }
   return lalaCopy(language, ko: '~$end까지', en: 'Until $end');
+}
+
+/// 추천 reason 원문. null/빈이면 null(미출력). 모든 표면이 동일 텍스트를 그리도록
+/// 게이트/원문의 SSOT 로 사용한다(위젯별 재계산/재문구 금지).
+String? placeReasonText(LalaPlace place) {
+  final reason = place.reason;
+  if (reason == null || reason.isEmpty) {
+    return null;
+  }
+  return reason;
+}
+
+/// 장소 데이터 신선도 원문. reason 과 동일한 SSOT 규칙(null/빈 → null).
+String? placeFreshnessText(LalaPlace place) {
+  final freshness = place.freshness;
+  if (freshness == null || freshness.isEmpty) {
+    return null;
+  }
+  return freshness;
+}
+
+/// 장소 카드/타일/시트 공용 시맨틱 라벨(§13.5). 장소명/카테고리/거리/지역/reason을
+/// 하나의 라벨로 합쳐 모든 표면이 동일 문구를 전달한다(SSOT). freshness 는 검색
+/// 타일 RC1 패턴을 따라 시각 전용이므로 라벨에서 제외.
+String placeCardSemanticsLabel(LalaPlace place, String language) {
+  final name = placeDisplayName(place, language);
+  final region = placeRegionLabel(place, language);
+  final distance = place.distanceM > 0 ? '${place.distanceM}m' : null;
+  return [
+    name,
+    categoryFilterLabel(place.category, language),
+    ?distance,
+    if (region.isNotEmpty) region,
+    if (placeReasonText(place) case final String reason) reason,
+  ].join(', ');
 }

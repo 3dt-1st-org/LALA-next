@@ -55,6 +55,15 @@ class LalaApiBackend implements LalaBackend {
   final LalaAppConfig config;
   final LalaApiClient _client;
 
+  /// V1 bounds-query (D4): prepare the viewport-rectangle params from
+  /// [config.bounds]. Each value is null when bounds are absent so the call
+  /// site falls back to the existing center+radius circle (state B2).
+  ({double? swLat, double? swLng, double? neLat, double? neLng})
+  _placesBounds() {
+    final b = config.bounds;
+    return (swLat: b?.swLat, swLng: b?.swLng, neLat: b?.neLat, neLng: b?.neLng);
+  }
+
   @override
   Future<LalaEnvelope<Map<String, dynamic>>> getHealth() {
     return _client.getHealth();
@@ -67,6 +76,9 @@ class LalaApiBackend implements LalaBackend {
 
   @override
   Future<LalaEnvelope<LalaPlacesResponse>> getPlaces() {
+    final bounds = _placesBounds();
+    // V1 bounds-query (D4): forward viewport rectangle when present; null → server
+    // falls back to the center+radius circle (state B2).
     return _client.getPlaces(
       lat: config.lat,
       lng: config.lng,
@@ -75,6 +87,10 @@ class LalaApiBackend implements LalaBackend {
       category: config.category,
       lang: config.lang,
       includeScores: true,
+      swLat: bounds.swLat,
+      swLng: bounds.swLng,
+      neLat: bounds.neLat,
+      neLng: bounds.neLng,
     );
   }
 
