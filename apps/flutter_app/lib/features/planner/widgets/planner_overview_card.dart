@@ -41,6 +41,9 @@ class PlannerOverviewCard extends StatelessWidget {
       if (weather == null)
         TinyMeta(lalaCopy(language, ko: '날씨 확인 중', en: 'Checking weather'))
       else ...<Widget>[
+        // D3 연쇄(SSOT=plan-level dust): 먼지 등급이 outdoor_status 를 나쁘게 뒤집고,
+        // 그 outdoor_status 가 V3-C 에서 야외 슬롯의 air_quality_bad 투영으로 내려온다.
+        // per-slot 먼지는 조작하지 않는다(역방향 영향만 문서화).
         TinyMeta(outdoorLabel(weather!.outdoorStatus, language: language)),
         if (tempLabel != null) TinyMeta(tempLabel),
         if (dust != null) ...<Widget>[
