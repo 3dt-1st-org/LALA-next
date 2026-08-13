@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Annotated
+from datetime import date
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 
@@ -15,12 +16,14 @@ from apps.api.app.core.responses import ensure_request_id, success_envelope
 from apps.api.app.schemas.account import AccountDeletionRequest
 from apps.api.app.schemas.docent import DocentAudioRequest, DocentScriptRequest
 from apps.api.app.schemas.planner import DailyPlanRequest
+from apps.api.app.schemas.planning import SavePlaceRequest, SavePlanRequest, SlotVisitRequest
 from apps.api.app.services import docent_service, places_service, planner_service, weather_service
 from apps.api.app.services.identity_service import IdentityService, get_identity_service
 from apps.api.app.services.logto_management import (
     LogtoManagementClient,
     get_logto_management_client,
 )
+from apps.api.app.services.planning_repository import PlanningRepository, get_planning_repository
 
 router = APIRouter(
     prefix="/api/v1",
@@ -88,6 +91,10 @@ def places(
     lat: float = Query(..., ge=-90, le=90),
     lng: float = Query(..., ge=-180, le=180),
     radius_m: int = Query(1000, gt=0, le=50000),
+    sw_lat: float | None = Query(None, ge=-90, le=90),
+    sw_lng: float | None = Query(None, ge=-180, le=180),
+    ne_lat: float | None = Query(None, ge=-90, le=90),
+    ne_lng: float | None = Query(None, ge=-180, le=180),
     category: str = Query("all"),
     lang: str = Query("ko"),
     language: str | None = Query(None),
@@ -101,6 +108,10 @@ def places(
         radius_m=radius_m,
         category=category,
         language=selected_language,
+        sw_lat=sw_lat,
+        sw_lng=sw_lng,
+        ne_lat=ne_lat,
+        ne_lng=ne_lng,
         include_scores=include_scores,
         limit=limit,
     )
@@ -188,3 +199,129 @@ def intervention(
     return success_envelope(
         request=request, data=payload, meta={"source": payload.get("source", "computed")}
     )
+
+
+# V5-A planning action endpoints. Auth-scoped to the caller via require_logto_identity
+# and every repository query is bound to the caller's (issuer, subject), so a user can
+# never read or write another user's saves, plans, or visits (A6). Honest empty: a
+# missing plan reads as null, missing saves/visits as [] (D9), never a 500.
+
+
+@router.get("/me/saved-places")
+def list_saved_places(
+    request: Request,
+    identity: Annotated[RequestIdentity, Depends(require_logto_identity)],
+    repository: Annotated[PlanningRepository, Depends(get_planning_repository)],
+) -> dict:
+    items = repository.list_saved_places(
+        issuer=identity.issuer or "", subject=identity.subject or ""
+    )
+    return success_envelope(request=request, data={"items": items}, meta={"source": "db"})
+
+
+@router.put("/me/saved-places/{place_id}")
+def save_place(
+    request: Request,
+    place_id: str,
+    identity: Annotated[RequestIdentity, Depends(require_logto_identity)],
+    repository: Annotated[PlanningRepository, Depends(get_planning_repository)],
+    body: SavePlaceRequest | None = None,
+) -> dict:
+    source = (body.source if body else None) or "public_mvp_snapshot"
+    result = repository.set_saved_place(
+        issuer=identity.issuer or "",
+        subject=identity.subject or "",
+        place_id=place_id,
+        source=source,
+        active=True,
+    )
+    return success_envelope(request=request, data=result, meta={"source": "db"})
+
+
+@router.delete("/me/saved-places/{place_id}")
+def unsave_place(
+    request: Request,
+    place_id: str,
+    identity: Annotated[RequestIdentity, Depends(require_logto_identity)],
+    repository: Annotated[PlanningRepository, Depends(get_planning_repository)],
+) -> dict:
+    result = repository.set_saved_place(
+        issuer=identity.issuer or "",
+        subject=identity.subject or "",
+        place_id=place_id,
+        source="public_mvp_snapshot",
+        active=False,
+    )
+    return success_envelope(request=request, data=result, meta={"source": "db"})
+
+
+@router.put("/me/plans/{plan_date}")
+def save_persisted_plan(
+    request: Request,
+    plan_date: date,
+    body: SavePlanRequest,
+    identity: Annotated[RequestIdentity, Depends(require_logto_identity)],
+    repository: Annotated[PlanningRepository, Depends(get_planning_repository)],
+) -> dict:
+    result = repository.save_plan(
+        issuer=identity.issuer or "",
+        subject=identity.subject or "",
+        plan_date=plan_date,
+        envelope=body.plan,
+    )
+    return success_envelope(request=request, data=result, meta={"source": "db"})
+
+
+@router.get("/me/plans/{plan_date}")
+def load_persisted_plan(
+    request: Request,
+    plan_date: date,
+    identity: Annotated[RequestIdentity, Depends(require_logto_identity)],
+    repository: Annotated[PlanningRepository, Depends(get_planning_repository)],
+) -> dict:
+    # None when absent, corrupt, or version-mismatched — honest null, never a throw (D8/D9).
+    result = repository.load_plan(
+        issuer=identity.issuer or "",
+        subject=identity.subject or "",
+        plan_date=plan_date,
+    )
+    return success_envelope(
+        request=request,
+        data=result,
+        meta={"source": "db" if result is not None else "unavailable"},
+    )
+
+
+@router.get("/me/plans/{plan_date}/visits")
+def list_slot_visits(
+    request: Request,
+    plan_date: date,
+    identity: Annotated[RequestIdentity, Depends(require_logto_identity)],
+    repository: Annotated[PlanningRepository, Depends(get_planning_repository)],
+) -> dict:
+    items = repository.list_slot_visits(
+        issuer=identity.issuer or "",
+        subject=identity.subject or "",
+        plan_date=plan_date,
+    )
+    return success_envelope(request=request, data={"items": items}, meta={"source": "db"})
+
+
+@router.put("/me/plans/{plan_date}/visits/{slot_period}")
+def check_in_slot(
+    request: Request,
+    plan_date: date,
+    slot_period: Literal["morning", "lunch", "afternoon", "dinner"],
+    body: SlotVisitRequest,
+    identity: Annotated[RequestIdentity, Depends(require_logto_identity)],
+    repository: Annotated[PlanningRepository, Depends(get_planning_repository)],
+) -> dict:
+    result = repository.set_slot_visit(
+        issuer=identity.issuer or "",
+        subject=identity.subject or "",
+        plan_date=plan_date,
+        slot_period=slot_period,
+        place_id=body.place_id,
+        status=body.status,
+    )
+    return success_envelope(request=request, data=result, meta={"source": "db"})

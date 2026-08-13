@@ -4,9 +4,8 @@ Date: 2026-07-30 KST
 Role: implementation (single slice)
 Base: `origin/main` `3fd52b55061511e5827979623c54f3be6e52478f` (after PR #81)
 Branch: `geondongkim/lala-p1-3-source-governance-registry`
-Head: `8bc5789a28179e6541ea5a856c591d6c01351b3c`
-Draft PR: https://github.com/3dt-1st-org/LALA-next/pull/82
-CI (head): API tests + safety contracts `pass`; Flutter analyze + test `pass`; Unix wrapper verification `pass` (not self-declared; CI is the gate).
+Merged PR #82 (head f28a335)
+CI (merge): API tests + safety contracts `pass`; Flutter analyze + test `pass`; Unix wrapper verification `pass` (not self-declared; CI is the gate).
 
 This slice adds two offline registries and one SSOT cleanup. It performs **no**
 network, crawl, DB write, migration apply, seed, deploy, AI/TTS, or secret
@@ -25,7 +24,9 @@ access. It does not promote any source to live-approved.
 - Canonical SQL remains the 13-file baseline ending at
   `063_local_signals_contract.sql`; this PR adds no migration.
 
-### DRAFT_PR
+### IMPLEMENTED_NOT_RUNTIME_VERIFIED
+
+Merged PR #82 (head f28a335).
 
 - `official_source_registry.py` declares the five official sources
   (`tour_api`, `kcisa`, `kopis`, `fair_trade_commission`, `data_portal`) by
@@ -111,7 +112,7 @@ Test matrix coverage:
 
 ## Remaining
 
-- Merge dependency: this Draft PR is based on `origin/main=3fd52b5` (PR #81
+- Merge dependency: Merged PR #82 is based on `origin/main=3fd52b5` (PR #81
   merged) and depends on no other open Draft PR.
 - External blockers (unchanged): source terms/license/retention, image rights,
   provenance, DB owner/apply window, AI/TTS cost ceiling, travel-time/opening-

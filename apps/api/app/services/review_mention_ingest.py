@@ -455,13 +455,16 @@ def fetch_review_mention_inputs(
     return posts, places
 
 
-def insert_review_mention_aggregates(
-    *,
-    dsn: str,
+def insert_review_mention_aggregates_on_cursor(
+    cur,
     aggregates: Sequence[ReviewMentionWeeklyAggregate],
-    connect_timeout: int,
 ) -> int:
-    import psycopg2
+    """Cursor variant — runs on the caller's transaction (P1a atomicity fix).
+
+    Same SQL and return contract as :func:`insert_review_mention_aggregates`
+    but uses the caller's cursor so receipts + aggregates commit/rollback as
+    ONE transaction unit.
+    """
     from psycopg2.extras import Json
 
     sql = """
@@ -524,25 +527,37 @@ def insert_review_mention_aggregates(
             ),
             updated_at = now()
     """
+    inserted = 0
+    for aggregate in aggregates:
+        cur.execute(
+            sql,
+            {
+                "week_start": aggregate.week_start,
+                "place_id": aggregate.place_id,
+                "place_name_ko": aggregate.place_name_ko,
+                "provider": aggregate.provider,
+                "category": aggregate.category,
+                "mention_count": aggregate.mention_count,
+                "organic_mention_count": aggregate.organic_mention_count,
+                "sentiment_score": aggregate.sentiment_score,
+                "attributes": Json(aggregate.attributes),
+            },
+        )
+        inserted += int(cur.rowcount or 0)
+    return inserted
+
+
+def insert_review_mention_aggregates(
+    *,
+    dsn: str,
+    aggregates: Sequence[ReviewMentionWeeklyAggregate],
+    connect_timeout: int,
+) -> int:
+    import psycopg2
+
     with psycopg2.connect(dsn, connect_timeout=connect_timeout) as conn:
-        inserted = 0
         with conn.cursor() as cur:
-            for aggregate in aggregates:
-                cur.execute(
-                    sql,
-                    {
-                        "week_start": aggregate.week_start,
-                        "place_id": aggregate.place_id,
-                        "place_name_ko": aggregate.place_name_ko,
-                        "provider": aggregate.provider,
-                        "category": aggregate.category,
-                        "mention_count": aggregate.mention_count,
-                        "organic_mention_count": aggregate.organic_mention_count,
-                        "sentiment_score": aggregate.sentiment_score,
-                        "attributes": Json(aggregate.attributes),
-                    },
-                )
-                inserted += int(cur.rowcount or 0)
+            inserted = insert_review_mention_aggregates_on_cursor(cur, aggregates)
         conn.commit()
     return inserted
 

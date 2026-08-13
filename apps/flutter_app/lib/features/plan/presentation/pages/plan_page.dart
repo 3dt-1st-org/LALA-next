@@ -11,6 +11,8 @@ import 'package:lala_next_app/core/backend/lala_backend.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
 import 'package:lala_next_app/core/location/region_context.dart';
+import 'package:lala_next_app/core/state/plan_context_store.dart';
+import 'package:lala_next_app/core/state/slot_visit_store.dart';
 import 'package:lala_next_app/features/home/home_view_helpers.dart'
     show interventionToastLabel;
 import 'package:lala_next_app/features/intervention/widgets/intervention_toast.dart';
@@ -18,10 +20,12 @@ import 'package:lala_next_app/features/location/widgets/default_region_indicator
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/features/place/widgets/empty_place_state.dart';
 import 'package:lala_next_app/features/planner/planner_helpers.dart';
+import 'package:lala_next_app/features/planner/spend_band_helpers.dart';
 import 'package:lala_next_app/features/planner/widgets/plan_slot_tile.dart';
 import 'package:lala_next_app/features/planner/widgets/planner_loading_card.dart';
 import 'package:lala_next_app/features/planner/widgets/planner_overview_card.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
+import 'package:lala_next_app/shared/l10n/place_labels.dart';
 import 'package:lala_next_app/shared/widgets/lala_skeleton.dart';
 
 /// 플랜 탭: 하루 일정을 생성해 타임라인으로 보여준다.
@@ -47,7 +51,13 @@ class PlanPage extends StatefulWidget {
   State<PlanPage> createState() => _PlanPageState();
 }
 
-enum _PlanLoadStatus { loading, data, error }
+// Per-state honesty (playbook §2/§13.5): five distinct outcomes, never
+// conflated. `loaded` is a real timeline (never a skeleton); `empty` is a
+// genuine no-data result (never shares a message with a failure); `unavailable`
+// is "could not reach the service" (network/timeout); `error` is "the service
+// responded with an error". An API failure is never shown with the same copy as
+// the empty no-data state.
+enum _PlanLoadStatus { loading, loaded, empty, unavailable, error }
 
 class _PlanPageState extends State<PlanPage> {
   late LalaAppConfig _baseConfig;
@@ -72,8 +82,15 @@ class _PlanPageState extends State<PlanPage> {
   int _loadGeneration = 0;
   late final VoidCallback _onRegionChanged;
   late final VoidCallback _onLanguageChanged;
+  // Cross-tab plan SSOT (§13.4): adopts a timeline published by the map tab so
+  // both tabs show the same plan without the plan tab refetching.
+  late final VoidCallback _onPlanChanged;
+  // V5-B VISIT: rebuild when a check-in toggles anywhere so the planned↔visited
+  // badge reflects the persisted state in SlotVisitStore.
+  late final VoidCallback _onVisitsChanged;
 
-  String? _error;
+  // 안내문은 unavailable/error 상태에서만 사용. empty(no-data) 는 별도 copy.
+  String _failureMessage = '';
 
   @override
   void initState() {
@@ -110,6 +127,34 @@ class _PlanPageState extends State<PlanPage> {
       _reloadForLanguage(next);
     };
     OnboardingState.languageListenable.addListener(_onLanguageChanged);
+    // Plan: adopt a non-null timeline published by another tab (e.g. the map tab's
+    // createDailyPlan). No-op-skip our own publishes (same instance) and external
+    // clears (null) so our view is never wiped by another tab's transient null.
+    _onPlanChanged = () {
+      if (!mounted) {
+        return;
+      }
+      final next = PlanContextStore.current;
+      if (next == null || next == _dailyPlan) {
+        return;
+      }
+      setState(() {
+        _dailyPlan = next;
+        _failureMessage = '';
+        _status = _visibleSlotsFrom(next).isEmpty
+            ? _PlanLoadStatus.empty
+            : _PlanLoadStatus.loaded;
+      });
+    };
+    PlanContextStore.listenable.addListener(_onPlanChanged);
+    // V5-B VISIT: react to check-ins toggled on this or any other tab.
+    _onVisitsChanged = () {
+      if (!mounted) {
+        return;
+      }
+      setState(() {});
+    };
+    SlotVisitStore.listenable.addListener(_onVisitsChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _load();
@@ -121,6 +166,8 @@ class _PlanPageState extends State<PlanPage> {
   void dispose() {
     RegionContextStore.listenable.removeListener(_onRegionChanged);
     OnboardingState.languageListenable.removeListener(_onLanguageChanged);
+    PlanContextStore.listenable.removeListener(_onPlanChanged);
+    SlotVisitStore.listenable.removeListener(_onVisitsChanged);
     _backend.close();
     super.dispose();
   }
@@ -131,8 +178,10 @@ class _PlanPageState extends State<PlanPage> {
   // current/manual context). The UI must badge this honestly.
   bool get _regionIsDefault => _region == null;
 
-  List<LalaPlanSlot> get _visibleSlots {
-    final slots = _dailyPlan?.slots ?? const <LalaPlanSlot>[];
+  List<LalaPlanSlot> get _visibleSlots => _visibleSlotsFrom(_dailyPlan);
+
+  List<LalaPlanSlot> _visibleSlotsFrom(LalaDailyPlan? dailyPlan) {
+    final slots = dailyPlan?.slots ?? const <LalaPlanSlot>[];
     return slots
         .where((slot) => hasVisiblePlanSlot(slot, _language))
         .toList(growable: false);
@@ -143,11 +192,60 @@ class _PlanPageState extends State<PlanPage> {
       _intervention!.shouldIntervene &&
       !_interventionDismissed;
 
+  // V3-D: 트리터 종류를 한 줄 배지로 표시(KO/EN 배타). null/알 수 없음은 배지 없음.
+  String? _interventionTriggerBadge(LalaIntervention intervention) {
+    switch (intervention.triggerType) {
+      case 'closure_detected':
+        return lalaCopy(_language, ko: '폐업 의심', en: 'Possible closure');
+      case 'bad_weather_and_closure':
+        return lalaCopy(_language, ko: '날씨 + 폐업', en: 'Weather + closure');
+      case 'bad_weather':
+        return lalaCopy(_language, ko: '날씨 변화', en: 'Weather change');
+      default:
+        return null;
+    }
+  }
+
+  // 대체 장소(swap) 버튼 라벨. alternativeSlot 이 있을 때만. 위조 금지 — null 이면 null.
+  String? _interventionSwapLabel(LalaIntervention intervention) {
+    final alt = intervention.alternativeSlot;
+    if (alt == null) {
+      return null;
+    }
+    final name = alt.place != null
+        ? placeDisplayName(alt.place!, _language)
+        : alt.title;
+    return lalaCopy(_language, ko: '대체 ▸ $name', en: 'Swap ▸ $name');
+  }
+
+  // swap 탭 — alternativeSlot 의 장소를 노출만 한다(스낵바). PlanContextStore 의
+  // 슬롯 치환은 별도 후속 작업(V3-D 데이터 범위 밖). 위조/변이 없다.
+  void _onSwapAlternative(LalaPlanSlot alternative) {
+    if (!mounted) {
+      return;
+    }
+    final name = alternative.place != null
+        ? placeDisplayName(alternative.place!, _language)
+        : alternative.title;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 2),
+        content: Text(
+          lalaCopy(
+            _language,
+            ko: '대체 장소 $name 을(를) 확인해 보세요.',
+            en: 'Check the alternative: $name.',
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _load() async {
     final generation = ++_loadGeneration;
     setState(() {
       _status = _PlanLoadStatus.loading;
-      _error = null;
+      _failureMessage = '';
       _interventionDismissed = false;
     });
 
@@ -197,7 +295,7 @@ class _PlanPageState extends State<PlanPage> {
     setState(() {
       _region = context;
       _status = _PlanLoadStatus.loading;
-      _error = null;
+      _failureMessage = '';
       _interventionDismissed = false;
     });
     final lat = context?.lat ?? _baseConfig.lat;
@@ -216,7 +314,7 @@ class _PlanPageState extends State<PlanPage> {
       _baseConfig = _baseConfig.copyWith(lang: language);
       _config = _config.copyWith(lang: language);
       _status = _PlanLoadStatus.loading;
-      _error = null;
+      _failureMessage = '';
       _interventionDismissed = false;
     });
     _backend.close();
@@ -226,12 +324,14 @@ class _PlanPageState extends State<PlanPage> {
 
   Future<void> _fetchPlan(int generation) async {
     // 일정(필수)과 개입(intervention, 부가)을 병렬로 조회한다.
-    // 각 라인은 독립된 try/catch 로 실패를 null 로 흡수한다.
-    Future<LalaDailyPlan?> loadPlan() async {
+    // 일정 라인은 실패 사유를 버리지 않고 캡처 — unavailable(도달 실패)과
+    // error(오류 응답)을 구분해 서로 다른 안내문을 내기 위함. 개입은 부가이므로
+    // 여전히 null 로 흡수한다.
+    Future<({LalaDailyPlan? plan, Object? failure})> loadPlan() async {
       try {
-        return (await _backend.createDailyPlan()).data;
-      } on Object {
-        return null;
+        return (plan: (await _backend.createDailyPlan()).data, failure: null);
+      } on Object catch (failure) {
+        return (plan: null, failure: failure);
       }
     }
 
@@ -243,31 +343,72 @@ class _PlanPageState extends State<PlanPage> {
       }
     }
 
-    final (plan, intervention) = await (loadPlan(), loadIntervention()).wait;
+    final (loaded, intervention) = await (loadPlan(), loadIntervention()).wait;
+    final plan = loaded.plan;
 
     if (generation != _loadGeneration || !mounted) {
       return;
     }
     if (plan == null) {
+      // Why: the client throws LalaApiException for both unreachable
+      // (NETWORK_ERROR/REQUEST_TIMEOUT/statusCode 0) and responded-error
+      // (HTTP_4xx/5xx, ok:false envelope). Splitting on the code keeps an API
+      // failure's copy distinct from the empty no-data message and from a
+      // reachability failure.
+      final status = _planFailureStatus(loaded.failure);
       setState(() {
-        _error = _fallbackErrorMessage();
-        _status = _PlanLoadStatus.error;
+        _failureMessage = _failureCopy(status);
+        _status = status;
       });
       return;
     }
     setState(() {
       _dailyPlan = plan;
       _intervention = intervention;
-      _status = _PlanLoadStatus.data;
+      // loaded vs empty: a real plan with at least one visible slot is never a
+      // skeleton; an empty visible list is a genuine no-data result, not a
+      // failure.
+      _status = _visibleSlotsFrom(plan).isEmpty
+          ? _PlanLoadStatus.empty
+          : _PlanLoadStatus.loaded;
     });
+    // Cross-tab plan SSOT (§13.4): publish the generated plan so the map tab and
+    // any other reader share this timeline instead of fetching independently.
+    PlanContextStore.set(plan);
   }
 
-  String _fallbackErrorMessage() {
-    return lalaCopy(
-      _language,
-      ko: '일정을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.',
-      en: 'Could not load the daily plan. Please try again shortly.',
-    );
+  /// 도달 실패(unavailable)와 오류 응답(error)을 예외 코드로 구분한다.
+  _PlanLoadStatus _planFailureStatus(Object? failure) {
+    if (failure is LalaApiException) {
+      final code = failure.code;
+      final networkUnreachable =
+          code == 'NETWORK_ERROR' ||
+          code == 'REQUEST_TIMEOUT' ||
+          failure.statusCode == 0;
+      return networkUnreachable
+          ? _PlanLoadStatus.unavailable
+          : _PlanLoadStatus.error;
+    }
+    // 비-API 예외(직렬화/파싱 등)는 서비스 도달과 무관하므로 error 로 분류.
+    return _PlanLoadStatus.error;
+  }
+
+  String _failureCopy(_PlanLoadStatus status) {
+    return switch (status) {
+      _PlanLoadStatus.unavailable => lalaCopy(
+        _language,
+        ko: '일시적으로 서버에 연결할 수 없어요. 네트워크를 확인 후 다시 시도해 주세요.',
+        en: 'Could not reach the service. Check your connection and try again.',
+      ),
+      _PlanLoadStatus.error => lalaCopy(
+        _language,
+        ko: '일정을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.',
+        en: 'Could not load the daily plan. Please try again shortly.',
+      ),
+      _PlanLoadStatus.loading ||
+      _PlanLoadStatus.loaded ||
+      _PlanLoadStatus.empty => '',
+    };
   }
 
   String _todayLabel() {
@@ -311,6 +452,24 @@ class _PlanPageState extends State<PlanPage> {
                 child: InterventionToast(
                   label: interventionToastLabel(_intervention!, _language),
                   language: _language,
+                  triggerBadge: _interventionTriggerBadge(_intervention!),
+                  swapLabel: _interventionSwapLabel(_intervention!),
+                  onSwap: _intervention!.alternativeSlot != null
+                      ? () => _onSwapAlternative(_intervention!.alternativeSlot!)
+                      : null,
+                  regenerateLabel: lalaCopy(
+                    _language,
+                    ko: '일정 다시 짜기',
+                    en: 'Regenerate',
+                  ),
+                  onRegenerate: _load,
+                  noAlternativeLabel: _intervention!.alternativeSlot == null
+                      ? lalaCopy(
+                          _language,
+                          ko: '지금은 대체 장소가 없어요.',
+                          en: 'No alternative right now.',
+                        )
+                      : null,
                   onOpenPlanner: () {
                     if (!mounted) {
                       return;
@@ -347,9 +506,25 @@ class _PlanPageState extends State<PlanPage> {
     switch (_status) {
       case _PlanLoadStatus.loading:
         return _PlanLoadingView(language: _language);
+      case _PlanLoadStatus.unavailable:
+        return _PlanFailureView(
+          key: const ValueKey('plan-unavailable-view'),
+          kind: _PlanFailureKind.unavailable,
+          message: _failureMessage,
+          language: _language,
+          onRetry: _load,
+        );
       case _PlanLoadStatus.error:
-        return _PlanErrorView(message: _error!, onRetry: _load);
-      case _PlanLoadStatus.data:
+        return _PlanFailureView(
+          key: const ValueKey('plan-error-view'),
+          kind: _PlanFailureKind.error,
+          message: _failureMessage,
+          language: _language,
+          onRetry: _load,
+        );
+      case _PlanLoadStatus.empty:
+        return _PlanEmptyView(language: _language, onRegenerate: _load);
+      case _PlanLoadStatus.loaded:
         return _PlanContent(
           dailyPlan: _dailyPlan,
           visibleSlots: _visibleSlots,
@@ -426,14 +601,19 @@ class _PlanLoadingView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      key: const ValueKey('plan-loading-view'),
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      children: <Widget>[
-        PlannerLoadingCard(language: language),
-        const SizedBox(height: 16),
-        const _PlannerTimelineSkeleton(),
-      ],
+    // 시맨틱: 로딩 상태를 화면 읽기 사용자에게 알린다(진행률/단계 주장 없이).
+    return Semantics(
+      container: true,
+      label: lalaCopy(language, ko: '일정을 준비하고 있어요', en: 'Preparing your plan'),
+      child: ListView(
+        key: const ValueKey('plan-loading-view'),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        children: <Widget>[
+          PlannerLoadingCard(language: language),
+          const SizedBox(height: 16),
+          const _PlannerTimelineSkeleton(),
+        ],
+      ),
     );
   }
 }
@@ -463,45 +643,79 @@ class _PlannerTimelineSkeleton extends StatelessWidget {
   }
 }
 
-/// 에러 본문(메시지 + 재시도).
-class _PlanErrorView extends StatelessWidget {
-  const _PlanErrorView({required this.message, required this.onRetry});
+/// 실패 본문(unavailable / error). 두 상태는 서로 다른 아이콘·카피로 구분되며,
+/// 빈 상태(no-data)의 카피와 절대 겹치지 않는다. 색상만으로 상태를 알리지 않도록
+/// 아이콘 + 텍스트 쌍을 항상 함께 표시한다(§13.5 접근성).
+enum _PlanFailureKind { unavailable, error }
 
+class _PlanFailureView extends StatelessWidget {
+  const _PlanFailureView({
+    super.key,
+    required this.kind,
+    required this.message,
+    required this.language,
+    required this.onRetry,
+  });
+
+  final _PlanFailureKind kind;
   final String message;
+  final String language;
   final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
+    final isUnavailable = kind == _PlanFailureKind.unavailable;
+    // 아이콘과 색상을 함께 써 색상 단독 신호를 피한다.
+    final icon = isUnavailable
+        ? Icons.wifi_off_rounded
+        : Icons.error_outline_rounded;
+    final accent = isUnavailable
+        ? const Color(0xFF475569)
+        : const Color(0xFFB45309);
+    final retryLabel = lalaCopy(language, ko: '다시 시도', en: 'Retry');
+    // 시맨틱: 화면 읽기 사용자에게 상태 종류까지 전달.
+    final semanticsLabel = lalaCopy(
+      language,
+      ko: isUnavailable ? '서버 연결 불가. $message' : '일정 불러오기 실패. $message',
+      en: isUnavailable
+          ? 'Service unreachable. $message'
+          : 'Failed to load plan. $message',
+    );
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
-              Icons.cloud_off_rounded,
-              size: 36,
-              color: Color(0xFF94A3B8),
-            ),
+            Icon(icon, size: 40, color: accent),
             const SizedBox(height: 12),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Color(0xFF475569),
-                fontWeight: FontWeight.w700,
-                height: 1.4,
+            Semantics(
+              container: true,
+              label: semanticsLabel,
+              child: Text(
+                message,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: const Color(0xFF475569),
+                  fontWeight: FontWeight.w700,
+                  height: 1.4,
+                ),
               ),
             ),
             const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh_rounded, size: 18),
-              label: const Text('재시도'),
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF2B6CB0),
-                foregroundColor: Colors.white,
-                textStyle: const TextStyle(fontWeight: FontWeight.w900),
+            // 최소 44dp 터치 타겟: 버튼 기본 최소 높이를 보장한다.
+            _MinTouchTarget(
+              child: FilledButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: Text(retryLabel),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF2B6CB0),
+                  foregroundColor: Colors.white,
+                  textStyle: const TextStyle(fontWeight: FontWeight.w900),
+                  minimumSize: const Size.fromHeight(44),
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                ),
               ),
             ),
           ],
@@ -511,7 +725,78 @@ class _PlanErrorView extends StatelessWidget {
   }
 }
 
-/// 일정 본문(개요 카드 + 슬롯 리스트 / 빈 상태).
+/// 빈 상태(no-data): 일정은 정상 로드되었으나 표시할 슬롯이 없다. 실패 카피와
+/// 구분되는 고유 안내문을 쓰며, '준비 중' 로딩 상태와도 섞이지 않는다.
+class _PlanEmptyView extends StatelessWidget {
+  const _PlanEmptyView({required this.language, required this.onRegenerate});
+
+  final String language;
+  final VoidCallback onRegenerate;
+
+  @override
+  Widget build(BuildContext context) {
+    final message = lalaCopy(
+      language,
+      // Why: the plan already loaded — an empty slot list is an empty result,
+      // not a "preparing" or failure state. Copy is distinct from both the
+      // loading card and any failure message.
+      ko: '표시할 일정이 없어요.',
+      en: 'No plan slots to show.',
+    );
+    final actionLabel = lalaCopy(
+      language,
+      ko: '일정 다시 만들기',
+      en: 'Regenerate plan',
+    );
+    final semanticsLabel = lalaCopy(
+      language,
+      ko: '빈 일정. $message',
+      en: 'Empty plan. $message',
+    );
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            EmptyPlaceState(language: language),
+            const SizedBox(height: 12),
+            Semantics(
+              container: true,
+              label: semanticsLabel,
+              child: Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Color(0xFF64748B),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            _MinTouchTarget(
+              child: OutlinedButton.icon(
+                onPressed: onRegenerate,
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: Text(actionLabel),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF2B6CB0),
+                  side: const BorderSide(color: Color(0xFFB9D4F3)),
+                  textStyle: const TextStyle(fontWeight: FontWeight.w900),
+                  minimumSize: const Size.fromHeight(44),
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 일정 본문(개요 카드 + 실제 슬롯 리스트). 로드된 상태 전용 — 빈/실패 분기는
+/// _buildBody 에서 별도 위젯으로 분리되었다.
 class _PlanContent extends StatelessWidget {
   const _PlanContent({
     required this.dailyPlan,
@@ -529,51 +814,9 @@ class _PlanContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (dailyPlan == null || visibleSlots.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              EmptyPlaceState(language: language),
-              const SizedBox(height: 12),
-              Text(
-                lalaCopy(
-                  language,
-                  // Why: the plan already loaded — an empty slot list is an empty
-                  // result, not a "preparing" state. The legitimate generating
-                  // state is the single _PlanLoadingView card shown only while
-                  // loading.
-                  ko: '표시할 일정이 없어요.',
-                  en: 'No plan slots to show.',
-                ),
-                style: const TextStyle(
-                  color: Color(0xFF64748B),
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 16),
-              OutlinedButton.icon(
-                onPressed: onRegenerate,
-                icon: const Icon(Icons.refresh_rounded, size: 18),
-                label: Text(
-                  lalaCopy(language, ko: '일정 다시 만들기', en: 'Regenerate plan'),
-                ),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF2B6CB0),
-                  side: const BorderSide(color: Color(0xFFB9D4F3)),
-                  textStyle: const TextStyle(fontWeight: FontWeight.w900),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    final weather = dailyPlan!.weather;
+    final weather = dailyPlan?.weather;
     return ListView(
+      key: const ValueKey('plan-content'),
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
       children: [
         Card(
@@ -596,8 +839,13 @@ class _PlanContent extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        ...visibleSlots.map(
-          (slot) => Padding(
+        ...visibleSlots.map((slot) {
+          // V5-B VISIT/SPEND: per-slot visit status (persisted in SlotVisitStore)
+          // and offline category-band estimate. planDate is the UTC date key
+          // (contract A1/D1: one plan per user per day).
+          final planDate = utcPlanDate();
+          final band = spendBandFor(slot, language);
+          return Padding(
             key: ValueKey('plan-slot-${slot.place?.placeId ?? slot.period}'),
             padding: const EdgeInsets.only(bottom: 10),
             child: PlanSlotTile(
@@ -619,10 +867,41 @@ class _PlanContent extends StatelessWidget {
                   ),
                 );
               },
+              visitStatus: SlotVisitStore.statusFor(planDate, slot.period),
+              onToggleVisit:
+                  () => SlotVisitStore.toggle(planDate, slot.period),
+              spendBand: band,
+              spendUnavailable: band == null,
             ),
-          ),
-        ),
+          );
+        }),
       ],
     );
   }
+}
+
+/// 접근성(§13.5): 버튼의 최소 터치 타겟(44dp)을 보장한다. 버튼 자체의
+/// minimumSize 로 충분하더라도, 인접 여백이 좁은 컨테이너 안에서 타겟이
+/// 찌그러지지 않도록 한 번 더 44dp 높이를 고정한다.
+class _MinTouchTarget extends StatelessWidget {
+  const _MinTouchTarget({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 44),
+      child: child,
+    );
+  }
+}
+
+/// V5-B: today's UTC date as the plan key `YYYY-MM-DD` (contract A1/D1 — one plan
+/// per user per day, UTC date key). Used to scope visit statuses in SlotVisitStore.
+String utcPlanDate() {
+  final utc = DateTime.now().toUtc();
+  return '${utc.year.toString().padLeft(4, '0')}'
+      '-${utc.month.toString().padLeft(2, '0')}'
+      '-${utc.day.toString().padLeft(2, '0')}';
 }

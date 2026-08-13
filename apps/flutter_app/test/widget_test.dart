@@ -7,6 +7,10 @@ import 'package:lala_next_app/auth/auth_controller.dart';
 import 'package:lala_next_app/auth/logto_auth_gateway.dart';
 import 'package:lala_next_app/core/location/region_context.dart';
 import 'package:lala_next_app/core/navigation/local_signal_action.dart';
+import 'package:lala_next_app/core/state/plan_context_store.dart';
+import 'package:lala_next_app/core/state/saved_place_store.dart';
+import 'package:lala_next_app/core/state/selected_place_store.dart';
+import 'package:lala_next_app/core/state/slot_visit_store.dart';
 import 'package:lala_next_app/features/local_signals/presentation/pages/local_signals_page.dart';
 import 'package:lala_next_app/features/map/widgets/top_map_chrome.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
@@ -18,10 +22,19 @@ import 'package:lala_next_app/main.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 void main() {
-  // RegionContextStore is a process-local singleton; reset it before each test
-  // so a manual/current choice made in one test cannot leak into another tab's
-  // seed coordinates.
-  setUp(RegionContextStore.clear);
+  // RegionContextStore and the Lane 1 cross-tab holders (SelectedPlaceStore,
+  // PlanContextStore) are process-local singletons; reset them before each test
+  // so a selection/plan/region made in one test cannot leak into another tab's
+  // state. Mirrors the existing region reset for the new sibling holders.
+  setUp(() {
+    RegionContextStore.clear();
+    SelectedPlaceStore.clear();
+    PlanContextStore.clear();
+    // V5-B action holders are sibling static singletons; reset them too so a
+    // save/check-in made in one test cannot leak into another.
+    SavedPlaceStore.clear();
+    SlotVisitStore.clear();
+  });
 
   test('map move reload policy follows the legacy places threshold', () {
     expect(
@@ -1730,7 +1743,8 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('추천 연결이 잠시 지연되고 있어요'), findsOneWidget);
+    // §13.5: 실패 종류(error)의 honest 안내문(빈 상태/도달 실패 카피와 구분).
+    expect(find.textContaining('추천 장소를 불러오지 못했어요'), findsOneWidget);
     expect(find.textContaining('요청을 처리하지 못했습니다'), findsNothing);
     expect(
       find.text('UPSTREAM_UNAVAILABLE: Authenticated route failed.'),
@@ -1776,7 +1790,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.textContaining('Recommendations are taking longer than expected'),
+      find.textContaining('Could not load recommendations'),
       findsOneWidget,
     );
     expect(find.textContaining('Unable to complete the request'), findsNothing);
@@ -2256,7 +2270,8 @@ void main() {
           expect(tester.widget<FittedBox>(fittedLabel).fit, BoxFit.scaleDown);
 
           final rect = tester.getRect(chip);
-          expect(rect.height, 40);
+          // §13.5: 카테고리 칩은 최소 44dp 터치 타겟(기존 40dp 컴팩트 계약에서 상향).
+          expect(rect.height, 44);
           expect(rect.left, greaterThanOrEqualTo(viewport.left));
           expect(rect.top, greaterThanOrEqualTo(viewport.top));
           expect(rect.right, lessThanOrEqualTo(viewport.right));
@@ -2272,7 +2287,8 @@ void main() {
         expect(settingsRect.right, lessThanOrEqualTo(viewport.right));
         expect(settingsRect.bottom, lessThanOrEqualTo(viewport.bottom));
         expect(chipRects.last.right, lessThanOrEqualTo(settingsRect.left));
-        expect(chipRects.map((rect) => rect.height).toSet(), <double>{40});
+        // §13.5: 모든 카테고리 칩이 44dp 최소 터치 타겟(기존 40dp 에서 상향).
+        expect(chipRects.map((rect) => rect.height).toSet(), <double>{44});
       },
     );
   }
@@ -2955,7 +2971,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('추천 연결이 잠시 지연되고 있어요'), findsOneWidget);
+    // §13.5: 실패 종류(error)에 따른 honest 안내문. 언어는 한국어만 표시(혼합 금지).
+    expect(find.textContaining('추천 장소를 불러오지 못했어요'), findsOneWidget);
     expect(find.textContaining('Places failed'), findsNothing);
     expect(_visibleMixedLanguageTexts(tester), isEmpty);
 
@@ -2967,7 +2984,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.textContaining('Recommendations are taking longer than expected'),
+      find.textContaining('Could not load recommendations'),
       findsOneWidget,
     );
     expect(find.textContaining('추천 연결이 잠시 지연되고 있어요'), findsNothing);

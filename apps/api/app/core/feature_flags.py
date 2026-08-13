@@ -251,6 +251,14 @@ FEATURE_FLAG_REGISTRY: tuple[FeatureFlag, ...] = (
         "LS-2",
         "Enable the Logto-authenticated Local Signals draft and policy write API.",
     ),
+    _flag(
+        "LALA_ENABLE_LIVE_ROUTING",
+        False,
+        "Haversine walk-time estimate only",
+        "V5-C",
+        "Permit the routing seam; real Kakao/Naver Directions remain BLOCKED_EXTERNAL/V7.",
+        env_name="LALA_ENABLE_LIVE_ROUTING",
+    ),
 )
 
 

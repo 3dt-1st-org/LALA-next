@@ -15,6 +15,7 @@ REQUIRED_SCHEMAS = (
     "rag",
     "ops",
     "compat",
+    "planning",
 )
 REQUIRED_RELATIONS = (
     "identity.users",
@@ -60,6 +61,9 @@ REQUIRED_RELATIONS = (
     "compat.legacy_places_api",
     "compat.legacy_docent_scripts_api",
     "ops.dependency_latest",
+    "planning.user_saved_places",
+    "planning.user_plans",
+    "planning.slot_visits",
 )
 
 REQUIRED_COLUMNS = {

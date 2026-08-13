@@ -18,6 +18,7 @@ import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/features/place/place_helpers.dart';
 import 'package:lala_next_app/features/place/widgets/category_badge.dart';
 import 'package:lala_next_app/features/place/widgets/empty_place_state.dart';
+import 'package:lala_next_app/features/place/widgets/place_reason_freshness.dart';
 import 'package:lala_next_app/features/place/widgets/place_thumb.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 import 'package:lala_next_app/shared/l10n/place_labels.dart';
@@ -37,7 +38,13 @@ class SearchPage extends StatefulWidget {
   State<SearchPage> createState() => _SearchPageState();
 }
 
-enum _SearchLoadStatus { loading, data, error }
+// Per-state honesty (playbook §2/§13.5): five distinct outcomes, never
+// conflated. `loaded` is a real result list (never a skeleton); `empty` is a
+// genuine no-data result (never shares a message with a failure); `unavailable`
+// is "could not reach the service" (network/timeout); `error` is "the service
+// responded with an error". An API failure is never shown with the same copy as
+// the empty no-data state.
+enum _SearchLoadStatus { loading, loaded, empty, unavailable, error }
 
 /// 검색에 노출할 카테고리 라인업(전체/명소/맛집/행사/문화).
 const List<String> _kSearchCategories = <String>[
@@ -59,7 +66,8 @@ class _SearchPageState extends State<SearchPage> {
 
   _SearchLoadStatus _status = _SearchLoadStatus.loading;
   List<LalaPlace> _places = const <LalaPlace>[];
-  String? _error;
+  // 안내문은 unavailable/error 상태에서만 사용. empty(no-data) 는 별도 copy.
+  String _failureMessage = '';
 
   // Active region context retained across onboarding/tabs (null = disclosed
   // default region). Seeded from the shared store so a manual/current choice
@@ -141,7 +149,7 @@ class _SearchPageState extends State<SearchPage> {
     final generation = ++_loadGeneration;
     setState(() {
       _status = _SearchLoadStatus.loading;
-      _error = null;
+      _failureMessage = '';
     });
 
     // 온보딩/다른 탭에서 확정된 컨텍스트(수동 선택 또는 현재 위치)를 기본 좌표보다
@@ -192,7 +200,7 @@ class _SearchPageState extends State<SearchPage> {
     setState(() {
       _region = context;
       _status = _SearchLoadStatus.loading;
-      _error = null;
+      _failureMessage = '';
     });
     final lat = context?.lat ?? _baseConfig.lat;
     final lng = context?.lng ?? _baseConfig.lng;
@@ -210,7 +218,7 @@ class _SearchPageState extends State<SearchPage> {
       _baseConfig = _baseConfig.copyWith(lang: language);
       _config = _config.copyWith(lang: language);
       _status = _SearchLoadStatus.loading;
-      _error = null;
+      _failureMessage = '';
     });
     _backend.close();
     _backend = _backendFactory(_config);
@@ -226,34 +234,60 @@ class _SearchPageState extends State<SearchPage> {
       final places = envelope.data?.places ?? const <LalaPlace>[];
       setState(() {
         _places = places;
-        _status = _SearchLoadStatus.data;
+        // loaded vs empty: a real non-empty result is never a skeleton; an empty
+        // list is a genuine no-data result, not a failure.
+        _status = places.isEmpty
+            ? _SearchLoadStatus.empty
+            : _SearchLoadStatus.loaded;
       });
-    } on LalaApiException catch (error) {
+    } on Object catch (failure) {
       if (generation != _loadGeneration || !mounted) {
         return;
       }
+      // Why: the client throws LalaApiException for both unreachable
+      // (NETWORK_ERROR/REQUEST_TIMEOUT/statusCode 0) and responded-error
+      // (HTTP_4xx/5xx). Splitting on the code keeps an API failure's copy
+      // distinct from the empty no-data message and from a reachability failure.
+      final status = _searchFailureStatus(failure);
       setState(() {
-        final message = error.message.trim();
-        _error = message.isEmpty ? _fallbackErrorMessage() : message;
-        _status = _SearchLoadStatus.error;
-      });
-    } on Object {
-      if (generation != _loadGeneration || !mounted) {
-        return;
-      }
-      setState(() {
-        _error = _fallbackErrorMessage();
-        _status = _SearchLoadStatus.error;
+        _failureMessage = _failureCopy(status);
+        _status = status;
       });
     }
   }
 
-  String _fallbackErrorMessage() {
-    return lalaCopy(
-      _language,
-      ko: '추천 장소를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.',
-      en: 'Could not load recommendations. Please try again shortly.',
-    );
+  /// 도달 실패(unavailable)와 오류 응답(error)을 예외 코드로 구분한다.
+  _SearchLoadStatus _searchFailureStatus(Object failure) {
+    if (failure is LalaApiException) {
+      final code = failure.code;
+      final networkUnreachable =
+          code == 'NETWORK_ERROR' ||
+          code == 'REQUEST_TIMEOUT' ||
+          failure.statusCode == 0;
+      return networkUnreachable
+          ? _SearchLoadStatus.unavailable
+          : _SearchLoadStatus.error;
+    }
+    // 비-API 예외(직렬화/파싱 등)는 서비스 도달과 무관하므로 error 로 분류.
+    return _SearchLoadStatus.error;
+  }
+
+  String _failureCopy(_SearchLoadStatus status) {
+    return switch (status) {
+      _SearchLoadStatus.unavailable => lalaCopy(
+        _language,
+        ko: '일시적으로 서버에 연결할 수 없어요. 네트워크를 확인 후 다시 시도해 주세요.',
+        en: 'Could not reach the service. Check your connection and try again.',
+      ),
+      _SearchLoadStatus.error => lalaCopy(
+        _language,
+        ko: '추천 장소를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.',
+        en: 'Could not load recommendations. Please try again shortly.',
+      ),
+      _SearchLoadStatus.loading ||
+      _SearchLoadStatus.loaded ||
+      _SearchLoadStatus.empty => '',
+    };
   }
 
   List<LalaPlace> get _visiblePlaces {
@@ -309,15 +343,37 @@ class _SearchPageState extends State<SearchPage> {
   Widget _buildBody(BuildContext context) {
     switch (_status) {
       case _SearchLoadStatus.loading:
-        return const _SearchLoadingView();
-      case _SearchLoadStatus.error:
-        return _SearchErrorView(message: _error!, onRetry: _load);
-      case _SearchLoadStatus.data:
-        return _SearchResultsView(
-          places: _visiblePlaces,
-          hasQuery: _query.trim().isNotEmpty || _selectedCategory != 'all',
+        return _SearchLoadingView(language: _language);
+      case _SearchLoadStatus.unavailable:
+        return _SearchFailureView(
+          key: const ValueKey('search-unavailable-view'),
+          kind: _SearchFailureKind.unavailable,
+          message: _failureMessage,
           language: _language,
+          onRetry: _load,
         );
+      case _SearchLoadStatus.error:
+        return _SearchFailureView(
+          key: const ValueKey('search-error-view'),
+          kind: _SearchFailureKind.error,
+          message: _failureMessage,
+          language: _language,
+          onRetry: _load,
+        );
+      case _SearchLoadStatus.empty:
+        return _SearchEmptyView(
+          language: _language,
+          hasQuery: _query.trim().isNotEmpty || _selectedCategory != 'all',
+          onResetFilters: () {
+            _searchController.clear();
+            setState(() {
+              _query = '';
+              _selectedCategory = 'all';
+            });
+          },
+        );
+      case _SearchLoadStatus.loaded:
+        return _SearchResultsView(places: _visiblePlaces, language: _language);
     }
   }
 }
@@ -414,7 +470,7 @@ class _CategoryChipBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 44,
+      height: 52,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.fromLTRB(24, 4, 24, 4),
@@ -423,32 +479,40 @@ class _CategoryChipBar extends StatelessWidget {
         itemBuilder: (context, index) {
           final category = categories[index];
           final isSelected = category == selected;
-          return FilterChip(
-            label: Text(
-              categoryFilterLabel(category, language),
-              style: TextStyle(
-                color: isSelected ? Colors.white : const Color(0xFF334155),
-                fontWeight: FontWeight.w900,
+          // 접근성(§13.5): 칩 터치 타겟이 44dp 이상이 되도록 padding 으로 채운다.
+          // (compact label 사이즈 자체는 유지하되 hit 영역만 44dp 확보.)
+          return Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 44),
+              child: FilterChip(
+                label: Text(
+                  categoryFilterLabel(category, language),
+                  style: TextStyle(
+                    color: isSelected ? Colors.white : const Color(0xFF334155),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                selected: isSelected,
+                onSelected: (_) => onSelect(category),
+                selectedColor: const Color(0xFF2B6CB0),
+                backgroundColor: Colors.white,
+                checkmarkColor: Colors.white,
+                showCheckmark: false,
+                materialTapTargetSize: MaterialTapTargetSize.padded,
+                side: BorderSide(
+                  color: isSelected
+                      ? const Color(0xFF2B6CB0)
+                      : const Color(0xFFE2E8F0),
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
               ),
             ),
-            selected: isSelected,
-            onSelected: (_) => onSelect(category),
-            selectedColor: const Color(0xFF2B6CB0),
-            backgroundColor: Colors.white,
-            checkmarkColor: Colors.white,
-            showCheckmark: false,
-            // 지도 칩과 동일한 컴팩트 언어: shrink wrap으로 40dp 이하 타겟.
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            visualDensity: const VisualDensity(horizontal: -3, vertical: -3),
-            side: BorderSide(
-              color: isSelected
-                  ? const Color(0xFF2B6CB0)
-                  : const Color(0xFFE2E8F0),
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(999),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           );
         },
       ),
@@ -459,16 +523,28 @@ class _CategoryChipBar extends StatelessWidget {
 /// 로딩 상태 본문: 요청 진행 중에만 결과 모양의 중성 스켈레톤 3줄.
 /// 데이터/에러 도착 시 이 위젯은 더 이상 렌더되지 않는다(_buildBody 분기).
 class _SearchLoadingView extends StatelessWidget {
-  const _SearchLoadingView();
+  const _SearchLoadingView({required this.language});
+
+  final String language;
 
   @override
   Widget build(BuildContext context) {
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-      itemCount: 3,
-      itemBuilder: (context, index) => Padding(
-        padding: EdgeInsets.only(top: index == 0 ? 0 : 12),
-        child: const _SearchSkeletonRow(),
+    // 시맨틱: 로딩 상태를 화면 읽기 사용자에게 알린다(진행률/단계 주장 없이).
+    return Semantics(
+      container: true,
+      label: lalaCopy(
+        language,
+        ko: '추천 장소를 불러오는 중',
+        en: 'Loading recommendations',
+      ),
+      child: ListView.builder(
+        key: const ValueKey('search-loading-view'),
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+        itemCount: 3,
+        itemBuilder: (context, index) => Padding(
+          padding: EdgeInsets.only(top: index == 0 ? 0 : 12),
+          child: const _SearchSkeletonRow(),
+        ),
       ),
     );
   }
@@ -513,45 +589,80 @@ class _SearchSkeletonRow extends StatelessWidget {
   }
 }
 
-/// 에러 상태 본문(메시지 + 재시도).
-class _SearchErrorView extends StatelessWidget {
-  const _SearchErrorView({required this.message, required this.onRetry});
+/// 실패 본문(unavailable / error). 두 상태는 서로 다른 아이콘·카피로 구분되며,
+/// 빈 상태(no-data)의 카피와 절대 겹치지 않는다. 색상만으로 상태를 알리지 않도록
+/// 아이콘 + 텍스트 쌍을 항상 함께 표시한다(§13.5 접근성).
+enum _SearchFailureKind { unavailable, error }
 
+class _SearchFailureView extends StatelessWidget {
+  const _SearchFailureView({
+    super.key,
+    required this.kind,
+    required this.message,
+    required this.language,
+    required this.onRetry,
+  });
+
+  final _SearchFailureKind kind;
   final String message;
+  final String language;
   final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
+    final isUnavailable = kind == _SearchFailureKind.unavailable;
+    // 아이콘과 색상을 함께 써 색상 단독 신호를 피한다.
+    final icon = isUnavailable
+        ? Icons.wifi_off_rounded
+        : Icons.error_outline_rounded;
+    final accent = isUnavailable
+        ? const Color(0xFF475569)
+        : const Color(0xFFB45309);
+    final retryLabel = lalaCopy(language, ko: '재시도', en: 'Retry');
+    // 시맨틱: 화면 읽기 사용자에게 상태 종류까지 전달.
+    final semanticsLabel = lalaCopy(
+      language,
+      ko: isUnavailable ? '서버 연결 불가. $message' : '추천 불러오기 실패. $message',
+      en: isUnavailable
+          ? 'Service unreachable. $message'
+          : 'Failed to load recommendations. $message',
+    );
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
-              Icons.cloud_off_rounded,
-              size: 36,
-              color: Color(0xFF94A3B8),
-            ),
+            Icon(icon, size: 40, color: accent),
             const SizedBox(height: 12),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Color(0xFF475569),
-                fontWeight: FontWeight.w700,
-                height: 1.4,
+            Semantics(
+              container: true,
+              label: semanticsLabel,
+              child: Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Color(0xFF475569),
+                  fontWeight: FontWeight.w700,
+                  height: 1.4,
+                ),
               ),
             ),
             const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh_rounded, size: 18),
-              label: const Text('재시도'),
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF2B6CB0),
-                foregroundColor: Colors.white,
-                textStyle: const TextStyle(fontWeight: FontWeight.w900),
+            // 최소 44dp 터치 타겟: 버튼 기본 최소 높이를 보장한다.
+            ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 44),
+              child: FilledButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: Text(retryLabel),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF2B6CB0),
+                  foregroundColor: Colors.white,
+                  textStyle: const TextStyle(fontWeight: FontWeight.w900),
+                  minimumSize: const Size.fromHeight(44),
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                ),
               ),
             ),
           ],
@@ -561,52 +672,94 @@ class _SearchErrorView extends StatelessWidget {
   }
 }
 
-/// 결과 본문(빈 상태 / 세로 리스트).
-class _SearchResultsView extends StatelessWidget {
-  const _SearchResultsView({
-    required this.places,
-    required this.hasQuery,
+/// 빈 상태(no-data): 정상 로드되었으나 표시할 장소가 없다(또는 필터 결과 없음).
+/// 실패 카피와 구분되는 고유 안내문을 쓰며, '불러오는 중' 로딩 상태와도 섞이지 않는다.
+class _SearchEmptyView extends StatelessWidget {
+  const _SearchEmptyView({
     required this.language,
+    required this.hasQuery,
+    required this.onResetFilters,
   });
 
-  final List<LalaPlace> places;
-  final bool hasQuery;
   final String language;
+  final bool hasQuery;
+  final VoidCallback onResetFilters;
 
   @override
   Widget build(BuildContext context) {
-    if (places.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              EmptyPlaceState(language: language),
-              const SizedBox(height: 12),
-              Text(
-                lalaCopy(
-                  language,
-                  // Why: an empty result is not "preparing" — the data arrived and
-                  // there is nothing here. Say so honestly instead of implying a
-                  // perpetual pending state.
-                  ko: hasQuery ? '조건에 맞는 장소가 없어요.' : '이 주변엔 아직 추천이 없어요.',
-                  en: hasQuery
-                      ? 'No places match your search.'
-                      : 'No recommendations here yet.',
-                ),
+    final message = lalaCopy(
+      language,
+      // Why: the data already loaded — an empty list is an empty result, not a
+      // "loading" or failure state. Copy is distinct from both the skeleton and
+      // any failure message.
+      ko: hasQuery ? '조건에 맞는 장소가 없어요.' : '이 주변엔 아직 추천이 없어요.',
+      en: hasQuery
+          ? 'No places match your search.'
+          : 'No recommendations here yet.',
+    );
+    final semanticsLabel = lalaCopy(
+      language,
+      ko: '빈 추천. $message',
+      en: 'Empty recommendations. $message',
+    );
+    final actionLabel = lalaCopy(language, ko: '필터 초기화', en: 'Reset filters');
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            EmptyPlaceState(language: language),
+            const SizedBox(height: 12),
+            Semantics(
+              container: true,
+              label: semanticsLabel,
+              child: Text(
+                message,
+                textAlign: TextAlign.center,
                 style: const TextStyle(
                   color: Color(0xFF64748B),
                   fontWeight: FontWeight.w700,
                 ),
               ),
+            ),
+            if (hasQuery) ...[
+              const SizedBox(height: 16),
+              ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 44),
+                child: OutlinedButton.icon(
+                  onPressed: onResetFilters,
+                  icon: const Icon(Icons.filter_alt_off_outlined, size: 18),
+                  label: Text(actionLabel),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF2B6CB0),
+                    side: const BorderSide(color: Color(0xFFB9D4F3)),
+                    textStyle: const TextStyle(fontWeight: FontWeight.w900),
+                    minimumSize: const Size.fromHeight(44),
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                  ),
+                ),
+              ),
             ],
-          ),
+          ],
         ),
-      );
-    }
+      ),
+    );
+  }
+}
 
+/// 결과 본문(세로 리스트). loaded 전용 — 빈/실패 분기는 _buildBody 에서 별도 위젯으로
+/// 분리되었다. 실제 결과가 있을 때만 렌더되므로 여기서 빈 분기는 다루지 않는다.
+class _SearchResultsView extends StatelessWidget {
+  const _SearchResultsView({required this.places, required this.language});
+
+  final List<LalaPlace> places;
+  final String language;
+
+  @override
+  Widget build(BuildContext context) {
     return ListView.separated(
+      key: const ValueKey('search-results-view'),
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       itemCount: places.length,
       separatorBuilder: (context, index) => const SizedBox(height: 12),
@@ -628,84 +781,106 @@ class _SearchPlaceTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasImage = hasOfficialPlaceImage(place);
-    return Container(
-      key: ValueKey('search-place-tile-${place.placeId}'),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: const [
-          BoxShadow(
-            blurRadius: 14,
-            offset: Offset(0, 6),
-            color: Color(0x10000000),
-          ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    CategoryBadge(category: place.category, language: language),
-                    if (place.distanceM > 0)
-                      Text(
-                        '${place.distanceM}m',
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: const Color(0xFF64748B),
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  placeDisplayName(place, language),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    height: 1.14,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.place_outlined,
-                      size: 13,
-                      color: Color(0xFF64748B),
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        placeRegionLabel(place, language),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: const Color(0xFF475569),
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+    final name = placeDisplayName(place, language);
+    final region = placeRegionLabel(place, language);
+    return Semantics(
+      container: true,
+      // 접근성(§13.5): 장소명/카테고리/거리/지역/reason을 하나의 시맨틱 라벨로 합쳐 전달
+      // (placeCardSemanticsLabel SSOT — 다른 표면과 동일 문구 보증).
+      label: placeCardSemanticsLabel(place, language),
+      child: Container(
+        key: ValueKey('search-place-tile-${place.placeId}'),
+        // 최소 44dp 터치 타겟 보장(내용이 짧아도 타일 전체 높이 하한선).
+        constraints: const BoxConstraints(minHeight: 44),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          boxShadow: const [
+            BoxShadow(
+              blurRadius: 14,
+              offset: Offset(0, 6),
+              color: Color(0x10000000),
             ),
-          ),
-          if (hasImage) ...[
-            const SizedBox(width: 12),
-            PlaceThumb(place: place),
           ],
-        ],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      CategoryBadge(
+                        category: place.category,
+                        language: language,
+                      ),
+                      if (place.distanceM > 0)
+                        Text(
+                          '${place.distanceM}m',
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                color: const Color(0xFF64748B),
+                                fontWeight: FontWeight.w800,
+                              ),
+                        ),
+                      if (place.freshness != null &&
+                          place.freshness!.isNotEmpty)
+                        PlaceFreshnessText(place: place),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      height: 1.14,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.place_outlined,
+                        size: 13,
+                        color: Color(0xFF64748B),
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          region,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: const Color(0xFF475569),
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (place.reason != null && place.reason!.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    PlaceReasonLine(place: place),
+                  ],
+                ],
+              ),
+            ),
+            if (hasImage) ...[
+              const SizedBox(width: 12),
+              PlaceThumb(place: place),
+            ],
+          ],
+        ),
       ),
     );
   }

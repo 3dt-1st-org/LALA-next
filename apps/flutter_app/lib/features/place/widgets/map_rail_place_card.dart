@@ -5,12 +5,15 @@ import '../../../shared/l10n/lala_copy.dart';
 import '../../../shared/l10n/place_labels.dart';
 import '../place_helpers.dart';
 import 'place_image.dart';
+import 'place_reason_freshness.dart';
 
 /// 지도 레일용 장소 카드.
 // 모바일 비주얼 계약(20260728) §13.2 / 01 Map 추천 rail: 사진 중심 compact card.
-// card 내용 = 이름 · 지역 · 도보 거리 · category. 선택 시 카테고리색 1px 테두리 하나만.
-// 공식 이미지가 없으면 중성 빈 슬롯(임의 사진 금지). freshness 는 LalaPlace 에 필드가
-// 없어 honest-empty 로 생략한다(날짜를 발명하지 않는다).
+// card 내용 = 이름 · 지역 · 도보 거리 · category(색 점+라벨) · reason · freshness.
+// §13.5: category 를 색으로만 전달하지 않는다 — 색 점(좌상단)과 함께 category 라벨을
+// 하단 메타 줄(category · 지역 · 도보거리)에 텍스트로 노출한다(새 색/폰트 없이).
+// 선택 시 카테고리색 1px 테두리 하나. 공식 이미지가 없으면 중성 빈 슬롯(임의 사진 금지).
+// reason/freshness 는 하단 오버레이 1줄(둘 다 null/빈이면 honest 생략, 날짜 발명 금지).
 class MapRailPlaceCard extends StatelessWidget {
   const MapRailPlaceCard({
     super.key,
@@ -33,11 +36,15 @@ class MapRailPlaceCard extends StatelessWidget {
     final hasImage = hasOfficialPlaceImage(place);
     final name = placeDisplayName(place, language);
     final region = placeRegionLabel(place, language);
+    // §13.5: category 라벨 텍스트. CategoryBadge/시맨틱 라벨과 동일 원문(categoryLabel).
+    final category = categoryLabel(place.category, language: language);
     final distance = lalaCopy(
       language,
       ko: '도보 ${place.distanceM}m',
       en: '${place.distanceM}m walk',
     );
+    // V1-RC4: 타일/독/상세와 동일 SSOT 원문. null/빔이면 하단 라인을 honest 생략한다.
+    final freshnessText = placeFreshnessText(place);
     return Material(
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(12),
@@ -46,7 +53,8 @@ class MapRailPlaceCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         onTap: onTap,
         child: Semantics(
-          label: name,
+          // V1-RC2: 검색 타일과 동일 SSOT 라벨(장소명/카테고리/거리/지역/reason).
+          label: placeCardSemanticsLabel(place, language),
           selected: selected,
           button: onTap != null,
           child: Container(
@@ -91,8 +99,8 @@ class MapRailPlaceCard extends StatelessWidget {
                     )
                   else
                     const ColoredBox(color: Color(0xFFEDF2F7)),
-                  // category 색 점(좌상단, 카테고리 토큰색 — marker/filter chip 과
-                  // 동일 토큰. 라벨 중복을 피하고 사진 중심을 유지하려 텍스트 배지 대신 색 점).
+                  // category 색 점(좌상단, 카테고리 토큰색 — marker/filter chip 과 동일 토큰).
+                  // §13.5: 색은 보조 채널이고 category 텍스트는 하단 메타 줄에 병치(색만으로 전달 금지).
                   Positioned(
                     top: 7,
                     left: 7,
@@ -137,7 +145,7 @@ class MapRailPlaceCard extends StatelessWidget {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              '$region · $distance',
+                              '$category · $region · $distance',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
@@ -147,6 +155,34 @@ class MapRailPlaceCard extends StatelessWidget {
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
+                            // V1-RC2(D-1): per-place reason, 같은 오버레이 스타일(흰색/10px/w600).
+                            // place.reason 이 null/빈이면 PlaceReasonLine 이 스스로 렌더하지 않는다.
+                            PlaceReasonLine(
+                              place: place,
+                              topSpacing: 2,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                height: 1.15,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            // V1-RC4: per-place 신선도(같은 오버레이 스타일). freshnessText 는
+                            // null/빔이면 생략 — 날짜를 발명하지 않는다.
+                            if (freshnessText != null) ...<Widget>[
+                              const SizedBox(height: 2),
+                              Text(
+                                freshnessText,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  height: 1.15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),

@@ -1,5 +1,7 @@
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
+import '../../kakao_map_models.dart';
+
 /// C3 최종: main.dart 에서 이관. 본문 불변(이동만).
 /// 앱 시작 환경설정(API base URI, 인증, 기본 쿼리 파라미터)을 담는 불변 값 객체.
 class LalaAppConfig {
@@ -16,12 +18,13 @@ class LalaAppConfig {
     this.lang = 'ko',
     this.requireLocationStartConfirmation = false,
     this.accessTokenProvider,
+    this.bounds,
   });
 
   const LalaAppConfig.fromEnvironment()
     : baseUri = const String.fromEnvironment(
         'LALA_API_BASE_URL',
-        defaultValue: 'http://127.0.0.1:8080',
+        defaultValue: 'https://api.lala-next.cloud',
       ),
       bearerToken = const String.fromEnvironment('LALA_API_BEARER_TOKEN'),
       apiKey = const String.fromEnvironment('LALA_IOS_API_KEY'),
@@ -42,7 +45,8 @@ class LalaAppConfig {
         'LALA_REQUIRE_LOCATION_START_CONFIRMATION',
         defaultValue: false,
       ),
-      accessTokenProvider = null;
+      accessTokenProvider = null,
+      bounds = null;
 
   final String baseUri;
   final String bearerToken;
@@ -56,6 +60,10 @@ class LalaAppConfig {
   final String lang;
   final bool requireLocationStartConfirmation;
   final LalaAccessTokenProvider? accessTokenProvider;
+
+  // V1 bounds-query (D4): optional viewport rectangle threaded from the camera
+  // into the /places call. null → existing center+radius circle (fallback B2).
+  final KakaoMapBounds? bounds;
 
   bool get hasAuth => bearerToken.trim().isNotEmpty || apiKey.trim().isNotEmpty;
   LalaAuthMode get authMode =>
@@ -74,6 +82,7 @@ class LalaAppConfig {
     String? lang,
     bool? requireLocationStartConfirmation,
     LalaAccessTokenProvider? accessTokenProvider,
+    KakaoMapBounds? bounds,
   }) {
     return LalaAppConfig(
       baseUri: baseUri ?? this.baseUri,
@@ -90,6 +99,7 @@ class LalaAppConfig {
           requireLocationStartConfirmation ??
           this.requireLocationStartConfirmation,
       accessTokenProvider: accessTokenProvider ?? this.accessTokenProvider,
+      bounds: bounds ?? this.bounds,
     );
   }
 }

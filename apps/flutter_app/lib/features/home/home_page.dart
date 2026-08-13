@@ -18,6 +18,9 @@ import 'package:lala_next_app/core/location/app_settings_opener.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
 import 'package:lala_next_app/core/location/region_context.dart';
 import 'package:lala_next_app/core/navigation/local_signal_action.dart';
+import 'package:lala_next_app/core/state/plan_context_store.dart';
+import 'package:lala_next_app/core/state/saved_place_store.dart';
+import 'package:lala_next_app/core/state/selected_place_store.dart';
 import 'package:lala_next_app/features/location/widgets/manual_location_sheet.dart';
 import 'package:lala_next_app/features/location/widgets/permanently_denied_recovery.dart';
 import 'package:lala_next_app/features/map/domain/active_map_sheet.dart';
@@ -57,6 +60,45 @@ class LalaHomePage extends StatefulWidget {
 
   @override
   State<LalaHomePage> createState() => _LalaHomePageState();
+
+  /// Test-only seam (D4/D5): simulates the Kakao map firing a camera-idle
+  /// event, driving the real debounce → _refresh path so the bounds-threading
+  /// and request-epoch guard can be exercised without a live map platform.
+  @visibleForTesting
+  static void simulateCameraIdleForTesting(
+    BuildContext context,
+    KakaoMapCamera camera,
+  ) {
+    final state = context.findAncestorStateOfType<_LalaHomePageState>();
+    state?._handleMapCameraIdle(camera);
+  }
+
+  /// Test-only seam (D5 response-ordering): dispatches a _refresh directly
+  /// (bypassing the camera-idle gate/debounce) so two overlapping queries with
+  /// out-of-order resolution can exercise the request-epoch guard. Fire-and-
+  /// forget, matching the real debounce call site (the refresh suspends at the
+  /// places await and is resolved later by the test's completer).
+  @visibleForTesting
+  static void simulateRefreshForTesting(BuildContext context) {
+    final state = context.findAncestorStateOfType<_LalaHomePageState>();
+    state?._refresh();
+  }
+
+  /// Test-only diagnostic (D5): the loaded places' first name + count, so the
+  /// request-epoch guard can be verified against the candidate SET held in
+  /// state (the newer result) rather than via fragile text-finding.
+  @visibleForTesting
+  static ({int count, String? firstName, bool loading}) placesStateForTesting(
+    BuildContext context,
+  ) {
+    final state = context.findAncestorStateOfType<_LalaHomePageState>();
+    final places = state?._places?.data?.places ?? const <LalaPlace>[];
+    return (
+      count: places.length,
+      firstName: places.isEmpty ? null : places.first.name,
+      loading: state?._loading ?? false,
+    );
+  }
 }
 
 class _LalaHomePageState extends State<LalaHomePage> {
@@ -78,6 +120,9 @@ class _LalaHomePageState extends State<LalaHomePage> {
 
   bool _loading = false;
   String? _error;
+  // 추천(places) 로드 실패의 honest 종류(unavailable vs error). _error 문자열만으로는
+  // 도달 실패와 서비스 오류를 구분할 수 없어 별도로 보존한다(§13.5). null = 실패 없음.
+  RecommendationFailureKind? _placeFailureKind;
   LalaEnvelope<Map<String, dynamic>>? _health;
   LalaEnvelope<LalaReadiness>? _readiness;
   LalaEnvelope<LalaPlacesResponse>? _places;
@@ -92,7 +137,6 @@ class _LalaHomePageState extends State<LalaHomePage> {
   bool _tourAudioLoading = false;
   String? _tourAudioError;
   String _selectedCategory = 'all';
-  String? _selectedPlaceId;
   ActiveMapSheet? _activeSheet;
   bool _voiceEnabled = true;
   bool _autoDocentEnabled = false;
@@ -113,6 +157,16 @@ class _LalaHomePageState extends State<LalaHomePage> {
   String? _lastAutoDocentPlaceId;
   double? _lastPlacesFetchLat;
   double? _lastPlacesFetchLng;
+  // V1 bounds-query (D5): track the map level at the last successful places
+  // fetch so a pure zoom (center unchanged) still triggers a reload.
+  int? _lastPlacesFetchLevel;
+  // V1 bounds-query (D4): latest viewport rectangle from the camera; threaded
+  // into _currentConfig() → LalaAppConfig.bounds. null → center+radius (B2).
+  KakaoMapBounds? _latestMapBounds;
+  // V1 bounds-query (D5 response-ordering): monotonic epoch captured per
+  // _refresh dispatch; a stale earlier reply is discarded when a newer query
+  // has fired. Additive — also hardens the existing center+radius path.
+  int _refreshEpoch = 0;
   DateTime? _lastWeatherFetchAt;
   double? _lastWeatherFetchLat;
   double? _lastWeatherFetchLng;
@@ -130,6 +184,16 @@ class _LalaHomePageState extends State<LalaHomePage> {
   LocalSignalPlaceActionRequest? _pendingLocalSignalAction;
   bool _localSignalActionRefreshAttempted = false;
   bool _localSignalActionCanonicalLookupAttempted = false;
+  // Cross-tab shared-state listeners (§13.4). The map is the selected-place SSOT
+  // writer; the listener rebuilds so a selection made on another tab reflects here
+  // too. The plan listener adopts a timeline published by the plan tab instead of
+  // the map fetching independently (eliminates dual-fetch divergence).
+  late final VoidCallback _onSelectedPlaceChanged;
+  late final VoidCallback _onPlanChanged;
+  // V5-B SAVE: the saved-place set is hydrated from SavedPlaceStore on cold start
+  // (bootstrap restores it from lala.v5.*) and kept in sync here so a save toggled
+  // anywhere reflects on the map/detail header too.
+  late final VoidCallback _onSavedPlacesChanged;
 
   @override
   void initState() {
@@ -150,7 +214,55 @@ class _LalaHomePageState extends State<LalaHomePage> {
     _authController.addListener(_handleAuthStateChanged);
     OnboardingState.languageListenable.addListener(_handleUiLanguageChanged);
     widget.localSignalActionController?.addListener(_handleLocalSignalAction);
+    // Selected place: rebuild when the shared id changes so another tab's selection
+    // reflects here. The map resolves SelectedPlaceStore.current against its own
+    // candidate set at build time (placeById ?? featuredPlace) — identical behavior
+    // to the old private field, now sourced from the shared holder.
+    _onSelectedPlaceChanged = () {
+      if (!mounted) {
+        return;
+      }
+      setState(() {});
+    };
+    SelectedPlaceStore.listenable.addListener(_onSelectedPlaceChanged);
+    // Plan: adopt a timeline published by the plan tab. No-op-skip our own
+    // publishes (same instance) and external clears (null) so a valid local plan
+    // is never wiped by another tab's transient null.
+    _onPlanChanged = () {
+      if (!mounted) {
+        return;
+      }
+      final next = PlanContextStore.current;
+      if (next == null || next == _dailyPlan?.data) {
+        return;
+      }
+      setState(() {
+        _dailyPlan = LalaEnvelope<LalaDailyPlan>(
+          ok: true,
+          data: next,
+          meta: const <String, dynamic>{},
+          error: null,
+          statusCode: 200,
+          requestId: null,
+        );
+      });
+    };
+    PlanContextStore.listenable.addListener(_onPlanChanged);
     _backend = widget.backendFactory(_currentConfig());
+    // V5-B SAVE: hydrate the local mirror from the cold-start-restored store, then
+    // subscribe so future toggles (this tab or elsewhere) stay in sync + durable.
+    _savedPlaceIds.addAll(SavedPlaceStore.current);
+    _onSavedPlacesChanged = () {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _savedPlaceIds
+          ..clear()
+          ..addAll(SavedPlaceStore.current);
+      });
+    };
+    SavedPlaceStore.listenable.addListener(_onSavedPlacesChanged);
     unawaited(_initializeAuth());
     if (!config.requireLocationStartConfirmation) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -175,6 +287,9 @@ class _LalaHomePageState extends State<LalaHomePage> {
     _recommendationRecoveryTimer?.cancel();
     _authController.removeListener(_handleAuthStateChanged);
     OnboardingState.languageListenable.removeListener(_handleUiLanguageChanged);
+    SelectedPlaceStore.listenable.removeListener(_onSelectedPlaceChanged);
+    PlanContextStore.listenable.removeListener(_onPlanChanged);
+    SavedPlaceStore.listenable.removeListener(_onSavedPlacesChanged);
     widget.localSignalActionController?.removeListener(
       _handleLocalSignalAction,
     );
@@ -190,6 +305,9 @@ class _LalaHomePageState extends State<LalaHomePage> {
       category: _selectedCategory,
       lang: _uiLanguage,
       accessTokenProvider: _authController.accessToken,
+      // V1 bounds-query (D4): carry the latest viewport rectangle into the
+      // /places call site; null preserves the center+radius fallback (B2).
+      bounds: _latestMapBounds,
     );
   }
 
@@ -213,7 +331,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
   }
 
   void _resetMapContext() {
-    _selectedPlaceId = null;
+    SelectedPlaceStore.set(null);
     _activeSheet = null;
     _docentAudio = null;
     _audioError = null;
@@ -332,11 +450,15 @@ class _LalaHomePageState extends State<LalaHomePage> {
     if (!fromAutoRecovery) {
       _resetRecommendationRecoveryState();
     }
+    // D5 response-ordering: capture a monotonic epoch for this dispatch; result
+    // application is skipped if a newer _refresh has since fired (stale discard).
+    final epoch = ++_refreshEpoch;
     final config = _currentConfig();
     setState(() {
       _loading = true;
       if (!fromAutoRecovery) {
         _error = null;
+        _placeFailureKind = null;
       }
       _audioError = null;
       _docentAudio = null;
@@ -388,14 +510,26 @@ class _LalaHomePageState extends State<LalaHomePage> {
       final previousPlaces = _places;
       final previousWeather = _weather;
       final previousIntervention = _intervention;
-      final placesFuture = loadOptional(
-        () => loadWithSingleRetry(
-          _backend.getPlaces,
-          shouldRetry: true,
-          retryDelay: _recommendationRequestRetryDelay,
-        ),
-        fallbackMessage: (_) => recommendationLoadFailureMessage(config.lang),
-      );
+      // places 실패 종류(unavailable vs error)를 honest 하게 구분하기 위해 예외를
+      // 별도 캡처한다(§13.5). loadOptional 은 메시지로 평탄화해 종류가 사라지므로,
+      // 로더 자체를 감싸 throw 를 포착한다.
+      Object? placesFailure;
+      Future<LalaEnvelope<LalaPlacesResponse>?> loadPlacesCapture() async {
+        try {
+          return await loadWithSingleRetry(
+            _backend.getPlaces,
+            shouldRetry: true,
+            retryDelay: _recommendationRequestRetryDelay,
+          );
+        } on Object catch (error) {
+          placesFailure = error;
+          // loadOptional 과 동일한 fallback 메시지를 loadErrors 에 반영한다.
+          loadErrors.add(recommendationLoadFailureMessage(config.lang));
+          return null;
+        }
+      }
+
+      final placesFuture = loadPlacesCapture();
       final health = (await healthFuture) ?? previousHealth;
       final readiness = (await readinessFuture) ?? previousReadiness;
       final places = await placesFuture;
@@ -406,14 +540,17 @@ class _LalaHomePageState extends State<LalaHomePage> {
       final autoDocentPlace = _autoDocentEnabled
           ? _nextAutoDocentPlace(effectiveItems)
           : null;
-      final selectedPlace = placeById(effectiveItems, _selectedPlaceId);
+      final selectedPlace = placeById(
+        effectiveItems,
+        SelectedPlaceStore.current,
+      );
       final firstPlace =
           autoDocentPlace ?? selectedPlace ?? featuredPlace(effectiveItems);
       final coreLoadError = loadErrors.isEmpty
           ? null
           : loadErrors.toSet().take(2).join(' / ');
 
-      if (!mounted) {
+      if (!mounted || epoch != _refreshEpoch) {
         return;
       }
       setState(() {
@@ -421,6 +558,13 @@ class _LalaHomePageState extends State<LalaHomePage> {
         _readiness = readiness;
         _syncSpeechCapabilityFromReadiness(readiness);
         _places = places ?? previousPlaces;
+        // places 가 새로 로드되었으면 실패 종류를 지운다(성공). 그렇지 않고 포착된
+        // 예외가 있으면 unavailable/error 로 분류해 보존한다(§13.5 honest states).
+        _placeFailureKind = places != null
+            ? null
+            : (placesFailure == null
+                  ? _placeFailureKind
+                  : recommendationFailureKind(placesFailure));
         _docentAudio = null;
         _tourAudio = null;
         _audioError = null;
@@ -431,6 +575,9 @@ class _LalaHomePageState extends State<LalaHomePage> {
         if (places != null) {
           _lastPlacesFetchLat = config.lat;
           _lastPlacesFetchLng = config.lng;
+          // D5: record the map level at this successful fetch so a later pure
+          // zoom (center unchanged) is detected as a level change.
+          _lastPlacesFetchLevel = _mapLevel;
         }
         if (autoDocentPlace != null) {
           _applyAutoDocentPlace(autoDocentPlace, closeActiveSheet: false);
@@ -465,7 +612,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
             ? null
             : loadErrors.toSet().take(2).join(' / ');
 
-        if (!mounted) {
+        if (!mounted || epoch != _refreshEpoch) {
           return;
         }
         setState(() {
@@ -500,7 +647,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
           ? null
           : loadErrors.toSet().take(2).join(' / ');
 
-      if (!mounted) {
+      if (!mounted || epoch != _refreshEpoch) {
         return;
       }
       setState(() {
@@ -513,8 +660,16 @@ class _LalaHomePageState extends State<LalaHomePage> {
         _tourAudioLoading = false;
         _error = loadError;
       });
+      // Cross-tab plan SSOT (§13.4): publish the fetched plan so the plan tab and
+      // any other reader share the same timeline instead of independently
+      // refetching and diverging. Only a real result is published — a failed fetch
+      // (null) must not wipe a valid shared plan.
+      final sharedPlan = dailyPlan?.data;
+      if (sharedPlan != null) {
+        PlanContextStore.set(sharedPlan);
+      }
     } on Object catch (error) {
-      if (!mounted) {
+      if (!mounted || epoch != _refreshEpoch) {
         return;
       }
       setState(() {
@@ -526,7 +681,9 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _cancelInterventionToastTimer();
       _scheduleRecommendationRecovery(reason: 'refresh-exception');
     } finally {
-      if (mounted) {
+      // D5: a stale dispatch must not clear the loading indicator while a newer
+      // query is still in flight.
+      if (mounted && epoch == _refreshEpoch) {
         setState(() {
           _loading = false;
         });
@@ -660,13 +817,14 @@ class _LalaHomePageState extends State<LalaHomePage> {
     if (places.isEmpty) {
       return null;
     }
-    return placeById(places, _selectedPlaceId) ?? featuredPlace(places);
+    return placeById(places, SelectedPlaceStore.current) ??
+        featuredPlace(places);
   }
 
   void _selectCategory(String category) {
     setState(() {
       _selectedCategory = category;
-      _selectedPlaceId = null;
+      SelectedPlaceStore.set(null);
       _activeSheet = null;
       _docentAudio = null;
       _audioError = null;
@@ -700,7 +858,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
           _selectedCategory != place.category) {
         _selectedCategory = place.category;
       }
-      _selectedPlaceId = place.placeId;
+      SelectedPlaceStore.set(place.placeId);
       _activeSheet = ActiveMapSheet.detail;
       _docentAudio = null;
       _audioError = null;
@@ -754,7 +912,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
     _selectPlace(place, ensureVisible: true);
     if (request.action == LocalSignalPlaceAction.addToPlan) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _selectedPlaceId == place.placeId) {
+        if (mounted && SelectedPlaceStore.current == place.placeId) {
           _openSheet(ActiveMapSheet.planner);
         }
       });
@@ -793,7 +951,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _selectPlace(place, ensureVisible: true, loadedPlaces: response);
       if (request.action == LocalSignalPlaceAction.addToPlan) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && _selectedPlaceId == place.placeId) {
+          if (mounted && SelectedPlaceStore.current == place.placeId) {
             _openSheet(ActiveMapSheet.planner);
           }
         });
@@ -834,7 +992,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
 
   void _clearPlaceSelection() {
     setState(() {
-      _selectedPlaceId = null;
+      SelectedPlaceStore.set(null);
       _activeSheet = null;
       _docentScript = null;
       _docentAudio = null;
@@ -850,9 +1008,11 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _mapFocusLng = cluster.lng;
       _mapLevel = _mapLevel <= 2 ? 2 : _mapLevel - 1;
       _focusedClusterMemberIds = cluster.clusterMemberIds;
-      _selectedPlaceId = cluster.clusterMemberIds.isEmpty
-          ? null
-          : cluster.clusterMemberIds.first;
+      SelectedPlaceStore.set(
+        cluster.clusterMemberIds.isEmpty
+            ? null
+            : cluster.clusterMemberIds.first,
+      );
       _activeSheet = null;
       _recommendationRailExpanded = true;
     });
@@ -867,6 +1027,10 @@ class _LalaHomePageState extends State<LalaHomePage> {
       currentLat: camera.lat,
       currentLng: camera.lng,
       thresholdMeters: _placesReloadThresholdMeters,
+      // V1 bounds-query (D5): reload on a pure zoom too (center unchanged but
+      // map level changed) so the viewport rectangle refreshes on zoom.
+      lastFetchLevel: _lastPlacesFetchLevel,
+      currentLevel: normalizedLevel,
     );
     setState(() {
       _queryLat = camera.lat;
@@ -874,8 +1038,11 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _mapFocusLat = camera.lat;
       _mapFocusLng = camera.lng;
       _mapLevel = normalizedLevel;
+      // V1 bounds-query (D4): keep the latest viewport rectangle for the next
+      // _refresh; null (map without getBounds) restores the center+radius path.
+      _latestMapBounds = camera.bounds;
       if (shouldReloadPlaces) {
-        _selectedPlaceId = null;
+        SelectedPlaceStore.set(null);
         _focusedClusterMemberIds = const <String>[];
         _activeSheet = null;
         _docentAudio = null;
@@ -1110,13 +1277,10 @@ class _LalaHomePageState extends State<LalaHomePage> {
   }
 
   void _toggleSavedPlace(String placeId) {
-    setState(() {
-      if (_savedPlaceIds.contains(placeId)) {
-        _savedPlaceIds.remove(placeId);
-      } else {
-        _savedPlaceIds.add(placeId);
-      }
-    });
+    // V5-B SAVE: the store is the SSOT and persists to lala.v5.* via the
+    // write-through listener in ActionPersistence. The _onSavedPlacesChanged
+    // listener syncs the local mirror + rebuilds.
+    SavedPlaceStore.toggle(placeId);
   }
 
   void _toggleRecommendationRail() {
@@ -1252,7 +1416,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
     LalaPlace place, {
     required bool closeActiveSheet,
   }) {
-    _selectedPlaceId = place.placeId;
+    SelectedPlaceStore.set(place.placeId);
     if (closeActiveSheet) {
       _activeSheet = null;
     }
@@ -1345,6 +1509,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
                 builder: (context) => Dashboard(
                   loading: _loading,
                   error: _error,
+                  placeFailureKind: _placeFailureKind,
                   health: _health,
                   readiness: _readiness,
                   places: _places,
@@ -1361,7 +1526,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
                   authMode: config.authMode,
                   kakaoJavascriptKey: config.kakaoJavascriptKey,
                   selectedCategory: _selectedCategory,
-                  selectedPlaceId: _selectedPlaceId,
+                  selectedPlaceId: SelectedPlaceStore.current,
                   activeSheet: _activeSheet,
                   uiLanguage: _uiLanguage,
                   voiceEnabled: _voiceEnabled,

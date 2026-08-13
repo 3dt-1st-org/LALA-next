@@ -78,6 +78,79 @@ String? planSlotDetail(LalaPlanSlot slot, String language) {
   return detail;
 }
 
+/// 이전 슬롯으로부터의 도보 이동 시간(분) 라인.
+/// §12.3: travel_time_from_previous_minutes 는 null(첫 슬롯/장소 없음)이면 표시하지
+/// 않는다. Haversine 기반 추정값이므로 별도의 "추정" 마커 없이 도보 N분 / N min walk.
+String? planSlotTravelTimeLabel(LalaPlanSlot slot, String language) {
+  final minutes = slot.travelTimeFromPreviousMinutes;
+  if (minutes == null || minutes < 0) {
+    return null;
+  }
+  return lalaCopy(
+    language,
+    ko: '도보 $minutes분',
+    en: '$minutes min walk',
+  );
+}
+
+/// 카테고리 기반 추정 운영시간 라인.
+/// §12.3: estimated_opening_hours 는 authority 가 아닌 추정값이므로 항상 (추정)/(est.)
+/// 마커를 붙인다. null(장소 없음)이면 표시하지 않는다. opening_hours_valid 는 authority
+/// 부재 시 null 이므로 authoritative 하게 표시하지 않는다.
+String? planSlotEstimatedHoursLabel(LalaPlanSlot slot, String language) {
+  final hours = slot.estimatedOpeningHours;
+  if (hours == null || hours.trim().isEmpty) {
+    return null;
+  }
+  return lalaCopy(
+    language,
+    ko: '영업 $hours (추정)',
+    en: 'Open $hours (est.)',
+  );
+}
+
+/// D4: 슬롯 운영 상태(open/closed/unknown) KO/EN 라벨.
+/// §V3-C: closure_state 는 카테고리 기반 추정 운영시간의 투영이며 authority 가
+/// 아니므로 "영업중/Open"은 추정 상태 표시이지 보증이 아니다("확정/Confirmed" 금지).
+/// null 은 honest-empty 로 "unknown" 취급한다.
+String planSlotClosureStateLabel(LalaPlanSlot slot, String language) {
+  final state = (slot.closureState ?? 'unknown').trim().toLowerCase();
+  return switch (state) {
+    'open' => lalaCopy(language, ko: '영업중', en: 'Open'),
+    'closed' => lalaCopy(language, ko: '영업종료', en: 'Closed'),
+    _ => lalaCopy(language, ko: '미확인', en: 'Unknown'),
+  };
+}
+
+/// D2: 슬롯 예보 창(forecast_window) 표시 라벨.
+/// §V3-C: time/temp 는 plan-level forecast 에서 nearest-time 매칭한 이미 포맷된
+/// 문자열이므로 언어 중립 데이터로 "time · temp" 형태로 합쳐 표시한다.
+/// null(예보 미확보)이면 표시하지 않는다(placeholder/spinner 없음).
+String? planSlotForecastWindowLabel(LalaPlanSlot slot, String language) {
+  final fw = slot.forecastWindow;
+  if (fw == null) return null;
+  final time = fw.time.trim();
+  final temp = fw.temp.trim();
+  if (time.isEmpty && temp.isEmpty) return null;
+  if (time.isEmpty) return temp;
+  if (temp.isEmpty) return time;
+  return '$time · $temp';
+}
+
+/// D3: 외부 대기질 나쁨 마커 라벨.
+/// §V3-C: plan-level 먼지 등급이 outdoor_status 를 나쁘게 뒤집은 경우에만 야외 슬롯에
+/// 투영한다. airQualityBad == true 이고 실내(indoor)가 아닐 때만 라벨 반환.
+/// null(먼지 미확보)은 결코 "나쁨"으로 조작하지 않는다(honest-empty).
+String? planSlotAirQualityBadLabel(LalaPlanSlot slot, String language) {
+  if (slot.airQualityBad != true) return null;
+  if (slot.indoorOutdoor == 'indoor') return null;
+  return lalaCopy(
+    language,
+    ko: '외부 대기질 나쁨',
+    en: 'Outdoor air quality poor',
+  );
+}
+
 /// 시간대 라벨(C3 추출 — main.dart 의 _periodLabel).
 String periodLabel(String period, {String language = 'ko'}) {
   final normalized = period.trim().toLowerCase();

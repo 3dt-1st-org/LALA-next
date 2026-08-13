@@ -5,6 +5,7 @@ import '../../../shared/l10n/multi_language_text.dart';
 import '../../../shared/l10n/place_labels.dart';
 import '../place_helpers.dart';
 import 'category_badge.dart';
+import 'place_reason_freshness.dart';
 import 'place_thumb.dart';
 
 /// 추천 장소 가로 카드(C3 추출 — main.dart 의 _RecommendedPlaceCard).
@@ -24,6 +25,7 @@ class RecommendedPlaceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = _categoryColor(place.category);
     final hasImage = hasOfficialPlaceImage(place);
+    final freshness = placeFreshnessText(place);
     return Container(
       key: ValueKey('recommended-place-card-${place.placeId}'),
       width: hasImage ? 270 : 232,
@@ -52,15 +54,29 @@ class RecommendedPlaceCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    CategoryBadge(
-                      category: place.category,
-                      language: language,
-                    ),
+                    CategoryBadge(category: place.category, language: language),
                     const SizedBox(width: 8),
                     Text(
                       '${place.distanceM}m',
                       style: Theme.of(context).textTheme.labelSmall,
                     ),
+                    if (freshness != null) ...[
+                      const SizedBox(width: 8),
+                      // V1-RC §13.5: freshness 는 가변 폭 후미 세그먼트 — Flexible+ellipsis
+                      // 로 메타 Row overflow 를 흡수(카테고리/거리는 고정 폭, 신선도가 먼저 잘린다).
+                      Flexible(
+                        child: Text(
+                          freshness,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                color: const Color(0xFF64748B),
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
                 const SizedBox(height: 10),
@@ -82,6 +98,8 @@ class RecommendedPlaceCard extends StatelessWidget {
                     color: const Color(0xFF475569),
                   ),
                 ),
+                // V1-RC2: per-place reason(없으면 PlaceReasonLine 이 렌더 생략).
+                PlaceReasonLine(place: place, topSpacing: 6),
               ],
             ),
           ),

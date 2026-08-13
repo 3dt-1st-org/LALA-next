@@ -108,6 +108,65 @@ String recommendationStatusMessage(
   );
 }
 
+/// 지도/추천 로드 실패의 두 가지 honest 종류(playbook §2/§13.5).
+/// unavailable = 서비스에 도달하지 못함(네트워크/타임아웃); error = 서비스가 오류로 응답.
+/// 두 종류는 빈 상태(no-data) 카피와 절대 겹치지 않는다.
+enum RecommendationFailureKind { unavailable, error }
+
+/// 캡처된 예외를 도달 실패(unavailable) / 오류 응답(error)으로 분류한다.
+/// LalaApiException 의 code/statusCode 가 없으면 서비스 도달과 무관하므로 error.
+RecommendationFailureKind recommendationFailureKind(Object? failure) {
+  if (failure is LalaApiException) {
+    final code = failure.code;
+    final networkUnreachable =
+        code == 'NETWORK_ERROR' ||
+        code == 'REQUEST_TIMEOUT' ||
+        failure.statusCode == 0;
+    return networkUnreachable
+        ? RecommendationFailureKind.unavailable
+        : RecommendationFailureKind.error;
+  }
+  return RecommendationFailureKind.error;
+}
+
+/// 실패 종류에 따른 distinct 안내문. 빈 상태(no-data) 카피와 구분된다.
+String recommendationFailureMessage(
+  String language,
+  RecommendationFailureKind kind,
+) {
+  switch (kind) {
+    case RecommendationFailureKind.unavailable:
+      return lalaCopy(
+        language,
+        ko: '일시적으로 서버에 연결할 수 없어요. 네트워크를 확인 후 다시 시도해 주세요.',
+        en: 'Could not reach the service. Check your connection and try again.',
+      );
+    case RecommendationFailureKind.error:
+      return lalaCopy(
+        language,
+        ko: '추천 장소를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.',
+        en: 'Could not load recommendations. Please try again shortly.',
+      );
+  }
+}
+
+/// 실패 종류에 따른 시맨틱/아이콘 라벨(화면 읽기 + 색상 단독 신호 회피용).
+String recommendationFailureSemanticsLabel(
+  String language,
+  RecommendationFailureKind kind,
+  String message,
+) {
+  return lalaCopy(
+    language,
+    ko: kind == RecommendationFailureKind.unavailable
+        ? '서버 연결 불가. $message'
+        : '추천 불러오기 실패. $message',
+    en: kind == RecommendationFailureKind.unavailable
+        ? 'Service unreachable. $message'
+        : 'Failed to load recommendations. $message',
+  );
+}
+
 String? localizedUiMessage(String? value, String language) {
   final localized = singleLanguageText(value, language);
   if (localized != null && localized.isNotEmpty) {
@@ -164,6 +223,10 @@ String interventionToastLabel(LalaIntervention intervention, String language) {
   final localizedReason = singleLanguageText(reason, language);
   final localizedAction = singleLanguageText(action, language);
 
+  // API 가 reason/recommendedAction 을 항상 채워 보내므로, 우선 순위는 기존과
+  // 동일하게 reason/action 카피를 그대로 쓴다. 아래쪽 trigger-aware fallback 은
+  // API 가 빈 카피를 보낸 honest-empty 경우에만 발동한다.
+
   if (isLalaEnglish(language)) {
     if (localizedReason != null && localizedAction != null) {
       return '$localizedReason · $localizedAction';
@@ -174,10 +237,7 @@ String interventionToastLabel(LalaIntervention intervention, String language) {
     if (localizedAction != null) {
       return localizedAction;
     }
-    if (place != null) {
-      return 'Weather changed. Adjust the route near $place.';
-    }
-    return 'Weather changed. Review today\'s route.';
+    return _interventionFallbackCopy(intervention.triggerType, place, language);
   }
 
   if (localizedReason != null) {
@@ -186,10 +246,55 @@ String interventionToastLabel(LalaIntervention intervention, String language) {
   if (localizedAction != null) {
     return localizedAction;
   }
-  if (place != null) {
-    return '날씨가 바뀌었어요. $place 중심으로 동선을 다시 확인해보세요.';
+  return _interventionFallbackCopy(intervention.triggerType, place, language);
+}
+
+/// triggerType 에 따른 honest fallback 카피(KO/EN 배타). API 카피가 비었을 때만
+/// 쓰인다. bad_weather/null 은 기존 weather 카피와 동일(역호환), closure_detected
+/// 와 bad_weather_and_closure 는 새 카피. 대체 장소가 없어도 위조하지 않는다.
+String _interventionFallbackCopy(String? trigger, String? place, String language) {
+  switch (trigger) {
+    case 'closure_detected':
+      return place != null
+          ? lalaCopy(
+              language,
+              ko: '선택한 장소가 영업 중이 아닐 수 있어요. $place 근처 다른 옵션을 확인해 보세요.',
+              en: 'The chosen place may be closed. Check other options near $place.',
+            )
+          : lalaCopy(
+              language,
+              ko: '선택한 장소가 영업 중이 아닐 수 있어요. 동선을 다시 확인해 보세요.',
+              en: 'The chosen place may be closed. Review the route.',
+            );
+    case 'bad_weather_and_closure':
+      return place != null
+          ? lalaCopy(
+              language,
+              ko: '날씨가 좋지 않고 $place 도 영업 중이 아닐 수 있어요. 실내 대안을 확인해 보세요.',
+              en: 'Weather is poor and $place may be closed. Check indoor alternatives.',
+            )
+          : lalaCopy(
+              language,
+              ko: '날씨가 좋지 않고 일부 장소가 영업 중이 아닐 수 있어요. 실내 대안을 확인해 보세요.',
+              en: 'Weather is poor and some places may be closed. Check indoor alternatives.',
+            );
+    case 'bad_weather':
+    default:
+      // null / 알 수 없는 트리거도 기존 weather 카피와 동일(역호환) — V3 이전
+      // triggerType 은 항상 null/bad_weather 이었고 기존 토스트는 weather 카피를
+      // 썼으므로, dashboard 경로(widget_test)의 기대 문구를 보존한다.
+      return place != null
+          ? lalaCopy(
+              language,
+              ko: '날씨가 바뀌었어요. $place 중심으로 동선을 다시 확인해보세요.',
+              en: 'Weather changed. Adjust the route near $place.',
+            )
+          : lalaCopy(
+              language,
+              ko: '날씨가 바뀌었어요. 하루 일정을 다시 확인해보세요.',
+              en: 'Weather changed. Review today\'s route.',
+            );
   }
-  return '날씨가 바뀌었어요. 하루 일정을 다시 확인해보세요.';
 }
 
 List<LalaPlace> filterPlaces(List<LalaPlace> places, String category) {
@@ -260,8 +365,16 @@ LalaPlace? placeById(List<LalaPlace> places, String? placeId) {
 String placeContextTitle(String category, String language) {
   return switch (category) {
     'event' => lalaCopy(language, ko: '행사 맥락', en: 'Event context'),
-    'restaurant' => lalaCopy(language, ko: '맛집 로컬 맥락', en: 'Food local context'),
-    'culture_venue' => lalaCopy(language, ko: '문화 연계 맥락', en: 'Culture context'),
+    'restaurant' => lalaCopy(
+      language,
+      ko: '맛집 로컬 맥락',
+      en: 'Food local context',
+    ),
+    'culture_venue' => lalaCopy(
+      language,
+      ko: '문화 연계 맥락',
+      en: 'Culture context',
+    ),
     _ => lalaCopy(language, ko: '로컬 맥락', en: 'Local context'),
   };
 }
@@ -279,6 +392,7 @@ List<ContextFact> placeContextFacts({
   required LalaPlace place,
   required String language,
   required LalaWeather? weather,
+  required String? source,
   required bool includeEvidence,
 }) {
   final score = place.score;
@@ -344,25 +458,20 @@ List<ContextFact> placeContextFacts({
     );
   }
 
-  if (weather != null) {
-    // P1: 빈 온도는 '야외 상태 · -' 로 보이지 않도록 온도 파트를 생략한다.
-    final outdoor = outdoorLabel(weather.outdoorStatus, language: language);
-    final temp = temperatureLabelOrNull(weather.temp);
-    add(Icons.wb_cloudy_outlined, temp == null ? outdoor : '$outdoor · $temp');
+  // RC3: 날씨 요약·귀속은 독과 같은 SSOT(publicWeatherSummary)에서 한 쌍.
+  // placeholder/fallback 이면 둘 다 null → 날씨 칩과 날씨소스 칩이 함께 생략된다.
+  final weatherSummary = publicWeatherSummary(weather, language);
+  if (weatherSummary.summary != null) {
+    add(Icons.wb_cloudy_outlined, weatherSummary.summary);
+    add(Icons.cloud_outlined, weatherSummary.source);
   }
 
-  if (includeEvidence) {
-    add(
-      Icons.verified_outlined,
-      externalSourceLabel(
-            place.upstreamSource ?? features['primary_source'],
-            language: language,
-          ) ??
-          sourceLabel(place.source, language: language),
-    );
-  }
+  // RC3: 추천 소스는 showEvidence 와 무관한 일반 경로 정직 정보('-' 면 add 가 생략).
+  // 출처 provenance(externalSourceLabel)는 PublicDataProofRow 가 증거 경로에서 동일 SSOT 으로
+  // 더 자세히 보여주므로 카드에서는 위임(중복 제거) — §1a deep-proof 분리, D-Cap 노출로 드러난 중복.
+  add(Icons.bolt_outlined, sourceLabel(source, language: language));
 
-  return facts.take(5).toList(growable: false);
+  return facts.take(8).toList(growable: false);
 }
 
 bool isLiveSpeechEnabled(LalaReadiness? readiness) {

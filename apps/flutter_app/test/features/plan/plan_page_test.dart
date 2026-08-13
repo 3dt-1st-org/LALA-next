@@ -54,7 +54,7 @@ void main() {
       expect(find.textContaining('%'), findsNothing);
       expect(find.text('일정을 준비하고 있어요'), findsOneWidget);
 
-      // 에러 도착 → 로딩 카드/스켈레톤 제거, 재시도 노출.
+      // 에러 도착 → 로딩 카드/스켈레톤 제거, 재시도 노출(§13.5 honest error state).
       backend.completeError();
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('planner-loading-card')), findsNothing);
@@ -62,7 +62,7 @@ void main() {
         find.byKey(const ValueKey('plan-timeline-skeleton')),
         findsNothing,
       );
-      expect(find.text('재시도'), findsOneWidget);
+      expect(find.text('다시 시도'), findsOneWidget);
     },
   );
 

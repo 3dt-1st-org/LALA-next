@@ -98,6 +98,15 @@ def _add_client_auth_security(schema: dict[str, Any]) -> None:
     )
     schemas.setdefault("MeData", _me_data_schema())
     schemas.setdefault("MeSuccessEnvelope", _success_envelope_schema("MeData"))
+    schemas.setdefault("SavedPlace", _saved_place_schema())
+    schemas.setdefault("SavedPlacesData", _saved_places_data_schema())
+    schemas.setdefault("SavedPlacesSuccessEnvelope", _success_envelope_schema("SavedPlacesData"))
+    schemas.setdefault("SaveToggleResult", _save_toggle_result_schema())
+    schemas.setdefault("PersistedPlan", _persisted_plan_schema())
+    schemas.setdefault("PersistedPlanSuccessEnvelope", _success_envelope_schema("PersistedPlan"))
+    schemas.setdefault("SlotVisit", _slot_visit_schema())
+    schemas.setdefault("SlotVisitsData", _slot_visits_data_schema())
+    schemas.setdefault("SlotVisitsSuccessEnvelope", _success_envelope_schema("SlotVisitsData"))
 
     security_schemes["BearerAuth"] = {
         "type": "http",
@@ -729,6 +738,10 @@ def _places_query_schema() -> dict[str, Any]:
             "lat": {"type": "number", "format": "double"},
             "lng": {"type": "number", "format": "double"},
             "radius_m": {"type": "integer"},
+            "sw_lat": {"type": "number", "format": "double", "nullable": True},
+            "sw_lng": {"type": "number", "format": "double", "nullable": True},
+            "ne_lat": {"type": "number", "format": "double", "nullable": True},
+            "ne_lng": {"type": "number", "format": "double", "nullable": True},
             "category": {
                 "type": "string",
                 "enum": ["all", "attraction", "restaurant", "event", "culture_venue"],
@@ -909,13 +922,20 @@ def _daily_plan_slot_schema() -> dict[str, Any]:
                 "anyOf": [{"type": "integer"}, {"type": "null"}],
                 "description": "Estimated walking minutes from previous slot (Haversine ÷ 4 km/h), or null for first slot / no place.",
             },
+            # V5-C routing-seam authority (additive). Absent unless
+            # LALA_ENABLE_LIVE_ROUTING is on; honestly null in V5 — real Kakao/Naver
+            # Directions are BLOCKED_EXTERNAL/V7, so this is never a guessed ETA.
+            "travel_time_authority_minutes": {
+                "anyOf": [{"type": "integer"}, {"type": "null"}],
+                "description": "Authoritative travel-time from previous slot (Directions ETA), or null when live routing is off/unavailable.",
+            },
             "opening_hours_valid": {
                 "anyOf": [{"type": "boolean"}, {"type": "null"}],
                 "description": "True if slot start within estimated hours.",
-                "estimated_opening_hours": {
-                    "anyOf": [{"type": "string"}, {"type": "null"}],
-                    "description": "Category-based estimate (e.g. 11:00-22:00).",
-                },
+            },
+            "estimated_opening_hours": {
+                "anyOf": [{"type": "string"}, {"type": "null"}],
+                "description": "Category-based estimate (e.g. 11:00-22:00); not an authority.",
             },
             "indoor_outdoor": {
                 "anyOf": [{"type": "string"}, {"type": "null"}],
@@ -937,6 +957,29 @@ def _daily_plan_slot_schema() -> dict[str, Any]:
             "unavailable_reason": {
                 "anyOf": [{"type": "string"}, {"type": "null"}],
                 "description": "Honest reason when no place is assigned, else null.",
+            },
+            # V3 additive OPTIONAL projections (PLAN_FULL_SLOTS). Absent/null when the
+            # flag is off; projections of already-fetched weather/AQ + opening-hours data.
+            "closure_state": {
+                "anyOf": [
+                    {"type": "string", "enum": ["open", "closed", "unknown"]},
+                    {"type": "null"},
+                ],
+                "description": "Projection of the category-based hours estimate (D4); "
+                "real temporary/holiday closure is not knowable offline.",
+            },
+            "forecast_window": {
+                "anyOf": [
+                    {"$ref": "#/components/schemas/ForecastItem"},
+                    {"type": "null"},
+                ],
+                "description": "Nearest-time forecast projection from the plan-level "
+                "weather.forecast list (D2); null when the forecast list is empty.",
+            },
+            "air_quality_bad": {
+                "anyOf": [{"type": "boolean"}, {"type": "null"}],
+                "description": "Outdoor-only bad-AQ flag projected from plan dust grade "
+                "(D3); null for indoor slots or unknown grade.",
             },
         },
         "additionalProperties": False,
@@ -1014,7 +1057,8 @@ def _intervention_data_schema() -> dict[str, Any]:
             },
             "trigger_type": {
                 "anyOf": [{"type": "string"}, {"type": "null"}],
-                "description": "Observable trigger (e.g. bad_weather) or null.",
+                "description": "Observable trigger (e.g. bad_weather, closure_detected, "
+                "bad_weather_and_closure) or null.",
             },
             "trigger_factors": {
                 "type": "array",
@@ -1024,6 +1068,10 @@ def _intervention_data_schema() -> dict[str, Any]:
                     "properties": {
                         "factor": {"type": "string"},
                         "value": {"type": "string"},
+                        "period": {
+                            "anyOf": [{"type": "string"}, {"type": "null"}],
+                            "description": "Slot period when present (e.g. closure factor).",
+                        },
                     },
                     "additionalProperties": False,
                 },
@@ -1045,6 +1093,118 @@ def _intervention_data_schema() -> dict[str, Any]:
                 "type": "array",
                 "items": {"type": "object"},
                 "description": "Empty on a fresh response; filled by the persistence layer.",
+            },
+        },
+        "additionalProperties": False,
+    }
+
+
+def _saved_place_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": ["place_id", "source"],
+        "description": "User-scoped saved place. place_id only — no coordinates or PII.",
+        "properties": {
+            "place_id": {"type": "string"},
+            "source": {"type": "string"},
+            "saved_at": {
+                "anyOf": [{"type": "string", "format": "date-time"}, {"type": "null"}],
+                "description": "When the place was saved, or null.",
+            },
+        },
+        "additionalProperties": False,
+    }
+
+
+def _saved_places_data_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": ["items"],
+        "description": "Saved places for the caller; empty list when none (honest empty).",
+        "properties": {
+            "items": {
+                "type": "array",
+                "items": {"$ref": "#/components/schemas/SavedPlace"},
+            },
+        },
+        "additionalProperties": False,
+    }
+
+
+def _save_toggle_result_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": ["place_id", "saved", "changed"],
+        "description": "Idempotent save/unsave result (repeat toggle = no-op delta).",
+        "properties": {
+            "place_id": {"type": "string"},
+            "saved": {"type": "boolean"},
+            "changed": {
+                "type": "boolean",
+                "description": "False when the toggle was a no-op (already in that state).",
+            },
+        },
+        "additionalProperties": False,
+    }
+
+
+def _persisted_plan_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": ["plan_date", "schema_version", "plan"],
+        "description": (
+            "Persisted daily plan, one per user per UTC day. A corrupt or "
+            "version-mismatched envelope reads as null (D8), never throws."
+        ),
+        "properties": {
+            "plan_date": {"type": "string", "format": "date"},
+            "schema_version": {"type": "integer"},
+            "plan": {"$ref": "#/components/schemas/DailyPlanData"},
+            "updated_at": {
+                "anyOf": [{"type": "string", "format": "date-time"}, {"type": "null"}],
+                "description": "Last persisted update time, or null.",
+            },
+        },
+        "additionalProperties": False,
+    }
+
+
+def _slot_visit_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": ["slot_period", "status"],
+        "description": "Per-slot check-in status (idempotent; re-check-in = one row).",
+        "properties": {
+            "slot_period": {
+                "type": "string",
+                "enum": ["morning", "lunch", "afternoon", "dinner"],
+            },
+            "place_id": {
+                "anyOf": [{"type": "string"}, {"type": "null"}],
+                "description": "Optional place visited in the slot, or null.",
+            },
+            "status": {"type": "string", "enum": ["planned", "visited"]},
+            "visited_at": {
+                "anyOf": [{"type": "string", "format": "date-time"}, {"type": "null"}],
+                "description": "When visited, or null for a planned slot.",
+            },
+        },
+        "additionalProperties": False,
+    }
+
+
+def _slot_visits_data_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": ["items"],
+        "description": (
+            "Slot visits for a persisted plan; empty list when none, in which "
+            "case slots render as 'planned' (honest empty, D9)."
+        ),
+        "properties": {
+            "items": {
+                "type": "array",
+                "items": {"$ref": "#/components/schemas/SlotVisit"},
             },
         },
         "additionalProperties": False,
