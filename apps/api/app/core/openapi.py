@@ -98,6 +98,15 @@ def _add_client_auth_security(schema: dict[str, Any]) -> None:
     )
     schemas.setdefault("MeData", _me_data_schema())
     schemas.setdefault("MeSuccessEnvelope", _success_envelope_schema("MeData"))
+    schemas.setdefault("SavedPlace", _saved_place_schema())
+    schemas.setdefault("SavedPlacesData", _saved_places_data_schema())
+    schemas.setdefault("SavedPlacesSuccessEnvelope", _success_envelope_schema("SavedPlacesData"))
+    schemas.setdefault("SaveToggleResult", _save_toggle_result_schema())
+    schemas.setdefault("PersistedPlan", _persisted_plan_schema())
+    schemas.setdefault("PersistedPlanSuccessEnvelope", _success_envelope_schema("PersistedPlan"))
+    schemas.setdefault("SlotVisit", _slot_visit_schema())
+    schemas.setdefault("SlotVisitsData", _slot_visits_data_schema())
+    schemas.setdefault("SlotVisitsSuccessEnvelope", _success_envelope_schema("SlotVisitsData"))
 
     security_schemes["BearerAuth"] = {
         "type": "http",
@@ -1077,6 +1086,118 @@ def _intervention_data_schema() -> dict[str, Any]:
                 "type": "array",
                 "items": {"type": "object"},
                 "description": "Empty on a fresh response; filled by the persistence layer.",
+            },
+        },
+        "additionalProperties": False,
+    }
+
+
+def _saved_place_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": ["place_id", "source"],
+        "description": "User-scoped saved place. place_id only — no coordinates or PII.",
+        "properties": {
+            "place_id": {"type": "string"},
+            "source": {"type": "string"},
+            "saved_at": {
+                "anyOf": [{"type": "string", "format": "date-time"}, {"type": "null"}],
+                "description": "When the place was saved, or null.",
+            },
+        },
+        "additionalProperties": False,
+    }
+
+
+def _saved_places_data_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": ["items"],
+        "description": "Saved places for the caller; empty list when none (honest empty).",
+        "properties": {
+            "items": {
+                "type": "array",
+                "items": {"$ref": "#/components/schemas/SavedPlace"},
+            },
+        },
+        "additionalProperties": False,
+    }
+
+
+def _save_toggle_result_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": ["place_id", "saved", "changed"],
+        "description": "Idempotent save/unsave result (repeat toggle = no-op delta).",
+        "properties": {
+            "place_id": {"type": "string"},
+            "saved": {"type": "boolean"},
+            "changed": {
+                "type": "boolean",
+                "description": "False when the toggle was a no-op (already in that state).",
+            },
+        },
+        "additionalProperties": False,
+    }
+
+
+def _persisted_plan_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": ["plan_date", "schema_version", "plan"],
+        "description": (
+            "Persisted daily plan, one per user per UTC day. A corrupt or "
+            "version-mismatched envelope reads as null (D8), never throws."
+        ),
+        "properties": {
+            "plan_date": {"type": "string", "format": "date"},
+            "schema_version": {"type": "integer"},
+            "plan": {"$ref": "#/components/schemas/DailyPlanData"},
+            "updated_at": {
+                "anyOf": [{"type": "string", "format": "date-time"}, {"type": "null"}],
+                "description": "Last persisted update time, or null.",
+            },
+        },
+        "additionalProperties": False,
+    }
+
+
+def _slot_visit_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": ["slot_period", "status"],
+        "description": "Per-slot check-in status (idempotent; re-check-in = one row).",
+        "properties": {
+            "slot_period": {
+                "type": "string",
+                "enum": ["morning", "lunch", "afternoon", "dinner"],
+            },
+            "place_id": {
+                "anyOf": [{"type": "string"}, {"type": "null"}],
+                "description": "Optional place visited in the slot, or null.",
+            },
+            "status": {"type": "string", "enum": ["planned", "visited"]},
+            "visited_at": {
+                "anyOf": [{"type": "string", "format": "date-time"}, {"type": "null"}],
+                "description": "When visited, or null for a planned slot.",
+            },
+        },
+        "additionalProperties": False,
+    }
+
+
+def _slot_visits_data_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": ["items"],
+        "description": (
+            "Slot visits for a persisted plan; empty list when none, in which "
+            "case slots render as 'planned' (honest empty, D9)."
+        ),
+        "properties": {
+            "items": {
+                "type": "array",
+                "items": {"$ref": "#/components/schemas/SlotVisit"},
             },
         },
         "additionalProperties": False,
