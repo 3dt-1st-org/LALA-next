@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
+from apps.api.app.core.config import get_settings
 from apps.api.app.schemas.planner import DailyPlanRequest
 from apps.api.app.services.normalization import normalize_language
 from apps.api.app.services.opening_hours_service import (
@@ -55,12 +58,35 @@ def intervention(*, lat: float, lng: float, radius_m: int, language: str = "en")
     candidate_name = (candidate or {}).get("name") or _fallback_candidate_name(normalized)
     outdoor_status = weather["outdoor_status"]
     is_bad_weather = outdoor_status == "bad"
+    full_slots = _full_slots_enabled()
+    unavailable_reason = (
+        "추천 장소가 부족해요" if normalized == "ko" else "Not enough nearby options"
+    )
+    # 기존 추천을 slot 구조로 옮김(P5A _plan_slot 재사용, period=afternoon).
+    original_slot = _plan_slot(
+        period="afternoon",
+        title=("오후" if normalized == "ko" else "Afternoon"),
+        place=candidate,
+        weather_hint=outdoor_status,
+        unavailable_reason=unavailable_reason,
+        language=normalized,
+        weather=weather,
+        full_slots=full_slots,
+    )
+    # D5: closure trigger derived offline from original_slot's category-based
+    # closure_state. No external feed (BLOCKED_EXTERNAL V7); flag-off → never emits.
+    closure_factors: list[dict] = []
+    is_closure = full_slots and original_slot.get("closure_state") == "closed"
+    if is_closure:
+        closure_factors = [
+            {"factor": "slot_closure_state", "value": "closed", "period": "afternoon"}
+        ]
     # P5B §12.4: observable trigger classification + honest-unavailable fields.
     # authority(travel-time/indoor-outdoor)가 없으면 값을 차단할 뿐 contract 는 유지.
     return {
         "center": {"lat": lat, "lng": lng},
         "radius_m": radius_m,
-        "should_intervene": is_bad_weather,
+        "should_intervene": is_bad_weather or is_closure,
         "reason": _intervention_reason(
             weather_status=outdoor_status,
             candidate_name=candidate_name,
@@ -73,32 +99,26 @@ def intervention(*, lat: float, lng: float, radius_m: int, language: str = "en")
         ),
         "place": candidate,
         "source": source,
-        # 기존 추천을 slot 구조로 옮김(P5A _plan_slot 재사용, period=afternoon).
-        "original_slot": _plan_slot(
-            period="afternoon",
-            title=("오후" if normalized == "ko" else "Afternoon"),
-            place=candidate,
-            weather_hint=outdoor_status,
-            unavailable_reason=(
-                "추천 장소가 부족해요" if normalized == "ko" else "Not enough nearby options"
-            ),
-            language=normalized,
-        ),
+        "original_slot": original_slot,
         # indoor/outdoor provenance: bad weather 시 실내 대체 장소 검색(AI enrichment 기반).
         "alternative_slot": _find_indoor_alternative(
             place_candidates=places.get("places") or [],
             exclude_place_id=(candidate or {}).get("place_id"),
             language=normalized,
             weather_hint=outdoor_status,
-            unavailable_reason=(
-                "추천 장소가 부족해요" if normalized == "ko" else "Not enough nearby options"
-            ),
+            unavailable_reason=unavailable_reason,
+            weather=weather,
+            full_slots=full_slots,
         )
         if is_bad_weather
         else None,
-        # observable trigger 만. good/unknown → null. 발명 금지.
-        "trigger_type": "bad_weather" if is_bad_weather else None,
-        "trigger_factors": _intervention_trigger_factors(outdoor_status=outdoor_status),
+        # observable trigger 만. good/unknown + closure 없음 → null. 발명 금지.
+        "trigger_type": _intervention_trigger_type(
+            is_bad_weather=is_bad_weather, is_closure=is_closure
+        ),
+        "trigger_factors": _intervention_trigger_factors(
+            outdoor_status=outdoor_status, closure_factors=closure_factors
+        ),
         # travel-time authority 부재 → 거리/이동시간 비교 불가(honest null).
         "distance_comparison": None,
         # contract boundary: API 는 항상 default. 실제 상태 관리는 P5C UI/persistence.
@@ -112,11 +132,36 @@ def _fallback_candidate_name(language: str) -> str:
     return "근처 로컬 장소" if language == "ko" else "nearby local places"
 
 
-def _intervention_trigger_factors(*, outdoor_status: str) -> list[dict]:
+def _full_slots_enabled() -> bool:
+    # PLAN_FULL_SLOTS gates the V3 additive slot projections (D2/D3/D4/D6) and the
+    # closure trigger (D5). getattr fallback mirrors places_service: test doubles that
+    # omit feature_flags stay flag-off (byte-for-byte pre-V3 behavior).
+    flags = getattr(get_settings(), "feature_flags", None) or {}
+    return bool(flags.get("PLAN_FULL_SLOTS", False))
+
+
+def _intervention_trigger_type(*, is_bad_weather: bool, is_closure: bool) -> str | None:
+    # D5: additive enum widening on a nullable string. Flag-off ⇒ is_closure False ⇒
+    # the pre-V3 "bad_weather"/None result is preserved exactly.
+    if is_bad_weather and is_closure:
+        return "bad_weather_and_closure"
+    if is_bad_weather:
+        return "bad_weather"
+    if is_closure:
+        return "closure_detected"
+    return None
+
+
+def _intervention_trigger_factors(
+    *, outdoor_status: str, closure_factors: list[dict] | None = None
+) -> list[dict]:
     """관측가능 trigger 요소만. 발명된 factor 없음(honest)."""
+    factors: list[dict] = []
     if outdoor_status == "bad":
-        return [{"factor": "weather_outdoor_status", "value": "bad"}]
-    return []
+        factors.append({"factor": "weather_outdoor_status", "value": "bad"})
+    if closure_factors:
+        factors.extend(closure_factors)
+    return factors
 
 
 def _find_indoor_alternative(
@@ -126,6 +171,8 @@ def _find_indoor_alternative(
     language: str,
     weather_hint: str | None,
     unavailable_reason: str,
+    weather: dict | None = None,
+    full_slots: bool = False,
 ) -> dict | None:
     """AI enrichment is_indoor=true 인 첫 번째 대체 장소를 slot 으로 반환.
 
@@ -142,6 +189,8 @@ def _find_indoor_alternative(
                 weather_hint=weather_hint,
                 unavailable_reason=unavailable_reason,
                 language=language,
+                weather=weather,
+                full_slots=full_slots,
             )
     return None
 
@@ -253,6 +302,16 @@ def _daily_plan_slots(*, place_candidates: list[dict], weather: dict, language: 
             travel_times[period] = None
         prev_place = place if place is not None else prev_place
 
+    # D6: swappable_alternatives populated from the existing candidate-pool leftovers
+    # (already-fetched places not assigned to any slot). Flag-off ⇒ empty dict ⇒ each
+    # slot stays swappable_alternatives: [] (byte-for-byte pre-V3).
+    full_slots = _full_slots_enabled()
+    swappable = (
+        _swappable_alternatives_by_period(assigned=assigned, place_candidates=place_candidates)
+        if full_slots
+        else {}
+    )
+
     return [
         _plan_slot(
             period=period,
@@ -262,9 +321,38 @@ def _daily_plan_slots(*, place_candidates: list[dict], weather: dict, language: 
             unavailable_reason=unavailable_reason,
             language=language,
             travel_time=travel_times[period],
+            weather=weather,
+            full_slots=full_slots,
+            swappable_alternatives=swappable.get(period),
         )
         for period in _PERIOD_ORDER
     ]
+
+
+def _swappable_alternatives_by_period(
+    *, assigned: dict[str, dict | None], place_candidates: list[dict]
+) -> dict[str, list[dict]]:
+    # D6: per-slot swap candidates = pool leftovers (not assigned to any slot), same
+    # category first, capped at 3. Honest [] when the pool is exhausted. No new fetch.
+    assigned_places = [p for p in assigned.values() if p is not None]
+    assigned_ids = {p.get("place_id") for p in assigned_places if p.get("place_id") is not None}
+    assigned_obj_ids = {id(p) for p in assigned_places}
+    leftovers = [
+        p
+        for p in place_candidates
+        if id(p) not in assigned_obj_ids and p.get("place_id") not in assigned_ids
+    ]
+    by_period: dict[str, list[dict]] = {}
+    for period in _PERIOD_ORDER:
+        slot_place = assigned[period]
+        if slot_place is None:
+            by_period[period] = []
+            continue
+        category = slot_place.get("category")
+        same = [p for p in leftovers if p.get("category") == category]
+        other = [p for p in leftovers if p.get("category") != category]
+        by_period[period] = (same + other)[:3]
+    return by_period
 
 
 _RECOMMENDATION_REASON = {
@@ -292,6 +380,9 @@ def _plan_slot(
     unavailable_reason: str,
     language: str,
     travel_time: int | None = None,
+    weather: dict | None = None,
+    full_slots: bool = False,
+    swappable_alternatives: list[dict] | None = None,
 ) -> dict:
     # start_time: 관용적 시간대 시작 시각(09:00/12:00/14:00/18:00). opening-hours authority
     # 확보 전까지 표준 관례 기반 추정값.
@@ -306,12 +397,12 @@ def _plan_slot(
     start_t = period_start_time(period)
     oh_valid = is_within_hours(start_t, open_t, close_t) if place else None
 
-    return {
+    slot = {
         "period": period,
         "title": title,
         "place": place,
         "weather_hint": weather_hint,
-        "start_time": period_start_time(period),
+        "start_time": start_t,
         "stay_duration_minutes": None,
         "travel_time_from_previous_minutes": travel_time,
         "opening_hours_valid": oh_valid,
@@ -319,9 +410,107 @@ def _plan_slot(
         "indoor_outdoor": indoor_outdoor,
         "recommendation_reason": (_recommendation_reason(place, language) if place else None),
         "local_franchise_confidence": None,
-        "swappable_alternatives": [],
+        "swappable_alternatives": (
+            list(swappable_alternatives) if (full_slots and swappable_alternatives) else []
+        ),
         "unavailable_reason": None if place else unavailable_reason,
     }
+    if full_slots:
+        # PLAN_FULL_SLOTS additive projections (D2/D3/D4). Flag-off omits these keys so
+        # the slot payload stays byte-for-byte the pre-V3 shape; values are projections
+        # of already-fetched weather/AQ + opening-hours data (no new external call).
+        slot["closure_state"] = _closure_state(oh_valid=oh_valid, place=place)
+        slot["forecast_window"] = _nearest_forecast_window(start_time=start_t, weather=weather)
+        slot["air_quality_bad"] = _air_quality_bad(indoor_outdoor=indoor_outdoor, weather=weather)
+    return slot
+
+
+_KST = timezone(timedelta(hours=9))
+_BAD_DUST_GRADES = frozenset({"bad", "very_bad"})
+_OK_DUST_GRADES = frozenset({"good", "normal"})
+
+
+def _closure_state(*, oh_valid: bool | None, place: dict | None) -> str:
+    # D4: projection of the category-based opening-hours estimate. Real temporary/holiday
+    # closure is NOT knowable here — those map to "unknown" (BLOCKED_EXTERNAL V7).
+    if place is None or oh_valid is None:
+        return "unknown"
+    return "open" if oh_valid else "closed"
+
+
+def _hhmm_to_minutes(value: str | None) -> int | None:
+    if not value or len(value) < 5:
+        return None
+    try:
+        return int(value[:2]) * 60 + int(value[3:5])
+    except (ValueError, IndexError):
+        return None
+
+
+def _forecast_item_minutes(time_str: object) -> int | None:
+    # Forecast items carry ISO datetime strings; the slot start is a Korean-local HH:MM
+    # convention, so normalize the forecast side to KST before comparing minute-of-day.
+    if not isinstance(time_str, str) or not time_str:
+        return None
+    text = time_str.strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=_KST)
+    dt_kst = dt.astimezone(_KST)
+    return dt_kst.hour * 60 + dt_kst.minute
+
+
+def _nearest_forecast_window(*, start_time: str | None, weather: dict | None) -> dict | None:
+    # D2: nearest-time projection from the existing plan-level forecast list — no new
+    # weather call. Tie-break on equidistant items: earliest (contract A4). Null when the
+    # forecast list is empty (AirKorea-only / unavailable paths).
+    if not start_time or not weather:
+        return None
+    forecast = weather.get("forecast") or []
+    if not forecast:
+        return None
+    target = _hhmm_to_minutes(start_time)
+    if target is None:
+        return None
+    best_item: dict | None = None
+    best_key: tuple[int, int] | None = None
+    for item in forecast:
+        if not isinstance(item, dict):
+            continue
+        minutes = _forecast_item_minutes(item.get("time"))
+        if minutes is None:
+            continue
+        # Sort by (abs delta, forecast minute-of-day) so equidistant ties go to earliest.
+        key = (abs(minutes - target), minutes)
+        if best_key is None or key < best_key:
+            best_key = key
+            best_item = item
+    if best_item is None:
+        return None
+    # Project exactly the ForecastItem shape {time,temp,icon} (schema-closed).
+    return {
+        "time": best_item.get("time"),
+        "temp": best_item.get("temp"),
+        "icon": best_item.get("icon"),
+    }
+
+
+def _air_quality_bad(*, indoor_outdoor: str | None, weather: dict | None) -> bool | None:
+    # D3: outdoor-relevance flag projected from the plan-level dust grade (one station per
+    # region; per-slot AQ would be fabricated). Indoor → null; unknown grade → null.
+    if indoor_outdoor == "indoor":
+        return None
+    grade = ((weather or {}).get("dust") or {}).get("grade")
+    if grade in _BAD_DUST_GRADES:
+        return True
+    if grade in _OK_DUST_GRADES:
+        return False
+    return None
 
 
 def _intervention_reason(*, weather_status: str, candidate_name: str, language: str = "en") -> str:

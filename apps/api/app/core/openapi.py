@@ -916,10 +916,10 @@ def _daily_plan_slot_schema() -> dict[str, Any]:
             "opening_hours_valid": {
                 "anyOf": [{"type": "boolean"}, {"type": "null"}],
                 "description": "True if slot start within estimated hours.",
-                "estimated_opening_hours": {
-                    "anyOf": [{"type": "string"}, {"type": "null"}],
-                    "description": "Category-based estimate (e.g. 11:00-22:00).",
-                },
+            },
+            "estimated_opening_hours": {
+                "anyOf": [{"type": "string"}, {"type": "null"}],
+                "description": "Category-based estimate (e.g. 11:00-22:00); not an authority.",
             },
             "indoor_outdoor": {
                 "anyOf": [{"type": "string"}, {"type": "null"}],
@@ -941,6 +941,29 @@ def _daily_plan_slot_schema() -> dict[str, Any]:
             "unavailable_reason": {
                 "anyOf": [{"type": "string"}, {"type": "null"}],
                 "description": "Honest reason when no place is assigned, else null.",
+            },
+            # V3 additive OPTIONAL projections (PLAN_FULL_SLOTS). Absent/null when the
+            # flag is off; projections of already-fetched weather/AQ + opening-hours data.
+            "closure_state": {
+                "anyOf": [
+                    {"type": "string", "enum": ["open", "closed", "unknown"]},
+                    {"type": "null"},
+                ],
+                "description": "Projection of the category-based hours estimate (D4); "
+                "real temporary/holiday closure is not knowable offline.",
+            },
+            "forecast_window": {
+                "anyOf": [
+                    {"$ref": "#/components/schemas/ForecastItem"},
+                    {"type": "null"},
+                ],
+                "description": "Nearest-time forecast projection from the plan-level "
+                "weather.forecast list (D2); null when the forecast list is empty.",
+            },
+            "air_quality_bad": {
+                "anyOf": [{"type": "boolean"}, {"type": "null"}],
+                "description": "Outdoor-only bad-AQ flag projected from plan dust grade "
+                "(D3); null for indoor slots or unknown grade.",
             },
         },
         "additionalProperties": False,
@@ -1018,7 +1041,8 @@ def _intervention_data_schema() -> dict[str, Any]:
             },
             "trigger_type": {
                 "anyOf": [{"type": "string"}, {"type": "null"}],
-                "description": "Observable trigger (e.g. bad_weather) or null.",
+                "description": "Observable trigger (e.g. bad_weather, closure_detected, "
+                "bad_weather_and_closure) or null.",
             },
             "trigger_factors": {
                 "type": "array",
@@ -1028,6 +1052,10 @@ def _intervention_data_schema() -> dict[str, Any]:
                     "properties": {
                         "factor": {"type": "string"},
                         "value": {"type": "string"},
+                        "period": {
+                            "anyOf": [{"type": "string"}, {"type": "null"}],
+                            "description": "Slot period when present (e.g. closure factor).",
+                        },
                     },
                     "additionalProperties": False,
                 },
