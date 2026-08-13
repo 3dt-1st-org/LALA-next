@@ -18,6 +18,8 @@ import 'package:lala_next_app/core/location/app_settings_opener.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
 import 'package:lala_next_app/core/location/region_context.dart';
 import 'package:lala_next_app/core/navigation/local_signal_action.dart';
+import 'package:lala_next_app/core/state/plan_context_store.dart';
+import 'package:lala_next_app/core/state/selected_place_store.dart';
 import 'package:lala_next_app/features/location/widgets/manual_location_sheet.dart';
 import 'package:lala_next_app/features/location/widgets/permanently_denied_recovery.dart';
 import 'package:lala_next_app/features/map/domain/active_map_sheet.dart';
@@ -134,7 +136,6 @@ class _LalaHomePageState extends State<LalaHomePage> {
   bool _tourAudioLoading = false;
   String? _tourAudioError;
   String _selectedCategory = 'all';
-  String? _selectedPlaceId;
   ActiveMapSheet? _activeSheet;
   bool _voiceEnabled = true;
   bool _autoDocentEnabled = false;
@@ -182,6 +183,12 @@ class _LalaHomePageState extends State<LalaHomePage> {
   LocalSignalPlaceActionRequest? _pendingLocalSignalAction;
   bool _localSignalActionRefreshAttempted = false;
   bool _localSignalActionCanonicalLookupAttempted = false;
+  // Cross-tab shared-state listeners (§13.4). The map is the selected-place SSOT
+  // writer; the listener rebuilds so a selection made on another tab reflects here
+  // too. The plan listener adopts a timeline published by the plan tab instead of
+  // the map fetching independently (eliminates dual-fetch divergence).
+  late final VoidCallback _onSelectedPlaceChanged;
+  late final VoidCallback _onPlanChanged;
 
   @override
   void initState() {
@@ -202,6 +209,40 @@ class _LalaHomePageState extends State<LalaHomePage> {
     _authController.addListener(_handleAuthStateChanged);
     OnboardingState.languageListenable.addListener(_handleUiLanguageChanged);
     widget.localSignalActionController?.addListener(_handleLocalSignalAction);
+    // Selected place: rebuild when the shared id changes so another tab's selection
+    // reflects here. The map resolves SelectedPlaceStore.current against its own
+    // candidate set at build time (placeById ?? featuredPlace) — identical behavior
+    // to the old private field, now sourced from the shared holder.
+    _onSelectedPlaceChanged = () {
+      if (!mounted) {
+        return;
+      }
+      setState(() {});
+    };
+    SelectedPlaceStore.listenable.addListener(_onSelectedPlaceChanged);
+    // Plan: adopt a timeline published by the plan tab. No-op-skip our own
+    // publishes (same instance) and external clears (null) so a valid local plan
+    // is never wiped by another tab's transient null.
+    _onPlanChanged = () {
+      if (!mounted) {
+        return;
+      }
+      final next = PlanContextStore.current;
+      if (next == null || next == _dailyPlan?.data) {
+        return;
+      }
+      setState(() {
+        _dailyPlan = LalaEnvelope<LalaDailyPlan>(
+          ok: true,
+          data: next,
+          meta: const <String, dynamic>{},
+          error: null,
+          statusCode: 200,
+          requestId: null,
+        );
+      });
+    };
+    PlanContextStore.listenable.addListener(_onPlanChanged);
     _backend = widget.backendFactory(_currentConfig());
     unawaited(_initializeAuth());
     if (!config.requireLocationStartConfirmation) {
@@ -227,6 +268,8 @@ class _LalaHomePageState extends State<LalaHomePage> {
     _recommendationRecoveryTimer?.cancel();
     _authController.removeListener(_handleAuthStateChanged);
     OnboardingState.languageListenable.removeListener(_handleUiLanguageChanged);
+    SelectedPlaceStore.listenable.removeListener(_onSelectedPlaceChanged);
+    PlanContextStore.listenable.removeListener(_onPlanChanged);
     widget.localSignalActionController?.removeListener(
       _handleLocalSignalAction,
     );
@@ -268,7 +311,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
   }
 
   void _resetMapContext() {
-    _selectedPlaceId = null;
+    SelectedPlaceStore.set(null);
     _activeSheet = null;
     _docentAudio = null;
     _audioError = null;
@@ -477,7 +520,10 @@ class _LalaHomePageState extends State<LalaHomePage> {
       final autoDocentPlace = _autoDocentEnabled
           ? _nextAutoDocentPlace(effectiveItems)
           : null;
-      final selectedPlace = placeById(effectiveItems, _selectedPlaceId);
+      final selectedPlace = placeById(
+        effectiveItems,
+        SelectedPlaceStore.current,
+      );
       final firstPlace =
           autoDocentPlace ?? selectedPlace ?? featuredPlace(effectiveItems);
       final coreLoadError = loadErrors.isEmpty
@@ -594,6 +640,14 @@ class _LalaHomePageState extends State<LalaHomePage> {
         _tourAudioLoading = false;
         _error = loadError;
       });
+      // Cross-tab plan SSOT (§13.4): publish the fetched plan so the plan tab and
+      // any other reader share the same timeline instead of independently
+      // refetching and diverging. Only a real result is published — a failed fetch
+      // (null) must not wipe a valid shared plan.
+      final sharedPlan = dailyPlan?.data;
+      if (sharedPlan != null) {
+        PlanContextStore.set(sharedPlan);
+      }
     } on Object catch (error) {
       if (!mounted || epoch != _refreshEpoch) {
         return;
@@ -743,13 +797,14 @@ class _LalaHomePageState extends State<LalaHomePage> {
     if (places.isEmpty) {
       return null;
     }
-    return placeById(places, _selectedPlaceId) ?? featuredPlace(places);
+    return placeById(places, SelectedPlaceStore.current) ??
+        featuredPlace(places);
   }
 
   void _selectCategory(String category) {
     setState(() {
       _selectedCategory = category;
-      _selectedPlaceId = null;
+      SelectedPlaceStore.set(null);
       _activeSheet = null;
       _docentAudio = null;
       _audioError = null;
@@ -783,7 +838,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
           _selectedCategory != place.category) {
         _selectedCategory = place.category;
       }
-      _selectedPlaceId = place.placeId;
+      SelectedPlaceStore.set(place.placeId);
       _activeSheet = ActiveMapSheet.detail;
       _docentAudio = null;
       _audioError = null;
@@ -837,7 +892,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
     _selectPlace(place, ensureVisible: true);
     if (request.action == LocalSignalPlaceAction.addToPlan) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _selectedPlaceId == place.placeId) {
+        if (mounted && SelectedPlaceStore.current == place.placeId) {
           _openSheet(ActiveMapSheet.planner);
         }
       });
@@ -876,7 +931,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _selectPlace(place, ensureVisible: true, loadedPlaces: response);
       if (request.action == LocalSignalPlaceAction.addToPlan) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && _selectedPlaceId == place.placeId) {
+          if (mounted && SelectedPlaceStore.current == place.placeId) {
             _openSheet(ActiveMapSheet.planner);
           }
         });
@@ -917,7 +972,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
 
   void _clearPlaceSelection() {
     setState(() {
-      _selectedPlaceId = null;
+      SelectedPlaceStore.set(null);
       _activeSheet = null;
       _docentScript = null;
       _docentAudio = null;
@@ -933,9 +988,11 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _mapFocusLng = cluster.lng;
       _mapLevel = _mapLevel <= 2 ? 2 : _mapLevel - 1;
       _focusedClusterMemberIds = cluster.clusterMemberIds;
-      _selectedPlaceId = cluster.clusterMemberIds.isEmpty
-          ? null
-          : cluster.clusterMemberIds.first;
+      SelectedPlaceStore.set(
+        cluster.clusterMemberIds.isEmpty
+            ? null
+            : cluster.clusterMemberIds.first,
+      );
       _activeSheet = null;
       _recommendationRailExpanded = true;
     });
@@ -965,7 +1022,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
       // _refresh; null (map without getBounds) restores the center+radius path.
       _latestMapBounds = camera.bounds;
       if (shouldReloadPlaces) {
-        _selectedPlaceId = null;
+        SelectedPlaceStore.set(null);
         _focusedClusterMemberIds = const <String>[];
         _activeSheet = null;
         _docentAudio = null;
@@ -1342,7 +1399,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
     LalaPlace place, {
     required bool closeActiveSheet,
   }) {
-    _selectedPlaceId = place.placeId;
+    SelectedPlaceStore.set(place.placeId);
     if (closeActiveSheet) {
       _activeSheet = null;
     }
@@ -1452,7 +1509,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
                   authMode: config.authMode,
                   kakaoJavascriptKey: config.kakaoJavascriptKey,
                   selectedCategory: _selectedCategory,
-                  selectedPlaceId: _selectedPlaceId,
+                  selectedPlaceId: SelectedPlaceStore.current,
                   activeSheet: _activeSheet,
                   uiLanguage: _uiLanguage,
                   voiceEnabled: _voiceEnabled,
