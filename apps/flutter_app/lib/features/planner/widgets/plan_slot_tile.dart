@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
+import '../../../shared/l10n/lala_copy.dart';
 import '../../../shared/l10n/multi_language_text.dart';
 import '../../../shared/l10n/place_labels.dart';
 import '../planner_helpers.dart';
+import '../spend_band_helpers.dart';
 
 /// 일정 슬롯 타일(C3 추출 — main.dart 의 _PlanSlotTile).
 class PlanSlotTile extends StatelessWidget {
@@ -13,6 +15,10 @@ class PlanSlotTile extends StatelessWidget {
     required this.language,
     required this.onSelectPlace,
     this.swapReason,
+    this.visitStatus,
+    this.onToggleVisit,
+    this.spendBand,
+    this.spendUnavailable = false,
   });
 
   final LalaPlanSlot slot;
@@ -21,6 +27,19 @@ class PlanSlotTile extends StatelessWidget {
 
   /// 날씨 교체 사유(P6A §04 Screen 04 swapped 상태). null 이면 일반 표시.
   final String? swapReason;
+
+  // V5-B VISIT (§V5-B D2): current visit status ('planned' | 'visited'). null →
+  // visit badge not rendered (backward-compatible for callers not wiring V5-B).
+  final String? visitStatus;
+
+  /// Toggles planned ↔ visited. When non-null the badge is tappable (min 44dp).
+  final VoidCallback? onToggleVisit;
+
+  // V5-B SPEND (§V5-B D3): offline category-band estimate. null + false → no
+  // spend row rendered. The caller passes either [spendBand] (known category) or
+  // [spendUnavailable] (honest-unavailable band); never a fabricated number.
+  final SpendBand? spendBand;
+  final bool spendUnavailable;
 
   @override
   Widget build(BuildContext context) {
@@ -61,6 +80,10 @@ class PlanSlotTile extends StatelessWidget {
       ?travelTimeLabel,
       ?estimatedHoursLabel,
     ];
+    // V5-B VISIT/SPEND badge text (only when wired by the caller).
+    final visitLabel = visitStatus == null ? null : _visitBadgeLabel(visitStatus!, language);
+    final spendLabel = spendBand?.label ??
+        (spendUnavailable ? spendBandUnavailableLabel(language) : null);
     // 접근성(§13.5): 슬롯 메타(시간대/실내·야외/이동시간/추정시간/운영상태/예보/대기질)를
     // 하나의 시맨틱 라벨로 합쳐 화면 읽기 사용자에게 전달. 색상 단독 신호를 피하기 위해
     // 실내·야외·운영상태는 모두 아이콘+텍스트+라벨 삼중으로 표현한다.
@@ -74,6 +97,8 @@ class PlanSlotTile extends StatelessWidget {
       ?forecastWindowText,
       ...metaEntries,
       ?airQualityBadText,
+      ?visitLabel,
+      ?spendLabel,
     ];
     return Semantics(
       container: true,
@@ -215,6 +240,33 @@ class PlanSlotTile extends StatelessWidget {
                   ),
                 ),
               ),
+              // V5-B VISIT + SPEND (§V5-B D2/D3): rendered only when the caller
+              // wires them. Existing callers that omit all three params see the
+              // legacy tile shape unchanged. Both reuse the documented slate chip
+              // tokens (no new color); icon+text+semantics so color is never the
+              // sole signal (§13.5).
+              if (visitLabel != null || spendLabel != null) ...[
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    if (visitLabel != null)
+                      _VisitBadge(
+                        language: language,
+                        status: visitStatus!,
+                        label: visitLabel,
+                        onToggle: onToggleVisit,
+                      ),
+                    if (spendLabel != null)
+                      _SpendBandChip(
+                        label: spendLabel,
+                        unavailable: spendBand == null && spendUnavailable,
+                      ),
+                  ],
+                ),
+              ],
               if (swapReason != null) ...[
                 const SizedBox(height: 4),
                 Container(
@@ -368,6 +420,128 @@ class _PlanSlotMetaChip extends StatelessWidget {
           color: const Color(0xFF475569),
           fontWeight: FontWeight.w700,
         ),
+      ),
+    );
+  }
+}
+
+/// V5-B VISIT badge text for a status ('planned' | 'visited').
+String _visitBadgeLabel(String status, String language) {
+  final visited = status.trim().toLowerCase() == 'visited';
+  return visited
+      ? lalaCopy(language, ko: '방문함', en: 'Visited')
+      : lalaCopy(language, ko: '예정', en: 'Planned');
+}
+
+/// V5-B VISIT badge: planned ↔ visited, icon+text+color (never color-alone).
+/// Teal reuses the documented open/indoor token; slate reuses the unknown token.
+/// Tappable with a 44dp minimum target when [onToggle] is non-null.
+class _VisitBadge extends StatelessWidget {
+  const _VisitBadge({
+    required this.language,
+    required this.status,
+    required this.label,
+    this.onToggle,
+  });
+
+  final String language;
+  final String status;
+  final String label;
+  final VoidCallback? onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final visited = status.trim().toLowerCase() == 'visited';
+    final color = visited ? const Color(0xFF0F766E) : const Color(0xFF64748B);
+    final icon = visited ? Icons.check_circle : Icons.radio_button_unchecked;
+    final chip = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 3),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+    if (onToggle == null) {
+      return chip;
+    }
+    // Min 44dp touch target (§13.5); the toggle persists via SlotVisitStore.
+    final toggleLabel = lalaCopy(
+      language,
+      ko: visited ? '방문 취소' : '방문 체크인',
+      en: visited ? 'Undo check-in' : 'Check in',
+    );
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 44),
+      child: InkWell(
+        onTap: onToggle,
+        borderRadius: BorderRadius.circular(6),
+        child: Semantics(
+          button: true,
+          label: toggleLabel,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: chip,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// V5-B SPEND band chip: estimate or honest-unavailable. Reuses the documented
+/// slate meta-chip tokens; the unavailable variant adds a help icon so absence is
+/// never read as a zero/blank number (B5 honest-unavailable).
+class _SpendBandChip extends StatelessWidget {
+  const _SpendBandChip({required this.label, this.unavailable = false});
+
+  final String label;
+  final bool unavailable;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            unavailable ? Icons.help_outline : Icons.payments_outlined,
+            size: 12,
+            color: const Color(0xFF64748B),
+          ),
+          const SizedBox(width: 3),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: const Color(0xFF475569),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -8,7 +8,9 @@ import 'package:lala_next_app/auth/logto_auth_gateway.dart';
 import 'package:lala_next_app/core/location/region_context.dart';
 import 'package:lala_next_app/core/navigation/local_signal_action.dart';
 import 'package:lala_next_app/core/state/plan_context_store.dart';
+import 'package:lala_next_app/core/state/saved_place_store.dart';
 import 'package:lala_next_app/core/state/selected_place_store.dart';
+import 'package:lala_next_app/core/state/slot_visit_store.dart';
 import 'package:lala_next_app/features/local_signals/presentation/pages/local_signals_page.dart';
 import 'package:lala_next_app/features/map/widgets/top_map_chrome.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
@@ -28,6 +30,10 @@ void main() {
     RegionContextStore.clear();
     SelectedPlaceStore.clear();
     PlanContextStore.clear();
+    // V5-B action holders are sibling static singletons; reset them too so a
+    // save/check-in made in one test cannot leak into another.
+    SavedPlaceStore.clear();
+    SlotVisitStore.clear();
   });
 
   test('map move reload policy follows the legacy places threshold', () {

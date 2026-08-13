@@ -65,6 +65,9 @@ class Settings:
     azure_speech_endpoint: str = ""
     azure_speech_key: str = ""
     enable_live_speech: bool = False
+    # V5-C MOVE routing seam. Real Kakao/Naver Directions are BLOCKED_EXTERNAL/V7;
+    # the flag only gates the hook. Default off keeps the Haversine estimate standalone.
+    enable_live_routing: bool = False
     paid_route_rate_limit_enabled: bool = True
     docent_script_rate_limit_per_minute: int = 60
     docent_audio_rate_limit_per_minute: int = 30
@@ -232,6 +235,7 @@ class Settings:
             ),
             azure_speech_key=_env_or_secret("AZURE_SPEECH_KEY", "azure-speech-key", key_vault_url),
             enable_live_speech=_bool_env("LALA_ENABLE_LIVE_SPEECH", default=False),
+            enable_live_routing=_bool_env("LALA_ENABLE_LIVE_ROUTING", default=False),
             paid_route_rate_limit_enabled=_bool_env(
                 "LALA_PAID_ROUTE_RATE_LIMIT_ENABLED",
                 default=True,

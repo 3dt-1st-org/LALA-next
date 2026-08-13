@@ -12,6 +12,7 @@ import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
 import 'package:lala_next_app/core/location/region_context.dart';
 import 'package:lala_next_app/core/state/plan_context_store.dart';
+import 'package:lala_next_app/core/state/slot_visit_store.dart';
 import 'package:lala_next_app/features/home/home_view_helpers.dart'
     show interventionToastLabel;
 import 'package:lala_next_app/features/intervention/widgets/intervention_toast.dart';
@@ -19,6 +20,7 @@ import 'package:lala_next_app/features/location/widgets/default_region_indicator
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/features/place/widgets/empty_place_state.dart';
 import 'package:lala_next_app/features/planner/planner_helpers.dart';
+import 'package:lala_next_app/features/planner/spend_band_helpers.dart';
 import 'package:lala_next_app/features/planner/widgets/plan_slot_tile.dart';
 import 'package:lala_next_app/features/planner/widgets/planner_loading_card.dart';
 import 'package:lala_next_app/features/planner/widgets/planner_overview_card.dart';
@@ -83,6 +85,9 @@ class _PlanPageState extends State<PlanPage> {
   // Cross-tab plan SSOT (§13.4): adopts a timeline published by the map tab so
   // both tabs show the same plan without the plan tab refetching.
   late final VoidCallback _onPlanChanged;
+  // V5-B VISIT: rebuild when a check-in toggles anywhere so the planned↔visited
+  // badge reflects the persisted state in SlotVisitStore.
+  late final VoidCallback _onVisitsChanged;
 
   // 안내문은 unavailable/error 상태에서만 사용. empty(no-data) 는 별도 copy.
   String _failureMessage = '';
@@ -142,6 +147,14 @@ class _PlanPageState extends State<PlanPage> {
       });
     };
     PlanContextStore.listenable.addListener(_onPlanChanged);
+    // V5-B VISIT: react to check-ins toggled on this or any other tab.
+    _onVisitsChanged = () {
+      if (!mounted) {
+        return;
+      }
+      setState(() {});
+    };
+    SlotVisitStore.listenable.addListener(_onVisitsChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _load();
@@ -154,6 +167,7 @@ class _PlanPageState extends State<PlanPage> {
     RegionContextStore.listenable.removeListener(_onRegionChanged);
     OnboardingState.languageListenable.removeListener(_onLanguageChanged);
     PlanContextStore.listenable.removeListener(_onPlanChanged);
+    SlotVisitStore.listenable.removeListener(_onVisitsChanged);
     _backend.close();
     super.dispose();
   }
@@ -825,8 +839,13 @@ class _PlanContent extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        ...visibleSlots.map(
-          (slot) => Padding(
+        ...visibleSlots.map((slot) {
+          // V5-B VISIT/SPEND: per-slot visit status (persisted in SlotVisitStore)
+          // and offline category-band estimate. planDate is the UTC date key
+          // (contract A1/D1: one plan per user per day).
+          final planDate = utcPlanDate();
+          final band = spendBandFor(slot, language);
+          return Padding(
             key: ValueKey('plan-slot-${slot.place?.placeId ?? slot.period}'),
             padding: const EdgeInsets.only(bottom: 10),
             child: PlanSlotTile(
@@ -848,9 +867,14 @@ class _PlanContent extends StatelessWidget {
                   ),
                 );
               },
+              visitStatus: SlotVisitStore.statusFor(planDate, slot.period),
+              onToggleVisit:
+                  () => SlotVisitStore.toggle(planDate, slot.period),
+              spendBand: band,
+              spendUnavailable: band == null,
             ),
-          ),
-        ),
+          );
+        }),
       ],
     );
   }
@@ -871,4 +895,13 @@ class _MinTouchTarget extends StatelessWidget {
       child: child,
     );
   }
+}
+
+/// V5-B: today's UTC date as the plan key `YYYY-MM-DD` (contract A1/D1 — one plan
+/// per user per day, UTC date key). Used to scope visit statuses in SlotVisitStore.
+String utcPlanDate() {
+  final utc = DateTime.now().toUtc();
+  return '${utc.year.toString().padLeft(4, '0')}'
+      '-${utc.month.toString().padLeft(2, '0')}'
+      '-${utc.day.toString().padLeft(2, '0')}';
 }

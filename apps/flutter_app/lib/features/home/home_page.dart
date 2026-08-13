@@ -19,6 +19,7 @@ import 'package:lala_next_app/core/location/lala_location.dart';
 import 'package:lala_next_app/core/location/region_context.dart';
 import 'package:lala_next_app/core/navigation/local_signal_action.dart';
 import 'package:lala_next_app/core/state/plan_context_store.dart';
+import 'package:lala_next_app/core/state/saved_place_store.dart';
 import 'package:lala_next_app/core/state/selected_place_store.dart';
 import 'package:lala_next_app/features/location/widgets/manual_location_sheet.dart';
 import 'package:lala_next_app/features/location/widgets/permanently_denied_recovery.dart';
@@ -189,6 +190,10 @@ class _LalaHomePageState extends State<LalaHomePage> {
   // the map fetching independently (eliminates dual-fetch divergence).
   late final VoidCallback _onSelectedPlaceChanged;
   late final VoidCallback _onPlanChanged;
+  // V5-B SAVE: the saved-place set is hydrated from SavedPlaceStore on cold start
+  // (bootstrap restores it from lala.v5.*) and kept in sync here so a save toggled
+  // anywhere reflects on the map/detail header too.
+  late final VoidCallback _onSavedPlacesChanged;
 
   @override
   void initState() {
@@ -244,6 +249,20 @@ class _LalaHomePageState extends State<LalaHomePage> {
     };
     PlanContextStore.listenable.addListener(_onPlanChanged);
     _backend = widget.backendFactory(_currentConfig());
+    // V5-B SAVE: hydrate the local mirror from the cold-start-restored store, then
+    // subscribe so future toggles (this tab or elsewhere) stay in sync + durable.
+    _savedPlaceIds.addAll(SavedPlaceStore.current);
+    _onSavedPlacesChanged = () {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _savedPlaceIds
+          ..clear()
+          ..addAll(SavedPlaceStore.current);
+      });
+    };
+    SavedPlaceStore.listenable.addListener(_onSavedPlacesChanged);
     unawaited(_initializeAuth());
     if (!config.requireLocationStartConfirmation) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -270,6 +289,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
     OnboardingState.languageListenable.removeListener(_handleUiLanguageChanged);
     SelectedPlaceStore.listenable.removeListener(_onSelectedPlaceChanged);
     PlanContextStore.listenable.removeListener(_onPlanChanged);
+    SavedPlaceStore.listenable.removeListener(_onSavedPlacesChanged);
     widget.localSignalActionController?.removeListener(
       _handleLocalSignalAction,
     );
@@ -1257,13 +1277,10 @@ class _LalaHomePageState extends State<LalaHomePage> {
   }
 
   void _toggleSavedPlace(String placeId) {
-    setState(() {
-      if (_savedPlaceIds.contains(placeId)) {
-        _savedPlaceIds.remove(placeId);
-      } else {
-        _savedPlaceIds.add(placeId);
-      }
-    });
+    // V5-B SAVE: the store is the SSOT and persists to lala.v5.* via the
+    // write-through listener in ActionPersistence. The _onSavedPlacesChanged
+    // listener syncs the local mirror + rebuilds.
+    SavedPlaceStore.toggle(placeId);
   }
 
   void _toggleRecommendationRail() {
