@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import math
 
+from apps.api.app.core.config import get_settings
+
 # Earth radius in meters (WGS-84 mean radius).
 _EARTH_RADIUS_M = 6_371_000.0
 
@@ -56,3 +58,36 @@ def period_start_time(period: str) -> str | None:
     opening-hours authority가 확보되면 실제 운영시간 기반으로 교체된다.
     """
     return _PERIOD_START_TIMES.get(period)
+
+
+def live_routing_enabled() -> bool:
+    """V5-C routing-seam flag read (mirrors speech_service.live_speech_enabled).
+
+    The flag gates the FUTURE Directions hook only; it never enables a live call in
+    V5. Default off keeps the Haversine estimate as the sole travel-time signal.
+    """
+    return bool(get_settings().enable_live_routing)
+
+
+def resolve_travel_time_authority_minutes(
+    lat1: float, lng1: float, lat2: float, lng2: float
+) -> int | None:
+    """V5-C routing seam: authoritative Directions ETA, or honest null.
+
+    This is the travel-time AUTHORITY surface (Kakao/Naver Directions), distinct from
+    the Haversine ESTIMATE (`estimate_walking_minutes`) which stays byte-for-byte.
+
+    - Flag OFF (default) -> None. The Haversine estimate stands alone; no authority.
+    - Flag ON -> still None in V5. Real Kakao/Naver Directions are BLOCKED_EXTERNAL /
+      V7 (contract §3a); the hook is present but the Directions invocation never fires,
+      so the authority stays honestly null rather than guessing a route/ETA.
+
+    The V7 call site is the marked branch below. It must ship no network/paid call in V5.
+    """
+    if not live_routing_enabled():
+        return None
+    # --- V7 boundary (BLOCKED_EXTERNAL in V5) -------------------------------------
+    # When live routing lands, the Kakao/Naver Directions request goes here. It is
+    # intentionally a no-op in V5: returning None keeps the authority honest and proves
+    # no outbound HTTP/paid call ships on any V5 path regardless of the flag state.
+    return None

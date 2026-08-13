@@ -13,7 +13,9 @@ from apps.api.app.services.places_service import list_places
 from apps.api.app.services.request_identity import generation_identity
 from apps.api.app.services.travel_time_service import (
     estimate_walking_minutes,
+    live_routing_enabled,
     period_start_time,
+    resolve_travel_time_authority_minutes,
 )
 from apps.api.app.services.weather_service import current_weather
 
@@ -289,6 +291,11 @@ def _daily_plan_slots(*, place_candidates: list[dict], weather: dict, language: 
     # First slot has no previous → null. Slots without place → null.
     prev_place: dict | None = None
     travel_times: dict[str, int | None] = {}
+    # V5-C routing seam: authoritative Directions ETA per slot. Gated hook — computed
+    # only when LALA_ENABLE_LIVE_ROUTING is on; honestly null in V5 (Directions are
+    # BLOCKED_EXTERNAL/V7). Flag-off keeps the slot key set byte-for-byte pre-V5.
+    routing_authority_enabled = live_routing_enabled()
+    travel_time_authorities: dict[str, int | None] = {}
     for period in _PERIOD_ORDER:
         place = assigned[period]
         if prev_place is not None and place is not None:
@@ -300,6 +307,15 @@ def _daily_plan_slots(*, place_candidates: list[dict], weather: dict, language: 
             )
         else:
             travel_times[period] = None
+        if routing_authority_enabled and prev_place is not None and place is not None:
+            travel_time_authorities[period] = resolve_travel_time_authority_minutes(
+                float(prev_place.get("lat") or 0),
+                float(prev_place.get("lng") or 0),
+                float(place.get("lat") or 0),
+                float(place.get("lng") or 0),
+            )
+        else:
+            travel_time_authorities[period] = None
         prev_place = place if place is not None else prev_place
 
     # D6: swappable_alternatives populated from the existing candidate-pool leftovers
@@ -324,6 +340,8 @@ def _daily_plan_slots(*, place_candidates: list[dict], weather: dict, language: 
             weather=weather,
             full_slots=full_slots,
             swappable_alternatives=swappable.get(period),
+            routing_authority_enabled=routing_authority_enabled,
+            travel_time_authority=travel_time_authorities[period],
         )
         for period in _PERIOD_ORDER
     ]
@@ -383,6 +401,8 @@ def _plan_slot(
     weather: dict | None = None,
     full_slots: bool = False,
     swappable_alternatives: list[dict] | None = None,
+    routing_authority_enabled: bool = False,
+    travel_time_authority: int | None = None,
 ) -> dict:
     # start_time: 관용적 시간대 시작 시각(09:00/12:00/14:00/18:00). opening-hours authority
     # 확보 전까지 표준 관례 기반 추정값.
@@ -422,6 +442,11 @@ def _plan_slot(
         slot["closure_state"] = _closure_state(oh_valid=oh_valid, place=place)
         slot["forecast_window"] = _nearest_forecast_window(start_time=start_t, weather=weather)
         slot["air_quality_bad"] = _air_quality_bad(indoor_outdoor=indoor_outdoor, weather=weather)
+    if routing_authority_enabled:
+        # V5-C routing-seam projection (C3/D4). Flag-off omits this key so the slot
+        # payload stays byte-for-byte pre-V5. Honestly null in V5: real Kakao/Naver
+        # Directions are BLOCKED_EXTERNAL/V7, so the authority never guesses a route.
+        slot["travel_time_authority_minutes"] = travel_time_authority
     return slot
 
 

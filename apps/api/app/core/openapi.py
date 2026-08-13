@@ -922,6 +922,13 @@ def _daily_plan_slot_schema() -> dict[str, Any]:
                 "anyOf": [{"type": "integer"}, {"type": "null"}],
                 "description": "Estimated walking minutes from previous slot (Haversine ÷ 4 km/h), or null for first slot / no place.",
             },
+            # V5-C routing-seam authority (additive). Absent unless
+            # LALA_ENABLE_LIVE_ROUTING is on; honestly null in V5 — real Kakao/Naver
+            # Directions are BLOCKED_EXTERNAL/V7, so this is never a guessed ETA.
+            "travel_time_authority_minutes": {
+                "anyOf": [{"type": "integer"}, {"type": "null"}],
+                "description": "Authoritative travel-time from previous slot (Directions ETA), or null when live routing is off/unavailable.",
+            },
             "opening_hours_valid": {
                 "anyOf": [{"type": "boolean"}, {"type": "null"}],
                 "description": "True if slot start within estimated hours.",
