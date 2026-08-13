@@ -105,9 +105,13 @@ def test_c1_flag_defaults_off_in_registry():
 
 
 def test_c1_live_routing_enabled_reads_flag(monkeypatch):
-    monkeypatch.setattr(travel_time_service, "get_settings", lambda: SimpleNamespace(enable_live_routing=False))
+    monkeypatch.setattr(
+        travel_time_service, "get_settings", lambda: SimpleNamespace(enable_live_routing=False)
+    )
     assert live_routing_enabled() is False
-    monkeypatch.setattr(travel_time_service, "get_settings", lambda: SimpleNamespace(enable_live_routing=True))
+    monkeypatch.setattr(
+        travel_time_service, "get_settings", lambda: SimpleNamespace(enable_live_routing=True)
+    )
     assert live_routing_enabled() is True
 
 
@@ -225,7 +229,10 @@ def test_c5_flag_off_slot_has_no_authority_key(monkeypatch):
     # Flag OFF (default) -> slot key set is byte-for-byte pre-V5: the additive
     # authority key is omitted entirely, never present-and-null.
     _enable_live_routing(monkeypatch, enabled=False)
-    candidates = [_candidate("a", lat=37.5563, lng=126.9724), _candidate("b", lat=37.4979, lng=127.0276)]
+    candidates = [
+        _candidate("a", lat=37.5563, lng=126.9724),
+        _candidate("b", lat=37.4979, lng=127.0276),
+    ]
     slots = planner_service._daily_plan_slots(
         place_candidates=candidates,
         weather={"outdoor_status": "good", "forecast": [], "dust": {"grade": "good"}},
