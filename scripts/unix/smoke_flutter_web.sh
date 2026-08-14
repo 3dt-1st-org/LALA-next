@@ -941,11 +941,11 @@ if os.environ.get("EXPECT_DOCENT_SCRIPT") == "true":
         r"(추천 점수|내국인 소비|관광 수요 분산|날씨 적합도|리뷰 품질|문화 연계)"
         r"(?:는|은|:)?\s*\d"
     )
-    for label, candidate in (("captured", script), ("scored", scored_script)):
+    for candidate in (script, scored_script):
         if any(term in candidate for term in internal_terms) or "스냅샷" in candidate:
-            raise SystemExit(f"Flutter docent script ({label}) exposed internal evidence labels.")
+            raise SystemExit("Flutter docent script exposed internal evidence labels.")
         if raw_score_pattern.search(candidate):
-            raise SystemExit(f"Flutter docent script ({label}) exposed raw score values.")
+            raise SystemExit("Flutter docent script exposed raw score values.")
     if not any(term in scored_script for term in ("내국인 소비", "로컬 소비", "지역 소비")):
         raise SystemExit("Flutter docent script missed local spending context.")
     if not any(term in scored_script for term in ("소상공인", "상권", "골목", "로컬 카페", "카페", "식당")):

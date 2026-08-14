@@ -280,6 +280,14 @@ async () => {
         Write-Host "Driving Flutter web location flow with test geolocation..."
         $locationFlowCode = @"
 async (page) => {
+  // Why: onboarding gates fresh profiles before the dashboard publishes
+  // __lalaAppState; seed the persisted completion so a fresh smoke browser
+  // exercises the post-onboarding contract.
+  await page.addInitScript(() => {
+    try {
+      window.localStorage.setItem('flutter.lala.onboarding.v1.completed', 'true');
+    } catch (_) {}
+  });
   await page.context().grantPermissions(['geolocation'], { origin: '$WebOrigin' });
   await page.context().setGeolocation({ latitude: $SmokeLat, longitude: $SmokeLng });
   await page.reload({ waitUntil: 'domcontentloaded' });
@@ -385,6 +393,7 @@ async () => {
     pinCount: state.pinCount,
     clusterCount: state.clusterCount,
     stats: state.stats,
+    apiPlacesCount: Number((window.__lalaAppState || {}).apiPlacesCount || 0),
     mapLevel: state.container ? state.container.getAttribute("data-lala-map-level") : null,
     containerPins: state.container ? state.container.getAttribute("data-lala-marker-pins") : null,
     containerClusters: state.container ? state.container.getAttribute("data-lala-marker-clusters") : null,
@@ -440,7 +449,16 @@ async () => {
             [Math]::Max($pinCount, $statPins) -le 0) {
             throw "Flutter location flow rendered only clusters without place pins."
         }
-        if ($mapLevel -gt 0 -and $mapLevel -le 8 -and
+        # V1 pin-first clustering contract (map_helpers.dart): 24+ places (or
+        # far zoom >= 10) cluster at ANY level; only a sparse list must stay on
+        # individual pins while zoomed in.
+        $placesCount = 0
+        if ($null -ne $markerState.apiPlacesCount) {
+            $placesCount = [int]$markerState.apiPlacesCount
+        }
+        $clusterThresholdEngaged = ($placesCount -ge 24) -or ($mapLevel -ge 10)
+        if (-not $clusterThresholdEngaged -and
+            $mapLevel -gt 0 -and $mapLevel -le 8 -and
             [Math]::Max($clusterCount, $statClusters) -gt 0) {
             throw "Flutter initial location map clustered places before the user zoomed out."
         }
