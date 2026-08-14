@@ -5,12 +5,15 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import 'package:lala_next_app/core/backend/lala_backend.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
 import 'package:lala_next_app/core/location/region_context.dart';
+import 'package:lala_next_app/core/routing/lala_route_paths.dart';
+import 'package:lala_next_app/core/state/selected_place_store.dart';
 import 'package:lala_next_app/features/home/home_view_helpers.dart'
     show filterPlaces;
 import 'package:lala_next_app/features/location/widgets/default_region_indicator.dart';
@@ -305,6 +308,15 @@ class _SearchPageState extends State<SearchPage> {
     return filtered;
   }
 
+  // Cross-tab selection (§13.4): publish through the SAME shared store the map
+  // tab writes to (persistence + cold-restart hydration ride along), then hand
+  // off to the map branch — the surface that owns the selection detail sheet —
+  // so a search tap lands exactly like a map tap.
+  void _selectPlace(LalaPlace place) {
+    SelectedPlaceStore.set(place.placeId);
+    context.go(LalaRoutePaths.mapRoute);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -373,7 +385,11 @@ class _SearchPageState extends State<SearchPage> {
           },
         );
       case _SearchLoadStatus.loaded:
-        return _SearchResultsView(places: _visiblePlaces, language: _language);
+        return _SearchResultsView(
+          places: _visiblePlaces,
+          language: _language,
+          onSelectPlace: _selectPlace,
+        );
     }
   }
 }
@@ -751,10 +767,15 @@ class _SearchEmptyView extends StatelessWidget {
 /// 결과 본문(세로 리스트). loaded 전용 — 빈/실패 분기는 _buildBody 에서 별도 위젯으로
 /// 분리되었다. 실제 결과가 있을 때만 렌더되므로 여기서 빈 분기는 다루지 않는다.
 class _SearchResultsView extends StatelessWidget {
-  const _SearchResultsView({required this.places, required this.language});
+  const _SearchResultsView({
+    required this.places,
+    required this.language,
+    required this.onSelectPlace,
+  });
 
   final List<LalaPlace> places;
   final String language;
+  final ValueChanged<LalaPlace> onSelectPlace;
 
   @override
   Widget build(BuildContext context) {
@@ -765,7 +786,11 @@ class _SearchResultsView extends StatelessWidget {
       separatorBuilder: (context, index) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final place = places[index];
-        return _SearchPlaceTile(place: place, language: language);
+        return _SearchPlaceTile(
+          place: place,
+          language: language,
+          onTap: () => onSelectPlace(place),
+        );
       },
     );
   }
@@ -773,113 +798,131 @@ class _SearchResultsView extends StatelessWidget {
 
 /// 검색 결과용 풀폭 장소 타일(CategoryBadge + PlaceThumb 재사용).
 class _SearchPlaceTile extends StatelessWidget {
-  const _SearchPlaceTile({required this.place, required this.language});
+  const _SearchPlaceTile({
+    required this.place,
+    required this.language,
+    required this.onTap,
+  });
 
   final LalaPlace place;
   final String language;
+
+  /// 타일 탭 → 공유 선택 스토어 게시 + 지도 탭 전환(_selectPlace).
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final hasImage = hasOfficialPlaceImage(place);
     final name = placeDisplayName(place, language);
     final region = placeRegionLabel(place, language);
-    return Semantics(
-      container: true,
-      // 접근성(§13.5): 장소명/카테고리/거리/지역/reason을 하나의 시맨틱 라벨로 합쳐 전달
-      // (placeCardSemanticsLabel SSOT — 다른 표면과 동일 문구 보증).
-      label: placeCardSemanticsLabel(place, language),
-      child: Container(
-        key: ValueKey('search-place-tile-${place.placeId}'),
-        // 최소 44dp 터치 타겟 보장(내용이 짧아도 타일 전체 높이 하한선).
-        constraints: const BoxConstraints(minHeight: 44),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
-          boxShadow: const [
-            BoxShadow(
-              blurRadius: 14,
-              offset: Offset(0, 6),
-              color: Color(0x10000000),
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        key: ValueKey('search-place-tile-tap-${place.placeId}'),
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Semantics(
+          container: true,
+          // 접근성(§13.5): 장소명/카테고리/거리/지역/reason을 하나의 시맨틱 라벨로 합쳐 전달
+          // (placeCardSemanticsLabel SSOT — 다른 표면과 동일 문구 보증).
+          label: placeCardSemanticsLabel(place, language),
+          button: true,
+          child: Container(
+            key: ValueKey('search-place-tile-${place.placeId}'),
+            // 최소 44dp 터치 타겟 보장(내용이 짧아도 타일 전체 높이 하한선).
+            constraints: const BoxConstraints(minHeight: 44),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+              boxShadow: const [
+                BoxShadow(
+                  blurRadius: 14,
+                  offset: Offset(0, 6),
+                  color: Color(0x10000000),
+                ),
+              ],
             ),
-          ],
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    crossAxisAlignment: WrapCrossAlignment.center,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      CategoryBadge(
-                        category: place.category,
-                        language: language,
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          CategoryBadge(
+                            category: place.category,
+                            language: language,
+                          ),
+                          if (place.distanceM > 0)
+                            Text(
+                              '${place.distanceM}m',
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(
+                                    color: const Color(0xFF64748B),
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                            ),
+                          if (place.freshness != null &&
+                              place.freshness!.isNotEmpty)
+                            PlaceFreshnessText(place: place),
+                        ],
                       ),
-                      if (place.distanceM > 0)
-                        Text(
-                          '${place.distanceM}m',
-                          style: Theme.of(context).textTheme.labelSmall
-                              ?.copyWith(
-                                color: const Color(0xFF64748B),
-                                fontWeight: FontWeight.w800,
-                              ),
-                        ),
-                      if (place.freshness != null &&
-                          place.freshness!.isNotEmpty)
-                        PlaceFreshnessText(place: place),
+                      const SizedBox(height: 10),
+                      Text(
+                        name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              fontWeight: FontWeight.w900,
+                              height: 1.14,
+                            ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.place_outlined,
+                            size: 13,
+                            color: Color(0xFF64748B),
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              region,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: const Color(0xFF475569),
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (place.reason != null && place.reason!.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        PlaceReasonLine(place: place),
+                      ],
                     ],
                   ),
-                  const SizedBox(height: 10),
-                  Text(
-                    name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
-                      height: 1.14,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.place_outlined,
-                        size: 13,
-                        color: Color(0xFF64748B),
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          region,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: const Color(0xFF475569),
-                                fontWeight: FontWeight.w700,
-                              ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (place.reason != null && place.reason!.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    PlaceReasonLine(place: place),
-                  ],
+                ),
+                if (hasImage) ...[
+                  const SizedBox(width: 12),
+                  PlaceThumb(place: place),
                 ],
-              ),
+              ],
             ),
-            if (hasImage) ...[
-              const SizedBox(width: 12),
-              PlaceThumb(place: place),
-            ],
-          ],
+          ),
         ),
       ),
     );
