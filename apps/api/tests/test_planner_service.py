@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+from types import SimpleNamespace
+
 import pytest
 
 from apps.api.app.schemas.planner import DailyPlanRequest
-from apps.api.app.services import planner_service
+from apps.api.app.services import places_service, planner_service
 
 
 @pytest.mark.parametrize(
@@ -394,6 +397,54 @@ def test_daily_plan_normalizes_language_and_translates_slots(monkeypatch) -> Non
     assert plan["slots"][0]["title"] == "Morning"
     assert plan["slots"][1]["title"] == "Lunch"
     assert plan["slots"][1]["weather_hint"] == "bad"
+
+
+def test_daily_plan_language_en_localizes_place_reason(monkeypatch) -> None:
+    # V7 fix: /plans/daily slots embed the /places reason composer output verbatim
+    # (slot.place.reason), so language=en must reach the REAL composer — patch only
+    # the db boundary, not list_places, to prove the language threading end-to-end.
+    monkeypatch.setattr(
+        planner_service,
+        "current_weather",
+        lambda **kwargs: {"source": "db", "outdoor_status": "good"},
+    )
+    monkeypatch.setattr(
+        places_service,
+        "get_settings",
+        lambda: SimpleNamespace(static_snapshot_fallback=False, db_dsn="postgres://test"),
+    )
+    monkeypatch.setattr(
+        places_service.db_repository,
+        "fetch_places",
+        lambda **kwargs: [
+            {
+                "place_id": "p1",
+                "name": "Nearby spot",
+                "category": "attraction",
+                "distance_m": 300,
+                "source": "db",
+                "upstream_source": "tour_api",
+            }
+        ],
+    )
+    monkeypatch.setattr(places_service.db_repository, "fetch_latest_weather", lambda **kwargs: {})
+    # Freeze the composer clock so the operating-status segment is deterministic.
+    fixed = datetime(2026, 8, 13, 12, 0, 0, tzinfo=UTC)
+
+    class _FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fixed.astimezone(tz) if tz else fixed.replace(tzinfo=None)
+
+    monkeypatch.setattr(places_service, "datetime", _FrozenDateTime)
+
+    request = DailyPlanRequest(lat=37.5665, lng=126.978, radius_m=3000, language="en")
+    plan = planner_service.daily_plan(request)
+
+    slot_place = plan["slots"][0]["place"]
+    assert slot_place["reason"] == "Open now · Nearby · Korea Tourism Organization data"
+    # The slot's own copy stays EN too (no mixed-language dock).
+    assert plan["slots"][0]["recommendation_reason"] == "Recommended as a local attraction"
 
 
 def test_daily_plan_handles_unavailable_sources(monkeypatch) -> None:
