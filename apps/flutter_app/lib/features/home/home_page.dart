@@ -194,6 +194,10 @@ class _LalaHomePageState extends State<LalaHomePage> {
   // (bootstrap restores it from lala.v5.*) and kept in sync here so a save toggled
   // anywhere reflects on the map/detail header too.
   late final VoidCallback _onSavedPlacesChanged;
+  // Why: separates a selection this tab published (its own call site already
+  // drove the sheet/camera) from an external publish (search tab) that the store
+  // listener must adopt through the local-tap path.
+  String? _lastSelectionPublishedHere;
 
   @override
   void initState() {
@@ -218,9 +222,24 @@ class _LalaHomePageState extends State<LalaHomePage> {
     // reflects here. The map resolves SelectedPlaceStore.current against its own
     // candidate set at build time (placeById ?? featuredPlace) — identical behavior
     // to the old private field, now sourced from the shared holder.
+    // An EXTERNAL publish (search tab) that resolves against the loaded places is
+    // adopted through _selectPlace so the detail sheet/category/camera behave
+    // exactly like a map-originated tap; map-originated publishes no-op past the
+    // guard (their call site already drove that UI).
     _onSelectedPlaceChanged = () {
       if (!mounted) {
         return;
+      }
+      final id = SelectedPlaceStore.current;
+      if (id != null && id != _lastSelectionPublishedHere) {
+        final place = placeById(
+          _places?.data?.places ?? const <LalaPlace>[],
+          id,
+        );
+        if (place != null) {
+          _selectPlace(place, ensureVisible: true);
+          return;
+        }
       }
       setState(() {});
     };
@@ -331,7 +350,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
   }
 
   void _resetMapContext() {
-    SelectedPlaceStore.set(null);
+    _publishSelection(null);
     _activeSheet = null;
     _docentAudio = null;
     _audioError = null;
@@ -824,7 +843,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
   void _selectCategory(String category) {
     setState(() {
       _selectedCategory = category;
-      SelectedPlaceStore.set(null);
+      _publishSelection(null);
       _activeSheet = null;
       _docentAudio = null;
       _audioError = null;
@@ -844,6 +863,14 @@ class _LalaHomePageState extends State<LalaHomePage> {
     });
   }
 
+  /// The map tab's sole write seam into the shared selection store. Records the
+  /// published id so the store listener can tell map-originated publishes (which
+  /// drive their own UI here) from external ones (search tab) it must adopt.
+  void _publishSelection(String? id) {
+    _lastSelectionPublishedHere = id;
+    SelectedPlaceStore.set(id);
+  }
+
   void _selectPlace(
     LalaPlace place, {
     bool ensureVisible = false,
@@ -858,7 +885,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
           _selectedCategory != place.category) {
         _selectedCategory = place.category;
       }
-      SelectedPlaceStore.set(place.placeId);
+      _publishSelection(place.placeId);
       _activeSheet = ActiveMapSheet.detail;
       _docentAudio = null;
       _audioError = null;
@@ -992,7 +1019,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
 
   void _clearPlaceSelection() {
     setState(() {
-      SelectedPlaceStore.set(null);
+      _publishSelection(null);
       _activeSheet = null;
       _docentScript = null;
       _docentAudio = null;
@@ -1008,7 +1035,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _mapFocusLng = cluster.lng;
       _mapLevel = _mapLevel <= 2 ? 2 : _mapLevel - 1;
       _focusedClusterMemberIds = cluster.clusterMemberIds;
-      SelectedPlaceStore.set(
+      _publishSelection(
         cluster.clusterMemberIds.isEmpty
             ? null
             : cluster.clusterMemberIds.first,
@@ -1042,7 +1069,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
       // _refresh; null (map without getBounds) restores the center+radius path.
       _latestMapBounds = camera.bounds;
       if (shouldReloadPlaces) {
-        SelectedPlaceStore.set(null);
+        _publishSelection(null);
         _focusedClusterMemberIds = const <String>[];
         _activeSheet = null;
         _docentAudio = null;
@@ -1416,7 +1443,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
     LalaPlace place, {
     required bool closeActiveSheet,
   }) {
-    SelectedPlaceStore.set(place.placeId);
+    _publishSelection(place.placeId);
     if (closeActiveSheet) {
       _activeSheet = null;
     }
