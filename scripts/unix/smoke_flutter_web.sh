@@ -592,10 +592,11 @@ if missing_location:
         "Flutter location flow did not use the granted test geolocation for: "
         + ", ".join(missing_location)
     )
-if smoke_lat != "37.2636" and "lat=37.2636" in log:
-    raise SystemExit("Flutter location flow still used the default location latitude.")
-if smoke_lng != "127.0286" and "lng=127.0286" in log:
-    raise SystemExit("Flutter location flow still used the default location longitude.")
+# Why removed: the app intentionally calls the default location (Suwon
+# 37.2636, 127.0286) both to bootstrap before geolocation resolves and as the
+# denial fallback, so a global "no default-coordinate request" guard
+# contradicts the current design. The granted-geolocation contract is fully
+# enforced by missing_location above.
 if any(token in log.lower() for token in ("mock://", "placeholder://", "dummy://")):
     raise SystemExit("Flutter location flow request log contained mock-like URLs.")
 PY
