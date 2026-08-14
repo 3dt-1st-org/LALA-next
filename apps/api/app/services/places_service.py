@@ -23,6 +23,14 @@ _UPSTREAM_SOURCE_LABELS: dict[str, str] = {
     "kopis": "공연예술통합전산망",
 }
 
+# EN S1 phrases, taken verbatim from docent_service._en_source_label so one EN
+# naming exists per source across API surfaces; canonical/empty/unknown → omit.
+_UPSTREAM_SOURCE_PHRASES_EN: dict[str, str] = {
+    "tour_api": "Korea Tourism Organization data",
+    "kcisa": "Korea Culture Information Service data",
+    "kopis": "KOPIS performing arts data",
+}
+
 # Lane-1 internal reason inputs: projected into the place dict for the composer
 # to read, then stripped before the /places response is serialized (§8).
 _INTERNAL_REASON_KEYS = ("_local_activity_band", "_has_linked_event")
@@ -136,6 +144,7 @@ def list_places(
             place=place,
             current_weather=current_weather,
             slot_time=slot_time,
+            language=language,
         )
         freshness = _format_freshness(place.get("updated_at"), current_time)
 
@@ -174,6 +183,7 @@ def list_places(
                     place=place,
                     current_weather=current_weather,
                     slot_time=slot_time,
+                    language=language,
                 )
                 freshness = _format_freshness(public_mvp_data.snapshot_generated_at(), current_time)
 
@@ -215,27 +225,36 @@ def _strip_internal_reason_inputs(place: dict) -> None:
         place.pop(key, None)
 
 
-def _upstream_source_reason_phrase(upstream_source: str) -> str | None:
+def _upstream_source_reason_phrase(upstream_source: str, *, language: str = "ko") -> str | None:
     """S1 provenance phrase; None for canonical/empty/unknown (contract D2).
 
     Replaces the old generic "공식 데이터" stamp: a phrase without a real source is
     less honest than silence.
     """
-    label = _UPSTREAM_SOURCE_LABELS.get((upstream_source or "").strip())
+    key = (upstream_source or "").strip()
+    if language == "en":
+        return _UPSTREAM_SOURCE_PHRASES_EN.get(key)
+    label = _UPSTREAM_SOURCE_LABELS.get(key)
     return f"{label} 데이터" if label else None
 
 
-def _local_activity_reason_phrase(local_activity_band: str | None) -> str | None:
+def _local_activity_reason_phrase(
+    local_activity_band: str | None, *, language: str = "ko"
+) -> str | None:
     """S2 binary activity hint from the SQL-projected band token (contract D1).
 
     Derives ONLY from the min-sample-gated band (Lane 1's token) — never from
     final_score or any component score (the number is unreachable from this phrase).
     """
     # Lane 1 sets 'active' above the min-sample gate; any truthy token = active.
-    return "로컬 소비 활발" if local_activity_band else None
+    if not local_activity_band:
+        return None
+    return "Active local spending" if language == "en" else "로컬 소비 활발"
 
 
-def _weather_band_phrase(current_weather: dict, *, category: str) -> str | None:
+def _weather_band_phrase(
+    current_weather: dict, *, category: str, language: str = "ko"
+) -> str | None:
     """S3 coarse weather band for the LIST reason (contract D3).
 
     Distinct granularity from RC3's publicWeatherSummary (band, not numbers), so it
@@ -245,35 +264,43 @@ def _weather_band_phrase(current_weather: dict, *, category: str) -> str | None:
         return None
     if current_weather.get("outdoor_status") == "bad":
         # A bare "bad weather" stamp on an outdoor attraction is not useful; honest silence.
-        return "실내활동 적합" if category in _INDOOR_PREFERRED_CATEGORIES else None
+        if category not in _INDOOR_PREFERRED_CATEGORIES:
+            return None
+        return "Indoor-friendly" if language == "en" else "실내활동 적합"
     # Good/other weather → single comfort band from temp; unparseable temp → omit.
     try:
         temp_c = float(current_weather.get("temp"))
     except (TypeError, ValueError):
         return None
     if temp_c < 5:
-        return "추운 날씨"
+        return "Cold weather" if language == "en" else "추운 날씨"
     if temp_c < 18:
-        return "선선한 날씨"
+        return "Cool weather" if language == "en" else "선선한 날씨"
     if temp_c < 27:
-        return "따뜻한 날씨"
-    return "더운 날씨"
+        return "Warm weather" if language == "en" else "따뜻한 날씨"
+    return "Hot weather" if language == "en" else "더운 날씨"
 
 
 def _linked_event_reason_phrase(
-    has_linked_event: bool | None, *, is_ongoing: bool | None
+    has_linked_event: bool | None, *, is_ongoing: bool | None, language: str = "ko"
 ) -> str | None:
     """D4 linked/ongoing event phrase for ANY category (contract D4); None if none."""
     if not has_linked_event:
         return None
+    if language == "en":
+        return "Ongoing event" if is_ongoing else "Linked event"
     return "진행 중인 행사" if is_ongoing else "행사 연계"
 
 
-def _derive_place_reason(*, place: dict, current_weather: dict, slot_time: str) -> str:
-    """Compose the normal-path reason — ONE ' · '-joined KO string (contract §3).
+def _derive_place_reason(
+    *, place: dict, current_weather: dict, slot_time: str, language: str = "ko"
+) -> str:
+    """Compose the normal-path reason — ONE ' · '-joined string (contract §3).
 
-    Single SSOT for the reason text; no client recomputes or rewords it. Canonical
-    segment order (head = most decision-useful, tail = first to ellipsize):
+    Single SSOT for the reason text; no client recomputes or rewords it. Language
+    follows the /places `language` param; en-branch selector (docent_service style)
+    so unnormalized values fall back to ko, matching normalize_language's contract.
+    Canonical segment order (head = most decision-useful, tail = first to ellipsize):
     [operating] · [weather(S3)] · [activity(S2)] · [event(D4)] · [proximity] · [source(S1)]
 
     Honesty invariants (playbook §4.1/§4.2): phrases only — never the score number,
@@ -287,16 +314,18 @@ def _derive_place_reason(*, place: dict, current_weather: dict, slot_time: str) 
     open_time, close_time = opening_hours_service.estimated_opening_hours(category)
     is_open = opening_hours_service.is_within_hours(slot_time, open_time, close_time)
     if is_open is True:
-        reasons.append("영업중")
+        reasons.append("Open now" if language == "en" else "영업중")
     # closed (False) / unparseable slot (None) → omit operating (honest)
 
     # 2. Weather band (S3) — coarse phrase, never per-card numbers
-    weather_phrase = _weather_band_phrase(current_weather, category=category)
+    weather_phrase = _weather_band_phrase(current_weather, category=category, language=language)
     if weather_phrase:
         reasons.append(weather_phrase)
 
     # 3. Activity (S2) — binary hint from the SQL band token; never a number
-    activity_phrase = _local_activity_reason_phrase(place.get("_local_activity_band"))
+    activity_phrase = _local_activity_reason_phrase(
+        place.get("_local_activity_band"), language=language
+    )
     if activity_phrase:
         reasons.append(activity_phrase)
 
@@ -304,6 +333,7 @@ def _derive_place_reason(*, place: dict, current_weather: dict, slot_time: str) 
     event_phrase = _linked_event_reason_phrase(
         place.get("_has_linked_event"),
         is_ongoing=place.get("is_ongoing"),
+        language=language,
     )
     if event_phrase:
         reasons.append(event_phrase)
@@ -311,11 +341,13 @@ def _derive_place_reason(*, place: dict, current_weather: dict, slot_time: str) 
     # 5. Proximity (≤500m) — existing logic
     distance_m = place.get("distance_m", 0)
     if isinstance(distance_m, (int, float)) and distance_m <= 500:
-        reasons.append("근접")
+        reasons.append("Nearby" if language == "en" else "근접")
     # >500m → omit proximity (honest)
 
     # 6. Source provenance (S1) — per-source phrase; canonical/empty/unknown → omit
-    source_phrase = _upstream_source_reason_phrase(place.get("upstream_source", ""))
+    source_phrase = _upstream_source_reason_phrase(
+        place.get("upstream_source", ""), language=language
+    )
     if source_phrase:
         reasons.append(source_phrase)
 

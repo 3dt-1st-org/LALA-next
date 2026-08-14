@@ -618,6 +618,73 @@ def test_derive_place_reason_proximity_over_500m() -> None:
     assert result == "영업중"  # 근접 없음
 
 
+def test_derive_place_reason_all_signals_present_en() -> None:
+    # V7 i18n: language=en composes the same canonical order in natural EN —
+    # segment gating is identical, only the copy changes (ko stays byte-identical).
+    place = {
+        "category": "restaurant",
+        "distance_m": 300,
+        "upstream_source": "tour_api",
+        "_local_activity_band": "active",
+        "_has_linked_event": True,
+        "is_ongoing": True,
+    }
+    current_weather = {"outdoor_status": "bad"}
+    slot_time = "12:30"
+
+    result = places_service._derive_place_reason(
+        place=place,
+        current_weather=current_weather,
+        slot_time=slot_time,
+        language="en",
+    )
+
+    assert result == (
+        "Open now · Indoor-friendly · Active local spending · Ongoing event · Nearby · "
+        "Korea Tourism Organization data"
+    )
+
+
+def test_derive_place_reason_linked_not_ongoing_en() -> None:
+    place = {
+        "category": "event",
+        "distance_m": 900,
+        "upstream_source": "kcisa",
+        "_has_linked_event": True,
+        "is_ongoing": False,
+    }
+    current_weather = {"outdoor_status": "good", "temp": "30"}
+    slot_time = "10:00"
+
+    result = places_service._derive_place_reason(
+        place=place,
+        current_weather=current_weather,
+        slot_time=slot_time,
+        language="en",
+    )
+
+    assert (
+        result == "Open now · Hot weather · Linked event · Korea Culture Information Service data"
+    )
+
+
+def test_derive_place_reason_unknown_language_falls_back_to_ko() -> None:
+    # Contract: unknown/edge languages behave like normalize_language (→ ko);
+    # the composer never invents a third branch.
+    place = {
+        "category": "attraction",
+        "distance_m": 300,
+        "upstream_source": "tour_api",
+    }
+    result = places_service._derive_place_reason(
+        place=place,
+        current_weather={"outdoor_status": "good"},
+        slot_time="12:00",
+        language="fr",
+    )
+    assert result == "영업중 · 근접 · 한국관광공사 데이터"
+
+
 def test_format_freshness_now() -> None:
     # 방금 전 (1분 미만)
     now = datetime(2026, 8, 12, 10, 30, 0, tzinfo=UTC)
@@ -797,6 +864,39 @@ def test_list_places_db_path_binds_reason_and_honest_none_freshness(monkeypatch)
     assert place["score"] == 0.9
 
 
+def test_list_places_db_path_binds_en_reason_for_language_en(monkeypatch) -> None:
+    # V7 fix: /places?language=en must bind EN reason copy (same signals as the
+    # KO test above — only the language differs, proving the composer honors it).
+    monkeypatch.setattr(places_service, "get_settings", lambda: _fake_settings())
+    _freeze_service_now(monkeypatch, fixed=datetime(2026, 8, 13, 12, 0, 0, tzinfo=UTC))
+    places = [
+        {
+            "place_id": "p1",
+            "name": "Nearby spot",
+            "category": "attraction",
+            "distance_m": 300,
+            "source": "db",
+            "upstream_source": "tour_api",
+            "score": 0.9,
+        }
+    ]
+    captured = _patch_db_fetch_places(monkeypatch, places=places)
+
+    result = places_service.list_places(
+        lat=37.5665,
+        lng=126.978,
+        radius_m=1000,
+        category="attraction",
+        language="en",
+        include_scores=True,
+    )
+
+    place = result["places"][0]
+    assert place["reason"] == "Open now · Nearby · Korea Tourism Organization data"
+    # The fetch layer sees the normalized en language (name localization parity).
+    assert captured[0]["language"] == "en"
+
+
 def test_list_places_db_path_freshness_from_updated_at_when_present(monkeypatch) -> None:
     # If a future payload carries updated_at, freshness is formatted truthfully.
     monkeypatch.setattr(places_service, "get_settings", lambda: _fake_settings())
@@ -954,6 +1054,33 @@ def test_source_phrase_agrees_with_client_external_source_label() -> None:
     assert places_service._upstream_source_reason_phrase("") is None
 
 
+@pytest.mark.parametrize(
+    ("upstream_source", "expected"),
+    [
+        ("tour_api", "Korea Tourism Organization data"),
+        ("kcisa", "Korea Culture Information Service data"),
+        ("kopis", "KOPIS performing arts data"),
+        # Same honest-omit contract as the KO branch (contract D2).
+        ("canonical", None),
+        ("", None),
+        ("unknown_source", None),
+    ],
+)
+def test_upstream_source_reason_phrase_en(upstream_source: str, expected) -> None:
+    assert places_service._upstream_source_reason_phrase(upstream_source, language="en") == expected
+
+
+def test_source_phrase_en_agrees_with_docent_en_source_label() -> None:
+    # V7: the EN S1 phrase is taken verbatim from docent_service._en_source_label
+    # so one EN naming per source exists across API surfaces (no drift).
+    from apps.api.app.services import docent_service
+
+    for source in _CLIENT_SOURCE_LABELS:
+        assert places_service._upstream_source_reason_phrase(
+            source, language="en"
+        ) == docent_service._en_source_label(source)
+
+
 # --- _local_activity_reason_phrase (S2, D1) ---
 
 
@@ -968,6 +1095,14 @@ def test_source_phrase_agrees_with_client_external_source_label() -> None:
 )
 def test_local_activity_reason_phrase(band, expected) -> None:
     assert places_service._local_activity_reason_phrase(band) == expected
+
+
+def test_local_activity_reason_phrase_en() -> None:
+    assert (
+        places_service._local_activity_reason_phrase("active", language="en")
+        == "Active local spending"
+    )
+    assert places_service._local_activity_reason_phrase(None, language="en") is None
 
 
 # --- _weather_band_phrase (S3, D3) ---
@@ -1003,6 +1138,25 @@ def test_weather_band_phrase(weather, category, expected) -> None:
     assert places_service._weather_band_phrase(weather, category=category) == expected
 
 
+@pytest.mark.parametrize(
+    ("weather", "category", "expected"),
+    [
+        ({}, "restaurant", None),
+        ({"outdoor_status": "bad"}, "restaurant", "Indoor-friendly"),
+        ({"outdoor_status": "bad"}, "attraction", None),
+        ({"outdoor_status": "good", "temp": "2"}, "attraction", "Cold weather"),
+        ({"outdoor_status": "good", "temp": "15.5"}, "attraction", "Cool weather"),
+        ({"outdoor_status": "good", "temp": "18"}, "attraction", "Warm weather"),
+        ({"outdoor_status": "good", "temp": "27"}, "attraction", "Hot weather"),
+        ({"outdoor_status": "good", "temp": ""}, "attraction", None),
+    ],
+)
+def test_weather_band_phrase_en(weather, category, expected) -> None:
+    assert places_service._weather_band_phrase(weather, category=category, language="en") == (
+        expected
+    )
+
+
 def test_weather_band_is_a_phrase_not_numbers() -> None:
     # §1a: the list band is a coarse phrase, never the publicWeatherSummary numbers.
     phrase = places_service._weather_band_phrase(
@@ -1030,6 +1184,24 @@ def test_weather_band_is_a_phrase_not_numbers() -> None:
 def test_linked_event_reason_phrase(has_linked_event, is_ongoing, expected) -> None:
     assert (
         places_service._linked_event_reason_phrase(has_linked_event, is_ongoing=is_ongoing)
+        == expected
+    )
+
+
+@pytest.mark.parametrize(
+    ("has_linked_event", "is_ongoing", "expected"),
+    [
+        (True, True, "Ongoing event"),
+        (True, False, "Linked event"),
+        (True, None, "Linked event"),
+        (False, True, None),
+    ],
+)
+def test_linked_event_reason_phrase_en(has_linked_event, is_ongoing, expected) -> None:
+    assert (
+        places_service._linked_event_reason_phrase(
+            has_linked_event, is_ongoing=is_ongoing, language="en"
+        )
         == expected
     )
 
