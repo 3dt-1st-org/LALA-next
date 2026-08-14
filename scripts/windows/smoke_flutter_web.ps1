@@ -330,8 +330,11 @@ async (page) => {
             $missingLocationPaths = @($locationFlowPaths | Where-Object {
                 $requestLog -notmatch ([regex]::Escape($_) + ".*lat=37\.5665.*lng=126\.978.*=> \[200\]")
             })
-            $usedDefaultLocation = $requestLog -like "*lat=37.2636*" -or $requestLog -like "*lng=127.0286*"
-            if ($missingFlowPaths.Count -eq 0 -and $missingLocationPaths.Count -eq 0 -and -not $usedDefaultLocation) {
+            # Why no default-coordinate check here: the app intentionally calls
+            # the default location (Suwon 37.2636, 127.0286) both to bootstrap
+            # before geolocation resolves and as the denial fallback; the
+            # granted-geolocation contract is enforced by $missingLocationPaths.
+            if ($missingFlowPaths.Count -eq 0 -and $missingLocationPaths.Count -eq 0) {
                 break
             }
             Start-Sleep -Milliseconds 500
@@ -353,9 +356,9 @@ async (page) => {
         if ($missingLocationPaths.Count -gt 0) {
             throw "Flutter location flow did not use the granted test geolocation for: $($missingLocationPaths -join ', ')"
         }
-        if ($requestLog -like "*lat=37.2636*" -or $requestLog -like "*lng=127.0286*") {
-            throw "Flutter location flow still used the default location."
-        }
+        # Why removed (mirror of unix): the app intentionally calls the default
+        # location (Suwon) to bootstrap and as the denial fallback; the granted
+        # geolocation contract is enforced by the check above.
         $lowerRequestLog = $requestLog.ToLowerInvariant()
         if ($lowerRequestLog.Contains("mock://") -or
             $lowerRequestLog.Contains("placeholder://") -or
