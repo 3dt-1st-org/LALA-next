@@ -776,6 +776,10 @@ def test_register_review_source_upserts_by_source_name(monkeypatch):
     executed = [sql for sql, _ in store["executed"]]  # type: ignore[union-attr]
     assert any("INSERT INTO ingest.review_sources" in s for s in executed)
     assert any("ON CONFLICT (source_name) DO UPDATE" in s for s in executed)
+    # Connection lifecycle must match persist_review_ingest_run: the connection
+    # is always closed (psycopg2's `with conn` only manages the transaction).
+    assert store.get("closed") is True
+    assert store.get("committed") is True
 
 
 def test_create_or_resume_ingest_run_writes_registered_source_fk():
@@ -1158,3 +1162,36 @@ def test_persist_review_ingest_run_received_count_is_retry_safe_on_resume(monkey
     ]  # type: ignore[union-attr]
     assert finalized[-1][1] == 3
 
+
+def test_register_review_source_closes_connection_on_failure(monkeypatch):
+    """The registration connection must close even when the upsert fails.
+
+    ``with psycopg2.connect(...)`` manages only the transaction, not the
+    lifecycle; ``closing(conn)`` owns closure. A failed upsert must still
+    roll back AND close so repeated operator retries cannot leak sessions.
+    """
+    store: dict[str, object] = {}
+    _install_fake_psycopg2(monkeypatch, store)
+    store["fail_on"] = "insert into ingest.review_sources"
+
+    with pytest.raises(RuntimeError, match="simulated db failure"):
+        governance.register_review_source(
+            dsn="postgresql://redacted",
+            registration=_registration(),
+            connect_timeout=5,
+        )
+
+    assert store.get("rolled_back") is True
+    assert store.get("closed") is True
+    assert store.get("committed") is not True
+
+
+def test_register_review_source_defaults_connect_timeout(monkeypatch):
+    store: dict[str, object] = {}
+    _install_fake_psycopg2(monkeypatch, store)
+    governance.register_review_source(
+        dsn="postgresql://redacted",
+        registration=_registration(),
+    )
+    # Same default as persist_review_ingest_run for consistency.
+    assert store["connects"] == [("postgresql://redacted", 5)]
