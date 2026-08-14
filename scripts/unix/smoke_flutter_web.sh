@@ -301,6 +301,14 @@ if [[ "$RUN_LOCATION_FLOW" == "true" ]]; then
   "$PWCLI" -s="$PW_SESSION" run-code "async (page) => {
     await page.context().grantPermissions(['geolocation'], { origin: '$WEB_ORIGIN' });
     await page.context().setGeolocation({ latitude: $SMOKE_LAT, longitude: $SMOKE_LNG });
+    // Why: onboarding gates fresh profiles before the dashboard publishes
+    // __lalaAppState (b7dd5ee); seed the persisted completion so a fresh
+    // smoke browser exercises the post-onboarding contract.
+    await page.addInitScript(() => {
+      try {
+        window.localStorage.setItem('flutter.lala.onboarding.v1.completed', 'true');
+      } catch (_) {}
+    });
     await page.goto('$TARGET_URL', { waitUntil: 'domcontentloaded' });
   }" >/dev/null
 fi
@@ -592,7 +600,7 @@ if any(token in log.lower() for token in ("mock://", "placeholder://", "dummy://
     raise SystemExit("Flutter location flow request log contained mock-like URLs.")
 PY
 
-  RESPONSE_LOG="$OUTPUT_DIR/flutter-web-api-responses.json" REQUEST_LOG="$REQUEST_LOG" EXPECT_DOCENT_SCRIPT="$EXPECT_DOCENT_SCRIPT" "$PYTHON" - <<'PY'
+  RESPONSE_LOG="$OUTPUT_DIR/flutter-web-api-responses.json" REQUEST_LOG="$REQUEST_LOG" EXPECT_DOCENT_SCRIPT="$EXPECT_DOCENT_SCRIPT" PLACE_COUNT_PATH="$OUTPUT_DIR/flutter-web-place-count.txt" "$PYTHON" - <<'PY'
 import json
 import os
 import re
@@ -632,7 +640,12 @@ def urls_for(path):
 
 def request_json(method, url, body=None):
     data = None
-    headers = {"Accept": "application/json"}
+    # Why: api.lala-next.cloud sits behind Cloudflare bot rules that block the
+    # default Python-urllib signature (error 1010); identify the smoke honestly.
+    headers = {
+        "Accept": "application/json",
+        "User-Agent": "LALA-DeployedWebSmoke/1.0",
+    }
     if body is not None:
         data = json.dumps(body, ensure_ascii=False).encode("utf-8")
         headers["Content-Type"] = "application/json"
@@ -725,7 +738,7 @@ def docent_category(value):
         return value
     return "attraction"
 
-def docent_body(place, weather):
+def docent_body(place, weather, *, with_score_context=False):
     score = place.get("score") if isinstance(place.get("score"), dict) else {}
     components = (
         score.get("components") if isinstance(score.get("components"), dict) else {}
@@ -770,6 +783,20 @@ def docent_body(place, weather):
     add_text(payload, "dust_pm25", dust.get("pm25"))
     add_text(payload, "dust_pm10_grade", dust.get("pm10_grade_ko") or dust.get("pm10_grade"))
     add_text(payload, "dust_pm25_grade", dust.get("pm25_grade_ko") or dust.get("pm25_grade"))
+    if with_score_context:
+        # Why: the app's normal path keeps scores opt-in (RC3/three-signals), so
+        # captured places carry no score fields; representative values exercise
+        # the API's score-gated docent phrases. setdefault keeps real captured
+        # values when a score flow did expose them.
+        for key, value in {
+            "final_score": 0.82,
+            "local_spending_score": 0.8,
+            "small_merchant_fit_score": 0.75,
+            "demand_dispersion_score": 0.7,
+            "weather_fit_score": 0.7,
+            "culture_relevance_score": 0.7,
+        }.items():
+            payload.setdefault(key, value)
     return payload
 
 def api_base_from_requests():
@@ -779,29 +806,36 @@ def api_base_from_requests():
     parsed = urllib.parse.urlparse(urls[-1])
     return f"{parsed.scheme}://{parsed.netloc}"
 
-def live_docent_data(place, weather):
-    matches = entries_for("/api/v1/docents/script")
-    if matches:
-        payload = matches[-1]["payload"]
-    else:
-        url = f"{api_base_from_requests()}/api/v1/docents/script"
-        status, payload = request_json("POST", url, body=docent_body(place, weather))
-        responses.append(
-            {
-                "url": url,
-                "status": status,
-                "payload": payload,
-                "capture": "direct-live-context",
-            }
-        )
-        if status != 200:
-            raise SystemExit(f"Flutter live-context docent request returned {status}.")
+def docent_data_from_payload(payload):
     if payload.get("ok") is not True:
         raise SystemExit("Flutter docent script response was non-ok.")
     data = payload.get("data")
     if not isinstance(data, dict):
         raise SystemExit("Flutter docent script response missed a data object.")
     return data
+
+def post_docent(place, weather, *, with_score_context=False, capture):
+    url = f"{api_base_from_requests()}/api/v1/docents/script"
+    status, payload = request_json(
+        "POST", url, body=docent_body(place, weather, with_score_context=with_score_context)
+    )
+    responses.append(
+        {
+            "url": url,
+            "status": status,
+            "payload": payload,
+            "capture": capture,
+        }
+    )
+    if status != 200:
+        raise SystemExit(f"Flutter live-context docent request returned {status}.")
+    return docent_data_from_payload(payload)
+
+def live_docent_data(place, weather):
+    matches = entries_for("/api/v1/docents/script")
+    if matches:
+        return docent_data_from_payload(matches[-1]["payload"])
+    return post_docent(place, weather, capture="direct-live-context")
 
 fallback_sources = {
     "public_mvp_snapshot",
@@ -822,6 +856,13 @@ if places.get("location_engine") != "postgis":
 place_items = places.get("places")
 if not isinstance(place_items, list) or not place_items:
     raise SystemExit("Flutter places response was empty.")
+# Hand the input place count to the later marker-state block (separate python
+# process) for the V1 clustering-contract check.
+try:
+    with open(os.environ["PLACE_COUNT_PATH"], "w") as place_count_file:
+        place_count_file.write(str(len(place_items)))
+except (KeyError, OSError):
+    pass
 for place in place_items:
     if not isinstance(place, dict):
         continue
@@ -873,6 +914,17 @@ if os.environ.get("EXPECT_DOCENT_SCRIPT") == "true":
     grounding_sources = docent.get("grounding_sources")
     if not isinstance(grounding_sources, list) or not grounding_sources:
         raise SystemExit("Flutter docent response missed grounding source labels.")
+    # Score-gated phrases are opt-in by design (the app's normal docent request
+    # carries no score context), so phrase assertions run against a direct
+    # request that supplies it; the captured app script keeps the shape,
+    # grounding, and honesty checks below.
+    scored_docent = post_docent(
+        first_place,
+        weather,
+        with_score_context=True,
+        capture="direct-live-context-scored",
+    )
+    scored_script = str(scored_docent.get("script") or "")
     internal_terms = (
         "종합 추천 점수",
         "최종 추천 점수",
@@ -885,25 +937,26 @@ if os.environ.get("EXPECT_DOCENT_SCRIPT") == "true":
         "public_mvp_snapshot",
         "snapshot",
     )
-    if any(term in script for term in internal_terms) or "스냅샷" in script:
-        raise SystemExit("Flutter docent script exposed internal evidence labels.")
-    if re.search(
+    raw_score_pattern = re.compile(
         r"(추천 점수|내국인 소비|관광 수요 분산|날씨 적합도|리뷰 품질|문화 연계)"
-        r"(?:는|은|:)?\s*\d",
-        script,
-    ):
-        raise SystemExit("Flutter docent script exposed raw score values.")
-    if not any(term in script for term in ("내국인 소비", "로컬 소비", "지역 소비")):
+        r"(?:는|은|:)?\s*\d"
+    )
+    for candidate in (script, scored_script):
+        if any(term in candidate for term in internal_terms) or "스냅샷" in candidate:
+            raise SystemExit("Flutter docent script exposed internal evidence labels.")
+        if raw_score_pattern.search(candidate):
+            raise SystemExit("Flutter docent script exposed raw score values.")
+    if not any(term in scored_script for term in ("내국인 소비", "로컬 소비", "지역 소비")):
         raise SystemExit("Flutter docent script missed local spending context.")
-    if not any(term in script for term in ("소상공인", "상권", "골목", "로컬 카페", "카페", "식당")):
+    if not any(term in scored_script for term in ("소상공인", "상권", "골목", "로컬 카페", "카페", "식당")):
         raise SystemExit("Flutter docent script missed small merchant route context.")
-    if not any(term in script for term in ("공식", "한국관광공사", "문화정보원", "공연예술통합전산망", "운영 DB")):
+    if not any(term in scored_script for term in ("공식", "한국관광공사", "문화정보원", "공연예술통합전산망", "운영 DB")):
         raise SystemExit("Flutter docent script missed official data grounding.")
-    if not any(term in script for term in ("방문 전후", "동선", "이어", "함께 연결")):
+    if not any(term in scored_script for term in ("방문 전후", "동선", "이어", "함께 연결")):
         raise SystemExit("Flutter docent script missed route action context.")
-    if not re.search(rf"PM10\s*{re.escape(pm10)}(?!\d)", script):
+    if not re.search(rf"PM10\s*{re.escape(pm10)}(?!\d)", scored_script):
         raise SystemExit("Flutter docent script did not include the captured PM10 value.")
-    if not re.search(rf"PM2\.5\s*{re.escape(pm25)}(?!\d)", script):
+    if not re.search(rf"PM2\.5\s*{re.escape(pm25)}(?!\d)", scored_script):
         raise SystemExit("Flutter docent script did not include the captured PM2.5 value.")
 
 response_path.write_text(
@@ -948,7 +1001,7 @@ PY
     };
   }' --raw)"
   printf '%s\n' "$MARKER_STATE" >"$OUTPUT_DIR/flutter-web-marker-state.json"
-  MARKER_STATE="$MARKER_STATE" "$PYTHON" - <<'PY'
+  MARKER_STATE="$MARKER_STATE" PLACE_COUNT_PATH="$OUTPUT_DIR/flutter-web-place-count.txt" "$PYTHON" - <<'PY'
 import json
 import os
 
@@ -973,7 +1026,22 @@ if stat_total <= 0:
     raise SystemExit("Flutter location flow did not pass live places into the map.")
 if max(cluster_count, stat_clusters) > 0 and max(pin_count, stat_pins) <= 0:
     raise SystemExit("Flutter location flow rendered only clusters without place pins.")
-if map_level and map_level <= 8 and max(cluster_count, stat_clusters) > 0:
+# V1 pin-first clustering contract (map_helpers.dart): 24+ places (or far zoom
+# >= 10) cluster at ANY level; only a sparse list must stay on individual pins
+# while zoomed in. The count is handed over by the API-response block above.
+place_count = 0
+try:
+    with open(os.environ["PLACE_COUNT_PATH"]) as place_count_file:
+        place_count = int(place_count_file.read().strip() or 0)
+except (KeyError, OSError, ValueError):
+    place_count = 0
+cluster_threshold_engaged = place_count >= 24 or map_level >= 10
+if (
+    not cluster_threshold_engaged
+    and map_level
+    and map_level <= 8
+    and max(cluster_count, stat_clusters) > 0
+):
     raise SystemExit(
         "Flutter initial location map clustered places before the user zoomed out."
     )
