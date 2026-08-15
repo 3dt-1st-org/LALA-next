@@ -992,6 +992,17 @@ def test_unix_scripts_have_safe_operational_guards():
     assert (
         "DB_DSN value is never printed by this script." in scripts["plan_review_mention_ingest.sh"]
     )
+    assert "run_place_mention_attribute_repair" in scripts["repair_place_mention_attributes.sh"]
+    assert "repair_place_mention_attributes.sh" in scripts["verify_repo.sh"]
+    assert "ALLOW_PLACE_MENTION_REPAIR_APPLY=1" in scripts["repair_place_mention_attributes.sh"]
+    assert (
+        "--confirm APPLY_PLACE_MENTION_ATTRIBUTE_REPAIR"
+        in scripts["repair_place_mention_attributes.sh"]
+    )
+    assert (
+        "DB_DSN value is never printed by this script."
+        in scripts["repair_place_mention_attributes.sh"]
+    )
     assert "run_review_attribute_batch" in scripts["plan_review_attribute_batch.sh"]
     assert "plan_review_attribute_batch.sh" in scripts["verify_repo.sh"]
     assert "ALLOW_REVIEW_ATTRIBUTE_BATCH_APPLY=1" in scripts["plan_review_attribute_batch.sh"]

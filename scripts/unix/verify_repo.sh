@@ -88,6 +88,9 @@ echo "Planning review/mention preprocessing..."
 echo "Planning review attribute batch..."
 "$ROOT/scripts/unix/plan_review_attribute_batch.sh" --python "$PYTHON"
 
+echo "Planning place mention attribute redaction repair..."
+"$ROOT/scripts/unix/repair_place_mention_attributes.sh" --python "$PYTHON"
+
 echo "Planning franchise business identity batch..."
 "$ROOT/scripts/unix/plan_franchise_identity_batch.sh" --python "$PYTHON"
 
