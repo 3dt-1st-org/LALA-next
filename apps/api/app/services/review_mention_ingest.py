@@ -13,6 +13,24 @@ PROMPT_VERSION = "review-mention-preprocess-v1"
 JOB_NAME = "review-mention-ingest"
 MIN_MATCH_CONFIDENCE = 0.85
 
+# Why: external_key values are URL-shaped source links; only a provider-scoped
+# sha256 digest may leave this service (same scoping convention as
+# content_sha256 below and the digest-token rule in review_ingest_governance).
+# The 4096-char bound mirrors review_ingest_governance so hashing stays bounded
+# on attacker-shaped keys. Over-bound keys are EXCLUDED, never
+# truncate-hashed: truncating would make two keys sharing a 4096-char prefix
+# collide into one digest (and one review_attribute_batch join). The SQL
+# consumer enforces the same bound so an over-bound row cannot join either.
+_EXTERNAL_KEY_HASH_INPUT_MAX = 4096
+
+
+def external_key_sha256(provider: str, external_key: str) -> str | None:
+    material = f"{provider}|{external_key}"
+    if len(material) > _EXTERNAL_KEY_HASH_INPUT_MAX:
+        return None
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()
+
+
 AD_MARKERS = (
     "광고",
     "협찬",
@@ -113,9 +131,13 @@ class ReviewMentionDecision:
     top_terms: tuple[str, ...]
 
     def to_public_dict(self) -> dict[str, Any]:
+        # Why: external_key is a URL-shaped source link; only the provider-scoped
+        # sha256 digest may appear in preview/persisted output (S1 redaction).
+        # Over-bound keys yield None (fail-closed exclusion, never a truncated
+        # hash that could collide with a shorter key's digest).
         return {
             "provider": self.post.provider,
-            "external_key": self.post.external_key,
+            "external_key_sha256": external_key_sha256(self.post.provider, self.post.external_key),
             "place_id": self.place.place_id if self.place else None,
             "place_name_ko": self.place.name_ko if self.place else None,
             "category": self.place.category if self.place else None,
@@ -342,10 +364,28 @@ def aggregate_decisions(
             "category_policy": _dominant_policy(items),
             "preprocess": {
                 "schema_version": PROMPT_VERSION,
-                "retained_external_keys": [item.post.external_key for item in retained[:20]],
-                "filtered_external_keys": [
-                    item.post.external_key for item in items if not item.retained
-                ][:20],
+                # Why: only provider-scoped sha256 digests — never the raw
+                # URL-shaped keys — may be persisted here (S1 redaction).
+                # review_attribute_batch joins these back to community.posts via
+                # pgcrypto digest(), so the digest must stay reproducible SQL-side.
+                # Over-bound keys (provider|key longer than the hash-input bound)
+                # are dropped from the list entirely and counted — never
+                # truncate-hashed, which would let a long key collide with a
+                # shorter key sharing its 4096-char prefix.
+                "retained_external_keys": [
+                    digest
+                    for digest in (
+                        external_key_sha256(item.post.provider, item.post.external_key)
+                        for item in retained[:20]
+                    )
+                    if digest is not None
+                ],
+                "retained_external_key_bounded_count": sum(
+                    1
+                    for item in retained
+                    if external_key_sha256(item.post.provider, item.post.external_key) is None
+                ),
+                "filtered_external_key_count": sum(1 for item in items if not item.retained),
             },
         }
         sentiment_score = _sentiment_score(retained)

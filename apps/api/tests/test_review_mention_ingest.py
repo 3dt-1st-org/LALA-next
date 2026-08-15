@@ -201,6 +201,126 @@ def test_insert_review_mention_aggregates_targets_community_table(monkeypatch):
     assert executed[-1] == ("commit", None)
 
 
+def test_preview_and_attributes_redact_url_shaped_external_keys():
+    """S1: raw URL-shaped external keys must never reach preview or attributes."""
+    retained_key = "https://example.test/post/123?x=1"
+    filtered_key = "https://example.test/post/456?q=ad#section"
+    posts = [
+        _post(retained_key, "카페포렛 커피와 디저트가 맛있고 서비스도 친절"),
+        _post(filtered_key, "카페포렛 협찬 원고료 제공받아 작성"),
+    ]
+    places = [_place("cafe", "카페포렛", "restaurant")]
+
+    result = review_mention_ingest.build_review_mention_result(
+        posts=posts,
+        places=places,
+        limit=10,
+    )
+
+    serialized = json.dumps(result.to_public_dict(), ensure_ascii=False)
+    # Raw key, and every URL-shaped fragment of it, must be absent.
+    for fragment in (
+        retained_key,
+        filtered_key,
+        "example.test",
+        "post/123",
+        "post/456",
+        "x=1",
+        "q=ad",
+    ):
+        assert fragment not in serialized
+
+    aggregate = result.aggregates[0]
+    attributes_json = json.dumps(aggregate.attributes, ensure_ascii=False)
+    for fragment in ("example.test", "post/123", "post/456"):
+        assert fragment not in attributes_json
+
+    preprocess = aggregate.attributes["preprocess"]
+    # Only digests survive; the un-consumed filtered list is now a count.
+    assert "filtered_external_keys" not in preprocess
+    assert preprocess["filtered_external_key_count"] == 1
+    assert preprocess["retained_external_keys"] == [
+        review_mention_ingest.external_key_sha256("naver_blog", retained_key)
+    ]
+    # Digests must be 64-char hex, never URL-shaped.
+    for digest in preprocess["retained_external_keys"]:
+        assert len(digest) == 64
+        assert all(char in "0123456789abcdef" for char in digest)
+
+
+def test_external_key_sha256_is_provider_scoped():
+    """Same key under a different provider must yield a different digest."""
+    key = "https://example.test/post/789"
+    naver = review_mention_ingest.external_key_sha256("naver_blog", key)
+    instagram = review_mention_ingest.external_key_sha256("instagram", key)
+
+    assert naver != instagram
+    assert len(naver) == 64
+    assert key not in naver
+
+
+def test_external_key_digest_bound_is_fail_closed_not_truncate_hash():
+    """S1 boundary: at-limit material digests normally; over-limit is excluded.
+
+    Truncate-then-hash would make a 4097-char key whose first 4096 chars equal a
+    shorter key's material collide into the SAME digest — over-bound keys must
+    therefore yield None, never a truncated digest.
+    """
+    bound = review_mention_ingest._EXTERNAL_KEY_HASH_INPUT_MAX
+    provider = "naver_blog"
+    at_limit_key = "k" * (bound - len(provider) - 1)  # material exactly 4096
+    over_limit_key = "k" * (bound - len(provider))  # material 4097
+
+    assert len(f"{provider}|{at_limit_key}") == bound
+    at_limit = review_mention_ingest.external_key_sha256(provider, at_limit_key)
+    assert at_limit is not None and len(at_limit) == 64
+    # No truncation fallback: over-bound yields None, never a truncated digest.
+    assert review_mention_ingest.external_key_sha256(provider, over_limit_key) is None
+    # Distinct in-bound materials never collide (sanity on the digest itself).
+    assert review_mention_ingest.external_key_sha256(provider, at_limit_key[:-1] + "z") != at_limit
+
+
+def test_over_bound_key_is_excluded_from_preview_and_attributes():
+    """S1: an over-bound key contributes no digest and no value anywhere."""
+    provider = "naver_blog"
+    bound = review_mention_ingest._EXTERNAL_KEY_HASH_INPUT_MAX
+    over_limit_key = (
+        "https://example.test/overbound?" + "z" * bound  # far past the material bound
+    )
+    posts = [
+        _post(over_limit_key, "카페포렛 커피와 디저트가 맛있고 서비스도 친절"),
+        _post("https://example.test/ok/1", "카페포렛 브런치 메뉴가 좋고 분위기가 조용"),
+    ]
+    places = [_place("cafe", "카페포렛", "restaurant")]
+
+    result = review_mention_ingest.build_review_mention_result(
+        posts=posts,
+        places=places,
+        limit=10,
+    )
+
+    serialized = json.dumps(result.to_public_dict(), ensure_ascii=False)
+    assert over_limit_key not in serialized
+    # Preview decisions are limited to the first 5; the over-bound one is there.
+    assert any(
+        item["external_key_sha256"] is None
+        for item in result.to_public_dict()["preview"]["decisions"]
+    )
+    assert any(
+        item["external_key_sha256"] is not None
+        for item in result.to_public_dict()["preview"]["decisions"]
+    )
+
+    preprocess = result.aggregates[0].attributes["preprocess"]
+    # No digest for the over-bound key — only the in-bound key's digest.
+    assert preprocess["retained_external_keys"] == [
+        review_mention_ingest.external_key_sha256(provider, "https://example.test/ok/1")
+    ]
+    assert preprocess["retained_external_key_bounded_count"] == 1
+    attributes_json = json.dumps(result.aggregates[0].attributes, ensure_ascii=False)
+    assert "example.test/overbound" not in attributes_json
+
+
 def _post(external_key: str, text: str) -> review_mention_ingest.ReviewMentionPost:
     return review_mention_ingest.ReviewMentionPost(
         provider="naver_blog",
