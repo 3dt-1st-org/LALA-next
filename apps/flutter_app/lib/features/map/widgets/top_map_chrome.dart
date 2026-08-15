@@ -99,7 +99,14 @@ class TopMapChrome extends StatelessWidget {
               const SizedBox(width: 6),
               MapRoundButton(
                 buttonKey: const ValueKey('settings-button'),
-                tooltip: lalaCopy(language, ko: '설정', en: 'Settings'),
+                tooltip: lalaCopyMulti(
+      language,
+      ko: '설정',
+      en: 'Settings',
+      ja: '設定',
+      zhHans: '设置',
+      zhHant: '設定',
+    ),
                 icon: Icons.settings,
                 onPressed: onOpenSettings,
               ),

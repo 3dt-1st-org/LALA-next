@@ -150,7 +150,14 @@ class _CommunityFeedPageState extends State<CommunityFeedPage> {
       backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
         title: Text(
-          lalaCopy(_language, ko: '커뮤니티', en: 'Community'),
+          lalaCopyMulti(
+      _language,
+      ko: '커뮤니티',
+      en: 'Community',
+      ja: 'コミュニティ',
+      zhHans: '社区',
+      zhHant: '社群',
+    ),
           style: const TextStyle(fontWeight: FontWeight.w900),
         ),
         backgroundColor: theme.colorScheme.surface,

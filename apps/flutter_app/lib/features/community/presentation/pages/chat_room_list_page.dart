@@ -190,7 +190,14 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: Text(lalaCopy(_language, ko: '취소', en: 'Cancel')),
+              child: Text(lalaCopyMulti(
+      _language,
+      ko: '취소',
+      en: 'Cancel',
+      ja: 'キャンセル',
+      zhHans: '取消',
+      zhHant: '取消',
+    )),
             ),
             FilledButton(
               onPressed: () =>

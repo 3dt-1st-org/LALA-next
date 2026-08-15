@@ -73,7 +73,14 @@ class FeaturedPlaceHeader extends StatelessWidget {
             IconButton(
               tooltip: saved
                   ? lalaCopy(language, ko: '저장됨', en: 'Saved')
-                  : lalaCopy(language, ko: '저장', en: 'Save'),
+                  : lalaCopyMulti(
+      language,
+      ko: '저장',
+      en: 'Save',
+      ja: '保存',
+      zhHans: '保存',
+      zhHant: '儲存',
+    ),
               onPressed: onToggleSaved,
               color: saved ? const Color(0xFFC53030) : const Color(0xFF64748B),
               icon: Icon(saved ? Icons.favorite : Icons.favorite_border),

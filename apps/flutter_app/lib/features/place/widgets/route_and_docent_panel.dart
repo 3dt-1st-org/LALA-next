@@ -68,7 +68,14 @@ class RouteAndDocentPanel extends StatelessWidget {
             Expanded(
               child: CompactInfoTile(
                 icon: Icons.cloud,
-                label: lalaCopy(language, ko: '날씨', en: 'Weather'),
+                label: lalaCopyMulti(
+      language,
+      ko: '날씨',
+      en: 'Weather',
+      ja: '気象',
+      zhHans: '天气',
+      zhHant: '天氣',
+    ),
                 // P1: 빈 온도는 '- · 먼지' 로 보이지 않도록 온도 파트를 생략한다.
                 value: _weatherTileValue(weather, language),
               ),

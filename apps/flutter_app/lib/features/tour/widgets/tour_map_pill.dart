@@ -23,7 +23,14 @@ class TourMapPill extends StatelessWidget {
     return SmallStatusPill(
       key: const ValueKey('tour-pill-hit-target'),
       icon: Icons.restaurant_menu,
-      label: lalaCopy(language, ko: '맛집 투어', en: 'Food tour'),
+      label: lalaCopyMulti(
+      language,
+      ko: '맛집 투어',
+      en: 'Food Tour',
+      ja: 'グルメツアー',
+      zhHans: '美食之旅',
+      zhHant: '美食之旅',
+    ),
       active: places.isNotEmpty,
       onPressed: onPressed,
     );

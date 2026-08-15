@@ -176,7 +176,14 @@ class _CommunityPostDetailPageState extends State<CommunityPostDetailPage> {
       backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
         title: Text(
-          lalaCopy(_language, ko: '게시글', en: 'Post'),
+          lalaCopyMulti(
+      _language,
+      ko: '게시글',
+      en: 'Post',
+      ja: '投稿',
+      zhHans: '帖子',
+      zhHant: '貼文',
+    ),
           style: const TextStyle(fontWeight: FontWeight.w900),
         ),
         backgroundColor: theme.colorScheme.surface,
@@ -286,7 +293,14 @@ class _DetailErrorView extends StatelessWidget {
             FilledButton.icon(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh_rounded, size: 18),
-              label: Text(lalaCopy(language, ko: '재시도', en: 'Retry')),
+              label: Text(lalaCopyMulti(
+      language,
+      ko: '재시도',
+      en: 'Retry',
+      ja: '再試行',
+      zhHans: '重试',
+      zhHant: '重試',
+    )),
               style: FilledButton.styleFrom(
                 backgroundColor: theme.colorScheme.primary,
                 foregroundColor: theme.colorScheme.onPrimary,

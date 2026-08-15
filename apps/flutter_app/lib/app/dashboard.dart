@@ -396,7 +396,14 @@ class Dashboard extends StatelessWidget {
                         ko: '현재 위치를 확인해야 추천을 볼 수 있어요',
                         en: 'Location permission is needed for recommendations',
                       ),
-                      actionLabel: lalaCopy(uiLanguage, ko: '재시도', en: 'Retry'),
+                      actionLabel: lalaCopyMulti(
+      uiLanguage,
+      ko: '재시도',
+      en: 'Retry',
+      ja: '再試行',
+      zhHans: '重试',
+      zhHant: '重試',
+    ),
                       onAction: onRetryLocation,
                       secondaryActionLabel: lalaCopy(
                         uiLanguage,
