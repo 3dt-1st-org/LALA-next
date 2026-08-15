@@ -1,6 +1,7 @@
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import '../config/app_config.dart';
+import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 import 'package:lala_next_app/shared/l10n/place_labels.dart';
 
 /// C3 최종: main.dart 에서 이관. 본문 불변(이동만).
@@ -85,7 +86,7 @@ class LalaApiBackend implements LalaBackend {
       radiusM: config.radiusM,
       limit: config.placeLimit,
       category: config.category,
-      lang: config.lang,
+      lang: apiRequestLanguage(config.lang),
       includeScores: true,
       swLat: bounds.swLat,
       swLng: bounds.swLng,
@@ -103,7 +104,7 @@ class LalaApiBackend implements LalaBackend {
     String? cursor,
   }) {
     return _client.getLocalSignals(
-      language: config.lang == 'en' ? 'en' : 'ko',
+      language: apiRequestLanguage(config.lang),
       region: region,
       placeId: placeId,
       kind: kind,
@@ -132,7 +133,7 @@ class LalaApiBackend implements LalaBackend {
       lat: config.lat,
       lng: config.lng,
       radiusM: config.radiusM,
-      language: config.lang,
+      language: apiRequestLanguage(config.lang),
     );
   }
 
@@ -166,14 +167,17 @@ class LalaApiBackend implements LalaBackend {
       dustPm10Grade: weather?.dust.pm10Grade,
       dustPm25Grade: weather?.dust.pm25Grade,
       category: place.category,
-      language: config.lang,
+      language: apiRequestLanguage(config.lang),
       mode: mode,
     );
   }
 
   @override
   Future<LalaAudioResponse> createDocentAudio({required String script}) {
-    return _client.createDocentAudio(script: script, language: config.lang);
+    return _client.createDocentAudio(
+      script: script,
+      language: apiRequestLanguage(config.lang),
+    );
   }
 
   @override
