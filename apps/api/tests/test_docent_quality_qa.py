@@ -227,3 +227,77 @@ def test_generate_docent_scripts_for_qa_keeps_batch_on_generation_error(monkeypa
     assert generated[0].script_generation_error.startswith("DOCENT_GROUNDING_REQUIRED:")
     assert records[0]["script_generation_error"].startswith("DOCENT_GROUNDING_REQUIRED:")
     assert summary["generation_error_count"] == 1
+
+
+# --- F3: language-aware canonical-name precheck ---
+
+
+def _en_candidate() -> docent_quality_qa.DocentQaCandidate:
+    return docent_quality_qa.DocentQaCandidate(
+        place_id="samwon-garden",
+        name_ko="삼원가든",
+        name_en="Samwon Garden",
+        category="restaurant",
+        script=(
+            "Welcome to Samwon Garden! This is a classic Korean barbecue stop "
+            "with generous side dishes. After lunch, take a slow walk through "
+            "the nearby Gongdeok market street."
+        ),
+        script_source_method="live",
+    )
+
+
+def test_en_precheck_compares_en_canonical_name_not_korean():
+    """F3: an EN script legitimately carrying the EN name must pass; checking
+    name_ko forced Korean into EN output and cascaded language_purity."""
+    check = docent_quality_qa.evaluate_docent_script(_en_candidate(), language="en")
+
+    assert "missing_place_name" not in check.issue_tags
+    assert "language_purity" not in check.issue_tags
+
+
+def test_en_precheck_still_flags_missing_en_name():
+    check = docent_quality_qa.evaluate_docent_script(_en_candidate(), language="en")
+    # Sanity: a script that genuinely omits the name must still be flagged.
+    missing = docent_quality_qa.DocentQaCandidate(
+        place_id="x",
+        name_ko="어느집",
+        name_en="Eoneu House",
+        category="restaurant",
+        script="A nice quiet stop for the afternoon with a good walking route afterwards.",
+        script_source_method="live",
+    )
+    flagged = docent_quality_qa.evaluate_docent_script(missing, language="en")
+    assert "missing_place_name" in flagged.issue_tags
+    assert check.blocker is False
+
+
+def test_ko_precheck_still_compares_korean_name():
+    ko_candidate = docent_quality_qa.DocentQaCandidate(
+        place_id="samwon-garden",
+        name_ko="삼원가든",
+        name_en="Samwon Garden",
+        category="restaurant",
+        script=(
+            "삼원가든에 오신 것을 환영합니다! 구수한 숯불 갈비와 넉넉한 반찬이 "
+            "기분 좋은 식사를 만들어 줍니다. 식사 후에는 공덕 시장 골목을 천천히 "
+            "걸어보세요."
+        ),
+        script_source_method="live",
+    )
+    check = docent_quality_qa.evaluate_docent_script(ko_candidate, language="ko")
+    assert "missing_place_name" not in check.issue_tags
+
+
+def test_missing_name_en_falls_back_to_no_check_not_korean():
+    """When only the KO name exists, the EN check must skip rather than force
+    the Korean name into the comparison (honest degradation)."""
+    ko_only = docent_quality_qa.DocentQaCandidate(
+        place_id="ko-only",
+        name_ko="수원화성",
+        category="attraction",
+        script="Hwaseong Fortress offers a walkable fortress wall with great views.",
+        script_source_method="live",
+    )
+    check = docent_quality_qa.evaluate_docent_script(ko_only, language="en")
+    assert "missing_place_name" not in check.issue_tags
