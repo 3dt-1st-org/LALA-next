@@ -353,3 +353,154 @@ def test_rerank_docent_candidates_fails_when_rerank_gate_disabled(monkeypatch):
     assert exc_info.value.code == "AI_NOT_CONFIGURED"
     assert exc_info.value.retryable is False
     assert "reranking is not enabled" in exc_info.value.message.lower()
+
+
+def test_grounding_context_prompt_appends_english_guard_for_en_language():
+    grounding = [
+        {
+            "source_type": "place_profile",
+            "title_ko": "정동문화축제",
+            "body_ko": "정동문화축제의 주간 로컬 언급 신호입니다.",
+            "body_en": None,
+        }
+    ]
+
+    prompt_en = ai_service._grounding_context_prompt(grounding, language="en")
+    prompt_ko = ai_service._grounding_context_prompt(grounding, language="ko")
+
+    # Why: verified grounding bodies are Korean-only, so an English request must carry an
+    # explicit translate-to-English guard or the model flips to Korean mid-script.
+    assert "every sentence of the final script must be English only" in prompt_en
+    assert "English only" not in prompt_ko
+    assert "정동문화축제의 주간 로컬 언급 신호입니다." in prompt_en
+
+
+def test_grounding_context_prompt_prefers_body_en_for_english_requests():
+    grounding = [
+        {
+            "source_type": "place_profile",
+            "title_ko": "삼원가든",
+            "body_ko": "장소명은 삼원가든입니다.",
+            "body_en": "The place name is Samwon Garden.",
+        }
+    ]
+
+    prompt_en = ai_service._grounding_context_prompt(grounding, language="en")
+    prompt_ko = ai_service._grounding_context_prompt(grounding, language="ko")
+
+    assert "The place name is Samwon Garden." in prompt_en
+    assert "장소명은 삼원가든입니다." not in prompt_en
+    assert "장소명은 삼원가든입니다." in prompt_ko
+
+
+def test_generate_docent_script_en_prompt_carries_output_language_guard(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            captured["messages"] = kwargs["messages"]
+            return SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(content="English script."))]
+            )
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs):
+            self.chat = SimpleNamespace(completions=FakeCompletions())
+
+    fake_openai = types.ModuleType("openai")
+    fake_openai.OpenAI = FakeOpenAI
+    monkeypatch.setitem(sys.modules, "openai", fake_openai)
+    monkeypatch.setattr(
+        ai_service,
+        "get_settings",
+        lambda: SimpleNamespace(
+            enable_live_ai=True,
+            openai_api_key="test-openai-key",  # pragma: allowlist secret
+            openai_base_url="https://api.openai.com/v1",
+            openai_docent_model="gpt-5.4-mini",
+        ),
+    )
+
+    request = DocentScriptRequest(
+        place_id="place-en",
+        place_name="Jeongdong Cultural Festival",
+        category="event",
+        language="en",
+        mode="brief",
+    )
+    grounding = [
+        {
+            "source_type": "place_profile",
+            "title_ko": "정동문화축제",
+            "body_ko": "정동문화축제는 중구 정동에서 즐기는 행사입니다.",
+            "body_en": None,
+        }
+    ]
+
+    ai_service.generate_docent_script_text(request, grounding_context=grounding)
+
+    user_prompt = captured["messages"][1]["content"]
+    assert "Output language: English." in user_prompt
+    assert "no Korean characters" in user_prompt
+    assert "must be English only" in user_prompt
+
+
+def test_generate_docent_script_en_prefers_request_place_name_over_korean_title(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            captured["messages"] = kwargs["messages"]
+            return SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(content="English script."))]
+            )
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs):
+            self.chat = SimpleNamespace(completions=FakeCompletions())
+
+    fake_openai = types.ModuleType("openai")
+    fake_openai.OpenAI = FakeOpenAI
+    monkeypatch.setitem(sys.modules, "openai", fake_openai)
+    monkeypatch.setattr(
+        ai_service,
+        "get_settings",
+        lambda: SimpleNamespace(
+            enable_live_ai=True,
+            openai_api_key="test-openai-key",  # pragma: allowlist secret
+            openai_base_url="https://api.openai.com/v1",
+            openai_docent_model="gpt-5.4-mini",
+        ),
+    )
+
+    grounding = [
+        {
+            "source_type": "place_profile",
+            "title_ko": "도심속 바다축제",
+            "body_ko": "도심속 바다축제는 노량진에서 열리는 행사입니다.",
+            "body_en": None,
+        }
+    ]
+
+    # English request: the client-supplied localized name must win over the Korean title
+    # so the model does not invent its own romanization.
+    request_en = DocentScriptRequest(
+        place_id="place-en",
+        place_name="City Sea Festival",
+        category="event",
+        language="en",
+        mode="brief",
+    )
+    ai_service.generate_docent_script_text(request_en, grounding_context=grounding)
+    assert "Place: City Sea Festival." in captured["messages"][1]["content"]
+
+    # Korean request: the verified Korean title keeps priority (unchanged behavior).
+    request_ko = DocentScriptRequest(
+        place_id="place-ko",
+        place_name="도심속 바다축제",
+        category="event",
+        language="ko",
+        mode="brief",
+    )
+    ai_service.generate_docent_script_text(request_ko, grounding_context=grounding)
+    assert "Place: 도심속 바다축제." in captured["messages"][1]["content"]
