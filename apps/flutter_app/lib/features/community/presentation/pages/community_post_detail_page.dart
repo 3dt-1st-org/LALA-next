@@ -86,11 +86,14 @@ class _CommunityPostDetailPageState extends State<CommunityPostDetailPage> {
     }
   }
 
-  String _fallbackError() => lalaCopy(
-        _language,
-        ko: '게시글을 불러오지 못했어요.',
-        en: 'Could not load this post.',
-      );
+  String _fallbackError() => lalaCopyMulti(
+          _language,
+          ko: '게시글을 불러오지 못했어요.',
+          en: 'Could not load this post.',
+          ja: '投稿を読み込めませんでした。',
+          zhHans: '无法加载这篇帖子。',
+          zhHant: '無法載入這篇貼文。',
+        );
 
   Future<void> _toggleLike() async {
     final current = _post;
@@ -153,13 +156,27 @@ class _CommunityPostDetailPageState extends State<CommunityPostDetailPage> {
       setState(() => _commentBusy = false);
       _showSnack(
         e.message.trim().isEmpty
-            ? lalaCopy(_language, ko: '댓글 작성에 실패했어요.', en: 'Failed to post comment.')
+            ? lalaCopyMulti(
+  _language,
+  ko: '댓글 작성에 실패했어요.',
+  en: 'Failed to post comment.',
+  ja: 'コメントの投稿に失敗しました。',
+  zhHans: '发表评论失败。',
+  zhHant: '發表留言失敗。',
+)
             : e.message,
       );
     } on Object {
       if (!mounted) return;
       setState(() => _commentBusy = false);
-      _showSnack(lalaCopy(_language, ko: '댓글 작성에 실패했어요.', en: 'Failed to post comment.'));
+      _showSnack(lalaCopyMulti(
+  _language,
+  ko: '댓글 작성에 실패했어요.',
+  en: 'Failed to post comment.',
+  ja: 'コメントの投稿に失敗しました。',
+  zhHans: '发表评论失败。',
+  zhHant: '發表留言失敗。',
+));
     }
   }
 
@@ -176,7 +193,14 @@ class _CommunityPostDetailPageState extends State<CommunityPostDetailPage> {
       backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
         title: Text(
-          lalaCopy(_language, ko: '게시글', en: 'Post'),
+          lalaCopyMulti(
+      _language,
+      ko: '게시글',
+      en: 'Post',
+      ja: '投稿',
+      zhHans: '帖子',
+      zhHant: '貼文',
+    ),
           style: const TextStyle(fontWeight: FontWeight.w900),
         ),
         backgroundColor: theme.colorScheme.surface,
@@ -286,7 +310,14 @@ class _DetailErrorView extends StatelessWidget {
             FilledButton.icon(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh_rounded, size: 18),
-              label: Text(lalaCopy(language, ko: '재시도', en: 'Retry')),
+              label: Text(lalaCopyMulti(
+      language,
+      ko: '재시도',
+      en: 'Retry',
+      ja: '再試行',
+      zhHans: '重试',
+      zhHant: '重試',
+    )),
               style: FilledButton.styleFrom(
                 backgroundColor: theme.colorScheme.primary,
                 foregroundColor: theme.colorScheme.onPrimary,
@@ -491,11 +522,14 @@ class _CommentSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          lalaCopy(
-            language,
-            ko: '댓글 ${comments.length}',
-            en: 'Comments ${comments.length}',
-          ),
+          lalaCopyMulti(
+              language,
+              ko: '댓글 ${comments.length}',
+              en: 'Comments ${comments.length}',
+              ja: 'コメント ${comments.length}',
+              zhHans: '评论 ${comments.length}',
+              zhHant: '留言 ${comments.length}',
+            ),
           style: theme.textTheme.titleSmall?.copyWith(
             fontWeight: FontWeight.w900,
             color: const Color(0xFF334155),
@@ -507,11 +541,14 @@ class _CommentSection extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 24),
             child: Center(
               child: Text(
-                lalaCopy(
-                  language,
-                  ko: '첫 댓글을 남겨보세요.',
-                  en: 'Be the first to comment.',
-                ),
+                lalaCopyMulti(
+                    language,
+                    ko: '첫 댓글을 남겨보세요.',
+                    en: 'Be the first to comment.',
+                    ja: '最初のコメントをどうぞ。',
+                    zhHans: '来发表第一条评论吧。',
+                    zhHant: '來發表第一則留言吧。',
+                  ),
                 style: const TextStyle(
                   color: Color(0xFF94A3B8),
                   fontWeight: FontWeight.w700,
@@ -632,11 +669,14 @@ class _CommentInputBar extends StatelessWidget {
               textInputAction: TextInputAction.send,
               onSubmitted: (_) => onSubmit(),
               decoration: InputDecoration(
-                hintText: lalaCopy(
-                  language,
-                  ko: '댓글을 입력하세요',
-                  en: 'Write a comment',
-                ),
+                hintText: lalaCopyMulti(
+                    language,
+                    ko: '댓글을 입력하세요',
+                    en: 'Write a comment',
+                    ja: 'コメントを入力',
+                    zhHans: '输入评论',
+                    zhHant: '輸入留言',
+                  ),
                 isDense: true,
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 14,

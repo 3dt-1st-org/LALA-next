@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:lala_next_app/core/routing/lala_route_paths.dart';
+import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 
 class LalaBottomNavBar extends StatelessWidget {
   const LalaBottomNavBar({
@@ -30,25 +31,53 @@ class LalaBottomNavBar extends StatelessWidget {
           key: ValueKey('nav-search'),
           icon: Icon(Icons.search_outlined),
           selectedIcon: Icon(Icons.search),
-          label: language == 'en' ? 'Search' : '검색',
+          label: lalaCopyMulti(
+            language,
+            ko: '검색',
+            en: 'Search',
+            ja: '検索',
+            zhHans: '搜索',
+            zhHant: '搜尋',
+          ),
         ),
         NavigationDestination(
           key: ValueKey('nav-map'),
           icon: Icon(Icons.map_outlined),
           selectedIcon: Icon(Icons.map),
-          label: language == 'en' ? 'Map' : '지도',
+          label: lalaCopyMulti(
+            language,
+            ko: '지도',
+            en: 'Map',
+            ja: '地図',
+            zhHans: '地图',
+            zhHant: '地圖',
+          ),
         ),
         NavigationDestination(
           key: ValueKey('nav-plan'),
           icon: Icon(Icons.calendar_today_outlined),
           selectedIcon: Icon(Icons.calendar_today),
-          label: language == 'en' ? 'Plan' : '일정',
+          label: lalaCopyMulti(
+            language,
+            ko: '일정',
+            en: 'Plan',
+            ja: 'プラン',
+            zhHans: '计划',
+            zhHant: '計畫',
+          ),
         ),
         NavigationDestination(
           key: const ValueKey('nav-local-signals'),
           icon: const Icon(Icons.campaign_outlined),
           selectedIcon: const Icon(Icons.campaign),
-          label: language == 'en' ? 'Local Signals' : '로컬 신호',
+          label: lalaCopyMulti(
+            language,
+            ko: '로컬 신호',
+            en: 'Local Signals',
+            ja: 'ローカル信号',
+            zhHans: '本地信号',
+            zhHant: '在地訊號',
+          ),
         ),
       ],
     );

@@ -87,10 +87,13 @@ class PermanentlyDeniedRecovery extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  lalaCopy(
+                  lalaCopyMulti(
                     language,
                     ko: '설정에서 위치가 꺼져 있어요',
                     en: 'Location is turned off in Settings',
+                    ja: '設定で位置情報がオフになっています',
+                    zhHans: '位置信息已在设置中关闭',
+                    zhHant: '位置資訊已在設定中關閉',
                   ),
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     color: const Color(0xFF111827),
@@ -104,15 +107,21 @@ class PermanentlyDeniedRecovery extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             canOpenSettings
-                ? lalaCopy(
+                ? lalaCopyMulti(
                     language,
                     ko: 'LALA의 위치 권한이 시스템 설정에서 꺼져 있어요. 설정을 열어 위치를 허용한 뒤 돌아와 다시 확인해 주세요. 또는 지역을 직접 선택할 수 있어요.',
                     en: "Location permission for LALA is disabled in system settings. Open Settings, allow location, then come back and retry — or choose an area below.",
+                    ja: 'LALAの位置情報権限がシステム設定でオフになっています。設定を開いて位置情報を許可し、戻って再試行するか、下で地域を直接選択できます。',
+                    zhHans: 'LALA 的定位权限已在系统设置中关闭。请打开设置允许定位后返回重试，或在下方直接选择地区。',
+                    zhHant: 'LALA 的定位權限已在系統設定中關閉。請開啟設定允許定位後返回重試，或在下方直接選擇地區。',
                   )
-                : lalaCopy(
+                : lalaCopyMulti(
                     language,
                     ko: '브라우저에서 위치를 차단했어요. 브라우저 사이트 설정에서 위치를 허용하거나, 아래에서 지역을 직접 선택할 수 있어요.',
                     en: "Your browser blocked location. Allow it in your browser's site settings, or choose an area below.",
+                    ja: 'ブラウザが位置情報をブロックしています。ブラウザのサイト設定で許可するか、下で地域を直接選択できます。',
+                    zhHans: '浏览器已阻止定位。请在浏览器网站设置中允许，或在下方直接选择地区。',
+                    zhHant: '瀏覽器已阻止定位。請在瀏覽器網站設定中允許，或在下方直接選擇地區。',
                   ),
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: const Color(0xFF4B5563),
@@ -126,7 +135,16 @@ class PermanentlyDeniedRecovery extends StatelessWidget {
               key: const ValueKey('permanently-denied-open-settings'),
               onPressed: onOpenSettings,
               icon: const Icon(Icons.settings_outlined),
-              label: Text(lalaCopy(language, ko: '설정 열기', en: 'Open settings')),
+              label: Text(
+                lalaCopyMulti(
+                  language,
+                  ko: '설정 열기',
+                  en: 'Open settings',
+                  ja: '設定を開く',
+                  zhHans: '打开设置',
+                  zhHant: '開啟設定',
+                ),
+              ),
               style: FilledButton.styleFrom(
                 minimumSize: const Size.fromHeight(48),
               ),
@@ -138,7 +156,16 @@ class PermanentlyDeniedRecovery extends StatelessWidget {
               key: const ValueKey('permanently-denied-retry'),
               onPressed: onRetry,
               icon: const Icon(Icons.my_location_outlined),
-              label: Text(lalaCopy(language, ko: '다시 확인', en: 'Retry')),
+              label: Text(
+                lalaCopyMulti(
+                  language,
+                  ko: '다시 확인',
+                  en: 'Retry',
+                  ja: '再試行',
+                  zhHans: '重试',
+                  zhHant: '重試',
+                ),
+              ),
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size.fromHeight(48),
                 foregroundColor: const Color(0xFF2B6CB0),
@@ -155,7 +182,14 @@ class PermanentlyDeniedRecovery extends StatelessWidget {
               onPressed: onChooseArea,
               icon: const Icon(Icons.map_outlined),
               label: Text(
-                lalaCopy(language, ko: '지역 직접 선택', en: 'Choose area'),
+                lalaCopyMulti(
+                  language,
+                  ko: '지역 직접 선택',
+                  en: 'Choose area',
+                  ja: '地域を選ぶ',
+                  zhHans: '选择地区',
+                  zhHant: '選擇地區',
+                ),
               ),
               style: FilledButton.styleFrom(
                 minimumSize: const Size.fromHeight(48),
@@ -169,7 +203,14 @@ class PermanentlyDeniedRecovery extends StatelessWidget {
               onPressed: onChooseArea,
               icon: const Icon(Icons.map_outlined),
               label: Text(
-                lalaCopy(language, ko: '지역 직접 선택', en: 'Choose area'),
+                lalaCopyMulti(
+                  language,
+                  ko: '지역 직접 선택',
+                  en: 'Choose area',
+                  ja: '地域を選ぶ',
+                  zhHans: '选择地区',
+                  zhHant: '選擇地區',
+                ),
               ),
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size.fromHeight(48),

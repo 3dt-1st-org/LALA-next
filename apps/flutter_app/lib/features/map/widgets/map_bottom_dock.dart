@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../shared/l10n/lala_copy.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import '../../../shared/l10n/place_labels.dart';
@@ -114,7 +116,17 @@ class MapBottomDock extends StatelessWidget {
                   TextButton.icon(
                     onPressed: currentPlace == null ? null : onOpenDetail,
                     icon: const Icon(Icons.keyboard_arrow_up),
-                    label: Text(uiLanguage == 'en' ? 'Details' : '상세'),
+                    // V6: 도슨트 상세 진입 라벨 — 방문객 로케일도 현지화(계약 I1).
+                    label: Text(
+                      lalaCopyMulti(
+                        uiLanguage,
+                        ko: '상세',
+                        en: 'Details',
+                        ja: '詳細',
+                        zhHans: '详情',
+                        zhHant: '詳情',
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -155,7 +167,14 @@ class MapBottomDock extends StatelessWidget {
                         onOpenDetail();
                       },
                       child: Text(
-                        uiLanguage == 'en' ? 'Signals' : '점수/근거',
+                        lalaCopyMulti(
+                          uiLanguage,
+                          ko: '점수/근거',
+                          en: 'Signals',
+                          ja: 'スコア/根拠',
+                          zhHans: '评分/依据',
+                          zhHant: '評分/依據',
+                        ),
                         style: const TextStyle(fontWeight: FontWeight.w900),
                       ),
                     ),
@@ -223,5 +242,12 @@ String? _freshnessLabel(String? dataAsOf, String language) {
   final match = _freshnessDateOnly.firstMatch(dataAsOf);
   if (match == null) return null;
   final date = match.group(1)!;
-  return language == 'en' ? 'Data as of: $date' : '데이터 기준: $date';
+  return lalaCopyMulti(
+    language,
+    ko: '데이터 기준: $date',
+    en: 'Data as of: $date',
+    ja: 'データ基準: $date',
+    zhHans: '数据截至：$date',
+    zhHant: '數據截至：$date',
+  );
 }

@@ -54,13 +54,23 @@ class RouteAndDocentPanel extends StatelessWidget {
             Expanded(
               child: CompactInfoTile(
                 icon: Icons.route,
-                label: lalaCopy(language, ko: '오늘 코스', en: 'Today route'),
+                label: lalaCopyMulti(
+  language,
+  ko: '오늘 코스',
+  en: 'Today route',
+  ja: '今日のコース',
+  zhHans: '今日路线',
+  zhHant: '今日路線',
+),
                 value: slots.isEmpty
-                    ? lalaCopy(
-                        language,
-                        ko: '날씨 기준 대체 동선 준비 중',
-                        en: 'Preparing a weather-aware route',
-                      )
+                    ? lalaCopyMulti(
+                          language,
+                          ko: '날씨 기준 대체 동선 준비 중',
+                          en: 'Preparing a weather-aware route',
+                          ja: '天気を考慮した代替ルートを準備中',
+                          zhHans: '正在准备考虑天气的替代路线',
+                          zhHant: '正在準備考慮天氣的替代路線',
+                        )
                     : planSlotTitle(slots.first, language),
               ),
             ),
@@ -68,7 +78,14 @@ class RouteAndDocentPanel extends StatelessWidget {
             Expanded(
               child: CompactInfoTile(
                 icon: Icons.cloud,
-                label: lalaCopy(language, ko: '날씨', en: 'Weather'),
+                label: lalaCopyMulti(
+      language,
+      ko: '날씨',
+      en: 'Weather',
+      ja: '気象',
+      zhHans: '天气',
+      zhHant: '天氣',
+    ),
                 // P1: 빈 온도는 '- · 먼지' 로 보이지 않도록 온도 파트를 생략한다.
                 value: _weatherTileValue(weather, language),
               ),
@@ -94,7 +111,14 @@ class RouteAndDocentPanel extends StatelessWidget {
   /// 날씨 타일 값: 온도가 있으면 '온도 · 먼지상황', 비어있으면 먼지상황만.
   String _weatherTileValue(LalaWeather? weather, String language) {
     if (weather == null) {
-      return lalaCopy(language, ko: '확인 중', en: 'Checking');
+      return lalaCopyMulti(
+  language,
+  ko: '확인 중',
+  en: 'Checking',
+  ja: '確認中',
+  zhHans: '确认中',
+  zhHant: '確認中',
+);
     }
     final temp = temperatureLabelOrNull(weather.temp);
     final dust = dustSituationLabel(weather.dust, language);

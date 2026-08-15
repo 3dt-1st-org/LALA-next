@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'package:lala_next_app/shared/l10n/lala_copy.dart';
+
 import 'kakao_map_fallback.dart';
 import 'kakao_map_models.dart';
 
@@ -14,7 +16,8 @@ Widget buildKakaoMapView({
   ValueChanged<KakaoMapCamera>? onCameraIdle,
 }) {
   return KakaoMapFallbackView(
-    message: language == 'en'
+    // V6: ko 만 KO 안내문(방문객 로케일 EN 폴백).
+    message: normalizeLalaLanguage(language) != 'ko'
         ? 'The live map is not available right now.'
         : '현재 지도를 표시할 수 없습니다.',
     language: language,

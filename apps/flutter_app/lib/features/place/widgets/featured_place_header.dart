@@ -72,8 +72,22 @@ class FeaturedPlaceHeader extends StatelessWidget {
             ),
             IconButton(
               tooltip: saved
-                  ? lalaCopy(language, ko: '저장됨', en: 'Saved')
-                  : lalaCopy(language, ko: '저장', en: 'Save'),
+                  ? lalaCopyMulti(
+  language,
+  ko: '저장됨',
+  en: 'Saved',
+  ja: '保存済み',
+  zhHans: '已保存',
+  zhHant: '已儲存',
+)
+                  : lalaCopyMulti(
+      language,
+      ko: '저장',
+      en: 'Save',
+      ja: '保存',
+      zhHans: '保存',
+      zhHant: '儲存',
+    ),
               onPressed: onToggleSaved,
               color: saved ? const Color(0xFFC53030) : const Color(0xFF64748B),
               icon: Icon(saved ? Icons.favorite : Icons.favorite_border),
@@ -109,11 +123,25 @@ class FeaturedPlaceHeader extends StatelessWidget {
             if (!showEvidence)
               InlineIconText(
                 icon: Icons.explore_outlined,
-                label: lalaCopy(language, ko: '로컬 추천', en: 'Local pick'),
+                label: lalaCopyMulti(
+  language,
+  ko: '로컬 추천',
+  en: 'Local pick',
+  ja: 'ローカルのおすすめ',
+  zhHans: '本地精选',
+  zhHant: '在地精選',
+),
               ),
             if (showEvidence) ...[
               Text(
-                lalaCopy(language, ko: '로컬 점수', en: 'Local score'),
+                lalaCopyMulti(
+  language,
+  ko: '로컬 점수',
+  en: 'Local score',
+  ja: 'ローカルスコア',
+  zhHans: '本地评分',
+  zhHant: '在地評分',
+),
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
                   color: const Color(0xFF1A202C),
                   fontWeight: FontWeight.w900,

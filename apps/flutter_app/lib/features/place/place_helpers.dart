@@ -8,13 +8,49 @@ import '../../shared/l10n/place_labels.dart';
 
 /// 장소 카테고리 표시 라벨(C3 추출 — main.dart 의 _categoryLabel).
 String categoryLabel(String category, {String language = 'ko'}) {
-  if (isLalaEnglish(language)) {
+  // V6: ko 이외 로케일은 현지화 라벨을 쓴다(기본은 EN).
+  if (normalizeLalaLanguage(language) != 'ko') {
     return switch (category) {
-      'restaurant' => 'Food',
-      'event' => 'Event',
-      'culture_venue' => 'Culture',
-      'attraction' => 'Attraction',
-      _ => 'Local',
+      'restaurant' => lalaCopyMulti(
+        language,
+        ko: '맛집',
+        en: 'Food',
+        ja: 'グルメ',
+        zhHans: '美食',
+        zhHant: '美食',
+      ),
+      'event' => lalaCopyMulti(
+        language,
+        ko: '행사',
+        en: 'Event',
+        ja: 'イベント',
+        zhHans: '活动',
+        zhHant: '活動',
+      ),
+      'culture_venue' => lalaCopyMulti(
+        language,
+        ko: '문화',
+        en: 'Culture',
+        ja: '文化',
+        zhHans: '文化',
+        zhHant: '文化',
+      ),
+      'attraction' => lalaCopyMulti(
+        language,
+        ko: '명소',
+        en: 'Attraction',
+        ja: '名所',
+        zhHans: '景点',
+        zhHant: '景點',
+      ),
+      _ => lalaCopyMulti(
+        language,
+        ko: '로컬',
+        en: 'Local',
+        ja: 'ローカル',
+        zhHans: '本地',
+        zhHant: '在地',
+      ),
     };
   }
   return switch (category) {
@@ -28,7 +64,20 @@ String categoryLabel(String category, {String language = 'ko'}) {
 
 /// 카테고리 필터 라벨(C3 추출 — main.dart 의 _categoryFilterLabel).
 String categoryFilterLabel(String category, String language) {
-  if (language == 'en') {
+  // V6: 전체(all) 문구는 로케일별 현지화, 나머지는 categoryLabel 체인.
+  if (category == 'all' && normalizeLalaLanguage(language) != 'ko') {
+    return lalaCopyMulti(
+      language,
+      ko: '전체',
+      en: 'All',
+      ja: 'すべて',
+      zhHans: '全部',
+      zhHant: '全部',
+    );
+  }
+  // Why: 'en' keeps its EN plural filter labels (byte-compat); the visitor
+  // locales already returned localized labels above, so only ko reaches here.
+  if (normalizeLalaLanguage(language) == 'en') {
     return switch (category) {
       'all' => 'All',
       'restaurant' => 'Restaurants',
@@ -51,8 +100,22 @@ String railCategoryLabel(LalaPlace place, String language) {
     return category;
   }
   final status = place.isOngoing == false
-      ? lalaCopy(language, ko: '종료', en: 'Ended')
-      : lalaCopy(language, ko: '진행 중', en: 'Ongoing');
+      ? lalaCopyMulti(
+          language,
+          ko: '종료',
+          en: 'Ended',
+          ja: '終了',
+          zhHans: '已结束',
+          zhHant: '已結束',
+        )
+      : lalaCopyMulti(
+          language,
+          ko: '진행 중',
+          en: 'Ongoing',
+          ja: '開催中',
+          zhHans: '进行中',
+          zhHant: '進行中',
+        );
   return '$category · $status';
 }
 
@@ -151,22 +214,32 @@ String? formatEventDate(String? rawDate, String language) {
   final year = match.group(1)!;
   final month = int.parse(match.group(2)!);
   final day = int.parse(match.group(3)!);
-  if (isLalaEnglish(language)) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return '${months[month - 1]} $day, $year';
+  final normalized = normalizeLalaLanguage(language);
+  switch (normalized) {
+    case 'en':
+      const months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+      ];
+      return '${months[month - 1]} $day, $year';
+    // V6(계약 §6): ja/zh 는 현지 날짜 표기(한국어 표기 노출 금지).
+    case 'ja':
+      return '$year年$month月$day日';
+    case 'zh-Hans':
+    case 'zh-Hant':
+      return '$year年$month月$day日';
+    case 'ko':
+      break;
   }
   return '$year년 ${month.toString().padLeft(2, '0')}월 ${day.toString().padLeft(2, '0')}일';
 }
@@ -182,9 +255,23 @@ String? eventDateRangeText(LalaPlace place, String language) {
     return '$start ~ $end';
   }
   if (start != null) {
-    return lalaCopy(language, ko: '$start부터', en: 'From $start');
+    return lalaCopyMulti(
+      language,
+      ko: '$start부터',
+      en: 'From $start',
+      ja: '$start から',
+      zhHans: '$start起',
+      zhHant: '$start起',
+    );
   }
-  return lalaCopy(language, ko: '~$end까지', en: 'Until $end');
+  return lalaCopyMulti(
+    language,
+    ko: '~$end까지',
+    en: 'Until $end',
+    ja: '$end まで',
+    zhHans: '至$end',
+    zhHant: '至$end',
+  );
 }
 
 /// 추천 reason 원문. null/빈이면 null(미출력). 모든 표면이 동일 텍스트를 그리도록

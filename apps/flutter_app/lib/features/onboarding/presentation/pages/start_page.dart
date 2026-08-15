@@ -59,10 +59,13 @@ class _OnboardingStartPageState extends State<OnboardingStartPage> {
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 236),
               child: Text(
-                lalaCopy(
+                lalaCopyMulti(
                   language,
                   ko: '어떤 여행을\n계획 중인가요?',
                   en: 'What kind of trip\nare you planning?',
+                  ja: 'どんな旅を\n計画していますか？',
+                  zhHans: '您正在计划\n什么样的旅行？',
+                  zhHant: '您正在計劃\n什麼樣的旅行？',
                 ),
                 style: TextStyle(
                   fontSize: LalaVisualTokens.onboardingTitleSize,
@@ -77,10 +80,13 @@ class _OnboardingStartPageState extends State<OnboardingStartPage> {
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 258),
               child: Text(
-                lalaCopy(
+                lalaCopyMulti(
                   language,
                   ko: '여행 유형을 선택하면 더 알맞은\n추천을 받을 수 있어요.',
                   en: 'Pick a trip type for more\nrelevant recommendations.',
+                  ja: 'より合うおすすめのために、\n旅のタイプを選んでください。',
+                  zhHans: '选择旅行类型，\n获取更合适的推荐。',
+                  zhHant: '選擇旅行類型，\n獲取更合適的推薦。',
                 ),
                 style: TextStyle(
                   fontSize: LalaVisualTokens.bodySize,
@@ -95,7 +101,14 @@ class _OnboardingStartPageState extends State<OnboardingStartPage> {
             _TravelTypeRow(
               key: const ValueKey('onboarding-travel-domestic'),
               icon: Icons.cottage_rounded,
-              label: lalaCopy(language, ko: '국내 여행', en: 'Domestic trip'),
+              label: lalaCopyMulti(
+                language,
+                ko: '국내 여행',
+                en: 'Domestic trip',
+                ja: '国内旅行',
+                zhHans: '国内旅行',
+                zhHant: '國內旅行',
+              ),
               selected: _pending == OnboardingTouristType.localTourist,
               onTap: () => _select(OnboardingTouristType.localTourist),
             ),
@@ -103,13 +116,27 @@ class _OnboardingStartPageState extends State<OnboardingStartPage> {
             _TravelTypeRow(
               key: const ValueKey('onboarding-travel-overseas'),
               icon: Icons.flight_takeoff_rounded,
-              label: lalaCopy(language, ko: '해외 방문', en: 'Overseas trip'),
+              label: lalaCopyMulti(
+                language,
+                ko: '해외 방문',
+                en: 'Overseas trip',
+                ja: '海外からのお越し',
+                zhHans: '海外到访',
+                zhHant: '海外到訪',
+              ),
               selected: _pending == OnboardingTouristType.foreignTourist,
               onTap: () => _select(OnboardingTouristType.foreignTourist),
             ),
             const Spacer(),
             _OnboardingPrimaryAction(
-              label: lalaCopy(language, ko: '다음', en: 'Next'),
+              label: lalaCopyMulti(
+                language,
+                ko: '다음',
+                en: 'Next',
+                ja: '次へ',
+                zhHans: '下一步',
+                zhHant: '下一步',
+              ),
               onPressed: _canAdvance ? _advance : null,
             ),
           ],

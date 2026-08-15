@@ -2531,7 +2531,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('settings-button')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('영어'));
+    await tester.tap(find.text('en'));
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.arrow_back_ios_new));
     await tester.pumpAndSettle();
@@ -2567,19 +2567,22 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('settings-button')));
     await tester.pumpAndSettle();
 
-    expect(find.text('한국어'), findsOneWidget);
-    expect(find.text('영어'), findsOneWidget);
-    expect(find.text('Korean'), findsNothing);
-    expect(find.text('English'), findsNothing);
+    // V6: 세그먼트 라벨은 정규 언어 코드(ko/en/ja/zh-Hans/zh-Hant)로 표시된다.
+    expect(find.text('ko'), findsOneWidget);
+    expect(find.text('en'), findsOneWidget);
+    expect(find.text('ja'), findsOneWidget);
+    expect(find.text('zh-Hans'), findsOneWidget);
+    expect(find.text('zh-Hant'), findsOneWidget);
     expect(_visibleMixedLanguageTexts(tester), isEmpty);
 
-    await tester.tap(find.text('영어'));
+    await tester.tap(find.text('en'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Korean'), findsOneWidget);
-    expect(find.text('English'), findsOneWidget);
-    expect(find.text('한국어'), findsNothing);
-    expect(find.text('영어'), findsNothing);
+    expect(find.text('ko'), findsOneWidget);
+    expect(find.text('en'), findsOneWidget);
+    expect(find.text('ja'), findsOneWidget);
+    expect(find.text('zh-Hans'), findsOneWidget);
+    expect(find.text('zh-Hant'), findsOneWidget);
     expect(_visibleMixedLanguageTexts(tester), isEmpty);
   });
 
@@ -2852,7 +2855,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('settings-button')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('영어'));
+    await tester.tap(find.text('en'));
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.arrow_back_ios_new));
     await tester.pumpAndSettle();
@@ -2902,7 +2905,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('settings-button')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('영어'));
+    await tester.tap(find.text('en'));
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.arrow_back_ios_new));
     await tester.pumpAndSettle();
@@ -2947,7 +2950,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('settings-button')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('영어'));
+    await tester.tap(find.text('en'));
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.arrow_back_ios_new));
     await tester.pumpAndSettle();
@@ -2978,7 +2981,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('settings-button')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('영어'));
+    await tester.tap(find.text('en'));
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.arrow_back_ios_new));
     await tester.pumpAndSettle();

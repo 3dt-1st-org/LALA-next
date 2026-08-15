@@ -2538,6 +2538,8 @@ List<ManualLocationOption> get featuredManualLocationOptions {
   ];
 }
 
+// V6: ko 만 KO 라벨, 그 외(en/ja/zh-Hans/zh-Hant)는 EN 라벨 — 지역명 정적 데이터는
+// KO/EN 뿐이므로 확장 로케일 화면에 한국어가 노출되는 것을 금지한다(계약 §6).
 String _localized(String language, {required String ko, required String en}) {
-  return language.toLowerCase().startsWith('en') ? en : ko;
+  return language.toLowerCase() == 'ko' ? ko : en;
 }

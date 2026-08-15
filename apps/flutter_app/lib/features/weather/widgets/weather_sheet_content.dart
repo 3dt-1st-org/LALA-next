@@ -34,11 +34,25 @@ class WeatherSheetContent extends StatelessWidget {
           runSpacing: 10,
           children: [
             WeatherFact(
-              label: lalaCopy(language, ko: '통합 대기', en: 'Air quality'),
+              label: lalaCopyMulti(
+      language,
+      ko: '통합 대기',
+      en: 'Air quality',
+      ja: '総合大気',
+      zhHans: '综合大气',
+      zhHant: '綜合大氣',
+    ),
               value: dustLabel(data.dust, language),
             ),
             WeatherFact(
-              label: lalaCopy(language, ko: '미세먼지(PM10)', en: 'PM10'),
+              label: lalaCopyMulti(
+      language,
+      ko: '미세먼지(PM10)',
+      en: 'PM10',
+      ja: 'PM10',
+      zhHans: 'PM10',
+      zhHant: 'PM10',
+    ),
               value: dustPollutantValueLabel(
                 value: data.dust.pm10,
                 grade: dustPollutantGradeLabel(data.dust, 'pm10', language),
@@ -46,7 +60,14 @@ class WeatherSheetContent extends StatelessWidget {
               ),
             ),
             WeatherFact(
-              label: lalaCopy(language, ko: '초미세먼지(PM2.5)', en: 'PM2.5'),
+              label: lalaCopyMulti(
+      language,
+      ko: '초미세먼지(PM2.5)',
+      en: 'PM2.5',
+      ja: 'PM2.5',
+      zhHans: 'PM2.5',
+      zhHant: 'PM2.5',
+    ),
               value: dustPollutantValueLabel(
                 value: data.dust.pm25,
                 grade: dustPollutantGradeLabel(data.dust, 'pm25', language),
@@ -54,7 +75,14 @@ class WeatherSheetContent extends StatelessWidget {
               ),
             ),
             WeatherFact(
-              label: lalaCopy(language, ko: '야외 상태', en: 'Outdoor'),
+              label: lalaCopyMulti(
+      language,
+      ko: '야외 상태',
+      en: 'Outdoor',
+      ja: '屋外状況',
+      zhHans: '室外状态',
+      zhHant: '室外狀態',
+    ),
               value: outdoorLabel(data.outdoorStatus, language: language),
             ),
           ],
@@ -62,7 +90,14 @@ class WeatherSheetContent extends StatelessWidget {
         if (data.forecast.isNotEmpty) ...[
           const SizedBox(height: 16),
           Text(
-            lalaCopy(language, ko: '날씨 추이', en: 'Forecast trend'),
+            lalaCopyMulti(
+      language,
+      ko: '날씨 추이',
+      en: 'Forecast trend',
+      ja: '気象の推移',
+      zhHans: '天气趋势',
+      zhHant: '天氣趨勢',
+    ),
             style: Theme.of(
               context,
             ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),

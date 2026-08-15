@@ -23,7 +23,14 @@ class WeatherMapPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final data = publicWeatherOrNull(weather);
     final pending =
-        lalaCopy(language, ko: '날씨 데이터 준비 중', en: 'Weather pending');
+        lalaCopyMulti(
+      language,
+      ko: '날씨 데이터 준비 중',
+      en: 'Weather pending',
+      ja: '気象データ準備中',
+      zhHans: '天气数据准备中',
+      zhHant: '天氣資料準備中',
+    );
     final String label;
     if (data == null) {
       label = pending;
@@ -34,10 +41,13 @@ class WeatherMapPill extends StatelessWidget {
       final airQuality = hasPm ? dustLabel(data.dust, language).trim() : '';
       final airLabel = airQuality.isEmpty
           ? ''
-          : lalaCopy(
+          : lalaCopyMulti(
               language,
               ko: '공기 $airQuality',
               en: 'Air $airQuality',
+              ja: '大気 $airQuality',
+              zhHans: '空气 $airQuality',
+              zhHant: '空氣 $airQuality',
             );
       if (temp == null) {
         label = airLabel.isEmpty ? pending : airLabel;

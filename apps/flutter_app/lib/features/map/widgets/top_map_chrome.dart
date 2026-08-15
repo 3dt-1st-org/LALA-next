@@ -6,17 +6,21 @@ import 'category_chip.dart';
 import 'map_round_button.dart';
 
 String _mapCategoryLabel(String category, String language) {
-  if (language != 'en') {
-    return categoryFilterLabel(category, language);
+  // V6: chip 은 로케일별 라벨을 쓴다. EN 전용 복수형(Sights/Food/...)은 en 에만
+  // 적용하고, 방문객 로케일(ja/zh)은 categoryFilterLabel 체인의 현지화 라벨을
+  // 따른다 — KO 폴백 노출 금지(계약 I1). raw 'en' 비교는 그대로 둔다: 호출부가
+  // 이미 정규화된 값을 전달하고 EN 라벨이 그대로 EN 이므로 중복 정규화가 불필요.
+  if (language == 'en') {
+    return switch (category) {
+      'all' => 'All',
+      'attraction' => 'Sights',
+      'restaurant' => 'Food',
+      'event' => 'Events',
+      'culture_venue' => 'Culture',
+      _ => categoryFilterLabel(category, language),
+    };
   }
-  return switch (category) {
-    'all' => 'All',
-    'attraction' => 'Sights',
-    'restaurant' => 'Food',
-    'event' => 'Events',
-    'culture_venue' => 'Culture',
-    _ => categoryFilterLabel(category, language),
-  };
+  return categoryFilterLabel(category, language);
 }
 
 /// 지도 상단 크롬(카테고리 필터 + 설정 버튼 + 로딩 바)(C3 추출 — main.dart 의 _TopMapChrome).
@@ -99,7 +103,14 @@ class TopMapChrome extends StatelessWidget {
               const SizedBox(width: 6),
               MapRoundButton(
                 buttonKey: const ValueKey('settings-button'),
-                tooltip: lalaCopy(language, ko: '설정', en: 'Settings'),
+                tooltip: lalaCopyMulti(
+      language,
+      ko: '설정',
+      en: 'Settings',
+      ja: '設定',
+      zhHans: '设置',
+      zhHant: '設定',
+    ),
                 icon: Icons.settings,
                 onPressed: onOpenSettings,
               ),
@@ -110,10 +121,13 @@ class TopMapChrome extends StatelessWidget {
             // 시맨틱: 지도 추천 로딩 중임을 화면 읽기 사용자에게 알린다(§13.5).
             Semantics(
               container: true,
-              label: lalaCopy(
+              label: lalaCopyMulti(
                 language,
                 ko: '추천 장소를 불러오는 중',
                 en: 'Loading recommendations',
+                ja: 'おすすめスポットを読み込み中',
+                zhHans: '正在加载推荐地点',
+                zhHant: '正在載入推薦地點',
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(999),

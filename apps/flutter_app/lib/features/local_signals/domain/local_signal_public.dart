@@ -3,6 +3,10 @@
 /// This model intentionally has no author identity, moderation state, score,
 /// capability token, coordinates, or third-party review fields. Unknown wire
 /// fields are ignored so private server-side data cannot enter app state.
+library;
+
+import '../../../shared/l10n/lala_copy.dart';
+
 enum LocalSignalKind {
   placeTip('place_tip'),
   routeNote('route_note'),
@@ -24,16 +28,63 @@ enum LocalSignalKind {
   }
 
   String label(String language) => switch (this) {
-    LocalSignalKind.placeTip => language == 'en' ? 'Place tip' : '장소 팁',
-    LocalSignalKind.routeNote => language == 'en' ? 'Route note' : '동선 메모',
-    LocalSignalKind.localQuestion =>
-      language == 'en' ? 'Local question' : '로컬 질문',
-    LocalSignalKind.accessibilityNote =>
-      language == 'en' ? 'Accessibility' : '접근성 메모',
-    LocalSignalKind.seasonalUpdate =>
-      language == 'en' ? 'Seasonal update' : '계절 업데이트',
-    LocalSignalKind.correction => language == 'en' ? 'Correction' : '정정',
-    LocalSignalKind.localStory => language == 'en' ? 'Local story' : '로컬 이야기',
+    // V6: ko 이외는 현지화(kind 라벨). ko 반환값은 기존과 동일.
+    LocalSignalKind.placeTip => lalaCopyMulti(
+      language,
+      ko: '장소 팁',
+      en: 'Place tip',
+      ja: 'スポットのヒント',
+      zhHans: '地点提示',
+      zhHant: '地點提示',
+    ),
+    LocalSignalKind.routeNote => lalaCopyMulti(
+      language,
+      ko: '동선 메모',
+      en: 'Route note',
+      ja: 'ルートメモ',
+      zhHans: '路线笔记',
+      zhHant: '路線筆記',
+    ),
+    LocalSignalKind.localQuestion => lalaCopyMulti(
+      language,
+      ko: '로컬 질문',
+      en: 'Local question',
+      ja: 'ローカルな質問',
+      zhHans: '本地提问',
+      zhHant: '在地提問',
+    ),
+    LocalSignalKind.accessibilityNote => lalaCopyMulti(
+      language,
+      ko: '접근성 메모',
+      en: 'Accessibility',
+      ja: 'バリアフリー情報',
+      zhHans: '无障碍信息',
+      zhHant: '無障礙資訊',
+    ),
+    LocalSignalKind.seasonalUpdate => lalaCopyMulti(
+      language,
+      ko: '계절 업데이트',
+      en: 'Seasonal update',
+      ja: '季節の最新情報',
+      zhHans: '季节更新',
+      zhHant: '季節更新',
+    ),
+    LocalSignalKind.correction => lalaCopyMulti(
+      language,
+      ko: '정정',
+      en: 'Correction',
+      ja: '訂正',
+      zhHans: '更正',
+      zhHant: '更正',
+    ),
+    LocalSignalKind.localStory => lalaCopyMulti(
+      language,
+      ko: '로컬 이야기',
+      en: 'Local story',
+      ja: 'ローカルの物語',
+      zhHans: '本地故事',
+      zhHant: '在地故事',
+    ),
   };
 }
 
@@ -56,12 +107,30 @@ enum LocalSignalCommercialDisclosure {
 
   String label(String language) => switch (this) {
     LocalSignalCommercialDisclosure.none => '',
-    LocalSignalCommercialDisclosure.visitor =>
-      language == 'en' ? 'Visitor disclosure' : '방문객 경험 기반 고지',
-    LocalSignalCommercialDisclosure.ownerOrStaff =>
-      language == 'en' ? 'Owner/staff disclosure' : '운영자·직원 관여 고지',
-    LocalSignalCommercialDisclosure.paidOrGifted =>
-      language == 'en' ? 'Paid or gifted disclosure' : '유료·제공 혜택 고지',
+    LocalSignalCommercialDisclosure.visitor => lalaCopyMulti(
+      language,
+      ko: '방문객 경험 기반 고지',
+      en: 'Visitor disclosure',
+      ja: '訪問者体験に基づく表示',
+      zhHans: '基于访客体验的披露',
+      zhHant: '基於訪客體驗的揭露',
+    ),
+    LocalSignalCommercialDisclosure.ownerOrStaff => lalaCopyMulti(
+      language,
+      ko: '운영자·직원 관여 고지',
+      en: 'Owner/staff disclosure',
+      ja: '運営者・従業員関与の表示',
+      zhHans: '经营者或员工参与披露',
+      zhHant: '經營者或員工參與揭露',
+    ),
+    LocalSignalCommercialDisclosure.paidOrGifted => lalaCopyMulti(
+      language,
+      ko: '유료·제공 혜택 고지',
+      en: 'Paid or gifted disclosure',
+      ja: '有償・提供特典の表示',
+      zhHans: '付费或赠礼披露',
+      zhHant: '付費或贈禮揭露',
+    ),
   };
 }
 

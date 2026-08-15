@@ -6,6 +6,8 @@ import 'dart:html' as html;
 
 import 'package:flutter/material.dart';
 
+import 'package:lala_next_app/shared/l10n/lala_copy.dart';
+
 import 'features/place/place_helpers.dart';
 import 'kakao_map_models.dart';
 
@@ -23,7 +25,8 @@ Widget buildKakaoMapView({
   ValueChanged<String>? onPlaceTap,
   ValueChanged<KakaoMapCamera>? onCameraIdle,
 }) {
-  final isEnglish = language == 'en';
+  // V6: ko 만 KO 안내문 — 방문객 로케일(ja/zh)도 EN 폴백(계약 I1).
+  final isEnglish = normalizeLalaLanguage(language) != 'ko';
   if (javascriptKey.trim().isEmpty) {
     return _KakaoMapUnavailable(
       message: isEnglish
@@ -141,7 +144,9 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
       ..style.color = '#1a202c'
       ..style.fontWeight = '800'
       ..style.setProperty('place-items', 'center')
-      ..text = widget.language == 'en' ? 'Loading Kakao Map' : '카카오 지도 로딩 중';
+      ..text = normalizeLalaLanguage(widget.language) != 'ko'
+          ? 'Loading Kakao Map'
+          : '카카오 지도 로딩 중';
     _makeFlutterLayerTransparent();
 
     _ensureKakaoMapsSdk(widget.javascriptKey)
@@ -158,7 +163,7 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
           _drawFallbackMap(
             container,
             language: widget.language,
-            message: widget.language == 'en'
+            message: normalizeLalaLanguage(widget.language) != 'ko'
                 ? 'Preparing the map view'
                 : '지도 화면을 준비하고 있습니다',
             places: widget.places,
@@ -173,7 +178,7 @@ class _KakaoMapBackgroundBridgeState extends State<_KakaoMapBackgroundBridge> {
     container.children.clear();
     container.text = '';
     container.style.display = 'block';
-    final isEnglish = widget.language == 'en';
+    final isEnglish = normalizeLalaLanguage(widget.language) != 'ko';
     final placesPayload = Uri.encodeComponent(
       jsonEncode(
         widget.places

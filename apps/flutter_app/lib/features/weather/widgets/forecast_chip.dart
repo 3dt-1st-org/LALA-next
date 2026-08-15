@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import '../weather_helpers.dart';
@@ -26,7 +28,10 @@ class ForecastChip extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(
-            language == 'en' ? item.time : weatherChartTimeLabel(item.time),
+            // V6: ko 만 'N시' 변환(방문객/EN 은 원본 24h 표기).
+            normalizeLalaLanguage(language) == 'ko'
+                ? weatherChartTimeLabel(item.time)
+                : item.time,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(

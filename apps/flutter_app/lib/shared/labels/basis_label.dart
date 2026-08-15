@@ -6,10 +6,13 @@ import 'source_label.dart';
 
 /// 점수 dataBasis 코드를 표시 라벨로 변환(C3 추출 — main.dart 의 _basisLabel).
 String basisLabel(String value, {String language = 'ko'}) {
+  // V6: ko 만 KO 라벨(방문객 화면 KO 노출 금지).
   if (isFallbackSourceCode(value)) {
-    return isLalaEnglish(language) ? 'Limited offline data' : '제한적 오프라인 데이터';
+    return normalizeLalaLanguage(language) == 'ko'
+        ? '제한적 오프라인 데이터'
+        : 'Limited offline data';
   }
-  if (isLalaEnglish(language)) {
+  if (normalizeLalaLanguage(language) != 'ko') {
     return switch (value.trim()) {
       'actual_data' => 'Real data',
       'dev_seed' => 'LALA curation',

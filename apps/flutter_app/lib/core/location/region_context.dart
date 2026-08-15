@@ -19,6 +19,7 @@ import 'package:flutter/foundation.dart';
 
 import 'package:lala_next_app/core/persistence/onboarding_preferences.dart';
 import 'package:lala_next_app/manual_location_options.dart';
+import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 
 /// How the active region context was established.
 enum RegionSource {
@@ -84,7 +85,13 @@ class RegionContext {
   bool get isDefault => source == RegionSource.defaultRegion;
 
   /// Label for the active language. ko/en are kept exclusive.
-  String label(String language) => language == 'en' ? labelEn : labelKo;
+  /// V6: ja/zh-Hans/zh-Hant 은 EN 라벨로 정직 폴백한다(계약 §6 — 지역명은
+  /// KO/EN 정적 데이터만 있으므로, 확장 로케일 화면에 한국어가 섞이는 것을
+  /// 금지하고 영문명을 보여준다).
+  String label(String language) {
+    final normalized = normalizeLalaLanguage(language);
+    return normalized == 'ko' ? labelKo : labelEn;
+  }
 
   @override
   bool operator ==(Object other) =>

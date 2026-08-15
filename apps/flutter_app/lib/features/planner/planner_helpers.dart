@@ -11,23 +11,45 @@ String planSlotTitle(LalaPlanSlot slot, String language) {
   final title = slot.title.trim();
   final place = slot.place;
   if (title.isEmpty) {
-    return lalaCopy(language, ko: '일정 준비 중', en: 'Preparing stop');
+    return lalaCopyMulti(
+  language,
+  ko: '일정 준비 중',
+  en: 'Preparing stop',
+  ja: '経由地を準備中',
+  zhHans: '正在准备站点',
+  zhHant: '正在準備站點',
+);
   }
   final localizedTitle = singleLanguageText(title, language);
   if (localizedTitle != null && localizedTitle.isNotEmpty) {
     return localizedTitle;
   }
-  if (isLalaEnglish(language) && containsKorean(title)) {
+  // V6: KO 전용 제목은 ko 화면에서만 그대로 쓴다. 방문객/EN 화면은 EN 조합으로.
+  if (normalizeLalaLanguage(language) != 'ko' && containsKorean(title)) {
     final placeName = place == null
-        ? lalaCopy(language, ko: '이 장소', en: 'this place')
+        ? lalaCopyMulti(
+  language,
+  ko: '이 장소',
+  en: 'this place',
+  ja: 'このスポット',
+  zhHans: '此地',
+  zhHant: '此地',
+)
         : placeDisplayName(place, language);
     return '${periodLabel(slot.period, language: language)} at $placeName';
   }
-  if (!isLalaEnglish(language) &&
+  if (normalizeLalaLanguage(language) == 'ko' &&
       looksEnglishText(title) &&
       !containsKorean(title)) {
     final placeName = place == null
-        ? lalaCopy(language, ko: '이 장소', en: 'this place')
+        ? lalaCopyMulti(
+  language,
+  ko: '이 장소',
+  en: 'this place',
+  ja: 'このスポット',
+  zhHans: '此地',
+  zhHant: '此地',
+)
         : placeDisplayName(place, language);
     return '${periodLabel(slot.period, language: language)} $placeName';
   }
@@ -46,7 +68,14 @@ bool hasVisiblePlanSlot(LalaPlanSlot slot, String language) {
   final lowerTitle = title.toLowerCase();
   return !title.contains('이 장소') &&
       !lowerTitle.contains('this place') &&
-      title != lalaCopy(language, ko: '일정 준비 중', en: 'Preparing stop');
+      title != lalaCopyMulti(
+  language,
+  ko: '일정 준비 중',
+  en: 'Preparing stop',
+  ja: '経由地を準備中',
+  zhHans: '正在准备站点',
+  zhHant: '正在準備站點',
+);
 }
 
 /// 일정 슬롯 부가 설명(C3 추출 — main.dart 의 _planSlotDetail).
@@ -86,11 +115,14 @@ String? planSlotTravelTimeLabel(LalaPlanSlot slot, String language) {
   if (minutes == null || minutes < 0) {
     return null;
   }
-  return lalaCopy(
-    language,
-    ko: '도보 $minutes분',
-    en: '$minutes min walk',
-  );
+  return lalaCopyMulti(
+      language,
+      ko: '도보 $minutes분',
+      en: '$minutes min walk',
+      ja: '徒歩 $minutes分',
+      zhHans: '步行 $minutes 分钟',
+      zhHant: '步行 $minutes 分鐘',
+    );
 }
 
 /// 카테고리 기반 추정 운영시간 라인.
@@ -102,11 +134,14 @@ String? planSlotEstimatedHoursLabel(LalaPlanSlot slot, String language) {
   if (hours == null || hours.trim().isEmpty) {
     return null;
   }
-  return lalaCopy(
-    language,
-    ko: '영업 $hours (추정)',
-    en: 'Open $hours (est.)',
-  );
+  return lalaCopyMulti(
+      language,
+      ko: '영업 $hours (추정)',
+      en: 'Open $hours (est.)',
+      ja: '営業 $hours（推定）',
+      zhHans: '营业 $hours（估计）',
+      zhHant: '營業 $hours（估計）',
+    );
 }
 
 /// D4: 슬롯 운영 상태(open/closed/unknown) KO/EN 라벨.
@@ -116,9 +151,30 @@ String? planSlotEstimatedHoursLabel(LalaPlanSlot slot, String language) {
 String planSlotClosureStateLabel(LalaPlanSlot slot, String language) {
   final state = (slot.closureState ?? 'unknown').trim().toLowerCase();
   return switch (state) {
-    'open' => lalaCopy(language, ko: '영업중', en: 'Open'),
-    'closed' => lalaCopy(language, ko: '영업종료', en: 'Closed'),
-    _ => lalaCopy(language, ko: '미확인', en: 'Unknown'),
+    'open' => lalaCopyMulti(
+  language,
+  ko: '영업중',
+  en: 'Open',
+  ja: '営業中',
+  zhHans: '营业中',
+  zhHant: '營業中',
+),
+    'closed' => lalaCopyMulti(
+  language,
+  ko: '영업종료',
+  en: 'Closed',
+  ja: '営業終了',
+  zhHans: '已打烊',
+  zhHant: '已打烊',
+),
+    _ => lalaCopyMulti(
+  language,
+  ko: '미확인',
+  en: 'Unknown',
+  ja: '未確認',
+  zhHans: '未确认',
+  zhHant: '未確認',
+),
   };
 }
 
@@ -144,23 +200,62 @@ String? planSlotForecastWindowLabel(LalaPlanSlot slot, String language) {
 String? planSlotAirQualityBadLabel(LalaPlanSlot slot, String language) {
   if (slot.airQualityBad != true) return null;
   if (slot.indoorOutdoor == 'indoor') return null;
-  return lalaCopy(
-    language,
-    ko: '외부 대기질 나쁨',
-    en: 'Outdoor air quality poor',
-  );
+  return lalaCopyMulti(
+      language,
+      ko: '외부 대기질 나쁨',
+      en: 'Outdoor air quality poor',
+      ja: '屋外の大気質が悪い',
+      zhHans: '室外空气质量差',
+      zhHant: '室外空氣品質差',
+    );
 }
 
 /// 시간대 라벨(C3 추출 — main.dart 의 _periodLabel).
 String periodLabel(String period, {String language = 'ko'}) {
   final normalized = period.trim().toLowerCase();
-  if (isLalaEnglish(language)) {
+  // V6: ko 이외 로케일은 EN 라벨 체인을 따른다(서버 슬롯 시간대는 EN 토큰).
+  if (normalizeLalaLanguage(language) != 'ko') {
     return switch (normalized) {
-      'morning' || 'am' || 'mo' || '오전' || '아침' => 'Morning',
-      'lunch' || 'noon' || 'midday' || 'lu' || '점심' => 'Lunch',
-      'afternoon' || 'pm' || 'af' || '오후' => 'Afternoon',
-      'dinner' || 'evening' || 'night' || 'di' || '저녁' || '밤' => 'Dinner',
-      _ => normalized.isEmpty ? '-' : 'Period',
+      'morning' || 'am' || 'mo' || '오전' || '아침' => lalaCopyMulti(
+        language,
+        ko: '아침',
+        en: 'Morning',
+        ja: '朝',
+        zhHans: '早晨',
+        zhHant: '早晨',
+      ),
+      'lunch' || 'noon' || 'midday' || 'lu' || '점심' => lalaCopyMulti(
+        language,
+        ko: '점심',
+        en: 'Lunch',
+        ja: '昼',
+        zhHans: '午餐',
+        zhHant: '午餐',
+      ),
+      'afternoon' || 'pm' || 'af' || '오후' => lalaCopyMulti(
+        language,
+        ko: '오후',
+        en: 'Afternoon',
+        ja: '午後',
+        zhHans: '下午',
+        zhHant: '下午',
+      ),
+      'dinner' || 'evening' || 'night' || 'di' || '저녁' || '밤' => lalaCopyMulti(
+        language,
+        ko: '저녁',
+        en: 'Dinner',
+        ja: '夜',
+        zhHans: '晚餐',
+        zhHant: '晚餐',
+      ),
+      _ => normalized.isEmpty ? '-' : lalaCopyMulti(
+        language,
+        ko: '시간대',
+        en: 'Period',
+        ja: '時間帯',
+        zhHans: '时段',
+        zhHant: '時段',
+      ),
     };
   }
   return switch (normalized) {

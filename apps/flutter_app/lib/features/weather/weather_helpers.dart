@@ -101,7 +101,8 @@ List<WeatherChartPoint> buildWeatherChartPoints({
 
 /// 예보 시각 라벨(C3 추출 — main.dart 의 _weatherChartTimeLabel).
 String weatherChartTimeLabel(String raw, {String language = 'ko'}) {
-  if (isLalaEnglish(language)) {
+  // V6: ko 만 'N시' 표기 — 방문객/EN 은 원본 24h 표기를 그대로 쓴다.
+  if (normalizeLalaLanguage(language) != 'ko') {
     return raw.trim();
   }
   final trimmed = raw.trim();

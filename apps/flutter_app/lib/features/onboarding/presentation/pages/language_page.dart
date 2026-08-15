@@ -1,6 +1,10 @@
 // 모바일 비주얼 계약 S2: 언어 선택.
-// KO/EN 텍스트 배지(국기 이모지 아님). 행 라벨은 각 언어의 고유명(한국어/English)으로
-// 이 선택 화면에서만 의도적 이중 노출. 선택 즉시 OnboardingState 언어를 갱신(01-flow §F1.4).
+// 텍스트 배지(국기 이모지 아님). 행 라벨은 각 언어의 고유명(한국어/English/日本語/
+// 简体中文/繁體中文)으로 이 선택 화면에서만 의도적 노출. 선택 즉시 OnboardingState
+// 언어를 갱신(01-flow §F1.4).
+// V6: 방문객 로케일(ja/zh-Hans/zh-Hant) 행 추가 — 계약 v6-foreign-visitor-ux §1/§2.
+// 다섯 행은 짧은 뷰포트에서 세로 공간을 초과할 수 있어 콘텐츠는 스크롤로 흡수하고
+// 주 액션은 하단에 항상 노출한다(§8 반응형 규칙).
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -54,48 +58,62 @@ class _OnboardingLanguagePageState extends State<OnboardingLanguagePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            Text(
-              lalaCopy(language, ko: '언어 선택', en: 'Language'),
-              style: TextStyle(
-                fontSize: LalaVisualTokens.onboardingTitleSize,
-                height: LalaVisualTokens.onboardingTitleLineHeight /
-                    LalaVisualTokens.onboardingTitleSize,
-                fontWeight: FontWeight.w800,
-                color: LalaVisualColors.ink,
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    Text(
+                      lalaCopyMulti(
+                        language,
+                        ko: '언어 선택',
+                        en: 'Language',
+                        ja: '言語を選択',
+                        zhHans: '选择语言',
+                        zhHant: '選擇語言',
+                      ),
+                      style: TextStyle(
+                        fontSize: LalaVisualTokens.onboardingTitleSize,
+                        height: LalaVisualTokens.onboardingTitleLineHeight /
+                            LalaVisualTokens.onboardingTitleSize,
+                        fontWeight: FontWeight.w800,
+                        color: LalaVisualColors.ink,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      lalaCopyMulti(
+                        language,
+                        ko: '앱에서 사용할 언어를 선택하세요.',
+                        en: 'Choose the language for the app.',
+                        ja: 'アプリで使う言語を選んでください。',
+                        zhHans: '选择应用使用的语言。',
+                        zhHant: '選擇應用使用的語言。',
+                      ),
+                      style: TextStyle(
+                        fontSize: LalaVisualTokens.bodySize,
+                        height: LalaVisualTokens.bodyLineHeight /
+                            LalaVisualTokens.bodySize,
+                        fontWeight: FontWeight.w500,
+                        color: LalaVisualColors.muted,
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+                    // 행 순서 = 계약 §1 표 순서. 라벨은 각 언어 고유명(의도적 노출).
+                    for (final entry in _kLanguageChoices) ...<Widget>[
+                      _LanguageRow(
+                        key: ValueKey('onboarding-language-${entry.code}'),
+                        badge: entry.badge,
+                        label: entry.endonym,
+                        selected: _selected == entry.code,
+                        onTap: () => _choose(entry.code),
+                      ),
+                      const SizedBox(height: LalaVisualTokens.contentGap),
+                    ],
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 14),
-            Text(
-              lalaCopy(
-                language,
-                ko: '앱에서 사용할 언어를 선택하세요.',
-                en: 'Choose the language for the app.',
-              ),
-              style: TextStyle(
-                fontSize: LalaVisualTokens.bodySize,
-                height: LalaVisualTokens.bodyLineHeight /
-                    LalaVisualTokens.bodySize,
-                fontWeight: FontWeight.w500,
-                color: LalaVisualColors.muted,
-              ),
-            ),
-            const SizedBox(height: 28),
-            _LanguageRow(
-              key: const ValueKey('onboarding-language-ko'),
-              badge: 'KO',
-              label: '한국어',
-              selected: _selected == 'ko',
-              onTap: () => _choose('ko'),
-            ),
-            const SizedBox(height: LalaVisualTokens.contentGap),
-            _LanguageRow(
-              key: const ValueKey('onboarding-language-en'),
-              badge: 'EN',
-              label: 'English',
-              selected: _selected == 'en',
-              onTap: () => _choose('en'),
-            ),
-            const Spacer(),
             SizedBox(
               width: double.infinity,
               child: FilledButton(
@@ -118,7 +136,16 @@ class _OnboardingLanguagePageState extends State<OnboardingLanguagePage> {
                     ),
                   ),
                 ),
-                child: Text(lalaCopy(language, ko: '다음', en: 'Next')),
+                child: Text(
+                  lalaCopyMulti(
+                    language,
+                    ko: '다음',
+                    en: 'Next',
+                    ja: '次へ',
+                    zhHans: '下一步',
+                    zhHant: '下一步',
+                  ),
+                ),
               ),
             ),
           ],
@@ -128,7 +155,24 @@ class _OnboardingLanguagePageState extends State<OnboardingLanguagePage> {
   }
 }
 
-/// S2 언어 행(높이 72). KO/EN 텍스트 배지 + 고유명 + 우측 check/radio 표시.
+/// S2 언어 행 정의. badge 는 텍스트(국기 이모지 금지, 계약 I3).
+class _LanguageChoice {
+  const _LanguageChoice(this.code, this.badge, this.endonym);
+
+  final String code;
+  final String badge;
+  final String endonym;
+}
+
+const List<_LanguageChoice> _kLanguageChoices = <_LanguageChoice>[
+  _LanguageChoice('ko', 'KO', '한국어'),
+  _LanguageChoice('en', 'EN', 'English'),
+  _LanguageChoice('ja', 'JA', '日本語'),
+  _LanguageChoice('zh-Hans', '简', '简体中文'),
+  _LanguageChoice('zh-Hant', '繁', '繁體中文'),
+];
+
+/// S2 언어 행(높이 72). 텍스트 배지 + 고유명 + 우측 check/radio 표시.
 class _LanguageRow extends StatelessWidget {
   const _LanguageRow({
     required this.badge,
@@ -205,7 +249,7 @@ class _LanguageRow extends StatelessWidget {
   }
 }
 
-/// KO/EN 텍스트 배지(국기 이모지 대체). 00-ground-truth §4: 텍스트 배지.
+/// KO/EN/JA/简/繁 텍스트 배지(국기 이모지 대체). 00-ground-truth §4: 텍스트 배지.
 class _LanguageBadge extends StatelessWidget {
   const _LanguageBadge({required this.code, required this.selected});
 

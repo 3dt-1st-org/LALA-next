@@ -56,8 +56,22 @@ class PlanSlotTile extends StatelessWidget {
     final indoorOutdoorLabel = slot.indoorOutdoor == null
         ? null
         : (slot.indoorOutdoor == 'indoor'
-              ? (language == 'ko' ? '실내' : 'Indoor')
-              : (language == 'ko' ? '야외' : 'Outdoor'));
+              ? lalaCopyMulti(
+                  language,
+                  ko: '실내',
+                  en: 'Indoor',
+                  ja: '屋内',
+                  zhHans: '室内',
+                  zhHant: '室內',
+                )
+              : lalaCopyMulti(
+                  language,
+                  ko: '야외',
+                  en: 'Outdoor',
+                  ja: '屋外',
+                  zhHans: '室外',
+                  zhHant: '室外',
+                ));
     // V3-C D2/D3/D4 투영: forecast_window(예보) · air_quality_bad(야외 먼지) ·
     // closure_state(운영 상태). null 은 honest-empty(placeholder 없음/unknown).
     final forecastWindowText = planSlotForecastWindowLabel(slot, language);
@@ -429,8 +443,22 @@ class _PlanSlotMetaChip extends StatelessWidget {
 String _visitBadgeLabel(String status, String language) {
   final visited = status.trim().toLowerCase() == 'visited';
   return visited
-      ? lalaCopy(language, ko: '방문함', en: 'Visited')
-      : lalaCopy(language, ko: '예정', en: 'Planned');
+      ? lalaCopyMulti(
+  language,
+  ko: '방문함',
+  en: 'Visited',
+  ja: '訪問済み',
+  zhHans: '已到访',
+  zhHant: '已到訪',
+)
+      : lalaCopyMulti(
+  language,
+  ko: '예정',
+  en: 'Planned',
+  ja: '予定',
+  zhHans: '计划中',
+  zhHant: '計畫中',
+);
 }
 
 /// V5-B VISIT badge: planned ↔ visited, icon+text+color (never color-alone).
@@ -482,10 +510,13 @@ class _VisitBadge extends StatelessWidget {
       return chip;
     }
     // Min 44dp touch target (§13.5); the toggle persists via SlotVisitStore.
-    final toggleLabel = lalaCopy(
+    final toggleLabel = lalaCopyMulti(
       language,
       ko: visited ? '방문 취소' : '방문 체크인',
       en: visited ? 'Undo check-in' : 'Check in',
+      ja: visited ? 'チェックインを取り消す' : 'チェックイン',
+      zhHans: visited ? '取消到访' : '到访签到',
+      zhHant: visited ? '取消到訪' : '到訪簽到',
     );
     return ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 44),

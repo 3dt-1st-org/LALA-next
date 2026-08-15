@@ -84,10 +84,13 @@ class DockDocentPreview extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        lalaCopy(
+                        lalaCopyMulti(
                           language,
                           ko: '${placeDisplayName(place, language)} 도슨트',
                           en: '${placeDisplayName(place, language)} docent',
+                          ja: '${placeDisplayName(place, language)} ガイド',
+                          zhHans: '${placeDisplayName(place, language)} 讲解',
+                          zhHant: '${placeDisplayName(place, language)} 導覽',
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,

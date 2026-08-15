@@ -25,7 +25,14 @@ class AccountSettingsSection extends StatelessWidget {
         if (state.status == LalaAuthStatus.disabled) {
           return SettingsSection(
             key: const ValueKey('account-panel'),
-            title: lalaCopy(language, ko: '계정', en: 'Account'),
+            title: lalaCopyMulti(
+              language,
+              ko: '계정',
+              en: 'Account',
+              ja: 'アカウント',
+              zhHans: '账户',
+              zhHant: '帳戶',
+            ),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -36,11 +43,14 @@ class AccountSettingsSection extends StatelessWidget {
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  lalaCopy(
-                    language,
-                    ko: '계정 로그인을 사용할 수 없어요',
-                    en: 'Sign-in unavailable',
-                  ),
+                  lalaCopyMulti(
+                      language,
+                      ko: '계정 로그인을 사용할 수 없어요',
+                      en: 'Sign-in unavailable',
+                      ja: 'ログインは利用できません',
+                      zhHans: '登录不可用',
+                      zhHant: '登入不可用',
+                    ),
                   style: const TextStyle(
                     color: Color(0xFF64748B),
                     fontSize: 12,
@@ -52,7 +62,14 @@ class AccountSettingsSection extends StatelessWidget {
           );
         }
         return SettingsSection(
-          title: lalaCopy(language, ko: '계정', en: 'Account'),
+          title: lalaCopyMulti(
+              language,
+              ko: '계정',
+              en: 'Account',
+              ja: 'アカウント',
+              zhHans: '账户',
+              zhHant: '帳戶',
+            ),
           child: Container(
             key: const ValueKey('account-panel'),
             constraints: const BoxConstraints(minHeight: 72),
@@ -77,7 +94,14 @@ class AccountSettingsSection extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Text(
-            lalaCopy(language, ko: '계정 처리 중', en: 'Updating account'),
+            lalaCopyMulti(
+              language,
+              ko: '계정 처리 중',
+              en: 'Updating account',
+              ja: 'アカウントを処理中',
+              zhHans: '正在处理账户',
+              zhHant: '正在處理帳戶',
+            ),
             style: const TextStyle(
               color: Color(0xFF475569),
               fontWeight: FontWeight.w800,
@@ -97,18 +121,30 @@ class AccountSettingsSection extends StatelessWidget {
               Expanded(
                 child: AccountStatusRow(
                   icon: Icons.person_outline,
-                  label: lalaCopy(
-                    language,
-                    ko: '게스트로 이용 중',
-                    en: 'Using LALA as a guest',
-                  ),
+                  label: lalaCopyMulti(
+                      language,
+                      ko: '게스트로 이용 중',
+                      en: 'Using LALA as a guest',
+                      ja: 'ゲストとして利用中',
+                      zhHans: '正在以访客身份使用',
+                      zhHant: '正在以訪客身分使用',
+                    ),
                 ),
               ),
               TextButton.icon(
                 key: const ValueKey('account-sign-in'),
                 onPressed: controller.signIn,
                 icon: const Icon(Icons.login, size: 20),
-                label: Text(lalaCopy(language, ko: '로그인', en: 'Sign in')),
+                label: Text(
+              lalaCopyMulti(
+                language,
+                ko: '로그인',
+                en: 'Sign in',
+                ja: 'ログイン',
+                zhHans: '登录',
+                zhHant: '登入',
+              ),
+            ),
               ),
             ],
           ),
@@ -129,7 +165,14 @@ class AccountSettingsSection extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                lalaCopy(language, ko: '로그인됨', en: 'Signed in'),
+                lalaCopyMulti(
+              language,
+              ko: '로그인됨',
+              en: 'Signed in',
+              ja: 'ログイン済み',
+              zhHans: '已登录',
+              zhHant: '已登入',
+            ),
                 style: const TextStyle(
                   color: Color(0xFF1E293B),
                   fontWeight: FontWeight.w900,
@@ -138,7 +181,14 @@ class AccountSettingsSection extends StatelessWidget {
             ),
             IconButton(
               key: const ValueKey('account-sign-out'),
-              tooltip: lalaCopy(language, ko: '로그아웃', en: 'Sign out'),
+              tooltip: lalaCopyMulti(
+              language,
+              ko: '로그아웃',
+              en: 'Sign out',
+              ja: 'ログアウト',
+              zhHans: '退出登录',
+              zhHant: '登出',
+            ),
               onPressed: controller.signOut,
               icon: const Icon(Icons.logout),
             ),
@@ -156,7 +206,16 @@ class AccountSettingsSection extends StatelessWidget {
             foregroundColor: const Color(0xFFB42318),
             textStyle: const TextStyle(fontWeight: FontWeight.w900),
           ),
-          child: Text(lalaCopy(language, ko: '계정 삭제', en: 'Delete account')),
+          child: Text(
+              lalaCopyMulti(
+                language,
+                ko: '계정 삭제',
+                en: 'Delete account',
+                ja: 'アカウントを削除',
+                zhHans: '删除账户',
+                zhHant: '刪除帳戶',
+              ),
+            ),
         ),
       ],
     );
@@ -167,19 +226,40 @@ class AccountSettingsSection extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         key: const ValueKey('account-delete-dialog'),
-        title: Text(lalaCopy(language, ko: '계정을 삭제할까요?', en: 'Delete account?')),
-        content: Text(
-          lalaCopy(
-            language,
-            ko: '계정과 연결된 데이터가 삭제되며 되돌릴 수 없습니다.',
-            en: 'Your account data will be deleted and cannot be restored.',
+        title: Text(
+            lalaCopyMulti(
+              language,
+              ko: '계정을 삭제할까요?',
+              en: 'Delete account?',
+              ja: 'アカウントを削除しますか？',
+              zhHans: '要删除账户吗？',
+              zhHant: '要刪除帳戶嗎？',
+            ),
           ),
+        content: Text(
+          lalaCopyMulti(
+              language,
+              ko: '계정과 연결된 데이터가 삭제되며 되돌릴 수 없습니다.',
+              en: 'Your account data will be deleted and cannot be restored.',
+              ja: 'アカウントに関連するデータが削除され、元に戻せません。',
+              zhHans: '与账户关联的数据将被删除且无法恢复。',
+              zhHant: '與帳戶相關的資料將被刪除且無法復原。',
+            ),
         ),
         actions: [
           TextButton(
             key: const ValueKey('account-delete-cancel'),
             onPressed: () => Navigator.of(context).pop(false),
-            child: Text(lalaCopy(language, ko: '취소', en: 'Cancel')),
+            child: Text(
+              lalaCopyMulti(
+                language,
+                ko: '취소',
+                en: 'Cancel',
+                ja: 'キャンセル',
+                zhHans: '取消',
+                zhHant: '取消',
+              ),
+            ),
           ),
           TextButton(
             key: const ValueKey('account-delete-confirm'),
@@ -187,7 +267,16 @@ class AccountSettingsSection extends StatelessWidget {
             style: TextButton.styleFrom(
               foregroundColor: const Color(0xFFB42318),
             ),
-            child: Text(lalaCopy(language, ko: '삭제', en: 'Delete')),
+            child: Text(
+              lalaCopyMulti(
+                language,
+                ko: '삭제',
+                en: 'Delete',
+                ja: '削除',
+                zhHans: '删除',
+                zhHant: '刪除',
+              ),
+            ),
           ),
         ],
       ),
@@ -236,11 +325,14 @@ class AccountErrorText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Text(
-      lalaCopy(
-        language,
-        ko: '계정 요청을 완료하지 못했어요. 다시 시도해 주세요.',
-        en: 'We could not complete the account request. Please try again.',
-      ),
+      lalaCopyMulti(
+          language,
+          ko: '계정 요청을 완료하지 못했어요. 다시 시도해 주세요.',
+          en: 'We could not complete the account request. Please try again.',
+          ja: 'アカウントリクエストを完了できませんでした。もう一度お試しください。',
+          zhHans: '无法完成账户请求，请重试。',
+          zhHant: '無法完成帳戶請求，請重試。',
+        ),
       style: const TextStyle(
         color: Color(0xFFB42318),
         fontSize: 12,

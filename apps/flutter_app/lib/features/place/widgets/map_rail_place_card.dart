@@ -38,10 +38,13 @@ class MapRailPlaceCard extends StatelessWidget {
     final region = placeRegionLabel(place, language);
     // §13.5: category 라벨 텍스트. CategoryBadge/시맨틱 라벨과 동일 원문(categoryLabel).
     final category = categoryLabel(place.category, language: language);
-    final distance = lalaCopy(
+    final distance = lalaCopyMulti(
       language,
       ko: '도보 ${place.distanceM}m',
       en: '${place.distanceM}m walk',
+      ja: '徒歩 ${place.distanceM}m',
+      zhHans: '步行 ${place.distanceM}米',
+      zhHant: '步行 ${place.distanceM}公尺',
     );
     // V1-RC4: 타일/독/상세와 동일 SSOT 원문. null/빔이면 하단 라인을 honest 생략한다.
     final freshnessText = placeFreshnessText(place);
@@ -145,7 +148,12 @@ class MapRailPlaceCard extends StatelessWidget {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              '$category · $region · $distance',
+                              // V6 §6: 번역 없는 정적 지역명은 영문 폴백을 그대로
+                              // 쓰되 '영문 제공' 배지로 폴백을 고지한다(무혼합·무침묵).
+                              placeNameUsesEnglishFallback(place, language)
+                                  ? '$category · $region · $distance · '
+                                        '${englishFallbackDisclosureLabel(language)}'
+                                  : '$category · $region · $distance',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(

@@ -277,15 +277,21 @@ class _SearchPageState extends State<SearchPage> {
 
   String _failureCopy(_SearchLoadStatus status) {
     return switch (status) {
-      _SearchLoadStatus.unavailable => lalaCopy(
+      _SearchLoadStatus.unavailable => lalaCopyMulti(
         _language,
         ko: '일시적으로 서버에 연결할 수 없어요. 네트워크를 확인 후 다시 시도해 주세요.',
         en: 'Could not reach the service. Check your connection and try again.',
+        ja: 'サーバーに一時的に接続できません。ネットワークを確認してもう一度お試しください。',
+        zhHans: '暂时无法连接服务器，请检查网络后重试。',
+        zhHant: '暫時無法連線伺服器，請檢查網路後重試。',
       ),
-      _SearchLoadStatus.error => lalaCopy(
+      _SearchLoadStatus.error => lalaCopyMulti(
         _language,
         ko: '추천 장소를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.',
         en: 'Could not load recommendations. Please try again shortly.',
+        ja: 'おすすめスポットを読み込めませんでした。しばらくしてからもう一度お試しください。',
+        zhHans: '无法加载推荐地点，请稍后重试。',
+        zhHant: '無法載入推薦地點，請稍後重試。',
       ),
       _SearchLoadStatus.loading ||
       _SearchLoadStatus.loaded ||
@@ -426,10 +432,13 @@ class _SearchHeader extends StatelessWidget {
             context,
           ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
           decoration: InputDecoration(
-            hintText: lalaCopy(
+            hintText: lalaCopyMulti(
               language,
               ko: '장소·지역 검색',
               en: 'Search places or areas',
+              ja: 'スポット・地域を検索',
+              zhHans: '搜索地点或地区',
+              zhHant: '搜尋地點或地區',
             ),
             hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
             prefixIcon: const Icon(
@@ -437,7 +446,14 @@ class _SearchHeader extends StatelessWidget {
               color: Color(0xFF64748B),
             ),
             suffixIcon: IconButton(
-              tooltip: lalaCopy(language, ko: '필터', en: 'Filter'),
+              tooltip: lalaCopyMulti(
+                language,
+                ko: '필터',
+                en: 'Filter',
+                ja: 'フィルター',
+                zhHans: '筛选',
+                zhHant: '篩選',
+              ),
               onPressed: onResetFilters,
               icon: const Icon(
                 Icons.filter_list_rounded,
@@ -548,10 +564,13 @@ class _SearchLoadingView extends StatelessWidget {
     // 시맨틱: 로딩 상태를 화면 읽기 사용자에게 알린다(진행률/단계 주장 없이).
     return Semantics(
       container: true,
-      label: lalaCopy(
+      label: lalaCopyMulti(
         language,
         ko: '추천 장소를 불러오는 중',
         en: 'Loading recommendations',
+        ja: 'おすすめスポットを読み込み中',
+        zhHans: '正在加载推荐地点',
+        zhHant: '正在載入推薦地點',
       ),
       child: ListView.builder(
         key: const ValueKey('search-loading-view'),
@@ -634,14 +653,26 @@ class _SearchFailureView extends StatelessWidget {
     final accent = isUnavailable
         ? const Color(0xFF475569)
         : const Color(0xFFB45309);
-    final retryLabel = lalaCopy(language, ko: '재시도', en: 'Retry');
+    final retryLabel = lalaCopyMulti(
+      language,
+      ko: '재시도',
+      en: 'Retry',
+      ja: '再試行',
+      zhHans: '重试',
+      zhHant: '重試',
+    );
     // 시맨틱: 화면 읽기 사용자에게 상태 종류까지 전달.
-    final semanticsLabel = lalaCopy(
+    final semanticsLabel = lalaCopyMulti(
       language,
       ko: isUnavailable ? '서버 연결 불가. $message' : '추천 불러오기 실패. $message',
       en: isUnavailable
           ? 'Service unreachable. $message'
           : 'Failed to load recommendations. $message',
+      ja: isUnavailable
+          ? 'サーバーに接続できません。$message'
+          : 'おすすめの読み込みに失敗しました。$message',
+      zhHans: isUnavailable ? '无法连接服务器。$message' : '加载推荐失败。$message',
+      zhHant: isUnavailable ? '無法連線伺服器。$message' : '載入推薦失敗。$message',
     );
     return Center(
       child: SingleChildScrollView(
@@ -703,7 +734,7 @@ class _SearchEmptyView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final message = lalaCopy(
+    final message = lalaCopyMulti(
       language,
       // Why: the data already loaded — an empty list is an empty result, not a
       // "loading" or failure state. Copy is distinct from both the skeleton and
@@ -712,13 +743,28 @@ class _SearchEmptyView extends StatelessWidget {
       en: hasQuery
           ? 'No places match your search.'
           : 'No recommendations here yet.',
+      ja: hasQuery
+          ? '条件に合うスポットが見つかりません。'
+          : 'この周辺にはまだおすすめがありません。',
+      zhHans: hasQuery ? '没有符合搜索条件的地点。' : '这附近暂无推荐。',
+      zhHant: hasQuery ? '沒有符合搜尋條件的地點。' : '這附近暫無推薦。',
     );
-    final semanticsLabel = lalaCopy(
+    final semanticsLabel = lalaCopyMulti(
       language,
       ko: '빈 추천. $message',
       en: 'Empty recommendations. $message',
+      ja: 'おすすめなし。$message',
+      zhHans: '暂无推荐。$message',
+      zhHant: '暫無推薦。$message',
     );
-    final actionLabel = lalaCopy(language, ko: '필터 초기화', en: 'Reset filters');
+    final actionLabel = lalaCopyMulti(
+      language,
+      ko: '필터 초기화',
+      en: 'Reset filters',
+      ja: 'フィルターをリセット',
+      zhHans: '重置筛选',
+      zhHant: '重設篩選',
+    );
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 24),

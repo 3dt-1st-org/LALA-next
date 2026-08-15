@@ -30,8 +30,22 @@ class UserSettingsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = lalaCopy(uiLanguage, ko: '설정', en: 'Settings');
-    final closeLabel = lalaCopy(uiLanguage, ko: '닫기', en: 'Close');
+    final title = lalaCopyMulti(
+      uiLanguage,
+      ko: '설정',
+      en: 'Settings',
+      ja: '設定',
+      zhHans: '设置',
+      zhHant: '設定',
+    );
+    final closeLabel = lalaCopyMulti(
+      uiLanguage,
+      ko: '닫기',
+      en: 'Close',
+      ja: '閉じる',
+      zhHans: '关闭',
+      zhHant: '關閉',
+    );
     return DraggableScrollableSheet(
       expand: false,
       initialChildSize: 1,
@@ -98,19 +112,25 @@ class UserSettingsSheet extends StatelessWidget {
                 language: uiLanguage,
               ),
               SettingsSection(
-                title: lalaCopy(
-                  uiLanguage,
-                  ko: '개인정보 동의 안내',
-                  en: 'Privacy notice',
-                ),
+                title: lalaCopyMulti(
+                    uiLanguage,
+                    ko: '개인정보 동의 안내',
+                    en: 'Privacy notice',
+                    ja: 'プライバシーに関するお知らせ',
+                    zhHans: '隐私须知',
+                    zhHant: '隱私須知',
+                  ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      lalaCopy(
+                      lalaCopyMulti(
                         uiLanguage,
                         ko: '서비스 품질 향상을 위해 최소한의 이용 정보와 위치 기반 추천 정보가 사용됩니다.',
                         en: 'LALA uses minimal usage and location signals to improve recommendations.',
+                        ja: 'サービス品質向上のため、最小限の利用情報と位置情報に基づく推奨情報が使用されます。',
+                        zhHans: '为提升服务质量，将使用最少的用量和基于位置的推荐信息。',
+                        zhHant: '為提升服務品質，將使用最少的用量和基於位置的推薦資訊。',
                       ),
                       style: const TextStyle(
                         color: Color(0xFF64748B),
@@ -128,37 +148,52 @@ class UserSettingsSheet extends StatelessWidget {
                         textStyle: const TextStyle(fontWeight: FontWeight.w900),
                       ),
                       child: Text(
-                        lalaCopy(uiLanguage, ko: '자세히 보기', en: 'Learn more'),
+                        lalaCopyMulti(
+      uiLanguage,
+      ko: '자세히 보기',
+      en: 'Learn more',
+      ja: '詳しく見る',
+      zhHans: '了解更多',
+      zhHant: '了解更多',
+    ),
                       ),
                     ),
                   ],
                 ),
               ),
               SettingsSection(
-                title: lalaCopy(
-                  uiLanguage,
-                  ko: '위치기반 정보 제공 동의',
-                  en: 'Location recommendations',
-                ),
+                title: lalaCopyMulti(
+                    uiLanguage,
+                    ko: '위치기반 정보 제공 동의',
+                    en: 'Location recommendations',
+                    ja: '位置情報に基づく情報提供の同意',
+                    zhHans: '基于位置的信息提供授权',
+                    zhHant: '基於位置的資訊提供同意',
+                  ),
                 trailing: Switch(
                   value: locationConsentEnabled,
                   onChanged: onLocationConsentChanged,
                 ),
               ),
               SettingsSection(
-                title: lalaCopy(uiLanguage, ko: '언어', en: 'Language'),
+                title: lalaCopyMulti(
+                  uiLanguage,
+                  ko: '언어',
+                  en: 'Language',
+                  ja: '言語',
+                  zhHans: '语言',
+                  zhHant: '語言',
+                ),
+                // V6: 다섯 언어. 각 세그먼트 라벨은 해당 언어 고유명(국기 이모지 금지).
+                // SegmentedButton 은 행이 좁아 짧은 고유명(KO/EN/JA/简/繁)을 쓴다.
                 child: SegmentedButton<String>(
                   segments: [
-                    ButtonSegment(
-                      value: 'ko',
-                      label: Text(languageOptionLabel('ko', uiLanguage)),
-                    ),
-                    ButtonSegment(
-                      value: 'en',
-                      label: Text(languageOptionLabel('en', uiLanguage)),
-                    ),
+                    for (final code in kLalaLanguages)
+                      ButtonSegment(value: code, label: Text(code)),
                   ],
-                  selected: {uiLanguage},
+                  selected: {
+                    normalizeLalaLanguage(uiLanguage),
+                  },
                   onSelectionChanged: (values) =>
                       onLanguageChanged(values.first),
                   style: SegmentedButton.styleFrom(
@@ -169,7 +204,14 @@ class UserSettingsSheet extends StatelessWidget {
                 ),
               ),
               SettingsSection(
-                title: lalaCopy(uiLanguage, ko: '글꼴 크기', en: 'Font size'),
+                title: lalaCopyMulti(
+      uiLanguage,
+      ko: '글꼴 크기',
+      en: 'Font size',
+      ja: 'フォントサイズ',
+      zhHans: '字体大小',
+      zhHant: '字型大小',
+    ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -192,9 +234,23 @@ class UserSettingsSheet extends StatelessWidget {
                 ),
               ),
               SettingsSection(
-                title: lalaCopy(uiLanguage, ko: '앱 정보', en: 'App info'),
+                title: lalaCopyMulti(
+      uiLanguage,
+      ko: '앱 정보',
+      en: 'App info',
+      ja: 'アプリ情報',
+      zhHans: '应用信息',
+      zhHant: '應用資訊',
+    ),
                 child: MetricRow(
-                  label: lalaCopy(uiLanguage, ko: '버전', en: 'Version'),
+                  label: lalaCopyMulti(
+      uiLanguage,
+      ko: '버전',
+      en: 'Version',
+      ja: 'バージョン',
+      zhHans: '版本',
+      zhHant: '版本',
+    ),
                   value: '1.0',
                 ),
               ),
@@ -209,10 +265,20 @@ class UserSettingsSheet extends StatelessWidget {
 /// 언어 옵션 라벨(C3 추출 — main.dart 의 _languageOptionLabel).
 /// 설정 시트에서만 사용되는 feature 전용 헬퍼.
 String languageOptionLabel(String optionLanguage, String uiLanguage) {
-  if (isLalaEnglish(uiLanguage)) {
-    return optionLanguage == 'en' ? 'English' : 'Korean';
+  switch (normalizeLalaLanguage(optionLanguage)) {
+    case 'en':
+      return 'English';
+    case 'ja':
+      return '日本語';
+    case 'zh-Hans':
+      return '简体中文';
+    case 'zh-Hant':
+      return '繁體中文';
+    case 'ko':
+      break;
   }
-  return optionLanguage == 'en' ? '영어' : '한국어';
+  // UI 언어가 ko 이면 '한국어', 그 외 로케일에서는 'Korean' 으로 표기.
+  return normalizeLalaLanguage(uiLanguage) == 'ko' ? '한국어' : 'Korean';
 }
 
 /// 앱 정보 표시용 라벨/값 행(C3 추출 — main.dart 의 _MetricRow).

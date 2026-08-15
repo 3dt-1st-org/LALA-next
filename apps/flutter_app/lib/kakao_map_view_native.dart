@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io' as io;
 
 import 'package:flutter/material.dart';
+
+import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import 'kakao_map_fallback.dart';
@@ -20,7 +22,8 @@ Widget buildKakaoMapView({
   final normalizedKey = javascriptKey.trim();
   if (normalizedKey.isEmpty) {
     return _KakaoMapNativeUnavailable(
-      message: language == 'en'
+      // V6: ko 만 KO 안내문(방문객 로케일 EN 폴백).
+      message: normalizeLalaLanguage(language) != 'ko'
           ? 'The live map is not available right now.'
           : '현재 지도를 표시할 수 없습니다.',
       language: language,
@@ -33,7 +36,8 @@ Widget buildKakaoMapView({
 
   if (!io.Platform.isIOS && !io.Platform.isAndroid) {
     return _KakaoMapNativeUnavailable(
-      message: language == 'en'
+      // V6: ko 만 KO 안내문(방문객 로케일 EN 폴백).
+      message: normalizeLalaLanguage(language) != 'ko'
           ? 'The live map is not available right now.'
           : '현재 지도를 표시할 수 없습니다.',
       language: language,

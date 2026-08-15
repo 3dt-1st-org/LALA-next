@@ -16,7 +16,10 @@ String? singleLanguageText(String? value, String language) {
   if (trimmed == null || trimmed.isEmpty) {
     return null;
   }
-  if (isLalaEnglish(language)) {
+  // V6: ko 이외(en/ja/zh-Hans/zh-Hant)는 모두 "한국어 없는 단일 언어"를 요구한다.
+  // KO 문자가 섞여 있으면 제거를 시도하고, KO 전용 텍스트는 null(폴백)로 폐기한다.
+  // Why: a JA/ZH screen must never surface a Korean fragment (contract I1).
+  if (normalizeLalaLanguage(language) != 'ko') {
     if (containsKorean(trimmed)) {
       return extractEnglishText(trimmed);
     }

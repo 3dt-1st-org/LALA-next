@@ -23,7 +23,14 @@ class ManualLocationEmptyState extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              lalaCopy(language, ko: '검색 결과가 없습니다', en: 'No matching area found'),
+              lalaCopyMulti(
+        language,
+        ko: '검색 결과가 없습니다',
+        en: 'No matching area found',
+        ja: '該当する地域が見つかりません',
+        zhHans: '未找到匹配地区',
+        zhHant: '未找到符合地區',
+      ),
               style: const TextStyle(
                 color: Color(0xFF64748B),
                 fontWeight: FontWeight.w800,

@@ -150,17 +150,27 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   void _onWsError(ChatWsError error) {
     if (!mounted) return;
     final message = error.message ??
-        lalaCopy(_language, ko: '메시지 전송에 실패했어요.', en: 'Failed to send message.');
+        lalaCopyMulti(
+  _language,
+  ko: '메시지 전송에 실패했어요.',
+  en: 'Failed to send message.',
+  ja: 'メッセージの送信に失敗しました。',
+  zhHans: '发送消息失败。',
+  zhHant: '傳送訊息失敗。',
+);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), duration: const Duration(seconds: 3)),
     );
   }
 
-  String _fallbackError() => lalaCopy(
-        _language,
-        ko: '메시지를 불러오지 못했어요.',
-        en: 'Could not load messages.',
-      );
+  String _fallbackError() => lalaCopyMulti(
+          _language,
+          ko: '메시지를 불러오지 못했어요.',
+          en: 'Could not load messages.',
+          ja: 'メッセージを読み込めませんでした。',
+          zhHans: '无法加载消息。',
+          zhHant: '無法載入訊息。',
+        );
 
   bool _isMine(ChatMessage message) {
     final me = _currentUserId;
@@ -197,7 +207,14 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
         title: Text(
-          lalaCopy(_language, ko: '채팅방', en: 'Chat room'),
+          lalaCopyMulti(
+  _language,
+  ko: '채팅방',
+  en: 'Chat room',
+  ja: 'チャットルーム',
+  zhHans: '聊天室',
+  zhHant: '聊天室',
+),
           style: const TextStyle(fontWeight: FontWeight.w900),
         ),
         backgroundColor: theme.colorScheme.surface,
@@ -286,19 +303,47 @@ class _ConnectionBadge extends StatelessWidget {
     final (color, label) = switch (status) {
       ChatWsStatus.connected => (
         const Color(0xFF22C55E),
-        lalaCopy(language, ko: '온라인', en: 'Online'),
+        lalaCopyMulti(
+  language,
+  ko: '온라인',
+  en: 'Online',
+  ja: 'オンライン',
+  zhHans: '在线',
+  zhHant: '線上',
+),
       ),
       ChatWsStatus.connecting => (
         const Color(0xFFF59E0B),
-        lalaCopy(language, ko: '연결 중', en: 'Connecting'),
+        lalaCopyMulti(
+  language,
+  ko: '연결 중',
+  en: 'Connecting',
+  ja: '接続中',
+  zhHans: '连接中',
+  zhHant: '連線中',
+),
       ),
       ChatWsStatus.error => (
         const Color(0xFFEF4444),
-        lalaCopy(language, ko: '연결 끊김', en: 'Offline'),
+        lalaCopyMulti(
+  language,
+  ko: '연결 끊김',
+  en: 'Offline',
+  ja: 'オフライン',
+  zhHans: '已断开',
+  zhHant: '已斷線',
+),
       ),
       ChatWsStatus.disconnected => (
         const Color(0xFF94A3B8),
-        lalaCopy(language, ko: '미연결', en: 'Idle'),
+        lalaCopyMulti(
+  language,
+  ko: '미연결',
+  en: 'Idle',
+  ja: '未接続',
+  zhHans: '未连接',
+  zhHant: '未連線',
+),
       ),
     };
     return Center(
@@ -472,11 +517,14 @@ class _ChatInputBar extends StatelessWidget {
               textInputAction: TextInputAction.send,
               onSubmitted: (_) => onSend(),
               decoration: InputDecoration(
-                hintText: lalaCopy(
-                  language,
-                  ko: '메시지를 입력하세요',
-                  en: 'Type a message',
-                ),
+                hintText: lalaCopyMulti(
+                    language,
+                    ko: '메시지를 입력하세요',
+                    en: 'Type a message',
+                    ja: 'メッセージを入力',
+                    zhHans: '输入消息',
+                    zhHant: '輸入訊息',
+                  ),
                 isDense: true,
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 14,
@@ -552,7 +600,14 @@ class _ChatErrorView extends StatelessWidget {
             FilledButton.icon(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh_rounded, size: 18),
-              label: Text(lalaCopy(language, ko: '재시도', en: 'Retry')),
+              label: Text(lalaCopyMulti(
+      language,
+      ko: '재시도',
+      en: 'Retry',
+      ja: '再試行',
+      zhHans: '重试',
+      zhHant: '重試',
+    )),
               style: FilledButton.styleFrom(
                 backgroundColor: theme.colorScheme.primary,
                 foregroundColor: theme.colorScheme.onPrimary,
@@ -576,11 +631,14 @@ class _ChatEmptyView extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Text(
-          lalaCopy(
-            language,
-            ko: '아직 메시지가 없어요.\n첫 인사를 남겨보세요!',
-            en: 'No messages yet.\nSay hello!',
-          ),
+          lalaCopyMulti(
+              language,
+              ko: '아직 메시지가 없어요.\n첫 인사를 남겨보세요!',
+              en: 'No messages yet.\nSay hello!',
+              ja: 'まだメッセージがありません。\n最初のあいさつをどうぞ！',
+              zhHans: '还没有消息。\n来打个招呼吧！',
+              zhHant: '還沒有訊息。\n來打個招呼吧！',
+            ),
           textAlign: TextAlign.center,
           style: const TextStyle(
             color: Color(0xFF64748B),

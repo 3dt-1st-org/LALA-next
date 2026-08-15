@@ -10,7 +10,14 @@ class PrivacyDetailsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final closeLabel = lalaCopy(language, ko: '닫기', en: 'Close');
+    final closeLabel = lalaCopyMulti(
+      language,
+      ko: '닫기',
+      en: 'Close',
+      ja: '閉じる',
+      zhHans: '关闭',
+      zhHant: '關閉',
+    );
     return DraggableScrollableSheet(
       expand: false,
       initialChildSize: 0.54,
@@ -48,7 +55,14 @@ class PrivacyDetailsSheet extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      lalaCopy(language, ko: '개인정보 동의 안내', en: 'Privacy notice'),
+                      lalaCopyMulti(
+      language,
+      ko: '개인정보 동의 안내',
+      en: 'Privacy notice',
+      ja: 'プライバシーに関するお知らせ',
+      zhHans: '隐私须知',
+      zhHant: '隱私須知',
+    ),
                       style: const TextStyle(
                         color: Color(0xFF111827),
                         fontSize: 18,
@@ -70,24 +84,40 @@ class PrivacyDetailsSheet extends StatelessWidget {
               const SizedBox(height: 12),
               PrivacyDetailRow(
                 icon: Icons.my_location_outlined,
-                title: lalaCopy(language, ko: '위치 기반 추천', en: 'Location context'),
-                body: lalaCopy(
+                title: lalaCopyMulti(
+      language,
+      ko: '위치 기반 추천',
+      en: 'Location context',
+      ja: '位置情報に基づくおすすめ',
+      zhHans: '基于位置的推荐',
+      zhHant: '基於位置的推薦',
+    ),
+                body: lalaCopyMulti(
                   language,
                   ko: '현재 화면의 지도 중심과 반경을 사용해 가까운 장소, 날씨, 일정을 계산합니다.',
                   en: 'LALA uses the current map center and radius for nearby places, weather, and plans.',
+                  ja: '現在の地図の中心と半径を使って、近くのスポット・気象・プランを計算します。',
+                  zhHans: '使用当前地图中心和半径计算附近的地点、天气和计划。',
+                  zhHant: '使用目前地圖中心和半徑計算附近的地點、天氣和計畫。',
                 ),
               ),
               PrivacyDetailRow(
                 icon: Icons.public_outlined,
-                title: lalaCopy(
+                title: lalaCopyMulti(
                   language,
                   ko: '공식 데이터 우선',
                   en: 'Official data first',
+                  ja: '公式データ優先',
+                  zhHans: '官方数据优先',
+                  zhHant: '官方資料優先',
                 ),
-                body: lalaCopy(
+                body: lalaCopyMulti(
                   language,
                   ko: '관광·문화·날씨·지역 소비 신호는 공식 기관 데이터와 공개 데이터를 우선 사용합니다.',
                   en: 'Tourism, culture, weather, and local signals prioritize official and public datasets.',
+                  ja: '観光・文化・気象・地域消費のシグナルは、公式機関データと公開データを優先して使用します。',
+                  zhHans: '旅游、文化、天气和本地消费信号优先使用官方机构和公开数据。',
+                  zhHant: '觀光、文化、天氣和在地消費訊號優先使用官方機構和公開資料。',
                 ),
               ),
             ],

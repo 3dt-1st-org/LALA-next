@@ -15,14 +15,23 @@ import '../../shared/l10n/lala_copy.dart';
 import '../place/place_helpers.dart';
 
 /// Estimate marker appended to every SPEND band so it is never read as fact.
-String spendBandMarkerLabel(String language) =>
-    lalaCopy(language, ko: '예산 구간', en: 'budget band');
+String spendBandMarkerLabel(String language) => lalaCopyMulti(
+      language,
+      ko: '예산 구간',
+      en: 'budget band',
+      ja: '予算目安',
+      zhHans: '预算区间',
+      zhHant: '預算區間',
+    );
 
 /// Honest-unavailable label rendered as its own band when no estimate exists.
-String spendBandUnavailableLabel(String language) => lalaCopy(
+String spendBandUnavailableLabel(String language) => lalaCopyMulti(
       language,
       ko: '예산 구간 미확정',
       en: 'Budget band unavailable',
+      ja: '予算目安は未確定',
+      zhHans: '预算区间未确定',
+      zhHant: '預算區間未確定',
     );
 
 /// A category-band budget estimate for a plan slot (offline, non-authoritative).
@@ -48,12 +57,11 @@ SpendBand? spendBandFor(LalaPlanSlot slot, String language) {
   final category = categoryLabel(place.category, language: language);
   // Compose the KO/EN label through lalaCopy so every user-facing string flows
   // through the single bilingual seam (contract B7).
+  // V6: 확장 로케일은 EN 밴드 문구 + 현지 마커(한국어 노출 금지).
+  final isKo = normalizeLalaLanguage(language) == 'ko';
+  final bandText = isKo ? band.ko : band.en;
   return SpendBand(
-    label: lalaCopy(
-      language,
-      ko: '$category · ${band.ko} (${spendBandMarkerLabel(language)})',
-      en: '$category · ${band.en} (${spendBandMarkerLabel(language)})',
-    ),
+    label: '$category · $bandText (${spendBandMarkerLabel(language)})',
   );
 }
 
