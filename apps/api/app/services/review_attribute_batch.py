@@ -373,7 +373,15 @@ def fetch_review_attribute_candidates(
         ) retained(external_key) ON TRUE
         LEFT JOIN community.posts posts
           ON posts.provider = mentions.provider
-         AND posts.external_key = retained.external_key
+         -- Why: over-bound keys are excluded on BOTH sides of this contract
+         -- (review_mention_ingest drops them at ingest); truncating here would
+         -- make a long key join on a shorter key's digest, so the length guard
+         -- must match the ingest-side hash-input bound exactly.
+         AND length(mentions.provider || '|' || posts.external_key) <= 4096
+         AND encode(
+                digest(mentions.provider || '|' || posts.external_key, 'sha256'),
+                'hex'
+            ) = retained.external_key
         WHERE mentions.place_id IS NOT NULL
           AND coalesce(mentions.organic_mention_count, 0) >= %s
           AND (%s = 'all' OR mentions.category = %s)

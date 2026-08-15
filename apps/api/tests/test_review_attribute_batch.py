@@ -125,6 +125,66 @@ def test_candidate_fetch_requires_active_registered_source_provenance(monkeypatc
     assert "{preprocess,source_name}" in sql
 
 
+def test_candidate_join_is_provider_scoped_digest_with_length_guard(monkeypatch):
+    """S1: the posts join must hash with the ingest-side formula, un-truncated.
+
+    The join may only match when the full provider|key material is within the
+    ingest-side hash-input bound — a `left(..., 4096)` truncation here would let
+    a long key join on a shorter key's digest (collision).
+    """
+    executed = []
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def execute(self, sql, params=None):
+            executed.append((sql, params))
+
+        def fetchall(self):
+            return []
+
+    class Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def cursor(self, **kwargs):
+            return Cursor()
+
+    monkeypatch.setitem(
+        sys.modules,
+        "psycopg2",
+        SimpleNamespace(connect=lambda *args, **kwargs: Connection()),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "psycopg2.extras",
+        SimpleNamespace(RealDictCursor=object()),
+    )
+
+    review_attribute_batch.fetch_review_attribute_candidates(
+        dsn="postgresql://redacted",
+        category="all",
+        min_organic=3,
+        limit=10,
+        connect_timeout=5,
+    )
+
+    sql = executed[0][0]
+    # Digest is computed on the FULL material (no left(..., N) truncation).
+    assert "digest(mentions.provider || '|' || posts.external_key, 'sha256')" in sql
+    join_clause = sql.split("LEFT JOIN community.posts posts")[1].split("WHERE")[0]
+    assert "left(" not in join_clause
+    # Over-bound material cannot join — guard matches the ingest-side bound.
+    assert "length(mentions.provider || '|' || posts.external_key) <= 4096" in sql
+
+
 def test_low_evidence_keeps_review_quality_null():
     candidate = _candidate(category="culture_venue", organic=2)
     enrichment = review_attribute_batch.build_deterministic_enrichments([candidate])[0]
