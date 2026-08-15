@@ -24,13 +24,17 @@ Safety contract (S2):
   3. ``--backup-ref <s3-or-path>`` recording where the controller's backup of
      the affected rows lives (the tool takes no backup itself)
   Missing any one refuses with exit 2 and zero mutation.
-- APPLY re-reads each affected row inside the apply transaction and skips rows
-  that no longer need repair, so concurrent writes are respected and a re-run
-  is idempotent (0 changes the second time).
+- APPLY re-reads each affected row inside the apply transaction with
+  ``SELECT ... FOR UPDATE`` and repairs from that live re-read (never from the
+  stale plan), so a concurrent writer is blocked across re-read→UPDATE and any
+  committed change is preserved rather than overwritten. Re-runs are idempotent
+  (0 changes the second time).
 - Post-apply verification re-scans and reports ``unsafe_after``; target 0
   (non-zero exits 1 so CI/operators see the incomplete state).
 - ``--report <path>`` writes a sanitized JSON artifact (counts/digests only —
-  never a raw value, key, or URL) for the controller's audit trail.
+  never a raw value, key, URL, storage path, or internal row id; even the
+  backup reference is reduced to a sha256 digest) for the controller's audit
+  trail.
 - Any error path goes through redact_secret_text with the DSN as explicit
   secret; no unsafe attribute value is ever placed in a log or report shape.
 """
@@ -38,6 +42,7 @@ Safety contract (S2):
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from datetime import UTC, datetime
@@ -57,6 +62,8 @@ CONFIRM_ENV = "REVIEW_ATTRIBUTE_REPAIR_APPLY"
 CONFIRM_ENV_VALUE = "I-UNDERSTAND-THIS-MUTATES-PRODUCTION"
 JOB_NAME = "place-mention-attribute-repair"
 TARGET = "community.place_mentions_weekly.attributes"
+
+_RESELECT_SQL = "SELECT attributes FROM community.place_mentions_weekly WHERE id = %s FOR UPDATE"
 
 _SELECT_SQL = """
     SELECT
@@ -140,8 +147,9 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _run_scan(args: argparse.Namespace, dsn: str) -> int:
-    conn = _open_connection(dsn, args.connect_timeout)
+    conn = None
     try:
+        conn = _open_connection(dsn, args.connect_timeout)
         with conn:
             with conn.cursor() as cur:
                 scan = _scan_with_limit(cur, args.limit)
@@ -149,7 +157,8 @@ def _run_scan(args: argparse.Namespace, dsn: str) -> int:
         _fail(args, dsn, "scan", exc)
         return 2
     finally:
-        conn.close()
+        if conn is not None:
+            conn.close()
 
     summary = summarize_row_plans(scan["plans"], scanned_row_count=scan["scanned_row_count"])
     payload: dict[str, Any] = {
@@ -166,10 +175,11 @@ def _run_scan(args: argparse.Namespace, dsn: str) -> int:
 
 def _run_apply(args: argparse.Namespace, dsn: str) -> int:
     started_at = datetime.now(UTC)
-    conn = _open_connection(dsn, args.connect_timeout)
+    conn = None
     updated_rows = 0
     before_after: list[dict[str, str]] = []
     try:
+        conn = _open_connection(dsn, args.connect_timeout)
         with conn:
             with conn.cursor() as cur:
                 scan = _scan_with_limit(cur, args.limit)
@@ -193,25 +203,24 @@ def _run_apply(args: argparse.Namespace, dsn: str) -> int:
                     return 2
 
                 # Re-read each affected row's CURRENT attributes inside the same
-                # transaction and repair from live state, so concurrent writes
-                # are respected and re-runs are idempotent (0 changes).
+                # transaction under a row lock (FOR UPDATE), then repair from
+                # that live re-read — never from the stale plan. The lock blocks
+                # concurrent writers across re-read→UPDATE; a writer that
+                # committed before the lock is observed in the re-read and its
+                # change is preserved (unsafe values are still repaired, but
+                # nothing the writer cleaned is re-written from stale state).
                 for plan in plans:
-                    cur.execute(
-                        "SELECT attributes FROM community.place_mentions_weekly WHERE id = %s",
-                        (plan.mention_id,),
-                    )
+                    cur.execute(_RESELECT_SQL, (plan.mention_id,))
                     row = cur.fetchone()
                     if row is None:
                         continue
                     current = _json_object(row[0])
                     if not find_unsafe_values(current, provider=plan.provider):
                         continue  # already repaired by a concurrent/recent run
-                    repaired, _changed = redact_unsafe_values(
-                        current, provider=plan.provider
-                    )
+                    repaired, _changed = redact_unsafe_values(current, provider=plan.provider)
                     before_after.append(
                         {
-                            "mention_id": plan.mention_id,
+                            "row_sha256": row_evidence_sha256(plan.mention_id),
                             "before_sha256": attributes_sha256(current),
                             "after_sha256": attributes_sha256(repaired),
                         }
@@ -225,9 +234,17 @@ def _run_apply(args: argparse.Namespace, dsn: str) -> int:
                 unsafe_after = sum(plan.unsafe_value_count for plan in verify["plans"])
     except Exception as exc:
         _fail(args, dsn, "apply", exc)
+        _best_effort_job_run(
+            args,
+            dsn,
+            started_at,
+            "failed",
+            redact_secret_text(str(exc) or exc.__class__.__name__, (dsn,)),
+        )
         return 2
     finally:
-        conn.close()
+        if conn is not None:
+            conn.close()
 
     _best_effort_job_run(args, dsn, started_at, "succeeded", None)
     payload: dict[str, Any] = {
@@ -235,7 +252,10 @@ def _run_apply(args: argparse.Namespace, dsn: str) -> int:
         "mode": "apply",
         "db_mutation": True,
         "target": TARGET,
-        "backup_ref": args.backup_ref,
+        # Evidence is digest-based: the operator's raw --backup-ref and the
+        # internal mention row ids never enter stdout, the report, or the
+        # job-run record (the raw ref lives only in the controller's ledger).
+        "backup_ref_sha256": backup_ref_sha256(args.backup_ref),
         "scanned_row_count": scan["scanned_row_count"],
         "affected_row_count": len(plans),
         "unsafe_value_count": planned_unsafe,
@@ -271,6 +291,21 @@ def _open_connection(dsn: str, connect_timeout: int):
     import psycopg2
 
     return psycopg2.connect(dsn, connect_timeout=connect_timeout)
+
+
+def backup_ref_sha256(backup_ref: str) -> str:
+    """Non-reversible evidence for the operator's --backup-ref.
+
+    The raw reference can name internal storage (bucket/path); outputs carry
+    this digest so the controller can correlate the run with its ledger entry
+    without the report ever echoing the storage path itself.
+    """
+    return hashlib.sha256(backup_ref.strip().encode("utf-8")).hexdigest()
+
+
+def row_evidence_sha256(mention_id: Any) -> str:
+    """Non-reversible evidence for an internal mention row id."""
+    return hashlib.sha256(str(mention_id).encode("utf-8")).hexdigest()
 
 
 def _json_object(value: Any) -> dict[str, Any]:
@@ -312,12 +347,16 @@ def _best_effort_job_run(
 ) -> None:
     import contextlib
 
-    from apps.api.app.services.review_mention_ingest import record_job_run
+    # Generic job-run service with THIS tool's job name — never the ingest
+    # module's wrapper, which hardcodes its own JOB_NAME and would misrecord
+    # this repair as a review-mention-ingest run.
+    from apps.api.app.services.job_runs import record_job_run
 
     finished_at = datetime.now(UTC)
     with contextlib.suppress(Exception):
         record_job_run(
             dsn=dsn,
+            job_name=JOB_NAME,
             status=status,
             started_at=started_at,
             finished_at=finished_at,
@@ -361,9 +400,7 @@ def _plan_payload() -> dict[str, Any]:
 
 def _apply_guard_error(args: argparse.Namespace) -> str:
     if os.getenv(CONFIRM_ENV) != CONFIRM_ENV_VALUE:
-        return (
-            f"--apply requires {CONFIRM_ENV}={CONFIRM_ENV_VALUE} in the process environment."
-        )
+        return f"--apply requires {CONFIRM_ENV}={CONFIRM_ENV_VALUE} in the process environment."
     if args.confirm_count is None:
         return "--apply requires --confirm-count <N> equal to the --scan unsafe_value_count."
     if args.confirm_count < 0:
@@ -397,8 +434,8 @@ def _write(args: argparse.Namespace, payload: dict[str, Any]) -> None:
     ):
         if key in payload:
             print(f"{key}={payload[key]}")
-    if payload.get("backup_ref"):
-        print(f"backup_ref={payload['backup_ref']}")
+    if payload.get("backup_ref_sha256"):
+        print(f"backup_ref_sha256={payload['backup_ref_sha256']}")
     for field_name, count in (payload.get("field_breakdown") or {}).items():
         print(f"field.{field_name}={count}")
 
