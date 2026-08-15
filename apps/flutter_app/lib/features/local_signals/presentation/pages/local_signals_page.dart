@@ -10,6 +10,7 @@ import '../../../../features/onboarding/onboarding_state.dart';
 import '../../../../manual_location_options.dart';
 import '../../../../shared/l10n/lala_copy.dart';
 import '../../../../shared/widgets/lala_skeleton.dart';
+import '../../domain/local_signal_aggregate.dart';
 import '../../domain/local_signal_public.dart';
 
 enum _LocalSignalsStatus { loading, loaded, empty, disabled, error }
@@ -38,6 +39,12 @@ class _LocalSignalsPageState extends State<LocalSignalsPage> {
   bool _loadingMore = false;
   bool _disposed = false;
   int _requestGeneration = 0;
+
+  // Governed aggregate read model: loaded in parallel with the feed. A failed
+  // aggregate fetch degrades to "no aggregate section" — it must never break
+  // the signals feed or render a fabricated aggregate.
+  LocalSignalAggregates? _aggregates;
+  bool _aggregatesFailed = false;
 
   String get _language => OnboardingState.language;
 
@@ -88,6 +95,8 @@ class _LocalSignalsPageState extends State<LocalSignalsPage> {
         _nextCursor = null;
         _hasMore = false;
         _loadingMore = false;
+        _aggregates = null;
+        _aggregatesFailed = false;
       });
     }
     if (append && mounted) setState(() => _loadingMore = true);
@@ -95,6 +104,14 @@ class _LocalSignalsPageState extends State<LocalSignalsPage> {
     final backend = widget.backendFactory(
       widget.initialConfig.copyWith(lang: _language),
     );
+    // The aggregate read is best-effort alongside the feed: governance
+    // flag-off and unavailable stores are honest-empty on the server, and a
+    // transport failure here only hides the aggregate section. Awaiting keeps
+    // both reads inside the backend's lifetime (close() runs after both).
+    Future<void>? aggregatesFuture;
+    if (!append) {
+      aggregatesFuture = _loadAggregates(backend, generation);
+    }
     try {
       final response = await backend.getLocalSignals(
         region: _coarseRegion,
@@ -130,7 +147,29 @@ class _LocalSignalsPageState extends State<LocalSignalsPage> {
         _status = _LocalSignalsStatus.error;
       });
     } finally {
+      if (aggregatesFuture != null) {
+        await aggregatesFuture;
+      }
       backend.close();
+    }
+  }
+
+  Future<void> _loadAggregates(dynamic backend, int generation) async {
+    try {
+      final response = await backend.getLocalSignalAggregates(
+        weeks: 4,
+        limit: 10,
+        placeId: null,
+        category: null,
+      );
+      final data = response.data;
+      if (data == null) throw const FormatException('Missing aggregates data.');
+      final aggregates = LocalSignalAggregates.fromJson(data);
+      if (!mounted || generation != _requestGeneration) return;
+      setState(() => _aggregates = aggregates);
+    } on Object {
+      if (!mounted || generation != _requestGeneration) return;
+      setState(() => _aggregatesFailed = true);
     }
   }
 
@@ -202,9 +241,46 @@ class _LocalSignalsPageState extends State<LocalSignalsPage> {
           child: _ErrorState(language: language, onRetry: () => _load()),
         );
       case _LocalSignalsStatus.empty:
+        // Honest empty feed + governed aggregates when approved data exists:
+        // the aggregate section stands on its own truth, clearly labeled as
+        // system aggregates rather than user posts.
+        if (_aggregates case final aggregates? when aggregates.available) {
+          return SliverMainAxisGroup(
+            slivers: <Widget>[
+              _aggregatesSliver(language, aggregates),
+              SliverToBoxAdapter(child: _EmptyState(language: language)),
+            ],
+          );
+        }
         return SliverToBoxAdapter(child: _EmptyState(language: language));
       case _LocalSignalsStatus.loaded:
-        return SliverList(
+        // available=false means the governed read model honestly has no
+        // aggregate rows — no section at all (header would crash on
+        // items.first and an empty section is not honest data).
+        if (_aggregates case final aggregates? when aggregates.available) {
+          return SliverMainAxisGroup(
+            slivers: <Widget>[
+              _aggregatesSliver(language, aggregates),
+              _signalsList(language),
+            ],
+          );
+        }
+        if (_aggregatesFailed) {
+          return SliverMainAxisGroup(
+            slivers: <Widget>[
+              SliverToBoxAdapter(
+                child: _AggregatesUnavailable(language: language),
+              ),
+              _signalsList(language),
+            ],
+          );
+        }
+        return _signalsList(language);
+    }
+  }
+
+  SliverList _signalsList(String language) {
+    return SliverList(
           delegate: SliverChildBuilderDelegate((context, index) {
             if (index < _items.length) {
               return Padding(
@@ -245,6 +321,43 @@ class _LocalSignalsPageState extends State<LocalSignalsPage> {
           }, childCount: _items.length + (_hasMore ? 1 : 0)),
         );
     }
+
+  /// Aggregate section: only rendered when the governed read model returned
+  /// available data. Provenance + freshness are always shown so a reader
+  /// cannot mistake these for user posts; place/plan actions reuse the same
+  /// callbacks as signal cards.
+  Widget _aggregatesSliver(String language, LocalSignalAggregates aggregates) {
+    return SliverPadding(
+      padding: const EdgeInsets.only(bottom: 16),
+      sliver: SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (context, index) {
+            if (index == 0) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _AggregatesHeader(
+                  language: language,
+                  aggregates: aggregates,
+                ),
+              );
+            }
+            final aggregate = aggregates.items[index - 1];
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _AggregateCard(
+                key: ValueKey(
+                  'local-signal-aggregate-${aggregate.placeId ?? aggregate.placeNameKo}-${aggregate.weekStart}',
+                ),
+                aggregate: aggregate,
+                language: language,
+                onPlaceAction: widget.onPlaceAction,
+              ),
+            );
+          },
+          childCount: 1 + aggregates.items.length,
+        ),
+      ),
+    );
   }
 }
 
@@ -618,4 +731,204 @@ String? _dateLabel(String? value) {
   final month = parsed.month.toString().padLeft(2, '0');
   final day = parsed.day.toString().padLeft(2, '0');
   return '${parsed.year}-$month-$day';
+}
+
+class _AggregatesHeader extends StatelessWidget {
+  const _AggregatesHeader({required this.language, required this.aggregates});
+
+  final String language;
+  final LocalSignalAggregates aggregates;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Icon(Icons.insights_outlined, size: 18,
+                color: theme.colorScheme.onSurfaceVariant),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                lalaCopyMulti(
+                  language,
+                  ko: '이번 달 로컬 관심 지표',
+                  en: 'Local interest this month',
+                  ja: '今月のローカル注目度',
+                  zhHans: '本月本地关注指标',
+                  zhHant: '本月在地關注指標',
+                ),
+                style: theme.textTheme.titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w800),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        // Honest provenance: aggregated review mentions (system data), with
+        // the aggregation date — never presented as user posts.
+        Text(
+          '${aggregates.items.first.providerLabel(language)} · ${aggregates.freshnessLabel(language)}',
+          key: const ValueKey('local-signals-aggregates-provenance'),
+          style: theme.textTheme.labelMedium
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        ),
+      ],
+    );
+  }
+}
+
+class _AggregateCard extends StatelessWidget {
+  const _AggregateCard({
+    required this.aggregate,
+    required this.language,
+    required this.onPlaceAction,
+    super.key,
+  });
+
+  final LocalSignalPlaceAggregate aggregate;
+  final String language;
+  final ValueChanged<LocalSignalPlaceActionRequest>? onPlaceAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final hasPlace = aggregate.placeId != null && onPlaceAction != null;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text(
+                    aggregate.placeNameKo,
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w800),
+                  ),
+                ),
+                Text(
+                  lalaCopyMulti(
+                    language,
+                    ko: '언급 ${aggregate.mentionCount}건',
+                    en: '${aggregate.mentionCount} mentions',
+                    ja: '言及${aggregate.mentionCount}件',
+                    zhHans: '${aggregate.mentionCount} 次提及',
+                    zhHant: '${aggregate.mentionCount} 次提及',
+                  ),
+                  key: ValueKey(
+                      'local-signal-aggregate-count-${aggregate.placeNameKo}'),
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              // Provenance lives in the section header once; the card shows
+              // only its aggregation window.
+              '${aggregate.weekStart} ~ ${aggregate.weekEnd}',
+              style: theme.textTheme.labelMedium
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+            if (hasPlace)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Wrap(
+                  spacing: 8,
+                  children: <Widget>[
+                    OutlinedButton.icon(
+                      key: ValueKey(
+                          'local-signal-aggregate-place-${aggregate.placeId}'),
+                      onPressed: () => onPlaceAction!(
+                        LocalSignalPlaceActionRequest(
+                          placeId: aggregate.placeId!,
+                          action: LocalSignalPlaceAction.viewPlace,
+                        ),
+                      ),
+                      icon: const Icon(Icons.place_outlined, size: 18),
+                      label: Text(
+                        lalaCopyMulti(
+                          language,
+                          ko: '장소 보기',
+                          en: 'View place',
+                          ja: 'スポットを見る',
+                          zhHans: '查看地点',
+                          zhHant: '查看地點',
+                        ),
+                      ),
+                    ),
+                    TextButton.icon(
+                      key: ValueKey(
+                          'local-signal-aggregate-plan-${aggregate.placeId}'),
+                      onPressed: () => onPlaceAction!(
+                        LocalSignalPlaceActionRequest(
+                          placeId: aggregate.placeId!,
+                          action: LocalSignalPlaceAction.addToPlan,
+                        ),
+                      ),
+                      icon: const Icon(Icons.route_outlined, size: 18),
+                      label: Text(
+                        lalaCopyMulti(
+                          language,
+                          ko: '일정에서 보기',
+                          en: 'Open plan',
+                          ja: 'プランで見る',
+                          zhHans: '在计划中查看',
+                          zhHant: '在計畫中查看',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AggregatesUnavailable extends StatelessWidget {
+  const _AggregatesUnavailable({required this.language});
+
+  final String language;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: <Widget>[
+          Icon(Icons.cloud_off_outlined,
+              size: 16, color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              // Honest unavailable: the aggregate read failed, so the section
+              // is explicitly not shown rather than silently hidden or faked.
+              lalaCopyMulti(
+                language,
+                ko: '집계 지표를 지금 불러올 수 없어요',
+                en: 'Aggregated stats are unavailable right now',
+                ja: '集計指標を現在読み込めません',
+                zhHans: '暂时无法加载汇总指标',
+                zhHant: '暫時無法載入彙總指標',
+              ),
+              key: const ValueKey('local-signals-aggregates-unavailable'),
+              style: theme.textTheme.labelMedium
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

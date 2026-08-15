@@ -242,6 +242,34 @@ class LalaApiClient {
     return _envelopeFromResponse<Map<String, dynamic>>(resp, parseData: _asMap);
   }
 
+  /// Governed system aggregates (per-place weekly review-mention counts).
+  /// Aggregate-only projection: the response shape carries no raw reviews,
+  /// authors, external keys, or URLs by construction.
+  Future<LalaEnvelope<Map<String, dynamic>>> getLocalSignalAggregates({
+    int weeks = 4,
+    int limit = 20,
+    String? placeId,
+    String? category,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final query = <String, dynamic>{'weeks': '$weeks', 'limit': '$limit'};
+    if (placeId != null && placeId.trim().isNotEmpty) {
+      query['place_id'] = placeId.trim();
+    }
+    if (category != null && category.trim().isNotEmpty) {
+      query['category'] = category.trim();
+    }
+    final resp = await _request(
+      'GET',
+      '/api/v1/community/signals/aggregates',
+      query: query,
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+    );
+    return _envelopeFromResponse<Map<String, dynamic>>(resp, parseData: _asMap);
+  }
+
   Future<LalaEnvelope<LalaWeather>> getWeather({
     required double lat,
     required double lng,

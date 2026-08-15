@@ -3698,6 +3698,21 @@ class FakeBackend implements LalaBackend {
   }
 
   @override
+  Future<LalaEnvelope<Map<String, dynamic>>> getLocalSignalAggregates({
+    int weeks = 4,
+    int limit = 20,
+    String? placeId,
+    String? category,
+  }) async {
+    throw const LalaApiException(
+      code: 'LOCAL_SIGNALS_DISABLED',
+      message: 'Local Signals aggregates are not enabled in this test backend.',
+      statusCode: 503,
+      retryable: false,
+    );
+  }
+
+  @override
   Future<LalaEnvelope<LalaWeather>> getWeather() async {
     weatherRequests += 1;
     weatherRequestConfigs.add(config);
