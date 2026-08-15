@@ -1595,3 +1595,31 @@ def test_list_places_malformed_bounds_ignored_when_flag_off(monkeypatch) -> None
 
     assert result["count"] == 1
     assert "sw_lat" not in result["query"]
+
+
+# --- Freshness localization (final-validation ISSUE 1: visitor locales must
+# never render Korean freshness; same contract as the #142 reason fix) ---
+
+
+def test_format_freshness_english_for_en_language() -> None:
+    now = datetime(2026, 8, 12, 10, 30, 0, tzinfo=UTC)
+
+    assert places_service._format_freshness("2026-08-12T10:29:45Z", now, "en") == "just now"
+    assert places_service._format_freshness("2026-08-12T10:25:00Z", now, "en") == "5 min ago"
+    assert places_service._format_freshness("2026-08-12T06:30:00Z", now, "en") == "4 hr ago"
+    assert places_service._format_freshness("2026-08-10T10:30:00Z", now, "en") == "2 days ago"
+
+
+def test_format_freshness_korean_default_unchanged() -> None:
+    now = datetime(2026, 8, 12, 10, 30, 0, tzinfo=UTC)
+
+    assert places_service._format_freshness("2026-08-12T10:29:45Z", now) == "방금 전"
+    assert places_service._format_freshness("2026-08-12T10:25:00Z", now, "ko") == "5분 전"
+    # Non-ko, non-en values keep the ko strings (normalize contract: unnormalized
+    # values fall back to ko, matching _derive_place_reason).
+    assert places_service._format_freshness("2026-08-10T10:30:00Z", now, "ja") == "2일 전"
+
+
+def test_format_freshness_en_future_timestamp_is_english() -> None:
+    now = datetime(2026, 8, 12, 10, 30, 0, tzinfo=UTC)
+    assert places_service._format_freshness("2026-08-12T10:31:00Z", now, "en") == "just now"

@@ -146,7 +146,7 @@ def list_places(
             slot_time=slot_time,
             language=language,
         )
-        freshness = _format_freshness(place.get("updated_at"), current_time)
+        freshness = _format_freshness(place.get("updated_at"), current_time, language)
 
         enriched_place["reason"] = reason
         enriched_place["freshness"] = freshness
@@ -185,7 +185,9 @@ def list_places(
                     slot_time=slot_time,
                     language=language,
                 )
-                freshness = _format_freshness(public_mvp_data.snapshot_generated_at(), current_time)
+                freshness = _format_freshness(
+                    public_mvp_data.snapshot_generated_at(), current_time, language
+                )
 
                 enriched_place["reason"] = reason
                 enriched_place["freshness"] = freshness
@@ -354,20 +356,25 @@ def _derive_place_reason(
     return " · ".join(reasons)
 
 
-def _format_freshness(updated_at: str | None, now: datetime) -> str | None:
+def _format_freshness(updated_at: str | None, now: datetime, language: str = "ko") -> str | None:
     """Format data freshness as human-readable relative time.
+
+    Language follows the /places `language` param (same contract as
+    _derive_place_reason): non-ko request languages get English strings so a
+    visitor locale never renders Korean copy.
 
     Rules:
     - updated_at None → None (honest empty)
-    - <1 minute → "방금 전"
-    - <1 hour → "N분 전"
-    - <1 day → "N시간 전"
-    - ≥1 day → "N일 전" (truthful elapsed days; never the misleading "오늘")
+    - <1 minute → "방금 전" / "just now"
+    - <1 hour → "N분 전" / "N min ago"
+    - <1 day → "N시간 전" / "N hr ago"
+    - ≥1 day → "N일 전" / "N days ago" (truthful elapsed days)
     - Parse errors → None (honest degradation)
 
     Returns:
-        Korean freshness string or None.
+        Localized freshness string or None.
     """
+    is_en = language == "en"
     if not updated_at:
         return None
 
@@ -388,19 +395,19 @@ def _format_freshness(updated_at: str | None, now: datetime) -> str | None:
 
         if total_seconds < 0:
             # Future timestamp (data corruption), treat as now
-            return "방금 전"
+            return "just now" if is_en else "방금 전"
 
         if total_seconds < 60:
-            return "방금 전"
+            return "just now" if is_en else "방금 전"
         elif total_seconds < 3600:
             minutes = int(total_seconds / 60)
-            return f"{minutes}분 전"
+            return f"{minutes} min ago" if is_en else f"{minutes}분 전"
         elif total_seconds < 86400:
             hours = int(total_seconds / 3600)
-            return f"{hours}시간 전"
+            return f"{hours} hr ago" if is_en else f"{hours}시간 전"
         else:
             days = int(total_seconds / 86400)
-            return f"{days}일 전"
+            return f"{days} days ago" if is_en else f"{days}일 전"
 
     except (ValueError, AttributeError):
         return None
