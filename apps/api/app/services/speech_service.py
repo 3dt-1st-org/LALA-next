@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from html import escape
 
 import requests
@@ -13,6 +14,44 @@ _DEFAULT_VOICES = {
     "ko": "ko-KR-SunHiNeural",
     "en": "en-US-JennyNeural",
 }
+
+# Markdown shapes that reach TTS-bound text (docent QA defect F2): emphasis
+# markers, link syntax, headings, list bullets, and code fences would be read
+# aloud literally by a speech synthesizer.
+_MD_LINK_RE = re.compile(r"\[([^\]]+)\]\([^)]*\)")
+_MD_HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s*", re.MULTILINE)
+_MD_LIST_RE = re.compile(r"^\s{0,3}[-*+]\s+", re.MULTILINE)
+_MD_ORDERED_LIST_RE = re.compile(r"^\s{0,3}\d+\.\s+", re.MULTILINE)
+_MD_CODE_FENCE_RE = re.compile(r"^\s*(?:```|~~~).*?(?:```|~~~)\s*$", re.MULTILINE | re.DOTALL)
+_MD_EMPHASIS_RES = (
+    re.compile(r"\*\*\*(.+?)\*\*\*"),
+    re.compile(r"___(.+?)___"),
+    re.compile(r"\*\*(.+?)\*\*"),
+    re.compile(r"__(.+?)__"),
+    re.compile(r"\*(.+?)\*"),
+    re.compile(r"(?<!\w)_(.+?)_(?!\w)"),
+    re.compile(r"`([^`]+)`"),
+)
+
+
+def strip_markdown_for_tts(text: str) -> str:
+    """Reduce markdown to plain spoken text for the TTS boundary.
+
+    Deterministic, display-preserving counterpart: the caller keeps the
+    original formatted script for the screen; only the synthesized voice
+    input is stripped.
+    """
+    cleaned = text
+    cleaned = _MD_CODE_FENCE_RE.sub("", cleaned)
+    cleaned = _MD_LINK_RE.sub(r"\1", cleaned)
+    cleaned = _MD_HEADING_RE.sub("", cleaned)
+    cleaned = _MD_LIST_RE.sub("", cleaned)
+    cleaned = _MD_ORDERED_LIST_RE.sub("", cleaned)
+    for emphasis in _MD_EMPHASIS_RES:
+        cleaned = emphasis.sub(r"\1", cleaned)
+    # Collapse the whitespace left behind by removed block markers.
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip()
 
 
 def live_speech_enabled() -> bool:
@@ -35,7 +74,10 @@ def synthesize_docent_audio(request: DocentAudioRequest) -> bytes:
 
     settings = get_settings()
     voice = _DEFAULT_VOICES[request.language]
-    ssml = _build_ssml(text=request.script, language=request.language, voice=voice)
+    # TTS reads markdown symbols aloud ("asterisk asterisk"); only the spoken
+    # text is sanitized — the display script keeps its formatting.
+    tts_text = strip_markdown_for_tts(request.script)
+    ssml = _build_ssml(text=tts_text, language=request.language, voice=voice)
     try:
         response = requests.post(
             _speech_tts_url(settings.azure_speech_region, settings.azure_speech_endpoint),

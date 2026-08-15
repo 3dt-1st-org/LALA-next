@@ -40,6 +40,7 @@ class DocentQaCandidate:
     place_id: str
     name_ko: str
     category: str
+    name_en: str | None = None
     region_name_ko: str | None = None
     province_code: str | None = None
     is_indoor: bool | None = None
@@ -61,12 +62,23 @@ class DocentQaCandidate:
     script_generated_at: str | None = None
     script_generation_error: str | None = None
 
+    def canonical_name(self, language: str) -> str | None:
+        """Language-appropriate canonical name for the contains-check.
+
+        Comparing the KO name against an English script (defect F3) forced the
+        Korean name into EN output and cascaded into language_purity fails.
+        """
+        if language == "en":
+            return self.name_en or None
+        return self.name_ko or None
+
     @classmethod
     def from_row(cls, row: dict[str, Any]) -> DocentQaCandidate:
         return cls(
             place_id=_text(row.get("place_id")) or "",
             name_ko=_text(row.get("name_ko")) or "",
             category=_text(row.get("category")) or "",
+            name_en=_text(row.get("name_en")),
             region_name_ko=_text(row.get("region_name_ko")),
             province_code=_text(row.get("province_code")),
             is_indoor=_bool(row.get("is_indoor")),
@@ -186,6 +198,7 @@ def fetch_docent_qa_candidates(
                 places.place_id,
                 places.name_ko,
                 places.category,
+                places.name_en,
                 places.region_name_ko,
                 places.province_code,
                 places.is_indoor,
@@ -441,7 +454,11 @@ def evaluate_docent_script(
         issue_tags.append("raw_score_leakage")
     if SECRET_LIKE_RE.search(script):
         issue_tags.append("secret_like_text")
-    if candidate.name_ko and candidate.name_ko not in script:
+    # Language-aware canonical-name check (defect F3): an EN script legitimately
+    # carries the EN name, so checking name_ko against it forced Korean into
+    # EN output and cascaded false language_purity blockers.
+    canonical_name = candidate.canonical_name(language)
+    if canonical_name and canonical_name not in script:
         issue_tags.append("missing_place_name")
     if _has_weather_values(candidate) and not _mentions_pm_context(script):
         issue_tags.append("missing_pm_context")

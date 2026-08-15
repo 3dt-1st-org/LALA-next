@@ -50,7 +50,6 @@ _REVIEW_SOURCE_HINTS = (
     "visitor",
     "blog",
     "naver",
-    "mention",
     "community",
 )
 _REVIEW_TEXT_HINTS_KO = (
@@ -149,6 +148,14 @@ def generate_docent_script_text(
         "If visitor-review context is provided, turn it into a natural insight, "
         "not a raw review summary. If only official/place-profile context is "
         "provided, stay closer to spatial curation and practical visiting value. "
+        "NEVER fabricate visitor quotes, testimonials, or attributed feelings. "
+        "Only reference visitor sentiment when actual review text is provided; "
+        "weekly mention counters are aggregate statistics, so phrase them as "
+        "aggregate interest (e.g. weekly local mentions), never as what "
+        "'many visitors' said or felt. "
+        "Do not assert whether the place is indoors or outdoors unless the "
+        "provided context explicitly states it; when unknown, stay at the "
+        "route and practical level. "
         "If distance, weather, PM10, PM2.5, small-merchant, or local-spending "
         "context is provided, mention those signals naturally without exposing "
         "private numeric recommendation scores. Include one practical route action "
@@ -158,8 +165,14 @@ def generate_docent_script_text(
         "condition. "
         "Use recommendation scores only as private reasoning: do not quote numeric "
         "scores, score labels, internal table names, cache names, or raw source codes "
-        "in the user-facing docent script. "
-        "Keep it concise, friendly, and suitable for a walking travel app."
+        "in the user-facing docent script. Do not describe internal metric "
+        "concepts either — never mention demand dispersion, visitor-flow "
+        "distribution, local spending fit, or small-merchant fit as reasons; "
+        "express concrete visiting value instead. "
+        "Keep it concise, friendly, and suitable for a walking travel app. "
+        "Write plain sentences only: no markdown formatting (no asterisks, "
+        "hashes, links, or list markers) — the script is read aloud by a "
+        "speech synthesizer."
     )
     try:
         completion = client.chat.completions.create(
@@ -276,7 +289,7 @@ def _docent_context_prompt(
     score_context = _score_context_prompt(request)
     if score_context:
         parts.append(score_context)
-    weather_context = _weather_context_prompt(request)
+    weather_context = _weather_context_prompt(request, language=request.language)
     if weather_context:
         parts.append(weather_context)
     grounding_prompt = _grounding_context_prompt(
@@ -313,27 +326,48 @@ def _score_context_prompt(request: DocentScriptRequest) -> str:
     return "Recommendation evidence: " + "; ".join(score_parts) + "."
 
 
-def _weather_context_prompt(request: DocentScriptRequest) -> str:
+def _weather_context_prompt(request: DocentScriptRequest, *, language: str = "ko") -> str:
     weather_parts: list[str] = []
     if temperature := format_celsius_label(request.weather_temp):
         weather_parts.append(f"temperature {temperature}")
     if condition := _weather_condition_label(request.weather_icon):
         weather_parts.append(f"weather condition {condition} (icon {request.weather_icon})")
     if request.weather_outdoor_status:
-        weather_parts.append(f"outdoor status {request.weather_outdoor_status}")
+        weather_parts.append(
+            f"outdoor status {_air_label(request.weather_outdoor_status, language)}"
+        )
     if request.dust_grade:
-        weather_parts.append(f"overall dust {request.dust_grade}")
+        weather_parts.append(f"overall dust {_air_label(request.dust_grade, language)}")
     if request.dust_pm10:
         weather_parts.append(f"PM10 value {request.dust_pm10}")
     if request.dust_pm25:
         weather_parts.append(f"PM2.5 value {request.dust_pm25}")
     if request.dust_pm10_grade:
-        weather_parts.append(f"PM10 grade {request.dust_pm10_grade}")
+        weather_parts.append(f"PM10 grade {_air_label(request.dust_pm10_grade, language)}")
     if request.dust_pm25_grade:
-        weather_parts.append(f"PM2.5 grade {request.dust_pm25_grade}")
+        weather_parts.append(f"PM2.5 grade {_air_label(request.dust_pm25_grade, language)}")
     if not weather_parts:
         return ""
     return "Current weather and air quality: " + "; ".join(weather_parts) + "."
+
+
+# Korean air-quality/outdoor labels (dust_quality.py) reach the prompt verbatim
+# and leak into English scripts (defect N1). Map them at the prompt boundary.
+_AIR_LABEL_EN = {
+    "좋음": "good",
+    "보통": "moderate",
+    "나쁨": "unhealthy",
+    "매우나쁨": "very unhealthy",
+    "실외": "outdoor",
+    "실내": "indoor",
+    "실내외": "indoor and outdoor",
+}
+
+
+def _air_label(value: str, language: str) -> str:
+    if language != "en":
+        return value
+    return _AIR_LABEL_EN.get(value.strip(), value)
 
 
 def _weather_condition_label(icon: str | None) -> str | None:
@@ -348,6 +382,18 @@ def _weather_condition_label(icon: str | None) -> str | None:
         "sleet": "mixed rain and snow",
         "snow": "snowy",
     }.get((icon or "").strip().lower())
+
+
+# Raw internal source ids (e.g. tour_api) surfaced verbatim in grounding
+# snippets leak into user-facing text (defect N7). Map to reader-safe labels
+# before the model ever sees them; the prohibition sentence stays as backup.
+_SOURCE_TYPE_LABELS = {
+    "tour_api": "official tourism data",
+    "place_profile": "verified place profile",
+    "place_mention": "weekly local mention counts",
+    "review": "visitor reviews",
+    "naver_blog": "local blog posts",
+}
 
 
 def _grounding_context_prompt(grounding_context: list[dict], *, language: str = "ko") -> str:
@@ -367,7 +413,7 @@ def _grounding_context_prompt(grounding_context: list[dict], *, language: str = 
             continue
         if len(body) > 260:
             body = body[:257].rstrip() + "..."
-        label = source_type
+        label = _SOURCE_TYPE_LABELS.get(source_type, source_type)
         if title:
             label += f" / {title}"
         snippets.append(f"- {label}: {body}")

@@ -504,3 +504,103 @@ def test_generate_docent_script_en_prefers_request_place_name_over_korean_title(
     )
     ai_service.generate_docent_script_text(request_ko, grounding_context=grounding)
     assert "Place: 도심속 바다축제." in captured["messages"][1]["content"]
+
+
+# --- Docent QA defect regressions (F1/F2/N1/N3/N4/N7) ---
+
+
+def test_counter_only_mention_chunk_is_not_visitor_review_context():
+    """F1: a weekly-counter row (source_type place_mention, counter body with
+    no review wording) must NOT arm the visitor-quote persona branch."""
+    request = DocentScriptRequest(
+        place_id="counter-only",
+        place_name="한밭교육박물관",
+        category="culture_venue",
+        language="ko",
+        mode="brief",
+    )
+
+    prompt = ai_service._docent_system_prompt(
+        request,
+        place_name="한밭교육박물관",
+        grounding_context=[
+            {
+                "source_type": "place_mention",
+                "title_ko": "한밭교육박물관 주간 언급",
+                # Counter-shaped body: numbers only, no review voice.
+                "body_ko": "지난주 총 언급 14회, 유기적 언급 9회, 감성 점수 0.61.",
+            }
+        ],
+    )
+
+    assert "공간 큐레이터" in prompt
+    assert "수석 도슨트" not in prompt
+
+
+def test_generation_prompt_forbids_fabricated_quotes_and_indoor_claims():
+    """F1/N3/N4 guards must be present in the generation prompt itself so the
+    model cannot invent visitor voice, metric wording, or indoor character."""
+    import inspect
+
+    source = inspect.getsource(ai_service.generate_docent_script_text)
+    assert "NEVER fabricate visitor quotes" in source
+    assert "weekly mention counters are aggregate statistics" in source
+    assert "Do not assert whether the place is indoors or outdoors" in source
+    assert "never mention demand dispersion" in source
+
+
+def test_en_weather_prompt_translates_korean_air_labels():
+    """N1: Korean AQI/outdoor labels must not enter an English prompt."""
+    request = DocentScriptRequest(
+        place_id="en-aqi",
+        place_name="Hwaseong Fortress",
+        category="attraction",
+        language="en",
+        mode="brief",
+        dust_grade="좋음",
+        dust_pm10_grade="보통",
+        dust_pm25_grade="좋음",
+        weather_outdoor_status="실외",
+    )
+
+    prompt = ai_service._weather_context_prompt(request, language="en")
+
+    assert "좋음" not in prompt
+    assert "보통" not in prompt
+    assert "실외" not in prompt
+    assert "overall dust good" in prompt
+    assert "PM10 grade moderate" in prompt
+    assert "outdoor status outdoor" in prompt
+
+
+def test_ko_weather_prompt_keeps_korean_air_labels():
+    """The KO path is unchanged (byte-compat with the pre-fix prompt)."""
+    request = DocentScriptRequest(
+        place_id="ko-aqi",
+        place_name="수원화성",
+        category="attraction",
+        language="ko",
+        mode="brief",
+        dust_grade="좋음",
+    )
+
+    prompt = ai_service._weather_context_prompt(request, language="ko")
+
+    assert "overall dust 좋음" in prompt
+
+
+def test_grounding_prompt_maps_raw_source_ids_to_reader_safe_labels():
+    """N7: raw internal ids like tour_api must not be model-visible."""
+    prompt = ai_service._grounding_context_prompt(
+        [
+            {
+                "source_type": "tour_api",
+                "title_ko": "아시아아시아",
+                "body_ko": "검증된 관광지 프로필입니다.",
+            }
+        ],
+        language="en",
+    )
+
+    assert "tour_api" not in prompt
+    assert "official tourism data" in prompt
