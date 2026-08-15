@@ -154,7 +154,14 @@ class _LocalSignalsPageState extends State<LocalSignalsPage> {
     final activeRegion = RegionContextStore.current;
     final regionLabel = activeRegion?.source == RegionSource.manual
         ? activeRegion!.label(language)
-        : lalaCopy(language, ko: '전국', en: 'Nationwide');
+        : lalaCopyMulti(
+          language,
+          ko: '전국',
+          en: 'Nationwide',
+          ja: '全国',
+          zhHans: '全国',
+          zhHant: '全國',
+        );
     return ColoredBox(
       color: theme.colorScheme.surface,
       child: SafeArea(
@@ -223,7 +230,14 @@ class _LocalSignalsPageState extends State<LocalSignalsPage> {
                         key: const ValueKey('local-signals-load-more'),
                         onPressed: _hasMore ? () => _load(append: true) : null,
                         child: Text(
-                          lalaCopy(language, ko: '더 보기', en: 'Load more'),
+                          lalaCopyMulti(
+                            language,
+                            ko: '더 보기',
+                            en: 'Load more',
+                            ja: 'もっと見る',
+                            zhHans: '加载更多',
+                            zhHant: '載入更多',
+                          ),
                         ),
                       ),
               ),
@@ -252,17 +266,27 @@ class _Header extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Text(
-          lalaCopy(language, ko: '로컬 신호', en: 'Local Signals'),
+          lalaCopyMulti(
+            language,
+            ko: '로컬 신호',
+            en: 'Local Signals',
+            ja: 'ローカル信号',
+            zhHans: '本地信号',
+            zhHant: '在地訊號',
+          ),
           style: Theme.of(
             context,
           ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 6),
         Text(
-          lalaCopy(
+          lalaCopyMulti(
             language,
             ko: '장소와 지역에 연결된 짧고 날짜가 명확한 관찰을 모아요.',
             en: 'Short, dated observations connected to places and areas.',
+            ja: 'スポットや地域に結びついた、短く日付の明確な観察を集めます。',
+            zhHans: '汇集与地点和地区相关的简短、日期明确的观察。',
+            zhHant: '彙集與地點和地區相關的簡短、日期明確的觀察。',
           ),
           style: Theme.of(
             context,
@@ -283,7 +307,14 @@ class _Header extends StatelessWidget {
             Chip(
               avatar: const Icon(Icons.visibility_outlined, size: 16),
               label: Text(
-                lalaCopy(language, ko: '공개 읽기', en: 'Public reading'),
+                lalaCopyMulti(
+                  language,
+                  ko: '공개 읽기',
+                  en: 'Public reading',
+                  ja: '公開読み取り',
+                  zhHans: '公开阅读',
+                  zhHant: '公開閱讀',
+                ),
               ),
             ),
           ],
@@ -334,15 +365,21 @@ class _DisabledState extends StatelessWidget {
   Widget build(BuildContext context) => _StatusCard(
     key: const ValueKey('local-signals-disabled'),
     icon: Icons.pause_circle_outline,
-    title: lalaCopy(
+    title: lalaCopyMulti(
       language,
       ko: '로컬 신호를 준비 중이에요',
       en: 'Local Signals is not ready',
+      ja: 'ローカル信号を準備中です',
+      zhHans: '本地信号准备中',
+      zhHant: '在地訊號準備中',
     ),
-    message: lalaCopy(
+    message: lalaCopyMulti(
       language,
       ko: '현재 공개 데이터가 없어 보여드릴 수 없어요. 준비되면 이 화면에 공개 신호만 표시합니다.',
       en: 'There is no public data available right now. Published signals will appear here when ready.',
+      ja: '現在公開できるデータがありません。準備が整い次第、公開シグナルのみをここに表示します。',
+      zhHans: '当前没有可公开的数据。就绪后将仅在此显示已发布的信号。',
+      zhHant: '當前沒有可公開的資料。就緒後將僅在此顯示已發布的訊號。',
     ),
   );
 }
@@ -356,11 +393,21 @@ class _EmptyState extends StatelessWidget {
   Widget build(BuildContext context) => _StatusCard(
     key: const ValueKey('local-signals-empty'),
     icon: Icons.inbox_outlined,
-    title: lalaCopy(language, ko: '아직 공개 신호가 없어요', en: 'No public signals yet'),
-    message: lalaCopy(
+    title: lalaCopyMulti(
+      language,
+      ko: '아직 공개 신호가 없어요',
+      en: 'No public signals yet',
+      ja: 'まだ公開シグナルがありません',
+      zhHans: '暂无公开信号',
+      zhHant: '暫無公開訊號',
+    ),
+    message: lalaCopyMulti(
       language,
       ko: '다른 지역을 선택하거나 나중에 다시 확인해 주세요.',
       en: 'Choose another area or check again later.',
+      ja: '別の地域を選ぶか、後でもう一度ご確認ください。',
+      zhHans: '请选择其他地区或稍后再查看。',
+      zhHant: '請選擇其他地區或稍後再查看。',
     ),
   );
 }
@@ -375,19 +422,34 @@ class _ErrorState extends StatelessWidget {
   Widget build(BuildContext context) => _StatusCard(
     key: const ValueKey('local-signals-error'),
     icon: Icons.cloud_off_outlined,
-    title: lalaCopy(
+    title: lalaCopyMulti(
       language,
       ko: '로컬 신호를 불러오지 못했어요',
       en: 'Could not load Local Signals',
+      ja: 'ローカル信号を読み込めませんでした',
+      zhHans: '无法加载本地信号',
+      zhHant: '無法載入在地訊號',
     ),
-    message: lalaCopy(
+    message: lalaCopyMulti(
       language,
       ko: '잠시 후 다시 시도해 주세요.',
       en: 'Please try again in a moment.',
+      ja: 'しばらくしてからもう一度お試しください。',
+      zhHans: '请稍后重试。',
+      zhHant: '請稍後重試。',
     ),
     action: TextButton(
       onPressed: onRetry,
-      child: Text(lalaCopy(language, ko: '다시 시도', en: 'Try again')),
+      child: Text(
+        lalaCopyMulti(
+          language,
+          ko: '다시 시도',
+          en: 'Try again',
+          ja: '再試行',
+          zhHans: '重试',
+          zhHant: '重試',
+        ),
+      ),
     ),
   );
 }
@@ -450,7 +512,16 @@ class _SignalCard extends StatelessWidget {
         _dateLabel(signal.observationDate ?? signal.publishedAt)!,
     ];
     if (signal.translationAvailable) {
-      metadata.add(lalaCopy(language, ko: '번역 제공', en: 'Translated view'));
+      metadata.add(
+        lalaCopyMulti(
+          language,
+          ko: '번역 제공',
+          en: 'Translated view',
+          ja: '翻訳表示',
+          zhHans: '翻译显示',
+          zhHant: '翻譯顯示',
+        ),
+      );
     }
     return Card(
       child: Padding(
@@ -500,7 +571,14 @@ class _SignalCard extends StatelessWidget {
                     ),
                     icon: const Icon(Icons.place_outlined, size: 18),
                     label: Text(
-                      lalaCopy(language, ko: '장소 보기', en: 'View place'),
+                      lalaCopyMulti(
+                      language,
+                      ko: '장소 보기',
+                      en: 'View place',
+                      ja: 'スポットを見る',
+                      zhHans: '查看地点',
+                      zhHant: '查看地點',
+                    ),
                     ),
                   ),
                   TextButton.icon(
@@ -513,7 +591,14 @@ class _SignalCard extends StatelessWidget {
                     ),
                     icon: const Icon(Icons.route_outlined, size: 18),
                     label: Text(
-                      lalaCopy(language, ko: '일정에서 보기', en: 'Open plan'),
+                      lalaCopyMulti(
+                        language,
+                        ko: '일정에서 보기',
+                        en: 'Open plan',
+                        ja: 'プランで見る',
+                        zhHans: '在计划中查看',
+                        zhHant: '在計畫中查看',
+                      ),
                     ),
                   ),
                 ],

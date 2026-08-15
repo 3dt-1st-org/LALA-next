@@ -56,8 +56,22 @@ class PlanSlotTile extends StatelessWidget {
     final indoorOutdoorLabel = slot.indoorOutdoor == null
         ? null
         : (slot.indoorOutdoor == 'indoor'
-              ? (language == 'ko' ? '실내' : 'Indoor')
-              : (language == 'ko' ? '야외' : 'Outdoor'));
+              ? lalaCopyMulti(
+                  language,
+                  ko: '실내',
+                  en: 'Indoor',
+                  ja: '屋内',
+                  zhHans: '室内',
+                  zhHant: '室內',
+                )
+              : lalaCopyMulti(
+                  language,
+                  ko: '야외',
+                  en: 'Outdoor',
+                  ja: '屋外',
+                  zhHans: '室外',
+                  zhHant: '室外',
+                ));
     // V3-C D2/D3/D4 투영: forecast_window(예보) · air_quality_bad(야외 먼지) ·
     // closure_state(운영 상태). null 은 honest-empty(placeholder 없음/unknown).
     final forecastWindowText = planSlotForecastWindowLabel(slot, language);

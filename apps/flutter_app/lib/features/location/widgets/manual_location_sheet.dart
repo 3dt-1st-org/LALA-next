@@ -32,16 +32,54 @@ class _ManualLocationSheetState extends State<ManualLocationSheet> {
   @override
   Widget build(BuildContext context) {
     final language = widget.language;
-    final title = lalaCopy(language, ko: '지역 선택', en: 'Choose area');
-    final closeLabel = lalaCopy(language, ko: '닫기', en: 'Close');
-    final allLabel = lalaCopy(language, ko: '전국', en: 'All');
-    final searchHint = lalaCopy(
+    final title = lalaCopyMulti(
+      language,
+      ko: '지역 선택',
+      en: 'Choose area',
+      ja: '地域を選択',
+      zhHans: '选择地区',
+      zhHant: '選擇地區',
+    );
+    final closeLabel = lalaCopyMulti(
+      language,
+      ko: '닫기',
+      en: 'Close',
+      ja: '閉じる',
+      zhHans: '关闭',
+      zhHant: '關閉',
+    );
+    final allLabel = lalaCopyMulti(
+      language,
+      ko: '전국',
+      en: 'All',
+      ja: 'すべて',
+      zhHans: '全部',
+      zhHant: '全部',
+    );
+    final searchHint = lalaCopyMulti(
       language,
       ko: '시군구 또는 시도 검색',
       en: 'Search city or province',
+      ja: '市区郡または道府県を検索',
+      zhHans: '搜索城市或省份',
+      zhHant: '搜尋城市或省份',
     );
-    final quickLabel = lalaCopy(language, ko: '빠른 선택', en: 'Quick picks');
-    final resultLabel = lalaCopy(language, ko: '선택 가능한 지역', en: 'Available areas');
+    final quickLabel = lalaCopyMulti(
+      language,
+      ko: '빠른 선택',
+      en: 'Quick picks',
+      ja: 'クイック選択',
+      zhHans: '快速选择',
+      zhHant: '快速選擇',
+    );
+    final resultLabel = lalaCopyMulti(
+      language,
+      ko: '선택 가능한 지역',
+      en: 'Available areas',
+      ja: '選択できる地域',
+      zhHans: '可选择地区',
+      zhHant: '可選擇地區',
+    );
     final normalizedQuery = _query.trim();
     ManualLocationProvince? selectedProvince;
     for (final province in manualLocationProvinces) {
@@ -70,10 +108,13 @@ class _ManualLocationSheetState extends State<ManualLocationSheet> {
     final headerCount = _selectedProvinceId == 'all'
         ? manualLocationOptions.length
         : selectedProvince?.options.length ?? filteredOptions.length;
-    final countText = lalaCopy(
+    final countText = lalaCopyMulti(
       language,
       ko: '$headerCount개 지역',
       en: '$headerCount areas',
+      ja: '$headerCount地域',
+      zhHans: '$headerCount 个地区',
+      zhHant: '$headerCount 個地區',
     );
     return DraggableScrollableSheet(
       expand: false,
@@ -157,7 +198,14 @@ class _ManualLocationSheetState extends State<ManualLocationSheet> {
                   suffixIcon: _query.isEmpty
                       ? null
                       : IconButton(
-                          tooltip: lalaCopy(language, ko: '검색어 지우기', en: 'Clear'),
+                          tooltip: lalaCopyMulti(
+                            language,
+                            ko: '검색어 지우기',
+                            en: 'Clear',
+                            ja: 'クリア',
+                            zhHans: '清除',
+                            zhHant: '清除',
+                          ),
                           onPressed: () {
                             _searchController.clear();
                             setState(() => _query = '');

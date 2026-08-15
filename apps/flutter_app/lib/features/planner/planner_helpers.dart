@@ -154,13 +154,49 @@ String? planSlotAirQualityBadLabel(LalaPlanSlot slot, String language) {
 /// 시간대 라벨(C3 추출 — main.dart 의 _periodLabel).
 String periodLabel(String period, {String language = 'ko'}) {
   final normalized = period.trim().toLowerCase();
-  if (isLalaEnglish(language)) {
+  // V6: ko 이외 로케일은 EN 라벨 체인을 따른다(서버 슬롯 시간대는 EN 토큰).
+  if (normalizeLalaLanguage(language) != 'ko') {
     return switch (normalized) {
-      'morning' || 'am' || 'mo' || '오전' || '아침' => 'Morning',
-      'lunch' || 'noon' || 'midday' || 'lu' || '점심' => 'Lunch',
-      'afternoon' || 'pm' || 'af' || '오후' => 'Afternoon',
-      'dinner' || 'evening' || 'night' || 'di' || '저녁' || '밤' => 'Dinner',
-      _ => normalized.isEmpty ? '-' : 'Period',
+      'morning' || 'am' || 'mo' || '오전' || '아침' => lalaCopyMulti(
+        language,
+        ko: '아침',
+        en: 'Morning',
+        ja: '朝',
+        zhHans: '早晨',
+        zhHant: '早晨',
+      ),
+      'lunch' || 'noon' || 'midday' || 'lu' || '점심' => lalaCopyMulti(
+        language,
+        ko: '점심',
+        en: 'Lunch',
+        ja: '昼',
+        zhHans: '午餐',
+        zhHant: '午餐',
+      ),
+      'afternoon' || 'pm' || 'af' || '오후' => lalaCopyMulti(
+        language,
+        ko: '오후',
+        en: 'Afternoon',
+        ja: '午後',
+        zhHans: '下午',
+        zhHant: '下午',
+      ),
+      'dinner' || 'evening' || 'night' || 'di' || '저녁' || '밤' => lalaCopyMulti(
+        language,
+        ko: '저녁',
+        en: 'Dinner',
+        ja: '夜',
+        zhHans: '晚餐',
+        zhHant: '晚餐',
+      ),
+      _ => normalized.isEmpty ? '-' : lalaCopyMulti(
+        language,
+        ko: '시간대',
+        en: 'Period',
+        ja: '時間帯',
+        zhHans: '时段',
+        zhHant: '時段',
+      ),
     };
   }
   return switch (normalized) {

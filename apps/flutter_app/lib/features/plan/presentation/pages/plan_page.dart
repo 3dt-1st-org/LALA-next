@@ -196,11 +196,32 @@ class _PlanPageState extends State<PlanPage> {
   String? _interventionTriggerBadge(LalaIntervention intervention) {
     switch (intervention.triggerType) {
       case 'closure_detected':
-        return lalaCopy(_language, ko: '폐업 의심', en: 'Possible closure');
+        return lalaCopyMulti(
+          _language,
+          ko: '폐업 의심',
+          en: 'Possible closure',
+          ja: '休業の可能性',
+          zhHans: '疑似停业',
+          zhHant: '疑似停業',
+        );
       case 'bad_weather_and_closure':
-        return lalaCopy(_language, ko: '날씨 + 폐업', en: 'Weather + closure');
+        return lalaCopyMulti(
+          _language,
+          ko: '날씨 + 폐업',
+          en: 'Weather + closure',
+          ja: '気象 + 休業',
+          zhHans: '天气 + 停业',
+          zhHant: '天氣 + 停業',
+        );
       case 'bad_weather':
-        return lalaCopy(_language, ko: '날씨 변화', en: 'Weather change');
+        return lalaCopyMulti(
+          _language,
+          ko: '날씨 변화',
+          en: 'Weather change',
+          ja: '気象の変化',
+          zhHans: '天气变化',
+          zhHant: '天氣變化',
+        );
       default:
         return null;
     }
@@ -215,7 +236,14 @@ class _PlanPageState extends State<PlanPage> {
     final name = alt.place != null
         ? placeDisplayName(alt.place!, _language)
         : alt.title;
-    return lalaCopy(_language, ko: '대체 ▸ $name', en: 'Swap ▸ $name');
+    return lalaCopyMulti(
+      _language,
+      ko: '대체 ▸ $name',
+      en: 'Swap ▸ $name',
+      ja: '代替 ▸ $name',
+      zhHans: '替换 ▸ $name',
+      zhHant: '替換 ▸ $name',
+    );
   }
 
   // swap 탭 — alternativeSlot 의 장소를 노출만 한다(스낵바). PlanContextStore 의
@@ -231,10 +259,13 @@ class _PlanPageState extends State<PlanPage> {
       SnackBar(
         duration: const Duration(seconds: 2),
         content: Text(
-          lalaCopy(
+          lalaCopyMulti(
             _language,
             ko: '대체 장소 $name 을(를) 확인해 보세요.',
             en: 'Check the alternative: $name.',
+            ja: '代替スポット $name をご確認ください。',
+            zhHans: '请查看替代地点：$name。',
+            zhHant: '請查看替代地點：$name。',
           ),
         ),
       ),
@@ -395,15 +426,21 @@ class _PlanPageState extends State<PlanPage> {
 
   String _failureCopy(_PlanLoadStatus status) {
     return switch (status) {
-      _PlanLoadStatus.unavailable => lalaCopy(
+      _PlanLoadStatus.unavailable => lalaCopyMulti(
         _language,
         ko: '일시적으로 서버에 연결할 수 없어요. 네트워크를 확인 후 다시 시도해 주세요.',
         en: 'Could not reach the service. Check your connection and try again.',
+        ja: 'サーバーに一時的に接続できません。ネットワークを確認してもう一度お試しください。',
+        zhHans: '暂时无法连接服务器，请检查网络后重试。',
+        zhHant: '暫時無法連線伺服器，請檢查網路後重試。',
       ),
-      _PlanLoadStatus.error => lalaCopy(
+      _PlanLoadStatus.error => lalaCopyMulti(
         _language,
         ko: '일정을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.',
         en: 'Could not load the daily plan. Please try again shortly.',
+        ja: 'プランを読み込めませんでした。しばらくしてからもう一度お試しください。',
+        zhHans: '无法加载行程，请稍后重试。',
+        zhHant: '無法載入行程，請稍後重試。',
       ),
       _PlanLoadStatus.loading ||
       _PlanLoadStatus.loaded ||
@@ -413,22 +450,39 @@ class _PlanPageState extends State<PlanPage> {
 
   String _todayLabel() {
     final now = DateTime.now();
-    final weekdaysKo = <String>['월', '화', '수', '목', '금', '토', '일'];
-    final weekdaysEn = <String>[
-      'Mon',
-      'Tue',
-      'Wed',
-      'Thu',
-      'Fri',
-      'Sat',
-      'Sun',
-    ];
-    if (isLalaEnglish(_language)) {
-      return '${now.year}-${now.month.toString().padLeft(2, '0')}'
-          '-${now.day.toString().padLeft(2, '0')} ${weekdaysEn[now.weekday - 1]}';
+    // V6(계약 §6): ko 는 기존 KO 형식, en 은 ISO+EN 요일, ja/zh 는 ISO+현지 요일.
+    switch (normalizeLalaLanguage(_language)) {
+      case 'ko':
+        final weekdaysKo = <String>['월', '화', '수', '목', '금', '토', '일'];
+        return '${now.year}년 ${now.month.toString().padLeft(2, '0')}월 '
+            '${now.day.toString().padLeft(2, '0')}일 ${weekdaysKo[now.weekday - 1]}';
+      case 'ja':
+        const weekdaysJa = ['月', '火', '水', '木', '金', '土', '日'];
+        return '${now.year}-${now.month.toString().padLeft(2, '0')}'
+            '-${now.day.toString().padLeft(2, '0')} ${weekdaysJa[now.weekday - 1]}';
+      case 'zh-Hans':
+        const weekdaysHans = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+        return '${now.year}-${now.month.toString().padLeft(2, '0')}'
+            '-${now.day.toString().padLeft(2, '0')} ${weekdaysHans[now.weekday - 1]}';
+      case 'zh-Hant':
+        const weekdaysHant = ['週一', '週二', '週三', '週四', '週五', '週六', '週日'];
+        return '${now.year}-${now.month.toString().padLeft(2, '0')}'
+            '-${now.day.toString().padLeft(2, '0')} ${weekdaysHant[now.weekday - 1]}';
+      case 'en':
+        final weekdaysEn = <String>[
+          'Mon',
+          'Tue',
+          'Wed',
+          'Thu',
+          'Fri',
+          'Sat',
+          'Sun',
+        ];
+        return '${now.year}-${now.month.toString().padLeft(2, '0')}'
+            '-${now.day.toString().padLeft(2, '0')} ${weekdaysEn[now.weekday - 1]}';
     }
-    return '${now.year}년 ${now.month.toString().padLeft(2, '0')}월 '
-        '${now.day.toString().padLeft(2, '0')}일 ${weekdaysKo[now.weekday - 1]}';
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}'
+        '-${now.day.toString().padLeft(2, '0')}';
   }
 
   @override
@@ -440,7 +494,14 @@ class _PlanPageState extends State<PlanPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _PlanHeader(
-              title: lalaCopy(_language, ko: '오늘 일정', en: 'Today\'s Plan'),
+              title: lalaCopyMulti(
+                _language,
+                ko: '오늘 일정',
+                en: 'Today\'s Plan',
+                ja: '今日のプラン',
+                zhHans: '今日计划',
+                zhHant: '今日計畫',
+              ),
               dateLabel: _todayLabel(),
               language: _language,
               onCalendar: _load,
@@ -457,17 +518,23 @@ class _PlanPageState extends State<PlanPage> {
                   onSwap: _intervention!.alternativeSlot != null
                       ? () => _onSwapAlternative(_intervention!.alternativeSlot!)
                       : null,
-                  regenerateLabel: lalaCopy(
+                  regenerateLabel: lalaCopyMulti(
                     _language,
                     ko: '일정 다시 짜기',
                     en: 'Regenerate',
+                    ja: 'プランを作り直す',
+                    zhHans: '重新生成',
+                    zhHant: '重新產生',
                   ),
                   onRegenerate: _load,
                   noAlternativeLabel: _intervention!.alternativeSlot == null
-                      ? lalaCopy(
+                      ? lalaCopyMulti(
                           _language,
                           ko: '지금은 대체 장소가 없어요.',
                           en: 'No alternative right now.',
+                          ja: '現在代替スポットはありません。',
+                          zhHans: '暂时没有替代地点。',
+                          zhHant: '暫時沒有替代地點。',
                         )
                       : null,
                   onOpenPlanner: () {
@@ -479,10 +546,13 @@ class _PlanPageState extends State<PlanPage> {
                       SnackBar(
                         duration: const Duration(seconds: 2),
                         content: Text(
-                          lalaCopy(
+                          lalaCopyMulti(
                             _language,
                             ko: '일정을 확인해 보세요.',
                             en: 'Review today\'s plan below.',
+                            ja: '下のプランをご確認ください。',
+                            zhHans: '请在下方查看今日计划。',
+                            zhHant: '請在下方查看今日計畫。',
                           ),
                         ),
                       ),
@@ -582,7 +652,14 @@ class _PlanHeader extends StatelessWidget {
             ),
           ),
           IconButton(
-            tooltip: lalaCopy(language, ko: '달력', en: 'Calendar'),
+            tooltip: lalaCopyMulti(
+              language,
+              ko: '달력',
+              en: 'Calendar',
+              ja: 'カレンダー',
+              zhHans: '日历',
+              zhHant: '日曆',
+            ),
             onPressed: onCalendar,
             icon: const Icon(Icons.calendar_today_rounded),
             color: Theme.of(context).colorScheme.primary,
@@ -604,7 +681,14 @@ class _PlanLoadingView extends StatelessWidget {
     // 시맨틱: 로딩 상태를 화면 읽기 사용자에게 알린다(진행률/단계 주장 없이).
     return Semantics(
       container: true,
-      label: lalaCopy(language, ko: '일정을 준비하고 있어요', en: 'Preparing your plan'),
+      label: lalaCopyMulti(
+        language,
+        ko: '일정을 준비하고 있어요',
+        en: 'Preparing your plan',
+        ja: 'プランを準備しています',
+        zhHans: '正在准备您的计划',
+        zhHant: '正在準備您的計畫',
+      ),
       child: ListView(
         key: const ValueKey('plan-loading-view'),
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -672,14 +756,26 @@ class _PlanFailureView extends StatelessWidget {
     final accent = isUnavailable
         ? const Color(0xFF475569)
         : const Color(0xFFB45309);
-    final retryLabel = lalaCopy(language, ko: '다시 시도', en: 'Retry');
+    final retryLabel = lalaCopyMulti(
+      language,
+      ko: '다시 시도',
+      en: 'Retry',
+      ja: '再試行',
+      zhHans: '重试',
+      zhHant: '重試',
+    );
     // 시맨틱: 화면 읽기 사용자에게 상태 종류까지 전달.
-    final semanticsLabel = lalaCopy(
+    final semanticsLabel = lalaCopyMulti(
       language,
       ko: isUnavailable ? '서버 연결 불가. $message' : '일정 불러오기 실패. $message',
       en: isUnavailable
           ? 'Service unreachable. $message'
           : 'Failed to load plan. $message',
+      ja: isUnavailable
+          ? 'サーバーに接続できません。$message'
+          : 'プランの読み込みに失敗しました。$message',
+      zhHans: isUnavailable ? '无法连接服务器。$message' : '加载行程失败。$message',
+      zhHant: isUnavailable ? '無法連線伺服器。$message' : '載入行程失敗。$message',
     );
     return Center(
       child: SingleChildScrollView(
@@ -735,23 +831,32 @@ class _PlanEmptyView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final message = lalaCopy(
+    final message = lalaCopyMulti(
       language,
       // Why: the plan already loaded — an empty slot list is an empty result,
       // not a "preparing" or failure state. Copy is distinct from both the
       // loading card and any failure message.
       ko: '표시할 일정이 없어요.',
       en: 'No plan slots to show.',
+      ja: '表示できるプランがありません。',
+      zhHans: '暂无可显示的行程。',
+      zhHant: '暫無可顯示的行程。',
     );
-    final actionLabel = lalaCopy(
+    final actionLabel = lalaCopyMulti(
       language,
       ko: '일정 다시 만들기',
       en: 'Regenerate plan',
+      ja: 'プランを作り直す',
+      zhHans: '重新生成计划',
+      zhHant: '重新產生計畫',
     );
-    final semanticsLabel = lalaCopy(
+    final semanticsLabel = lalaCopyMulti(
       language,
       ko: '빈 일정. $message',
       en: 'Empty plan. $message',
+      ja: '空のプラン。$message',
+      zhHans: '空行程。$message',
+      zhHant: '空行程。$message',
     );
     return Center(
       child: SingleChildScrollView(

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../shared/l10n/lala_copy.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import '../../../shared/widgets/small_status_pill.dart';
@@ -23,7 +25,14 @@ class PlannerMapPill extends StatelessWidget {
     return SmallStatusPill(
       key: const ValueKey('planner-pill-hit-target'),
       icon: Icons.event_note,
-      label: language == 'en' ? 'Daily Plan' : '하루 일정',
+      label: lalaCopyMulti(
+        language,
+        ko: '하루 일정',
+        en: 'Daily Plan',
+        ja: '一日のプラン',
+        zhHans: '每日计划',
+        zhHant: '每日計畫',
+      ),
       active: slots.isNotEmpty,
       onPressed: onPressed,
     );

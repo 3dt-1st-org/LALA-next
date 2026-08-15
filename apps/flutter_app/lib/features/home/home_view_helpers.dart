@@ -61,31 +61,77 @@ List<String> proofSourceLabels({
 
   final inputSources = stringList(features['input_sources']);
   if (inputSources.any((source) => source.startsWith('economy.'))) {
-    add(lalaCopy(language, ko: '카드 소비', en: 'Card spending'));
+    add(
+      lalaCopyMulti(
+        language,
+        ko: '카드 소비',
+        en: 'Card spending',
+        ja: 'カード消費',
+        zhHans: '刷卡消费',
+        zhHant: '刷卡消費',
+      ),
+    );
   }
   if (inputSources.contains('culture.events') ||
       asFeatureInt(features['culture_event_count']) > 0) {
-    add(lalaCopy(language, ko: '문화행사 데이터', en: 'Culture events'));
+    add(
+      lalaCopyMulti(
+        language,
+        ko: '문화행사 데이터',
+        en: 'Culture events',
+        ja: '文化イベントデータ',
+        zhHans: '文化活动数据',
+        zhHant: '文化活動數據',
+      ),
+    );
   }
   if (inputSources.contains('travel.weather_observations') ||
       score?.components.weatherFitScore != null ||
       weather != null) {
     add(
       weather == null
-          ? lalaCopy(language, ko: '날씨 관측', en: 'Weather observations')
-          : lalaCopy(
+          ? lalaCopyMulti(
+              language,
+              ko: '날씨 관측',
+              en: 'Weather observations',
+              ja: '気象観測',
+              zhHans: '气象观测',
+              zhHant: '氣象觀測',
+            )
+          : lalaCopyMulti(
               language,
               ko: '날씨 ${dustSituationLabel(weather.dust, language)}',
               en: 'Weather ${dustSituationLabel(weather.dust, language, includePrefix: false)}',
+              ja: '気象 ${dustSituationLabel(weather.dust, language, includePrefix: false)}',
+              zhHans: '天气 ${dustSituationLabel(weather.dust, language, includePrefix: false)}',
+              zhHant: '天氣 ${dustSituationLabel(weather.dust, language, includePrefix: false)}',
             ),
     );
   }
   if (inputSources.contains('travel.places')) {
-    add(lalaCopy(language, ko: '공식 장소 DB', en: 'Official place DB'));
+    add(
+      lalaCopyMulti(
+        language,
+        ko: '공식 장소 DB',
+        en: 'Official place DB',
+        ja: '公式スポットDB',
+        zhHans: '官方地点数据库',
+        zhHant: '官方地點資料庫',
+      ),
+    );
   }
   if (stringList(features['dynamic_source_types']).isNotEmpty ||
       stringList(features['rag_source_types']).isNotEmpty) {
-    add(lalaCopy(language, ko: '검색 컨텍스트', en: 'RAG context'));
+    add(
+      lalaCopyMulti(
+        language,
+        ko: '검색 컨텍스트',
+        en: 'RAG context',
+        ja: '検索コンテキスト',
+        zhHans: '检索上下文',
+        zhHant: '檢索上下文',
+      ),
+    );
   }
   return labels.take(8).toList(growable: false);
 }
@@ -95,16 +141,22 @@ String recommendationStatusMessage(
   required bool recoveryPending,
 }) {
   if (recoveryPending) {
-    return lalaCopy(
+    return lalaCopyMulti(
       language,
       ko: '추천 연결이 잠시 지연되고 있어요. 자동으로 다시 불러오는 중입니다.',
       en: 'Recommendations are taking longer than expected. Retrying automatically.',
+      ja: 'おすすめの取得に時間がかかっています。自動で再試行しています。',
+      zhHans: '推荐加载稍有延迟，正在自动重试。',
+      zhHant: '推薦載入稍有延遲，正在自動重試。',
     );
   }
-  return lalaCopy(
+  return lalaCopyMulti(
     language,
     ko: '추천 장소를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.',
     en: 'Could not load recommendations. Please try again shortly.',
+    ja: 'おすすめスポットを読み込めませんでした。しばらくしてからもう一度お試しください。',
+    zhHans: '无法加载推荐地点，请稍后重试。',
+    zhHant: '無法載入推薦地點，請稍後重試。',
   );
 }
 
@@ -136,16 +188,22 @@ String recommendationFailureMessage(
 ) {
   switch (kind) {
     case RecommendationFailureKind.unavailable:
-      return lalaCopy(
+      return lalaCopyMulti(
         language,
         ko: '일시적으로 서버에 연결할 수 없어요. 네트워크를 확인 후 다시 시도해 주세요.',
         en: 'Could not reach the service. Check your connection and try again.',
+        ja: 'サーバーに一時的に接続できません。ネットワークを確認してもう一度お試しください。',
+        zhHans: '暂时无法连接服务器，请检查网络后重试。',
+        zhHant: '暫時無法連線伺服器，請檢查網路後重試。',
       );
     case RecommendationFailureKind.error:
-      return lalaCopy(
+      return lalaCopyMulti(
         language,
         ko: '추천 장소를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.',
         en: 'Could not load recommendations. Please try again shortly.',
+        ja: 'おすすめスポットを読み込めませんでした。しばらくしてからもう一度お試しください。',
+        zhHans: '无法加载推荐地点，请稍后重试。',
+        zhHant: '無法載入推薦地點，請稍後重試。',
       );
   }
 }
@@ -156,7 +214,7 @@ String recommendationFailureSemanticsLabel(
   RecommendationFailureKind kind,
   String message,
 ) {
-  return lalaCopy(
+  return lalaCopyMulti(
     language,
     ko: kind == RecommendationFailureKind.unavailable
         ? '서버 연결 불가. $message'
@@ -164,6 +222,15 @@ String recommendationFailureSemanticsLabel(
     en: kind == RecommendationFailureKind.unavailable
         ? 'Service unreachable. $message'
         : 'Failed to load recommendations. $message',
+    ja: kind == RecommendationFailureKind.unavailable
+        ? 'サーバーに接続できません。$message'
+        : 'おすすめの読み込みに失敗しました。$message',
+    zhHans: kind == RecommendationFailureKind.unavailable
+        ? '无法连接服务器。$message'
+        : '加载推荐失败。$message',
+    zhHant: kind == RecommendationFailureKind.unavailable
+        ? '無法連線伺服器。$message'
+        : '載入推薦失敗。$message',
   );
 }
 
@@ -176,10 +243,13 @@ String? localizedUiMessage(String? value, String language) {
   if (trimmed == null || trimmed.isEmpty) {
     return null;
   }
-  return lalaCopy(
+  return lalaCopyMulti(
     language,
     ko: '지금 정보를 불러오지 못했어요.',
     en: 'Could not load the information right now.',
+    ja: '現在情報を読み込めません。',
+    zhHans: '暂时无法加载信息。',
+    zhHant: '暫時無法載入資訊。',
   );
 }
 
@@ -195,10 +265,13 @@ String safeUiErrorMessage(String? value, {String? fallbackMessage}) {
 }
 
 String recommendationLoadFailureMessage(String language) {
-  return lalaCopy(
+  return lalaCopyMulti(
     language,
     ko: '추천 장소를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.',
     en: 'Could not load recommendations. Please try again shortly.',
+    ja: 'おすすめスポットを読み込めませんでした。しばらくしてからもう一度お試しください。',
+    zhHans: '无法加载推荐地点，请稍后重试。',
+    zhHant: '無法載入推薦地點，請稍後重試。',
   );
 }
 
@@ -227,7 +300,8 @@ String interventionToastLabel(LalaIntervention intervention, String language) {
   // 동일하게 reason/action 카피를 그대로 쓴다. 아래쪽 trigger-aware fallback 은
   // API 가 빈 카피를 보낸 honest-empty 경우에만 발동한다.
 
-  if (isLalaEnglish(language)) {
+  // V6: ko 이외 로케일은 EN 카피 체인을 따른다(확장 로케일 폴백).
+  if (normalizeLalaLanguage(language) != 'ko') {
     if (localizedReason != null && localizedAction != null) {
       return '$localizedReason · $localizedAction';
     }
@@ -364,18 +438,38 @@ LalaPlace? placeById(List<LalaPlace> places, String? placeId) {
 
 String placeContextTitle(String category, String language) {
   return switch (category) {
-    'event' => lalaCopy(language, ko: '행사 맥락', en: 'Event context'),
-    'restaurant' => lalaCopy(
+    'event' => lalaCopyMulti(
+      language,
+      ko: '행사 맥락',
+      en: 'Event context',
+      ja: 'イベント文脈',
+      zhHans: '活动背景',
+      zhHant: '活動背景',
+    ),
+    'restaurant' => lalaCopyMulti(
       language,
       ko: '맛집 로컬 맥락',
       en: 'Food local context',
+      ja: 'グルメのローカル文脈',
+      zhHans: '美食本地背景',
+      zhHant: '美食在地背景',
     ),
-    'culture_venue' => lalaCopy(
+    'culture_venue' => lalaCopyMulti(
       language,
       ko: '문화 연계 맥락',
       en: 'Culture context',
+      ja: '文化連携文脈',
+      zhHans: '文化关联背景',
+      zhHant: '文化關聯背景',
     ),
-    _ => lalaCopy(language, ko: '로컬 맥락', en: 'Local context'),
+    _ => lalaCopyMulti(
+      language,
+      ko: '로컬 맥락',
+      en: 'Local context',
+      ja: 'ローカル文脈',
+      zhHans: '本地背景',
+      zhHant: '在地背景',
+    ),
   };
 }
 

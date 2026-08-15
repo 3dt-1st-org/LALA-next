@@ -73,10 +73,38 @@ class MapDraggableSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final title = switch (activeSheet) {
-      ActiveMapSheet.detail => language == 'en' ? 'Details' : '장소 상세',
-      ActiveMapSheet.planner => language == 'en' ? 'Daily Plan' : '하루 일정',
-      ActiveMapSheet.weather => language == 'en' ? 'Weather' : '날씨',
-      ActiveMapSheet.tour => language == 'en' ? 'Food Tour' : '맛집 투어',
+      ActiveMapSheet.detail => lalaCopyMulti(
+        language,
+        ko: '장소 상세',
+        en: 'Details',
+        ja: 'スポット詳細',
+        zhHans: '地点详情',
+        zhHant: '地點詳情',
+      ),
+      ActiveMapSheet.planner => lalaCopyMulti(
+        language,
+        ko: '하루 일정',
+        en: 'Daily Plan',
+        ja: '一日のプラン',
+        zhHans: '每日计划',
+        zhHant: '每日計畫',
+      ),
+      ActiveMapSheet.weather => lalaCopyMulti(
+        language,
+        ko: '날씨',
+        en: 'Weather',
+        ja: '気象',
+        zhHans: '天气',
+        zhHant: '天氣',
+      ),
+      ActiveMapSheet.tour => lalaCopyMulti(
+        language,
+        ko: '맛집 투어',
+        en: 'Food Tour',
+        ja: 'グルメツアー',
+        zhHans: '美食之旅',
+        zhHant: '美食之旅',
+      ),
     };
     final icon = switch (activeSheet) {
       ActiveMapSheet.detail => Icons.place_outlined,

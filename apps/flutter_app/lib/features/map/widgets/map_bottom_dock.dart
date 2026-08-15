@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../shared/l10n/lala_copy.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import '../../../shared/l10n/place_labels.dart';
@@ -223,5 +225,12 @@ String? _freshnessLabel(String? dataAsOf, String language) {
   final match = _freshnessDateOnly.firstMatch(dataAsOf);
   if (match == null) return null;
   final date = match.group(1)!;
-  return language == 'en' ? 'Data as of: $date' : '데이터 기준: $date';
+  return lalaCopyMulti(
+    language,
+    ko: '데이터 기준: $date',
+    en: 'Data as of: $date',
+    ja: 'データ基準: $date',
+    zhHans: '数据截至：$date',
+    zhHant: '數據截至：$date',
+  );
 }

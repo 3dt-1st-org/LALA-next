@@ -31,10 +31,13 @@ class DefaultRegionIndicator extends StatelessWidget {
           const SizedBox(width: 6),
           Expanded(
             child: Text(
-              lalaCopy(
+              lalaCopyMulti(
                 language,
                 ko: '현재 위치 대신 기본 지역(수원) 추천을 보여드려요',
                 en: 'Showing the default region (Suwon), not your location',
+                ja: '現在地の代わりに既定の地域（水原）のおすすめを表示しています',
+                zhHans: '正在显示默认地区（水原）的推荐，而非您的位置',
+                zhHant: '正在顯示預設地區（水原）的推薦，而非您的位置',
               ),
               style: const TextStyle(
                 fontSize: 12,
