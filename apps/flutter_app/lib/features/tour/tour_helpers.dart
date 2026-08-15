@@ -24,7 +24,8 @@ String tourGuideScript(List<LalaPlace> places, String language) {
   final localSignal = items
       .map((place) => place.score?.components.localSpendingScore ?? 0)
       .fold<double>(0, math.max);
-  if (isLalaEnglish(language)) {
+  // V6: ko 만 KO 문장 조합 — 방문객/EN 은 EN 문장(계약 I1, 정직 EN 폴백).
+  if (normalizeLalaLanguage(language) != 'ko') {
     final middle = tail.isEmpty ? '' : ' Continue through ${tail.join(', ')}.';
     final signal = localSignal >= 0.7
         ? ' These stops show strong local spending signals.'
