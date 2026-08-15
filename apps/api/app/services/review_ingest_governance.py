@@ -1273,6 +1273,7 @@ def _finalize_ingest_run(
     *,
     run_id: str,
     status: Literal["running", "succeeded", "failed"],
+    received_count: int,
     processed_count: int,
     duplicate_count: int,
     quarantined_count: int,
@@ -1282,11 +1283,17 @@ def _finalize_ingest_run(
     """Write final counters/status to the run accounting row.
 
     Idempotent *accounting* (not immutability): retry-safe absolute overwrite
-    of counters so re-running a batch converges rather than accumulates.
+    of EVERY counter -- including ``received_count`` -- so re-running a batch
+    converges rather than accumulates. Without overwriting ``received_count``
+    here, a resumed run (same ``run_key``) would keep the first attempt's stale
+    value forever, diverging from the processed/duplicate/quarantined counters
+    that are refreshed every time. Finalize is the single retry-safe source of
+    truth for the whole accounting row.
     """
     sql = """
         UPDATE community.ingest_runs
         SET status = %s,
+            received_count = %s,
             processed_count = %s,
             duplicate_count = %s,
             quarantined_count = %s,
@@ -1299,6 +1306,7 @@ def _finalize_ingest_run(
         sql,
         (
             status,
+            received_count,
             processed_count,
             duplicate_count,
             quarantined_count,
@@ -1367,6 +1375,7 @@ def govern_review_ingest_on_cursor(
         cur,
         run_id=run_id,
         status="succeeded",
+        received_count=received_count,
         processed_count=len(new_records),
         duplicate_count=len(replay_records),
         quarantined_count=len(quarantined),
@@ -1430,13 +1439,16 @@ def register_review_source(
     *,
     dsn: str,
     registration: ReviewSourceRegistration,
-    connect_timeout: int,
+    connect_timeout: int = 5,
 ) -> None:
     """Idempotently upsert a review-source registration row.
 
     Internal/admin only: there is intentionally no public endpoint. This runs
     in its own transaction (separate from any ingest run) because registration
-    is an operator action, not part of the worker batch boundary.
+    is an operator action, not part of the worker batch boundary. The
+    connection lifecycle mirrors :func:`persist_review_ingest_run`:
+    ``closing(conn)`` owns the connection, ``with conn:`` owns the transaction
+    (commit on success, rollback on error).
     """
     if not dsn:
         raise ValueError("DB_DSN is required.")
@@ -1466,19 +1478,20 @@ def register_review_source(
             source_status = EXCLUDED.source_status,
             updated_at = now()
     """
-    with psycopg2.connect(dsn, connect_timeout=connect_timeout) as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                sql,
-                (
-                    registration.source_name,
-                    registration.provider,
-                    registration.license_class,
-                    registration.terms_version,
-                    registration.collection_method,
-                    registration.retention_policy,
-                    registration.redaction_policy,
-                    registration.source_status,
-                ),
-            )
-        conn.commit()
+    conn = psycopg2.connect(dsn, connect_timeout=connect_timeout)
+    with closing(conn):
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    sql,
+                    (
+                        registration.source_name,
+                        registration.provider,
+                        registration.license_class,
+                        registration.terms_version,
+                        registration.collection_method,
+                        registration.retention_policy,
+                        registration.redaction_policy,
+                        registration.source_status,
+                    ),
+                )
