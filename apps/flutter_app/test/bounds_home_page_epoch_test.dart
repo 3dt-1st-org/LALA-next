@@ -109,6 +109,13 @@ class _EpochBackend implements LalaBackend {
     String? cursor,
   }) => throw StateError('disabled');
   @override
+  Future<LalaEnvelope<Map<String, dynamic>>> getLocalSignalAggregates({
+    int weeks = 4,
+    int limit = 20,
+    String? placeId,
+    String? category,
+  }) => throw StateError('disabled');
+  @override
   Future<LalaEnvelope<LalaWeather>> getWeather() =>
       throw StateError('disabled');
   @override

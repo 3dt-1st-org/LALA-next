@@ -27,6 +27,15 @@ abstract class LalaBackend {
     String? cursor,
   });
 
+  /// Governed system aggregates (weekly review-mention counts per place).
+  /// System-aggregate read model — never user posts, never raw review data.
+  Future<LalaEnvelope<Map<String, dynamic>>> getLocalSignalAggregates({
+    int weeks,
+    int limit,
+    String? placeId,
+    String? category,
+  });
+
   Future<LalaEnvelope<LalaWeather>> getWeather();
 
   Future<LalaEnvelope<LalaIntervention>> getIntervention();
@@ -110,6 +119,21 @@ class LalaApiBackend implements LalaBackend {
       kind: kind,
       sort: sort,
       cursor: cursor,
+    );
+  }
+
+  @override
+  Future<LalaEnvelope<Map<String, dynamic>>> getLocalSignalAggregates({
+    int weeks = 4,
+    int limit = 20,
+    String? placeId,
+    String? category,
+  }) {
+    return _client.getLocalSignalAggregates(
+      weeks: weeks,
+      limit: limit,
+      placeId: placeId,
+      category: category,
     );
   }
 

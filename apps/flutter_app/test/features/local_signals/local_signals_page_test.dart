@@ -37,6 +37,141 @@ void main() {
     expect(find.text('로컬 신호를 준비 중이에요'), findsOneWidget);
   });
 
+  testWidgets(
+    'governed aggregates render with provenance, period, and count', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _app(
+        _SignalsBackend.loaded(aggregates: _aggregatesPayload()),
+        onPlaceAction: (_) {},
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Provenance label: aggregated review mentions + aggregation date.
+    expect(
+      find.byKey(const ValueKey('local-signals-aggregates-provenance')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('리뷰 언급 집계'), findsOneWidget);
+    expect(find.textContaining('집계 기준 2026-08-04'), findsOneWidget);
+    // Aggregate card with period and mention count.
+    expect(
+      find.byKey(const ValueKey('local-signal-aggregate-count-수원화성')),
+      findsOneWidget,
+    );
+    expect(find.text('언급 12건'), findsOneWidget);
+    expect(find.textContaining('2026-08-03 ~ 2026-08-09'), findsOneWidget);
+    // Place/plan actions reuse the shared typed action request.
+    expect(
+      find.byKey(const ValueKey('local-signal-aggregate-place-place-1')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('local-signal-aggregate-plan-place-1')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('aggregate place action dispatches the typed request', (
+    tester,
+  ) async {
+    final requests = <LocalSignalPlaceActionRequest>[];
+    await tester.pumpWidget(
+      _app(
+        _SignalsBackend.loaded(aggregates: _aggregatesPayload()),
+        onPlaceAction: requests.add,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('local-signal-aggregate-place-place-1')),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('local-signal-aggregate-plan-place-1')),
+    );
+
+    expect(requests, <LocalSignalPlaceActionRequest>[
+      const LocalSignalPlaceActionRequest(
+        placeId: 'place-1',
+        action: LocalSignalPlaceAction.viewPlace,
+      ),
+      const LocalSignalPlaceActionRequest(
+        placeId: 'place-1',
+        action: LocalSignalPlaceAction.addToPlan,
+      ),
+    ]);
+  });
+
+  testWidgets(
+    'aggregate read failure shows honest unavailable, feed unaffected', (
+    tester,
+  ) async {
+    // aggregates: null → the fake throws for the aggregate read.
+    await tester.pumpWidget(_app(_SignalsBackend.loaded()));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('local-signals-aggregates-provenance')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('local-signals-aggregates-unavailable')),
+      findsOneWidget,
+    );
+    // The signal feed still renders normally.
+    expect(find.byKey(const ValueKey('local-signal-signal-1')), findsOneWidget);
+  });
+
+  testWidgets('available-but-empty aggregates render no aggregate section', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _app(
+        _SignalsBackend.loaded(
+          aggregates: _aggregatesPayload(items: const <Map<String, dynamic>>[]),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('local-signals-aggregates-provenance')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('local-signals-aggregates-unavailable')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey('local-signal-signal-1')), findsOneWidget);
+  });
+
+  testWidgets('ja locale renders localized aggregate copy without Korean', (
+    tester,
+  ) async {
+    OnboardingState.selectLanguage('ja');
+    await tester.pumpWidget(
+      _app(
+        _SignalsBackend.loaded(aggregates: _aggregatesPayload()),
+        onPlaceAction: (_) {},
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('local-signals-aggregates-provenance')),
+      findsOneWidget,
+    );
+    // ja has its own aggregate copy (V6 five-language contract).
+    expect(find.textContaining('レビュー言及の集計'), findsOneWidget);
+    expect(find.textContaining('言及12件'), findsOneWidget);
+    // Visitor locale must not leak Korean aggregate copy.
+    expect(find.text('언급 12건'), findsNothing);
+    expect(find.text('리뷰 언급 집계'), findsNothing);
+  });
+
   testWidgets('guest can read public signals but has no write or identity UI', (
     tester,
   ) async {
@@ -308,10 +443,12 @@ final ManualLocationOption _seoulOption = const ManualLocationOption(
 );
 
 class _SignalsBackend implements LalaBackend {
-  _SignalsBackend._({this.feed, this.error, this.completer});
+  _SignalsBackend._({this.feed, this.error, this.completer, this.aggregates});
 
-  factory _SignalsBackend.loaded({LocalSignalsFeed? feed}) =>
-      _SignalsBackend._(feed: feed ?? _feed());
+  factory _SignalsBackend.loaded({
+    LocalSignalsFeed? feed,
+    Map<String, dynamic>? aggregates,
+  }) => _SignalsBackend._(feed: feed ?? _feed(), aggregates: aggregates);
 
   factory _SignalsBackend.disabled() => _SignalsBackend._(
     error: const LalaApiException(
@@ -348,6 +485,10 @@ class _SignalsBackend implements LalaBackend {
   final LocalSignalsFeed? feed;
   final Object? error;
   final Completer<LalaEnvelope<Map<String, dynamic>>>? completer;
+
+  /// Governed aggregate payload; null = aggregate read fails (honest
+  /// unavailable path), empty-available = honest no-aggregate-data.
+  final Map<String, dynamic>? aggregates;
   final List<String?> requestedRegions = <String?>[];
 
   void complete(LocalSignalsFeed value) {
@@ -369,6 +510,35 @@ class _SignalsBackend implements LalaBackend {
       return Future<LalaEnvelope<Map<String, dynamic>>>.error(error!);
     }
     return Future<LalaEnvelope<Map<String, dynamic>>>.value(_envelope(feed!));
+  }
+
+  @override
+  Future<LalaEnvelope<Map<String, dynamic>>> getLocalSignalAggregates({
+    int weeks = 4,
+    int limit = 20,
+    String? placeId,
+    String? category,
+  }) {
+    if (aggregates == null) {
+      return Future<LalaEnvelope<Map<String, dynamic>>>.error(
+        const LalaApiException(
+          code: 'LOCAL_SIGNALS_DISABLED',
+          message: 'aggregates disabled',
+          statusCode: 503,
+          retryable: false,
+        ),
+      );
+    }
+    return Future<LalaEnvelope<Map<String, dynamic>>>.value(
+      LalaEnvelope<Map<String, dynamic>>(
+        ok: true,
+        data: aggregates,
+        meta: const <String, dynamic>{},
+        error: null,
+        statusCode: 200,
+        requestId: null,
+      ),
+    );
   }
 
   @override
@@ -501,4 +671,31 @@ Map<String, dynamic> _itemToJson(
       .toList(growable: false),
   'translation_available': item.translationAvailable,
   'display_language': item.displayLanguage,
+};
+
+Map<String, dynamic> _aggregatesPayload({
+  List<Map<String, dynamic>> items = const <Map<String, dynamic>>[
+    <String, dynamic>{
+      'kind': 'system_aggregate',
+      'place_id': 'place-1',
+      'place_name_ko': '수원화성',
+      'category': 'attraction',
+      'mention_count': 12,
+      'organic_mention_count': 9,
+      'sentiment_score': 0.62,
+      'review_quality_score': 0.71,
+      'week_start': '2026-08-03',
+      'week_end': '2026-08-09',
+      'provider_class': 'aggregated_review_mentions',
+    },
+  ],
+}) => <String, dynamic>{
+  'read_model': 'local_signals_place_aggregates',
+  'read_model_version': 'v1',
+  'source': 'governed_review_mention_aggregation',
+  'provider_class': 'aggregated_review_mentions',
+  'available': true,
+  'items': items,
+  'computed_at': '2026-08-04T06:30:00Z',
+  'last_refreshed_at': '2026-08-04T06:30:00Z',
 };
