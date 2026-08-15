@@ -112,9 +112,14 @@ def generate_docent_script_text(
     )
     language = display_language(request.language)
     grounding_context = grounding_context or []
-    place_name = (
-        _canonical_grounding_title(grounding_context) or request.place_name or request.place_id
-    )
+    # Why: the canonical grounding title is the Korean name; for an English request that
+    # forces the model to improvise its own romanization. Prefer the client-supplied
+    # localized name and keep the Korean title only as the Korean-mode label.
+    if language == "English":
+        place_name = request.place_name or _canonical_grounding_title(grounding_context)
+    else:
+        place_name = _canonical_grounding_title(grounding_context) or request.place_name
+    place_name = place_name or request.place_id
     context = _docent_context_prompt(
         request,
         grounding_context=grounding_context,
@@ -124,8 +129,17 @@ def generate_docent_script_text(
         place_name=place_name,
         grounding_context=grounding_context,
     )
+    # Why: verified grounding rows are Korean-only in the DB, so an English request used to
+    # hand the model a fully Korean context and the output language flipped mid-script.
+    language_guard = (
+        "The grounding snippets may be written in Korean. Translate their meaning; "
+        "every sentence of the output script must be in English only — no Korean characters.\n"
+        if language == "English"
+        else "모든 문장을 한국어로만 작성하세요.\n"
+    )
     prompt = (
         f"Output language: {language}.\n"
+        f"{language_guard}"
         f"Mode: {request.mode}.\n"
         f"Category: {request.category}.\n"
         f"Place: {place_name}.\n"
@@ -265,10 +279,19 @@ def _docent_context_prompt(
     weather_context = _weather_context_prompt(request)
     if weather_context:
         parts.append(weather_context)
-    grounding_prompt = _grounding_context_prompt(grounding_context or [])
+    grounding_prompt = _grounding_context_prompt(
+        grounding_context or [],
+        language=request.language,
+    )
     if grounding_prompt:
         parts.append(grounding_prompt)
     return " ".join(parts)
+
+
+_GROUNDING_PROMPT_LANGUAGE_GUARD_EN = (
+    "The grounding snippets below may be written in Korean. Translate their meaning into "
+    "English; every sentence of the final script must be English only."
+)
 
 
 def _score_context_prompt(request: DocentScriptRequest) -> str:
@@ -327,12 +350,18 @@ def _weather_condition_label(icon: str | None) -> str | None:
     }.get((icon or "").strip().lower())
 
 
-def _grounding_context_prompt(grounding_context: list[dict]) -> str:
+def _grounding_context_prompt(grounding_context: list[dict], *, language: str = "ko") -> str:
     snippets: list[str] = []
     for item in grounding_context[:3]:
         source_type = str(item.get("source_type") or "unknown").strip()
         title = str(item.get("title_ko") or "").strip()
-        body = str(item.get("body_ko") or item.get("body_en") or "").strip()
+        # Why: verified grounding bodies are Korean-only in the DB; for an English request
+        # prefer body_en when it exists and otherwise let the guard sentence below force
+        # translation instead of letting the Korean source flip the output language.
+        if language == "en":
+            body = str(item.get("body_en") or item.get("body_ko") or "").strip()
+        else:
+            body = str(item.get("body_ko") or item.get("body_en") or "").strip()
         body = " ".join(body.split())
         if not body:
             continue
@@ -344,10 +373,13 @@ def _grounding_context_prompt(grounding_context: list[dict]) -> str:
         snippets.append(f"- {label}: {body}")
     if not snippets:
         return ""
-    return (
+    header = (
         "Grounding snippets from LALA verified place context. Use them when relevant, "
-        "and do not invent facts beyond them:\n" + "\n".join(snippets)
+        "and do not invent facts beyond them:"
     )
+    if language == "en":
+        header += " " + _GROUNDING_PROMPT_LANGUAGE_GUARD_EN
+    return header + "\n" + "\n".join(snippets)
 
 
 def _canonical_grounding_title(grounding_context: list[dict]) -> str | None:
