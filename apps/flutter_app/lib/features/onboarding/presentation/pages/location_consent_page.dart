@@ -177,10 +177,13 @@ class _OnboardingLocationConsentPageState
                     ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 272),
                       child: Text(
-                        lalaCopy(
+                        lalaCopyMulti(
                           language,
                           ko: '내 주변을\n추천해 드릴게요',
                           en: 'We\'ll recommend\nwhat\'s nearby',
+                          ja: '近くのスポットを\nご案内します',
+                          zhHans: '为您推荐\n附近的去处',
+                          zhHant: '為您推薦\n附近的去處',
                         ),
                         style: TextStyle(
                           fontSize: LalaVisualTokens.onboardingTitleSize,
@@ -194,10 +197,13 @@ class _OnboardingLocationConsentPageState
                     ),
                     const SizedBox(height: 14),
                     Text(
-                      lalaCopy(
+                      lalaCopyMulti(
                         language,
                         ko: '현재 위치를 사용하면 가까운 명소·맛집·행사 등\n맞춤 추천을 받을 수 있어요.\n\n위치 정보는 동의 없이 저장되지 않으며,\n언제든지 변경할 수 있어요.',
                         en: 'Use your current location for nearby attractions,\nfood, and events.\n\nLocation is never stored without consent,\nand you can change it anytime.',
+                        ja: '現在地を使って、近くの名所・グルメ・イベントなど\nおすすめをご案内します。\n\n位置情報は同意なしに保存されず、\nいつでも変更できます。',
+                        zhHans: '使用当前位置，探索附近的景点、美食和活动。\n\n未经同意不会存储位置信息，\n您可以随时更改。',
+                        zhHant: '使用當前位置，探索附近的景點、美食和活動。\n\n未經同意不會儲存位置資訊，\n您可以隨時更改。',
                       ),
                       style: TextStyle(
                         fontSize: LalaVisualTokens.bodySize,
@@ -223,7 +229,14 @@ class _OnboardingLocationConsentPageState
               ),
               const SizedBox(height: 8),
               _TextActionButton(
-                label: lalaCopy(language, ko: '나중에 하기', en: 'Not now'),
+                label: lalaCopyMulti(
+                  language,
+                  ko: '나중에 하기',
+                  en: 'Not now',
+                  ja: 'あとで',
+                  zhHans: '暂不',
+                  zhHant: '暫不',
+                ),
                 onPressed: () => unawaited(_complete()),
               ),
             ] else if (_requesting)
@@ -239,18 +252,39 @@ class _OnboardingLocationConsentPageState
               )
             else ...<Widget>[
               _PrimaryButton(
-                label: lalaCopy(language, ko: '현재 위치 사용', en: 'Use location'),
+                label: lalaCopyMulti(
+                  language,
+                  ko: '현재 위치 사용',
+                  en: 'Use location',
+                  ja: '現在地を使う',
+                  zhHans: '使用当前位置',
+                  zhHant: '使用當前位置',
+                ),
                 onPressed: _allowLocation,
               ),
               const SizedBox(height: LalaVisualTokens.contentGap),
               _SecondaryButton(
-                label: lalaCopy(language, ko: '지역 직접 선택', en: 'Choose area'),
+                label: lalaCopyMulti(
+                  language,
+                  ko: '지역 직접 선택',
+                  en: 'Choose area',
+                  ja: '地域を選ぶ',
+                  zhHans: '选择地区',
+                  zhHant: '選擇地區',
+                ),
                 // 권한 결과와 무관하게 항상 노출/사용 가능.
                 onPressed: _requesting ? null : _openManualSheet,
               ),
               const SizedBox(height: 8),
               _TextActionButton(
-                label: lalaCopy(language, ko: '나중에 하기', en: 'Not now'),
+                label: lalaCopyMulti(
+                  language,
+                  ko: '나중에 하기',
+                  en: 'Not now',
+                  ja: 'あとで',
+                  zhHans: '暂不',
+                  zhHant: '暫不',
+                ),
                 onPressed: _requesting ? null : () => unawaited(_complete()),
               ),
             ],

@@ -4,7 +4,7 @@ import '../../shared/l10n/lala_copy.dart';
 import '../../shared/l10n/multi_language_text.dart';
 import '../../shared/l10n/place_labels.dart';
 
-/// 도슨트 스크립트 본문(C3 추출 — main.dart 의 _docentBody).
+/// 도센트 스크립트 본문(C3 추출 — main.dart 의 _docentBody).
 String docentBody({
   required LalaPlace? place,
   required String? script,
@@ -43,15 +43,29 @@ bool isPlaceholderDocentScript(String value) {
       RegExp(r'^this is a .+ docent script\.?$').hasMatch(lower);
 }
 
-/// 도슨트 미구비 상태 안내 문구(C3 추출 — main.dart 의 _unavailableDocentBody).
+/// 도슬트 미구비 상태 안내 문구(C3 추출 — main.dart 의 _unavailableDocentBody).
 String unavailableDocentBody({
   required LalaPlace? place,
   required String language,
 }) {
-  if (isLalaEnglish(language)) {
+  if (normalizeLalaLanguage(language) != 'ko') {
     return place == null
-        ? 'Select a place to load a docent script.'
-        : 'Loading the docent script. Please check again shortly.';
+        ? lalaCopyMulti(
+            language,
+            ko: '추천 장소가 선택되면 도슨트 스크립트를 불러옵니다.',
+            en: 'Select a place to load a docent script.',
+            ja: 'スポットを選ぶとドセントスクリプトを読み込みます。',
+            zhHans: '选择地点后即可加载导览解说。',
+            zhHant: '選擇地點後即可載入導覽解說。',
+          )
+        : lalaCopyMulti(
+            language,
+            ko: '도슨트 스크립트를 불러오는 중입니다. 잠시 뒤 다시 확인해 주세요.',
+            en: 'Loading the docent script. Please check again shortly.',
+            ja: 'ドセントスクリプトを読み込み中です。しばらくしてからもう一度ご確認ください。',
+            zhHans: '正在加载导览解说，请稍后再查看。',
+            zhHant: '正在載入導覽解說，請稍後再查看。',
+          );
   }
   return place == null
       ? '추천 장소가 선택되면 도슨트 스크립트를 불러옵니다.'
@@ -85,10 +99,24 @@ String docentSummary({
   }
 
   final placeName = place == null ? null : placeDisplayName(place, language);
-  if (isLalaEnglish(language)) {
+  if (normalizeLalaLanguage(language) != 'ko') {
     return placeName == null
-        ? 'Preparing local experiences around your current location.'
-        : 'Preparing the cultural context and route around $placeName.';
+        ? lalaCopyMulti(
+            language,
+            ko: '현재 위치 주변의 로컬 경험을 준비하고 있습니다.',
+            en: 'Preparing local experiences around your current location.',
+            ja: '現在地周辺のローカル体験を準備しています。',
+            zhHans: '正在为您准备当前位置附近的本地体验。',
+            zhHant: '正在為您準備目前位置附近的在地體驗。',
+          )
+        : lalaCopyMulti(
+            language,
+            ko: '$placeName 주변의 문화 맥락과 동선을 준비하고 있습니다.',
+            en: 'Preparing the cultural context and route around $placeName.',
+            ja: '$placeName 周辺の文化的背景とルートを準備しています。',
+            zhHans: '正在准备 $placeName 周边的文化背景和路线。',
+            zhHant: '正在準備 $placeName 週邊的文化背景和路線。',
+          );
   }
   return placeName == null
       ? '현재 위치 주변의 로컬 경험을 준비하고 있습니다.'
@@ -120,7 +148,14 @@ String? docentActionLabel({
     return null;
   }
   final placeName = place == null
-      ? lalaCopy(language, ko: '이 장소', en: 'this place')
+      ? lalaCopyMulti(
+          language,
+          ko: '이 장소',
+          en: 'this place',
+          ja: 'このスポット',
+          zhHans: '此地',
+          zhHant: '此地',
+        )
       : placeDisplayName(place, language);
   final localizedAction = singleLanguageText(trimmed, language);
   if (localizedAction != null && localizedAction.isNotEmpty) {
@@ -128,20 +163,44 @@ String? docentActionLabel({
   }
   final looksEnglish = looksEnglishText(trimmed);
   if (looksEnglish) {
-    if (isLalaEnglish(language)) {
+    // V6: ko 이외(en/ja/zh)는 모두 영문 원문을 그대로 쓴다(정직 폴백).
+    if (normalizeLalaLanguage(language) != 'ko') {
       return trimmed;
     }
     return '$placeName 주변 골목과 지역 상권을 함께 걷는 코스로 이어집니다.';
   }
-  if (isLalaEnglish(language)) {
+  if (normalizeLalaLanguage(language) != 'ko') {
     return place == null
-        ? 'This route continues through nearby local streets and businesses.'
-        : 'This route continues through local streets and businesses around $placeName.';
+        ? lalaCopyMulti(
+            language,
+            ko: '이 동선은 주변 로컬 거리와 상권으로 이어집니다.',
+            en: 'This route continues through nearby local streets and businesses.',
+            ja: 'このルートは近くのローカルな街並みと商店街へ続きます。',
+            zhHans: '这条路线将穿过附近的本地街道和商圈。',
+            zhHant: '這條路線將穿過附近的本地街道和商圈。',
+          )
+        : lalaCopyMulti(
+            language,
+            ko: '이 동선은 $placeName 주변 로컬 거리와 상권으로 이어집니다.',
+            en: 'This route continues through local streets and businesses around $placeName.',
+            ja: 'このルートは $placeName 周辺のローカルな街並みと商店街へ続きます。',
+            zhHans: '这条路线将穿过 $placeName 附近的本地街道和商圈。',
+            zhHant: '這條路線將穿過 $placeName 附近的本地街道和商圈。',
+          );
   }
   return trimmed;
 }
 
 /// 도슨트 음성 바이트 수 라벨(C3 추출 — main.dart 의 _audioBytesLabel).
 String audioBytesLabel(int bytes, String language) {
-  return isLalaEnglish(language) ? '$bytes bytes' : '$bytes바이트';
+  return normalizeLalaLanguage(language) == 'ko'
+      ? '$bytes바이트'
+      : lalaCopyMulti(
+          language,
+          ko: '$bytes바이트',
+          en: '$bytes bytes',
+          ja: '$bytes バイト',
+          zhHans: '$bytes 字节',
+          zhHant: '$bytes 位元組',
+        );
 }

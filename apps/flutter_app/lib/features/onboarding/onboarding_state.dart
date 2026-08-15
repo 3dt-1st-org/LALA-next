@@ -8,6 +8,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import 'package:lala_next_app/core/persistence/onboarding_preferences.dart';
+import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 
 /// 온보딩 start 단계에서 선택하는 관광객 유형.
 enum OnboardingTouristType { foreignTourist, localTourist }
@@ -64,8 +65,10 @@ class OnboardingState {
   }
 
   /// 언어를 직접 변경(language 단계에서 start 기본값을 덮어쓸 수 있다).
+  /// V6: ko/en + 방문객 로케일(ja/zh-Hans/zh-Hant)을 지원하며, 알 수 없는 값은
+  /// 기존처럼 ko 로 정규화된다.
   static void selectLanguage(String language) {
-    _language.value = language == 'en' ? 'en' : 'ko';
+    _language.value = normalizeLalaLanguage(language);
     _persist();
   }
 
@@ -103,7 +106,7 @@ class OnboardingState {
   /// Cold start: 영속화된 스냅샷으로 인메모리 상태를 복원한다. 역직렬화는
   /// 이미 안전한 기본값으로 정규화되어 있으므로 추가 검증 없이 적용한다.
   static void applySnapshot(OnboardingSnapshot snapshot) {
-    _language.value = snapshot.language == 'en' ? 'en' : 'ko';
+    _language.value = normalizeLalaLanguage(snapshot.language);
     _touristType = _decodeTouristType(snapshot.touristTypeCode);
     _completed.value = snapshot.completed;
   }

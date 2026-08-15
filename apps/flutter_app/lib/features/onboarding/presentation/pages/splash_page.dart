@@ -65,13 +65,16 @@ class _OnboardingSplashPageState extends State<OnboardingSplashPage> {
                 ),
                 const SizedBox(height: 18),
                 Text(
-                  lalaCopy(
+                  lalaCopyMulti(
                     language,
                     // Why: a pre-onboarding boot transition must not promise a
                     // specific region or "nearby" guidance before any location is
                     // resolved. Keep the guidance promise, drop the Suwon claim.
                     ko: '여행을 안내해 드릴게요',
                     en: 'We\'ll guide your trip',
+                    ja: '旅をご案内します',
+                    zhHans: '为您的旅行提供向导',
+                    zhHant: '為您的旅行提供嚮導',
                   ),
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     color: const Color(0xFF475569),

@@ -16,6 +16,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:lala_next_app/manual_location_options.dart';
+import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 
 /// Versioned key prefix so schema changes never collide with older installs.
 const String kOnboardingStoragePrefix = 'lala.onboarding.v1.';
@@ -43,7 +44,8 @@ class OnboardingSnapshot {
   /// Whether onboarding has been completed. False on a clean first run.
   final bool completed;
 
-  /// Chosen UI language code ('ko' / 'en'). Unknown values fall back to 'ko'.
+  /// Chosen UI language code ('ko' / 'en' / 'ja' / 'zh-Hans' / 'zh-Hant').
+  /// Unknown values fall back to 'ko' (V6 visitor locales included).
   final String language;
 
   /// Persisted tourist-type code (see [kTouristTypeCode*]). Unknown -> local.
@@ -173,7 +175,8 @@ class OnboardingPreferences {
     await _backend.remove(_kManualRegionId);
   }
 
-  String _decodeLanguage(String? raw) => raw == 'en' ? 'en' : 'ko';
+  // V6: 디스크 포맷은 키/네임스페이스 그대로 두고, 디코드만 확장 로케일을 허용한다.
+  String _decodeLanguage(String? raw) => normalizeLalaLanguage(raw);
 
   String _decodeTouristTypeCode(String? raw) {
     return raw == kTouristTypeCodeForeign

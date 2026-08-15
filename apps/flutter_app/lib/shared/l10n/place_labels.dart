@@ -1,6 +1,8 @@
 // 장소/지역/위치/야외 상태 표시 라벨 공용 헬퍼 (C3 추출).
 // main.dart 의 _locationLabel / _placeDisplayName / _placeRegionLabel / _outdoorLabel 이
 // 여기로 정식화되었다. 의존: lalaCopy, isLalaEnglish, singleLanguageText, containsKorean.
+// V6: ja/zh-Hans/zh-Hant 는 EN 체인을 따른다(계약 §6 정직 폴백 — 확장 로케일 화면에
+// 한국어 정적 데이터가 섞이는 것을 금지).
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import 'lala_copy.dart';
@@ -8,19 +10,34 @@ import 'multi_language_text.dart';
 
 String locationLabel(String? value, String language) {
   final trimmed = value?.trim();
+  final normalizedLanguage = normalizeLalaLanguage(language);
   if (trimmed == null || trimmed.isEmpty) {
     // Why: a missing weather location must not be fabricated as "Suwon" (which
     // reads as the user's own location). Disclose the default region honestly
     // until a real location is resolved.
-    return lalaCopy(language, ko: '기본 지역', en: 'Default region');
+    return lalaCopyMulti(
+      language,
+      ko: '기본 지역',
+      en: 'Default region',
+      ja: '既定の地域',
+      zhHans: '默认地区',
+      zhHant: '預設地區',
+    );
   }
   final normalized = trimmed.toLowerCase();
   final localized = singleLanguageText(trimmed, language);
-  if (isLalaEnglish(language)) {
+  if (normalizedLanguage != 'ko') {
     if (localized == null || localized.isEmpty) {
       return switch (trimmed) {
         '수원' || '수원시' => 'Suwon',
-        _ => 'Nearby area',
+        _ => lalaCopyMulti(
+          language,
+          ko: '주변 지역',
+          en: 'Nearby area',
+          ja: '近くのエリア',
+          zhHans: '附近区域',
+          zhHant: '附近區域',
+        ),
       };
     }
     return switch (localized) {
@@ -41,7 +58,7 @@ String locationLabel(String? value, String language) {
 }
 
 String placeDisplayName(LalaPlace place, String language) {
-  if (isLalaEnglish(language)) {
+  if (normalizeLalaLanguage(language) != 'ko') {
     final nameEn = singleLanguageText(place.nameEn, language);
     if (nameEn != null) {
       return nameEn;
@@ -50,7 +67,14 @@ String placeDisplayName(LalaPlace place, String language) {
     if (primaryName != null) {
       return primaryName;
     }
-    return 'Local place';
+    return lalaCopyMulti(
+      language,
+      ko: '이 장소',
+      en: 'Local place',
+      ja: '現地のスポット',
+      zhHans: '本地地点',
+      zhHant: '本地地點',
+    );
   }
   final nameKo = singleLanguageText(place.nameKo, language);
   if (nameKo != null) {
@@ -64,7 +88,7 @@ String placeDisplayName(LalaPlace place, String language) {
 }
 
 String placeRegionLabel(LalaPlace place, String language) {
-  if (isLalaEnglish(language)) {
+  if (normalizeLalaLanguage(language) != 'ko') {
     final regionEn = singleLanguageText(place.regionEn, language);
     if (regionEn != null) {
       return regionEn;
@@ -80,7 +104,7 @@ String placeRegionLabel(LalaPlace place, String language) {
     if (address != null) {
       return address;
     }
-    return 'Nearby area';
+    return locationLabel(null, language);
   }
   final regionKo = singleLanguageText(place.regionKo, language);
   if (regionKo != null) {
@@ -94,11 +118,32 @@ String placeRegionLabel(LalaPlace place, String language) {
 }
 
 String outdoorLabel(String status, {String language = 'ko'}) {
-  if (isLalaEnglish(language)) {
+  if (normalizeLalaLanguage(language) != 'ko') {
     return switch (status) {
-      'good' => 'Good',
-      'normal' => 'Normal',
-      'bad' => 'Caution',
+      'good' => lalaCopyMulti(
+        language,
+        ko: '좋음',
+        en: 'Good',
+        ja: '良',
+        zhHans: '优',
+        zhHant: '優',
+      ),
+      'normal' => lalaCopyMulti(
+        language,
+        ko: '보통',
+        en: 'Normal',
+        ja: '普通',
+        zhHans: '一般',
+        zhHant: '一般',
+      ),
+      'bad' => lalaCopyMulti(
+        language,
+        ko: '주의',
+        en: 'Caution',
+        ja: '注意',
+        zhHans: '注意',
+        zhHant: '注意',
+      ),
       _ => status,
     };
   }
