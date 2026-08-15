@@ -443,8 +443,22 @@ class _PlanSlotMetaChip extends StatelessWidget {
 String _visitBadgeLabel(String status, String language) {
   final visited = status.trim().toLowerCase() == 'visited';
   return visited
-      ? lalaCopy(language, ko: '방문함', en: 'Visited')
-      : lalaCopy(language, ko: '예정', en: 'Planned');
+      ? lalaCopyMulti(
+  language,
+  ko: '방문함',
+  en: 'Visited',
+  ja: '訪問済み',
+  zhHans: '已到访',
+  zhHant: '已到訪',
+)
+      : lalaCopyMulti(
+  language,
+  ko: '예정',
+  en: 'Planned',
+  ja: '予定',
+  zhHans: '计划中',
+  zhHant: '計畫中',
+);
 }
 
 /// V5-B VISIT badge: planned ↔ visited, icon+text+color (never color-alone).
@@ -496,10 +510,13 @@ class _VisitBadge extends StatelessWidget {
       return chip;
     }
     // Min 44dp touch target (§13.5); the toggle persists via SlotVisitStore.
-    final toggleLabel = lalaCopy(
+    final toggleLabel = lalaCopyMulti(
       language,
       ko: visited ? '방문 취소' : '방문 체크인',
       en: visited ? 'Undo check-in' : 'Check in',
+      ja: visited ? 'チェックインを取り消す' : 'チェックイン',
+      zhHans: visited ? '取消到访' : '到访签到',
+      zhHant: visited ? '取消到訪' : '到訪簽到',
     );
     return ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 44),

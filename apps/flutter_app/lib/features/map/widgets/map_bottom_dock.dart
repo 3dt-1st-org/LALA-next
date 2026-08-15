@@ -116,7 +116,17 @@ class MapBottomDock extends StatelessWidget {
                   TextButton.icon(
                     onPressed: currentPlace == null ? null : onOpenDetail,
                     icon: const Icon(Icons.keyboard_arrow_up),
-                    label: Text(uiLanguage == 'en' ? 'Details' : '상세'),
+                    // V6: 도슨트 상세 진입 라벨 — 방문객 로케일도 현지화(계약 I1).
+                    label: Text(
+                      lalaCopyMulti(
+                        uiLanguage,
+                        ko: '상세',
+                        en: 'Details',
+                        ja: '詳細',
+                        zhHans: '详情',
+                        zhHant: '詳情',
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -157,7 +167,14 @@ class MapBottomDock extends StatelessWidget {
                         onOpenDetail();
                       },
                       child: Text(
-                        uiLanguage == 'en' ? 'Signals' : '점수/근거',
+                        lalaCopyMulti(
+                          uiLanguage,
+                          ko: '점수/근거',
+                          en: 'Signals',
+                          ja: 'スコア/根拠',
+                          zhHans: '评分/依据',
+                          zhHant: '評分/依據',
+                        ),
                         style: const TextStyle(fontWeight: FontWeight.w900),
                       ),
                     ),

@@ -75,7 +75,9 @@ String categoryFilterLabel(String category, String language) {
       zhHant: '全部',
     );
   }
-  if (language == 'en') {
+  // Why: 'en' keeps its EN plural filter labels (byte-compat); the visitor
+  // locales already returned localized labels above, so only ko reaches here.
+  if (normalizeLalaLanguage(language) == 'en') {
     return switch (category) {
       'all' => 'All',
       'restaurant' => 'Restaurants',

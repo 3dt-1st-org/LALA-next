@@ -57,6 +57,34 @@ String locationLabel(String? value, String language) {
   };
 }
 
+/// Honest-fallback disclosure for visitor locales (contract §6): when static
+/// data (place names, region names) has no translation, the visitor screen
+/// shows the English form — never silently. Mirrors the Local Signals
+/// `Translated view` badge so one disclosure pattern exists app-wide.
+bool placeNameUsesEnglishFallback(LalaPlace place, String language) {
+  if (normalizeLalaLanguage(language) == 'ko') {
+    return false;
+  }
+  // EN screens show the English name by contract (not a fallback); only the
+  // visitor locales are disclosing an untranslated static field.
+  if (normalizeLalaLanguage(language) == 'en') {
+    return false;
+  }
+  return singleLanguageText(place.nameEn, language) == null;
+}
+
+/// The disclosure label appended near untranslated static names.
+String englishFallbackDisclosureLabel(String language) {
+  return lalaCopyMulti(
+    language,
+    ko: '영문 제공',
+    en: 'Shown in English',
+    ja: '英語表記',
+    zhHans: '英文显示',
+    zhHant: '英文顯示',
+  );
+}
+
 String placeDisplayName(LalaPlace place, String language) {
   if (normalizeLalaLanguage(language) != 'ko') {
     final nameEn = singleLanguageText(place.nameEn, language);

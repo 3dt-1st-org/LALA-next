@@ -125,11 +125,14 @@ class _CommunityFeedPageState extends State<CommunityFeedPage> {
     }
   }
 
-  String _fallbackError() => lalaCopy(
-        _language,
-        ko: '게시글을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.',
-        en: 'Could not load posts. Please try again shortly.',
-      );
+  String _fallbackError() => lalaCopyMulti(
+          _language,
+          ko: '게시글을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.',
+          en: 'Could not load posts. Please try again shortly.',
+          ja: '投稿を読み込めませんでした。しばらくしてからもう一度お試しください。',
+          zhHans: '无法加载帖子，请稍后重试。',
+          zhHant: '無法載入貼文，請稍後重試。',
+        );
 
   Future<void> _openCreate() async {
     final result =
@@ -166,7 +169,14 @@ class _CommunityFeedPageState extends State<CommunityFeedPage> {
         scrolledUnderElevation: 0,
         actions: [
           IconButton(
-            tooltip: lalaCopy(_language, ko: '채팅', en: 'Chat'),
+            tooltip: lalaCopyMulti(
+  _language,
+  ko: '채팅',
+  en: 'Chat',
+  ja: 'チャット',
+  zhHans: '聊天',
+  zhHant: '聊天',
+),
             icon: const Icon(Icons.chat_bubble_outline_rounded),
             onPressed: () => context.push(LalaRoutePaths.communityChat),
           ),
@@ -184,7 +194,14 @@ class _CommunityFeedPageState extends State<CommunityFeedPage> {
         onPressed: _openCreate,
         icon: const Icon(Icons.edit_outlined),
         label: Text(
-          lalaCopy(_language, ko: '글쓰기', en: 'Write'),
+          lalaCopyMulti(
+  _language,
+  ko: '글쓰기',
+  en: 'Write',
+  ja: '書き込む',
+  zhHans: '发帖',
+  zhHant: '發文',
+),
           style: const TextStyle(fontWeight: FontWeight.w900),
         ),
       ),
@@ -311,11 +328,14 @@ class _FeedEmptyView extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  lalaCopy(
-                    language,
-                    ko: '아직 게시글이 없어요.\n첫 글을 남겨보세요!',
-                    en: 'No posts yet.\nBe the first to share!',
-                  ),
+                  lalaCopyMulti(
+                      language,
+                      ko: '아직 게시글이 없어요.\n첫 글을 남겨보세요!',
+                      en: 'No posts yet.\nBe the first to share!',
+                      ja: 'まだ投稿がありません。\n最初の投稿をどうぞ！',
+                      zhHans: '还没有帖子。\n来发第一篇吧！',
+                      zhHant: '還沒有貼文。\n來發第一篇吧！',
+                    ),
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: Color(0xFF64748B),

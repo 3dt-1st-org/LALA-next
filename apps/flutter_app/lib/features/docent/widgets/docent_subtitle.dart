@@ -98,15 +98,21 @@ class DocentSubtitle extends StatelessWidget {
                       children: [
                         Text(
                           place == null
-                              ? lalaCopy(
+                              ? lalaCopyMulti(
                                   language,
                                   ko: '로컬 도슨트',
                                   en: 'Local docent',
+                                  ja: 'ローカルガイド',
+                                  zhHans: '本地讲解',
+                                  zhHant: '在地導覽',
                                 )
-                              : lalaCopy(
+                              : lalaCopyMulti(
                                   language,
                                   ko: '${placeDisplayName(place!, language)} 도슨트',
                                   en: '${placeDisplayName(place!, language)} docent',
+                                  ja: '${placeDisplayName(place!, language)} ガイド',
+                                  zhHans: '${placeDisplayName(place!, language)} 讲解',
+                                  zhHant: '${placeDisplayName(place!, language)} 導覽',
                                 ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -360,7 +366,14 @@ class _DocentPlaybackRow extends StatelessWidget {
                 children: [
                   Text(
                     controller.scriptText ??
-                        lalaCopy(language, ko: '도슨트 음성', en: 'Docent audio'),
+                        lalaCopyMulti(
+                          language,
+                          ko: '도슨트 음성',
+                          en: 'Docent audio',
+                          ja: 'ガイド音声',
+                          zhHans: '讲解语音',
+                          zhHant: '導覽語音',
+                        ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(

@@ -45,7 +45,14 @@ class TourScriptCard extends StatelessWidget {
               const SizedBox(width: 7),
               Expanded(
                 child: Text(
-                  lalaCopy(language, ko: '투어 도슨트 스크립트', en: 'Tour docent script'),
+                  lalaCopyMulti(
+                  language,
+                  ko: '투어 도슨트 스크립트',
+                  en: 'Tour docent script',
+                  ja: 'ツアーガイド台本',
+                  zhHans: '行程讲解稿',
+                  zhHant: '行程導覽稿',
+                ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(

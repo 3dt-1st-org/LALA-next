@@ -47,10 +47,13 @@ class WeatherUnavailableCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 5),
                 Text(
-                  lalaCopy(
+                  lalaCopyMulti(
                     language,
                     ko: '실시간 관측값이 확인될 때 온도와 미세먼지를 표시합니다.',
                     en: 'Temperature and dust appear when verified observations are available.',
+                    ja: '検証済みの観測値が確認できた時点で気温と粒子状物質を表示します。',
+                    zhHans: '获得经验证的观测值后显示温度和颗粒物信息。',
+                    zhHant: '獲得經驗證的觀測值後顯示溫度和懸浮微粒資訊。',
                   ),
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: const Color(0xFF64748B),

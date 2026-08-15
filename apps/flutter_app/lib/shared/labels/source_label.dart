@@ -22,10 +22,13 @@ bool isPlaceholderWeatherSource(String? source) {
 }
 
 String sourceLabel(String? value, {String language = 'ko'}) {
+  // V6: ko 만 KO 라벨 — 그 외 로케일은 EN 라벨(방문객 화면 KO 노출 금지).
   if (isFallbackSourceCode(value)) {
-    return isLalaEnglish(language) ? 'Limited offline data' : '제한적 오프라인 데이터';
+    return normalizeLalaLanguage(language) == 'ko'
+        ? '제한적 오프라인 데이터'
+        : 'Limited offline data';
   }
-  if (isLalaEnglish(language)) {
+  if (normalizeLalaLanguage(language) != 'ko') {
     return switch ((value ?? '').trim()) {
       'db' => 'Live recommendations',
       'mixed' => 'Live + official data',
@@ -45,9 +48,11 @@ String sourceLabel(String? value, {String language = 'ko'}) {
 
 String weatherSourceLabel(String? value, {String language = 'ko'}) {
   if (isPlaceholderWeatherSource(value) || isFallbackSourceCode(value)) {
-    return isLalaEnglish(language) ? 'Weather pending' : '날씨 준비 중';
+    return normalizeLalaLanguage(language) == 'ko'
+        ? '날씨 준비 중'
+        : 'Weather pending';
   }
-  if (isLalaEnglish(language)) {
+  if (normalizeLalaLanguage(language) != 'ko') {
     return switch ((value ?? '').trim()) {
       'db' => 'Live weather',
       'db+airkorea_sido_realtime' => 'Live weather + AirKorea air quality',

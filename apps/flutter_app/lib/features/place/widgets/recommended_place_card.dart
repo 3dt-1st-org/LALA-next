@@ -91,7 +91,11 @@ class RecommendedPlaceCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  _placeCardSubtitle(place, language),
+                  // V6 §6: 번역 없는 정적 데이터(주소/지역)는 영문 폴백 + 고지 배지.
+                  placeNameUsesEnglishFallback(place, language)
+                      ? '${_placeCardSubtitle(place, language)} · '
+                            '${englishFallbackDisclosureLabel(language)}'
+                      : _placeCardSubtitle(place, language),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(

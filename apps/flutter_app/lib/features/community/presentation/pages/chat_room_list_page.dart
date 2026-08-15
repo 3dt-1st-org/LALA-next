@@ -125,20 +125,26 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
     }
   }
 
-  String _fallbackError() => lalaCopy(
-        _language,
-        ko: '채팅방을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.',
-        en: 'Could not load chat rooms. Please try again shortly.',
-      );
+  String _fallbackError() => lalaCopyMulti(
+          _language,
+          ko: '채팅방을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.',
+          en: 'Could not load chat rooms. Please try again shortly.',
+          ja: 'チャットルームを読み込めませんでした。しばらくしてからもう一度お試しください。',
+          zhHans: '无法加载聊天室，请稍后重试。',
+          zhHant: '無法載入聊天室，請稍後重試。',
+        );
 
   Future<void> _openCreate() async {
     if (!_canCreate) {
       _showSnack(
-        lalaCopy(
-          _language,
-          ko: '방 만들기는 로그인이 필요해요.',
-          en: 'Sign in to create a room.',
-        ),
+        lalaCopyMulti(
+            _language,
+            ko: '방 만들기는 로그인이 필요해요.',
+            en: 'Sign in to create a room.',
+            ja: 'ルーム作成にはログインが必要です。',
+            zhHans: '创建房间需要登录。',
+            zhHant: '建立房間需要登入。',
+          ),
       );
       return;
     }
@@ -152,12 +158,26 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
       if (!mounted) return;
       _showSnack(
         e.message.trim().isEmpty
-            ? lalaCopy(_language, ko: '방 생성에 실패했어요.', en: 'Failed to create room.')
+            ? lalaCopyMulti(
+  _language,
+  ko: '방 생성에 실패했어요.',
+  en: 'Failed to create room.',
+  ja: 'ルーム作成に失敗しました。',
+  zhHans: '创建房间失败。',
+  zhHant: '建立房間失敗。',
+)
             : e.message,
       );
     } on Object {
       if (!mounted) return;
-      _showSnack(lalaCopy(_language, ko: '방 생성에 실패했어요.', en: 'Failed to create room.'));
+      _showSnack(lalaCopyMulti(
+  _language,
+  ko: '방 생성에 실패했어요.',
+  en: 'Failed to create room.',
+  ja: 'ルーム作成に失敗しました。',
+  zhHans: '创建房间失败。',
+  zhHant: '建立房間失敗。',
+));
     }
   }
 
@@ -168,7 +188,14 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
       builder: (context) {
         return AlertDialog(
           title: Text(
-            lalaCopy(_language, ko: '새 채팅방', en: 'New chat room'),
+            lalaCopyMulti(
+  _language,
+  ko: '새 채팅방',
+  en: 'New chat room',
+  ja: '新しいチャットルーム',
+  zhHans: '新聊天室',
+  zhHant: '新聊天室',
+),
             style: const TextStyle(fontWeight: FontWeight.w900),
           ),
           content: TextField(
@@ -179,11 +206,14 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
             onSubmitted: (value) =>
                 Navigator.of(context).pop(value.trim()),
             decoration: InputDecoration(
-              hintText: lalaCopy(
-                _language,
-                ko: '방 이름',
-                en: 'Room name',
-              ),
+              hintText: lalaCopyMulti(
+                  _language,
+                  ko: '방 이름',
+                  en: 'Room name',
+                  ja: 'ルーム名',
+                  zhHans: '房间名称',
+                  zhHant: '房間名稱',
+                ),
               border: const OutlineInputBorder(),
             ),
           ),
@@ -202,7 +232,14 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
             FilledButton(
               onPressed: () =>
                   Navigator.of(context).pop(controller.text.trim()),
-              child: Text(lalaCopy(_language, ko: '만들기', en: 'Create')),
+              child: Text(lalaCopyMulti(
+  _language,
+  ko: '만들기',
+  en: 'Create',
+  ja: '作成',
+  zhHans: '创建',
+  zhHant: '建立',
+)),
             ),
           ],
         );
@@ -227,7 +264,14 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
       backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
         title: Text(
-          lalaCopy(_language, ko: '채팅', en: 'Chat'),
+          lalaCopyMulti(
+  _language,
+  ko: '채팅',
+  en: 'Chat',
+  ja: 'チャット',
+  zhHans: '聊天',
+  zhHant: '聊天',
+),
           style: const TextStyle(fontWeight: FontWeight.w900),
         ),
         backgroundColor: theme.colorScheme.surface,
@@ -256,7 +300,14 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
         onPressed: _openCreate,
         icon: const Icon(Icons.add_rounded),
         label: Text(
-          lalaCopy(_language, ko: '방 만들기', en: 'New room'),
+          lalaCopyMulti(
+  _language,
+  ko: '방 만들기',
+  en: 'New room',
+  ja: 'ルームを作る',
+  zhHans: '创建房间',
+  zhHant: '建立房間',
+),
           style: const TextStyle(fontWeight: FontWeight.w900),
         ),
       ),
@@ -348,11 +399,20 @@ class _ListErrorView extends StatelessWidget {
             FilledButton.icon(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh_rounded, size: 18),
-              label: Text(lalaCopy(
-                Localizations.localeOf(context).languageCode,
-                ko: '재시도',
-                en: 'Retry',
-              )),
+              // Why: the sheet reads the widget locale, so route it through
+              // the SSOT normalizer rather than a raw locale code.
+              label: Text(
+                lalaCopyMulti(
+                  normalizeLalaLanguage(
+                    Localizations.localeOf(context).languageCode,
+                  ),
+                  ko: '재시도',
+                  en: 'Retry',
+                  ja: '再試行',
+                  zhHans: '重试',
+                  zhHant: '重試',
+                ),
+              ),
               style: FilledButton.styleFrom(
                 backgroundColor: theme.colorScheme.primary,
                 foregroundColor: theme.colorScheme.onPrimary,
@@ -389,11 +449,14 @@ class _ListEmptyView extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  lalaCopy(
-                    language,
-                    ko: '아직 채팅방이 없어요.\n첫 방을 만들어보세요!',
-                    en: 'No chat rooms yet.\nCreate the first one!',
-                  ),
+                  lalaCopyMulti(
+                      language,
+                      ko: '아직 채팅방이 없어요.\n첫 방을 만들어보세요!',
+                      en: 'No chat rooms yet.\nCreate the first one!',
+                      ja: 'まだチャットルームがありません。\n最初のルームを作ってみましょう！',
+                      zhHans: '还没有聊天室。\n来创建第一个吧！',
+                      zhHant: '還沒有聊天室。\n來建立第一個吧！',
+                    ),
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: Color(0xFF64748B),

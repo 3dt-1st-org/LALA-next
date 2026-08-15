@@ -330,43 +330,61 @@ String _interventionFallbackCopy(String? trigger, String? place, String language
   switch (trigger) {
     case 'closure_detected':
       return place != null
-          ? lalaCopy(
-              language,
-              ko: '선택한 장소가 영업 중이 아닐 수 있어요. $place 근처 다른 옵션을 확인해 보세요.',
-              en: 'The chosen place may be closed. Check other options near $place.',
-            )
-          : lalaCopy(
-              language,
-              ko: '선택한 장소가 영업 중이 아닐 수 있어요. 동선을 다시 확인해 보세요.',
-              en: 'The chosen place may be closed. Review the route.',
-            );
+          ? lalaCopyMulti(
+                language,
+                ko: '선택한 장소가 영업 중이 아닐 수 있어요. $place 근처 다른 옵션을 확인해 보세요.',
+                en: 'The chosen place may be closed. Check other options near $place.',
+                ja: '選択したスポットは営業していない可能性があります。$place 付近の他の選択肢をご確認ください。',
+                zhHans: '所选地点可能已打烊。请查看 $place 附近的其他选择。',
+                zhHant: '所選地點可能已打烊。請查看 $place 附近的其他選擇。',
+              )
+          : lalaCopyMulti(
+                language,
+                ko: '선택한 장소가 영업 중이 아닐 수 있어요. 동선을 다시 확인해 보세요.',
+                en: 'The chosen place may be closed. Review the route.',
+                ja: '選択したスポットは営業していない可能性があります。ルートをご確認ください。',
+                zhHans: '所选地点可能已打烊。请重新查看路线。',
+                zhHant: '所選地點可能已打烊。請重新查看路線。',
+              );
     case 'bad_weather_and_closure':
       return place != null
-          ? lalaCopy(
-              language,
-              ko: '날씨가 좋지 않고 $place 도 영업 중이 아닐 수 있어요. 실내 대안을 확인해 보세요.',
-              en: 'Weather is poor and $place may be closed. Check indoor alternatives.',
-            )
-          : lalaCopy(
-              language,
-              ko: '날씨가 좋지 않고 일부 장소가 영업 중이 아닐 수 있어요. 실내 대안을 확인해 보세요.',
-              en: 'Weather is poor and some places may be closed. Check indoor alternatives.',
-            );
+          ? lalaCopyMulti(
+                language,
+                ko: '날씨가 좋지 않고 $place 도 영업 중이 아닐 수 있어요. 실내 대안을 확인해 보세요.',
+                en: 'Weather is poor and $place may be closed. Check indoor alternatives.',
+                ja: '天気が悪く、$place も営業していない可能性があります。屋内の代替をご確認ください。',
+                zhHans: '天气不佳，$place 也可能已打烊。请查看室内替代方案。',
+                zhHant: '天氣不佳，$place 也可能已打烊。請查看室內替代方案。',
+              )
+          : lalaCopyMulti(
+                language,
+                ko: '날씨가 좋지 않고 일부 장소가 영업 중이 아닐 수 있어요. 실내 대안을 확인해 보세요.',
+                en: 'Weather is poor and some places may be closed. Check indoor alternatives.',
+                ja: '天気が悪く、一部のスポットは営業していない可能性があります。屋内の代替をご確認ください。',
+                zhHans: '天气不佳，部分地点可能已打烊。请查看室内替代方案。',
+                zhHant: '天氣不佳，部分地點可能已打烊。請查看室內替代方案。',
+              );
     case 'bad_weather':
     default:
       // null / 알 수 없는 트리거도 기존 weather 카피와 동일(역호환) — V3 이전
       // triggerType 은 항상 null/bad_weather 이었고 기존 토스트는 weather 카피를
       // 썼으므로, dashboard 경로(widget_test)의 기대 문구를 보존한다.
       return place != null
-          ? lalaCopy(
-              language,
-              ko: '날씨가 바뀌었어요. $place 중심으로 동선을 다시 확인해보세요.',
-              en: 'Weather changed. Adjust the route near $place.',
-            )
-          : lalaCopy(
+          ? lalaCopyMulti(
+                language,
+                ko: '날씨가 바뀌었어요. $place 중심으로 동선을 다시 확인해보세요.',
+                en: 'Weather changed. Adjust the route near $place.',
+                ja: '天気が変わりました。$place を中心にルートをご確認ください。',
+                zhHans: '天气有变化。请围绕 $place 重新查看路线。',
+                zhHant: '天氣有變化。請圍繞 $place 重新查看路線。',
+              )
+          : lalaCopyMulti(
               language,
               ko: '날씨가 바뀌었어요. 하루 일정을 다시 확인해보세요.',
               en: 'Weather changed. Review today\'s route.',
+              ja: '天気が変わりました。今日のプランをご確認ください。',
+              zhHans: '天气有变化。请查看今日计划。',
+              zhHant: '天氣有變化。請查看今日計畫。',
             );
   }
 }
@@ -511,20 +529,26 @@ List<ContextFact> placeContextFacts({
   if (placeEventCount > 0) {
     add(
       Icons.event_note_outlined,
-      lalaCopy(
-        language,
-        ko: '장소 연계 행사 ${commaInt(placeEventCount)}건',
-        en: '${commaInt(placeEventCount)} linked events',
-      ),
+      lalaCopyMulti(
+          language,
+          ko: '장소 연계 행사 ${commaInt(placeEventCount)}건',
+          en: '${commaInt(placeEventCount)} linked events',
+          ja: 'スポット関連イベント ${commaInt(placeEventCount)}件',
+          zhHans: '${commaInt(placeEventCount)} 场关联活动',
+          zhHant: '${commaInt(placeEventCount)} 場關聯活動',
+        ),
     );
   } else if (cultureEventCount > 0) {
     add(
       Icons.festival_outlined,
-      lalaCopy(
-        language,
-        ko: '지역 문화행사 ${commaInt(cultureEventCount)}건',
-        en: '${commaInt(cultureEventCount)} nearby culture events',
-      ),
+      lalaCopyMulti(
+          language,
+          ko: '지역 문화행사 ${commaInt(cultureEventCount)}건',
+          en: '${commaInt(cultureEventCount)} nearby culture events',
+          ja: '地域の文化イベント ${commaInt(cultureEventCount)}件',
+          zhHans: '${commaInt(cultureEventCount)} 场附近文化活动',
+          zhHant: '${commaInt(cultureEventCount)} 場附近文化活動',
+        ),
     );
   }
 
@@ -532,11 +556,14 @@ List<ContextFact> placeContextFacts({
   if (includeEvidence && spendAmount > 0) {
     add(
       Icons.payments_outlined,
-      lalaCopy(
-        language,
-        ko: '카드 소비 ${formatWonCompact(spendAmount, language)}',
-        en: 'Card spend ${formatWonCompact(spendAmount, language)}',
-      ),
+      lalaCopyMulti(
+          language,
+          ko: '카드 소비 ${formatWonCompact(spendAmount, language)}',
+          en: 'Card spend ${formatWonCompact(spendAmount, language)}',
+          ja: 'カード消費 ${formatWonCompact(spendAmount, language)}',
+          zhHans: '刷卡消费 ${formatWonCompact(spendAmount, language)}',
+          zhHant: '刷卡消費 ${formatWonCompact(spendAmount, language)}',
+        ),
     );
   }
 
@@ -544,11 +571,14 @@ List<ContextFact> placeContextFacts({
   if (includeEvidence && transactionCount > 0) {
     add(
       Icons.receipt_long_outlined,
-      lalaCopy(
-        language,
-        ko: '거래 ${commaInt(transactionCount)}건',
-        en: '${commaInt(transactionCount)} transactions',
-      ),
+      lalaCopyMulti(
+          language,
+          ko: '거래 ${commaInt(transactionCount)}건',
+          en: '${commaInt(transactionCount)} transactions',
+          ja: '取引 ${commaInt(transactionCount)}件',
+          zhHans: '${commaInt(transactionCount)} 笔交易',
+          zhHant: '${commaInt(transactionCount)} 筆交易',
+        ),
     );
   }
 
@@ -578,7 +608,9 @@ String? externalSourceLabel(Object? value, {String language = 'ko'}) {
   if (isFallbackSourceCode(normalized)) {
     return sourceLabel(normalized, language: language);
   }
-  if (isLalaEnglish(language)) {
+  // V6: ko 만 KO 출처명. 그 외 로케일(en/ja/zh)은 EN 출처명 — KO 명칭이 방문객
+  // 화면에 노출되지 않도록 한다(계약 I1).
+  if (normalizeLalaLanguage(language) != 'ko') {
     return switch (normalized) {
       'tour_api' => 'Korea Tourism data',
       'kcisa' => 'Culture information data',
@@ -643,12 +675,32 @@ String commaInt(num value) {
 }
 
 String formatWonCompact(num value, String language) {
-  if (isLalaEnglish(language)) {
-    return 'KRW ${commaInt(value)}';
+  switch (normalizeLalaLanguage(language)) {
+    case 'ko':
+      final rounded = value.round();
+      if (rounded >= 10000) {
+        return '${commaInt(rounded / 10000)}만원';
+      }
+      return '${commaInt(rounded)}원';
+    case 'ja':
+      // 만원 단위는 일본어 권(万円) 관습을 따른다.
+      final rounded = value.round();
+      if (rounded >= 10000) {
+        return '${commaInt(rounded / 10000)}万円';
+      }
+      return '₩${commaInt(rounded)}';
+    case 'zh-Hans':
+    case 'zh-Hant':
+      final rounded = value.round();
+      if (rounded >= 10000) {
+        final wan = commaInt(rounded / 10000);
+        return normalizeLalaLanguage(language) == 'zh-Hant' ? '$wan萬韓元' : '$wan万韩元';
+      }
+      return normalizeLalaLanguage(language) == 'zh-Hant'
+          ? '₩${commaInt(rounded)}'
+          : '₩${commaInt(rounded)}';
+    case 'en':
+      return 'KRW ${commaInt(value)}';
   }
-  final rounded = value.round();
-  if (rounded >= 10000) {
-    return '${commaInt(rounded / 10000)}만원';
-  }
-  return '${commaInt(rounded)}원';
+  return 'KRW ${commaInt(value)}';
 }

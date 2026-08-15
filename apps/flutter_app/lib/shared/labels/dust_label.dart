@@ -12,9 +12,48 @@ String dustLabel(LalaDust dust, String language) {
 }
 
 String dustGradeLabel(String gradeCode, String gradeKo, String language) {
-  if (!isLalaEnglish(language)) {
+  // V6: ko 만 KO 등급명 사용. 그 외(en/ja/zh)는 등급 코드의 현지화 라벨.
+  if (normalizeLalaLanguage(language) == 'ko') {
     final localizedKo = singleLanguageText(gradeKo, language);
     return localizedKo ?? gradeCode;
+  }
+  if (normalizeLalaLanguage(language) != 'en') {
+    return switch (gradeCode.trim()) {
+      'good' => lalaCopyMulti(
+        language,
+        ko: '좋음',
+        en: 'Good',
+        ja: '良',
+        zhHans: '优',
+        zhHant: '優',
+      ),
+      'normal' => lalaCopyMulti(
+        language,
+        ko: '보통',
+        en: 'Normal',
+        ja: '普通',
+        zhHans: '一般',
+        zhHant: '一般',
+      ),
+      'bad' => lalaCopyMulti(
+        language,
+        ko: '나쁨',
+        en: 'Bad',
+        ja: '悪い',
+        zhHans: '差',
+        zhHant: '差',
+      ),
+      'very_bad' => lalaCopyMulti(
+        language,
+        ko: '매우 나쁨',
+        en: 'Very bad',
+        ja: '非常に悪い',
+        zhHans: '很差',
+        zhHant: '很差',
+      ),
+      final grade when grade.isEmpty => gradeCode,
+      final grade => grade,
+    };
   }
   return switch (gradeCode.trim()) {
     'good' => 'Good',
@@ -66,7 +105,8 @@ String dustPollutantValueLabel({
   if (normalized.isEmpty) {
     return grade;
   }
-  final unit = isLalaEnglish(language) ? 'ug/m3' : '㎍/m³';
+  // V6: ko 만 ㎍/m³ 단위, 그 외 로케일은 라틴 단위 표기.
+  final unit = normalizeLalaLanguage(language) == 'ko' ? '㎍/m³' : 'ug/m3';
   return '$normalized$unit · $grade';
 }
 
@@ -101,7 +141,7 @@ String dustSituationLabel(
   final hasPm25 = pm25.isNotEmpty;
   final pm10Grade = dustPollutantGradeLabel(dust, 'pm10', language).trim();
   final pm25Grade = dustPollutantGradeLabel(dust, 'pm25', language).trim();
-  if (isLalaEnglish(language)) {
+  if (normalizeLalaLanguage(language) != 'ko') {
     final values = [
       if (hasPm10)
         compactDustPart(label: 'PM10', value: pm10, grade: pm10Grade),
@@ -109,9 +149,28 @@ String dustSituationLabel(
         compactDustPart(label: 'PM2.5', value: pm25, grade: pm25Grade),
     ];
     if (values.isEmpty) {
-      return includePrefix ? 'Dust $grade' : grade;
+      final dustWord = lalaCopyMulti(
+        language,
+        ko: '미세먼지',
+        en: 'Dust',
+        ja: '粒子状物質',
+        zhHans: '颗粒物',
+        zhHant: '懸浮微粒',
+      );
+      return includePrefix ? '$dustWord $grade' : grade;
     }
-    return [if (includePrefix) 'Dust', values.join(' · ')].join(' ');
+    if (includePrefix) {
+      final dustWord = lalaCopyMulti(
+        language,
+        ko: '미세먼지',
+        en: 'Dust',
+        ja: '粒子状物質',
+        zhHans: '颗粒物',
+        zhHant: '懸浮微粒',
+      );
+      return '$dustWord ${values.join(' · ')}';
+    }
+    return values.join(' · ');
   }
   final values = [
     if (hasPm10) compactDustPart(label: '미세', value: pm10, grade: pm10Grade),

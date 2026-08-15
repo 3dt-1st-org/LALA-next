@@ -41,10 +41,13 @@ class WeatherMapPill extends StatelessWidget {
       final airQuality = hasPm ? dustLabel(data.dust, language).trim() : '';
       final airLabel = airQuality.isEmpty
           ? ''
-          : lalaCopy(
+          : lalaCopyMulti(
               language,
               ko: '공기 $airQuality',
               en: 'Air $airQuality',
+              ja: '大気 $airQuality',
+              zhHans: '空气 $airQuality',
+              zhHant: '空氣 $airQuality',
             );
       if (temp == null) {
         label = airLabel.isEmpty ? pending : airLabel;

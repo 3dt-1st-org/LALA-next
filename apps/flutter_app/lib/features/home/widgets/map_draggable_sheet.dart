@@ -175,7 +175,14 @@ class MapDraggableSheet extends StatelessWidget {
                       ),
                       const Spacer(),
                       IconButton(
-                        tooltip: lalaCopy(language, ko: '닫기', en: 'Close'),
+                        tooltip: lalaCopyMulti(
+                          language,
+                          ko: '닫기',
+                          en: 'Close',
+                          ja: '閉じる',
+                          zhHans: '关闭',
+                          zhHant: '關閉',
+                        ),
                         onPressed: onClose,
                         icon: const Icon(Icons.close),
                       ),

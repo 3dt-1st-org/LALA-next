@@ -963,10 +963,13 @@ class _PlanContent extends StatelessWidget {
                   SnackBar(
                     duration: const Duration(seconds: 2),
                     content: Text(
-                      lalaCopy(
+                      lalaCopyMulti(
                         language,
                         ko: '지도 탭에서 동선을 확인해 보세요.',
                         en: 'Check the route on the Map tab.',
+                        ja: '地図タブでルートをご確認ください。',
+                        zhHans: '请在地图标签页查看路线。',
+                        zhHant: '請在地圖分頁查看路線。',
                       ),
                     ),
                   ),
