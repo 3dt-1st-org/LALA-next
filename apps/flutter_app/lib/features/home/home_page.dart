@@ -6,6 +6,8 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+
+import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import 'package:lala_next_app/app/dashboard.dart';
@@ -996,9 +998,10 @@ class _LalaHomePageState extends State<LalaHomePage> {
   void _showLocalSignalActionLookupError(Object error) {
     final message = _safeErrorMessage(
       error,
-      fallbackMessage: (_) => _uiLanguage == 'en'
-          ? 'This place could not be confirmed right now.'
-          : '장소 정보를 지금 확인하지 못했어요.',
+      // V6: ko 만 KO 안내문 — 방문객 로케일은 EN 폴백(계약 I1).
+      fallbackMessage: (_) => normalizeLalaLanguage(_uiLanguage) == 'ko'
+          ? '장소 정보를 지금 확인하지 못했어요.'
+          : 'This place could not be confirmed right now.',
     );
     ScaffoldMessenger.of(
       context,
@@ -1009,9 +1012,9 @@ class _LalaHomePageState extends State<LalaHomePage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          _uiLanguage == 'en'
-              ? 'This place is not available in the current map results.'
-              : '현재 지도 결과에서 연결된 장소를 찾지 못했어요.',
+          normalizeLalaLanguage(_uiLanguage) == 'ko'
+              ? '현재 지도 결과에서 연결된 장소를 찾지 못했어요.'
+              : 'This place is not available in the current map results.',
         ),
       ),
     );

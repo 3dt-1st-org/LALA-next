@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'package:lala_next_app/shared/l10n/lala_copy.dart';
+
 import 'features/place/place_helpers.dart';
 import 'kakao_map_models.dart';
 
@@ -48,7 +50,10 @@ class KakaoMapFallbackView extends StatelessWidget {
             ),
           Center(
             child: Semantics(
-              label: language == 'en' ? 'Map preview' : '지도 미리보기',
+              // V6: ko 만 KO 라벨(방문객 로케일 EN 폴백).
+              label: normalizeLalaLanguage(language) == 'ko'
+                  ? '지도 미리보기'
+                  : 'Map preview',
               child: Container(
                 margin: const EdgeInsets.all(24),
                 padding: const EdgeInsets.symmetric(
@@ -227,9 +232,9 @@ class _FallbackMarker extends StatelessWidget {
         child: Semantics(
           button: onTap != null,
           label: place.isCluster
-              ? (language == 'en'
-                    ? '${place.clusterCount} places'
-                    : '${place.clusterCount}곳')
+              ? (normalizeLalaLanguage(language) == 'ko'
+                    ? '${place.clusterCount}곳'
+                    : '${place.clusterCount} places')
               : place.name,
           child: GestureDetector(
             key: ValueKey('kakao-map-marker-${place.id}'),

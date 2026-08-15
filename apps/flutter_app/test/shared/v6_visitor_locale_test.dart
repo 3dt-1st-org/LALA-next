@@ -124,6 +124,34 @@ void main() {
       expect(lalaCopyMulti('zh-Hans', ko: '이 장소', en: copy), copy);
       expect(lalaCopyMulti('zh-Hant', ko: '이 장소', en: copy), copy);
     });
+
+    test(
+      'legacy lalaCopy gives visitor locales the honest EN fallback (I1)',
+      () {
+        // V6 SSOT semantics: only ko-normalizing languages get KO copy; every
+        // visitor locale falls through to EN so un-migrated call sites cannot
+        // leak Korean onto a visitor screen.
+        const ko = '이 장소';
+        const en = 'Local place';
+        expect(lalaCopy('ko', ko: ko, en: en), ko);
+        expect(lalaCopy('en', ko: ko, en: en), en);
+        expect(lalaCopy('ja', ko: ko, en: en), en);
+        expect(lalaCopy('zh-Hans', ko: ko, en: en), en);
+        expect(lalaCopy('zh-Hant', ko: ko, en: en), en);
+        // Byte-exact equality with the EN variant for every visitor locale.
+        expect(lalaCopy('ja', ko: ko, en: en), lalaCopy('en', ko: ko, en: en));
+        expect(
+          lalaCopy('zh-Hans', ko: ko, en: en),
+          lalaCopy('en', ko: ko, en: en),
+        );
+        expect(
+          lalaCopy('zh-Hant', ko: ko, en: en),
+          lalaCopy('en', ko: ko, en: en),
+        );
+        // Unknown values normalize to ko first, so they keep the KO variant.
+        expect(lalaCopy('fr', ko: ko, en: en), ko);
+      },
+    );
   });
 
   group('singleLanguageText visitor-locale extraction (I1)', () {
@@ -231,6 +259,37 @@ void main() {
       expect(locationLabel(null, 'ko'), '기본 지역');
       expect(locationLabel(null, 'en'), 'Default region');
     });
+  });
+
+  group('whole-app legacy lalaCopy visitor gate', () {
+    test(
+      'every legacy ko/en pair resolves visitor locales to the EN variant',
+      () {
+        // Representative pairs drawn from the still-legacy call sites (map
+        // fallback/stub/native, community, settings, dashboard). The SSOT
+        // semantics must make all of them EN on visitor locales.
+        const pairs = <(String, String)>[
+          ('지도 미리보기', 'Map preview'),
+          ('현재 지도를 표시할 수 없습니다.', 'The live map is not available right now.'),
+          ('카카오 지도 로딩 중', 'Loading Kakao Map'),
+          ('지도 화면을 준비하고 있습니다', 'Preparing the map view'),
+          ('장소', 'Local place'),
+          ('재시도', 'Retry'),
+          ('닫기', 'Close'),
+        ];
+        for (final (ko, en) in pairs) {
+          for (final locale in <String>['ja', 'zh-Hans', 'zh-Hant']) {
+            expect(
+              lalaCopy(locale, ko: ko, en: en),
+              en,
+              reason: 'legacy pair leaked KO at $locale',
+            );
+          }
+          expect(lalaCopy('ko', ko: ko, en: en), ko);
+          expect(lalaCopy('en', ko: ko, en: en), en);
+        }
+      },
+    );
   });
 
   group('no flag emoji in the language surface (I3)', () {
