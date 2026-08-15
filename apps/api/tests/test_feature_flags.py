@@ -40,6 +40,7 @@ EXPECTED_KEYS = {
     "MAP_FUNNEL_METRICS",
     "LOCAL_SIGNALS_READ",
     "LOCAL_SIGNALS_WRITE",
+    "LOCAL_SIGNALS_AGGREGATE_READ",
 }
 
 
@@ -102,6 +103,7 @@ def test_every_registered_flag_accepts_only_its_canonical_env_input(flag):
         ("MAP_FUNNEL_METRICS", "on", True),
         ("LOCAL_SIGNALS_READ", "true", True),
         ("LOCAL_SIGNALS_WRITE", "1", True),
+        ("LOCAL_SIGNALS_AGGREGATE_READ", "on", True),
     ],
 )
 def test_registered_env_override_is_typed_and_scoped(key, raw_value, expected):

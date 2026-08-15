@@ -107,6 +107,15 @@ def _add_client_auth_security(schema: dict[str, Any]) -> None:
     schemas.setdefault("SlotVisit", _slot_visit_schema())
     schemas.setdefault("SlotVisitsData", _slot_visits_data_schema())
     schemas.setdefault("SlotVisitsSuccessEnvelope", _success_envelope_schema("SlotVisitsData"))
+    schemas.setdefault("LocalSignalPlaceAggregate", _local_signal_place_aggregate_schema())
+    schemas.setdefault(
+        "LocalSignalPlaceAggregatesData",
+        _local_signal_place_aggregates_data_schema(),
+    )
+    schemas.setdefault(
+        "LocalSignalPlaceAggregatesSuccessEnvelope",
+        _success_envelope_schema("LocalSignalPlaceAggregatesData"),
+    )
 
     security_schemes["BearerAuth"] = {
         "type": "http",
@@ -1205,6 +1214,88 @@ def _slot_visits_data_schema() -> dict[str, Any]:
             "items": {
                 "type": "array",
                 "items": {"$ref": "#/components/schemas/SlotVisit"},
+            },
+        },
+        "additionalProperties": False,
+    }
+
+
+def _local_signal_place_aggregate_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": ["kind", "place_name_ko", "category", "mention_count", "week_start"],
+        "description": (
+            "Governed review-mention aggregate for one place and week window. "
+            "Counts and scalar scores only — no raw reviews, authors, external "
+            "keys, URLs, or the source table's nested attributes."
+        ),
+        "properties": {
+            "kind": {
+                "type": "string",
+                "enum": ["system_aggregate"],
+                "description": "Typed marker: a system aggregate, never a user post.",
+            },
+            "place_id": {
+                "anyOf": [{"type": "string"}, {"type": "null"}],
+                "description": "Canonical place id, or null when unresolvable.",
+            },
+            "place_name_ko": {"type": "string"},
+            "category": {"type": "string"},
+            "mention_count": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Total mentions rolled up for the window.",
+            },
+            "organic_mention_count": {
+                "anyOf": [{"type": "integer", "minimum": 0}, {"type": "null"}],
+            },
+            "sentiment_score": {
+                "anyOf": [{"type": "number", "minimum": -1, "maximum": 1}, {"type": "null"}],
+            },
+            "review_quality_score": {
+                "anyOf": [{"type": "number", "minimum": 0, "maximum": 1}, {"type": "null"}],
+            },
+            "week_start": {"type": "string", "format": "date"},
+            "week_end": {"type": "string", "format": "date"},
+            "provider_class": {
+                "type": "string",
+                "enum": ["aggregated_review_mentions"],
+            },
+        },
+        "additionalProperties": False,
+    }
+
+
+def _local_signal_place_aggregates_data_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": ["items", "available"],
+        "description": (
+            "Governed system aggregates read model. available=false is the "
+            "honest empty state (governance flag off or no approved data), "
+            "never an error and never fabricated rows."
+        ),
+        "properties": {
+            "read_model": {"type": "string"},
+            "read_model_version": {"type": "string"},
+            "source": {
+                "type": "string",
+                "enum": ["governed_review_mention_aggregation"],
+            },
+            "provider_class": {
+                "type": "string",
+                "enum": ["aggregated_review_mentions"],
+            },
+            "available": {"type": "boolean"},
+            "items": {
+                "type": "array",
+                "items": {"$ref": "#/components/schemas/LocalSignalPlaceAggregate"},
+            },
+            "computed_at": {
+                "anyOf": [{"type": "string", "format": "date-time"}, {"type": "null"}],
+            },
+            "last_refreshed_at": {
+                "anyOf": [{"type": "string", "format": "date-time"}, {"type": "null"}],
             },
         },
         "additionalProperties": False,

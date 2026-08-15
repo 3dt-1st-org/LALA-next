@@ -378,6 +378,7 @@ run.
 | `MAP_FUNNEL_METRICS` | `LALA_MAP_FUNNEL_METRICS` | `false` | current metrics surface | W6-c |
 | `LOCAL_SIGNALS_READ` | `LALA_LOCAL_SIGNALS_READ` | `false` | no Local Signals read surface | LS-2 |
 | `LOCAL_SIGNALS_WRITE` | `LALA_LOCAL_SIGNALS_WRITE` | `false` | no Local Signals write surface | LS-2 |
+| `LOCAL_SIGNALS_AGGREGATE_READ` | `LALA_LOCAL_SIGNALS_AGGREGATE_READ` | `false` | no approved-aggregate read surface | LS-2 |
 | `LALA_ENABLE_LIVE_ROUTING` | `LALA_ENABLE_LIVE_ROUTING` | `false` | Haversine walk-time estimate only | V5-C |
 
 ### 5.1 Wave 1 — place data + location/weather reliability

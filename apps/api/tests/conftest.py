@@ -50,6 +50,7 @@ def isolate_db_env(monkeypatch) -> None:
         "LALA_ACCESS_LOG_PATH",
         "LALA_LOCAL_SIGNALS_READ",
         "LALA_LOCAL_SIGNALS_WRITE",
+        "LALA_LOCAL_SIGNALS_AGGREGATE_READ",
     ):
         monkeypatch.delenv(name, raising=False)
     from apps.api.app.core.rate_limit import reset_rate_limit_state_for_tests

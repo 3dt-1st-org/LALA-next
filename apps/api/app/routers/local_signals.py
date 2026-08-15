@@ -22,6 +22,10 @@ from apps.api.app.schemas.local_signals import (
     LocalSignalPatch,
     LocalSignalReportCreate,
 )
+from apps.api.app.services.local_signals_aggregates import (
+    LocalSignalsAggregatesRepository,
+    LocalSignalsAggregatesService,
+)
 from apps.api.app.services.local_signals_service import (
     LocalSignalsRepository,
     LocalSignalsService,
@@ -38,6 +42,14 @@ router = APIRouter(
 def get_local_signals_service() -> LocalSignalsService:
     settings = get_settings()
     return LocalSignalsService(LocalSignalsRepository(settings), settings=settings)
+
+
+def get_local_signals_aggregates_service() -> LocalSignalsAggregatesService:
+    settings = get_settings()
+    return LocalSignalsAggregatesService(
+        LocalSignalsAggregatesRepository(settings),
+        settings=settings,
+    )
 
 
 def _actor_key(identity: RequestIdentity) -> str:
@@ -95,6 +107,34 @@ def list_signals(
         limit=limit,
         cursor=cursor,
         sort=sort,
+    )
+    _record_event(request, "read")
+    return success_envelope(request=request, data=payload, meta={"source": "db"})
+
+
+@router.get("/signals/aggregates", dependencies=[Depends(_read_limit)])
+def list_signal_aggregates(
+    request: Request,
+    weeks: Annotated[int, Query(ge=1, le=12)] = 4,
+    limit: Annotated[int, Query(gt=0, le=50)] = 20,
+    place_id: Annotated[str | None, Query(min_length=1, max_length=128)] = None,
+    category: Annotated[str | None, Query(min_length=1, max_length=64)] = None,
+    service: Annotated[
+        LocalSignalsAggregatesService, Depends(get_local_signals_aggregates_service)
+    ] = None,  # type: ignore[assignment]
+) -> dict:
+    """Governed system aggregates (per-place weekly review-mention counts).
+
+    Aggregate-only output from the whitelisted governed source; never raw
+    reviews, authors, external keys, or URLs. The dedicated governance flag is
+    default-off, and flag-off is an honest unavailable empty result.
+    """
+
+    payload = service.list_place_aggregates(
+        weeks=weeks,
+        limit=limit,
+        place_id=place_id,
+        category=category,
     )
     _record_event(request, "read")
     return success_envelope(request=request, data=payload, meta={"source": "db"})

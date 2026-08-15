@@ -278,3 +278,44 @@ class LocalSignalReportCreate(BaseModel):
         "translation_issue",
         "other_policy",
     ]
+
+
+class LocalSignalPlaceAggregate(BaseModel):
+    """Governed review-mention aggregate for one place and week window.
+
+    Aggregate-only by construction: counts, an optional scalar sentiment/quality
+    score, and provenance metadata. There is intentionally no field that can
+    carry raw review text, an external key, an external URL, an author, or the
+    source table's nested ``attributes`` blob.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Typed system-aggregate marker: a consumer cannot mistake this row for a
+    # user-generated Local Signal.
+    kind: Literal["system_aggregate"] = "system_aggregate"
+    place_id: CanonicalPlaceId | None = None
+    place_name_ko: str = Field(min_length=1, max_length=160)
+    category: str = Field(min_length=1, max_length=64)
+    mention_count: int = Field(ge=0)
+    organic_mention_count: int | None = Field(default=None, ge=0)
+    sentiment_score: float | None = Field(default=None, ge=-1.0, le=1.0)
+    review_quality_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    week_start: date
+    week_end: date
+    provider_class: Literal["aggregated_review_mentions"] = "aggregated_review_mentions"
+
+
+class LocalSignalPlaceAggregatesResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    read_model: str = Field(min_length=1, max_length=64)
+    read_model_version: str = Field(min_length=1, max_length=32)
+    source: Literal["governed_review_mention_aggregation"] = "governed_review_mention_aggregation"
+    provider_class: Literal["aggregated_review_mentions"] = "aggregated_review_mentions"
+    # Honest availability: flag-off governance returns an empty, explicitly
+    # unavailable result instead of an error or fabricated rows.
+    available: bool
+    items: list[LocalSignalPlaceAggregate] = Field(default_factory=list, max_length=50)
+    computed_at: datetime | None = None
+    last_refreshed_at: datetime | None = None

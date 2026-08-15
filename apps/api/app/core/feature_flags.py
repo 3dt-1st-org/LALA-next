@@ -252,6 +252,13 @@ FEATURE_FLAG_REGISTRY: tuple[FeatureFlag, ...] = (
         "Enable the Logto-authenticated Local Signals draft and policy write API.",
     ),
     _flag(
+        "LOCAL_SIGNALS_AGGREGATE_READ",
+        False,
+        "no approved-aggregate read surface",
+        "LS-2",
+        "Enable the governed place-mention aggregate read model (default-safe honest empty).",
+    ),
+    _flag(
         "LALA_ENABLE_LIVE_ROUTING",
         False,
         "Haversine walk-time estimate only",
