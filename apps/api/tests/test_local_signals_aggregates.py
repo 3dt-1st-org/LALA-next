@@ -365,3 +365,52 @@ def test_aggregates_openapi_documents_the_read_only_system_surface(
     )
     for forbidden in ("attributes", "external_key", "url", "body", "author"):
         assert forbidden not in item_properties
+
+
+def test_repository_join_uses_governed_source_name_not_sub_provider():
+    """The weekly rows carry sub-providers (naver_blog/naver_cafe) in the
+    provider column; the governed registration is identified by source_name
+    (attributes->>'source'). Joining on provider matched nothing in production
+    (source provider='naver'), so aggregates rendered empty even with fresh
+    governed rows. The join must be on the source name."""
+    executed: list[tuple[str, Any]] = []
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def execute(self, sql, params=None):
+            executed.append((sql, params))
+
+        def fetchall(self):
+            return []
+
+        def fetchone(self):
+            return None
+
+    class Connection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def close(self):
+            return None
+
+        def cursor(self, **_):
+            return Cursor()
+
+    repository = LocalSignalsAggregatesRepository(
+        Settings(db_dsn="postgresql://redacted"),
+        connect=lambda **_: Connection(),
+    )
+    repository.list_place_aggregates(weeks=4, limit=5, place_id=None, category=None)
+    repository.latest_refresh_at()
+
+    joined_sql = "".join(sql for sql, _ in executed)
+    assert "sources.source_name = mentions.attributes->>'source'" in joined_sql
+    assert "sources.provider = mentions.provider" not in joined_sql
