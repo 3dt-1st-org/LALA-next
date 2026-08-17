@@ -466,19 +466,25 @@ def _en_weather_sentence(request: DocentScriptRequest) -> str:
         parts.append(temperature)
     if sky := _en_weather_icon_label(request.weather_icon):
         parts.append(f"sky {sky}")
+    # Korean grade labels (좋음/보통/…) must be translated at every EN
+    # boundary — this is the third PM-label path (Stage-5 batch finding).
+    from apps.api.app.services.ai_service import _air_label
+
+    pm10_grade = _air_label(request.dust_pm10_grade, "en") if request.dust_pm10_grade else None
+    pm25_grade = _air_label(request.dust_pm25_grade, "en") if request.dust_pm25_grade else None
     dust_parts: list[str] = []
-    if request.dust_pm10_grade and request.dust_pm10:
-        dust_parts.append(f"PM10 {request.dust_pm10_grade} ({request.dust_pm10})")
-    elif request.dust_pm10_grade:
-        dust_parts.append(f"PM10 {request.dust_pm10_grade}")
-    if request.dust_pm25_grade and request.dust_pm25:
-        dust_parts.append(f"PM2.5 {request.dust_pm25_grade} ({request.dust_pm25})")
-    elif request.dust_pm25_grade:
-        dust_parts.append(f"PM2.5 {request.dust_pm25_grade}")
+    if pm10_grade and request.dust_pm10:
+        dust_parts.append(f"PM10 {pm10_grade} ({request.dust_pm10})")
+    elif pm10_grade:
+        dust_parts.append(f"PM10 {pm10_grade}")
+    if pm25_grade and request.dust_pm25:
+        dust_parts.append(f"PM2.5 {pm25_grade} ({request.dust_pm25})")
+    elif pm25_grade:
+        dust_parts.append(f"PM2.5 {pm25_grade}")
     if dust_parts:
         parts.append(" / ".join(dust_parts))
     elif request.dust_grade:
-        parts.append(f"dust {request.dust_grade}")
+        parts.append(f"dust {_air_label(request.dust_grade, 'en')}")
     if not parts:
         return ""
     status = (

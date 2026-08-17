@@ -762,15 +762,9 @@ def query_knowledge_chunks(
 
 def _place_profile_chunk(row: dict[str, Any]) -> KnowledgeChunk:
     category_label = _category_label_ko(row.get("category"))
-    score_parts = [
-        _score_phrase("최종 추천 점수", row.get("final_score")),
-        _score_phrase("내국인 소비", row.get("local_spending_score")),
-        _score_phrase("관광 수요 분산", row.get("demand_dispersion_score")),
-        _score_phrase("날씨 적합도", row.get("weather_fit_score")),
-        _score_phrase("리뷰 품질", row.get("review_quality_score")),
-        _score_phrase("문화 연계", row.get("culture_relevance_score")),
-    ]
-    score_text = " ".join(part for part in score_parts if part)
+    # Numeric scores live in the structured metadata only. Stage-5 live QA
+    # proved a model can quote the grounding body verbatim, leaking internal
+    # metric values into user-facing text — so the body must stay score-free.
     indoor_text = (
         "실내"
         if row.get("is_indoor") is True
@@ -784,7 +778,6 @@ def _place_profile_chunk(row: dict[str, Any]) -> KnowledgeChunk:
             f"카테고리는 {category_label}이고 지역은 {row.get('region_name_ko') or '미분류'}입니다.",
             f"주소는 {row.get('address_ko') or '주소 미상'}입니다.",
             f"날씨 필터 기준은 {indoor_text}입니다.",
-            score_text,
             f"대표 원천은 {row.get('primary_source') or 'unknown'}입니다.",
         ]
     )
