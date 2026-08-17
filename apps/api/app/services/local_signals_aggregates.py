@@ -94,7 +94,7 @@ class LocalSignalsAggregatesRepository:
                 MIN(mentions.updated_at) AS computed_at
             FROM community.place_mentions_weekly mentions
             JOIN ingest.review_sources sources
-              ON sources.provider = mentions.provider
+              ON sources.source_name = mentions.attributes->>'source'
             WHERE sources.source_status = 'active'
               AND sources.license_class IN ({_LICENSE_CLASSES_SQL})
               AND mentions.week_start >= (CURRENT_DATE - (%s::int * 7) * INTERVAL '1 day')
@@ -125,7 +125,7 @@ class LocalSignalsAggregatesRepository:
             SELECT MAX(mentions.updated_at) AS last_refreshed_at
             FROM community.place_mentions_weekly mentions
             JOIN ingest.review_sources sources
-              ON sources.provider = mentions.provider
+              ON sources.source_name = mentions.attributes->>'source'
             WHERE sources.source_status = 'active'
               AND sources.license_class IN ({_LICENSE_CLASSES_SQL})
         """
