@@ -70,8 +70,11 @@ def test_place_profile_chunk_keeps_public_value_score_context():
     assert chunk.place_id == "place-1"
     assert "카테고리는 명소" in chunk.body_ko
     assert "attraction" not in chunk.body_ko
-    assert "내국인 소비" in chunk.body_ko
-    assert "관광 수요 분산" in chunk.body_ko
+    # Stage-5 live QA: a model can quote the grounding body verbatim, so the
+    # body must never carry internal metric values — scores live in metadata only.
+    assert "내국인 소비" not in chunk.body_ko
+    assert "관광 수요 분산" not in chunk.body_ko
+    assert "최종 추천 점수" not in chunk.body_ko
     assert chunk.metadata["score"]["features"]["card_month"] == "2026-05-01"
 
 

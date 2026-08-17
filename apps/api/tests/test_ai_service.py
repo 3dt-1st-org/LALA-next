@@ -627,3 +627,27 @@ def test_en_dust_guard_sentence_translates_korean_grades():
     assert "좋음" not in sentence and "보통" not in sentence
     assert "PM10 is good (13)" in sentence
     assert "PM2.5 is moderate (13)" in sentence
+
+
+def test_en_weather_sentence_translates_korean_grades():
+    """Stage-5 batch finding: docent_service._en_weather_sentence (the third
+    PM-label path) still emitted 'PM10 좋음 (13) / PM2.5 좋음 (13)'."""
+    from apps.api.app.schemas.docent import DocentScriptRequest
+    from apps.api.app.services import docent_service
+
+    request = DocentScriptRequest(
+        place_id="x",
+        place_name="Test",
+        category="attraction",
+        language="en",
+        mode="brief",
+        weather_temp="24.0",
+        weather_icon="partly-cloudy",
+        dust_pm10_grade="좋음",
+        dust_pm10="13",
+        dust_pm25_grade="좋음",
+        dust_pm25="13",
+    )
+    sentence = docent_service._en_weather_sentence(request)
+    assert "좋음" not in sentence
+    assert "PM10 good (13)" in sentence and "PM2.5 good (13)" in sentence
