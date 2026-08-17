@@ -815,14 +815,20 @@ def _ko_dust_split_sentence(request: DocentScriptRequest) -> str:
 
 def _en_dust_split_sentence(request: DocentScriptRequest) -> str:
     dust_parts: list[str] = []
-    if request.dust_pm10_grade and request.dust_pm10:
-        dust_parts.append(f"PM10 is {request.dust_pm10_grade} ({request.dust_pm10})")
-    elif request.dust_pm10_grade:
-        dust_parts.append(f"PM10 is {request.dust_pm10_grade}")
-    if request.dust_pm25_grade and request.dust_pm25:
-        dust_parts.append(f"PM2.5 is {request.dust_pm25_grade} ({request.dust_pm25})")
-    elif request.dust_pm25_grade:
-        dust_parts.append(f"PM2.5 is {request.dust_pm25_grade}")
+    # Korean grade labels (좋음/보통/나쁨/…) leak verbatim into EN guard
+    # sentences; translate at this boundary like ai_service._air_label.
+    from apps.api.app.services.ai_service import _air_label
+
+    pm10_grade = _air_label(request.dust_pm10_grade, "en") if request.dust_pm10_grade else None
+    pm25_grade = _air_label(request.dust_pm25_grade, "en") if request.dust_pm25_grade else None
+    if pm10_grade and request.dust_pm10:
+        dust_parts.append(f"PM10 is {pm10_grade} ({request.dust_pm10})")
+    elif pm10_grade:
+        dust_parts.append(f"PM10 is {pm10_grade}")
+    if pm25_grade and request.dust_pm25:
+        dust_parts.append(f"PM2.5 is {pm25_grade} ({request.dust_pm25})")
+    elif pm25_grade:
+        dust_parts.append(f"PM2.5 is {pm25_grade}")
     if not dust_parts:
         return ""
     return "Current air quality: " + "; ".join(dust_parts) + "."

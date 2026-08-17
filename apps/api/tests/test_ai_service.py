@@ -604,3 +604,26 @@ def test_grounding_prompt_maps_raw_source_ids_to_reader_safe_labels():
 
     assert "tour_api" not in prompt
     assert "official tourism data" in prompt
+
+
+def test_en_dust_guard_sentence_translates_korean_grades():
+    """N1 residual (Stage-5 canary): docent_service's EN dust sentence emitted
+    'PM10 is 좋음' — the second PM-label path #146 missed."""
+    from apps.api.app.schemas.docent import DocentScriptRequest
+    from apps.api.app.services import docent_service
+
+    request = DocentScriptRequest(
+        place_id="x",
+        place_name="Test",
+        category="attraction",
+        language="en",
+        mode="brief",
+        dust_pm10_grade="좋음",
+        dust_pm10="13",
+        dust_pm25_grade="보통",
+        dust_pm25="13",
+    )
+    sentence = docent_service._en_dust_split_sentence(request)
+    assert "좋음" not in sentence and "보통" not in sentence
+    assert "PM10 is good (13)" in sentence
+    assert "PM2.5 is moderate (13)" in sentence
