@@ -49,6 +49,10 @@ _KNOWN_NAME_EN = {
     "세종대왕 역사문화관": "King Sejong History and Culture Center",
     "이함캠퍼스": "Iham Campus",
     "고양가을꽃축제": "Goyang Autumn Flower Festival",
+    # Why: hangul_romanize mangles these into wrong public labels (e.g. "Hanhat",
+    # "Myeongjeongjeon"); curated exact romanizations are the canonical display names.
+    "중명전": "Jungmyeongjeon",
+    "한밭교육박물관": "Hanbat Education Museum",
 }
 
 _NAME_SUFFIXES = (

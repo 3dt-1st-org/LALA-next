@@ -97,3 +97,52 @@ def test_build_local_enrichment_can_refresh_local_values() -> None:
     )
 
     assert enrichment.name_en == "2025 7th BMF Black Music Festival"
+
+
+def test_romanize_place_name_uses_jungmyeongjeon_label() -> None:
+    name = local_place_enrichment.romanize_place_name("중명전")
+
+    assert name == "Jungmyeongjeon"
+    assert "Myeongjeongjeon" not in name
+    assert "Jeon Hall" not in name
+
+
+def test_romanize_place_name_uses_hanbat_education_museum_label() -> None:
+    name = local_place_enrichment.romanize_place_name("한밭교육박물관")
+
+    assert name == "Hanbat Education Museum"
+    assert "Hanhat" not in name
+
+
+def test_build_local_enrichment_refresh_replaces_wrong_production_labels() -> None:
+    # Why: these mirror the confirmed wrong travel.places.name_en rows that the
+    # targeted repair mode regenerates from curated entries.
+    jungmyeongjeon = local_place_enrichment.build_local_enrichment(
+        {
+            "place_id": "tour-api-1017547",
+            "name_ko": "중명전",
+            "name_en": "Myeongjeongjeon Hall",
+            "address_ko": "서울시 중구 덕수궁길 11",
+            "address_en": "Seoul Jung-gu Deoksugung-gil 11",
+            "region_name_ko": "중구",
+            "region_name_en": "Jung-gu",
+        },
+        replace_existing=True,
+    )
+    hanbat = local_place_enrichment.build_local_enrichment(
+        {
+            "place_id": "tour-api-130420",
+            "name_ko": "한밭교육박물관",
+            "name_en": "Daejeon Hanhat Education Museum",
+            "address_ko": "대전광역시 서구 둔산로 111",
+            "address_en": "Daejeon Seo-gu",
+            "region_name_ko": "서구",
+            "region_name_en": "Seo-gu",
+        },
+        replace_existing=True,
+    )
+
+    assert jungmyeongjeon.place_id == "tour-api-1017547"
+    assert jungmyeongjeon.name_en == "Jungmyeongjeon"
+    assert hanbat.place_id == "tour-api-130420"
+    assert hanbat.name_en == "Hanbat Education Museum"
