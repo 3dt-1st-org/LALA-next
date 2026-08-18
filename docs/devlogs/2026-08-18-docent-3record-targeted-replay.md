@@ -114,3 +114,61 @@ Test coverage added (`apps/api/tests/test_docent_live_qa_sample.py`):
   The runner validates whatever manifest path it is given before any call.
 - Rollback: revert this commit; the default full-run path is untouched, so
   reverting removes only the targeted mode.
+
+## Phase B addendum (2026-08-18, post controller acceptance of Phase A)
+
+Executed after independent Phase A acceptance at `f36db84`. Counts and
+verdicts only; raw scripts remain exclusively under gitignored
+`output/local/docent-qa-lane-c/correction-3records/`.
+
+### Manifest rebuild
+
+- Rebuilt from the read-only final artifact (stage-5 final run report): 40
+  unique place ids with safe metadata only (names/categories/regions/
+  expectations/language samples). No scripts copied; nothing invented.
+- `primary_source: tour_api` set per the repo's governed-source contract for
+  `tour-api-*` ids (corroborated: 78/80 original scripts carry the tour_api
+  source label). `sample_features`/addresses omitted (unrecoverable; zero
+  original scripts reference scores, so omission matches observable behavior).
+- Canonical English names set only for the two audited EN targets:
+  `Jungmyeongjeon`, `Hanbat Education Museum`.
+
+### Dry proof (network-mocked) and execution
+
+- Mocked dry run: exactly 3 POSTs — the three intended pairs — 0
+  sibling-language calls, 1 weather GET, selection hash `57ed328987aed4d2`.
+- One targeted execution against the established production endpoint: 3 calls,
+  3 HTTP 200, 0 service errors, 0 transport errors, exit 0. Live generation
+  lane for all three (no rule-based fallback). The deployed envelope reports
+  no token counters for this endpoint; the stop-loss recorded $0 estimated.
+  No Speech/audio, no crawl, no deploy, no DB writes.
+
+### 11-dimension manual rubric (3/3 PASS)
+
+Local machine-readable verdicts:
+`output/local/docent-qa-lane-c/correction-3records/manual-rubric-3records.json`
+(the historical 80-record rubric is preserved unchanged).
+
+| place_id | lang | verdict | defect and evidence of correction |
+| --- | --- | --- | --- |
+| `tour-api-1316965` | ko | PASS | serialization leak → 0 template markers, 0 provider ids (regex battery re-run); precheck 96, no tags |
+| `tour-api-1017547` | en | PASS | `Myeongjeongjeon Hall` → `Jungmyeongjeon` present, wrong form absent |
+| `tour-api-130420` | en | PASS | `Hanhat` → `Hanbat` present, wrong form absent; secondary tokens (Uam-ro, Samsung-dong, Dong-gu) correct revised romanization |
+
+All other dimensions clean for all three: language purity (zero hangul in EN,
+zero long-latin in KO), zero score leakage, zero fabricated quotes (2 sigils
+on one record are possessive apostrophes), zero markdown/TTS sigils, zero
+indoor/outdoor assertions, weather restatements consistent (precheck weather
+10/10 x3), region/local context named, docent persona confirmed (the two EN
+`category_persona_weak` precheck tags are the documented N8 EN-tooling
+artifact, superseded by the manual pass — same treatment as the 80-record
+rubric), bilingual pairing intact per place.
+
+### Operational status (Phase C input)
+
+- As proven in Phase A from code: these requests regenerate on demand and no
+  script cache write exists (`save_docent_script_cache` has no production
+  callers; route tests assert the seam stays idle). Nothing remains to
+  invalidate or update on the server; future client requests with context
+  regenerate fresh.
+- No merge, no deploy, no production DB mutation performed.
