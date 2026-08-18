@@ -10,6 +10,12 @@ Hard run caps live in ``RUN_CAPS`` and are enforced before any network call:
 the runner aborts once ``max_places``, ``max_calls``, or ``max_estimated_cost_usd``
 is reached. Paid calls go through the standard OpenAI lane behind the deployed
 API (never Azure); this tool itself holds no provider key.
+
+Targeted replay mode: repeatable ``--target place_id:language`` args select
+exact manifest pairs for correction runs (e.g. 3 records after a manual
+rubric). Targets are validated against the authoritative manifest before the
+weather lookup or any POST, and every existing cap still applies. Without
+``--target`` the default full-run behavior is unchanged.
 """
 
 from __future__ import annotations
@@ -43,6 +49,10 @@ _EST_COST_PER_1M_USD = 2.00
 
 _PM_RE = re.compile(r"PM10|PM2\.5|미세먼지|초미세먼지")
 
+# Languages the docent script endpoint produces; targets outside this set are
+# rejected at parse time.
+_SUPPORTED_LANGUAGES = ("ko", "en")
+
 
 def _http_post_json(url: str, payload: dict[str, Any], timeout: float) -> dict[str, Any]:
     body = json.dumps(payload).encode("utf-8")
@@ -63,6 +73,67 @@ def _http_get_json(url: str, timeout: float) -> dict[str, Any]:
     )
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return json.loads(resp.read().decode("utf-8"))
+
+
+def parse_target(raw: str) -> tuple[str, str]:
+    """Parse a ``place_id:language`` target; raise ValueError when malformed."""
+    place_id, sep, language = raw.partition(":")
+    if not sep or not place_id or ":" in language:
+        raise ValueError(f"target must be 'place_id:language', got {raw!r}")
+    if language not in _SUPPORTED_LANGUAGES:
+        raise ValueError(
+            f"unsupported language {language!r}; expected one of {_SUPPORTED_LANGUAGES}"
+        )
+    return place_id, language
+
+
+def validate_manifest(manifest: list[dict[str, Any]]) -> None:
+    """Enforce the authoritative-manifest shape before any network call."""
+    if not isinstance(manifest, list) or not 30 <= len(manifest) <= RUN_CAPS["max_places"]:
+        count = len(manifest) if isinstance(manifest, list) else -1
+        raise ValueError(f"manifest must hold 30-{RUN_CAPS['max_places']} places; has {count}")
+
+
+def select_target_pairs(
+    manifest: list[dict[str, Any]], targets: list[tuple[str, str]]
+) -> list[tuple[dict[str, Any], str]]:
+    """Resolve exact ``(place, language)`` pairs against the manifest.
+
+    Fails (ValueError) on duplicate, unknown-place, or unsupported-language
+    targets so a bad run dies before the weather lookup or any POST. Output
+    order follows manifest order, then the place's language order — never the
+    CLI order — so repeated runs are byte-stable.
+    """
+    seen: set[tuple[str, str]] = set()
+    for pair in targets:
+        if pair in seen:
+            raise ValueError(f"duplicate target {pair[0]}:{pair[1]}")
+        seen.add(pair)
+    by_id: dict[str, dict[str, Any]] = {}
+    for place in manifest:
+        place_id = place.get("place_id")
+        if not place_id:
+            raise ValueError("manifest row is missing place_id")
+        if place_id in by_id:
+            raise ValueError(f"manifest holds duplicate place_id {place_id}")
+        by_id[place_id] = place
+    wanted_ids = {place_id for place_id, _ in targets}
+    for place_id in sorted(wanted_ids):
+        if place_id not in by_id:
+            raise ValueError(f"target place {place_id} not found in manifest")
+    pairs: list[tuple[dict[str, Any], str]] = []
+    for place in manifest:
+        if place.get("place_id") not in wanted_ids:
+            continue
+        languages = place.get("language_samples") or ["ko"]
+        for language in languages:
+            if (place["place_id"], language) in seen:
+                pairs.append((place, language))
+    resolved = {(place["place_id"], language) for place, language in pairs}
+    for place_id, language in sorted(seen):
+        if (place_id, language) not in resolved:
+            raise ValueError(f"target {place_id}:{language} is not in the place's language_samples")
+    return pairs
 
 
 def build_request_body(
@@ -125,110 +196,152 @@ def run(
     limit: int,
     request_delay_sec: float,
     weather: dict[str, Any],
+    targets: list[tuple[str, str]] | None = None,
 ) -> int:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    if not 30 <= len(manifest) <= RUN_CAPS["max_places"]:
-        print(f"manifest must hold 30-{RUN_CAPS['max_places']} places; has {len(manifest)}")
+    try:
+        validate_manifest(manifest)
+        selected = select_target_pairs(manifest, targets) if targets is not None else None
+    except ValueError as exc:
+        print(str(exc))
         return 2
-    places = manifest[:limit]
-    planned_calls = sum(len(p.get("language_samples") or ["ko"]) for p in places)
+    if selected is not None:
+        # Targeted replay: --limit is a full-run concept and is deliberately ignored.
+        places = []
+        for place, _language in selected:
+            if place not in places:
+                places.append(place)
+        pairs = selected
+    else:
+        places = manifest[:limit]
+        pairs = [
+            (place, language)
+            for place in places
+            for language in place.get("language_samples") or ["ko"]
+        ]
+    planned_calls = len(pairs)
     if planned_calls > RUN_CAPS["max_calls"]:
         print(f"planned {planned_calls} calls exceeds cap {RUN_CAPS['max_calls']}")
         return 2
+    selection: dict[str, Any] | None = None
+    if targets is not None:
+        # Planned-call statement only: IDs stay in the report, nothing secret here.
+        selection = {
+            "mode": "targeted",
+            "targets": [f"{place_id}:{language}" for place_id, language in sorted(targets)],
+        }
+        print(
+            f"targeted mode: {planned_calls} planned call(s) across {len(places)} place(s) "
+            f"(caps: max_calls={RUN_CAPS['max_calls']}, "
+            f"max_estimated_cost_usd={RUN_CAPS['max_estimated_cost_usd']})"
+        )
 
     endpoint = base_url.rstrip("/") + "/api/v1/docents/script"
     records: list[dict[str, Any]] = []
     counters = {"calls": 0, "ok": 0, "service_errors": 0, "transport_errors": 0}
     tokens = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
-    for place in places:
-        for language in place.get("language_samples") or ["ko"]:
-            if counters["calls"] >= RUN_CAPS["max_calls"]:
-                break
-            body = build_request_body(place, language, weather)
-            record: dict[str, Any] = {
-                "place_id": place["place_id"],
-                "place_name": place.get("place_name_ko"),
-                "category": place["category"],
-                "region": place.get("region_ko"),
-                "language": language,
-                "mode": "brief",
-                "expectation": place.get("expectation", "nonempty"),
-            }
-            counters["calls"] += 1
-            try:
-                envelope = _http_post_json(endpoint, body, timeout=40.0)
-            except urllib.error.HTTPError as exc:
-                try:
-                    detail = json.loads(exc.read().decode("utf-8"))
-                except Exception:
-                    detail = {}
-                record["http_status"] = exc.code
-                record["error_code"] = detail.get("error", {}).get("code") or f"HTTP{exc.code}"
-                counters["service_errors" if exc.code >= 400 else "ok"] += 1
-                records.append(record)
-                time.sleep(request_delay_sec)
-                continue
-            except Exception as exc:  # transport failure: record honestly, never fabricate
-                record["http_status"] = None
-                record["error_code"] = exc.__class__.__name__
-                counters["transport_errors"] += 1
-                records.append(record)
-                time.sleep(request_delay_sec)
-                continue
-            counters["ok"] += 1
-            data = envelope.get("data") or {}
-            usage = _extract_usage(envelope)
-            for key in tokens:
-                tokens[key] += usage[key]
-            estimated = tokens["total_tokens"] / 1_000_000 * _EST_COST_PER_1M_USD
-            if estimated >= RUN_CAPS["max_estimated_cost_usd"]:
-                print(f"stop-loss: estimated ${estimated:.4f} reached cap; halting")
-                records.append({**record, "halted": True, "reason": "cost_stop_loss"})
-                return _write_report(
-                    output_dir, manifest_path, base_url, places, records, counters, tokens
-                )
-
-            script = str(data.get("script") or "")
-            candidate = docent_quality_qa.DocentQaCandidate(
-                place_id=place["place_id"],
-                name_ko=place.get("place_name_ko") or "",
-                category=place["category"],
-                region_name_ko=place.get("region_ko"),
-                primary_source=place.get("primary_source"),
-                final_score=(place.get("sample_features") or {}).get("final_score"),
-                rag_chunk_count=int(data.get("grounding_count") or 0),
-                review_mention_count=(place.get("sample_features") or {}).get("mention_count"),
-                review_organic_mention_count=(place.get("sample_features") or {}).get(
-                    "organic_mention_count"
-                ),
-                weather_pm10=_to_float((weather.get("dust") or {}).get("pm10")),
-                weather_pm25=_to_float((weather.get("dust") or {}).get("pm25")),
-                weather_temperature_c=_to_float(weather.get("temp")),
-                script=script,
-                script_source_method=str(data.get("source") or ""),
-                script_generated_at=str(data.get("generated_at") or ""),
-            )
-            precheck = docent_quality_qa.evaluate_docent_script(candidate, language=language)
-            record.update(
-                {
-                    "http_status": 200,
-                    "source": data.get("source"),
-                    "grounding_count": data.get("grounding_count"),
-                    "grounding_sources": data.get("grounding_sources"),
-                    "retrieval_mode": (data.get("retrieval") or {}).get("mode"),
-                    "script_chars": len(script),
-                    "script": script,
-                    "auto_precheck": precheck.to_public_dict(),
-                    "usage": usage,
-                }
-            )
-            records.append(record)
-            time.sleep(request_delay_sec)
+    for place, language in pairs:
         if counters["calls"] >= RUN_CAPS["max_calls"]:
             break
+        body = build_request_body(place, language, weather)
+        record: dict[str, Any] = {
+            "place_id": place["place_id"],
+            "place_name": place.get("place_name_ko"),
+            "category": place["category"],
+            "region": place.get("region_ko"),
+            "language": language,
+            "mode": "brief",
+            "expectation": place.get("expectation", "nonempty"),
+        }
+        counters["calls"] += 1
+        try:
+            envelope = _http_post_json(endpoint, body, timeout=40.0)
+        except urllib.error.HTTPError as exc:
+            try:
+                detail = json.loads(exc.read().decode("utf-8"))
+            except Exception:
+                detail = {}
+            record["http_status"] = exc.code
+            record["error_code"] = detail.get("error", {}).get("code") or f"HTTP{exc.code}"
+            counters["service_errors" if exc.code >= 400 else "ok"] += 1
+            records.append(record)
+            time.sleep(request_delay_sec)
+            continue
+        except Exception as exc:  # transport failure: record honestly, never fabricate
+            record["http_status"] = None
+            record["error_code"] = exc.__class__.__name__
+            counters["transport_errors"] += 1
+            records.append(record)
+            time.sleep(request_delay_sec)
+            continue
+        counters["ok"] += 1
+        data = envelope.get("data") or {}
+        usage = _extract_usage(envelope)
+        for key in tokens:
+            tokens[key] += usage[key]
+        estimated = tokens["total_tokens"] / 1_000_000 * _EST_COST_PER_1M_USD
+        if estimated >= RUN_CAPS["max_estimated_cost_usd"]:
+            print(f"stop-loss: estimated ${estimated:.4f} reached cap; halting")
+            records.append({**record, "halted": True, "reason": "cost_stop_loss"})
+            return _write_report(
+                output_dir,
+                manifest_path,
+                base_url,
+                places,
+                records,
+                counters,
+                tokens,
+                selection=selection,
+            )
 
-    return _write_report(output_dir, manifest_path, base_url, places, records, counters, tokens)
+        script = str(data.get("script") or "")
+        candidate = docent_quality_qa.DocentQaCandidate(
+            place_id=place["place_id"],
+            name_ko=place.get("place_name_ko") or "",
+            category=place["category"],
+            region_name_ko=place.get("region_ko"),
+            primary_source=place.get("primary_source"),
+            final_score=(place.get("sample_features") or {}).get("final_score"),
+            rag_chunk_count=int(data.get("grounding_count") or 0),
+            review_mention_count=(place.get("sample_features") or {}).get("mention_count"),
+            review_organic_mention_count=(place.get("sample_features") or {}).get(
+                "organic_mention_count"
+            ),
+            weather_pm10=_to_float((weather.get("dust") or {}).get("pm10")),
+            weather_pm25=_to_float((weather.get("dust") or {}).get("pm25")),
+            weather_temperature_c=_to_float(weather.get("temp")),
+            script=script,
+            script_source_method=str(data.get("source") or ""),
+            script_generated_at=str(data.get("generated_at") or ""),
+        )
+        precheck = docent_quality_qa.evaluate_docent_script(candidate, language=language)
+        record.update(
+            {
+                "http_status": 200,
+                "source": data.get("source"),
+                "grounding_count": data.get("grounding_count"),
+                "grounding_sources": data.get("grounding_sources"),
+                "retrieval_mode": (data.get("retrieval") or {}).get("mode"),
+                "script_chars": len(script),
+                "script": script,
+                "auto_precheck": precheck.to_public_dict(),
+                "usage": usage,
+            }
+        )
+        records.append(record)
+        time.sleep(request_delay_sec)
+
+    return _write_report(
+        output_dir,
+        manifest_path,
+        base_url,
+        places,
+        records,
+        counters,
+        tokens,
+        selection=selection,
+    )
 
 
 def _write_report(
@@ -239,6 +352,7 @@ def _write_report(
     records: list[dict[str, Any]],
     counters: dict[str, int],
     tokens: dict[str, int],
+    selection: dict[str, Any] | None = None,
 ) -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
     stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
@@ -255,6 +369,8 @@ def _write_report(
         "place_count": len(places),
         "records": records,
     }
+    if selection is not None:
+        report["selection"] = selection
     path = output_dir / f"live-docent-qa-{stamp}.json"
     path.write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
     print(
@@ -286,7 +402,40 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--limit", type=int, default=RUN_CAPS["max_places"])
     parser.add_argument("--request-delay-sec", type=float, default=1.2)
+    parser.add_argument(
+        "--target",
+        action="append",
+        default=None,
+        metavar="PLACE_ID:LANGUAGE",
+        help=(
+            "exact manifest pair to replay (repeatable, e.g. tour-api-123:ko); "
+            "validated against the manifest before any network call; "
+            "ignores --limit and keeps every run cap"
+        ),
+    )
     args = parser.parse_args(argv)
+
+    targets: list[tuple[str, str]] | None = None
+    if args.target:
+        targets = []
+        try:
+            for raw in args.target:
+                targets.append(parse_target(raw))
+        except ValueError as exc:
+            print(str(exc))
+            return 2
+        # Fail-before-network: full manifest + target validation happens before
+        # the weather lookup, so bad arguments cost nothing.
+        try:
+            manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
+            validate_manifest(manifest)
+            selected = select_target_pairs(manifest, targets)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            print(f"target validation failed: {exc}")
+            return 2
+        if len(selected) > RUN_CAPS["max_calls"]:
+            print(f"planned {len(selected)} calls exceeds cap {RUN_CAPS['max_calls']}")
+            return 2
 
     weather_url = args.base_url.rstrip("/") + "/api/v1/weather?lat=37.5665&lng=126.9780"
     try:
@@ -301,6 +450,7 @@ def main(argv: list[str] | None = None) -> int:
         limit=args.limit,
         request_delay_sec=args.request_delay_sec,
         weather=weather,
+        targets=targets,
     )
 
 
