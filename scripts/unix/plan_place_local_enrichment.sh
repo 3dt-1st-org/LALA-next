@@ -16,7 +16,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     -h|--help)
       echo "Usage: scripts/unix/plan_place_local_enrichment.sh [tool args...] [--python PATH]"
-      echo "Tool args include --preview, --apply, --refresh-local, --confirm APPLY_LOCAL_PLACE_ENRICHMENT, --limit N, --json."
+      echo "Tool args include --preview, --apply, --refresh-local, --target-place-id PLACE_ID, --confirm APPLY_LOCAL_PLACE_ENRICHMENT, --limit N, --json."
       exit 0
       ;;
     *)
