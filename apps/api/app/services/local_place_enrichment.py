@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
 from apps.api.app.services import region_catalog
 
 PROMPT_VERSION = "local-romanization-v1"
+
+_CONFIDENCE = 0.62
+_REASON = "Local Hangul romanization fallback for static English display."
 
 _KNOWN_NAME_EN = {
     "2025 에듀의왕! 어울림축제": "2025 Edu Uiwang Harmony Festival",
@@ -111,8 +114,24 @@ def build_local_enrichment(
         name_en=name_en or romanize_place_name(row.get("name_ko")),
         address_en=address_en or romanize_address(row.get("address_ko")),
         region_name_en=region_name_en,
-        confidence=0.62,
-        reason="Local Hangul romanization fallback for static English display.",
+        confidence=_CONFIDENCE,
+        reason=_REASON,
+    )
+
+
+def build_targeted_name_en_enrichment(row: dict[str, Any]) -> LocalPlaceEnrichment:
+    """Name-only enrichment for bounded targeted repair.
+
+    Why: targeted repair exists to fix a wrong public name_en label; the
+    production address_en/region_name_en values stay untouched.
+    """
+    return LocalPlaceEnrichment(
+        place_id=str(row.get("place_id") or ""),
+        name_en=romanize_place_name(row.get("name_ko")),
+        address_en=None,
+        region_name_en=None,
+        confidence=_CONFIDENCE,
+        reason=_REASON,
     )
 
 
@@ -200,6 +219,58 @@ def fetch_candidates(
             return [dict(row) for row in cur.fetchall()]
 
 
+class TargetedPlaceChangedError(RuntimeError):
+    """A targeted place row vanished or its name_ko changed during a targeted apply."""
+
+
+def fetch_targeted_places(
+    *,
+    dsn: str,
+    place_ids: Sequence[str],
+    connect_timeout: int,
+) -> list[dict[str, Any]]:
+    """Fetch exactly the requested place IDs (no broad candidate set, no filtering)."""
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+
+    target_sql = """
+        SELECT
+            place_id,
+            name_ko,
+            name_en,
+            address_ko,
+            address_en,
+            region_name_ko,
+            region_name_en
+        FROM travel.places
+        WHERE place_id = ANY(%s)
+    """
+    with psycopg2.connect(dsn, connect_timeout=connect_timeout) as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(target_sql, (list(place_ids),))
+            return [dict(row) for row in cur.fetchall()]
+
+
+def targeted_rows_error(rows: Sequence[dict[str, Any]], place_ids: Sequence[str]) -> str:
+    """Fail-closed guard for targeted repair: every ID must exist exactly once
+    with a Korean name that has a curated romanization entry."""
+    rows_by_id: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        rows_by_id.setdefault(str(row.get("place_id") or ""), []).append(row)
+    for place_id in place_ids:
+        matches = rows_by_id.get(place_id) or []
+        if not matches:
+            return f"target place {place_id} was not found; refusing to mutate anything."
+        if len(matches) > 1:
+            return f"target place {place_id} matched more than one row; refusing."
+        if _optional_text(matches[0].get("name_ko")) not in _KNOWN_NAME_EN:
+            return (
+                f"target place {place_id} has a name_ko without a curated entry; "
+                "targeted repair only regenerates curated labels."
+            )
+    return ""
+
+
 def apply_local_enrichments(
     *,
     dsn: str,
@@ -273,6 +344,86 @@ def apply_local_enrichments(
                 cur.execute(replace_update_sql if replace_existing else merge_update_sql, params)
                 updated += cur.rowcount
                 cur.execute(insert_sql, params)
+        conn.commit()
+    return updated
+
+
+def apply_targeted_local_enrichments(
+    *,
+    dsn: str,
+    enrichments: Sequence[LocalPlaceEnrichment],
+    expected_name_ko: Mapping[str, str],
+    connect_timeout: int,
+) -> int:
+    """Regenerate targeted name_en labels in one transaction.
+
+    Why: targeted repair must never half-apply — each UPDATE re-checks the
+    curated name_ko fetched pre-mutation, so a missing or concurrently changed
+    target raises and the whole run (update + history inserts) rolls back.
+    Only name_en is written; address_en/region_name_en stay as-is.
+    """
+    import psycopg2
+
+    if not enrichments:
+        return 0
+    guarded_update_sql = """
+        UPDATE travel.places
+        SET
+            name_en = %(name_en)s,
+            updated_at = now()
+        WHERE place_id = %(place_id)s AND name_ko = %(name_ko)s
+    """
+    insert_sql = """
+        INSERT INTO travel.place_enrichments (
+            place_id,
+            enrichment_type,
+            name_en,
+            address_en,
+            region_name_en,
+            attributes,
+            confidence,
+            source_method,
+            model_name,
+            prompt_version
+        )
+        VALUES (
+            %(place_id)s,
+            'english_text',
+            %(name_en)s,
+            NULL,
+            NULL,
+            %(attributes)s::jsonb,
+            %(confidence)s,
+            'local_romanization',
+            NULL,
+            %(prompt_version)s
+        )
+    """
+    updated = 0
+    with psycopg2.connect(dsn, connect_timeout=connect_timeout) as conn:
+        with conn.cursor() as cur:
+            for item in enrichments:
+                if not item.name_en:
+                    raise TargetedPlaceChangedError(
+                        f"target place {item.place_id} has no regenerated name_en; "
+                        "refusing to mutate anything."
+                    )
+                params = {
+                    "place_id": item.place_id,
+                    "name_ko": expected_name_ko[item.place_id],
+                    "name_en": item.name_en,
+                    "attributes": json.dumps({"reason": item.reason}, ensure_ascii=False),
+                    "confidence": item.confidence,
+                    "prompt_version": PROMPT_VERSION,
+                }
+                cur.execute(guarded_update_sql, params)
+                if cur.rowcount != 1:
+                    raise TargetedPlaceChangedError(
+                        f"target place {item.place_id} changed or disappeared; "
+                        "rolling back the whole targeted apply."
+                    )
+                cur.execute(insert_sql, params)
+                updated += 1
         conn.commit()
     return updated
 
