@@ -2,11 +2,14 @@
 
 ## Summary
 
-Two confirmed wrong public English labels in `travel.places.name_en` get a
+Two confirmed wrong public English labels in `travel.places.name_en` got a
 durable fix path: exact curated romanization entries for future deterministic
 generation, plus a repeatable bounded targeted repair mode in the local
-enrichment CLI for the existing rows. This change touches no database; the
-apply below is an operator runbook for a later guarded execution.
+enrichment CLI for the existing rows. The code path merged as PR #152 (squash
+commit `db5ccac097fc5bc13c7b64646a308e48c3cc352`, 2026-08-18), and the
+guarded targeted apply was then executed once, bounded to exactly the two rows
+below. The runbook in this devlog is the record of that execution and the
+reference for any future guarded use.
 
 | place_id | name_ko | wrong label today | canonical public label |
 | --- | --- | --- | --- |
@@ -16,7 +19,7 @@ apply below is an operator runbook for a later guarded execution.
 The earlier 3-record docent QA replay passed only because its manifest
 injected the corrected labels; the stored rows stayed wrong until this path.
 
-## What changed (code)
+## What changed (code, merged in PR #152)
 
 - `_KNOWN_NAME_EN` in `apps/api/app/services/local_place_enrichment.py` gains
   the two exact Korean-to-English entries, so future local romanization of
@@ -43,10 +46,33 @@ injected the corrected labels; the stored rows stayed wrong until this path.
 - `sql/canonical/` is untouched: it is a replayable empty-DB schema baseline
   and must not carry row-specific UPDATEs.
 
-## Operator runbook (no secrets, no cloud identifiers)
+## Operational outcome (completed 2026-08-18)
+
+- Merged: PR #152 squash commit `db5ccac097fc5bc13c7b64646a308e48c3cc352`.
+  CI and the standard deploy for that exact SHA both concluded `success` on
+  2026-08-18.
+- Scope actually mutated: exactly two `travel.places.name_en` values —
+  `tour-api-1017547` → `Jungmyeongjeon` and `tour-api-130420` →
+  `Hanbat Education Museum`. No `address_en` or `region_name_en` field was
+  changed.
+- Public confirmation (fresh no-cache reads): `GET /api/v1/places` with
+  `language=en` returns `Jungmyeongjeon` and `Hanbat Education Museum` for
+  the two ids; `/healthz` and `/readyz` report `ok` with `db` and `postgis`
+  configured (db-backed mode).
+- **This operation is complete. Do not rerun the targeted apply merely to
+  confirm it.** The labels are already canonical in production, and a second
+  apply would append redundant `local_romanization` enrichment-history rows —
+  the history table is an append-only audit trail.
+- `sql/canonical/` remains untouched: it is a replayable empty-DB schema
+  baseline and must not carry row-specific UPDATEs. The repository CLI is the
+  governed mutation path for bounded corrections like this one.
+
+## Operator runbook (executed once 2026-08-18; retained for reference)
 
 Preconditions: a shell in the repo root with `DB_DSN` exported by your usual
-secrets flow. The wrapper never prints the DSN value.
+secrets flow. The wrapper never prints the DSN value. No `psql` CLI is
+assumed on the production host: the backup and read-back examples below use
+the repository Python runtime with the same driver the enrichment CLI uses.
 
 ### 1. Dry-run (no mutation)
 
