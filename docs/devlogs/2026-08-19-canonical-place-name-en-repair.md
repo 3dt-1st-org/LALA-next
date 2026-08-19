@@ -11,7 +11,7 @@ guarded targeted apply was then executed once, bounded to exactly the two rows
 below. The runbook in this devlog is the record of that execution and the
 reference for any future guarded use.
 
-| place_id | name_ko | wrong label today | canonical public label |
+| place_id | name_ko | wrong label before repair | canonical public label |
 | --- | --- | --- | --- |
 | `tour-api-1017547` | 중명전 | `Myeongjeongjeon Hall` | `Jungmyeongjeon` |
 | `tour-api-130420` | 한밭교육박물관 | `Daejeon Hanhat Education Museum` | `Hanbat Education Museum` |
@@ -91,16 +91,35 @@ scripts/unix/plan_place_local_enrichment.sh --json --preview --refresh-local \
 
 ```bash
 mkdir -p output/local/place-name-repair
-psql "$DB_DSN" -At -F $'\t' -c \
-  "SELECT place_id, name_ko, name_en, address_en, region_name_en, updated_at
-     FROM travel.places
-    WHERE place_id IN ('tour-api-1017547', 'tour-api-130420');" \
-  > output/local/place-name-repair/backup-two-rows.tsv
-cat output/local/place-name-repair/backup-two-rows.tsv
+uv run python - <<'PY'
+import os
+
+import psycopg2
+
+# DB_DSN comes from the usual secrets flow; it is never printed or logged.
+dsn = os.environ["DB_DSN"]
+target_ids = ("tour-api-1017547", "tour-api-130420")
+with psycopg2.connect(dsn, connect_timeout=5) as conn:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT place_id, name_ko, name_en, address_en, region_name_en, updated_at
+              FROM travel.places
+             WHERE place_id IN %s
+            """,
+            (target_ids,),
+        )
+        rows = cur.fetchall()
+with open("output/local/place-name-repair/backup-two-rows.tsv", "w") as fh:
+    for record in rows:
+        fh.write("\t".join(str(column) for column in record) + "\n")
+print("backup rows written:", len(rows))
+PY
 ```
 
 Keep the TSV (gitignored under `output/local/`); it is the rollback reference
-for all English columns of both rows.
+for all English columns of both rows. Inspect it locally only — do not print
+backup contents to shared logs.
 
 ### 3. Exact two-target apply (guarded mutation)
 
@@ -118,19 +137,43 @@ or mid-run change exits 2 and writes nothing.
 ### 4. Read-only post-check
 
 ```bash
-# Labels now canonical, address/region unchanged versus the backup TSV.
-psql "$DB_DSN" -c \
-  "SELECT place_id, name_ko, name_en FROM travel.places
-    WHERE place_id IN ('tour-api-1017547', 'tour-api-130420')
-    ORDER BY place_id;"
+uv run python - <<'PY'
+import os
 
-# Exactly one new local_romanization history row per target, name_en only.
-psql "$DB_DSN" -c \
-  "SELECT place_id, name_en, address_en, region_name_en, source_method, prompt_version
-     FROM travel.place_enrichments
-    WHERE place_id IN ('tour-api-1017547', 'tour-api-130420')
-      AND source_method = 'local_romanization'
-    ORDER BY place_id, generated_at DESC;"
+import psycopg2
+
+# DB_DSN comes from the usual secrets flow; it is never printed or logged.
+dsn = os.environ["DB_DSN"]
+target_ids = ("tour-api-1017547", "tour-api-130420")
+with psycopg2.connect(dsn, connect_timeout=5) as conn:
+    with conn.cursor() as cur:
+        # Labels now canonical; address/region unchanged versus the backup TSV.
+        cur.execute(
+            """
+            SELECT place_id, name_ko, name_en
+              FROM travel.places
+             WHERE place_id IN %s
+             ORDER BY place_id
+            """,
+            (target_ids,),
+        )
+        for place_id, name_ko, name_en in cur.fetchall():
+            print(place_id, name_en)
+        # Exactly one new local_romanization history row per target, name_en only.
+        cur.execute(
+            """
+            SELECT place_id, count(*)
+              FROM travel.place_enrichments
+             WHERE place_id IN %s
+               AND source_method = 'local_romanization'
+             GROUP BY place_id
+             ORDER BY place_id
+            """,
+            (target_ids,),
+        )
+        for place_id, count in cur.fetchall():
+            print(place_id, "local_romanization history rows:", count)
+PY
 ```
 
 Rollback (operator decision only): restore the two rows' `name_en` from the
