@@ -6,10 +6,11 @@ Two confirmed wrong public English labels in `travel.places.name_en` got a
 durable fix path: exact curated romanization entries for future deterministic
 generation, plus a repeatable bounded targeted repair mode in the local
 enrichment CLI for the existing rows. The code path merged as PR #152 (squash
-commit `db5ccac097fc5bc13c7b64646a308e48c3cc352`, 2026-08-18), and the
-guarded targeted apply was then executed once, bounded to exactly the two rows
-below. The runbook in this devlog is the record of that execution and the
-reference for any future guarded use.
+commit `db5ccac097fc5bc13c7b64646a308e48c3cc352`; merged 2026-08-18T16:17:55Z,
+which is 2026-08-19 in the project's Asia/Seoul reporting timezone — all
+dates below are KST), and the guarded targeted apply was then executed once,
+bounded to exactly the two rows below. The runbook in this devlog is the
+record of that execution and the reference for any future guarded use.
 
 | place_id | name_ko | wrong label before repair | canonical public label |
 | --- | --- | --- | --- |
@@ -46,11 +47,12 @@ injected the corrected labels; the stored rows stayed wrong until this path.
 - `sql/canonical/` is untouched: it is a replayable empty-DB schema baseline
   and must not carry row-specific UPDATEs.
 
-## Operational outcome (completed 2026-08-18)
+## Operational outcome (completed 2026-08-19, KST)
 
-- Merged: PR #152 squash commit `db5ccac097fc5bc13c7b64646a308e48c3cc352`.
-  CI and the standard deploy for that exact SHA both concluded `success` on
-  2026-08-18.
+- Merged: PR #152 squash commit `db5ccac097fc5bc13c7b64646a308e48c3cc352`,
+  merged 2026-08-18T16:17:55Z = 2026-08-19 01:17:55 KST. CI and the standard
+  deploy for that exact SHA both concluded `success` immediately after
+  (2026-08-19 KST).
 - Scope actually mutated: exactly two `travel.places.name_en` values —
   `tour-api-1017547` → `Jungmyeongjeon` and `tour-api-130420` →
   `Hanbat Education Museum`. No `address_en` or `region_name_en` field was
@@ -67,12 +69,18 @@ injected the corrected labels; the stored rows stayed wrong until this path.
   baseline and must not carry row-specific UPDATEs. The repository CLI is the
   governed mutation path for bounded corrections like this one.
 
-## Operator runbook (executed once 2026-08-18; retained for reference)
+## Operator runbook (executed once 2026-08-19 KST; retained for reference)
 
-Preconditions: a shell in the repo root with `DB_DSN` exported by your usual
-secrets flow. The wrapper never prints the DSN value. No `psql` CLI is
-assumed on the production host: the backup and read-back examples below use
-the repository Python runtime with the same driver the enrichment CLI uses.
+Preconditions: the repository runtime resolves the connection itself through
+its managed secret contract — the examples below call
+`get_settings().db_dsn`, which honors `LALA_RUNTIME_PROFILE`: operational
+profiles (`api`/`worker`) pull from the managed secret store fail-closed, so
+never export a raw connection value on the production host. Local development
+is the separate, clearly-labeled option: `LALA_RUNTIME_PROFILE=local` with
+`DB_DSN` in the environment (or `.env.local`) is the supported override.
+Nothing here ever prints the DSN value. No `psql` CLI is assumed on the
+production host: the backup and read-back examples below use the repository
+Python runtime with the same driver the enrichment CLI uses.
 
 ### 1. Dry-run (no mutation)
 
@@ -92,12 +100,13 @@ scripts/unix/plan_place_local_enrichment.sh --json --preview --refresh-local \
 ```bash
 mkdir -p output/local/place-name-repair
 uv run python - <<'PY'
-import os
-
 import psycopg2
 
-# DB_DSN comes from the usual secrets flow; it is never printed or logged.
-dsn = os.environ["DB_DSN"]
+from apps.api.app.core.config import get_settings
+
+# The repository runtime resolves the DSN (managed secret contract per
+# LALA_RUNTIME_PROFILE); its value is never printed or logged.
+dsn = get_settings().db_dsn
 target_ids = ("tour-api-1017547", "tour-api-130420")
 with psycopg2.connect(dsn, connect_timeout=5) as conn:
     with conn.cursor() as cur:
@@ -110,16 +119,33 @@ with psycopg2.connect(dsn, connect_timeout=5) as conn:
             (target_ids,),
         )
         rows = cur.fetchall()
+        # Pre-apply boundary: per-target all-time count of local_romanization
+        # history rows, to compare against the same count in the post-check.
+        cur.execute(
+            """
+            SELECT place_id, count(*)
+              FROM travel.place_enrichments
+             WHERE place_id IN %s
+               AND source_method = 'local_romanization'
+             GROUP BY place_id
+             ORDER BY place_id
+            """,
+            (target_ids,),
+        )
+        history_before = dict(cur.fetchall())
 with open("output/local/place-name-repair/backup-two-rows.tsv", "w") as fh:
     for record in rows:
         fh.write("\t".join(str(column) for column in record) + "\n")
 print("backup rows written:", len(rows))
+print("local_romanization history before:", history_before)
 PY
 ```
 
-Keep the TSV (gitignored under `output/local/`); it is the rollback reference
-for all English columns of both rows. Inspect it locally only — do not print
-backup contents to shared logs.
+Keep the TSV and the printed pre-apply count (gitignored under
+`output/local/`); they are the rollback reference for all English columns of
+both rows and the boundary for proving the apply added exactly one history
+row per target. Inspect them locally only — do not print backup contents to
+shared logs.
 
 ### 3. Exact two-target apply (guarded mutation)
 
@@ -138,12 +164,13 @@ or mid-run change exits 2 and writes nothing.
 
 ```bash
 uv run python - <<'PY'
-import os
-
 import psycopg2
 
-# DB_DSN comes from the usual secrets flow; it is never printed or logged.
-dsn = os.environ["DB_DSN"]
+from apps.api.app.core.config import get_settings
+
+# The repository runtime resolves the DSN (managed secret contract per
+# LALA_RUNTIME_PROFILE); its value is never printed or logged.
+dsn = get_settings().db_dsn
 target_ids = ("tour-api-1017547", "tour-api-130420")
 with psycopg2.connect(dsn, connect_timeout=5) as conn:
     with conn.cursor() as cur:
@@ -159,7 +186,7 @@ with psycopg2.connect(dsn, connect_timeout=5) as conn:
         )
         for place_id, name_ko, name_en in cur.fetchall():
             print(place_id, name_en)
-        # Exactly one new local_romanization history row per target, name_en only.
+        # All-time per-target total of local_romanization history rows.
         cur.execute(
             """
             SELECT place_id, count(*)
@@ -175,6 +202,11 @@ with psycopg2.connect(dsn, connect_timeout=5) as conn:
             print(place_id, "local_romanization history rows:", count)
 PY
 ```
+
+The history count is an all-time total, not a delta: this query alone cannot
+prove the apply added exactly one row per target. A true one-new-row proof
+needs the same count captured before the apply and compared after — the §2
+preflight records that boundary alongside the backup TSV.
 
 Rollback (operator decision only): restore the two rows' `name_en` from the
 backup TSV; the history rows are an append-only audit trail.
