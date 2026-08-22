@@ -14,9 +14,9 @@
 > read-only legacy tree at `/Users/geondongkim/3dt-1st-Project` and the current
 > LALA-next tree in this worktree.
 >
-> Reconciliation note (2026-08-19): this revision aligns the plan with the
-> approved contract decisions and with PR #60's **merged** foundation
-> (`062_review_ingestion_governance.sql` +
+> Reconciliation note (2026-08-19, corrected 2026-08-22): this revision aligns
+> the plan with the approved contract decisions and with PR #60's **merged**
+> foundation (`062_review_ingestion_governance.sql` +
 > `apps/api/app/services/review_ingest_governance.py`). Locked facts it enforces:
 > the registry is `ingest.review_sources` (there is no `ingest.source_registry`);
 > 062 does **not** retain raw review bodies; `community.posts_raw` is
@@ -25,9 +25,14 @@
 > implementation adds only aggregate-only receipt/dedupe records, source
 > registration lookup, a transaction boundary, and typed safe quarantine
 > metadata, with **no external-provider calls**; and the bulk (`gpt-5.4-nano`) vs
-> recheck/docent (`gpt-5.4-mini`) model roles are unchanged. The clean-room
-> evidence and history sections (§0–§6, §26, §29–§31) are retained unchanged in
-> substance.
+> recheck/docent (`gpt-5.4-mini`) model roles are unchanged. Reconciliation edits
+> are confined to this note, the §1 glossary row, §4.5, §7, §9, §10, §11, §19,
+> §20, §24, §25, the §29 milestone markers, and the §32 related-links list; the
+> remaining clean-room evidence and history sections (§0, §2–§3, §5–§6, §8,
+> §12–§18, §21–§23, §26–§28, §30–§31) are retained unchanged in substance.
+> §25.1 is additionally corrected so that no canonical migration number — and no
+> list position that could be read as one — is reserved for any
+> not-yet-implemented item.
 
 ## 0. Provenance & Method
 
@@ -720,60 +725,60 @@ inputs yields the same rows (no duplicates, no lost higher-tier enrichments).
 
 ## 25. Schema / API / Migration Contracts
 
-### 25.1 Migrations (additive, ordered)
+### 25.1 Migrations (additive; canonical numbering is never reserved here)
 
 **Landed by PR #60 (governance foundation, merged to `main`):**
 
-1. **`062_review_ingestion_governance.sql`** (IMPLEMENTED, merged to `main` by
-   PR #60): additive, re-runnable
-   (`CREATE TABLE IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS` /
-   `CREATE INDEX IF NOT EXISTS`). Creates `ingest.review_sources` (§9.3) +
-   `ingest.review_ingest_receipts` (the aggregate-only persistent receipt/dedupe,
-   item 4 below), extends `community.ingest_runs` with the governance columns +
-   the `review_source_name` FK → registered source + the `run_key` partial unique
-   idempotency index, and creates `community.ingest_quarantine` (§19) with
-   **no raw-body column**. It **does not retain raw review bodies** — no table or
-   column it creates stores body/title/URL text. Backed by the typed governance
-   boundary in
-   `apps/api/app/services/review_ingest_governance.py`, which runs the
-   DB-authoritative source gate + register → run → receipt → quarantine →
-   finalize inside one transaction.
+- **`062_review_ingestion_governance.sql`** — **the only migration PR #60 ships,
+  and the only numbered item in this section.** It is IMPLEMENTED, merged to
+  `main`, additive, and re-runnable
+  (`CREATE TABLE IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS` /
+  `CREATE INDEX IF NOT EXISTS`). It creates `ingest.review_sources` (§9.3) +
+  `ingest.review_ingest_receipts` (the aggregate-only persistent receipt/dedupe
+  described in §12/§19), extends `community.ingest_runs` with the governance
+  columns + the `review_source_name` FK → registered source + the `run_key`
+  partial unique idempotency index, and creates `community.ingest_quarantine`
+  (§19) with **no raw-body column**. It **does not retain raw review bodies** —
+  no table or column it creates stores body/title/URL text. Backed by the typed
+  governance boundary in
+  `apps/api/app/services/review_ingest_governance.py`, which runs the
+  DB-authoritative source gate + register → run → receipt → quarantine →
+  finalize inside one transaction. The aggregate-only receipt/dedupe is
+  **implemented by this same migration**, not held for a separate one: receipts
+  key cross-batch dedupe on (source, external_key, `content_sha256`), so an
+  exact replay (same triple, any run) yields `rowcount 0` and does not re-emit
+  an aggregate, while a content revision (new hash) inserts a fresh row and
+  does. No external-provider calls.
 
-**Remaining TARGET migrations (no migration number is reserved by this plan):**
+**Remaining TARGET migrations (deliberately unnumbered):**
 
-2. **`travel.place_enrichments` uniqueness** (§18): add unique
-   `(place_id, enrichment_type, prompt_version)` (or accept append-only history
-   with a `latest` flag) to support replay auditing.
-3. **`rag.knowledge_chunks` source-type policy** (§17): no schema change needed,
-   but add a CHECK/CI rule that `community_post` rows must not embed raw bodies
-   (enforced in code + test).
-4. **Aggregate-only persistent receipt/dedupe — IMPLEMENTED in `062` (PR #60),
-   not a separate migration:** `ingest.review_ingest_receipts` keys cross-batch
-   dedupe on (source, external_key, `content_sha256`) so duplicate records across
-   batches are detected without re-storing raw text. An exact replay (same
-   triple, any run) yields `rowcount 0` and does not re-emit an aggregate; a
-   content revision (new hash) inserts a fresh row and does. It ships inside the
-   single transaction boundary across register → run → receipt → quarantine →
-   finalize (§19). No external-provider calls.
+- **`travel.place_enrichments` uniqueness** (§18): add unique
+  `(place_id, enrichment_type, prompt_version)` (or accept append-only history
+  with a `latest` flag) to support replay auditing.
+- **`rag.knowledge_chunks` source-type policy** (§17): no schema change needed,
+  but add a CHECK/CI rule that `community_post` rows must not embed raw bodies
+  (enforced in code + test).
 
 > **Migration-numbering rule (locked):** `062` is already in use by
 > `062_review_ingestion_governance.sql` on `main`, and `063`/`064` are also
 > already taken (`063_local_signals_contract.sql`,
-> `064_planning_action_tables.sql`). Items 2–3 above therefore carry **no
-> number**: they take the next free canonical number at the time they are
-> implemented, chosen against `sql/canonical/` on `main` — never a pre-assigned
-> value from this document. Nothing in this plan reserves a migration slot.
+> `064_planning_action_tables.sql`). The TARGET items above therefore carry
+> **no number — not even a document-list position that could be misread as one**:
+> each takes the next free canonical number at the time it is implemented,
+> chosen against `sql/canonical/` on `main` — never a pre-assigned value from
+> this document. Nothing in this plan reserves a migration slot.
 
-**BLOCKED_EXTERNAL (not a migration — no raw-retention table):**
+**BLOCKED_EXTERNAL (not a migration at all — no raw-retention table):**
 
-5. `community.posts_raw` (or any raw review-body table) is **BLOCKED_EXTERNAL**:
-   not created by this plan, not created by PR #60, and not assigned a migration
-   number until a separate legal/retention/access decision (§10.2). Earlier
-   drafts of this plan listed it as migration item 1 and backfilled
-   `community.posts` into it; that proposal is superseded and must not be
-   renumbered into the canonical sequence (it would collide with the already
-   shipped `062`). It is recorded here as **BLOCKED_EXTERNAL, not as a CURRENT
-   or TARGET implementation item** — no part of this plan implements it.
+- `community.posts_raw` (or any raw review-body table) is **BLOCKED_EXTERNAL**:
+  not created by this plan, not created by PR #60, and not assigned a migration
+  number (or a numbered list position) until a separate
+  legal/retention/access decision (§10.2). Earlier drafts of this plan listed it
+  as migration item 1 and backfilled `community.posts` into it; that proposal is
+  superseded and must not be renumbered into the canonical sequence (it would
+  collide with the already shipped `062`). It is recorded here as
+  **BLOCKED_EXTERNAL, not as a CURRENT or TARGET implementation item** — no part
+  of this plan implements it, and no migration number is held open for it.
 
 All migrations remain additive (`CREATE TABLE IF NOT EXISTS`, `ADD COLUMN IF NOT
 EXISTS`) and backward-compatible with the canonical baseline as it exists on
@@ -876,7 +881,7 @@ history via `place_enrichments` generations.
 - **Target:** one terms-compliant source governed via the worker contract
   (§8/§9) using the `062` `ingest.review_sources` registry + DB-backed
   `review_ingest_governance.py` gate. The aggregate-only receipt + persistent
-  dedupe (§25.1 item 4, **LANDED in `062`/PR #60**) is already the persistence
+  dedupe (§25.1, **LANDED in `062`/PR #60**) is already the persistence
   floor; this lane adds only live acquisition. **No `posts_raw`**
   (BLOCKED_EXTERNAL, §10). Live acquisition that calls external providers remains
   BLOCKED_EXTERNAL until the legal/retention/access decision.
