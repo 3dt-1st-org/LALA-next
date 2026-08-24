@@ -14,22 +14,23 @@
 > read-only legacy tree at `/Users/geondongkim/3dt-1st-Project` and the current
 > LALA-next tree in this worktree.
 >
-> Reconciliation note (2026-08-19, corrected 2026-08-22): this revision aligns
-> the plan with the approved contract decisions and with PR #60's **merged**
-> foundation (`062_review_ingestion_governance.sql` +
+> Reconciliation note (2026-08-19, corrected 2026-08-22 and 2026-08-24): this
+> revision aligns the plan with the approved contract decisions and with PR #60's
+> **merged** foundation (`062_review_ingestion_governance.sql` +
 > `apps/api/app/services/review_ingest_governance.py`). Locked facts it enforces:
 > the registry is `ingest.review_sources` (there is no `ingest.source_registry`);
 > 062 does **not** retain raw review bodies; `community.posts_raw` is
 > **BLOCKED_EXTERNAL** (no raw review text stored, served, logged, or embedded
-> before a separate legal/retention/access decision); the next review-specific
-> implementation adds only aggregate-only receipt/dedupe records, source
-> registration lookup, a transaction boundary, and typed safe quarantine
-> metadata, with **no external-provider calls**; and the bulk (`gpt-5.4-nano`) vs
+> before a separate legal/retention/access decision — this holds regardless of
+> license terms, §9.1); the review-specific governance foundation adds only
+> aggregate-only receipt/dedupe records, source registration lookup, a
+> transaction boundary, and typed safe quarantine metadata, with **no
+> external-provider calls**; and the bulk (`gpt-5.4-nano`) vs
 > recheck/docent (`gpt-5.4-mini`) model roles are unchanged. Reconciliation edits
 > are confined to this note, the §1 glossary row, §4.5, §7, §9, §10, §11, §19,
-> §20, §24, §25, the §29 milestone markers, and the §32 related-links list; the
-> remaining clean-room evidence and history sections (§0, §2–§3, §5–§6, §8,
-> §12–§18, §21–§23, §26–§28, §30–§31) are retained unchanged in substance.
+> §20, §24, §25, the §29 milestone markers, §30, and the §32 related-links list;
+> the remaining clean-room evidence and history sections (§0, §2–§3, §5–§6, §8,
+> §12–§18, §21–§23, §26–§28, §31) are retained unchanged in substance.
 > §25.1 is additionally corrected so that no canonical migration number — and no
 > list position that could be read as one — is reserved for any
 > not-yet-implemented item.
@@ -369,8 +370,9 @@ Live mutation stays behind `ALLOW_*_APPLY=1` + `--confirm` gates and the Wave-1
 - **Licensed APIs:** a review/portal Search API used **within its terms**
   (e.g. Naver Search API with `NAVER_CLIENT_ID/SECRET`) for *discovery* of
   review/blog URLs and metadata — **not** for re-publishing review text. Store
-  only metadata + a pointer; summarize content via the bulk lane; never store
-  verbatim review bodies unless the license explicitly permits retention.
+  only metadata + a pointer; summarize content via the bulk lane; **never store
+  verbatim review bodies — raw retention is BLOCKED_EXTERNAL (§10) regardless of
+  license terms until the separate legal/retention/access decision is made.**
 - **Public/processed datasets:** public-data community indicators that can be
   legally stored and summarized (the same discipline as
   `docs/operations/card-spending-source-inventory.md`).
@@ -464,10 +466,11 @@ plan:
    for cross-run dedupe, routes malformed/unsafe records to
    `community.ingest_quarantine` with typed `safe_metadata`, and produces an
    aggregate-only `ApprovedReviewAggregate` (no raw body stored — §10) — all in
-   one transaction. **The next review-specific implementation must add only:
-   aggregate-only persistent receipt/dedupe records, source-registration lookup,
-   a transaction boundary, and typed safe quarantine metadata — and must not
-   call external providers.** Live acquisition is a separate, later lane.
+   one transaction. **Per the locked contract decision, this foundation adds
+   only: aggregate-only persistent receipt/dedupe records, source-registration
+   lookup, a transaction boundary, and typed safe quarantine metadata — and
+   makes no external-provider calls.** Live acquisition is a separate, later
+   lane.
 2. **Normalize** (§13): `clean_review_text`-style HTML/entity/whitespace cleanup;
    language detection/tagging; KO/EN place-term normalization.
 3. **Deduplicate** (§12): normalized-text + source + URL + content hash.
@@ -611,10 +614,10 @@ inputs yields the same rows (no duplicates, no lost higher-tier enrichments).
   {approved, rejected, retried})`. **No `raw_payload_ref` and no body column by
   design** — a record is diagnosable from identity + content hash + the
   code-backed `reason_code`/`reason` + the typed `safe_metadata` jsonb alone.
-  This is the "typed safe quarantine metadata" the next slice persists via
-  `review_ingest_governance.py::_insert_quarantine_entries`. (The earlier
-  draft's `ai_failure` reason and `raw_payload_ref` pointer are removed: neither
-  exists in 062.)
+  This is the "typed safe quarantine metadata" the governance foundation
+  already persists via `review_ingest_governance.py::_insert_quarantine_entries`
+  (062/PR #60, merged to `main`). (The earlier draft's `ai_failure` reason and
+  `raw_payload_ref` pointer are removed: neither exists in 062.)
 - **Idempotent dead-letter:** partial unique index on
   `(provider, external_key, reason_category) WHERE resolved_at IS NULL` means
   retrying a failed batch does not duplicate dead-letter rows.
@@ -949,8 +952,9 @@ Slides 7, 8, 10, 16, 19 together define the pipeline's product purpose:
   weekly place roll-ups) — never personal tracking.
 - **Slide 19 (legal/privacy):** 합법적 수집 (licensed/public + de-identified,
   processed data) and 명시적 동의 (location Opt-in). This pipeline implements
-  the data half: only licensed/public or processed sources, no raw PII, raw text
-  minimized and purged on schedule, aggregate-only serve path.
+  the data half: only licensed/public or processed sources, no raw PII, **raw
+  review text not stored at all** (BLOCKED_EXTERNAL, §10 — nothing retained to
+  purge), aggregate-only serve path.
 
 **Net:** a recommendation can truthfully say "this place is trusted because N
 organic local signals rated it highly on [attributes], from [approved sources]"
