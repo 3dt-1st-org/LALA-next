@@ -17,12 +17,14 @@ import 'package:lala_next_app/core/state/selected_place_store.dart';
 import 'package:lala_next_app/features/home/home_view_helpers.dart'
     show filterPlaces;
 import 'package:lala_next_app/features/location/widgets/default_region_indicator.dart';
+import 'package:lala_next_app/features/location/widgets/manual_location_sheet.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/features/place/place_helpers.dart';
 import 'package:lala_next_app/features/place/widgets/category_badge.dart';
 import 'package:lala_next_app/features/place/widgets/empty_place_state.dart';
 import 'package:lala_next_app/features/place/widgets/place_reason_freshness.dart';
 import 'package:lala_next_app/features/place/widgets/place_thumb.dart';
+import 'package:lala_next_app/manual_location_options.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 import 'package:lala_next_app/shared/l10n/place_labels.dart';
 import 'package:lala_next_app/shared/widgets/lala_skeleton.dart';
@@ -323,6 +325,34 @@ class _SearchPageState extends State<SearchPage> {
     context.go(LalaRoutePaths.mapRoute);
   }
 
+  Future<void> _openRegionPicker() async {
+    final selected = await showModalBottomSheet<ManualLocationOption>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => ManualLocationSheet(language: _language),
+    );
+    if (selected != null && mounted) {
+      await RegionContextStore.setAndFlush(RegionContext.manual(selected));
+    }
+  }
+
+  String get _regionLabel {
+    final region = _region;
+    if (region != null) {
+      return region.label(_language);
+    }
+    return lalaCopyMulti(
+      _language,
+      ko: '기본 지역 · 수원',
+      en: 'Default region · Suwon',
+      ja: '既定の地域 · 水原',
+      zhHans: '默认地区 · 水原',
+      zhHant: '預設地區 · 水原',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -342,6 +372,12 @@ class _SearchPageState extends State<SearchPage> {
                   _selectedCategory = 'all';
                 });
               },
+            ),
+            _SearchRegionContextRow(
+              language: _language,
+              regionLabel: _regionLabel,
+              isDefault: _regionIsDefault,
+              onPressed: _openRegionPicker,
             ),
             _CategoryChipBar(
               categories: _kSearchCategories,
@@ -400,7 +436,123 @@ class _SearchPageState extends State<SearchPage> {
   }
 }
 
-/// 상단 검색 바 + 커뮤니티 진입 + 새로고침 버튼.
+/// 검색 요청의 실제 지역 컨텍스트를 항상 드러내고 전국 직접 선택으로 연결한다.
+/// null 컨텍스트는 현재 위치가 아니라 공개된 기본 지역임을 label/icon으로 구분한다.
+class _SearchRegionContextRow extends StatelessWidget {
+  const _SearchRegionContextRow({
+    required this.language,
+    required this.regionLabel,
+    required this.isDefault,
+    required this.onPressed,
+  });
+
+  final String language;
+  final String regionLabel;
+  final bool isDefault;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final contextLabel = lalaCopyMulti(
+      language,
+      ko: '탐색 지역',
+      en: 'Exploration region',
+      ja: '探索地域',
+      zhHans: '探索地区',
+      zhHant: '探索地區',
+    );
+    final changeLabel = lalaCopyMulti(
+      language,
+      ko: '변경',
+      en: 'Change',
+      ja: '変更',
+      zhHans: '更改',
+      zhHant: '變更',
+    );
+    final semanticLabel = '$contextLabel, $regionLabel, $changeLabel';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 4, 24, 2),
+      child: Semantics(
+        button: true,
+        label: semanticLabel,
+        child: OutlinedButton(
+          key: const ValueKey('search-region-picker'),
+          onPressed: onPressed,
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size.fromHeight(48),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            foregroundColor: const Color(0xFF334155),
+            backgroundColor: Colors.white,
+            side: const BorderSide(color: Color(0xFFE2E8F0)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          child: Row(
+            children: <Widget>[
+              Icon(
+                isDefault
+                    ? Icons.location_searching_rounded
+                    : Icons.location_on_outlined,
+                size: 20,
+                color: isDefault
+                    ? const Color(0xFF64748B)
+                    : const Color(0xFF2B6CB0),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Text(
+                      contextLabel,
+                      style: const TextStyle(
+                        color: Color(0xFF64748B),
+                        fontSize: 12,
+                        height: 1.2,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      regionLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF0F172A),
+                        fontSize: 14,
+                        height: 1.2,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                changeLabel,
+                style: const TextStyle(
+                  color: Color(0xFF2B6CB0),
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(width: 2),
+              const Icon(
+                Icons.chevron_right_rounded,
+                size: 20,
+                color: Color(0xFF2B6CB0),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 상단 검색 바.
 class _SearchHeader extends StatelessWidget {
   const _SearchHeader({
     required this.controller,
