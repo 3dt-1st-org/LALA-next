@@ -10,6 +10,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:lala_next_app/app/lala_visual_tokens.dart';
 import 'package:lala_next_app/core/routing/lala_route_paths.dart';
+import 'package:lala_next_app/features/onboarding/onboarding_language_options.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/features/onboarding/presentation/widgets/onboarding_scaffold.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
@@ -100,7 +101,7 @@ class _OnboardingLanguagePageState extends State<OnboardingLanguagePage> {
                     ),
                     const SizedBox(height: 28),
                     // 행 순서 = 계약 §1 표 순서. 라벨은 각 언어 고유명(의도적 노출).
-                    for (final entry in _kLanguageChoices) ...<Widget>[
+                    for (final entry in onboardingLanguageChoices) ...<Widget>[
                       _LanguageRow(
                         key: ValueKey('onboarding-language-${entry.code}'),
                         badge: entry.badge,
@@ -154,23 +155,6 @@ class _OnboardingLanguagePageState extends State<OnboardingLanguagePage> {
     );
   }
 }
-
-/// S2 언어 행 정의. badge 는 텍스트(국기 이모지 금지, 계약 I3).
-class _LanguageChoice {
-  const _LanguageChoice(this.code, this.badge, this.endonym);
-
-  final String code;
-  final String badge;
-  final String endonym;
-}
-
-const List<_LanguageChoice> _kLanguageChoices = <_LanguageChoice>[
-  _LanguageChoice('ko', 'KO', '한국어'),
-  _LanguageChoice('en', 'EN', 'English'),
-  _LanguageChoice('ja', 'JA', '日本語'),
-  _LanguageChoice('zh-Hans', '简', '简体中文'),
-  _LanguageChoice('zh-Hant', '繁', '繁體中文'),
-];
 
 /// S2 언어 행(높이 72). 텍스트 배지 + 고유명 + 우측 check/radio 표시.
 class _LanguageRow extends StatelessWidget {

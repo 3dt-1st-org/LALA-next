@@ -56,11 +56,17 @@ class OnboardingState {
   /// 관광객 유형을 선택하고 기본 언어를 함께 세팅한다.
   /// - 외국인 관광객 → English(en)
   /// - 내국인 관광객 → 한국어(ko)
-  static void selectTouristType(OnboardingTouristType type) {
+  /// [preserveLanguage]는 S1에서 사용자가 먼저 고른 언어를 유지한다.
+  static void selectTouristType(
+    OnboardingTouristType type, {
+    bool preserveLanguage = false,
+  }) {
     _touristType = type;
-    _language.value = type == OnboardingTouristType.foreignTourist
-        ? 'en'
-        : 'ko';
+    if (!preserveLanguage) {
+      _language.value = type == OnboardingTouristType.foreignTourist
+          ? 'en'
+          : 'ko';
+    }
     _persist();
   }
 

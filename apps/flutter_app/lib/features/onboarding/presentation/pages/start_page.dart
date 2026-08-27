@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:lala_next_app/app/lala_visual_tokens.dart';
 import 'package:lala_next_app/core/routing/lala_route_paths.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
+import 'package:lala_next_app/features/onboarding/presentation/widgets/onboarding_language_menu.dart';
 import 'package:lala_next_app/features/onboarding/presentation/widgets/onboarding_scaffold.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 
@@ -19,6 +20,19 @@ class OnboardingStartPage extends StatefulWidget {
 
 class _OnboardingStartPageState extends State<OnboardingStartPage> {
   OnboardingTouristType? _pending;
+  String? _languageOverride;
+
+  @override
+  void initState() {
+    super.initState();
+    final defaultLanguage =
+        OnboardingState.touristType == OnboardingTouristType.foreignTourist
+        ? 'en'
+        : 'ko';
+    if (OnboardingState.language != defaultLanguage) {
+      _languageOverride = OnboardingState.language;
+    }
+  }
 
   // S1 은 언어 선택 이전이므로 앱 SSOT(기본 ko)를 따른다.
   String get _language => OnboardingState.language;
@@ -29,13 +43,23 @@ class _OnboardingStartPageState extends State<OnboardingStartPage> {
     setState(() => _pending = type);
   }
 
+  void _selectLanguage(String language) {
+    setState(() {
+      _languageOverride = language;
+      OnboardingState.selectLanguage(language);
+    });
+  }
+
   void _advance() {
     final type = _pending;
     if (type == null) {
       return;
     }
-    // 선택한 유형과 그 기본 언어를 SSOT 에 기록한 뒤 S2 로 이동.
-    OnboardingState.selectTouristType(type);
+    // 사용자가 먼저 고른 언어가 있으면 유형 기본값으로 덮지 않고 한 번만 영속화한다.
+    OnboardingState.selectTouristType(
+      type,
+      preserveLanguage: _languageOverride != null,
+    );
     if (mounted) {
       context.go(LalaRoutePaths.onboardingLanguage);
     }
@@ -46,6 +70,10 @@ class _OnboardingStartPageState extends State<OnboardingStartPage> {
     final language = _language;
     return OnboardingScaffold(
       step: 1,
+      headerAction: OnboardingLanguageMenu(
+        language: language,
+        onSelected: _selectLanguage,
+      ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(
           LalaVisualTokens.pageGutter,
