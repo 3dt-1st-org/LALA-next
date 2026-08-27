@@ -17,8 +17,10 @@
 - 데이터 파이프라인과 사용자 기능의 연결 확인
 - 마케팅 문구와 실제 제공 기능의 정합성 검토
 
-이 문서는 화면 디자인 명세나 API 스키마 전체를 대체하지 않는다. 시각 규격은
-`docs/planning/lala-mobile-visual-contract/`, API 필드 정의는
+이 문서는 화면 디자인 명세나 API 스키마 전체를 대체하지 않는다. 기능 중심의 최신
+화면·상태·데이터 바인딩은
+`docs/planning/lala-functional-ui-contract-20260827/`, 기존 시각 토큰과 목표
+근거는 `docs/planning/lala-mobile-visual-contract-20260728/`, API 필드 정의는
 `docs/api/flutter-contract.md`, 데이터 구조는 `docs/data/data-dictionary.md`를
 함께 따른다.
 
