@@ -16,11 +16,104 @@ import 'package:lala_next_app/core/persistence/onboarding_preferences.dart';
 import 'package:lala_next_app/core/routing/lala_route_paths.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/features/onboarding/presentation/pages/language_page.dart';
+import 'package:lala_next_app/features/onboarding/presentation/pages/start_page.dart';
 import 'package:lala_next_app/shared/l10n/multi_language_text.dart';
 
 Widget _wrapLanguagePage() => const MaterialApp(home: OnboardingLanguagePage());
 
 void main() {
+  group('V6 S1 language entry', () {
+    setUp(OnboardingState.reset);
+    tearDown(OnboardingState.reset);
+
+    testWidgets('changes the first question language before trip selection', (
+      tester,
+    ) async {
+      await tester.pumpWidget(const MaterialApp(home: OnboardingStartPage()));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('onboarding-quick-language-menu')),
+        findsOneWidget,
+      );
+      expect(find.text('어떤 여행을\n계획 중인가요?'), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(const ValueKey('onboarding-quick-language-menu')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('onboarding-quick-language-ja')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(OnboardingState.language, 'ja');
+      expect(find.text('どんな旅を\n計画していますか？'), findsOneWidget);
+      expect(find.text('어떤 여행을\n계획 중인가요?'), findsNothing);
+    });
+
+    testWidgets('explicit language survives trip-type defaulting into S2', (
+      tester,
+    ) async {
+      final router = GoRouter(
+        initialLocation: LalaRoutePaths.onboardingStart,
+        routes: <RouteBase>[
+          GoRoute(
+            path: LalaRoutePaths.onboardingStart,
+            builder: (context, state) => const OnboardingStartPage(),
+          ),
+          GoRoute(
+            path: LalaRoutePaths.onboardingLanguage,
+            builder: (context, state) => const OnboardingLanguagePage(),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey('onboarding-quick-language-menu')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('onboarding-quick-language-ja')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('onboarding-travel-domestic')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, '次へ'));
+      await tester.pumpAndSettle();
+
+      expect(OnboardingState.language, 'ja');
+      expect(find.text('言語を選択'), findsOneWidget);
+      expect(find.text('언어 선택'), findsNothing);
+    });
+
+    testWidgets('language entry fits the iPhone 17 Pro logical viewport', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(402, 874);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(const MaterialApp(home: OnboardingStartPage()));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(
+        tester
+            .getSize(
+              find.byKey(const ValueKey('onboarding-quick-language-menu')),
+            )
+            .height,
+        greaterThanOrEqualTo(44),
+      );
+    });
+  });
+
   group('V6 S2 language page rows', () {
     setUp(OnboardingState.reset);
     tearDown(OnboardingState.reset);
