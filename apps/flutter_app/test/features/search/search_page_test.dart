@@ -184,6 +184,105 @@ void main() {
     },
   );
 
+  testWidgets(
+    'search always exposes the active region and a nationwide picker entry',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SearchPage(
+            locationProvider: _CountingLocationProvider(
+              const LalaLocationResult.unavailable(),
+            ),
+            backendFactory: (config) => _LoadedPlacesBackend(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('search-region-picker')),
+        findsOneWidget,
+      );
+      expect(find.text('탐색 지역'), findsOneWidget);
+      expect(find.text('기본 지역 · 수원'), findsOneWidget);
+      expect(find.text('변경'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('search-region-picker')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('지역 선택'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('manual-location-search')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets('search region context fits the mobile contract viewport', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SearchPage(
+          locationProvider: _CountingLocationProvider(
+            const LalaLocationResult.unavailable(),
+          ),
+          backendFactory: (config) => _LoadedPlacesBackend(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final picker = find.byKey(const ValueKey('search-region-picker'));
+    expect(picker, findsOneWidget);
+    expect(tester.getSize(picker).height, greaterThanOrEqualTo(48));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('search region row reacts to a shared manual selection', (
+    tester,
+  ) async {
+    RegionContextStore.set(RegionContext.manual(_busanOption()));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SearchPage(
+          locationProvider: _CountingLocationProvider(
+            const LalaLocationResult.unavailable(),
+          ),
+          backendFactory: (config) => _LoadedPlacesBackend(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('해운대구'), findsOneWidget);
+    expect(find.text('기본 지역 · 수원'), findsNothing);
+
+    RegionContextStore.set(
+      RegionContext.manual(
+        const ManualLocationOption(
+          id: 'seoul-jongno',
+          provinceId: 'seoul',
+          provinceKo: '서울특별시',
+          provinceEn: 'Seoul',
+          labelKo: '종로구',
+          labelEn: 'Jongno-gu',
+          lat: 37.573,
+          lng: 126.9794,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('종로구'), findsOneWidget);
+    expect(find.text('해운대구'), findsNothing);
+  });
+
   tearDown(() {
     RegionContextStore.clear();
     OnboardingState.reset();
