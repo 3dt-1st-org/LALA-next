@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lala_next_app/app/lala_visual_tokens.dart';
 import 'package:lala_next_app/auth/auth_controller.dart';
 import 'package:lala_next_app/auth/logto_auth_gateway.dart';
 import 'package:lala_next_app/core/location/region_context.dart';
@@ -2492,6 +2493,47 @@ void main() {
     expect(find.text('일정'), findsOneWidget);
     expect(find.text('플랜'), findsNothing);
   });
+
+  testWidgets(
+    'bottom navigation uses a crisp white surface and blue selection',
+    (tester) async {
+      await tester.pumpWidget(
+        TestLalaApp(
+          backendFactory: FakeBackend.new,
+          initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('lala-bottom-nav-surface')),
+        findsOneWidget,
+      );
+
+      final navigationBar = tester.widget<NavigationBar>(
+        find.byType(NavigationBar),
+      );
+      expect(navigationBar.backgroundColor, LalaVisualColors.card);
+      expect(navigationBar.surfaceTintColor, Colors.transparent);
+      expect(navigationBar.indicatorColor, LalaVisualColors.primarySoft);
+      expect(navigationBar.elevation, 0);
+
+      final navTheme = tester.widget<NavigationBarTheme>(
+        find.ancestor(
+          of: find.byType(NavigationBar),
+          matching: find.byType(NavigationBarTheme),
+        ),
+      );
+      expect(
+        navTheme.data.iconTheme?.resolve({WidgetState.selected})?.color,
+        LalaVisualColors.primaryBlue,
+      );
+      expect(
+        navTheme.data.iconTheme?.resolve(<WidgetState>{})?.color,
+        LalaVisualColors.ink,
+      );
+    },
+  );
 
   testWidgets('place detail save control toggles local saved state', (
     tester,
