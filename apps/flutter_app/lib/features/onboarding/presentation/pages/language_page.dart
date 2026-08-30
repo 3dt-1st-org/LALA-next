@@ -75,7 +75,8 @@ class _OnboardingLanguagePageState extends State<OnboardingLanguagePage> {
                       ),
                       style: TextStyle(
                         fontSize: LalaVisualTokens.onboardingTitleSize,
-                        height: LalaVisualTokens.onboardingTitleLineHeight /
+                        height:
+                            LalaVisualTokens.onboardingTitleLineHeight /
                             LalaVisualTokens.onboardingTitleSize,
                         fontWeight: FontWeight.w800,
                         color: LalaVisualColors.ink,
@@ -93,7 +94,8 @@ class _OnboardingLanguagePageState extends State<OnboardingLanguagePage> {
                       ),
                       style: TextStyle(
                         fontSize: LalaVisualTokens.bodySize,
-                        height: LalaVisualTokens.bodyLineHeight /
+                        height:
+                            LalaVisualTokens.bodyLineHeight /
                             LalaVisualTokens.bodySize,
                         fontWeight: FontWeight.w500,
                         color: LalaVisualColors.muted,
@@ -127,7 +129,8 @@ class _OnboardingLanguagePageState extends State<OnboardingLanguagePage> {
                   foregroundColor: LalaVisualColors.card,
                   textStyle: TextStyle(
                     fontSize: LalaVisualTokens.controlLabelSize,
-                    height: LalaVisualTokens.controlLabelLineHeight /
+                    height:
+                        LalaVisualTokens.controlLabelLineHeight /
                         LalaVisualTokens.controlLabelSize,
                     fontWeight: FontWeight.w700,
                   ),
@@ -208,7 +211,8 @@ class _LanguageRow extends StatelessWidget {
                     label,
                     style: TextStyle(
                       fontSize: LalaVisualTokens.controlLabelSize,
-                      height: LalaVisualTokens.controlLabelLineHeight /
+                      height:
+                          LalaVisualTokens.controlLabelLineHeight /
                           LalaVisualTokens.controlLabelSize,
                       fontWeight: FontWeight.w700,
                       color: LalaVisualColors.ink,
@@ -216,9 +220,7 @@ class _LanguageRow extends StatelessWidget {
                   ),
                 ),
                 Icon(
-                  selected
-                      ? Icons.check_circle
-                      : Icons.radio_button_unchecked,
+                  selected ? Icons.check_circle : Icons.radio_button_unchecked,
                   color: selected
                       ? LalaVisualColors.primaryBlue
                       : LalaVisualColors.muted,
@@ -247,9 +249,7 @@ class _LanguageBadge extends StatelessWidget {
       height: 32,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: selected
-            ? LalaVisualColors.primaryBlue
-            : LalaVisualColors.line,
+        color: selected ? LalaVisualColors.primaryBlue : LalaVisualColors.line,
         borderRadius: BorderRadius.circular(LalaVisualTokens.controlRadius),
       ),
       child: Text(
@@ -258,7 +258,8 @@ class _LanguageBadge extends StatelessWidget {
           fontSize: 13,
           fontWeight: FontWeight.w800,
           color: selected ? LalaVisualColors.card : LalaVisualColors.ink,
-          letterSpacing: 0.4,
+          // 토큰 계약(00-ground-truth §4): letter spacing 은 0.
+          letterSpacing: 0,
         ),
       ),
     );

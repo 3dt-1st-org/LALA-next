@@ -97,7 +97,8 @@ class _OnboardingStartPageState extends State<OnboardingStartPage> {
                 ),
                 style: TextStyle(
                   fontSize: LalaVisualTokens.onboardingTitleSize,
-                  height: LalaVisualTokens.onboardingTitleLineHeight /
+                  height:
+                      LalaVisualTokens.onboardingTitleLineHeight /
                       LalaVisualTokens.onboardingTitleSize,
                   fontWeight: FontWeight.w800,
                   color: LalaVisualColors.ink,
@@ -118,7 +119,8 @@ class _OnboardingStartPageState extends State<OnboardingStartPage> {
                 ),
                 style: TextStyle(
                   fontSize: LalaVisualTokens.bodySize,
-                  height: LalaVisualTokens.bodyLineHeight /
+                  height:
+                      LalaVisualTokens.bodyLineHeight /
                       LalaVisualTokens.bodySize,
                   fontWeight: FontWeight.w500,
                   color: LalaVisualColors.muted,
@@ -207,7 +209,9 @@ class _TravelTypeRow extends StatelessWidget {
             constraints: const BoxConstraints(minHeight: 80),
             padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(LalaVisualTokens.controlRadius),
+              borderRadius: BorderRadius.circular(
+                LalaVisualTokens.controlRadius,
+              ),
               border: Border.all(
                 color: selected
                     ? LalaVisualColors.primaryBlue
@@ -224,15 +228,19 @@ class _TravelTypeRow extends StatelessWidget {
                     label,
                     style: TextStyle(
                       fontSize: LalaVisualTokens.controlLabelSize,
-                      height: LalaVisualTokens.controlLabelLineHeight /
+                      height:
+                          LalaVisualTokens.controlLabelLineHeight /
                           LalaVisualTokens.controlLabelSize,
                       fontWeight: FontWeight.w700,
                       color: LalaVisualColors.ink,
                     ),
                   ),
                 ),
+                // 선택 신호는 outline 외에 아이콘 형태 변화도 사용한다(00-ground-truth §5).
                 Icon(
-                  Icons.chevron_right_rounded,
+                  selected
+                      ? Icons.check_circle_rounded
+                      : Icons.chevron_right_rounded,
                   color: selected
                       ? LalaVisualColors.primaryBlue
                       : LalaVisualColors.muted,
@@ -249,7 +257,10 @@ class _TravelTypeRow extends StatelessWidget {
 
 /// 온보딩 주 액션(높이 52). onPressed == null 이면 비활성.
 class _OnboardingPrimaryAction extends StatelessWidget {
-  const _OnboardingPrimaryAction({required this.label, required this.onPressed});
+  const _OnboardingPrimaryAction({
+    required this.label,
+    required this.onPressed,
+  });
 
   final String label;
   final VoidCallback? onPressed;
@@ -270,14 +281,13 @@ class _OnboardingPrimaryAction extends StatelessWidget {
           disabledForegroundColor: LalaVisualColors.card,
           textStyle: TextStyle(
             fontSize: LalaVisualTokens.controlLabelSize,
-            height: LalaVisualTokens.controlLabelLineHeight /
+            height:
+                LalaVisualTokens.controlLabelLineHeight /
                 LalaVisualTokens.controlLabelSize,
             fontWeight: FontWeight.w700,
           ),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(
-              LalaVisualTokens.controlRadius,
-            ),
+            borderRadius: BorderRadius.circular(LalaVisualTokens.controlRadius),
           ),
         ),
         child: Text(label),
