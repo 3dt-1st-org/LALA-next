@@ -56,6 +56,12 @@ abstract final class LalaVisualTokens {
   static const double chipLineHeight = 16;
   static const double bottomNavSize = 12;
   static const double bottomNavLineHeight = 16;
+
+  /// 하단 탭의 콘텐츠 높이. iOS 안전영역은 별도의 제한된 여백으로 더한다.
+  static const double bottomNavHeight = 64;
+
+  /// 홈 인디케이터와의 완충 여백 상한. 전체 시스템 패딩을 그대로 더하지 않는다.
+  static const double bottomNavMaxSafeInset = 16;
 }
 
 /// 계약 색상 토큰. 거의 흰 canvas + 선명한 action blue + 카테고리 다색을 함께 써서

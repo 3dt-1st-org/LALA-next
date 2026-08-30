@@ -2535,6 +2535,40 @@ void main() {
     },
   );
 
+  testWidgets('bottom navigation caps the iPhone safe-area gap', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.devicePixelRatio = 1;
+    tester.view.padding = const FakeViewPadding(bottom: 34);
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      TestLalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final navigationBar = tester.widget<NavigationBar>(
+      find.byType(NavigationBar),
+    );
+    expect(navigationBar.height, LalaVisualTokens.bottomNavHeight);
+    expect(
+      tester.getSize(find.byKey(const ValueKey('lala-bottom-nav-safe-inset'))),
+      const Size(393, LalaVisualTokens.bottomNavMaxSafeInset),
+    );
+    expect(
+      tester.getSize(find.byKey(const ValueKey('lala-bottom-nav-surface'))),
+      const Size(
+        393,
+        LalaVisualTokens.bottomNavHeight +
+            LalaVisualTokens.bottomNavMaxSafeInset,
+      ),
+    );
+  });
+
   testWidgets('place detail save control toggles local saved state', (
     tester,
   ) async {
