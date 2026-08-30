@@ -283,6 +283,42 @@ void main() {
     expect(find.text('해운대구'), findsNothing);
   });
 
+  testWidgets(
+    'manual region selection still works when location permission is denied',
+    (tester) async {
+      // 권한 거부(soft denial) 상태에서도 수동 선택 경로가 막히지 않아야 한다.
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SearchPage(
+            locationProvider: _CountingLocationProvider(
+              const LalaLocationResult.denied(),
+            ),
+            backendFactory: (config) => _LoadedPlacesBackend(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('search-region-picker')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey('manual-location-search')),
+        '세종',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('manual-location-option-sejong-sejong')),
+      );
+      await tester.pumpAndSettle();
+
+      // 거부와 무관하게 수동 선택이 store 에 확정되고 region 행에 반영된다.
+      expect(RegionContextStore.current?.regionId, 'sejong-sejong');
+      expect(find.text('세종특별자치시'), findsOneWidget);
+      expect(find.text('기본 지역 · 수원'), findsNothing);
+    },
+  );
+
   tearDown(() {
     RegionContextStore.clear();
     OnboardingState.reset();

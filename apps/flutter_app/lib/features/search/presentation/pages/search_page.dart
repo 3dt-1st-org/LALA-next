@@ -27,6 +27,8 @@ import 'package:lala_next_app/features/place/widgets/place_thumb.dart';
 import 'package:lala_next_app/manual_location_options.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 import 'package:lala_next_app/shared/l10n/place_labels.dart';
+import 'package:lala_next_app/shared/labels/dataset_freshness_label.dart';
+import 'package:lala_next_app/shared/labels/source_label.dart';
 import 'package:lala_next_app/shared/widgets/lala_skeleton.dart';
 
 /// 검색 탭: 추천 장소를 불러와 카테고리/검색어로 필터링한다.
@@ -71,6 +73,11 @@ class _SearchPageState extends State<SearchPage> {
 
   _SearchLoadStatus _status = _SearchLoadStatus.loading;
   List<LalaPlace> _places = const <LalaPlace>[];
+  // 결과 카드의 출처/신선도 영역은 응답 envelope 의 실제 값만 사용한다(03-bindings §2:
+  // dataset 출처 = LalaPlacesResponse.source, dataset 신선도 = dataAsOf). 값이 없으면
+  // 해당 칩을 렌더하지 않는다 — 발명된 출처/시각을 표시하지 않는다.
+  String _datasetSource = '';
+  String? _datasetDataAsOf;
   // 안내문은 unavailable/error 상태에서만 사용. empty(no-data) 는 별도 copy.
   String _failureMessage = '';
 
@@ -239,6 +246,8 @@ class _SearchPageState extends State<SearchPage> {
       final places = envelope.data?.places ?? const <LalaPlace>[];
       setState(() {
         _places = places;
+        _datasetSource = envelope.data?.source ?? '';
+        _datasetDataAsOf = envelope.data?.dataAsOf;
         // loaded vs empty: a real non-empty result is never a skeleton; an empty
         // list is a genuine no-data result, not a failure.
         _status = places.isEmpty
@@ -430,6 +439,8 @@ class _SearchPageState extends State<SearchPage> {
         return _SearchResultsView(
           places: _visiblePlaces,
           language: _language,
+          datasetSource: _datasetSource,
+          datasetDataAsOf: _datasetDataAsOf,
           onSelectPlace: _selectPlace,
         );
     }
@@ -547,6 +558,25 @@ class _SearchRegionContextRow extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// 결과 세트 출처/데이터 기준 시각 칩(PlaceFreshnessText 와 같은 메타 스타일).
+/// 11sp 미만으로 줄이지 않는다(04-responsive §3).
+class _SearchDatasetMetaText extends StatelessWidget {
+  const _SearchDatasetMetaText(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+        color: const Color(0xFF64748B),
+        fontWeight: FontWeight.w600,
       ),
     );
   }
@@ -820,9 +850,7 @@ class _SearchFailureView extends StatelessWidget {
       en: isUnavailable
           ? 'Service unreachable. $message'
           : 'Failed to load recommendations. $message',
-      ja: isUnavailable
-          ? 'サーバーに接続できません。$message'
-          : 'おすすめの読み込みに失敗しました。$message',
+      ja: isUnavailable ? 'サーバーに接続できません。$message' : 'おすすめの読み込みに失敗しました。$message',
       zhHans: isUnavailable ? '无法连接服务器。$message' : '加载推荐失败。$message',
       zhHant: isUnavailable ? '無法連線伺服器。$message' : '載入推薦失敗。$message',
     );
@@ -895,9 +923,7 @@ class _SearchEmptyView extends StatelessWidget {
       en: hasQuery
           ? 'No places match your search.'
           : 'No recommendations here yet.',
-      ja: hasQuery
-          ? '条件に合うスポットが見つかりません。'
-          : 'この周辺にはまだおすすめがありません。',
+      ja: hasQuery ? '条件に合うスポットが見つかりません。' : 'この周辺にはまだおすすめがありません。',
       zhHans: hasQuery ? '没有符合搜索条件的地点。' : '这附近暂无推荐。',
       zhHant: hasQuery ? '沒有符合搜尋條件的地點。' : '這附近暫無推薦。',
     );
@@ -968,11 +994,18 @@ class _SearchResultsView extends StatelessWidget {
   const _SearchResultsView({
     required this.places,
     required this.language,
+    required this.datasetSource,
+    required this.datasetDataAsOf,
     required this.onSelectPlace,
   });
 
   final List<LalaPlace> places;
   final String language;
+
+  /// 결과 세트의 실제 출처/데이터 기준 시각(응답 envelope). 값이 없으면 칩 미표시.
+  final String datasetSource;
+  final String? datasetDataAsOf;
+
   final ValueChanged<LalaPlace> onSelectPlace;
 
   @override
@@ -987,6 +1020,8 @@ class _SearchResultsView extends StatelessWidget {
         return _SearchPlaceTile(
           place: place,
           language: language,
+          datasetSource: datasetSource,
+          datasetDataAsOf: datasetDataAsOf,
           onTap: () => onSelectPlace(place),
         );
       },
@@ -999,11 +1034,17 @@ class _SearchPlaceTile extends StatelessWidget {
   const _SearchPlaceTile({
     required this.place,
     required this.language,
+    required this.datasetSource,
+    required this.datasetDataAsOf,
     required this.onTap,
   });
 
   final LalaPlace place;
   final String language;
+
+  /// 결과 세트의 실제 출처/데이터 기준 시각(응답 envelope). 값이 없으면 칩 미표시.
+  final String datasetSource;
+  final String? datasetDataAsOf;
 
   /// 타일 탭 → 공유 선택 스토어 게시 + 지도 탭 전환(_selectPlace).
   final VoidCallback onTap;
@@ -1013,6 +1054,9 @@ class _SearchPlaceTile extends StatelessWidget {
     final hasImage = hasOfficialPlaceImage(place);
     final name = placeDisplayName(place, language);
     final region = placeRegionLabel(place, language);
+    // S2 계약: source/dataset data_as_of 가 없으면 source/freshness 칩을 숨긴다.
+    final sourceChip = sourceLabel(datasetSource, language: language);
+    final freshnessChip = datasetFreshnessLabel(datasetDataAsOf, language);
     return Material(
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(18),
@@ -1068,9 +1112,13 @@ class _SearchPlaceTile extends StatelessWidget {
                                     fontWeight: FontWeight.w800,
                                   ),
                             ),
+                          if (sourceChip != '-')
+                            _SearchDatasetMetaText(sourceChip),
                           if (place.freshness != null &&
                               place.freshness!.isNotEmpty)
                             PlaceFreshnessText(place: place),
+                          if (freshnessChip != null)
+                            _SearchDatasetMetaText(freshnessChip),
                         ],
                       ),
                       const SizedBox(height: 10),
