@@ -37,6 +37,15 @@ void main() {
     SlotVisitStore.clear();
   });
 
+  Future<void> expandMapDockIfCollapsed(WidgetTester tester) async {
+    final toggle = find.byKey(const ValueKey('map-dock-expand-toggle'));
+    if (toggle.evaluate().isEmpty) {
+      return;
+    }
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+  }
+
   test('map move reload policy follows the legacy places threshold', () {
     expect(
       shouldReloadPlacesForMapMove(
@@ -297,6 +306,8 @@ void main() {
 
     await tester.pumpAndSettle();
 
+    await expandMapDockIfCollapsed(tester);
+
     expect(find.text('전체'), findsOneWidget);
     expect(find.text('명소'), findsAtLeastNWidgets(1));
     expect(find.text('대시보드'), findsNothing);
@@ -329,6 +340,8 @@ void main() {
 
     await tester.tap(find.byTooltip('닫기').first);
     await tester.pumpAndSettle();
+
+    await expandMapDockIfCollapsed(tester);
 
     final evidenceButton = find.widgetWithText(TextButton, '점수/근거');
     await tester.ensureVisible(evidenceButton);
@@ -931,6 +944,8 @@ void main() {
     await tester.tap(find.text('맛집').first);
     await tester.pumpAndSettle();
 
+    await expandMapDockIfCollapsed(tester);
+
     expect(configs.last.category, 'restaurant');
     expect(
       backends.fold<int>(
@@ -1387,6 +1402,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('auto-docent-toggle')));
     await tester.pumpAndSettle();
 
+    await expandMapDockIfCollapsed(tester);
+
     expect(find.text('장소 상세'), findsNothing);
     expect(
       find.byKey(const ValueKey('lala-map-fallback-center-37.2636-127.0286')),
@@ -1525,11 +1542,15 @@ void main() {
     await tester.tapAt(const Offset(20, 20));
     await tester.pumpAndSettle();
 
+    await expandMapDockIfCollapsed(tester);
+
     expect(find.text('장소 상세'), findsNothing);
     expect(find.text('수원화성 도슨트'), findsAtLeastNWidgets(1));
 
     await tester.tap(find.byKey(const ValueKey('location-refresh')));
     await tester.pumpAndSettle();
+
+    await expandMapDockIfCollapsed(tester);
 
     expect(find.text('수원화성 도슨트'), findsNothing);
     expect(find.text('화성행궁 도슨트'), findsAtLeastNWidgets(1));
@@ -1563,6 +1584,8 @@ void main() {
       find.byKey(const ValueKey('tour-stop-action-hwaseong-haenggung')),
     );
     await tester.pumpAndSettle();
+
+    await expandMapDockIfCollapsed(tester);
 
     expect(find.text('장소 상세'), findsNothing);
     expect(find.text('화성행궁 도슨트'), findsOneWidget);
@@ -1600,6 +1623,8 @@ void main() {
     await tester.tapAt(selectedRailCardTopLeft + const Offset(24, 24));
     await tester.pumpAndSettle();
 
+    await expandMapDockIfCollapsed(tester);
+
     expect(find.text('장소 상세'), findsNothing);
     expect(find.text('화성행궁 도슨트'), findsAtLeastNWidgets(1));
     expect(find.text('수원화성 도슨트'), findsNothing);
@@ -1624,6 +1649,8 @@ void main() {
       );
 
       await tester.pumpAndSettle();
+
+      await expandMapDockIfCollapsed(tester);
 
       expect(
         find.byKey(const ValueKey('lala-map-marker-cluster-food-a')),
@@ -1721,6 +1748,8 @@ void main() {
 
     await tester.pumpAndSettle();
 
+    await expandMapDockIfCollapsed(tester);
+
     expect(find.text('화성행궁'), findsAtLeastNWidgets(1));
     expect(find.textContaining('14°C'), findsWidgets);
     expect(find.textContaining('조선 왕실'), findsAtLeastNWidgets(1));
@@ -1766,6 +1795,8 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('map-error-retry')));
     await tester.pumpAndSettle();
+
+    await expandMapDockIfCollapsed(tester);
 
     expect(backendCreations, 3);
     expect(
@@ -2151,6 +2182,43 @@ void main() {
       expect(cultureChip.right, lessThan(393));
     },
   );
+
+  testWidgets('mobile map dock expands from the 96dp map-first summary', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      TestLalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final dock = find.byKey(const ValueKey('map-bottom-dock'));
+    expect(tester.getSize(dock).height, 96);
+    expect(
+      find.byKey(const ValueKey('map-dock-expand-toggle')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('map-dock-expand-toggle')));
+    await tester.pumpAndSettle();
+
+    expect(tester.getSize(dock).height, 196);
+    expect(
+      find.byKey(const ValueKey('map-dock-collapse-toggle')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('map-dock-collapse-toggle')));
+    await tester.pumpAndSettle();
+    expect(tester.getSize(dock).height, 96);
+  });
 
   // P6F §13.5 반응형 code-conformance: 360/430/768dp 에서 5 칩+설정 접근 가능,
   // 지도 컨트롤 스택과 하단 dock 의 세로 영역이 겹치지 않는다(동작 규칙만 고정).
@@ -2580,6 +2648,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await expandMapDockIfCollapsed(tester);
+
     await tester.tap(find.widgetWithText(TextButton, '상세'));
     await tester.pumpAndSettle();
 
@@ -2680,6 +2750,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await expandMapDockIfCollapsed(tester);
+
     expect(find.text('Hwaseong Haenggung'), findsAtLeastNWidgets(1));
     expect(find.text('Daily Plan'), findsOneWidget);
     expect(
@@ -2762,6 +2834,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      await expandMapDockIfCollapsed(tester);
+
       // remediation C2: photo-forward 레일 카드는 이름 오버레이만(행사 상태 라벨은 상세에서).
       expect(find.text('화성행궁 야간 산책'), findsWidgets);
 
@@ -2803,6 +2877,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await expandMapDockIfCollapsed(tester);
+
     expect(find.textContaining('Limited offline data'), findsWidgets);
     expect(find.textContaining('Official data'), findsNothing);
     expect(find.textContaining('snapshot'), findsNothing);
@@ -2843,6 +2919,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await expandMapDockIfCollapsed(tester);
+
     await tester.tap(find.widgetWithText(TextButton, 'Details'));
     await tester.pumpAndSettle();
 
@@ -2880,6 +2958,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      await expandMapDockIfCollapsed(tester);
+
       expect(find.text('Local place'), findsAtLeastNWidgets(1));
       expect(find.textContaining('호반아트리움'), findsNothing);
       expect(find.textContaining('경기도'), findsNothing);
@@ -2904,6 +2984,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+
+      await expandMapDockIfCollapsed(tester);
 
       expect(find.text('이 장소'), findsAtLeastNWidgets(1));
       expect(find.textContaining('Hoam Art Museum'), findsNothing);
@@ -2959,6 +3041,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await expandMapDockIfCollapsed(tester);
+
     expect(find.textContaining('Weather'), findsNothing);
     expect(find.textContaining('Keep'), findsNothing);
     expect(find.textContaining('Detailed'), findsNothing);
@@ -2989,6 +3073,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.arrow_back_ios_new));
     await tester.pumpAndSettle();
+
+    await expandMapDockIfCollapsed(tester);
 
     expect(find.textContaining('Weather is good'), findsAtLeastNWidgets(1));
     expect(find.textContaining('Air Normal'), findsAtLeastNWidgets(1));
@@ -3021,6 +3107,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await expandMapDockIfCollapsed(tester);
+
     expect(backend.docentScriptRequests, ['brief:hwaseong-haenggung']);
     expect(find.textContaining('도슨트 스크립트를 불러오는 중입니다'), findsAtLeastNWidgets(1));
     expect(find.textContaining('migration skeleton'), findsNothing);
@@ -3034,6 +3122,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.arrow_back_ios_new));
     await tester.pumpAndSettle();
+
+    await expandMapDockIfCollapsed(tester);
 
     expect(
       find.textContaining('Loading the docent script'),
@@ -3113,6 +3203,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await expandMapDockIfCollapsed(tester);
+
     expect(backend.docentScriptRequests, ['brief:hwaseong-haenggung']);
     expect(backend.audioRequests, isEmpty);
     expect(find.text('정보 더 듣기'), findsOneWidget);
@@ -3151,6 +3243,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+
+    await expandMapDockIfCollapsed(tester);
 
     expect(find.textContaining('조선 왕실'), findsAtLeastNWidgets(1));
     expect(

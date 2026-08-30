@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
+import 'package:lala_next_app/features/docent/widgets/dock_docent_preview.dart';
 import 'package:lala_next_app/features/map/widgets/map_bottom_dock.dart';
 
 const LalaPlace _place = LalaPlace(
@@ -32,21 +33,26 @@ const LalaPlace _place = LalaPlace(
 Widget _wrap(Widget child) => MaterialApp(home: Scaffold(body: child));
 
 MapBottomDock _dock({
+  bool isWide = false,
   String? dataAsOf,
   String uiLanguage = 'ko',
   // 기본은 기존 fixture 동작 보존; D-Src 테스트가 null(production 의 no-live-places)도 주입 가능.
   String? source = 'public_mvp_snapshot',
   LalaWeather? weather,
+  bool expanded = true,
+  double height = 240,
+  VoidCallback? onToggleExpanded,
 }) {
   return MapBottomDock(
-    isWide: false,
+    isWide: isWide,
     places: const <LalaPlace>[_place],
     source: source,
     weather: weather,
     dataAsOf: dataAsOf,
     topPlace: _place,
     uiLanguage: uiLanguage,
-    height: 240,
+    height: height,
+    expanded: expanded,
     docentScript: null,
     docentAudio: null,
     docentAction: null,
@@ -62,6 +68,7 @@ MapBottomDock _dock({
     onOpenDetail: () {},
     onRefresh: () {},
     onToggleEvidence: () {},
+    onToggleExpanded: onToggleExpanded,
   );
 }
 
@@ -177,6 +184,87 @@ void main() {
 
       expect(find.text('실시간 추천'), findsNothing);
       expect(find.text('-'), findsNothing);
+    });
+  });
+
+  group('collapsed place summary (B map-space option)', () {
+    testWidgets('starts at 96dp and keeps only the essential place identity', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _wrap(
+          SizedBox(
+            width: 393,
+            child: _dock(
+              expanded: false,
+              height: 96,
+              weather: _weather(temp: '23', source: 'kma_ultra_srt_ncst'),
+              dataAsOf: '2026-06-19T02:24:44.557686+00:00',
+              onToggleExpanded: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        tester.getSize(find.byKey(const ValueKey('map-bottom-dock'))).height,
+        96,
+      );
+      expect(find.text('행궁동 카페'), findsOneWidget);
+      expect(find.text('210m'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('map-dock-expand-toggle')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('데이터 기준'), findsNothing);
+      expect(find.textContaining('PM10'), findsNothing);
+      expect(find.byType(DockDocentPreview), findsNothing);
+    });
+
+    testWidgets('tap and upward swipe both request expansion', (tester) async {
+      var toggleCount = 0;
+      await tester.pumpWidget(
+        _wrap(
+          SizedBox(
+            width: 393,
+            child: _dock(
+              expanded: false,
+              height: 96,
+              onToggleExpanded: () => toggleCount += 1,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final toggle = find.byKey(const ValueKey('map-dock-expand-toggle'));
+      await tester.tap(toggle);
+      expect(toggleCount, 1);
+
+      await tester.fling(toggle, const Offset(0, -80), 800);
+      await tester.pump();
+      expect(toggleCount, 2);
+    });
+
+    testWidgets('wide dock stays expanded without a no-op collapse control', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _wrap(
+          SizedBox(
+            width: 1024,
+            child: _dock(isWide: true, onToggleExpanded: () {}),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('행궁동 카페'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('map-dock-collapse-toggle')),
+        findsNothing,
+      );
     });
   });
 }
