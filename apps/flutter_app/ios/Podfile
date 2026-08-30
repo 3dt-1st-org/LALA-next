@@ -40,4 +40,27 @@ post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
   end
+
+  # CocoaPods can emit an over-expanded relative resource path for this
+  # manifest in deep Git worktrees. Keep the generated Pods project portable
+  # by normalizing only the known plugin resource to its resolved local path.
+  privacy_manifest = File.join(
+    __dir__,
+    '.symlinks',
+    'plugins',
+    'flutter_secure_storage',
+    'ios',
+    'Resources',
+    'PrivacyInfo.xcprivacy'
+  )
+  if File.file?(privacy_manifest)
+    resolved_manifest = File.realpath(privacy_manifest)
+    installer.pods_project.files.each do |file_reference|
+      next unless file_reference.path.to_s.end_with?('PrivacyInfo.xcprivacy')
+      next unless file_reference.real_path.to_s == resolved_manifest
+
+      file_reference.path = resolved_manifest
+      file_reference.source_tree = '<absolute>'
+    end
+  end
 end
