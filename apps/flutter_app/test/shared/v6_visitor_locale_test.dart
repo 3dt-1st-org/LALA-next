@@ -162,8 +162,10 @@ void main() {
     });
 
     test('keeps non-Korean text as-is on visitor locales', () {
-      expect(singleLanguageText('Hwaseong Haenggung', 'ja'),
-          'Hwaseong Haenggung');
+      expect(
+        singleLanguageText('Hwaseong Haenggung', 'ja'),
+        'Hwaseong Haenggung',
+      );
       expect(singleLanguageText('Suwon', 'zh-Hans'), 'Suwon');
     });
 
@@ -191,12 +193,15 @@ void main() {
       }
     });
 
-    test('selectLanguage normalizes unknown input to ko (existing behavior)', () {
-      OnboardingState.selectLanguage('fr');
-      expect(OnboardingState.language, 'ko');
-      OnboardingState.selectLanguage('zh-TW');
-      expect(OnboardingState.language, 'zh-Hant');
-    });
+    test(
+      'selectLanguage normalizes unknown input to ko (existing behavior)',
+      () {
+        OnboardingState.selectLanguage('fr');
+        expect(OnboardingState.language, 'ko');
+        OnboardingState.selectLanguage('zh-TW');
+        expect(OnboardingState.language, 'zh-Hant');
+      },
+    );
 
     test('applySnapshot restores visitor locales from persistence', () {
       OnboardingState.applySnapshot(
@@ -271,7 +276,7 @@ void main() {
         const pairs = <(String, String)>[
           ('지도 미리보기', 'Map preview'),
           ('현재 지도를 표시할 수 없습니다.', 'The live map is not available right now.'),
-          ('카카오 지도 로딩 중', 'Loading Kakao Map'),
+          ('네이버 지도 로딩 중', 'Loading Naver Map'),
           ('지도 화면을 준비하고 있습니다', 'Preparing the map view'),
           ('장소', 'Local place'),
           ('재시도', 'Retry'),
@@ -308,10 +313,7 @@ void main() {
         '简体中文',
         '繁體中文',
       ];
-      final flagEmoji = RegExp(
-        '[\u{1F1E6}-\u{1F1FF}]',
-        unicode: true,
-      );
+      final flagEmoji = RegExp('[\u{1F1E6}-\u{1F1FF}]', unicode: true);
       for (final surface in surfaces) {
         expect(flagEmoji.hasMatch(surface), isFalse, reason: surface);
       }

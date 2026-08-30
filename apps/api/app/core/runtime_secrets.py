@@ -40,7 +40,7 @@ SECRET_REGISTRY: tuple[SecretSpec, ...] = (
     SecretSpec("OAUTH_CLIENT_ID", "oauth-client-id"),
     SecretSpec("OAUTH_REQUIRED_SCOPES", "oauth-required-scopes"),
     SecretSpec("KAKAO_REST_API_KEY", "kakao-rest-api-key"),
-    SecretSpec("KAKAO_JAVASCRIPT_KEY", "kakao-javascript-key"),
+    SecretSpec("NAVER_MAP_CLIENT_ID", "naver-map-client-id"),
     SecretSpec("KAKAO_REDIRECT_URI", "kakao-redirect-uri"),
     SecretSpec("NAVER_CLIENT_ID", "naver-client-id"),
     SecretSpec("NAVER_CLIENT_SECRET", "naver-client-secret"),

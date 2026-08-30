@@ -31,7 +31,7 @@ $OptionalSecretNames = @(
     "oauth-client-id",
     "oauth-required-scopes",
     "kakao-rest-api-key",
-    "kakao-javascript-key",
+    "naver-map-client-id",
     "kakao-redirect-uri",
     "naver-client-id",
     "naver-client-secret",

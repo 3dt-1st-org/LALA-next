@@ -10,8 +10,8 @@ import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import 'package:lala_next_app/app/lala_visual_tokens.dart';
 import 'package:lala_next_app/features/map/map_helpers.dart';
-import 'package:lala_next_app/kakao_map_fallback.dart';
-import 'package:lala_next_app/kakao_map_models.dart';
+import 'package:lala_next_app/lala_map_fallback.dart';
+import 'package:lala_next_app/lala_map_models.dart';
 
 void main() {
   group('bounded cluster policy', () {
@@ -87,7 +87,7 @@ void main() {
     testWidgets('non-restaurant pin icon is white', (tester) async {
       await _pumpFallback(
         tester,
-        const KakaoMapPlace(
+        const LalaMapPlace(
           id: 'p1',
           name: 'P',
           category: 'attraction',
@@ -101,7 +101,7 @@ void main() {
     testWidgets('restaurant pin icon is restaurantInk (기존 유지)', (tester) async {
       await _pumpFallback(
         tester,
-        const KakaoMapPlace(
+        const LalaMapPlace(
           id: 'p2',
           name: 'P',
           category: 'restaurant',
@@ -117,14 +117,14 @@ void main() {
   });
 }
 
-Future<void> _pumpFallback(WidgetTester tester, KakaoMapPlace place) async {
+Future<void> _pumpFallback(WidgetTester tester, LalaMapPlace place) async {
   await tester.pumpWidget(
     MaterialApp(
       home: Scaffold(
         body: SizedBox(
           width: 400,
           height: 800,
-          child: KakaoMapFallbackView(
+          child: LalaMapFallbackView(
             message: '',
             language: 'ko',
             centerLat: 37.28,

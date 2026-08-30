@@ -34,7 +34,7 @@ class Settings:
     oauth_client_id: str = ""
     oauth_required_scopes: tuple[str, ...] = ()
     kakao_rest_api_key: str = ""
-    kakao_javascript_key: str = ""
+    naver_map_client_id: str = ""
     kakao_redirect_uri: str = ""
     naver_client_id: str = ""
     naver_client_secret: str = ""
@@ -183,9 +183,9 @@ class Settings:
             kakao_rest_api_key=_env_or_secret(
                 "KAKAO_REST_API_KEY", "kakao-rest-api-key", key_vault_url
             ),
-            kakao_javascript_key=_env_or_secret(
-                "KAKAO_JAVASCRIPT_KEY",
-                "kakao-javascript-key",
+            naver_map_client_id=_env_or_secret(
+                "NAVER_MAP_CLIENT_ID",
+                "naver-map-client-id",
                 key_vault_url,
             ),
             kakao_redirect_uri=_env_or_secret(

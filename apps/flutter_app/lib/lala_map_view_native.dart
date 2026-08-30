@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io' as io;
 
@@ -6,22 +7,23 @@ import 'package:flutter/material.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
-import 'kakao_map_fallback.dart';
-import 'kakao_map_models.dart';
+import 'lala_map_fallback.dart';
+import 'lala_map_models.dart';
 
-Widget buildKakaoMapView({
-  required String javascriptKey,
+Widget buildLalaMapView({
+  required String clientId,
   required String language,
   required double centerLat,
   required double centerLng,
   required int level,
-  required List<KakaoMapPlace> places,
+  required List<LalaMapPlace> places,
+  bool interactionEnabled = true,
   ValueChanged<String>? onPlaceTap,
-  ValueChanged<KakaoMapCamera>? onCameraIdle,
+  ValueChanged<LalaMapCamera>? onCameraIdle,
 }) {
-  final normalizedKey = javascriptKey.trim();
-  if (normalizedKey.isEmpty) {
-    return _KakaoMapNativeUnavailable(
+  final normalizedClientId = clientId.trim();
+  if (normalizedClientId.isEmpty) {
+    return _LalaMapNativeUnavailable(
       // V6: ko 만 KO 안내문(방문객 로케일 EN 폴백).
       message: normalizeLalaLanguage(language) != 'ko'
           ? 'The live map is not available right now.'
@@ -35,7 +37,7 @@ Widget buildKakaoMapView({
   }
 
   if (!io.Platform.isIOS && !io.Platform.isAndroid) {
-    return _KakaoMapNativeUnavailable(
+    return _LalaMapNativeUnavailable(
       // V6: ko 만 KO 안내문(방문객 로케일 EN 폴백).
       message: normalizeLalaLanguage(language) != 'ko'
           ? 'The live map is not available right now.'
@@ -48,46 +50,57 @@ Widget buildKakaoMapView({
     );
   }
 
-  return _KakaoMapNativeWebView(
-    javascriptKey: normalizedKey,
+  return _LalaMapNativeWebView(
+    clientId: normalizedClientId,
+    language: language,
     centerLat: centerLat,
     centerLng: centerLng,
     level: level,
     places: places,
+    interactionEnabled: interactionEnabled,
     onPlaceTap: onPlaceTap,
     onCameraIdle: onCameraIdle,
   );
 }
 
-class _KakaoMapNativeWebView extends StatefulWidget {
-  const _KakaoMapNativeWebView({
-    required this.javascriptKey,
+class _LalaMapNativeWebView extends StatefulWidget {
+  const _LalaMapNativeWebView({
+    required this.clientId,
+    required this.language,
     required this.centerLat,
     required this.centerLng,
     required this.level,
     required this.places,
+    required this.interactionEnabled,
     this.onPlaceTap,
     this.onCameraIdle,
   });
 
-  final String javascriptKey;
+  final String clientId;
+  final String language;
   final double centerLat;
   final double centerLng;
   final int level;
-  final List<KakaoMapPlace> places;
+  final List<LalaMapPlace> places;
+  final bool interactionEnabled;
   final ValueChanged<String>? onPlaceTap;
-  final ValueChanged<KakaoMapCamera>? onCameraIdle;
+  final ValueChanged<LalaMapCamera>? onCameraIdle;
 
   @override
-  State<_KakaoMapNativeWebView> createState() => _KakaoMapNativeWebViewState();
+  State<_LalaMapNativeWebView> createState() => _LalaMapNativeWebViewState();
 }
 
-class _KakaoMapNativeWebViewState extends State<_KakaoMapNativeWebView> {
+class _LalaMapNativeWebViewState extends State<_LalaMapNativeWebView> {
+  static int _nextBridgeId = 0;
+
   late final WebViewController _controller;
+  late final String _bridgeId;
+  int _revision = 0;
 
   @override
   void initState() {
     super.initState();
+    _bridgeId = 'lala-native-map-${_nextBridgeId++}';
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0xFFEAF2FB))
@@ -97,6 +110,7 @@ class _KakaoMapNativeWebViewState extends State<_KakaoMapNativeWebView> {
       )
       ..setNavigationDelegate(
         NavigationDelegate(
+          onPageFinished: (_) async => _pushConfig(),
           onNavigationRequest: (request) {
             final uri = Uri.tryParse(request.url);
             if (uri == null) {
@@ -104,24 +118,31 @@ class _KakaoMapNativeWebViewState extends State<_KakaoMapNativeWebView> {
             }
             return uri.host == 'lala-next.cloud' ||
                     uri.host == 'www.lala-next.cloud' ||
-                    uri.host == 'dapi.kakao.com'
+                    uri.host == 'oapi.map.naver.com'
                 ? NavigationDecision.navigate
                 : NavigationDecision.prevent;
           },
         ),
       )
-      ..loadRequest(_mapUri());
+      ..loadRequest(_nextMapUri());
   }
 
   @override
-  void didUpdateWidget(covariant _KakaoMapNativeWebView oldWidget) {
+  void didUpdateWidget(covariant _LalaMapNativeWebView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.javascriptKey != widget.javascriptKey ||
+    if (oldWidget.clientId != widget.clientId ||
+        oldWidget.language != widget.language ||
         oldWidget.centerLat != widget.centerLat ||
         oldWidget.centerLng != widget.centerLng ||
         oldWidget.level != widget.level ||
-        !sameKakaoMapPlaces(oldWidget.places, widget.places)) {
-      _controller.loadRequest(_mapUri());
+        oldWidget.interactionEnabled != widget.interactionEnabled ||
+        !sameLalaMapPlaces(oldWidget.places, widget.places)) {
+      if (oldWidget.clientId != widget.clientId ||
+          oldWidget.language != widget.language) {
+        _controller.loadRequest(_nextMapUri());
+      } else {
+        unawaited(_pushConfig());
+      }
     }
   }
 
@@ -133,29 +154,40 @@ class _KakaoMapNativeWebViewState extends State<_KakaoMapNativeWebView> {
     );
   }
 
-  Uri _mapUri() {
-    return Uri.https('lala-next.cloud', '/kakao-map-embed.html', {
-      'appkey': widget.javascriptKey,
-      'lat': widget.centerLat.toStringAsFixed(7),
-      'lng': widget.centerLng.toStringAsFixed(7),
-      'level': '${widget.level}',
-      'places': jsonEncode(
-        widget.places
-            .map(
-              (place) => {
-                'id': place.id,
-                'name': place.name,
-                'category': place.category,
-                'lat': place.lat,
-                'lng': place.lng,
-                'clusterCount': place.clusterCount,
-                'clusterMemberIds': place.clusterMemberIds,
-                'selected': place.selected,
-              },
-            )
-            .toList(),
-      ),
+  Uri _nextMapUri() {
+    _revision += 1;
+    return Uri.https('lala-next.cloud', '/naver-map-embed.html', {
+      'r': '$_revision',
     });
+  }
+
+  Future<void> _pushConfig() {
+    final config = jsonEncode({
+      'bridgeId': _bridgeId,
+      'clientId': widget.clientId,
+      'language': widget.language,
+      'interactive': widget.interactionEnabled,
+      'lat': widget.centerLat,
+      'lng': widget.centerLng,
+      'level': widget.level,
+      'places': widget.places
+          .map(
+            (place) => {
+              'id': place.id,
+              'name': place.name,
+              'category': place.category,
+              'lat': place.lat,
+              'lng': place.lng,
+              'clusterCount': place.clusterCount,
+              'clusterMemberIds': place.clusterMemberIds,
+              'selected': place.selected,
+            },
+          )
+          .toList(),
+    });
+    return _controller.runJavaScript(
+      'window.LalaMapEmbed && window.LalaMapEmbed.setConfig($config);',
+    );
   }
 
   void _handleMapMessage(String rawMessage) {
@@ -169,24 +201,26 @@ class _KakaoMapNativeWebViewState extends State<_KakaoMapNativeWebView> {
     } on FormatException {
       decoded = null;
     }
-    if (decoded is Map<String, dynamic>) {
-      final camera = decodeKakaoCameraIdlePayload(decoded);
+    if (decoded is Map<String, dynamic> &&
+        decoded['source'] == 'lala-naver-map' &&
+        decoded['bridgeId'] == _bridgeId) {
+      final camera = decodeLalaMapCameraIdlePayload(decoded);
       if (camera != null) {
         widget.onCameraIdle?.call(camera);
         return;
       }
       final placeId = decoded['placeId']?.toString().trim();
-      if (placeId != null && placeId.isNotEmpty) {
+      if (decoded['type'] == 'placeTap' &&
+          placeId != null &&
+          placeId.isNotEmpty) {
         widget.onPlaceTap?.call(placeId);
       }
-      return;
     }
-    widget.onPlaceTap?.call(trimmed);
   }
 }
 
-class _KakaoMapNativeUnavailable extends StatelessWidget {
-  const _KakaoMapNativeUnavailable({
+class _LalaMapNativeUnavailable extends StatelessWidget {
+  const _LalaMapNativeUnavailable({
     required this.message,
     required this.language,
     required this.centerLat,
@@ -199,12 +233,12 @@ class _KakaoMapNativeUnavailable extends StatelessWidget {
   final String language;
   final double centerLat;
   final double centerLng;
-  final List<KakaoMapPlace> places;
+  final List<LalaMapPlace> places;
   final ValueChanged<String>? onPlaceTap;
 
   @override
   Widget build(BuildContext context) {
-    return KakaoMapFallbackView(
+    return LalaMapFallbackView(
       message: message,
       language: language,
       centerLat: centerLat,

@@ -24,7 +24,7 @@ import 'package:lala_next_app/features/map/widgets/map_utility_control_row.dart'
 import 'package:lala_next_app/features/map/widgets/top_map_chrome.dart';
 import 'package:lala_next_app/features/tour/widgets/tour_map_pill.dart';
 import 'package:lala_next_app/features/weather/weather_helpers.dart';
-import 'package:lala_next_app/kakao_map_view.dart';
+import 'package:lala_next_app/lala_map_view.dart';
 import 'package:lala_next_app/manual_location_options.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 import 'package:lala_next_app/smoke_state.dart';
@@ -51,7 +51,7 @@ class Dashboard extends StatelessWidget {
     required this.tourAudioLoading,
     required this.tourAudioError,
     required this.authMode,
-    required this.kakaoJavascriptKey,
+    required this.naverMapClientId,
     required this.selectedCategory,
     required this.selectedPlaceId,
     required this.activeSheet,
@@ -118,7 +118,7 @@ class Dashboard extends StatelessWidget {
   final bool tourAudioLoading;
   final String? tourAudioError;
   final LalaAuthMode authMode;
-  final String kakaoJavascriptKey;
+  final String naverMapClientId;
   final String selectedCategory;
   final String? selectedPlaceId;
   final ActiveMapSheet? activeSheet;
@@ -144,8 +144,8 @@ class Dashboard extends StatelessWidget {
   final int mapLevel;
   final ValueChanged<String> onSelectCategory;
   final ValueChanged<LalaPlace> onSelectPlace;
-  final ValueChanged<KakaoMapPlace> onSelectCluster;
-  final ValueChanged<KakaoMapCamera> onCameraIdle;
+  final ValueChanged<LalaMapPlace> onSelectCluster;
+  final ValueChanged<LalaMapCamera> onCameraIdle;
   final VoidCallback onClearPlaceSelection;
   final VoidCallback onToggleRecommendationRail;
   final ValueChanged<ActiveMapSheet> onOpenSheet;
@@ -276,7 +276,7 @@ class Dashboard extends StatelessWidget {
                 places: topPlaces,
                 selectedPlace: topPlace,
                 weather: currentWeather,
-                kakaoJavascriptKey: kakaoJavascriptKey,
+                naverMapClientId: naverMapClientId,
                 language: uiLanguage,
                 fallbackCenterLat: queryLat,
                 fallbackCenterLng: queryLng,
@@ -365,13 +365,13 @@ class Dashboard extends StatelessWidget {
                           : Icons.error_outline,
                       label: displayedError,
                       actionLabel: lalaCopyMulti(
-                          uiLanguage,
-                          ko: '지금 다시 시도',
-                          en: 'Retry now',
-                          ja: '今すぐ再試行',
-                          zhHans: '立即重试',
-                          zhHant: '立即重試',
-                        ),
+                        uiLanguage,
+                        ko: '지금 다시 시도',
+                        en: 'Retry now',
+                        ja: '今すぐ再試行',
+                        zhHans: '立即重试',
+                        zhHant: '立即重試',
+                      ),
                       onAction: onRefresh,
                       color: Theme.of(context).colorScheme.errorContainer,
                     ),
@@ -395,30 +395,30 @@ class Dashboard extends StatelessWidget {
                       ),
                       icon: Icons.my_location_outlined,
                       label: lalaCopyMulti(
-                          uiLanguage,
-                          ko: '현재 위치를 확인해야 추천을 볼 수 있어요',
-                          en: 'Location permission is needed for recommendations',
-                          ja: 'おすすめを表示するには位置情報の確認が必要です',
-                          zhHans: '需要确认当前位置才能查看推荐',
-                          zhHant: '需要確認目前位置才能查看推薦',
-                        ),
+                        uiLanguage,
+                        ko: '현재 위치를 확인해야 추천을 볼 수 있어요',
+                        en: 'Location permission is needed for recommendations',
+                        ja: 'おすすめを表示するには位置情報の確認が必要です',
+                        zhHans: '需要确认当前位置才能查看推荐',
+                        zhHant: '需要確認目前位置才能查看推薦',
+                      ),
                       actionLabel: lalaCopyMulti(
-      uiLanguage,
-      ko: '재시도',
-      en: 'Retry',
-      ja: '再試行',
-      zhHans: '重试',
-      zhHant: '重試',
-    ),
+                        uiLanguage,
+                        ko: '재시도',
+                        en: 'Retry',
+                        ja: '再試行',
+                        zhHans: '重试',
+                        zhHant: '重試',
+                      ),
                       onAction: onRetryLocation,
                       secondaryActionLabel: lalaCopyMulti(
-                          uiLanguage,
-                          ko: '지역 선택',
-                          en: 'Choose area',
-                          ja: '地域を選択',
-                          zhHans: '选择地区',
-                          zhHant: '選擇地區',
-                        ),
+                        uiLanguage,
+                        ko: '지역 선택',
+                        en: 'Choose area',
+                        ja: '地域を選択',
+                        zhHans: '选择地区',
+                        zhHant: '選擇地區',
+                      ),
                       onSecondaryAction: onOpenManualLocation,
                       color: Colors.white.withValues(alpha: 0.94),
                     ),

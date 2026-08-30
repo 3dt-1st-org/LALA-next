@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 @immutable
-class KakaoMapPlace {
-  const KakaoMapPlace({
+class LalaMapPlace {
+  const LalaMapPlace({
     required this.id,
     required this.name,
     required this.category,
@@ -29,7 +29,7 @@ class KakaoMapPlace {
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
-        other is KakaoMapPlace &&
+        other is LalaMapPlace &&
             other.id == id &&
             other.name == name &&
             other.category == category &&
@@ -53,11 +53,27 @@ class KakaoMapPlace {
   );
 }
 
+const int lalaMapMinimumLevel = 2;
+const int lalaMapMaximumLevel = 10;
+
+/// LALA keeps the former level contract: a larger level means a wider view.
+/// NAVER Maps uses the opposite zoom direction, so all provider conversion is
+/// isolated here instead of leaking into clustering and backend query logic.
+int lalaMapLevelToNaverZoom(int level) {
+  final normalized = level.clamp(lalaMapMinimumLevel, lalaMapMaximumLevel);
+  return 19 - normalized;
+}
+
+int naverZoomToLalaMapLevel(num zoom) {
+  final level = 19 - zoom.round();
+  return level.clamp(lalaMapMinimumLevel, lalaMapMaximumLevel);
+}
+
 // V1 bounds-query (D4): the viewport rectangle (SW/NE) sourced from the map's
-// own getBounds(). Optional on KakaoMapCamera — null → center+radius fallback.
+// own getBounds(). Optional on LalaMapCamera - null means center+radius fallback.
 @immutable
-class KakaoMapBounds {
-  const KakaoMapBounds({
+class LalaMapBounds {
+  const LalaMapBounds({
     required this.swLat,
     required this.swLng,
     required this.neLat,
@@ -72,7 +88,7 @@ class KakaoMapBounds {
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
-        other is KakaoMapBounds &&
+        other is LalaMapBounds &&
             other.swLat == swLat &&
             other.swLng == swLng &&
             other.neLat == neLat &&
@@ -84,8 +100,8 @@ class KakaoMapBounds {
 }
 
 @immutable
-class KakaoMapCamera {
-  const KakaoMapCamera({
+class LalaMapCamera {
+  const LalaMapCamera({
     required this.lat,
     required this.lng,
     required this.level,
@@ -98,10 +114,10 @@ class KakaoMapCamera {
 
   // V1 bounds-query (D4): optional viewport rectangle; null → center+radius
   // fallback (state B2) so callers without bounds behave identically to today.
-  final KakaoMapBounds? bounds;
+  final LalaMapBounds? bounds;
 }
 
-bool sameKakaoMapPlaces(List<KakaoMapPlace> a, List<KakaoMapPlace> b) {
+bool sameLalaMapPlaces(List<LalaMapPlace> a, List<LalaMapPlace> b) {
   return listEquals(a, b);
 }
 
@@ -122,7 +138,8 @@ int? _payloadAsInt(Object? value) {
   return int.tryParse(value?.toString() ?? '');
 }
 
-/// Decodes a Kakao `cameraIdle` bridge payload into a [KakaoMapCamera].
+/// Decodes a provider-neutral `cameraIdle` bridge payload into a
+/// [LalaMapCamera].
 ///
 /// V1 bounds-query (D4): the SSOT decode shared by the native and web bridges.
 /// Accepts either a JSON string (web DOM event `detail`) or an already-decoded
@@ -130,7 +147,7 @@ int? _payloadAsInt(Object? value) {
 /// (`sw_lat`/`sw_lng`/`ne_lat`/`ne_lng`): bounds are set only when ALL four are
 /// present, else null → center+radius fallback (state B2). Returns null when the
 /// payload is not a camera-idle message or lacks lat/lng/level.
-KakaoMapCamera? decodeKakaoCameraIdlePayload(Object? payload) {
+LalaMapCamera? decodeLalaMapCameraIdlePayload(Object? payload) {
   Object? decoded = payload;
   if (payload is String) {
     try {
@@ -155,9 +172,9 @@ KakaoMapCamera? decodeKakaoCameraIdlePayload(Object? payload) {
   final swLng = _payloadAsDouble(decoded['sw_lng']);
   final neLat = _payloadAsDouble(decoded['ne_lat']);
   final neLng = _payloadAsDouble(decoded['ne_lng']);
-  final KakaoMapBounds? bounds =
+  final LalaMapBounds? bounds =
       (swLat != null && swLng != null && neLat != null && neLng != null)
-      ? KakaoMapBounds(swLat: swLat, swLng: swLng, neLat: neLat, neLng: neLng)
+      ? LalaMapBounds(swLat: swLat, swLng: swLng, neLat: neLat, neLng: neLng)
       : null;
-  return KakaoMapCamera(lat: lat, lng: lng, level: level, bounds: bounds);
+  return LalaMapCamera(lat: lat, lng: lng, level: level, bounds: bounds);
 }

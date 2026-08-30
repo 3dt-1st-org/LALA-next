@@ -1,18 +1,18 @@
 // V1 bounds-query (Lane B) — D4 model carrier tests.
-// Covers KakaoMapBounds value equality and KakaoMapCamera.optional bounds.
+// Covers LalaMapBounds value equality and LalaMapCamera.optional bounds.
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lala_next_app/kakao_map_models.dart';
+import 'package:lala_next_app/lala_map_models.dart';
 
 void main() {
-  group('KakaoMapBounds', () {
-    test('value equality mirrors KakaoMapPlace semantics', () {
-      const a = KakaoMapBounds(
+  group('LalaMapBounds', () {
+    test('value equality mirrors LalaMapPlace semantics', () {
+      const a = LalaMapBounds(
         swLat: 37.0,
         swLng: 126.0,
         neLat: 38.0,
         neLng: 127.5,
       );
-      const b = KakaoMapBounds(
+      const b = LalaMapBounds(
         swLat: 37.0,
         swLng: 126.0,
         neLat: 38.0,
@@ -23,7 +23,7 @@ void main() {
     });
 
     test('inequality on any differing corner', () {
-      const base = KakaoMapBounds(
+      const base = LalaMapBounds(
         swLat: 37.0,
         swLng: 126.0,
         neLat: 38.0,
@@ -31,7 +31,7 @@ void main() {
       );
       expect(
         base ==
-            const KakaoMapBounds(
+            const LalaMapBounds(
               swLat: 37.1,
               swLng: 126.0,
               neLat: 38.0,
@@ -41,7 +41,7 @@ void main() {
       );
       expect(
         base ==
-            const KakaoMapBounds(
+            const LalaMapBounds(
               swLat: 37.0,
               swLng: 126.0,
               neLat: 38.0,
@@ -52,20 +52,20 @@ void main() {
     });
   });
 
-  group('KakaoMapCamera optional bounds', () {
+  group('LalaMapCamera optional bounds', () {
     test('null bounds — center+radius fallback carrier (state B2)', () {
-      const camera = KakaoMapCamera(lat: 37.26, lng: 127.03, level: 5);
+      const camera = LalaMapCamera(lat: 37.26, lng: 127.03, level: 5);
       expect(camera.bounds, isNull);
     });
 
     test('round-trips bounds when supplied', () {
-      const bounds = KakaoMapBounds(
+      const bounds = LalaMapBounds(
         swLat: 37.0,
         swLng: 126.0,
         neLat: 38.0,
         neLng: 127.5,
       );
-      const camera = KakaoMapCamera(
+      const camera = LalaMapCamera(
         lat: 37.5,
         lng: 126.75,
         level: 4,

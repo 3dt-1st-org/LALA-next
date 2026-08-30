@@ -44,7 +44,7 @@ echo "Resolving Flutter app dependencies..."
 flutter pub get
 
 echo "Formatting Flutter app in check-only mode..."
-dart format --set-exit-if-changed lib/main.dart lib/kakao_*.dart test/widget_test.dart
+dart format --set-exit-if-changed lib/main.dart lib/lala_map_*.dart test/widget_test.dart
 
 echo "Analyzing Flutter app..."
 flutter analyze
@@ -54,7 +54,7 @@ flutter test
 
 echo "Building Flutter web release bundle..."
 FLUTTER_BUILD_ARGS=(build web --release --pwa-strategy=none)
-if [[ -n "${KAKAO_JAVASCRIPT_KEY:-}" ]]; then
-  FLUTTER_BUILD_ARGS+=(--dart-define "KAKAO_JAVASCRIPT_KEY=$KAKAO_JAVASCRIPT_KEY")
+if [[ -n "${NAVER_MAP_CLIENT_ID:-}" ]]; then
+  FLUTTER_BUILD_ARGS+=(--dart-define "NAVER_MAP_CLIENT_ID=$NAVER_MAP_CLIENT_ID")
 fi
 flutter "${FLUTTER_BUILD_ARGS[@]}"

@@ -594,25 +594,47 @@ def test_onprem_docker_and_runtime_hardening_contracts():
     assert "secret_printing=false" in rotation_script
 
 
-def test_kakao_map_bridges_forward_zoom_camera_updates():
-    web_bridge = (ROOT / "apps" / "flutter_app" / "lib" / "kakao_map_view_web.dart").read_text(
+def test_naver_map_bridges_forward_camera_updates():
+    web_bridge = (ROOT / "apps" / "flutter_app" / "lib" / "lala_map_view_web.dart").read_text(
         encoding="utf-8"
     )
-    native_embed = (ROOT / "apps" / "flutter_app" / "web" / "kakao-map-embed.html").read_text(
+    native_embed = (ROOT / "apps" / "flutter_app" / "web" / "naver-map-embed.html").read_text(
         encoding="utf-8"
     )
 
-    assert 'kakao.maps.event.addListener(map, "dragend"' in web_bridge
-    assert 'kakao.maps.event.addListener(map, "zoom_changed"' in web_bridge
-    assert '"lala-map-camera-idle"' in web_bridge
-    assert "level: map.getLevel()" in web_bridge
-    assert "new kakao.maps.Circle" not in web_bridge
+    assert "HtmlElementView" in web_bridge
+    assert "naver-map-embed.html" in web_bridge
+    assert "queryParameters: {'r': '$_revision'}" in web_bridge
+    assert "postMessage(" in web_bridge
+    assert "event.origin != html.window.location.origin" in web_bridge
+    assert "event.source != _frame.contentWindow" not in web_bridge
+    assert "decoded['bridgeId'] != _bridgeId" in web_bridge
+    assert "lala-naver-map" in web_bridge
+    assert "lala-flutter-map-config" in web_bridge
 
-    assert 'kakao.maps.event.addListener(map, "dragend"' in native_embed
-    assert 'kakao.maps.event.addListener(map, "zoom_changed"' in native_embed
+    assert "https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=" in native_embed
+    assert "window.LalaMapEmbed" in native_embed
+    assert "lala-flutter-map-config" in native_embed
+    assert 'bridgeId: String(value.bridgeId || "").trim()' in native_embed
+    assert "bridgeId: config.bridgeId" in native_embed
+    assert "window.location.hash" not in native_embed
+    assert "window.location.search" not in native_embed
+    assert 'sendToFlutter({ type: "placeTap", placeId: placeId })' in native_embed
+    assert "suppressIdleUntil" in native_embed
+    assert 'naver.maps.Event.addListener(map, "idle"' in native_embed
     assert 'type: "cameraIdle"' in native_embed
-    assert "level: map.getLevel()" in native_embed
-    assert "new kakao.maps.Circle" not in native_embed
+    assert "map.getBounds()" in native_embed
+    assert "bounds.getSW" in native_embed
+    assert "bounds.getNE" in native_embed
+    assert "naverZoomToAppLevel(map.getZoom())" in native_embed
+    assert "logoControl: true" in native_embed
+    assert "mapDataControl: true" in native_embed
+    assert 'dataset.lalaMapProvider = "naver"' in native_embed
+    assert "new naver.maps.Circle" not in native_embed
+
+    combined = web_bridge + native_embed
+    assert "NAVER_CLIENT_SECRET" not in combined
+    assert "clientSecret" not in combined
 
 
 def test_flutter_web_smoke_drives_location_flow_and_route_requests():
