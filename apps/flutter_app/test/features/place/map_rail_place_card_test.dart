@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
+import 'package:lala_next_app/app/lala_visual_tokens.dart';
 import 'package:lala_next_app/features/map/widgets/map_place_carousel_overlay.dart';
 import 'package:lala_next_app/features/place/widgets/empty_place_state.dart';
 import 'package:lala_next_app/features/place/widgets/map_rail_place_card.dart';
@@ -186,8 +187,8 @@ void main() {
       );
       final decoration = container.decoration as BoxDecoration;
       final border = decoration.border as Border;
-      // attraction token color (#C53030), single uniform 1px border
-      expect(border.top.color, const Color(0xFFC53030));
+      // attraction token color, single uniform 1px border
+      expect(border.top.color, LalaVisualColors.attraction);
       expect(border.top.width, 1);
       expect(border.bottom.width, 1);
       // V1-RC4: category text (명소) still present in the meta line alongside the border.

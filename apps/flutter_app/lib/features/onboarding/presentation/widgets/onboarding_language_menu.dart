@@ -38,41 +38,26 @@ class OnboardingLanguageMenu extends StatelessWidget {
       initialValue: selected.code,
       tooltip: selectorLabel,
       onSelected: onSelected,
+      color: LalaVisualColors.card,
+      surfaceTintColor: Colors.transparent,
+      elevation: 8,
+      offset: const Offset(0, 8),
+      constraints: const BoxConstraints(minWidth: 208, maxWidth: 232),
+      menuPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(LalaVisualTokens.controlRadius),
+        side: const BorderSide(color: LalaVisualColors.line),
+      ),
       itemBuilder: (context) => <PopupMenuEntry<String>>[
         for (final choice in onboardingLanguageChoices)
           PopupMenuItem<String>(
             key: ValueKey('onboarding-quick-language-${choice.code}'),
             value: choice.code,
-            child: Row(
-              children: <Widget>[
-                SizedBox(
-                  width: 28,
-                  child: Text(
-                    choice.badge,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      color: LalaVisualColors.primaryBlue,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    choice.endonym,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: LalaVisualColors.ink,
-                    ),
-                  ),
-                ),
-                if (choice.code == selected.code)
-                  const Icon(
-                    Icons.check_rounded,
-                    size: 20,
-                    color: LalaVisualColors.primaryBlue,
-                  ),
-              ],
+            height: 50,
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: _LanguageMenuRow(
+              choice: choice,
+              selected: choice.code == selected.code,
             ),
           ),
       ],
@@ -107,6 +92,64 @@ class OnboardingLanguageMenu extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _LanguageMenuRow extends StatelessWidget {
+  const _LanguageMenuRow({required this.choice, required this.selected});
+
+  final OnboardingLanguageChoice choice;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      key: ValueKey(
+        selected
+            ? 'onboarding-quick-language-selected-${choice.code}'
+            : 'onboarding-quick-language-row-${choice.code}',
+      ),
+      duration: const Duration(milliseconds: 120),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: selected ? LalaVisualColors.primarySoft : Colors.transparent,
+        borderRadius: BorderRadius.circular(LalaVisualTokens.controlRadius),
+      ),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: Text(
+              choice.endonym,
+              style: TextStyle(
+                fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
+                color: selected
+                    ? LalaVisualColors.primaryBlue
+                    : LalaVisualColors.ink,
+              ),
+            ),
+          ),
+          Text(
+            choice.badge,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: selected
+                  ? LalaVisualColors.primaryBlue
+                  : LalaVisualColors.muted,
+            ),
+          ),
+          const SizedBox(width: 10),
+          if (selected)
+            const Icon(
+              Icons.check_circle_rounded,
+              size: 20,
+              color: LalaVisualColors.primaryBlue,
+            )
+          else
+            const SizedBox(width: 20),
+        ],
       ),
     );
   }

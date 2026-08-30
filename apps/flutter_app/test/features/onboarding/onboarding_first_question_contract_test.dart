@@ -88,6 +88,14 @@ void main() {
           findsOneWidget,
         );
       }
+      // 현재 언어는 회색 기본 popup이 아니라 전용 tonal surface + check로 드러난다.
+      expect(
+        find.byKey(
+          const ValueKey('onboarding-quick-language-selected-ko'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.byIcon(Icons.check_circle_rounded), findsOneWidget);
       // 메뉴 항목 수 = 5(그 외 항목 없음).
       expect(
         find.byWidgetPredicate(
