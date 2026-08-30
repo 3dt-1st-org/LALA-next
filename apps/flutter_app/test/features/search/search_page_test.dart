@@ -12,7 +12,7 @@ import 'package:lala_next_app/core/backend/lala_backend.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
 import 'package:lala_next_app/core/location/region_context.dart';
-import 'package:lala_next_app/features/place/widgets/place_thumb.dart';
+import 'package:lala_next_app/features/place/widgets/place_image.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/features/search/presentation/pages/search_page.dart';
 import 'package:lala_next_app/manual_location_options.dart';
@@ -76,8 +76,14 @@ void main() {
       expect(find.text('행궁동 카페'), findsOneWidget);
       expect(find.text('수원'), findsWidgets);
       expect(find.text('320m'), findsOneWidget);
-      // 공식 이미지 슬롯(빌려온/발명 이미지가 아님).
-      expect(find.byType(PlaceThumb), findsOneWidget);
+      // 공식 이미지 슬롯(빌려온/발명 이미지가 아님) — 좌측 고정 미디어 프레임 안.
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('search-place-media-search-test-cafe')),
+          matching: find.byType(PlaceImage),
+        ),
+        findsOneWidget,
+      );
     },
   );
 
@@ -181,6 +187,141 @@ void main() {
       expect(find.text('Search places or areas'), findsOneWidget);
       expect(find.text('장소·지역 검색'), findsNothing);
       expect(configs.last.lang, 'en');
+    },
+  );
+
+  testWidgets(
+    'search always exposes the active region and a nationwide picker entry',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SearchPage(
+            locationProvider: _CountingLocationProvider(
+              const LalaLocationResult.unavailable(),
+            ),
+            backendFactory: (config) => _LoadedPlacesBackend(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('search-region-picker')),
+        findsOneWidget,
+      );
+      expect(find.text('탐색 지역'), findsOneWidget);
+      expect(find.text('기본 지역 · 수원'), findsOneWidget);
+      expect(find.text('변경'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('search-region-picker')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('지역 선택'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('manual-location-search')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets('search region context fits the mobile contract viewport', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SearchPage(
+          locationProvider: _CountingLocationProvider(
+            const LalaLocationResult.unavailable(),
+          ),
+          backendFactory: (config) => _LoadedPlacesBackend(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final picker = find.byKey(const ValueKey('search-region-picker'));
+    expect(picker, findsOneWidget);
+    expect(tester.getSize(picker).height, greaterThanOrEqualTo(48));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('search region row reacts to a shared manual selection', (
+    tester,
+  ) async {
+    RegionContextStore.set(RegionContext.manual(_busanOption()));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SearchPage(
+          locationProvider: _CountingLocationProvider(
+            const LalaLocationResult.unavailable(),
+          ),
+          backendFactory: (config) => _LoadedPlacesBackend(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('해운대구'), findsOneWidget);
+    expect(find.text('기본 지역 · 수원'), findsNothing);
+
+    RegionContextStore.set(
+      RegionContext.manual(
+        const ManualLocationOption(
+          id: 'seoul-jongno',
+          provinceId: 'seoul',
+          provinceKo: '서울특별시',
+          provinceEn: 'Seoul',
+          labelKo: '종로구',
+          labelEn: 'Jongno-gu',
+          lat: 37.573,
+          lng: 126.9794,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('종로구'), findsOneWidget);
+    expect(find.text('해운대구'), findsNothing);
+  });
+
+  testWidgets(
+    'manual region selection still works when location permission is denied',
+    (tester) async {
+      // 권한 거부(soft denial) 상태에서도 수동 선택 경로가 막히지 않아야 한다.
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SearchPage(
+            locationProvider: _CountingLocationProvider(
+              const LalaLocationResult.denied(),
+            ),
+            backendFactory: (config) => _LoadedPlacesBackend(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('search-region-picker')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey('manual-location-search')),
+        '세종',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('manual-location-option-sejong-sejong')),
+      );
+      await tester.pumpAndSettle();
+
+      // 거부와 무관하게 수동 선택이 store 에 확정되고 region 행에 반영된다.
+      expect(RegionContextStore.current?.regionId, 'sejong-sejong');
+      expect(find.text('세종특별자치시'), findsOneWidget);
+      expect(find.text('기본 지역 · 수원'), findsNothing);
     },
   );
 

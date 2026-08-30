@@ -10,6 +10,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:lala_next_app/app/lala_visual_tokens.dart';
 import 'package:lala_next_app/core/routing/lala_route_paths.dart';
+import 'package:lala_next_app/features/onboarding/onboarding_language_options.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/features/onboarding/presentation/widgets/onboarding_scaffold.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
@@ -74,7 +75,8 @@ class _OnboardingLanguagePageState extends State<OnboardingLanguagePage> {
                       ),
                       style: TextStyle(
                         fontSize: LalaVisualTokens.onboardingTitleSize,
-                        height: LalaVisualTokens.onboardingTitleLineHeight /
+                        height:
+                            LalaVisualTokens.onboardingTitleLineHeight /
                             LalaVisualTokens.onboardingTitleSize,
                         fontWeight: FontWeight.w800,
                         color: LalaVisualColors.ink,
@@ -92,7 +94,8 @@ class _OnboardingLanguagePageState extends State<OnboardingLanguagePage> {
                       ),
                       style: TextStyle(
                         fontSize: LalaVisualTokens.bodySize,
-                        height: LalaVisualTokens.bodyLineHeight /
+                        height:
+                            LalaVisualTokens.bodyLineHeight /
                             LalaVisualTokens.bodySize,
                         fontWeight: FontWeight.w500,
                         color: LalaVisualColors.muted,
@@ -100,7 +103,7 @@ class _OnboardingLanguagePageState extends State<OnboardingLanguagePage> {
                     ),
                     const SizedBox(height: 28),
                     // 행 순서 = 계약 §1 표 순서. 라벨은 각 언어 고유명(의도적 노출).
-                    for (final entry in _kLanguageChoices) ...<Widget>[
+                    for (final entry in onboardingLanguageChoices) ...<Widget>[
                       _LanguageRow(
                         key: ValueKey('onboarding-language-${entry.code}'),
                         badge: entry.badge,
@@ -126,7 +129,8 @@ class _OnboardingLanguagePageState extends State<OnboardingLanguagePage> {
                   foregroundColor: LalaVisualColors.card,
                   textStyle: TextStyle(
                     fontSize: LalaVisualTokens.controlLabelSize,
-                    height: LalaVisualTokens.controlLabelLineHeight /
+                    height:
+                        LalaVisualTokens.controlLabelLineHeight /
                         LalaVisualTokens.controlLabelSize,
                     fontWeight: FontWeight.w700,
                   ),
@@ -154,23 +158,6 @@ class _OnboardingLanguagePageState extends State<OnboardingLanguagePage> {
     );
   }
 }
-
-/// S2 언어 행 정의. badge 는 텍스트(국기 이모지 금지, 계약 I3).
-class _LanguageChoice {
-  const _LanguageChoice(this.code, this.badge, this.endonym);
-
-  final String code;
-  final String badge;
-  final String endonym;
-}
-
-const List<_LanguageChoice> _kLanguageChoices = <_LanguageChoice>[
-  _LanguageChoice('ko', 'KO', '한국어'),
-  _LanguageChoice('en', 'EN', 'English'),
-  _LanguageChoice('ja', 'JA', '日本語'),
-  _LanguageChoice('zh-Hans', '简', '简体中文'),
-  _LanguageChoice('zh-Hant', '繁', '繁體中文'),
-];
 
 /// S2 언어 행(높이 72). 텍스트 배지 + 고유명 + 우측 check/radio 표시.
 class _LanguageRow extends StatelessWidget {
@@ -224,7 +211,8 @@ class _LanguageRow extends StatelessWidget {
                     label,
                     style: TextStyle(
                       fontSize: LalaVisualTokens.controlLabelSize,
-                      height: LalaVisualTokens.controlLabelLineHeight /
+                      height:
+                          LalaVisualTokens.controlLabelLineHeight /
                           LalaVisualTokens.controlLabelSize,
                       fontWeight: FontWeight.w700,
                       color: LalaVisualColors.ink,
@@ -232,9 +220,7 @@ class _LanguageRow extends StatelessWidget {
                   ),
                 ),
                 Icon(
-                  selected
-                      ? Icons.check_circle
-                      : Icons.radio_button_unchecked,
+                  selected ? Icons.check_circle : Icons.radio_button_unchecked,
                   color: selected
                       ? LalaVisualColors.primaryBlue
                       : LalaVisualColors.muted,
@@ -263,9 +249,7 @@ class _LanguageBadge extends StatelessWidget {
       height: 32,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: selected
-            ? LalaVisualColors.primaryBlue
-            : LalaVisualColors.line,
+        color: selected ? LalaVisualColors.primaryBlue : LalaVisualColors.line,
         borderRadius: BorderRadius.circular(LalaVisualTokens.controlRadius),
       ),
       child: Text(
@@ -274,7 +258,8 @@ class _LanguageBadge extends StatelessWidget {
           fontSize: 13,
           fontWeight: FontWeight.w800,
           color: selected ? LalaVisualColors.card : LalaVisualColors.ink,
-          letterSpacing: 0.4,
+          // 토큰 계약(00-ground-truth §4): letter spacing 은 0.
+          letterSpacing: 0,
         ),
       ),
     );

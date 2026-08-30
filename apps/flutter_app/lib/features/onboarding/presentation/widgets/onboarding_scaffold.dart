@@ -14,6 +14,7 @@ class OnboardingScaffold extends StatelessWidget {
     required this.step,
     required this.child,
     this.showProgress = true,
+    this.headerAction,
     super.key,
   }) : assert(step >= 1 && step <= 3);
 
@@ -25,6 +26,9 @@ class OnboardingScaffold extends StatelessWidget {
 
   /// 진행 텍스트 노출 여부(스플래시는 false).
   final bool showProgress;
+
+  /// 워드마크 반대편에 배치할 선택적 44dp 헤더 액션.
+  final Widget? headerAction;
 
   @override
   Widget build(BuildContext context) {
@@ -44,7 +48,15 @@ class OnboardingScaffold extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  const LalaWordmark(),
+                  Row(
+                    children: <Widget>[
+                      const LalaWordmark(),
+                      if (headerAction != null) ...<Widget>[
+                        const Spacer(),
+                        headerAction!,
+                      ],
+                    ],
+                  ),
                   if (showProgress) ...<Widget>[
                     const SizedBox(height: 18),
                     OnboardingProgress(step: step),

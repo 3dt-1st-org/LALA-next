@@ -4,6 +4,7 @@ import '../../../shared/l10n/lala_copy.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import '../../../shared/l10n/place_labels.dart';
+import '../../../shared/labels/dataset_freshness_label.dart';
 import '../../../shared/labels/source_label.dart';
 import '../../../shared/widgets/tiny_meta.dart';
 import '../../docent/widgets/dock_docent_preview.dart';
@@ -192,11 +193,11 @@ class MapBottomDock extends StatelessWidget {
                     if (sourceLabel(source, language: uiLanguage)
                         case final String src when src != '-')
                       TinyMeta(src),
-                    // V1-RC2(D-2): per-place 신선도(장소 단위). 아래 _freshnessLabel 칩은
+                    // V1-RC2(D-2): per-place 신선도(장소 단위). 아래 칩은
                     // 데이터셋 기준(dataAsOf)으로 별개 — 이름/개념 다르게 유지.
                     if (placeFreshnessText(currentPlace) case final String f)
                       TinyMeta(f),
-                    if (_freshnessLabel(dataAsOf, uiLanguage)
+                    if (datasetFreshnessLabel(dataAsOf, uiLanguage)
                         case final String label)
                       TinyMeta(label),
                   ],
@@ -230,24 +231,4 @@ class MapBottomDock extends StatelessWidget {
       ),
     );
   }
-}
-
-final RegExp _freshnessDateOnly = RegExp(r'^(\d{4}-\d{2}-\d{2})');
-
-/// 정직한 신선도 라벨: 실제 snapshot generated_at 의 날짜(YYYY-MM-DD) 부분만 사용.
-/// [dataAsOf] 가 없거나 날짜 파식 불가 → null(honest absence, 라벨 미표시).
-/// 절대 fabricate/invent/mok timestamp 를 넣지 않는다.
-String? _freshnessLabel(String? dataAsOf, String language) {
-  if (dataAsOf == null) return null;
-  final match = _freshnessDateOnly.firstMatch(dataAsOf);
-  if (match == null) return null;
-  final date = match.group(1)!;
-  return lalaCopyMulti(
-    language,
-    ko: '데이터 기준: $date',
-    en: 'Data as of: $date',
-    ja: 'データ基準: $date',
-    zhHans: '数据截至：$date',
-    zhHant: '數據截至：$date',
-  );
 }

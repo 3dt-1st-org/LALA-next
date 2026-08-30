@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:lala_next_app/app/lala_visual_tokens.dart';
 import 'package:lala_next_app/core/routing/lala_route_paths.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
+import 'package:lala_next_app/features/onboarding/presentation/widgets/onboarding_language_menu.dart';
 import 'package:lala_next_app/features/onboarding/presentation/widgets/onboarding_scaffold.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 
@@ -19,6 +20,19 @@ class OnboardingStartPage extends StatefulWidget {
 
 class _OnboardingStartPageState extends State<OnboardingStartPage> {
   OnboardingTouristType? _pending;
+  String? _languageOverride;
+
+  @override
+  void initState() {
+    super.initState();
+    final defaultLanguage =
+        OnboardingState.touristType == OnboardingTouristType.foreignTourist
+        ? 'en'
+        : 'ko';
+    if (OnboardingState.language != defaultLanguage) {
+      _languageOverride = OnboardingState.language;
+    }
+  }
 
   // S1 은 언어 선택 이전이므로 앱 SSOT(기본 ko)를 따른다.
   String get _language => OnboardingState.language;
@@ -29,13 +43,23 @@ class _OnboardingStartPageState extends State<OnboardingStartPage> {
     setState(() => _pending = type);
   }
 
+  void _selectLanguage(String language) {
+    setState(() {
+      _languageOverride = language;
+      OnboardingState.selectLanguage(language);
+    });
+  }
+
   void _advance() {
     final type = _pending;
     if (type == null) {
       return;
     }
-    // 선택한 유형과 그 기본 언어를 SSOT 에 기록한 뒤 S2 로 이동.
-    OnboardingState.selectTouristType(type);
+    // 사용자가 먼저 고른 언어가 있으면 유형 기본값으로 덮지 않고 한 번만 영속화한다.
+    OnboardingState.selectTouristType(
+      type,
+      preserveLanguage: _languageOverride != null,
+    );
     if (mounted) {
       context.go(LalaRoutePaths.onboardingLanguage);
     }
@@ -46,6 +70,10 @@ class _OnboardingStartPageState extends State<OnboardingStartPage> {
     final language = _language;
     return OnboardingScaffold(
       step: 1,
+      headerAction: OnboardingLanguageMenu(
+        language: language,
+        onSelected: _selectLanguage,
+      ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(
           LalaVisualTokens.pageGutter,
@@ -69,7 +97,8 @@ class _OnboardingStartPageState extends State<OnboardingStartPage> {
                 ),
                 style: TextStyle(
                   fontSize: LalaVisualTokens.onboardingTitleSize,
-                  height: LalaVisualTokens.onboardingTitleLineHeight /
+                  height:
+                      LalaVisualTokens.onboardingTitleLineHeight /
                       LalaVisualTokens.onboardingTitleSize,
                   fontWeight: FontWeight.w800,
                   color: LalaVisualColors.ink,
@@ -90,7 +119,8 @@ class _OnboardingStartPageState extends State<OnboardingStartPage> {
                 ),
                 style: TextStyle(
                   fontSize: LalaVisualTokens.bodySize,
-                  height: LalaVisualTokens.bodyLineHeight /
+                  height:
+                      LalaVisualTokens.bodyLineHeight /
                       LalaVisualTokens.bodySize,
                   fontWeight: FontWeight.w500,
                   color: LalaVisualColors.muted,
@@ -119,7 +149,7 @@ class _OnboardingStartPageState extends State<OnboardingStartPage> {
               label: lalaCopyMulti(
                 language,
                 ko: '해외 방문',
-                en: 'Overseas trip',
+                en: 'Visiting Korea',
                 ja: '海外からのお越し',
                 zhHans: '海外到访',
                 zhHant: '海外到訪',
@@ -179,7 +209,9 @@ class _TravelTypeRow extends StatelessWidget {
             constraints: const BoxConstraints(minHeight: 80),
             padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(LalaVisualTokens.controlRadius),
+              borderRadius: BorderRadius.circular(
+                LalaVisualTokens.controlRadius,
+              ),
               border: Border.all(
                 color: selected
                     ? LalaVisualColors.primaryBlue
@@ -196,15 +228,20 @@ class _TravelTypeRow extends StatelessWidget {
                     label,
                     style: TextStyle(
                       fontSize: LalaVisualTokens.controlLabelSize,
-                      height: LalaVisualTokens.controlLabelLineHeight /
+                      height:
+                          LalaVisualTokens.controlLabelLineHeight /
                           LalaVisualTokens.controlLabelSize,
                       fontWeight: FontWeight.w700,
                       color: LalaVisualColors.ink,
                     ),
                   ),
                 ),
+                // 선택 신호는 outline 외에 아이콘 형태 변화도 사용한다(00-ground-truth §5).
+                // 미선택은 빈 radio 표시 — 행이 내비게이션을 암시하지 않는다.
                 Icon(
-                  Icons.chevron_right_rounded,
+                  selected
+                      ? Icons.check_circle_rounded
+                      : Icons.radio_button_unchecked,
                   color: selected
                       ? LalaVisualColors.primaryBlue
                       : LalaVisualColors.muted,
@@ -221,7 +258,10 @@ class _TravelTypeRow extends StatelessWidget {
 
 /// 온보딩 주 액션(높이 52). onPressed == null 이면 비활성.
 class _OnboardingPrimaryAction extends StatelessWidget {
-  const _OnboardingPrimaryAction({required this.label, required this.onPressed});
+  const _OnboardingPrimaryAction({
+    required this.label,
+    required this.onPressed,
+  });
 
   final String label;
   final VoidCallback? onPressed;
@@ -242,14 +282,13 @@ class _OnboardingPrimaryAction extends StatelessWidget {
           disabledForegroundColor: LalaVisualColors.card,
           textStyle: TextStyle(
             fontSize: LalaVisualTokens.controlLabelSize,
-            height: LalaVisualTokens.controlLabelLineHeight /
+            height:
+                LalaVisualTokens.controlLabelLineHeight /
                 LalaVisualTokens.controlLabelSize,
             fontWeight: FontWeight.w700,
           ),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(
-              LalaVisualTokens.controlRadius,
-            ),
+            borderRadius: BorderRadius.circular(LalaVisualTokens.controlRadius),
           ),
         ),
         child: Text(label),
