@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
+import 'package:lala_next_app/app/lala_visual_tokens.dart';
 import 'package:lala_next_app/core/backend/lala_backend.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
@@ -22,8 +23,8 @@ import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/features/place/place_helpers.dart';
 import 'package:lala_next_app/features/place/widgets/category_badge.dart';
 import 'package:lala_next_app/features/place/widgets/empty_place_state.dart';
+import 'package:lala_next_app/features/place/widgets/place_image.dart';
 import 'package:lala_next_app/features/place/widgets/place_reason_freshness.dart';
-import 'package:lala_next_app/features/place/widgets/place_thumb.dart';
 import 'package:lala_next_app/manual_location_options.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 import 'package:lala_next_app/shared/l10n/place_labels.dart';
@@ -483,7 +484,12 @@ class _SearchRegionContextRow extends StatelessWidget {
     final semanticLabel = '$contextLabel, $regionLabel, $changeLabel';
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 4, 24, 2),
+      padding: const EdgeInsets.fromLTRB(
+        LalaVisualTokens.pageGutter,
+        4,
+        LalaVisualTokens.pageGutter,
+        2,
+      ),
       child: Semantics(
         button: true,
         label: semanticLabel,
@@ -494,10 +500,12 @@ class _SearchRegionContextRow extends StatelessWidget {
             minimumSize: const Size.fromHeight(48),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             foregroundColor: const Color(0xFF334155),
-            backgroundColor: Colors.white,
+            backgroundColor: LalaVisualColors.card,
             side: const BorderSide(color: Color(0xFFE2E8F0)),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(
+                LalaVisualTokens.controlRadius,
+              ),
             ),
           ),
           child: Row(
@@ -508,8 +516,8 @@ class _SearchRegionContextRow extends StatelessWidget {
                     : Icons.location_on_outlined,
                 size: 20,
                 color: isDefault
-                    ? const Color(0xFF64748B)
-                    : const Color(0xFF2B6CB0),
+                    ? LalaVisualColors.muted
+                    : LalaVisualColors.primaryBlue,
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -520,7 +528,7 @@ class _SearchRegionContextRow extends StatelessWidget {
                     Text(
                       contextLabel,
                       style: const TextStyle(
-                        color: Color(0xFF64748B),
+                        color: LalaVisualColors.muted,
                         fontSize: 12,
                         height: 1.2,
                         fontWeight: FontWeight.w700,
@@ -545,7 +553,7 @@ class _SearchRegionContextRow extends StatelessWidget {
               Text(
                 changeLabel,
                 style: const TextStyle(
-                  color: Color(0xFF2B6CB0),
+                  color: LalaVisualColors.primaryBlue,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -553,7 +561,7 @@ class _SearchRegionContextRow extends StatelessWidget {
               const Icon(
                 Icons.chevron_right_rounded,
                 size: 20,
-                color: Color(0xFF2B6CB0),
+                color: LalaVisualColors.primaryBlue,
               ),
             ],
           ),
@@ -575,7 +583,7 @@ class _SearchDatasetMetaText extends StatelessWidget {
     return Text(
       label,
       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-        color: const Color(0xFF64748B),
+        color: LalaVisualColors.muted,
         fontWeight: FontWeight.w600,
       ),
     );
@@ -603,7 +611,12 @@ class _SearchHeader extends StatelessWidget {
     // 모바일 비주얼 계약 remediation D: 헤더는 필드(선행 검색 아이콘 + placeholder +
     // 후행 필터 아이콘 하나)만. 커뮤니티/새로고침 버튼은 이 헤더에서 뺀다(라우트/서비스 유지).
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 18, 24, 4),
+      padding: const EdgeInsets.fromLTRB(
+        LalaVisualTokens.pageGutter,
+        18,
+        LalaVisualTokens.pageGutter,
+        4,
+      ),
       child: SizedBox(
         height: 48,
         child: TextField(
@@ -625,7 +638,7 @@ class _SearchHeader extends StatelessWidget {
             hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
             prefixIcon: const Icon(
               Icons.search_rounded,
-              color: Color(0xFF64748B),
+              color: LalaVisualColors.muted,
             ),
             suffixIcon: IconButton(
               tooltip: lalaCopyMulti(
@@ -639,22 +652,26 @@ class _SearchHeader extends StatelessWidget {
               onPressed: onResetFilters,
               icon: const Icon(
                 Icons.filter_list_rounded,
-                color: Color(0xFF64748B),
+                color: LalaVisualColors.muted,
               ),
             ),
             filled: true,
-            fillColor: Colors.white,
+            fillColor: LalaVisualColors.card,
             isDense: true,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 14,
               vertical: 0,
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(
+                LalaVisualTokens.controlRadius,
+              ),
               borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(
+                LalaVisualTokens.controlRadius,
+              ),
               borderSide: BorderSide(
                 color: Theme.of(context).colorScheme.primary,
                 width: 1.6,
@@ -767,7 +784,8 @@ class _SearchLoadingView extends StatelessWidget {
   }
 }
 
-/// 결과 타일 모양의 중성 스켈레톤(이미지 96x88 + 텍스트 레일). 가짜 매장명/이미지 없음.
+/// 결과 타일 모양의 중성 스켈레톤(좌측 미디어 96x88 + 우측 텍스트 레일 — 재구성된
+/// 결과 타일과 동일 구조). 가짜 매장명/이미지 없음.
 class _SearchSkeletonRow extends StatelessWidget {
   const _SearchSkeletonRow();
 
@@ -777,13 +795,19 @@ class _SearchSkeletonRow extends StatelessWidget {
       key: const ValueKey('search-skeleton-row'),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
+        color: LalaVisualColors.card,
+        borderRadius: BorderRadius.circular(LalaVisualTokens.controlRadius),
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
+          const LalaSkeleton(
+            width: 96,
+            height: 88,
+            radius: LalaVisualTokens.controlRadius,
+          ),
+          const SizedBox(width: LalaVisualTokens.contentGap),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -798,8 +822,6 @@ class _SearchSkeletonRow extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: 12),
-          const LalaSkeleton(width: 96, height: 88, radius: 8),
         ],
       ),
     );
@@ -1012,7 +1034,13 @@ class _SearchResultsView extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView.separated(
       key: const ValueKey('search-results-view'),
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      // 00-ground-truth §4: 일반 화면 gutter 24dp.
+      padding: const EdgeInsets.fromLTRB(
+        LalaVisualTokens.pageGutter,
+        8,
+        LalaVisualTokens.pageGutter,
+        24,
+      ),
       itemCount: places.length,
       separatorBuilder: (context, index) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
@@ -1051,18 +1079,17 @@ class _SearchPlaceTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasImage = hasOfficialPlaceImage(place);
     final name = placeDisplayName(place, language);
     final region = placeRegionLabel(place, language);
     // S2 계약: source/dataset data_as_of 가 없으면 source/freshness 칩을 숨긴다.
     final sourceChip = sourceLabel(datasetSource, language: language);
     final freshnessChip = datasetFreshnessLabel(datasetDataAsOf, language);
     return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(18),
+      color: LalaVisualColors.card,
+      borderRadius: BorderRadius.circular(LalaVisualTokens.controlRadius),
       child: InkWell(
         key: ValueKey('search-place-tile-tap-${place.placeId}'),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(LalaVisualTokens.controlRadius),
         onTap: onTap,
         child: Semantics(
           container: true,
@@ -1076,8 +1103,10 @@ class _SearchPlaceTile extends StatelessWidget {
             constraints: const BoxConstraints(minHeight: 44),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
+              color: LalaVisualColors.card,
+              borderRadius: BorderRadius.circular(
+                LalaVisualTokens.controlRadius,
+              ),
               border: Border.all(color: const Color(0xFFE2E8F0)),
               boxShadow: const [
                 BoxShadow(
@@ -1087,43 +1116,20 @@ class _SearchPlaceTile extends StatelessWidget {
                 ),
               ],
             ),
+            // S2 계약 재구성: 좌측 고정 미디어 프레임 → 우측 '이름 → 한 줄 reason →
+            // compact 메타 → 실제 dataset 출처/신선도' 순서.
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                _SearchPlaceMediaFrame(place: place, language: language),
+                const SizedBox(width: LalaVisualTokens.contentGap),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 6,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          CategoryBadge(
-                            category: place.category,
-                            language: language,
-                          ),
-                          if (place.distanceM > 0)
-                            Text(
-                              '${place.distanceM}m',
-                              style: Theme.of(context).textTheme.labelSmall
-                                  ?.copyWith(
-                                    color: const Color(0xFF64748B),
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                            ),
-                          if (sourceChip != '-')
-                            _SearchDatasetMetaText(sourceChip),
-                          if (place.freshness != null &&
-                              place.freshness!.isNotEmpty)
-                            PlaceFreshnessText(place: place),
-                          if (freshnessChip != null)
-                            _SearchDatasetMetaText(freshnessChip),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
                       Text(
                         name,
+                        key: ValueKey('search-place-name-${place.placeId}'),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.titleMedium
@@ -1132,13 +1138,19 @@ class _SearchPlaceTile extends StatelessWidget {
                               height: 1.14,
                             ),
                       ),
-                      const SizedBox(height: 6),
+                      PlaceReasonLine(place: place, topSpacing: 6),
+                      const SizedBox(height: 8),
                       Row(
                         children: [
-                          const Icon(
+                          CategoryBadge(
+                            category: place.category,
+                            language: language,
+                          ),
+                          const SizedBox(width: 8),
+                          Icon(
                             Icons.place_outlined,
                             size: 13,
-                            color: Color(0xFF64748B),
+                            color: LalaVisualColors.muted,
                           ),
                           const SizedBox(width: 4),
                           Expanded(
@@ -1153,24 +1165,93 @@ class _SearchPlaceTile extends StatelessWidget {
                                   ),
                             ),
                           ),
+                          if (place.distanceM > 0) ...[
+                            const SizedBox(width: 8),
+                            Text(
+                              '${place.distanceM}m',
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(
+                                    color: LalaVisualColors.muted,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                            ),
+                          ],
                         ],
                       ),
-                      if (place.reason != null && place.reason!.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        PlaceReasonLine(place: place),
+                      // 실제 값이 있을 때만 렌더되는 출처/신선도 영역(빈 줄 없음).
+                      if (sourceChip != '-' ||
+                          freshnessChip != null ||
+                          (place.freshness?.isNotEmpty ?? false)) ...[
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            if (sourceChip != '-')
+                              _SearchDatasetMetaText(sourceChip),
+                            if (place.freshness?.isNotEmpty ?? false)
+                              PlaceFreshnessText(place: place),
+                            if (freshnessChip != null)
+                              _SearchDatasetMetaText(freshnessChip),
+                          ],
+                        ),
                       ],
                     ],
                   ),
                 ),
-                if (hasImage) ...[
-                  const SizedBox(width: 12),
-                  PlaceThumb(place: place),
-                ],
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// 결과 미디어 프레임(좌측 고정 96x88, 반경 8). 공식 이미지가 있을 때만 실제
+/// 이미지를 채우고, 없으면 카테고리 색의 place 아이콘 placeholder 를 둔다 —
+/// 다른 장소 사진을 대체해 끼워 넣지 않는다(00-ground-truth §3 금지).
+/// 이미지 유무와 무관하게 치수가 고정되어 레이아웃이 흔들리지 않는다.
+class _SearchPlaceMediaFrame extends StatelessWidget {
+  const _SearchPlaceMediaFrame({required this.place, required this.language});
+
+  final LalaPlace place;
+  final String language;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasImage = hasOfficialPlaceImage(place);
+    return Container(
+      key: ValueKey('search-place-media-${place.placeId}'),
+      width: 96,
+      height: 88,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: LalaVisualColors.surface,
+        borderRadius: BorderRadius.circular(LalaVisualTokens.controlRadius),
+        border: Border.all(color: LalaVisualColors.line),
+      ),
+      child: hasImage
+          ? PlaceImage(place: place, width: 96, height: 88)
+          : Center(
+              // S4 계약의 정직한 이미지 부재 문구 재사용(다른 장소 사진 대체 금지).
+              child: Semantics(
+                label: lalaCopyMulti(
+                  language,
+                  ko: '이미지 준비 중',
+                  en: 'Image pending',
+                  ja: '画像準備中',
+                  zhHans: '图片准备中',
+                  zhHant: '圖片準備中',
+                ),
+                child: Icon(
+                  Icons.place_rounded,
+                  size: 28,
+                  color: categoryColor(place.category),
+                ),
+              ),
+            ),
     );
   }
 }

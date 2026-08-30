@@ -149,7 +149,7 @@ class _OnboardingStartPageState extends State<OnboardingStartPage> {
               label: lalaCopyMulti(
                 language,
                 ko: '해외 방문',
-                en: 'Overseas trip',
+                en: 'Visiting Korea',
                 ja: '海外からのお越し',
                 zhHans: '海外到访',
                 zhHant: '海外到訪',
@@ -237,10 +237,11 @@ class _TravelTypeRow extends StatelessWidget {
                   ),
                 ),
                 // 선택 신호는 outline 외에 아이콘 형태 변화도 사용한다(00-ground-truth §5).
+                // 미선택은 빈 radio 표시 — 행이 내비게이션을 암시하지 않는다.
                 Icon(
                   selected
                       ? Icons.check_circle_rounded
-                      : Icons.chevron_right_rounded,
+                      : Icons.radio_button_unchecked,
                   color: selected
                       ? LalaVisualColors.primaryBlue
                       : LalaVisualColors.muted,

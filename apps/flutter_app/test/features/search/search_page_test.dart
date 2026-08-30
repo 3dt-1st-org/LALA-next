@@ -12,7 +12,7 @@ import 'package:lala_next_app/core/backend/lala_backend.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
 import 'package:lala_next_app/core/location/region_context.dart';
-import 'package:lala_next_app/features/place/widgets/place_thumb.dart';
+import 'package:lala_next_app/features/place/widgets/place_image.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/features/search/presentation/pages/search_page.dart';
 import 'package:lala_next_app/manual_location_options.dart';
@@ -76,8 +76,14 @@ void main() {
       expect(find.text('행궁동 카페'), findsOneWidget);
       expect(find.text('수원'), findsWidgets);
       expect(find.text('320m'), findsOneWidget);
-      // 공식 이미지 슬롯(빌려온/발명 이미지가 아님).
-      expect(find.byType(PlaceThumb), findsOneWidget);
+      // 공식 이미지 슬롯(빌려온/발명 이미지가 아님) — 좌측 고정 미디어 프레임 안.
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('search-place-media-search-test-cafe')),
+          matching: find.byType(PlaceImage),
+        ),
+        findsOneWidget,
+      );
     },
   );
 

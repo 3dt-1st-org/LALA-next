@@ -116,6 +116,27 @@ void main() {
       }
     });
 
+    testWidgets('English rows use the Visiting Korea foreign label', (
+      tester,
+    ) async {
+      await tester.pumpWidget(const MaterialApp(home: OnboardingStartPage()));
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey('onboarding-quick-language-menu')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('onboarding-quick-language-en')),
+      );
+      await tester.pumpAndSettle();
+
+      // 계약 문구: 해외 방문 행의 EN 라벨은 Visiting Korea.
+      expect(find.text('Domestic trip'), findsOneWidget);
+      expect(find.text('Visiting Korea'), findsOneWidget);
+      expect(find.text('Overseas trip'), findsNothing);
+    });
+
     testWidgets('selected row shows outline plus a distinct selected icon', (
       tester,
     ) async {
@@ -146,11 +167,20 @@ void main() {
       );
       expect(
         rowIcons('onboarding-travel-overseas'),
-        contains(Icons.chevron_right_rounded),
+        contains(Icons.radio_button_unchecked),
       );
       expect(
         rowIcons('onboarding-travel-overseas'),
         isNot(contains(Icons.check_circle_rounded)),
+      );
+      // 행이 내비게이션을 암시하는 chevron 표시는 선택 여부와 무관하게 없다.
+      expect(
+        rowIcons('onboarding-travel-domestic'),
+        isNot(contains(Icons.chevron_right_rounded)),
+      );
+      expect(
+        rowIcons('onboarding-travel-overseas'),
+        isNot(contains(Icons.chevron_right_rounded)),
       );
     });
   });
