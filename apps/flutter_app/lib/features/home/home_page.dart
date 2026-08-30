@@ -152,6 +152,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
   bool _locationPermanentlyDenied = false;
   bool _locationStartPromptVisible = false;
   bool _recommendationRailExpanded = true;
+  bool _mapDockExpanded = false;
   List<String> _focusedClusterMemberIds = const <String>[];
   final Set<String> _savedPlaceIds = <String>{};
   final Set<String> _detailDocentPlayedPlaceIds = <String>{};
@@ -362,6 +363,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
     _showEvidence = false;
     _focusedClusterMemberIds = const <String>[];
     _recommendationRailExpanded = true;
+    _mapDockExpanded = false;
   }
 
   Future<void> _requestLocationThenRefresh({
@@ -854,6 +856,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _tourAudioLoading = false;
       _showEvidence = false;
       _focusedClusterMemberIds = const <String>[];
+      _mapDockExpanded = false;
       _mapFocusLat = null;
       _mapFocusLng = null;
       _mapLevel = _defaultMapLevel;
@@ -889,6 +892,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
       }
       _publishSelection(place.placeId);
       _activeSheet = ActiveMapSheet.detail;
+      _mapDockExpanded = false;
       _docentAudio = null;
       _audioError = null;
       _focusedClusterMemberIds = const <String>[];
@@ -1029,6 +1033,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _audioError = null;
       _focusedClusterMemberIds = const <String>[];
       _showEvidence = false;
+      _mapDockExpanded = false;
     });
   }
 
@@ -1045,6 +1050,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
       );
       _activeSheet = null;
       _recommendationRailExpanded = true;
+      _mapDockExpanded = false;
     });
   }
 
@@ -1081,6 +1087,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
         _tourAudioError = null;
         _tourAudioLoading = false;
         _recommendationRailExpanded = true;
+        _mapDockExpanded = false;
       }
     });
     if (!shouldReloadPlaces) {
@@ -1316,6 +1323,12 @@ class _LalaHomePageState extends State<LalaHomePage> {
   void _toggleRecommendationRail() {
     setState(() {
       _recommendationRailExpanded = !_recommendationRailExpanded;
+    });
+  }
+
+  void _toggleMapDock() {
+    setState(() {
+      _mapDockExpanded = !_mapDockExpanded;
     });
   }
 
@@ -1570,6 +1583,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
                   locationFallbackNoticeVisible: _locationFallbackNoticeVisible,
                   locationStartPromptVisible: _locationStartPromptVisible,
                   recommendationRailExpanded: _recommendationRailExpanded,
+                  mapDockExpanded: _mapDockExpanded,
                   recommendationRecoveryPending: _recommendationRecoveryPending,
                   recommendationRecoveryAttempt:
                       _recommendationRecoveryAttempts,
@@ -1585,6 +1599,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
                   onCameraIdle: _handleMapCameraIdle,
                   onClearPlaceSelection: _clearPlaceSelection,
                   onToggleRecommendationRail: _toggleRecommendationRail,
+                  onToggleMapDock: _toggleMapDock,
                   onOpenSheet: _openSheet,
                   onCloseSheet: _closeSheet,
                   onToggleVoice: _toggleVoice,

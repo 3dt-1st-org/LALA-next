@@ -67,6 +67,7 @@ class Dashboard extends StatelessWidget {
     required this.locationFallbackNoticeVisible,
     required this.locationStartPromptVisible,
     required this.recommendationRailExpanded,
+    required this.mapDockExpanded,
     required this.recommendationRecoveryPending,
     required this.recommendationRecoveryAttempt,
     required this.focusedClusterMemberIds,
@@ -81,6 +82,7 @@ class Dashboard extends StatelessWidget {
     required this.onCameraIdle,
     required this.onClearPlaceSelection,
     required this.onToggleRecommendationRail,
+    required this.onToggleMapDock,
     required this.onOpenSheet,
     required this.onCloseSheet,
     required this.onToggleVoice,
@@ -134,6 +136,7 @@ class Dashboard extends StatelessWidget {
   final bool locationFallbackNoticeVisible;
   final bool locationStartPromptVisible;
   final bool recommendationRailExpanded;
+  final bool mapDockExpanded;
   final bool recommendationRecoveryPending;
   final int recommendationRecoveryAttempt;
   final List<String> focusedClusterMemberIds;
@@ -148,6 +151,7 @@ class Dashboard extends StatelessWidget {
   final ValueChanged<LalaMapCamera> onCameraIdle;
   final VoidCallback onClearPlaceSelection;
   final VoidCallback onToggleRecommendationRail;
+  final VoidCallback onToggleMapDock;
   final ValueChanged<ActiveMapSheet> onOpenSheet;
   final VoidCallback onCloseSheet;
   final VoidCallback onToggleVoice;
@@ -262,12 +266,17 @@ class Dashboard extends StatelessWidget {
             : isWide
             ? 232.0
             : 220.0;
-        // 모바일 비주얼 계약 remediation C2: 모바일 선택장소 독 초기 높이 196dp.
-        final bottomDockHeight = isWide
-            ? 218.0
-            : constraints.maxHeight < 700
-            ? 164.0
-            : 196.0;
+        final dockShowsExpandedContent =
+            isWide || topPlace == null || mapDockExpanded;
+        // B안: 선택 장소가 있으면 지도 우선 96dp 요약으로 시작한다. 오류/빈 상태와
+        // 데스크톱은 복구 액션과 정보 밀도를 보존하기 위해 기존 높이를 유지한다.
+        final bottomDockHeight = dockShowsExpandedContent
+            ? isWide
+                  ? 218.0
+                  : constraints.maxHeight < 700
+                  ? 164.0
+                  : 196.0
+            : 96.0;
         final floatingControlsBottom = bottomDockHeight + 16;
         return Stack(
           children: [
@@ -462,6 +471,7 @@ class Dashboard extends StatelessWidget {
                     topPlace: topPlace,
                     uiLanguage: uiLanguage,
                     height: bottomDockHeight,
+                    expanded: dockShowsExpandedContent,
                     docentScript: activeDocent?.placeId == topPlace?.placeId
                         ? activeDocent?.script
                         : null,
@@ -493,15 +503,18 @@ class Dashboard extends StatelessWidget {
                     onOpenDetail: () => onOpenSheet(ActiveMapSheet.detail),
                     onRefresh: onRefresh,
                     onToggleEvidence: onToggleEvidence,
+                    onToggleExpanded: onToggleMapDock,
                   ),
                 ),
               ),
             ),
             // 모바일 비주얼 계약(00-ground-truth §6 / 01-flow §3): 컨트롤 스택은
             // 우측 가장자리(mapGutter=12), 도크 핸들보다 16dp 위. 세로 44dp 타겟.
-            Positioned(
+            AnimatedPositioned(
               right: 12,
               bottom: floatingControlsBottom,
+              duration: const Duration(milliseconds: 240),
+              curve: Curves.easeOutCubic,
               child: FloatingMapControls(
                 voiceEnabled: voiceEnabled,
                 autoDocentEnabled: autoDocentEnabled,

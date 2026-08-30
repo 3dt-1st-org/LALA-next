@@ -427,6 +427,45 @@ void main() {
         ),
       );
     });
+
+    testWidgets('360dp collapsed summary with very long place identity', (
+      tester,
+    ) async {
+      await _pumpAndCaptureOverflow(
+        tester,
+        360,
+        widget: SizedBox(
+          width: 360,
+          child: MapBottomDock(
+            isWide: false,
+            places: <LalaPlace>[_dockPlace()],
+            source: 'db',
+            weather: _dockWeather(),
+            dataAsOf: '2026-06-19T02:24:44.557686+00:00',
+            topPlace: _dockPlace(),
+            uiLanguage: 'ko',
+            height: 96,
+            expanded: false,
+            docentScript: null,
+            docentAudio: null,
+            docentAction: null,
+            audioLoading: false,
+            audioError: null,
+            canFetchAudio: false,
+            showEvidence: false,
+            error: null,
+            placeFailureKind: null,
+            recommendationRecoveryPending: false,
+            onFetchAudio: () {},
+            onAddToPlan: () {},
+            onOpenDetail: () {},
+            onRefresh: () {},
+            onToggleEvidence: () {},
+            onToggleExpanded: () {},
+          ),
+        ),
+      );
+    });
   });
 
   // V1 three-signals §6/§8 (Lane 3 overflow gate): reason 이 정식 6세그먼트(정준 순서,
