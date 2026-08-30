@@ -232,7 +232,7 @@ ALLOW_RAG_INDEX_APPLY=1 \
     runtime has picked up the refreshed Key Vault values.
 
 12. Rebuild and redeploy Flutter web after backend URL or client auth changes.
-    Pass `LALA_API_BASE_URL`, `KAKAO_JAVASCRIPT_KEY`, and `LALA_UI_LANGUAGE` as
+    Pass `LALA_API_BASE_URL`, `NAVER_MAP_CLIENT_ID`, and `LALA_UI_LANGUAGE` as
     build-time values from deployment secrets or trusted local shell variables.
     Do not pass `LALA_API_BEARER_TOKEN` while public contest access is enabled.
 

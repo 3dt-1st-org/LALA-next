@@ -27,7 +27,8 @@ cd apps/flutter_app && flutter analyze && flutter test    # Flutter
 > 주의: 메인 체크아웃에 `.env`(DB_DSN)가 있으면 일부 테스트가 임포트 시점 DB 연결로 행업. `.env` 를 임시 옮기거나 worktree(.env 없음)에서 실행.
 
 ## 보존 불변량 (절대 깨뜨리지 말 것)
-- **지도 = 카카오맵** (MapLibre 아님). `kakao_map_view_{web,native,stub}.dart` 조건부 import 패턴 유지.
+- **지도 = 네이버 Dynamic Map**. `lala_map_view_{web,native,stub}.dart` 조건부 import와
+  `naver-map-embed.html` 브리지를 유지하고, 서버용 Naver Search API 비밀을 Flutter에 넣지 않습니다.
 - **인증 = Logto SDK** (직접 토큰 관리 아님). `lib/auth/` (auth_controller, logto_auth_gateway) 경유.
 - **위치 = Geolocator + browser_location 하이브리드**. `browser_location_{web,native,stub}.dart` 조건부 import 유지.
 - 조건부 import 패턴: `export 'X_stub.dart' if (dart.library.html) 'X_web.dart' if (dart.library.io) 'X_native.dart';`

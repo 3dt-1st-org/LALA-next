@@ -9,9 +9,9 @@ Current app surface:
 - Public `/healthz` and `/readyz` status before auth is available.
 - Runtime mode display from `/readyz.data.mode`.
 - Runtime editable backend base URL.
-- Kakao Maps background map, loaded with `KAKAO_JAVASCRIPT_KEY` at Flutter web
+- Naver Dynamic Map background, loaded with `NAVER_MAP_CLIENT_ID` at Flutter web
   build time and through the registered `https://lala-next.cloud`
-  `kakao-map-embed.html` page for native iOS/Android WebView builds.
+  `naver-map-embed.html` page for native iOS/Android WebView builds.
 - 3 km current-location recommendation radius for the Seoul/Gyeonggi launch dataset.
 - Bearer token or migration API key input for `/api/v1/*`.
 - Recommendation-first home surface that highlights the top place, local-value
@@ -82,7 +82,7 @@ location, and fails if the old default Suwon coordinate appears in those API log
 With `--api-base-url <url>`, the same location-flow request check runs against a
 separately running backend that allows the selected local web origin. For the deployed contest site, use
 `--web-url https://lala-next.cloud/?qa=<label>` so the smoke opens the registered
-Kakao/CORS origin directly and verifies the same location-driven API requests,
+Naver Maps/CORS origin directly and verifies the same location-driven API requests,
 then verifies a live-context docent script from the same place/weather data. The macOS/Linux smoke also captures
 `flutter-web-api-responses.json` and fails if the browser received non-DB
 places, a non-PostGIS location engine, weather without AirKorea PM10/PM2.5
@@ -107,7 +107,7 @@ Optional compile-time defaults:
 ```bash
 flutter run \
   --dart-define LALA_API_BASE_URL=http://127.0.0.1:8080 \
-  --dart-define KAKAO_JAVASCRIPT_KEY="$KAKAO_JAVASCRIPT_KEY"
+  --dart-define NAVER_MAP_CLIENT_ID="$NAVER_MAP_CLIENT_ID"
 ```
 
 During the public contest review window, shared dev can set
@@ -133,15 +133,19 @@ at **build time** in the following priority order:
    injection source for guest builds and CI/CD pipelines. Build systems inject these values
    as compile-time dart-defines; the Flutter client itself does not retrieve SSM parameters.
 
-2. **Local Fallback:** If SSM is unavailable, local `.env` or `.env.local` files
+2. **Secrets Manager Fallback:** If the operator-supplied SSM parameter is not
+   configured or available, the restricted `lala-next/naver-map-client-id`
+   entry is checked.
+
+3. **Local Fallback:** If the managed sources are unavailable, local `.env` or `.env.local` files
    may be used **only inside an isolated build subshell** for development builds.
    These files must never be committed, copied, or referenced in production builds.
 
-3. **No Temporary/Fake Values:** Build systems should not invent or substitute placeholder
+4. **No Temporary/Fake Values:** Build systems should not invent or substitute placeholder
    values. If a required configuration value is unavailable and no safe default exists,
    the build should fail. For `LALA_API_BASE_URL`, a safe public default is provided.
 
-4. **Safe Public Default:** The `LALA_API_BASE_URL` configuration has a safe static
+5. **Safe Public Default:** The `LALA_API_BASE_URL` configuration has a safe static
    default (`https://api.lala-next.cloud`) as a guest-safe fallback for public read-only
    flows. This default allows the app to function without requiring explicit configuration.
    Explicit dart-define values always override this default unchanged, including
@@ -151,5 +155,7 @@ at **build time** in the following priority order:
 secret paths, secret names, AWS identifiers, or environment variable content in
 build output or documentation.
 
-The Kakao JavaScript key is embedded in web and native WebView map loads by
-design and must be protected by Kakao's JavaScript SDK domain allowlist.
+`NAVER_MAP_CLIENT_ID` is embedded in web and native WebView map loads by design
+and must be protected by the Naver Cloud Dynamic Map URL allowlist. It is not
+the server-side `NAVER_CLIENT_ID`, and `NAVER_CLIENT_SECRET` must never enter a
+Flutter build, browser bundle, screenshot, or client log.

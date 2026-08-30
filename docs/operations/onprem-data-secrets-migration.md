@@ -129,7 +129,7 @@ Build a private inventory with three columns:
 | `kopis-api-key` | `KOPIS_API_KEY` | data/API operator |
 | `naver-client-id` | `NAVER_CLIENT_ID` | API operator |
 | `naver-client-secret` | `NAVER_CLIENT_SECRET` | API operator |
-| `kakao-javascript-key` | `KAKAO_JAVASCRIPT_KEY` | frontend/API operator |
+| `naver-map-client-id` | `NAVER_MAP_CLIENT_ID` | frontend build operator |
 | `kakao-rest-api-key` | `KAKAO_REST_API_KEY` | API operator |
 | `azure-openai-endpoint` | `AZURE_OPENAI_ENDPOINT` | AI operator |
 | `azure-openai-key` | `AZURE_OPENAI_KEY` | AI operator |

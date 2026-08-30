@@ -1,5 +1,11 @@
 # V1 Bounds-Query Design Contract — viewport-rectangle place query (additive to center+radius)
 
+> Historical contract note (2026-08-31): this document records the Kakao-based
+> implementation at the named commit. The current map implementation uses the
+> provider-neutral `LalaMap*` models and `naver-map-embed.html`; see
+> `docs/planning/naver-map-migration-plan.md`. Historical identifiers below are
+> intentionally retained as evidence of the original baseline.
+
 > **Slice within V1 phase PR #133.** This is a foundation design contract on the canonical branch
 > `geondongkim/lala-v1-rc2-rail-reason-freshness` (PR #133; head `36fe924`). It ships as a
 > **doc-only foundation slice** — **no separate branch or PR is created for it.** Binding work is

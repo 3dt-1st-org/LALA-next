@@ -84,13 +84,13 @@ curl -fsS 'https://api.lala-next.cloud/api/v1/places?lat=37.2636&lng=127.0286&ra
 ## Frontend
 
 Use the guarded deploy script for every production frontend deploy. It fails
-before uploading anything if the Kakao Maps JavaScript key is absent or was not
+before uploading anything if the Naver Dynamic Map client id is absent or was not
 compiled into the bundle. This prevents the app from silently switching to the
 map-unavailable fallback.
 
 ```bash
 set -a
-source .env
+source .env.local
 set +a
 scripts/unix/deploy_flutter_web_vercel.sh
 ```
@@ -98,9 +98,10 @@ scripts/unix/deploy_flutter_web_vercel.sh
 Use `scripts/unix/deploy_flutter_web_vercel.sh --dry-run` to build and verify
 the bundle without changing the public deployment.
 
-`KAKAO_JAVASCRIPT_KEY` is necessarily embedded in the browser bundle by Kakao
-Maps' JavaScript SDK design. Treat it as a restricted public client key: do not
-commit it, and allow only the production domains in Kakao Developers.
+`NAVER_MAP_CLIENT_ID` is necessarily embedded in the browser bundle by Naver
+Maps' JavaScript SDK design. Treat it as restricted public build configuration:
+do not commit it, and allow only approved production and development URLs in
+Naver Cloud Platform. Never inject `NAVER_CLIENT_SECRET` into Flutter.
 
 Smoke the frontend:
 
@@ -110,13 +111,12 @@ curl -sS -o /dev/null -w '%{http_code}\n' https://www.lala-next.cloud
 ```
 
 The production Flutter build for the contest window should use the Azure-backed
-API base URL, no bundled API bearer token, the Kakao Maps JavaScript key, the
+API base URL, no bundled API bearer token, the Naver Dynamic Map client id, the
 current commit SHA through `LALA_BUILD_SHA`, and a 3 km current-location
 recommendation radius. Build with `--pwa-strategy=none` so reviewer browsers do
-not keep an older Flutter service-worker bundle after a new release. Kakao
-Developers must allow the deployed web
-domains, including `https://lala-next.cloud`, `https://www.lala-next.cloud`, and
-any Vercel preview domain used for judging.
+not keep an older Flutter service-worker bundle after a new release. Naver Cloud
+Dynamic Map must allow every deployed web origin used for review; do not use a
+preview domain until it has been added to that allowlist.
 
 ## DNS
 
