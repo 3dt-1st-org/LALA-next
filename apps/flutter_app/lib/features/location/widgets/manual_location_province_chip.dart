@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../app/lala_visual_tokens.dart';
+
 /// 수동 지역 선택 시트의 시/도 필터 칩(C3 추출 — main.dart 의 _ManualLocationProvinceChip).
 class ManualLocationProvinceChip extends StatelessWidget {
   const ManualLocationProvinceChip({
@@ -19,17 +21,17 @@ class ManualLocationProvinceChip extends StatelessWidget {
       label: Text(
         label,
         style: TextStyle(
-          color: selected ? Colors.white : const Color(0xFF111827),
+          color: selected ? Colors.white : LalaVisualColors.ink,
           fontWeight: FontWeight.w900,
         ),
       ),
       selected: selected,
       showCheckmark: false,
       onSelected: (_) => onSelected(),
-      selectedColor: const Color(0xFF111827),
-      backgroundColor: Colors.white,
+      selectedColor: LalaVisualColors.primaryBlue,
+      backgroundColor: LalaVisualColors.card,
       side: BorderSide(
-        color: selected ? const Color(0xFF111827) : const Color(0xFFE2E8F0),
+        color: selected ? LalaVisualColors.primaryBlue : LalaVisualColors.line,
       ),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
     );

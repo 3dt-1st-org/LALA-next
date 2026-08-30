@@ -823,6 +823,8 @@ void main() {
       find.byKey(const ValueKey('manual-location-option-seoul-jung')),
     );
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('manual-location-apply')));
+    await tester.pumpAndSettle();
 
     expect(locationProvider.requests, 1);
     expect(backends.length, 3);
@@ -888,6 +890,8 @@ void main() {
       await tester.tap(
         find.byKey(const ValueKey('manual-location-option-busan-gangseo')),
       );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('manual-location-apply')));
       await tester.pumpAndSettle();
 
       expect(backends.length, 3);
@@ -3317,6 +3321,8 @@ void main() {
       await tester.tap(
         find.byKey(const ValueKey('manual-location-option-seoul-jung')),
       );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('manual-location-apply')));
       await tester.pumpAndSettle();
 
       expect(OnboardingState.isCompleted, isTrue);

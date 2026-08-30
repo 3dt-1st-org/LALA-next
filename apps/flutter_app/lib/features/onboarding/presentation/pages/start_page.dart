@@ -131,6 +131,7 @@ class _OnboardingStartPageState extends State<OnboardingStartPage> {
             _TravelTypeRow(
               key: const ValueKey('onboarding-travel-domestic'),
               icon: Icons.cottage_rounded,
+              accentColor: LalaVisualColors.primaryBlue,
               label: lalaCopyMulti(
                 language,
                 ko: '국내 여행',
@@ -146,6 +147,7 @@ class _OnboardingStartPageState extends State<OnboardingStartPage> {
             _TravelTypeRow(
               key: const ValueKey('onboarding-travel-overseas'),
               icon: Icons.flight_takeoff_rounded,
+              accentColor: LalaVisualColors.attraction,
               label: lalaCopyMulti(
                 language,
                 ko: '해외 방문',
@@ -180,6 +182,7 @@ class _OnboardingStartPageState extends State<OnboardingStartPage> {
 class _TravelTypeRow extends StatelessWidget {
   const _TravelTypeRow({
     required this.icon,
+    required this.accentColor,
     required this.label,
     required this.selected,
     required this.onTap,
@@ -187,6 +190,7 @@ class _TravelTypeRow extends StatelessWidget {
   });
 
   final IconData icon;
+  final Color accentColor;
   final String label;
   final bool selected;
   final VoidCallback onTap;
@@ -221,7 +225,19 @@ class _TravelTypeRow extends StatelessWidget {
             ),
             child: Row(
               children: <Widget>[
-                Icon(icon, color: LalaVisualColors.primaryBlue, size: 24),
+                Container(
+                  key: const ValueKey('onboarding-travel-icon-surface'),
+                  width: 44,
+                  height: 44,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: accentColor.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(
+                      LalaVisualTokens.controlRadius,
+                    ),
+                  ),
+                  child: Icon(icon, color: accentColor, size: 24),
+                ),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Text(
@@ -275,11 +291,9 @@ class _OnboardingPrimaryAction extends StatelessWidget {
         style: FilledButton.styleFrom(
           minimumSize: const Size.fromHeight(LalaVisualTokens.actionHeight),
           backgroundColor: LalaVisualColors.primaryBlue,
-          disabledBackgroundColor: LalaVisualColors.primaryBlue.withValues(
-            alpha: 0.32,
-          ),
+          disabledBackgroundColor: LalaVisualColors.disabledFill,
           foregroundColor: LalaVisualColors.card,
-          disabledForegroundColor: LalaVisualColors.card,
+          disabledForegroundColor: LalaVisualColors.disabledInk,
           textStyle: TextStyle(
             fontSize: LalaVisualTokens.controlLabelSize,
             height:

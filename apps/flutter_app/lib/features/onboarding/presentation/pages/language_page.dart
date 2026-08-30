@@ -181,9 +181,7 @@ class _LanguageRow extends StatelessWidget {
       selected: selected,
       label: label,
       child: Material(
-        color: selected
-            ? LalaVisualColors.primaryBlue.withValues(alpha: 0.06)
-            : LalaVisualColors.card,
+        color: selected ? LalaVisualColors.primarySoft : LalaVisualColors.card,
         borderRadius: BorderRadius.circular(LalaVisualTokens.controlRadius),
         child: InkWell(
           onTap: onTap,
@@ -199,7 +197,7 @@ class _LanguageRow extends StatelessWidget {
                 color: selected
                     ? LalaVisualColors.primaryBlue
                     : LalaVisualColors.line,
-                width: 1,
+                width: selected ? 1.5 : 1,
               ),
             ),
             child: Row(
@@ -249,7 +247,9 @@ class _LanguageBadge extends StatelessWidget {
       height: 32,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: selected ? LalaVisualColors.primaryBlue : LalaVisualColors.line,
+        color: selected
+            ? LalaVisualColors.primaryBlue
+            : LalaVisualColors.primarySoft,
         borderRadius: BorderRadius.circular(LalaVisualTokens.controlRadius),
       ),
       child: Text(
@@ -257,7 +257,9 @@ class _LanguageBadge extends StatelessWidget {
         style: TextStyle(
           fontSize: 13,
           fontWeight: FontWeight.w800,
-          color: selected ? LalaVisualColors.card : LalaVisualColors.ink,
+          color: selected
+              ? LalaVisualColors.card
+              : LalaVisualColors.primaryBlue,
           // 토큰 계약(00-ground-truth §4): letter spacing 은 0.
           letterSpacing: 0,
         ),
