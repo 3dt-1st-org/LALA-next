@@ -341,7 +341,13 @@ class _SearchPageState extends State<SearchPage> {
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => ManualLocationSheet(language: _language),
+      builder: (_) => ManualLocationSheet(
+        language: _language,
+        activeRegionId: _region?.source == RegionSource.manual
+            ? _region?.regionId
+            : null,
+        activeRegionLabel: _regionLabel,
+      ),
     );
     if (selected != null && mounted) {
       await RegionContextStore.setAndFlush(RegionContext.manual(selected));
@@ -366,7 +372,7 @@ class _SearchPageState extends State<SearchPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: LalaVisualColors.surface,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -499,9 +505,9 @@ class _SearchRegionContextRow extends StatelessWidget {
           style: OutlinedButton.styleFrom(
             minimumSize: const Size.fromHeight(48),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            foregroundColor: const Color(0xFF334155),
+            foregroundColor: LalaVisualColors.ink,
             backgroundColor: LalaVisualColors.card,
-            side: const BorderSide(color: Color(0xFFE2E8F0)),
+            side: const BorderSide(color: LalaVisualColors.line),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(
                 LalaVisualTokens.controlRadius,
@@ -540,7 +546,7 @@ class _SearchRegionContextRow extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        color: Color(0xFF0F172A),
+                        color: LalaVisualColors.ink,
                         fontSize: 14,
                         height: 1.2,
                         fontWeight: FontWeight.w800,
@@ -580,11 +586,18 @@ class _SearchDatasetMetaText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      label,
-      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-        color: LalaVisualColors.muted,
-        fontWeight: FontWeight.w600,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      decoration: BoxDecoration(
+        color: LalaVisualColors.primarySoft,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: LalaVisualColors.primaryPressed,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
@@ -635,10 +648,10 @@ class _SearchHeader extends StatelessWidget {
               zhHans: '搜索地点或地区',
               zhHant: '搜尋地點或地區',
             ),
-            hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
+            hintStyle: const TextStyle(color: LalaVisualColors.muted),
             prefixIcon: const Icon(
               Icons.search_rounded,
-              color: LalaVisualColors.muted,
+              color: LalaVisualColors.primaryBlue,
             ),
             suffixIcon: IconButton(
               tooltip: lalaCopyMulti(
@@ -652,7 +665,7 @@ class _SearchHeader extends StatelessWidget {
               onPressed: onResetFilters,
               icon: const Icon(
                 Icons.filter_list_rounded,
-                color: LalaVisualColors.muted,
+                color: LalaVisualColors.primaryBlue,
               ),
             ),
             filled: true,
@@ -666,7 +679,7 @@ class _SearchHeader extends StatelessWidget {
               borderRadius: BorderRadius.circular(
                 LalaVisualTokens.controlRadius,
               ),
-              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+              borderSide: const BorderSide(color: LalaVisualColors.line),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(
@@ -710,6 +723,12 @@ class _CategoryChipBar extends StatelessWidget {
         itemBuilder: (context, index) {
           final category = categories[index];
           final isSelected = category == selected;
+          final accent = category == 'all'
+              ? LalaVisualColors.primaryBlue
+              : categoryColor(category);
+          final selectedTextColor = category == 'restaurant'
+              ? LalaVisualColors.restaurantInk
+              : Colors.white;
           // 접근성(§13.5): 칩 터치 타겟이 44dp 이상이 되도록 padding 으로 채운다.
           // (compact label 사이즈 자체는 유지하되 hit 영역만 44dp 확보.)
           return Center(
@@ -719,21 +738,21 @@ class _CategoryChipBar extends StatelessWidget {
                 label: Text(
                   categoryFilterLabel(category, language),
                   style: TextStyle(
-                    color: isSelected ? Colors.white : const Color(0xFF334155),
+                    color: isSelected
+                        ? selectedTextColor
+                        : LalaVisualColors.ink,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
                 selected: isSelected,
                 onSelected: (_) => onSelect(category),
-                selectedColor: const Color(0xFF2B6CB0),
+                selectedColor: accent,
                 backgroundColor: Colors.white,
-                checkmarkColor: Colors.white,
+                checkmarkColor: selectedTextColor,
                 showCheckmark: false,
                 materialTapTargetSize: MaterialTapTargetSize.padded,
                 side: BorderSide(
-                  color: isSelected
-                      ? const Color(0xFF2B6CB0)
-                      : const Color(0xFFE2E8F0),
+                  color: isSelected ? accent : LalaVisualColors.line,
                 ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(999),
@@ -1084,6 +1103,8 @@ class _SearchPlaceTile extends StatelessWidget {
     // S2 계약: source/dataset data_as_of 가 없으면 source/freshness 칩을 숨긴다.
     final sourceChip = sourceLabel(datasetSource, language: language);
     final freshnessChip = datasetFreshnessLabel(datasetDataAsOf, language);
+    final reason = placeReasonText(place);
+    final accent = categoryColor(place.category);
     return Material(
       color: LalaVisualColors.card,
       borderRadius: BorderRadius.circular(LalaVisualTokens.controlRadius),
@@ -1107,12 +1128,12 @@ class _SearchPlaceTile extends StatelessWidget {
               borderRadius: BorderRadius.circular(
                 LalaVisualTokens.controlRadius,
               ),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
+              border: Border.all(color: accent.withValues(alpha: 0.28)),
               boxShadow: const [
                 BoxShadow(
-                  blurRadius: 14,
-                  offset: Offset(0, 6),
-                  color: Color(0x10000000),
+                  blurRadius: 16,
+                  offset: Offset(0, 5),
+                  color: Color(0x0F27466B),
                 ),
               ],
             ),
@@ -1127,18 +1148,72 @@ class _SearchPlaceTile extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        name,
-                        key: ValueKey('search-place-name-${place.placeId}'),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(
-                              fontWeight: FontWeight.w900,
-                              height: 1.14,
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              name,
+                              key: ValueKey(
+                                'search-place-name-${place.placeId}',
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(
+                                    color: LalaVisualColors.ink,
+                                    fontWeight: FontWeight.w900,
+                                    height: 1.14,
+                                  ),
                             ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            size: 20,
+                            color: LalaVisualColors.muted,
+                          ),
+                        ],
                       ),
-                      PlaceReasonLine(place: place, topSpacing: 6),
+                      if (reason != null) ...[
+                        const SizedBox(height: 6),
+                        Container(
+                          key: ValueKey('search-place-reason-${place.placeId}'),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: accent.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(
+                              LalaVisualTokens.controlRadius,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.auto_awesome_rounded,
+                                size: 13,
+                                color: accent,
+                              ),
+                              const SizedBox(width: 5),
+                              Expanded(
+                                child: Text(
+                                  reason,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        color: LalaVisualColors.ink,
+                                        fontWeight: FontWeight.w700,
+                                        height: 1.2,
+                                      ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 8),
                       Row(
                         children: [
@@ -1160,7 +1235,7 @@ class _SearchPlaceTile extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: Theme.of(context).textTheme.bodySmall
                                   ?.copyWith(
-                                    color: const Color(0xFF475569),
+                                    color: LalaVisualColors.muted,
                                     fontWeight: FontWeight.w700,
                                   ),
                             ),
@@ -1228,9 +1303,11 @@ class _SearchPlaceMediaFrame extends StatelessWidget {
       height: 88,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: LalaVisualColors.surface,
+        color: categoryColor(place.category).withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(LalaVisualTokens.controlRadius),
-        border: Border.all(color: LalaVisualColors.line),
+        border: Border.all(
+          color: categoryColor(place.category).withValues(alpha: 0.24),
+        ),
       ),
       child: hasImage
           ? PlaceImage(place: place, width: 96, height: 88)

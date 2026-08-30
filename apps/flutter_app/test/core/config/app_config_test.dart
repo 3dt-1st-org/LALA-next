@@ -23,28 +23,25 @@ void main() {
       );
     });
 
-    // KAKAO_JAVASCRIPT_KEY has no static default, so an iOS build that forgets
+    // NAVER_MAP_CLIENT_ID has no static default, so an iOS build that forgets
     // the dart-define silently leaves the key empty and the map degrades to the
-    // decorative fallback with no build-time signal. This compiled assertion
-    // proves the dart-define flows into config.kakaoJavascriptKey; the
+    // honest unavailable state with no build-time signal. This compiled assertion
+    // proves the dart-define flows into config.naverMapClientId; the
     // verification script also compiles the default (no-define → empty) case.
-    test(
-      'kakaoJavascriptKey equals the dart-define compiled into the test',
-      () {
-        final config = const LalaAppConfig.fromEnvironment();
-        const String expectedKey = String.fromEnvironment(
-          'TEST_EXPECTED_KAKAO_JAVASCRIPT_KEY',
-          defaultValue: '',
-        );
-        expect(
-          config.kakaoJavascriptKey,
-          expectedKey,
-          reason:
-              'config.kakaoJavascriptKey must equal the KAKAO_JAVASCRIPT_KEY '
-              'dart-define compiled into this test',
-        );
-      },
-    );
+    test('naverMapClientId equals the dart-define compiled into the test', () {
+      final config = const LalaAppConfig.fromEnvironment();
+      const String expectedKey = String.fromEnvironment(
+        'TEST_EXPECTED_NAVER_MAP_CLIENT_ID',
+        defaultValue: '',
+      );
+      expect(
+        config.naverMapClientId,
+        expectedKey,
+        reason:
+            'config.naverMapClientId must equal the NAVER_MAP_CLIENT_ID '
+            'dart-define compiled into this test',
+      );
+    });
   });
 
   // The defaults below are not wired to LALA_API_BASE_URL, so they hold under
@@ -62,7 +59,7 @@ void main() {
     });
 
     // bearerToken and apiKey are real secrets with no dart-define wiring, so they
-    // stay empty under every compilation. kakaoJavascriptKey is also empty by
+    // stay empty under every compilation. naverMapClientId is also empty by
     // default but IS dart-define-wired; its empty-vs-overridden boundary is
     // proven by the compiled test above, so it is not re-asserted here (the
     // override compilation deliberately sets it to a non-empty placeholder).

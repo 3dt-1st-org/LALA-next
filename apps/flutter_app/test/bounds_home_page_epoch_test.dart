@@ -21,7 +21,7 @@ import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
 import 'package:lala_next_app/features/home/home_page.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
-import 'package:lala_next_app/kakao_map_models.dart';
+import 'package:lala_next_app/lala_map_models.dart';
 
 LalaEnvelope<T> _envelope<T>(T data) => LalaEnvelope<T>(
   ok: true,
@@ -329,11 +329,11 @@ void main() {
       );
       LalaHomePage.simulateCameraIdleForTesting(
         context,
-        const KakaoMapCamera(
+        const LalaMapCamera(
           lat: 37.28,
           lng: 127.01,
           level: 4,
-          bounds: KakaoMapBounds(
+          bounds: LalaMapBounds(
             swLat: 37.0,
             swLng: 126.0,
             neLat: 38.0,

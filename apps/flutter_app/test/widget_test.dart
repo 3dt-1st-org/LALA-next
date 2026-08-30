@@ -16,8 +16,8 @@ import 'package:lala_next_app/features/map/widgets/top_map_chrome.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/features/plan/presentation/pages/plan_page.dart';
 import 'package:lala_next_app/features/search/presentation/pages/search_page.dart';
-import 'package:lala_next_app/kakao_map_fallback.dart';
-import 'package:lala_next_app/kakao_map_models.dart';
+import 'package:lala_next_app/lala_map_fallback.dart';
+import 'package:lala_next_app/lala_map_models.dart';
 import 'package:lala_next_app/main.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
@@ -219,27 +219,27 @@ void main() {
         home: SizedBox(
           width: 390,
           height: 640,
-          child: KakaoMapFallbackView(
+          child: LalaMapFallbackView(
             message: '현재 지도를 표시할 수 없습니다.',
             language: 'ko',
             centerLat: 37.2636,
             centerLng: 127.0286,
-            places: <KakaoMapPlace>[],
+            places: <LalaMapPlace>[],
           ),
         ),
       ),
     );
 
     expect(
-      find.byKey(const ValueKey('kakao-map-marker-fallback-center')),
+      find.byKey(const ValueKey('lala-map-marker-fallback-center')),
       findsNothing,
     );
     expect(
-      find.byKey(const ValueKey('kakao-map-marker-fallback-food')),
+      find.byKey(const ValueKey('lala-map-marker-fallback-food')),
       findsNothing,
     );
     expect(
-      find.byKey(const ValueKey('kakao-map-marker-fallback-culture')),
+      find.byKey(const ValueKey('lala-map-marker-fallback-culture')),
       findsNothing,
     );
     expect(find.text('로컬 맛집'), findsNothing);
@@ -253,13 +253,13 @@ void main() {
         home: SizedBox(
           width: 390,
           height: 640,
-          child: KakaoMapFallbackView(
+          child: LalaMapFallbackView(
             message: '현재 지도를 표시할 수 없습니다.',
             language: 'ko',
             centerLat: 37.2636,
             centerLng: 127.0286,
-            places: <KakaoMapPlace>[
-              KakaoMapPlace(
+            places: <LalaMapPlace>[
+              LalaMapPlace(
                 id: 'official-place',
                 name: '공식 장소',
                 category: 'attraction',
@@ -274,11 +274,11 @@ void main() {
     );
 
     expect(
-      find.byKey(const ValueKey('kakao-map-marker-official-place')),
+      find.byKey(const ValueKey('lala-map-marker-official-place')),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('kakao-map-marker-fallback-food')),
+      find.byKey(const ValueKey('lala-map-marker-fallback-food')),
       findsNothing,
     );
     expect(find.text('공식 장소'), findsOneWidget);
@@ -823,6 +823,8 @@ void main() {
       find.byKey(const ValueKey('manual-location-option-seoul-jung')),
     );
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('manual-location-apply')));
+    await tester.pumpAndSettle();
 
     expect(locationProvider.requests, 1);
     expect(backends.length, 3);
@@ -888,6 +890,8 @@ void main() {
       await tester.tap(
         find.byKey(const ValueKey('manual-location-option-busan-gangseo')),
       );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('manual-location-apply')));
       await tester.pumpAndSettle();
 
       expect(backends.length, 3);
@@ -1345,7 +1349,7 @@ void main() {
 
     expect(find.text('장소 상세'), findsNothing);
     expect(
-      find.byKey(const ValueKey('kakao-map-fallback-center-37.2828-127.0101')),
+      find.byKey(const ValueKey('lala-map-fallback-center-37.2828-127.0101')),
       findsOneWidget,
     );
     expect(find.text('로컬 맥락'), findsNothing);
@@ -1384,12 +1388,12 @@ void main() {
 
     expect(find.text('장소 상세'), findsNothing);
     expect(
-      find.byKey(const ValueKey('kakao-map-fallback-center-37.2636-127.0286')),
+      find.byKey(const ValueKey('lala-map-fallback-center-37.2636-127.0286')),
       findsOneWidget,
     );
     expect(
       find.descendant(
-        of: find.byKey(const ValueKey('kakao-map-marker-hwaseong-haenggung')),
+        of: find.byKey(const ValueKey('lala-map-marker-hwaseong-haenggung')),
         matching: find.byIcon(Icons.account_balance),
       ),
       findsOneWidget,
@@ -1433,7 +1437,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('auto-docent-toggle')));
     await tester.pumpAndSettle();
     expect(
-      find.byKey(const ValueKey('kakao-map-fallback-center-37.2828-127.0101')),
+      find.byKey(const ValueKey('lala-map-fallback-center-37.2828-127.0101')),
       findsNothing,
     );
     expect(find.text('장소 상세'), findsNothing);
@@ -1444,7 +1448,7 @@ void main() {
     expect(backendCreations, 3);
     expect(find.text('장소 상세'), findsNothing);
     expect(
-      find.byKey(const ValueKey('kakao-map-fallback-center-37.2828-127.0101')),
+      find.byKey(const ValueKey('lala-map-fallback-center-37.2828-127.0101')),
       findsOneWidget,
     );
   });
@@ -1481,7 +1485,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('auto-docent-toggle')));
     await tester.pumpAndSettle();
     expect(
-      find.byKey(const ValueKey('kakao-map-fallback-center-37.2828-127.0101')),
+      find.byKey(const ValueKey('lala-map-fallback-center-37.2828-127.0101')),
       findsOneWidget,
     );
 
@@ -1490,11 +1494,11 @@ void main() {
 
     expect(backendCreations, 3);
     expect(
-      find.byKey(const ValueKey('kakao-map-fallback-center-37.2828-127.0101')),
+      find.byKey(const ValueKey('lala-map-fallback-center-37.2828-127.0101')),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('kakao-map-fallback-center-37.2870-127.0110')),
+      find.byKey(const ValueKey('lala-map-fallback-center-37.2870-127.0110')),
       findsNothing,
     );
   });
@@ -1550,7 +1554,7 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('kakao-map-fallback-center-37.2636-127.0286')),
+      find.byKey(const ValueKey('lala-map-fallback-center-37.2636-127.0286')),
       findsOneWidget,
     );
 
@@ -1576,7 +1580,7 @@ void main() {
 
     expect(find.text('장소 상세'), findsOneWidget);
     expect(
-      find.byKey(const ValueKey('kakao-map-fallback-center-37.2870-127.0110')),
+      find.byKey(const ValueKey('lala-map-fallback-center-37.2870-127.0110')),
       findsOneWidget,
     );
     expect(
@@ -1621,20 +1625,20 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.byKey(const ValueKey('kakao-map-marker-cluster-food-a')),
+        find.byKey(const ValueKey('lala-map-marker-cluster-food-a')),
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey('kakao-map-marker-cluster-food-b')),
+        find.byKey(const ValueKey('lala-map-marker-cluster-food-b')),
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey('kakao-map-marker-cluster-food-c')),
+        find.byKey(const ValueKey('lala-map-marker-cluster-food-c')),
         findsOneWidget,
       );
       expect(
         find.byKey(
-          const ValueKey('kakao-map-marker-cluster-restaurant:6710:22862'),
+          const ValueKey('lala-map-marker-cluster-restaurant:6710:22862'),
         ),
         findsNothing,
       );
@@ -1903,7 +1907,7 @@ void main() {
     expect(find.text('개발 연결'), findsNothing);
     expect(find.text('기본 주소'), findsNothing);
     expect(find.text('마이그레이션 키'), findsNothing);
-    expect(find.text('카카오 지도 키'), findsNothing);
+    expect(find.text('네이버 지도 키'), findsNothing);
 
     await tester.tap(find.text('자세히 보기'));
     await tester.pumpAndSettle();
@@ -3317,6 +3321,8 @@ void main() {
       await tester.tap(
         find.byKey(const ValueKey('manual-location-option-seoul-jung')),
       );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('manual-location-apply')));
       await tester.pumpAndSettle();
 
       expect(OnboardingState.isCompleted, isTrue);

@@ -423,7 +423,7 @@ void main() {
         expect(
           find.byKey(
             ValueKey(
-              'kakao-map-fallback-center-'
+              'lala-map-fallback-center-'
               '${manualRegion.lat.toStringAsFixed(4)}-'
               '${manualRegion.lng.toStringAsFixed(4)}',
             ),
@@ -433,7 +433,7 @@ void main() {
         expect(
           find.byKey(
             ValueKey(
-              'kakao-map-fallback-center-'
+              'lala-map-fallback-center-'
               '${initialConfig.lat.toStringAsFixed(4)}-'
               '${initialConfig.lng.toStringAsFixed(4)}',
             ),

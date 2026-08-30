@@ -32,11 +32,11 @@ void main() {
     test(
       'categoryColorHex() matches the token hex (JS marker path drift guard)',
       () {
-        expect(categoryColorHex('attraction'), '#C53030');
-        expect(categoryColorHex('restaurant'), '#F5C842');
-        expect(categoryColorHex('event'), '#2B6CB0');
-        expect(categoryColorHex('culture_venue'), '#0F766E');
-        expect(categoryColorHex('unknown'), '#1A202C');
+        expect(categoryColorHex('attraction'), '#D93C56');
+        expect(categoryColorHex('restaurant'), '#F4B740');
+        expect(categoryColorHex('event'), '#1769CF');
+        expect(categoryColorHex('culture_venue'), '#0B8478');
+        expect(categoryColorHex('unknown'), '#162033');
       },
     );
 

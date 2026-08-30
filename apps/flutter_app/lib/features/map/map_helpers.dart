@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
-import '../../kakao_map_view.dart';
+import '../../lala_map_view.dart';
 import '../../shared/l10n/lala_copy.dart';
 import '../../shared/l10n/place_labels.dart';
 
@@ -53,14 +53,14 @@ int _selectedPlaceSortValue(String placeId, String? selectedId) {
 /// 지도 마커 클러스터링(C3 추출 — main.dart 의 clusterMapPlacesForMap).
 /// LegacyMapCanvas(프로덕션)이 사용하므로 map feature 공개 API.
 /// test/widget_test.dart 는 main.dart re-export 로 그대로 접근.
-List<KakaoMapPlace> clusterMapPlacesForMap({
+List<LalaMapPlace> clusterMapPlacesForMap({
   required List<LalaPlace> places,
   required LalaPlace? selected,
   required int mapLevel,
   required String language,
 }) {
   final selectedId = selected?.placeId;
-  final selectedMarkers = <KakaoMapPlace>[];
+  final selectedMarkers = <LalaMapPlace>[];
   final buckets = <String, List<LalaPlace>>{};
   // The places endpoint is capped at 60. A prior count gate of 80 was therefore
   // unreachable in production, leaving a full response as dozens of overlapping
@@ -92,8 +92,8 @@ List<KakaoMapPlace> clusterMapPlacesForMap({
       ).compareTo(placeDisplayName(b, language));
     });
 
-  KakaoMapPlace toMapPlace(LalaPlace place, {bool selected = false}) {
-    return KakaoMapPlace(
+  LalaMapPlace toMapPlace(LalaPlace place, {bool selected = false}) {
+    return LalaMapPlace(
       id: place.placeId,
       name: placeDisplayName(place, language),
       category: place.category,
@@ -147,7 +147,7 @@ List<KakaoMapPlace> clusterMapPlacesForMap({
     buckets.putIfAbsent(key, () => <LalaPlace>[]).add(place);
   }
 
-  final clustered = <KakaoMapPlace>[];
+  final clustered = <LalaMapPlace>[];
   for (final entry in buckets.entries) {
     final group = entry.value;
     if (group.length >= 2) {
@@ -169,7 +169,7 @@ List<KakaoMapPlace> clusterMapPlacesForMap({
           return countCompare != 0 ? countCompare : a.compareTo(b);
         });
       clustered.add(
-        KakaoMapPlace(
+        LalaMapPlace(
           id: 'cluster-${entry.key}',
           name: lalaCopy(
             language,

@@ -318,6 +318,11 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      // 행 탭은 pending만 바꾸고, 명시 CTA를 눌러야 실제 context가 바뀐다.
+      expect(RegionContextStore.current, isNull);
+      await tester.tap(find.byKey(const ValueKey('manual-location-apply')));
+      await tester.pumpAndSettle();
+
       // 거부와 무관하게 수동 선택이 store 에 확정되고 region 행에 반영된다.
       expect(RegionContextStore.current?.regionId, 'sejong-sejong');
       expect(find.text('세종특별자치시'), findsOneWidget);

@@ -202,9 +202,9 @@ try {
         if ($StartApi) {
             $buildArgs += @("--dart-define", "LALA_IOS_API_KEY=$SmokeApiKey")
         }
-        $KakaoJavascriptKey = [Environment]::GetEnvironmentVariable("KAKAO_JAVASCRIPT_KEY", "Process")
-        if ($KakaoJavascriptKey) {
-            $buildArgs += @("--dart-define", "KAKAO_JAVASCRIPT_KEY=$KakaoJavascriptKey")
+        $NaverMapClientId = [Environment]::GetEnvironmentVariable("NAVER_MAP_CLIENT_ID", "Process")
+        if ($NaverMapClientId) {
+            $buildArgs += @("--dart-define", "NAVER_MAP_CLIENT_ID=$NaverMapClientId")
         }
         Push-Location $AppDir
         try {

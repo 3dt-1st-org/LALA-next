@@ -2,7 +2,7 @@
 // LalaAppConfig.bounds: copyWith carries bounds; null preserves prior bounds.
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
-import 'package:lala_next_app/kakao_map_models.dart';
+import 'package:lala_next_app/lala_map_models.dart';
 
 LalaAppConfig _base() => const LalaAppConfig(baseUri: 'https://example.test');
 
@@ -13,7 +13,7 @@ void main() {
     });
 
     test('copyWith(bounds:...) carries the viewport rectangle', () {
-      const bounds = KakaoMapBounds(
+      const bounds = LalaMapBounds(
         swLat: 37.0,
         swLng: 126.0,
         neLat: 38.0,
@@ -24,7 +24,7 @@ void main() {
     });
 
     test('copyWith(bounds:null) preserves the prior bounds', () {
-      const bounds = KakaoMapBounds(
+      const bounds = LalaMapBounds(
         swLat: 37.0,
         swLng: 126.0,
         neLat: 38.0,
@@ -37,7 +37,7 @@ void main() {
     });
 
     test('copyWith(other fields) does not disturb bounds', () {
-      const bounds = KakaoMapBounds(
+      const bounds = LalaMapBounds(
         swLat: 37.0,
         swLng: 126.0,
         neLat: 38.0,

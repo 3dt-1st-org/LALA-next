@@ -240,7 +240,7 @@ load_lala_key_vault_secrets() {
   set_secret_env_if_missing "$vault_name" "OAUTH_CLIENT_ID" "oauth-client-id"
   set_secret_env_if_missing "$vault_name" "OAUTH_REQUIRED_SCOPES" "oauth-required-scopes"
   set_secret_env_if_missing "$vault_name" "KAKAO_REST_API_KEY" "kakao-rest-api-key"
-  set_secret_env_if_missing "$vault_name" "KAKAO_JAVASCRIPT_KEY" "kakao-javascript-key"
+  set_secret_env_if_missing "$vault_name" "NAVER_MAP_CLIENT_ID" "naver-map-client-id"
   set_secret_env_if_missing "$vault_name" "KAKAO_REDIRECT_URI" "kakao-redirect-uri"
   set_secret_env_if_missing "$vault_name" "NAVER_CLIENT_ID" "naver-client-id"
   set_secret_env_if_missing "$vault_name" "NAVER_CLIENT_SECRET" "naver-client-secret"

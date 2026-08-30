@@ -181,7 +181,7 @@ flutter build web --release \
   --dart-define LOGTO_API_AUDIENCE=<A1> \
   --dart-define LOGTO_NATIVE_APP_ID=<A2> \
   --dart-define LOGTO_WEB_APP_ID=<A3> \
-  --dart-define KAKAO_JAVASCRIPT_KEY=<kakao_js_key>
+  --dart-define NAVER_MAP_CLIENT_ID=<naver_dynamic_map_client_id>
 # Vercel prod 배포
 vercel deploy --prod
 ```

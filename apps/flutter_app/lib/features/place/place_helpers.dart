@@ -120,7 +120,7 @@ String railCategoryLabel(LalaPlace place, String language) {
 }
 
 /// 카테고리 색상(P6A §2.3 단일 SSOT — 칩·카드·마커가 동일 토큰 사용).
-/// 기존 Color(0xFF...) 리터럴을 LalaVisualColors 토큰으로 일원화; 값은 동일.
+/// 칩·카드·마커가 밝고 일관된 카테고리 의미색을 공유한다.
 Color categoryColor(String category) {
   return switch (category) {
     'attraction' => LalaVisualColors.attraction,

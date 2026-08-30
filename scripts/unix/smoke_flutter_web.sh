@@ -260,8 +260,8 @@ else
   if [[ "$START_API" == "true" ]]; then
     FLUTTER_BUILD_ARGS+=(--dart-define "LALA_IOS_API_KEY=$SMOKE_API_KEY")
   fi
-  if [[ -n "${KAKAO_JAVASCRIPT_KEY:-}" ]]; then
-    FLUTTER_BUILD_ARGS+=(--dart-define "KAKAO_JAVASCRIPT_KEY=$KAKAO_JAVASCRIPT_KEY")
+  if [[ -n "${NAVER_MAP_CLIENT_ID:-}" ]]; then
+    FLUTTER_BUILD_ARGS+=(--dart-define "NAVER_MAP_CLIENT_ID=$NAVER_MAP_CLIENT_ID")
   fi
   (cd "$APP_DIR" && flutter "${FLUTTER_BUILD_ARGS[@]}")
 

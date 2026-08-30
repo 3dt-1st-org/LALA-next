@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 
 import 'features/place/place_helpers.dart';
-import 'kakao_map_models.dart';
+import 'lala_map_models.dart';
 
-class KakaoMapFallbackView extends StatelessWidget {
-  const KakaoMapFallbackView({
+class LalaMapFallbackView extends StatelessWidget {
+  const LalaMapFallbackView({
     super.key,
     required this.message,
     required this.language,
@@ -20,7 +20,7 @@ class KakaoMapFallbackView extends StatelessWidget {
   final String language;
   final double centerLat;
   final double centerLng;
-  final List<KakaoMapPlace> places;
+  final List<LalaMapPlace> places;
   final ValueChanged<String>? onPlaceTap;
 
   @override
@@ -28,7 +28,7 @@ class KakaoMapFallbackView extends StatelessWidget {
     final visiblePlaces = places.take(40).toList(growable: false);
     return ColoredBox(
       key: ValueKey(
-        'kakao-map-fallback-center-${centerLat.toStringAsFixed(4)}-${centerLng.toStringAsFixed(4)}',
+        'lala-map-fallback-center-${centerLat.toStringAsFixed(4)}-${centerLng.toStringAsFixed(4)}',
       ),
       color: const Color(0xFFEAF2FB),
       child: Stack(
@@ -97,7 +97,7 @@ class _FallbackMarker extends StatelessWidget {
     required this.onTap,
   });
 
-  final KakaoMapPlace place;
+  final LalaMapPlace place;
   final String language;
   final ({double x, double y}) position;
   final VoidCallback? onTap;
@@ -237,7 +237,7 @@ class _FallbackMarker extends StatelessWidget {
                     : '${place.clusterCount} places')
               : place.name,
           child: GestureDetector(
-            key: ValueKey('kakao-map-marker-${place.id}'),
+            key: ValueKey('lala-map-marker-${place.id}'),
             onTap: onTap,
             child: marker,
           ),

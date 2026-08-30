@@ -1,6 +1,6 @@
 #!/bin/bash
 # True compiled dart-define verification for LALA_API_BASE_URL and
-# KAKAO_JAVASCRIPT_KEY.
+# NAVER_MAP_CLIENT_ID.
 #
 # String.fromEnvironment is resolved at compile time, so override behavior can
 # only be proven by compiling the test binary with the dart-define baked in.
@@ -9,8 +9,8 @@
 #   1. Default       — no dart-define (static public fallback / empty key).
 #   2. API override  — explicit LALA_API_BASE_URL, with a matching
 #                      TEST_EXPECTED_API_BASE_URL the compiled test asserts.
-#   3. Key override  — explicit KAKAO_JAVASCRIPT_KEY (non-secret placeholder),
-#                      with a matching TEST_EXPECTED_KAKAO_JAVASCRIPT_KEY.
+#   3. Key override  — explicit NAVER_MAP_CLIENT_ID (non-secret placeholder),
+#                      with a matching TEST_EXPECTED_NAVER_MAP_CLIENT_ID.
 #
 # All cases use the same data-driven tests; only the compile-time constants
 # differ. No secrets, tokens, or cloud identifiers are used — only a public
@@ -55,16 +55,16 @@ run_case "explicit local override (loopback)" \
   --dart-define "LALA_API_BASE_URL=http://127.0.0.1:8080" \
   --dart-define "TEST_EXPECTED_API_BASE_URL=http://127.0.0.1:8080"
 
-# Case 3: Explicit KAKAO_JAVASCRIPT_KEY override. This boundary has no static
+# Case 3: Explicit NAVER_MAP_CLIENT_ID override. This boundary has no static
 # default, so a build that omits the dart-define silently disables the Kakao
 # map (the original runtime-recovery symptom). An obvious non-secret placeholder
-# is baked into both KAKAO_JAVASCRIPT_KEY and TEST_EXPECTED_KAKAO_JAVASCRIPT_KEY
+# is baked into both NAVER_MAP_CLIENT_ID and TEST_EXPECTED_NAVER_MAP_CLIENT_ID
 # so the compiled test proves the dart-define flowed into
-# config.kakaoJavascriptKey. No real key is ever used.
+# config.naverMapClientId. No real key is ever used.
 _LALA_PLACEHOLDER_KEY="nonsecret-mapkey-placeholder-000000" # pragma: allowlist secret
-run_case "explicit kakao key override (non-secret placeholder)" \
-  --dart-define "KAKAO_JAVASCRIPT_KEY=${_LALA_PLACEHOLDER_KEY}" \
-  --dart-define "TEST_EXPECTED_KAKAO_JAVASCRIPT_KEY=${_LALA_PLACEHOLDER_KEY}"
+run_case "explicit naver client id override (non-secret placeholder)" \
+  --dart-define "NAVER_MAP_CLIENT_ID=${_LALA_PLACEHOLDER_KEY}" \
+  --dart-define "TEST_EXPECTED_NAVER_MAP_CLIENT_ID=${_LALA_PLACEHOLDER_KEY}"
 
 echo ""
 echo "Results: ${PASS_COUNT} passed, ${FAIL_COUNT} failed"

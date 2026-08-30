@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Build and deploy the public Flutter bundle. The Kakao JavaScript key is a
+# Build and deploy the public Flutter bundle. The Naver Dynamic Map client id is a
 # build-time public browser credential, but it must still be supplied so the
 # map bridge cannot silently fall back to its unavailable state.
 set -euo pipefail
@@ -21,8 +21,8 @@ case "${1:-}" in
     ;;
 esac
 
-if [[ -z "${KAKAO_JAVASCRIPT_KEY:-}" ]]; then
-  echo "KAKAO_JAVASCRIPT_KEY is required for a production Flutter web build." >&2
+if [[ -z "${NAVER_MAP_CLIENT_ID:-}" ]]; then
+  echo "NAVER_MAP_CLIENT_ID is required for a production Flutter web build." >&2
   echo "Load it from the approved local secret source, then rerun this command." >&2
   exit 2
 fi
@@ -55,13 +55,13 @@ fi
     --pwa-strategy=none \
     --dart-define="LALA_API_BASE_URL=$API_BASE_URL" \
     --dart-define="LALA_BUILD_SHA=$BUILD_SHA" \
-    --dart-define="KAKAO_JAVASCRIPT_KEY=$KAKAO_JAVASCRIPT_KEY"
+    --dart-define="NAVER_MAP_CLIENT_ID=$NAVER_MAP_CLIENT_ID"
 )
 
 python3 "$ROOT_DIR/scripts/prepare_flutter_vercel_static_output.py"
 
-if ! grep -Fq -- "$KAKAO_JAVASCRIPT_KEY" "$STAGING_DIR/main.dart.js"; then
-  echo "Kakao JavaScript key was not compiled into the Flutter bundle." >&2
+if ! grep -Fq -- "$NAVER_MAP_CLIENT_ID" "$STAGING_DIR/main.dart.js"; then
+  echo "Naver Dynamic Map client id was not compiled into the Flutter bundle." >&2
   exit 1
 fi
 

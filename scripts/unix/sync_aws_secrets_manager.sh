@@ -23,7 +23,7 @@ Options:
   --source-env PATH              dotenv input (default: <repo>/.env)
   --prefix PREFIX                secret prefix (default: lala-next/)
   --region REGION                AWS region (default: AWS_REGION or us-east-1)
-  --include-build-config         include KAKAO_JAVASCRIPT_KEY for restricted build access
+  --include-build-config         include NAVER_MAP_CLIENT_ID for restricted build access
   --apply --confirm SYNC_AWS_SECRETS
                                  create/update entries after explicit confirmation
   -h, --help                     show this help
@@ -80,7 +80,7 @@ RUNTIME_NAMES=(
 )
 BUILD_NAMES=()
 if [[ "$INCLUDE_BUILD_CONFIG" == "true" ]]; then
-  BUILD_NAMES+=(KAKAO_JAVASCRIPT_KEY)
+  BUILD_NAMES+=(NAVER_MAP_CLIENT_ID)
 fi
 
 secret_name_for_env() {

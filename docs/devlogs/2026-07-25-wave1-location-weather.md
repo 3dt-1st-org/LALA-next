@@ -151,6 +151,11 @@ DB 마이그레이션·배포·DNS·비밀키 변경은 없다(아래 “롤백�
 - ci.yml YAML 유효성 확인.
 
 ### 배포 동작 (확인, 변경 없음)
+
+> Historical note (2026-08-31): this section records the build inputs that were
+> current when this devlog was written. The map build input is now documented in
+> `docs/planning/naver-map-migration-plan.md`; no server credential is passed to
+> Flutter.
 - **API 배포**: `deploy.yml` 은 `workflow_run` 으로 **main** 의 CI 성공시에만 SSM→EC2 배포.
   이 Draft PR 에서는 배포 트리거 없음.
 - **Web 배포**: `scripts/unix/deploy_flutter_web_vercel.sh` 의 dart-define 은 공개값만 —

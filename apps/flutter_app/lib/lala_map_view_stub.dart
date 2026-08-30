@@ -2,20 +2,21 @@ import 'package:flutter/material.dart';
 
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 
-import 'kakao_map_fallback.dart';
-import 'kakao_map_models.dart';
+import 'lala_map_fallback.dart';
+import 'lala_map_models.dart';
 
-Widget buildKakaoMapView({
-  required String javascriptKey,
+Widget buildLalaMapView({
+  required String clientId,
   required String language,
   required double centerLat,
   required double centerLng,
   required int level,
-  required List<KakaoMapPlace> places,
+  required List<LalaMapPlace> places,
+  bool interactionEnabled = true,
   ValueChanged<String>? onPlaceTap,
-  ValueChanged<KakaoMapCamera>? onCameraIdle,
+  ValueChanged<LalaMapCamera>? onCameraIdle,
 }) {
-  return KakaoMapFallbackView(
+  return LalaMapFallbackView(
     // V6: ko 만 KO 안내문(방문객 로케일 EN 폴백).
     message: normalizeLalaLanguage(language) != 'ko'
         ? 'The live map is not available right now.'

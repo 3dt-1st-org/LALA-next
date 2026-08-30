@@ -32,7 +32,7 @@ import 'package:lala_next_app/features/settings/widgets/user_settings_sheet.dart
 import 'package:lala_next_app/features/tour/tour_helpers.dart';
 import 'package:lala_next_app/features/weather/weather_helpers.dart';
 import 'package:lala_next_app/features/home/home_view_helpers.dart';
-import 'package:lala_next_app/kakao_map_view.dart';
+import 'package:lala_next_app/lala_map_view.dart';
 import 'package:lala_next_app/manual_location_options.dart';
 import 'package:lala_next_app/smoke_state.dart';
 
@@ -63,13 +63,13 @@ class LalaHomePage extends StatefulWidget {
   @override
   State<LalaHomePage> createState() => _LalaHomePageState();
 
-  /// Test-only seam (D4/D5): simulates the Kakao map firing a camera-idle
+  /// Test-only seam (D4/D5): simulates the Naver map firing a camera-idle
   /// event, driving the real debounce → _refresh path so the bounds-threading
   /// and request-epoch guard can be exercised without a live map platform.
   @visibleForTesting
   static void simulateCameraIdleForTesting(
     BuildContext context,
-    KakaoMapCamera camera,
+    LalaMapCamera camera,
   ) {
     final state = context.findAncestorStateOfType<_LalaHomePageState>();
     state?._handleMapCameraIdle(camera);
@@ -164,7 +164,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
   int? _lastPlacesFetchLevel;
   // V1 bounds-query (D4): latest viewport rectangle from the camera; threaded
   // into _currentConfig() → LalaAppConfig.bounds. null → center+radius (B2).
-  KakaoMapBounds? _latestMapBounds;
+  LalaMapBounds? _latestMapBounds;
   // V1 bounds-query (D5 response-ordering): monotonic epoch captured per
   // _refresh dispatch; a stale earlier reply is discarded when a newer query
   // has fired. Additive — also hardens the existing center+radius path.
@@ -1032,7 +1032,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
     });
   }
 
-  void _focusCluster(KakaoMapPlace cluster) {
+  void _focusCluster(LalaMapPlace cluster) {
     setState(() {
       _mapFocusLat = cluster.lat;
       _mapFocusLng = cluster.lng;
@@ -1048,7 +1048,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
     });
   }
 
-  void _handleMapCameraIdle(KakaoMapCamera camera) {
+  void _handleMapCameraIdle(LalaMapCamera camera) {
     final normalizedLevel = camera.level.clamp(2, 10).toInt();
     final shouldReloadPlaces = shouldReloadPlacesForMapMove(
       hasAnyPlaces: _visiblePlacesForCurrentCategory().isNotEmpty,
@@ -1554,7 +1554,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
                   tourAudioLoading: _tourAudioLoading,
                   tourAudioError: _tourAudioError,
                   authMode: config.authMode,
-                  kakaoJavascriptKey: config.kakaoJavascriptKey,
+                  naverMapClientId: config.naverMapClientId,
                   selectedCategory: _selectedCategory,
                   selectedPlaceId: SelectedPlaceStore.current,
                   activeSheet: _activeSheet,

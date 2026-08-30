@@ -12,6 +12,7 @@ import 'package:lala_next_app/core/location/lala_location.dart';
 import 'package:lala_next_app/core/navigation/local_signal_action.dart';
 import 'package:lala_next_app/app/map_sheet_visibility.dart';
 import 'package:lala_next_app/core/routing/lala_router.dart';
+import 'package:lala_next_app/app/lala_visual_tokens.dart';
 
 const List<Duration> _defaultRecommendationRecoveryDelays = <Duration>[
   Duration(seconds: 8),
@@ -63,14 +64,19 @@ class _LalaAppState extends State<LalaApp> {
   Widget build(BuildContext context) {
     final colorScheme =
         ColorScheme.fromSeed(
-          seedColor: const Color(0xFF2B6CB0),
+          seedColor: LalaVisualColors.primaryBlue,
           brightness: Brightness.light,
         ).copyWith(
-          primary: const Color(0xFF2B6CB0),
-          secondary: const Color(0xFFF5C842),
-          tertiary: const Color(0xFFC53030),
-          surface: const Color(0xFFF7FAFC),
+          primary: LalaVisualColors.primaryBlue,
+          onPrimary: Colors.white,
+          primaryContainer: LalaVisualColors.primarySoft,
+          onPrimaryContainer: LalaVisualColors.ink,
+          secondary: LalaVisualColors.culture,
+          tertiary: LalaVisualColors.attraction,
+          surface: LalaVisualColors.surface,
           surfaceContainerLowest: Colors.white,
+          outline: LalaVisualColors.line,
+          outlineVariant: LalaVisualColors.line,
         );
 
     return MaterialApp.router(
@@ -78,7 +84,7 @@ class _LalaAppState extends State<LalaApp> {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: colorScheme,
-        scaffoldBackgroundColor: Colors.transparent,
+        scaffoldBackgroundColor: LalaVisualColors.surface,
         useMaterial3: true,
         fontFamily: 'Pretendard',
         cardTheme: const CardThemeData(

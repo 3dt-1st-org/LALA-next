@@ -1,5 +1,5 @@
 // 모바일 비주얼 계약 S3: 위치 동의.
-// - 상단 읽기 전용 카카오맵 미리보기(라이브 키 경계 재사용, 제스처/콜백 차단).
+// - 상단 읽기 전용 네이버 지도 미리보기(라이브 키 경계 재사용, 제스처/콜백 차단).
 // - "현재 위치 사용"(요청 중에만 비활성), "지역 직접 선택"(항상 노출), "나중에 하기".
 // 수동 지역 선택은 권한 실패 뒤에만 나타나지 않고 첫 렌더부터 항상 사용 가능하다(01-flow §F1.5).
 import 'dart:async';
@@ -169,7 +169,7 @@ class _OnboardingLocationConsentPageState
                   children: <Widget>[
                     // 읽기 전용 라이브 미리보기. 좌표가 없으므로 핀은 없다.
                     LocationMapPreview(
-                      kakaoJavascriptKey: _config.kakaoJavascriptKey,
+                      naverMapClientId: _config.naverMapClientId,
                       centerLat: _config.lat,
                       centerLng: _config.lng,
                     ),
@@ -202,8 +202,10 @@ class _OnboardingLocationConsentPageState
                         ko: '현재 위치를 사용하면 가까운 명소·맛집·행사 등\n맞춤 추천을 받을 수 있어요.\n\n위치 정보는 동의 없이 저장되지 않으며,\n언제든지 변경할 수 있어요.',
                         en: 'Use your current location for nearby attractions,\nfood, and events.\n\nLocation is never stored without consent,\nand you can change it anytime.',
                         ja: '現在地を使って、近くの名所・グルメ・イベントなど\nおすすめをご案内します。\n\n位置情報は同意なしに保存されず、\nいつでも変更できます。',
-                        zhHans: '使用当前位置，探索附近的景点、美食和活动。\n\n未经同意不会存储位置信息，\n您可以随时更改。',
-                        zhHant: '使用當前位置，探索附近的景點、美食和活動。\n\n未經同意不會儲存位置資訊，\n您可以隨時更改。',
+                        zhHans:
+                            '使用当前位置，探索附近的景点、美食和活动。\n\n未经同意不会存储位置信息，\n您可以随时更改。',
+                        zhHant:
+                            '使用當前位置，探索附近的景點、美食和活動。\n\n未經同意不會儲存位置資訊，\n您可以隨時更改。',
                       ),
                       style: TextStyle(
                         fontSize: LalaVisualTokens.bodySize,

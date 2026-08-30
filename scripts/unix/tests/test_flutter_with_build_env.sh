@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Test-only: verifies scripts/unix/flutter_with_build_env.sh resolves the Kakao
-# build key in the intended order -- SSM Parameter Store, then AWS Secrets
+# Test-only: verifies scripts/unix/flutter_with_build_env.sh resolves the Naver
+# Dynamic Map client id in the intended order -- SSM Parameter Store, then AWS Secrets
 # Manager, then a trusted local dotenv parsed in an isolated subshell -- without
 # ever contacting AWS or reading a real dotenv. Every value below is a non-secret
 # placeholder emitted by a stubbed `aws`; no real key, secret id, or device id is
@@ -80,24 +80,26 @@ run_case() {
   LALA_TEST_ARGS="$ARGS" LALA_TEST_ENV="$ENVF" \
     AWS_STUB_SSM="$ssm_val" AWS_STUB_SM="$sm_val" \
     PATH="$TMP/bin:/usr/local/bin:/usr/bin:/bin" \
-    env -u KAKAO_JAVASCRIPT_KEY \
-    bash "$SCRIPT" --source-env "$dotenv" --kakao-key-ssm-param "$ssm_param" \
+    env -u NAVER_MAP_CLIENT_ID -u NAVER_CLIENT_SECRET \
+    bash "$SCRIPT" --source-env "$dotenv" --naver-map-client-id-ssm-param "$ssm_param" \
       -- "$TMP/bin/stub" >/dev/null
 }
 
 echo "Case A: SSM Parameter Store is tried first when a parameter name is supplied."
 run_case "$TMP/no-such-env" "$SSM_PARAM_NAME" "$SSM_PLACEHOLDER" "$SM_PLACEHOLDER"
-assert_present "$ARGS" "KAKAO_JAVASCRIPT_KEY=$SSM_PLACEHOLDER"
-assert_absent  "$ARGS" "KAKAO_JAVASCRIPT_KEY=$SM_PLACEHOLDER"
+assert_present "$ARGS" "NAVER_MAP_CLIENT_ID=$SSM_PLACEHOLDER"
+assert_absent  "$ARGS" "NAVER_MAP_CLIENT_ID=$SM_PLACEHOLDER"
 
 echo "Case B: Secrets Manager is the approved fallback when no SSM name is set."
 run_case "$TMP/no-such-env" "" "$SSM_PLACEHOLDER" "$SM_PLACEHOLDER"
-assert_present "$ARGS" "KAKAO_JAVASCRIPT_KEY=$SM_PLACEHOLDER"
+assert_present "$ARGS" "NAVER_MAP_CLIENT_ID=$SM_PLACEHOLDER"
 
 echo "Case C: local dotenv is the last resort and parsed in an isolated subshell."
-printf 'KAKAO_JAVASCRIPT_KEY=%s\nSHOULD_NOT_LEAK=yes\n' "$LOCAL_PLACEHOLDER" > "$TMP/dotenv"
+printf 'NAVER_MAP_CLIENT_ID=%s\nNAVER_CLIENT_SECRET=must-not-leak\nSHOULD_NOT_LEAK=yes\n' "$LOCAL_PLACEHOLDER" > "$TMP/dotenv"
 run_case "$TMP/dotenv" "" "" ""
-assert_present "$ARGS" "KAKAO_JAVASCRIPT_KEY=$LOCAL_PLACEHOLDER"
+assert_present "$ARGS" "NAVER_MAP_CLIENT_ID=$LOCAL_PLACEHOLDER"
 assert_absent  "$ENVF" "SHOULD_NOT_LEAK="
+assert_absent  "$ENVF" "NAVER_CLIENT_SECRET="
+assert_absent  "$ARGS" "must-not-leak"
 
 echo "PASS: build-helper resolution order is SSM -> Secrets Manager -> isolated dotenv."

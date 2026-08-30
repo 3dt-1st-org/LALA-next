@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
-import '../../../kakao_map_view.dart';
+import '../../../lala_map_view.dart';
 import '../map_helpers.dart';
 
-/// 카카오맵 캔버스 + 그라데이션 오버레이(C3 추출 — main.dart 의 _LegacyMapCanvas).
+/// 네이버 지도 캔버스 + 그라데이션 오버레이(C3 추출 - main.dart 의 _LegacyMapCanvas).
 class LegacyMapCanvas extends StatelessWidget {
   const LegacyMapCanvas({
     super.key,
     required this.places,
     required this.selectedPlace,
     required this.weather,
-    required this.kakaoJavascriptKey,
+    required this.naverMapClientId,
     required this.language,
     required this.fallbackCenterLat,
     required this.fallbackCenterLng,
@@ -26,7 +26,7 @@ class LegacyMapCanvas extends StatelessWidget {
   final List<LalaPlace> places;
   final LalaPlace? selectedPlace;
   final LalaWeather? weather;
-  final String kakaoJavascriptKey;
+  final String naverMapClientId;
   final String language;
   final double fallbackCenterLat;
   final double fallbackCenterLng;
@@ -34,8 +34,8 @@ class LegacyMapCanvas extends StatelessWidget {
   final double? mapFocusLng;
   final int mapLevel;
   final ValueChanged<String> onSelectPlaceId;
-  final ValueChanged<KakaoMapPlace> onSelectCluster;
-  final ValueChanged<KakaoMapCamera> onCameraIdle;
+  final ValueChanged<LalaMapPlace> onSelectCluster;
+  final ValueChanged<LalaMapCamera> onCameraIdle;
 
   @override
   Widget build(BuildContext context) {
@@ -65,8 +65,8 @@ class LegacyMapCanvas extends StatelessWidget {
     return Stack(
       children: [
         Positioned.fill(
-          child: buildKakaoMapView(
-            javascriptKey: kakaoJavascriptKey,
+          child: buildLalaMapView(
+            clientId: naverMapClientId,
             language: language,
             centerLat: centerLat,
             centerLng: centerLng,

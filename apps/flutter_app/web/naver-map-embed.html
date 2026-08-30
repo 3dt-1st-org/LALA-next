@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>LALA Naver Map</title>
+  <style>
+    html,
+    body,
+    #map {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #eaf2fb;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .message {
+      display: grid;
+      width: 100%;
+      height: 100%;
+      padding: 24px;
+      box-sizing: border-box;
+      place-items: center;
+      color: #334155;
+      font-size: 13px;
+      font-weight: 800;
+      text-align: center;
+    }
+
+    .lala-marker {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      pointer-events: auto;
+      filter: drop-shadow(0 8px 18px rgba(15, 23, 42, 0.26));
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    .lala-marker-name {
+      max-width: 132px;
+      padding: 5px 10px;
+      overflow: hidden;
+      border-radius: 12px;
+      background: rgba(17, 24, 39, 0.84);
+      box-shadow: 0 6px 18px rgba(15, 23, 42, 0.18);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 800;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .lala-marker-circle {
+      display: grid;
+      box-sizing: border-box;
+      place-items: center;
+      border: 3px solid #fff;
+      border-radius: 50%;
+      box-shadow: 0 6px 14px rgba(15, 23, 42, 0.22);
+    }
+
+    .lala-marker-label {
+      display: grid;
+      place-items: center;
+      font-weight: 900;
+      line-height: 1;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="map" role="application" aria-label="LALA Naver map"></div>
+  <script>
+    (function () {
+      "use strict";
+
+      const mapElement = document.getElementById("map");
+      let map = null;
+      let markers = [];
+      let sdkLoading = false;
+      let suppressIdleUntil = 0;
+      let config = sanitizeConfig({});
+
+      window.LalaMapEmbed = {
+        setConfig: function (next) {
+          config = sanitizeConfig(next || {});
+          updateLanguage();
+          if (!config.clientId) {
+            showMessage(unavailableCopy());
+            return;
+          }
+          if (!window.naver || !window.naver.maps) {
+            loadSdk();
+            return;
+          }
+          if (!map) initializeMap();
+          applyConfig();
+        }
+      };
+
+      window.addEventListener("message", function (event) {
+        if (event.origin !== window.location.origin || event.source !== window.parent) return;
+        let next = event.data;
+        if (typeof next === "string") {
+          try {
+            next = JSON.parse(next);
+          } catch (_) {
+            return;
+          }
+        }
+        if (!next || next.source !== "lala-flutter-map-config") return;
+        window.LalaMapEmbed.setConfig(next);
+      });
+
+      function finiteNumber(value, fallback) {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : fallback;
+      }
+
+      function clamp(value, minimum, maximum) {
+        return Math.max(minimum, Math.min(maximum, value));
+      }
+
+      function normalizeLanguage(value) {
+        if (value === "en" || value === "ja") return value;
+        if (String(value).toLowerCase().startsWith("zh")) return "zh";
+        return "ko";
+      }
+
+      function sanitizeConfig(value) {
+        return {
+          bridgeId: String(value.bridgeId || "").trim(),
+          clientId: String(value.clientId || "").trim(),
+          language: normalizeLanguage(value.language || "ko"),
+          interactive: value.interactive !== false,
+          centerLat: finiteNumber(value.lat, 37.2823),
+          centerLng: finiteNumber(value.lng, 127.0179),
+          level: clamp(Math.round(finiteNumber(value.level, 6)), 2, 10),
+          places: Array.isArray(value.places) ? value.places : []
+        };
+      }
+
+      function updateLanguage() {
+        document.documentElement.lang = config.language;
+        mapElement.setAttribute(
+          "aria-label",
+          config.language === "ko" ? "LALA 네이버 지도" : "LALA Naver map"
+        );
+      }
+
+      function appLevelToNaverZoom(value) {
+        return 19 - clamp(Math.round(value), 2, 10);
+      }
+
+      function naverZoomToAppLevel(value) {
+        return clamp(19 - Math.round(value), 2, 10);
+      }
+
+      function showMessage(message) {
+        mapElement.innerHTML = "";
+        const node = document.createElement("div");
+        node.className = "message";
+        node.textContent = message;
+        mapElement.appendChild(node);
+      }
+
+      function unavailableCopy() {
+        return config.language === "ko"
+          ? "현재 지도를 표시할 수 없습니다."
+          : "The live map is not available right now.";
+      }
+
+      function sendToFlutter(payload) {
+        const raw = JSON.stringify(Object.assign({
+          source: "lala-naver-map",
+          bridgeId: config.bridgeId
+        }, payload));
+        if (window.LalaMap && typeof window.LalaMap.postMessage === "function") {
+          window.LalaMap.postMessage(raw);
+          return;
+        }
+        if (window.parent !== window) {
+          window.parent.postMessage(raw, window.location.origin);
+        }
+      }
+
+      window.navermap_authFailure = function () {
+        showMessage(unavailableCopy());
+        sendToFlutter({ type: "mapError", code: "auth" });
+      };
+
+      function loadSdk() {
+        if (sdkLoading) return;
+        sdkLoading = true;
+        const script = document.createElement("script");
+        script.async = true;
+        script.src = "https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=" +
+          encodeURIComponent(config.clientId) + "&language=" + encodeURIComponent(config.language);
+        script.onload = function () {
+          sdkLoading = false;
+          initializeMap();
+          applyConfig();
+        };
+        script.onerror = function () {
+          sdkLoading = false;
+          showMessage(unavailableCopy());
+          sendToFlutter({ type: "mapError", code: "sdk_load" });
+        };
+        document.head.appendChild(script);
+      }
+
+      function initializeMap() {
+        if (!window.naver || !window.naver.maps) {
+          showMessage(unavailableCopy());
+          return;
+        }
+
+        mapElement.innerHTML = "";
+        const center = new naver.maps.LatLng(config.centerLat, config.centerLng);
+        suppressIdleUntil = Date.now() + 750;
+        map = new naver.maps.Map(mapElement, {
+          center: center,
+          zoom: appLevelToNaverZoom(config.level),
+          minZoom: appLevelToNaverZoom(10),
+          maxZoom: appLevelToNaverZoom(2),
+          draggable: config.interactive,
+          pinchZoom: config.interactive,
+          scrollWheel: config.interactive,
+          keyboardShortcuts: config.interactive,
+          disableDoubleClickZoom: !config.interactive,
+          disableDoubleTapZoom: !config.interactive,
+          disableTwoFingerTapZoom: !config.interactive,
+          mapTypeControl: false,
+          zoomControl: false,
+          scaleControl: false,
+          logoControl: true,
+          logoControlOptions: {
+            position: naver.maps.Position.LEFT_CENTER
+          },
+          mapDataControl: true,
+          mapDataControlOptions: {
+            position: naver.maps.Position.RIGHT_CENTER
+          }
+        });
+
+        naver.maps.Event.addListener(map, "idle", function () {
+          if (!config.interactive || Date.now() < suppressIdleUntil) return;
+          const nextCenter = map.getCenter();
+          const bounds = map.getBounds();
+          const southWest = bounds && bounds.getSW ? bounds.getSW() : null;
+          const northEast = bounds && bounds.getNE ? bounds.getNE() : null;
+          const payload = {
+            type: "cameraIdle",
+            lat: nextCenter.lat(),
+            lng: nextCenter.lng(),
+            level: naverZoomToAppLevel(map.getZoom())
+          };
+          if (southWest && northEast) {
+            payload.sw_lat = southWest.lat();
+            payload.sw_lng = southWest.lng();
+            payload.ne_lat = northEast.lat();
+            payload.ne_lng = northEast.lng();
+          }
+          sendToFlutter(payload);
+        });
+
+        window.addEventListener("resize", function () {
+          map.setSize(new naver.maps.Size(window.innerWidth, window.innerHeight));
+        });
+      }
+
+      function applyConfig() {
+        if (!map) return;
+        map.setOptions({
+          draggable: config.interactive,
+          pinchZoom: config.interactive,
+          scrollWheel: config.interactive,
+          keyboardShortcuts: config.interactive,
+          disableDoubleClickZoom: !config.interactive,
+          disableDoubleTapZoom: !config.interactive,
+          disableTwoFingerTapZoom: !config.interactive
+        });
+        const targetCenter = new naver.maps.LatLng(config.centerLat, config.centerLng);
+        const currentCenter = map.getCenter();
+        const targetZoom = appLevelToNaverZoom(config.level);
+        const cameraChanged = !currentCenter ||
+          Math.abs(currentCenter.lat() - config.centerLat) > 0.0000001 ||
+          Math.abs(currentCenter.lng() - config.centerLng) > 0.0000001 ||
+          map.getZoom() !== targetZoom;
+        if (cameraChanged) {
+          suppressIdleUntil = Date.now() + 750;
+          map.setCenter(targetCenter);
+          map.setZoom(targetZoom);
+        }
+
+        markers.forEach(function (marker) { marker.setMap(null); });
+        markers = [];
+        let renderedPins = 0;
+        let renderedClusters = 0;
+        config.places.forEach(function (place) {
+          const isCluster = Number(place.clusterCount || 0) > 1;
+          const markerView = buildMarkerView(place, isCluster);
+          const marker = new naver.maps.Marker({
+            position: new naver.maps.LatLng(Number(place.lat), Number(place.lng)),
+            map: map,
+            title: String(place.name || ""),
+            clickable: config.interactive,
+            zIndex: place.selected ? 1000 : (isCluster ? 850 : 900),
+            icon: {
+              content: markerView.element,
+              size: new naver.maps.Size(markerView.width, markerView.height),
+              anchor: new naver.maps.Point(markerView.width / 2, markerView.height)
+            }
+          });
+          markers.push(marker);
+
+          if (isCluster) {
+            renderedClusters += 1;
+          } else {
+            renderedPins += 1;
+          }
+
+          naver.maps.Event.addListener(marker, "click", function () {
+            const placeId = String(place.id || "").trim();
+            if (config.interactive && placeId) {
+              sendToFlutter({ type: "placeTap", placeId: placeId });
+            }
+          });
+        });
+
+        mapElement.dataset.lalaMarkerPins = String(renderedPins);
+        mapElement.dataset.lalaMarkerClusters = String(renderedClusters);
+        mapElement.dataset.lalaMapLevel = String(config.level);
+        mapElement.dataset.lalaMapProvider = "naver";
+        window.__lalaLastMapMarkerStats = {
+          provider: "naver",
+          pins: renderedPins,
+          clusters: renderedClusters,
+          total: config.places.length,
+          level: config.level
+        };
+      }
+
+      function buildMarkerView(place, isCluster) {
+        const marker = document.createElement("div");
+        marker.className = "lala-marker " + (isCluster ? "lala-marker-cluster" : "lala-marker-pin");
+        marker.dataset.lalaPlaceId = String(place.id || "");
+        marker.dataset.lalaCategory = String(place.category || "");
+        marker.setAttribute("role", "button");
+        marker.setAttribute("aria-label", String(place.name || "Local place"));
+
+        const selected = Boolean(place.selected) && !isCluster;
+        if (selected) {
+          const namePill = document.createElement("div");
+          namePill.className = "lala-marker-name";
+          namePill.textContent = shortName(place.name);
+          marker.appendChild(namePill);
+        }
+
+        const size = isCluster ? 48 : (selected ? 48 : 40);
+        const categoryColor = colorFor(place.category);
+        const circle = document.createElement("div");
+        circle.className = "lala-marker-circle";
+        circle.style.width = size + "px";
+        circle.style.height = size + "px";
+
+        const label = document.createElement("div");
+        label.className = "lala-marker-label";
+        if (isCluster) {
+          marker.dataset.lalaClusterCount = String(place.clusterCount || "");
+          circle.style.background = "#fff";
+          circle.style.borderColor = categoryColor;
+          label.style.color = clusterTextColorFor(place.category);
+          label.style.fontSize = "14px";
+          label.textContent = String(place.clusterCount || "");
+        } else {
+          marker.dataset.lalaMarkerShape = "pin";
+          circle.style.background = categoryColor;
+          label.style.color = markerTextColorFor(place.category);
+          label.style.fontSize = selected ? "14px" : "12px";
+          label.innerHTML = iconSvgFor(place.category);
+        }
+        circle.appendChild(label);
+        marker.appendChild(circle);
+
+        return {
+          element: marker,
+          width: selected ? 156 : (isCluster ? 56 : 48),
+          height: selected ? 78 : (isCluster ? 56 : 52)
+        };
+      }
+
+      function colorFor(category) {
+        if (category === "attraction") return "#C53030";
+        if (category === "restaurant") return "#F5C842";
+        if (category === "event") return "#2B6CB0";
+        if (category === "culture_venue") return "#0F766E";
+        return "#1A202C";
+      }
+
+      function markerTextColorFor(category) {
+        return category === "restaurant" ? "#1A202C" : "#fff";
+      }
+
+      function clusterTextColorFor(category) {
+        return category === "restaurant" ? "#6B4F0D" : colorFor(category);
+      }
+
+      function shortName(name) {
+        const value = String(name || (config.language === "ko" ? "장소" : "Local place"));
+        return value.length > 14 ? value.slice(0, 14) + "..." : value;
+      }
+
+      function iconSvgFor(category) {
+        if (category === "restaurant") {
+          return '<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M7 3v8M5 3v8M9 3v8M5 11h4v10M16 3v18M16 3c3 2 4 5 3 9h-3" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        }
+        if (category === "event") {
+          return '<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M8 3v4M16 3v4M4 10h16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
+        }
+        return '<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M4 10h16L12 4 4 10ZM6 10v8M10 10v8M14 10v8M18 10v8M4 20h16" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      }
+    })();
+  </script>
+</body>
+</html>

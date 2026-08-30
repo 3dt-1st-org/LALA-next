@@ -1,6 +1,6 @@
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
-import '../../kakao_map_models.dart';
+import '../../lala_map_models.dart';
 
 /// C3 최종: main.dart 에서 이관. 본문 불변(이동만).
 /// 앱 시작 환경설정(API base URI, 인증, 기본 쿼리 파라미터)을 담는 불변 값 객체.
@@ -9,7 +9,7 @@ class LalaAppConfig {
     required this.baseUri,
     this.bearerToken = '',
     this.apiKey = '',
-    this.kakaoJavascriptKey = '',
+    this.naverMapClientId = '',
     this.lat = 37.2636,
     this.lng = 127.0286,
     this.radiusM = 3000,
@@ -28,7 +28,7 @@ class LalaAppConfig {
       ),
       bearerToken = const String.fromEnvironment('LALA_API_BEARER_TOKEN'),
       apiKey = const String.fromEnvironment('LALA_IOS_API_KEY'),
-      kakaoJavascriptKey = const String.fromEnvironment('KAKAO_JAVASCRIPT_KEY'),
+      naverMapClientId = const String.fromEnvironment('NAVER_MAP_CLIENT_ID'),
       lat = 37.2636,
       lng = 127.0286,
       radiusM = 3000,
@@ -51,7 +51,7 @@ class LalaAppConfig {
   final String baseUri;
   final String bearerToken;
   final String apiKey;
-  final String kakaoJavascriptKey;
+  final String naverMapClientId;
   final double lat;
   final double lng;
   final int radiusM;
@@ -63,7 +63,7 @@ class LalaAppConfig {
 
   // V1 bounds-query (D4): optional viewport rectangle threaded from the camera
   // into the /places call. null → existing center+radius circle (fallback B2).
-  final KakaoMapBounds? bounds;
+  final LalaMapBounds? bounds;
 
   bool get hasAuth => bearerToken.trim().isNotEmpty || apiKey.trim().isNotEmpty;
   LalaAuthMode get authMode =>
@@ -73,7 +73,7 @@ class LalaAppConfig {
     String? baseUri,
     String? bearerToken,
     String? apiKey,
-    String? kakaoJavascriptKey,
+    String? naverMapClientId,
     double? lat,
     double? lng,
     int? radiusM,
@@ -82,13 +82,13 @@ class LalaAppConfig {
     String? lang,
     bool? requireLocationStartConfirmation,
     LalaAccessTokenProvider? accessTokenProvider,
-    KakaoMapBounds? bounds,
+    LalaMapBounds? bounds,
   }) {
     return LalaAppConfig(
       baseUri: baseUri ?? this.baseUri,
       bearerToken: bearerToken ?? this.bearerToken,
       apiKey: apiKey ?? this.apiKey,
-      kakaoJavascriptKey: kakaoJavascriptKey ?? this.kakaoJavascriptKey,
+      naverMapClientId: naverMapClientId ?? this.naverMapClientId,
       lat: lat ?? this.lat,
       lng: lng ?? this.lng,
       radiusM: radiusM ?? this.radiusM,

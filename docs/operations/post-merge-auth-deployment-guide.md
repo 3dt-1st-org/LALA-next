@@ -182,7 +182,7 @@ export LOGTO_ENDPOINT="<LOGTO_CLOUD_ENDPOINT>"
 export LOGTO_API_AUDIENCE="<LALA_API_RESOURCE_IDENTIFIER>"
 export LOGTO_NATIVE_APP_ID="<NATIVE_APP_ID>"
 export LOGTO_WEB_APP_ID="<WEB_APP_ID>"
-export KAKAO_JAVASCRIPT_KEY="<KAKAO_JAVASCRIPT_KEY>"
+export NAVER_MAP_CLIENT_ID="<NAVER_MAP_CLIENT_ID>"
 
 flutter build web --release \
   --pwa-strategy=none \
@@ -194,7 +194,7 @@ flutter build web --release \
   --dart-define=LOGTO_WEB_APP_ID="$LOGTO_WEB_APP_ID" \
   --dart-define=LOGTO_REDIRECT_URI=https://lala-next.cloud/auth-callback.html \
   --dart-define=LOGTO_POST_LOGOUT_REDIRECT_URI=https://lala-next.cloud/ \
-  --dart-define=KAKAO_JAVASCRIPT_KEY="$KAKAO_JAVASCRIPT_KEY"
+  --dart-define=NAVER_MAP_CLIENT_ID="$NAVER_MAP_CLIENT_ID"
 ```
 
 Vercel 프로젝트 binding을 환경에서 제공하고 production에 배포한다.

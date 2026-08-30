@@ -1,17 +1,17 @@
 // V1 bounds-query (Lane B) — D4 bridge decode tests.
 // Verifies the shared SSOT decode used by BOTH the native JS-channel path
-// (kakao_map_view_native.dart, decoded-map input) and the web DOM-event path
-// (kakao_map_view_web.dart, JSON-string input). Bounds parse when all four
+// (lala_map_view_native.dart, decoded-map input) and the web DOM-event path
+// (lala_map_view_web.dart, JSON-string input). Bounds parse when all four
 // fields are present and omit (null) otherwise → center+radius fallback (B2).
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lala_next_app/kakao_map_models.dart';
+import 'package:lala_next_app/lala_map_models.dart';
 
 void main() {
-  group('decodeKakaoCameraIdlePayload — native (decoded map) path', () {
+  group('decodeLalaMapCameraIdlePayload — native (decoded map) path', () {
     test('parses all four bounds fields when present', () {
-      final camera = decodeKakaoCameraIdlePayload(<String, dynamic>{
+      final camera = decodeLalaMapCameraIdlePayload(<String, dynamic>{
         'type': 'cameraIdle',
         'lat': 37.5,
         'lng': 126.9,
@@ -33,7 +33,7 @@ void main() {
     });
 
     test('omits bounds (null) when the four fields are absent', () {
-      final camera = decodeKakaoCameraIdlePayload(<String, dynamic>{
+      final camera = decodeLalaMapCameraIdlePayload(<String, dynamic>{
         'type': 'cameraIdle',
         'lat': 37.5,
         'lng': 126.9,
@@ -44,7 +44,7 @@ void main() {
     });
 
     test('omits bounds when only some fields are present (all-or-none)', () {
-      final camera = decodeKakaoCameraIdlePayload(<String, dynamic>{
+      final camera = decodeLalaMapCameraIdlePayload(<String, dynamic>{
         'type': 'cameraIdle',
         'lat': 37.5,
         'lng': 126.9,
@@ -58,22 +58,22 @@ void main() {
     });
 
     test('returns null for a non-cameraIdle message (placeId path)', () {
-      final camera = decodeKakaoCameraIdlePayload(<String, dynamic>{
+      final camera = decodeLalaMapCameraIdlePayload(<String, dynamic>{
         'placeId': 'place-42',
       });
       expect(camera, isNull);
     });
 
     test('returns null when lat/lng/level are missing', () {
-      final camera = decodeKakaoCameraIdlePayload(<String, dynamic>{
+      final camera = decodeLalaMapCameraIdlePayload(<String, dynamic>{
         'type': 'cameraIdle',
         'lat': 37.5,
       });
       expect(camera, isNull);
     });
 
-    test('coerces numeric strings (Kakao posts may stringify)', () {
-      final camera = decodeKakaoCameraIdlePayload(<String, dynamic>{
+    test('coerces numeric strings from provider bridge messages', () {
+      final camera = decodeLalaMapCameraIdlePayload(<String, dynamic>{
         'type': 'cameraIdle',
         'lat': '37.5',
         'lng': '126.9',
@@ -91,7 +91,7 @@ void main() {
     });
   });
 
-  group('decodeKakaoCameraIdlePayload — web (JSON string) path', () {
+  group('decodeLalaMapCameraIdlePayload — web (JSON string) path', () {
     test('parses a JSON-string detail with bounds', () {
       final payload = jsonEncode({
         'lat': 37.5,
@@ -102,7 +102,7 @@ void main() {
         'ne_lat': 38.0,
         'ne_lng': 127.8,
       });
-      final camera = decodeKakaoCameraIdlePayload(payload);
+      final camera = decodeLalaMapCameraIdlePayload(payload);
       expect(camera, isNotNull);
       expect(camera!.bounds, isNotNull);
       expect(camera.bounds!.swLat, 37.0);
@@ -111,18 +111,18 @@ void main() {
 
     test('JSON-string detail without bounds → null bounds', () {
       final payload = jsonEncode({'lat': 37.5, 'lng': 126.9, 'level': 4});
-      final camera = decodeKakaoCameraIdlePayload(payload);
+      final camera = decodeLalaMapCameraIdlePayload(payload);
       expect(camera, isNotNull);
       expect(camera!.bounds, isNull);
     });
 
     test('malformed JSON string → null', () {
-      expect(decodeKakaoCameraIdlePayload('not-json'), isNull);
+      expect(decodeLalaMapCameraIdlePayload('not-json'), isNull);
     });
 
     test('non-map payload → null', () {
-      expect(decodeKakaoCameraIdlePayload(42), isNull);
-      expect(decodeKakaoCameraIdlePayload(null), isNull);
+      expect(decodeLalaMapCameraIdlePayload(42), isNull);
+      expect(decodeLalaMapCameraIdlePayload(null), isNull);
     });
   });
 }
