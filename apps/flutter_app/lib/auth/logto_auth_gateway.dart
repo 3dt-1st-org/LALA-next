@@ -33,22 +33,39 @@ class LalaAuthConfig {
       selectedIsWeb ? 'LOGTO_WEB_APP_ID' : 'LOGTO_NATIVE_APP_ID',
     ).trim();
     final apiAudience = read('LOGTO_API_AUDIENCE').trim();
-    final configuredRedirectUri = read('LOGTO_REDIRECT_URI').trim();
-    final postLogoutRedirectUri = read('LOGTO_POST_LOGOUT_REDIRECT_URI').trim();
+    final platformRedirectUri = read(
+      selectedIsWeb ? 'LOGTO_WEB_REDIRECT_URI' : 'LOGTO_NATIVE_REDIRECT_URI',
+    ).trim();
+    final legacyRedirectUri = read('LOGTO_REDIRECT_URI').trim();
+    final platformPostLogoutRedirectUri = read(
+      selectedIsWeb
+          ? 'LOGTO_WEB_POST_LOGOUT_REDIRECT_URI'
+          : 'LOGTO_NATIVE_POST_LOGOUT_REDIRECT_URI',
+    ).trim();
+    final legacyPostLogoutRedirectUri = read(
+      'LOGTO_POST_LOGOUT_REDIRECT_URI',
+    ).trim();
     final defaultRedirectUri = selectedIsWeb
         ? selectedBaseUri.resolve('/auth-callback.html').toString()
         : _nativeRedirectUri;
+    final redirectUri = _selectPlatformUri(
+      platformValue: platformRedirectUri,
+      legacyValue: legacyRedirectUri,
+      defaultValue: defaultRedirectUri,
+      isWeb: selectedIsWeb,
+    )!;
+    final postLogoutRedirectUri = _selectPlatformUri(
+      platformValue: platformPostLogoutRedirectUri,
+      legacyValue: legacyPostLogoutRedirectUri,
+      isWeb: selectedIsWeb,
+    );
 
     return LalaAuthConfig(
       endpoint: endpoint,
       appId: appId,
       apiAudience: apiAudience,
-      redirectUri: configuredRedirectUri.isEmpty
-          ? defaultRedirectUri
-          : configuredRedirectUri,
-      postLogoutRedirectUri: postLogoutRedirectUri.isEmpty
-          ? null
-          : postLogoutRedirectUri,
+      redirectUri: redirectUri,
+      postLogoutRedirectUri: postLogoutRedirectUri,
       isWeb: selectedIsWeb,
     );
   }
@@ -79,6 +96,14 @@ abstract interface class LalaAuthGateway {
   Future<String?> accessToken(String resource);
 }
 
+/// Optional richer session contract implemented by the real Logto gateway.
+/// Simple test gateways and disabled adapters can keep the minimal interface.
+abstract interface class LalaSessionGateway implements LalaAuthGateway {
+  Future<LalaAuthProfile?> get profile;
+
+  Future<bool> validateSession(String resource);
+}
+
 typedef LalaAuthControllerFactory =
     LalaAuthController Function(LalaAppAuthDependencies dependencies);
 
@@ -101,13 +126,7 @@ LalaAuthController createLalaAuthController(
     );
   }
 
-  final client = LogtoClient(
-    config: LogtoConfig(
-      endpoint: config.endpoint,
-      appId: config.appId,
-      resources: [config.apiAudience],
-    ),
-  );
+  final client = LogtoClient(config: createLogtoSdkConfig(config));
   final gateway = LogtoAuthGateway(client, config: config);
   final apiClient = LalaApiClient(
     baseUri: dependencies.apiBaseUri,
@@ -120,7 +139,7 @@ LalaAuthController createLalaAuthController(
   );
 }
 
-class LogtoAuthGateway implements LalaAuthGateway {
+class LogtoAuthGateway implements LalaSessionGateway {
   const LogtoAuthGateway(this._client, {required this.config});
 
   final LogtoClient _client;
@@ -128,6 +147,26 @@ class LogtoAuthGateway implements LalaAuthGateway {
 
   @override
   Future<bool> get isAuthenticated => _client.isAuthenticated;
+
+  @override
+  Future<LalaAuthProfile?> get profile async {
+    final claims = await _client.idTokenClaims;
+    if (claims == null) {
+      return null;
+    }
+    final values = claims.toJson();
+    return LalaAuthProfile(
+      name: _normalizedString(values['name']),
+      email: _normalizedString(values['email']),
+      picture: _normalizedString(values['picture']),
+      emailVerified: _normalizedBool(values['email_verified']),
+    );
+  }
+
+  @override
+  Future<bool> validateSession(String resource) async {
+    return await accessToken(resource) != null;
+  }
 
   @override
   Future<void> signIn() => _client.signIn(config.redirectUri);
@@ -174,11 +213,17 @@ class LalaClientAccountApi implements LalaAccountApi {
   }
 }
 
-class _DisabledAuthGateway implements LalaAuthGateway {
+class _DisabledAuthGateway implements LalaSessionGateway {
   const _DisabledAuthGateway();
 
   @override
   Future<bool> get isAuthenticated => Future<bool>.value(false);
+
+  @override
+  Future<LalaAuthProfile?> get profile => Future<LalaAuthProfile?>.value();
+
+  @override
+  Future<bool> validateSession(String resource) => Future<bool>.value(false);
 
   @override
   Future<String?> accessToken(String resource) => Future<String?>.value();
@@ -209,12 +254,73 @@ String _compileTimeEnvironmentValue(String name) {
       'LOGTO_NATIVE_APP_ID',
     ),
     'LOGTO_API_AUDIENCE' => const String.fromEnvironment('LOGTO_API_AUDIENCE'),
+    'LOGTO_WEB_REDIRECT_URI' => const String.fromEnvironment(
+      'LOGTO_WEB_REDIRECT_URI',
+    ),
+    'LOGTO_NATIVE_REDIRECT_URI' => const String.fromEnvironment(
+      'LOGTO_NATIVE_REDIRECT_URI',
+    ),
     'LOGTO_REDIRECT_URI' => const String.fromEnvironment('LOGTO_REDIRECT_URI'),
+    'LOGTO_WEB_POST_LOGOUT_REDIRECT_URI' => const String.fromEnvironment(
+      'LOGTO_WEB_POST_LOGOUT_REDIRECT_URI',
+    ),
+    'LOGTO_NATIVE_POST_LOGOUT_REDIRECT_URI' => const String.fromEnvironment(
+      'LOGTO_NATIVE_POST_LOGOUT_REDIRECT_URI',
+    ),
     'LOGTO_POST_LOGOUT_REDIRECT_URI' => const String.fromEnvironment(
       'LOGTO_POST_LOGOUT_REDIRECT_URI',
     ),
     _ => throw ArgumentError.value(name, 'name', 'Unknown environment value.'),
   };
+}
+
+@visibleForTesting
+LogtoConfig createLogtoSdkConfig(LalaAuthConfig config) {
+  return LogtoConfig(
+    endpoint: config.endpoint,
+    appId: config.appId,
+    resources: [config.apiAudience],
+    scopes: [LogtoUserScope.email.value],
+  );
+}
+
+String? _normalizedString(Object? value) {
+  if (value is! String) {
+    return null;
+  }
+  final normalized = value.trim();
+  return normalized.isEmpty ? null : normalized;
+}
+
+bool? _normalizedBool(Object? value) {
+  if (value is bool) {
+    return value;
+  }
+  if (value is String) {
+    return bool.tryParse(value.trim());
+  }
+  return null;
+}
+
+String? _selectPlatformUri({
+  required String platformValue,
+  required String legacyValue,
+  required bool isWeb,
+  String? defaultValue,
+}) {
+  if (platformValue.isNotEmpty) {
+    return platformValue;
+  }
+  if (legacyValue.isEmpty) {
+    return defaultValue;
+  }
+  if (_isValidRedirectUri(legacyValue, isWeb: isWeb)) {
+    return legacyValue;
+  }
+  if (_isValidRedirectUri(legacyValue, isWeb: !isWeb)) {
+    return defaultValue;
+  }
+  return legacyValue;
 }
 
 bool _isHttpsUri(String value) {

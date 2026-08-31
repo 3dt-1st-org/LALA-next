@@ -14,7 +14,12 @@ import 'package:lala_next_app/features/community/presentation/community_api.dart
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 
 class ChatRoomListPage extends StatefulWidget {
-  const ChatRoomListPage({super.key});
+  const ChatRoomListPage({
+    this.initialConfig = const LalaAppConfig.fromEnvironment(),
+    super.key,
+  });
+
+  final LalaAppConfig initialConfig;
 
   @override
   State<ChatRoomListPage> createState() => _ChatRoomListPageState();
@@ -39,7 +44,7 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
   @override
   void initState() {
     super.initState();
-    _config = LalaAppConfig.fromEnvironment();
+    _config = widget.initialConfig;
     _client = createCommunityClient(_config);
     _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {

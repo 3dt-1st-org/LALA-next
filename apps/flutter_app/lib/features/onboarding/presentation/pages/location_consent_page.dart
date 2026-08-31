@@ -24,10 +24,12 @@ import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 class OnboardingLocationConsentPage extends StatefulWidget {
   const OnboardingLocationConsentPage({
     required this.locationProvider,
+    this.showAccountLink = false,
     super.key,
   });
 
   final LalaLocationProvider locationProvider;
+  final bool showAccountLink;
 
   @override
   State<OnboardingLocationConsentPage> createState() =>
@@ -132,6 +134,12 @@ class _OnboardingLocationConsentPageState
   }
 
   Future<void> _complete() async {
+    if (widget.showAccountLink) {
+      if (mounted) {
+        context.go(LalaRoutePaths.onboardingAccount);
+      }
+      return;
+    }
     // Why: callers already durably flushed the region choice via setAndFlush, so
     // only the completion slice remains. completeAndFlush awaits that write and
     // flips the router's completion gate only afterwards; storage failure still

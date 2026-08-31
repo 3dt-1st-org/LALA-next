@@ -34,13 +34,21 @@ import 'package:lala_next_app/shared/widgets/lala_skeleton.dart';
 
 /// 검색 탭: 추천 장소를 불러와 카테고리/검색어로 필터링한다.
 class SearchPage extends StatefulWidget {
-  const SearchPage({this.locationProvider, this.backendFactory, super.key});
+  const SearchPage({
+    this.locationProvider,
+    this.backendFactory,
+    this.initialConfig = const LalaAppConfig.fromEnvironment(),
+    super.key,
+  });
 
   /// 테스트 주입용 위치 프로바이더(기본 = Geolocator 하이브리드).
   final LalaLocationProvider? locationProvider;
 
   /// 테스트 주입용 백엔드 팩토리(기본 = LalaApiBackend).
   final LalaBackendFactory? backendFactory;
+
+  /// API/auth config shared by the app root.
+  final LalaAppConfig initialConfig;
 
   @override
   State<SearchPage> createState() => _SearchPageState();
@@ -101,9 +109,7 @@ class _SearchPageState extends State<SearchPage> {
   @override
   void initState() {
     super.initState();
-    _baseConfig = LalaAppConfig.fromEnvironment().copyWith(
-      lang: OnboardingState.language,
-    );
+    _baseConfig = widget.initialConfig.copyWith(lang: OnboardingState.language);
     _config = _baseConfig.copyWith(radiusM: _radiusM);
     _locationProvider =
         widget.locationProvider ?? const GeolocatorLalaLocationProvider();

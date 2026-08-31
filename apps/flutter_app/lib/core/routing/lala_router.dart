@@ -11,6 +11,7 @@ import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:lala_next_app/app/lala_main_shell.dart';
+import 'package:lala_next_app/auth/auth_controller.dart';
 import 'package:lala_next_app/auth/logto_auth_gateway.dart';
 import 'package:lala_next_app/core/backend/lala_backend.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
@@ -18,6 +19,7 @@ import 'package:lala_next_app/core/location/lala_location.dart';
 import 'package:lala_next_app/core/navigation/local_signal_action.dart';
 import 'package:lala_next_app/core/routing/lala_route_paths.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
+import 'package:lala_next_app/features/onboarding/presentation/pages/account_link_page.dart';
 import 'package:lala_next_app/features/onboarding/presentation/pages/language_page.dart';
 import 'package:lala_next_app/features/onboarding/presentation/pages/location_consent_page.dart';
 import 'package:lala_next_app/features/onboarding/presentation/pages/splash_page.dart';
@@ -37,9 +39,11 @@ GoRouter createLalaRouter({
   required LalaAppConfig initialConfig,
   required LalaLocationProvider locationProvider,
   required List<Duration> recommendationRecoveryDelays,
-  required LalaAuthControllerFactory authControllerFactory,
+  LalaAuthController? authController,
+  LalaAuthControllerFactory? authControllerFactory,
   LocalSignalActionController? localSignalActionController,
 }) {
+  assert(authController != null || authControllerFactory != null);
   final signalActionController =
       localSignalActionController ?? LocalSignalActionController();
   return GoRouter(
@@ -80,8 +84,17 @@ GoRouter createLalaRouter({
       GoRoute(
         path: LalaRoutePaths.onboardingLocation,
         builder: (BuildContext context, GoRouterState state) =>
-            OnboardingLocationConsentPage(locationProvider: locationProvider),
+            OnboardingLocationConsentPage(
+              locationProvider: locationProvider,
+              showAccountLink: authController?.config.enabled ?? false,
+            ),
       ),
+      if (authController != null)
+        GoRoute(
+          path: LalaRoutePaths.onboardingAccount,
+          builder: (BuildContext context, GoRouterState state) =>
+              OnboardingAccountLinkPage(authController: authController),
+        ),
       // --- Main shell (search/map/plan/Local Signals) ---
       StatefulShellRoute.indexedStack(
         builder:
@@ -98,7 +111,7 @@ GoRouter createLalaRouter({
               GoRoute(
                 path: LalaRoutePaths.search,
                 builder: (BuildContext context, GoRouterState state) =>
-                    const SearchPage(),
+                    SearchPage(initialConfig: initialConfig),
               ),
             ],
           ),
@@ -113,6 +126,7 @@ GoRouter createLalaRouter({
                       locationProvider: locationProvider,
                       recommendationRecoveryDelays:
                           recommendationRecoveryDelays,
+                      authController: authController,
                       authControllerFactory: authControllerFactory,
                       localSignalActionController: signalActionController,
                     ),
@@ -124,7 +138,7 @@ GoRouter createLalaRouter({
               GoRoute(
                 path: LalaRoutePaths.plan,
                 builder: (BuildContext context, GoRouterState state) =>
-                    const PlanPage(),
+                    PlanPage(initialConfig: initialConfig),
               ),
             ],
           ),
@@ -151,31 +165,34 @@ GoRouter createLalaRouter({
       GoRoute(
         path: LalaRoutePaths.community,
         builder: (BuildContext context, GoRouterState state) =>
-            const CommunityFeedPage(),
+            CommunityFeedPage(initialConfig: initialConfig),
       ),
       GoRoute(
         path: LalaRoutePaths.communityPost,
         builder: (BuildContext context, GoRouterState state) {
           final postId = state.pathParameters['id'] ?? '';
-          return CommunityPostDetailPage(postId: postId);
+          return CommunityPostDetailPage(
+            postId: postId,
+            initialConfig: initialConfig,
+          );
         },
       ),
       GoRoute(
         path: LalaRoutePaths.communityCreate,
         builder: (BuildContext context, GoRouterState state) =>
-            const CommunityCreatePostPage(),
+            CommunityCreatePostPage(initialConfig: initialConfig),
       ),
       // --- ONMU P3c: 커뮤니티 채팅 push 라우트 ---
       GoRoute(
         path: LalaRoutePaths.communityChat,
         builder: (BuildContext context, GoRouterState state) =>
-            const ChatRoomListPage(),
+            ChatRoomListPage(initialConfig: initialConfig),
       ),
       GoRoute(
         path: LalaRoutePaths.communityChatRoom,
         builder: (BuildContext context, GoRouterState state) {
           final roomId = state.pathParameters['id'] ?? '';
-          return ChatRoomPage(roomId: roomId);
+          return ChatRoomPage(roomId: roomId, initialConfig: initialConfig);
         },
       ),
     ],

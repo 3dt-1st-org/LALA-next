@@ -48,16 +48,18 @@ class LalaHomePage extends StatefulWidget {
     required this.initialConfig,
     required this.locationProvider,
     required this.recommendationRecoveryDelays,
-    required this.authControllerFactory,
+    this.authController,
+    this.authControllerFactory,
     this.localSignalActionController,
     super.key,
-  });
+  }) : assert(authController != null || authControllerFactory != null);
 
   final LalaBackendFactory backendFactory;
   final LalaAppConfig initialConfig;
   final LalaLocationProvider locationProvider;
   final List<Duration> recommendationRecoveryDelays;
-  final LalaAuthControllerFactory authControllerFactory;
+  final LalaAuthController? authController;
+  final LalaAuthControllerFactory? authControllerFactory;
   final LocalSignalActionController? localSignalActionController;
 
   @override
@@ -117,6 +119,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
   late double _queryLng;
   late LalaBackend _backend;
   late final LalaAuthController _authController;
+  late final bool _ownsAuthController;
   bool _authInitializationComplete = false;
   LalaAuthStatus? _lastAuthStatus;
 
@@ -214,10 +217,14 @@ class _LalaHomePageState extends State<LalaHomePage> {
     _queryLng = region?.lng ?? config.lng;
     _uiLanguage = OnboardingState.language;
     _locationStartPromptVisible = config.requireLocationStartConfirmation;
-    _authController = widget.authControllerFactory(
-      LalaAppAuthDependencies(apiBaseUri: Uri.parse(config.baseUri)),
-    );
+    _ownsAuthController = widget.authController == null;
+    _authController =
+        widget.authController ??
+        widget.authControllerFactory!(
+          LalaAppAuthDependencies(apiBaseUri: Uri.parse(config.baseUri)),
+        );
     _lastAuthStatus = _authController.state.status;
+    _authInitializationComplete = !_ownsAuthController;
     _authController.addListener(_handleAuthStateChanged);
     OnboardingState.languageListenable.addListener(_handleUiLanguageChanged);
     widget.localSignalActionController?.addListener(_handleLocalSignalAction);
@@ -285,7 +292,9 @@ class _LalaHomePageState extends State<LalaHomePage> {
       });
     };
     SavedPlaceStore.listenable.addListener(_onSavedPlacesChanged);
-    unawaited(_initializeAuth());
+    if (_ownsAuthController) {
+      unawaited(_initializeOwnedAuth());
+    }
     if (!config.requireLocationStartConfirmation) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -315,7 +324,9 @@ class _LalaHomePageState extends State<LalaHomePage> {
     widget.localSignalActionController?.removeListener(
       _handleLocalSignalAction,
     );
-    _authController.dispose();
+    if (_ownsAuthController) {
+      _authController.dispose();
+    }
     _backend.close();
     super.dispose();
   }
@@ -333,7 +344,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
     );
   }
 
-  Future<void> _initializeAuth() async {
+  Future<void> _initializeOwnedAuth() async {
     await _authController.initialize();
     _authInitializationComplete = true;
   }

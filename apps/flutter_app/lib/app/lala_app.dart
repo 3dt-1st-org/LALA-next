@@ -2,9 +2,12 @@
 // ONMU P0: MaterialApp(home:) → MaterialApp.router(StatefulShellRoute 3-탭).
 // theme/title/의존성 주입 게이트는 그대로. LalaHomePage 는 /map-route 분기에서 래핑된다.
 // const 생성자를 유지(main.dart 의 const LalaApp() 보존)하기 위해 State 에서 라우터를 캐시한다.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:lala_next_app/auth/auth_controller.dart';
 import 'package:lala_next_app/auth/logto_auth_gateway.dart';
 import 'package:lala_next_app/core/backend/lala_backend.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
@@ -43,21 +46,41 @@ class LalaApp extends StatefulWidget {
 }
 
 class _LalaAppState extends State<LalaApp> {
-  // 위젯 의존성은 불변이므로 라우터는 initState 에서 한 번만 구성한다.
-  late final GoRouter _router = createLalaRouter(
-    backendFactory: widget.backendFactory,
-    initialConfig: widget.initialConfig,
-    locationProvider: widget.locationProvider,
-    recommendationRecoveryDelays: widget.recommendationRecoveryDelays,
-    authControllerFactory: widget.authControllerFactory,
-    localSignalActionController: widget.localSignalActionController,
-  );
+  late final LalaAuthController _authController;
+  late final LalaAppConfig _appConfig;
+  late final GoRouter _router;
 
   @override
   void initState() {
     super.initState();
+    _authController = widget.authControllerFactory(
+      LalaAppAuthDependencies(
+        apiBaseUri: Uri.parse(widget.initialConfig.baseUri),
+      ),
+    );
+    _appConfig = _authController.config.enabled
+        ? widget.initialConfig.copyWith(
+            accessTokenProvider: _authController.accessToken,
+          )
+        : widget.initialConfig;
+    _router = createLalaRouter(
+      backendFactory: widget.backendFactory,
+      initialConfig: _appConfig,
+      locationProvider: widget.locationProvider,
+      recommendationRecoveryDelays: widget.recommendationRecoveryDelays,
+      authController: _authController,
+      localSignalActionController: widget.localSignalActionController,
+    );
+    unawaited(_authController.initialize());
     // 앱 시작(및 각 테스트) 시 네비게이션 바가 보이도록 시트 활성 상태를 리셋한다.
     lalaMapSheetActive.value = false;
+  }
+
+  @override
+  void dispose() {
+    _router.dispose();
+    _authController.dispose();
+    super.dispose();
   }
 
   @override
