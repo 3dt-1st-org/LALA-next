@@ -13,6 +13,7 @@ import 'package:lala_next_app/core/state/saved_place_store.dart';
 import 'package:lala_next_app/core/state/selected_place_store.dart';
 import 'package:lala_next_app/core/state/slot_visit_store.dart';
 import 'package:lala_next_app/features/local_signals/presentation/pages/local_signals_page.dart';
+import 'package:lala_next_app/features/map/widgets/map_bottom_dock.dart';
 import 'package:lala_next_app/features/map/widgets/top_map_chrome.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/features/plan/presentation/pages/plan_page.dart';
@@ -2183,7 +2184,7 @@ void main() {
     },
   );
 
-  testWidgets('mobile map dock expands from the 96dp map-first summary', (
+  testWidgets('mobile map dock expands from the 84dp B2 slim summary', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(393, 852);
@@ -2200,7 +2201,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final dock = find.byKey(const ValueKey('map-bottom-dock'));
-    expect(tester.getSize(dock).height, 96);
+    expect(tester.getSize(dock).height, MapBottomDock.mobileCollapsedHeight);
     expect(
       find.byKey(const ValueKey('map-dock-expand-toggle')),
       findsOneWidget,
@@ -2217,7 +2218,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('map-dock-collapse-toggle')));
     await tester.pumpAndSettle();
-    expect(tester.getSize(dock).height, 96);
+    expect(tester.getSize(dock).height, MapBottomDock.mobileCollapsedHeight);
   });
 
   // P6F §13.5 반응형 code-conformance: 360/430/768dp 에서 5 칩+설정 접근 가능,
