@@ -35,10 +35,31 @@
 - Build-wrapper shell contract tests, including the negative management-secret
   boundary.
 - `flutter analyze`.
+- Full Flutter suite: 738 tests passed.
+- `uv run pre-commit run --all-files` and `git diff --check` passed.
+- Clean Web release and iOS Simulator debug builds passed. Both bundles contain
+  only the expected platform public client configuration; the management
+  credential sentinel is absent.
+
+## iPhone 17 Pro runtime evidence
+
+- Built code head: `381443a3e7e752c808eaac27d516042802d0e387`.
+- Uninstalled the prior app before installing the clean simulator build.
+- Completed all three onboarding decisions, reached the optional account-link
+  screen, opened the real hosted Logto sign-in surface, cancelled it, and
+  recovered through the guest action.
+- Guest entry reached the live Naver map with actual place imagery, markers,
+  recommendation cards, and weather. Denying location kept explicit retry and
+  manual-region recovery actions.
+- A full terminate and relaunch skipped onboarding and returned directly to the
+  live map, confirming guest onboarding persistence.
+- Eight named captures have eight distinct SHA-256 hashes. Captures remain
+  local and untracked.
 
 ## Remaining runtime gates
 
-- Hosted sign-in cancellation, refresh, sign-out, and `/api/v1/me` against an
-  approved test account.
-- Web CORS/origin behavior and production-tenant decision.
-- iPhone and Web runtime captures after the exact PR head is built.
+- Successful hosted sign-in, token refresh, sign-out, and `/api/v1/me`
+  synchronization require an approved test account.
+- Web CORS/origin behavior still needs an interactive Web runtime check.
+- The inspected tenant is development-only; production-tenant selection and
+  connector readiness remain operational decisions.

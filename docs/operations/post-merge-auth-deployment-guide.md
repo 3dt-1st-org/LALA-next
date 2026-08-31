@@ -189,8 +189,9 @@ Resolver order is the current process environment, approved AWS Secrets
 Manager public build entries, `.env.local`, then `.env`. Prefer
 `LOGTO_WEB_REDIRECT_URI` / `LOGTO_WEB_POST_LOGOUT_REDIRECT_URI` and
 `LOGTO_NATIVE_REDIRECT_URI` / `LOGTO_NATIVE_POST_LOGOUT_REDIRECT_URI`.
-Legacy shared URI names remain compatible but must not be used to make a Web
-URI authoritative for a native build.
+Legacy shared `LOGTO_REDIRECT_URI` / `LOGTO_POST_LOGOUT_REDIRECT_URI` names
+remain compatible, but must not be used to make a Web URI authoritative for a
+native build.
 
 Vercel 프로젝트 binding을 환경에서 제공하고 production에 배포한다.
 
