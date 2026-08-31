@@ -9,7 +9,7 @@ This is the source-of-truth handoff for LALA runtime secrets and reproducible Fl
 | EC2 API service role | Individual runtime secrets under `lala-next/` needed by `Settings.from_env()` | GitHub token, team member credentials, developer dotenv files |
 | Worker service role | Only the API/worker entries needed for its enabled job | Flutter build key unless it genuinely needs it |
 | CI deploy role | SSM deploy permission; it does not read application secret values | `secretsmanager:GetSecretValue` |
-| Developer build role | At most `lala-next/naver-map-client-id`, a URL-restricted public client configuration value | `DB_DSN`, OpenAI, Naver Search API secret, Logto management, API bearer, or public-data keys |
+| Developer build role | URL-restricted map client config plus Logto endpoint, audience, public app IDs, and redirect URIs needed for the selected platform | `DB_DSN`, OpenAI, Naver Search API secret, Logto management credentials, API bearer, or public-data keys |
 | Developer workstation | Local `.env` or `.env.local` only when explicitly needed | A copied production runtime env file |
 
 The API resolves each supported setting in this order: process environment, AWS Secrets Manager (`LALA_AWS_SM_PREFIX`, default `lala-next/`), then legacy Azure Key Vault. Normal AWS operation uses the EC2 instance role and individual Secrets Manager values. `LALA_STATIC_SNAPSHOT_FALLBACK=false` remains the normal state; a snapshot is an outage-only read-only fallback, never normal data.
@@ -30,7 +30,9 @@ Keep toggles and operational choices in the EC2 root-owned runtime env file, not
 
 1. Authenticate AWS CLI with an operator role. Confirm access without printing identity details: `aws sts get-caller-identity --no-cli-pager >/dev/null`.
 2. Create the EC2 instance role policy allowing only `secretsmanager:GetSecretValue` and `secretsmanager:DescribeSecret` for `lala-next/*` in the deployment region. Do not grant `ListSecrets`, create, update, or delete to the runtime role.
-3. Create a distinct developer build policy allowing only those two actions on `lala-next/naver-map-client-id`. Do not reuse the EC2 role on laptops.
+3. Create a distinct developer build policy allowing only those two actions on
+   the approved public Flutter build entries. Do not reuse the EC2 role on
+   laptops and never include Logto management credentials.
 4. Run the value-free inventory first:
 
    ```bash
@@ -67,7 +69,13 @@ scripts/unix/flutter_with_build_env.sh \
   -- flutter build ios --simulator
 ```
 
-The wrapper checks an explicitly configured SSM parameter first, then the build-only Secrets Manager entry, and finally the trusted dotenv in an isolated subshell. It does not read or pass `NAVER_CLIENT_SECRET`, API bearer tokens, DB credentials, OpenAI keys, or Logto management secrets. For a non-production endpoint, pass `--api-base-url https://<approved-host>`.
+The wrapper resolves current process values first, then build-only Secrets
+Manager entries, then `.env.local` and `.env` in isolated subshells. An
+explicit map SSM parameter remains the highest-priority map override. It does
+not read or pass `NAVER_CLIENT_SECRET`, API bearer tokens, DB credentials,
+OpenAI keys, or Logto management secrets. Platform-specific Logto redirect
+names are preferred; legacy shared URI names are compatibility inputs only.
+For a non-production endpoint, pass `--api-base-url https://<approved-host>`.
 
 Do not copy a production `.env` into an Orca worktree, a simulator, CI, screenshots, chat, or a pull request. A session that lacks a needed value must report the missing **name** and stop; it must not invent a key, switch to mock data, or weaken an integration check.
 

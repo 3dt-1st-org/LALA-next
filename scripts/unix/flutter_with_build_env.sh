@@ -4,6 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 source "$SCRIPT_DIR/_common.sh"
+source "$SCRIPT_DIR/_flutter_public_build_config.sh"
 
 SOURCE_ENV=""
 REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}"
@@ -20,8 +21,8 @@ Usage: scripts/unix/flutter_with_build_env.sh [options] -- <flutter command...>
 Runs a Flutter build/test command with only public build configuration injected.
 NAVER_MAP_CLIENT_ID is resolved in this order: AWS SSM Parameter Store when
 --naver-map-client-id-ssm-param (or LALA_NAVER_MAP_CLIENT_ID_SSM_PARAM) is set, then AWS
-Secrets Manager (the approved restricted build secret), then a trusted local
-dotenv file parsed in an isolated subshell. No API bearer token, database DSN,
+Secrets Manager (the approved restricted build secret), then trusted
+.env.local and .env files parsed in isolated subshells. No API bearer token, database DSN,
 OpenAI key, Naver Search API secret, or Logto management secret is read.
 EOF
 }
@@ -45,41 +46,38 @@ if [[ $# -eq 0 ]]; then
 fi
 
 ROOT="$(repo_root)"
-SOURCE_ENV="${SOURCE_ENV:-$ROOT/.env}"
 
 # Public build-credential resolution order:
-#   1. AWS SSM Parameter Store -- only when the operator supplies a parameter name
-#      (--naver-map-client-id-ssm-param / LALA_NAVER_MAP_CLIENT_ID_SSM_PARAM).
-#      No default name is ever
-#      assumed, so SSM is skipped until that mapping is decided (CORRECTION_REQUIRED).
-#   2. AWS Secrets Manager -- the approved restricted build secret.
-#   3. Trusted local dotenv -- parsed in an isolated subshell so only
-#      NAVER_MAP_CLIENT_ID ever reaches this process or the Flutter build.
-key=""
+#   1. Operator-selected SSM Parameter Store mapping for the Naver map id.
+#   2. AWS Secrets Manager entries under the approved project prefix.
+#   3. Trusted .env.local, then .env, each read in an isolated subshell.
+key="${NAVER_MAP_CLIENT_ID:-}"
 
 if [[ -z "${key//[[:space:]]/}" ]] && [[ -n "$NAVER_MAP_CLIENT_ID_SSM_PARAM" ]] && command -v aws >/dev/null 2>&1; then
   key="$(aws ssm get-parameter --with-decryption --name "$NAVER_MAP_CLIENT_ID_SSM_PARAM" --region "$REGION" --query 'Parameter.Value' --output text --no-cli-pager 2>/dev/null || true)"
 fi
 
-if [[ -z "${key//[[:space:]]/}" ]] && command -v aws >/dev/null 2>&1; then
-  key="$(aws secretsmanager get-secret-value --secret-id "${PREFIX}naver-map-client-id" --region "$REGION" --query SecretString --output text --no-cli-pager 2>/dev/null || true)"
+NAVER_MAP_CLIENT_ID="$key"
+
+if [[ -n "$SOURCE_ENV" ]]; then
+  FLUTTER_PUBLIC_ENV_FILES=("$SOURCE_ENV")
+else
+  FLUTTER_PUBLIC_ENV_FILES=("$ROOT/.env.local" "$ROOT/.env")
 fi
 
-if [[ -z "${key//[[:space:]]/}" ]]; then
-  # Isolated: source the dotenv in a subshell so its other variables never enter
-  # this process's environment; surface only the single build key.
-  if [[ -f "$SOURCE_ENV" ]]; then
-    # shellcheck disable=SC1090
-    key="$( ( set -a; . "$SOURCE_ENV"; set +a; printf '%s' "${NAVER_MAP_CLIENT_ID:-}" ) )"
-  fi
-fi
+BUILD_SHA="$(git -C "$ROOT" rev-parse --short HEAD)"
+platform="any"
+for arg in "$@"; do
+  case "$arg" in
+    web) platform="web" ;;
+    ios|apk|appbundle) platform="native" ;;
+  esac
+done
 
-if [[ -z "${key//[[:space:]]/}" ]]; then
-  echo "NAVER_MAP_CLIENT_ID is required from restricted build configuration (SSM/Secrets Manager) or a trusted dotenv file." >&2
-  exit 1
-fi
+resolve_flutter_public_build_config "$platform" false
+append_flutter_public_dart_defines
 
 cd "$ROOT/apps/flutter_app"
-echo "Flutter build configuration resolved (API host and domain-restricted map key only)."
+echo "Flutter public build configuration resolved (map and optional Logto client identifiers)."
 echo "server_secret_printing=false"
-exec "$@" "--dart-define=LALA_API_BASE_URL=$API_BASE_URL" "--dart-define=NAVER_MAP_CLIENT_ID=$key" "--dart-define=LALA_BUILD_SHA=$(git -C "$ROOT" rev-parse --short HEAD)"
+exec "$@" "${FLUTTER_PUBLIC_DART_DEFINES[@]}"

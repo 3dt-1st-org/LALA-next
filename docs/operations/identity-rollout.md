@@ -4,9 +4,11 @@ Wave 1 still protects `/api/v1/*` with static transition credentials:
 `API_BEARER_TOKEN` or `IOS_API_KEY`. OAuth/Entra configuration can also be
 planned, surfaced in readiness, and used for signed RS256 JWT validation when
 the issuer, audience, JWKS URL, and required scopes are configured. Flutter
-token acquisition via the Logto dart SDK is implemented (merged PRs e9abd91,
-c701b99, e9a3566); static credential retirement and external activation remain
-approval-gated work.
+token acquisition via the Logto dart SDK and API JWT validation are present on
+`main`. Optional onboarding account linking, root-owned session reconciliation,
+and shared token-provider wiring are implemented on the current feature branch
+and remain subject to PR review and runtime verification. Static credential
+retirement and external activation remain approval-gated work.
 
 Generate the non-mutating plan:
 
@@ -51,9 +53,10 @@ are the AWS Secrets Manager secret names used in operational profiles:
 - `logto-endpoint` (authoritative; issuer + JWKS are derived from it)
 - `logto-api-audience` (authoritative)
 - `logto-management-endpoint` (optional; falls back to `logto-endpoint`)
-- Flutter client identifiers + redirect URIs (`LOGTO_WEB_APP_ID` /
-  `LOGTO_NATIVE_APP_ID`), configured via dart-defines / build config rather than
-  the API secret store.
+- Flutter public client identifiers and platform-specific redirect URIs
+  (`LOGTO_WEB_APP_ID`, `LOGTO_NATIVE_APP_ID`, and the corresponding
+  `LOGTO_*_REDIRECT_URI` values), configured through the public build resolver
+  rather than the API runtime environment.
 
 Legacy `oauth-*` secrets remain available as a fallback only when the Logto
 endpoint is not set:

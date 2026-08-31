@@ -23,7 +23,7 @@ Options:
   --source-env PATH              dotenv input (default: <repo>/.env)
   --prefix PREFIX                secret prefix (default: lala-next/)
   --region REGION                AWS region (default: AWS_REGION or us-east-1)
-  --include-build-config         include NAVER_MAP_CLIENT_ID for restricted build access
+  --include-build-config         include public Flutter map and Logto client configuration
   --apply --confirm SYNC_AWS_SECRETS
                                  create/update entries after explicit confirmation
   -h, --help                     show this help
@@ -80,7 +80,13 @@ RUNTIME_NAMES=(
 )
 BUILD_NAMES=()
 if [[ "$INCLUDE_BUILD_CONFIG" == "true" ]]; then
-  BUILD_NAMES+=(NAVER_MAP_CLIENT_ID)
+  BUILD_NAMES+=(
+    NAVER_MAP_CLIENT_ID
+    LOGTO_NATIVE_APP_ID LOGTO_WEB_APP_ID
+    LOGTO_NATIVE_REDIRECT_URI LOGTO_WEB_REDIRECT_URI
+    LOGTO_NATIVE_POST_LOGOUT_REDIRECT_URI LOGTO_WEB_POST_LOGOUT_REDIRECT_URI
+    LOGTO_REDIRECT_URI LOGTO_POST_LOGOUT_REDIRECT_URI
+  )
 fi
 
 secret_name_for_env() {

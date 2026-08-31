@@ -42,8 +42,9 @@ Logto Console에서 다음 순서로 만든다.
 
 1. API Resource를 만들고 HTTPS identifier를 `LOGTO_API_AUDIENCE`로 기록한다.
 2. Native Application을 만들고 public App ID를 `LOGTO_NATIVE_APP_ID`로 기록한다.
-3. Native redirect와 post sign-out URI에
-   `cloud.lalanext.lala://callback`을 등록한다.
+3. Native redirect에 `cloud.lalanext.lala://callback`을 등록한다. Native
+   post sign-out URI를 별도로 사용하지 않으면 앱은 같은 등록 callback으로
+   돌아간다.
 4. Web Application을 만들고 public App ID를 `LOGTO_WEB_APP_ID`로 기록한다.
 5. Web redirect에 `https://lala-next.cloud/auth-callback.html`을 등록한다.
 6. Web post sign-out URI에 `https://lala-next.cloud/`을 등록한다.
@@ -175,27 +176,21 @@ curl -sS -o /dev/null -w '%{http_code}\n' \
 
 ## 8. Flutter Web을 Vercel에 배포한다
 
-개발 PC에서 최신 `main`을 checkout하고 public 값만 dart-define으로 전달한다.
+개발 PC에서 최신 `main`을 checkout하고 저장소 wrapper로 public 값만
+dart-define에 전달한다. 운영 Web 빌드는 Logto Web public config가 없으면
+fail-closed한다.
 
 ```bash
-export LOGTO_ENDPOINT="<LOGTO_CLOUD_ENDPOINT>"
-export LOGTO_API_AUDIENCE="<LALA_API_RESOURCE_IDENTIFIER>"
-export LOGTO_NATIVE_APP_ID="<NATIVE_APP_ID>"
-export LOGTO_WEB_APP_ID="<WEB_APP_ID>"
-export NAVER_MAP_CLIENT_ID="<NAVER_MAP_CLIENT_ID>"
-
-flutter build web --release \
-  --pwa-strategy=none \
-  --dart-define=LALA_API_BASE_URL=https://api.lala-next.cloud \
-  --dart-define=LALA_BUILD_SHA="$(git rev-parse HEAD)" \
-  --dart-define=LOGTO_ENDPOINT="$LOGTO_ENDPOINT" \
-  --dart-define=LOGTO_API_AUDIENCE="$LOGTO_API_AUDIENCE" \
-  --dart-define=LOGTO_NATIVE_APP_ID="$LOGTO_NATIVE_APP_ID" \
-  --dart-define=LOGTO_WEB_APP_ID="$LOGTO_WEB_APP_ID" \
-  --dart-define=LOGTO_REDIRECT_URI=https://lala-next.cloud/auth-callback.html \
-  --dart-define=LOGTO_POST_LOGOUT_REDIRECT_URI=https://lala-next.cloud/ \
-  --dart-define=NAVER_MAP_CLIENT_ID="$NAVER_MAP_CLIENT_ID"
+scripts/unix/flutter_with_build_env.sh \
+  -- flutter build web --release --pwa-strategy=none
 ```
+
+Resolver order is the current process environment, approved AWS Secrets
+Manager public build entries, `.env.local`, then `.env`. Prefer
+`LOGTO_WEB_REDIRECT_URI` / `LOGTO_WEB_POST_LOGOUT_REDIRECT_URI` and
+`LOGTO_NATIVE_REDIRECT_URI` / `LOGTO_NATIVE_POST_LOGOUT_REDIRECT_URI`.
+Legacy shared URI names remain compatible but must not be used to make a Web
+URI authoritative for a native build.
 
 Vercel 프로젝트 binding을 환경에서 제공하고 production에 배포한다.
 
@@ -215,7 +210,8 @@ vercel deploy static-output --prod
 실제 사용자 계정 대신 배포 테스트 계정을 사용한다.
 
 1. 로그아웃 상태에서 장소와 날씨가 열리는지 확인한다.
-2. 설정의 로그인 버튼을 눌러 Logto hosted 화면이 열리는지 확인한다.
+2. 온보딩의 선택적 계정 연결 또는 설정의 로그인 버튼을 눌러 Logto hosted
+   화면이 열리는지 확인한다. 게스트 선택은 지도·검색·일정을 계속 열어야 한다.
 3. Google로 로그인하고 앱 복귀, `/api/v1/me` 성공, 새로고침 후 세션 복구,
    로그아웃을 확인한다.
 4. Apple로 같은 순서를 확인한다. iOS release 후보도

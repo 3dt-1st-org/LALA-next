@@ -36,7 +36,15 @@ if [[ "${1:-}" == "ssm" && "${2:-}" == "get-parameter" ]]; then
   [[ -n "${AWS_STUB_SSM:-}" ]] && { printf '%s' "$AWS_STUB_SSM"; exit 0; }
   exit 1
 elif [[ "${1:-}" == "secretsmanager" && "${2:-}" == "get-secret-value" ]]; then
-  [[ -n "${AWS_STUB_SM:-}" ]] && { printf '%s' "$AWS_STUB_SM"; exit 0; }
+  secret_id=""
+  while [[ $# -gt 0 ]]; do
+    if [[ "$1" == "--secret-id" ]]; then secret_id="${2:-}"; break; fi
+    shift
+  done
+  if [[ "$secret_id" == */naver-map-client-id && -n "${AWS_STUB_SM:-}" ]]; then
+    printf '%s' "$AWS_STUB_SM"
+    exit 0
+  fi
   exit 1
 fi
 exit 1
@@ -81,6 +89,13 @@ run_case() {
     AWS_STUB_SSM="$ssm_val" AWS_STUB_SM="$sm_val" \
     PATH="$TMP/bin:/usr/local/bin:/usr/bin:/bin" \
     env -u NAVER_MAP_CLIENT_ID -u NAVER_CLIENT_SECRET \
+      -u LOGTO_ENDPOINT -u LOGTO_API_AUDIENCE \
+      -u LOGTO_WEB_APP_ID -u LOGTO_NATIVE_APP_ID \
+      -u LOGTO_WEB_REDIRECT_URI -u LOGTO_NATIVE_REDIRECT_URI \
+      -u LOGTO_WEB_POST_LOGOUT_REDIRECT_URI \
+      -u LOGTO_NATIVE_POST_LOGOUT_REDIRECT_URI \
+      -u LOGTO_REDIRECT_URI -u LOGTO_POST_LOGOUT_REDIRECT_URI \
+      -u LOGTO_MANAGEMENT_CLIENT_SECRET \
     bash "$SCRIPT" --source-env "$dotenv" --naver-map-client-id-ssm-param "$ssm_param" \
       -- "$TMP/bin/stub" >/dev/null
 }
@@ -102,4 +117,29 @@ assert_absent  "$ENVF" "SHOULD_NOT_LEAK="
 assert_absent  "$ENVF" "NAVER_CLIENT_SECRET="
 assert_absent  "$ARGS" "must-not-leak"
 
-echo "PASS: build-helper resolution order is SSM -> Secrets Manager -> isolated dotenv."
+echo "Case D: public Logto client values are injected without management credentials."
+cat > "$TMP/logto-dotenv" <<'ENVEOF'
+NAVER_MAP_CLIENT_ID=nonsecret-map-placeholder-0000
+LOGTO_ENDPOINT=https://auth.example.test
+LOGTO_API_AUDIENCE=https://api.example.test
+LOGTO_WEB_APP_ID=web-app-id
+LOGTO_NATIVE_APP_ID=native-app-id
+LOGTO_WEB_REDIRECT_URI=https://app.example.test/auth-callback.html
+LOGTO_NATIVE_REDIRECT_URI=cloud.lalanext.lala://callback
+LOGTO_WEB_POST_LOGOUT_REDIRECT_URI=https://app.example.test/
+LOGTO_REDIRECT_URI=https://app.example.test/auth-callback.html
+LOGTO_POST_LOGOUT_REDIRECT_URI=https://app.example.test/
+LOGTO_MANAGEMENT_CLIENT_SECRET=must-not-reach-flutter
+ENVEOF
+run_case "$TMP/logto-dotenv" "" "" ""
+assert_present "$ARGS" "LOGTO_ENDPOINT=https://auth.example.test"
+assert_present "$ARGS" "LOGTO_API_AUDIENCE=https://api.example.test"
+assert_present "$ARGS" "LOGTO_WEB_APP_ID=web-app-id"
+assert_present "$ARGS" "LOGTO_NATIVE_APP_ID=native-app-id"
+assert_present "$ARGS" "LOGTO_WEB_REDIRECT_URI=https://app.example.test/auth-callback.html"
+assert_present "$ARGS" "LOGTO_NATIVE_REDIRECT_URI=cloud.lalanext.lala://callback"
+assert_absent  "$ARGS" "LOGTO_MANAGEMENT_CLIENT_SECRET"
+assert_absent  "$ARGS" "must-not-reach-flutter"
+assert_absent  "$ENVF" "LOGTO_MANAGEMENT_CLIENT_SECRET="
+
+echo "PASS: public build config is source-ordered, Logto-aware, and server-secret safe."
