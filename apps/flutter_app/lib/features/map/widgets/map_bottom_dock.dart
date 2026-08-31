@@ -17,6 +17,8 @@ import 'empty_dock_content.dart';
 
 /// 지도 하단 독(선택 장소 요약 + 도슨트 미리보기)(C3 추출 — main.dart 의 _MapBottomDock).
 class MapBottomDock extends StatelessWidget {
+  static const double mobileCollapsedHeight = 84;
+
   const MapBottomDock({
     super.key,
     required this.isWide,
@@ -130,11 +132,11 @@ class MapBottomDock extends StatelessWidget {
             key: const ValueKey('map-dock-expand-toggle'),
             onTap: onToggleExpanded,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 12, 12),
+              padding: const EdgeInsets.fromLTRB(16, 6, 12, 8),
               child: Column(
                 children: [
                   _DockHandle(color: const Color(0xFFCBD5E0)),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 6),
                   Row(
                     children: [
                       CategoryBadge(

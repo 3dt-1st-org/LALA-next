@@ -268,7 +268,7 @@ class Dashboard extends StatelessWidget {
             : 220.0;
         final dockShowsExpandedContent =
             isWide || topPlace == null || mapDockExpanded;
-        // B안: 선택 장소가 있으면 지도 우선 96dp 요약으로 시작한다. 오류/빈 상태와
+        // B2: 선택 장소가 있으면 지도 우선 84dp 요약으로 시작한다. 오류/빈 상태와
         // 데스크톱은 복구 액션과 정보 밀도를 보존하기 위해 기존 높이를 유지한다.
         final bottomDockHeight = dockShowsExpandedContent
             ? isWide
@@ -276,7 +276,7 @@ class Dashboard extends StatelessWidget {
                   : constraints.maxHeight < 700
                   ? 164.0
                   : 196.0
-            : 96.0;
+            : MapBottomDock.mobileCollapsedHeight;
         final floatingControlsBottom = bottomDockHeight + 16;
         return Stack(
           children: [

@@ -187,8 +187,8 @@ void main() {
     });
   });
 
-  group('collapsed place summary (B map-space option)', () {
-    testWidgets('starts at 96dp and keeps only the essential place identity', (
+  group('collapsed place summary (B2 slim map-space option)', () {
+    testWidgets('starts at 84dp and keeps only the essential place identity', (
       tester,
     ) async {
       await tester.pumpWidget(
@@ -197,7 +197,7 @@ void main() {
             width: 393,
             child: _dock(
               expanded: false,
-              height: 96,
+              height: MapBottomDock.mobileCollapsedHeight,
               weather: _weather(temp: '23', source: 'kma_ultra_srt_ncst'),
               dataAsOf: '2026-06-19T02:24:44.557686+00:00',
               onToggleExpanded: () {},
@@ -209,13 +209,19 @@ void main() {
 
       expect(
         tester.getSize(find.byKey(const ValueKey('map-bottom-dock'))).height,
-        96,
+        MapBottomDock.mobileCollapsedHeight,
       );
       expect(find.text('행궁동 카페'), findsOneWidget);
       expect(find.text('210m'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('map-dock-expand-toggle')),
         findsOneWidget,
+      );
+      expect(
+        tester
+            .getSize(find.byKey(const ValueKey('map-dock-expand-toggle')))
+            .height,
+        greaterThanOrEqualTo(44),
       );
       expect(find.textContaining('데이터 기준'), findsNothing);
       expect(find.textContaining('PM10'), findsNothing);
@@ -230,7 +236,7 @@ void main() {
             width: 393,
             child: _dock(
               expanded: false,
-              height: 96,
+              height: MapBottomDock.mobileCollapsedHeight,
               onToggleExpanded: () => toggleCount += 1,
             ),
           ),

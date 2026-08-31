@@ -444,7 +444,7 @@ void main() {
             dataAsOf: '2026-06-19T02:24:44.557686+00:00',
             topPlace: _dockPlace(),
             uiLanguage: 'ko',
-            height: 96,
+            height: MapBottomDock.mobileCollapsedHeight,
             expanded: false,
             docentScript: null,
             docentAudio: null,
