@@ -189,11 +189,24 @@ class UserSettingsSheet extends StatelessWidget {
                 child: SegmentedButton<String>(
                   segments: [
                     for (final code in kLalaLanguages)
-                      ButtonSegment(value: code, label: Text(code)),
+                      ButtonSegment(
+                        value: code,
+                        tooltip: languageOptionLabel(code, uiLanguage),
+                        label: Text(
+                          compactLanguageOptionLabel(code),
+                          maxLines: 1,
+                          softWrap: false,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
                   ],
                   selected: {normalizeLalaLanguage(uiLanguage)},
                   onSelectionChanged: (values) =>
                       onLanguageChanged(values.first),
+                  showSelectedIcon: false,
                   style: SegmentedButton.styleFrom(
                     backgroundColor: Colors.white,
                     selectedBackgroundColor: const Color(0xFF2B6CB0),
@@ -258,6 +271,23 @@ class UserSettingsSheet extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+/// 좁은 설정 시트에서도 지원 언어 다섯 개를 한 줄로 보여 주는 짧은 표기.
+String compactLanguageOptionLabel(String optionLanguage) {
+  switch (normalizeLalaLanguage(optionLanguage)) {
+    case 'en':
+      return 'EN';
+    case 'ja':
+      return '日本';
+    case 'zh-Hans':
+      return '简中';
+    case 'zh-Hant':
+      return '繁中';
+    case 'ko':
+    default:
+      return 'KO';
   }
 }
 
