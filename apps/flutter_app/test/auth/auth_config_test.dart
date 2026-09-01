@@ -4,7 +4,7 @@ import 'package:lala_next_app/auth/logto_auth_gateway.dart';
 void main() {
   group('LalaAuthConfig.fromEnvironment', () {
     test(
-      'normalizes configured Web values once and selects the Web app ID',
+      'normalizes platform-specific Web values and selects the Web app ID',
       () {
         final config = _config(
           isWeb: true,
@@ -13,9 +13,9 @@ void main() {
             'LOGTO_WEB_APP_ID': '  web-client-id  ',
             'LOGTO_NATIVE_APP_ID': 'native-client-id',
             'LOGTO_API_AUDIENCE': '  https://api.example.com  ',
-            'LOGTO_REDIRECT_URI':
+            'LOGTO_WEB_REDIRECT_URI':
                 '  https://app.example.com/auth-callback.html  ',
-            'LOGTO_POST_LOGOUT_REDIRECT_URI':
+            'LOGTO_WEB_POST_LOGOUT_REDIRECT_URI':
                 '  https://app.example.com/signed-out  ',
           },
         );
@@ -65,7 +65,7 @@ void main() {
       expect(config.enabled, isTrue);
     });
 
-    test('rejects malformed and native-only Web redirect URIs', () {
+    test('rejects malformed Web redirect URIs', () {
       final malformed = _config(
         isWeb: true,
         values: {
@@ -73,36 +73,59 @@ void main() {
           'LOGTO_REDIRECT_URI': 'not a uri',
         },
       );
-      final nativeScheme = _config(
-        isWeb: true,
-        values: {
-          ..._requiredValues(webAppId: 'web-client-id'),
-          'LOGTO_REDIRECT_URI': 'cloud.lalanext.lala://callback',
-        },
-      );
 
       expect(malformed.enabled, isFalse);
-      expect(nativeScheme.enabled, isFalse);
     });
 
-    test('rejects Web-only native redirect URIs', () {
+    test('rejects the Logto Management API as the app API audience', () {
       final config = _config(
         isWeb: false,
         values: {
           ..._requiredValues(nativeAppId: 'native-client-id'),
-          'LOGTO_REDIRECT_URI': 'https://app.example.com/auth-callback.html',
+          'LOGTO_ENDPOINT': 'https://auth.example.com/',
+          'LOGTO_API_AUDIENCE': 'https://auth.example.com/api/',
         },
       );
 
       expect(config.enabled, isFalse);
     });
 
-    test('rejects an invalid post-logout URI for the selected platform', () {
+    test('ignores a legacy redirect that belongs to the other platform', () {
+      final webConfig = _config(
+        isWeb: true,
+        baseUri: Uri.parse('https://app.example.com/start'),
+        values: {
+          ..._requiredValues(webAppId: 'web-client-id'),
+          'LOGTO_REDIRECT_URI': 'cloud.lalanext.lala://callback',
+        },
+      );
+      final nativeConfig = _config(
+        isWeb: false,
+        values: {
+          ..._requiredValues(nativeAppId: 'native-client-id'),
+          'LOGTO_REDIRECT_URI': 'https://app.example.com/auth-callback.html',
+          'LOGTO_POST_LOGOUT_REDIRECT_URI':
+              'https://app.example.com/signed-out',
+        },
+      );
+
+      expect(
+        webConfig.redirectUri,
+        'https://app.example.com/auth-callback.html',
+      );
+      expect(webConfig.enabled, isTrue);
+      expect(nativeConfig.redirectUri, 'cloud.lalanext.lala://callback');
+      expect(nativeConfig.postLogoutRedirectUri, isNull);
+      expect(nativeConfig.enabled, isTrue);
+    });
+
+    test('rejects an invalid platform-specific post-logout URI', () {
       final config = _config(
         isWeb: true,
         values: {
           ..._requiredValues(webAppId: 'web-client-id'),
-          'LOGTO_POST_LOGOUT_REDIRECT_URI': 'cloud.lalanext.lala://signed-out',
+          'LOGTO_WEB_POST_LOGOUT_REDIRECT_URI':
+              'cloud.lalanext.lala://signed-out',
         },
       );
 

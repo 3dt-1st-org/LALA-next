@@ -21,8 +21,11 @@ abstract final class LalaRoutePaths {
   /// 3/4 언어 선택.
   static const String onboardingLanguage = '/onboarding/language';
 
-  /// 4/4 위치 권한 요청 — 완료 시 /map-route 로 전환.
+  /// 3/3 위치 권한 요청 — 선택형 계정 연결 또는 /map-route 로 전환.
   static const String onboardingLocation = '/onboarding/location';
+
+  /// 위치 선택 뒤의 선택형 계정 연결. 3단계 진행률에는 포함하지 않는다.
+  static const String onboardingAccount = '/onboarding/account';
 
   // --- ONMU P3b: 커뮤니티 push 라우트(메인 쉘 외부, 탭 상태 유지) ---
   /// 커뮤니티 게시판 피드.

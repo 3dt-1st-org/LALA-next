@@ -14,9 +14,14 @@ import 'package:lala_next_app/features/community/presentation/chat_ws_client.dar
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 
 class ChatRoomPage extends StatefulWidget {
-  const ChatRoomPage({super.key, required this.roomId});
+  const ChatRoomPage({
+    super.key,
+    required this.roomId,
+    this.initialConfig = const LalaAppConfig.fromEnvironment(),
+  });
 
   final String roomId;
+  final LalaAppConfig initialConfig;
 
   @override
   State<ChatRoomPage> createState() => _ChatRoomPageState();
@@ -44,7 +49,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   @override
   void initState() {
     super.initState();
-    _config = LalaAppConfig.fromEnvironment();
+    _config = widget.initialConfig;
     _client = createCommunityClient(_config);
     _ws = ChatWsClient();
     _inputController = TextEditingController();

@@ -111,8 +111,7 @@ class AccountSettingsSection extends StatelessWidget {
       );
     }
 
-    final me = state.me;
-    if (me == null) {
+    if (!state.authenticated) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -164,8 +163,12 @@ class AccountSettingsSection extends StatelessWidget {
             const Icon(Icons.account_circle_outlined, color: Color(0xFF2B6CB0)),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(
-                lalaCopyMulti(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    state.profile?.name ??
+                        lalaCopyMulti(
               language,
               ko: '로그인됨',
               en: 'Signed in',
@@ -173,10 +176,25 @@ class AccountSettingsSection extends StatelessWidget {
               zhHans: '已登录',
               zhHant: '已登入',
             ),
-                style: const TextStyle(
-                  color: Color(0xFF1E293B),
-                  fontWeight: FontWeight.w900,
-                ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF1E293B),
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  if (state.profile?.email != null)
+                    Text(
+                      state.profile!.email!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF64748B),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                ],
               ),
             ),
             IconButton(
@@ -194,11 +212,30 @@ class AccountSettingsSection extends StatelessWidget {
             ),
           ],
         ),
-        if (state.errorMessage != null) ...[
+        if (state.accountSyncStatus == LalaAccountSyncStatus.error) ...[
+          const SizedBox(height: 8),
+          AccountErrorText(language: language),
+          TextButton.icon(
+            key: const ValueKey('account-sync-retry'),
+            onPressed: controller.retryAccountSync,
+            icon: const Icon(Icons.refresh, size: 18),
+            label: Text(
+              lalaCopyMulti(
+                language,
+                ko: '계정 연결 다시 시도',
+                en: 'Retry account sync',
+                ja: 'アカウント連携を再試行',
+                zhHans: '重试账户同步',
+                zhHant: '重試帳戶同步',
+              ),
+            ),
+          ),
+        ] else if (state.errorMessage != null) ...[
           const SizedBox(height: 8),
           AccountErrorText(language: language),
         ],
-        TextButton(
+        if (state.me != null)
+          TextButton(
           key: const ValueKey('account-delete'),
           onPressed: () => _confirmDelete(context),
           style: TextButton.styleFrom(

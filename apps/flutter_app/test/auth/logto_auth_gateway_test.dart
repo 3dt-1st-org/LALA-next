@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lala_next_app/auth/logto_auth_gateway.dart';
 import 'package:logto_dart_sdk/logto_dart_sdk.dart';
+// ignore: implementation_imports
+import 'package:logto_dart_sdk/src/modules/id_token.dart';
 
 void main() {
   const config = LalaAuthConfig(
@@ -12,6 +14,38 @@ void main() {
   );
 
   group('LogtoAuthGateway', () {
+    test('SDK config requests the API resource and email profile scope', () {
+      final sdkConfig = createLogtoSdkConfig(config);
+
+      expect(sdkConfig.resources, [config.apiAudience]);
+      expect(sdkConfig.scopes, contains(LogtoUserScope.email.value));
+    });
+
+    test('maps public ID-token claims into an account profile', () async {
+      final client = FakeLogtoClient(
+        authenticated: true,
+        claims: OpenIdClaims.fromJson({
+          'iss': 'https://auth.example.com/oidc',
+          'sub': 'account-123',
+          'aud': ['native-client-id'],
+          'exp': 2000000000,
+          'iat': 1900000000,
+          'name': 'Ada Lovelace',
+          'email': 'ada@example.com',
+          'email_verified': true,
+          'picture': 'https://images.example.com/ada.png',
+        }),
+      );
+      final gateway = LogtoAuthGateway(client, config: config);
+
+      final profile = await gateway.profile;
+
+      expect(profile?.name, 'Ada Lovelace');
+      expect(profile?.email, 'ada@example.com');
+      expect(profile?.emailVerified, isTrue);
+      expect(profile?.picture, 'https://images.example.com/ada.png');
+    });
+
     test('forwards sign-in and access-token values to the SDK', () async {
       final client = FakeLogtoClient(
         authenticated: true,
@@ -72,6 +106,7 @@ class FakeLogtoClient extends LogtoClient {
   FakeLogtoClient({
     required this.authenticated,
     this.accessToken,
+    this.claims,
     this.clearSessionOnSignOut = false,
     this.signOutError,
   }) : super(
@@ -83,6 +118,7 @@ class FakeLogtoClient extends LogtoClient {
 
   bool authenticated;
   final AccessToken? accessToken;
+  final OpenIdClaims? claims;
   final bool clearSessionOnSignOut;
   final Object? signOutError;
   final List<String> signInRedirects = [];
@@ -91,6 +127,9 @@ class FakeLogtoClient extends LogtoClient {
 
   @override
   Future<bool> get isAuthenticated async => authenticated;
+
+  @override
+  Future<OpenIdClaims?> get idTokenClaims async => claims;
 
   @override
   Future<void> signIn(

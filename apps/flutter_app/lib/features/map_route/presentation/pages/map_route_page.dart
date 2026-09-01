@@ -2,6 +2,7 @@
 // 하단 네비게이션 쉘 안에서도 앱의 기존 동작이 1:1로 유지된다.
 import 'package:flutter/material.dart';
 
+import 'package:lala_next_app/auth/auth_controller.dart';
 import 'package:lala_next_app/auth/logto_auth_gateway.dart';
 import 'package:lala_next_app/core/backend/lala_backend.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
@@ -15,16 +16,18 @@ class MapRoutePage extends StatelessWidget {
     required this.initialConfig,
     required this.locationProvider,
     required this.recommendationRecoveryDelays,
-    required this.authControllerFactory,
+    this.authController,
+    this.authControllerFactory,
     required this.localSignalActionController,
     super.key,
-  });
+  }) : assert(authController != null || authControllerFactory != null);
 
   final LalaBackendFactory backendFactory;
   final LalaAppConfig initialConfig;
   final LalaLocationProvider locationProvider;
   final List<Duration> recommendationRecoveryDelays;
-  final LalaAuthControllerFactory authControllerFactory;
+  final LalaAuthController? authController;
+  final LalaAuthControllerFactory? authControllerFactory;
   final LocalSignalActionController localSignalActionController;
 
   @override
@@ -34,6 +37,7 @@ class MapRoutePage extends StatelessWidget {
       initialConfig: initialConfig,
       locationProvider: locationProvider,
       recommendationRecoveryDelays: recommendationRecoveryDelays,
+      authController: authController,
       authControllerFactory: authControllerFactory,
       localSignalActionController: localSignalActionController,
     );

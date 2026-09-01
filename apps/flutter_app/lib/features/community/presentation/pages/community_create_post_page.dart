@@ -9,7 +9,12 @@ import 'package:lala_next_app/features/community/presentation/community_api.dart
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 
 class CommunityCreatePostPage extends StatefulWidget {
-  const CommunityCreatePostPage({super.key});
+  const CommunityCreatePostPage({
+    this.initialConfig = const LalaAppConfig.fromEnvironment(),
+    super.key,
+  });
+
+  final LalaAppConfig initialConfig;
 
   @override
   State<CommunityCreatePostPage> createState() =>
@@ -30,7 +35,7 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
   @override
   void initState() {
     super.initState();
-    _config = LalaAppConfig.fromEnvironment();
+    _config = widget.initialConfig;
     _client = createCommunityClient(_config);
     _titleController = TextEditingController();
     _bodyController = TextEditingController();

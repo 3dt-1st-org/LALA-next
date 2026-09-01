@@ -13,7 +13,12 @@ import 'package:lala_next_app/features/community/presentation/community_api.dart
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 
 class CommunityFeedPage extends StatefulWidget {
-  const CommunityFeedPage({super.key});
+  const CommunityFeedPage({
+    this.initialConfig = const LalaAppConfig.fromEnvironment(),
+    super.key,
+  });
+
+  final LalaAppConfig initialConfig;
 
   @override
   State<CommunityFeedPage> createState() => _CommunityFeedPageState();
@@ -38,7 +43,7 @@ class _CommunityFeedPageState extends State<CommunityFeedPage> {
   @override
   void initState() {
     super.initState();
-    _config = LalaAppConfig.fromEnvironment();
+    _config = widget.initialConfig;
     _client = createCommunityClient(_config);
     _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
