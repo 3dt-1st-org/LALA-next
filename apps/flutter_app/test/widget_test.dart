@@ -24,6 +24,7 @@ import 'package:lala_next_app/features/search/presentation/pages/search_page.dar
 import 'package:lala_next_app/lala_map_fallback.dart';
 import 'package:lala_next_app/lala_map_models.dart';
 import 'package:lala_next_app/main.dart';
+import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 void main() {
@@ -2685,7 +2686,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('settings-button')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('en'));
+    await tester.tap(find.byKey(const ValueKey('settings-language-en')));
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.arrow_back_ios_new));
     await tester.pumpAndSettle();
@@ -2721,22 +2722,23 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('settings-button')));
     await tester.pumpAndSettle();
 
-    // V6: 세그먼트 라벨은 정규 언어 코드(ko/en/ja/zh-Hans/zh-Hant)로 표시된다.
-    expect(find.text('ko'), findsOneWidget);
-    expect(find.text('en'), findsOneWidget);
-    expect(find.text('ja'), findsOneWidget);
-    expect(find.text('zh-Hans'), findsOneWidget);
-    expect(find.text('zh-Hant'), findsOneWidget);
+    // 다섯 언어는 좁은 화면에서도 한 줄인 짧은 라벨과 안정적인 키를 쓴다.
+    for (final code in kLalaLanguages) {
+      expect(find.byKey(ValueKey('settings-language-$code')), findsOneWidget);
+    }
+    expect(find.text('KO'), findsOneWidget);
+    expect(find.text('EN'), findsOneWidget);
+    expect(find.text('日本'), findsOneWidget);
+    expect(find.text('简中'), findsOneWidget);
+    expect(find.text('繁中'), findsOneWidget);
     expect(_visibleMixedLanguageTexts(tester), isEmpty);
 
-    await tester.tap(find.text('en'));
+    await tester.tap(find.byKey(const ValueKey('settings-language-en')));
     await tester.pumpAndSettle();
 
-    expect(find.text('ko'), findsOneWidget);
-    expect(find.text('en'), findsOneWidget);
-    expect(find.text('ja'), findsOneWidget);
-    expect(find.text('zh-Hans'), findsOneWidget);
-    expect(find.text('zh-Hant'), findsOneWidget);
+    for (final code in kLalaLanguages) {
+      expect(find.byKey(ValueKey('settings-language-$code')), findsOneWidget);
+    }
     expect(_visibleMixedLanguageTexts(tester), isEmpty);
   });
 
@@ -3021,7 +3023,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('settings-button')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('en'));
+    await tester.tap(find.byKey(const ValueKey('settings-language-en')));
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.arrow_back_ios_new));
     await tester.pumpAndSettle();
@@ -3073,7 +3075,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('settings-button')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('en'));
+    await tester.tap(find.byKey(const ValueKey('settings-language-en')));
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.arrow_back_ios_new));
     await tester.pumpAndSettle();
@@ -3122,7 +3124,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('settings-button')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('en'));
+    await tester.tap(find.byKey(const ValueKey('settings-language-en')));
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.arrow_back_ios_new));
     await tester.pumpAndSettle();
@@ -3155,7 +3157,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('settings-button')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('en'));
+    await tester.tap(find.byKey(const ValueKey('settings-language-en')));
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.arrow_back_ios_new));
     await tester.pumpAndSettle();
@@ -3618,7 +3620,8 @@ class _TestLalaAppState extends State<TestLalaApp> {
     return LalaApp(
       backendFactory: widget.backendFactory,
       initialConfig: widget.initialConfig.copyWith(
-        requireLocationStartConfirmation: widget.requireLocationStartConfirmation,
+        requireLocationStartConfirmation:
+            widget.requireLocationStartConfirmation,
       ),
       recommendationRecoveryDelays:
           widget.recommendationRecoveryDelays ??

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../auth/auth_controller.dart';
+import '../../../features/preferences/presentation/travel_preferences_page.dart';
 import '../../../shared/l10n/lala_copy.dart';
 import 'account_settings_section.dart';
 import 'privacy_details_sheet.dart';
@@ -54,7 +55,7 @@ class UserSettingsSheet extends StatelessWidget {
       builder: (context, scrollController) {
         return DecoratedBox(
           decoration: BoxDecoration(
-            color: const Color(0xFFF5F5F5),
+            color: const Color(0xFFF7F9FC),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
             boxShadow: const [
               BoxShadow(
@@ -113,13 +114,13 @@ class UserSettingsSheet extends StatelessWidget {
               ),
               SettingsSection(
                 title: lalaCopyMulti(
-                    uiLanguage,
-                    ko: '개인정보 동의 안내',
-                    en: 'Privacy notice',
-                    ja: 'プライバシーに関するお知らせ',
-                    zhHans: '隐私须知',
-                    zhHant: '隱私須知',
-                  ),
+                  uiLanguage,
+                  ko: '개인정보 동의 안내',
+                  en: 'Privacy notice',
+                  ja: 'プライバシーに関するお知らせ',
+                  zhHans: '隐私须知',
+                  zhHant: '隱私須知',
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -149,13 +150,13 @@ class UserSettingsSheet extends StatelessWidget {
                       ),
                       child: Text(
                         lalaCopyMulti(
-      uiLanguage,
-      ko: '자세히 보기',
-      en: 'Learn more',
-      ja: '詳しく見る',
-      zhHans: '了解更多',
-      zhHant: '了解更多',
-    ),
+                          uiLanguage,
+                          ko: '자세히 보기',
+                          en: 'Learn more',
+                          ja: '詳しく見る',
+                          zhHans: '了解更多',
+                          zhHant: '了解更多',
+                        ),
                       ),
                     ),
                   ],
@@ -163,13 +164,13 @@ class UserSettingsSheet extends StatelessWidget {
               ),
               SettingsSection(
                 title: lalaCopyMulti(
-                    uiLanguage,
-                    ko: '위치기반 정보 제공 동의',
-                    en: 'Location recommendations',
-                    ja: '位置情報に基づく情報提供の同意',
-                    zhHans: '基于位置的信息提供授权',
-                    zhHant: '基於位置的資訊提供同意',
-                  ),
+                  uiLanguage,
+                  ko: '위치기반 정보 제공 동의',
+                  en: 'Location recommendations',
+                  ja: '位置情報に基づく情報提供の同意',
+                  zhHans: '基于位置的信息提供授权',
+                  zhHant: '基於位置的資訊提供同意',
+                ),
                 trailing: Switch(
                   value: locationConsentEnabled,
                   onChanged: onLocationConsentChanged,
@@ -184,18 +185,29 @@ class UserSettingsSheet extends StatelessWidget {
                   zhHans: '语言',
                   zhHant: '語言',
                 ),
-                // V6: 다섯 언어. 각 세그먼트 라벨은 해당 언어 고유명(국기 이모지 금지).
-                // SegmentedButton 은 행이 좁아 짧은 고유명(KO/EN/JA/简/繁)을 쓴다.
+                // 짧은 고유명은 좁은 화면에서도 다섯 언어를 한 줄에 유지한다.
                 child: SegmentedButton<String>(
                   segments: [
                     for (final code in kLalaLanguages)
-                      ButtonSegment(value: code, label: Text(code)),
+                      ButtonSegment(
+                        value: code,
+                        tooltip: languageOptionLabel(code, uiLanguage),
+                        label: Text(
+                          compactLanguageOptionLabel(code),
+                          key: ValueKey('settings-language-$code'),
+                          maxLines: 1,
+                          softWrap: false,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
                   ],
-                  selected: {
-                    normalizeLalaLanguage(uiLanguage),
-                  },
+                  selected: {normalizeLalaLanguage(uiLanguage)},
                   onSelectionChanged: (values) =>
                       onLanguageChanged(values.first),
+                  showSelectedIcon: false,
                   style: SegmentedButton.styleFrom(
                     backgroundColor: Colors.white,
                     selectedBackgroundColor: const Color(0xFF2B6CB0),
@@ -205,13 +217,13 @@ class UserSettingsSheet extends StatelessWidget {
               ),
               SettingsSection(
                 title: lalaCopyMulti(
-      uiLanguage,
-      ko: '글꼴 크기',
-      en: 'Font size',
-      ja: 'フォントサイズ',
-      zhHans: '字体大小',
-      zhHant: '字型大小',
-    ),
+                  uiLanguage,
+                  ko: '글꼴 크기',
+                  en: 'Font size',
+                  ja: 'フォントサイズ',
+                  zhHans: '字体大小',
+                  zhHant: '字型大小',
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -235,30 +247,48 @@ class UserSettingsSheet extends StatelessWidget {
               ),
               SettingsSection(
                 title: lalaCopyMulti(
-      uiLanguage,
-      ko: '앱 정보',
-      en: 'App info',
-      ja: 'アプリ情報',
-      zhHans: '应用信息',
-      zhHant: '應用資訊',
-    ),
+                  uiLanguage,
+                  ko: '앱 정보',
+                  en: 'App info',
+                  ja: 'アプリ情報',
+                  zhHans: '应用信息',
+                  zhHant: '應用資訊',
+                ),
                 child: MetricRow(
                   label: lalaCopyMulti(
-      uiLanguage,
-      ko: '버전',
-      en: 'Version',
-      ja: 'バージョン',
-      zhHans: '版本',
-      zhHant: '版本',
-    ),
+                    uiLanguage,
+                    ko: '버전',
+                    en: 'Version',
+                    ja: 'バージョン',
+                    zhHans: '版本',
+                    zhHant: '版本',
+                  ),
                   value: '1.0',
                 ),
               ),
+              TravelPreferencesSettingsSection(language: uiLanguage),
             ],
           ),
         );
       },
     );
+  }
+}
+
+/// 좁은 설정 시트에서도 지원 언어 다섯 개를 한 줄로 보여 주는 짧은 표기.
+String compactLanguageOptionLabel(String optionLanguage) {
+  switch (normalizeLalaLanguage(optionLanguage)) {
+    case 'en':
+      return 'EN';
+    case 'ja':
+      return '日本';
+    case 'zh-Hans':
+      return '简中';
+    case 'zh-Hant':
+      return '繁中';
+    case 'ko':
+    default:
+      return 'KO';
   }
 }
 

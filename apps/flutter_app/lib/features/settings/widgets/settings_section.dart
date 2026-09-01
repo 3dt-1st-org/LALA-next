@@ -21,7 +21,8 @@ class SettingsSection extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFDCE5F0)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
