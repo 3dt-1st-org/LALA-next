@@ -1,8 +1,8 @@
 # Issue #120 docent-first implementation contract
 
-Status: approved implementation input  
-Base: `origin/main` at `35ed6bad7ecaa3acaf98c177ace63f0cd8a36ea3`  
-Branch: `feature/docent-first-experience`  
+Status: approved implementation input
+Base: `origin/main` at `35ed6bad7ecaa3acaf98c177ace63f0cd8a36ea3`
+Branch: `feature/docent-first-experience`
 Issue: <https://github.com/3dt-1st-org/LALA-next/issues/120>
 
 ## 1. Objective
