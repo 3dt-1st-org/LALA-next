@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -110,6 +111,17 @@ void main() {
   testWidgets('builds a Korean restaurant card from declared food needs', (
     tester,
   ) async {
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async => null,
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+
     await tester.pumpWidget(
       const MaterialApp(
         home: FoodPreferencesPage(
@@ -149,6 +161,12 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.textContaining('안전을 보장하지 않아요'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('copy-korean-restaurant-card')));
+    await tester.pump();
+    expect(find.text('한국어 문구를 복사했어요.'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 2));
+    expect(find.text('한국어 문구를 복사했어요.'), findsNothing);
   });
 
   testWidgets('shows the Korean request and a visitor-language translation', (

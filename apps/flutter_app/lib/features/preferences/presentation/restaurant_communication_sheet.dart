@@ -569,20 +569,69 @@ Future<void> _copyToClipboard(
 ) async {
   await Clipboard.setData(ClipboardData(text: value));
   if (!context.mounted) return;
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(
-        _copy(
-          language,
-          ko: '한국어 문구를 복사했어요.',
-          en: 'Korean text copied.',
-          ja: '韓国語の文をコピーしました。',
-          zhHans: '已复制韩语内容。',
-          zhHant: '已複製韓語內容。',
+  final message = _copy(
+    language,
+    ko: '한국어 문구를 복사했어요.',
+    en: 'Korean text copied.',
+    ja: '韓国語の文をコピーしました。',
+    zhHans: '已复制韩语内容。',
+    zhHant: '已複製韓語內容。',
+  );
+  final overlay = Overlay.maybeOf(context);
+  if (overlay == null) return;
+
+  late final OverlayEntry entry;
+  entry = OverlayEntry(
+    builder: (context) => Positioned(
+      left: 24,
+      right: 24,
+      bottom: MediaQuery.paddingOf(context).bottom + 84,
+      child: IgnorePointer(
+        child: Center(
+          child: Semantics(
+            container: true,
+            liveRegion: true,
+            label: message,
+            child: Material(
+              color: const Color(0xFF172237),
+              elevation: 6,
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.check_circle_outline,
+                      size: 18,
+                      color: Colors.white,
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        message,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     ),
   );
+  overlay.insert(entry);
+  await Future<void>.delayed(const Duration(milliseconds: 1600));
+  if (entry.mounted) entry.remove();
 }
 
 String _dietaryKoreanLabel(DietaryMode value) => switch (value) {
