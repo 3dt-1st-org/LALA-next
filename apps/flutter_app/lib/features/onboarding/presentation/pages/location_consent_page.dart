@@ -178,6 +178,7 @@ class _OnboardingLocationConsentPageState
                     // 읽기 전용 라이브 미리보기. 좌표가 없으므로 핀은 없다.
                     LocationMapPreview(
                       naverMapClientId: _config.naverMapClientId,
+                      language: language,
                       centerLat: _config.lat,
                       centerLng: _config.lng,
                     ),

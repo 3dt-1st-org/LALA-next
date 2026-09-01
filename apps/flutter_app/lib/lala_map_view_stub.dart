@@ -17,10 +17,7 @@ Widget buildLalaMapView({
   ValueChanged<LalaMapCamera>? onCameraIdle,
 }) {
   return LalaMapFallbackView(
-    // V6: ko 만 KO 안내문(방문객 로케일 EN 폴백).
-    message: normalizeLalaLanguage(language) != 'ko'
-        ? 'The live map is not available right now.'
-        : '현재 지도를 표시할 수 없습니다.',
+    message: liveMapUnavailableLabel(language),
     language: language,
     centerLat: centerLat,
     centerLng: centerLng,

@@ -8,29 +8,53 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lala_next_app/features/onboarding/presentation/widgets/location_map_preview.dart';
 
 void main() {
-  testWidgets(
-    'no client id renders the explicit map-unavailable state',
-    (tester) async {
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: Material(
-            child: LocationMapPreview(
-              naverMapClientId: '',
-              centerLat: 37.2636,
-              centerLng: 127.0286,
-            ),
+  testWidgets('no client id renders the explicit map-unavailable state', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Material(
+          child: LocationMapPreview(
+            naverMapClientId: '',
+            language: 'ko',
+            centerLat: 37.2636,
+            centerLng: 127.0286,
           ),
         ),
-      );
-      await tester.pump();
+      ),
+    );
+    await tester.pump();
 
-      // 경계(buildLalaMapView)를 거쳐 폴백 메시지로 떨어진다.
-      expect(find.text('현재 지도를 표시할 수 없습니다.'), findsOneWidget);
-      // 읽기 전용: 제스처 차단.
-      expect(find.byType(IgnorePointer), findsWidgets);
-      // 좌표가 없으면 발명된 매장/핀이 없어야 한다.
-      expect(find.text('로컬 맛집'), findsNothing);
-      expect(find.text('문화 행사'), findsNothing);
-    },
-  );
+    // 경계(buildLalaMapView)를 거쳐 폴백 메시지로 떨어진다.
+    expect(find.text('현재 지도를 표시할 수 없습니다.'), findsOneWidget);
+    // 읽기 전용: 제스처 차단.
+    expect(find.byType(IgnorePointer), findsWidgets);
+    // 좌표가 없으면 발명된 매장/핀이 없어야 한다.
+    expect(find.text('로컬 맛집'), findsNothing);
+    expect(find.text('문화 행사'), findsNothing);
+  });
+
+  testWidgets('uses the selected visitor locale for fallback and semantics', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Material(
+          child: LocationMapPreview(
+            naverMapClientId: '',
+            language: 'ja',
+            centerLat: 37.2636,
+            centerLng: 127.0286,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('現在、地図を表示できません。'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('LALA ネイバー地図プレビュー')), findsOneWidget);
+    expect(find.text('현재 지도를 표시할 수 없습니다.'), findsNothing);
+    semantics.dispose();
+  });
 }

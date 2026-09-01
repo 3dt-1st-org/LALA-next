@@ -276,5 +276,55 @@ void main() {
       expect(find.byType(MapRailPlaceCard), findsNWidgets(2));
       expect(find.byType(EmptyPlaceState), findsNothing);
     });
+
+    testWidgets('Japanese map rail chrome and source are localized', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _wrap(
+          MapPlaceCarouselOverlay(
+            places: const <LalaPlace>[],
+            source: 'db',
+            language: 'ja',
+            selectedPlaceId: null,
+            explicitSelectedPlaceId: null,
+            expanded: false,
+            compact: true,
+            onSelectPlace: (_) {},
+            onReselectSelectedPlace: () {},
+            onToggleExpanded: () {},
+          ),
+        ),
+      );
+
+      expect(find.text('おすすめを見る'), findsOneWidget);
+      expect(find.text('0件 · リアルタイムのおすすめ'), findsOneWidget);
+      expect(find.textContaining('Show places'), findsNothing);
+    });
+
+    testWidgets('Simplified Chinese map rail chrome and source are localized', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _wrap(
+          MapPlaceCarouselOverlay(
+            places: const <LalaPlace>[],
+            source: 'db',
+            language: 'zh-Hans',
+            selectedPlaceId: null,
+            explicitSelectedPlaceId: null,
+            expanded: true,
+            compact: true,
+            onSelectPlace: (_) {},
+            onReselectSelectedPlace: () {},
+            onToggleExpanded: () {},
+          ),
+        ),
+      );
+
+      expect(find.text('收起推荐'), findsOneWidget);
+      expect(find.text('0处 · 实时推荐'), findsOneWidget);
+      expect(find.textContaining('Hide places'), findsNothing);
+    });
   });
 }

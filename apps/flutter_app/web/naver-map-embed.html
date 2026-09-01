@@ -147,10 +147,14 @@
 
       function updateLanguage() {
         document.documentElement.lang = config.language;
-        mapElement.setAttribute(
-          "aria-label",
-          config.language === "ko" ? "LALA 네이버 지도" : "LALA Naver map"
-        );
+        const label = config.language === "ko"
+          ? "LALA 네이버 지도"
+          : config.language === "ja"
+            ? "LALA ネイバー地図"
+            : config.language === "zh"
+              ? "LALA NAVER 地图"
+              : "LALA Naver map";
+        mapElement.setAttribute("aria-label", label);
       }
 
       function appLevelToNaverZoom(value) {
@@ -170,9 +174,10 @@
       }
 
       function unavailableCopy() {
-        return config.language === "ko"
-          ? "현재 지도를 표시할 수 없습니다."
-          : "The live map is not available right now.";
+        if (config.language === "ko") return "현재 지도를 표시할 수 없습니다.";
+        if (config.language === "ja") return "現在、地図を表示できません。";
+        if (config.language === "zh") return "当前无法显示地图。";
+        return "The live map is not available right now.";
       }
 
       function sendToFlutter(payload) {
@@ -412,7 +417,14 @@
       }
 
       function shortName(name) {
-        const value = String(name || (config.language === "ko" ? "장소" : "Local place"));
+        const fallback = config.language === "ko"
+          ? "장소"
+          : config.language === "ja"
+            ? "スポット"
+            : config.language === "zh"
+              ? "地点"
+              : "Local place";
+        const value = String(name || fallback);
         return value.length > 14 ? value.slice(0, 14) + "..." : value;
       }
 

@@ -7,12 +7,14 @@ import 'package:flutter/material.dart';
 
 import 'package:lala_next_app/app/lala_visual_tokens.dart';
 import 'package:lala_next_app/lala_map_view.dart';
+import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 
 /// S3 위치 동의 화면의 읽기 전용 지도 미리보기. 클라이언트 ID가
 /// 없으면 폴백(blocked) 상태다.
 class LocationMapPreview extends StatelessWidget {
   const LocationMapPreview({
     required this.naverMapClientId,
+    required this.language,
     required this.centerLat,
     required this.centerLng,
     this.level = 4,
@@ -20,6 +22,7 @@ class LocationMapPreview extends StatelessWidget {
   });
 
   final String naverMapClientId;
+  final String language;
   final double centerLat;
   final double centerLng;
   final int level;
@@ -27,7 +30,7 @@ class LocationMapPreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Semantics(
-      label: 'Naver map preview',
+      label: naverMapLabel(language, preview: true),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(LalaVisualTokens.controlRadius),
         child: SizedBox(
@@ -37,7 +40,7 @@ class LocationMapPreview extends StatelessWidget {
           child: IgnorePointer(
             child: buildLalaMapView(
               clientId: naverMapClientId,
-              language: 'ko',
+              language: language,
               centerLat: centerLat,
               centerLng: centerLng,
               level: level,

@@ -22,25 +22,41 @@ bool isPlaceholderWeatherSource(String? source) {
 }
 
 String sourceLabel(String? value, {String language = 'ko'}) {
-  // V6: ko 만 KO 라벨 — 그 외 로케일은 EN 라벨(방문객 화면 KO 노출 금지).
   if (isFallbackSourceCode(value)) {
-    return normalizeLalaLanguage(language) == 'ko'
-        ? '제한적 오프라인 데이터'
-        : 'Limited offline data';
-  }
-  if (normalizeLalaLanguage(language) != 'ko') {
-    return switch ((value ?? '').trim()) {
-      'db' => 'Live recommendations',
-      'mixed' => 'Live + official data',
-      'skeleton' => 'LALA curation',
-      '' => '-',
-      final source => source,
-    };
+    return lalaCopyMulti(
+      language,
+      ko: '제한적 오프라인 데이터',
+      en: 'Limited offline data',
+      ja: '制限付きオフラインデータ',
+      zhHans: '有限离线数据',
+      zhHant: '有限離線資料',
+    );
   }
   return switch ((value ?? '').trim()) {
-    'db' => '실시간 추천',
-    'mixed' => '실시간·공식 데이터',
-    'skeleton' => '로컬 큐레이션',
+    'db' => lalaCopyMulti(
+      language,
+      ko: '실시간 추천',
+      en: 'Live recommendations',
+      ja: 'リアルタイムのおすすめ',
+      zhHans: '实时推荐',
+      zhHant: '即時推薦',
+    ),
+    'mixed' => lalaCopyMulti(
+      language,
+      ko: '실시간·공식 데이터',
+      en: 'Live + official data',
+      ja: 'リアルタイム＋公式データ',
+      zhHans: '实时＋官方数据',
+      zhHant: '即時＋官方資料',
+    ),
+    'skeleton' => lalaCopyMulti(
+      language,
+      ko: '로컬 큐레이션',
+      en: 'LALA curation',
+      ja: 'LALAセレクション',
+      zhHans: 'LALA精选',
+      zhHant: 'LALA精選',
+    ),
     '' => '-',
     final source => source,
   };
@@ -48,30 +64,64 @@ String sourceLabel(String? value, {String language = 'ko'}) {
 
 String weatherSourceLabel(String? value, {String language = 'ko'}) {
   if (isPlaceholderWeatherSource(value) || isFallbackSourceCode(value)) {
-    return normalizeLalaLanguage(language) == 'ko'
-        ? '날씨 준비 중'
-        : 'Weather pending';
-  }
-  if (normalizeLalaLanguage(language) != 'ko') {
-    return switch ((value ?? '').trim()) {
-      'db' => 'Live weather',
-      'db+airkorea_sido_realtime' => 'Live weather + AirKorea air quality',
-      'kma_ultra_srt_ncst' => 'KMA live weather',
-      'airkorea_sido_realtime' => 'AirKorea live air quality',
-      'kma_ultra_srt_ncst+airkorea_sido_realtime' =>
-        'KMA weather + AirKorea air quality',
-      'mixed' => 'Live + official weather',
-      '' => '-',
-      final source => sourceLabel(source, language: language),
-    };
+    return lalaCopyMulti(
+      language,
+      ko: '날씨 준비 중',
+      en: 'Weather pending',
+      ja: '天気情報を準備中',
+      zhHans: '天气信息准备中',
+      zhHant: '天氣資訊準備中',
+    );
   }
   return switch ((value ?? '').trim()) {
-    'db' => '실시간 날씨',
-    'db+airkorea_sido_realtime' => '실시간 날씨·AirKorea 대기질',
-    'kma_ultra_srt_ncst' => '기상청 실황',
-    'airkorea_sido_realtime' => 'AirKorea 대기질',
-    'kma_ultra_srt_ncst+airkorea_sido_realtime' => '기상청·AirKorea 실황',
-    'mixed' => '실시간·공식 날씨',
+    'db' => lalaCopyMulti(
+      language,
+      ko: '실시간 날씨',
+      en: 'Live weather',
+      ja: 'リアルタイム天気',
+      zhHans: '实时天气',
+      zhHant: '即時天氣',
+    ),
+    'db+airkorea_sido_realtime' => lalaCopyMulti(
+      language,
+      ko: '실시간 날씨·AirKorea 대기질',
+      en: 'Live weather + AirKorea air quality',
+      ja: 'リアルタイム天気＋AirKorea大気質',
+      zhHans: '实时天气＋AirKorea空气质量',
+      zhHant: '即時天氣＋AirKorea空氣品質',
+    ),
+    'kma_ultra_srt_ncst' => lalaCopyMulti(
+      language,
+      ko: '기상청 실황',
+      en: 'KMA live weather',
+      ja: '韓国気象庁の実況',
+      zhHans: '韩国气象厅实况',
+      zhHant: '韓國氣象廳實況',
+    ),
+    'airkorea_sido_realtime' => lalaCopyMulti(
+      language,
+      ko: 'AirKorea 대기질',
+      en: 'AirKorea live air quality',
+      ja: 'AirKorea大気質',
+      zhHans: 'AirKorea空气质量',
+      zhHant: 'AirKorea空氣品質',
+    ),
+    'kma_ultra_srt_ncst+airkorea_sido_realtime' => lalaCopyMulti(
+      language,
+      ko: '기상청·AirKorea 실황',
+      en: 'KMA weather + AirKorea air quality',
+      ja: '韓国気象庁＋AirKorea実況',
+      zhHans: '韩国气象厅＋AirKorea实况',
+      zhHant: '韓國氣象廳＋AirKorea實況',
+    ),
+    'mixed' => lalaCopyMulti(
+      language,
+      ko: '실시간·공식 날씨',
+      en: 'Live + official weather',
+      ja: 'リアルタイム＋公式天気',
+      zhHans: '实时＋官方天气',
+      zhHant: '即時＋官方天氣',
+    ),
     '' => '-',
     final source => sourceLabel(source, language: language),
   };
