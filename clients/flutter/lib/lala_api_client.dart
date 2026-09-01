@@ -1472,6 +1472,8 @@ class LalaDocentScript {
     required this.cacheKey,
     this.generatedAt,
     this.ttlSec,
+    this.groundingCount,
+    this.groundingSources = const <String>[],
   });
 
   final String placeId;
@@ -1485,11 +1487,17 @@ class LalaDocentScript {
   final String? generatedAt;
   final int? ttlSec;
 
+  /// RAG grounding evidence exposed by the server OpenAPI (additive; older
+  /// payloads omit both — absent fields must stay absent, never invented).
+  final int? groundingCount;
+  final List<String> groundingSources;
+
   static LalaDocentScript fromJsonObject(Object? value) {
     return LalaDocentScript.fromJson(_asMap(value));
   }
 
   factory LalaDocentScript.fromJson(Map<String, dynamic> json) {
+    final rawGroundingSources = json['grounding_sources'];
     return LalaDocentScript(
       placeId: _asString(json['place_id']),
       category: _asString(json['category']),
@@ -1501,6 +1509,10 @@ class LalaDocentScript {
       cacheKey: _asString(json['cache_key']),
       generatedAt: _asOptionalString(json['generated_at']),
       ttlSec: _asOptionalInt(json['ttl_sec']),
+      groundingCount: _asOptionalInt(json['grounding_count']),
+      groundingSources: rawGroundingSources is List
+          ? rawGroundingSources.map((e) => '$e').toList(growable: false)
+          : const <String>[],
     );
   }
 }

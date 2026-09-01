@@ -13,6 +13,9 @@ import 'package:lala_next_app/core/location/lala_location.dart';
 import 'package:lala_next_app/core/location/region_context.dart';
 import 'package:lala_next_app/core/state/plan_context_store.dart';
 import 'package:lala_next_app/core/state/slot_visit_store.dart';
+import 'package:lala_next_app/features/docent/experience/docent_experience_controller.dart';
+import 'package:lala_next_app/features/docent/experience/docent_experience_copy.dart';
+import 'package:lala_next_app/features/docent/experience/docent_experience_state.dart';
 import 'package:lala_next_app/features/home/home_view_helpers.dart'
     show interventionToastLabel;
 import 'package:lala_next_app/features/intervention/widgets/intervention_toast.dart';
@@ -34,6 +37,7 @@ class PlanPage extends StatefulWidget {
     this.locationProvider,
     this.backendFactory,
     this.initialConfig = const LalaAppConfig.fromEnvironment(),
+    this.docentExperienceController,
     super.key,
   });
 
@@ -46,6 +50,10 @@ class PlanPage extends StatefulWidget {
   /// API/좌표 config 주입용 선택적 시드(기본 = 컴파일타임 환경).
   /// UI 언어는 persisted [OnboardingState] 가 유일한 권위다.
   final LalaAppConfig initialConfig;
+
+  /// 이슈 #120 §6: 앱 루트 단일 도슨트 경험 컨트롤러(선택 — 라우터가 주입).
+  /// null 이면 '전체 듣기'/슬롯 재생 버튼을 만들지 않는다.
+  final DocentExperienceController? docentExperienceController;
 
   @override
   State<PlanPage> createState() => _PlanPageState();
@@ -516,7 +524,8 @@ class _PlanPageState extends State<PlanPage> {
                   triggerBadge: _interventionTriggerBadge(_intervention!),
                   swapLabel: _interventionSwapLabel(_intervention!),
                   onSwap: _intervention!.alternativeSlot != null
-                      ? () => _onSwapAlternative(_intervention!.alternativeSlot!)
+                      ? () =>
+                            _onSwapAlternative(_intervention!.alternativeSlot!)
                       : null,
                   regenerateLabel: lalaCopyMulti(
                     _language,
@@ -601,6 +610,7 @@ class _PlanPageState extends State<PlanPage> {
           language: _language,
           loading: false,
           onRegenerate: _load,
+          docentController: widget.docentExperienceController,
         );
     }
   }
@@ -771,9 +781,7 @@ class _PlanFailureView extends StatelessWidget {
       en: isUnavailable
           ? 'Service unreachable. $message'
           : 'Failed to load plan. $message',
-      ja: isUnavailable
-          ? 'サーバーに接続できません。$message'
-          : 'プランの読み込みに失敗しました。$message',
+      ja: isUnavailable ? 'サーバーに接続できません。$message' : 'プランの読み込みに失敗しました。$message',
       zhHans: isUnavailable ? '无法连接服务器。$message' : '加载行程失败。$message',
       zhHant: isUnavailable ? '無法連線伺服器。$message' : '載入行程失敗。$message',
     );
@@ -909,6 +917,7 @@ class _PlanContent extends StatelessWidget {
     required this.language,
     required this.loading,
     required this.onRegenerate,
+    this.docentController,
   });
 
   final LalaDailyPlan? dailyPlan;
@@ -917,9 +926,38 @@ class _PlanContent extends StatelessWidget {
   final bool loading;
   final VoidCallback onRegenerate;
 
+  /// 이슈 #120 §6: 일정 도슨트 진입(선택). null 이면 관련 버튼을 만들지 않는다.
+  final DocentExperienceController? docentController;
+
+  // 이 큐가 현재 재생 중인 큐인지 — placeId 순서가 정확히 같을 때만.
+  bool _isCurrentQueue(DocentExperienceState state, List<LalaPlace> places) {
+    if (!state.queueActive || state.queue.length != places.length) {
+      return false;
+    }
+    for (var i = 0; i < places.length; i++) {
+      if (state.queue[i].placeId != places[i].placeId) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   @override
   Widget build(BuildContext context) {
     final weather = dailyPlan?.weather;
+    // 이슈 #120 §6: 큐 순서 = 보이는 슬롯 순서 그대로(장소 없는 슬롯은
+    // 건너뛴다). 컨트롤러와 동일하게 인접한 중복 장소를 미리 제거해야 현재
+    // 큐 비교와 버튼의 재생/정지 상태가 어긋나지 않는다.
+    final queuePlaces = <LalaPlace>[];
+    for (final slot in visibleSlots) {
+      final place = slot.place;
+      if (place == null ||
+          (queuePlaces.isNotEmpty &&
+              queuePlaces.last.placeId == place.placeId)) {
+        continue;
+      }
+      queuePlaces.add(place);
+    }
     return ListView(
       key: const ValueKey('plan-content'),
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
@@ -943,6 +981,58 @@ class _PlanContent extends StatelessWidget {
             ),
           ),
         ),
+        // 이슈 #120 §6: '전체 도슨트 듣기' — 개요 바로 아래. 같은 큐가 재생 중이면
+        // 정지로 전환(재탭 재시작이 아니라 정직한 stop).
+        if (docentController != null && queuePlaces.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: ValueListenableBuilder<DocentExperienceState>(
+              valueListenable: docentController!.state,
+              builder:
+                  (
+                    BuildContext context,
+                    DocentExperienceState state,
+                    Widget? _,
+                  ) {
+                    final active = _isCurrentQueue(state, queuePlaces);
+                    return _MinTouchTarget(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: OutlinedButton.icon(
+                          key: const ValueKey('plan-docent-play-all'),
+                          onPressed: () {
+                            if (active) {
+                              unawaited(docentController!.stop());
+                            } else {
+                              unawaited(
+                                docentController!.playQueue(queuePlaces),
+                              );
+                            }
+                          },
+                          icon: Icon(
+                            active
+                                ? Icons.stop_rounded
+                                : Icons.play_arrow_rounded,
+                            size: 20,
+                            color: const Color(0xFFC87F11),
+                          ),
+                          label: Text(
+                            active
+                                ? docentStopSemanticLabel(language)
+                                : docentPlayAllLabel(language),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF744210),
+                            side: const BorderSide(color: Color(0xFFF5C842)),
+                            backgroundColor: const Color(0xFFFFFBEB),
+                            minimumSize: const Size(0, 44),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+            ),
+          ),
         const SizedBox(height: 12),
         ...visibleSlots.map((slot) {
           // V5-B VISIT/SPEND: per-slot visit status (persisted in SlotVisitStore)
@@ -976,10 +1066,12 @@ class _PlanContent extends StatelessWidget {
                 );
               },
               visitStatus: SlotVisitStore.statusFor(planDate, slot.period),
-              onToggleVisit:
-                  () => SlotVisitStore.toggle(planDate, slot.period),
+              onToggleVisit: () => SlotVisitStore.toggle(planDate, slot.period),
               spendBand: band,
               spendUnavailable: band == null,
+              onPlayDocent: docentController == null || slot.place == null
+                  ? null
+                  : () => unawaited(docentController!.playPlace(slot.place!)),
             ),
           );
         }),

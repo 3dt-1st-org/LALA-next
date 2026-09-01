@@ -16,6 +16,7 @@ import 'package:lala_next_app/core/navigation/local_signal_action.dart';
 import 'package:lala_next_app/app/map_sheet_visibility.dart';
 import 'package:lala_next_app/core/routing/lala_router.dart';
 import 'package:lala_next_app/app/lala_visual_tokens.dart';
+import 'package:lala_next_app/features/docent/experience/docent_experience_controller.dart';
 
 const List<Duration> _defaultRecommendationRecoveryDelays = <Duration>[
   Duration(seconds: 8),
@@ -32,6 +33,7 @@ class LalaApp extends StatefulWidget {
     this.recommendationRecoveryDelays = _defaultRecommendationRecoveryDelays,
     this.authControllerFactory = createLalaAuthController,
     this.localSignalActionController,
+    this.docentExperienceController,
   });
 
   final LalaBackendFactory backendFactory;
@@ -41,6 +43,10 @@ class LalaApp extends StatefulWidget {
   final LalaAuthControllerFactory authControllerFactory;
   final LocalSignalActionController? localSignalActionController;
 
+  /// 이슈 #120 §4: 앱 루트 단일 도슨트 경험 소유자. null 이면 State 가 생산용
+  /// 컨트롤러를 생성·해제한다(주입된 컨트롤러는 호출자 소유 — 해제하지 않는다).
+  final DocentExperienceController? docentExperienceController;
+
   @override
   State<LalaApp> createState() => _LalaAppState();
 }
@@ -49,6 +55,7 @@ class _LalaAppState extends State<LalaApp> {
   late final LalaAuthController _authController;
   late final LalaAppConfig _appConfig;
   late final GoRouter _router;
+  DocentExperienceController? _ownedDocentExperience;
 
   @override
   void initState() {
@@ -63,6 +70,12 @@ class _LalaAppState extends State<LalaApp> {
             accessTokenProvider: _authController.accessToken,
           )
         : widget.initialConfig;
+    final docentExperienceController =
+        widget.docentExperienceController ??
+        (_ownedDocentExperience = DocentExperienceController(
+          backendFactory: widget.backendFactory,
+          baseConfig: _appConfig,
+        ));
     _router = createLalaRouter(
       backendFactory: widget.backendFactory,
       initialConfig: _appConfig,
@@ -70,6 +83,7 @@ class _LalaAppState extends State<LalaApp> {
       recommendationRecoveryDelays: widget.recommendationRecoveryDelays,
       authController: _authController,
       localSignalActionController: widget.localSignalActionController,
+      docentExperienceController: docentExperienceController,
     );
     unawaited(_authController.initialize());
     // 앱 시작(및 각 테스트) 시 네비게이션 바가 보이도록 시트 활성 상태를 리셋한다.
@@ -80,6 +94,11 @@ class _LalaAppState extends State<LalaApp> {
   void dispose() {
     _router.dispose();
     _authController.dispose();
+    // 직접 만든 도슨트 컨트롤러만 해제한다(플레이어/백엔드 정리는 비동기).
+    final owned = _ownedDocentExperience;
+    if (owned != null) {
+      unawaited(owned.dispose());
+    }
     super.dispose();
   }
 

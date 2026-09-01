@@ -746,6 +746,57 @@ void main() {
     expect(envelope.data?.ttlSec, 604800);
     expect(envelope.data?.requestHash, startsWith('012345'));
     expect(envelope.data?.cacheKey, startsWith('docent_script:'));
+    // Additive grounding parse (issue #120 §5): absent server fields stay absent.
+    expect(envelope.data?.groundingCount, isNull);
+    expect(envelope.data?.groundingSources, isEmpty);
+  });
+
+  test('docent script parses grounding_count and grounding_sources additively',
+      () async {
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      dio: _dio((request) async {
+        return _json({
+          'ok': true,
+          'data': {
+            'place_id': 'grounded-place',
+            'category': 'culture_venue',
+            'language': 'ko',
+            'mode': 'brief',
+            'script': '근거 있는 도슨트 스크립트',
+            'source': 'openai',
+            'generated_at': '2026-09-01T00:00:00+00:00',
+            'grounding_count': 3,
+            'grounding_sources': [
+              'place_profile',
+              'culture_event',
+              'community_post',
+            ],
+            'request_hash':
+                '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+            'cache_key': 'docent_script:grounded',
+          },
+          'meta': {'request_id': 'grounded-request-id'},
+          'error': null,
+        });
+      }),
+    );
+
+    final envelope = await client.createDocentScript(
+      placeId: 'grounded-place',
+      placeName: '근거 장소',
+      address: '주소',
+      source: 'db',
+      category: 'culture_venue',
+      language: 'ko',
+    );
+
+    expect(envelope.data?.groundingCount, 3);
+    expect(envelope.data?.groundingSources, <String>[
+      'place_profile',
+      'culture_event',
+      'community_post',
+    ]);
   });
 
   test('typed API response models parse weather, plans, and intervention',

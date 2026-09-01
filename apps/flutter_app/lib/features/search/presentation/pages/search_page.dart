@@ -15,6 +15,8 @@ import 'package:lala_next_app/core/location/lala_location.dart';
 import 'package:lala_next_app/core/location/region_context.dart';
 import 'package:lala_next_app/core/routing/lala_route_paths.dart';
 import 'package:lala_next_app/core/state/selected_place_store.dart';
+import 'package:lala_next_app/features/docent/experience/docent_experience_controller.dart';
+import 'package:lala_next_app/features/docent/widgets/docent_play_button.dart';
 import 'package:lala_next_app/features/home/home_view_helpers.dart'
     show filterPlaces;
 import 'package:lala_next_app/features/location/widgets/default_region_indicator.dart';
@@ -38,6 +40,7 @@ class SearchPage extends StatefulWidget {
     this.locationProvider,
     this.backendFactory,
     this.initialConfig = const LalaAppConfig.fromEnvironment(),
+    this.docentExperienceController,
     super.key,
   });
 
@@ -49,6 +52,10 @@ class SearchPage extends StatefulWidget {
 
   /// API/auth config shared by the app root.
   final LalaAppConfig initialConfig;
+
+  /// 이슈 #120 §6: 앱 루트 단일 도슨트 경험 컨트롤러(선택 — 라우터가 주입).
+  /// null 이면 타일에 재생 버튼을 만들지 않는다.
+  final DocentExperienceController? docentExperienceController;
 
   @override
   State<SearchPage> createState() => _SearchPageState();
@@ -341,6 +348,15 @@ class _SearchPageState extends State<SearchPage> {
     context.go(LalaRoutePaths.mapRoute);
   }
 
+  // 이슈 #120 §6: 검색 타일의 도슨트 재생 진입. 재생은 선택/내비게이션과 독립 —
+  // 선택 스토어 게시도 지도 탭 전환도 하지 않는다(_selectPlace 재사용 금지).
+  void _playDocent(LalaPlace place) {
+    final controller = widget.docentExperienceController;
+    if (controller != null) {
+      unawaited(controller.playPlace(place));
+    }
+  }
+
   Future<void> _openRegionPicker() async {
     final selected = await showModalBottomSheet<ManualLocationOption>(
       context: context,
@@ -455,6 +471,9 @@ class _SearchPageState extends State<SearchPage> {
           datasetSource: _datasetSource,
           datasetDataAsOf: _datasetDataAsOf,
           onSelectPlace: _selectPlace,
+          onPlayDocent: widget.docentExperienceController == null
+              ? null
+              : _playDocent,
         );
     }
   }
@@ -1044,6 +1063,7 @@ class _SearchResultsView extends StatelessWidget {
     required this.datasetSource,
     required this.datasetDataAsOf,
     required this.onSelectPlace,
+    this.onPlayDocent,
   });
 
   final List<LalaPlace> places;
@@ -1054,6 +1074,9 @@ class _SearchResultsView extends StatelessWidget {
   final String? datasetDataAsOf;
 
   final ValueChanged<LalaPlace> onSelectPlace;
+
+  /// 이슈 #120 §6: 타일별 도슨트 재생 진입(선택과 독립). null 이면 버튼 없음.
+  final ValueChanged<LalaPlace>? onPlayDocent;
 
   @override
   Widget build(BuildContext context) {
@@ -1076,6 +1099,9 @@ class _SearchResultsView extends StatelessWidget {
           datasetSource: datasetSource,
           datasetDataAsOf: datasetDataAsOf,
           onTap: () => onSelectPlace(place),
+          onPlayDocent: onPlayDocent == null
+              ? null
+              : () => onPlayDocent!(place),
         );
       },
     );
@@ -1090,6 +1116,7 @@ class _SearchPlaceTile extends StatelessWidget {
     required this.datasetSource,
     required this.datasetDataAsOf,
     required this.onTap,
+    this.onPlayDocent,
   });
 
   final LalaPlace place;
@@ -1101,6 +1128,10 @@ class _SearchPlaceTile extends StatelessWidget {
 
   /// 타일 탭 → 공유 선택 스토어 게시 + 지도 탭 전환(_selectPlace).
   final VoidCallback onTap;
+
+  /// 이슈 #120 §6: 타일별 도슨트 재생 진입 — 탭 선택과 독립인 제스처여야 한다.
+  /// null 이면 버튼을 만들지 않는다.
+  final VoidCallback? onPlayDocent;
 
   @override
   Widget build(BuildContext context) {
@@ -1221,33 +1252,33 @@ class _SearchPlaceTile extends StatelessWidget {
                         ),
                       ],
                       const SizedBox(height: 8),
-                      Row(
+                      // 320dp/200%(§13.5)에서 고정폭 배지+거리가 한 줄에 못 들어갈
+                      // 때가 있다 — 아래 출처/신선도 칩과 같은 Wrap 패턴으로 줄바꿈.
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           CategoryBadge(
                             category: place.category,
                             language: language,
                           ),
-                          const SizedBox(width: 8),
                           Icon(
                             Icons.place_outlined,
                             size: 13,
                             color: LalaVisualColors.muted,
                           ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              region,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(
-                                    color: LalaVisualColors.muted,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                            ),
+                          Text(
+                            region,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: LalaVisualColors.muted,
+                                  fontWeight: FontWeight.w700,
+                                ),
                           ),
-                          if (place.distanceM > 0) ...[
-                            const SizedBox(width: 8),
+                          if (place.distanceM > 0)
                             Text(
                               '${place.distanceM}m',
                               style: Theme.of(context).textTheme.labelSmall
@@ -1256,7 +1287,6 @@ class _SearchPlaceTile extends StatelessWidget {
                                     fontWeight: FontWeight.w800,
                                   ),
                             ),
-                          ],
                         ],
                       ),
                       // 실제 값이 있을 때만 렌더되는 출처/신선도 영역(빈 줄 없음).
@@ -1281,6 +1311,16 @@ class _SearchPlaceTile extends StatelessWidget {
                     ],
                   ),
                 ),
+                // 이슈 #120 §6: 타일 우측 도슨트 재생 진입(44dp). 중첩 제스처에서
+                // 안쪽이 이기므로 버튼 탭은 타일 선택(onTap)으로 새지 않는다.
+                if (onPlayDocent != null) ...<Widget>[
+                  const SizedBox(width: 8),
+                  DocentPlayButton(
+                    key: ValueKey('search-docent-play-${place.placeId}'),
+                    language: language,
+                    onPressed: onPlayDocent,
+                  ),
+                ],
               ],
             ),
           ),

@@ -3,6 +3,7 @@ import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import '../../../shared/l10n/lala_copy.dart';
 import '../../../shared/l10n/place_labels.dart';
+import '../../docent/widgets/docent_play_button.dart';
 import '../place_helpers.dart';
 import 'place_image.dart';
 import 'place_reason_freshness.dart';
@@ -22,6 +23,7 @@ class MapRailPlaceCard extends StatelessWidget {
     required this.selected,
     required this.compact,
     this.onTap,
+    this.onPlayDocent,
   });
 
   final LalaPlace place;
@@ -29,6 +31,10 @@ class MapRailPlaceCard extends StatelessWidget {
   final bool selected;
   final bool compact;
   final VoidCallback? onTap;
+
+  /// 이슈 #120 §6: 카드별 도슨트 재생 진입. null 이면 버튼을 만들지 않는다.
+  /// 카드 탭(선택)과 독립 — 버튼 탭이 선택을 유발하지 않는다.
+  final VoidCallback? onPlayDocent;
 
   @override
   Widget build(BuildContext context) {
@@ -116,6 +122,19 @@ class MapRailPlaceCard extends StatelessWidget {
                       child: const SizedBox(width: 12, height: 12),
                     ),
                   ),
+                  // 이슈 #120 §6: 도슨트 재생 진입(우상단). 중첩 제스처에서 안쪽이
+                  // 이기므로 버튼 탭은 카드 선택(onTap)으로 새지 않는다.
+                  if (onPlayDocent != null)
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: DocentPlayButton(
+                        key: ValueKey('map-rail-docent-play-${place.placeId}'),
+                        language: language,
+                        onPressed: onPlayDocent,
+                        visual: 30,
+                      ),
+                    ),
                   // 이름 + 메타(지역 · 도보 거리) 하단 오버레이.
                   Positioned(
                     left: 0,

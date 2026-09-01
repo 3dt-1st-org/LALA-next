@@ -23,6 +23,7 @@ import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
 import 'package:lala_next_app/core/location/region_context.dart';
 import 'package:lala_next_app/core/persistence/cross_tab_preferences.dart';
+import 'package:lala_next_app/features/docent/experience/docent_experience_controller.dart';
 import 'package:lala_next_app/core/persistence/onboarding_preferences.dart';
 import 'package:lala_next_app/core/routing/lala_router.dart';
 import 'package:lala_next_app/core/state/plan_context_store.dart';
@@ -33,6 +34,8 @@ import 'package:lala_next_app/features/home/home_page.dart';
 import 'package:lala_next_app/features/plan/presentation/pages/plan_page.dart';
 import 'package:lala_next_app/features/search/presentation/pages/search_page.dart';
 import 'package:lala_next_app/manual_location_options.dart';
+
+import '../features/docent/inert_docent_audio_player.dart';
 
 void main() {
   // The onboarding + region + cross-tab holders are process-local singletons.
@@ -338,6 +341,11 @@ void main() {
           ),
           recommendationRecoveryDelays: const <Duration>[Duration(seconds: 1)],
           authControllerFactory: createLalaAuthController,
+          docentExperienceController: DocentExperienceController(
+            backendFactory: (config) => _NoopBackend(),
+            baseConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+            player: InertDocentAudioPlayer(),
+          ),
         );
         await tester.pumpWidget(MaterialApp.router(routerConfig: router));
         // No transient redirect to onboarding for a known-completed user: the

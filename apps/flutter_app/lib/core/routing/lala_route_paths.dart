@@ -28,6 +28,9 @@ abstract final class LalaRoutePaths {
   static const String onboardingAccount = '/onboarding/account';
 
   // --- ONMU P3b: 커뮤니티 push 라우트(메인 쉘 외부, 탭 상태 유지) ---
+  /// 이슈 #120 §6.3: 전체 화면 도슨트 플레이어(메인 쉘 외부 push 라우트).
+  static const String docentPlayer = '/docent-player';
+
   /// 커뮤니티 게시판 피드.
   static const String community = '/community';
 

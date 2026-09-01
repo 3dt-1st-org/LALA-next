@@ -4,6 +4,7 @@ import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 import '../../../shared/l10n/lala_copy.dart';
 import '../../../shared/l10n/multi_language_text.dart';
 import '../../../shared/l10n/place_labels.dart';
+import '../../docent/widgets/docent_play_button.dart';
 import '../planner_helpers.dart';
 import '../spend_band_helpers.dart';
 
@@ -19,6 +20,7 @@ class PlanSlotTile extends StatelessWidget {
     this.onToggleVisit,
     this.spendBand,
     this.spendUnavailable = false,
+    this.onPlayDocent,
   });
 
   final LalaPlanSlot slot;
@@ -40,6 +42,10 @@ class PlanSlotTile extends StatelessWidget {
   // [spendUnavailable] (honest-unavailable band); never a fabricated number.
   final SpendBand? spendBand;
   final bool spendUnavailable;
+
+  /// 이슈 #120 §6: 슬롯별 도슨트 재생 진입(선택). null 이면 버튼을 만들지 않는다.
+  /// 타일 탭(스낵바)과 독립인 제스처 영역이다.
+  final VoidCallback? onPlayDocent;
 
   @override
   Widget build(BuildContext context) {
@@ -392,11 +398,33 @@ class PlanSlotTile extends StatelessWidget {
                 const SizedBox(height: 7),
                 Align(
                   alignment: Alignment.centerRight,
-                  child: Icon(
-                    Icons.chevron_right,
-                    color: const Color(0xFF94A3B8),
-                    size: 20,
-                  ),
+                  child: onPlayDocent == null
+                      ? const Icon(
+                          Icons.chevron_right,
+                          color: Color(0xFF94A3B8),
+                          size: 20,
+                        )
+                      : Row(
+                          // 이슈 #120 §6: 슬롯별 도슨트 재생(44dp). 중첩 제스처에서
+                          // 안쪽이 이기므로 버튼 탭은 타일 탭으로 새지 않는다.
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            DocentPlayButton(
+                              key: ValueKey(
+                                'plan-slot-docent-play-${place.placeId}',
+                              ),
+                              language: language,
+                              onPressed: onPlayDocent,
+                              visual: 30,
+                            ),
+                            const SizedBox(width: 4),
+                            const Icon(
+                              Icons.chevron_right,
+                              color: Color(0xFF94A3B8),
+                              size: 20,
+                            ),
+                          ],
+                        ),
                 ),
               ],
             ],

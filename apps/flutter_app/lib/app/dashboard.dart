@@ -99,6 +99,7 @@ class Dashboard extends StatelessWidget {
     required this.onOpenManualLocation,
     required this.onRetryLocation,
     required this.onStartLocation,
+    this.onPlayDocentPlace,
   });
 
   final bool loading;
@@ -168,6 +169,10 @@ class Dashboard extends StatelessWidget {
   final VoidCallback onOpenManualLocation;
   final VoidCallback onRetryLocation;
   final VoidCallback onStartLocation;
+
+  /// 이슈 #120 §6: 지도 레일 카드의 도슨트 재생 진입(app-root 컨트롤러).
+  /// null 이면 재생 버튼을 만들지 않는다(기존 호출부 영향 없음).
+  final ValueChanged<LalaPlace>? onPlayDocentPlace;
 
   @override
   Widget build(BuildContext context) {
@@ -330,6 +335,7 @@ class Dashboard extends StatelessWidget {
                     onSelectPlace: onSelectPlace,
                     onReselectSelectedPlace: onClearPlaceSelection,
                     onToggleExpanded: onToggleRecommendationRail,
+                    onPlayDocent: onPlayDocentPlace,
                   ),
                 ),
               ),

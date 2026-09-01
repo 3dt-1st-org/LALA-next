@@ -29,10 +29,13 @@ import 'package:lala_next_app/core/persistence/onboarding_preferences.dart';
 import 'package:lala_next_app/core/routing/lala_route_paths.dart';
 import 'package:lala_next_app/core/state/plan_context_store.dart';
 import 'package:lala_next_app/core/state/selected_place_store.dart';
+import 'package:lala_next_app/features/docent/experience/docent_experience_controller.dart';
 import 'package:lala_next_app/features/home/widgets/map_draggable_sheet.dart';
 import 'package:lala_next_app/features/map_route/presentation/pages/map_route_page.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/features/search/presentation/pages/search_page.dart';
+
+import '../docent/inert_docent_audio_player.dart';
 
 LalaEnvelope<T> _envelope<T>(T data) => LalaEnvelope<T>(
   ok: true,
@@ -155,11 +158,20 @@ Future<void> _flush(WidgetTester tester) async {
   }
 }
 
+/// Hermetic docent controller for the map branch — nothing plays in these
+/// tests, so the backend factory must never be called (eager call 금지).
+DocentExperienceController _docentController() =>
+    DocentExperienceController(
+      backendFactory: (_) => throw StateError('docent unused in crosstab'),
+      baseConfig: const LalaAppConfig(baseUri: ''),
+      player: InertDocentAudioPlayer(),
+    );
+
 /// Two-branch shell mirroring the production StatefulShellRoute. Like the real
 /// router it STARTS ON THE MAP branch — go_router builds inactive branches
 /// lazily, so the map (the initial tab) is mounted and its shared-selection
 /// listener is live before the user can ever reach the search tab.
-GoRouter _shellRouter() {
+GoRouter _shellRouter(DocentExperienceController docentController) {
   return GoRouter(
     initialLocation: LalaRoutePaths.mapRoute,
     routes: <RouteBase>[
@@ -191,6 +203,7 @@ GoRouter _shellRouter() {
                   recommendationRecoveryDelays: const <Duration>[],
                   authControllerFactory: createLalaAuthController,
                   localSignalActionController: LocalSignalActionController(),
+                  docentExperienceController: docentController,
                 ),
               ),
             ],
@@ -224,7 +237,9 @@ void main() {
     'search tap publishes the shared selection and switches to the map branch '
     '(search → store → tab switch)',
     (tester) async {
-      final router = _shellRouter();
+      final docentController = _docentController();
+      addTearDown(docentController.dispose);
+      final router = _shellRouter(docentController);
       await tester.pumpWidget(MaterialApp.router(routerConfig: router));
       await _flush(tester);
 
@@ -268,6 +283,8 @@ void main() {
 
   testWidgets('map adopts a search-originated selection exactly like a map tap '
       '(store → map: detail sheet opens)', (tester) async {
+    final docentController = _docentController();
+    addTearDown(docentController.dispose);
     await tester.pumpWidget(
       MaterialApp(
         home: MapRoutePage(
@@ -277,6 +294,7 @@ void main() {
           recommendationRecoveryDelays: const <Duration>[],
           authControllerFactory: createLalaAuthController,
           localSignalActionController: LocalSignalActionController(),
+          docentExperienceController: docentController,
         ),
       ),
     );
@@ -304,6 +322,8 @@ void main() {
     'map behavior unchanged)',
     (tester) async {
       final controller = LocalSignalActionController();
+      final docentController = _docentController();
+      addTearDown(docentController.dispose);
       await tester.pumpWidget(
         MaterialApp(
           home: MapRoutePage(
@@ -313,6 +333,7 @@ void main() {
             recommendationRecoveryDelays: const <Duration>[],
             authControllerFactory: createLalaAuthController,
             localSignalActionController: controller,
+            docentExperienceController: docentController,
           ),
         ),
       );

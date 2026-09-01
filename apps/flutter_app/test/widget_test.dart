@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'features/docent/inert_docent_audio_player.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lala_next_app/app/lala_visual_tokens.dart';
@@ -12,6 +14,7 @@ import 'package:lala_next_app/core/state/plan_context_store.dart';
 import 'package:lala_next_app/core/state/saved_place_store.dart';
 import 'package:lala_next_app/core/state/selected_place_store.dart';
 import 'package:lala_next_app/core/state/slot_visit_store.dart';
+import 'package:lala_next_app/features/docent/experience/docent_experience_controller.dart';
 import 'package:lala_next_app/features/local_signals/presentation/pages/local_signals_page.dart';
 import 'package:lala_next_app/features/map/widgets/map_bottom_dock.dart';
 import 'package:lala_next_app/features/map/widgets/top_map_chrome.dart';
@@ -3540,7 +3543,7 @@ void main() {
   );
 }
 
-class TestLalaApp extends StatelessWidget {
+class TestLalaApp extends StatefulWidget {
   const TestLalaApp({
     required this.backendFactory,
     required this.initialConfig,
@@ -3549,6 +3552,7 @@ class TestLalaApp extends StatelessWidget {
     this.recommendationRecoveryDelays,
     this.authControllerFactory,
     this.localSignalActionController,
+    this.docentExperienceController,
     this.onboardingCompleted = true,
     super.key,
   });
@@ -3560,43 +3564,83 @@ class TestLalaApp extends StatelessWidget {
   final List<Duration>? recommendationRecoveryDelays;
   final LalaAuthControllerFactory? authControllerFactory;
   final LocalSignalActionController? localSignalActionController;
+  final DocentExperienceController? docentExperienceController;
 
   /// ONMU P2: 기존 라이브 지도 테스트는 온보딩이 완료된 상태를 가정한다.
   /// 온보딩 플로우 자체를 검증할 때만 false 로 넘겨 reset 한다.
   final bool onboardingCompleted;
 
   @override
+  State<TestLalaApp> createState() => _TestLalaAppState();
+}
+
+class _TestLalaAppState extends State<TestLalaApp> {
+  DocentExperienceController? _ownedDocentExperience;
+
+  // 도슨트 컨트롤러 소유권: 테스트가 주입하면 호출자 소유(해제하지 않는다).
+  // 주입이 없으면 State 가 불활성 플레이어 컨트롤러를 정확히 하나 만들어
+  // rebuild 간 재사용하고 dispose 에서 해제한다(매 build 생성·미해제 누수 방지).
+  DocentExperienceController get _docentExperienceController {
+    final injected = widget.docentExperienceController;
+    if (injected != null) {
+      return injected;
+    }
+    final existing = _ownedDocentExperience;
+    if (existing != null) {
+      return existing;
+    }
+    final created = DocentExperienceController(
+      backendFactory: widget.backendFactory,
+      baseConfig: widget.initialConfig,
+      player: InertDocentAudioPlayer(),
+    );
+    _ownedDocentExperience = created;
+    return created;
+  }
+
+  @override
+  void dispose() {
+    unawaited(_ownedDocentExperience?.dispose() ?? Future<void>.value());
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (onboardingCompleted) {
+    if (widget.onboardingCompleted) {
       // Direct widget tests do not run bootstrapAppState. Seed the same SSOT
       // from the test config before mounting; production always restores it
       // from OnboardingPreferences before runApp.
-      OnboardingState.selectLanguage(initialConfig.lang);
+      OnboardingState.selectLanguage(widget.initialConfig.lang);
       OnboardingState.markCompleted();
     } else {
       OnboardingState.reset();
     }
     return LalaApp(
-      backendFactory: backendFactory,
-      initialConfig: initialConfig.copyWith(
-        requireLocationStartConfirmation: requireLocationStartConfirmation,
+      backendFactory: widget.backendFactory,
+      initialConfig: widget.initialConfig.copyWith(
+        requireLocationStartConfirmation: widget.requireLocationStartConfirmation,
       ),
       recommendationRecoveryDelays:
-          recommendationRecoveryDelays ??
+          widget.recommendationRecoveryDelays ??
           const <Duration>[
             Duration(seconds: 8),
             Duration(seconds: 16),
             Duration(seconds: 30),
           ],
       locationProvider:
-          locationProvider ??
+          widget.locationProvider ??
           FakeLocationProvider(
             LalaLocationResult.found(
-              LalaLocation(lat: initialConfig.lat, lng: initialConfig.lng),
+              LalaLocation(
+                lat: widget.initialConfig.lat,
+                lng: widget.initialConfig.lng,
+              ),
             ),
           ),
-      authControllerFactory: authControllerFactory ?? createLalaAuthController,
-      localSignalActionController: localSignalActionController,
+      authControllerFactory:
+          widget.authControllerFactory ?? createLalaAuthController,
+      localSignalActionController: widget.localSignalActionController,
+      docentExperienceController: _docentExperienceController,
     );
   }
 }
