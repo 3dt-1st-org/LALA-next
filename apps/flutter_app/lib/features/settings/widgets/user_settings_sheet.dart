@@ -194,6 +194,7 @@ class UserSettingsSheet extends StatelessWidget {
                         tooltip: languageOptionLabel(code, uiLanguage),
                         label: Text(
                           compactLanguageOptionLabel(code),
+                          key: ValueKey('settings-language-$code'),
                           maxLines: 1,
                           softWrap: false,
                           style: const TextStyle(
