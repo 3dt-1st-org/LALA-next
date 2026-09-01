@@ -33,6 +33,8 @@ import 'package:lala_next_app/features/community/presentation/pages/community_po
 import 'package:lala_next_app/features/community/presentation/pages/community_create_post_page.dart';
 import 'package:lala_next_app/features/community/presentation/pages/chat_room_list_page.dart';
 import 'package:lala_next_app/features/community/presentation/pages/chat_room_page.dart';
+import 'package:lala_next_app/features/docent/experience/docent_experience_controller.dart';
+import 'package:lala_next_app/features/docent/presentation/pages/docent_player_page.dart';
 
 GoRouter createLalaRouter({
   required LalaBackendFactory backendFactory,
@@ -42,6 +44,10 @@ GoRouter createLalaRouter({
   LalaAuthController? authController,
   LalaAuthControllerFactory? authControllerFactory,
   LocalSignalActionController? localSignalActionController,
+
+  /// 이슈 #120 §4: 앱 루트 단일 도슨트 경험 소유자 — 쉘 미니플레이어와
+  /// 전체 플레이어 라우트가 같은 컨트롤러를 공유한다.
+  required DocentExperienceController docentExperienceController,
 }) {
   assert(authController != null || authControllerFactory != null);
   final signalActionController =
@@ -103,7 +109,10 @@ GoRouter createLalaRouter({
               GoRouterState state,
               StatefulNavigationShell navigationShell,
             ) {
-              return LalaMainShell(navigationShell: navigationShell);
+              return LalaMainShell(
+                navigationShell: navigationShell,
+                docentExperienceController: docentExperienceController,
+              );
             },
         branches: <StatefulShellBranch>[
           StatefulShellBranch(
@@ -162,6 +171,12 @@ GoRouter createLalaRouter({
       ),
       // --- ONMU P3b: 커뮤니티 push 라우트(메인 쉘 외부). context.push 로 진입해
       // 탭 상태를 유지한 채 풀스크린으로 올라간다. ---
+      // 이슈 #120 §6.3: 도슨트 전체 플레이어도 동일 push 패턴을 따른다.
+      GoRoute(
+        path: LalaRoutePaths.docentPlayer,
+        builder: (BuildContext context, GoRouterState state) =>
+            DocentPlayerPage(controller: docentExperienceController),
+      ),
       GoRoute(
         path: LalaRoutePaths.community,
         builder: (BuildContext context, GoRouterState state) =>

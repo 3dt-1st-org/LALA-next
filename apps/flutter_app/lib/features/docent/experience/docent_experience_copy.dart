@@ -203,3 +203,70 @@ String docentScriptSourceLabel(String source, String language) {
       );
   }
 }
+
+/// 미니플레이어 탭(전체 플레이어 열기) 시맨틱 라벨.
+String docentOpenPlayerSemanticLabel(String language) {
+  return lalaCopyMulti(
+    language,
+    ko: '도슨트 플레이어 열기',
+    en: 'Open the docent player',
+    ja: 'ガイドプレーヤーを開く',
+    zhHans: '打开讲解播放器',
+    zhHant: '打開導覽播放器',
+  );
+}
+
+/// 큐 진행 표기(1-based). 숫자만 쓰므로 로케일 변형 없이 하나의 문자열.
+String docentMiniQueueProgress(int queueIndex, int queueLength) =>
+    '${queueIndex + 1}/$queueLength';
+
+/// 전체 플레이어 스크립트 섹션 제목.
+String docentTranscriptSectionTitle(String language) {
+  return lalaCopyMulti(
+    language,
+    ko: '도슨트 스크립트',
+    en: 'Docent script',
+    ja: 'ガイドスクリプト',
+    zhHans: '讲解词',
+    zhHant: '導覽解說',
+  );
+}
+
+/// 운전기사용 한국어 이름 유틸리티 버튼 라벨(§6.3).
+String docentDriverNameButtonLabel(String language) {
+  return lalaCopyMulti(
+    language,
+    ko: '운전기사에게 보여주기',
+    en: 'Show your driver',
+    ja: '運転手さんに見せる',
+    zhHans: '出示给司机',
+    zhHant: '出示給司機',
+  );
+}
+
+/// 한국어 이름 시트 캡션(이름 자체는 nameKo 원문 그대로 — 번역하지 않는다).
+String docentDriverNameSheetCaption(String language) {
+  return lalaCopyMulti(
+    language,
+    ko: '한국어 이름',
+    en: 'Korean name',
+    ja: '韓国語の名前',
+    zhHans: '韩语名称',
+    zhHant: '韓語名稱',
+  );
+}
+
+/// 생성 시점 라벨 — 파싱 가능한 generatedAt 에만 호출(파싱 불가면 호출부가 생략).
+String docentGeneratedAtLabel(DateTime generatedAt, String language) {
+  String two(int v) => v.toString().padLeft(2, '0');
+  final stamped =
+      '${generatedAt.year}.${two(generatedAt.month)}.${two(generatedAt.day)}';
+  return lalaCopyMulti(
+    language,
+    ko: '$stamped 생성',
+    en: 'Created $stamped',
+    ja: '$stamped 生成',
+    zhHans: '生成于 $stamped',
+    zhHant: '生成於 $stamped',
+  );
+}

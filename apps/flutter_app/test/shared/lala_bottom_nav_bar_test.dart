@@ -3,9 +3,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:lala_next_app/app/lala_main_shell.dart';
+import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/persistence/onboarding_preferences.dart';
 import 'package:lala_next_app/core/routing/lala_route_paths.dart';
+import 'package:lala_next_app/features/docent/experience/docent_experience_controller.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
+
+import '../features/docent/inert_docent_audio_player.dart';
 
 void main() {
   setUp(() {
@@ -23,7 +27,14 @@ void main() {
       routes: <RouteBase>[
         StatefulShellRoute.indexedStack(
           builder: (context, state, shell) =>
-              LalaMainShell(navigationShell: shell),
+              LalaMainShell(
+                navigationShell: shell,
+                docentExperienceController: DocentExperienceController(
+                  backendFactory: (_) => throw StateError('unused'),
+                  baseConfig: const LalaAppConfig(baseUri: ''),
+                  player: InertDocentAudioPlayer(),
+                ),
+              ),
           branches: <StatefulShellBranch>[
             _branch(LalaRoutePaths.search, 'search'),
             _branch(LalaRoutePaths.mapRoute, 'map'),

@@ -12,12 +12,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:lala_next_app/app/lala_main_shell.dart';
+import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/persistence/onboarding_preferences.dart';
 import 'package:lala_next_app/core/routing/lala_route_paths.dart';
+import 'package:lala_next_app/features/docent/experience/docent_experience_controller.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/features/onboarding/presentation/pages/language_page.dart';
 import 'package:lala_next_app/features/onboarding/presentation/pages/start_page.dart';
 import 'package:lala_next_app/shared/l10n/multi_language_text.dart';
+
+import '../docent/inert_docent_audio_player.dart';
 
 Widget _wrapLanguagePage() => const MaterialApp(home: OnboardingLanguagePage());
 
@@ -307,7 +311,14 @@ void main() {
         routes: <RouteBase>[
           StatefulShellRoute.indexedStack(
             builder: (context, state, shell) =>
-                LalaMainShell(navigationShell: shell),
+                LalaMainShell(
+                  navigationShell: shell,
+                  docentExperienceController: DocentExperienceController(
+                    backendFactory: (_) => throw StateError('unused'),
+                    baseConfig: const LalaAppConfig(baseUri: ''),
+                    player: InertDocentAudioPlayer(),
+                  ),
+                ),
             branches: <StatefulShellBranch>[
               StatefulShellBranch(
                 routes: <RouteBase>[
