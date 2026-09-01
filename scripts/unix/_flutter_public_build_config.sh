@@ -101,6 +101,12 @@ resolve_flutter_public_build_config() {
       echo "Logto public build configuration is incomplete: ${missing[*]}" >&2
       return 1
     fi
+    local normalized_logto_endpoint="${LOGTO_ENDPOINT%/}"
+    local normalized_api_audience="${LOGTO_API_AUDIENCE%/}"
+    if [[ "$normalized_api_audience" == "$normalized_logto_endpoint/api" ]]; then
+      echo "LOGTO_API_AUDIENCE must identify the LALA API resource, not the Logto Management API." >&2
+      return 1
+    fi
     LOGTO_BUILD_ENABLED="true"
   else
     LOGTO_BUILD_ENABLED="false"

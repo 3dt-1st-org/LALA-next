@@ -63,3 +63,15 @@
 - Web CORS/origin behavior still needs an interactive Web runtime check.
 - The inspected tenant is development-only; production-tenant selection and
   connector readiness remain operational decisions.
+
+## 2026-09-02 Google sign-in correction
+
+- A real Google sign-in returned a valid public profile but LALA `/me` sync
+  failed. The Logto console showed that the Native app and LALA API Resource
+  were configured, while the local Flutter build had requested the Logto
+  Management API as its audience instead of the LALA API Resource.
+- Corrected the ignored local build configuration without printing its other
+  values. The standard build resolver and `LalaAuthConfig` now reject this
+  management-audience mix-up so a bad build fails before hosted sign-in.
+- Successful `/me` synchronization on a freshly rebuilt iPhone 17 Pro remains
+  the runtime acceptance gate for this correction.

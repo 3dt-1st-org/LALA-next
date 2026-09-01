@@ -41,6 +41,9 @@ Dashboard에서도 현재 Production deployment를 기록한다. AWS Console에�
 Logto Console에서 다음 순서로 만든다.
 
 1. API Resource를 만들고 HTTPS identifier를 `LOGTO_API_AUDIENCE`로 기록한다.
+   이 값은 LALA API Resource identifier여야 하며 Logto Management API
+   (`<LOGTO_ENDPOINT>/api`)를 사용하면 안 된다. 저장소 빌드 wrapper는 이
+   오설정을 fail-closed로 거부한다.
 2. Native Application을 만들고 public App ID를 `LOGTO_NATIVE_APP_ID`로 기록한다.
 3. Native redirect에 `cloud.lalanext.lala://callback`을 등록한다. Native
    post sign-out URI를 별도로 사용하지 않으면 앱은 같은 등록 callback으로

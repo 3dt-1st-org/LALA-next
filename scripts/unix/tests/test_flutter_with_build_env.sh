@@ -142,4 +142,15 @@ assert_absent  "$ARGS" "LOGTO_MANAGEMENT_CLIENT_SECRET"
 assert_absent  "$ARGS" "must-not-reach-flutter"
 assert_absent  "$ENVF" "LOGTO_MANAGEMENT_CLIENT_SECRET="
 
+echo "Case E: Logto Management API cannot be used as the LALA API audience."
+cat > "$TMP/logto-management-audience-dotenv" <<'ENVEOF'
+NAVER_MAP_CLIENT_ID=nonsecret-map-placeholder-0000
+LOGTO_ENDPOINT=https://auth.example.test
+LOGTO_API_AUDIENCE=https://auth.example.test/api
+LOGTO_NATIVE_APP_ID=native-app-id
+ENVEOF
+if run_case "$TMP/logto-management-audience-dotenv" "" "" ""; then
+  fail "expected the management API audience to fail closed"
+fi
+
 echo "PASS: public build config is source-ordered, Logto-aware, and server-secret safe."

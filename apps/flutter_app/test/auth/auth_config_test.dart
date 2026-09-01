@@ -77,6 +77,19 @@ void main() {
       expect(malformed.enabled, isFalse);
     });
 
+    test('rejects the Logto Management API as the app API audience', () {
+      final config = _config(
+        isWeb: false,
+        values: {
+          ..._requiredValues(nativeAppId: 'native-client-id'),
+          'LOGTO_ENDPOINT': 'https://auth.example.com/',
+          'LOGTO_API_AUDIENCE': 'https://auth.example.com/api/',
+        },
+      );
+
+      expect(config.enabled, isFalse);
+    });
+
     test('ignores a legacy redirect that belongs to the other platform', () {
       final webConfig = _config(
         isWeb: true,

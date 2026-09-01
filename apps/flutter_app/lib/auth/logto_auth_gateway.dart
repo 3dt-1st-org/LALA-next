@@ -81,6 +81,7 @@ class LalaAuthConfig {
       _isHttpsUri(endpoint) &&
       appId.isNotEmpty &&
       _isHttpsUri(apiAudience) &&
+      !_isLogtoManagementAudience(endpoint, apiAudience) &&
       _isValidRedirectUri(redirectUri, isWeb: isWeb) &&
       (postLogoutRedirectUri == null ||
           _isValidRedirectUri(postLogoutRedirectUri!, isWeb: isWeb));
@@ -326,6 +327,12 @@ String? _selectPlatformUri({
 bool _isHttpsUri(String value) {
   final uri = Uri.tryParse(value);
   return uri != null && uri.scheme == 'https' && uri.host.isNotEmpty;
+}
+
+bool _isLogtoManagementAudience(String endpoint, String audience) {
+  final normalizedEndpoint = endpoint.replaceFirst(RegExp(r'/+$'), '');
+  final normalizedAudience = audience.replaceFirst(RegExp(r'/+$'), '');
+  return normalizedAudience == '$normalizedEndpoint/api';
 }
 
 bool _isValidRedirectUri(String value, {required bool isWeb}) {
