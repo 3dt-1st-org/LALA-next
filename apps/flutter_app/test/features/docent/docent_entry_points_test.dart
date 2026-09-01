@@ -158,6 +158,10 @@ class _SearchPlacesBackend implements LalaBackend {
 
 /// 일정 탭용: 장소 있는 슬롯 2개 + 장소 없는 슬롯 1개(가운데) — 큐는 [p1, p2].
 class _PlanSlotsBackend implements LalaBackend {
+  const _PlanSlotsBackend({this.duplicateMorningPlace = false});
+
+  final bool duplicateMorningPlace;
+
   @override
   Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan() async {
     return _envelope(
@@ -203,6 +207,24 @@ class _PlanSlotsBackend implements LalaBackend {
               source: 'db',
             ),
           ),
+          if (duplicateMorningPlace)
+            const LalaPlanSlot(
+              period: 'late-morning',
+              title: '행궁동 카페거리 다시 보기',
+              place: LalaPlace(
+                placeId: 'rail-p1',
+                name: '행궁동 카페거리',
+                nameKo: '행궁동 카페거리',
+                category: 'culture',
+                lat: 37.2636,
+                lng: 127.0286,
+                address: '경기도 수원시 팔달구',
+                regionKo: '수원',
+                regionEn: 'Suwon',
+                distanceM: 120,
+                source: 'db',
+              ),
+            ),
           const LalaPlanSlot(period: 'lunch', title: '행궁동 점심 골목'),
           const LalaPlanSlot(
             period: 'afternoon',
@@ -280,9 +302,7 @@ void main() {
     OnboardingState.reset();
   });
 
-  testWidgets('지도 레일 카드 재생 버튼은 선택 없이 컨트롤러 재생만 시작한다', (
-    tester,
-  ) async {
+  testWidgets('지도 레일 카드 재생 버튼은 선택 없이 컨트롤러 재생만 시작한다', (tester) async {
     final controller = _controller(_DocentReadyBackend());
     var selectionTaps = 0;
     var docentTaps = 0;
@@ -325,9 +345,7 @@ void main() {
     expect(controller.currentState.queueActive, isFalse);
   });
 
-  testWidgets('지도 레일 카드는 onPlayDocent 가 없으면 재생 버튼을 만들지 않는다', (
-    tester,
-  ) async {
+  testWidgets('지도 레일 카드는 onPlayDocent 가 없으면 재생 버튼을 만들지 않는다', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -367,7 +385,9 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byKey(const ValueKey('map-rail-docent-play-rail-p1')));
+    await tester.tap(
+      find.byKey(const ValueKey('map-rail-docent-play-rail-p1')),
+    );
     await tester.pumpAndSettle();
 
     expect(controller.currentState.phase, DocentExperiencePhase.unavailable);
@@ -392,7 +412,9 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byKey(const ValueKey('map-rail-docent-play-rail-p1')));
+    await tester.tap(
+      find.byKey(const ValueKey('map-rail-docent-play-rail-p1')),
+    );
     await tester.pumpAndSettle();
 
     expect(controller.currentState.phase, DocentExperiencePhase.failed);
@@ -412,7 +434,10 @@ void main() {
     await tester.pumpAndSettle();
 
     // 결과 타일이 로드되었고 아직 아무것도 선택되지 않았다.
-    expect(find.byKey(const ValueKey('search-place-tile-rail-p1')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('search-place-tile-rail-p1')),
+      findsOneWidget,
+    );
     expect(SelectedPlaceStore.current, isNull);
 
     await tester.tap(find.byKey(const ValueKey('search-docent-play-rail-p1')));
@@ -434,12 +459,13 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('search-docent-play-rail-p1')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('search-docent-play-rail-p1')),
+      findsNothing,
+    );
   });
 
-  testWidgets('일정 전체 듣기: 보이는 슬롯 순서 큐 재생 후 같은 큐면 정지로 전환', (
-    tester,
-  ) async {
+  testWidgets('일정 전체 듣기: 보이는 슬롯 순서 큐 재생 후 같은 큐면 정지로 전환', (tester) async {
     final controller = _controller(_DocentReadyBackend());
     await tester.pumpWidget(
       MaterialApp(
@@ -476,6 +502,37 @@ void main() {
     expect(find.text('전체 도슨트 듣기'), findsOneWidget);
   });
 
+  testWidgets('일정 전체 듣기는 인접 중복 장소를 제거한 큐와 정지 상태를 공유한다', (tester) async {
+    final controller = _controller(_DocentReadyBackend());
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PlanPage(
+          locationProvider: _ImmediateLocationProvider(),
+          backendFactory: (config) =>
+              const _PlanSlotsBackend(duplicateMorningPlace: true),
+          docentExperienceController: controller,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final playAll = find.byKey(const ValueKey('plan-docent-play-all'));
+    await tester.tap(playAll);
+    await tester.pumpAndSettle();
+
+    expect(
+      controller.currentState.queue.map((p) => p.placeId).toList(),
+      const <String>['rail-p1', 'rail-p2'],
+    );
+    expect(find.text('도슨트 정지'), findsOneWidget);
+
+    await tester.tap(playAll);
+    await tester.pumpAndSettle();
+
+    expect(controller.currentState.queueActive, isFalse);
+    expect(find.text('전체 도슨트 듣기'), findsOneWidget);
+  });
+
   testWidgets('일정 슬롯 개별 재생 버튼은 해당 장소만 playPlace 한다', (tester) async {
     final controller = _controller(_DocentReadyBackend());
     await tester.pumpWidget(
@@ -490,7 +547,9 @@ void main() {
     await tester.pumpAndSettle();
 
     // 일정 탭은 리스트 하단까지 스크롤해야 오후 슬롯이 빌드된다(지연 빌드).
-    final slotButton = find.byKey(const ValueKey('plan-slot-docent-play-rail-p2'));
+    final slotButton = find.byKey(
+      const ValueKey('plan-slot-docent-play-rail-p2'),
+    );
     await tester.scrollUntilVisible(slotButton, 200);
     await tester.ensureVisible(slotButton);
     await tester.pumpAndSettle();
@@ -502,9 +561,7 @@ void main() {
     expect(controller.currentState.phase, DocentExperiencePhase.ready);
   });
 
-  testWidgets('320dp 폭 + 200% 텍스트 스케일에서 진입 버튼들이 오버플로우 없이 렌더된다', (
-    tester,
-  ) async {
+  testWidgets('320dp 폭 + 200% 텍스트 스케일에서 진입 버튼들이 오버플로우 없이 렌더된다', (tester) async {
     final controller = _controller(_DocentReadyBackend());
     tester.view.physicalSize = const Size(320, 640);
     tester.view.devicePixelRatio = 1.0;

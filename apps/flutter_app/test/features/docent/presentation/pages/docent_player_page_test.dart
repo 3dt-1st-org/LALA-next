@@ -210,8 +210,7 @@ void main() {
 
   Widget wrapApp(Widget child) => MaterialApp(home: child);
 
-  testWidgets('source/생성시각/grounding 칩은 실제 필드가 있을 때만 렌더된다',
-      (tester) async {
+  testWidgets('source/생성시각/grounding 칩은 실제 필드가 있을 때만 렌더된다', (tester) async {
     OnboardingState.selectLanguage('ko');
     final backend = _ScriptedBackend(
       generatedAt: '2026-09-01T00:00:00+00:00',
@@ -219,6 +218,7 @@ void main() {
       groundingSources: const <String>[
         'place_profile',
         'culture_event',
+        'community_post',
         'internal_legacy_code',
       ],
     );
@@ -238,18 +238,17 @@ void main() {
     // grounding 은 bounded 지역화 라벨 — 원시 식별자를 노출하지 않는다.
     expect(find.text('장소 프로필'), findsOneWidget);
     expect(find.text('문화 행사 정보'), findsOneWidget);
-    expect(find.text('공식 출처'), findsOneWidget);
+    expect(find.text('커뮤니티 게시물'), findsOneWidget);
+    expect(find.text('참고 자료'), findsOneWidget);
     expect(find.textContaining('internal_legacy_code'), findsNothing);
     // 스크립트 전문은 단일 언어 원문 그대로(리스트 하단 — 스크롤해 확인).
-    await tester.scrollUntilVisible(
-      find.text('행궁동 로컬 도슨트 스크립트입니다.'),
-      120,
-    );
+    await tester.scrollUntilVisible(find.text('행궁동 로컬 도슨트 스크립트입니다.'), 120);
     expect(find.text('행궁동 로컬 도슨트 스크립트입니다.'), findsOneWidget);
   });
 
-  testWidgets('generatedAt/grounding 가 없으면 칩을 만들지 않는다(honest 생략)',
-      (tester) async {
+  testWidgets('generatedAt/grounding 가 없으면 칩을 만들지 않는다(honest 생략)', (
+    tester,
+  ) async {
     OnboardingState.selectLanguage('ko');
     final backend = _ScriptedBackend();
     final player = _RecordingFakePlayer();
@@ -306,7 +305,9 @@ void main() {
     await tester.pumpWidget(wrapApp(DocentPlayerPage(controller: controller)));
     await tester.pumpAndSettle();
 
-    final driverButton = find.byKey(const ValueKey('docent-driver-name-button'));
+    final driverButton = find.byKey(
+      const ValueKey('docent-driver-name-button'),
+    );
     expect(driverButton, findsOneWidget);
     await tester.tap(driverButton);
     await tester.pumpAndSettle();
@@ -346,8 +347,9 @@ void main() {
     expect(find.text('테스트 주소'), findsNothing);
   });
 
-  testWidgets('정지 버튼은 세션을 끝내고 이전 화면으로 pop 한다(빈 Scaffold 잔류 금지)',
-      (tester) async {
+  testWidgets('정지 버튼은 세션을 끝내고 이전 화면으로 pop 한다(빈 Scaffold 잔류 금지)', (
+    tester,
+  ) async {
     OnboardingState.selectLanguage('ko');
     final backend = _ScriptedBackend();
     final player = _RecordingFakePlayer();
@@ -364,13 +366,12 @@ void main() {
       routes: <RouteBase>[
         GoRoute(
           path: '/',
-          builder: (BuildContext context, GoRouterState state) =>
-              Builder(
-                builder: (BuildContext context) => TextButton(
-                  onPressed: () => context.push('/docent-player'),
-                  child: const Text('open-player'),
-                ),
-              ),
+          builder: (BuildContext context, GoRouterState state) => Builder(
+            builder: (BuildContext context) => TextButton(
+              onPressed: () => context.push('/docent-player'),
+              child: const Text('open-player'),
+            ),
+          ),
         ),
         GoRoute(
           path: '/docent-player',
@@ -444,8 +445,7 @@ void main() {
     expect(find.text('재생 중'), findsOneWidget);
   });
 
-  testWidgets('320dp 폭 + 200% 텍스트 스케일에서 오버플로우 없이 렌더된다',
-      (tester) async {
+  testWidgets('320dp 폭 + 200% 텍스트 스케일에서 오버플로우 없이 렌더된다', (tester) async {
     OnboardingState.selectLanguage('ko');
     final backend = _ScriptedBackend(
       generatedAt: '2026-09-01T00:00:00+00:00',
@@ -476,10 +476,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    await tester.scrollUntilVisible(
-      find.text('행궁동 로컬 도슨트 스크립트입니다.'),
-      120,
-    );
+    await tester.scrollUntilVisible(find.text('행궁동 로컬 도슨트 스크립트입니다.'), 120);
     // 스크롤 후에도 오버플로우 예외는 없다.
     expect(tester.takeException(), isNull);
     expect(find.text('행궁동 로컬 도슨트 스크립트입니다.'), findsOneWidget);

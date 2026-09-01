@@ -524,7 +524,8 @@ class _PlanPageState extends State<PlanPage> {
                   triggerBadge: _interventionTriggerBadge(_intervention!),
                   swapLabel: _interventionSwapLabel(_intervention!),
                   onSwap: _intervention!.alternativeSlot != null
-                      ? () => _onSwapAlternative(_intervention!.alternativeSlot!)
+                      ? () =>
+                            _onSwapAlternative(_intervention!.alternativeSlot!)
                       : null,
                   regenerateLabel: lalaCopyMulti(
                     _language,
@@ -780,9 +781,7 @@ class _PlanFailureView extends StatelessWidget {
       en: isUnavailable
           ? 'Service unreachable. $message'
           : 'Failed to load plan. $message',
-      ja: isUnavailable
-          ? 'サーバーに接続できません。$message'
-          : 'プランの読み込みに失敗しました。$message',
+      ja: isUnavailable ? 'サーバーに接続できません。$message' : 'プランの読み込みに失敗しました。$message',
       zhHans: isUnavailable ? '无法连接服务器。$message' : '加载行程失败。$message',
       zhHant: isUnavailable ? '無法連線伺服器。$message' : '載入行程失敗。$message',
     );
@@ -946,11 +945,19 @@ class _PlanContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final weather = dailyPlan?.weather;
-    // 이슈 #120 §6: 큐 순서 = 보이는 슬롯 순서 그대로(장소 없는 슬롯은 건너뛴다).
-    final queuePlaces = <LalaPlace>[
-      for (final slot in visibleSlots)
-        if (slot.place != null) slot.place!,
-    ];
+    // 이슈 #120 §6: 큐 순서 = 보이는 슬롯 순서 그대로(장소 없는 슬롯은
+    // 건너뛴다). 컨트롤러와 동일하게 인접한 중복 장소를 미리 제거해야 현재
+    // 큐 비교와 버튼의 재생/정지 상태가 어긋나지 않는다.
+    final queuePlaces = <LalaPlace>[];
+    for (final slot in visibleSlots) {
+      final place = slot.place;
+      if (place == null ||
+          (queuePlaces.isNotEmpty &&
+              queuePlaces.last.placeId == place.placeId)) {
+        continue;
+      }
+      queuePlaces.add(place);
+    }
     return ListView(
       key: const ValueKey('plan-content'),
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
@@ -981,44 +988,49 @@ class _PlanContent extends StatelessWidget {
             padding: const EdgeInsets.only(top: 12),
             child: ValueListenableBuilder<DocentExperienceState>(
               valueListenable: docentController!.state,
-              builder: (
-                BuildContext context,
-                DocentExperienceState state,
-                Widget? _,
-              ) {
-                final active = _isCurrentQueue(state, queuePlaces);
-                return _MinTouchTarget(
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: OutlinedButton.icon(
-                      key: const ValueKey('plan-docent-play-all'),
-                      onPressed: () {
-                        if (active) {
-                          unawaited(docentController!.stop());
-                        } else {
-                          unawaited(docentController!.playQueue(queuePlaces));
-                        }
-                      },
-                      icon: Icon(
-                        active ? Icons.stop_rounded : Icons.play_arrow_rounded,
-                        size: 20,
-                        color: const Color(0xFFC87F11),
+              builder:
+                  (
+                    BuildContext context,
+                    DocentExperienceState state,
+                    Widget? _,
+                  ) {
+                    final active = _isCurrentQueue(state, queuePlaces);
+                    return _MinTouchTarget(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: OutlinedButton.icon(
+                          key: const ValueKey('plan-docent-play-all'),
+                          onPressed: () {
+                            if (active) {
+                              unawaited(docentController!.stop());
+                            } else {
+                              unawaited(
+                                docentController!.playQueue(queuePlaces),
+                              );
+                            }
+                          },
+                          icon: Icon(
+                            active
+                                ? Icons.stop_rounded
+                                : Icons.play_arrow_rounded,
+                            size: 20,
+                            color: const Color(0xFFC87F11),
+                          ),
+                          label: Text(
+                            active
+                                ? docentStopSemanticLabel(language)
+                                : docentPlayAllLabel(language),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF744210),
+                            side: const BorderSide(color: Color(0xFFF5C842)),
+                            backgroundColor: const Color(0xFFFFFBEB),
+                            minimumSize: const Size(0, 44),
+                          ),
+                        ),
                       ),
-                      label: Text(
-                        active
-                            ? docentStopSemanticLabel(language)
-                            : docentPlayAllLabel(language),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF744210),
-                        side: const BorderSide(color: Color(0xFFF5C842)),
-                        backgroundColor: const Color(0xFFFFFBEB),
-                        minimumSize: const Size(0, 44),
-                      ),
-                    ),
-                  ),
-                );
-              },
+                    );
+                  },
             ),
           ),
         const SizedBox(height: 12),
@@ -1054,15 +1066,12 @@ class _PlanContent extends StatelessWidget {
                 );
               },
               visitStatus: SlotVisitStore.statusFor(planDate, slot.period),
-              onToggleVisit:
-                  () => SlotVisitStore.toggle(planDate, slot.period),
+              onToggleVisit: () => SlotVisitStore.toggle(planDate, slot.period),
               spendBand: band,
               spendUnavailable: band == null,
               onPlayDocent: docentController == null || slot.place == null
                   ? null
-                  : () => unawaited(
-                      docentController!.playPlace(slot.place!),
-                    ),
+                  : () => unawaited(docentController!.playPlace(slot.place!)),
             ),
           );
         }),

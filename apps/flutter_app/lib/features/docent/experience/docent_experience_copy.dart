@@ -5,7 +5,10 @@ import '../../../shared/l10n/lala_copy.dart';
 import 'docent_experience_state.dart';
 
 /// 미니플레이어/플레이어 상태 한 줄 캡션(단계별 정직 문구).
-String docentExperiencePhaseLabel(DocentExperiencePhase phase, String language) {
+String docentExperiencePhaseLabel(
+  DocentExperiencePhase phase,
+  String language,
+) {
   switch (phase) {
     case DocentExperiencePhase.idle:
       return '';
@@ -257,7 +260,8 @@ String docentDriverNameSheetCaption(String language) {
 }
 
 /// grounding source_type 식별자 → bounded 지역화 라벨(§6.3). 원시 내부값을
-/// 그대로 노출하지 않는다 — 알 수 없는 값은 일반 '공식 출처' 계열로 수렴.
+/// 그대로 노출하지 않는다 — 알 수 없는 값은 출처 성격을 단정하지 않는 중립
+/// 라벨로 수렴한다.
 String docentGroundingSourceLabel(String source, String language) {
   final normalized = source.trim().toLowerCase();
   switch (normalized) {
@@ -288,6 +292,15 @@ String docentGroundingSourceLabel(String source, String language) {
         zhHans: '地点提及',
         zhHant: '地點提及',
       );
+    case 'community_post':
+      return lalaCopyMulti(
+        language,
+        ko: '커뮤니티 게시물',
+        en: 'Community post',
+        ja: 'コミュニティ投稿',
+        zhHans: '社区帖子',
+        zhHant: '社群貼文',
+      );
     case 'weather_context':
       return lalaCopyMulti(
         language,
@@ -300,11 +313,11 @@ String docentGroundingSourceLabel(String source, String language) {
     default:
       return lalaCopyMulti(
         language,
-        ko: '공식 출처',
-        en: 'Official source',
-        ja: '公式ソース',
-        zhHans: '官方来源',
-        zhHant: '官方來源',
+        ko: '참고 자료',
+        en: 'Reference source',
+        ja: '参考資料',
+        zhHans: '参考资料',
+        zhHant: '參考資料',
       );
   }
 }
