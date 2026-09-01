@@ -200,12 +200,15 @@ void main() {
       initialLocation: LalaRoutePaths.search,
       routes: <RouteBase>[
         StatefulShellRoute.indexedStack(
-          builder: (BuildContext context, GoRouterState state,
-                  StatefulNavigationShell shell) =>
-              LalaMainShell(
-            navigationShell: shell,
-            docentExperienceController: controller,
-          ),
+          builder:
+              (
+                BuildContext context,
+                GoRouterState state,
+                StatefulNavigationShell shell,
+              ) => LalaMainShell(
+                navigationShell: shell,
+                docentExperienceController: controller,
+              ),
           branches: <StatefulShellBranch>[
             StatefulShellBranch(
               routes: <RouteBase>[
@@ -273,6 +276,9 @@ void main() {
     // 상태 캡션은 실제 재생 상태만 표시한다.
     expect(find.text('재생 중'), findsOneWidget);
     expect(controller.currentState.phase, DocentExperiencePhase.playing);
+    expect(find.byKey(const ValueKey('docent-mini-artwork')), findsOneWidget);
+    // 테스트 장소에는 검증 이미지가 없으므로 정직한 중성 placeholder를 쓴다.
+    expect(find.byIcon(Icons.photo_camera_front_outlined), findsOneWidget);
   });
 
   testWidgets('미니플레이어 탭 → 전체 플레이어 push, 닫으면 탭 상태 유지', (tester) async {
@@ -300,8 +306,7 @@ void main() {
     expect(find.byKey(const ValueKey('docent-mini-player')), findsOneWidget);
   });
 
-  testWidgets('지도 인-바디 시트가 열리면 미니플레이어도 하단 바와 함께 숨는다',
-      (tester) async {
+  testWidgets('지도 인-바디 시트가 열리면 미니플레이어도 하단 바와 함께 숨는다', (tester) async {
     OnboardingState.selectLanguage('ko');
     OnboardingState.markCompleted();
     final player = _EmittingFakePlayer();
@@ -319,8 +324,7 @@ void main() {
     expect(find.byType(LalaBottomNavBar), findsNothing);
   });
 
-  testWidgets('320dp 폭 + 200% 텍스트 스케일에서 미니플레이어가 오버플로우 없이 렌더된다',
-      (tester) async {
+  testWidgets('320dp 폭 + 200% 텍스트 스케일에서 미니플레이어가 오버플로우 없이 렌더된다', (tester) async {
     OnboardingState.selectLanguage('ko');
     OnboardingState.markCompleted();
     final player = _EmittingFakePlayer();

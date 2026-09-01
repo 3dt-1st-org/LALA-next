@@ -28,51 +28,48 @@ class DocentPlayerPage extends StatelessWidget {
       builder: (BuildContext context, String language, Widget? _) {
         return ValueListenableBuilder<DocentExperienceState>(
           valueListenable: controller.state,
-          builder: (
-            BuildContext context,
-            DocentExperienceState state,
-            Widget? _,
-          ) {
-            final place = state.place;
-            if (place == null) {
-              // 세션이 이미 정지/비었으면 빈 배경만(가짜 콘텐츠 금지). AppBar 의
-              // 자동 back 버튼으로 항상 탈출구를 남긴다 — 빈 Scaffold 에 갇히지 않게.
-              return Scaffold(appBar: AppBar(), body: const SizedBox.shrink());
-            }
-            return Scaffold(
-              appBar: AppBar(
-                title: Text(
-                  placeDisplayName(place, language),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              body: ListView(
-                padding: const EdgeInsets.all(16),
-                children: <Widget>[
-                  _DocentVerifiedImage(place: place),
-                  const SizedBox(height: 12),
-                  _DocentPlayerHeader(
-                    place: place,
-                    language: language,
-                    state: state,
+          builder:
+              (BuildContext context, DocentExperienceState state, Widget? _) {
+                final place = state.place;
+                if (place == null) {
+                  // 세션이 이미 정지/비었으면 빈 배경만(가짜 콘텐츠 금지). AppBar 의
+                  // 자동 back 버튼으로 항상 탈출구를 남긴다 — 빈 Scaffold 에 갇히지 않게.
+                  return Scaffold(
+                    appBar: AppBar(),
+                    body: const SizedBox.shrink(),
+                  );
+                }
+                return Scaffold(
+                  appBar: AppBar(
+                    title: Text(
+                      placeDisplayName(place, language),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                  const SizedBox(height: 12),
-                  _DocentPlaybackCard(
-                    controller: controller,
-                    language: language,
-                    state: state,
-                    onStop: () => _stopDocentSession(context, controller),
+                  body: ListView(
+                    padding: const EdgeInsets.all(16),
+                    children: <Widget>[
+                      _DocentVerifiedImage(place: place),
+                      const SizedBox(height: 12),
+                      _DocentPlayerHeader(
+                        place: place,
+                        language: language,
+                        state: state,
+                      ),
+                      const SizedBox(height: 12),
+                      _DocentPlaybackCard(
+                        controller: controller,
+                        language: language,
+                        state: state,
+                        onStop: () => _stopDocentSession(context, controller),
+                      ),
+                      const SizedBox(height: 16),
+                      _DocentTranscriptCard(state: state, language: language),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                  _DocentTranscriptCard(
-                    state: state,
-                    language: language,
-                  ),
-                ],
-              ),
-            );
-          },
+                );
+              },
         );
       },
     );
@@ -141,10 +138,10 @@ class _DocentPlayerHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final displayName = placeDisplayName(place, language);
     final nameKo = place.nameKo?.trim();
-    // 한국어 이름 유틸리티는 실제 nameKo 가 있고 표시명과 다를 때만 노출한다.
-    final driverName = (nameKo != null && nameKo.isNotEmpty && nameKo != displayName)
-        ? nameKo
-        : null;
+    // 외국어 표시명에서는 한국어 원문도 함께 보여준다. 기사님 유틸리티는 실제
+    // nameKo 가 있으면 현재 UI 언어와 관계없이 제공한다(§6.3의 유일한 숨김 조건).
+    final driverName = nameKo != null && nameKo.isNotEmpty ? nameKo : null;
+    final showKoreanName = driverName != null && driverName != displayName;
     final script = state.script;
     final chips = <Widget>[
       if (script != null)
@@ -161,39 +158,51 @@ class _DocentPlayerHeader extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: <Widget>[
-            Expanded(
-              child: Text(
-                displayName,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
-              ),
-            ),
-            if (driverName != null) ...<Widget>[
-              const SizedBox(width: 8),
-              OutlinedButton.icon(
-                key: const ValueKey('docent-driver-name-button'),
-                onPressed: () => _showDriverNameSheet(context, driverName),
-                icon: const Icon(Icons.local_taxi_outlined, size: 18),
-                label: Text(
-                  docentDriverNameButtonLabel(language),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF744210),
-                  side: const BorderSide(color: Color(0xFFF5C842)),
-                  backgroundColor: const Color(0xFFFFFBEB),
-                ),
-              ),
-            ],
-          ],
+        Text(
+          displayName,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
         ),
+        if (showKoreanName) ...<Widget>[
+          const SizedBox(height: 3),
+          Text(
+            driverName,
+            key: const ValueKey('docent-korean-place-name'),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Color(0xFF475569),
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
         if (chips.isNotEmpty) ...<Widget>[
           const SizedBox(height: 8),
           Wrap(spacing: 6, runSpacing: 6, children: chips),
+        ],
+        if (driverName != null) ...<Widget>[
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              key: const ValueKey('docent-driver-name-button'),
+              onPressed: () => _showDriverNameSheet(context, driverName),
+              icon: const Icon(Icons.local_taxi_outlined, size: 18),
+              label: Text(
+                docentDriverNameButtonLabel(language),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF744210),
+                side: const BorderSide(color: Color(0xFFF5C842)),
+                backgroundColor: const Color(0xFFFFFBEB),
+                minimumSize: const Size.fromHeight(48),
+              ),
+            ),
+          ),
         ],
       ],
     );
@@ -321,8 +330,7 @@ class _DocentPlaybackCard extends StatelessWidget {
         ? '${docentMiniQueueProgress(state.queueIndex, state.queue.length)} · '
         : '';
     final caption =
-        state.safeMessage ??
-        docentExperiencePhaseLabel(state.phase, language);
+        state.safeMessage ?? docentExperiencePhaseLabel(state.phase, language);
     final isPlaying = state.phase == DocentExperiencePhase.playing;
     final isPreparing = state.preparing;
     final isRetry =
@@ -361,7 +369,9 @@ class _DocentPlaybackCard extends StatelessWidget {
               label: toggleLabel,
               button: true,
               child: IconButton(
-                onPressed: isPreparing ? null : () => controller.toggleControl(),
+                onPressed: isPreparing
+                    ? null
+                    : () => controller.toggleControl(),
                 icon: isPreparing
                     ? const SizedBox(
                         width: 18,
@@ -389,10 +399,7 @@ class _DocentPlaybackCard extends StatelessWidget {
               button: true,
               child: IconButton(
                 onPressed: onStop,
-                icon: const Icon(
-                  Icons.stop_rounded,
-                  color: Color(0xFFC87F11),
-                ),
+                icon: const Icon(Icons.stop_rounded, color: Color(0xFFC87F11)),
                 padding: EdgeInsets.zero,
                 tooltip: docentStopSemanticLabel(language),
               ),

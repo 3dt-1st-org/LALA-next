@@ -3,8 +3,11 @@
 // 지원되지 않는 정보는 만들지 않는다(§6.3 준수). 색은 tour_audio_bar 의
 // 기존 앰버 토큰 계열을 그대로 재사용한다(새 토큰 금지).
 import 'package:flutter/material.dart';
+import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import '../../../shared/l10n/place_labels.dart';
+import '../../place/place_helpers.dart';
+import '../../place/widgets/place_image.dart';
 import 'docent_experience_controller.dart';
 import 'docent_experience_copy.dart';
 import 'docent_experience_state.dart';
@@ -62,7 +65,7 @@ class DocentMiniPlayer extends StatelessWidget {
                       ),
                       child: Row(
                         children: <Widget>[
-                          _DocentMiniPhaseIcon(phase: state.phase),
+                          _DocentMiniArtwork(place: place),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Column(
@@ -132,52 +135,38 @@ class DocentMiniPlayer extends StatelessWidget {
   }
 }
 
-/// 단계 아이콘 — 실제 단계만 반영(준비 중 스피너, 재생 파형, 완료 체크 등).
-class _DocentMiniPhaseIcon extends StatelessWidget {
-  const _DocentMiniPhaseIcon({required this.phase});
+/// 목표 UI의 실제 장소 썸네일. 검증된 이미지가 없거나 네트워크 로드가 실패하면
+/// 중성 placeholder가 그대로 남으며, 임의 이미지는 사용하지 않는다.
+class _DocentMiniArtwork extends StatelessWidget {
+  const _DocentMiniArtwork({required this.place});
 
-  final DocentExperiencePhase phase;
+  final LalaPlace place;
 
   @override
   Widget build(BuildContext context) {
-    switch (phase) {
-      case DocentExperiencePhase.checkingReadiness:
-      case DocentExperiencePhase.preparingScript:
-      case DocentExperiencePhase.preparingAudio:
-        return const SizedBox(
-          width: 20,
-          height: 20,
-          child: CircularProgressIndicator(strokeWidth: 2),
-        );
-      case DocentExperiencePhase.ready:
-      case DocentExperiencePhase.playing:
-      case DocentExperiencePhase.paused:
-        return const Icon(
-          Icons.graphic_eq,
-          size: 20,
-          color: Color(0xFFC87F11),
-        );
-      case DocentExperiencePhase.completed:
-        return const Icon(
-          Icons.check_circle_outline,
-          size: 20,
-          color: Color(0xFFC87F11),
-        );
-      case DocentExperiencePhase.unavailable:
-        return const Icon(
-          Icons.volume_off_outlined,
-          size: 20,
-          color: Color(0xFFC87F11),
-        );
-      case DocentExperiencePhase.failed:
-        return const Icon(
-          Icons.error_outline,
-          size: 20,
-          color: Color(0xFFC87F11),
-        );
-      case DocentExperiencePhase.idle:
-        return const SizedBox.shrink();
-    }
+    return ClipRRect(
+      key: const ValueKey('docent-mini-artwork'),
+      borderRadius: BorderRadius.circular(8),
+      child: SizedBox(
+        width: 40,
+        height: 40,
+        child: Stack(
+          fit: StackFit.expand,
+          children: <Widget>[
+            const ColoredBox(
+              color: Color(0xFFEDF2F7),
+              child: Icon(
+                Icons.photo_camera_front_outlined,
+                size: 20,
+                color: Color(0xFF94A3B8),
+              ),
+            ),
+            if (hasOfficialPlaceImage(place))
+              PlaceImage(place: place, width: 40, height: 40),
+          ],
+        ),
+      ),
+    );
   }
 }
 

@@ -305,14 +305,31 @@ void main() {
     await tester.pumpWidget(wrapApp(DocentPlayerPage(controller: controller)));
     await tester.pumpAndSettle();
 
+    expect(
+      find.byKey(const ValueKey('docent-korean-place-name')),
+      findsOneWidget,
+    );
+    expect(find.text('행궁동 카페거리'), findsOneWidget);
     final driverButton = find.byKey(
       const ValueKey('docent-driver-name-button'),
     );
     expect(driverButton, findsOneWidget);
+    await tester.dragUntilVisible(
+      driverButton,
+      find.byType(ListView),
+      const Offset(0, -200),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(driverButton);
     await tester.pumpAndSettle();
     // 시트에는 한국어 원문을 그대로 크게 — 번역/변형 금지.
-    expect(find.text('행궁동 카페거리'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('행궁동 카페거리'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('Korean name'), findsOneWidget);
     // 실제 주소가 있으면 기사님 시트에 함께 노출한다.
     expect(find.text('테스트 주소'), findsOneWidget);
@@ -340,10 +357,25 @@ void main() {
     await tester.pumpWidget(wrapApp(DocentPlayerPage(controller: controller)));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('docent-driver-name-button')));
+    final driverButton = find.byKey(
+      const ValueKey('docent-driver-name-button'),
+    );
+    await tester.dragUntilVisible(
+      driverButton,
+      find.byType(ListView),
+      const Offset(0, -200),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(driverButton);
     await tester.pumpAndSettle();
 
-    expect(find.text('행궁동 카페거리'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(BottomSheet),
+        matching: find.text('행궁동 카페거리'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('테스트 주소'), findsNothing);
   });
 
