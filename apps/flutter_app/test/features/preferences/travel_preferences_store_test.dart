@@ -53,6 +53,32 @@ void main() {
     expect(decoded, original);
   });
 
+  test('equal preference sets keep the same hash regardless of order', () {
+    final first = TravelPreferences(
+      interests: <TravelInterest>{
+        TravelInterest.localFood,
+        TravelInterest.history,
+      },
+      transportModes: <TransportMode>{
+        TransportMode.walk,
+        TransportMode.transit,
+      },
+    );
+    final second = TravelPreferences(
+      interests: <TravelInterest>{
+        TravelInterest.history,
+        TravelInterest.localFood,
+      },
+      transportModes: <TransportMode>{
+        TransportMode.transit,
+        TransportMode.walk,
+      },
+    );
+
+    expect(first, second);
+    expect(first.hashCode, second.hashCode);
+  });
+
   test('rejects unknown schema and safely bounds malformed values', () {
     expect(
       TravelPreferences.fromJson(<String, Object>{'version': 99}),

@@ -453,17 +453,17 @@ class TravelPreferences {
     pace,
     crowdTolerance,
     walkingBand,
-    ...interests,
-    ...travelStyles,
+    _stableEnumSetHash(interests),
+    _stableEnumSetHash(travelStyles),
     indoorOutdoorPreference,
     weatherSensitivity,
-    ...cuisines,
+    _stableEnumSetHash(cuisines),
     foodAdventure,
-    ...dietaryModes,
-    ...allergens,
+    _stableEnumSetHash(dietaryModes),
+    _stableEnumSetHash(allergens),
     avoidIngredients,
-    ...companions,
-    ...transportModes,
+    _stableEnumSetHash(companions),
+    _stableEnumSetHash(transportModes),
     restFrequency,
     maxOneWayMinutes,
     maxTransfers,
@@ -524,4 +524,9 @@ Set<T> _enumSet<T extends Enum>(
 String _boundedText(String value, int limit) {
   final trimmed = value.trim();
   return trimmed.length <= limit ? trimmed : trimmed.substring(0, limit);
+}
+
+int _stableEnumSetHash<T extends Enum>(Set<T> values) {
+  final names = values.map((value) => value.name).toList()..sort();
+  return Object.hashAll(names);
 }
