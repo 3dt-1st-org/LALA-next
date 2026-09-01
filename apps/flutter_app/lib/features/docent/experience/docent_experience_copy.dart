@@ -256,6 +256,71 @@ String docentDriverNameSheetCaption(String language) {
   );
 }
 
+/// grounding source_type 식별자 → bounded 지역화 라벨(§6.3). 원시 내부값을
+/// 그대로 노출하지 않는다 — 알 수 없는 값은 일반 '공식 출처' 계열로 수렴.
+String docentGroundingSourceLabel(String source, String language) {
+  final normalized = source.trim().toLowerCase();
+  switch (normalized) {
+    case 'place_profile':
+      return lalaCopyMulti(
+        language,
+        ko: '장소 프로필',
+        en: 'Place profile',
+        ja: '場所プロフィール',
+        zhHans: '场所资料',
+        zhHant: '場所資料',
+      );
+    case 'culture_event':
+      return lalaCopyMulti(
+        language,
+        ko: '문화 행사 정보',
+        en: 'Culture event data',
+        ja: '文化イベント情報',
+        zhHans: '文化活动信息',
+        zhHant: '文化活動資訊',
+      );
+    case 'place_mention':
+      return lalaCopyMulti(
+        language,
+        ko: '장소 언급',
+        en: 'Place mentions',
+        ja: '場所への言及',
+        zhHans: '地点提及',
+        zhHant: '地點提及',
+      );
+    case 'weather_context':
+      return lalaCopyMulti(
+        language,
+        ko: '날씨 맥락',
+        en: 'Weather context',
+        ja: '天気コンテキスト',
+        zhHans: '天气背景',
+        zhHant: '天氣背景',
+      );
+    default:
+      return lalaCopyMulti(
+        language,
+        ko: '공식 출처',
+        en: 'Official source',
+        ja: '公式ソース',
+        zhHans: '官方来源',
+        zhHant: '官方來源',
+      );
+  }
+}
+
+/// 일정 '전체 도슨트 듣기' 진입 버튼 라벨(보이는 슬롯 순서 큐 재생).
+String docentPlayAllLabel(String language) {
+  return lalaCopyMulti(
+    language,
+    ko: '전체 도슨트 듣기',
+    en: 'Play the full guide',
+    ja: 'ガイドをすべて再生',
+    zhHans: '播放全部讲解',
+    zhHant: '播放全部導覽',
+  );
+}
+
 /// 생성 시점 라벨 — 파싱 가능한 generatedAt 에만 호출(파싱 불가면 호출부가 생략).
 String docentGeneratedAtLabel(DateTime generatedAt, String language) {
   String two(int v) => v.toString().padLeft(2, '0');

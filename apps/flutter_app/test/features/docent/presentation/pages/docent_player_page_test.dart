@@ -1,17 +1,21 @@
 // 이슈 #120 §9: 전체 화면 도슨트 플레이어 위젯 계약.
 // - source/생성시각/grounding 칩은 실제 스크립트 필드가 있을 때만 렌더(없으면 생략).
-// - 한국어 이름 유틸리티는 nameKo 가 실제로 있을 때만 노출.
+// - grounding 은 bounded 지역화 라벨 — 원시 내부 식별자를 노출하지 않는다.
+// - 한국어 이름 유틸리티는 nameKo 가 실제로 있을 때만 노출(주소도 실제 있을 때만).
+// - 정지는 세션 종료 — 이전 화면으로 pop 되어 빈 Scaffold 에 갇히지 않는다.
 // - seek/진행바/시간 표시를 제공하지 않는다(플레이어 미지원 — §6.3).
 // - 단일 언어 스크립트만 전문으로 보여준다.
 // 가짜 백엔드/플레이어만 사용 — 네트워크·실 오디오 없음.
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import 'package:lala_next_app/core/backend/lala_backend.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/features/docent/experience/docent_experience_controller.dart';
+import 'package:lala_next_app/features/docent/experience/docent_experience_state.dart';
 import 'package:lala_next_app/features/docent/playback/docent_audio_player.dart';
 import 'package:lala_next_app/features/docent/presentation/pages/docent_player_page.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
@@ -166,14 +170,18 @@ class _RecordingFakePlayer implements DocentAudioPlayer {
   }
 }
 
-LalaPlace _place({String? nameKo, String name = '행궁동 카페거리'}) {
+LalaPlace _place({
+  String? nameKo,
+  String name = '행궁동 카페거리',
+  String address = '테스트 주소',
+}) {
   return LalaPlace(
     placeId: 'player-p1',
     name: name,
     category: 'culture',
     lat: 37.2636,
     lng: 127.0286,
-    address: '테스트 주소',
+    address: address,
     distanceM: 120,
     source: 'db',
     nameKo: nameKo,
@@ -207,7 +215,12 @@ void main() {
     OnboardingState.selectLanguage('ko');
     final backend = _ScriptedBackend(
       generatedAt: '2026-09-01T00:00:00+00:00',
-      groundingSources: const <String>['tour_api', 'kcisa'],
+      // 실제 source_type 도메인 + 알 수 없는 값 하나(bounded 라벨 수렴 확인).
+      groundingSources: const <String>[
+        'place_profile',
+        'culture_event',
+        'internal_legacy_code',
+      ],
     );
     final player = _RecordingFakePlayer();
     final controller = await _readyController(
@@ -222,8 +235,11 @@ void main() {
 
     expect(find.text('LALA 큐레이션'), findsOneWidget);
     expect(find.text('2026.09.01 생성'), findsOneWidget);
-    expect(find.text('tour_api'), findsOneWidget);
-    expect(find.text('kcisa'), findsOneWidget);
+    // grounding 은 bounded 지역화 라벨 — 원시 식별자를 노출하지 않는다.
+    expect(find.text('장소 프로필'), findsOneWidget);
+    expect(find.text('문화 행사 정보'), findsOneWidget);
+    expect(find.text('공식 출처'), findsOneWidget);
+    expect(find.textContaining('internal_legacy_code'), findsNothing);
     // 스크립트 전문은 단일 언어 원문 그대로(리스트 하단 — 스크롤해 확인).
     await tester.scrollUntilVisible(
       find.text('행궁동 로컬 도슨트 스크립트입니다.'),
@@ -249,7 +265,8 @@ void main() {
 
     expect(find.text('LALA 큐레이션'), findsOneWidget);
     expect(find.textContaining('생성'), findsNothing);
-    expect(find.textContaining('tour_api'), findsNothing);
+    expect(find.text('공식 출처'), findsNothing);
+    expect(find.text('장소 프로필'), findsNothing);
   });
 
   testWidgets('파싱 불가능한 generatedAt 은 날짜 라벨로 노출하지 않는다', (tester) async {
@@ -296,6 +313,92 @@ void main() {
     // 시트에는 한국어 원문을 그대로 크게 — 번역/변형 금지.
     expect(find.text('행궁동 카페거리'), findsOneWidget);
     expect(find.text('Korean name'), findsOneWidget);
+    // 실제 주소가 있으면 기사님 시트에 함께 노출한다.
+    expect(find.text('테스트 주소'), findsOneWidget);
+  });
+
+  testWidgets('주소가 없는 장소의 기사님 시트는 주소 줄을 만들지 않는다', (tester) async {
+    OnboardingState.selectLanguage('en');
+    final backend = _ScriptedBackend(script: 'Local docent script in English.');
+    final player = _RecordingFakePlayer();
+    final controller = DocentExperienceController(
+      backendFactory: (_) => backend,
+      baseConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      player: player,
+      languageReader: () => 'en',
+    );
+    await controller.playPlace(
+      _place(
+        name: 'Haenggung-dong Cafe Street',
+        nameKo: '행궁동 카페거리',
+        address: '',
+      ),
+    );
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(wrapApp(DocentPlayerPage(controller: controller)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('docent-driver-name-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('행궁동 카페거리'), findsOneWidget);
+    expect(find.text('테스트 주소'), findsNothing);
+  });
+
+  testWidgets('정지 버튼은 세션을 끝내고 이전 화면으로 pop 한다(빈 Scaffold 잔류 금지)',
+      (tester) async {
+    OnboardingState.selectLanguage('ko');
+    final backend = _ScriptedBackend();
+    final player = _RecordingFakePlayer();
+    final controller = await _readyController(
+      backend: backend,
+      player: player,
+      place: _place(),
+    );
+    addTearDown(controller.dispose);
+
+    // push 패턴(쉘 밖 전체 플레이어)을 미러: origin 버튼이 /docent-player 로 push.
+    final router = GoRouter(
+      initialLocation: '/',
+      routes: <RouteBase>[
+        GoRoute(
+          path: '/',
+          builder: (BuildContext context, GoRouterState state) =>
+              Builder(
+                builder: (BuildContext context) => TextButton(
+                  onPressed: () => context.push('/docent-player'),
+                  child: const Text('open-player'),
+                ),
+              ),
+        ),
+        GoRoute(
+          path: '/docent-player',
+          builder: (BuildContext context, GoRouterState state) =>
+              DocentPlayerPage(controller: controller),
+        ),
+      ],
+    );
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('open-player'));
+    await tester.pumpAndSettle();
+    expect(find.byType(DocentPlayerPage), findsOneWidget);
+
+    // 재생 카드는 화면 하단(이미지·헤더 아래)에 있다 — 스크롤해 노출 후 탭.
+    final stopIcon = find.byIcon(Icons.stop_rounded);
+    await tester.scrollUntilVisible(stopIcon, 200);
+    await tester.ensureVisible(stopIcon);
+    await tester.pumpAndSettle();
+    await tester.tap(stopIcon);
+    await tester.pumpAndSettle();
+
+    // 정지 = 세션 종료: 이전 화면으로 돌아가고 컨트롤러는 idle.
+    expect(find.byType(DocentPlayerPage), findsNothing);
+    expect(find.text('open-player'), findsOneWidget);
+    expect(controller.currentState.phase, DocentExperiencePhase.idle);
+    expect(controller.currentState.place, isNull);
   });
 
   testWidgets('nameKo 가 없으면 운전기사 유틸리티를 만들지 않는다', (tester) async {
@@ -346,7 +449,11 @@ void main() {
     OnboardingState.selectLanguage('ko');
     final backend = _ScriptedBackend(
       generatedAt: '2026-09-01T00:00:00+00:00',
-      groundingSources: const <String>['tour_api', 'kcisa', 'kopis'],
+      groundingSources: const <String>[
+        'place_profile',
+        'culture_event',
+        'weather_context',
+      ],
     );
     final player = _RecordingFakePlayer();
     final controller = await _readyController(

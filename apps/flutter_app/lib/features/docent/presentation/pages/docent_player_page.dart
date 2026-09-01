@@ -1,7 +1,10 @@
 // 이슈 #120 §6.3: 전체 화면 도슨트 플레이어(메인 쉘 외부 push 라우트).
 // source/generatedAt/grounding 은 실제 스크립트 필드가 있을 때만 렌더한다 —
 // duration·seek·챕터·인용 퍼센트처럼 지원되지 않거나 없는 정보는 만들지 않는다.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import '../../../../shared/l10n/place_labels.dart';
@@ -32,8 +35,9 @@ class DocentPlayerPage extends StatelessWidget {
           ) {
             final place = state.place;
             if (place == null) {
-              // 세션이 이미 정지/비었으면 빈 배경만(가짜 콘텐츠 금지).
-              return const Scaffold(body: SizedBox.shrink());
+              // 세션이 이미 정지/비었으면 빈 배경만(가짜 콘텐츠 금지). AppBar 의
+              // 자동 back 버튼으로 항상 탈출구를 남긴다 — 빈 Scaffold 에 갇히지 않게.
+              return Scaffold(appBar: AppBar(), body: const SizedBox.shrink());
             }
             return Scaffold(
               appBar: AppBar(
@@ -58,6 +62,7 @@ class DocentPlayerPage extends StatelessWidget {
                     controller: controller,
                     language: language,
                     state: state,
+                    onStop: () => _stopDocentSession(context, controller),
                   ),
                   const SizedBox(height: 16),
                   _DocentTranscriptCard(
@@ -71,6 +76,18 @@ class DocentPlayerPage extends StatelessWidget {
         );
       },
     );
+  }
+
+  // 정지는 세션 종료(state.place → null)라 이 페이지를 빈 Scaffold 로 남긴다 —
+  // 이전 화면으로 돌려보내 빈 페이지에 갇히지 않게 한다.
+  void _stopDocentSession(
+    BuildContext context,
+    DocentExperienceController controller,
+  ) {
+    unawaited(controller.stop());
+    if (context.canPop()) {
+      context.pop();
+    }
   }
 }
 
@@ -136,7 +153,10 @@ class _DocentPlayerHeader extends StatelessWidget {
         ),
       if (script?.generatedAt != null)
         ..._generatedAtChip(script!.generatedAt!, language),
-      ..._groundingChips(script?.groundingSources ?? const <String>[]),
+      ..._groundingChips(
+        script?.groundingSources ?? const <String>[],
+        language,
+      ),
     ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -190,16 +210,22 @@ class _DocentPlayerHeader extends StatelessWidget {
     ];
   }
 
-  // grounding 라벨은 groundingSources 원문 그대로 — 없으면 아무것도 만들지 않는다.
-  List<Widget> _groundingChips(List<String> sources) {
+  // grounding 은 bounded 지역화 라벨로만 — 원시 내부 식별자를 노출하지 않는다.
+  // 없으면 아무것도 만들지 않는다.
+  List<Widget> _groundingChips(List<String> sources, String language) {
     return <Widget>[
       for (final source in sources)
         if (source.trim().isNotEmpty)
-          _DocentMetaChip(label: source.trim(), grounding: true),
+          _DocentMetaChip(
+            label: docentGroundingSourceLabel(source, language),
+            grounding: true,
+          ),
     ];
   }
 
   void _showDriverNameSheet(BuildContext context, String driverName) {
+    // 기사님 시트에는 실제 주소도 함께 — 있을 때만(없으면 라인을 만들지 않는다).
+    final address = place.address.trim();
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -223,6 +249,18 @@ class _DocentPlayerHeader extends StatelessWidget {
                   fontWeight: FontWeight.w900,
                 ),
               ),
+              if (address.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 10),
+                Text(
+                  address,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF334155),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
             ],
           ),
         );
@@ -269,11 +307,13 @@ class _DocentPlaybackCard extends StatelessWidget {
     required this.controller,
     required this.language,
     required this.state,
+    required this.onStop,
   });
 
   final DocentExperienceController controller;
   final String language;
   final DocentExperienceState state;
+  final VoidCallback onStop;
 
   @override
   Widget build(BuildContext context) {
@@ -348,7 +388,7 @@ class _DocentPlaybackCard extends StatelessWidget {
               label: docentStopSemanticLabel(language),
               button: true,
               child: IconButton(
-                onPressed: () => controller.stop(),
+                onPressed: onStop,
                 icon: const Icon(
                   Icons.stop_rounded,
                   color: Color(0xFFC87F11),

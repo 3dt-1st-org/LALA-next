@@ -21,6 +21,7 @@ class MapPlaceCarouselOverlay extends StatelessWidget {
     required this.onSelectPlace,
     required this.onReselectSelectedPlace,
     required this.onToggleExpanded,
+    this.onPlayDocent,
   });
 
   final List<LalaPlace> places;
@@ -33,6 +34,10 @@ class MapPlaceCarouselOverlay extends StatelessWidget {
   final ValueChanged<LalaPlace> onSelectPlace;
   final VoidCallback onReselectSelectedPlace;
   final VoidCallback onToggleExpanded;
+
+  /// 이슈 #120 §6: 레일 카드별 도슨트 재생 진입(app-root 컨트롤러로 연결).
+  /// null 이면 버튼 자체를 만들지 않는다(기존 호출부 영향 없음).
+  final ValueChanged<LalaPlace>? onPlayDocent;
 
   @override
   Widget build(BuildContext context) {
@@ -169,6 +174,9 @@ class MapPlaceCarouselOverlay extends StatelessWidget {
                                     : selected
                                     ? null
                                     : () => onSelectPlace(place),
+                                onPlayDocent: onPlayDocent == null
+                                    ? null
+                                    : () => onPlayDocent!(place),
                               );
                             },
                           ),

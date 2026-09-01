@@ -23,6 +23,7 @@ import 'package:lala_next_app/core/navigation/local_signal_action.dart';
 import 'package:lala_next_app/core/state/plan_context_store.dart';
 import 'package:lala_next_app/core/state/saved_place_store.dart';
 import 'package:lala_next_app/core/state/selected_place_store.dart';
+import 'package:lala_next_app/features/docent/experience/docent_experience_controller.dart';
 import 'package:lala_next_app/features/location/widgets/manual_location_sheet.dart';
 import 'package:lala_next_app/features/location/widgets/permanently_denied_recovery.dart';
 import 'package:lala_next_app/features/map/domain/active_map_sheet.dart';
@@ -51,6 +52,7 @@ class LalaHomePage extends StatefulWidget {
     this.authController,
     this.authControllerFactory,
     this.localSignalActionController,
+    this.docentExperienceController,
     super.key,
   }) : assert(authController != null || authControllerFactory != null);
 
@@ -61,6 +63,10 @@ class LalaHomePage extends StatefulWidget {
   final LalaAuthController? authController;
   final LalaAuthControllerFactory? authControllerFactory;
   final LocalSignalActionController? localSignalActionController;
+
+  /// 이슈 #120 §6: 앱 루트 단일 도슨트 경험 컨트롤러(선택 — 라우터가 주입).
+  /// null 이면 레일 카드에 재생 버튼을 만들지 않는다.
+  final DocentExperienceController? docentExperienceController;
 
   @override
   State<LalaHomePage> createState() => _LalaHomePageState();
@@ -1627,6 +1633,10 @@ class _LalaHomePageState extends State<LalaHomePage> {
                   onOpenManualLocation: () => _openManualLocationSheet(context),
                   onRetryLocation: _retryLocationConsent,
                   onStartLocation: _startFromCurrentLocation,
+                  onPlayDocentPlace: widget.docentExperienceController == null
+                      ? null
+                      : (place) =>
+                            widget.docentExperienceController!.playPlace(place),
                 ),
               ),
               // permanentlyDenied recovery: a calm, non-blocking card over the

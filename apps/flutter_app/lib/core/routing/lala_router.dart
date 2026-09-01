@@ -120,7 +120,10 @@ GoRouter createLalaRouter({
               GoRoute(
                 path: LalaRoutePaths.search,
                 builder: (BuildContext context, GoRouterState state) =>
-                    SearchPage(initialConfig: initialConfig),
+                    SearchPage(
+                      initialConfig: initialConfig,
+                      docentExperienceController: docentExperienceController,
+                    ),
               ),
             ],
           ),
@@ -138,6 +141,7 @@ GoRouter createLalaRouter({
                       authController: authController,
                       authControllerFactory: authControllerFactory,
                       localSignalActionController: signalActionController,
+                      docentExperienceController: docentExperienceController,
                     ),
               ),
             ],
@@ -147,7 +151,10 @@ GoRouter createLalaRouter({
               GoRoute(
                 path: LalaRoutePaths.plan,
                 builder: (BuildContext context, GoRouterState state) =>
-                    PlanPage(initialConfig: initialConfig),
+                    PlanPage(
+                      initialConfig: initialConfig,
+                      docentExperienceController: docentExperienceController,
+                    ),
               ),
             ],
           ),

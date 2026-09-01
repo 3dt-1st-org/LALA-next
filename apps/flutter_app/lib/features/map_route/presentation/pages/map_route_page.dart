@@ -8,6 +8,7 @@ import 'package:lala_next_app/core/backend/lala_backend.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
 import 'package:lala_next_app/core/navigation/local_signal_action.dart';
+import 'package:lala_next_app/features/docent/experience/docent_experience_controller.dart';
 import 'package:lala_next_app/features/home/home_page.dart';
 
 class MapRoutePage extends StatelessWidget {
@@ -19,6 +20,7 @@ class MapRoutePage extends StatelessWidget {
     this.authController,
     this.authControllerFactory,
     required this.localSignalActionController,
+    required this.docentExperienceController,
     super.key,
   }) : assert(authController != null || authControllerFactory != null);
 
@@ -30,6 +32,9 @@ class MapRoutePage extends StatelessWidget {
   final LalaAuthControllerFactory? authControllerFactory;
   final LocalSignalActionController localSignalActionController;
 
+  /// 이슈 #120 §6: 앱 루트 단일 도슨트 경험 컨트롤러 — 지도 레일 카드 재생 진입.
+  final DocentExperienceController docentExperienceController;
+
   @override
   Widget build(BuildContext context) {
     return LalaHomePage(
@@ -40,6 +45,7 @@ class MapRoutePage extends StatelessWidget {
       authController: authController,
       authControllerFactory: authControllerFactory,
       localSignalActionController: localSignalActionController,
+      docentExperienceController: docentExperienceController,
     );
   }
 }
