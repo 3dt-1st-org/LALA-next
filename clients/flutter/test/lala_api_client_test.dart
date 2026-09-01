@@ -767,7 +767,11 @@ void main() {
             'source': 'openai',
             'generated_at': '2026-09-01T00:00:00+00:00',
             'grounding_count': 3,
-            'grounding_sources': ['tour_api', 'kcisa', 'kopis'],
+            'grounding_sources': [
+              'place_profile',
+              'culture_event',
+              'community_post',
+            ],
             'request_hash':
                 '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
             'cache_key': 'docent_script:grounded',
@@ -789,9 +793,9 @@ void main() {
 
     expect(envelope.data?.groundingCount, 3);
     expect(envelope.data?.groundingSources, <String>[
-      'tour_api',
-      'kcisa',
-      'kopis',
+      'place_profile',
+      'culture_event',
+      'community_post',
     ]);
   });
 
