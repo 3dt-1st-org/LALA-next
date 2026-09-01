@@ -26,9 +26,7 @@ Widget buildLalaMapView({
   final normalizedClientId = clientId.trim();
   if (normalizedClientId.isEmpty) {
     return LalaMapFallbackView(
-      message: normalizeLalaLanguage(language) != 'ko'
-          ? 'The live map is not available right now.'
-          : '현재 지도를 표시할 수 없습니다.',
+      message: liveMapUnavailableLabel(language),
       language: language,
       centerLat: centerLat,
       centerLng: centerLng,
@@ -214,5 +212,4 @@ class _LalaMapWebFrameState extends State<_LalaMapWebFrame> {
   }
 }
 
-String _mapTitle(String language) =>
-    normalizeLalaLanguage(language) == 'ko' ? 'LALA 네이버 지도' : 'LALA Naver map';
+String _mapTitle(String language) => naverMapLabel(language);

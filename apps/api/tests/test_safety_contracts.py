@@ -613,6 +613,9 @@ def test_naver_map_bridges_forward_camera_updates():
     assert "lala-flutter-map-config" in web_bridge
 
     assert "https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=" in native_embed
+    assert 'if (value === "en" || value === "ja") return value' in native_embed
+    assert 'startsWith("zh")' in native_embed
+    assert '"&language=" + encodeURIComponent(config.language)' in native_embed
     assert "window.LalaMapEmbed" in native_embed
     assert "lala-flutter-map-config" in native_embed
     assert 'bridgeId: String(value.bridgeId || "").trim()' in native_embed

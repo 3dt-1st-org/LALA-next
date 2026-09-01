@@ -83,15 +83,21 @@ class MapPlaceCarouselOverlay extends StatelessWidget {
                     const SizedBox(width: 4),
                     Text(
                       expanded
-                          ? lalaCopy(
+                          ? lalaCopyMulti(
                               language,
                               ko: '추천 장소 접기',
                               en: 'Hide places',
+                              ja: 'おすすめを隠す',
+                              zhHans: '收起推荐',
+                              zhHant: '收起推薦',
                             )
-                          : lalaCopy(
+                          : lalaCopyMulti(
                               language,
                               ko: '추천 장소 보기',
                               en: 'Show places',
+                              ja: 'おすすめを見る',
+                              zhHans: '查看推荐',
+                              zhHant: '查看推薦',
                             ),
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
                         color: const Color(0xFF374151),
@@ -101,10 +107,15 @@ class MapPlaceCarouselOverlay extends StatelessWidget {
                     const SizedBox(width: 8),
                     Flexible(
                       child: Text(
-                        lalaCopy(
+                        lalaCopyMulti(
                           language,
                           ko: '${items.length}곳 · ${sourceLabel(source, language: language)}',
                           en: '${items.length} places · ${sourceLabel(source, language: language)}',
+                          ja: '${items.length}件 · ${sourceLabel(source, language: language)}',
+                          zhHans:
+                              '${items.length}处 · ${sourceLabel(source, language: language)}',
+                          zhHant:
+                              '${items.length}處 · ${sourceLabel(source, language: language)}',
                         ),
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
                           color: const Color(0xFF64748B),

@@ -38,17 +38,17 @@ void main() {
           'fallback',
           'public_mvp_snapshot',
         ]) {
-          _expectNoHangul(externalSourceLabel(code, language: locale) ?? '', code);
+          _expectNoHangul(
+            externalSourceLabel(code, language: locale) ?? '',
+            code,
+          );
         }
       });
     }
 
     test('ko keeps Korean names (byte-compat)', () {
       expect(externalSourceLabel('tour_api', language: 'ko'), '한국관광공사');
-      expect(
-        externalSourceLabel('fallback', language: 'ko'),
-        '제한적 오프라인 데이터',
-      );
+      expect(externalSourceLabel('fallback', language: 'ko'), '제한적 오프라인 데이터');
     });
 
     test('en keeps English names (byte-compat)', () {
@@ -116,6 +116,21 @@ void main() {
       expect(basisLabel('actual_data', language: 'ko'), '실데이터');
       expect(basisLabel('actual_data', language: 'en'), 'Real data');
     });
+
+    test('map source and weather labels use the selected visitor locale', () {
+      expect(sourceLabel('db', language: 'ja'), 'リアルタイムのおすすめ');
+      expect(sourceLabel('mixed', language: 'zh-Hans'), '实时＋官方数据');
+      expect(sourceLabel('skeleton', language: 'zh-Hant'), 'LALA精選');
+      expect(
+        weatherSourceLabel('kma_ultra_srt_ncst', language: 'ja'),
+        '韓国気象庁の実況',
+      );
+      expect(
+        weatherSourceLabel('airkorea_sido_realtime', language: 'zh-Hans'),
+        'AirKorea空气质量',
+      );
+      expect(weatherSourceLabel('fallback', language: 'zh-Hant'), '天氣資訊準備中');
+    });
   });
 
   group('dust labels', () {
@@ -174,7 +189,11 @@ void main() {
     });
 
     test('ko keeps the Korean composition (byte-compat)', () {
-      final slot = LalaPlanSlot(period: 'lunch', title: 'Suwon Museum', place: null);
+      final slot = LalaPlanSlot(
+        period: 'lunch',
+        title: 'Suwon Museum',
+        place: null,
+      );
       // ko composes the period + place name in Korean.
       expect(planSlotTitle(slot, 'ko'), contains('점심'));
     });
@@ -193,9 +212,7 @@ void main() {
 
         await tester.pumpWidget(
           MaterialApp(
-            home: Scaffold(
-              body: DockLabelProbe(uiLanguage: locale),
-            ),
+            home: Scaffold(body: DockLabelProbe(uiLanguage: locale)),
           ),
         );
         await tester.pumpAndSettle();
@@ -233,15 +250,13 @@ class DockLabelProbe extends StatelessWidget {
             _ => 'Details',
           },
         ),
-        Text(
-          switch (normalizeProbe(uiLanguage)) {
-            'ko' => '점수/근거',
-            'ja' => 'スコア/根拠',
-            'zh-Hans' => '评分/依据',
-            'zh-Hant' => '評分/依據',
-            _ => 'Signals',
-          },
-        ),
+        Text(switch (normalizeProbe(uiLanguage)) {
+          'ko' => '점수/근거',
+          'ja' => 'スコア/根拠',
+          'zh-Hans' => '评分/依据',
+          'zh-Hant' => '評分/依據',
+          _ => 'Signals',
+        }),
       ],
     );
   }

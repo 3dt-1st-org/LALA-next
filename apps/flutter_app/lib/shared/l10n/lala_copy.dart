@@ -53,7 +53,8 @@ bool isLalaEnglish(String language) => language == 'en';
 /// 확장 로케일(ja/zh-Hans/zh-Hant) 여부. 정규화 후 판정한다.
 bool isLalaVisitorLocale(String language) {
   final normalized = normalizeLalaLanguage(language);
-  return normalized == 'ja' || normalized == 'zh-Hans' ||
+  return normalized == 'ja' ||
+      normalized == 'zh-Hans' ||
       normalized == 'zh-Hant';
 }
 
@@ -95,4 +96,36 @@ String lalaCopyMulti(
 String apiRequestLanguage(String language) {
   final normalized = normalizeLalaLanguage(language);
   return normalized == 'ko' ? 'ko' : 'en';
+}
+
+/// 지도 공급자 또는 키가 준비되지 않았을 때 표시하는 정직한 안내 문구.
+String liveMapUnavailableLabel(String language) => lalaCopyMulti(
+  language,
+  ko: '현재 지도를 표시할 수 없습니다.',
+  en: 'The live map is not available right now.',
+  ja: '現在、地図を表示できません。',
+  zhHans: '当前无法显示地图。',
+  zhHant: '目前無法顯示地圖。',
+);
+
+/// 네이버 지도 surface의 접근성 이름.
+String naverMapLabel(String language, {bool preview = false}) {
+  if (preview) {
+    return lalaCopyMulti(
+      language,
+      ko: 'LALA 네이버 지도 미리보기',
+      en: 'LALA Naver map preview',
+      ja: 'LALA ネイバー地図プレビュー',
+      zhHans: 'LALA NAVER 地图预览',
+      zhHant: 'LALA NAVER 地圖預覽',
+    );
+  }
+  return lalaCopyMulti(
+    language,
+    ko: 'LALA 네이버 지도',
+    en: 'LALA Naver map',
+    ja: 'LALA ネイバー地図',
+    zhHans: 'LALA NAVER 地图',
+    zhHant: 'LALA NAVER 地圖',
+  );
 }
