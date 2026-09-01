@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:lala_next_app/app/lala_visual_tokens.dart';
 import 'package:lala_next_app/features/preferences/data/travel_preferences_store.dart';
 import 'package:lala_next_app/features/preferences/domain/travel_preferences.dart';
+import 'package:lala_next_app/features/preferences/presentation/restaurant_communication_sheet.dart';
 import 'package:lala_next_app/features/settings/widgets/settings_section.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 
@@ -568,11 +569,11 @@ class _TravelPreferencesPageState extends State<TravelPreferencesPage> {
                           color: const Color(0xFFE24A3B),
                           title: _text(
                             widget.language,
-                            ko: '음식과 식이 제약',
+                            ko: '음식·식이 요청',
                             en: 'Food and dietary needs',
-                            ja: '食事と食事制限',
-                            zhHans: '饮食与饮食限制',
-                            zhHant: '飲食與飲食限制',
+                            ja: '食の好み・食事上の要望',
+                            zhHans: '饮食偏好与需求',
+                            zhHant: '飲食偏好與需求',
                           ),
                           subtitle: _foodSummary(widget.language, _draft),
                           onTap: () => _openDetail(
@@ -1010,11 +1011,11 @@ class _FoodPreferencesPageState extends State<FoodPreferencesPage> {
     return _DetailScaffold(
       title: _text(
         widget.language,
-        ko: '음식과 식이 제약',
+        ko: '음식·식이 요청',
         en: 'Food and dietary needs',
-        ja: '食事と食事制限',
-        zhHans: '饮食与饮食限制',
-        zhHant: '飲食與飲食限制',
+        ja: '食の好み・食事上の要望',
+        zhHans: '饮食偏好与需求',
+        zhHant: '飲食偏好與需求',
       ),
       saveLabel: _doneLabel(widget.language),
       onSave: () {
@@ -1125,11 +1126,11 @@ class _FoodPreferencesPageState extends State<FoodPreferencesPage> {
         _SectionTitle(
           title: _text(
             widget.language,
-            ko: '반드시 지켜야 해요',
-            en: 'Must follow',
-            ja: '必ず守る条件',
-            zhHans: '必须遵守',
-            zhHant: '必須遵守',
+            ko: '안전·식이 조건',
+            en: 'Safety and dietary needs',
+            ja: '安全・食事上の条件',
+            zhHans: '安全与饮食需求',
+            zhHant: '安全與飲食需求',
           ),
         ),
         _Panel(
@@ -1139,11 +1140,11 @@ class _FoodPreferencesPageState extends State<FoodPreferencesPage> {
               Text(
                 _text(
                   widget.language,
-                  ko: '식이 방식',
-                  en: 'Dietary modes',
-                  ja: '食事方式',
-                  zhHans: '饮食方式',
-                  zhHant: '飲食方式',
+                  ko: '식이 요청',
+                  en: 'Dietary requests',
+                  ja: '食事上の要望',
+                  zhHans: '饮食需求',
+                  zhHant: '飲食需求',
                 ),
                 style: _controlLabelStyle,
               ),
@@ -1160,11 +1161,11 @@ class _FoodPreferencesPageState extends State<FoodPreferencesPage> {
               Text(
                 _text(
                   widget.language,
-                  ko: '알레르기',
-                  en: 'Allergens',
-                  ja: 'アレルギー',
-                  zhHans: '过敏原',
-                  zhHant: '過敏原',
+                  ko: '알레르기·민감 식품',
+                  en: 'Allergens or sensitivities',
+                  ja: 'アレルギー・過敏な食品',
+                  zhHans: '过敏或敏感食物',
+                  zhHant: '過敏或敏感食物',
                 ),
                 style: _controlLabelStyle,
               ),
@@ -1186,7 +1187,7 @@ class _FoodPreferencesPageState extends State<FoodPreferencesPage> {
                 decoration: InputDecoration(
                   labelText: _text(
                     widget.language,
-                    ko: '못 먹는 재료',
+                    ko: '피해야 하는 재료',
                     en: 'Ingredients to avoid',
                     ja: '避けたい食材',
                     zhHans: '不能食用的食材',
@@ -1207,15 +1208,51 @@ class _FoodPreferencesPageState extends State<FoodPreferencesPage> {
           ),
         ),
         const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: FilledButton.icon(
+            key: const ValueKey('restaurant-communication-card'),
+            onPressed: () {
+              FocusScope.of(context).unfocus();
+              showRestaurantCommunicationSheet(
+                context: context,
+                language: widget.language,
+                preferences: _draft.copyWith(
+                  avoidIngredients: _avoidController.text,
+                ),
+              );
+            },
+            icon: const Icon(Icons.restaurant_menu),
+            label: Text(
+              _text(
+                widget.language,
+                ko: '식당에서 보여주기',
+                en: 'Show at the restaurant',
+                ja: 'お店で見せる',
+                zhHans: '给餐厅工作人员看',
+                zhHant: '給餐廳工作人員看',
+              ),
+              style: const TextStyle(fontWeight: FontWeight.w900),
+            ),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF0B67D8),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
         _InfoNotice(
           icon: Icons.info_outline,
           text: _text(
             widget.language,
-            ko: '추천 정확도를 위한 참고 정보예요. 알레르기와 식이 조건은 주문 전에 매장에 직접 확인해 주세요.',
-            en: 'These settings guide recommendations. Confirm allergies and dietary needs directly with the venue before ordering.',
-            ja: 'おすすめの参考情報です。アレルギーや食事条件は注文前に店舗へ直接ご確認ください。',
-            zhHans: '这些设置仅用于辅助推荐。点餐前请直接向商家确认过敏与饮食要求。',
-            zhHant: '這些設定僅用於輔助推薦。點餐前請直接向店家確認過敏與飲食需求。',
+            ko: '대표 항목만 제공해요. 목록에 없다면 피해야 하는 재료에 직접 입력하고, 주문 전에 매장에 재료와 교차 접촉 가능성을 확인해 주세요.',
+            en: 'Only common items are listed. Add anything else under ingredients to avoid, then confirm ingredients and possible cross-contact with the venue before ordering.',
+            ja: '代表的な項目のみ表示しています。ほかに避ける食材があれば直接入力し、注文前に原材料と交差接触の可能性を店舗へ確認してください。',
+            zhHans: '这里只列出常见项目。其他需避免的食材请自行填写，并在点餐前向商家确认食材及交叉接触的可能性。',
+            zhHant: '這裡只列出常見項目。其他需避免的食材請自行填寫，並在點餐前向店家確認食材及交叉接觸的可能性。',
           ),
         ),
       ],

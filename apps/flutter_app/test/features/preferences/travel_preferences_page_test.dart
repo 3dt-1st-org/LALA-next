@@ -63,7 +63,7 @@ void main() {
     );
     await tester.tap(find.byKey(const ValueKey('food-preferences-entry')));
     await tester.pumpAndSettle();
-    expect(find.text('반드시 지켜야 해요'), findsOneWidget);
+    expect(find.text('안전·식이 조건'), findsOneWidget);
 
     await tester.ensureVisible(
       find.byKey(const ValueKey('food-cuisine-korean')),
@@ -105,5 +105,90 @@ void main() {
 
     expect(find.text('Travel preferences'), findsOneWidget);
     expect(find.text('Shape recommendations around you'), findsOneWidget);
+  });
+
+  testWidgets('builds a Korean restaurant card from declared food needs', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: FoodPreferencesPage(
+          language: 'ko',
+          initialValue: TravelPreferences(
+            dietaryModes: {DietaryMode.halal},
+            allergens: {Allergen.nuts, Allergen.shellfish},
+            avoidIngredients: '고수',
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('알레르기·민감 식품'), findsOneWidget);
+    expect(find.text('피해야 하는 재료'), findsOneWidget);
+    expect(find.text('알러지'), findsNothing);
+
+    await tester.drag(find.byType(ListView), const Offset(0, -900));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('restaurant-communication-card')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('restaurant-korean-request-card')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('식이 요청: 할랄'), findsOneWidget);
+    expect(find.textContaining('알레르기·민감 식품: 갑각류, 견과류'), findsOneWidget);
+    expect(find.textContaining('추가로 피해야 하는 재료: 고수'), findsOneWidget);
+    expect(find.textContaining('같은 기름이나 조리도구'), findsOneWidget);
+    await tester.drag(
+      find.byKey(const ValueKey('restaurant-communication-scroll')),
+      const Offset(0, -1200),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('안전을 보장하지 않아요'), findsOneWidget);
+  });
+
+  testWidgets('shows the Korean request and a visitor-language translation', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: FoodPreferencesPage(
+          language: 'en',
+          initialValue: TravelPreferences(
+            dietaryModes: {DietaryMode.vegan},
+            allergens: {Allergen.soy},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(ListView), const Offset(0, -900));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('restaurant-communication-card')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Korean to show staff'), findsOneWidget);
+    await tester.drag(
+      find.byKey(const ValueKey('restaurant-communication-scroll')),
+      const Offset(0, -500),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Check in my language'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('restaurant-visitor-request-card')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Dietary requests: Vegan'), findsOneWidget);
+    expect(
+      find.textContaining('Allergens or sensitivities: Soy'),
+      findsOneWidget,
+    );
   });
 }
