@@ -15,6 +15,7 @@ import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 import 'package:lala_next_app/core/backend/lala_backend.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/features/docent/experience/docent_experience_controller.dart';
+import 'package:lala_next_app/features/docent/experience/docent_experience_copy.dart';
 import 'package:lala_next_app/features/docent/experience/docent_experience_state.dart';
 import 'package:lala_next_app/features/docent/playback/docent_audio_player.dart';
 import 'package:lala_next_app/features/docent/presentation/pages/docent_player_page.dart';
@@ -209,6 +210,14 @@ void main() {
   tearDown(OnboardingState.reset);
 
   Widget wrapApp(Widget child) => MaterialApp(home: child);
+
+  test('전체 플레이어 제목은 장소명과 분리되어 5개 언어로 지역화된다', () {
+    expect(docentPlayerPageTitle('ko'), '도슨트');
+    expect(docentPlayerPageTitle('en'), 'Docent');
+    expect(docentPlayerPageTitle('ja'), 'ガイド');
+    expect(docentPlayerPageTitle('zh-Hans'), '讲解');
+    expect(docentPlayerPageTitle('zh-Hant'), '導覽');
+  });
 
   testWidgets('source/생성시각/grounding 칩은 실제 필드가 있을 때만 렌더된다', (tester) async {
     OnboardingState.selectLanguage('ko');

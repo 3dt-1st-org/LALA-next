@@ -219,6 +219,18 @@ String docentOpenPlayerSemanticLabel(String language) {
   );
 }
 
+/// 전체 플레이어 AppBar 제목. 장소명은 본문에서 한 번만 크게 보여 중복을 피한다.
+String docentPlayerPageTitle(String language) {
+  return lalaCopyMulti(
+    language,
+    ko: '도슨트',
+    en: 'Docent',
+    ja: 'ガイド',
+    zhHans: '讲解',
+    zhHant: '導覽',
+  );
+}
+
 /// 큐 진행 표기(1-based). 숫자만 쓰므로 로케일 변형 없이 하나의 문자열.
 String docentMiniQueueProgress(int queueIndex, int queueLength) =>
     '${queueIndex + 1}/$queueLength';

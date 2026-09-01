@@ -42,7 +42,7 @@ class DocentPlayerPage extends StatelessWidget {
                 return Scaffold(
                   appBar: AppBar(
                     title: Text(
-                      placeDisplayName(place, language),
+                      docentPlayerPageTitle(language),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
