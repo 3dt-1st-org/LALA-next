@@ -50,14 +50,11 @@ class _RestaurantCommunicationEntryCardState
             zhHant: '開啟給餐廳工作人員看的需求卡',
           ),
           hint: _summary(widget.language, preferences),
+          onTap: () => _showCommunicationSheet(preferences),
           child: InkWell(
             key: const ValueKey('restaurant-detail-show-staff'),
             borderRadius: BorderRadius.circular(LalaVisualTokens.controlRadius),
-            onTap: () => showRestaurantCommunicationSheet(
-              context: context,
-              language: widget.language,
-              preferences: preferences,
-            ),
+            onTap: () => _showCommunicationSheet(preferences),
             child: Ink(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
@@ -124,6 +121,14 @@ class _RestaurantCommunicationEntryCardState
           ),
         );
       },
+    );
+  }
+
+  void _showCommunicationSheet(TravelPreferences preferences) {
+    showRestaurantCommunicationSheet(
+      context: context,
+      language: widget.language,
+      preferences: preferences,
     );
   }
 }

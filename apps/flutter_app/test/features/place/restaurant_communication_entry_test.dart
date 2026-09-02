@@ -39,7 +39,17 @@ void main() {
 
     expect(find.text('식당 직원에게 보여주기'), findsOneWidget);
     expect(find.textContaining('2개'), findsOneWidget);
-    expect(find.bySemanticsLabel('식당 직원에게 보여 줄 요청 카드 열기'), findsOneWidget);
+    final staffCardSemantics = find.bySemanticsLabel('식당 직원에게 보여 줄 요청 카드 열기');
+    expect(staffCardSemantics, findsOneWidget);
+    expect(
+      tester.getSemantics(staffCardSemantics),
+      matchesSemantics(
+        label: '식당 직원에게 보여 줄 요청 카드 열기',
+        hint: '저장한 식이·알레르기 조건 2개를 한국어 요청 카드에 반영해요.',
+        isButton: true,
+        hasTapAction: true,
+      ),
+    );
     await tester.tap(
       find.byKey(const ValueKey('restaurant-detail-show-staff')),
     );

@@ -63,19 +63,13 @@ class _TravelPreferencesSettingsSectionState
               zhHans: '打开',
               zhHant: '開啟',
             ),
+            onTap: _openPreferences,
             child: InkWell(
               key: const ValueKey('travel-preferences-entry'),
               borderRadius: BorderRadius.circular(
                 LalaVisualTokens.controlRadius,
               ),
-              onTap: () => Navigator.of(context).push<void>(
-                MaterialPageRoute<void>(
-                  builder: (_) => TravelPreferencesPage(
-                    language: widget.language,
-                    store: _store,
-                  ),
-                ),
-              ),
+              onTap: _openPreferences,
               child: ConstrainedBox(
                 constraints: const BoxConstraints(minHeight: 64),
                 child: Row(
@@ -133,6 +127,15 @@ class _TravelPreferencesSettingsSectionState
           ),
         );
       },
+    );
+  }
+
+  void _openPreferences() {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            TravelPreferencesPage(language: widget.language, store: _store),
+      ),
     );
   }
 }

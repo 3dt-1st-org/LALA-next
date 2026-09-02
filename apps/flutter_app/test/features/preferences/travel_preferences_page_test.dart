@@ -107,9 +107,19 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Travel experience'), findsOneWidget);
+    final entrySemantics = find.bySemanticsLabel(
+      RegExp(r'^Travel preferences\.'),
+    );
+    expect(entrySemantics, findsOneWidget);
     expect(
-      find.bySemanticsLabel(RegExp(r'^Travel preferences\.')),
-      findsOneWidget,
+      tester.getSemantics(entrySemantics),
+      matchesSemantics(
+        label:
+            'Travel preferences. Balanced · No interests yet · Moderate walks',
+        hint: 'Open',
+        isButton: true,
+        hasTapAction: true,
+      ),
     );
     await tester.tap(find.byKey(const ValueKey('travel-preferences-entry')));
     await tester.pumpAndSettle();
