@@ -10,7 +10,8 @@ import 'package:lala_next_app/features/weather/widgets/weather_sheet_content.dar
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 
 class MapDraggableSheet extends StatelessWidget {
-  const MapDraggableSheet({super.key,
+  const MapDraggableSheet({
+    super.key,
     required this.activeSheet,
     required this.place,
     required this.places,
@@ -35,6 +36,7 @@ class MapDraggableSheet extends StatelessWidget {
     required this.onToggleSavedPlace,
     required this.onAddToPlan,
     required this.onFetchAudio,
+    this.onOpenFullDetails,
     required this.onFetchTourAudio,
     required this.onSelectPlace,
     required this.onRefresh,
@@ -65,6 +67,7 @@ class MapDraggableSheet extends StatelessWidget {
   final ValueChanged<String> onToggleSavedPlace;
   final VoidCallback onAddToPlan;
   final VoidCallback onFetchAudio;
+  final VoidCallback? onOpenFullDetails;
   final VoidCallback onFetchTourAudio;
   final ValueChanged<LalaPlace> onSelectPlace;
   final VoidCallback onRefresh;
@@ -209,6 +212,7 @@ class MapDraggableSheet extends StatelessWidget {
                       onToggleSavedPlace: onToggleSavedPlace,
                       onAddToPlan: onAddToPlan,
                       onFetchAudio: onFetchAudio,
+                      onOpenFullDetails: onOpenFullDetails,
                     ),
                     ActiveMapSheet.planner => PlannerSheetContent(
                       language: language,

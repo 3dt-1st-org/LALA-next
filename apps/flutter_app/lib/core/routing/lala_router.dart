@@ -9,6 +9,7 @@
 //   완료(OnboardingState.markCompleted) 시 /map-route 로 전환한다.
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import 'package:lala_next_app/app/lala_main_shell.dart';
 import 'package:lala_next_app/auth/auth_controller.dart';
@@ -28,6 +29,10 @@ import 'package:lala_next_app/features/map_route/presentation/pages/map_route_pa
 import 'package:lala_next_app/features/plan/presentation/pages/plan_page.dart';
 import 'package:lala_next_app/features/search/presentation/pages/search_page.dart';
 import 'package:lala_next_app/features/local_signals/presentation/pages/local_signals_page.dart';
+import 'package:lala_next_app/features/place/presentation/pages/place_detail_page.dart';
+import 'package:lala_next_app/features/preferences/presentation/travel_preferences_page.dart';
+import 'package:lala_next_app/features/profile/presentation/pages/account_page.dart';
+import 'package:lala_next_app/features/profile/presentation/pages/profile_page.dart';
 import 'package:lala_next_app/features/community/presentation/pages/community_feed_page.dart';
 import 'package:lala_next_app/features/community/presentation/pages/community_post_detail_page.dart';
 import 'package:lala_next_app/features/community/presentation/pages/community_create_post_page.dart';
@@ -101,7 +106,7 @@ GoRouter createLalaRouter({
           builder: (BuildContext context, GoRouterState state) =>
               OnboardingAccountLinkPage(authController: authController),
         ),
-      // --- Main shell (search/map/plan/Local Signals) ---
+      // --- Main shell (search/map/plan/Local Signals/profile) ---
       StatefulShellRoute.indexedStack(
         builder:
             (
@@ -174,7 +179,44 @@ GoRouter createLalaRouter({
               ),
             ],
           ),
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: LalaRoutePaths.profile,
+                builder: (BuildContext context, GoRouterState state) =>
+                    ProfilePage(authController: authController),
+              ),
+            ],
+          ),
         ],
+      ),
+      GoRoute(
+        path: LalaRoutePaths.placeDetail,
+        builder: (BuildContext context, GoRouterState state) {
+          final placeId = state.pathParameters['placeId'] ?? '';
+          final initialPlace = state.extra is LalaPlace
+              ? state.extra! as LalaPlace
+              : null;
+          return PlaceDetailPage(
+            placeId: placeId,
+            initialPlace: initialPlace,
+            backendFactory: backendFactory,
+            initialConfig: initialConfig,
+            actionController: signalActionController,
+            docentExperienceController: docentExperienceController,
+          );
+        },
+      ),
+      if (authController != null)
+        GoRoute(
+          path: LalaRoutePaths.account,
+          builder: (BuildContext context, GoRouterState state) =>
+              AccountPage(authController: authController),
+        ),
+      GoRoute(
+        path: LalaRoutePaths.travelPreferences,
+        builder: (BuildContext context, GoRouterState state) =>
+            TravelPreferencesPage(language: OnboardingState.language),
       ),
       // --- ONMU P3b: 커뮤니티 push 라우트(메인 쉘 외부). context.push 로 진입해
       // 탭 상태를 유지한 채 풀스크린으로 올라간다. ---

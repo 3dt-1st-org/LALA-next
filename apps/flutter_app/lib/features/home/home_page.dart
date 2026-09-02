@@ -6,6 +6,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
@@ -20,6 +21,7 @@ import 'package:lala_next_app/core/location/app_settings_opener.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
 import 'package:lala_next_app/core/location/region_context.dart';
 import 'package:lala_next_app/core/navigation/local_signal_action.dart';
+import 'package:lala_next_app/core/routing/lala_route_paths.dart';
 import 'package:lala_next_app/core/state/plan_context_store.dart';
 import 'package:lala_next_app/core/state/saved_place_store.dart';
 import 'package:lala_next_app/core/state/selected_place_store.dart';
@@ -1397,6 +1399,10 @@ class _LalaHomePageState extends State<LalaHomePage> {
     }
   }
 
+  void _openFullPlaceDetails(LalaPlace place) {
+    context.push(LalaRoutePaths.placeDetailFor(place.placeId), extra: place);
+  }
+
   void _retryLocationConsent() {
     setState(() {
       _locationConsentEnabled = true;
@@ -1633,6 +1639,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
                   onOpenManualLocation: () => _openManualLocationSheet(context),
                   onRetryLocation: _retryLocationConsent,
                   onStartLocation: _startFromCurrentLocation,
+                  onOpenPlaceDetails: _openFullPlaceDetails,
                   onPlayDocentPlace: widget.docentExperienceController == null
                       ? null
                       : (place) =>
