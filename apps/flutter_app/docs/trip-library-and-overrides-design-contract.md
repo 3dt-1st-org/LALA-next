@@ -11,8 +11,9 @@ successful widget test as runtime evidence.
 
 - `TravelPreferences` is the account/device default.
 - `TripPreferenceOverride` contains only fields that may legitimately change
-  for one UTC plan date. It never weakens declared allergens, dietary modes, or
-  accessibility constraints.
+  for one user-visible itinerary calendar date. It never weakens declared
+  allergens, dietary modes, or accessibility constraints. Converting that date
+  to UTC is forbidden because it can move the itinerary to the previous day.
 - Effective planning input is `hard defaults + soft override`. Missing override
   fields inherit the default rather than receiving a generated value.
 - Guests keep a versioned device copy. After Logto authentication and `/me`

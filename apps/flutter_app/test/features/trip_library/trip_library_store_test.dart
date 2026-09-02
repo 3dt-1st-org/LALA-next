@@ -51,6 +51,12 @@ void main() {
     expect(override.toJson(), isNot(contains('avoid_stairs')));
   });
 
+  test('trip library date key preserves the selected calendar date', () {
+    final selectedDate = DateTime(2026, 9, 3, 0, 5);
+
+    expect(tripLibraryDateKey(selectedDate), '2026-09-03');
+  });
+
   test(
     'override and visit metadata round-trip through device storage',
     () async {
@@ -76,8 +82,8 @@ void main() {
         ),
       );
 
-    SlotVisitStore.clear();
-    final second = TripLibraryStore();
+      SlotVisitStore.clear();
+      final second = TripLibraryStore();
       await second.ensureLoaded();
 
       expect(second.overrideFor(date).pace, TravelPace.relaxed);

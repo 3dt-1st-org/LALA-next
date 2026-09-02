@@ -29,6 +29,7 @@ import 'package:lala_next_app/features/planner/spend_band_helpers.dart';
 import 'package:lala_next_app/features/planner/widgets/plan_slot_tile.dart';
 import 'package:lala_next_app/features/planner/widgets/planner_loading_card.dart';
 import 'package:lala_next_app/features/planner/widgets/planner_overview_card.dart';
+import 'package:lala_next_app/features/trip_library/domain/trip_library_models.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 import 'package:lala_next_app/shared/l10n/place_labels.dart';
 import 'package:lala_next_app/shared/widgets/lala_skeleton.dart';
@@ -516,7 +517,9 @@ class _PlanPageState extends State<PlanPage> {
               language: _language,
               onCalendar: _load,
               onSettings: () => unawaited(
-                context.push(LalaRoutePaths.tripSettingsFor(utcPlanDate())),
+                context.push(
+                  LalaRoutePaths.tripSettingsFor(tripLibraryDateKey()),
+                ),
               ),
             ),
             if (_regionIsDefault) DefaultRegionIndicator(language: _language),
@@ -1057,9 +1060,10 @@ class _PlanContent extends StatelessWidget {
         const SizedBox(height: 12),
         ...visibleSlots.map((slot) {
           // V5-B VISIT/SPEND: per-slot visit status (persisted in SlotVisitStore)
-          // and offline category-band estimate. planDate is the UTC date key
-          // (contract A1/D1: one plan per user per day).
-          final planDate = utcPlanDate();
+          // and offline category-band estimate. planDate follows the user's
+          // current calendar day so trip settings and visit records do not
+          // appear one day behind around local midnight.
+          final planDate = tripLibraryDateKey();
           final band = spendBandFor(slot, language);
           return Padding(
             key: ValueKey('plan-slot-${slot.place?.placeId ?? slot.period}'),
@@ -1108,13 +1112,4 @@ class _MinTouchTarget extends StatelessWidget {
       child: child,
     );
   }
-}
-
-/// V5-B: today's UTC date as the plan key `YYYY-MM-DD` (contract A1/D1 — one plan
-/// per user per day, UTC date key). Used to scope visit statuses in SlotVisitStore.
-String utcPlanDate() {
-  final utc = DateTime.now().toUtc();
-  return '${utc.year.toString().padLeft(4, '0')}'
-      '-${utc.month.toString().padLeft(2, '0')}'
-      '-${utc.day.toString().padLeft(2, '0')}';
 }

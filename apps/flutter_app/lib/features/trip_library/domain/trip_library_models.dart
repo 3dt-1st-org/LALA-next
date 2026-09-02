@@ -287,10 +287,10 @@ class PastTripSummary {
 }
 
 String tripLibraryDateKey([DateTime? value]) {
-  final utc = (value ?? DateTime.now()).toUtc();
-  return '${utc.year.toString().padLeft(4, '0')}-'
-      '${utc.month.toString().padLeft(2, '0')}-'
-      '${utc.day.toString().padLeft(2, '0')}';
+  final calendarDate = value ?? DateTime.now();
+  return '${calendarDate.year.toString().padLeft(4, '0')}-'
+      '${calendarDate.month.toString().padLeft(2, '0')}-'
+      '${calendarDate.day.toString().padLeft(2, '0')}';
 }
 
 String tripVisitKey(String planDate, String slotPeriod) =>

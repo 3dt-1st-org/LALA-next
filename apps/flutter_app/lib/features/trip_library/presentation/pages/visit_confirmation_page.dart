@@ -9,6 +9,7 @@ import 'package:lala_next_app/features/planner/planner_helpers.dart';
 import 'package:lala_next_app/features/trip_library/data/trip_library_store.dart';
 import 'package:lala_next_app/features/trip_library/domain/trip_library_models.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
+import 'package:lala_next_app/shared/l10n/place_labels.dart';
 
 /// S-25: explicit, bounded visit outcome with opt-in recommendation use.
 class VisitConfirmationPage extends StatefulWidget {
@@ -99,7 +100,9 @@ class _VisitConfirmationPageState extends State<VisitConfirmationPage> {
               _VisitSubjectCard(
                 planDate: widget.planDate,
                 period: widget.slotPeriod,
-                title: slot == null
+                title: slot?.place != null
+                    ? placeDisplayName(slot!.place!, language)
+                    : slot == null
                     ? periodLabel(widget.slotPeriod, language: language)
                     : planSlotTitle(slot, language),
                 language: language,

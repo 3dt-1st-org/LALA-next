@@ -173,6 +173,8 @@ void main() {
       find.byKey(const ValueKey('visit-confirmation-page')),
       findsOneWidget,
     );
+    expect(find.text('성수 정본 식당'), findsOneWidget);
+    expect(find.text('점심 식사'), findsNothing);
     await tester.tap(find.text('방문하지 않았어요'));
     await tester.pump();
     await tester.tap(find.text('날씨'));
