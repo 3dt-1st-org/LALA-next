@@ -7,7 +7,7 @@
 // it on cold start (bootstrap) and persists changes by listening to [listenable].
 //
 // Keying: "$planDate:$slotPeriod" (contract A1/D1 — one plan per user per day, UTC
-// date key). Value: "planned" | "visited" (LalaSlotVisit.status shape). A slot with
+// date key). Value: "planned" | "visited" | "not_visited" (API status shape). A slot with
 // no entry is implicitly "planned" (contract A9/D9 honest empty → slots render as
 // planned), so the map only stores non-default (visited) entries.
 import 'package:flutter/foundation.dart';
@@ -31,10 +31,12 @@ class SlotVisitStore {
   static ValueListenable<SlotVisitMap> get listenable => _notifier;
 
   /// The current visit map (unmodifiable view).
-  static SlotVisitMap get current => Map<String, String>.unmodifiable(_notifier.value);
+  static SlotVisitMap get current =>
+      Map<String, String>.unmodifiable(_notifier.value);
 
   /// Build the composite key for a slot.
-  static String key(String planDate, String slotPeriod) => '$planDate:$slotPeriod';
+  static String key(String planDate, String slotPeriod) =>
+      '$planDate:$slotPeriod';
 
   /// Status for a slot, or [defaultStatus] when unrecorded (honest empty → planned).
   static String statusFor(String planDate, String slotPeriod) {
@@ -61,6 +63,22 @@ class SlotVisitStore {
     }
     _notifier.value = next;
     return wasVisited ? defaultStatus : visited;
+  }
+
+  /// Sets an explicit bounded outcome. Planned remains the implicit default and
+  /// is therefore removed from the persisted map.
+  static void setStatus(String planDate, String slotPeriod, String status) {
+    if (!const <String>{'planned', 'visited', 'not_visited'}.contains(status)) {
+      throw ArgumentError.value(status, 'status', 'unknown visit status');
+    }
+    final k = key(planDate, slotPeriod);
+    final next = Map<String, String>.of(_notifier.value);
+    if (status == defaultStatus) {
+      next.remove(k);
+    } else {
+      next[k] = status;
+    }
+    _notifier.value = next;
   }
 
   /// Reset to empty (tests / re-onboarding).

@@ -5,12 +5,14 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import 'package:lala_next_app/core/backend/lala_backend.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
 import 'package:lala_next_app/core/location/region_context.dart';
+import 'package:lala_next_app/core/routing/lala_route_paths.dart';
 import 'package:lala_next_app/core/state/plan_context_store.dart';
 import 'package:lala_next_app/core/state/slot_visit_store.dart';
 import 'package:lala_next_app/features/docent/experience/docent_experience_controller.dart';
@@ -513,6 +515,9 @@ class _PlanPageState extends State<PlanPage> {
               dateLabel: _todayLabel(),
               language: _language,
               onCalendar: _load,
+              onSettings: () => unawaited(
+                context.push(LalaRoutePaths.tripSettingsFor(utcPlanDate())),
+              ),
             ),
             if (_regionIsDefault) DefaultRegionIndicator(language: _language),
             if (_shouldShowInterventionToast)
@@ -623,6 +628,7 @@ class _PlanHeader extends StatelessWidget {
     required this.dateLabel,
     required this.language,
     required this.onCalendar,
+    required this.onSettings,
   });
 
   final String title;
@@ -631,6 +637,7 @@ class _PlanHeader extends StatelessWidget {
 
   /// 달력/캘린더 액션 — 오늘 일정을 다시 불러온다.
   final VoidCallback onCalendar;
+  final VoidCallback onSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -672,6 +679,20 @@ class _PlanHeader extends StatelessWidget {
             ),
             onPressed: onCalendar,
             icon: const Icon(Icons.calendar_today_rounded),
+            color: Theme.of(context).colorScheme.primary,
+          ),
+          IconButton(
+            key: const ValueKey('plan-trip-settings-entry'),
+            tooltip: lalaCopyMulti(
+              language,
+              ko: '이번 여행 설정',
+              en: 'This trip settings',
+              ja: '今回の旅行設定',
+              zhHans: '本次旅行设置',
+              zhHant: '本次旅行設定',
+            ),
+            onPressed: onSettings,
+            icon: const Icon(Icons.tune_rounded),
             color: Theme.of(context).colorScheme.primary,
           ),
         ],
@@ -1046,27 +1067,19 @@ class _PlanContent extends StatelessWidget {
             child: PlanSlotTile(
               slot: slot,
               language: language,
-              onSelectPlace: (_) {
-                // P1: 플랜 탭 내 별도 상세 화면은 아직 연결되지 않았다.
-                // 탭 피드백으로 새로고침 없이 토스트로 장소명만 확인한다.
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    duration: const Duration(seconds: 2),
-                    content: Text(
-                      lalaCopyMulti(
-                        language,
-                        ko: '지도 탭에서 동선을 확인해 보세요.',
-                        en: 'Check the route on the Map tab.',
-                        ja: '地図タブでルートをご確認ください。',
-                        zhHans: '请在地图标签页查看路线。',
-                        zhHant: '請在地圖分頁查看路線。',
-                      ),
-                    ),
-                  ),
-                );
-              },
+              onSelectPlace: (place) => unawaited(
+                context.push(
+                  LalaRoutePaths.placeDetailFor(place.placeId),
+                  extra: place,
+                ),
+              ),
               visitStatus: SlotVisitStore.statusFor(planDate, slot.period),
-              onToggleVisit: () => SlotVisitStore.toggle(planDate, slot.period),
+              onToggleVisit: () => unawaited(
+                context.push(
+                  LalaRoutePaths.visitConfirmationFor(planDate, slot.period),
+                  extra: slot,
+                ),
+              ),
               spendBand: band,
               spendUnavailable: band == null,
               onPlayDocent: docentController == null || slot.place == null
