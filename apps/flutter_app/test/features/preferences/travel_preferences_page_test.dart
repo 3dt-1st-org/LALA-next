@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:lala_next_app/features/preferences/data/travel_preferences_store.dart';
+import 'package:lala_next_app/features/preferences/data/travel_preferences_remote.dart';
 import 'package:lala_next_app/features/preferences/domain/travel_preferences.dart';
 import 'package:lala_next_app/features/preferences/presentation/travel_preferences_page.dart';
 
@@ -30,6 +31,11 @@ void main() {
       findsOneWidget,
     );
 
+    await tester.drag(
+      find.byKey(const ValueKey('travel-preferences-scroll')),
+      const Offset(0, -240),
+    );
+    await tester.pumpAndSettle();
     await tester.ensureVisible(
       find.byKey(const ValueKey('interest-localFood')),
     );
@@ -101,12 +107,65 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Travel experience'), findsOneWidget);
+    final entrySemantics = find.bySemanticsLabel(
+      RegExp(r'^Travel preferences\.'),
+    );
+    expect(entrySemantics, findsOneWidget);
+    expect(
+      tester.getSemantics(entrySemantics),
+      matchesSemantics(
+        label:
+            'Travel preferences. Balanced · No interests yet · Moderate walks',
+        hint: 'Open',
+        isButton: true,
+        hasTapAction: true,
+      ),
+    );
     await tester.tap(find.byKey(const ValueKey('travel-preferences-entry')));
     await tester.pumpAndSettle();
 
     expect(find.text('Travel preferences'), findsOneWidget);
     expect(find.text('Shape recommendations around you'), findsOneWidget);
   });
+
+  testWidgets(
+    'shows a choice instead of overwriting a conflicting account copy',
+    (tester) async {
+      final store = TravelPreferencesStore();
+      await store.ensureLoaded();
+      await store.save(
+        const TravelPreferences(interests: {TravelInterest.localFood}),
+      );
+      await store.connectAccount(
+        _PageRemote(
+          const TravelPreferences(interests: {TravelInterest.history}),
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: TravelPreferencesPage(language: 'ko', store: store),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('기기와 계정 취향이 달라요'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('use-account-preferences')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('use-device-preferences')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('use-account-preferences')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('계정과 동기화됨'), findsOneWidget);
+      expect(store.value.interests, {TravelInterest.history});
+    },
+  );
 
   testWidgets('builds a Korean restaurant card from declared food needs', (
     tester,
@@ -209,4 +268,33 @@ void main() {
       findsOneWidget,
     );
   });
+}
+
+class _PageRemote implements TravelPreferencesRemote {
+  _PageRemote(this.value);
+
+  TravelPreferences value;
+  int revision = 1;
+
+  @override
+  Future<TravelPreferencesRemoteDocument?> get() async =>
+      TravelPreferencesRemoteDocument(
+        preferences: value,
+        revision: revision,
+        updatedAt: '2026-09-02T00:00:00Z',
+      );
+
+  @override
+  Future<TravelPreferencesRemoteDocument> put({
+    required TravelPreferences preferences,
+    required int expectedRevision,
+  }) async {
+    value = preferences;
+    revision += 1;
+    return TravelPreferencesRemoteDocument(
+      preferences: value,
+      revision: revision,
+      updatedAt: '2026-09-02T00:01:00Z',
+    );
+  }
 }

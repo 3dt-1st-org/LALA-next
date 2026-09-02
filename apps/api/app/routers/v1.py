@@ -17,6 +17,7 @@ from apps.api.app.schemas.account import AccountDeletionRequest
 from apps.api.app.schemas.docent import DocentAudioRequest, DocentScriptRequest
 from apps.api.app.schemas.planner import DailyPlanRequest
 from apps.api.app.schemas.planning import SavePlaceRequest, SavePlanRequest, SlotVisitRequest
+from apps.api.app.schemas.preferences import SaveTravelPreferencesRequest
 from apps.api.app.services import docent_service, places_service, planner_service, weather_service
 from apps.api.app.services.identity_service import IdentityService, get_identity_service
 from apps.api.app.services.logto_management import (
@@ -24,6 +25,10 @@ from apps.api.app.services.logto_management import (
     get_logto_management_client,
 )
 from apps.api.app.services.planning_repository import PlanningRepository, get_planning_repository
+from apps.api.app.services.travel_preferences_service import (
+    TravelPreferencesService,
+    get_travel_preferences_service,
+)
 
 router = APIRouter(
     prefix="/api/v1",
@@ -52,6 +57,77 @@ def me(
             "created_at": user.created_at.isoformat(),
             "authenticated": True,
         },
+    )
+
+
+@router.get(
+    "/me/preferences",
+    description=(
+        "Returns the caller's LALA-owned travel preferences. Logto claims never store "
+        "preference or dietary-constraint data."
+    ),
+)
+def get_travel_preferences(
+    request: Request,
+    identity: Annotated[RequestIdentity, Depends(require_logto_identity)],
+    identity_service: Annotated[IdentityService, Depends(get_identity_service)],
+    preferences_service: Annotated[
+        TravelPreferencesService,
+        Depends(get_travel_preferences_service),
+    ],
+) -> dict:
+    issuer = identity.issuer or ""
+    subject = identity.subject or ""
+    identity_service.provision_user(issuer, subject)
+    record = preferences_service.get(issuer=issuer, subject=subject)
+    data = None
+    if record is not None:
+        data = {
+            "preferences": record.preferences,
+            "revision": record.revision,
+            "updated_at": record.updated_at.isoformat(),
+        }
+    return success_envelope(
+        request=request,
+        data=data,
+        meta={"source": "db" if record is not None else "unavailable"},
+    )
+
+
+@router.put(
+    "/me/preferences",
+    description=(
+        "Creates or replaces the caller's validated travel preferences using an "
+        "optimistic revision guard."
+    ),
+)
+def put_travel_preferences(
+    body: SaveTravelPreferencesRequest,
+    request: Request,
+    identity: Annotated[RequestIdentity, Depends(require_logto_identity)],
+    identity_service: Annotated[IdentityService, Depends(get_identity_service)],
+    preferences_service: Annotated[
+        TravelPreferencesService,
+        Depends(get_travel_preferences_service),
+    ],
+) -> dict:
+    issuer = identity.issuer or ""
+    subject = identity.subject or ""
+    identity_service.provision_user(issuer, subject)
+    record = preferences_service.put(
+        issuer=issuer,
+        subject=subject,
+        expected_revision=body.expected_revision,
+        preferences=body.preferences.model_dump(mode="json"),
+    )
+    return success_envelope(
+        request=request,
+        data={
+            "preferences": record.preferences,
+            "revision": record.revision,
+            "updated_at": record.updated_at.isoformat(),
+        },
+        meta={"source": "db"},
     )
 
 
