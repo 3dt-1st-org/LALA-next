@@ -36,6 +36,7 @@ class FeaturedPlacePanel extends StatelessWidget {
     required this.onToggleSavedPlace,
     required this.onAddToPlan,
     required this.onFetchAudio,
+    this.onOpenFullDetails,
     this.preferencesStore,
   });
 
@@ -57,6 +58,7 @@ class FeaturedPlacePanel extends StatelessWidget {
   final ValueChanged<String> onToggleSavedPlace;
   final VoidCallback onAddToPlan;
   final VoidCallback onFetchAudio;
+  final VoidCallback? onOpenFullDetails;
   final TravelPreferencesStore? preferencesStore;
 
   @override
@@ -101,6 +103,24 @@ class FeaturedPlacePanel extends StatelessWidget {
           RestaurantCommunicationEntryCard(
             language: language,
             store: preferencesStore,
+          ),
+        ],
+        if (onOpenFullDetails != null) ...[
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            key: const ValueKey('open-full-place-details'),
+            onPressed: onOpenFullDetails,
+            icon: const Icon(Icons.open_in_new_rounded),
+            label: Text(
+              lalaCopyMulti(
+                language,
+                ko: '전체 상세 보기',
+                en: 'Open full details',
+                ja: '詳細を全画面で見る',
+                zhHans: '查看完整详情',
+                zhHant: '查看完整詳情',
+              ),
+            ),
           ),
         ],
         if (shouldShowEventInfo(currentPlace)) ...[

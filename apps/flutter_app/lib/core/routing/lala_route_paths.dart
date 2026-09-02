@@ -1,5 +1,5 @@
 // LALA main-shell tab route constants.
-// Each branch maps to one tab (search / map / plan / Local Signals).
+// Each branch maps to one tab (search / map / plan / Local Signals / profile).
 // ONMU P2: 온보딩 4단계 경로(splash/start/language/location) 추가.
 abstract final class LalaRoutePaths {
   const LalaRoutePaths._();
@@ -8,6 +8,15 @@ abstract final class LalaRoutePaths {
   static const String mapRoute = '/map-route';
   static const String plan = '/plan';
   static const String localSignals = '/local-signals';
+  static const String profile = '/profile';
+
+  /// Canonical full-screen place detail. The map/search hand-off also passes a
+  /// LalaPlace through GoRouterState.extra so the first frame does not refetch.
+  static const String placeDetail = '/places/:placeId';
+
+  /// Account and preference routes are pushed above the profile tab.
+  static const String account = '/profile/account';
+  static const String travelPreferences = '/profile/travel-preferences';
 
   /// 온보딩 라우트 공통 접두사. redirect 가 온보딩 라우트 여부를 판별하는 데 사용.
   static const String onboardingPrefix = '/onboarding';
@@ -52,4 +61,7 @@ abstract final class LalaRoutePaths {
   /// 채팅방 경로를 roomId 로 조합.
   static String communityChatRoomFor(String roomId) =>
       '/community/chat/$roomId';
+
+  static String placeDetailFor(String placeId) =>
+      '/places/${Uri.encodeComponent(placeId)}';
 }

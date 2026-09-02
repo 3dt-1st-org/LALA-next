@@ -136,6 +136,19 @@ class LalaBottomNavBar extends StatelessWidget {
                       zhHant: '在地訊號',
                     ),
                   ),
+                  NavigationDestination(
+                    key: const ValueKey('nav-profile'),
+                    icon: const Icon(Icons.person_outline_rounded),
+                    selectedIcon: const Icon(Icons.person_rounded),
+                    label: lalaCopyMulti(
+                      language,
+                      ko: '내 정보',
+                      en: 'My Info',
+                      ja: 'マイ情報',
+                      zhHans: '我的',
+                      zhHant: '我的',
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -157,4 +170,5 @@ const List<String> lalaTabPaths = <String>[
   LalaRoutePaths.mapRoute,
   LalaRoutePaths.plan,
   LalaRoutePaths.localSignals,
+  LalaRoutePaths.profile,
 ];
