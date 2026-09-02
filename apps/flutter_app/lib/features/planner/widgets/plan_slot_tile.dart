@@ -30,11 +30,12 @@ class PlanSlotTile extends StatelessWidget {
   /// 날씨 교체 사유(P6A §04 Screen 04 swapped 상태). null 이면 일반 표시.
   final String? swapReason;
 
-  // V5-B VISIT (§V5-B D2): current visit status ('planned' | 'visited'). null →
+  // V5-B VISIT (§V5-B D2): current visit status
+  // ('planned' | 'visited' | 'not_visited'). null →
   // visit badge not rendered (backward-compatible for callers not wiring V5-B).
   final String? visitStatus;
 
-  /// Toggles planned ↔ visited. When non-null the badge is tappable (min 44dp).
+  /// Opens the visit outcome editor. The badge remains a 44dp tap target.
   final VoidCallback? onToggleVisit;
 
   // V5-B SPEND (§V5-B D3): offline category-band estimate. null + false → no
@@ -467,30 +468,37 @@ class _PlanSlotMetaChip extends StatelessWidget {
   }
 }
 
-/// V5-B VISIT badge text for a status ('planned' | 'visited').
+/// V5-B VISIT badge text for a bounded outcome.
 String _visitBadgeLabel(String status, String language) {
-  final visited = status.trim().toLowerCase() == 'visited';
-  return visited
-      ? lalaCopyMulti(
-  language,
-  ko: '방문함',
-  en: 'Visited',
-  ja: '訪問済み',
-  zhHans: '已到访',
-  zhHant: '已到訪',
-)
-      : lalaCopyMulti(
-  language,
-  ko: '예정',
-  en: 'Planned',
-  ja: '予定',
-  zhHans: '计划中',
-  zhHant: '計畫中',
-);
+  return switch (status.trim().toLowerCase()) {
+    'visited' => lalaCopyMulti(
+      language,
+      ko: '방문함',
+      en: 'Visited',
+      ja: '訪問済み',
+      zhHans: '已到访',
+      zhHant: '已到訪',
+    ),
+    'not_visited' => lalaCopyMulti(
+      language,
+      ko: '방문하지 않음',
+      en: 'Not visited',
+      ja: '未訪問',
+      zhHans: '未到访',
+      zhHant: '未到訪',
+    ),
+    _ => lalaCopyMulti(
+      language,
+      ko: '예정',
+      en: 'Planned',
+      ja: '予定',
+      zhHans: '计划中',
+      zhHant: '計畫中',
+    ),
+  };
 }
 
-/// V5-B VISIT badge: planned ↔ visited, icon+text+color (never color-alone).
-/// Teal reuses the documented open/indoor token; slate reuses the unknown token.
+/// V5-B VISIT badge: planned / visited / not visited, never color-alone.
 /// Tappable with a 44dp minimum target when [onToggle] is non-null.
 class _VisitBadge extends StatelessWidget {
   const _VisitBadge({
@@ -507,9 +515,17 @@ class _VisitBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final visited = status.trim().toLowerCase() == 'visited';
-    final color = visited ? const Color(0xFF0F766E) : const Color(0xFF64748B);
-    final icon = visited ? Icons.check_circle : Icons.radio_button_unchecked;
+    final normalized = status.trim().toLowerCase();
+    final color = switch (normalized) {
+      'visited' => const Color(0xFF0F766E),
+      'not_visited' => const Color(0xFFC53030),
+      _ => const Color(0xFF64748B),
+    };
+    final icon = switch (normalized) {
+      'visited' => Icons.check_circle,
+      'not_visited' => Icons.do_not_disturb_alt_rounded,
+      _ => Icons.radio_button_unchecked,
+    };
     final chip = Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
@@ -537,14 +553,14 @@ class _VisitBadge extends StatelessWidget {
     if (onToggle == null) {
       return chip;
     }
-    // Min 44dp touch target (§13.5); the toggle persists via SlotVisitStore.
+    // Min 44dp touch target (§13.5); the action opens the explicit S-25 editor.
     final toggleLabel = lalaCopyMulti(
       language,
-      ko: visited ? '방문 취소' : '방문 체크인',
-      en: visited ? 'Undo check-in' : 'Check in',
-      ja: visited ? 'チェックインを取り消す' : 'チェックイン',
-      zhHans: visited ? '取消到访' : '到访签到',
-      zhHant: visited ? '取消到訪' : '到訪簽到',
+      ko: '방문 결과 변경',
+      en: 'Change visit outcome',
+      ja: '訪問結果を変更',
+      zhHans: '更改到访结果',
+      zhHant: '變更到訪結果',
     );
     return ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 44),

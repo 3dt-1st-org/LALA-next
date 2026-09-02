@@ -116,7 +116,8 @@ Both are flagged OFF by default. V5 ships the gating + the honest-offline path, 
 ### A3. D-gates (each must be testable offline)
 
 - **D1 — Persisted-plan + slots schema.** Versioned envelope (`schema_version`, `created_at`,
-  `updated_at`); slots reference place-id + slot-index; one plan per user per day (UTC date key).
+  `updated_at`); slots reference place-id + slot-index; one plan per user-visible itinerary
+  calendar date. A date-only key is not converted through UTC.
 - **D2 — `user_saved_places`.** User-scoped, place-id only (no coordinates/PII), idempotent
   toggle (save → unsaved → save is a no-op delta, not a duplicate row).
 - **D3 — `slot_visits` / check-in.** Status enum (`planned` / `visited`) + optional timestamp;

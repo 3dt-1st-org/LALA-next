@@ -1493,11 +1493,16 @@ void main() {
       'slot_period': 'morning',
       'status': 'visited',
       'place_id': null,
+      'reason_code': null,
+      'use_for_recommendations': true,
       'visited_at': null,
+      'confirmed_at': '2026-09-03T00:00:00Z',
     });
     expect(visit.slotPeriod, 'morning');
     expect(visit.status, 'visited');
     expect(visit.placeId, isNull);
+    expect(visit.useForRecommendations, isTrue);
+    expect(visit.confirmedAt, '2026-09-03T00:00:00Z');
 
     final savesData = LalaSavedPlacesData.fromJsonObject(
         const {'items': <Map<String, dynamic>>[]});
@@ -1521,6 +1526,32 @@ void main() {
     expect(persisted.planDate, '2026-08-14');
     expect(persisted.schemaVersion, 1);
     expect(persisted.plan, isNull);
+
+    final summaries = LalaPersistedPlansData.fromJsonObject(const {
+      'items': [
+        {
+          'plan_date': '2026-08-14',
+          'schema_version': 1,
+          'region': '서울',
+          'slot_count': 4,
+          'visited_count': 2,
+          'updated_at': null,
+        },
+      ],
+    });
+    expect(summaries.items.single.region, '서울');
+    expect(summaries.items.single.slotCount, 4);
+    expect(summaries.items.single.visitedCount, 2);
+
+    final override = LalaTripPreferenceOverrideDocument.fromJsonObject(const {
+      'plan_date': '2026-08-14',
+      'schema_version': 1,
+      'revision': 3,
+      'override': {'version': 1, 'pace': 'relaxed'},
+      'updated_at': '2026-09-03T00:00:00Z',
+    });
+    expect(override.revision, 3);
+    expect(override.override['pace'], 'relaxed');
   });
 
   test('listSavedPlaces sends bearer auth and parses saved-place items',
@@ -1601,6 +1632,61 @@ void main() {
     expect(envelope.data, isNull); // honest null, never a thrown parse
   });
 
+  test('past plans and trip overrides use scoped planning paths', () async {
+    final requests = <RequestOptions>[];
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      bearerToken: 'plan-token',
+      dio: _dio(
+        (request) async {
+          if (request.method == 'GET' && request.uri.path.endsWith('/plans')) {
+            return _json({
+              'ok': true,
+              'data': {'items': <Object?>[]},
+              'meta': {'request_id': 'plans-id'},
+              'error': null,
+            });
+          }
+          return _json({
+            'ok': true,
+            'data': {
+              'plan_date': '2026-08-14',
+              'schema_version': 1,
+              'revision': 1,
+              'override': {'version': 1, 'pace': 'balanced'},
+              'updated_at': '2026-09-03T00:00:00Z',
+            },
+            'meta': {'request_id': 'override-id'},
+            'error': null,
+          });
+        },
+        sink: requests.add,
+      ),
+    );
+
+    final plans = await client.listPersistedPlans(
+      before: '2026-09-01',
+      limit: 10,
+    );
+    final saved = await client.putTripPreferenceOverride(
+      planDate: '2026-08-14',
+      expectedRevision: 0,
+      override: const {'version': 1, 'pace': 'balanced'},
+    );
+
+    expect(plans.data?.items, isEmpty);
+    expect(requests.first.uri.path, '/api/v1/me/plans');
+    expect(requests.first.uri.queryParameters['before'], '2026-09-01');
+    expect(requests.first.uri.queryParameters['limit'], '10');
+    expect(requests.last.uri.path,
+        '/api/v1/me/plans/2026-08-14/preferences');
+    expect(requests.last.data, {
+      'expected_revision': 0,
+      'override': {'version': 1, 'pace': 'balanced'},
+    });
+    expect(saved.data?.revision, 1);
+  });
+
   test('checkInSlot PUTs the status body to the slot visit path', () async {
     final requests = <RequestOptions>[];
     final client = LalaApiClient(
@@ -1613,7 +1699,10 @@ void main() {
             'slot_period': 'morning',
             'place_id': 'p1',
             'status': 'visited',
+            'reason_code': null,
+            'use_for_recommendations': false,
             'visited_at': null,
+            'confirmed_at': null,
           },
           'meta': {'request_id': 'visit-id'},
           'error': null,
@@ -1633,6 +1722,11 @@ void main() {
         requests.single.uri.path, '/api/v1/me/plans/2026-08-14/visits/morning');
     expect(envelope.data?.status, 'visited');
     expect(envelope.data?.slotPeriod, 'morning');
+    expect(requests.single.data, {
+      'status': 'visited',
+      'place_id': 'p1',
+      'use_for_recommendations': false,
+    });
   });
 }
 

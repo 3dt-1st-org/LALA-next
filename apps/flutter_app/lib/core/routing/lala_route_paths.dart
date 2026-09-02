@@ -17,6 +17,10 @@ abstract final class LalaRoutePaths {
   /// Account and preference routes are pushed above the profile tab.
   static const String account = '/profile/account';
   static const String travelPreferences = '/profile/travel-preferences';
+  static const String savedPlaces = '/profile/saved-places';
+  static const String pastTrips = '/profile/past-trips';
+  static const String tripSettings = '/plan/:planDate/settings';
+  static const String visitConfirmation = '/plan/:planDate/visit/:slotPeriod';
 
   /// 온보딩 라우트 공통 접두사. redirect 가 온보딩 라우트 여부를 판별하는 데 사용.
   static const String onboardingPrefix = '/onboarding';
@@ -64,4 +68,11 @@ abstract final class LalaRoutePaths {
 
   static String placeDetailFor(String placeId) =>
       '/places/${Uri.encodeComponent(placeId)}';
+
+  static String tripSettingsFor(String planDate) =>
+      '/plan/${Uri.encodeComponent(planDate)}/settings';
+
+  static String visitConfirmationFor(String planDate, String slotPeriod) =>
+      '/plan/${Uri.encodeComponent(planDate)}/visit/'
+      '${Uri.encodeComponent(slotPeriod)}';
 }

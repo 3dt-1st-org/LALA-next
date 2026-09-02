@@ -6,7 +6,10 @@ from fastapi.testclient import TestClient
 
 from apps.api.app.core.auth import RequestIdentity, require_client_auth, require_logto_identity
 from apps.api.app.main import create_app
-from apps.api.app.services.planning_repository import get_planning_repository
+from apps.api.app.services.planning_repository import (
+    TripPreferenceOverrideRevisionConflict,
+    get_planning_repository,
+)
 
 
 class FakePlanningRepository:
@@ -15,8 +18,11 @@ class FakePlanningRepository:
     def __init__(self) -> None:
         self.calls: list[tuple] = []
         self.plan: dict[str, Any] | None = None
+        self.plans: list[dict[str, Any]] = []
         self.saved_places: list[dict[str, Any]] = []
         self.visits: list[dict[str, Any]] = []
+        self.trip_override: dict[str, Any] | None = None
+        self.trip_override_conflict = False
 
     def list_saved_places(self, *, issuer: str, subject: str):
         self.calls.append(("list_saved_places", issuer, subject))
@@ -38,17 +44,70 @@ class FakePlanningRepository:
         self.calls.append(("load_plan", issuer, subject, plan_date))
         return self.plan
 
+    def list_plans(self, *, issuer, subject, before, limit):
+        self.calls.append(("list_plans", issuer, subject, before, limit))
+        return self.plans
+
+    def delete_plan(self, *, issuer, subject, plan_date):
+        self.calls.append(("delete_plan", issuer, subject, plan_date))
+        return {"plan_date": plan_date.isoformat(), "deleted": True}
+
+    def get_trip_preference_override(self, *, issuer, subject, plan_date):
+        self.calls.append(("get_trip_preference_override", issuer, subject, plan_date))
+        return self.trip_override
+
+    def put_trip_preference_override(
+        self, *, issuer, subject, plan_date, expected_revision, payload
+    ):
+        self.calls.append(
+            (
+                "put_trip_preference_override",
+                issuer,
+                subject,
+                plan_date,
+                expected_revision,
+                payload,
+            )
+        )
+        if self.trip_override_conflict:
+            raise TripPreferenceOverrideRevisionConflict()
+        return {
+            "plan_date": plan_date.isoformat(),
+            "schema_version": 1,
+            "revision": expected_revision + 1,
+            "override": payload,
+            "updated_at": "2026-09-03T00:00:00+00:00",
+        }
+
+    def delete_trip_preference_override(self, *, issuer, subject, plan_date):
+        self.calls.append(("delete_trip_preference_override", issuer, subject, plan_date))
+        return {"plan_date": plan_date.isoformat(), "deleted": True}
+
     def list_slot_visits(self, *, issuer, subject, plan_date):
         self.calls.append(("list_slot_visits", issuer, subject, plan_date))
         return self.visits
 
-    def set_slot_visit(self, *, issuer, subject, plan_date, slot_period, place_id, status):
+    def set_slot_visit(
+        self,
+        *,
+        issuer,
+        subject,
+        plan_date,
+        slot_period,
+        place_id,
+        status,
+        reason_code,
+        use_for_recommendations,
+    ):
         self.calls.append(("set_slot_visit", issuer, subject, plan_date, slot_period, status))
         return {
             "slot_period": slot_period,
             "place_id": place_id,
             "status": status,
+            "reason_code": reason_code,
+            "use_for_recommendations": use_for_recommendations,
             "visited_at": None,
+            "confirmed_at": None,
         }
 
 
@@ -127,6 +186,79 @@ def test_save_plan_persists_envelope_body():
     assert repo.calls[0][4] == plan  # envelope passed through verbatim
 
 
+def test_list_and_delete_past_plans_are_caller_scoped_and_bounded():
+    repo = FakePlanningRepository()
+    repo.plans = [
+        {
+            "plan_date": "2026-08-14",
+            "schema_version": 1,
+            "region": "서울",
+            "slot_count": 4,
+            "visited_count": 2,
+            "updated_at": None,
+        }
+    ]
+    client = _client(repo, _identity_a())
+
+    listed = client.get("/api/v1/me/plans?before=2026-09-01&limit=10")
+    data = _assert_envelope(listed.json())
+    assert data["items"][0]["region"] == "서울"
+    assert "center" not in data["items"][0]
+    assert repo.calls[0][0:3] == ("list_plans", "https://issuer.example", "user-a")
+    assert repo.calls[0][4] == 10
+
+    deleted = client.delete("/api/v1/me/plans/2026-08-14")
+    assert _assert_envelope(deleted.json()) == {
+        "plan_date": "2026-08-14",
+        "deleted": True,
+    }
+
+
+def test_trip_override_honest_null_write_and_conflict():
+    repo = FakePlanningRepository()
+    client = _client(repo, _identity_a())
+
+    absent = client.get("/api/v1/me/plans/2026-08-14/preferences")
+    assert _assert_envelope(absent.json()) is None
+    assert absent.json()["meta"]["source"] == "unavailable"
+
+    saved = client.put(
+        "/api/v1/me/plans/2026-08-14/preferences",
+        json={
+            "expected_revision": 0,
+            "override": {
+                "version": 1,
+                "pace": "relaxed",
+                "transport_modes": ["walk", "transit"],
+            },
+        },
+    )
+    saved_data = _assert_envelope(saved.json())
+    assert saved_data["revision"] == 1
+    assert saved_data["override"]["pace"] == "relaxed"
+
+    repo.trip_override_conflict = True
+    conflict = client.put(
+        "/api/v1/me/plans/2026-08-14/preferences",
+        json={"expected_revision": 1, "override": {"version": 1}},
+    )
+    assert conflict.status_code == 409
+    assert conflict.json()["error"]["code"] == "TRIP_PREFERENCES_REVISION_CONFLICT"
+
+
+def test_trip_override_rejects_duplicate_enum_values():
+    repo = FakePlanningRepository()
+    response = _client(repo, _identity_a()).put(
+        "/api/v1/me/plans/2026-08-14/preferences",
+        json={
+            "expected_revision": 0,
+            "override": {"version": 1, "transport_modes": ["walk", "walk"]},
+        },
+    )
+    assert response.status_code == 422
+    assert repo.calls == []
+
+
 def test_visits_list_honest_empty_and_check_in():
     repo = FakePlanningRepository()
     client = _client(repo, _identity_a())
@@ -141,8 +273,37 @@ def test_visits_list_honest_empty_and_check_in():
         "slot_period": "morning",
         "place_id": "p1",
         "status": "visited",
+        "reason_code": None,
+        "use_for_recommendations": False,
         "visited_at": None,
+        "confirmed_at": None,
     }
+
+
+def test_not_visited_reason_and_recommendation_consent_are_explicit():
+    repo = FakePlanningRepository()
+    response = _client(repo, _identity_a()).put(
+        "/api/v1/me/plans/2026-08-14/visits/dinner",
+        json={
+            "status": "not_visited",
+            "reason_code": "weather",
+            "use_for_recommendations": True,
+        },
+    )
+    data = _assert_envelope(response.json())
+    assert data["status"] == "not_visited"
+    assert data["reason_code"] == "weather"
+    assert data["use_for_recommendations"] is True
+
+
+def test_visit_reason_is_rejected_for_non_skipped_status():
+    repo = FakePlanningRepository()
+    response = _client(repo, _identity_a()).put(
+        "/api/v1/me/plans/2026-08-14/visits/dinner",
+        json={"status": "visited", "reason_code": "weather"},
+    )
+    assert response.status_code == 422
+    assert repo.calls == []
 
 
 def test_check_in_rejects_unknown_slot_period_with_422():

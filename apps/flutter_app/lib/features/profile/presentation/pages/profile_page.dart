@@ -6,18 +6,26 @@ import 'package:go_router/go_router.dart';
 import 'package:lala_next_app/app/lala_visual_tokens.dart';
 import 'package:lala_next_app/auth/auth_controller.dart';
 import 'package:lala_next_app/core/routing/lala_route_paths.dart';
+import 'package:lala_next_app/core/state/saved_place_store.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/features/preferences/data/travel_preferences_store.dart';
 import 'package:lala_next_app/features/preferences/domain/travel_preferences.dart';
 import 'package:lala_next_app/features/settings/widgets/privacy_details_sheet.dart';
+import 'package:lala_next_app/features/trip_library/data/trip_library_store.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 
 /// S-50: account, personalization, and app-setting entry points.
 class ProfilePage extends StatefulWidget {
-  const ProfilePage({super.key, this.authController, this.preferencesStore});
+  const ProfilePage({
+    super.key,
+    this.authController,
+    this.preferencesStore,
+    this.tripLibraryStore,
+  });
 
   final LalaAuthController? authController;
   final TravelPreferencesStore? preferencesStore;
+  final TripLibraryStore? tripLibraryStore;
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
@@ -25,13 +33,16 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   late final TravelPreferencesStore _preferencesStore;
+  late final TripLibraryStore _tripLibraryStore;
 
   @override
   void initState() {
     super.initState();
     _preferencesStore =
         widget.preferencesStore ?? TravelPreferencesStore.instance;
+    _tripLibraryStore = widget.tripLibraryStore ?? TripLibraryStore.instance;
     unawaited(_preferencesStore.ensureLoaded());
+    unawaited(_tripLibraryStore.ensureLoaded());
   }
 
   @override
@@ -40,7 +51,11 @@ class _ProfilePageState extends State<ProfilePage> {
       valueListenable: OnboardingState.languageListenable,
       builder: (context, language, _) {
         return AnimatedBuilder(
-          animation: _preferencesStore,
+          animation: Listenable.merge(<Listenable>[
+            _preferencesStore,
+            _tripLibraryStore,
+            SavedPlaceStore.listenable,
+          ]),
           builder: (context, _) {
             final auth = widget.authController;
             if (auth == null) {
@@ -142,6 +157,52 @@ class _ProfilePageState extends State<ProfilePage> {
               preferences: preferences,
               language: language,
               onTap: () => context.push(LalaRoutePaths.travelPreferences),
+            ),
+            const SizedBox(height: 10),
+            Material(
+              color: LalaVisualColors.card,
+              clipBehavior: Clip.antiAlias,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(
+                  LalaVisualTokens.controlRadius,
+                ),
+                side: const BorderSide(color: LalaVisualColors.line),
+              ),
+              child: Column(
+                children: <Widget>[
+                  _ProfileMenuRow(
+                    key: const ValueKey('profile-saved-places-entry'),
+                    icon: Icons.bookmark_outline_rounded,
+                    title: lalaCopyMulti(
+                      language,
+                      ko: '저장한 장소',
+                      en: 'Saved places',
+                      ja: '保存した場所',
+                      zhHans: '已保存地点',
+                      zhHant: '已儲存地點',
+                    ),
+                    value: '${SavedPlaceStore.current.length}',
+                    onTap: () => context.push(LalaRoutePaths.savedPlaces),
+                  ),
+                  const Divider(height: 1, indent: 56),
+                  _ProfileMenuRow(
+                    key: const ValueKey('profile-past-trips-entry'),
+                    icon: Icons.calendar_month_outlined,
+                    title: lalaCopyMulti(
+                      language,
+                      ko: '지난 일정',
+                      en: 'Past trips',
+                      ja: '過去の旅行',
+                      zhHans: '历史行程',
+                      zhHant: '過往行程',
+                    ),
+                    value: _tripLibraryStore.accountConnected
+                        ? '${_tripLibraryStore.pastTrips.length}'
+                        : null,
+                    onTap: () => context.push(LalaRoutePaths.pastTrips),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: LalaVisualTokens.sectionGap),
             Text(

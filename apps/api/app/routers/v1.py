@@ -11,12 +11,18 @@ from apps.api.app.core.auth import (
     require_logto_identity,
 )
 from apps.api.app.core.config import get_settings
+from apps.api.app.core.errors import ServiceError
 from apps.api.app.core.rate_limit import enforce_public_contest_paid_route_limit
 from apps.api.app.core.responses import ensure_request_id, success_envelope
 from apps.api.app.schemas.account import AccountDeletionRequest
 from apps.api.app.schemas.docent import DocentAudioRequest, DocentScriptRequest
 from apps.api.app.schemas.planner import DailyPlanRequest
-from apps.api.app.schemas.planning import SavePlaceRequest, SavePlanRequest, SlotVisitRequest
+from apps.api.app.schemas.planning import (
+    SavePlaceRequest,
+    SavePlanRequest,
+    SaveTripPreferenceOverrideRequest,
+    SlotVisitRequest,
+)
 from apps.api.app.schemas.preferences import SaveTravelPreferencesRequest
 from apps.api.app.services import docent_service, places_service, planner_service, weather_service
 from apps.api.app.services.identity_service import IdentityService, get_identity_service
@@ -24,7 +30,11 @@ from apps.api.app.services.logto_management import (
     LogtoManagementClient,
     get_logto_management_client,
 )
-from apps.api.app.services.planning_repository import PlanningRepository, get_planning_repository
+from apps.api.app.services.planning_repository import (
+    PlanningRepository,
+    TripPreferenceOverrideRevisionConflict,
+    get_planning_repository,
+)
 from apps.api.app.services.travel_preferences_service import (
     TravelPreferencesService,
     get_travel_preferences_service,
@@ -331,6 +341,23 @@ def unsave_place(
     return success_envelope(request=request, data=result, meta={"source": "db"})
 
 
+@router.get("/me/plans")
+def list_persisted_plans(
+    request: Request,
+    identity: Annotated[RequestIdentity, Depends(require_logto_identity)],
+    repository: Annotated[PlanningRepository, Depends(get_planning_repository)],
+    before: Annotated[date | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=50)] = 20,
+) -> dict:
+    items = repository.list_plans(
+        issuer=identity.issuer or "",
+        subject=identity.subject or "",
+        before=before,
+        limit=limit,
+    )
+    return success_envelope(request=request, data={"items": items}, meta={"source": "db"})
+
+
 @router.put("/me/plans/{plan_date}")
 def save_persisted_plan(
     request: Request,
@@ -368,6 +395,81 @@ def load_persisted_plan(
     )
 
 
+@router.delete("/me/plans/{plan_date}")
+def delete_persisted_plan(
+    request: Request,
+    plan_date: date,
+    identity: Annotated[RequestIdentity, Depends(require_logto_identity)],
+    repository: Annotated[PlanningRepository, Depends(get_planning_repository)],
+) -> dict:
+    result = repository.delete_plan(
+        issuer=identity.issuer or "",
+        subject=identity.subject or "",
+        plan_date=plan_date,
+    )
+    return success_envelope(request=request, data=result, meta={"source": "db"})
+
+
+@router.get("/me/plans/{plan_date}/preferences")
+def get_trip_preference_override(
+    request: Request,
+    plan_date: date,
+    identity: Annotated[RequestIdentity, Depends(require_logto_identity)],
+    repository: Annotated[PlanningRepository, Depends(get_planning_repository)],
+) -> dict:
+    result = repository.get_trip_preference_override(
+        issuer=identity.issuer or "",
+        subject=identity.subject or "",
+        plan_date=plan_date,
+    )
+    return success_envelope(
+        request=request,
+        data=result,
+        meta={"source": "db" if result is not None else "unavailable"},
+    )
+
+
+@router.put("/me/plans/{plan_date}/preferences")
+def put_trip_preference_override(
+    request: Request,
+    plan_date: date,
+    body: SaveTripPreferenceOverrideRequest,
+    identity: Annotated[RequestIdentity, Depends(require_logto_identity)],
+    repository: Annotated[PlanningRepository, Depends(get_planning_repository)],
+) -> dict:
+    try:
+        result = repository.put_trip_preference_override(
+            issuer=identity.issuer or "",
+            subject=identity.subject or "",
+            plan_date=plan_date,
+            expected_revision=body.expected_revision,
+            payload=body.override.model_dump(mode="json", exclude_none=True),
+        )
+    except TripPreferenceOverrideRevisionConflict as exc:
+        raise ServiceError(
+            status_code=409,
+            code="TRIP_PREFERENCES_REVISION_CONFLICT",
+            message="Trip preferences changed on another device.",
+            retryable=False,
+        ) from exc
+    return success_envelope(request=request, data=result, meta={"source": "db"})
+
+
+@router.delete("/me/plans/{plan_date}/preferences")
+def delete_trip_preference_override(
+    request: Request,
+    plan_date: date,
+    identity: Annotated[RequestIdentity, Depends(require_logto_identity)],
+    repository: Annotated[PlanningRepository, Depends(get_planning_repository)],
+) -> dict:
+    result = repository.delete_trip_preference_override(
+        issuer=identity.issuer or "",
+        subject=identity.subject or "",
+        plan_date=plan_date,
+    )
+    return success_envelope(request=request, data=result, meta={"source": "db"})
+
+
 @router.get("/me/plans/{plan_date}/visits")
 def list_slot_visits(
     request: Request,
@@ -399,5 +501,7 @@ def check_in_slot(
         slot_period=slot_period,
         place_id=body.place_id,
         status=body.status,
+        reason_code=body.reason_code,
+        use_for_recommendations=body.use_for_recommendations,
     )
     return success_envelope(request=request, data=result, meta={"source": "db"})

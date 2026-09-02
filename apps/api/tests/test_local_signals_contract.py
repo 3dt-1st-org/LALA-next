@@ -23,11 +23,12 @@ def test_local_signals_migration_is_next_ordered_additive_contract():
     plan = canonical_sql.load_canonical_sql_plan()
 
     assert plan.ok is True
-    assert [item.name for item in plan.files][-4:] == [
+    assert [item.name for item in plan.files][-5:] == [
         "062_review_ingestion_governance.sql",
         "063_local_signals_contract.sql",
         "064_planning_action_tables.sql",
         "065_user_travel_preferences.sql",
+        "066_trip_library_and_visit_feedback.sql",
     ]
     sql = LOCAL_SIGNALS_SQL.read_text(encoding="utf-8")
     assert not re.search(r"\b(DROP|TRUNCATE|DELETE\s+FROM)\b", sql, re.IGNORECASE)

@@ -33,6 +33,10 @@ import 'package:lala_next_app/features/place/presentation/pages/place_detail_pag
 import 'package:lala_next_app/features/preferences/presentation/travel_preferences_page.dart';
 import 'package:lala_next_app/features/profile/presentation/pages/account_page.dart';
 import 'package:lala_next_app/features/profile/presentation/pages/profile_page.dart';
+import 'package:lala_next_app/features/trip_library/presentation/pages/past_trips_page.dart';
+import 'package:lala_next_app/features/trip_library/presentation/pages/saved_places_page.dart';
+import 'package:lala_next_app/features/trip_library/presentation/pages/trip_settings_page.dart';
+import 'package:lala_next_app/features/trip_library/presentation/pages/visit_confirmation_page.dart';
 import 'package:lala_next_app/features/community/presentation/pages/community_feed_page.dart';
 import 'package:lala_next_app/features/community/presentation/pages/community_post_detail_page.dart';
 import 'package:lala_next_app/features/community/presentation/pages/community_create_post_page.dart';
@@ -217,6 +221,35 @@ GoRouter createLalaRouter({
         path: LalaRoutePaths.travelPreferences,
         builder: (BuildContext context, GoRouterState state) =>
             TravelPreferencesPage(language: OnboardingState.language),
+      ),
+      GoRoute(
+        path: LalaRoutePaths.savedPlaces,
+        builder: (BuildContext context, GoRouterState state) => SavedPlacesPage(
+          backendFactory: backendFactory,
+          initialConfig: initialConfig,
+          actionController: signalActionController,
+        ),
+      ),
+      GoRoute(
+        path: LalaRoutePaths.pastTrips,
+        builder: (BuildContext context, GoRouterState state) =>
+            const PastTripsPage(),
+      ),
+      GoRoute(
+        path: LalaRoutePaths.tripSettings,
+        builder: (BuildContext context, GoRouterState state) =>
+            TripSettingsPage(planDate: state.pathParameters['planDate'] ?? ''),
+      ),
+      GoRoute(
+        path: LalaRoutePaths.visitConfirmation,
+        builder: (BuildContext context, GoRouterState state) =>
+            VisitConfirmationPage(
+              planDate: state.pathParameters['planDate'] ?? '',
+              slotPeriod: state.pathParameters['slotPeriod'] ?? '',
+              slot: state.extra is LalaPlanSlot
+                  ? state.extra! as LalaPlanSlot
+                  : null,
+            ),
       ),
       // --- ONMU P3b: 커뮤니티 push 라우트(메인 쉘 외부). context.push 로 진입해
       // 탭 상태를 유지한 채 풀스크린으로 올라간다. ---

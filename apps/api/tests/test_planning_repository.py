@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 import pytest
@@ -10,6 +10,7 @@ from apps.api.app.services.planning_repository import (
     PLANNING_ENVELOPE_VERSION,
     PlanningRepository,
     PlanningRepositoryUnavailable,
+    TripPreferenceOverrideRevisionConflict,
 )
 
 
@@ -33,6 +34,8 @@ class _FakeCursor:
         self._executed.append((sql, params))
 
     def fetchone(self):
+        if isinstance(self._fetchone, list):
+            return self._fetchone.pop(0) if self._fetchone else None
         return self._fetchone
 
     def fetchall(self):
@@ -88,6 +91,8 @@ def test_every_read_query_is_scoped_to_caller_issuer_and_subject():
     repo.list_saved_places(issuer="iss-a", subject="sub-a")
     repo.list_slot_visits(issuer="iss-a", subject="sub-a", plan_date=date(2026, 8, 14))
     repo.load_plan(issuer="iss-a", subject="sub-a", plan_date=date(2026, 8, 14))
+    repo.list_plans(issuer="iss-a", subject="sub-a", before=None, limit=20)
+    repo.get_trip_preference_override(issuer="iss-a", subject="sub-a", plan_date=date(2026, 8, 14))
     for sql, params in executed:
         assert "issuer = %s" in sql and "subject = %s" in sql
         assert ("iss-a", "sub-a")[:2] == (params[0], params[1])
@@ -137,7 +142,10 @@ def test_check_in_upserts_in_place_never_duplicates():
             "slot_period": "morning",
             "place_id": "p",
             "status": "visited",
+            "reason_code": None,
+            "use_for_recommendations": False,
             "visited_at": None,
+            "confirmed_at": None,
         }
     )
     repo.set_slot_visit(
@@ -147,6 +155,8 @@ def test_check_in_upserts_in_place_never_duplicates():
         slot_period="morning",
         place_id="p",
         status="visited",
+        reason_code=None,
+        use_for_recommendations=False,
     )
     sql, params = executed[0]
     assert "ON CONFLICT" in sql and "DO UPDATE" in sql  # upsert -> idempotent, one row
@@ -163,6 +173,8 @@ def test_check_in_rejects_unknown_period_or_status():
             slot_period="brunch",
             place_id=None,
             status="visited",
+            reason_code=None,
+            use_for_recommendations=False,
         )
     with pytest.raises(ValueError):
         repo.set_slot_visit(
@@ -172,7 +184,54 @@ def test_check_in_rejects_unknown_period_or_status():
             slot_period="morning",
             place_id=None,
             status="maybe",
+            reason_code=None,
+            use_for_recommendations=False,
         )
+
+
+def test_check_in_rejects_reason_for_visited_status():
+    repo, _executed = _repo()
+    with pytest.raises(ValueError):
+        repo.set_slot_visit(
+            issuer="iss",
+            subject="sub",
+            plan_date=date(2026, 8, 14),
+            slot_period="morning",
+            place_id=None,
+            status="visited",
+            reason_code="weather",
+            use_for_recommendations=False,
+        )
+
+
+def test_not_visited_outcome_binds_reason_and_explicit_consent():
+    repo, executed = _repo(
+        fetchone={
+            "slot_period": "dinner",
+            "place_id": "p",
+            "status": "not_visited",
+            "reason_code": "weather",
+            "use_for_recommendations": True,
+            "visited_at": None,
+            "confirmed_at": None,
+        }
+    )
+    result = repo.set_slot_visit(
+        issuer="iss",
+        subject="sub",
+        plan_date=date(2026, 8, 14),
+        slot_period="dinner",
+        place_id="p",
+        status="not_visited",
+        reason_code="weather",
+        use_for_recommendations=True,
+    )
+    _, params = executed[0]
+    assert "weather" in params
+    assert True in params
+    assert result["status"] == "not_visited"
+    assert result["reason_code"] == "weather"
+    assert result["use_for_recommendations"] is True
 
 
 # -- A7 / A8 / D8: corrupt -> null, version-mismatch -> null, never throws -------
@@ -215,6 +274,11 @@ def test_honest_empty_when_no_data():
     assert repo.list_saved_places(issuer="iss", subject="sub") == []
     assert repo.list_slot_visits(issuer="iss", subject="sub", plan_date=date(2026, 8, 14)) == []
     assert repo.load_plan(issuer="iss", subject="sub", plan_date=date(2026, 8, 14)) is None
+    assert repo.list_plans(issuer="iss", subject="sub", before=None, limit=20) == []
+    assert (
+        repo.get_trip_preference_override(issuer="iss", subject="sub", plan_date=date(2026, 8, 14))
+        is None
+    )
 
 
 def test_list_results_project_only_safe_fields():
@@ -227,6 +291,85 @@ def test_list_results_project_only_safe_fields():
     saves = repo.list_saved_places(issuer="iss", subject="sub")
     assert [s["place_id"] for s in saves] == ["p1", "p2"]
     assert all(set(s) == {"place_id", "source", "saved_at"} for s in saves)  # no coords/PII leak
+
+
+def test_past_plan_summary_projects_region_without_coordinates():
+    repo, _ = _repo(
+        fetchall=[
+            {
+                "plan_date": date(2026, 8, 14),
+                "schema_version": PLANNING_ENVELOPE_VERSION,
+                "envelope": {
+                    "center": {"lat": 37.5, "lng": 127.0},
+                    "slots": [
+                        {
+                            "period": "morning",
+                            "place": {"region_ko": "서울 성동구", "lat": 37.5, "lng": 127.0},
+                        }
+                    ],
+                },
+                "visited_count": 1,
+                "updated_at": None,
+            }
+        ]
+    )
+
+    summaries = repo.list_plans(issuer="iss", subject="sub", before=None, limit=20)
+
+    assert summaries == [
+        {
+            "plan_date": "2026-08-14",
+            "schema_version": 1,
+            "region": "서울 성동구",
+            "slot_count": 1,
+            "visited_count": 1,
+            "updated_at": None,
+        }
+    ]
+    assert "center" not in summaries[0]
+    assert "lat" not in str(summaries[0]) and "lng" not in str(summaries[0])
+
+
+def test_trip_override_uses_revision_compare_and_swap():
+    repo, executed = _repo(
+        fetchone=[
+            {"revision": 2},
+            {
+                "schema_version": 1,
+                "revision": 3,
+                "payload": {"version": 1, "pace": "relaxed"},
+                "updated_at": datetime(2026, 9, 3),
+            },
+        ]
+    )
+
+    result = repo.put_trip_preference_override(
+        issuer="iss",
+        subject="sub",
+        plan_date=date(2026, 8, 14),
+        expected_revision=2,
+        payload={"version": 1, "pace": "relaxed"},
+    )
+
+    assert len(executed) == 2
+    assert "FOR UPDATE" in executed[0][0]
+    assert "revision = %s" in executed[1][0]
+    assert result["revision"] == 3
+
+
+def test_trip_override_rejects_stale_revision_before_write():
+    repo, executed = _repo(fetchone={"revision": 3})
+
+    with pytest.raises(TripPreferenceOverrideRevisionConflict):
+        repo.put_trip_preference_override(
+            issuer="iss",
+            subject="sub",
+            plan_date=date(2026, 8, 14),
+            expected_revision=2,
+            payload={"version": 1},
+        )
+
+    assert len(executed) == 1
 
 
 # -- D8 store path serializes envelope without a client toJson -----------------
