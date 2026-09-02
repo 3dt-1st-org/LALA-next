@@ -39,6 +39,7 @@ void main() {
 
     expect(find.text('식당 직원에게 보여주기'), findsOneWidget);
     expect(find.textContaining('2개'), findsOneWidget);
+    expect(find.bySemanticsLabel('식당 직원에게 보여 줄 요청 카드 열기'), findsOneWidget);
     await tester.tap(
       find.byKey(const ValueKey('restaurant-detail-show-staff')),
     );

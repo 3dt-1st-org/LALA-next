@@ -38,7 +38,9 @@ class _RestaurantCommunicationEntryCardState
       builder: (context, _) {
         final preferences = _store.value;
         return Semantics(
+          container: true,
           button: true,
+          excludeSemantics: true,
           label: _copy(
             widget.language,
             ko: '식당 직원에게 보여 줄 요청 카드 열기',
@@ -47,6 +49,7 @@ class _RestaurantCommunicationEntryCardState
             zhHans: '打开给餐厅工作人员看的需求卡',
             zhHant: '開啟給餐廳工作人員看的需求卡',
           ),
+          hint: _summary(widget.language, preferences),
           child: InkWell(
             key: const ValueKey('restaurant-detail-show-staff'),
             borderRadius: BorderRadius.circular(LalaVisualTokens.controlRadius),

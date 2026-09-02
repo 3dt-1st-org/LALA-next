@@ -48,68 +48,86 @@ class _TravelPreferencesSettingsSectionState
             zhHans: '旅行体验',
             zhHant: '旅行體驗',
           ),
-          child: InkWell(
-            key: const ValueKey('travel-preferences-entry'),
-            borderRadius: BorderRadius.circular(LalaVisualTokens.controlRadius),
-            onTap: () => Navigator.of(context).push<void>(
-              MaterialPageRoute<void>(
-                builder: (_) => TravelPreferencesPage(
-                  language: widget.language,
-                  store: _store,
+          child: Semantics(
+            container: true,
+            button: true,
+            excludeSemantics: true,
+            label:
+                '${_text(widget.language, ko: '여행 취향', en: 'Travel preferences', ja: '旅行の好み', zhHans: '旅行偏好', zhHant: '旅行偏好')}. '
+                '${_preferenceSummary(widget.language, value)}',
+            hint: _text(
+              widget.language,
+              ko: '열기',
+              en: 'Open',
+              ja: '開く',
+              zhHans: '打开',
+              zhHant: '開啟',
+            ),
+            child: InkWell(
+              key: const ValueKey('travel-preferences-entry'),
+              borderRadius: BorderRadius.circular(
+                LalaVisualTokens.controlRadius,
+              ),
+              onTap: () => Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(
+                  builder: (_) => TravelPreferencesPage(
+                    language: widget.language,
+                    store: _store,
+                  ),
                 ),
               ),
-            ),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 64),
-              child: Row(
-                children: [
-                  const _LeadingIcon(
-                    icon: Icons.favorite_outline,
-                    color: Color(0xFF0B67D8),
-                    background: Color(0xFFEAF3FF),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          _text(
-                            widget.language,
-                            ko: '여행 취향',
-                            en: 'Travel preferences',
-                            ja: '旅行の好み',
-                            zhHans: '旅行偏好',
-                            zhHant: '旅行偏好',
-                          ),
-                          style: const TextStyle(
-                            color: LalaVisualColors.ink,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _preferenceSummary(widget.language, value),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: LalaVisualColors.muted,
-                            fontSize: 12,
-                            height: 1.25,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 64),
+                child: Row(
+                  children: [
+                    const _LeadingIcon(
+                      icon: Icons.favorite_outline,
+                      color: Color(0xFF0B67D8),
+                      background: Color(0xFFEAF3FF),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  const Icon(
-                    Icons.chevron_right,
-                    color: LalaVisualColors.muted,
-                  ),
-                ],
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            _text(
+                              widget.language,
+                              ko: '여행 취향',
+                              en: 'Travel preferences',
+                              ja: '旅行の好み',
+                              zhHans: '旅行偏好',
+                              zhHant: '旅行偏好',
+                            ),
+                            style: const TextStyle(
+                              color: LalaVisualColors.ink,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _preferenceSummary(widget.language, value),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: LalaVisualColors.muted,
+                              fontSize: 12,
+                              height: 1.25,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Icon(
+                      Icons.chevron_right,
+                      color: LalaVisualColors.muted,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
