@@ -283,6 +283,98 @@ void main() {
     );
   });
 
+  test('getTravelPreferences preserves honest null for an empty profile',
+      () async {
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      dio: _dio((request) async {
+        expect(request.method, 'GET');
+        expect(request.uri.path, '/api/v1/me/preferences');
+        return _json({
+          'ok': true,
+          'data': null,
+          'meta': {'source': 'unavailable'},
+          'error': null,
+        });
+      }),
+    );
+
+    final envelope = await client.getTravelPreferences();
+
+    expect(envelope.ok, isTrue);
+    expect(envelope.data, isNull);
+    expect(envelope.meta['source'], 'unavailable');
+  });
+
+  test('getTravelPreferences parses a revisioned server document', () async {
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      dio: _dio((request) async => _json({
+            'ok': true,
+            'data': {
+              'preferences': {
+                'version': 1,
+                'soft': {'pace': 'relaxed'},
+                'hard': <String, Object?>{},
+                'locale': <String, Object?>{},
+              },
+              'revision': 3,
+              'updated_at': '2026-09-02T00:00:00Z',
+            },
+            'meta': {'source': 'db'},
+            'error': null,
+          })),
+    );
+
+    final document = (await client.getTravelPreferences()).data;
+
+    expect(document?.revision, 3);
+    expect(document?.preferences['version'], 1);
+    expect(document?.updatedAt, '2026-09-02T00:00:00Z');
+  });
+
+  test('putTravelPreferences sends the optimistic revision and dynamic auth',
+      () async {
+    late RequestOptions captured;
+    final preferences = <String, dynamic>{
+      'version': 1,
+      'soft': <String, Object?>{},
+      'hard': <String, Object?>{},
+      'locale': <String, Object?>{},
+    };
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      accessTokenProvider: () async => 'preferences-token',
+      dio: _dio((request) async {
+        captured = request;
+        return _json({
+          'ok': true,
+          'data': {
+            'preferences': preferences,
+            'revision': 5,
+            'updated_at': '2026-09-02T00:00:00Z',
+          },
+          'meta': {'source': 'db'},
+          'error': null,
+        });
+      }),
+    );
+
+    final envelope = await client.putTravelPreferences(
+      expectedRevision: 4,
+      preferences: preferences,
+    );
+
+    expect(captured.method, 'PUT');
+    expect(captured.uri.path, '/api/v1/me/preferences');
+    expect(captured.data, {
+      'expected_revision': 4,
+      'preferences': preferences,
+    });
+    expect(_h(captured, 'authorization'), 'Bearer preferences-token');
+    expect(envelope.data?.revision, 5);
+  });
+
   test('deleteMe sends JSON confirmation and dynamic auth, accepting only 204',
       () async {
     late RequestOptions captured;

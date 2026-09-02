@@ -10,6 +10,8 @@ import 'package:lala_next_app/features/place/widgets/featured_place_header.dart'
 import 'package:lala_next_app/features/place/widgets/place_context_card.dart';
 import 'package:lala_next_app/features/place/widgets/public_data_proof_row.dart';
 import 'package:lala_next_app/features/place/widgets/signal_grid.dart';
+import 'package:lala_next_app/features/preferences/data/travel_preferences_store.dart';
+import 'package:lala_next_app/features/preferences/presentation/restaurant_communication_entry_card.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 import 'package:lala_next_app/shared/widgets/muted_sheet_card.dart';
 
@@ -34,6 +36,7 @@ class FeaturedPlacePanel extends StatelessWidget {
     required this.onToggleSavedPlace,
     required this.onAddToPlan,
     required this.onFetchAudio,
+    this.preferencesStore,
   });
 
   final LalaPlace? place;
@@ -54,6 +57,7 @@ class FeaturedPlacePanel extends StatelessWidget {
   final ValueChanged<String> onToggleSavedPlace;
   final VoidCallback onAddToPlan;
   final VoidCallback onFetchAudio;
+  final TravelPreferencesStore? preferencesStore;
 
   @override
   Widget build(BuildContext context) {
@@ -92,6 +96,13 @@ class FeaturedPlacePanel extends StatelessWidget {
           source: source,
           showEvidence: showEvidence,
         ),
+        if (currentPlace.category.toLowerCase() == 'restaurant') ...[
+          const SizedBox(height: 12),
+          RestaurantCommunicationEntryCard(
+            language: language,
+            store: preferencesStore,
+          ),
+        ],
         if (shouldShowEventInfo(currentPlace)) ...[
           const SizedBox(height: 12),
           EventInfoCard(place: currentPlace, language: language),

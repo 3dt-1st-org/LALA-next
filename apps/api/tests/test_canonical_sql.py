@@ -24,6 +24,7 @@ EXPECTED_CANONICAL_MIGRATION_ORDER = (
     "062_review_ingestion_governance.sql",
     "063_local_signals_contract.sql",
     "064_planning_action_tables.sql",
+    "065_user_travel_preferences.sql",
 )
 
 
@@ -61,7 +62,7 @@ def test_load_canonical_sql_plan_is_safe_and_ordered():
     assert plan.ok is True
     assert tuple(item.name for item in plan.files) == EXPECTED_CANONICAL_MIGRATION_ORDER
     assert canonical_sql.CANONICAL_MIGRATION_ORDER == EXPECTED_CANONICAL_MIGRATION_ORDER
-    assert canonical_sql.CANONICAL_MIGRATION_LATEST == "064_planning_action_tables.sql"
+    assert canonical_sql.CANONICAL_MIGRATION_LATEST == "065_user_travel_preferences.sql"
     assert plan.to_dict()["statement_count"] >= 10
     assert all(len(item.sha256) == 64 for item in plan.files)
 
@@ -94,8 +95,8 @@ def test_canonical_migration_filename_contract_rejects_duplicate_or_invalid_pref
 
 
 def test_future_migration_does_not_silently_extend_the_merged_baseline():
-    future_names = EXPECTED_CANONICAL_MIGRATION_ORDER[:-1] + (
-        "064_rag_knowledge_retrieval_metadata.sql",
+    future_names = EXPECTED_CANONICAL_MIGRATION_ORDER + (
+        "066_rag_knowledge_retrieval_metadata.sql",
     )
 
     with pytest.raises(ValueError, match="baseline drifted"):
@@ -158,7 +159,7 @@ def test_apply_canonical_sql_cli_defaults_to_plan_json(capsys):
     assert exit_code == 0
     assert output["ok"] is True
     assert output["mode"] == "plan"
-    assert output["plan"]["file_count"] == 14
+    assert output["plan"]["file_count"] == len(EXPECTED_CANONICAL_MIGRATION_ORDER)
     assert "result" not in output
 
 

@@ -111,6 +111,47 @@ class LalaApiClient {
     );
   }
 
+  Future<LalaEnvelope<LalaTravelPreferencesDocument?>> getTravelPreferences({
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'GET',
+      '/api/v1/me/preferences',
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+    );
+    return _envelopeFromResponse<LalaTravelPreferencesDocument?>(
+      resp,
+      parseData: (value) => value == null
+          ? null
+          : LalaTravelPreferencesDocument.fromJsonObject(value),
+    );
+  }
+
+  Future<LalaEnvelope<LalaTravelPreferencesDocument>> putTravelPreferences({
+    required int expectedRevision,
+    required Map<String, dynamic> preferences,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'PUT',
+      '/api/v1/me/preferences',
+      body: {
+        'expected_revision': expectedRevision,
+        'preferences': preferences,
+      },
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+      contentType: 'application/json',
+    );
+    return _envelopeFromResponse<LalaTravelPreferencesDocument>(
+      resp,
+      parseData: LalaTravelPreferencesDocument.fromJsonObject,
+    );
+  }
+
   Future<void> deleteMe({
     required String confirmation,
     String? requestId,
@@ -1131,6 +1172,43 @@ class LalaMe {
       userId: userId,
       createdAt: createdAt,
       authenticated: authenticated,
+    );
+  }
+}
+
+class LalaTravelPreferencesDocument {
+  const LalaTravelPreferencesDocument({
+    required this.preferences,
+    required this.revision,
+    required this.updatedAt,
+  });
+
+  final Map<String, dynamic> preferences;
+  final int revision;
+  final String updatedAt;
+
+  static LalaTravelPreferencesDocument fromJsonObject(Object? value) {
+    if (value is! Map) {
+      throw const FormatException('Expected travel-preferences data object.');
+    }
+    return LalaTravelPreferencesDocument.fromJson(
+      value.map((key, value) => MapEntry('$key', value)),
+    );
+  }
+
+  factory LalaTravelPreferencesDocument.fromJson(Map<String, dynamic> json) {
+    final preferences = json['preferences'];
+    final revision = json['revision'];
+    final updatedAt = json['updated_at'];
+    if (preferences is! Map || revision is! int || updatedAt is! String) {
+      throw const FormatException(
+        'Expected preferences, revision, and updated_at fields.',
+      );
+    }
+    return LalaTravelPreferencesDocument(
+      preferences: preferences.map((key, value) => MapEntry('$key', value)),
+      revision: revision,
+      updatedAt: updatedAt,
     );
   }
 }

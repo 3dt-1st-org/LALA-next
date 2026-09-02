@@ -135,6 +135,7 @@ class _TravelPreferencesPageState extends State<TravelPreferencesPage> {
   TravelPreferences _saved = const TravelPreferences();
   bool _loading = true;
   bool _saving = false;
+  bool _syncing = false;
   bool _allowPop = false;
 
   bool get _dirty => _draft != _saved;
@@ -143,7 +144,25 @@ class _TravelPreferencesPageState extends State<TravelPreferencesPage> {
   void initState() {
     super.initState();
     _store = widget.store ?? TravelPreferencesStore.instance;
+    _store.addListener(_handleStoreChange);
     _load();
+  }
+
+  @override
+  void dispose() {
+    _store.removeListener(_handleStoreChange);
+    super.dispose();
+  }
+
+  void _handleStoreChange() {
+    if (!mounted) return;
+    final updateEditor = !_dirty;
+    setState(() {
+      if (updateEditor) {
+        _draft = _store.value;
+        _saved = _store.value;
+      }
+    });
   }
 
   Future<void> _load() async {
@@ -163,17 +182,27 @@ class _TravelPreferencesPageState extends State<TravelPreferencesPage> {
       await _store.save(_draft);
       if (!mounted) return;
       setState(() => _saved = _draft);
+      final synced = _store.syncStatus == TravelPreferencesSyncStatus.synced;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            _text(
-              widget.language,
-              ko: '이 기기에 여행 취향을 저장했어요.',
-              en: 'Travel preferences saved on this device.',
-              ja: '旅行の好みをこの端末に保存しました。',
-              zhHans: '旅行偏好已保存在此设备上。',
-              zhHant: '旅行偏好已儲存在此裝置上。',
-            ),
+            synced
+                ? _text(
+                    widget.language,
+                    ko: '계정과 이 기기에 여행 취향을 저장했어요.',
+                    en: 'Travel preferences saved to your account and device.',
+                    ja: '旅行の好みをアカウントと端末に保存しました。',
+                    zhHans: '旅行偏好已保存到账号和此设备。',
+                    zhHant: '旅行偏好已儲存到帳號和此裝置。',
+                  )
+                : _text(
+                    widget.language,
+                    ko: '이 기기에 여행 취향을 저장했어요.',
+                    en: 'Travel preferences saved on this device.',
+                    ja: '旅行の好みをこの端末に保存しました。',
+                    zhHans: '旅行偏好已保存在此设备上。',
+                    zhHant: '旅行偏好已儲存在此裝置上。',
+                  ),
           ),
         ),
       );
@@ -195,6 +224,21 @@ class _TravelPreferencesPageState extends State<TravelPreferencesPage> {
       );
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _runSyncAction(Future<void> Function() action) async {
+    if (_syncing || _dirty) return;
+    setState(() => _syncing = true);
+    try {
+      await action();
+      if (!mounted) return;
+      setState(() {
+        _draft = _store.value;
+        _saved = _store.value;
+      });
+    } finally {
+      if (mounted) setState(() => _syncing = false);
     }
   }
 
@@ -346,6 +390,18 @@ class _TravelPreferencesPageState extends State<TravelPreferencesPage> {
                       color: LalaVisualColors.muted,
                       fontWeight: FontWeight.w700,
                     ),
+                  ),
+                  const SizedBox(height: 16),
+                  _AccountSyncCard(
+                    status: _store.syncStatus,
+                    language: widget.language,
+                    busy: _syncing,
+                    hasUnsavedChanges: _dirty,
+                    onRetry: () => _runSyncAction(_store.retryAccountSync),
+                    onUseAccount: () =>
+                        _runSyncAction(_store.useAccountPreferences),
+                    onUseDevice: () =>
+                        _runSyncAction(_store.saveDevicePreferencesToAccount),
                   ),
                   const SizedBox(height: 24),
                   _SectionTitle(
@@ -647,18 +703,6 @@ class _TravelPreferencesPageState extends State<TravelPreferencesPage> {
                           ),
                         ),
                       ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  _InfoNotice(
-                    icon: Icons.phonelink_lock_outlined,
-                    text: _text(
-                      widget.language,
-                      ko: '지금은 이 기기에만 저장돼요. 계정 동기화는 준비가 끝난 뒤 별도로 안내할게요.',
-                      en: 'Saved on this device for now. Account sync will be offered separately when ready.',
-                      ja: '現在はこの端末にのみ保存されます。アカウント同期は準備後に別途ご案内します。',
-                      zhHans: '目前仅保存在此设备上。账户同步准备好后会另行提示。',
-                      zhHant: '目前僅儲存在此裝置上。帳戶同步準備好後會另行提示。',
                     ),
                   ),
                 ],
@@ -2380,6 +2424,286 @@ class _InterestChip extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
         side: BorderSide(color: selected ? color : LalaVisualColors.line),
+      ),
+    );
+  }
+}
+
+class _AccountSyncCard extends StatelessWidget {
+  const _AccountSyncCard({
+    required this.status,
+    required this.language,
+    required this.busy,
+    required this.hasUnsavedChanges,
+    required this.onRetry,
+    required this.onUseAccount,
+    required this.onUseDevice,
+  });
+
+  final TravelPreferencesSyncStatus status;
+  final String language;
+  final bool busy;
+  final bool hasUnsavedChanges;
+  final VoidCallback onRetry;
+  final VoidCallback onUseAccount;
+  final VoidCallback onUseDevice;
+
+  @override
+  Widget build(BuildContext context) {
+    final (icon, accent, background, title, body) = switch (status) {
+      TravelPreferencesSyncStatus.localOnly => (
+        Icons.phone_iphone_outlined,
+        LalaVisualColors.muted,
+        const Color(0xFFF4F6F8),
+        _text(
+          language,
+          ko: '이 기기에 안전하게 저장',
+          en: 'Saved safely on this device',
+          ja: 'この端末に安全に保存',
+          zhHans: '安全保存在此设备',
+          zhHant: '安全儲存在此裝置',
+        ),
+        _text(
+          language,
+          ko: '로그인하면 여러 기기에서 같은 취향을 사용할 수 있어요.',
+          en: 'Sign in to use the same preferences across devices.',
+          ja: 'ログインすると複数の端末で同じ設定を使えます。',
+          zhHans: '登录后可在多台设备使用相同偏好。',
+          zhHant: '登入後可在多台裝置使用相同偏好。',
+        ),
+      ),
+      TravelPreferencesSyncStatus.checking => (
+        Icons.sync,
+        LalaVisualColors.primaryBlue,
+        const Color(0xFFEAF3FF),
+        _text(
+          language,
+          ko: '계정 취향 확인 중',
+          en: 'Checking account preferences',
+          ja: 'アカウント設定を確認中',
+          zhHans: '正在检查账号偏好',
+          zhHant: '正在檢查帳號偏好',
+        ),
+        _text(
+          language,
+          ko: '기기 설정은 그대로 유지돼요.',
+          en: 'Your device settings remain available.',
+          ja: '端末の設定はそのまま保持されます。',
+          zhHans: '设备设置会保持不变。',
+          zhHant: '裝置設定會保持不變。',
+        ),
+      ),
+      TravelPreferencesSyncStatus.serverEmpty => (
+        Icons.cloud_upload_outlined,
+        const Color(0xFF148467),
+        const Color(0xFFEAF8F3),
+        _text(
+          language,
+          ko: '계정에 저장할 준비가 됐어요',
+          en: 'Ready to save to your account',
+          ja: 'アカウントに保存できます',
+          zhHans: '可保存到账号',
+          zhHant: '可儲存到帳號',
+        ),
+        _text(
+          language,
+          ko: '현재 기기의 취향을 계정 기본값으로 저장할까요?',
+          en: 'Save this device\'s preferences as your account defaults?',
+          ja: 'この端末の設定をアカウントの既定値にしますか？',
+          zhHans: '要将此设备的偏好保存为账号默认值吗？',
+          zhHant: '要將此裝置的偏好儲存為帳號預設值嗎？',
+        ),
+      ),
+      TravelPreferencesSyncStatus.synced => (
+        Icons.cloud_done_outlined,
+        const Color(0xFF148467),
+        const Color(0xFFEAF8F3),
+        _text(
+          language,
+          ko: '계정과 동기화됨',
+          en: 'Synced with your account',
+          ja: 'アカウントと同期済み',
+          zhHans: '已与账号同步',
+          zhHant: '已與帳號同步',
+        ),
+        _text(
+          language,
+          ko: '저장하면 계정과 이 기기에 함께 반영돼요.',
+          en: 'Saving updates both your account and this device.',
+          ja: '保存するとアカウントと端末の両方に反映されます。',
+          zhHans: '保存后会同时更新账号和此设备。',
+          zhHant: '儲存後會同時更新帳號和此裝置。',
+        ),
+      ),
+      TravelPreferencesSyncStatus.conflict => (
+        Icons.compare_arrows,
+        const Color(0xFFB45309),
+        const Color(0xFFFFF7E8),
+        _text(
+          language,
+          ko: '기기와 계정 취향이 달라요',
+          en: 'Device and account preferences differ',
+          ja: '端末とアカウントの設定が異なります',
+          zhHans: '设备与账号偏好不同',
+          zhHant: '裝置與帳號偏好不同',
+        ),
+        hasUnsavedChanges
+            ? _text(
+                language,
+                ko: '편집 중인 내용을 먼저 저장하거나 취소한 뒤 기준을 선택해 주세요.',
+                en: 'Save or discard your edits before choosing which copy to keep.',
+                ja: '編集中の内容を保存または破棄してから選択してください。',
+                zhHans: '请先保存或放弃编辑，再选择要保留的版本。',
+                zhHant: '請先儲存或放棄編輯，再選擇要保留的版本。',
+              )
+            : _text(
+                language,
+                ko: '덮어쓰지 않고 어떤 값을 유지할지 직접 선택해요.',
+                en: 'Choose which copy to keep; nothing is overwritten automatically.',
+                ja: '自動で上書きせず、残す設定を選べます。',
+                zhHans: '不会自动覆盖，请选择要保留的版本。',
+                zhHant: '不會自動覆蓋，請選擇要保留的版本。',
+              ),
+      ),
+      TravelPreferencesSyncStatus.error => (
+        Icons.cloud_off_outlined,
+        const Color(0xFFB45309),
+        const Color(0xFFFFF7E8),
+        _text(
+          language,
+          ko: '계정 동기화를 확인해 주세요',
+          en: 'Account sync needs attention',
+          ja: 'アカウント同期を確認してください',
+          zhHans: '请检查账号同步',
+          zhHant: '請檢查帳號同步',
+        ),
+        _text(
+          language,
+          ko: '기기 저장은 유지돼요. 연결이 돌아오면 다시 확인할 수 있어요.',
+          en: 'Device storage is safe. Retry when the connection is available.',
+          ja: '端末の設定は保持されています。接続後に再試行できます。',
+          zhHans: '设备设置仍会保留，连接恢复后可重试。',
+          zhHant: '裝置設定仍會保留，連線恢復後可重試。',
+        ),
+      ),
+    };
+
+    return Container(
+      key: const ValueKey('travel-preferences-sync-card'),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(LalaVisualTokens.controlRadius),
+        border: Border.all(color: accent.withValues(alpha: 0.28)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: accent, size: 22),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: LalaVisualColors.ink,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  body,
+                  style: const TextStyle(
+                    color: LalaVisualColors.muted,
+                    fontSize: 12,
+                    height: 1.35,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (status == TravelPreferencesSyncStatus.serverEmpty) ...[
+                  const SizedBox(height: 10),
+                  FilledButton.icon(
+                    key: const ValueKey('save-device-preferences-to-account'),
+                    onPressed: busy || hasUnsavedChanges ? null : onUseDevice,
+                    icon: const Icon(Icons.cloud_upload_outlined, size: 18),
+                    label: Text(
+                      _text(
+                        language,
+                        ko: '계정에 저장',
+                        en: 'Save to account',
+                        ja: 'アカウントに保存',
+                        zhHans: '保存到账号',
+                        zhHant: '儲存到帳號',
+                      ),
+                    ),
+                  ),
+                ],
+                if (status == TravelPreferencesSyncStatus.conflict) ...[
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      OutlinedButton(
+                        key: const ValueKey('use-account-preferences'),
+                        onPressed: busy || hasUnsavedChanges
+                            ? null
+                            : onUseAccount,
+                        child: Text(
+                          _text(
+                            language,
+                            ko: '계정 값 사용',
+                            en: 'Use account',
+                            ja: 'アカウントを使用',
+                            zhHans: '使用账号设置',
+                            zhHant: '使用帳號設定',
+                          ),
+                        ),
+                      ),
+                      FilledButton(
+                        key: const ValueKey('use-device-preferences'),
+                        onPressed: busy || hasUnsavedChanges
+                            ? null
+                            : onUseDevice,
+                        child: Text(
+                          _text(
+                            language,
+                            ko: '이 기기 값 사용',
+                            en: 'Use this device',
+                            ja: 'この端末を使用',
+                            zhHans: '使用此设备设置',
+                            zhHant: '使用此裝置設定',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                if (status == TravelPreferencesSyncStatus.error) ...[
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    key: const ValueKey('retry-preferences-sync'),
+                    onPressed: busy || hasUnsavedChanges ? null : onRetry,
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: Text(
+                      _text(
+                        language,
+                        ko: '다시 확인',
+                        en: 'Retry',
+                        ja: '再試行',
+                        zhHans: '重试',
+                        zhHant: '重試',
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
