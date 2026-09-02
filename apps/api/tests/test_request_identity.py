@@ -38,18 +38,31 @@ def test_logto_settings_are_canonical_and_derive_jwt_validation_values(monkeypat
     assert is_oauth_jwt_validation_configured(settings) is True
 
 
+def test_logto_authoritative_settings_do_not_inherit_legacy_required_scopes(monkeypatch):
+    monkeypatch.setenv("LOGTO_ENDPOINT", LOGTO_ENDPOINT)
+    monkeypatch.setenv("LOGTO_API_AUDIENCE", LOGTO_API_AUDIENCE)
+    monkeypatch.setenv("OAUTH_REQUIRED_SCOPES", "access_as_user")
+
+    settings = Settings.from_env()
+
+    assert settings.oauth_required_scopes == ()
+    assert is_oauth_jwt_validation_configured(settings) is True
+
+
 def test_unsafe_logto_endpoint_preserves_legacy_oauth_validation_settings(monkeypatch):
     monkeypatch.setenv("LOGTO_ENDPOINT", "http://unsafe-logto.example")
     monkeypatch.setenv("LOGTO_API_AUDIENCE", LOGTO_API_AUDIENCE)
     monkeypatch.setenv("OAUTH_ISSUER", "https://legacy.example/issuer")
     monkeypatch.setenv("OAUTH_AUDIENCE", "legacy-audience")
     monkeypatch.setenv("OAUTH_JWKS_URL", "https://legacy.example/jwks")
+    monkeypatch.setenv("OAUTH_REQUIRED_SCOPES", "access_as_user")
 
     settings = Settings.from_env()
 
     assert settings.oauth_issuer == "https://legacy.example/issuer"
     assert settings.oauth_audience == "legacy-audience"
     assert settings.oauth_jwks_url == "https://legacy.example/jwks"
+    assert settings.oauth_required_scopes == ("access_as_user",)
 
 
 def test_missing_logto_audience_preserves_legacy_oauth_validation_settings(monkeypatch):
@@ -58,12 +71,14 @@ def test_missing_logto_audience_preserves_legacy_oauth_validation_settings(monke
     monkeypatch.setenv("OAUTH_ISSUER", "https://legacy.example/issuer")
     monkeypatch.setenv("OAUTH_AUDIENCE", "legacy-audience")
     monkeypatch.setenv("OAUTH_JWKS_URL", "https://legacy.example/jwks")
+    monkeypatch.setenv("OAUTH_REQUIRED_SCOPES", "access_as_user")
 
     settings = Settings.from_env()
 
     assert settings.oauth_issuer == "https://legacy.example/issuer"
     assert settings.oauth_audience == "legacy-audience"
     assert settings.oauth_jwks_url == "https://legacy.example/jwks"
+    assert settings.oauth_required_scopes == ("access_as_user",)
 
 
 @pytest.mark.parametrize(
@@ -223,10 +238,13 @@ def test_oauth_validation_does_not_require_scopes_when_none_are_configured(clien
     assert response.json()["ok"] is True
 
 
-def test_oauth_scope_claim_is_enforced_when_configured(client, monkeypatch):
+def test_logto_validation_ignores_legacy_required_scopes(client, monkeypatch):
+    # Regression: OAUTH_REQUIRED_SCOPES is a legacy-provider (Entra) setting.
+    # Inheriting it on the Logto-derived path rejected every Logto-issued token
+    # before issuer/audience/expiry could ever pass, surfacing as /me 401s.
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     _configure_logto(monkeypatch)
-    monkeypatch.setenv("OAUTH_REQUIRED_SCOPES", "lala.read")
+    monkeypatch.setenv("OAUTH_REQUIRED_SCOPES", "access_as_user")
     monkeypatch.setattr(
         "apps.api.app.core.jwt_auth._get_signing_key",
         lambda jwks_url, token: key.public_key(),
@@ -234,11 +252,23 @@ def test_oauth_scope_claim_is_enforced_when_configured(client, monkeypatch):
 
     response = client.get(
         "/api/v1/places?lat=37.2&lng=127.0",
-        headers={"Authorization": f"Bearer {_signed_token(key, scope='lala.read')}"},
+        headers={"Authorization": f"Bearer {_signed_token(key, scope='email')}"},
     )
 
     assert response.status_code == 200
     assert response.json()["ok"] is True
+
+
+def test_readyz_reports_scopes_skipped_on_logto_authoritative_path(client, monkeypatch):
+    _configure_logto(monkeypatch)
+    monkeypatch.setenv("OAUTH_REQUIRED_SCOPES", "access_as_user")
+
+    response = client.get("/readyz")
+
+    assert response.status_code == 200
+    checks = response.json()["data"]["checks"]
+    assert checks["jwt_validation"] == "configured"
+    assert checks["oauth_required_scopes"] == "skipped"
 
 
 def _configure_logto(monkeypatch) -> None:

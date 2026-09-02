@@ -177,8 +177,16 @@ class Settings:
                 else "" or _env_or_secret("OAUTH_JWKS_URL", "oauth-jwks-url", key_vault_url)
             ),
             oauth_client_id=_env_or_secret("OAUTH_CLIENT_ID", "oauth-client-id", key_vault_url),
-            oauth_required_scopes=_csv_value(
-                _env_or_secret("OAUTH_REQUIRED_SCOPES", "oauth-required-scopes", key_vault_url)
+            # Legacy Entra delegated scopes (e.g. access_as_user) are not Logto
+            # API-resource scopes; requiring them on the authoritative Logto path
+            # rejects every Logto-issued token. They only gate the legacy OAUTH_*
+            # fallback below.
+            oauth_required_scopes=(
+                ()
+                if logto_validation_configured
+                else _csv_value(
+                    _env_or_secret("OAUTH_REQUIRED_SCOPES", "oauth-required-scopes", key_vault_url)
+                )
             ),
             kakao_rest_api_key=_env_or_secret(
                 "KAKAO_REST_API_KEY", "kakao-rest-api-key", key_vault_url
