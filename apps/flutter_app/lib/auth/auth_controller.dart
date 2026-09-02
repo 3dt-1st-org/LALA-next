@@ -7,6 +7,27 @@ enum LalaAuthStatus { disabled, signedOut, busy, signedIn, error }
 
 enum LalaAccountSyncStatus { idle, syncing, ready, error }
 
+/// Safe account-sync failure classes. Only these coarse categories are
+/// distinguishable outside the controller; raw error text, status details,
+/// tokens, and request ids never cross this boundary.
+enum LalaAccountSyncErrorCategory {
+  /// The server rejected the session (401): sign in again.
+  staleSession,
+
+  /// The LALA API is temporarily unreachable or failing: retry.
+  serviceUnavailable,
+
+  /// The account request timed out: retry.
+  timeout,
+
+  /// The account link itself is misconfigured for this build: the guest
+  /// experience stays usable; support is needed.
+  configuration,
+
+  /// Anything else: retry with the generic safe copy.
+  unknown,
+}
+
 @immutable
 class LalaAuthProfile {
   const LalaAuthProfile({
@@ -30,6 +51,7 @@ class LalaAuthState {
     this.profile,
     this.me,
     this.accountSyncStatus = LalaAccountSyncStatus.idle,
+    this.accountSyncErrorCategory,
     this.errorMessage,
   });
 
@@ -54,6 +76,7 @@ class LalaAuthState {
     LalaAuthProfile? profile,
     LalaMe? me,
     required LalaAccountSyncStatus accountSyncStatus,
+    LalaAccountSyncErrorCategory? accountSyncErrorCategory,
     String? errorMessage,
   }) : this(
          status: LalaAuthStatus.signedIn,
@@ -61,6 +84,7 @@ class LalaAuthState {
          profile: profile,
          me: me,
          accountSyncStatus: accountSyncStatus,
+         accountSyncErrorCategory: accountSyncErrorCategory,
          errorMessage: errorMessage,
        );
 
@@ -69,6 +93,7 @@ class LalaAuthState {
     LalaAuthProfile? profile,
     LalaMe? me,
     LalaAccountSyncStatus accountSyncStatus = LalaAccountSyncStatus.idle,
+    LalaAccountSyncErrorCategory? accountSyncErrorCategory,
     required String message,
   }) : this(
          status: LalaAuthStatus.error,
@@ -76,6 +101,7 @@ class LalaAuthState {
          profile: profile,
          me: me,
          accountSyncStatus: accountSyncStatus,
+         accountSyncErrorCategory: accountSyncErrorCategory,
          errorMessage: message,
        );
 
@@ -84,6 +110,7 @@ class LalaAuthState {
   final LalaAuthProfile? profile;
   final LalaMe? me;
   final LalaAccountSyncStatus accountSyncStatus;
+  final LalaAccountSyncErrorCategory? accountSyncErrorCategory;
   final String? errorMessage;
 }
 
@@ -111,6 +138,20 @@ class LalaAuthController extends ChangeNotifier {
       'We could not complete that account request. Please try again.';
   static const String safeAccountSyncErrorMessage =
       'We could not connect your LALA account. Please try again.';
+  static const String sessionExpiredMessage =
+      'Your session has expired. Please sign in again.';
+  static const String accountLinkUnavailableMessage =
+      'Account linking is unavailable, but you can keep using LALA as a guest.';
+
+  /// Safe English fallback copy for a sync failure category. Localized UI
+  /// renders its own per-category copy from [LalaAccountSyncErrorCategory].
+  static String safeAccountSyncMessageFor(LalaAccountSyncErrorCategory category) {
+    return switch (category) {
+      LalaAccountSyncErrorCategory.staleSession => sessionExpiredMessage,
+      LalaAccountSyncErrorCategory.configuration => accountLinkUnavailableMessage,
+      _ => safeAccountSyncErrorMessage,
+    };
+  }
 
   final LalaAuthConfig config;
   final LalaAuthGateway _gateway;
@@ -305,16 +346,18 @@ class LalaAuthController extends ChangeNotifier {
           accountSyncStatus: LalaAccountSyncStatus.ready,
         ),
       );
-    } on Object {
+    } on Object catch (error) {
       if (!_isCurrentSession(revision)) {
         return;
       }
+      final category = classifyAccountSyncError(error);
       _setState(
         LalaAuthState.signedIn(
           profile: selectedProfile,
           me: previousMe,
           accountSyncStatus: LalaAccountSyncStatus.error,
-          errorMessage: safeAccountSyncErrorMessage,
+          accountSyncErrorCategory: category,
+          errorMessage: safeAccountSyncMessageFor(category),
         ),
       );
     }
@@ -357,4 +400,27 @@ class LalaAuthController extends ChangeNotifier {
     _state = state;
     notifyListeners();
   }
+}
+
+/// Classifies an account-API failure into a safe category. Reads only the
+/// transport's coarse status/code/retryable facts; message text and request
+/// ids are deliberately ignored so they can never reach a user surface.
+LalaAccountSyncErrorCategory classifyAccountSyncError(Object error) {
+  if (error is LalaApiException) {
+    if (error.statusCode == 401) {
+      return LalaAccountSyncErrorCategory.staleSession;
+    }
+    if (error.code == 'REQUEST_TIMEOUT') {
+      return LalaAccountSyncErrorCategory.timeout;
+    }
+    if (error.statusCode >= 500 || error.statusCode == 0 || error.retryable) {
+      return LalaAccountSyncErrorCategory.serviceUnavailable;
+    }
+  }
+  // StateError/FormatException come from the client wrapper's own contract
+  // guards (disabled adapter, malformed account response), not the network.
+  if (error is StateError || error is FormatException) {
+    return LalaAccountSyncErrorCategory.configuration;
+  }
+  return LalaAccountSyncErrorCategory.unknown;
 }

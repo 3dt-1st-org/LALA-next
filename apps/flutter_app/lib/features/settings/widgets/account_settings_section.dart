@@ -214,7 +214,10 @@ class AccountSettingsSection extends StatelessWidget {
         ),
         if (state.accountSyncStatus == LalaAccountSyncStatus.error) ...[
           const SizedBox(height: 8),
-          AccountErrorText(language: language),
+          AccountErrorText(
+            language: language,
+            category: state.accountSyncErrorCategory,
+          ),
           TextButton.icon(
             key: const ValueKey('account-sync-retry'),
             onPressed: controller.retryAccountSync,
@@ -354,22 +357,44 @@ class AccountStatusRow extends StatelessWidget {
 }
 
 /// 계정 에러 안내 텍스트(C3 추출 — main.dart 의 _AccountErrorText).
+/// 동기화 실패는 안전한 카테고리별 문구로만 구분한다(세션 만료/일시 장애/설정 오류).
 class AccountErrorText extends StatelessWidget {
-  const AccountErrorText({super.key, required this.language});
+  const AccountErrorText({super.key, required this.language, this.category});
 
   final String language;
+  final LalaAccountSyncErrorCategory? category;
 
   @override
   Widget build(BuildContext context) {
+    final copy = switch (category) {
+      LalaAccountSyncErrorCategory.staleSession => lalaCopyMulti(
+        language,
+        ko: '세션이 만료되었어요. 다시 로그인해 주세요.',
+        en: 'Your session has expired. Please sign in again.',
+        ja: 'セッションの有効期限が切れました。再度ログインしてください。',
+        zhHans: '会话已过期，请重新登录。',
+        zhHant: '工作階段已過期，請重新登入。',
+      ),
+      LalaAccountSyncErrorCategory.configuration => lalaCopyMulti(
+        language,
+        ko: '계정 연결 설정을 사용할 수 없어요. 지도·검색·일정은 계속 이용할 수 있어요.',
+        en:
+            'Account linking is unavailable in this build. Maps, search, and plans keep working.',
+        ja: 'アカウント連携の設定が利用できません。地図・検索・日程は引き続き利用できます。',
+        zhHans: '账户关联配置不可用。地图、搜索和行程仍可继续使用。',
+        zhHant: '帳戶連結設定無法使用。地圖、搜尋和行程仍可繼續使用。',
+      ),
+      _ => lalaCopyMulti(
+        language,
+        ko: '계정 요청을 완료하지 못했어요. 다시 시도해 주세요.',
+        en: 'We could not complete the account request. Please try again.',
+        ja: 'アカウントリクエストを完了できませんでした。もう一度お試しください。',
+        zhHans: '无法完成账户请求，请重试。',
+        zhHant: '無法完成帳戶請求，請重試。',
+      ),
+    };
     return Text(
-      lalaCopyMulti(
-          language,
-          ko: '계정 요청을 완료하지 못했어요. 다시 시도해 주세요.',
-          en: 'We could not complete the account request. Please try again.',
-          ja: 'アカウントリクエストを完了できませんでした。もう一度お試しください。',
-          zhHans: '无法完成账户请求，请重试。',
-          zhHant: '無法完成帳戶請求，請重試。',
-        ),
+      copy,
       style: const TextStyle(
         color: Color(0xFFB42318),
         fontSize: 12,

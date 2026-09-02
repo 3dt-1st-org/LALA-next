@@ -47,6 +47,12 @@ HTTPS `LOGTO_ENDPOINT` and validates the `LOGTO_API_AUDIENCE`. The equivalent
 legacy configuration is the atomic `OAUTH_ISSUER`, `OAUTH_AUDIENCE`, and
 `OAUTH_JWKS_URL` tuple. OAuth client ID and required scopes are optional and do
 not determine whether resource-server JWT validation is configured.
+`OAUTH_REQUIRED_SCOPES` is a legacy-provider setting: it is enforced only on the
+legacy `OAUTH_*` fallback path. When the Logto endpoint and API audience derive
+the issuer, audience, and JWKS URL, required-scope enforcement is skipped —
+Logto API-resource tokens are validated by signature, issuer, audience, and
+expiry instead, because the legacy delegated-scope names (for example
+`access_as_user`) do not exist as Logto API-resource scopes.
 
 Account routes are Bearer-only OAuth operations:
 

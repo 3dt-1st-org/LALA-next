@@ -247,6 +247,113 @@ void main() {
       expect(controller.state.status, LalaAuthStatus.signedOut);
       expect(controller.state.me, isNull);
     });
+
+    group('account sync error categories', () {
+      test('classifier maps transport facts to safe categories', () {
+        const staleSession = LalaApiException(
+          code: 'UNAUTHORIZED',
+          message: 'x',
+          statusCode: 401,
+          retryable: false,
+        );
+        const timeout = LalaApiException(
+          code: 'REQUEST_TIMEOUT',
+          message: 'x',
+          statusCode: 0,
+          retryable: true,
+        );
+        const unavailable = LalaApiException(
+          code: 'CLIENT_AUTH_UNAVAILABLE',
+          message: 'x',
+          statusCode: 503,
+          retryable: true,
+        );
+        const network = LalaApiException(
+          code: 'NETWORK_ERROR',
+          message: 'x',
+          statusCode: 0,
+          retryable: false,
+        );
+
+        expect(classifyAccountSyncError(staleSession),
+            LalaAccountSyncErrorCategory.staleSession);
+        expect(
+          classifyAccountSyncError(timeout),
+          LalaAccountSyncErrorCategory.timeout,
+        );
+        expect(
+          classifyAccountSyncError(unavailable),
+          LalaAccountSyncErrorCategory.serviceUnavailable,
+        );
+        expect(
+          classifyAccountSyncError(network),
+          LalaAccountSyncErrorCategory.serviceUnavailable,
+        );
+        expect(
+          classifyAccountSyncError(StateError('disabled adapter')),
+          LalaAccountSyncErrorCategory.configuration,
+        );
+        expect(
+          classifyAccountSyncError(const FormatException('bad account body')),
+          LalaAccountSyncErrorCategory.configuration,
+        );
+        expect(
+          classifyAccountSyncError(Exception('anything else')),
+          LalaAccountSyncErrorCategory.unknown,
+        );
+      });
+
+      test('401 sync failure reports stale session without internals', () async {
+        final controller = LalaAuthController(
+          config: enabledConfig,
+          gateway: FakeAuthGateway(authenticated: true),
+          accountApi: FakeAccountApi(
+            getMeError: const LalaApiException(
+              code: 'UNAUTHORIZED',
+              message: 'jwt rejected for audience internal-detail',
+              statusCode: 401,
+              retryable: false,
+            ),
+          ),
+        );
+
+        await controller.initialize();
+
+        expect(controller.state.accountSyncStatus, LalaAccountSyncStatus.error);
+        expect(
+          controller.state.accountSyncErrorCategory,
+          LalaAccountSyncErrorCategory.staleSession,
+        );
+        expect(
+          controller.state.errorMessage,
+          LalaAuthController.sessionExpiredMessage,
+        );
+        expect(controller.state.errorMessage, isNot(contains('internal-detail')));
+      });
+
+      test('configuration sync failure keeps guest-usable wording', () async {
+        final controller = LalaAuthController(
+          config: enabledConfig,
+          gateway: FakeAuthGateway(authenticated: true),
+          accountApi: FakeAccountApi(
+            getMeError: StateError('private backend detail'),
+          ),
+        );
+
+        await controller.initialize();
+
+        expect(controller.state.accountSyncStatus, LalaAccountSyncStatus.error);
+        expect(
+          controller.state.accountSyncErrorCategory,
+          LalaAccountSyncErrorCategory.configuration,
+        );
+        expect(
+          controller.state.errorMessage,
+          LalaAuthController.accountLinkUnavailableMessage,
+        );
+        expect(controller.state.errorMessage, isNot(contains('private')));
+      });
+    });
   });
 }
 
@@ -317,9 +424,10 @@ class PendingAuthGateway implements LalaAuthGateway {
 }
 
 class FakeAccountApi implements LalaAccountApi {
-  FakeAccountApi({this.me, this.deleteError});
+  FakeAccountApi({this.me, this.getMeError, this.deleteError});
 
   final LalaMe? me;
+  final Object? getMeError;
   final Object? deleteError;
   int getMeCalls = 0;
   final List<String> deleteConfirmations = [];
@@ -327,6 +435,9 @@ class FakeAccountApi implements LalaAccountApi {
   @override
   Future<LalaMe> getMe() async {
     getMeCalls += 1;
+    if (getMeError != null) {
+      throw getMeError!;
+    }
     return me!;
   }
 
