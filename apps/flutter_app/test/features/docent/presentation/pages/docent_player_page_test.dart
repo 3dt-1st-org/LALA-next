@@ -6,6 +6,8 @@
 // - seek/진행바/시간 표시를 제공하지 않는다(플레이어 미지원 — §6.3).
 // - 단일 언어 스크립트만 전문으로 보여준다.
 // 가짜 백엔드/플레이어만 사용 — 네트워크·실 오디오 없음.
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -202,6 +204,175 @@ Future<DocentExperienceController> _readyController({
   );
   await controller.playPlace(place);
   return controller;
+}
+
+/// 준비 단계/게이트/실패를 테스트가 제어하는 백엔드(round2 §1 상태 매트릭스 검증).
+/// Completer 게이트로 실제 컨트롤러의 중간 단계를 그대로 멈춰 본다 —
+/// 가짜 성공 경로는 만들지 않는다.
+class _StepBackend implements LalaBackend {
+  _StepBackend({
+    this.speechEnabled = true,
+    this.readinessGate,
+    this.scriptGate,
+    this.audioGate,
+    this.emptyAudio = false,
+  });
+
+  bool speechEnabled;
+  Completer<void>? readinessGate;
+  Completer<void>? scriptGate;
+  Completer<void>? audioGate;
+  bool emptyAudio;
+
+  int readinessCalls = 0;
+
+  static const String scriptText = '행궁동 로컬 도슨트 스크립트입니다.';
+
+  @override
+  Future<LalaEnvelope<LalaReadiness>> getReadiness() async {
+    readinessCalls++;
+    final gate = readinessGate;
+    if (gate != null) {
+      await gate.future;
+    }
+    return LalaEnvelope<LalaReadiness>(
+      ok: true,
+      data: LalaReadiness(
+        status: 'ok',
+        checks: <String, String>{
+          'live_speech': speechEnabled ? 'enabled' : 'disabled',
+        },
+        mode: LalaRuntimeMode(
+          overall: 'ok',
+          data: 'db-backed',
+          ai: 'disabled',
+          speech: speechEnabled ? 'live-azure' : 'off',
+          worker: 'dry-run',
+        ),
+      ),
+      meta: const <String, dynamic>{'request_id': 'step-backend'},
+      error: null,
+      statusCode: 200,
+      requestId: 'step-backend',
+    );
+  }
+
+  @override
+  Future<LalaEnvelope<LalaDocentScript>> createDocentScript({
+    required LalaPlace place,
+    LalaWeather? weather,
+    String mode = 'brief',
+  }) async {
+    final gate = scriptGate;
+    if (gate != null) {
+      await gate.future;
+    }
+    return LalaEnvelope<LalaDocentScript>(
+      ok: true,
+      data: LalaDocentScript(
+        placeId: place.placeId,
+        category: place.category,
+        language: 'ko',
+        mode: mode,
+        script: scriptText,
+        source: 'rule_based_curation',
+        requestHash: 'b' * 64,
+        cacheKey: 'docent_script:step',
+        generatedAt: null,
+        groundingSources: const <String>[],
+      ),
+      meta: const <String, dynamic>{'request_id': 'step-backend'},
+      error: null,
+      statusCode: 200,
+      requestId: 'step-backend',
+    );
+  }
+
+  @override
+  Future<LalaAudioResponse> createDocentAudio({required String script}) async {
+    final gate = audioGate;
+    if (gate != null) {
+      await gate.future;
+    }
+    if (emptyAudio) {
+      return LalaAudioResponse(
+        bytes: Uint8List(0),
+        requestId: 'step-backend',
+        contentType: 'audio/mpeg',
+        requestHash: null,
+        cacheKey: null,
+      );
+    }
+    return LalaAudioResponse(
+      bytes: Uint8List.fromList(<int>[1, 2, 3, 4]),
+      requestId: 'step-backend',
+      contentType: 'audio/mpeg',
+      requestHash: null,
+      cacheKey: null,
+    );
+  }
+
+  @override
+  void close() {}
+
+  @override
+  Future<LalaEnvelope<Map<String, dynamic>>> getHealth() {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<LalaEnvelope<LalaPlacesResponse>> getPlaces() {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<LalaEnvelope<Map<String, dynamic>>> getLocalSignals({
+    String? region,
+    String? placeId,
+    String? kind,
+    String sort = 'recent',
+    String? cursor,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<LalaEnvelope<Map<String, dynamic>>> getLocalSignalAggregates({
+    int weeks = 4,
+    int limit = 20,
+    String? placeId,
+    String? category,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<LalaEnvelope<LalaWeather>> getWeather() {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<LalaEnvelope<LalaIntervention>> getIntervention() {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan() {
+    throw UnimplementedError();
+  }
+}
+
+DocentExperienceController _stepController({
+  required _StepBackend backend,
+  required _RecordingFakePlayer player,
+  String language = 'ko',
+}) {
+  return DocentExperienceController(
+    backendFactory: (_) => backend,
+    baseConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+    player: player,
+    languageReader: () => language,
+  );
 }
 
 void main() {
@@ -521,5 +692,186 @@ void main() {
     // 스크롤 후에도 오버플로우 예외는 없다.
     expect(tester.takeException(), isNull);
     expect(find.text('행궁동 로컬 도슨트 스크립트입니다.'), findsOneWidget);
+  });
+
+  testWidgets('준비 중에는 실제 3단계 캡션을 따라가고 재생 컨트롤은 비활성 이유를 알린다', (tester) async {
+    OnboardingState.selectLanguage('ko');
+    final backend = _StepBackend(
+      readinessGate: Completer<void>(),
+      scriptGate: Completer<void>(),
+      audioGate: Completer<void>(),
+    );
+    final player = _RecordingFakePlayer();
+    final controller = _stepController(backend: backend, player: player);
+    addTearDown(controller.dispose);
+    unawaited(controller.playPlace(_place()));
+    await tester.pump();
+
+    await tester.pumpWidget(wrapApp(DocentPlayerPage(controller: controller)));
+
+    // 1단계: readiness 확인 중 — 토글은 비활성이고 라벨이 단계를 설명한다.
+    expect(find.text('음성 사용 가능 여부 확인 중'), findsOneWidget);
+    final playIcon = find.byIcon(Icons.play_arrow_rounded);
+    IconButton playButton() => tester.widget<IconButton>(
+      find.ancestor(of: playIcon, matching: find.byType(IconButton)).first,
+    );
+    expect(playButton().onPressed, isNull);
+    expect(playButton().tooltip, '음성 사용 가능 여부 확인 중');
+
+    backend.readinessGate!.complete();
+    await tester.pump();
+    // 2단계: 스크립트 준비 중(스크립트 전 문은 아직 없다 — 만들어 두지 않는다).
+    expect(find.text('도슨트 스크립트 준비 중'), findsOneWidget);
+    expect(find.byKey(const ValueKey('docent-transcript-text')), findsNothing);
+
+    backend.scriptGate!.complete();
+    await tester.pump();
+    // 3단계: 음성 준비 중 — 실제 스크립트는 이미 읽을 수 있다(text-first).
+    expect(find.text('도슨트 음성 준비 중'), findsOneWidget);
+    expect(playButton().onPressed, isNull);
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('docent-transcript-text')),
+      120,
+    );
+    expect(find.text('행궁동 로컬 도슨트 스크립트입니다.'), findsOneWidget);
+
+    backend.audioGate!.complete();
+    await tester.pumpAndSettle();
+    // 준비 완료 → 실제 재생 유도(활성 play 컨트롤).
+    expect(controller.currentState.phase, DocentExperiencePhase.ready);
+    expect(playButton().onPressed, isNotNull);
+  });
+
+  testWidgets('음성 미활성은 unavailable 설명·재시도 CTA 만 보여준다(가짜 재생 금지)', (
+    tester,
+  ) async {
+    OnboardingState.selectLanguage('ko');
+    final backend = _StepBackend(speechEnabled: false);
+    final player = _RecordingFakePlayer();
+    final controller = _stepController(backend: backend, player: player);
+    await controller.playPlace(_place());
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(wrapApp(DocentPlayerPage(controller: controller)));
+    await tester.pumpAndSettle();
+
+    expect(controller.currentState.phase, DocentExperiencePhase.unavailable);
+    expect(find.text('음성 도슨트를 사용할 수 없어요'), findsOneWidget);
+    expect(find.text(docentVoiceUnavailableExplanation('ko')), findsOneWidget);
+    expect(find.byIcon(Icons.volume_off_outlined), findsOneWidget);
+    // play 유혹/빈 스크립트 섹션은 만들지 않는다 — 게이트 뒤엔 실제로 없다.
+    expect(find.byIcon(Icons.play_arrow_rounded), findsNothing);
+    expect(find.text('도슨트 스크립트'), findsNothing);
+
+    // 재시도 CTA 는 실제 readiness 재확인(명시적 사용자 행동)으로만 이어진다.
+    final retryButton = find.byKey(const ValueKey('docent-retry-button'));
+    await tester.scrollUntilVisible(retryButton, 120);
+    await tester.ensureVisible(retryButton);
+    await tester.pumpAndSettle();
+    expect(find.text('다시 시도'), findsOneWidget);
+    backend.speechEnabled = true;
+    await tester.tap(retryButton);
+    await tester.pumpAndSettle();
+
+    expect(backend.readinessCalls, 2);
+    expect(
+      controller.currentState.phase,
+      DocentExperiencePhase.ready,
+      reason: '재시도 후 게이트가 열려 있으면 실제 준비가 진행된다',
+    );
+  });
+
+  testWidgets('음성 준비 실패는 안전 문구·재시도와 함께 실제 스크립트를 계속 보여준다', (tester) async {
+    OnboardingState.selectLanguage('ko');
+    final backend = _StepBackend(emptyAudio: true);
+    final player = _RecordingFakePlayer();
+    final controller = _stepController(backend: backend, player: player);
+    await controller.playPlace(_place());
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(wrapApp(DocentPlayerPage(controller: controller)));
+    await tester.pumpAndSettle();
+
+    expect(controller.currentState.phase, DocentExperiencePhase.failed);
+    // 캡션은 safeMessage 단일 출처 — 원시 오류가 아니라 bounded 문구다.
+    expect(find.text(docentAudioFailureMessageLocalized('ko')), findsOneWidget);
+    expect(find.byIcon(Icons.error_outline_rounded), findsOneWidget);
+    final retryButton = find.byKey(const ValueKey('docent-retry-button'));
+    await tester.scrollUntilVisible(retryButton, 120);
+    expect(find.text('다시 시도'), findsOneWidget);
+    // 남은 실제 스크립트는 계속 읽을 수 있다.
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('docent-transcript-text')),
+      120,
+    );
+    expect(find.text('행궁동 로컬 도슨트 스크립트입니다.'), findsOneWidget);
+  });
+
+  testWidgets('200% 텍스트 스케일 실패 상태에서도 안전 문구·컨트롤이 잘리지 않는다', (tester) async {
+    OnboardingState.selectLanguage('ko');
+    final backend = _StepBackend(emptyAudio: true);
+    final player = _RecordingFakePlayer();
+    final controller = _stepController(backend: backend, player: player);
+    await controller.playPlace(_place());
+    addTearDown(controller.dispose);
+
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(2.0)),
+        child: wrapApp(DocentPlayerPage(controller: controller)),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    final message = find.text(docentAudioFailureMessageLocalized('ko'));
+    final retryButton = find.byKey(const ValueKey('docent-retry-button'));
+    await tester.scrollUntilVisible(retryButton, 120);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(message, findsOneWidget);
+    // 컨트롤 행이 캡션 아래로 내려가 있어 재시도 칩이 44dp 를 유지한다.
+    final retryChip = find
+        .ancestor(
+          of: find.byIcon(Icons.refresh_rounded),
+          matching: find.byType(OutlinedButton),
+        )
+        .first;
+    expect(tester.getSize(retryChip).height, greaterThanOrEqualTo(44));
+  });
+
+  test('방문객 4개 로케일의 도슨트 플레이어 문구에는 한글이 노출되지 않는다', () {
+    final hangul = RegExp('[가-힣]');
+    const visitorLocales = <String>['en', 'ja', 'zh-Hans', 'zh-Hant'];
+    for (final language in visitorLocales) {
+      for (final phase in DocentExperiencePhase.values) {
+        final label = docentExperiencePhaseLabel(phase, language);
+        if (phase == DocentExperiencePhase.idle) {
+          expect(label, isEmpty);
+          continue;
+        }
+        expect(label, isNotEmpty, reason: '$language $phase');
+        expect(hangul.hasMatch(label), isFalse, reason: '$language $phase');
+      }
+      final strings = <String>[
+        speechUnavailableMessage(language),
+        docentVoiceUnavailableExplanation(language),
+        docentRetryButtonLabel(language),
+        docentPlaySemanticLabel(language),
+        docentPauseSemanticLabel(language),
+        docentRetrySemanticLabel(language),
+        docentStopSemanticLabel(language),
+        docentPlayerPageTitle(language),
+        docentTranscriptSectionTitle(language),
+      ];
+      for (final value in strings) {
+        expect(value, isNotEmpty, reason: language);
+        expect(hangul.hasMatch(value), isFalse, reason: '$language: $value');
+      }
+    }
   });
 }
