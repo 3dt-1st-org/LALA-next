@@ -430,6 +430,178 @@ void main() {
     expect(opened.last.aggregate?.placeId, 'place-1');
     expect(opened.last.aggregateEnvelope?.available, isTrue);
   });
+
+  testWidgets(
+    'share entry is offered in loaded, aggregate-only, and empty states',
+    (tester) async {
+      // Loaded feed.
+      await tester.pumpWidget(
+        _app(_SignalsBackend.loaded(), onOpenDetail: (_) {}),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('local-signals-contribution-entry')),
+        findsOneWidget,
+      );
+
+      // Aggregate-only: empty public feed with governed aggregates present.
+      await tester.pumpWidget(
+        _app(
+          _SignalsBackend.loaded(
+            feed: _emptyFeed(),
+            aggregates: _aggregatesPayload(),
+          ),
+          onOpenDetail: (_) {},
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('local-signals-contribution-entry')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('local-signals-empty')), findsOneWidget);
+
+      // Honest empty feed without aggregates.
+      await tester.pumpWidget(
+        _app(_SignalsBackend.loaded(feed: _emptyFeed()), onOpenDetail: (_) {}),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('local-signals-contribution-entry')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'share entry stays hidden in disabled, error, loading, and dead-end cases',
+    (tester) async {
+      // Policy: the disabled/readiness flag is externally owned and off — no
+      // contribution invitation may appear there.
+      await tester.pumpWidget(_app(_SignalsBackend.disabled()));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('local-signals-disabled')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('local-signals-contribution-entry')),
+        findsNothing,
+      );
+
+      await tester.pumpWidget(_app(_SignalsBackend.error()));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('local-signals-contribution-entry')),
+        findsNothing,
+      );
+
+      final pending = _SignalsBackend.pending();
+      await tester.pumpWidget(_app(pending));
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('local-signals-contribution-entry')),
+        findsNothing,
+      );
+      pending.complete(_feed());
+      await tester.pumpAndSettle();
+
+      // No detail route wired → the button must not dead-end.
+      await tester.pumpWidget(_app(_SignalsBackend.loaded()));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('local-signals-contribution-entry')),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
+    'share entry routes a coarse-region contribute argument from S-31',
+    (tester) async {
+      final opened = <LocalSignalDetailArguments>[];
+      RegionContextStore.set(RegionContext.manual(_busanOption));
+      await tester.pumpWidget(
+        _app(_SignalsBackend.loaded(), onOpenDetail: opened.add),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('local-signals-share-experience')),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('local-signals-share-experience')),
+        warnIfMissed: false,
+      );
+      await tester.pumpAndSettle();
+
+      final arguments = opened.single;
+      expect(arguments.contribution, isTrue);
+      expect(arguments.signal, isNull);
+      expect(arguments.aggregate, isNull);
+      expect(arguments.contributeRegion?.code, 'busan-haeundae');
+      expect(arguments.contributeRegion?.label, '해운대구');
+      expect(arguments.contributePlace, isNull);
+    },
+  );
+
+  testWidgets('share entry without a manual region carries no region context', (
+    tester,
+  ) async {
+    final opened = <LocalSignalDetailArguments>[];
+    await tester.pumpWidget(
+      _app(_SignalsBackend.loaded(), onOpenDetail: opened.add),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('local-signals-share-experience')),
+    );
+    await tester.pumpAndSettle();
+
+    final arguments = opened.single;
+    expect(arguments.contribution, isTrue);
+    expect(arguments.contributeRegion, isNull);
+    expect(arguments.contributePlace, isNull);
+    // Without a manual region the entry copy stays sign-in honest and never
+    // invents a region context.
+    expect(find.textContaining('지역 맥락'), findsNothing);
+    expect(find.textContaining('로그인이 필요해요'), findsWidgets);
+  });
+
+  testWidgets('share entry localizes for visitors without Korean leaks', (
+    tester,
+  ) async {
+    OnboardingState.selectLanguage('ja');
+    await tester.pumpWidget(
+      _app(_SignalsBackend.loaded(), onOpenDetail: (_) {}),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('自分の体験を共有'), findsOneWidget);
+    expect(find.text('体験を共有する'), findsOneWidget);
+    expect(find.text('내 경험 보태기'), findsNothing);
+    expect(find.text('경험 공유하기'), findsNothing);
+  });
+
+  testWidgets('S-31 with share entry stays overflow-free at 200% text', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(393, 852));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+    await tester.pumpWidget(
+      _app(_SignalsBackend.loaded(), onOpenDetail: (_) {}),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('local-signals-contribution-entry')),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Widget _app(
