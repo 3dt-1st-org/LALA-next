@@ -61,6 +61,34 @@ void main() {
     );
     expect(find.textContaining('식이 요청: 할랄'), findsOneWidget);
     expect(find.textContaining('알레르기·민감 식품: 견과류'), findsOneWidget);
+
+    final largeTextButton = find.byKey(
+      const ValueKey('restaurant-large-text-mode'),
+    );
+    await tester.scrollUntilVisible(
+      largeTextButton,
+      160,
+      scrollable: find
+          .descendant(
+            of: find.byKey(const ValueKey('restaurant-communication-scroll')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.tap(largeTextButton);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('restaurant-large-text-card')),
+      findsOneWidget,
+    );
+    final largeText = tester.widget<SelectableText>(
+      find.descendant(
+        of: find.byKey(const ValueKey('restaurant-large-text-card')),
+        matching: find.byType(SelectableText),
+      ),
+    );
+    expect(largeText.style?.fontSize, 26);
+    expect(find.text('직원에게 보여 주세요'), findsOneWidget);
   });
 
   testWidgets('non-restaurant detail omits the staff card', (tester) async {

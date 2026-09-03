@@ -87,6 +87,7 @@ void main() {
       );
       // 실제 슬롯 제목(서버 순서 그대로).
       expect(find.text('화성행궁 산책 코스'), findsOneWidget);
+      expect(find.byKey(const ValueKey('plan-timeline-dot')), findsOneWidget);
       // 읽을 수 있는 날씨/먼지(말줄임/중복 라벨 아님).
       expect(find.textContaining('14°C'), findsWidgets);
       expect(find.text('PM10 31 보통'), findsOneWidget);

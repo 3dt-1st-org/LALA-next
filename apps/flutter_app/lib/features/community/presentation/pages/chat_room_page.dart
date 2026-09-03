@@ -11,9 +11,11 @@ import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/features/community/presentation/community_api.dart';
 import 'package:lala_next_app/features/community/presentation/community_auth_guard.dart';
+import 'package:lala_next_app/features/community/presentation/chat_preference_attachment_sheet.dart';
 import 'package:lala_next_app/features/community/presentation/chat_ws_client.dart';
 import 'package:lala_next_app/auth/auth_controller.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
+import 'package:lala_next_app/features/preferences/data/travel_preferences_store.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 
 class ChatRoomPage extends StatefulWidget {
@@ -22,11 +24,13 @@ class ChatRoomPage extends StatefulWidget {
     required this.roomId,
     this.initialConfig = const LalaAppConfig.fromEnvironment(),
     this.authController,
+    this.preferencesStore,
   });
 
   final String roomId;
   final LalaAppConfig initialConfig;
   final LalaAuthController? authController;
+  final TravelPreferencesStore? preferencesStore;
 
   @override
   State<ChatRoomPage> createState() => _ChatRoomPageState();
@@ -38,6 +42,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   late final LalaAppConfig _config;
   late LalaApiClient _client;
   late final ChatWsClient _ws;
+  late final TravelPreferencesStore _preferencesStore;
   late final TextEditingController _inputController;
   late final ScrollController _scrollController;
   StreamSubscription<ChatMessage>? _messageSub;
@@ -52,6 +57,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   bool _initializing = false;
   bool _sending = false;
   String? _pendingDraft;
+  String? _failedDraft;
 
   @override
   void initState() {
@@ -59,6 +65,9 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     _config = widget.initialConfig;
     _client = createCommunityClient(_config);
     _ws = ChatWsClient();
+    _preferencesStore =
+        widget.preferencesStore ?? TravelPreferencesStore.instance;
+    unawaited(_preferencesStore.ensureLoaded());
     _inputController = TextEditingController();
     _scrollController = ScrollController();
     _statusSub = _ws.status.listen(_onWsStatus);
@@ -99,6 +108,8 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
         _currentUserId = null;
         _status = _LoadStatus.authRequired;
         _wsStatus = ChatWsStatus.disconnected;
+        _pendingDraft = null;
+        _failedDraft = null;
       });
     }
   }
@@ -204,6 +215,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       _messages = <ChatMessage>[..._messages, message];
       if (_isMine(message) && message.body.trim() == _pendingDraft) {
         _pendingDraft = null;
+        _failedDraft = null;
       }
     });
     WidgetsBinding.instance.addPostFrameCallback((_) => _jumpToBottom());
@@ -223,7 +235,10 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
         offset: _inputController.text.length,
       );
     }
-    _pendingDraft = null;
+    setState(() {
+      _pendingDraft = null;
+      _failedDraft = draft;
+    });
     final message = lalaCopyMulti(
       _language,
       ko: '메시지를 보내지 못했어요. 입력 내용을 복원했습니다.',
@@ -288,11 +303,54 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       _onWsError(const ChatWsError(code: 'not_connected'));
       return;
     }
-    setState(() => _sending = true);
+    setState(() {
+      _sending = true;
+      _failedDraft = null;
+    });
     _pendingDraft = text;
     _ws.send(text);
     _inputController.clear();
     setState(() => _sending = false);
+  }
+
+  Future<void> _retryFailedMessage() async {
+    final draft = _failedDraft;
+    if (draft == null || draft.trim().isEmpty) return;
+    _inputController.text = draft;
+    _inputController.selection = TextSelection.collapsed(
+      offset: _inputController.text.length,
+    );
+    await _sendMessage();
+  }
+
+  Future<void> _openPreferenceAttachments() async {
+    final attachment = await showChatPreferenceAttachmentSheet(
+      context: context,
+      language: _language,
+      store: _preferencesStore,
+    );
+    if (!mounted || attachment == null || attachment.trim().isEmpty) return;
+    final current = _inputController.text.trimRight();
+    _inputController.text = current.isEmpty
+        ? attachment
+        : '$current\n\n$attachment';
+    _inputController.selection = TextSelection.collapsed(
+      offset: _inputController.text.length,
+    );
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          lalaCopyMulti(
+            _language,
+            ko: '메시지 초안에 추가했어요. 확인한 뒤 보내 주세요.',
+            en: 'Added to your draft. Review it before sending.',
+            ja: '下書きに追加しました。確認してから送信してください。',
+            zhHans: '已添加到草稿，请确认后再发送。',
+            zhHant: '已新增到草稿，請確認後再傳送。',
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -339,6 +397,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
               sending: _sending,
               connected: _wsStatus == ChatWsStatus.connected,
               language: _language,
+              onAttach: _openPreferenceAttachments,
               onSend: _sendMessage,
             ),
           ],
@@ -382,14 +441,22 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
           language: _language,
         );
       case _LoadStatus.data:
-        if (_messages.isEmpty) {
+        if (_messages.isEmpty && _failedDraft == null) {
           return _ChatEmptyView(language: _language);
         }
         return ListView.builder(
           controller: _scrollController,
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-          itemCount: _messages.length,
+          itemCount: _messages.length + (_failedDraft == null ? 0 : 1),
           itemBuilder: (context, index) {
+            if (index == _messages.length) {
+              return _FailedMessageBubble(
+                body: _failedDraft!,
+                language: _language,
+                retrying: _sending,
+                onRetry: _retryFailedMessage,
+              );
+            }
             final message = _messages[index];
             return _MessageBubble(
               message: message,
@@ -595,6 +662,7 @@ class _ChatInputBar extends StatelessWidget {
     required this.sending,
     required this.connected,
     required this.language,
+    required this.onAttach,
     required this.onSend,
   });
 
@@ -602,6 +670,7 @@ class _ChatInputBar extends StatelessWidget {
   final bool sending;
   final bool connected;
   final String language;
+  final VoidCallback onAttach;
   final VoidCallback onSend;
 
   @override
@@ -615,6 +684,21 @@ class _ChatInputBar extends StatelessWidget {
       ),
       child: Row(
         children: [
+          IconButton(
+            key: const ValueKey('chat-attach-preferences'),
+            tooltip: lalaCopyMulti(
+              language,
+              ko: '저장된 여행 정보 첨부',
+              en: 'Attach saved travel details',
+              ja: '保存した旅行情報を追加',
+              zhHans: '添加已保存的旅行信息',
+              zhHant: '新增已儲存的旅行資訊',
+            ),
+            onPressed: onAttach,
+            icon: const Icon(Icons.add_circle_outline_rounded),
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+          ),
+          const SizedBox(width: 4),
           Expanded(
             child: TextField(
               controller: controller,
@@ -667,6 +751,106 @@ class _ChatInputBar extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _FailedMessageBubble extends StatelessWidget {
+  const _FailedMessageBubble({
+    required this.body,
+    required this.language,
+    required this.retrying,
+    required this.onRetry,
+  });
+
+  final String body;
+  final String language;
+  final bool retrying;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Semantics(
+        container: true,
+        label: lalaCopyMulti(
+          language,
+          ko: '전송 실패한 메시지',
+          en: 'Message not sent',
+          ja: '送信できなかったメッセージ',
+          zhHans: '未发送的消息',
+          zhHant: '未傳送的訊息',
+        ),
+        child: Container(
+          key: const ValueKey('chat-failed-message'),
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.sizeOf(context).width * 0.78,
+          ),
+          margin: const EdgeInsets.symmetric(vertical: 6),
+          padding: const EdgeInsets.fromLTRB(14, 10, 10, 8),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF1F2),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFFCA5A5)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(body, style: const TextStyle(height: 1.4)),
+              const SizedBox(height: 6),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  const Icon(
+                    Icons.error_outline_rounded,
+                    size: 16,
+                    color: Color(0xFFB42318),
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    lalaCopyMulti(
+                      language,
+                      ko: '전송되지 않음',
+                      en: 'Not sent',
+                      ja: '未送信',
+                      zhHans: '未发送',
+                      zhHant: '未傳送',
+                    ),
+                    style: const TextStyle(
+                      color: Color(0xFFB42318),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton.icon(
+                    key: const ValueKey('chat-failed-retry'),
+                    onPressed: retrying ? null : onRetry,
+                    icon: const Icon(Icons.refresh_rounded, size: 16),
+                    label: Text(
+                      lalaCopyMulti(
+                        language,
+                        ko: '다시 보내기',
+                        en: 'Retry',
+                        ja: '再送信',
+                        zhHans: '重试',
+                        zhHant: '重試',
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      minimumSize: const Size(44, 44),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      foregroundColor: const Color(0xFFB42318),
+                      textStyle: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

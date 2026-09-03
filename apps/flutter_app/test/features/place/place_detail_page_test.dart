@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:lala_next_app/core/backend/lala_backend.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
@@ -10,11 +11,13 @@ import 'package:lala_next_app/core/state/saved_place_store.dart';
 import 'package:lala_next_app/features/docent/experience/docent_experience_controller.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/features/place/presentation/pages/place_detail_page.dart';
+import 'package:lala_next_app/features/preferences/data/travel_preferences_store.dart';
 
 import '../docent/inert_docent_audio_player.dart';
 
 void main() {
   setUp(() {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
     SavedPlaceStore.clear();
     OnboardingState.applySnapshot(
       const OnboardingSnapshot(completed: true, language: 'ko'),
@@ -31,6 +34,8 @@ void main() {
       await tester.binding.setSurfaceSize(const Size(393, 852));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       final actionController = LocalSignalActionController();
+      final preferencesStore = TravelPreferencesStore();
+      await preferencesStore.ensureLoaded();
       final docentController = DocentExperienceController(
         backendFactory: (_) => _PlaceDetailBackend(),
         baseConfig: const LalaAppConfig(baseUri: 'https://example.invalid'),
@@ -49,6 +54,7 @@ void main() {
             ),
             actionController: actionController,
             docentExperienceController: docentController,
+            preferencesStore: preferencesStore,
           ),
         ),
       );
@@ -60,11 +66,31 @@ void main() {
         find.byKey(const ValueKey('restaurant-detail-show-staff')),
         findsOneWidget,
       );
+      expect(
+        find.byKey(const ValueKey('place-detail-restaurant-help')),
+        findsOneWidget,
+      );
       expect(SavedPlaceStore.isSaved(_place.placeId), isFalse);
 
       await tester.tap(find.byTooltip('저장'));
       await tester.pump();
       expect(SavedPlaceStore.isSaved(_place.placeId), isTrue);
+
+      await tester.tap(
+        find.byKey(const ValueKey('place-detail-restaurant-help')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('식당에서 보여주기'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('restaurant-korean-request-card')),
+        findsOneWidget,
+      );
+      Navigator.of(
+        tester.element(
+          find.byKey(const ValueKey('restaurant-korean-request-card')),
+        ),
+      ).pop();
+      await tester.pumpAndSettle();
 
       expect(find.text('내국인 소비'), findsNothing);
       await tester.tap(

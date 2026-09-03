@@ -19,6 +19,7 @@ import 'package:lala_next_app/features/place/widgets/public_data_proof_row.dart'
 import 'package:lala_next_app/features/place/widgets/signal_grid.dart';
 import 'package:lala_next_app/features/preferences/data/travel_preferences_store.dart';
 import 'package:lala_next_app/features/preferences/presentation/restaurant_communication_entry_card.dart';
+import 'package:lala_next_app/features/preferences/presentation/restaurant_communication_sheet.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 import 'package:lala_next_app/shared/labels/dataset_freshness_label.dart';
 import 'package:lala_next_app/shared/labels/source_label.dart';
@@ -280,6 +281,9 @@ class _PlaceDetailPageState extends State<PlaceDetailPage> {
                 },
                 onMap: () =>
                     _handoffToMap(place, LocalSignalPlaceAction.viewPlace),
+                onRestaurantHelp: place.category.toLowerCase() == 'restaurant'
+                    ? () => _showRestaurantHelp(language)
+                    : null,
               ),
               const SizedBox(height: 12),
               PlaceContextCard(
@@ -376,6 +380,17 @@ class _PlaceDetailPageState extends State<PlaceDetailPage> {
     );
     context.go(LalaRoutePaths.mapRoute);
   }
+
+  Future<void> _showRestaurantHelp(String language) async {
+    final store = widget.preferencesStore ?? TravelPreferencesStore.instance;
+    await store.ensureLoaded();
+    if (!mounted) return;
+    await showRestaurantCommunicationSheet(
+      context: context,
+      language: language,
+      preferences: store.value,
+    );
+  }
 }
 
 class _PlaceActions extends StatelessWidget {
@@ -384,18 +399,22 @@ class _PlaceActions extends StatelessWidget {
     required this.onAddToPlan,
     required this.onDocent,
     required this.onMap,
+    this.onRestaurantHelp,
   });
 
   final String language;
   final VoidCallback onAddToPlan;
   final VoidCallback onDocent;
   final VoidCallback onMap;
+  final VoidCallback? onRestaurantHelp;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final width = (constraints.maxWidth - 16) / 3;
+        final actionCount = onRestaurantHelp == null ? 3 : 4;
+        final columns = actionCount == 4 ? 2 : 3;
+        final width = (constraints.maxWidth - (8 * (columns - 1))) / columns;
         return Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -443,6 +462,21 @@ class _PlaceActions extends StatelessWidget {
               ),
               onTap: onMap,
             ),
+            if (onRestaurantHelp != null)
+              _ActionButton(
+                key: const ValueKey('place-detail-restaurant-help'),
+                width: width,
+                icon: Icons.record_voice_over_outlined,
+                label: lalaCopyMulti(
+                  language,
+                  ko: '소통 도움',
+                  en: 'Staff help',
+                  ja: '会話サポート',
+                  zhHans: '沟通帮助',
+                  zhHant: '溝通協助',
+                ),
+                onTap: onRestaurantHelp!,
+              ),
           ],
         );
       },
