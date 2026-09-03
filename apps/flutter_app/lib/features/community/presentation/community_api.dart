@@ -32,11 +32,7 @@ String formatRelativeTime(String iso, String language) {
     return lalaCopy(language, ko: '방금 전', en: 'just now');
   }
   if (minutes < 60) {
-    return lalaCopy(
-      language,
-      ko: '$minutes분 전',
-      en: '$minutes min ago',
-    );
+    return lalaCopy(language, ko: '$minutes분 전', en: '$minutes min ago');
   }
   final hours = delta.inHours;
   if (hours < 24) {
