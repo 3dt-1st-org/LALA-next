@@ -1,4 +1,4 @@
-# LALA Stitch vs LALA-next 화면 비교 보고서 v2 · 이미지판
+# LALA Stitch vs LALA-next 화면 비교 보고서 v2.1 · 이미지·누락·차이판
 
 작성일: 2026-09-03
 성격: 기능·UI 대응 및 검증 상태 업데이트
@@ -14,7 +14,11 @@ LALA-next 앱 코드 기준: `651b5f245a2eea88acea479f02ff05dd6097fb93`
 구현의 기준이다.
 
 - 논리 화면 구현: **36/36**
-- 누락된 canonical ID: **0개**
+- LALA-next에서 누락된 canonical ID: **0개**
+- Stitch 정본 시각 자산에서 누락된 ID: **0개**. 다만 Stitch의 “31개 완료”
+  메시지는 S-30, S-53, S-55, S-56, S-57을 목록에서 빠뜨렸다.
+- 최종 exact-head 개별 캡처가 없는 화면: **26개**. 이는 구현 누락이 아니라
+  화면별 최종 재생 증거의 공백이다.
 - 최종 통합 PR: `#171`, `#172`, `#173`, `#174` 모두 MERGED
 - 전체 자동 검증: Flutter 832 tests, Dart client 39 tests, API tests, Ruff,
   formatting, pre-commit 및 detect-secrets 통과
@@ -76,7 +80,9 @@ LALA-next 앱 코드 기준: `651b5f245a2eea88acea479f02ff05dd6097fb93`
 
 이 기호는 시각적 픽셀 복제율이 아니라 기능·상태·근거성의 대응 정도다.
 
-## 3. 이전 보고서 대비 변화
+## 3. 누락·차이 총괄
+
+### 3.1 이전 보고서 대비 변화
 
 | 항목 | 이전 판정 | v2 판정 |
 | --- | --- | --- |
@@ -90,6 +96,55 @@ LALA-next 앱 코드 기준: `651b5f245a2eea88acea479f02ff05dd6097fb93`
 | 커뮤니티·채팅 | 가짜 실시간 대화 | 공개 읽기와 Logto-gated 쓰기/채팅; 로그아웃 시 private state 폐기 |
 | 실구동 | 모바일 브라우저 prototype만 | iPhone 17 Pro exact-tree 설치·실제 탭 및 모바일·데스크톱 웹 검증 |
 | 사실성 | 예시를 실시간처럼 보일 위험 | unavailable, empty, stale, auth-required를 실제 데이터와 분리 |
+
+### 3.2 어떤 화면이 없는가
+
+| 비교 대상 | 누락 또는 미독립화 화면 | 정확한 판정 |
+| --- | --- | --- |
+| 현재 LALA-next integration | **없음** | S-01~S-59의 canonical 36개가 route, focused sheet 또는 nested page로 모두 도달 가능하다. sheet로 표현된 S-13~S-15도 의도적 정보 구조이며 화면 누락이 아니다. |
+| Stitch 정본 시각 자산 | **없음** | 내보내기 명세가 36개 자산을 S-01~S-59에 일대일 배정한다. S-05와 S-52~S-57은 `_14`, `_8`, `_5`, `_17`, `_11`, `_10`, `_18`처럼 일반 폴더명으로 생성됐지만 자산은 존재한다. |
+| Stitch “31개 완료” 메시지 | S-30, S-53, S-55, S-56, S-57이 목록에서 누락 | 메시지의 열거 오류다. 다섯 화면 모두 실제 생성 자산과 36화면 내보내기 명세에 있으므로 디자인 자체가 없다는 뜻은 아니다. |
+| 초기 3-ZIP Stitch 통합 미리보기 | S-03 독립 화면 부재. S-20~S-25와 S-40~S-44 일부, S-59가 독립 URL route가 아닌 모달·조건부 상태 | 다섯 전역 hash route만 있고 대부분의 하위 화면은 React local state로 전환됐다. 보이는 UI 상태는 있어도 canonical route parity와 상태 복원 계약은 없었다. 이후 선택한 36개 정본 자산과 구분해야 한다. |
+| LALA-next 최종 exact-head 개별 캡처 | S-01, S-11~S-15, S-20~S-25, S-30~S-32, S-41, S-43~S-44, S-51~S-57, S-59 | 총 26개다. 코드·focused test·전체 회귀 검증 또는 이전 phase 캡처는 있지만, `71c22da`에서 각 화면을 다시 열어 저장한 개별 이미지는 없다. **증거 누락이지 화면 누락이 아니다.** |
+
+따라서 “현재 앱에 아예 없는 화면”은 canonical 범위에서는 **0개**다. 남은 것은
+독립 실계정·운영 상태를 만들지 못한 기능 검증과 26개 화면의 최종 head 개별 캡처다.
+
+### 3.3 어떤 기능이 없거나 아직 끝까지 검증되지 않았는가
+
+| 기능군 | Stitch 프로토타입에 없는 것 | LALA-next 현재 상태 | 남은 공백의 성격 |
+| --- | --- | --- | --- |
+| 지도·장소 | 실제 지도 SDK, API 장소, canonical ID, 위치 오류 회복 | NAVER Dynamic Map, API 장소·날씨, 핀·클러스터·선택 동기화 구현 및 exact-head 확인 | 핵심 기능 공백 없음. 웹 localhost 실데이터는 production CORS 정책상 제한 |
+| 계정 동기화 | 실제 OAuth, 토큰 수명주기, `/api/v1/me`, 실패·logout 상태 | Logto SDK와 계정 동기화 상태 기계 구현 | 실제 Google 로그인 성공 뒤 `/me` 동기화는 실계정 검증이 아직 없음 |
+| 일정·방문 | 서버 저장, 실제 날씨 개입 재계산, 방문 기록 쓰기 | 4슬롯, 전후 대안, 여행별 override, 방문 확인 계약 구현 | production migration과 실제 write를 실행하지 않았음 |
+| Local Signals | 수집 adapter, 광고·중복 필터, accepted-only 저장, 안전한 집계 | governed aggregate/detail과 empty·stale·source-safe 상태 구현 | 운영 데이터량과 source 활성화 결과에 따라 honest empty가 남을 수 있음 |
+| 커뮤니티·채팅 | 실제 계정 권한, 서버 게시·댓글·반응, WebSocket, logout privacy | 공개 읽기와 Logto-gated 쓰기·채팅 및 late-response 폐기 구현 | 실계정 post/comment/reaction/chat은 운영 데이터를 만들지 않아 미실행 |
+| 개인화 | 기기 영속화, 서버 동기화, 기본 취향과 여행 override 우선순위 | device-first 저장, account sync, 날짜별 override, 충돌 해결 구현 | 계정 간·기기 간 동기화의 실제 runtime 검증이 남음 |
+| 도슨트 | 실제 RAG 응답, 비용 gate, 음성 생성 실패 상태 | text-first RAG와 음성 enablement 분리 구현 | 유료 음성 호출, 대표 장소 전체 품질·발음 수동 QA가 남음 |
+| 언어·접근성 | 선택 UI 외 실제 전 화면 번역과 보조기술 동작 | 5개 locale 선택, 위치 회복, 이동·접근성 설정 구현 | KO/EN/JA/zh-Hans/zh-Hant 전 화면 번역 완전성, 동적 글자, VoiceOver·키보드 QA가 남음 |
+| 플랫폼 증거 | 실제 native build·install 개념 없음 | iPhone 17 Pro와 웹 대표 흐름 검증 | 26개 화면 exact-head 재캡처와 최신 Android integration 실구동이 남음 |
+
+여기서 “남음”은 모두 같은 뜻이 아니다. 지도처럼 구현과 실구동이 끝난 기능도 있고,
+계정·채팅처럼 코드는 있으나 실제 계정 상태를 만들지 않은 기능도 있으며, production
+DB write나 유료 음성처럼 의도적으로 승인 경계 뒤에 둔 기능도 있다.
+
+### 3.4 같은 기능인데 어떻게 다른가
+
+| 화면·기능 | Stitch 방식 | LALA-next 방식 | 차이와 선택 이유 |
+| --- | --- | --- | --- |
+| S-01~S-06 시작·온보딩 | 한 앱 안의 화면 상태와 자동 전환 중심. 계정 행동의 시각 집중도가 높음 | 여행 맥락, 언어, 위치, 지역, 계정을 복원 가능한 단계로 분리 | LALA는 단계가 더 많지만 권한 거부·로그인 실패 후에도 게스트나 직접 지역으로 회복 가능 |
+| S-10 지도 | 점선 캔버스, 고정 핀·거리·대기 정보 | 실제 NAVER 지도, API 장소, category pin, cluster, 위치·오류 상태 | Stitch는 시각 구성이 선명하고 LALA는 데이터와 지도 동작이 실제임 |
+| S-11 검색 | 예시 장소를 local state로 필터·정렬 | 선택 지역과 API 검색, canonical place ID로 지도·상세 연결 | 겉보기 기능은 같지만 LALA 결과는 다른 화면과 동일 장소 정체성을 유지 |
+| S-12 장소 상세 | 큰 대표 이미지와 세 CTA, 풍부한 예시 날씨·혼잡·출처 | API 상세·추천 근거와 실제 후속 route, unavailable·stale 구분 | Stitch는 첫 화면 탐색성이 우수하고 LALA는 근거성과 상태 진실성이 우수 |
+| S-13 식당 소통 | 독립 카드에 미리 채운 알레르기·요청과 다국어 표현 | 음식점 상세의 focused sheet가 저장된 식이 제약을 사용하고 큰 글씨·복사 제공 | LALA는 사용자가 입력하지 않은 위험도를 만들지 않지만 진입 CTA의 시각 가시성은 더 보강할 수 있음 |
+| S-14 날씨·대기질 | 즉시 풍부한 예시 수치와 활동 적합도 | API 관측시각, unavailable·error·stale 및 일정 개입 진입 | Stitch는 정보 밀도가 높고 LALA는 값이 없을 때 거짓 수치를 만들지 않음 |
+| S-15·S-20·S-21 동선과 일정 회복 | 카드 재배열과 local state 기반 대체, 이동선이 시각적으로 명확 | 선택한 실제 장소, 서버 호환 4슬롯, 원안·대안 비교와 명시 적용 | LALA가 상태 계약은 강하고 Stitch가 슬롯·이동의 시각적 연결은 더 좋음 |
+| S-30 도슨트 | 완성된 오디오 player처럼 재생되는 시뮬레이션 | RAG text를 기본으로 제공하고 음성은 비용·준비 상태에 따라 disabled/available 분리 | LALA는 가짜 재생을 피하고, Stitch의 player 계층은 음성이 실제 활성화될 때 참고 가능 |
+| S-31~S-32 Local Signals | 큰 mention 수와 최신성을 예시로 채워 풍부하게 표현 | 광고·중복·출처 정책을 통과한 집계만 표시하고 raw 원문·작성자·URL은 비공개 | Stitch는 밀도가 높지만 LALA가 신뢰 등급과 개인정보 경계를 보존 |
+| S-40~S-44 커뮤니티·채팅 | 예시 사용자·게시글·대화가 즉시 보이는 local state | public read와 authenticated write/chat 분리, logout 시 private state와 늦은 응답 폐기 | LALA는 빈 화면이 생겨도 실제 권한·개인정보를 우선 |
+| S-50~S-51 계정 허브 | 연결된 가짜 계정과 동기화 완료를 기본 표시 | guest/account/loading/error/logout과 `/me` 상태를 구분 | 같은 프로필 UI라도 LALA는 인증 결과 전 성공 상태를 보여 주지 않음 |
+| S-52~S-59 개인화 | 다채로운 chip·요약과 React 메모리 저장 | device-first 기본값, account sync, 여행별 override, hard safety constraint, 충돌 해결 | Stitch는 설정 탐색성이 좋고 LALA는 저장 수명주기와 우선순위가 실제 계약에 연결됨 |
+| 전역 내비게이션 | 5개 hash route와 모듈 내부 modal/local state | typed route, shell tab, focused sheet, nested page를 목적에 따라 구분 | LALA는 deep link·복원·ID 전달이 가능하며, 모든 상태를 억지로 top-level route로 만들지 않음 |
 
 ## 4. Flow 1: 시작과 진입
 
