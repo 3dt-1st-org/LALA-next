@@ -212,9 +212,10 @@ String? planSlotAirQualityBadLabel(LalaPlanSlot slot, String language) {
 }
 
 /// 슬롯 indoor_outdoor 라벨. API 는 indoor|balanced|outdoor 만 허용하지만
-/// 클라이언트 모델은 자유 문자열이므로 명시적으로 세 갈래로 매핑한다 —
-/// balanced 를 야외로 표기하면 근거 없는 야외 주장이 된다(중립 혼합 라벨).
-/// null/빈 값은 honest-empty 로 배지 자체를 숨긴다(null 반환).
+/// 클라이언트 모델은 자유 문자열이므로 정확히 세 값만 매핑한다 —
+/// balanced 를 야외로 표기하면 근거 없는 야외 주장이 되고(중립 혼합 라벨),
+/// 알 수 없는 값을 혼합으로 표기해도 근거 없는 주장이 된다.
+/// null/빈 값과 지원하지 않는 값은 honest-empty 로 배지 자체를 숨긴다(null 반환).
 String? planSlotIndoorOutdoorLabel(LalaPlanSlot slot, String language) {
   final value = slot.indoorOutdoor?.trim().toLowerCase();
   if (value == null || value.isEmpty) return null;
@@ -235,8 +236,7 @@ String? planSlotIndoorOutdoorLabel(LalaPlanSlot slot, String language) {
       zhHans: '室外',
       zhHant: '室外',
     ),
-    // balanced 및 알 수 없는 값: 어느 한쪽도 주장하지 않는 중립 라벨.
-    _ => lalaCopyMulti(
+    'balanced' => lalaCopyMulti(
       language,
       ko: '실내·야외 혼합',
       en: 'Indoor/outdoor mix',
@@ -244,16 +244,21 @@ String? planSlotIndoorOutdoorLabel(LalaPlanSlot slot, String language) {
       zhHans: '室内外兼顾',
       zhHant: '室內外兼顧',
     ),
+    // 알 수 없는 와이어 값: 혼합/실내/야외 어느 쪽도 주장하지 않는다(배지 숨김).
+    _ => null,
   };
 }
 
-/// 슬롯 indoor_outdoor 배지 아이콘. balanced(및 알 수 없는 값)는 저울 아이콘으로
-/// 건물/공원 어느 한쪽도 시각적으로 주장하지 않는다.
+/// 슬롯 indoor_outdoor 배지 아이콘. balanced 는 저울 아이콘으로 건물/공원
+/// 어느 한쪽도 시각적으로 주장하지 않는다. 알 수 없는 값은 라벨이 null 이라
+/// 배지가 숨겨지므로 여기에 닿지 않지만, 단독 호출에 대비해 미확인 아이콘으로
+/// 혼합을 암시하지 않게 한다.
 IconData planSlotIndoorOutdoorIcon(LalaPlanSlot slot) {
   return switch ((slot.indoorOutdoor ?? '').trim().toLowerCase()) {
     'indoor' => Icons.home_work_outlined,
     'outdoor' => Icons.park_outlined,
-    _ => Icons.balance_outlined,
+    'balanced' => Icons.balance_outlined,
+    _ => Icons.help_outline,
   };
 }
 

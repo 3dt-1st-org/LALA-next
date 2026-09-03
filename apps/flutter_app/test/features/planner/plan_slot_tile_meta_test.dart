@@ -119,6 +119,75 @@ void main() {
     });
   });
 
+  group('planSlotIndoorOutdoorLabel', () {
+    LalaPlanSlot slotWith(String? value) => LalaPlanSlot(
+      period: 'lunch',
+      title: '점심',
+      place: _place(),
+      indoorOutdoor: value,
+    );
+
+    test('balanced stays the localized mix label (KO/EN)', () {
+      expect(
+        planSlotIndoorOutdoorLabel(slotWith('balanced'), 'ko'),
+        '실내·야외 혼합',
+      );
+      expect(
+        planSlotIndoorOutdoorLabel(slotWith('balanced'), 'en'),
+        'Indoor/outdoor mix',
+      );
+    });
+
+    test('indoor/outdoor keep their explicit claims', () {
+      expect(planSlotIndoorOutdoorLabel(slotWith('indoor'), 'ko'), '실내');
+      expect(planSlotIndoorOutdoorLabel(slotWith('outdoor'), 'ko'), '야외');
+    });
+
+    test('normalizes case/whitespace before matching', () {
+      expect(
+        planSlotIndoorOutdoorLabel(slotWith('  Balanced '), 'ko'),
+        '실내·야외 혼합',
+      );
+    });
+
+    test('made-up wire values never claim mix/indoor/outdoor → null', () {
+      // The client model is a free String? — a newer server enum or junk wire
+      // value must not surface as a balanced/mix claim.
+      expect(
+        planSlotIndoorOutdoorLabel(slotWith('glasshouse-arcade'), 'ko'),
+        isNull,
+      );
+      expect(planSlotIndoorOutdoorLabel(slotWith('hybrid'), 'en'), isNull);
+      expect(planSlotIndoorOutdoorLabel(slotWith('indoors'), 'ko'), isNull);
+      expect(planSlotIndoorOutdoorLabel(slotWith('야외'), 'ko'), isNull);
+    });
+
+    test('null/empty/blank stay honest-empty → null', () {
+      expect(planSlotIndoorOutdoorLabel(slotWith(null), 'ko'), isNull);
+      expect(planSlotIndoorOutdoorLabel(slotWith(''), 'ko'), isNull);
+      expect(planSlotIndoorOutdoorLabel(slotWith('   '), 'ko'), isNull);
+    });
+
+    test('icon maps exactly; unknown never implies the mix scales', () {
+      expect(
+        planSlotIndoorOutdoorIcon(slotWith('balanced')),
+        Icons.balance_outlined,
+      );
+      expect(
+        planSlotIndoorOutdoorIcon(slotWith('indoor')),
+        Icons.home_work_outlined,
+      );
+      expect(
+        planSlotIndoorOutdoorIcon(slotWith('outdoor')),
+        Icons.park_outlined,
+      );
+      expect(
+        planSlotIndoorOutdoorIcon(slotWith('glasshouse-arcade')),
+        Icons.help_outline,
+      );
+    });
+  });
+
   group('PlanSlotTile meta rendering', () {
     testWidgets('shows travel time and estimated hours when present (KO)', (
       tester,
@@ -233,6 +302,33 @@ void main() {
       expect(find.text('Outdoor'), findsNothing);
       expect(find.textContaining('혼합'), findsNothing);
     });
+
+    testWidgets(
+      'made-up indoor_outdoor wire value renders no badge claim at all (KO)',
+      (tester) async {
+        final slot = LalaPlanSlot(
+          period: 'lunch',
+          title: '점심',
+          place: _place(),
+          indoorOutdoor: 'glasshouse-arcade',
+        );
+        await tester.pumpWidget(
+          _wrap(
+            PlanSlotTile(slot: slot, language: 'ko', onSelectPlace: (_) {}),
+          ),
+        );
+
+        // Unknown wire value: neither mix nor indoor nor outdoor may be claimed…
+        expect(find.text('실내·야외 혼합'), findsNothing);
+        expect(find.text('야외'), findsNothing);
+        expect(find.text('실내'), findsNothing);
+        // …and no icon may visually imply one (honest-empty badge).
+        expect(find.byIcon(Icons.balance_outlined), findsNothing);
+        expect(find.byIcon(Icons.park_outlined), findsNothing);
+        expect(find.byIcon(Icons.home_work_outlined), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+    );
 
     testWidgets(
       'outdoor keeps the explicit outdoor claim and indoor the indoor one',
