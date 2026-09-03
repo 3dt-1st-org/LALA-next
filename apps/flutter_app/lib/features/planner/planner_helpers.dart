@@ -12,13 +12,13 @@ String planSlotTitle(LalaPlanSlot slot, String language) {
   final place = slot.place;
   if (title.isEmpty) {
     return lalaCopyMulti(
-  language,
-  ko: '일정 준비 중',
-  en: 'Preparing stop',
-  ja: '経由地を準備中',
-  zhHans: '正在准备站点',
-  zhHant: '正在準備站點',
-);
+      language,
+      ko: '일정 준비 중',
+      en: 'Preparing stop',
+      ja: '経由地を準備中',
+      zhHans: '正在准备站点',
+      zhHant: '正在準備站點',
+    );
   }
   final localizedTitle = singleLanguageText(title, language);
   if (localizedTitle != null && localizedTitle.isNotEmpty) {
@@ -28,13 +28,13 @@ String planSlotTitle(LalaPlanSlot slot, String language) {
   if (normalizeLalaLanguage(language) != 'ko' && containsKorean(title)) {
     final placeName = place == null
         ? lalaCopyMulti(
-  language,
-  ko: '이 장소',
-  en: 'this place',
-  ja: 'このスポット',
-  zhHans: '此地',
-  zhHant: '此地',
-)
+            language,
+            ko: '이 장소',
+            en: 'this place',
+            ja: 'このスポット',
+            zhHans: '此地',
+            zhHant: '此地',
+          )
         : placeDisplayName(place, language);
     return '${periodLabel(slot.period, language: language)} at $placeName';
   }
@@ -43,13 +43,13 @@ String planSlotTitle(LalaPlanSlot slot, String language) {
       !containsKorean(title)) {
     final placeName = place == null
         ? lalaCopyMulti(
-  language,
-  ko: '이 장소',
-  en: 'this place',
-  ja: 'このスポット',
-  zhHans: '此地',
-  zhHant: '此地',
-)
+            language,
+            ko: '이 장소',
+            en: 'this place',
+            ja: 'このスポット',
+            zhHans: '此地',
+            zhHant: '此地',
+          )
         : placeDisplayName(place, language);
     return '${periodLabel(slot.period, language: language)} $placeName';
   }
@@ -68,14 +68,15 @@ bool hasVisiblePlanSlot(LalaPlanSlot slot, String language) {
   final lowerTitle = title.toLowerCase();
   return !title.contains('이 장소') &&
       !lowerTitle.contains('this place') &&
-      title != lalaCopyMulti(
-  language,
-  ko: '일정 준비 중',
-  en: 'Preparing stop',
-  ja: '経由地を準備中',
-  zhHans: '正在准备站点',
-  zhHant: '正在準備站點',
-);
+      title !=
+          lalaCopyMulti(
+            language,
+            ko: '일정 준비 중',
+            en: 'Preparing stop',
+            ja: '経由地を準備中',
+            zhHans: '正在准备站点',
+            zhHant: '正在準備站點',
+          );
 }
 
 /// 일정 슬롯 부가 설명(C3 추출 — main.dart 의 _planSlotDetail).
@@ -116,13 +117,13 @@ String? planSlotTravelTimeLabel(LalaPlanSlot slot, String language) {
     return null;
   }
   return lalaCopyMulti(
-      language,
-      ko: '도보 $minutes분',
-      en: '$minutes min walk',
-      ja: '徒歩 $minutes分',
-      zhHans: '步行 $minutes 分钟',
-      zhHant: '步行 $minutes 分鐘',
-    );
+    language,
+    ko: '도보 $minutes분',
+    en: '$minutes min walk',
+    ja: '徒歩 $minutes分',
+    zhHans: '步行 $minutes 分钟',
+    zhHant: '步行 $minutes 分鐘',
+  );
 }
 
 /// 카테고리 기반 추정 운영시간 라인.
@@ -135,13 +136,13 @@ String? planSlotEstimatedHoursLabel(LalaPlanSlot slot, String language) {
     return null;
   }
   return lalaCopyMulti(
-      language,
-      ko: '영업 $hours (추정)',
-      en: 'Open $hours (est.)',
-      ja: '営業 $hours（推定）',
-      zhHans: '营业 $hours（估计）',
-      zhHant: '營業 $hours（估計）',
-    );
+    language,
+    ko: '영업 $hours (추정)',
+    en: 'Open $hours (est.)',
+    ja: '営業 $hours（推定）',
+    zhHans: '营业 $hours（估计）',
+    zhHant: '營業 $hours（估計）',
+  );
 }
 
 /// D4: 슬롯 운영 상태(open/closed/unknown) KO/EN 라벨.
@@ -152,29 +153,29 @@ String planSlotClosureStateLabel(LalaPlanSlot slot, String language) {
   final state = (slot.closureState ?? 'unknown').trim().toLowerCase();
   return switch (state) {
     'open' => lalaCopyMulti(
-  language,
-  ko: '영업중',
-  en: 'Open',
-  ja: '営業中',
-  zhHans: '营业中',
-  zhHant: '營業中',
-),
+      language,
+      ko: '영업중',
+      en: 'Open',
+      ja: '営業中',
+      zhHans: '营业中',
+      zhHant: '營業中',
+    ),
     'closed' => lalaCopyMulti(
-  language,
-  ko: '영업종료',
-  en: 'Closed',
-  ja: '営業終了',
-  zhHans: '已打烊',
-  zhHant: '已打烊',
-),
+      language,
+      ko: '영업종료',
+      en: 'Closed',
+      ja: '営業終了',
+      zhHans: '已打烊',
+      zhHant: '已打烊',
+    ),
     _ => lalaCopyMulti(
-  language,
-  ko: '미확인',
-  en: 'Unknown',
-  ja: '未確認',
-  zhHans: '未确认',
-  zhHant: '未確認',
-),
+      language,
+      ko: '미확인',
+      en: 'Unknown',
+      ja: '未確認',
+      zhHans: '未确认',
+      zhHant: '未確認',
+    ),
   };
 }
 
@@ -201,13 +202,59 @@ String? planSlotAirQualityBadLabel(LalaPlanSlot slot, String language) {
   if (slot.airQualityBad != true) return null;
   if (slot.indoorOutdoor == 'indoor') return null;
   return lalaCopyMulti(
+    language,
+    ko: '외부 대기질 나쁨',
+    en: 'Outdoor air quality poor',
+    ja: '屋外の大気質が悪い',
+    zhHans: '室外空气质量差',
+    zhHant: '室外空氣品質差',
+  );
+}
+
+/// 슬롯 indoor_outdoor 라벨. API 는 indoor|balanced|outdoor 만 허용하지만
+/// 클라이언트 모델은 자유 문자열이므로 명시적으로 세 갈래로 매핑한다 —
+/// balanced 를 야외로 표기하면 근거 없는 야외 주장이 된다(중립 혼합 라벨).
+/// null/빈 값은 honest-empty 로 배지 자체를 숨긴다(null 반환).
+String? planSlotIndoorOutdoorLabel(LalaPlanSlot slot, String language) {
+  final value = slot.indoorOutdoor?.trim().toLowerCase();
+  if (value == null || value.isEmpty) return null;
+  return switch (value) {
+    'indoor' => lalaCopyMulti(
       language,
-      ko: '외부 대기질 나쁨',
-      en: 'Outdoor air quality poor',
-      ja: '屋外の大気質が悪い',
-      zhHans: '室外空气质量差',
-      zhHant: '室外空氣品質差',
-    );
+      ko: '실내',
+      en: 'Indoor',
+      ja: '屋内',
+      zhHans: '室内',
+      zhHant: '室內',
+    ),
+    'outdoor' => lalaCopyMulti(
+      language,
+      ko: '야외',
+      en: 'Outdoor',
+      ja: '屋外',
+      zhHans: '室外',
+      zhHant: '室外',
+    ),
+    // balanced 및 알 수 없는 값: 어느 한쪽도 주장하지 않는 중립 라벨.
+    _ => lalaCopyMulti(
+      language,
+      ko: '실내·야외 혼합',
+      en: 'Indoor/outdoor mix',
+      ja: '屋内外の併用',
+      zhHans: '室内外兼顾',
+      zhHant: '室內外兼顧',
+    ),
+  };
+}
+
+/// 슬롯 indoor_outdoor 배지 아이콘. balanced(및 알 수 없는 값)는 저울 아이콘으로
+/// 건물/공원 어느 한쪽도 시각적으로 주장하지 않는다.
+IconData planSlotIndoorOutdoorIcon(LalaPlanSlot slot) {
+  return switch ((slot.indoorOutdoor ?? '').trim().toLowerCase()) {
+    'indoor' => Icons.home_work_outlined,
+    'outdoor' => Icons.park_outlined,
+    _ => Icons.balance_outlined,
+  };
 }
 
 /// 시간대 라벨(C3 추출 — main.dart 의 _periodLabel).
@@ -248,14 +295,17 @@ String periodLabel(String period, {String language = 'ko'}) {
         zhHans: '晚餐',
         zhHant: '晚餐',
       ),
-      _ => normalized.isEmpty ? '-' : lalaCopyMulti(
-        language,
-        ko: '시간대',
-        en: 'Period',
-        ja: '時間帯',
-        zhHans: '时段',
-        zhHant: '時段',
-      ),
+      _ =>
+        normalized.isEmpty
+            ? '-'
+            : lalaCopyMulti(
+                language,
+                ko: '시간대',
+                en: 'Period',
+                ja: '時間帯',
+                zhHans: '时段',
+                zhHant: '時段',
+              ),
     };
   }
   return switch (normalized) {

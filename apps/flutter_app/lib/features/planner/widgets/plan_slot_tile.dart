@@ -67,25 +67,7 @@ class PlanSlotTile extends StatelessWidget {
     final detail = planSlotDetail(slot, language);
     final travelTimeLabel = planSlotTravelTimeLabel(slot, language);
     final estimatedHoursLabel = planSlotEstimatedHoursLabel(slot, language);
-    final indoorOutdoorLabel = slot.indoorOutdoor == null
-        ? null
-        : (slot.indoorOutdoor == 'indoor'
-              ? lalaCopyMulti(
-                  language,
-                  ko: '실내',
-                  en: 'Indoor',
-                  ja: '屋内',
-                  zhHans: '室内',
-                  zhHant: '室內',
-                )
-              : lalaCopyMulti(
-                  language,
-                  ko: '야외',
-                  en: 'Outdoor',
-                  ja: '屋外',
-                  zhHans: '室外',
-                  zhHant: '室外',
-                ));
+    final indoorOutdoorLabel = planSlotIndoorOutdoorLabel(slot, language);
     // V3-C D2/D3/D4 투영: forecast_window(예보) · air_quality_bad(야외 먼지) ·
     // closure_state(운영 상태). null 은 honest-empty(placeholder 없음/unknown).
     final forecastWindowText = planSlotForecastWindowLabel(slot, language);
@@ -105,6 +87,14 @@ class PlanSlotTile extends StatelessWidget {
       'open' => Icons.check_circle_outline,
       'closed' => Icons.cancel_outlined,
       _ => Icons.help_outline,
+    };
+    // 실내·야외 배지 색: 기존 토큰만 재사용(teal=실내, red=야외, slate=중립·balanced).
+    final indoorOutdoorColor = switch ((slot.indoorOutdoor ?? '')
+        .trim()
+        .toLowerCase()) {
+      'indoor' => const Color(0xFF0F766E),
+      'outdoor' => const Color(0xFFC53030),
+      _ => const Color(0xFF64748B),
     };
     final metaEntries = <String>[?travelTimeLabel, ?estimatedHoursLabel];
     // V5-B VISIT/SPEND badge text (only when wired by the caller).
@@ -212,26 +202,20 @@ class PlanSlotTile extends StatelessWidget {
                           ),
                         ),
                       ],
-                      if (slot.indoorOutdoor != null) ...[
+                      if (indoorOutdoorLabel != null) ...[
                         if (weatherHint == null && forecastWindowText == null)
                           const Spacer(),
                         Icon(
-                          slot.indoorOutdoor == 'indoor'
-                              ? Icons.home_work_outlined
-                              : Icons.park_outlined,
+                          planSlotIndoorOutdoorIcon(slot),
                           size: 13,
-                          color: slot.indoorOutdoor == 'indoor'
-                              ? const Color(0xFF0F766E)
-                              : const Color(0xFFC53030),
+                          color: indoorOutdoorColor,
                         ),
                         const SizedBox(width: 2),
                         Text(
-                          indoorOutdoorLabel!,
+                          indoorOutdoorLabel,
                           style: Theme.of(context).textTheme.labelSmall
                               ?.copyWith(
-                                color: slot.indoorOutdoor == 'indoor'
-                                    ? const Color(0xFF0F766E)
-                                    : const Color(0xFFC53030),
+                                color: indoorOutdoorColor,
                                 fontWeight: FontWeight.w800,
                               ),
                         ),

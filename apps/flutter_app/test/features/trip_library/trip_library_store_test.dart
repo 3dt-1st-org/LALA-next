@@ -233,6 +233,103 @@ void main() {
   );
 
   test(
+    'late reconciliation PUT after disconnect/reconnect cannot clobber newer state (server-null branch)',
+    () async {
+      // Reconciliation retries today's trip date, so the override must live there.
+      final date = tripLibraryDateKey();
+      final store = TripLibraryStore();
+      await store.ensureLoaded();
+      await store.saveOverride(
+        date,
+        const TripPreferenceOverride(pace: TravelPace.relaxed),
+      );
+      // Server has no override, so reconciliation takes the putOverride branch.
+      final gate = Completer<void>();
+      final staleRemote = _MemoryTripRemote(overrideGate: gate);
+
+      final staleConnect = store.connectAccount(staleRemote);
+      // Timer hop: the first connect has drained its microtasks and is parked
+      // on the gated putOverride when the disconnect/reconnect happens.
+      await Future<void>.delayed(Duration.zero);
+      store.disconnectAccount();
+
+      // The reconnect reconciles under a fresh epoch and lands a conflict doc
+      // at revision 7 (server value differs, device value is kept).
+      final freshRemote = _MemoryTripRemote(
+        overrides: <String, TripOverrideDocument>{
+          date: const TripOverrideDocument(
+            value: TripPreferenceOverride(pace: TravelPace.packed),
+            revision: 7,
+            updatedAt: '2026-09-03T00:00:00Z',
+          ),
+        },
+      );
+      await store.connectAccount(freshRemote);
+      addTearDown(store.disconnectAccount);
+
+      gate.complete();
+      await staleConnect;
+
+      // The stale PUT would complete with revision 1 (expected 0 + 1) and
+      // overwrite the newer epoch's reconciliation — it must be rejected.
+      expect(store.overrideDocumentFor(date)?.revision, 7);
+      expect(store.overrideFor(date).pace, TravelPace.relaxed);
+      expect(store.overrideDocumentFor(date)?.dirty, isTrue);
+    },
+  );
+
+  test(
+    'late reconciliation PUT after disconnect/reconnect cannot clobber newer state (same-value-dirty branch)',
+    () async {
+      final date = tripLibraryDateKey();
+      final store = TripLibraryStore();
+      await store.ensureLoaded();
+      await store.saveOverride(
+        date,
+        const TripPreferenceOverride(pace: TravelPace.relaxed),
+      );
+      // Same value on the server + dirty local copy → the reconciliation
+      // re-push branch calls putOverride with the server's revision.
+      final gate = Completer<void>();
+      final staleRemote = _MemoryTripRemote(
+        overrideGate: gate,
+        overrides: <String, TripOverrideDocument>{
+          date: const TripOverrideDocument(
+            value: TripPreferenceOverride(pace: TravelPace.relaxed),
+            revision: 3,
+            updatedAt: '2026-09-03T00:00:00Z',
+          ),
+        },
+      );
+
+      final staleConnect = store.connectAccount(staleRemote);
+      await Future<void>.delayed(Duration.zero);
+      store.disconnectAccount();
+
+      final freshRemote = _MemoryTripRemote(
+        overrides: <String, TripOverrideDocument>{
+          date: const TripOverrideDocument(
+            value: TripPreferenceOverride(pace: TravelPace.packed),
+            revision: 9,
+            updatedAt: '2026-09-03T00:00:00Z',
+          ),
+        },
+      );
+      await store.connectAccount(freshRemote);
+      addTearDown(store.disconnectAccount);
+
+      gate.complete();
+      await staleConnect;
+
+      // The stale PUT would complete with revision 4 (expected 3 + 1) and
+      // overwrite the newer epoch's conflict doc — it must be rejected.
+      expect(store.overrideDocumentFor(date)?.revision, 9);
+      expect(store.overrideFor(date).pace, TravelPace.relaxed);
+      expect(store.overrideDocumentFor(date)?.dirty, isTrue);
+    },
+  );
+
+  test(
     'revision-conflict rejection surfaces conflict and keeps device copy',
     () async {
       const date = '2026-09-03';
@@ -286,6 +383,7 @@ class _MemoryTripRemote implements TripLibraryRemote {
     this.failVisitOnce = false,
     this.rejectOverrideRevision = false,
     this.visitGate,
+    this.overrideGate,
     List<PastTripSummary>? pastTrips,
   }) : savedIds = savedIds ?? <String>{},
        overrides = overrides ?? <String, TripOverrideDocument>{},
@@ -298,6 +396,9 @@ class _MemoryTripRemote implements TripLibraryRemote {
   bool failDeletePlan = false;
   bool rejectOverrideRevision;
   final Completer<void>? visitGate;
+
+  /// Holds putOverride open (deterministic in-flight PUT for epoch-guard tests).
+  final Completer<void>? overrideGate;
   final List<PastTripSummary> pastTrips;
   final Map<String, Map<String, TripVisitFeedback>> visits =
       <String, Map<String, TripVisitFeedback>>{};
@@ -340,6 +441,8 @@ class _MemoryTripRemote implements TripLibraryRemote {
     required int expectedRevision,
     required TripPreferenceOverride value,
   }) async {
+    final gate = overrideGate;
+    if (gate != null) await gate.future;
     if (rejectOverrideRevision) {
       throw const LalaApiException(
         code: 'TRIP_PREFERENCES_REVISION_CONFLICT',

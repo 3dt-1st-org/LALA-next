@@ -12,6 +12,9 @@ import 'package:lala_next_app/core/backend/lala_backend.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
 import 'package:lala_next_app/core/location/region_context.dart';
+import 'package:lala_next_app/core/state/plan_context_store.dart';
+import 'package:lala_next_app/core/state/saved_place_store.dart';
+import 'package:lala_next_app/core/state/slot_visit_store.dart';
 import 'package:lala_next_app/features/plan/presentation/pages/plan_page.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/manual_location_options.dart';
@@ -294,9 +297,42 @@ void main() {
     expect(configs.last.lang, 'en');
   });
 
+  // F-030: a save toggled on ANY surface (map detail, saved-places list) must
+  // rebuild this page via the shared SavedPlaceStore and show the marker on
+  // the timeline for that slot's place.
+  testWidgets(
+    'saving a place anywhere rebuilds the plan timeline saved marker',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PlanPage(
+            locationProvider: _FoundLocationProvider(),
+            backendFactory: (config) => _PlaceSlotBackend(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Unsaved place: the positive-only marker stays hidden.
+      expect(find.text('저장됨'), findsNothing);
+
+      // The save happens elsewhere (another tab/detail page) — the plan tab
+      // only observes the shared store.
+      SavedPlaceStore.add('place-museum');
+      await tester.pump();
+
+      expect(find.text('저장됨'), findsOneWidget);
+    },
+  );
+
   tearDown(() {
     RegionContextStore.clear();
     OnboardingState.reset();
+    // Process-local singletons this page reads/writes — cleared so a saved
+    // place, visit status, or published plan cannot leak into the next test.
+    SavedPlaceStore.clear();
+    SlotVisitStore.clear();
+    PlanContextStore.clear();
   });
 }
 
@@ -409,6 +445,46 @@ class _HiddenSlotsBackend implements LalaBackend {
       source: 'db',
       requestHash: 'test-plan-hidden-hash',
       cacheKey: 'daily_plan:test-hidden',
+    ),
+  );
+
+  @override
+  void close() {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError('not used in plan: ${invocation.memberName}');
+}
+
+/// A plan whose slot carries a real place, so the timeline tile has a placeId
+/// to check against SavedPlaceStore (F-030 marker wiring).
+class _PlaceSlotBackend implements LalaBackend {
+  @override
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan() async => _envelope(
+    LalaDailyPlan(
+      language: 'ko',
+      center: const LalaCoordinate(lat: 37.2636, lng: 127.0286),
+      radiusM: 3000,
+      weather: _weather(),
+      slots: const <LalaPlanSlot>[
+        LalaPlanSlot(
+          period: 'morning',
+          title: '박물관 관람',
+          place: LalaPlace(
+            placeId: 'place-museum',
+            name: '수원박물관',
+            category: 'museum',
+            lat: 37.26,
+            lng: 127.03,
+            address: '수원',
+            distanceM: 400,
+            source: 'db',
+          ),
+        ),
+      ],
+      source: 'db',
+      requestHash: 'test-plan-place-hash',
+      cacheKey: 'daily_plan:test-place',
     ),
   );
 
