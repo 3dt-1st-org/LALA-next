@@ -1,4 +1,4 @@
-# LALA Stitch vs LALA-next 화면 비교 보고서 v2
+# LALA Stitch vs LALA-next 화면 비교 보고서 v2 · 이미지판
 
 작성일: 2026-09-03
 성격: 기능·UI 대응 및 검증 상태 업데이트
@@ -22,6 +22,7 @@ LALA-next 앱 코드 기준: `651b5f245a2eea88acea479f02ff05dd6097fb93`
   S-40, S-42의 비로그인 gate, S-50, S-58
 - exact-head 웹 검증: 온보딩, NAVER 지도 surface, 전역 내비게이션, 내 정보의
   모바일·데스크톱 반응형
+- 흐름별 시각 비교: Stitch 개념안과 LALA-next 실구동을 맞붙인 비교판 11장
 - 운영 승인이 필요한 상태: 실제 Logto 계정 쓰기, 채팅, production DB 적용,
   유료 AI·음성, integration에서 main으로의 승격
 
@@ -50,6 +51,17 @@ LALA-next 앱 코드 기준: `651b5f245a2eea88acea479f02ff05dd6097fb93`
 - 실행 기준: 비운영 `integration/canonical-screen-completion-20260903`
 - `main`은 `e13216cdabd467b9c7b5ec0a0e475a8005d1a152`로 유지됐으며, 이 비교는
   production 배포 완료를 뜻하지 않는다.
+
+### 이미지 판독 원칙
+
+- `STITCH · CONCEPT`: 기능 정의를 바탕으로 만든 시각·상호작용 제안이다. 화면의
+  장소, 계정, 날씨, 수치와 대화는 운영 사실이 아니다.
+- `LALA · EXACT 71c22da`: 현재 integration 제품 tree와 동일한 exact-head를 새로
+  빌드·설치해 실제 탭으로 확인한 화면이다.
+- `LALA · PHASE EVIDENCE`: 해당 기능 구현 당시의 실구동 캡처다. 이후 전체 회귀
+  검증은 통과했지만 최종 exact-head에서 같은 하위 화면을 다시 캡처한 것은 아니다.
+- 비교판은 정보 구조와 기능 대응을 보기 위한 것이다. 서로 다른 기기 frame이나
+  축척을 픽셀 완성도 점수로 해석하지 않는다.
 
 ### 표의 기호
 
@@ -81,6 +93,16 @@ LALA-next 앱 코드 기준: `651b5f245a2eea88acea479f02ff05dd6097fb93`
 
 ## 4. Flow 1: 시작과 진입
 
+![여행 맥락, 언어, 위치로 이어지는 LALA-next 온보딩 실구동](assets/stitch-runtime-comparison-v2/11-onboarding-sequence.png)
+
+*그림 1. exact-head iPhone 17 Pro에서 확인한 S-02~S-04. 로그인이나 위치 권한이
+완료되지 않아도 사용자가 직접 회복 경로를 선택할 수 있다.*
+
+![Stitch 계정 연결 개념안과 LALA-next 계정 연결 실구동 비교](assets/stitch-runtime-comparison-v2/01-entry-account.png)
+
+*그림 2. Stitch는 계정 행동의 시각적 집중도가 높고, LALA-next는 Logto 로그인과
+게스트 진입을 실제 인증 경계에 맞춰 분리한다.*
+
 | ID | Stitch 의도 | LALA-next 현재 대응 | 판정 | 검증·남은 차이 |
 | --- | --- | --- | --- | --- |
 | S-01 앱 시작·복원 | 스플래시, 설정 복원, 실패 복구 | `OnboardingSplashPage`가 저장 상태를 복원하고 안전한 다음 route를 결정 | `FULL/A` | 자동 테스트 대상. 최종 캡처는 복원 후 S-02부터 시작해 splash frame은 별도 보존하지 않음 |
@@ -97,6 +119,22 @@ Stitch가 한 화면에 많이 묶었던 언어·위치·계정을 LALA-next는 
 않는다는 점에서 방문객 접근성과 회복성이 더 높다.
 
 ## 5. Flow 2: 발견과 방문 준비
+
+![Stitch 지도 개념안과 LALA-next NAVER 지도 실구동 비교](assets/stitch-runtime-comparison-v2/02-map.png)
+
+*그림 3. 왼쪽은 예시 핀·카드로 구성된 개념안이고, 오른쪽은 실제 NAVER 지도와
+API 장소·날씨·핀·클러스터가 결합된 exact-head 화면이다.*
+
+![Stitch 장소 상세 개념안과 LALA-next 음식점 상세 구현 비교](assets/stitch-runtime-comparison-v2/03-place-detail.png)
+
+*그림 4. Stitch는 대표 이미지와 핵심 CTA의 첫 화면 집중도가 높다. LALA-next는
+canonical 장소와 실제 행동을 연결하지만 추천 근거·소통 도움 진입의 시각 계층은
+추가 보정 가치가 있다.*
+
+![Stitch 식이 요청 카드와 LALA-next 식당 소통 도움 비교](assets/stitch-runtime-comparison-v2/08-restaurant-help.png)
+
+*그림 5. 두 안 모두 직원에게 바로 보여 주는 목적을 갖는다. LALA-next는 저장된
+식이 제약이 없을 때 이를 정직하게 알리고, 큰 글씨·복사·현지 표현을 제공한다.*
 
 | ID | Stitch 의도 | LALA-next 현재 대응 | 판정 | 검증·남은 차이 |
 | --- | --- | --- | --- | --- |
@@ -116,6 +154,11 @@ LALA-next는 그 구조를 유지하면서 지도와 장소를 예시가 아닌 
 
 ## 6. Flow 3: 일정과 회복
 
+![Stitch 일정 개념안과 LALA-next 실제 데이터 일정 비교](assets/stitch-runtime-comparison-v2/04-plan.png)
+
+*그림 6. Stitch의 카드·이동선은 빠른 스캔에 유리하다. LALA-next는 실제 4슬롯과
+상황 정보를 우선하며, 다음 시각 보정 대상은 슬롯 간 이동과 대안 비교의 연결감이다.*
+
 | ID | Stitch 의도 | LALA-next 현재 대응 | 판정 | 검증·남은 차이 |
 | --- | --- | --- | --- | --- |
 | S-20 하루 일정 | 오전·점심·오후·저녁과 이동 연결 | server-compatible 4슬롯 일정과 장소·도슨트·방문 행동 | `FULL/P` | 전체 suite와 phase 증거. 최종 head 일대일 캡처는 안 함 |
@@ -133,6 +176,11 @@ Stitch의 이동 연결선과 대체 제안은 여전히 좋은 시각 참고다
 
 ## 7. Flow 4: 도슨트와 로컬 정보
 
+![Stitch Local Signals 개념안과 LALA-next 실제 집계 화면 비교](assets/stitch-runtime-comparison-v2/05-local-signals.png)
+
+*그림 7. Stitch의 풍부한 수치는 예시다. LALA-next는 실제 집계·출처·기준일을
+표시하고, 데이터가 없거나 부족한 경우 준비 상태를 그대로 보여 준다.*
+
 | ID | Stitch 의도 | LALA-next 현재 대응 | 판정 | 검증·남은 차이 |
 | --- | --- | --- | --- | --- |
 | S-30 장소 도슨트 | 음성 player, script, 이동 제어 | RAG text를 기본 제공하고 음성은 enablement·유료 gate에 따라 분리 | `GATED/P` | text/read-only는 구현. 유료 음성 호출과 전 장소 품질 QA는 별도 운영 gate |
@@ -146,6 +194,11 @@ Stitch는 수치가 풍부해 보이지만 예시값이었다. LALA-next는 정�
 의도적 차이다.
 
 ## 8. Flow 5: 커뮤니티와 채팅
+
+![LALA-next 공개 커뮤니티 읽기와 로그인 쓰기 게이트](assets/stitch-runtime-comparison-v2/09-community-auth.png)
+
+*그림 8. exact-head에서 공개 읽기는 허용하되, 글쓰기는 Logto 계정 연결 뒤로
+제한된다. 예시 게시글로 빈 운영 데이터를 채우지 않은 상태도 함께 검증했다.*
 
 | ID | Stitch 의도 | LALA-next 현재 대응 | 판정 | 검증·남은 차이 |
 | --- | --- | --- | --- | --- |
@@ -162,6 +215,16 @@ Stitch의 채팅은 풍부하지만 가짜 사용자와 로컬 메모리였다. 
 삽입하지 않은 것은 미구현이 아니라 데이터·개인정보 경계를 지킨 결과다.
 
 ## 9. Flow 6: 계정과 개인화
+
+![Stitch 프로필 개념안과 LALA-next 내 정보 실구동 비교](assets/stitch-runtime-comparison-v2/06-profile.png)
+
+*그림 9. Stitch의 프로필은 시각적으로 풍부하지만 가이드·계정 예시를 포함한다.
+LALA-next는 실제 guest/account 상태와 저장·지난 일정·동의·커뮤니티 진입을 묶는다.*
+
+![Stitch 개인화 설정과 LALA-next 여행 취향 화면 비교](assets/stitch-runtime-comparison-v2/07-preferences.png)
+
+*그림 10. Stitch는 요약 카드와 고정 이중 CTA가 강점이다. LALA-next는 취향과
+안전 조건의 저장 우선순위를 실제 상태에 연결하고 더 조용한 밀도로 표현한다.*
 
 | ID | Stitch 의도 | LALA-next 현재 대응 | 판정 | 검증·남은 차이 |
 | --- | --- | --- | --- | --- |
@@ -228,6 +291,11 @@ Stitch가 제안한 개인화 분류는 대부분 유지됐고, LALA-next는 이
   `/tmp/lala-canonical-screen-audit-20260903/output/local/runtime-evidence/pr174-iphone17pro/exact-71c22da/`
 
 ### 웹
+
+![LALA-next 내 정보의 모바일과 데스크톱 반응형 실구동](assets/stitch-runtime-comparison-v2/10-web-responsive.png)
+
+*그림 11. 동일 exact-head 웹 빌드의 393×852 및 1440×900 화면. 데스크톱은
+기능 손실 없이 폭을 사용하지만 정보 밀도와 최대 콘텐츠 폭은 후속 시각 개선 대상이다.*
 
 - build: iOS 확인 뒤 기존 build를 다시 삭제하고 exact head로 web build
 - viewport: 393 x 852 및 1440 x 900
