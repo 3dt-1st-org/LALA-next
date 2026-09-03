@@ -401,11 +401,12 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
           },
         );
       case _ListStatus.loading:
-        return const _ListLoadingView();
+        return _ListLoadingView(language: _language);
       case _ListStatus.error:
         return _ListErrorView(
           message: _error!,
           onRetry: () => _load(initial: true),
+          language: _language,
         );
       case _ListStatus.data:
         if (_rooms.isEmpty) {
@@ -424,25 +425,34 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
 }
 
 class _ListLoadingView extends StatelessWidget {
-  const _ListLoadingView();
+  const _ListLoadingView({required this.language});
+
+  final String language;
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    return Center(
       child: Padding(
-        padding: EdgeInsets.all(24),
+        padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            SizedBox(
+            const SizedBox(
               width: 28,
               height: 28,
               child: CircularProgressIndicator(strokeWidth: 2.4),
             ),
-            SizedBox(height: 14),
+            const SizedBox(height: 14),
             Text(
-              '채팅방을 불러오는 중...',
-              style: TextStyle(
+              lalaCopyMulti(
+                language,
+                ko: '채팅방을 불러오는 중...',
+                en: 'Loading chat rooms…',
+                ja: 'チャットルームを読み込んでいます…',
+                zhHans: '正在加载聊天室…',
+                zhHant: '正在載入聊天室…',
+              ),
+              style: const TextStyle(
                 color: Color(0xFF475569),
                 fontWeight: FontWeight.w800,
               ),
@@ -455,9 +465,17 @@ class _ListLoadingView extends StatelessWidget {
 }
 
 class _ListErrorView extends StatelessWidget {
-  const _ListErrorView({required this.message, required this.onRetry});
+  const _ListErrorView({
+    required this.message,
+    required this.onRetry,
+    required this.language,
+  });
   final String message;
   final VoidCallback onRetry;
+
+  // Why: the label follows the app-selected language, not the device locale,
+  // so one screen never mixes two languages.
+  final String language;
 
   @override
   Widget build(BuildContext context) {
@@ -487,13 +505,9 @@ class _ListErrorView extends StatelessWidget {
             FilledButton.icon(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh_rounded, size: 18),
-              // Why: the sheet reads the widget locale, so route it through
-              // the SSOT normalizer rather than a raw locale code.
               label: Text(
                 lalaCopyMulti(
-                  normalizeLalaLanguage(
-                    Localizations.localeOf(context).languageCode,
-                  ),
+                  language,
                   ko: '재시도',
                   en: 'Retry',
                   ja: '再試行',

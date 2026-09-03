@@ -18,11 +18,17 @@ class CommunityPostDetailPage extends StatefulWidget {
     required this.postId,
     this.initialConfig = const LalaAppConfig.fromEnvironment(),
     this.authController,
+    this.client,
   });
 
   final String postId;
   final LalaAppConfig initialConfig;
   final LalaAuthController? authController;
+
+  /// Optional injected client for focused tests; production always builds
+  /// its own from [initialConfig]. Must stay optional because the shared
+  /// router constructs this page without it.
+  final LalaApiClient? client;
 
   @override
   State<CommunityPostDetailPage> createState() =>
@@ -34,6 +40,7 @@ enum _DetailStatus { loading, data, error }
 class _CommunityPostDetailPageState extends State<CommunityPostDetailPage> {
   late final LalaAppConfig _config;
   late LalaApiClient _client;
+  late final bool _ownsClient;
 
   _DetailStatus _status = _DetailStatus.loading;
   CommunityPost? _post;
@@ -48,7 +55,8 @@ class _CommunityPostDetailPageState extends State<CommunityPostDetailPage> {
   void initState() {
     super.initState();
     _config = widget.initialConfig;
-    _client = createCommunityClient(_config);
+    _ownsClient = widget.client == null;
+    _client = widget.client ?? createCommunityClient(_config);
     _commentController = TextEditingController();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _load();
@@ -58,7 +66,7 @@ class _CommunityPostDetailPageState extends State<CommunityPostDetailPage> {
   @override
   void dispose() {
     _commentController.dispose();
-    _client.close();
+    if (_ownsClient) _client.close();
     super.dispose();
   }
 
@@ -150,11 +158,21 @@ class _CommunityPostDetailPageState extends State<CommunityPostDetailPage> {
       });
     } on Object {
       if (!mounted) return;
-      // 실패 시 롤백.
+      // 실패 시 롤백 + 정직한 안내(조용히 되돌리면 반영된 것으로 읽힌다).
       setState(() {
         _post = current;
         _likeBusy = false;
       });
+      _showSnack(
+        lalaCopyMulti(
+          _language,
+          ko: '좋아요 처리에 실패했어요. 잠시 후 다시 시도해 주세요.',
+          en: 'Could not update your like. Please try again.',
+          ja: 'いいねを更新できませんでした。しばらくしてからもう一度お試しください。',
+          zhHans: '无法更新点赞，请稍后重试。',
+          zhHant: '無法更新按讚，請稍後再試。',
+        ),
+      );
     }
   }
 
