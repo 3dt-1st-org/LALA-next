@@ -15,10 +15,10 @@ not claim that every runtime state has been exercised on a device.
 | S-01--S-20 | Implemented on the integration line | Covered by the full Flutter/API/client suites | Prior evidence exists; final exact-head replay pending |
 | S-21--S-25 | Implemented and merged through phase PRs | Covered by focused tests and the full suites | Prior phase evidence exists; final exact-head replay pending |
 | S-30--S-32 | Implemented and reachable from detail, plan, and Local Signals | Covered by focused tests and the full suites | Prior phase evidence exists; final exact-head replay pending |
-| S-40--S-44 | Implemented with public reads and Logto-gated writes/chat | Focused auth-flow tests and the full suite pass | S-40 public read and the signed-out write gate verified on iPhone 17 Pro; authenticated operations remain gated |
+| S-40--S-44 | Implemented with public reads and Logto-gated writes/chat; private chat state is discarded on sign-out and late responses cannot reopen it | Focused auth-flow tests and the full suite pass | S-40 public read and the signed-out write gate verified on iPhone 17 Pro; authenticated operations remain gated |
 | S-50--S-59 | Implemented, including persisted privacy and explicit sync resolution | Focused settings tests and the full suite pass | S-50 and S-58 verified on iPhone 17 Pro, including preference persistence across relaunch |
 
-At the final application tree, Flutter analysis, all 831 Flutter tests, API
+At the final application tree, Flutter analysis, all 832 Flutter tests, API
 tests, Dart client tests, Ruff, formatting, pre-commit (including secret
 detection), and diff checks passed. The same tree was installed on an iPhone 17
 Pro simulator after removing the previous bundle. Visual and OCR inspection
