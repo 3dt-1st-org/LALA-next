@@ -4,6 +4,27 @@ This is the tracked reconciliation for the 36 logical screens in the functional
 brief. A logical screen may be a route, a focused sheet, or a dedicated nested
 page when that representation preserves the intended task and state.
 
+## Current completion snapshot
+
+The canonical completion branch contains a reachable implementation for all 36
+logical screens. This statement covers code and route/state bindings; it does
+not claim that every runtime state has been exercised on a device.
+
+| Scope | Implementation | Automated verification | Runtime verification |
+| --- | --- | --- | --- |
+| S-01--S-20 | Implemented on the integration line | Covered by the full Flutter/API/client suites | Prior evidence exists; final exact-head replay pending |
+| S-21--S-25 | Implemented and merged through phase PRs | Covered by focused tests and the full suites | Prior phase evidence exists; final exact-head replay pending |
+| S-30--S-32 | Implemented and reachable from detail, plan, and Local Signals | Covered by focused tests and the full suites | Prior phase evidence exists; final exact-head replay pending |
+| S-40--S-44 | Implemented with public reads and Logto-gated writes/chat | Focused auth-flow tests and the full suite pass | Final exact-head signed-out/public-state replay pending |
+| S-50--S-59 | Implemented, including persisted privacy and explicit sync resolution | Focused settings tests and the full suite pass | Final exact-head profile/privacy replay pending |
+
+The latest code head before this documentation update was `3761d8e`. At that
+head, Flutter analysis, all 831 Flutter tests, API tests, Dart client tests,
+Ruff, formatting, pre-commit (including secret detection), and diff checks
+passed. The phase remains incomplete until the final PR exact head has green CI
+and an iPhone 17 Pro build is installed and visually inspected without fixture,
+mock, or demo data standing in for runtime truth.
+
 | ID | Representation | Primary implementation | Entry | Runtime truth |
 | --- | --- | --- | --- | --- |
 | S-01 | route | `OnboardingSplashPage` | cold start | persisted restore, honest retry |
