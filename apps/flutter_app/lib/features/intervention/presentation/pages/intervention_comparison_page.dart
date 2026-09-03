@@ -270,25 +270,10 @@ class _SlotCard extends StatelessWidget {
     final closureKey = value == null
         ? 'unknown'
         : (value.closureState ?? 'unknown').trim().toLowerCase();
-    final indoorOutdoorLabel = value?.indoorOutdoor == null
+    // Shared with the plan tile so balanced never renders as an outdoor claim.
+    final indoorOutdoorLabel = value == null
         ? null
-        : value!.indoorOutdoor == 'indoor'
-        ? _copy(
-            language,
-            ko: '실내',
-            en: 'Indoor',
-            ja: '屋内',
-            zhHans: '室内',
-            zhHant: '室內',
-          )
-        : _copy(
-            language,
-            ko: '야외',
-            en: 'Outdoor',
-            ja: '屋外',
-            zhHans: '室外',
-            zhHant: '室外',
-          );
+        : planSlotIndoorOutdoorLabel(value, language);
     final airQualityLabel = value == null
         ? null
         : planSlotAirQualityBadLabel(value, language);
@@ -344,9 +329,7 @@ class _SlotCard extends StatelessWidget {
                   if (indoorOutdoorLabel != null)
                     _ConstraintChip(
                       label: indoorOutdoorLabel,
-                      icon: value.indoorOutdoor == 'indoor'
-                          ? Icons.home_work_outlined
-                          : Icons.park_outlined,
+                      icon: planSlotIndoorOutdoorIcon(value),
                     ),
                   if (weatherHint != null)
                     _ConstraintChip(

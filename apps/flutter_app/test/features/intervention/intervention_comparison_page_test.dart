@@ -162,6 +162,48 @@ void main() {
     },
   );
 
+  testWidgets(
+    'S-21 renders a balanced slot as a neutral mix badge, not outdoor',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(393, 852));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final intervention = _intervention(
+        originalSlot: const LalaPlanSlot(
+          period: 'afternoon',
+          title: '복합 문화 공간',
+          indoorOutdoor: 'balanced',
+          closureState: 'open',
+        ),
+        alternativeSlot: const LalaPlanSlot(
+          period: 'afternoon',
+          title: '실내 전시',
+          indoorOutdoor: 'indoor',
+          closureState: 'open',
+        ),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: InterventionComparisonPage(
+            language: 'ko',
+            arguments: InterventionComparisonArguments(
+              intervention: intervention,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // balanced 는 중립 혼합 라벨 + 저울 아이콘 — 야외 주장 금지.
+      expect(find.text('실내·야외 혼합'), findsOneWidget);
+      expect(find.text('야외'), findsNothing);
+      expect(find.byIcon(Icons.balance_outlined), findsOneWidget);
+      expect(find.byIcon(Icons.park_outlined), findsNothing);
+      // 대안 카드의 실내 배지는 그대로.
+      expect(find.text('실내'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('S-21 explains a disabled apply when no alternative exists', (
     tester,
   ) async {

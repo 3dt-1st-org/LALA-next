@@ -388,11 +388,15 @@ class TripLibraryStore extends ChangeNotifier {
     if (localOverride == null && serverOverride != null) {
       _overrides[planDate] = serverOverride;
     } else if (localOverride != null && serverOverride == null) {
-      _overrides[planDate] = await remote.putOverride(
+      final saved = await remote.putOverride(
         planDate,
         expectedRevision: 0,
         value: localOverride.value,
       );
+      // Late-response guard: a disconnect/reconnect during the PUT invalidates
+      // this result; assigning it would clobber the newer epoch's state.
+      if (epoch != _syncEpoch) return;
+      _overrides[planDate] = saved;
     } else if (localOverride != null && serverOverride != null) {
       if (localOverride.value == serverOverride.value && !localOverride.dirty) {
         _overrides[planDate] = serverOverride;
@@ -405,11 +409,14 @@ class TripLibraryStore extends ChangeNotifier {
         );
         _syncStatus = TripLibrarySyncStatus.conflict;
       } else {
-        _overrides[planDate] = await remote.putOverride(
+        final saved = await remote.putOverride(
           planDate,
           expectedRevision: serverOverride.revision,
           value: localOverride.value,
         );
+        // Late-response guard, same as the server-null branch above.
+        if (epoch != _syncEpoch) return;
+        _overrides[planDate] = saved;
       }
     }
 
