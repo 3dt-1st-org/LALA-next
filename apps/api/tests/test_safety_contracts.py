@@ -684,9 +684,9 @@ def test_flutter_web_smoke_drives_location_flow_and_route_requests():
     assert "Flutter docent script did not include the captured PM2.5 value." in unix_script
     # The unix marker contract moved into a shared validator (iframe bridge,
     # pin-first clustering, live-count reconciliation); keep guarding it there.
-    marker_contract = (
-        ROOT / "scripts" / "unix" / "_flutter_web_marker_contract.py"
-    ).read_text(encoding="utf-8")
+    marker_contract = (ROOT / "scripts" / "unix" / "_flutter_web_marker_contract.py").read_text(
+        encoding="utf-8"
+    )
     assert "_flutter_web_marker_contract.py" in unix_script
     assert 'FAIL_PREFIX = "Flutter location flow"' in marker_contract
     assert "rendered no real map pins or clusters." in marker_contract
