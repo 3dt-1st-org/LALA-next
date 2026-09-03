@@ -95,6 +95,8 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     if (!_authenticated && _status != _LoadStatus.authRequired) {
       unawaited(_ws.disconnect());
       setState(() {
+        _messages = const <ChatMessage>[];
+        _currentUserId = null;
         _status = _LoadStatus.authRequired;
         _wsStatus = ChatWsStatus.disconnected;
       });
@@ -142,6 +144,10 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       final data = envelope.data;
       final messages = data?.messages ?? const <ChatMessage>[];
       if (!mounted) return;
+      if (!_authenticated) {
+        setState(() => _status = _LoadStatus.authRequired);
+        return;
+      }
       setState(() {
         _messages = messages;
         _status = _LoadStatus.data;
@@ -149,12 +155,20 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       WidgetsBinding.instance.addPostFrameCallback((_) => _jumpToBottom());
     } on LalaApiException {
       if (!mounted) return;
+      if (!_authenticated) {
+        setState(() => _status = _LoadStatus.authRequired);
+        return;
+      }
       setState(() {
         _error = _fallbackError();
         _status = _LoadStatus.error;
       });
     } on Object {
       if (!mounted) return;
+      if (!_authenticated) {
+        setState(() => _status = _LoadStatus.authRequired);
+        return;
+      }
       setState(() {
         _error = _fallbackError();
         _status = _LoadStatus.error;
@@ -168,6 +182,10 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       return;
     }
     final token = await _client.resolveWebSocketToken();
+    if (!mounted || !_authenticated) {
+      if (mounted) setState(() => _wsStatus = ChatWsStatus.disconnected);
+      return;
+    }
     if (token.isEmpty) {
       // 인증 미지원: 실시간 수신은 불가. REST 메시지 로드는 유지.
       setState(() => _wsStatus = ChatWsStatus.error);

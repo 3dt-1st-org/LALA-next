@@ -72,7 +72,19 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
 
   void _onAuthChanged() {
     if (!mounted) return;
-    if (_canCreate && _status == _ListStatus.authRequired) {
+    if (!_canCreate) {
+      if (_status != _ListStatus.authRequired || _rooms.isNotEmpty) {
+        setState(() {
+          _rooms = const <ChatRoom>[];
+          _total = 0;
+          _hasMore = false;
+          _isLoadingMore = false;
+          _status = _ListStatus.authRequired;
+        });
+      }
+      return;
+    }
+    if (_status == _ListStatus.authRequired) {
       _load(initial: true);
     } else {
       setState(() {});
@@ -107,6 +119,10 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
       final rooms = data?.rooms ?? const <ChatRoom>[];
       final total = data?.total ?? rooms.length;
       if (!mounted) return;
+      if (!_canCreate) {
+        setState(() => _status = _ListStatus.authRequired);
+        return;
+      }
       setState(() {
         _rooms = rooms;
         _total = total;
@@ -115,12 +131,20 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
       });
     } on LalaApiException {
       if (!mounted) return;
+      if (!_canCreate) {
+        setState(() => _status = _ListStatus.authRequired);
+        return;
+      }
       setState(() {
         _error = _fallbackError();
         _status = _ListStatus.error;
       });
     } on Object {
       if (!mounted) return;
+      if (!_canCreate) {
+        setState(() => _status = _ListStatus.authRequired);
+        return;
+      }
       setState(() {
         _error = _fallbackError();
         _status = _ListStatus.error;
@@ -140,6 +164,13 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
       final data = envelope.data;
       final more = data?.rooms ?? const <ChatRoom>[];
       if (!mounted) return;
+      if (!_canCreate) {
+        setState(() {
+          _isLoadingMore = false;
+          _status = _ListStatus.authRequired;
+        });
+        return;
+      }
       setState(() {
         _rooms = <ChatRoom>[..._rooms, ...more];
         _hasMore = _rooms.length < (data?.total ?? _rooms.length);
@@ -147,7 +178,10 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
       });
     } on Object {
       if (!mounted) return;
-      setState(() => _isLoadingMore = false);
+      setState(() {
+        _isLoadingMore = false;
+        if (!_canCreate) _status = _ListStatus.authRequired;
+      });
     }
   }
 

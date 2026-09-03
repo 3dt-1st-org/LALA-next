@@ -92,6 +92,43 @@ void main() {
     expect(gateway.signInCalls, 0);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'S-43 returns to the auth gate as soon as the account signs out',
+    (tester) async {
+      final gateway = _FakeAuthGateway()..authenticated = true;
+      final controller = LalaAuthController(
+        config: _enabledAuthConfig,
+        gateway: gateway,
+        accountApi: const _FakeAccountApi(),
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ChatRoomListPage(
+            initialConfig: const LalaAppConfig(baseUri: 'http://127.0.0.1:9'),
+            authController: controller,
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(controller.state.authenticated, isTrue);
+
+      await controller.signOut();
+      await tester.pump();
+
+      expect(find.text('계정을 연결해 대화를 이어가세요'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      // Let the request that began while authenticated hit its bounded
+      // timeout; its late result must not replace the auth gate.
+      await tester.pump(const Duration(seconds: 9));
+      await tester.pump();
+      expect(find.text('계정을 연결해 대화를 이어가세요'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
 
 const LalaAuthConfig _enabledAuthConfig = LalaAuthConfig(
