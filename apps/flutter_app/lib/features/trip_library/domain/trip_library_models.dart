@@ -267,6 +267,21 @@ class TripVisitFeedback {
           : null,
     );
   }
+
+  // Value equality so sync reconciliation can compare a device copy against a
+  // decoded server copy (identity comparison would always differ and force a
+  // re-push on every reconnect).
+  @override
+  bool operator ==(Object other) =>
+      other is TripVisitFeedback &&
+      other.status == status &&
+      other.reason == reason &&
+      other.useForRecommendations == useForRecommendations &&
+      other.confirmedAt == confirmedAt;
+
+  @override
+  int get hashCode =>
+      Object.hash(status, reason, useForRecommendations, confirmedAt);
 }
 
 @immutable

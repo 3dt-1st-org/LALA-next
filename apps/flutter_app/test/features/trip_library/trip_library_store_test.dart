@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -179,6 +180,102 @@ void main() {
     expect(remote.savedIds, {'device-place', 'account-place'});
     expect(store.syncStatus, TripLibrarySyncStatus.synced);
   });
+
+  test('account sync retry re-pushes a visit whose write failed', () async {
+    // Reconciliation retries today's trip date, so the visit must live there.
+    final date = tripLibraryDateKey();
+    final remote = _MemoryTripRemote(failVisitOnce: true);
+    final store = TripLibraryStore();
+    await store.connectAccount(remote);
+    addTearDown(store.disconnectAccount);
+
+    await store.saveVisit(
+      date,
+      'lunch',
+      placeId: 'lunch-place',
+      feedback: const TripVisitFeedback(status: TripVisitStatus.visited),
+    );
+    expect(store.syncStatus, TripLibrarySyncStatus.error);
+    expect(remote.visits[date], isNull);
+
+    remote.failVisitOnce = false;
+    await store.retryAccountSync();
+
+    expect(store.syncStatus, TripLibrarySyncStatus.synced);
+    expect(remote.visits[date]?['lunch']?.status, TripVisitStatus.visited);
+    expect(SlotVisitStore.statusFor(date, 'lunch'), 'visited');
+  });
+
+  test(
+    'late visit completion after disconnect keeps local-only status',
+    () async {
+      const date = '2026-09-03';
+      final gate = Completer<void>();
+      final remote = _MemoryTripRemote(visitGate: gate);
+      final store = TripLibraryStore();
+      await store.connectAccount(remote);
+
+      final saving = store.saveVisit(
+        date,
+        'dinner',
+        placeId: 'dinner-place',
+        feedback: const TripVisitFeedback(status: TripVisitStatus.visited),
+      );
+      await Future<void>.delayed(Duration.zero);
+      store.disconnectAccount();
+      gate.complete();
+      await saving;
+
+      expect(store.syncStatus, TripLibrarySyncStatus.localOnly);
+      expect(store.visitFor(date, 'dinner').status, TripVisitStatus.visited);
+      expect(SlotVisitStore.statusFor(date, 'dinner'), 'visited');
+    },
+  );
+
+  test(
+    'revision-conflict rejection surfaces conflict and keeps device copy',
+    () async {
+      const date = '2026-09-03';
+      final remote = _MemoryTripRemote(rejectOverrideRevision: true);
+      final store = TripLibraryStore();
+      await store.connectAccount(remote);
+      addTearDown(store.disconnectAccount);
+
+      await store.saveOverride(
+        date,
+        const TripPreferenceOverride(pace: TravelPace.relaxed),
+      );
+
+      expect(store.syncStatus, TripLibrarySyncStatus.conflict);
+      expect(store.overrideFor(date).pace, TravelPace.relaxed);
+      expect(store.overrideDocumentFor(date)?.dirty, isTrue);
+    },
+  );
+
+  test(
+    'failed past-plan deletion rolls back to the loaded trip list',
+    () async {
+      final remote = _MemoryTripRemote(
+        pastTrips: const <PastTripSummary>[
+          PastTripSummary(
+            planDate: '2026-09-01',
+            slotCount: 4,
+            visitedCount: 2,
+          ),
+        ],
+      );
+      final store = TripLibraryStore();
+      await store.connectAccount(remote);
+      addTearDown(store.disconnectAccount);
+      expect(store.pastTrips, hasLength(1));
+
+      remote.failDeletePlan = true;
+      await store.deletePastPlan('2026-09-01');
+
+      expect(store.syncStatus, TripLibrarySyncStatus.error);
+      expect(store.pastTrips.map((trip) => trip.planDate), ['2026-09-01']);
+    },
+  );
 }
 
 class _MemoryTripRemote implements TripLibraryRemote {
@@ -186,12 +283,22 @@ class _MemoryTripRemote implements TripLibraryRemote {
     Set<String>? savedIds,
     Map<String, TripOverrideDocument>? overrides,
     this.failVisit = false,
+    this.failVisitOnce = false,
+    this.rejectOverrideRevision = false,
+    this.visitGate,
+    List<PastTripSummary>? pastTrips,
   }) : savedIds = savedIds ?? <String>{},
-       overrides = overrides ?? <String, TripOverrideDocument>{};
+       overrides = overrides ?? <String, TripOverrideDocument>{},
+       pastTrips = pastTrips ?? const <PastTripSummary>[];
 
   final Set<String> savedIds;
   final Map<String, TripOverrideDocument> overrides;
   final bool failVisit;
+  bool failVisitOnce;
+  bool failDeletePlan = false;
+  bool rejectOverrideRevision;
+  final Completer<void>? visitGate;
+  final List<PastTripSummary> pastTrips;
   final Map<String, Map<String, TripVisitFeedback>> visits =
       <String, Map<String, TripVisitFeedback>>{};
 
@@ -201,7 +308,9 @@ class _MemoryTripRemote implements TripLibraryRemote {
   }
 
   @override
-  Future<void> deletePlan(String planDate) async {}
+  Future<void> deletePlan(String planDate) async {
+    if (failDeletePlan) throw StateError('offline');
+  }
 
   @override
   Future<TripOverrideDocument?> getOverride(String planDate) async =>
@@ -214,7 +323,7 @@ class _MemoryTripRemote implements TripLibraryRemote {
   Future<List<PastTripSummary>> listPastTrips({
     String? before,
     int limit = 20,
-  }) async => const <PastTripSummary>[];
+  }) async => pastTrips;
 
   @override
   Future<Map<String, TripVisitFeedback>> listVisits(String planDate) async =>
@@ -231,6 +340,14 @@ class _MemoryTripRemote implements TripLibraryRemote {
     required int expectedRevision,
     required TripPreferenceOverride value,
   }) async {
+    if (rejectOverrideRevision) {
+      throw const LalaApiException(
+        code: 'TRIP_PREFERENCES_REVISION_CONFLICT',
+        message: 'stale revision',
+        statusCode: 409,
+        retryable: false,
+      );
+    }
     final next = TripOverrideDocument(
       value: value,
       revision: expectedRevision + 1,
@@ -247,7 +364,12 @@ class _MemoryTripRemote implements TripLibraryRemote {
     required String? placeId,
     required TripVisitFeedback feedback,
   }) async {
-    if (failVisit) throw StateError('offline');
+    final gate = visitGate;
+    if (gate != null) await gate.future;
+    if (failVisit || failVisitOnce) {
+      failVisitOnce = false;
+      throw StateError('offline');
+    }
     visits.putIfAbsent(
       planDate,
       () => <String, TripVisitFeedback>{},

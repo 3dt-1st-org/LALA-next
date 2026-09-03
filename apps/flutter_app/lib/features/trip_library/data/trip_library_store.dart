@@ -36,6 +36,11 @@ class TripLibraryStore extends ChangeNotifier {
       <String, TripOverrideDocument>{};
   final Map<String, TripVisitFeedback> _visits = <String, TripVisitFeedback>{};
 
+  /// Place id per visit key, session memory only — device storage deliberately
+  /// keeps no place ids, so a retry after a cold start pushes without one
+  /// (the check-in contract allows a null place_id).
+  final Map<String, String> _visitPlaceIds = <String, String>{};
+
   Future<void>? _loadFuture;
   Future<void> _savedWriteQueue = Future<void>.value();
   bool _loaded = false;
@@ -76,6 +81,7 @@ class TripLibraryStore extends ChangeNotifier {
     } on Object {
       _overrides.clear();
       _visits.clear();
+      _visitPlaceIds.clear();
     } finally {
       _loaded = true;
       notifyListeners();
@@ -146,6 +152,7 @@ class TripLibraryStore extends ChangeNotifier {
     }
     _overrides.clear();
     _visits.clear();
+    _visitPlaceIds.clear();
     _pastTrips = const <PastTripSummary>[];
     _syncStatus = TripLibrarySyncStatus.localOnly;
     try {
@@ -179,6 +186,9 @@ class TripLibraryStore extends ChangeNotifier {
     notifyListeners();
     final remote = _remote;
     if (remote == null) return;
+    // Late-response guard: a disconnect/reconnect during the PUT invalidates
+    // this result; the dirty device copy stays for the next reconciliation.
+    final epoch = _syncEpoch;
     _syncStatus = TripLibrarySyncStatus.syncing;
     notifyListeners();
     try {
@@ -187,14 +197,17 @@ class TripLibraryStore extends ChangeNotifier {
         expectedRevision: current?.revision ?? 0,
         value: value,
       );
+      if (epoch != _syncEpoch) return;
       _overrides[planDate] = saved;
       _syncStatus = TripLibrarySyncStatus.synced;
       await _persistLocal();
     } on LalaApiException catch (error) {
+      if (epoch != _syncEpoch) return;
       _syncStatus = error.code == 'TRIP_PREFERENCES_REVISION_CONFLICT'
           ? TripLibrarySyncStatus.conflict
           : TripLibrarySyncStatus.error;
     } on Object {
+      if (epoch != _syncEpoch) return;
       _syncStatus = TripLibrarySyncStatus.error;
     }
     notifyListeners();
@@ -203,10 +216,12 @@ class TripLibraryStore extends ChangeNotifier {
   Future<void> reloadOverrideFromAccount(String planDate) async {
     final remote = _remote;
     if (remote == null) return;
+    final epoch = _syncEpoch;
     _syncStatus = TripLibrarySyncStatus.syncing;
     notifyListeners();
     try {
       final server = await remote.getOverride(planDate);
+      if (epoch != _syncEpoch) return;
       if (server == null) {
         _overrides.remove(planDate);
       } else {
@@ -215,6 +230,7 @@ class TripLibraryStore extends ChangeNotifier {
       _syncStatus = TripLibrarySyncStatus.synced;
       await _persistLocal();
     } on Object {
+      if (epoch != _syncEpoch) return;
       _syncStatus = TripLibrarySyncStatus.error;
     }
     notifyListeners();
@@ -227,12 +243,15 @@ class TripLibraryStore extends ChangeNotifier {
     notifyListeners();
     final remote = _remote;
     if (remote == null) return;
+    final epoch = _syncEpoch;
     _syncStatus = TripLibrarySyncStatus.syncing;
     notifyListeners();
     try {
       await remote.deleteOverride(planDate);
+      if (epoch != _syncEpoch) return;
       _syncStatus = TripLibrarySyncStatus.synced;
     } on Object {
+      if (epoch != _syncEpoch) return;
       _syncStatus = TripLibrarySyncStatus.error;
     }
     notifyListeners();
@@ -248,8 +267,14 @@ class TripLibraryStore extends ChangeNotifier {
     final key = tripVisitKey(planDate, slotPeriod);
     if (feedback.status == TripVisitStatus.planned) {
       _visits.remove(key);
+      _visitPlaceIds.remove(key);
     } else {
       _visits[key] = feedback;
+      if (placeId == null) {
+        _visitPlaceIds.remove(key);
+      } else {
+        _visitPlaceIds[key] = placeId;
+      }
     }
     SlotVisitStore.setStatus(
       planDate,
@@ -260,15 +285,17 @@ class TripLibraryStore extends ChangeNotifier {
     notifyListeners();
     final remote = _remote;
     if (remote == null) return;
+    final epoch = _syncEpoch;
     _syncStatus = TripLibrarySyncStatus.syncing;
     notifyListeners();
     try {
       final saved = await remote.putVisit(
         planDate,
         slotPeriod,
-        placeId: placeId,
+        placeId: placeId ?? _visitPlaceIds[key],
         feedback: feedback,
       );
+      if (epoch != _syncEpoch) return;
       if (saved.status == TripVisitStatus.planned) {
         _visits.remove(key);
       } else {
@@ -277,6 +304,7 @@ class TripLibraryStore extends ChangeNotifier {
       _syncStatus = TripLibrarySyncStatus.synced;
       await _persistLocal();
     } on Object {
+      if (epoch != _syncEpoch) return;
       _syncStatus = TripLibrarySyncStatus.error;
     }
     notifyListeners();
@@ -285,15 +313,18 @@ class TripLibraryStore extends ChangeNotifier {
   Future<void> refreshPastTrips({String? before, bool append = false}) async {
     final remote = _remote;
     if (remote == null) return;
+    final epoch = _syncEpoch;
     _syncStatus = TripLibrarySyncStatus.syncing;
     notifyListeners();
     try {
       final loaded = await remote.listPastTrips(before: before);
+      if (epoch != _syncEpoch) return;
       _pastTrips = append
           ? <PastTripSummary>[..._pastTrips, ...loaded]
           : loaded;
       _syncStatus = TripLibrarySyncStatus.synced;
     } on Object {
+      if (epoch != _syncEpoch) return;
       _syncStatus = TripLibrarySyncStatus.error;
     }
     notifyListeners();
@@ -327,18 +358,22 @@ class TripLibraryStore extends ChangeNotifier {
   Future<void> deletePastPlan(String planDate) async {
     final remote = _remote;
     if (remote == null) return;
+    final epoch = _syncEpoch;
     _syncStatus = TripLibrarySyncStatus.syncing;
     notifyListeners();
     try {
       await remote.deletePlan(planDate);
+      if (epoch != _syncEpoch) return;
       _pastTrips = _pastTrips
           .where((trip) => trip.planDate != planDate)
           .toList(growable: false);
       _overrides.remove(planDate);
       _visits.removeWhere((key, _) => key.startsWith('$planDate:'));
+      _visitPlaceIds.removeWhere((key, _) => key.startsWith('$planDate:'));
       _syncStatus = TripLibrarySyncStatus.synced;
       await _persistLocal();
     } on Object {
+      if (epoch != _syncEpoch) return;
       _syncStatus = TripLibrarySyncStatus.error;
     }
     notifyListeners();
@@ -389,6 +424,27 @@ class TripLibraryStore extends ChangeNotifier {
         tripVisitStatusWire(_visits[key]!.status),
       );
     }
+    // Retry leg: device-first visit writes that never reached the account (a
+    // failed putVisit) are re-pushed here so "sync can be retried later" is a
+    // real action. The device copy stays authoritative (putIfAbsent above), so
+    // keys missing on the server or diverging from it converge to the device.
+    final prefix = '$planDate:';
+    for (final entry in _visits.entries) {
+      if (!entry.key.startsWith(prefix)) continue;
+      if (serverVisits[entry.key.substring(prefix.length)] == entry.value) {
+        continue;
+      }
+      final saved = await remote.putVisit(
+        planDate,
+        entry.key.substring(prefix.length),
+        placeId: _visitPlaceIds[entry.key],
+        feedback: entry.value,
+      );
+      if (epoch != _syncEpoch) return;
+      if (saved.status != TripVisitStatus.planned) {
+        _visits[entry.key] = saved;
+      }
+    }
   }
 
   void _attachListeners() {
@@ -411,6 +467,9 @@ class TripLibraryStore extends ChangeNotifier {
     _lastSavedIds = Set<String>.of(next);
     if (added.isEmpty && removed.isEmpty) return;
     _savedWriteQueue = _savedWriteQueue.then((_) async {
+      // Late-response guard: a disconnect while the queued writes are in
+      // flight must not report an account-synced state afterwards.
+      final epoch = _syncEpoch;
       _syncStatus = TripLibrarySyncStatus.syncing;
       notifyListeners();
       try {
@@ -420,8 +479,10 @@ class TripLibraryStore extends ChangeNotifier {
         for (final placeId in removed) {
           await remote.setSavedPlace(placeId, saved: false);
         }
+        if (epoch != _syncEpoch) return;
         _syncStatus = TripLibrarySyncStatus.synced;
       } on Object {
+        if (epoch != _syncEpoch) return;
         _syncStatus = TripLibrarySyncStatus.error;
       }
       notifyListeners();
@@ -439,10 +500,15 @@ class TripLibraryStore extends ChangeNotifier {
     TripLibraryRemote remote,
     LalaDailyPlan plan,
   ) async {
+    final epoch = _syncEpoch;
     try {
       await remote.savePlan(tripLibraryDateKey(), encodeLalaDailyPlan(plan));
+      // Late-response guard: ignore the completion when the account context it
+      // wrote under is no longer active.
+      if (epoch != _syncEpoch) return;
       await refreshPastTrips();
     } on Object {
+      if (epoch != _syncEpoch) return;
       _syncStatus = TripLibrarySyncStatus.error;
       notifyListeners();
     }
