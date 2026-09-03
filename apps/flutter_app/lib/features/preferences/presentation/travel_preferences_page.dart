@@ -736,44 +736,44 @@ class _TravelPreferencesPageState extends State<TravelPreferencesPage> {
             ? null
             : SafeArea(
                 minimum: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-                child: SizedBox(
-                  height: LalaVisualTokens.actionHeight,
-                  child: FilledButton.icon(
-                    key: const ValueKey('travel-preferences-save'),
-                    onPressed: _dirty && !_saving ? _save : null,
-                    icon: _saving
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(Icons.check),
-                    label: Text(
-                      _text(
-                        widget.language,
-                        ko: '저장',
-                        en: 'Save',
-                        ja: '保存',
-                        zhHans: '保存',
-                        zhHant: '儲存',
+                // Why: fixed actionHeight clipped the label under large
+                // text scaling; minimumSize keeps the visual height.
+                child: FilledButton.icon(
+                  key: const ValueKey('travel-preferences-save'),
+                  onPressed: _dirty && !_saving ? _save : null,
+                  icon: _saving
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.check),
+                  label: Text(
+                    _text(
+                      widget.language,
+                      ko: '저장',
+                      en: 'Save',
+                      ja: '保存',
+                      zhHans: '保存',
+                      zhHant: '儲存',
+                    ),
+                  ),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: LalaVisualColors.primaryBlue,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: LalaVisualColors.disabledFill,
+                    disabledForegroundColor: LalaVisualColors.disabledInk,
+                    minimumSize: Size(0, LalaVisualTokens.actionHeight),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(
+                        LalaVisualTokens.controlRadius,
                       ),
                     ),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: LalaVisualColors.primaryBlue,
-                      foregroundColor: Colors.white,
-                      disabledBackgroundColor: LalaVisualColors.disabledFill,
-                      disabledForegroundColor: LalaVisualColors.disabledInk,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(
-                          LalaVisualTokens.controlRadius,
-                        ),
-                      ),
-                      textStyle: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                      ),
+                    textStyle: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
                     ),
                   ),
                 ),
@@ -2011,26 +2011,26 @@ class _DetailScaffold extends StatelessWidget {
       ),
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-        child: SizedBox(
-          height: LalaVisualTokens.actionHeight,
-          child: FilledButton(
-            key: const ValueKey('preference-detail-apply'),
-            onPressed: onSave,
-            style: FilledButton.styleFrom(
-              backgroundColor: LalaVisualColors.primaryBlue,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(
-                  LalaVisualTokens.controlRadius,
-                ),
-              ),
-              textStyle: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w900,
+        // Why: fixed actionHeight clipped the label under large text
+        // scaling; minimumSize keeps the visual height but lets it grow.
+        child: FilledButton(
+          key: const ValueKey('preference-detail-apply'),
+          onPressed: onSave,
+          style: FilledButton.styleFrom(
+            backgroundColor: LalaVisualColors.primaryBlue,
+            foregroundColor: Colors.white,
+            minimumSize: Size(0, LalaVisualTokens.actionHeight),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(
+                LalaVisualTokens.controlRadius,
               ),
             ),
-            child: Text(saveLabel),
+            textStyle: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+            ),
           ),
+          child: Text(saveLabel),
         ),
       ),
     );
@@ -2067,31 +2067,36 @@ class _SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Expanded(
-            child: Text(
-              title,
-              style: const TextStyle(
-                color: LalaVisualColors.ink,
-                fontSize: 17,
-                fontWeight: FontWeight.w900,
+    // Why: section titles as headings so screen-reader users can jump
+    // between the S-53..S-57 preference sections.
+    return Semantics(
+      header: true,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  color: LalaVisualColors.ink,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
             ),
-          ),
-          if (caption != null)
-            Text(
-              caption!,
-              style: const TextStyle(
-                color: LalaVisualColors.muted,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
+            if (caption != null)
+              Text(
+                caption!,
+                style: const TextStyle(
+                  color: LalaVisualColors.muted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
