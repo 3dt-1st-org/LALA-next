@@ -19,11 +19,17 @@ class CommunityFeedPage extends StatefulWidget {
   const CommunityFeedPage({
     this.initialConfig = const LalaAppConfig.fromEnvironment(),
     this.authController,
+    this.client,
     super.key,
   });
 
   final LalaAppConfig initialConfig;
   final LalaAuthController? authController;
+
+  /// Optional injected client for focused tests; production always builds
+  /// its own from [initialConfig]. Must stay optional because the shared
+  /// router constructs this page without it.
+  final LalaApiClient? client;
 
   @override
   State<CommunityFeedPage> createState() => _CommunityFeedPageState();
@@ -34,6 +40,7 @@ enum _FeedStatus { loading, data, error }
 class _CommunityFeedPageState extends State<CommunityFeedPage> {
   late final LalaAppConfig _config;
   late LalaApiClient _client;
+  late final bool _ownsClient;
   final ScrollController _scrollController = ScrollController();
 
   _FeedStatus _status = _FeedStatus.loading;
@@ -45,11 +52,16 @@ class _CommunityFeedPageState extends State<CommunityFeedPage> {
   bool _isLoadingMore = false;
   bool _hasMore = false;
 
+  // Why: pagination failure must be visible and retryable — a silent stop
+  // reads as "no more posts", which is a different truth.
+  bool _loadMoreFailed = false;
+
   @override
   void initState() {
     super.initState();
     _config = widget.initialConfig;
-    _client = createCommunityClient(_config);
+    _ownsClient = widget.client == null;
+    _client = widget.client ?? createCommunityClient(_config);
     _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _load(initial: true);
@@ -60,7 +72,7 @@ class _CommunityFeedPageState extends State<CommunityFeedPage> {
   void dispose() {
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
-    _client.close();
+    if (_ownsClient) _client.close();
     super.dispose();
   }
 
@@ -82,6 +94,9 @@ class _CommunityFeedPageState extends State<CommunityFeedPage> {
       setState(() {
         _status = _FeedStatus.loading;
         _error = null;
+        // Why: a full reload replaces the list, so a stale pagination failure
+        // must not resurface as a retry row on the refreshed feed.
+        _loadMoreFailed = false;
       });
     }
     try {
@@ -116,7 +131,10 @@ class _CommunityFeedPageState extends State<CommunityFeedPage> {
 
   Future<void> _loadMore() async {
     if (_isLoadingMore) return;
-    setState(() => _isLoadingMore = true);
+    setState(() {
+      _isLoadingMore = true;
+      _loadMoreFailed = false;
+    });
     final offset = _posts.length;
     try {
       final envelope = await _client.getCommunityPosts(
@@ -133,7 +151,10 @@ class _CommunityFeedPageState extends State<CommunityFeedPage> {
       });
     } on Object {
       if (!mounted) return;
-      setState(() => _isLoadingMore = false);
+      setState(() {
+        _isLoadingMore = false;
+        _loadMoreFailed = true;
+      });
     }
   }
 
@@ -266,11 +287,12 @@ class _CommunityFeedPageState extends State<CommunityFeedPage> {
   Widget _buildBody() {
     switch (_status) {
       case _FeedStatus.loading:
-        return const _FeedLoadingView();
+        return _FeedLoadingView(language: _language);
       case _FeedStatus.error:
         return _FeedErrorView(
           message: _error!,
           onRetry: () => _load(initial: true),
+          language: _language,
         );
       case _FeedStatus.data:
         if (_posts.isEmpty) {
@@ -281,8 +303,10 @@ class _CommunityFeedPageState extends State<CommunityFeedPage> {
           posts: _posts,
           total: _total,
           isLoadingMore: _isLoadingMore,
+          loadMoreFailed: _loadMoreFailed,
           language: _language,
           onTap: _openPost,
+          onRetryLoadMore: _loadMore,
         );
     }
   }
@@ -339,25 +363,34 @@ class _CommunityTrustNotice extends StatelessWidget {
 
 /// 로딩 상태 본문.
 class _FeedLoadingView extends StatelessWidget {
-  const _FeedLoadingView();
+  const _FeedLoadingView({required this.language});
+
+  final String language;
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    return Center(
       child: Padding(
-        padding: EdgeInsets.all(24),
+        padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            SizedBox(
+            const SizedBox(
               width: 28,
               height: 28,
               child: CircularProgressIndicator(strokeWidth: 2.4),
             ),
-            SizedBox(height: 14),
+            const SizedBox(height: 14),
             Text(
-              '게시글을 불러오는 중...',
-              style: TextStyle(
+              lalaCopyMulti(
+                language,
+                ko: '게시글을 불러오는 중...',
+                en: 'Loading posts…',
+                ja: '投稿を読み込んでいます…',
+                zhHans: '正在加载帖子…',
+                zhHant: '正在載入貼文…',
+              ),
+              style: const TextStyle(
                 color: Color(0xFF475569),
                 fontWeight: FontWeight.w800,
               ),
@@ -370,9 +403,14 @@ class _FeedLoadingView extends StatelessWidget {
 }
 
 class _FeedErrorView extends StatelessWidget {
-  const _FeedErrorView({required this.message, required this.onRetry});
+  const _FeedErrorView({
+    required this.message,
+    required this.onRetry,
+    required this.language,
+  });
   final String message;
   final VoidCallback onRetry;
+  final String language;
 
   @override
   Widget build(BuildContext context) {
@@ -402,7 +440,16 @@ class _FeedErrorView extends StatelessWidget {
             FilledButton.icon(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh_rounded, size: 18),
-              label: const Text('재시도'),
+              label: Text(
+                lalaCopyMulti(
+                  language,
+                  ko: '재시도',
+                  en: 'Retry',
+                  ja: '再試行',
+                  zhHans: '重试',
+                  zhHant: '重試',
+                ),
+              ),
               style: FilledButton.styleFrom(
                 backgroundColor: theme.colorScheme.primary,
                 foregroundColor: theme.colorScheme.onPrimary,
@@ -469,27 +516,54 @@ class _FeedListView extends StatelessWidget {
     required this.posts,
     required this.total,
     required this.isLoadingMore,
+    required this.loadMoreFailed,
     required this.language,
     required this.onTap,
+    required this.onRetryLoadMore,
   });
 
   final ScrollController controller;
   final List<CommunityPost> posts;
   final int total;
   final bool isLoadingMore;
+  final bool loadMoreFailed;
   final String language;
   final ValueChanged<CommunityPost> onTap;
+  final VoidCallback onRetryLoadMore;
 
   @override
   Widget build(BuildContext context) {
+    final tailCount = (isLoadingMore || loadMoreFailed) ? 1 : 0;
     return ListView.separated(
       controller: controller,
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 88),
-      itemCount: posts.length + (isLoadingMore ? 1 : 0),
+      itemCount: posts.length + tailCount,
       separatorBuilder: (context, index) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         if (index == posts.length) {
+          if (loadMoreFailed) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Center(
+                child: OutlinedButton.icon(
+                  key: const ValueKey('community-feed-load-more-retry'),
+                  onPressed: onRetryLoadMore,
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  label: Text(
+                    lalaCopyMulti(
+                      language,
+                      ko: '더 불러오지 못했어요. 다시 시도',
+                      en: 'Could not load more. Try again',
+                      ja: 'さらに読み込めませんでした。再試行',
+                      zhHans: '未能加载更多，请重试',
+                      zhHant: '無法載入更多，請重試',
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }
           return const Padding(
             padding: EdgeInsets.symmetric(vertical: 16),
             child: Center(

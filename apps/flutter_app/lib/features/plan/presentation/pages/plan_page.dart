@@ -14,6 +14,7 @@ import 'package:lala_next_app/core/location/lala_location.dart';
 import 'package:lala_next_app/core/location/region_context.dart';
 import 'package:lala_next_app/core/routing/lala_route_paths.dart';
 import 'package:lala_next_app/core/state/plan_context_store.dart';
+import 'package:lala_next_app/core/state/saved_place_store.dart';
 import 'package:lala_next_app/core/state/slot_visit_store.dart';
 import 'package:lala_next_app/features/docent/experience/docent_experience_controller.dart';
 import 'package:lala_next_app/features/docent/experience/docent_experience_copy.dart';
@@ -101,6 +102,9 @@ class _PlanPageState extends State<PlanPage> {
   // V5-B VISIT: rebuild when a check-in toggles anywhere so the planned↔visited
   // badge reflects the persisted state in SlotVisitStore.
   late final VoidCallback _onVisitsChanged;
+  // F-030 save-state sharing: rebuild when a save toggles anywhere so the plan
+  // timeline's saved marker matches the map/detail state (same SavedPlaceStore).
+  late final VoidCallback _onSavedPlacesChanged;
 
   // 안내문은 unavailable/error 상태에서만 사용. empty(no-data) 는 별도 copy.
   String _failureMessage = '';
@@ -168,6 +172,14 @@ class _PlanPageState extends State<PlanPage> {
       setState(() {});
     };
     SlotVisitStore.listenable.addListener(_onVisitsChanged);
+    // F-030: react to saves toggled anywhere (map detail, saved-places list).
+    _onSavedPlacesChanged = () {
+      if (!mounted) {
+        return;
+      }
+      setState(() {});
+    };
+    SavedPlaceStore.listenable.addListener(_onSavedPlacesChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _load();
@@ -181,6 +193,7 @@ class _PlanPageState extends State<PlanPage> {
     OnboardingState.languageListenable.removeListener(_onLanguageChanged);
     PlanContextStore.listenable.removeListener(_onPlanChanged);
     SlotVisitStore.listenable.removeListener(_onVisitsChanged);
+    SavedPlaceStore.listenable.removeListener(_onSavedPlacesChanged);
     _backend.close();
     super.dispose();
   }
@@ -1161,6 +1174,11 @@ class _PlanContent extends StatelessWidget {
               ),
               spendBand: band,
               spendUnavailable: band == null,
+              // F-030: the plan timeline mirrors the shared save state so the
+              // same place reads identically on map/detail and plan.
+              saved: slot.place == null
+                  ? null
+                  : SavedPlaceStore.isSaved(slot.place!.placeId),
               onPlayDocent: docentController == null || slot.place == null
                   ? null
                   : () => unawaited(docentController!.playPlace(slot.place!)),

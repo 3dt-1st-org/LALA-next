@@ -309,7 +309,9 @@ class _DocentMetaChip extends StatelessWidget {
   }
 }
 
-/// 재생 상태 + 재생/일시정지/정지 컨트롤. 앰버 토큰은 tour_audio_bar 계열 재사용.
+/// 재생 상태 계열 카드 — 컨트롤러의 실제 단계마다 서로 다른 정직 표현
+/// (round2-docent-player-polish §1 상태 매트릭스). 앰버 토큰은 tour_audio_bar
+/// 계열, unavailable 슬레이트는 docent_subtitle 계열을 재사용한다(새 색 금지).
 /// seek 슬라이더/진행바/남은 시간은 제공하지 않는다(플레이어가 지원하지 않음).
 class _DocentPlaybackCard extends StatelessWidget {
   const _DocentPlaybackCard({
@@ -326,93 +328,209 @@ class _DocentPlaybackCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final phase = state.phase;
+    final isPreparing = state.preparing;
+    final isUnavailable = phase == DocentExperiencePhase.unavailable;
+    final isRetry = isUnavailable || phase == DocentExperiencePhase.failed;
+    final isPlaying = phase == DocentExperiencePhase.playing;
     final queuePrefix = state.queueActive
         ? '${docentMiniQueueProgress(state.queueIndex, state.queue.length)} · '
         : '';
+    // 캡션은 단일 출처: safeMessage 가 있으면 그 자체가 상태 설명이다(§2 계약).
     final caption =
-        state.safeMessage ?? docentExperiencePhaseLabel(state.phase, language);
-    final isPlaying = state.phase == DocentExperiencePhase.playing;
-    final isPreparing = state.preparing;
-    final isRetry =
-        state.phase == DocentExperiencePhase.unavailable ||
-        state.phase == DocentExperiencePhase.failed;
+        state.safeMessage ?? docentExperiencePhaseLabel(phase, language);
+    final explanation = isUnavailable
+        ? docentVoiceUnavailableExplanation(language)
+        : null;
+    // 준비 중 비활성 토글의 라벨은 현재 단계 캡션 — '왜 못 누르는지'를 알린다.
     final toggleLabel = isRetry
         ? docentRetrySemanticLabel(language)
+        : isPreparing
+        ? docentExperiencePhaseLabel(phase, language)
         : isPlaying
         ? docentPauseSemanticLabel(language)
         : docentPlaySemanticLabel(language);
+    final stopColor = isUnavailable
+        ? const Color(0xFF64748B)
+        : const Color(0xFFC87F11);
+    final stopButton = SizedBox(
+      width: 44,
+      height: 44,
+      child: Semantics(
+        label: docentStopSemanticLabel(language),
+        button: true,
+        child: IconButton(
+          onPressed: onStop,
+          icon: Icon(Icons.stop_rounded, color: stopColor),
+          padding: EdgeInsets.zero,
+          tooltip: docentStopSemanticLabel(language),
+        ),
+      ),
+    );
+    final List<Widget> controls;
+    if (isRetry) {
+      // unavailable/failed: 보이는 재시도 CTA(명시적 사용자 행동) + 정지.
+      controls = <Widget>[
+        Expanded(
+          child: OutlinedButton.icon(
+            key: const ValueKey('docent-retry-button'),
+            onPressed: () => controller.toggleControl(),
+            icon: const Icon(Icons.refresh_rounded, size: 18),
+            label: Text(docentRetryButtonLabel(language)),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF744210),
+              side: const BorderSide(color: Color(0xFFF5C842)),
+              backgroundColor: const Color(0xFFFFFBEB),
+              minimumSize: const Size.fromHeight(44),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        stopButton,
+      ];
+    } else {
+      controls = <Widget>[
+        SizedBox(
+          width: 44,
+          height: 44,
+          child: Semantics(
+            label: toggleLabel,
+            button: true,
+            enabled: !isPreparing,
+            child: IconButton(
+              onPressed: isPreparing ? null : () => controller.toggleControl(),
+              icon: Icon(
+                isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                color: const Color(0xFFC87F11),
+              ),
+              padding: EdgeInsets.zero,
+              tooltip: toggleLabel,
+            ),
+          ),
+        ),
+        stopButton,
+      ];
+    }
+    // Why: 큰 글자에서 인라인 컨트롤이 캡션을 밀어내지 않도록 재시도 상태와
+    // 130%+ 텍스트 스케일에서는 컨트롤을 아래 행으로 내린다(200% 가독 계약).
+    // 비선형 스케일러 대비 scale(14) 기준으로 실효 배율을 잰다.
+    final stacked =
+        isRetry || MediaQuery.textScalerOf(context).scale(14) >= 14 * 1.3;
+    final statusBlock = Row(
+      children: <Widget>[
+        _DocentStateGlyph(phase: phase),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Semantics(
+                liveRegion: true,
+                child: Text(
+                  '$queuePrefix$caption',
+                  style: TextStyle(
+                    color: isUnavailable
+                        ? const Color(0xFF334155)
+                        : const Color(0xFF744210),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              if (explanation != null) ...<Widget>[
+                const SizedBox(height: 3),
+                Text(
+                  explanation,
+                  style: const TextStyle(
+                    color: Color(0xFF64748B),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        if (!stacked) ...<Widget>[const SizedBox(width: 8), ...controls],
+      ],
+    );
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFBEB),
+        color: isUnavailable
+            ? const Color(0xFFF8FAFC)
+            : const Color(0xFFFFFBEB),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFF5C842)),
+        border: Border.all(
+          color: isUnavailable
+              ? const Color(0xFFE2E8F0)
+              : const Color(0xFFF5C842),
+        ),
       ),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: Text(
-              '$queuePrefix$caption',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Color(0xFF744210),
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          SizedBox(
-            width: 44,
-            height: 44,
-            child: Semantics(
-              label: toggleLabel,
-              button: true,
-              child: IconButton(
-                onPressed: isPreparing
-                    ? null
-                    : () => controller.toggleControl(),
-                icon: isPreparing
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Icon(
-                        isRetry
-                            ? Icons.refresh_rounded
-                            : isPlaying
-                            ? Icons.pause_rounded
-                            : Icons.play_arrow_rounded,
-                        color: const Color(0xFFC87F11),
-                      ),
-                padding: EdgeInsets.zero,
-                tooltip: toggleLabel,
-              ),
-            ),
-          ),
-          SizedBox(
-            width: 44,
-            height: 44,
-            child: Semantics(
-              label: docentStopSemanticLabel(language),
-              button: true,
-              child: IconButton(
-                onPressed: onStop,
-                icon: const Icon(Icons.stop_rounded, color: Color(0xFFC87F11)),
-                padding: EdgeInsets.zero,
-                tooltip: docentStopSemanticLabel(language),
-              ),
-            ),
-          ),
-        ],
-      ),
+      child: stacked
+          ? Column(
+              children: <Widget>[
+                statusBlock,
+                const SizedBox(height: 10),
+                Row(children: controls),
+              ],
+            )
+          : statusBlock,
     );
   }
 }
 
-/// 단일 언어 스크립트 전문(스크롤 가능). 이 언어로 쓸 수 있는 스크립트가 없으면
-/// 섹션 전체를 honest 하게 생략한다 — 빈 문구로 채우지 않는다.
+/// 카드 상단 상태 글리프 — 재생 계열은 앰버 웨이브폼, 준비 중은 스피너,
+/// unavailable 은 슬레이트 음소거, failed 는 앰버 경고. 상태를 색+형태로 이중 전달.
+class _DocentStateGlyph extends StatelessWidget {
+  const _DocentStateGlyph({required this.phase});
+
+  final DocentExperiencePhase phase;
+
+  @override
+  Widget build(BuildContext context) {
+    switch (phase) {
+      case DocentExperiencePhase.checkingReadiness:
+      case DocentExperiencePhase.preparingScript:
+      case DocentExperiencePhase.preparingAudio:
+        return const SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: Color(0xFFC87F11),
+          ),
+        );
+      case DocentExperiencePhase.unavailable:
+        return const Icon(
+          Icons.volume_off_outlined,
+          size: 22,
+          color: Color(0xFF64748B),
+        );
+      case DocentExperiencePhase.failed:
+        return const Icon(
+          Icons.error_outline_rounded,
+          size: 22,
+          color: Color(0xFF92400E),
+        );
+      case DocentExperiencePhase.idle:
+        // idle 세션은 place==null 로 카드 자체가 렌더되지 않는다(안전 기본값).
+        return const SizedBox(width: 20, height: 20);
+      case DocentExperiencePhase.ready:
+      case DocentExperiencePhase.playing:
+      case DocentExperiencePhase.paused:
+      case DocentExperiencePhase.completed:
+        return const Icon(
+          Icons.graphic_eq_rounded,
+          size: 22,
+          color: Color(0xFFC87F11),
+        );
+    }
+  }
+}
+
+/// 단일 언어 스크립트 전문(스크롤 가능) — text-first 기본 콘텐츠라 흰 카드로
+/// 승격한다(tour_script_card 계열 토큰 재사용). 이 언어로 쓸 수 있는 스크립트가
+/// 없으면 섹션 전체를 honest 하게 생략한다 — 빈 문구로 채우지 않는다.
 class _DocentTranscriptCard extends StatelessWidget {
   const _DocentTranscriptCard({required this.state, required this.language});
 
@@ -428,16 +546,36 @@ class _DocentTranscriptCard extends StatelessWidget {
     if (text == null || text.isEmpty) {
       return const SizedBox.shrink();
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(
-          docentTranscriptSectionTitle(language),
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900),
-        ),
-        const SizedBox(height: 8),
-        Text(text, style: const TextStyle(fontSize: 15, height: 1.5)),
-      ],
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            docentTranscriptSectionTitle(language),
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF111827),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            text,
+            key: const ValueKey('docent-transcript-text'),
+            style: const TextStyle(
+              fontSize: 15,
+              height: 1.5,
+              color: Color(0xFF1A202C),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

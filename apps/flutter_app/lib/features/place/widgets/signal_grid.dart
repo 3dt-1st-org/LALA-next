@@ -37,7 +37,14 @@ class SignalGrid extends StatelessWidget {
       if (localSpendingValue != null)
         Expanded(
           child: SignalMeter(
-            label: lalaCopy(language, ko: '내국인 소비', en: 'Local spending'),
+            label: lalaCopyMulti(
+              language,
+              ko: '내국인 소비',
+              en: 'Local spending',
+              ja: '地元民の消費',
+              zhHans: '本地人消费',
+              zhHant: '本地人消費',
+            ),
             value: localSpendingValue,
             color: const Color(0xFFC53030),
           ),
@@ -45,7 +52,14 @@ class SignalGrid extends StatelessWidget {
       if (demandDispersionValue != null)
         Expanded(
           child: SignalMeter(
-            label: lalaCopy(language, ko: '수요 분산', en: 'Demand spread'),
+            label: lalaCopyMulti(
+              language,
+              ko: '수요 분산',
+              en: 'Demand spread',
+              ja: '需要の分散',
+              zhHans: '需求分散',
+              zhHant: '需求分散',
+            ),
             value: demandDispersionValue,
             color: const Color(0xFFF5C842),
           ),
@@ -53,7 +67,14 @@ class SignalGrid extends StatelessWidget {
       if (cultureRelevanceValue != null)
         Expanded(
           child: SignalMeter(
-            label: lalaCopy(language, ko: '문화 연계', en: 'Culture fit'),
+            label: lalaCopyMulti(
+              language,
+              ko: '문화 연계',
+              en: 'Culture fit',
+              ja: '文化との関連',
+              zhHans: '文化关联',
+              zhHant: '文化關聯',
+            ),
             value: cultureRelevanceValue,
             color: const Color(0xFF2B6CB0),
           ),
@@ -61,7 +82,14 @@ class SignalGrid extends StatelessWidget {
       if (weatherFitValue != null)
         Expanded(
           child: SignalMeter(
-            label: lalaCopy(language, ko: '날씨 적합', en: 'Weather fit'),
+            label: lalaCopyMulti(
+              language,
+              ko: '날씨 적합',
+              en: 'Weather fit',
+              ja: '天候の適合',
+              zhHans: '天气适宜',
+              zhHant: '天氣適宜',
+            ),
             value: weatherFitValue,
             color: const Color(0xFF0F766E),
           ),
@@ -73,7 +101,14 @@ class SignalGrid extends StatelessWidget {
       return _card(
         child: Center(
           child: Text(
-            lalaCopy(language, ko: '데이터 없음', en: 'No data yet'),
+            lalaCopyMulti(
+              language,
+              ko: '데이터 없음',
+              en: 'No data yet',
+              ja: 'データなし',
+              zhHans: '暂无数据',
+              zhHant: '暫無資料',
+            ),
             style: Theme.of(
               context,
             ).textTheme.labelMedium?.copyWith(color: LalaVisualColors.muted),

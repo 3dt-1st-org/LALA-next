@@ -62,6 +62,133 @@ class LocalSignalMutationReceipt {
   final String title;
   final String body;
 
+  /// Labels cover exactly the API Literal values; an unknown wire value is
+  /// returned as-is so a contract change stays visible instead of rendered as
+  /// an invented moderation claim.
+  String statusLabel(String language) => switch (status) {
+    'draft' => lalaCopyMulti(
+      language,
+      ko: '비공개 초안',
+      en: 'Private draft',
+      ja: '非公開の下書き',
+      zhHans: '私密草稿',
+      zhHant: '私密草稿',
+    ),
+    'submitted' => lalaCopyMulti(
+      language,
+      ko: '검수 요청됨',
+      en: 'Submitted for review',
+      ja: '審査依頼済み',
+      zhHans: '已提交审核',
+      zhHant: '已提交審核',
+    ),
+    'published' => lalaCopyMulti(
+      language,
+      ko: '공개됨',
+      en: 'Published',
+      ja: '公開済み',
+      zhHans: '已公开',
+      zhHant: '已公開',
+    ),
+    'hidden' => lalaCopyMulti(
+      language,
+      ko: '숨김됨',
+      en: 'Hidden',
+      ja: '非表示',
+      zhHans: '已隐藏',
+      zhHant: '已隱藏',
+    ),
+    'removed' => lalaCopyMulti(
+      language,
+      ko: '관리자에 의해 내려감',
+      en: 'Removed',
+      ja: '削除済み',
+      zhHans: '已被移除',
+      zhHant: '已被移除',
+    ),
+    'deleted' => lalaCopyMulti(
+      language,
+      ko: '삭제됨',
+      en: 'Deleted',
+      ja: '削除済み',
+      zhHans: '已删除',
+      zhHant: '已刪除',
+    ),
+    _ => status,
+  };
+
+  String moderationStateLabel(String language) => switch (moderationState) {
+    'unreviewed' => lalaCopyMulti(
+      language,
+      ko: '검수 전',
+      en: 'Not yet reviewed',
+      ja: '未審査',
+      zhHans: '尚未审核',
+      zhHant: '尚未審核',
+    ),
+    'pending' => lalaCopyMulti(
+      language,
+      ko: '검수 중',
+      en: 'Under review',
+      ja: '審査中',
+      zhHans: '审核中',
+      zhHant: '審核中',
+    ),
+    'approved' => lalaCopyMulti(
+      language,
+      ko: '검수 승인',
+      en: 'Review approved',
+      ja: '審査承認済み',
+      zhHans: '审核通过',
+      zhHant: '審核通過',
+    ),
+    'rejected' => lalaCopyMulti(
+      language,
+      ko: '검수 반려',
+      en: 'Review rejected',
+      ja: '審査却下',
+      zhHans: '审核未通过',
+      zhHant: '審核未通過',
+    ),
+    _ => moderationState,
+  };
+
+  String visibilityLabel(String language) => switch (visibility) {
+    'private' => lalaCopyMulti(
+      language,
+      ko: '비공개',
+      en: 'Private',
+      ja: '非公開',
+      zhHans: '不公开',
+      zhHant: '不公開',
+    ),
+    'pending_review' => lalaCopyMulti(
+      language,
+      ko: '검수 후 공개 예정',
+      en: 'Awaiting review before publication',
+      ja: '公開前の審査待ち',
+      zhHans: '待审核后公开',
+      zhHant: '待審核後公開',
+    ),
+    'public' => lalaCopyMulti(
+      language,
+      ko: '공개',
+      en: 'Public',
+      ja: '公開',
+      zhHans: '公开',
+      zhHant: '公開',
+    ),
+    'unlisted' => lalaCopyMulti(
+      language,
+      ko: '목록 비공개',
+      en: 'Unlisted',
+      ja: '限定公開',
+      zhHans: '不列入列表',
+      zhHant: '不列入清單',
+    ),
+    _ => visibility,
+  };
+
   factory LocalSignalMutationReceipt.fromJson(Object? value) {
     if (value is! Map) {
       throw const FormatException('Invalid Local Signal mutation receipt.');

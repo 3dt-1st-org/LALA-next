@@ -5,6 +5,7 @@ import '../../../shared/l10n/lala_copy.dart';
 import 'docent_experience_state.dart';
 
 /// 미니플레이어/플레이어 상태 한 줄 캡션(단계별 정직 문구).
+/// 준비 3단계는 실제 컨트롤러 단계를 그대로 구분해 알린다(round2 §1 상태 매트릭스).
 String docentExperiencePhaseLabel(
   DocentExperiencePhase phase,
   String language,
@@ -13,15 +14,31 @@ String docentExperiencePhaseLabel(
     case DocentExperiencePhase.idle:
       return '';
     case DocentExperiencePhase.checkingReadiness:
+      return lalaCopyMulti(
+        language,
+        ko: '음성 사용 가능 여부 확인 중',
+        en: 'Checking voice availability',
+        ja: '音声の利用可否を確認中',
+        zhHans: '正在确认语音可用性',
+        zhHant: '正在確認語音可用性',
+      );
     case DocentExperiencePhase.preparingScript:
+      return lalaCopyMulti(
+        language,
+        ko: '도슨트 스크립트 준비 중',
+        en: 'Preparing the script',
+        ja: 'ガイドスクリプトを準備中',
+        zhHans: '正在准备讲解词',
+        zhHant: '正在準備導覽解說',
+      );
     case DocentExperiencePhase.preparingAudio:
       return lalaCopyMulti(
         language,
-        ko: '도슨트 준비 중',
-        en: 'Preparing the guide',
-        ja: 'ガイドを準備中',
-        zhHans: '正在准备讲解',
-        zhHant: '正在準備導覽',
+        ko: '도슨트 음성 준비 중',
+        en: 'Preparing the audio',
+        ja: 'ガイド音声を準備中',
+        zhHans: '正在准备讲解语音',
+        zhHant: '正在準備導覽語音',
       );
     case DocentExperiencePhase.ready:
       return lalaCopyMulti(
@@ -82,6 +99,32 @@ String speechUnavailableMessage(String language) {
     ja: '音声ガイドはご利用いただけません',
     zhHans: '语音讲解暂不可用',
     zhHant: '語音導覽暫不可用',
+  );
+}
+
+/// unavailable 상태의 '왜 비활성인지' 설명(round2 §1). 게이트 꺼짐과 도달 실패를
+/// 모두 포괄하는 정직한 범위만 말한다 — 원인을 단정하거나 숨겨진 스크립트가
+/// 있다고 암시하지 않는다(readiness 게이트 뒤에는 스크립트도 없다).
+String docentVoiceUnavailableExplanation(String language) {
+  return lalaCopyMulti(
+    language,
+    ko: '음성 도슨트 기능이 꺼져 있거나 아직 준비되지 않았어요. 잠시 후 다시 시도해 주세요.',
+    en: 'Voice guidance is turned off or not ready on this service yet. Please try again later.',
+    ja: '音声ガイドは現在無効か、まだ準備ができていません。しばらくしてからもう一度お試しください。',
+    zhHans: '语音讲解功能尚未开启或尚未就绪，请稍后重试。',
+    zhHant: '語音導覽功能尚未開啟或尚未就緒，請稍後重試。',
+  );
+}
+
+/// unavailable/failed 상태의 보이는 재시도 CTA 라벨(명시적 사용자 행동 유지).
+String docentRetryButtonLabel(String language) {
+  return lalaCopyMulti(
+    language,
+    ko: '다시 시도',
+    en: 'Try again',
+    ja: '再試行',
+    zhHans: '重试',
+    zhHant: '重試',
   );
 }
 

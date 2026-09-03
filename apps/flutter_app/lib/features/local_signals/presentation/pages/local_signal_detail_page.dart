@@ -59,6 +59,9 @@ class _LocalSignalDetailPageState extends State<LocalSignalDetailPage> {
   LocalSignalCommentFeed? _comments;
   bool _loading = false;
   bool _commentsLoading = false;
+  // Why: a failed comment read must not render as "no public comments" —
+  // empty and failed are different truths.
+  bool _commentsFailed = false;
   bool _actionBusy = false;
   bool _useful = false;
   bool _saved = false;
@@ -122,7 +125,10 @@ class _LocalSignalDetailPageState extends State<LocalSignalDetailPage> {
   Future<void> _loadComments() async {
     final signal = _signal;
     if (signal == null) return;
-    setState(() => _commentsLoading = true);
+    setState(() {
+      _commentsLoading = true;
+      _commentsFailed = false;
+    });
     try {
       final comments = await _repository.getComments(
         signal.id,
@@ -130,7 +136,9 @@ class _LocalSignalDetailPageState extends State<LocalSignalDetailPage> {
       );
       if (mounted) setState(() => _comments = comments);
     } on Object {
-      // Comments are secondary. Keep the verified signal body visible.
+      // Comments are secondary. Keep the verified signal body visible, but
+      // surface the failure instead of an honest-looking empty list.
+      if (mounted) setState(() => _commentsFailed = true);
     } finally {
       if (mounted) setState(() => _commentsLoading = false);
     }
@@ -414,10 +422,12 @@ class _LocalSignalDetailPageState extends State<LocalSignalDetailPage> {
               language: widget.language,
               authenticated: _authenticated,
               loading: _commentsLoading,
+              failed: _commentsFailed,
               comments: _comments?.items ?? const <LocalSignalPublicComment>[],
               controller: _commentController,
               busy: _actionBusy,
               onSubmit: _addComment,
+              onRetry: _loadComments,
             ),
             const SizedBox(height: 16),
           ],
@@ -835,19 +845,23 @@ class _CommentsSection extends StatelessWidget {
     required this.language,
     required this.authenticated,
     required this.loading,
+    required this.failed,
     required this.comments,
     required this.controller,
     required this.busy,
     required this.onSubmit,
+    required this.onRetry,
   });
 
   final String language;
   final bool authenticated;
   final bool loading;
+  final bool failed;
   final List<LocalSignalPublicComment> comments;
   final TextEditingController controller;
   final bool busy;
   final VoidCallback onSubmit;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) => _SurfacePanel(
@@ -868,6 +882,38 @@ class _CommentsSection extends StatelessWidget {
         const SizedBox(height: 10),
         if (loading)
           const LinearProgressIndicator()
+        else if (failed)
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  _copy(
+                    language,
+                    ko: '댓글을 불러오지 못했어요.',
+                    en: 'Comments could not be loaded.',
+                    ja: 'コメントを読み込めませんでした。',
+                    zhHans: '无法加载评论。',
+                    zhHant: '無法載入留言。',
+                  ),
+                  style: const TextStyle(color: LalaVisualColors.muted),
+                ),
+              ),
+              TextButton(
+                key: const ValueKey('local-signal-comments-retry'),
+                onPressed: onRetry,
+                child: Text(
+                  _copy(
+                    language,
+                    ko: '다시 시도',
+                    en: 'Try again',
+                    ja: '再試行',
+                    zhHans: '重试',
+                    zhHant: '重試',
+                  ),
+                ),
+              ),
+            ],
+          )
         else if (comments.isEmpty)
           Text(
             _copy(
@@ -1326,16 +1372,20 @@ class _ContributionComposerState extends State<_ContributionComposer> {
             if (_receipt != null) ...<Widget>[
               const SizedBox(height: 8),
               Text(
+                // Moderation transparency: the receipt's governed status,
+                // review state, and visibility are labeled, never invented —
+                // unknown wire values render as the raw contract value.
                 _copy(
                   widget.language,
-                  ko: '상태: ${_receipt!.status} · 공개 범위: ${_receipt!.visibility}',
-                  en: 'Status: ${_receipt!.status} · Visibility: ${_receipt!.visibility}',
-                  ja: '状態: ${_receipt!.status} · 公開範囲: ${_receipt!.visibility}',
+                  ko: '상태: ${_receipt!.statusLabel(widget.language)} · 검수: ${_receipt!.moderationStateLabel(widget.language)} · 공개 범위: ${_receipt!.visibilityLabel(widget.language)}',
+                  en: 'Status: ${_receipt!.statusLabel(widget.language)} · Review: ${_receipt!.moderationStateLabel(widget.language)} · Visibility: ${_receipt!.visibilityLabel(widget.language)}',
+                  ja: '状態: ${_receipt!.statusLabel(widget.language)} · 審査: ${_receipt!.moderationStateLabel(widget.language)} · 公開範囲: ${_receipt!.visibilityLabel(widget.language)}',
                   zhHans:
-                      '状态：${_receipt!.status} · 可见性：${_receipt!.visibility}',
+                      '状态：${_receipt!.statusLabel(widget.language)} · 审核：${_receipt!.moderationStateLabel(widget.language)} · 可见性：${_receipt!.visibilityLabel(widget.language)}',
                   zhHant:
-                      '狀態：${_receipt!.status} · 可見性：${_receipt!.visibility}',
+                      '狀態：${_receipt!.statusLabel(widget.language)} · 審核：${_receipt!.moderationStateLabel(widget.language)} · 可見性：${_receipt!.visibilityLabel(widget.language)}',
                 ),
+                key: const ValueKey('local-signal-draft-receipt-status'),
                 style: const TextStyle(
                   color: LalaVisualColors.muted,
                   fontWeight: FontWeight.w700,

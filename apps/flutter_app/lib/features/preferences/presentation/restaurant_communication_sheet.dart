@@ -81,19 +81,22 @@ class RestaurantCommunicationSheet extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      _copy(
-                        language,
-                        ko: '식당에서 보여주기',
-                        en: 'Show at the restaurant',
-                        ja: 'お店で見せる',
-                        zhHans: '给餐厅工作人员看',
-                        zhHant: '給餐廳工作人員看',
-                      ),
-                      style: const TextStyle(
-                        color: LalaVisualColors.ink,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
+                    Semantics(
+                      header: true,
+                      child: Text(
+                        _copy(
+                          language,
+                          ko: '식당에서 보여주기',
+                          en: 'Show at the restaurant',
+                          ja: 'お店で見せる',
+                          zhHans: '给餐厅工作人员看',
+                          zhHant: '給餐廳工作人員看',
+                        ),
+                        style: const TextStyle(
+                          color: LalaVisualColors.ink,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -265,7 +268,8 @@ class RestaurantCommunicationSheet extends StatelessWidget {
           ),
           child: SizedBox(
             width: double.infinity,
-            height: 48,
+            // Why: fixed 48px height clipped the label under large text
+            // scaling; minimumSize keeps the visual height but grows.
             child: FilledButton.icon(
               key: const ValueKey('copy-korean-restaurant-card'),
               onPressed: () => _copyToClipboard(context, koreanCard, language),
@@ -283,6 +287,7 @@ class RestaurantCommunicationSheet extends StatelessWidget {
               ),
               style: FilledButton.styleFrom(
                 backgroundColor: const Color(0xFF0B67D8),
+                minimumSize: const Size(0, 48),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -303,19 +308,28 @@ class _LanguageLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: const Color(0xFF0B67D8)),
-        const SizedBox(width: 8),
-        Text(
-          text,
-          style: const TextStyle(
-            color: LalaVisualColors.ink,
-            fontSize: 14,
-            fontWeight: FontWeight.w900,
+    // Why: mark the sheet's section labels as headings so screen-reader
+    // users can jump between the Korean card and their-language card. The
+    // label sits in Flexible so it wraps instead of overflowing the row
+    // under large text scaling.
+    return Semantics(
+      header: true,
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: const Color(0xFF0B67D8)),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              text,
+              style: const TextStyle(
+                color: LalaVisualColors.ink,
+                fontSize: 14,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -541,7 +555,8 @@ Future<void> _showLargeRestaurantCard(
               ),
               child: SizedBox(
                 width: double.infinity,
-                height: 48,
+                // Why: grows under large text scaling instead of clipping
+                // the label; 48px stays the visual baseline.
                 child: FilledButton.icon(
                   key: const ValueKey('restaurant-large-text-copy'),
                   onPressed: () =>
@@ -558,6 +573,7 @@ Future<void> _showLargeRestaurantCard(
                     ),
                     style: const TextStyle(fontWeight: FontWeight.w900),
                   ),
+                  style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
                 ),
               ),
             ),

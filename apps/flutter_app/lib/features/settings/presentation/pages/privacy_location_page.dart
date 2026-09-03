@@ -231,7 +231,7 @@ class _PrivacyLocationPageState extends State<PrivacyLocationPage> {
                   subtitle: Text(
                     lalaCopyMulti(
                       language,
-                      ko: '앱의 추천 설정입니다. 운영체제 위치 권한과는 별도로 관리돼요.',
+                      ko: '앱의 추천 설정이에요. 운영체제 위치 권한과는 별도로 관리돼요.',
                       en: 'This app choice is separate from the operating-system permission.',
                       ja: 'アプリ内の選択で、OSの位置権限とは別に管理されます。',
                       zhHans: '这是应用内选择，与系统位置权限分开管理。',

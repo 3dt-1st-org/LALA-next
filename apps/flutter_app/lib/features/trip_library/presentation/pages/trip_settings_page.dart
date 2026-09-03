@@ -117,6 +117,9 @@ class _TripSettingsPageState extends State<TripSettingsPage> {
                         }
                       }
                     : null,
+                onRetry: sync == TripLibrarySyncStatus.error
+                    ? () => unawaited(_tripStore.retryAccountSync())
+                    : null,
               ),
               const SizedBox(height: 20),
               _SectionTitle(
@@ -451,6 +454,7 @@ class _SyncBanner extends StatelessWidget {
     required this.differenceCount,
     required this.status,
     this.onReload,
+    this.onRetry,
   });
 
   final String language;
@@ -459,25 +463,36 @@ class _SyncBanner extends StatelessWidget {
   final TripLibrarySyncStatus status;
   final VoidCallback? onReload;
 
+  /// Recovery entry for a failed account write: re-runs the device-first
+  /// reconciliation (the device copy is never dropped).
+  final VoidCallback? onRetry;
+
   @override
   Widget build(BuildContext context) {
     final conflict = status == TripLibrarySyncStatus.conflict;
+    final syncFailed = status == TripLibrarySyncStatus.error;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: conflict
+        color: conflict || syncFailed
             ? const Color(0xFFFFF7ED)
             : LalaVisualColors.primarySoft,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: conflict ? const Color(0xFFF59E0B) : const Color(0xFFBDD8FA),
+          color: conflict || syncFailed
+              ? const Color(0xFFF59E0B)
+              : const Color(0xFFBDD8FA),
         ),
       ),
       child: Row(
         children: <Widget>[
           Icon(
-            conflict ? Icons.sync_problem_rounded : Icons.tune_rounded,
-            color: conflict
+            conflict
+                ? Icons.sync_problem_rounded
+                : syncFailed
+                ? Icons.cloud_off_outlined
+                : Icons.tune_rounded,
+            color: conflict || syncFailed
                 ? const Color(0xFFB45309)
                 : LalaVisualColors.primaryBlue,
           ),
@@ -493,6 +508,15 @@ class _SyncBanner extends StatelessWidget {
                       '与其他设备上的设置不同。',
                       '與其他裝置上的設定不同。',
                     )
+                  : syncFailed
+                  ? _copy(
+                      language,
+                      '기기에 저장됐어요. 계정 동기화가 필요해요.',
+                      'Saved on this device. Account sync needs attention.',
+                      '端末に保存されました。アカウント同期が必要です。',
+                      '已保存到设备，需要账号同步。',
+                      '已儲存到裝置，需要帳號同步。',
+                    )
                   : _copy(
                       language,
                       '$planDate · 변경 $differenceCount개',
@@ -504,6 +528,11 @@ class _SyncBanner extends StatelessWidget {
               style: const TextStyle(fontWeight: FontWeight.w800),
             ),
           ),
+          if (onRetry != null)
+            TextButton(
+              onPressed: onRetry,
+              child: Text(_copy(language, '다시 시도', 'Retry', '再試行', '重试', '重試')),
+            ),
           if (onReload != null)
             TextButton(
               onPressed: onReload,
