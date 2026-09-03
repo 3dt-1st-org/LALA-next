@@ -2045,11 +2045,14 @@ class _Panel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.white,
+    // Why: a DecoratedBox here sits between tiles (SwitchListTile) and the
+    // Scaffold Material, hiding their ink splashes — a Flutter debug
+    // assertion and an invisible touch feedback defect.
+    return Material(
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(LalaVisualTokens.controlRadius),
-        border: Border.all(color: LalaVisualColors.line),
+        side: BorderSide(color: LalaVisualColors.line),
       ),
       child: Padding(padding: padding, child: child),
     );
@@ -2823,8 +2826,23 @@ String _doneLabel(String language) => _text(
   zhHant: '套用',
 );
 
-String _minuteSuffix(String language) =>
-    normalizeLalaLanguage(language) == 'en' ? ' min' : '분';
+/// Minute unit for chips/summaries. Must stay locale-aware: a Korean '분' here
+/// leaks onto ja/zh preference screens (the only remaining Hangul leak found
+/// in the visitor-locale audit).
+String _minuteSuffix(String language) {
+  switch (normalizeLalaLanguage(language)) {
+    case 'en':
+      return ' min';
+    case 'ja':
+      return '分';
+    case 'zh-Hans':
+      return '分钟';
+    case 'zh-Hant':
+      return '分鐘';
+    default:
+      return '분';
+  }
+}
 
 String _countSuffix(String language) {
   switch (normalizeLalaLanguage(language)) {
