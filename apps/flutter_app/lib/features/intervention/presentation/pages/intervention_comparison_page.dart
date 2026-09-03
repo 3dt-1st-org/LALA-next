@@ -4,7 +4,9 @@ import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import '../../../../app/lala_visual_tokens.dart';
 import '../../../../shared/l10n/lala_copy.dart';
+import '../../../../shared/l10n/multi_language_text.dart';
 import '../../../../shared/l10n/place_labels.dart';
+import '../../../planner/planner_helpers.dart';
 
 enum InterventionComparisonDecision { keepCurrent, applyAlternative }
 
@@ -154,6 +156,13 @@ class _ChangeSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // F-051 hierarchy: one short chip per observable trigger factor so the
+    // "why" scans before the prose. Chips come only from the API factor list —
+    // an unlabeled factor is dropped, never invented.
+    final chipLabels = intervention.triggerFactors
+        .map((factor) => _factorChipLabel(factor, language))
+        .whereType<String>()
+        .toList(growable: false);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -161,40 +170,61 @@ class _ChangeSummary extends StatelessWidget {
         borderRadius: BorderRadius.circular(LalaVisualTokens.controlRadius),
         border: Border.all(color: const Color(0xFFF4C77D)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              const Icon(
-                Icons.change_circle_outlined,
-                color: Color(0xFF9A5B00),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  _triggerLabel(intervention.triggerType, language),
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: const Color(0xFF744210),
+      child: Semantics(
+        container: true,
+        label: <String>[
+          _triggerLabel(intervention.triggerType, language),
+          ...chipLabels,
+          intervention.reason,
+          if (intervention.recommendedAction.trim().isNotEmpty)
+            intervention.recommendedAction,
+        ].join(', '),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                const Icon(
+                  Icons.change_circle_outlined,
+                  color: Color(0xFF9A5B00),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _triggerLabel(intervention.triggerType, language),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      color: const Color(0xFF744210),
+                    ),
                   ),
+                ),
+              ],
+            ),
+            if (chipLabels.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: <Widget>[
+                  for (final label in chipLabels)
+                    _ConstraintChip(label: label, icon: _factorChipIcon()),
+                ],
+              ),
+            ],
+            const SizedBox(height: 10),
+            Text(intervention.reason, style: theme.textTheme.bodyLarge),
+            if (intervention.recommendedAction.trim().isNotEmpty) ...<Widget>[
+              const SizedBox(height: 8),
+              Text(
+                intervention.recommendedAction,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: LalaVisualColors.muted,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 10),
-          Text(intervention.reason, style: theme.textTheme.bodyLarge),
-          if (intervention.recommendedAction.trim().isNotEmpty) ...<Widget>[
-            const SizedBox(height: 8),
-            Text(
-              intervention.recommendedAction,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: LalaVisualColors.muted,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
           ],
-        ],
+        ),
       ),
     );
   }
@@ -230,59 +260,231 @@ class _SlotCard extends StatelessWidget {
         : value.place == null
         ? value.title
         : placeDisplayName(value.place!, language);
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: LalaVisualColors.card,
-        borderRadius: BorderRadius.circular(LalaVisualTokens.controlRadius),
-        border: Border.all(color: accent.withValues(alpha: 0.38)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            label,
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: accent,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 9),
-          Text(
-            title,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          if (value != null) ...<Widget>[
-            const SizedBox(height: 12),
-            _FactRow(
-              icon: Icons.schedule_outlined,
-              text: _slotTime(value, language),
-            ),
-            const SizedBox(height: 8),
-            _FactRow(
-              icon: Icons.storefront_outlined,
-              text: _openingHours(value, language),
-            ),
-            const SizedBox(height: 8),
-            _FactRow(
-              icon: Icons.directions_walk_outlined,
-              text: _travelAuthority(value, language),
-            ),
-            if ((value.recommendationReason ?? '')
-                .trim()
-                .isNotEmpty) ...<Widget>[
-              const SizedBox(height: 10),
-              Text(
-                value.recommendationReason!,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: LalaVisualColors.muted,
-                  height: 1.4,
-                ),
+    // F-051: per-side constraint badges (weather / air quality / closure /
+    // indoor-outdoor) from the real slot projections — the same values the
+    // plan tile shows. Null projections render no badge (honest empty), so the
+    // original card visibly carries the problem states the API reported.
+    final closureLabel = value == null
+        ? null
+        : planSlotClosureStateLabel(value, language);
+    final closureKey = value == null
+        ? 'unknown'
+        : (value.closureState ?? 'unknown').trim().toLowerCase();
+    final indoorOutdoorLabel = value?.indoorOutdoor == null
+        ? null
+        : value!.indoorOutdoor == 'indoor'
+        ? _copy(
+            language,
+            ko: '실내',
+            en: 'Indoor',
+            ja: '屋内',
+            zhHans: '室内',
+            zhHant: '室內',
+          )
+        : _copy(
+            language,
+            ko: '야외',
+            en: 'Outdoor',
+            ja: '屋外',
+            zhHans: '室外',
+            zhHant: '室外',
+          );
+    final airQualityLabel = value == null
+        ? null
+        : planSlotAirQualityBadLabel(value, language);
+    final weatherHint = value == null
+        ? null
+        : singleLanguageText(value.weatherHint ?? '', language);
+    final semanticsLabel = <String?>[
+      label,
+      title,
+      if (value != null) _slotTime(value, language),
+      closureLabel,
+      indoorOutdoorLabel,
+      weatherHint,
+      airQualityLabel,
+      if (value != null) _openingHours(value, language),
+      if (value != null) _travelAuthority(value, language),
+      value?.recommendationReason,
+    ].whereType<String>().join(', ');
+    return Semantics(
+      container: true,
+      label: semanticsLabel,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: LalaVisualColors.card,
+          borderRadius: BorderRadius.circular(LalaVisualTokens.controlRadius),
+          border: Border.all(color: accent.withValues(alpha: 0.38)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              label,
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: accent,
+                fontWeight: FontWeight.w900,
               ),
+            ),
+            const SizedBox(height: 9),
+            Text(
+              title,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            if (value != null) ...<Widget>[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: <Widget>[
+                  _ClosureChip(label: closureLabel!, stateKey: closureKey),
+                  if (indoorOutdoorLabel != null)
+                    _ConstraintChip(
+                      label: indoorOutdoorLabel,
+                      icon: value.indoorOutdoor == 'indoor'
+                          ? Icons.home_work_outlined
+                          : Icons.park_outlined,
+                    ),
+                  if (weatherHint != null)
+                    _ConstraintChip(
+                      label: weatherHint,
+                      icon: Icons.cloud_outlined,
+                    ),
+                  if (airQualityLabel != null)
+                    _ConstraintChip(
+                      label: airQualityLabel,
+                      icon: Icons.warning_amber_rounded,
+                      emphasized: true,
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _FactRow(
+                icon: Icons.schedule_outlined,
+                text: _slotTime(value, language),
+              ),
+              const SizedBox(height: 8),
+              _FactRow(
+                icon: Icons.storefront_outlined,
+                text: _openingHours(value, language),
+              ),
+              const SizedBox(height: 8),
+              _FactRow(
+                icon: Icons.directions_walk_outlined,
+                text: _travelAuthority(value, language),
+              ),
+              if ((value.recommendationReason ?? '')
+                  .trim()
+                  .isNotEmpty) ...<Widget>[
+                const SizedBox(height: 10),
+                Text(
+                  value.recommendationReason!,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: LalaVisualColors.muted,
+                    height: 1.4,
+                  ),
+                ),
+              ],
             ],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Open/closed/unknown badge mirroring the plan tile's D4 badge: state color +
+/// icon + text (never color-alone), slate chip background tokens.
+class _ClosureChip extends StatelessWidget {
+  const _ClosureChip({required this.label, required this.stateKey});
+
+  final String label;
+  final String stateKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = switch (stateKey) {
+      'open' => const Color(0xFF0F766E),
+      'closed' => const Color(0xFFC53030),
+      _ => const Color(0xFF64748B),
+    };
+    final icon = switch (stateKey) {
+      'open' => Icons.check_circle_outline,
+      'closed' => Icons.cancel_outlined,
+      _ => Icons.help_outline,
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(icon, size: 11, color: color),
+          const SizedBox(width: 3),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Neutral constraint chip (indoor/outdoor, weather hint, factor chips) on the
+/// documented slate chip tokens. [emphasized] switches to the red marker token
+/// for poor-air-quality states — icon + text still carry the meaning.
+class _ConstraintChip extends StatelessWidget {
+  const _ConstraintChip({
+    required this.label,
+    required this.icon,
+    this.emphasized = false,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool emphasized;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = emphasized
+        ? const Color(0xFFC53030)
+        : const Color(0xFF475569);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: emphasized ? const Color(0xFFC53030) : const Color(0xFFE2E8F0),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(icon, size: 11, color: color),
+          const SizedBox(width: 3),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: color,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -418,51 +620,88 @@ class _BottomActions extends StatelessWidget {
       color: LalaVisualColors.card,
       border: Border(top: BorderSide(color: LalaVisualColors.line)),
     ),
-    child: Row(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        Expanded(
-          child: OutlinedButton(
-            key: const ValueKey('intervention-keep-current'),
-            onPressed: () =>
-                context.pop(InterventionComparisonDecision.keepCurrent),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size(0, LalaVisualTokens.actionHeight),
-            ),
-            child: Text(
-              _copy(
-                language,
-                ko: '기존 일정 유지',
-                en: 'Keep current',
-                ja: '現在の予定を維持',
-                zhHans: '保留当前计划',
-                zhHant: '保留目前計畫',
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: FilledButton(
-            key: const ValueKey('intervention-apply-alternative'),
-            onPressed: hasAlternative
-                ? () => context.pop(
-                    InterventionComparisonDecision.applyAlternative,
-                  )
-                : null,
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(0, LalaVisualTokens.actionHeight),
-            ),
-            child: Text(
-              _copy(
-                language,
-                ko: '대안 적용',
-                en: 'Apply alternative',
-                ja: '代替案を適用',
-                zhHans: '应用替代方案',
-                zhHant: '套用替代方案',
-              ),
+        // Failure semantics: a disabled apply must explain itself instead of
+        // leaving the user guessing. Honest copy — no invented alternative.
+        if (!hasAlternative)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: <Widget>[
+                const Icon(
+                  Icons.search_off_rounded,
+                  size: 16,
+                  color: LalaVisualColors.muted,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    _copy(
+                      language,
+                      ko: '조건에 맞는 대체 장소를 찾지 못했어요. 일정을 유지하거나 다시 만들 수 있어요.',
+                      en: 'No matching alternative was found. You can keep the plan or regenerate it.',
+                      ja: '条件に合う代替スポットが見つかりませんでした。予定を維持するか、作り直せます。',
+                      zhHans: '未找到符合条件的替代地点。您可以保留当前计划或重新生成。',
+                      zhHant: '未找到符合條件的替代地點。您可以保留目前計畫或重新產生。',
+                    ),
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: LalaVisualColors.muted,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: OutlinedButton(
+                key: const ValueKey('intervention-keep-current'),
+                onPressed: () =>
+                    context.pop(InterventionComparisonDecision.keepCurrent),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, LalaVisualTokens.actionHeight),
+                ),
+                child: Text(
+                  _copy(
+                    language,
+                    ko: '기존 일정 유지',
+                    en: 'Keep current',
+                    ja: '現在の予定を維持',
+                    zhHans: '保留当前计划',
+                    zhHant: '保留目前計畫',
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: FilledButton(
+                key: const ValueKey('intervention-apply-alternative'),
+                onPressed: hasAlternative
+                    ? () => context.pop(
+                        InterventionComparisonDecision.applyAlternative,
+                      )
+                    : null,
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(0, LalaVisualTokens.actionHeight),
+                ),
+                child: Text(
+                  _copy(
+                    language,
+                    ko: '대안 적용',
+                    en: 'Apply alternative',
+                    ja: '代替案を適用',
+                    zhHans: '应用替代方案',
+                    zhHant: '套用替代方案',
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     ),
@@ -630,18 +869,64 @@ String? _factorLabel(Map<String, dynamic> factor, String language) {
       zhHant: '目前不適合戶外活動。',
     );
   }
-  if (kind == 'opening_hours' || kind == 'closure_state') {
+  // Why: the API emits the closure factor as slot_closure_state (planner
+  // service), so mapping only the legacy closure_state/opening_hours kinds
+  // silently dropped the closure reason from the evidence panel.
+  if (kind == 'slot_closure_state' || kind == 'closure_state') {
     return _copy(
       language,
-      ko: '운영 상태 변화가 관측됐어요.',
-      en: 'A change in opening status was observed.',
-      ja: '営業状況の変化が確認されました。',
-      zhHans: '观测到营业状态变化。',
-      zhHant: '觀測到營業狀態變化。',
+      ko: '추정 운영시간 기준으로 영업 종료 가능성이 관측됐어요.',
+      en: 'A possible closure was observed from the estimated opening hours.',
+      ja: '推定営業時間に基づき、営業終了の可能性が確認されました。',
+      zhHans: '根据估算营业时间，观测到可能已打烊。',
+      zhHant: '根據估算營業時間，觀測到可能已打烊。',
+    );
+  }
+  if (kind == 'opening_hours') {
+    return _copy(
+      language,
+      ko: '운영 시간 근거가 변화했어요.',
+      en: 'The opening-hours evidence changed.',
+      ja: '営業時間の根拠が変わりました。',
+      zhHans: '营业时间依据发生了变化。',
+      zhHant: '營業時間依據發生了變化。',
     );
   }
   return null;
 }
+
+/// Short chip label for the change-summary hierarchy (F-051). Same factor
+/// families as [_factorLabel]; null for kinds this build cannot label — the
+/// chip row never invents a reason the API did not report.
+String? _factorChipLabel(Map<String, dynamic> factor, String language) {
+  final kind = factor['factor'];
+  final value = factor['value'];
+  if (kind == 'weather_outdoor_status' && value == 'bad') {
+    return _copy(
+      language,
+      ko: '날씨 악화',
+      en: 'Poor weather',
+      ja: '天候悪化',
+      zhHans: '天气恶劣',
+      zhHant: '天氣惡劣',
+    );
+  }
+  if (kind == 'slot_closure_state' ||
+      kind == 'closure_state' ||
+      kind == 'opening_hours') {
+    return _copy(
+      language,
+      ko: '운영 상태 변화',
+      en: 'Opening-status change',
+      ja: '営業状況の変化',
+      zhHans: '营业状态变化',
+      zhHant: '營業狀態變化',
+    );
+  }
+  return null;
+}
+
+IconData _factorChipIcon() => Icons.flag_outlined;
 
 String _copy(
   String language, {
