@@ -4,6 +4,9 @@ This is the tracked reconciliation for the 36 logical screens in the functional
 brief. A logical screen may be a route, a focused sheet, or a dedicated nested
 page when that representation preserves the intended task and state.
 
+The updated Stitch-to-runtime, flow-by-flow comparison is documented in
+`docs/product/lala-stitch-vs-runtime-screen-comparison-v2-20260903.md`.
+
 ## Current completion snapshot
 
 The canonical completion branch contains a reachable implementation for all 36
