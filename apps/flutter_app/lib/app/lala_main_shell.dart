@@ -41,7 +41,7 @@ class LalaMainShell extends StatelessWidget {
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
-                  // 도슨트 미니플레이어 — 4-탭 하단 바 바로 위에 상주(idle 시 자체 축소).
+                  // 도슨트 미니플레이어 — 5-탭 하단 바 바로 위에 상주(idle 시 자체 축소).
                   DocentMiniPlayer(
                     controller: docentExperienceController,
                     language: language,

@@ -24,6 +24,9 @@ EXPECTED_CANONICAL_MIGRATION_ORDER = (
     "062_review_ingestion_governance.sql",
     "063_local_signals_contract.sql",
     "064_planning_action_tables.sql",
+    "065_user_travel_preferences.sql",
+    "066_trip_library_and_visit_feedback.sql",
+    "067_community_post_reports.sql",
 )
 
 
@@ -61,7 +64,7 @@ def test_load_canonical_sql_plan_is_safe_and_ordered():
     assert plan.ok is True
     assert tuple(item.name for item in plan.files) == EXPECTED_CANONICAL_MIGRATION_ORDER
     assert canonical_sql.CANONICAL_MIGRATION_ORDER == EXPECTED_CANONICAL_MIGRATION_ORDER
-    assert canonical_sql.CANONICAL_MIGRATION_LATEST == "064_planning_action_tables.sql"
+    assert canonical_sql.CANONICAL_MIGRATION_LATEST == "067_community_post_reports.sql"
     assert plan.to_dict()["statement_count"] >= 10
     assert all(len(item.sha256) == 64 for item in plan.files)
 
@@ -94,12 +97,52 @@ def test_canonical_migration_filename_contract_rejects_duplicate_or_invalid_pref
 
 
 def test_future_migration_does_not_silently_extend_the_merged_baseline():
-    future_names = EXPECTED_CANONICAL_MIGRATION_ORDER[:-1] + (
-        "064_rag_knowledge_retrieval_metadata.sql",
+    future_names = EXPECTED_CANONICAL_MIGRATION_ORDER + (
+        "068_rag_knowledge_retrieval_metadata.sql",
     )
 
     with pytest.raises(ValueError, match="baseline drifted"):
         canonical_sql.validate_canonical_migration_order(future_names, require_baseline=True)
+
+
+def test_trip_library_migration_is_additive_and_bounded():
+    sql = (canonical_sql.CANONICAL_SQL_DIR / "066_trip_library_and_visit_feedback.sql").read_text(
+        encoding="utf-8"
+    )
+
+    assert "CREATE TABLE IF NOT EXISTS planning.trip_preference_overrides" in sql
+    assert "ADD COLUMN IF NOT EXISTS reason_code" in sql
+    assert "ADD COLUMN IF NOT EXISTS use_for_recommendations" in sql
+    assert "ADD COLUMN IF NOT EXISTS confirmed_at" in sql
+    assert "status IN ('planned', 'visited', 'not_visited')" in sql
+    assert "jsonb_typeof(payload) = 'object'" in sql
+    assert "DROP TABLE" not in sql.upper()
+    assert "TRUNCATE" not in sql.upper()
+    assert "DELETE FROM" not in sql.upper()
+
+
+def test_community_post_reports_migration_is_idempotent_and_governed():
+    sql = (canonical_sql.CANONICAL_SQL_DIR / "067_community_post_reports.sql").read_text(
+        encoding="utf-8"
+    )
+
+    assert "CREATE TABLE IF NOT EXISTS community.post_reports" in sql
+    assert "REFERENCES community.user_posts(id) ON DELETE CASCADE" in sql
+    # The reporter must be a provisioned internal user (ownership constraint).
+    assert "REFERENCES identity.users (issuer, subject)" in sql
+    # Bounded reason vocabulary; no free-text report column exists.
+    assert "post_reports_reason_check" in sql
+    assert "'other_policy'" in sql
+    # One unresolved report per reporter/post is enforced by a partial unique index.
+    assert "CREATE UNIQUE INDEX IF NOT EXISTS idx_post_reports_unresolved" in sql
+    assert "WHERE status IN ('open', 'triaged')" in sql
+    assert "DROP TABLE" not in sql.upper()
+    assert "TRUNCATE" not in sql.upper()
+    assert "DELETE FROM" not in sql.upper()
+    # No raw free-text report body/note column is part of the governed contract.
+    assert "body text" not in sql.lower()
+    assert "note text" not in sql.lower()
+    assert "free_text" not in sql.lower()
 
 
 def test_custom_fake_runner_plan_reports_duplicate_prefix_without_db_access(tmp_path):
@@ -158,7 +201,7 @@ def test_apply_canonical_sql_cli_defaults_to_plan_json(capsys):
     assert exit_code == 0
     assert output["ok"] is True
     assert output["mode"] == "plan"
-    assert output["plan"]["file_count"] == 14
+    assert output["plan"]["file_count"] == len(EXPECTED_CANONICAL_MIGRATION_ORDER)
     assert "result" not in output
 
 

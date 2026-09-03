@@ -218,10 +218,12 @@ All helpers are **private** to `apps/api/app/services/places_service.py` and are
 # (home_view_helpers.dart:436-463). canonical/empty/unknown → None (honest omit, no generic stamp).
 def _upstream_source_reason_phrase(upstream_source: str) -> str | None: ...
 
+
 # D1 — S2 aggregate-activity phrase. Binary: above min-sample gate → '로컬 소비 활발', else None.
 # Derives ONLY from the features aggregate (region_transaction_count), NEVER from final_score /
 # component scores. band is the SQL-projected min-sample flag (§Lane 1), not a number.
 def _local_activity_reason_phrase(local_activity_band: str | None) -> str | None: ...
+
 
 # D3 — S3 coarse weather band for the LIST reason. Distinct granularity from publicWeatherSummary
 # (band, not numbers). indoor-pref category ∧ outdoor_status=='bad' → '실내활동 적합' (existing bit
@@ -229,9 +231,12 @@ def _local_activity_reason_phrase(local_activity_band: str | None) -> str | None
 # weather → None.
 def _weather_band_phrase(current_weather: dict, *, category: str) -> str | None: ...
 
+
 # D4 — linked/ongoing event phrase for ANY category. has_linked_event (SQL-projected from the
 # already-joined LATERAL) → '진행 중인 행사' / '행사 연계'; else None.
-def _linked_event_reason_phrase(has_linked_event: bool | None, *, is_ongoing: bool | None) -> str | None: ...
+def _linked_event_reason_phrase(
+    has_linked_event: bool | None, *, is_ongoing: bool | None
+) -> str | None: ...
 ```
 
 **Canonical band spec (proposed values — controller may tune; the SHAPE is locked: band, not number):**

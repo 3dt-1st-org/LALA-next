@@ -6,15 +6,20 @@ import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/features/community/presentation/community_api.dart';
+import 'package:lala_next_app/features/community/presentation/community_auth_guard.dart';
+import 'package:lala_next_app/auth/auth_controller.dart';
+import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 
 class CommunityCreatePostPage extends StatefulWidget {
   const CommunityCreatePostPage({
     this.initialConfig = const LalaAppConfig.fromEnvironment(),
+    this.authController,
     super.key,
   });
 
   final LalaAppConfig initialConfig;
+  final LalaAuthController? authController;
 
   @override
   State<CommunityCreatePostPage> createState() =>
@@ -51,7 +56,7 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
     super.dispose();
   }
 
-  String get _language => _config.lang;
+  String get _language => OnboardingState.language;
 
   bool get _canSubmit {
     if (_busy) return false;
@@ -69,7 +74,16 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
       return;
     }
     if (_tags.length >= 8) {
-      _showSnack(lalaCopy(_language, ko: '태그는 최대 8개까지.', en: 'Up to 8 tags.'));
+      _showSnack(
+        lalaCopyMulti(
+          _language,
+          ko: '태그는 최대 8개까지.',
+          en: 'Up to 8 tags.',
+          ja: 'タグは最大8件です。',
+          zhHans: '最多添加 8 个标签。',
+          zhHant: '最多新增 8 個標籤。',
+        ),
+      );
       return;
     }
     setState(() => _tags.add(cleaned));
@@ -84,6 +98,24 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
     final title = _titleController.text.trim();
     final body = _bodyController.text.trim();
     if (title.isEmpty || body.isEmpty || _busy) return;
+    final outcome = await requestCommunityAuthentication(
+      context,
+      controller: widget.authController,
+      language: _language,
+      actionLabel: lalaCopyMulti(
+        _language,
+        ko: '게시',
+        en: 'publishing',
+        ja: '投稿',
+        zhHans: '发布',
+        zhHant: '發布',
+      ),
+    );
+    if (!mounted) return;
+    if (outcome != CommunityAuthOutcome.alreadyAuthenticated) {
+      if (outcome == CommunityAuthOutcome.signedInNow) setState(() {});
+      return;
+    }
     setState(() => _busy = true);
     try {
       await _client.createCommunityPost(
@@ -93,18 +125,32 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
       );
       if (!mounted) return;
       Navigator.of(context).pop(true);
-    } on LalaApiException catch (e) {
+    } on LalaApiException {
       if (!mounted) return;
       setState(() => _busy = false);
       _showSnack(
-        e.message.trim().isEmpty
-            ? lalaCopy(_language, ko: '게시에 실패했어요.', en: 'Failed to publish.')
-            : e.message,
+        lalaCopyMulti(
+          _language,
+          ko: '게시에 실패했어요. 내용은 유지됐습니다.',
+          en: 'Failed to publish. Your draft is still here.',
+          ja: '投稿できませんでした。入力内容は保持されています。',
+          zhHans: '发布失败，草稿已保留。',
+          zhHant: '發布失敗，草稿已保留。',
+        ),
       );
     } on Object {
       if (!mounted) return;
       setState(() => _busy = false);
-      _showSnack(lalaCopy(_language, ko: '게시에 실패했어요.', en: 'Failed to publish.'));
+      _showSnack(
+        lalaCopyMulti(
+          _language,
+          ko: '게시에 실패했어요.',
+          en: 'Failed to publish.',
+          ja: '投稿に失敗しました。',
+          zhHans: '发布失败。',
+          zhHant: '發布失敗。',
+        ),
+      );
     }
   }
 
@@ -121,7 +167,14 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
       backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
         title: Text(
-          lalaCopy(_language, ko: '새 게시글', en: 'New Post'),
+          lalaCopyMulti(
+            _language,
+            ko: '새 게시글',
+            en: 'New Post',
+            ja: '新しい投稿',
+            zhHans: '新帖子',
+            zhHant: '新貼文',
+          ),
           style: const TextStyle(fontWeight: FontWeight.w900),
         ),
         backgroundColor: theme.colorScheme.surface,
@@ -132,14 +185,17 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: FilledButton(
+              key: const ValueKey('community-post-submit'),
               onPressed: _canSubmit ? _submit : null,
               style: FilledButton.styleFrom(
                 backgroundColor: theme.colorScheme.primary,
                 foregroundColor: theme.colorScheme.onPrimary,
                 disabledBackgroundColor: const Color(0xFFE2E8F0),
                 textStyle: const TextStyle(fontWeight: FontWeight.w900),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
               ),
               child: _busy
                   ? const SizedBox(
@@ -150,7 +206,16 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
                         color: Colors.white,
                       ),
                     )
-                  : Text(lalaCopy(_language, ko: '게시', en: 'Post')),
+                  : Text(
+                      lalaCopyMulti(
+                        _language,
+                        ko: '게시',
+                        en: 'Post',
+                        ja: '投稿',
+                        zhHans: '发布',
+                        zhHant: '發布',
+                      ),
+                    ),
             ),
           ),
         ],
@@ -160,14 +225,47 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
           children: [
+            if (!isCommunityAuthenticated(widget.authController)) ...<Widget>[
+              Container(
+                key: const ValueKey('community-create-auth-notice'),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF7ED),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFFED7AA)),
+                ),
+                child: Text(
+                  lalaCopyMulti(
+                    _language,
+                    ko: '작성 내용은 보존돼요. 게시할 때 Logto 로그인을 연결합니다.',
+                    en: 'Your draft is preserved. LALA asks for Logto sign-in when you publish.',
+                    ja: '入力内容は保持されます。投稿時にLogtoログインを案内します。',
+                    zhHans: '草稿会保留，发布时将提示连接 Logto 登录。',
+                    zhHant: '草稿會保留，發布時將提示連結 Logto 登入。',
+                  ),
+                  style: const TextStyle(
+                    color: Color(0xFF9A3412),
+                    height: 1.35,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+            ],
             TextField(
               controller: _titleController,
               maxLength: 160,
               textInputAction: TextInputAction.next,
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
-                labelText:
-                    lalaCopy(_language, ko: '제목', en: 'Title'),
+                labelText: lalaCopyMulti(
+                  _language,
+                  ko: '제목',
+                  en: 'Title',
+                  ja: 'タイトル',
+                  zhHans: '标题',
+                  zhHant: '標題',
+                ),
                 labelStyle: const TextStyle(fontWeight: FontWeight.w800),
                 alignLabelWithHint: true,
                 filled: true,
@@ -182,8 +280,10 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
-                  borderSide:
-                      BorderSide(color: theme.colorScheme.primary, width: 1.6),
+                  borderSide: BorderSide(
+                    color: theme.colorScheme.primary,
+                    width: 1.6,
+                  ),
                 ),
               ),
             ),
@@ -195,8 +295,14 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
               maxLines: 12,
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
-                labelText:
-                    lalaCopy(_language, ko: '본문', en: 'Body'),
+                labelText: lalaCopyMulti(
+                  _language,
+                  ko: '본문',
+                  en: 'Body',
+                  ja: '本文',
+                  zhHans: '正文',
+                  zhHant: '內文',
+                ),
                 labelStyle: const TextStyle(fontWeight: FontWeight.w800),
                 alignLabelWithHint: true,
                 filled: true,
@@ -211,14 +317,23 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
-                  borderSide:
-                      BorderSide(color: theme.colorScheme.primary, width: 1.6),
+                  borderSide: BorderSide(
+                    color: theme.colorScheme.primary,
+                    width: 1.6,
+                  ),
                 ),
               ),
             ),
             const SizedBox(height: 16),
             Text(
-              lalaCopy(_language, ko: '태그', en: 'Tags'),
+              lalaCopyMulti(
+                _language,
+                ko: '태그',
+                en: 'Tags',
+                ja: 'タグ',
+                zhHans: '标签',
+                zhHant: '標籤',
+              ),
               style: theme.textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w900,
                 color: const Color(0xFF334155),
@@ -233,10 +348,13 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
                     textInputAction: TextInputAction.done,
                     onSubmitted: (_) => _addTag(),
                     decoration: InputDecoration(
-                      hintText: lalaCopy(
+                      hintText: lalaCopyMulti(
                         _language,
                         ko: '태그 입력 후 엔터',
                         en: 'Type a tag and press enter',
+                        ja: 'タグを入力してEnter',
+                        zhHans: '输入标签后按回车',
+                        zhHant: '輸入標籤後按 Enter',
                       ),
                       isDense: true,
                       prefixText: '#',
@@ -252,18 +370,18 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
                       ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide:
-                            const BorderSide(color: Color(0xFFE2E8F0)),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide:
-                            const BorderSide(color: Color(0xFFE2E8F0)),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide(
-                            color: theme.colorScheme.primary, width: 1.6),
+                          color: theme.colorScheme.primary,
+                          width: 1.6,
+                        ),
                       ),
                     ),
                   ),

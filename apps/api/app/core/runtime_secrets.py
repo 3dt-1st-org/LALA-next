@@ -223,9 +223,19 @@ def validate_secret_contract(
             continue
 
         # Check if value exists and is usable
-        value = str(values.get(env_name, ""))
+        # Settings exposes snake_case field names while lower-level callers may
+        # provide canonical environment names. Accept both without re-querying
+        # AWS for a value that was already resolved by the runtime loader.
+        raw_value = values.get(env_name, values.get(env_name.lower(), ""))
+        value = "" if raw_value is None else str(raw_value)
         if _usable_secret(value):
             configured.append(env_name)
+            continue
+
+        # A caller-supplied non-empty placeholder is an invalid contract, not
+        # an absent value that AWS is allowed to replace or reclassify.
+        if value.strip():
+            invalid.append(env_name)
             continue
 
         # Use structured AWS lookup to classify the failure

@@ -153,6 +153,16 @@ class OnboardingState {
     unawaited(_clearAll(prefs));
   }
 
+  /// Reset variant for explicit user-facing data deletion, where durability
+  /// must complete before reporting success.
+  static Future<void> resetAndFlush() async {
+    _touristType = OnboardingTouristType.localTourist;
+    _language.value = 'ko';
+    _completed.value = false;
+    final prefs = _prefs;
+    if (prefs != null) await _clearAll(prefs);
+  }
+
   static Future<void> _clearAll(OnboardingPreferences prefs) async {
     try {
       await prefs.clearAll();

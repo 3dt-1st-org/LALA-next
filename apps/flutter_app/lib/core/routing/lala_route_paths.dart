@@ -1,5 +1,5 @@
 // LALA main-shell tab route constants.
-// Each branch maps to one tab (search / map / plan / Local Signals).
+// Each branch maps to one tab (search / map / plan / Local Signals / profile).
 // ONMU P2: 온보딩 4단계 경로(splash/start/language/location) 추가.
 abstract final class LalaRoutePaths {
   const LalaRoutePaths._();
@@ -8,6 +8,30 @@ abstract final class LalaRoutePaths {
   static const String mapRoute = '/map-route';
   static const String plan = '/plan';
   static const String localSignals = '/local-signals';
+  static const String profile = '/profile';
+
+  /// Canonical full-screen place detail. The map/search hand-off also passes a
+  /// LalaPlace through GoRouterState.extra so the first frame does not refetch.
+  static const String placeDetail = '/places/:placeId';
+
+  /// Account and preference routes are pushed above the profile tab.
+  static const String account = '/profile/account';
+  static const String travelPreferences = '/profile/travel-preferences';
+  static const String savedPlaces = '/profile/saved-places';
+  static const String pastTrips = '/profile/past-trips';
+  static const String tripSettings = '/plan/:planDate/settings';
+  static const String visitConfirmation = '/plan/:planDate/visit/:slotPeriod';
+  static const String interventionComparison = '/plan/change-comparison';
+  static const String localSignalDetail = '/local-signals/detail/:signalId';
+
+  /// S-31 feed-level contribution. Stable path so a web refresh or deep link
+  /// rebuilds contribute mode without GoRouter extra; the optional coarse
+  /// region/place context travels in extra only — never in the URL, which
+  /// carries no coordinates or ids beyond this fixed segment.
+  static const String localSignalContribution = '/local-signals/contribute';
+  static const String preferenceSyncConflict =
+      '/profile/preference-sync-conflict';
+  static const String privacyLocation = '/profile/privacy-location';
 
   /// 온보딩 라우트 공통 접두사. redirect 가 온보딩 라우트 여부를 판별하는 데 사용.
   static const String onboardingPrefix = '/onboarding';
@@ -52,4 +76,17 @@ abstract final class LalaRoutePaths {
   /// 채팅방 경로를 roomId 로 조합.
   static String communityChatRoomFor(String roomId) =>
       '/community/chat/$roomId';
+
+  static String placeDetailFor(String placeId) =>
+      '/places/${Uri.encodeComponent(placeId)}';
+
+  static String tripSettingsFor(String planDate) =>
+      '/plan/${Uri.encodeComponent(planDate)}/settings';
+
+  static String visitConfirmationFor(String planDate, String slotPeriod) =>
+      '/plan/${Uri.encodeComponent(planDate)}/visit/'
+      '${Uri.encodeComponent(slotPeriod)}';
+
+  static String localSignalDetailFor(String signalId) =>
+      '/local-signals/detail/${Uri.encodeComponent(signalId)}';
 }

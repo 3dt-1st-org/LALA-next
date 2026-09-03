@@ -350,6 +350,7 @@ class CrossTabPersistence {
   static VoidCallback? _selectedPlaceDisposer;
   static VoidCallback? _planDisposer;
   static bool _attached = false;
+  static CrossTabPreferences? _preferences;
 
   /// Attaches write-through listeners and hydrates the holders from [prefs].
   ///
@@ -359,6 +360,7 @@ class CrossTabPersistence {
   static Future<void> attachAndHydrate(CrossTabPreferences prefs) async {
     detach();
     _attached = true;
+    _preferences = prefs;
     final epochAtLoadStart = _epoch;
 
     _selectedPlaceDisposer = _listen(
@@ -397,6 +399,14 @@ class CrossTabPersistence {
     _selectedPlaceDisposer = null;
     _planDisposer = null;
     _attached = false;
+    _preferences = null;
+  }
+
+  /// Clears the persisted and process-local guest selection and plan.
+  static Future<void> clearAndFlush() async {
+    SelectedPlaceStore.clear();
+    PlanContextStore.clear();
+    await _preferences?.clearAll();
   }
 
   static VoidCallback _listen(

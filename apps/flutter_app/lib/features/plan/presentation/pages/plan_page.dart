@@ -5,19 +5,23 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import 'package:lala_next_app/core/backend/lala_backend.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
 import 'package:lala_next_app/core/location/region_context.dart';
+import 'package:lala_next_app/core/routing/lala_route_paths.dart';
 import 'package:lala_next_app/core/state/plan_context_store.dart';
+import 'package:lala_next_app/core/state/saved_place_store.dart';
 import 'package:lala_next_app/core/state/slot_visit_store.dart';
 import 'package:lala_next_app/features/docent/experience/docent_experience_controller.dart';
 import 'package:lala_next_app/features/docent/experience/docent_experience_copy.dart';
 import 'package:lala_next_app/features/docent/experience/docent_experience_state.dart';
 import 'package:lala_next_app/features/home/home_view_helpers.dart'
     show interventionToastLabel;
+import 'package:lala_next_app/features/intervention/presentation/pages/intervention_comparison_page.dart';
 import 'package:lala_next_app/features/intervention/widgets/intervention_toast.dart';
 import 'package:lala_next_app/features/location/widgets/default_region_indicator.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
@@ -25,8 +29,10 @@ import 'package:lala_next_app/features/place/widgets/empty_place_state.dart';
 import 'package:lala_next_app/features/planner/planner_helpers.dart';
 import 'package:lala_next_app/features/planner/spend_band_helpers.dart';
 import 'package:lala_next_app/features/planner/widgets/plan_slot_tile.dart';
+import 'package:lala_next_app/features/planner/widgets/plan_timeline_entry.dart';
 import 'package:lala_next_app/features/planner/widgets/planner_loading_card.dart';
 import 'package:lala_next_app/features/planner/widgets/planner_overview_card.dart';
+import 'package:lala_next_app/features/trip_library/domain/trip_library_models.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 import 'package:lala_next_app/shared/l10n/place_labels.dart';
 import 'package:lala_next_app/shared/widgets/lala_skeleton.dart';
@@ -96,6 +102,9 @@ class _PlanPageState extends State<PlanPage> {
   // V5-B VISIT: rebuild when a check-in toggles anywhere so the planned↔visited
   // badge reflects the persisted state in SlotVisitStore.
   late final VoidCallback _onVisitsChanged;
+  // F-030 save-state sharing: rebuild when a save toggles anywhere so the plan
+  // timeline's saved marker matches the map/detail state (same SavedPlaceStore).
+  late final VoidCallback _onSavedPlacesChanged;
 
   // 안내문은 unavailable/error 상태에서만 사용. empty(no-data) 는 별도 copy.
   String _failureMessage = '';
@@ -163,6 +172,14 @@ class _PlanPageState extends State<PlanPage> {
       setState(() {});
     };
     SlotVisitStore.listenable.addListener(_onVisitsChanged);
+    // F-030: react to saves toggled anywhere (map detail, saved-places list).
+    _onSavedPlacesChanged = () {
+      if (!mounted) {
+        return;
+      }
+      setState(() {});
+    };
+    SavedPlaceStore.listenable.addListener(_onSavedPlacesChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _load();
@@ -176,6 +193,7 @@ class _PlanPageState extends State<PlanPage> {
     OnboardingState.languageListenable.removeListener(_onLanguageChanged);
     PlanContextStore.listenable.removeListener(_onPlanChanged);
     SlotVisitStore.listenable.removeListener(_onVisitsChanged);
+    SavedPlaceStore.listenable.removeListener(_onSavedPlacesChanged);
     _backend.close();
     super.dispose();
   }
@@ -254,27 +272,109 @@ class _PlanPageState extends State<PlanPage> {
     );
   }
 
-  // swap 탭 — alternativeSlot 의 장소를 노출만 한다(스낵바). PlanContextStore 의
-  // 슬롯 치환은 별도 후속 작업(V3-D 데이터 범위 밖). 위조/변이 없다.
-  void _onSwapAlternative(LalaPlanSlot alternative) {
-    if (!mounted) {
+  Future<void> _openInterventionComparison() async {
+    final intervention = _intervention;
+    if (intervention == null || !intervention.shouldIntervene) return;
+    final decision = await context.push<InterventionComparisonDecision>(
+      LalaRoutePaths.interventionComparison,
+      extra: InterventionComparisonArguments(intervention: intervention),
+    );
+    if (!mounted) return;
+    if (decision == InterventionComparisonDecision.keepCurrent) {
+      setState(() => _interventionDismissed = true);
       return;
     }
+    final alternative = intervention.alternativeSlot;
+    if (decision == InterventionComparisonDecision.applyAlternative &&
+        alternative != null) {
+      _applyInterventionAlternative(intervention, alternative);
+    }
+  }
+
+  void _applyInterventionAlternative(
+    LalaIntervention intervention,
+    LalaPlanSlot alternative,
+  ) {
+    final previous = _dailyPlan;
+    if (previous == null) return;
+    final original = intervention.originalSlot;
+    final targetIndex = previous.slots.indexWhere((slot) {
+      final originalPlaceId = original?.place?.placeId;
+      if (originalPlaceId != null && slot.place?.placeId == originalPlaceId) {
+        return true;
+      }
+      return slot.period == (original?.period ?? alternative.period);
+    });
+    if (targetIndex < 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            lalaCopyMulti(
+              _language,
+              ko: '현재 일정에서 바꿀 항목을 찾지 못했어요.',
+              en: 'The matching slot is no longer in the current plan.',
+              ja: '現在のプランに対象の予定が見つかりません。',
+              zhHans: '当前计划中已找不到对应行程。',
+              zhHant: '目前計畫中已找不到對應行程。',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+
+    final slots = List<LalaPlanSlot>.of(previous.slots);
+    slots[targetIndex] = alternative;
+    final updated = LalaDailyPlan(
+      language: previous.language,
+      center: previous.center,
+      radiusM: previous.radiusM,
+      weather: previous.weather,
+      slots: List<LalaPlanSlot>.unmodifiable(slots),
+      source: previous.source,
+      requestHash: previous.requestHash,
+      cacheKey: previous.cacheKey,
+    );
+    setState(() {
+      _dailyPlan = updated;
+      _interventionDismissed = true;
+    });
+    PlanContextStore.set(updated);
+
     final name = alternative.place != null
         ? placeDisplayName(alternative.place!, _language)
         : alternative.title;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        duration: const Duration(seconds: 2),
+        duration: const Duration(seconds: 6),
         content: Text(
           lalaCopyMulti(
             _language,
-            ko: '대체 장소 $name 을(를) 확인해 보세요.',
-            en: 'Check the alternative: $name.',
-            ja: '代替スポット $name をご確認ください。',
-            zhHans: '请查看替代地点：$name。',
-            zhHant: '請查看替代地點：$name。',
+            ko: '$name(으)로 일정을 바꿨어요.',
+            en: 'Plan changed to $name.',
+            ja: '予定を$nameに変更しました。',
+            zhHans: '行程已更改为$name。',
+            zhHant: '行程已變更為$name。',
           ),
+        ),
+        action: SnackBarAction(
+          key: const ValueKey('intervention-undo'),
+          label: lalaCopyMulti(
+            _language,
+            ko: '되돌리기',
+            en: 'Undo',
+            ja: '元に戻す',
+            zhHans: '撤销',
+            zhHant: '復原',
+          ),
+          onPressed: () {
+            if (!mounted) return;
+            setState(() {
+              _dailyPlan = previous;
+              _interventionDismissed = false;
+            });
+            PlanContextStore.set(previous);
+          },
         ),
       ),
     );
@@ -513,6 +613,11 @@ class _PlanPageState extends State<PlanPage> {
               dateLabel: _todayLabel(),
               language: _language,
               onCalendar: _load,
+              onSettings: () => unawaited(
+                context.push(
+                  LalaRoutePaths.tripSettingsFor(tripLibraryDateKey()),
+                ),
+              ),
             ),
             if (_regionIsDefault) DefaultRegionIndicator(language: _language),
             if (_shouldShowInterventionToast)
@@ -524,8 +629,7 @@ class _PlanPageState extends State<PlanPage> {
                   triggerBadge: _interventionTriggerBadge(_intervention!),
                   swapLabel: _interventionSwapLabel(_intervention!),
                   onSwap: _intervention!.alternativeSlot != null
-                      ? () =>
-                            _onSwapAlternative(_intervention!.alternativeSlot!)
+                      ? () => unawaited(_openInterventionComparison())
                       : null,
                   regenerateLabel: lalaCopyMulti(
                     _language,
@@ -547,25 +651,7 @@ class _PlanPageState extends State<PlanPage> {
                         )
                       : null,
                   onOpenPlanner: () {
-                    if (!mounted) {
-                      return;
-                    }
-                    setState(() => _interventionDismissed = true);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        duration: const Duration(seconds: 2),
-                        content: Text(
-                          lalaCopyMulti(
-                            _language,
-                            ko: '일정을 확인해 보세요.',
-                            en: 'Review today\'s plan below.',
-                            ja: '下のプランをご確認ください。',
-                            zhHans: '请在下方查看今日计划。',
-                            zhHant: '請在下方查看今日計畫。',
-                          ),
-                        ),
-                      ),
-                    );
+                    unawaited(_openInterventionComparison());
                   },
                   onDismiss: () {
                     if (mounted) {
@@ -623,6 +709,7 @@ class _PlanHeader extends StatelessWidget {
     required this.dateLabel,
     required this.language,
     required this.onCalendar,
+    required this.onSettings,
   });
 
   final String title;
@@ -631,6 +718,7 @@ class _PlanHeader extends StatelessWidget {
 
   /// 달력/캘린더 액션 — 오늘 일정을 다시 불러온다.
   final VoidCallback onCalendar;
+  final VoidCallback onSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -672,6 +760,20 @@ class _PlanHeader extends StatelessWidget {
             ),
             onPressed: onCalendar,
             icon: const Icon(Icons.calendar_today_rounded),
+            color: Theme.of(context).colorScheme.primary,
+          ),
+          IconButton(
+            key: const ValueKey('plan-trip-settings-entry'),
+            tooltip: lalaCopyMulti(
+              language,
+              ko: '이번 여행 설정',
+              en: 'This trip settings',
+              ja: '今回の旅行設定',
+              zhHans: '本次旅行设置',
+              zhHant: '本次旅行設定',
+            ),
+            onPressed: onSettings,
+            icon: const Icon(Icons.tune_rounded),
             color: Theme.of(context).colorScheme.primary,
           ),
         ],
@@ -1034,41 +1136,49 @@ class _PlanContent extends StatelessWidget {
             ),
           ),
         const SizedBox(height: 12),
-        ...visibleSlots.map((slot) {
+        ...List<Widget>.generate(visibleSlots.length, (index) {
+          final slot = visibleSlots[index];
           // V5-B VISIT/SPEND: per-slot visit status (persisted in SlotVisitStore)
-          // and offline category-band estimate. planDate is the UTC date key
-          // (contract A1/D1: one plan per user per day).
-          final planDate = utcPlanDate();
+          // and offline category-band estimate. planDate follows the user's
+          // current calendar day so trip settings and visit records do not
+          // appear one day behind around local midnight.
+          final planDate = tripLibraryDateKey();
           final band = spendBandFor(slot, language);
-          return Padding(
+          return PlanTimelineEntry(
             key: ValueKey('plan-slot-${slot.place?.placeId ?? slot.period}'),
-            padding: const EdgeInsets.only(bottom: 10),
+            first: index == 0,
+            last: index == visibleSlots.length - 1,
+            positionLabel: lalaCopyMulti(
+              language,
+              ko: '일정 ${index + 1}/${visibleSlots.length}',
+              en: 'Plan stop ${index + 1} of ${visibleSlots.length}',
+              ja: '予定 ${index + 1}/${visibleSlots.length}',
+              zhHans: '行程 ${index + 1}/${visibleSlots.length}',
+              zhHant: '行程 ${index + 1}/${visibleSlots.length}',
+            ),
             child: PlanSlotTile(
               slot: slot,
               language: language,
-              onSelectPlace: (_) {
-                // P1: 플랜 탭 내 별도 상세 화면은 아직 연결되지 않았다.
-                // 탭 피드백으로 새로고침 없이 토스트로 장소명만 확인한다.
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    duration: const Duration(seconds: 2),
-                    content: Text(
-                      lalaCopyMulti(
-                        language,
-                        ko: '지도 탭에서 동선을 확인해 보세요.',
-                        en: 'Check the route on the Map tab.',
-                        ja: '地図タブでルートをご確認ください。',
-                        zhHans: '请在地图标签页查看路线。',
-                        zhHant: '請在地圖分頁查看路線。',
-                      ),
-                    ),
-                  ),
-                );
-              },
+              onSelectPlace: (place) => unawaited(
+                context.push(
+                  LalaRoutePaths.placeDetailFor(place.placeId),
+                  extra: place,
+                ),
+              ),
               visitStatus: SlotVisitStore.statusFor(planDate, slot.period),
-              onToggleVisit: () => SlotVisitStore.toggle(planDate, slot.period),
+              onToggleVisit: () => unawaited(
+                context.push(
+                  LalaRoutePaths.visitConfirmationFor(planDate, slot.period),
+                  extra: slot,
+                ),
+              ),
               spendBand: band,
               spendUnavailable: band == null,
+              // F-030: the plan timeline mirrors the shared save state so the
+              // same place reads identically on map/detail and plan.
+              saved: slot.place == null
+                  ? null
+                  : SavedPlaceStore.isSaved(slot.place!.placeId),
               onPlayDocent: docentController == null || slot.place == null
                   ? null
                   : () => unawaited(docentController!.playPlace(slot.place!)),
@@ -1095,13 +1205,4 @@ class _MinTouchTarget extends StatelessWidget {
       child: child,
     );
   }
-}
-
-/// V5-B: today's UTC date as the plan key `YYYY-MM-DD` (contract A1/D1 — one plan
-/// per user per day, UTC date key). Used to scope visit statuses in SlotVisitStore.
-String utcPlanDate() {
-  final utc = DateTime.now().toUtc();
-  return '${utc.year.toString().padLeft(4, '0')}'
-      '-${utc.month.toString().padLeft(2, '0')}'
-      '-${utc.day.toString().padLeft(2, '0')}';
 }

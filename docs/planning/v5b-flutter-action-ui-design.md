@@ -169,7 +169,7 @@ sequenceDiagram
 | SAVE set serialization | `LalaSavedPlace.placeId` shape (place-id only, no coords/PII — contract privacy scope) | store owns encode/decode; **no `toJson` on client** |
 | VISIT map serialization | `LalaSlotVisit.{slotPeriod, status}` shape (status ∈ `planned`\|`visited`) | store owns encode/decode |
 | Visit status enum | `LalaSlotVisit.status` String values | read-side type mirror |
-| `planDate` key | UTC date (`YYYY-MM-DD`) per contract A1/D1 "one plan per user per day (UTC date key)" | derived `DateTime.now().toUtc()` |
+| `planDate` key | User-visible itinerary calendar date (`YYYY-MM-DD`) per contract A1/D1 | derived from local calendar fields without UTC conversion |
 
 **Client methods NOT invoked on the normal path** (`listSavedPlaces`, `savePlace`,
 `unsavePlace`, `savePersistedPlan`, `loadPersistedPlan`, `checkInSlot`, `listSlotVisits`):
@@ -211,6 +211,6 @@ consuming the DTO shapes + zero hand-written HTTP, identical to how
 - V5-B does **not** invoke the V5-A backend methods. If the integrator wants a live sync
   path, that is a V7 flag-gated follow-up (contract §3), wired through `LalaBackend` (which
   V5-B intentionally does not mutate to keep the 11 test fakes intact).
-- `planDate` is derived client-side as today's UTC date. If V5-C or a later lane changes the
-  plan-date authority, `SlotVisitStore`'s key derivation (`$planDate:$slotPeriod`) is the
-  single place to update.
+- `planDate` is derived client-side from the current user-visible calendar date. If V5-C or
+  a later lane changes the plan-date authority, `SlotVisitStore`'s key derivation
+  (`$planDate:$slotPeriod`) is the single place to update.

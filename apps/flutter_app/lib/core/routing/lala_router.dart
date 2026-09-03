@@ -9,6 +9,7 @@
 //   완료(OnboardingState.markCompleted) 시 /map-route 로 전환한다.
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import 'package:lala_next_app/app/lala_main_shell.dart';
 import 'package:lala_next_app/auth/auth_controller.dart';
@@ -28,6 +29,18 @@ import 'package:lala_next_app/features/map_route/presentation/pages/map_route_pa
 import 'package:lala_next_app/features/plan/presentation/pages/plan_page.dart';
 import 'package:lala_next_app/features/search/presentation/pages/search_page.dart';
 import 'package:lala_next_app/features/local_signals/presentation/pages/local_signals_page.dart';
+import 'package:lala_next_app/features/local_signals/presentation/pages/local_signal_detail_page.dart';
+import 'package:lala_next_app/features/intervention/presentation/pages/intervention_comparison_page.dart';
+import 'package:lala_next_app/features/place/presentation/pages/place_detail_page.dart';
+import 'package:lala_next_app/features/preferences/presentation/travel_preferences_page.dart';
+import 'package:lala_next_app/features/preferences/presentation/preference_sync_conflict_page.dart';
+import 'package:lala_next_app/features/profile/presentation/pages/account_page.dart';
+import 'package:lala_next_app/features/profile/presentation/pages/profile_page.dart';
+import 'package:lala_next_app/features/settings/presentation/pages/privacy_location_page.dart';
+import 'package:lala_next_app/features/trip_library/presentation/pages/past_trips_page.dart';
+import 'package:lala_next_app/features/trip_library/presentation/pages/saved_places_page.dart';
+import 'package:lala_next_app/features/trip_library/presentation/pages/trip_settings_page.dart';
+import 'package:lala_next_app/features/trip_library/presentation/pages/visit_confirmation_page.dart';
 import 'package:lala_next_app/features/community/presentation/pages/community_feed_page.dart';
 import 'package:lala_next_app/features/community/presentation/pages/community_post_detail_page.dart';
 import 'package:lala_next_app/features/community/presentation/pages/community_create_post_page.dart';
@@ -101,7 +114,7 @@ GoRouter createLalaRouter({
           builder: (BuildContext context, GoRouterState state) =>
               OnboardingAccountLinkPage(authController: authController),
         ),
-      // --- Main shell (search/map/plan/Local Signals) ---
+      // --- Main shell (search/map/plan/Local Signals/profile) ---
       StatefulShellRoute.indexedStack(
         builder:
             (
@@ -170,11 +183,162 @@ GoRouter createLalaRouter({
                         signalActionController.dispatch(request);
                         context.go(LalaRoutePaths.mapRoute);
                       },
+                      onOpenDetail: (arguments) {
+                        // Contribution has no signal id: routing it through
+                        // the detail path would synthesize a fake id and lose
+                        // contribute mode on web refresh. Use the stable
+                        // contribution path; context rides in extra only.
+                        // go (not push) so the browser-facing route becomes
+                        // the contribution URL — pushed routes never reach
+                        // routeInformationProvider by default, and a refresh
+                        // must land back here via the builder fallback.
+                        if (arguments.contribution) {
+                          context.go(
+                            LalaRoutePaths.localSignalContribution,
+                            extra: arguments,
+                          );
+                          return;
+                        }
+                        final aggregate = arguments.aggregate;
+                        final detailId =
+                            arguments.signal?.id ??
+                            '${aggregate?.placeId ?? 'aggregate'}-'
+                                '${aggregate?.weekStart ?? 'unknown'}';
+                        context.push(
+                          LalaRoutePaths.localSignalDetailFor(detailId),
+                          extra: arguments,
+                        );
+                      },
                     ),
               ),
             ],
           ),
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: LalaRoutePaths.profile,
+                builder: (BuildContext context, GoRouterState state) =>
+                    ProfilePage(authController: authController),
+              ),
+            ],
+          ),
         ],
+      ),
+      GoRoute(
+        path: LalaRoutePaths.placeDetail,
+        builder: (BuildContext context, GoRouterState state) {
+          final placeId = state.pathParameters['placeId'] ?? '';
+          final initialPlace = state.extra is LalaPlace
+              ? state.extra! as LalaPlace
+              : null;
+          return PlaceDetailPage(
+            placeId: placeId,
+            initialPlace: initialPlace,
+            backendFactory: backendFactory,
+            initialConfig: initialConfig,
+            actionController: signalActionController,
+            docentExperienceController: docentExperienceController,
+          );
+        },
+      ),
+      GoRoute(
+        path: LalaRoutePaths.localSignalDetail,
+        builder: (BuildContext context, GoRouterState state) =>
+            LocalSignalDetailPage(
+              signalId: state.pathParameters['signalId'] ?? '',
+              language: OnboardingState.language,
+              initialConfig: initialConfig,
+              arguments: state.extra is LocalSignalDetailArguments
+                  ? state.extra! as LocalSignalDetailArguments
+                  : null,
+              authController: authController,
+              onPlaceAction: (request) {
+                signalActionController.dispatch(request);
+                context.go(LalaRoutePaths.mapRoute);
+              },
+            ),
+      ),
+      GoRoute(
+        path: LalaRoutePaths.localSignalContribution,
+        builder: (BuildContext context, GoRouterState state) =>
+            LocalSignalDetailPage(
+              // Contribution mode never fetches a signal, so no real id
+              // exists; an inert non-empty sentinel keeps the page contract.
+              signalId: 'contribute',
+              language: OnboardingState.language,
+              initialConfig: initialConfig,
+              // Why: a web refresh or deep link drops GoRouter extra; the
+              // fallback rebuilds contribute mode (without in-memory region
+              // context) instead of attempting a fake signal fetch.
+              arguments: state.extra is LocalSignalDetailArguments
+                  ? state.extra! as LocalSignalDetailArguments
+                  : const LocalSignalDetailArguments.contribute(),
+              authController: authController,
+              onPlaceAction: (request) {
+                signalActionController.dispatch(request);
+                context.go(LalaRoutePaths.mapRoute);
+              },
+            ),
+      ),
+      if (authController != null)
+        GoRoute(
+          path: LalaRoutePaths.account,
+          builder: (BuildContext context, GoRouterState state) =>
+              AccountPage(authController: authController),
+        ),
+      GoRoute(
+        path: LalaRoutePaths.travelPreferences,
+        builder: (BuildContext context, GoRouterState state) =>
+            TravelPreferencesPage(language: OnboardingState.language),
+      ),
+      GoRoute(
+        path: LalaRoutePaths.preferenceSyncConflict,
+        builder: (BuildContext context, GoRouterState state) =>
+            PreferenceSyncConflictPage(language: OnboardingState.language),
+      ),
+      GoRoute(
+        path: LalaRoutePaths.privacyLocation,
+        builder: (BuildContext context, GoRouterState state) =>
+            PrivacyLocationPage(authController: authController),
+      ),
+      GoRoute(
+        path: LalaRoutePaths.savedPlaces,
+        builder: (BuildContext context, GoRouterState state) => SavedPlacesPage(
+          backendFactory: backendFactory,
+          initialConfig: initialConfig,
+          actionController: signalActionController,
+        ),
+      ),
+      GoRoute(
+        path: LalaRoutePaths.pastTrips,
+        builder: (BuildContext context, GoRouterState state) =>
+            const PastTripsPage(),
+      ),
+      GoRoute(
+        path: LalaRoutePaths.tripSettings,
+        builder: (BuildContext context, GoRouterState state) =>
+            TripSettingsPage(planDate: state.pathParameters['planDate'] ?? ''),
+      ),
+      GoRoute(
+        path: LalaRoutePaths.visitConfirmation,
+        builder: (BuildContext context, GoRouterState state) =>
+            VisitConfirmationPage(
+              planDate: state.pathParameters['planDate'] ?? '',
+              slotPeriod: state.pathParameters['slotPeriod'] ?? '',
+              slot: state.extra is LalaPlanSlot
+                  ? state.extra! as LalaPlanSlot
+                  : null,
+            ),
+      ),
+      GoRoute(
+        path: LalaRoutePaths.interventionComparison,
+        builder: (BuildContext context, GoRouterState state) =>
+            InterventionComparisonPage(
+              language: OnboardingState.language,
+              arguments: state.extra is InterventionComparisonArguments
+                  ? state.extra! as InterventionComparisonArguments
+                  : null,
+            ),
       ),
       // --- ONMU P3b: 커뮤니티 push 라우트(메인 쉘 외부). context.push 로 진입해
       // 탭 상태를 유지한 채 풀스크린으로 올라간다. ---
@@ -187,7 +351,10 @@ GoRouter createLalaRouter({
       GoRoute(
         path: LalaRoutePaths.community,
         builder: (BuildContext context, GoRouterState state) =>
-            CommunityFeedPage(initialConfig: initialConfig),
+            CommunityFeedPage(
+              initialConfig: initialConfig,
+              authController: authController,
+            ),
       ),
       GoRoute(
         path: LalaRoutePaths.communityPost,
@@ -196,25 +363,36 @@ GoRouter createLalaRouter({
           return CommunityPostDetailPage(
             postId: postId,
             initialConfig: initialConfig,
+            authController: authController,
           );
         },
       ),
       GoRoute(
         path: LalaRoutePaths.communityCreate,
         builder: (BuildContext context, GoRouterState state) =>
-            CommunityCreatePostPage(initialConfig: initialConfig),
+            CommunityCreatePostPage(
+              initialConfig: initialConfig,
+              authController: authController,
+            ),
       ),
       // --- ONMU P3c: 커뮤니티 채팅 push 라우트 ---
       GoRoute(
         path: LalaRoutePaths.communityChat,
         builder: (BuildContext context, GoRouterState state) =>
-            ChatRoomListPage(initialConfig: initialConfig),
+            ChatRoomListPage(
+              initialConfig: initialConfig,
+              authController: authController,
+            ),
       ),
       GoRoute(
         path: LalaRoutePaths.communityChatRoom,
         builder: (BuildContext context, GoRouterState state) {
           final roomId = state.pathParameters['id'] ?? '';
-          return ChatRoomPage(roomId: roomId, initialConfig: initialConfig);
+          return ChatRoomPage(
+            roomId: roomId,
+            initialConfig: initialConfig,
+            authController: authController,
+          );
         },
       ),
     ],

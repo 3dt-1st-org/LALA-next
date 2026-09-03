@@ -4,7 +4,11 @@ import '../../../shared/l10n/lala_copy.dart';
 
 /// 행사 진행 상태 필(C3 추출 — main.dart 의 _EventStatusPill).
 class EventStatusPill extends StatelessWidget {
-  const EventStatusPill({super.key, required this.isOngoing, required this.language});
+  const EventStatusPill({
+    super.key,
+    required this.isOngoing,
+    required this.language,
+  });
 
   final bool isOngoing;
   final String language;
@@ -21,8 +25,22 @@ class EventStatusPill extends StatelessWidget {
       ),
       child: Text(
         isOngoing
-            ? lalaCopy(language, ko: '진행 중', en: 'Ongoing')
-            : lalaCopy(language, ko: '종료', en: 'Ended'),
+            ? lalaCopyMulti(
+                language,
+                ko: '진행 중',
+                en: 'Ongoing',
+                ja: '開催中',
+                zhHans: '进行中',
+                zhHant: '進行中',
+              )
+            : lalaCopyMulti(
+                language,
+                ko: '종료',
+                en: 'Ended',
+                ja: '終了',
+                zhHans: '已结束',
+                zhHant: '已結束',
+              ),
         style: TextStyle(
           color: color,
           fontWeight: FontWeight.w900,

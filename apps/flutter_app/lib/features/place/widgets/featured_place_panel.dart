@@ -10,6 +10,8 @@ import 'package:lala_next_app/features/place/widgets/featured_place_header.dart'
 import 'package:lala_next_app/features/place/widgets/place_context_card.dart';
 import 'package:lala_next_app/features/place/widgets/public_data_proof_row.dart';
 import 'package:lala_next_app/features/place/widgets/signal_grid.dart';
+import 'package:lala_next_app/features/preferences/data/travel_preferences_store.dart';
+import 'package:lala_next_app/features/preferences/presentation/restaurant_communication_entry_card.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 import 'package:lala_next_app/shared/widgets/muted_sheet_card.dart';
 
@@ -34,6 +36,8 @@ class FeaturedPlacePanel extends StatelessWidget {
     required this.onToggleSavedPlace,
     required this.onAddToPlan,
     required this.onFetchAudio,
+    this.onOpenFullDetails,
+    this.preferencesStore,
   });
 
   final LalaPlace? place;
@@ -54,6 +58,8 @@ class FeaturedPlacePanel extends StatelessWidget {
   final ValueChanged<String> onToggleSavedPlace;
   final VoidCallback onAddToPlan;
   final VoidCallback onFetchAudio;
+  final VoidCallback? onOpenFullDetails;
+  final TravelPreferencesStore? preferencesStore;
 
   @override
   Widget build(BuildContext context) {
@@ -61,10 +67,13 @@ class FeaturedPlacePanel extends StatelessWidget {
     if (currentPlace == null) {
       return MutedSheetCard(
         icon: Icons.place_outlined,
-        label: lalaCopy(
+        label: lalaCopyMulti(
           language,
           ko: '이 주변 추천을 준비 중입니다. 지도를 움직이거나 잠시 뒤 다시 시도해 주세요.',
           en: 'Recommendations are still being prepared here. Move the map or try again shortly.',
+          ja: 'この周辺のおすすめを準備中です。地図を動かすか、しばらくしてからもう一度お試しください。',
+          zhHans: '正在准备这附近的推荐。请移动地图或稍后重试。',
+          zhHant: '正在準備這附近的推薦。請移動地圖或稍後再試。',
         ),
       );
     }
@@ -92,6 +101,31 @@ class FeaturedPlacePanel extends StatelessWidget {
           source: source,
           showEvidence: showEvidence,
         ),
+        if (currentPlace.category.toLowerCase() == 'restaurant') ...[
+          const SizedBox(height: 12),
+          RestaurantCommunicationEntryCard(
+            language: language,
+            store: preferencesStore,
+          ),
+        ],
+        if (onOpenFullDetails != null) ...[
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            key: const ValueKey('open-full-place-details'),
+            onPressed: onOpenFullDetails,
+            icon: const Icon(Icons.open_in_new_rounded),
+            label: Text(
+              lalaCopyMulti(
+                language,
+                ko: '전체 상세 보기',
+                en: 'Open full details',
+                ja: '詳細を全画面で見る',
+                zhHans: '查看完整详情',
+                zhHant: '查看完整詳情',
+              ),
+            ),
+          ),
+        ],
         if (shouldShowEventInfo(currentPlace)) ...[
           const SizedBox(height: 12),
           EventInfoCard(place: currentPlace, language: language),
@@ -106,8 +140,22 @@ class FeaturedPlacePanel extends StatelessWidget {
             ),
             label: Text(
               showEvidence
-                  ? lalaCopy(language, ko: '점수/근거 숨기기', en: 'Hide signals')
-                  : lalaCopy(language, ko: '점수/근거 보기', en: 'Show signals'),
+                  ? lalaCopyMulti(
+                      language,
+                      ko: '점수/근거 숨기기',
+                      en: 'Hide signals',
+                      ja: 'スコア・根拠を隠す',
+                      zhHans: '隐藏评分和依据',
+                      zhHant: '隱藏評分和依據',
+                    )
+                  : lalaCopyMulti(
+                      language,
+                      ko: '점수/근거 보기',
+                      en: 'Show signals',
+                      ja: 'スコア・根拠を見る',
+                      zhHans: '查看评分和依据',
+                      zhHant: '查看評分和依據',
+                    ),
             ),
             style: OutlinedButton.styleFrom(
               foregroundColor: const Color(0xFF1A202C),

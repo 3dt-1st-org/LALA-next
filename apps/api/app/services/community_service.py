@@ -41,12 +41,22 @@ _POST_LIST_COLUMNS = """
               AND l.issuer = %s
               AND l.subject = %s
         )
-    ) AS viewer_liked
+    ) AS viewer_liked,
+    (
+        SELECT EXISTS (
+            SELECT 1
+            FROM community.user_follows f
+            WHERE f.follower_issuer = %s
+              AND f.follower_subject = %s
+              AND f.followee_issuer = p.author_issuer
+              AND f.followee_subject = p.author_subject
+        )
+    ) AS viewer_following
 """
 
 
 def _viewer_params(viewer_issuer: str | None, viewer_subject: str | None) -> tuple[str, str]:
-    """Viewer identity for the viewer_liked subquery.
+    """Viewer identity for the viewer_liked/viewer_following subqueries.
 
     ``None`` is passed straight to psycopg2 (SQL NULL), which makes the
     ``l.issuer = %s`` predicate evaluate to NULL and the EXISTS clause to FALSE.
@@ -87,7 +97,9 @@ class CommunityRepository:
             LIMIT %s OFFSET %s
         """
         total_sql = "SELECT count(*)::int FROM community.user_posts"
-        viewer = _viewer_params(viewer_issuer, viewer_subject)
+        # The viewer pair is bound once per viewer-state subquery
+        # (viewer_liked, then viewer_following).
+        viewer = _viewer_params(viewer_issuer, viewer_subject) * 2
         with self._cursor() as cur:
             cur.execute(total_sql)
             total = int(cur.fetchone()["count"])  # type: ignore[index]
@@ -109,7 +121,7 @@ class CommunityRepository:
               ON u.issuer = p.author_issuer AND u.subject = p.author_subject
             WHERE p.id = %s
         """
-        viewer = _viewer_params(viewer_issuer, viewer_subject)
+        viewer = _viewer_params(viewer_issuer, viewer_subject) * 2
         with self._cursor() as cur:
             cur.execute(sql, (*viewer, str(post_id)))
             return cur.fetchone()
@@ -275,9 +287,16 @@ class CommunityRepository:
         *,
         follower_issuer: str,
         follower_subject: str,
-        followee_issuer: str,
-        followee_subject: str,
+        followee_user_id: UUID,
     ) -> dict[str, Any]:
+        """Toggle a follow addressed by the followee's internal user UUID.
+
+        The wire never carries issuer/subject pairs for the followee, so the
+        repository resolves them server-side and reports back only an outcome;
+        policy (self-follow, missing followee) is decided by the service.
+        """
+        resolve_followee_sql = "SELECT issuer, subject FROM identity.users WHERE id = %s"
+        resolve_viewer_sql = "SELECT id FROM identity.users WHERE issuer = %s AND subject = %s"
         delete_sql = """
             DELETE FROM community.user_follows
             WHERE follower_issuer = %s AND follower_subject = %s
@@ -287,45 +306,85 @@ class CommunityRepository:
         insert_sql = """
             INSERT INTO community.user_follows
                 (follower_issuer, follower_subject, followee_issuer, followee_subject)
-            SELECT %s, %s, %s, %s
-            WHERE EXISTS (
-                SELECT 1 FROM identity.users
-                WHERE issuer = %s AND subject = %s
-            )
+            VALUES (%s, %s, %s, %s)
             RETURNING followee_issuer
         """
-        resolve_sql = (
-            "SELECT id AS followee_user_id FROM identity.users WHERE issuer = %s AND subject = %s"
-        )
         with self._cursor() as cur:
+            cur.execute(resolve_followee_sql, (str(followee_user_id),))
+            followee = cur.fetchone()
+            if followee is None:
+                return {"outcome": "missing_followee"}
+            cur.execute(resolve_viewer_sql, (follower_issuer, follower_subject))
+            viewer = cur.fetchone()
+            if viewer is not None and str(viewer["id"]) == str(followee_user_id):
+                # Why: the self-follow guard runs before any mutation so a
+                # rejected attempt can never create or flip a follow row.
+                return {"outcome": "self_follow"}
             cur.execute(
                 delete_sql,
                 (
                     follower_issuer,
                     follower_subject,
-                    followee_issuer,
-                    followee_subject,
+                    followee["issuer"],
+                    followee["subject"],
                 ),
             )
-            deleted = cur.fetchone()
             following = False
-            if deleted is None:
+            if cur.fetchone() is None:
                 cur.execute(
                     insert_sql,
                     (
                         follower_issuer,
                         follower_subject,
-                        followee_issuer,
-                        followee_subject,
-                        followee_issuer,
-                        followee_subject,
+                        followee["issuer"],
+                        followee["subject"],
                     ),
                 )
                 following = cur.fetchone() is not None
-            cur.execute(resolve_sql, (followee_issuer, followee_subject))
-            identity_row = cur.fetchone()
-        followee_user_id = identity_row["id"] if identity_row else None  # type: ignore[index]
-        return {"followee_user_id": followee_user_id, "following": following}
+        return {"outcome": "followed" if following else "unfollowed"}
+
+    def report_post(
+        self,
+        *,
+        post_id: UUID,
+        issuer: str,
+        subject: str,
+        reason_code: str,
+    ) -> dict[str, Any]:
+        """Create (or idempotently re-receive) a governed post report.
+
+        The unique partial index on unresolved reports makes a repeat submit
+        return the original case unchanged; ``xmax = 0`` distinguishes the
+        fresh insert from the conflict path without a second round trip.
+        """
+        author_sql = "SELECT author_issuer, author_subject FROM community.user_posts WHERE id = %s"
+        insert_sql = """
+            INSERT INTO community.post_reports AS r
+                (post_id, reporter_issuer, reporter_subject, reason_code)
+            SELECT %s, %s, %s, %s
+            ON CONFLICT (reporter_issuer, reporter_subject, post_id)
+                WHERE status IN ('open', 'triaged')
+            DO UPDATE SET reason_code = r.reason_code
+            RETURNING r.id, r.reason_code, r.status, (xmax = 0) AS inserted
+        """
+        with self._cursor() as cur:
+            cur.execute(author_sql, (str(post_id),))
+            post = cur.fetchone()
+            if post is None:
+                return {"outcome": "missing_post"}
+            if post["author_issuer"] == issuer and post["author_subject"] == subject:
+                # Why: a self-report is rejected before the insert so the
+                # one-report-per-reporter slot is never consumed by it.
+                return {"outcome": "self_report"}
+            cur.execute(insert_sql, (str(post_id), issuer, subject, reason_code))
+            row = cur.fetchone()
+            assert row is not None  # DO UPDATE always returns the conflicted row.
+        return {
+            "outcome": "created" if row["inserted"] else "duplicate",
+            "report_id": row["id"],
+            "reason_code": row["reason_code"],
+            "status": row["status"],
+        }
 
     @contextmanager
     def _cursor(self) -> Iterator[Any]:
@@ -477,28 +536,61 @@ class CommunityService:
         *,
         follower_issuer: str,
         follower_subject: str,
-        followee_issuer: str,
-        followee_subject: str,
+        followee_user_id: UUID,
     ) -> dict[str, Any]:
-        if (follower_issuer, follower_subject) == (followee_issuer, followee_subject):
+        try:
+            row = self._repository.toggle_follow(
+                follower_issuer=follower_issuer,
+                follower_subject=follower_subject,
+                followee_user_id=followee_user_id,
+            )
+        except CommunityRepositoryUnavailable as exc:
+            raise _database_unavailable() from exc
+        outcome = row.get("outcome")
+        if outcome == "missing_followee":
+            raise _not_found("COMMUNITY_FOLLOWEE_NOT_FOUND", "Followee user was not found.")
+        if outcome == "self_follow":
             raise ServiceError(
                 status_code=422,
                 code="INVALID_FOLLOW_TARGET",
                 message="A user cannot follow themselves.",
                 retryable=False,
             )
+        return {"followee_user_id": str(followee_user_id), "following": outcome == "followed"}
+
+    def report_post(
+        self,
+        *,
+        post_id: UUID,
+        issuer: str,
+        subject: str,
+        reason_code: str,
+    ) -> dict[str, Any]:
         try:
-            row = self._repository.toggle_follow(
-                follower_issuer=follower_issuer,
-                follower_subject=follower_subject,
-                followee_issuer=followee_issuer,
-                followee_subject=followee_subject,
+            row = self._repository.report_post(
+                post_id=post_id,
+                issuer=issuer,
+                subject=subject,
+                reason_code=reason_code,
             )
         except CommunityRepositoryUnavailable as exc:
             raise _database_unavailable() from exc
-        if not row.get("following") and row.get("followee_user_id") is None:
-            raise _not_found("COMMUNITY_FOLLOWEE_NOT_FOUND", "Followee identity was not found.")
-        return row
+        outcome = row.get("outcome")
+        if outcome == "missing_post":
+            raise _not_found("COMMUNITY_POST_NOT_FOUND", "Community post was not found.")
+        if outcome == "self_report":
+            raise ServiceError(
+                status_code=422,
+                code="INVALID_REPORT_TARGET",
+                message="A user cannot report their own post.",
+                retryable=False,
+            )
+        return {
+            "report_id": str(row["report_id"]),
+            "reason_code": row["reason_code"],
+            "status": row["status"],
+            "duplicate": outcome == "duplicate",
+        }
 
 
 def get_community_service() -> CommunityService:
@@ -517,6 +609,7 @@ def _post_payload(row: dict[str, Any]) -> dict[str, Any]:
         "comment_count": int(row.get("comment_count") or 0),
         "like_count": int(row.get("like_count") or 0),
         "viewer_liked": bool(row.get("viewer_liked")),
+        "viewer_following": bool(row.get("viewer_following")),
         "created_at": created_at.isoformat() if created_at else None,
         "updated_at": updated_at.isoformat() if updated_at else None,
     }

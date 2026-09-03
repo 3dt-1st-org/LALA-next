@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:lala_next_app/features/preferences/data/travel_preferences_store.dart';
+import 'package:lala_next_app/features/preferences/data/travel_preferences_remote.dart';
 import 'package:lala_next_app/features/preferences/domain/travel_preferences.dart';
 
 void main() {
@@ -141,4 +142,100 @@ void main() {
     expect(store.value, const TravelPreferences());
     expect(store.isLoaded, isTrue);
   });
+
+  test(
+    'adopts account preferences when the device has no local document',
+    () async {
+      const account = TravelPreferences(
+        interests: {TravelInterest.history},
+        pace: TravelPace.relaxed,
+      );
+      final remote = _MemoryRemote(account: account, revision: 3);
+      final store = TravelPreferencesStore();
+
+      await store.connectAccount(remote);
+
+      expect(store.value, account);
+      expect(store.syncStatus, TravelPreferencesSyncStatus.synced);
+      expect(store.serverRevision, 3);
+    },
+  );
+
+  test(
+    'does not silently overwrite differing device and account values',
+    () async {
+      final store = TravelPreferencesStore();
+      await store.ensureLoaded();
+      await store.save(
+        const TravelPreferences(interests: {TravelInterest.localFood}),
+      );
+      final remote = _MemoryRemote(
+        account: const TravelPreferences(interests: {TravelInterest.history}),
+        revision: 4,
+      );
+
+      await store.connectAccount(remote);
+
+      expect(store.syncStatus, TravelPreferencesSyncStatus.conflict);
+      expect(store.value.interests, {TravelInterest.localFood});
+
+      await store.useAccountPreferences();
+      expect(store.syncStatus, TravelPreferencesSyncStatus.synced);
+      expect(store.value.interests, {TravelInterest.history});
+    },
+  );
+
+  test('uploads the explicit device choice with optimistic revision', () async {
+    final store = TravelPreferencesStore();
+    await store.ensureLoaded();
+    const device = TravelPreferences(interests: {TravelInterest.localFood});
+    await store.save(device);
+    final remote = _MemoryRemote(
+      account: const TravelPreferences(interests: {TravelInterest.history}),
+      revision: 5,
+    );
+    await store.connectAccount(remote);
+
+    await store.saveDevicePreferencesToAccount();
+
+    expect(remote.lastExpectedRevision, 5);
+    expect(remote.account, device);
+    expect(store.syncStatus, TravelPreferencesSyncStatus.synced);
+    expect(store.serverRevision, 6);
+  });
+}
+
+class _MemoryRemote implements TravelPreferencesRemote {
+  _MemoryRemote({this.account, this.revision = 0});
+
+  TravelPreferences? account;
+  int revision;
+  int? lastExpectedRevision;
+
+  @override
+  Future<TravelPreferencesRemoteDocument?> get() async {
+    final value = account;
+    if (value == null) return null;
+    return TravelPreferencesRemoteDocument(
+      preferences: value,
+      revision: revision,
+      updatedAt: '2026-09-02T00:00:00Z',
+    );
+  }
+
+  @override
+  Future<TravelPreferencesRemoteDocument> put({
+    required TravelPreferences preferences,
+    required int expectedRevision,
+  }) async {
+    lastExpectedRevision = expectedRevision;
+    if (expectedRevision != revision) throw StateError('revision conflict');
+    account = preferences;
+    revision += 1;
+    return TravelPreferencesRemoteDocument(
+      preferences: preferences,
+      revision: revision,
+      updatedAt: '2026-09-02T00:01:00Z',
+    );
+  }
 }

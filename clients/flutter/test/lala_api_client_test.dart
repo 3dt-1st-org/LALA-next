@@ -283,6 +283,98 @@ void main() {
     );
   });
 
+  test('getTravelPreferences preserves honest null for an empty profile',
+      () async {
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      dio: _dio((request) async {
+        expect(request.method, 'GET');
+        expect(request.uri.path, '/api/v1/me/preferences');
+        return _json({
+          'ok': true,
+          'data': null,
+          'meta': {'source': 'unavailable'},
+          'error': null,
+        });
+      }),
+    );
+
+    final envelope = await client.getTravelPreferences();
+
+    expect(envelope.ok, isTrue);
+    expect(envelope.data, isNull);
+    expect(envelope.meta['source'], 'unavailable');
+  });
+
+  test('getTravelPreferences parses a revisioned server document', () async {
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      dio: _dio((request) async => _json({
+            'ok': true,
+            'data': {
+              'preferences': {
+                'version': 1,
+                'soft': {'pace': 'relaxed'},
+                'hard': <String, Object?>{},
+                'locale': <String, Object?>{},
+              },
+              'revision': 3,
+              'updated_at': '2026-09-02T00:00:00Z',
+            },
+            'meta': {'source': 'db'},
+            'error': null,
+          })),
+    );
+
+    final document = (await client.getTravelPreferences()).data;
+
+    expect(document?.revision, 3);
+    expect(document?.preferences['version'], 1);
+    expect(document?.updatedAt, '2026-09-02T00:00:00Z');
+  });
+
+  test('putTravelPreferences sends the optimistic revision and dynamic auth',
+      () async {
+    late RequestOptions captured;
+    final preferences = <String, dynamic>{
+      'version': 1,
+      'soft': <String, Object?>{},
+      'hard': <String, Object?>{},
+      'locale': <String, Object?>{},
+    };
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      accessTokenProvider: () async => 'preferences-token',
+      dio: _dio((request) async {
+        captured = request;
+        return _json({
+          'ok': true,
+          'data': {
+            'preferences': preferences,
+            'revision': 5,
+            'updated_at': '2026-09-02T00:00:00Z',
+          },
+          'meta': {'source': 'db'},
+          'error': null,
+        });
+      }),
+    );
+
+    final envelope = await client.putTravelPreferences(
+      expectedRevision: 4,
+      preferences: preferences,
+    );
+
+    expect(captured.method, 'PUT');
+    expect(captured.uri.path, '/api/v1/me/preferences');
+    expect(captured.data, {
+      'expected_revision': 4,
+      'preferences': preferences,
+    });
+    expect(_h(captured, 'authorization'), 'Bearer preferences-token');
+    expect(envelope.data?.revision, 5);
+  });
+
   test('deleteMe sends JSON confirmation and dynamic auth, accepting only 204',
       () async {
     late RequestOptions captured;
@@ -1401,11 +1493,16 @@ void main() {
       'slot_period': 'morning',
       'status': 'visited',
       'place_id': null,
+      'reason_code': null,
+      'use_for_recommendations': true,
       'visited_at': null,
+      'confirmed_at': '2026-09-03T00:00:00Z',
     });
     expect(visit.slotPeriod, 'morning');
     expect(visit.status, 'visited');
     expect(visit.placeId, isNull);
+    expect(visit.useForRecommendations, isTrue);
+    expect(visit.confirmedAt, '2026-09-03T00:00:00Z');
 
     final savesData = LalaSavedPlacesData.fromJsonObject(
         const {'items': <Map<String, dynamic>>[]});
@@ -1429,6 +1526,32 @@ void main() {
     expect(persisted.planDate, '2026-08-14');
     expect(persisted.schemaVersion, 1);
     expect(persisted.plan, isNull);
+
+    final summaries = LalaPersistedPlansData.fromJsonObject(const {
+      'items': [
+        {
+          'plan_date': '2026-08-14',
+          'schema_version': 1,
+          'region': '서울',
+          'slot_count': 4,
+          'visited_count': 2,
+          'updated_at': null,
+        },
+      ],
+    });
+    expect(summaries.items.single.region, '서울');
+    expect(summaries.items.single.slotCount, 4);
+    expect(summaries.items.single.visitedCount, 2);
+
+    final override = LalaTripPreferenceOverrideDocument.fromJsonObject(const {
+      'plan_date': '2026-08-14',
+      'schema_version': 1,
+      'revision': 3,
+      'override': {'version': 1, 'pace': 'relaxed'},
+      'updated_at': '2026-09-03T00:00:00Z',
+    });
+    expect(override.revision, 3);
+    expect(override.override['pace'], 'relaxed');
   });
 
   test('listSavedPlaces sends bearer auth and parses saved-place items',
@@ -1509,6 +1632,60 @@ void main() {
     expect(envelope.data, isNull); // honest null, never a thrown parse
   });
 
+  test('past plans and trip overrides use scoped planning paths', () async {
+    final requests = <RequestOptions>[];
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      bearerToken: 'plan-token',
+      dio: _dio(
+        (request) async {
+          if (request.method == 'GET' && request.uri.path.endsWith('/plans')) {
+            return _json({
+              'ok': true,
+              'data': {'items': <Object?>[]},
+              'meta': {'request_id': 'plans-id'},
+              'error': null,
+            });
+          }
+          return _json({
+            'ok': true,
+            'data': {
+              'plan_date': '2026-08-14',
+              'schema_version': 1,
+              'revision': 1,
+              'override': {'version': 1, 'pace': 'balanced'},
+              'updated_at': '2026-09-03T00:00:00Z',
+            },
+            'meta': {'request_id': 'override-id'},
+            'error': null,
+          });
+        },
+        sink: requests.add,
+      ),
+    );
+
+    final plans = await client.listPersistedPlans(
+      before: '2026-09-01',
+      limit: 10,
+    );
+    final saved = await client.putTripPreferenceOverride(
+      planDate: '2026-08-14',
+      expectedRevision: 0,
+      override: const {'version': 1, 'pace': 'balanced'},
+    );
+
+    expect(plans.data?.items, isEmpty);
+    expect(requests.first.uri.path, '/api/v1/me/plans');
+    expect(requests.first.uri.queryParameters['before'], '2026-09-01');
+    expect(requests.first.uri.queryParameters['limit'], '10');
+    expect(requests.last.uri.path, '/api/v1/me/plans/2026-08-14/preferences');
+    expect(requests.last.data, {
+      'expected_revision': 0,
+      'override': {'version': 1, 'pace': 'balanced'},
+    });
+    expect(saved.data?.revision, 1);
+  });
+
   test('checkInSlot PUTs the status body to the slot visit path', () async {
     final requests = <RequestOptions>[];
     final client = LalaApiClient(
@@ -1521,7 +1698,10 @@ void main() {
             'slot_period': 'morning',
             'place_id': 'p1',
             'status': 'visited',
+            'reason_code': null,
+            'use_for_recommendations': false,
             'visited_at': null,
+            'confirmed_at': null,
           },
           'meta': {'request_id': 'visit-id'},
           'error': null,
@@ -1541,6 +1721,128 @@ void main() {
         requests.single.uri.path, '/api/v1/me/plans/2026-08-14/visits/morning');
     expect(envelope.data?.status, 'visited');
     expect(envelope.data?.slotPeriod, 'morning');
+    expect(requests.single.data, {
+      'status': 'visited',
+      'place_id': 'p1',
+      'use_for_recommendations': false,
+    });
+  });
+
+  // F-080 community follow/report contracts.
+
+  test('toggleCommunityFollow POSTs only the internal user UUID', () async {
+    final requests = <RequestOptions>[];
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      bearerToken: 'follow-token',
+      dio: _dio(
+        (request) async => _json({
+          'ok': true,
+          'data': {
+            'followee_user_id': '22222222-2222-4222-8222-222222222222',
+            'following': true,
+          },
+          'meta': {'request_id': 'follow-id'},
+          'error': null,
+        }),
+        sink: requests.add,
+      ),
+    );
+
+    final envelope = await client.toggleCommunityFollow(
+      followeeUserId: '22222222-2222-4222-8222-222222222222',
+    );
+
+    expect(requests.single.method, 'POST');
+    expect(requests.single.uri.path, '/api/v1/community/follows');
+    // The body must not carry issuer/subject or any other external identity.
+    expect(requests.single.data, {
+      'followee_user_id': '22222222-2222-4222-8222-222222222222',
+    });
+    expect(envelope.data?.following, isTrue);
+    expect(
+      envelope.data?.followeeUserId,
+      '22222222-2222-4222-8222-222222222222',
+    );
+  });
+
+  test('reportCommunityPost POSTs a bounded reason code and parses the receipt',
+      () async {
+    final requests = <RequestOptions>[];
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      bearerToken: 'report-token',
+      dio: _dio(
+        (request) async => _json({
+          'ok': true,
+          'data': {
+            'report_id': '33333333-3333-4333-8333-333333333333',
+            'reason_code': 'privacy_exposure',
+            'status': 'open',
+            'duplicate': true,
+          },
+          'meta': {'request_id': 'report-id'},
+          'error': null,
+        }),
+        sink: requests.add,
+      ),
+    );
+
+    final envelope = await client.reportCommunityPost(
+      postId: 'post-1',
+      reasonCode: 'privacy_exposure',
+    );
+
+    expect(requests.single.method, 'POST');
+    expect(requests.single.uri.path, '/api/v1/community/posts/post-1/reports');
+    // No free-text field is ever serialized onto the wire.
+    expect(requests.single.data, {'reason_code': 'privacy_exposure'});
+    expect(envelope.data?.duplicate, isTrue);
+    expect(envelope.data?.reasonCode, 'privacy_exposure');
+    expect(envelope.data?.status, 'open');
+    expect(
+      envelope.data?.reportId,
+      '33333333-3333-4333-8333-333333333333',
+    );
+  });
+
+  test('CommunityPost parses viewer_following and copyWith keeps it honest',
+      () {
+    final post = CommunityPost.fromJsonObject(const {
+      'id': 'post-1',
+      'author_user_id': '22222222-2222-4222-8222-222222222222',
+      'title': 't',
+      'body': 'b',
+      'tags': <String>['tips'],
+      'like_count': 2,
+      'comment_count': 1,
+      'viewer_liked': true,
+      'viewer_following': true,
+      'created_at': '2026-09-03T00:00:00Z',
+    });
+    expect(post.viewerLiked, isTrue);
+    expect(post.viewerFollowing, isTrue);
+
+    final toggled = post.copyWithReactions(viewerFollowing: false);
+    expect(toggled.viewerFollowing, isFalse);
+    // Untouched reaction state is preserved by the copy.
+    expect(toggled.viewerLiked, isTrue);
+    expect(toggled.likeCount, 2);
+
+    // A guest payload without viewer_following degrades to false, not an
+    // invented following state.
+    final guest = CommunityPost.fromJsonObject(const {
+      'id': 'post-2',
+      'author_user_id': '22222222-2222-4222-8222-222222222222',
+      'title': 't',
+      'body': 'b',
+      'tags': <String>[],
+      'like_count': 0,
+      'comment_count': 0,
+      'viewer_liked': false,
+      'created_at': '2026-09-03T00:00:00Z',
+    });
+    expect(guest.viewerFollowing, isFalse);
   });
 }
 

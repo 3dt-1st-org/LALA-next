@@ -12,6 +12,8 @@ import '../../../../shared/l10n/lala_copy.dart';
 import '../../../../shared/widgets/lala_skeleton.dart';
 import '../../domain/local_signal_aggregate.dart';
 import '../../domain/local_signal_public.dart';
+import '../widgets/local_signal_contribution_composer.dart';
+import 'local_signal_detail_page.dart';
 
 enum _LocalSignalsStatus { loading, loaded, empty, disabled, error }
 
@@ -20,12 +22,14 @@ class LocalSignalsPage extends StatefulWidget {
     required this.backendFactory,
     required this.initialConfig,
     this.onPlaceAction,
+    this.onOpenDetail,
     super.key,
   });
 
   final LalaBackendFactory backendFactory;
   final LalaAppConfig initialConfig;
   final ValueChanged<LocalSignalPlaceActionRequest>? onPlaceAction;
+  final ValueChanged<LocalSignalDetailArguments>? onOpenDetail;
 
   @override
   State<LocalSignalsPage> createState() => _LocalSignalsPageState();
@@ -83,6 +87,34 @@ class _LocalSignalsPageState extends State<LocalSignalsPage> {
       return context!.regionId;
     }
     return null;
+  }
+
+  RegionContext? get _manualRegion {
+    final context = RegionContextStore.current;
+    return context?.source == RegionSource.manual ? context : null;
+  }
+
+  /// F-071: the feed-level contribution entry. Policy: offered once the feed
+  /// resolves to real data or an honest empty (aggregate-only included);
+  /// hidden while loading (transient), on error (retry is the honest next
+  /// action), and in the disabled/readiness state — that flag is externally
+  /// owned and off, so inviting writes the server has not announced readiness
+  /// for would end in a governed 503. Requires a detail route (always present
+  /// in the app) so the button never dead-ends.
+  bool get _shareEntryVisible =>
+      widget.onOpenDetail != null &&
+      (_status == _LocalSignalsStatus.loaded ||
+          _status == _LocalSignalsStatus.empty);
+
+  void _openContribution() {
+    final manual = _manualRegion;
+    widget.onOpenDetail!(
+      LocalSignalDetailArguments.contribute(
+        region: manual == null
+            ? null
+            : (code: manual.regionId, label: manual.label(_language)),
+      ),
+    );
   }
 
   Future<void> _load({bool append = false}) async {
@@ -194,13 +226,13 @@ class _LocalSignalsPageState extends State<LocalSignalsPage> {
     final regionLabel = activeRegion?.source == RegionSource.manual
         ? activeRegion!.label(language)
         : lalaCopyMulti(
-          language,
-          ko: '전국',
-          en: 'Nationwide',
-          ja: '全国',
-          zhHans: '全国',
-          zhHant: '全國',
-        );
+            language,
+            ko: '전국',
+            en: 'Nationwide',
+            ja: '全国',
+            zhHans: '全国',
+            zhHant: '全國',
+          );
     return ColoredBox(
       color: theme.colorScheme.surface,
       child: SafeArea(
@@ -223,6 +255,26 @@ class _LocalSignalsPageState extends State<LocalSignalsPage> {
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 sliver: _contentSliver(language),
               ),
+              if (_shareEntryVisible)
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+                  sliver: SliverToBoxAdapter(
+                    child: LocalSignalContributionEntry(
+                      entryKey: const ValueKey(
+                        'local-signals-contribution-entry',
+                      ),
+                      buttonKey: const ValueKey(
+                        'local-signals-share-experience',
+                      ),
+                      language: language,
+                      // Auth state is unknown on this page; the entry copy
+                      // stays sign-in-honest for both guests and users.
+                      authenticated: null,
+                      contextLabel: _manualRegion?.label(language),
+                      onPressed: _openContribution,
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -281,46 +333,47 @@ class _LocalSignalsPageState extends State<LocalSignalsPage> {
 
   SliverList _signalsList(String language) {
     return SliverList(
-          delegate: SliverChildBuilderDelegate((context, index) {
-            if (index < _items.length) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _SignalCard(
-                  key: ValueKey('local-signal-${_items[index].id}'),
-                  signal: _items[index],
-                  language: language,
-                  onPlaceAction: widget.onPlaceAction,
-                ),
-              );
-            }
-            return Padding(
-              padding: const EdgeInsets.only(top: 4, bottom: 24),
-              child: Center(
-                child: _loadingMore
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : OutlinedButton(
-                        key: const ValueKey('local-signals-load-more'),
-                        onPressed: _hasMore ? () => _load(append: true) : null,
-                        child: Text(
-                          lalaCopyMulti(
-                            language,
-                            ko: '더 보기',
-                            en: 'Load more',
-                            ja: 'もっと見る',
-                            zhHans: '加载更多',
-                            zhHant: '載入更多',
-                          ),
-                        ),
+      delegate: SliverChildBuilderDelegate((context, index) {
+        if (index < _items.length) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _SignalCard(
+              key: ValueKey('local-signal-${_items[index].id}'),
+              signal: _items[index],
+              language: language,
+              onPlaceAction: widget.onPlaceAction,
+              onOpenDetail: widget.onOpenDetail,
+            ),
+          );
+        }
+        return Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 24),
+          child: Center(
+            child: _loadingMore
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : OutlinedButton(
+                    key: const ValueKey('local-signals-load-more'),
+                    onPressed: _hasMore ? () => _load(append: true) : null,
+                    child: Text(
+                      lalaCopyMulti(
+                        language,
+                        ko: '더 보기',
+                        en: 'Load more',
+                        ja: 'もっと見る',
+                        zhHans: '加载更多',
+                        zhHant: '載入更多',
                       ),
-              ),
-            );
-          }, childCount: _items.length + (_hasMore ? 1 : 0)),
+                    ),
+                  ),
+          ),
         );
-    }
+      }, childCount: _items.length + (_hasMore ? 1 : 0)),
+    );
+  }
 
   /// Aggregate section: only rendered when the governed read model returned
   /// available data. Provenance + freshness are always shown so a reader
@@ -330,32 +383,31 @@ class _LocalSignalsPageState extends State<LocalSignalsPage> {
     return SliverPadding(
       padding: const EdgeInsets.only(bottom: 16),
       sliver: SliverList(
-        delegate: SliverChildBuilderDelegate(
-          (context, index) {
-            if (index == 0) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: _AggregatesHeader(
-                  language: language,
-                  aggregates: aggregates,
-                ),
-              );
-            }
-            final aggregate = aggregates.items[index - 1];
+        delegate: SliverChildBuilderDelegate((context, index) {
+          if (index == 0) {
             return Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: _AggregateCard(
-                key: ValueKey(
-                  'local-signal-aggregate-${aggregate.placeId ?? aggregate.placeNameKo}-${aggregate.weekStart}',
-                ),
-                aggregate: aggregate,
+              child: _AggregatesHeader(
                 language: language,
-                onPlaceAction: widget.onPlaceAction,
+                aggregates: aggregates,
               ),
             );
-          },
-          childCount: 1 + aggregates.items.length,
-        ),
+          }
+          final aggregate = aggregates.items[index - 1];
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _AggregateCard(
+              key: ValueKey(
+                'local-signal-aggregate-${aggregate.placeId ?? aggregate.placeNameKo}-${aggregate.weekStart}',
+              ),
+              aggregate: aggregate,
+              aggregateEnvelope: aggregates,
+              language: language,
+              onPlaceAction: widget.onPlaceAction,
+              onOpenDetail: widget.onOpenDetail,
+            ),
+          );
+        }, childCount: 1 + aggregates.items.length),
       ),
     );
   }
@@ -608,12 +660,14 @@ class _SignalCard extends StatelessWidget {
     required this.signal,
     required this.language,
     required this.onPlaceAction,
+    required this.onOpenDetail,
     super.key,
   });
 
   final LocalSignalPublicItem signal;
   final String language;
   final ValueChanged<LocalSignalPlaceActionRequest>? onPlaceAction;
+  final ValueChanged<LocalSignalDetailArguments>? onOpenDetail;
 
   @override
   Widget build(BuildContext context) {
@@ -668,6 +722,28 @@ class _SignalCard extends StatelessWidget {
                 ),
               ),
             ],
+            if (onOpenDetail != null) ...<Widget>[
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton.icon(
+                  key: ValueKey('local-signal-detail-${signal.id}'),
+                  onPressed: () =>
+                      onOpenDetail!(LocalSignalDetailArguments.public(signal)),
+                  icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                  label: Text(
+                    lalaCopyMulti(
+                      language,
+                      ko: '신호 자세히 보기',
+                      en: 'Open signal detail',
+                      ja: 'シグナルの詳細を見る',
+                      zhHans: '查看信号详情',
+                      zhHant: '查看訊號詳情',
+                    ),
+                  ),
+                ),
+              ),
+            ],
             if (signal.placeLinks.isNotEmpty && onPlaceAction != null) ...[
               const SizedBox(height: 13),
               Wrap(
@@ -685,13 +761,13 @@ class _SignalCard extends StatelessWidget {
                     icon: const Icon(Icons.place_outlined, size: 18),
                     label: Text(
                       lalaCopyMulti(
-                      language,
-                      ko: '장소 보기',
-                      en: 'View place',
-                      ja: 'スポットを見る',
-                      zhHans: '查看地点',
-                      zhHant: '查看地點',
-                    ),
+                        language,
+                        ko: '장소 보기',
+                        en: 'View place',
+                        ja: 'スポットを見る',
+                        zhHans: '查看地点',
+                        zhHant: '查看地點',
+                      ),
                     ),
                   ),
                   TextButton.icon(
@@ -747,8 +823,11 @@ class _AggregatesHeader extends StatelessWidget {
       children: <Widget>[
         Row(
           children: <Widget>[
-            Icon(Icons.insights_outlined, size: 18,
-                color: theme.colorScheme.onSurfaceVariant),
+            Icon(
+              Icons.insights_outlined,
+              size: 18,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
             const SizedBox(width: 6),
             Expanded(
               child: Text(
@@ -760,8 +839,9 @@ class _AggregatesHeader extends StatelessWidget {
                   zhHans: '本月本地关注指标',
                   zhHant: '本月在地關注指標',
                 ),
-                style: theme.textTheme.titleSmall
-                    ?.copyWith(fontWeight: FontWeight.w800),
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
           ],
@@ -772,8 +852,9 @@ class _AggregatesHeader extends StatelessWidget {
         Text(
           '${aggregates.items.first.providerLabel(language)} · ${aggregates.freshnessLabel(language)}',
           key: const ValueKey('local-signals-aggregates-provenance'),
-          style: theme.textTheme.labelMedium
-              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
         ),
       ],
     );
@@ -783,14 +864,18 @@ class _AggregatesHeader extends StatelessWidget {
 class _AggregateCard extends StatelessWidget {
   const _AggregateCard({
     required this.aggregate,
+    required this.aggregateEnvelope,
     required this.language,
     required this.onPlaceAction,
+    required this.onOpenDetail,
     super.key,
   });
 
   final LocalSignalPlaceAggregate aggregate;
+  final LocalSignalAggregates aggregateEnvelope;
   final String language;
   final ValueChanged<LocalSignalPlaceActionRequest>? onPlaceAction;
+  final ValueChanged<LocalSignalDetailArguments>? onOpenDetail;
 
   @override
   Widget build(BuildContext context) {
@@ -807,8 +892,9 @@ class _AggregateCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     aggregate.placeNameKo,
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w800),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
                 Text(
@@ -821,7 +907,8 @@ class _AggregateCard extends StatelessWidget {
                     zhHant: '${aggregate.mentionCount} 次提及',
                   ),
                   key: ValueKey(
-                      'local-signal-aggregate-count-${aggregate.placeNameKo}'),
+                    'local-signal-aggregate-count-${aggregate.placeNameKo}',
+                  ),
                   style: theme.textTheme.labelLarge?.copyWith(
                     color: theme.colorScheme.primary,
                     fontWeight: FontWeight.w800,
@@ -834,8 +921,9 @@ class _AggregateCard extends StatelessWidget {
               // Provenance lives in the section header once; the card shows
               // only its aggregation window.
               '${aggregate.weekStart} ~ ${aggregate.weekEnd}',
-              style: theme.textTheme.labelMedium
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
             ),
             if (hasPlace)
               Padding(
@@ -845,7 +933,8 @@ class _AggregateCard extends StatelessWidget {
                   children: <Widget>[
                     OutlinedButton.icon(
                       key: ValueKey(
-                          'local-signal-aggregate-place-${aggregate.placeId}'),
+                        'local-signal-aggregate-place-${aggregate.placeId}',
+                      ),
                       onPressed: () => onPlaceAction!(
                         LocalSignalPlaceActionRequest(
                           placeId: aggregate.placeId!,
@@ -866,7 +955,8 @@ class _AggregateCard extends StatelessWidget {
                     ),
                     TextButton.icon(
                       key: ValueKey(
-                          'local-signal-aggregate-plan-${aggregate.placeId}'),
+                        'local-signal-aggregate-plan-${aggregate.placeId}',
+                      ),
                       onPressed: () => onPlaceAction!(
                         LocalSignalPlaceActionRequest(
                           placeId: aggregate.placeId!,
@@ -888,6 +978,32 @@ class _AggregateCard extends StatelessWidget {
                   ],
                 ),
               ),
+            if (onOpenDetail != null)
+              SizedBox(
+                width: double.infinity,
+                child: TextButton.icon(
+                  key: ValueKey(
+                    'local-signal-aggregate-detail-${aggregate.placeId ?? aggregate.placeNameKo}',
+                  ),
+                  onPressed: () => onOpenDetail!(
+                    LocalSignalDetailArguments.aggregate(
+                      aggregate,
+                      aggregateEnvelope,
+                    ),
+                  ),
+                  icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                  label: Text(
+                    lalaCopyMulti(
+                      language,
+                      ko: '집계 자세히 보기',
+                      en: 'Open aggregate detail',
+                      ja: '集計の詳細を見る',
+                      zhHans: '查看汇总详情',
+                      zhHant: '查看彙總詳情',
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -907,8 +1023,11 @@ class _AggregatesUnavailable extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         children: <Widget>[
-          Icon(Icons.cloud_off_outlined,
-              size: 16, color: theme.colorScheme.onSurfaceVariant),
+          Icon(
+            Icons.cloud_off_outlined,
+            size: 16,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
           const SizedBox(width: 6),
           Expanded(
             child: Text(
@@ -923,8 +1042,9 @@ class _AggregatesUnavailable extends StatelessWidget {
                 zhHant: '暫時無法載入彙總指標',
               ),
               key: const ValueKey('local-signals-aggregates-unavailable'),
-              style: theme.textTheme.labelMedium
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
             ),
           ),
         ],

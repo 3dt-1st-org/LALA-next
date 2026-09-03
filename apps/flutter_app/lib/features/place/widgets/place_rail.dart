@@ -33,17 +33,29 @@ class PlaceRail extends StatelessWidget {
             const Icon(Icons.expand_less, size: 18),
             const SizedBox(width: 6),
             Text(
-              lalaCopy(language, ko: '추천 장소', en: 'Recommended places'),
+              lalaCopyMulti(
+                language,
+                ko: '추천 장소',
+                en: 'Recommended places',
+                ja: 'おすすめスポット',
+                zhHans: '推荐地点',
+                zhHant: '推薦地點',
+              ),
               style: Theme.of(
                 context,
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
             ),
             const Spacer(),
             InlineMeta(
-              lalaCopy(
+              lalaCopyMulti(
                 language,
                 ko: '${items.length}곳 · ${sourceLabel(source, language: language)}',
                 en: '${items.length} places · ${sourceLabel(source, language: language)}',
+                ja: '${items.length}か所 · ${sourceLabel(source, language: language)}',
+                zhHans:
+                    '${items.length} 个地点 · ${sourceLabel(source, language: language)}',
+                zhHant:
+                    '${items.length} 個地點 · ${sourceLabel(source, language: language)}',
               ),
             ),
           ],

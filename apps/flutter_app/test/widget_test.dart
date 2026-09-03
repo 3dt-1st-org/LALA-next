@@ -2099,6 +2099,38 @@ void main() {
     expect(find.byKey(const ValueKey('account-sign-in')), findsOneWidget);
   });
 
+  testWidgets('account sync 401 shows stale-session copy without internals', (
+    tester,
+  ) async {
+    final gateway = WidgetTestAuthGateway();
+    await tester.pumpWidget(
+      TestLalaApp(
+        backendFactory: FakeBackend.new,
+        initialConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+        authControllerFactory: (_) =>
+            _widgetTestAuthController(gateway: gateway, accountApi: WidgetTestAccountApi(
+              getMeError: const LalaApiException(
+                code: 'UNAUTHORIZED',
+                message: 'jwt rejected for legacy-scope-internal-detail',
+                statusCode: 401,
+                retryable: false,
+              ),
+            )),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('settings-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('account-sign-in')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('세션이 만료되었어요. 다시 로그인해 주세요.'), findsOneWidget);
+    expect(find.textContaining('legacy-scope-internal-detail'), findsNothing);
+    expect(find.byKey(const ValueKey('account-sync-retry')), findsOneWidget);
+    // The account panel stays usable: sign-out remains reachable for a fresh login.
+    expect(find.byKey(const ValueKey('account-sign-out')), findsOneWidget);
+  });
+
   testWidgets('disabled auth preserves guest map startup', (tester) async {
     await tester.pumpWidget(
       TestLalaApp(
@@ -3701,14 +3733,22 @@ class WidgetTestAuthGateway implements LalaAuthGateway {
 }
 
 class WidgetTestAccountApi implements LalaAccountApi {
+  WidgetTestAccountApi({this.getMeError});
+
+  final Object? getMeError;
   final List<String> deleteConfirmations = [];
 
   @override
-  Future<LalaMe> getMe() async => const LalaMe(
-    userId: 'account-123',
-    createdAt: '2026-07-10T00:00:00Z',
-    authenticated: true,
-  );
+  Future<LalaMe> getMe() async {
+    if (getMeError != null) {
+      throw getMeError!;
+    }
+    return const LalaMe(
+      userId: 'account-123',
+      createdAt: '2026-07-10T00:00:00Z',
+      authenticated: true,
+    );
+  }
 
   @override
   Future<void> deleteMe({required String confirmation}) async {

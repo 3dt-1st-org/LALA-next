@@ -19,6 +19,7 @@ DOCENT_SCRIPT_PATH = "/api/v1/docents/script"
 DAILY_PLAN_PATH = "/api/v1/plans/daily"
 INTERVENTION_PATH = "/api/v1/plans/intervention"
 ME_PATH = "/api/v1/me"
+ME_PATH_PREFIX = "/api/v1/me/"
 LOCAL_SIGNALS_PATH_PREFIX = "/api/v1/community/signals"
 LOCAL_SIGNALS_PLACES_PATH_PREFIX = "/api/v1/community/places/"
 
@@ -104,6 +105,9 @@ def _add_client_auth_security(schema: dict[str, Any]) -> None:
     schemas.setdefault("SaveToggleResult", _save_toggle_result_schema())
     schemas.setdefault("PersistedPlan", _persisted_plan_schema())
     schemas.setdefault("PersistedPlanSuccessEnvelope", _success_envelope_schema("PersistedPlan"))
+    schemas.setdefault("PersistedPlanSummary", _persisted_plan_summary_schema())
+    schemas.setdefault("PersistedPlansData", _persisted_plans_data_schema())
+    schemas.setdefault("TripPreferenceOverride", _trip_preference_override_schema())
     schemas.setdefault("SlotVisit", _slot_visit_schema())
     schemas.setdefault("SlotVisitsData", _slot_visits_data_schema())
     schemas.setdefault("SlotVisitsSuccessEnvelope", _success_envelope_schema("SlotVisitsData"))
@@ -142,7 +146,11 @@ def _add_client_auth_security(schema: dict[str, Any]) -> None:
                 is_local_signals = path.startswith(LOCAL_SIGNALS_PATH_PREFIX) or path.startswith(
                     LOCAL_SIGNALS_PLACES_PATH_PREFIX
                 )
-                if path == ME_PATH or (is_local_signals and method.lower() != "get"):
+                if (
+                    path == ME_PATH
+                    or path.startswith(ME_PATH_PREFIX)
+                    or (is_local_signals and method.lower() != "get")
+                ):
                     operation["security"] = [{"OAuthBearerAuth": []}]
                     _remove_generated_auth_parameters(operation)
                 else:
@@ -291,6 +299,8 @@ def _add_success_envelope_responses(schema: dict[str, Any]) -> None:
 def _add_operation_contract_extensions(schema: dict[str, Any]) -> None:
     for path, path_item in (schema.get("paths") or {}).items():
         timeout_seconds = OPERATION_TIMEOUT_SECONDS.get(path)
+        if timeout_seconds is None and path.startswith(ME_PATH_PREFIX):
+            timeout_seconds = 12
         if timeout_seconds is None and (
             path.startswith(LOCAL_SIGNALS_PATH_PREFIX)
             or path.startswith(LOCAL_SIGNALS_PLACES_PATH_PREFIX)
@@ -302,12 +312,16 @@ def _add_operation_contract_extensions(schema: dict[str, Any]) -> None:
             if not isinstance(operation, dict):
                 continue
             operation["x-lala-timeout-seconds"] = timeout_seconds
-            operation["x-lala-auth-required"] = path == ME_PATH or (
-                (
-                    path.startswith(LOCAL_SIGNALS_PATH_PREFIX)
-                    or path.startswith(LOCAL_SIGNALS_PLACES_PATH_PREFIX)
+            operation["x-lala-auth-required"] = (
+                path == ME_PATH
+                or path.startswith(ME_PATH_PREFIX)
+                or (
+                    (
+                        path.startswith(LOCAL_SIGNALS_PATH_PREFIX)
+                        or path.startswith(LOCAL_SIGNALS_PLACES_PATH_PREFIX)
+                    )
+                    and method.lower() != "get"
                 )
-                and method.lower() != "get"
             )
 
 
@@ -1178,10 +1192,71 @@ def _persisted_plan_schema() -> dict[str, Any]:
     }
 
 
+def _persisted_plan_summary_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": [
+            "plan_date",
+            "schema_version",
+            "slot_count",
+            "visited_count",
+        ],
+        "description": "Safe past-trip summary; no owner identity or precise route history.",
+        "properties": {
+            "plan_date": {"type": "string", "format": "date"},
+            "schema_version": {"type": "integer"},
+            "region": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+            "slot_count": {"type": "integer", "minimum": 0, "maximum": 4},
+            "visited_count": {"type": "integer", "minimum": 0, "maximum": 4},
+            "updated_at": {"anyOf": [{"type": "string", "format": "date-time"}, {"type": "null"}]},
+        },
+        "additionalProperties": False,
+    }
+
+
+def _persisted_plans_data_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+            "items": {
+                "type": "array",
+                "items": {"$ref": "#/components/schemas/PersistedPlanSummary"},
+            }
+        },
+        "additionalProperties": False,
+    }
+
+
+def _trip_preference_override_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": [
+            "plan_date",
+            "schema_version",
+            "revision",
+            "override",
+            "updated_at",
+        ],
+        "description": (
+            "Date-scoped soft preference overrides. Dietary and accessibility "
+            "constraints remain inherited from the default preferences."
+        ),
+        "properties": {
+            "plan_date": {"type": "string", "format": "date"},
+            "schema_version": {"type": "integer", "enum": [1]},
+            "revision": {"type": "integer", "minimum": 1},
+            "override": {"type": "object"},
+            "updated_at": {"type": "string", "format": "date-time"},
+        },
+        "additionalProperties": False,
+    }
+
+
 def _slot_visit_schema() -> dict[str, Any]:
     return {
         "type": "object",
-        "required": ["slot_period", "status"],
+        "required": ["slot_period", "status", "use_for_recommendations"],
         "description": "Per-slot check-in status (idempotent; re-check-in = one row).",
         "properties": {
             "slot_period": {
@@ -1192,10 +1267,35 @@ def _slot_visit_schema() -> dict[str, Any]:
                 "anyOf": [{"type": "string"}, {"type": "null"}],
                 "description": "Optional place visited in the slot, or null.",
             },
-            "status": {"type": "string", "enum": ["planned", "visited"]},
+            "status": {
+                "type": "string",
+                "enum": ["planned", "visited", "not_visited"],
+            },
+            "reason_code": {
+                "anyOf": [
+                    {
+                        "type": "string",
+                        "enum": [
+                            "closed",
+                            "weather",
+                            "crowded",
+                            "time",
+                            "transport",
+                            "changed_mind",
+                            "other",
+                        ],
+                    },
+                    {"type": "null"},
+                ]
+            },
+            "use_for_recommendations": {"type": "boolean"},
             "visited_at": {
                 "anyOf": [{"type": "string", "format": "date-time"}, {"type": "null"}],
                 "description": "When visited, or null for a planned slot.",
+            },
+            "confirmed_at": {
+                "anyOf": [{"type": "string", "format": "date-time"}, {"type": "null"}],
+                "description": "When the user confirmed an outcome, or null while planned.",
             },
         },
         "additionalProperties": False,

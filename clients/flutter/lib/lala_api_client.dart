@@ -111,6 +111,44 @@ class LalaApiClient {
     );
   }
 
+  Future<LalaEnvelope<LalaTravelPreferencesDocument?>> getTravelPreferences({
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'GET',
+      '/api/v1/me/preferences',
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+    );
+    return _envelopeFromResponse<LalaTravelPreferencesDocument?>(
+      resp,
+      parseData: (value) => value == null
+          ? null
+          : LalaTravelPreferencesDocument.fromJsonObject(value),
+    );
+  }
+
+  Future<LalaEnvelope<LalaTravelPreferencesDocument>> putTravelPreferences({
+    required int expectedRevision,
+    required Map<String, dynamic> preferences,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'PUT',
+      '/api/v1/me/preferences',
+      body: {'expected_revision': expectedRevision, 'preferences': preferences},
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+      contentType: 'application/json',
+    );
+    return _envelopeFromResponse<LalaTravelPreferencesDocument>(
+      resp,
+      parseData: LalaTravelPreferencesDocument.fromJsonObject,
+    );
+  }
+
   Future<void> deleteMe({
     required String confirmation,
     String? requestId,
@@ -238,6 +276,173 @@ class LalaApiClient {
       query: query,
       requestId: requestId,
       timeout: timeout ?? readTimeout,
+    );
+    return _envelopeFromResponse<Map<String, dynamic>>(resp, parseData: _asMap);
+  }
+
+  Future<LalaEnvelope<Map<String, dynamic>>> getLocalSignal({
+    required String signalId,
+    String language = 'ko',
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'GET',
+      '/api/v1/community/signals/${Uri.encodeComponent(signalId)}',
+      query: {'language': language},
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+    );
+    return _envelopeFromResponse<Map<String, dynamic>>(resp, parseData: _asMap);
+  }
+
+  Future<LalaEnvelope<Map<String, dynamic>>> getLocalSignalComments({
+    required String signalId,
+    String language = 'ko',
+    int limit = 20,
+    String? cursor,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final query = <String, dynamic>{
+      'language': language,
+      'limit': '$limit',
+      if ((cursor ?? '').trim().isNotEmpty) 'cursor': cursor!.trim(),
+    };
+    final resp = await _request(
+      'GET',
+      '/api/v1/community/signals/${Uri.encodeComponent(signalId)}/comments',
+      query: query,
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+    );
+    return _envelopeFromResponse<Map<String, dynamic>>(resp, parseData: _asMap);
+  }
+
+  Future<LalaEnvelope<Map<String, dynamic>>> createLocalSignalDraft({
+    required Map<String, dynamic> draft,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'POST',
+      '/api/v1/community/signals',
+      body: draft,
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+      contentType: 'application/json',
+    );
+    return _envelopeFromResponse<Map<String, dynamic>>(resp, parseData: _asMap);
+  }
+
+  Future<LalaEnvelope<Map<String, dynamic>>> updateLocalSignalDraft({
+    required String signalId,
+    required Map<String, dynamic> patch,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'PATCH',
+      '/api/v1/community/signals/${Uri.encodeComponent(signalId)}',
+      body: patch,
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+      contentType: 'application/json',
+    );
+    return _envelopeFromResponse<Map<String, dynamic>>(resp, parseData: _asMap);
+  }
+
+  Future<LalaEnvelope<Map<String, dynamic>>> submitLocalSignalDraft({
+    required String signalId,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'POST',
+      '/api/v1/community/signals/${Uri.encodeComponent(signalId)}/submit',
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+    );
+    return _envelopeFromResponse<Map<String, dynamic>>(resp, parseData: _asMap);
+  }
+
+  Future<LalaEnvelope<Map<String, dynamic>>> deleteLocalSignalDraft({
+    required String signalId,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'DELETE',
+      '/api/v1/community/signals/${Uri.encodeComponent(signalId)}',
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+    );
+    return _envelopeFromResponse<Map<String, dynamic>>(resp, parseData: _asMap);
+  }
+
+  Future<LalaEnvelope<Map<String, dynamic>>> setLocalSignalReaction({
+    required String signalId,
+    required String reactionType,
+    required bool active,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      active ? 'PUT' : 'DELETE',
+      '/api/v1/community/signals/${Uri.encodeComponent(signalId)}/reactions/'
+      '${Uri.encodeComponent(reactionType)}',
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+    );
+    return _envelopeFromResponse<Map<String, dynamic>>(resp, parseData: _asMap);
+  }
+
+  Future<LalaEnvelope<Map<String, dynamic>>> setLocalSignalSaved({
+    required String signalId,
+    required bool active,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      active ? 'PUT' : 'DELETE',
+      '/api/v1/community/signals/${Uri.encodeComponent(signalId)}/save',
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+    );
+    return _envelopeFromResponse<Map<String, dynamic>>(resp, parseData: _asMap);
+  }
+
+  Future<LalaEnvelope<Map<String, dynamic>>> createLocalSignalComment({
+    required String signalId,
+    required String sourceLanguage,
+    required String body,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'POST',
+      '/api/v1/community/signals/${Uri.encodeComponent(signalId)}/comments',
+      body: {'source_language': sourceLanguage, 'body': body},
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+      contentType: 'application/json',
+    );
+    return _envelopeFromResponse<Map<String, dynamic>>(resp, parseData: _asMap);
+  }
+
+  Future<LalaEnvelope<Map<String, dynamic>>> reportLocalSignal({
+    required String signalId,
+    required String reasonCode,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'POST',
+      '/api/v1/community/signals/${Uri.encodeComponent(signalId)}/reports',
+      body: {'reason_code': reasonCode},
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+      contentType: 'application/json',
     );
     return _envelopeFromResponse<Map<String, dynamic>>(resp, parseData: _asMap);
   }
@@ -561,6 +766,106 @@ class LalaApiClient {
     );
   }
 
+  Future<LalaEnvelope<LalaPersistedPlansData>> listPersistedPlans({
+    String? before,
+    int limit = 20,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final query = <String, String>{'limit': '$limit'};
+    if (before != null && before.isNotEmpty) query['before'] = before;
+    final resp = await _request(
+      'GET',
+      '/api/v1/me/plans',
+      query: query,
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+    );
+    return _envelopeFromResponse<LalaPersistedPlansData>(
+      resp,
+      parseData: LalaPersistedPlansData.fromJsonObject,
+    );
+  }
+
+  Future<LalaEnvelope<LalaPlanDeleteResult>> deletePersistedPlan({
+    required String planDate,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'DELETE',
+      '/api/v1/me/plans/$planDate',
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+    );
+    return _envelopeFromResponse<LalaPlanDeleteResult>(
+      resp,
+      parseData: LalaPlanDeleteResult.fromJsonObject,
+    );
+  }
+
+  Future<LalaEnvelope<LalaTripPreferenceOverrideDocument?>>
+      getTripPreferenceOverride({
+    required String planDate,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'GET',
+      '/api/v1/me/plans/$planDate/preferences',
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+    );
+    return _envelopeFromResponse<LalaTripPreferenceOverrideDocument?>(
+      resp,
+      parseData: (value) => value == null
+          ? null
+          : LalaTripPreferenceOverrideDocument.fromJsonObject(value),
+    );
+  }
+
+  Future<LalaEnvelope<LalaTripPreferenceOverrideDocument>>
+      putTripPreferenceOverride({
+    required String planDate,
+    required int expectedRevision,
+    required Map<String, dynamic> override,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'PUT',
+      '/api/v1/me/plans/$planDate/preferences',
+      body: <String, dynamic>{
+        'expected_revision': expectedRevision,
+        'override': override,
+      },
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+      contentType: 'application/json',
+    );
+    return _envelopeFromResponse<LalaTripPreferenceOverrideDocument>(
+      resp,
+      parseData: LalaTripPreferenceOverrideDocument.fromJsonObject,
+    );
+  }
+
+  Future<LalaEnvelope<LalaPlanDeleteResult>> deleteTripPreferenceOverride({
+    required String planDate,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'DELETE',
+      '/api/v1/me/plans/$planDate/preferences',
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+    );
+    return _envelopeFromResponse<LalaPlanDeleteResult>(
+      resp,
+      parseData: LalaPlanDeleteResult.fromJsonObject,
+    );
+  }
+
   Future<LalaEnvelope<LalaSlotVisitsData>> listSlotVisits({
     required String planDate,
     String? requestId,
@@ -583,11 +888,15 @@ class LalaApiClient {
     required String slotPeriod,
     String status = 'visited',
     String? placeId,
+    String? reasonCode,
+    bool useForRecommendations = false,
     String? requestId,
     Duration? timeout,
   }) async {
     final body = <String, dynamic>{'status': status};
     if (placeId != null) body['place_id'] = placeId;
+    if (reasonCode != null) body['reason_code'] = reasonCode;
+    body['use_for_recommendations'] = useForRecommendations;
     final resp = await _request(
       'PUT',
       '/api/v1/me/plans/$planDate/visits/$slotPeriod',
@@ -724,6 +1033,50 @@ class LalaApiClient {
     return _envelopeFromResponse<CommunityLikeState>(
       resp,
       parseData: CommunityLikeState.fromJsonObject,
+    );
+  }
+
+  /// 작성자 팔로우 토글(OAuth). 요청은 내부 사용자 UUID 만 전송한다 —
+  /// issuer/subject 같은 외부 식별자는 통신에 노출하지 않는다.
+  Future<LalaEnvelope<CommunityFollowState>> toggleCommunityFollow({
+    required String followeeUserId,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'POST',
+      '/api/v1/community/follows',
+      body: <String, dynamic>{'followee_user_id': followeeUserId},
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+      contentType: 'application/json',
+    );
+    return _envelopeFromResponse<CommunityFollowState>(
+      resp,
+      parseData: CommunityFollowState.fromJsonObject,
+    );
+  }
+
+  /// 게시글 신고(OAuth). 요청은 제한된 reason_code 만 담고 자유 서술을
+  /// 보내지 않는다. 동일 신고 반복은 서버가 동일 접수 영수증(duplicate)을
+  /// 돌려준다.
+  Future<LalaEnvelope<CommunityReportReceipt>> reportCommunityPost({
+    required String postId,
+    required String reasonCode,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'POST',
+      '/api/v1/community/posts/$postId/reports',
+      body: <String, dynamic>{'reason_code': reasonCode},
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+      contentType: 'application/json',
+    );
+    return _envelopeFromResponse<CommunityReportReceipt>(
+      resp,
+      parseData: CommunityReportReceipt.fromJsonObject,
     );
   }
 
@@ -1131,6 +1484,43 @@ class LalaMe {
       userId: userId,
       createdAt: createdAt,
       authenticated: authenticated,
+    );
+  }
+}
+
+class LalaTravelPreferencesDocument {
+  const LalaTravelPreferencesDocument({
+    required this.preferences,
+    required this.revision,
+    required this.updatedAt,
+  });
+
+  final Map<String, dynamic> preferences;
+  final int revision;
+  final String updatedAt;
+
+  static LalaTravelPreferencesDocument fromJsonObject(Object? value) {
+    if (value is! Map) {
+      throw const FormatException('Expected travel-preferences data object.');
+    }
+    return LalaTravelPreferencesDocument.fromJson(
+      value.map((key, value) => MapEntry('$key', value)),
+    );
+  }
+
+  factory LalaTravelPreferencesDocument.fromJson(Map<String, dynamic> json) {
+    final preferences = json['preferences'];
+    final revision = json['revision'];
+    final updatedAt = json['updated_at'];
+    if (preferences is! Map || revision is! int || updatedAt is! String) {
+      throw const FormatException(
+        'Expected preferences, revision, and updated_at fields.',
+      );
+    }
+    return LalaTravelPreferencesDocument(
+      preferences: preferences.map((key, value) => MapEntry('$key', value)),
+      revision: revision,
+      updatedAt: updatedAt,
     );
   }
 }
@@ -1625,9 +2015,7 @@ class LalaPlanSlot {
       travelTimeFromPreviousMinutes: _asOptionalInt(
         json['travel_time_from_previous_minutes'],
       ),
-      estimatedOpeningHours: _asOptionalString(
-        json['estimated_opening_hours'],
-      ),
+      estimatedOpeningHours: _asOptionalString(json['estimated_opening_hours']),
       openingHoursValid: _asOptionalBool(json['opening_hours_valid']),
       indoorOutdoor: _asOptionalString(json['indoor_outdoor']),
       recommendationReason: _asOptionalString(json['recommendation_reason']),
@@ -1910,6 +2298,7 @@ class CommunityPost {
     required this.likeCount,
     required this.commentCount,
     required this.viewerLiked,
+    required this.viewerFollowing,
     required this.createdAt,
     this.updatedAt,
   });
@@ -1922,6 +2311,9 @@ class CommunityPost {
   final int likeCount;
   final int commentCount;
   final bool viewerLiked;
+
+  /// 현재 뷰어가 이 글의 작성자를 팔로우 중인지(비로그인=false).
+  final bool viewerFollowing;
   final String createdAt;
   final String? updatedAt;
 
@@ -1943,16 +2335,18 @@ class CommunityPost {
       likeCount: _asInt(json['like_count']),
       commentCount: _asInt(json['comment_count']),
       viewerLiked: _asBool(json['viewer_liked']),
+      viewerFollowing: _asBool(json['viewer_following']),
       createdAt: _asString(json['created_at']),
       updatedAt: _asOptionalString(json['updated_at']),
     );
   }
 
-  /// 좋아요/댓글 수·viewer_liked 만 갱신한 복사본(낙관적 UI 용).
+  /// 좋아요/댓글 수·viewer 상태만 갱신한 복사본(낙관적 UI 용).
   CommunityPost copyWithReactions({
     int? likeCount,
     int? commentCount,
     bool? viewerLiked,
+    bool? viewerFollowing,
   }) {
     return CommunityPost(
       id: id,
@@ -1963,6 +2357,7 @@ class CommunityPost {
       likeCount: likeCount ?? this.likeCount,
       commentCount: commentCount ?? this.commentCount,
       viewerLiked: viewerLiked ?? this.viewerLiked,
+      viewerFollowing: viewerFollowing ?? this.viewerFollowing,
       createdAt: createdAt,
       updatedAt: updatedAt,
     );
@@ -2078,6 +2473,57 @@ class CommunityLikeState {
       postId: _asString(json['post_id']),
       liked: _asBool(json['liked']),
       likeCount: _asInt(json['like_count']),
+    );
+  }
+}
+
+/// 팔로우 토글 응답(followee_user_id/following). 외부 식별자는 포함되지 않는다.
+class CommunityFollowState {
+  const CommunityFollowState({
+    required this.followeeUserId,
+    required this.following,
+  });
+
+  final String followeeUserId;
+  final bool following;
+
+  static CommunityFollowState fromJsonObject(Object? value) {
+    return CommunityFollowState.fromJson(_asMap(value));
+  }
+
+  factory CommunityFollowState.fromJson(Map<String, dynamic> json) {
+    return CommunityFollowState(
+      followeeUserId: _asString(json['followee_user_id']),
+      following: _asBool(json['following']),
+    );
+  }
+}
+
+/// 게시글 신고 접수 영수증(report_id/reason_code/status/duplicate).
+/// unknown status 값은 원본 문자열 그대로 보관한다(지원 상태로 재표기 금지).
+class CommunityReportReceipt {
+  const CommunityReportReceipt({
+    required this.reportId,
+    required this.reasonCode,
+    required this.status,
+    required this.duplicate,
+  });
+
+  final String reportId;
+  final String reasonCode;
+  final String status;
+  final bool duplicate;
+
+  static CommunityReportReceipt fromJsonObject(Object? value) {
+    return CommunityReportReceipt.fromJson(_asMap(value));
+  }
+
+  factory CommunityReportReceipt.fromJson(Map<String, dynamic> json) {
+    return CommunityReportReceipt(
+      reportId: _asString(json['report_id']),
+      reasonCode: _asString(json['reason_code']),
+      status: _asString(json['status']),
+      duplicate: _asBool(json['duplicate']),
     );
   }
 }
@@ -2348,11 +2794,17 @@ class LalaPersistedPlanSummary {
   const LalaPersistedPlanSummary({
     required this.planDate,
     required this.schemaVersion,
+    this.region,
+    this.slotCount = 0,
+    this.visitedCount = 0,
     this.updatedAt,
   });
 
   final String planDate;
   final int schemaVersion;
+  final String? region;
+  final int slotCount;
+  final int visitedCount;
   final String? updatedAt;
 
   static LalaPersistedPlanSummary fromJsonObject(Object? value) {
@@ -2363,7 +2815,78 @@ class LalaPersistedPlanSummary {
     return LalaPersistedPlanSummary(
       planDate: _asString(json['plan_date']),
       schemaVersion: _asInt(json['schema_version']),
+      region: _asOptionalString(json['region']),
+      slotCount: _asInt(json['slot_count']),
+      visitedCount: _asInt(json['visited_count']),
       updatedAt: _asOptionalString(json['updated_at']),
+    );
+  }
+}
+
+class LalaPersistedPlansData {
+  const LalaPersistedPlansData({required this.items});
+
+  final List<LalaPersistedPlanSummary> items;
+
+  static LalaPersistedPlansData fromJsonObject(Object? value) {
+    return LalaPersistedPlansData.fromJson(_asMap(value));
+  }
+
+  factory LalaPersistedPlansData.fromJson(Map<String, dynamic> json) {
+    return LalaPersistedPlansData(
+      items: _asList(
+        json['items'],
+      ).map(LalaPersistedPlanSummary.fromJsonObject).toList(),
+    );
+  }
+}
+
+class LalaPlanDeleteResult {
+  const LalaPlanDeleteResult({required this.planDate, required this.deleted});
+
+  final String planDate;
+  final bool deleted;
+
+  static LalaPlanDeleteResult fromJsonObject(Object? value) {
+    return LalaPlanDeleteResult.fromJson(_asMap(value));
+  }
+
+  factory LalaPlanDeleteResult.fromJson(Map<String, dynamic> json) {
+    return LalaPlanDeleteResult(
+      planDate: _asString(json['plan_date']),
+      deleted: _asBool(json['deleted']),
+    );
+  }
+}
+
+class LalaTripPreferenceOverrideDocument {
+  const LalaTripPreferenceOverrideDocument({
+    required this.planDate,
+    required this.schemaVersion,
+    required this.revision,
+    required this.override,
+    required this.updatedAt,
+  });
+
+  final String planDate;
+  final int schemaVersion;
+  final int revision;
+  final Map<String, dynamic> override;
+  final String updatedAt;
+
+  static LalaTripPreferenceOverrideDocument fromJsonObject(Object? value) {
+    return LalaTripPreferenceOverrideDocument.fromJson(_asMap(value));
+  }
+
+  factory LalaTripPreferenceOverrideDocument.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    return LalaTripPreferenceOverrideDocument(
+      planDate: _asString(json['plan_date']),
+      schemaVersion: _asInt(json['schema_version']),
+      revision: _asInt(json['revision']),
+      override: Map<String, dynamic>.from(_asMap(json['override'])),
+      updatedAt: _asString(json['updated_at']),
     );
   }
 }
@@ -2401,13 +2924,19 @@ class LalaSlotVisit {
     required this.slotPeriod,
     required this.status,
     this.placeId,
+    this.reasonCode,
+    this.useForRecommendations = false,
     this.visitedAt,
+    this.confirmedAt,
   });
 
   final String slotPeriod;
   final String status;
   final String? placeId;
+  final String? reasonCode;
+  final bool useForRecommendations;
   final String? visitedAt;
+  final String? confirmedAt;
 
   static LalaSlotVisit fromJsonObject(Object? value) {
     return LalaSlotVisit.fromJson(_asMap(value));
@@ -2418,7 +2947,10 @@ class LalaSlotVisit {
       slotPeriod: _asString(json['slot_period']),
       status: _asString(json['status']),
       placeId: _asOptionalString(json['place_id']),
+      reasonCode: _asOptionalString(json['reason_code']),
+      useForRecommendations: _asBool(json['use_for_recommendations']),
       visitedAt: _asOptionalString(json['visited_at']),
+      confirmedAt: _asOptionalString(json['confirmed_at']),
     );
   }
 }

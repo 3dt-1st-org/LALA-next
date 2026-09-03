@@ -11,21 +11,26 @@ import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/routing/lala_route_paths.dart';
 import 'package:lala_next_app/features/community/presentation/community_api.dart';
+import 'package:lala_next_app/features/community/presentation/community_auth_guard.dart';
+import 'package:lala_next_app/auth/auth_controller.dart';
+import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 
 class ChatRoomListPage extends StatefulWidget {
   const ChatRoomListPage({
     this.initialConfig = const LalaAppConfig.fromEnvironment(),
+    this.authController,
     super.key,
   });
 
   final LalaAppConfig initialConfig;
+  final LalaAuthController? authController;
 
   @override
   State<ChatRoomListPage> createState() => _ChatRoomListPageState();
 }
 
-enum _ListStatus { loading, data, error }
+enum _ListStatus { authRequired, loading, data, error }
 
 class _ChatRoomListPageState extends State<ChatRoomListPage> {
   late final LalaAppConfig _config;
@@ -47,6 +52,7 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
     _config = widget.initialConfig;
     _client = createCommunityClient(_config);
     _scrollController.addListener(_onScroll);
+    widget.authController?.addListener(_onAuthChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _load(initial: true);
     });
@@ -56,12 +62,34 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
   void dispose() {
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
+    widget.authController?.removeListener(_onAuthChanged);
     _client.close();
     super.dispose();
   }
 
-  String get _language => _config.lang;
-  bool get _canCreate => _config.hasAuth || _config.accessTokenProvider != null;
+  String get _language => OnboardingState.language;
+  bool get _canCreate => isCommunityAuthenticated(widget.authController);
+
+  void _onAuthChanged() {
+    if (!mounted) return;
+    if (!_canCreate) {
+      if (_status != _ListStatus.authRequired || _rooms.isNotEmpty) {
+        setState(() {
+          _rooms = const <ChatRoom>[];
+          _total = 0;
+          _hasMore = false;
+          _isLoadingMore = false;
+          _status = _ListStatus.authRequired;
+        });
+      }
+      return;
+    }
+    if (_status == _ListStatus.authRequired) {
+      _load(initial: true);
+    } else {
+      setState(() {});
+    }
+  }
 
   void _onScroll() {
     if (_status != _ListStatus.data) return;
@@ -75,6 +103,10 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
   }
 
   Future<void> _load({bool initial = false}) async {
+    if (!_canCreate) {
+      setState(() => _status = _ListStatus.authRequired);
+      return;
+    }
     if (initial) {
       setState(() {
         _status = _ListStatus.loading;
@@ -82,26 +114,37 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
       });
     }
     try {
-      final envelope =
-          await _client.getChatRooms(limit: _pageSize, offset: 0);
+      final envelope = await _client.getChatRooms(limit: _pageSize, offset: 0);
       final data = envelope.data;
       final rooms = data?.rooms ?? const <ChatRoom>[];
       final total = data?.total ?? rooms.length;
       if (!mounted) return;
+      if (!_canCreate) {
+        setState(() => _status = _ListStatus.authRequired);
+        return;
+      }
       setState(() {
         _rooms = rooms;
         _total = total;
         _hasMore = rooms.length < total;
         _status = _ListStatus.data;
       });
-    } on LalaApiException catch (e) {
+    } on LalaApiException {
       if (!mounted) return;
+      if (!_canCreate) {
+        setState(() => _status = _ListStatus.authRequired);
+        return;
+      }
       setState(() {
-        _error = e.message.trim().isEmpty ? _fallbackError() : e.message;
+        _error = _fallbackError();
         _status = _ListStatus.error;
       });
     } on Object {
       if (!mounted) return;
+      if (!_canCreate) {
+        setState(() => _status = _ListStatus.authRequired);
+        return;
+      }
       setState(() {
         _error = _fallbackError();
         _status = _ListStatus.error;
@@ -114,11 +157,20 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
     setState(() => _isLoadingMore = true);
     final offset = _rooms.length;
     try {
-      final envelope =
-          await _client.getChatRooms(limit: _pageSize, offset: offset);
+      final envelope = await _client.getChatRooms(
+        limit: _pageSize,
+        offset: offset,
+      );
       final data = envelope.data;
       final more = data?.rooms ?? const <ChatRoom>[];
       if (!mounted) return;
+      if (!_canCreate) {
+        setState(() {
+          _isLoadingMore = false;
+          _status = _ListStatus.authRequired;
+        });
+        return;
+      }
       setState(() {
         _rooms = <ChatRoom>[..._rooms, ...more];
         _hasMore = _rooms.length < (data?.total ?? _rooms.length);
@@ -126,30 +178,36 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
       });
     } on Object {
       if (!mounted) return;
-      setState(() => _isLoadingMore = false);
+      setState(() {
+        _isLoadingMore = false;
+        if (!_canCreate) _status = _ListStatus.authRequired;
+      });
     }
   }
 
   String _fallbackError() => lalaCopyMulti(
-          _language,
-          ko: '채팅방을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.',
-          en: 'Could not load chat rooms. Please try again shortly.',
-          ja: 'チャットルームを読み込めませんでした。しばらくしてからもう一度お試しください。',
-          zhHans: '无法加载聊天室，请稍后重试。',
-          zhHant: '無法載入聊天室，請稍後重試。',
-        );
+    _language,
+    ko: '채팅방을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.',
+    en: 'Could not load chat rooms. Please try again shortly.',
+    ja: 'チャットルームを読み込めませんでした。しばらくしてからもう一度お試しください。',
+    zhHans: '无法加载聊天室，请稍后重试。',
+    zhHant: '無法載入聊天室，請稍後重試。',
+  );
 
   Future<void> _openCreate() async {
     if (!_canCreate) {
-      _showSnack(
-        lalaCopyMulti(
-            _language,
-            ko: '방 만들기는 로그인이 필요해요.',
-            en: 'Sign in to create a room.',
-            ja: 'ルーム作成にはログインが必要です。',
-            zhHans: '创建房间需要登录。',
-            zhHant: '建立房間需要登入。',
-          ),
+      await requestCommunityAuthentication(
+        context,
+        controller: widget.authController,
+        language: _language,
+        actionLabel: lalaCopyMulti(
+          _language,
+          ko: '채팅방 만들기',
+          en: 'creating a chat room',
+          ja: 'チャットルーム作成',
+          zhHans: '创建聊天室',
+          zhHant: '建立聊天室',
+        ),
       );
       return;
     }
@@ -159,30 +217,30 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
       await _client.createChatRoom(name: name.trim());
       if (!mounted) return;
       _load(initial: true);
-    } on LalaApiException catch (e) {
+    } on LalaApiException {
       if (!mounted) return;
       _showSnack(
-        e.message.trim().isEmpty
-            ? lalaCopyMulti(
-  _language,
-  ko: '방 생성에 실패했어요.',
-  en: 'Failed to create room.',
-  ja: 'ルーム作成に失敗しました。',
-  zhHans: '创建房间失败。',
-  zhHant: '建立房間失敗。',
-)
-            : e.message,
+        lalaCopyMulti(
+          _language,
+          ko: '방 생성에 실패했어요.',
+          en: 'Failed to create room.',
+          ja: 'ルーム作成に失敗しました。',
+          zhHans: '创建房间失败。',
+          zhHant: '建立房間失敗。',
+        ),
       );
     } on Object {
       if (!mounted) return;
-      _showSnack(lalaCopyMulti(
-  _language,
-  ko: '방 생성에 실패했어요.',
-  en: 'Failed to create room.',
-  ja: 'ルーム作成に失敗しました。',
-  zhHans: '创建房间失败。',
-  zhHant: '建立房間失敗。',
-));
+      _showSnack(
+        lalaCopyMulti(
+          _language,
+          ko: '방 생성에 실패했어요.',
+          en: 'Failed to create room.',
+          ja: 'ルーム作成に失敗しました。',
+          zhHans: '创建房间失败。',
+          zhHant: '建立房間失敗。',
+        ),
+      );
     }
   }
 
@@ -194,13 +252,13 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
         return AlertDialog(
           title: Text(
             lalaCopyMulti(
-  _language,
-  ko: '새 채팅방',
-  en: 'New chat room',
-  ja: '新しいチャットルーム',
-  zhHans: '新聊天室',
-  zhHant: '新聊天室',
-),
+              _language,
+              ko: '새 채팅방',
+              en: 'New chat room',
+              ja: '新しいチャットルーム',
+              zhHans: '新聊天室',
+              zhHant: '新聊天室',
+            ),
             style: const TextStyle(fontWeight: FontWeight.w900),
           ),
           content: TextField(
@@ -208,43 +266,46 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
             autofocus: true,
             maxLength: 120,
             textInputAction: TextInputAction.done,
-            onSubmitted: (value) =>
-                Navigator.of(context).pop(value.trim()),
+            onSubmitted: (value) => Navigator.of(context).pop(value.trim()),
             decoration: InputDecoration(
               hintText: lalaCopyMulti(
-                  _language,
-                  ko: '방 이름',
-                  en: 'Room name',
-                  ja: 'ルーム名',
-                  zhHans: '房间名称',
-                  zhHant: '房間名稱',
-                ),
+                _language,
+                ko: '방 이름',
+                en: 'Room name',
+                ja: 'ルーム名',
+                zhHans: '房间名称',
+                zhHant: '房間名稱',
+              ),
               border: const OutlineInputBorder(),
             ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: Text(lalaCopyMulti(
-      _language,
-      ko: '취소',
-      en: 'Cancel',
-      ja: 'キャンセル',
-      zhHans: '取消',
-      zhHant: '取消',
-    )),
+              child: Text(
+                lalaCopyMulti(
+                  _language,
+                  ko: '취소',
+                  en: 'Cancel',
+                  ja: 'キャンセル',
+                  zhHans: '取消',
+                  zhHant: '取消',
+                ),
+              ),
             ),
             FilledButton(
               onPressed: () =>
                   Navigator.of(context).pop(controller.text.trim()),
-              child: Text(lalaCopyMulti(
-  _language,
-  ko: '만들기',
-  en: 'Create',
-  ja: '作成',
-  zhHans: '创建',
-  zhHant: '建立',
-)),
+              child: Text(
+                lalaCopyMulti(
+                  _language,
+                  ko: '만들기',
+                  en: 'Create',
+                  ja: '作成',
+                  zhHans: '创建',
+                  zhHant: '建立',
+                ),
+              ),
             ),
           ],
         );
@@ -270,13 +331,13 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
       appBar: AppBar(
         title: Text(
           lalaCopyMulti(
-  _language,
-  ko: '채팅',
-  en: 'Chat',
-  ja: 'チャット',
-  zhHans: '聊天',
-  zhHant: '聊天',
-),
+            _language,
+            ko: '채팅',
+            en: 'Chat',
+            ja: 'チャット',
+            zhHans: '聊天',
+            zhHant: '聊天',
+          ),
           style: const TextStyle(fontWeight: FontWeight.w900),
         ),
         backgroundColor: theme.colorScheme.surface,
@@ -306,13 +367,13 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
         icon: const Icon(Icons.add_rounded),
         label: Text(
           lalaCopyMulti(
-  _language,
-  ko: '방 만들기',
-  en: 'New room',
-  ja: 'ルームを作る',
-  zhHans: '创建房间',
-  zhHant: '建立房間',
-),
+            _language,
+            ko: '방 만들기',
+            en: 'New room',
+            ja: 'ルームを作る',
+            zhHans: '创建房间',
+            zhHant: '建立房間',
+          ),
           style: const TextStyle(fontWeight: FontWeight.w900),
         ),
       ),
@@ -321,12 +382,31 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
 
   Widget _buildBody() {
     switch (_status) {
+      case _ListStatus.authRequired:
+        return CommunityAuthenticationView(
+          language: _language,
+          controller: widget.authController,
+          purpose: lalaCopyMulti(
+            _language,
+            ko: '채팅',
+            en: 'chat',
+            ja: 'チャット',
+            zhHans: '聊天',
+            zhHant: '聊天',
+          ),
+          onAuthenticated: () {
+            if (_status == _ListStatus.authRequired) {
+              _load(initial: true);
+            }
+          },
+        );
       case _ListStatus.loading:
-        return const _ListLoadingView();
+        return _ListLoadingView(language: _language);
       case _ListStatus.error:
         return _ListErrorView(
           message: _error!,
           onRetry: () => _load(initial: true),
+          language: _language,
         );
       case _ListStatus.data:
         if (_rooms.isEmpty) {
@@ -345,25 +425,34 @@ class _ChatRoomListPageState extends State<ChatRoomListPage> {
 }
 
 class _ListLoadingView extends StatelessWidget {
-  const _ListLoadingView();
+  const _ListLoadingView({required this.language});
+
+  final String language;
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    return Center(
       child: Padding(
-        padding: EdgeInsets.all(24),
+        padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            SizedBox(
+            const SizedBox(
               width: 28,
               height: 28,
               child: CircularProgressIndicator(strokeWidth: 2.4),
             ),
-            SizedBox(height: 14),
+            const SizedBox(height: 14),
             Text(
-              '채팅방을 불러오는 중...',
-              style: TextStyle(
+              lalaCopyMulti(
+                language,
+                ko: '채팅방을 불러오는 중...',
+                en: 'Loading chat rooms…',
+                ja: 'チャットルームを読み込んでいます…',
+                zhHans: '正在加载聊天室…',
+                zhHant: '正在載入聊天室…',
+              ),
+              style: const TextStyle(
                 color: Color(0xFF475569),
                 fontWeight: FontWeight.w800,
               ),
@@ -376,9 +465,17 @@ class _ListLoadingView extends StatelessWidget {
 }
 
 class _ListErrorView extends StatelessWidget {
-  const _ListErrorView({required this.message, required this.onRetry});
+  const _ListErrorView({
+    required this.message,
+    required this.onRetry,
+    required this.language,
+  });
   final String message;
   final VoidCallback onRetry;
+
+  // Why: the label follows the app-selected language, not the device locale,
+  // so one screen never mixes two languages.
+  final String language;
 
   @override
   Widget build(BuildContext context) {
@@ -389,7 +486,11 @@ class _ListErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.cloud_off_rounded, size: 36, color: Color(0xFF94A3B8)),
+            const Icon(
+              Icons.cloud_off_rounded,
+              size: 36,
+              color: Color(0xFF94A3B8),
+            ),
             const SizedBox(height: 12),
             Text(
               message,
@@ -404,13 +505,9 @@ class _ListErrorView extends StatelessWidget {
             FilledButton.icon(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh_rounded, size: 18),
-              // Why: the sheet reads the widget locale, so route it through
-              // the SSOT normalizer rather than a raw locale code.
               label: Text(
                 lalaCopyMulti(
-                  normalizeLalaLanguage(
-                    Localizations.localeOf(context).languageCode,
-                  ),
+                  language,
                   ko: '재시도',
                   en: 'Retry',
                   ja: '再試行',
@@ -455,13 +552,13 @@ class _ListEmptyView extends StatelessWidget {
                 const SizedBox(height: 12),
                 Text(
                   lalaCopyMulti(
-                      language,
-                      ko: '아직 채팅방이 없어요.\n첫 방을 만들어보세요!',
-                      en: 'No chat rooms yet.\nCreate the first one!',
-                      ja: 'まだチャットルームがありません。\n最初のルームを作ってみましょう！',
-                      zhHans: '还没有聊天室。\n来创建第一个吧！',
-                      zhHant: '還沒有聊天室。\n來建立第一個吧！',
-                    ),
+                    language,
+                    ko: '아직 채팅방이 없어요.\n첫 방을 만들어보세요!',
+                    en: 'No chat rooms yet.\nCreate the first one!',
+                    ja: 'まだチャットルームがありません。\n最初のルームを作ってみましょう！',
+                    zhHans: '还没有聊天室。\n来创建第一个吧！',
+                    zhHant: '還沒有聊天室。\n來建立第一個吧！',
+                  ),
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: Color(0xFF64748B),
@@ -567,7 +664,9 @@ class _ChatRoomCard extends StatelessWidget {
                 height: 44,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.primaryContainer.withValues(alpha: 0.6),
+                  color: theme.colorScheme.primaryContainer.withValues(
+                    alpha: 0.6,
+                  ),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(
@@ -602,10 +701,7 @@ class _ChatRoomCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              const Icon(
-                Icons.chevron_right_rounded,
-                color: Color(0xFF94A3B8),
-              ),
+              const Icon(Icons.chevron_right_rounded, color: Color(0xFF94A3B8)),
             ],
           ),
         ),

@@ -6,6 +6,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
@@ -20,6 +21,7 @@ import 'package:lala_next_app/core/location/app_settings_opener.dart';
 import 'package:lala_next_app/core/location/lala_location.dart';
 import 'package:lala_next_app/core/location/region_context.dart';
 import 'package:lala_next_app/core/navigation/local_signal_action.dart';
+import 'package:lala_next_app/core/routing/lala_route_paths.dart';
 import 'package:lala_next_app/core/state/plan_context_store.dart';
 import 'package:lala_next_app/core/state/saved_place_store.dart';
 import 'package:lala_next_app/core/state/selected_place_store.dart';
@@ -30,6 +32,7 @@ import 'package:lala_next_app/features/map/domain/active_map_sheet.dart';
 import 'package:lala_next_app/features/map/map_helpers.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/features/settings/widgets/user_settings_sheet.dart';
+import 'package:lala_next_app/features/settings/data/privacy_settings_store.dart';
 import 'package:lala_next_app/features/tour/tour_helpers.dart';
 import 'package:lala_next_app/features/weather/weather_helpers.dart';
 import 'package:lala_next_app/features/home/home_view_helpers.dart';
@@ -53,6 +56,7 @@ class LalaHomePage extends StatefulWidget {
     this.authControllerFactory,
     this.localSignalActionController,
     this.docentExperienceController,
+    this.privacySettingsStore,
     super.key,
   }) : assert(authController != null || authControllerFactory != null);
 
@@ -67,6 +71,7 @@ class LalaHomePage extends StatefulWidget {
   /// 이슈 #120 §6: 앱 루트 단일 도슨트 경험 컨트롤러(선택 — 라우터가 주입).
   /// null 이면 레일 카드에 재생 버튼을 만들지 않는다.
   final DocentExperienceController? docentExperienceController;
+  final PrivacySettingsStore? privacySettingsStore;
 
   @override
   State<LalaHomePage> createState() => _LalaHomePageState();
@@ -206,6 +211,8 @@ class _LalaHomePageState extends State<LalaHomePage> {
   // (bootstrap restores it from lala.v5.*) and kept in sync here so a save toggled
   // anywhere reflects on the map/detail header too.
   late final VoidCallback _onSavedPlacesChanged;
+  late final PrivacySettingsStore _privacySettingsStore;
+  late final VoidCallback _onPrivacySettingsChanged;
   // Why: separates a selection this tab published (its own call site already
   // drove the sheet/camera) from an external publish (search tab) that the store
   // listener must adopt through the local-tap path.
@@ -222,7 +229,12 @@ class _LalaHomePageState extends State<LalaHomePage> {
     _queryLat = region?.lat ?? config.lat;
     _queryLng = region?.lng ?? config.lng;
     _uiLanguage = OnboardingState.language;
-    _locationStartPromptVisible = config.requireLocationStartConfirmation;
+    _privacySettingsStore =
+        widget.privacySettingsStore ?? PrivacySettingsStore.instance;
+    _locationConsentEnabled =
+        _privacySettingsStore.locationRecommendationsEnabled;
+    _locationStartPromptVisible =
+        config.requireLocationStartConfirmation && _locationConsentEnabled;
     _ownsAuthController = widget.authController == null;
     _authController =
         widget.authController ??
@@ -298,13 +310,36 @@ class _LalaHomePageState extends State<LalaHomePage> {
       });
     };
     SavedPlaceStore.listenable.addListener(_onSavedPlacesChanged);
+    _onPrivacySettingsChanged = () {
+      if (!mounted) return;
+      final enabled = _privacySettingsStore.locationRecommendationsEnabled;
+      if (_locationConsentEnabled == enabled) return;
+      _applyLocationConsent(enabled, requestWhenEnabled: true);
+    };
+    _privacySettingsStore.addListener(_onPrivacySettingsChanged);
     if (_ownsAuthController) {
       unawaited(_initializeOwnedAuth());
+    }
+    unawaited(_initializeLocationPreferenceAndLoad(region, config));
+  }
+
+  Future<void> _initializeLocationPreferenceAndLoad(
+    RegionContext? region,
+    LalaAppConfig config,
+  ) async {
+    await _privacySettingsStore.ensureLoaded();
+    if (!mounted) return;
+    final enabled = _privacySettingsStore.locationRecommendationsEnabled;
+    if (_locationConsentEnabled != enabled) {
+      setState(() {
+        _locationConsentEnabled = enabled;
+        if (!enabled) _locationStartPromptVisible = false;
+      });
     }
     if (!config.requireLocationStartConfirmation) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          if (region?.source == RegionSource.manual) {
+          if (region?.source == RegionSource.manual || !enabled) {
             // A restored manual region is an explicit durable choice. Start the
             // map from it without asking for live coordinates; the current-
             // location control remains the only action that may replace it.
@@ -327,6 +362,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
     SelectedPlaceStore.listenable.removeListener(_onSelectedPlaceChanged);
     PlanContextStore.listenable.removeListener(_onPlanChanged);
     SavedPlaceStore.listenable.removeListener(_onSavedPlacesChanged);
+    _privacySettingsStore.removeListener(_onPrivacySettingsChanged);
     widget.localSignalActionController?.removeListener(
       _handleLocalSignalAction,
     );
@@ -1381,6 +1417,11 @@ class _LalaHomePageState extends State<LalaHomePage> {
   }
 
   void _setLocationConsent(bool enabled) {
+    unawaited(_privacySettingsStore.setLocationRecommendationsEnabled(enabled));
+    _applyLocationConsent(enabled, requestWhenEnabled: true);
+  }
+
+  void _applyLocationConsent(bool enabled, {required bool requestWhenEnabled}) {
     setState(() {
       _locationConsentEnabled = enabled;
       if (!enabled) {
@@ -1388,7 +1429,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
       }
       _locationPermanentlyDenied = false;
     });
-    if (enabled) {
+    if (enabled && requestWhenEnabled) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           _requestLocationThenRefresh(resetSelection: true);
@@ -1397,7 +1438,12 @@ class _LalaHomePageState extends State<LalaHomePage> {
     }
   }
 
+  void _openFullPlaceDetails(LalaPlace place) {
+    context.push(LalaRoutePaths.placeDetailFor(place.placeId), extra: place);
+  }
+
   void _retryLocationConsent() {
+    unawaited(_privacySettingsStore.setLocationRecommendationsEnabled(true));
     setState(() {
       _locationConsentEnabled = true;
       _locationFallbackNoticeVisible = false;
@@ -1412,6 +1458,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
   }
 
   void _startFromCurrentLocation() {
+    unawaited(_privacySettingsStore.setLocationRecommendationsEnabled(true));
     setState(() {
       _locationConsentEnabled = true;
       _locationFallbackNoticeVisible = false;
@@ -1547,6 +1594,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
       _mapFocusLng = selected.lng;
       _mapLevel = _defaultMapLevel;
     });
+    unawaited(_privacySettingsStore.setLocationRecommendationsEnabled(true));
     // 수동 선택을 검색/플랜 탭과 공유한다(온보딩 선택이 폐기되지 않도록).
     // Why: await the manual-id write before the UI refresh so a kill right after
     // the pick cannot lose the region the user just chose.
@@ -1633,6 +1681,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
                   onOpenManualLocation: () => _openManualLocationSheet(context),
                   onRetryLocation: _retryLocationConsent,
                   onStartLocation: _startFromCurrentLocation,
+                  onOpenPlaceDetails: _openFullPlaceDetails,
                   onPlayDocentPlace: widget.docentExperienceController == null
                       ? null
                       : (place) =>

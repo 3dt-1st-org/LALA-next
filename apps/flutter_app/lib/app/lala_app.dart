@@ -6,6 +6,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import 'package:lala_next_app/auth/auth_controller.dart';
 import 'package:lala_next_app/auth/logto_auth_gateway.dart';
@@ -17,6 +18,10 @@ import 'package:lala_next_app/app/map_sheet_visibility.dart';
 import 'package:lala_next_app/core/routing/lala_router.dart';
 import 'package:lala_next_app/app/lala_visual_tokens.dart';
 import 'package:lala_next_app/features/docent/experience/docent_experience_controller.dart';
+import 'package:lala_next_app/features/preferences/data/travel_preferences_remote.dart';
+import 'package:lala_next_app/features/preferences/data/travel_preferences_store.dart';
+import 'package:lala_next_app/features/trip_library/data/trip_library_remote.dart';
+import 'package:lala_next_app/features/trip_library/data/trip_library_store.dart';
 
 const List<Duration> _defaultRecommendationRecoveryDelays = <Duration>[
   Duration(seconds: 8),
@@ -55,6 +60,10 @@ class _LalaAppState extends State<LalaApp> {
   late final LalaAuthController _authController;
   late final LalaAppConfig _appConfig;
   late final GoRouter _router;
+  late final TravelPreferencesRemote _travelPreferencesRemote;
+  late final TripLibraryRemote _tripLibraryRemote;
+  bool _preferenceAccountConnected = false;
+  bool _tripLibraryAccountConnected = false;
   DocentExperienceController? _ownedDocentExperience;
 
   @override
@@ -70,6 +79,20 @@ class _LalaAppState extends State<LalaApp> {
             accessTokenProvider: _authController.accessToken,
           )
         : widget.initialConfig;
+    _travelPreferencesRemote = LalaTravelPreferencesRemote(
+      LalaApiClient(
+        baseUri: Uri.parse(widget.initialConfig.baseUri),
+        accessTokenProvider: _authController.accessToken,
+      ),
+    );
+    _tripLibraryRemote = LalaTripLibraryRemote(
+      LalaApiClient(
+        baseUri: Uri.parse(widget.initialConfig.baseUri),
+        accessTokenProvider: _authController.accessToken,
+      ),
+    );
+    unawaited(TripLibraryStore.instance.ensureLoaded());
+    _authController.addListener(_onAuthStateChanged);
     final docentExperienceController =
         widget.docentExperienceController ??
         (_ownedDocentExperience = DocentExperienceController(
@@ -92,6 +115,13 @@ class _LalaAppState extends State<LalaApp> {
 
   @override
   void dispose() {
+    _authController.removeListener(_onAuthStateChanged);
+    if (_preferenceAccountConnected) {
+      TravelPreferencesStore.instance.disconnectAccount();
+    }
+    if (_tripLibraryAccountConnected) {
+      TripLibraryStore.instance.disconnectAccount();
+    }
     _router.dispose();
     _authController.dispose();
     // 직접 만든 도슨트 컨트롤러만 해제한다(플레이어/백엔드 정리는 비동기).
@@ -100,6 +130,35 @@ class _LalaAppState extends State<LalaApp> {
       unawaited(owned.dispose());
     }
     super.dispose();
+  }
+
+  void _onAuthStateChanged() {
+    final state = _authController.state;
+    final accountReady =
+        state.authenticated &&
+        state.accountSyncStatus == LalaAccountSyncStatus.ready;
+    if (accountReady && !_preferenceAccountConnected) {
+      _preferenceAccountConnected = true;
+      unawaited(
+        TravelPreferencesStore.instance.connectAccount(
+          _travelPreferencesRemote,
+        ),
+      );
+    }
+    if (accountReady && !_tripLibraryAccountConnected) {
+      _tripLibraryAccountConnected = true;
+      unawaited(TripLibraryStore.instance.connectAccount(_tripLibraryRemote));
+    }
+    if (!state.authenticated) {
+      if (_preferenceAccountConnected) {
+        _preferenceAccountConnected = false;
+        TravelPreferencesStore.instance.disconnectAccount();
+      }
+      if (_tripLibraryAccountConnected) {
+        _tripLibraryAccountConnected = false;
+        TripLibraryStore.instance.disconnectAccount();
+      }
+    }
   }
 
   @override
