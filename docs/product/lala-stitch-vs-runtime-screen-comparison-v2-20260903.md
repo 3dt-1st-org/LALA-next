@@ -139,7 +139,7 @@ LALA-next 앱 코드 기준: `651b5f245a2eea88acea479f02ff05dd6097fb93`
 | 개인화 | 기기 영속화, 서버 동기화, 기본 취향과 여행 override 우선순위 | device-first 저장, account sync, 날짜별 override, 충돌 해결 구현 | 계정 간·기기 간 동기화의 실제 runtime 검증이 남음 |
 | 도슨트 | 실제 RAG 응답, 비용 gate, 음성 생성 실패 상태 | text-first RAG와 음성 enablement 분리 구현 | 유료 음성 호출, 대표 장소 전체 품질·발음 수동 QA가 남음 |
 | 언어·접근성 | 선택 UI 외 실제 전 화면 번역과 보조기술 동작 | 5개 locale 선택, 위치 회복, 이동·접근성 설정 구현 | KO/EN/JA/zh-Hans/zh-Hant 전 화면 번역 완전성, 동적 글자, VoiceOver·키보드 QA가 남음 |
-| 플랫폼 증거 | 실제 native build·install 개념 없음 | iPhone 17 Pro와 웹 대표 흐름 검증 | 26개 화면 exact-head 재캡처와 최신 Android integration 실구동이 남음 |
+| 플랫폼 증거 | 실제 native build·install 개념 없음 | iPhone 17 Pro와 웹 대표 흐름 검증 | 23개 화면 exact-head 재캡처와 최신 Android integration 실구동이 남음 |
 
 여기서 “남음”은 모두 같은 뜻이 아니다. 지도처럼 구현과 실구동이 끝난 기능도 있고,
 계정·채팅처럼 코드는 있으나 실제 계정 상태를 만들지 않은 기능도 있으며, production
