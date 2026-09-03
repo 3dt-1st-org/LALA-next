@@ -966,89 +966,82 @@ response_path.write_text(
 )
 PY
 
+  # Markers render inside the same-origin naver-map-embed.html iframe; collect
+  # bridge stats, dataset counts, DOM markers, and per-cluster member counts
+  # there, and tolerate top-document markers as drift if the bridge moves.
   MARKER_STATE="$("$PWCLI" -s="$PW_SESSION" eval 'async () => {
+    function collectDocument(doc, win) {
+      const mapElement = doc.getElementById("map");
+      return {
+        pins: doc.querySelectorAll(".lala-marker-pin").length,
+        clusters: doc.querySelectorAll(".lala-marker-cluster").length,
+        clusterCounts: Array.from(doc.querySelectorAll(".lala-marker-cluster")).map(
+          (marker) =>
+            marker.getAttribute("data-lala-cluster-count") ||
+            marker.dataset.lalaClusterCount ||
+            ""
+        ),
+        sampleMarkers: Array.from(doc.querySelectorAll(".lala-marker"))
+          .slice(0, 8)
+          .map((marker) => ({
+            id: marker.getAttribute("data-lala-place-id") || marker.dataset.lalaPlaceId || "",
+            category: marker.getAttribute("data-lala-category") || marker.dataset.lalaCategory || "",
+            clusterCount: marker.getAttribute("data-lala-cluster-count") || marker.dataset.lalaClusterCount || "",
+            title: marker.getAttribute("title") || ""
+          })),
+        stats: (win && win.__lalaLastMapMarkerStats) || null,
+        mapLevel: mapElement ? mapElement.getAttribute("data-lala-map-level") : null,
+        containerPins: mapElement ? mapElement.getAttribute("data-lala-marker-pins") : null,
+        containerClusters: mapElement ? mapElement.getAttribute("data-lala-marker-clusters") : null
+      };
+    }
     function currentState() {
-      const container = document.getElementById("lala-kakao-background-map");
-      const pinCount = document.querySelectorAll(".lala-marker-pin").length;
-      const clusterCount = document.querySelectorAll(".lala-marker-cluster").length;
-      const stats = window.__lalaLastMapMarkerStats || {};
-      return { container, pinCount, clusterCount, stats };
+      let frame = null;
+      for (const frameElement of Array.from(document.querySelectorAll("iframe"))) {
+        let doc = null;
+        let win = null;
+        try {
+          doc = frameElement.contentDocument;
+          win = frameElement.contentWindow;
+        } catch (_) {
+          continue;
+        }
+        if (!doc || !win) continue;
+        const src = String(frameElement.src || "");
+        const isMapFrame =
+          src.indexOf("naver-map-embed.html") !== -1 ||
+          Boolean(win.__lalaLastMapMarkerStats) ||
+          doc.querySelector(".lala-marker") !== null;
+        if (!isMapFrame) continue;
+        frame = collectDocument(doc, win);
+        break;
+      }
+      return { frame, topDocument: collectDocument(document, window) };
+    }
+    function hasMarkers(source) {
+      if (!source) return false;
+      const dom = Number(source.pins || 0) + Number(source.clusters || 0);
+      const stats = source.stats
+        ? Number(source.stats.pins || 0) + Number(source.stats.clusters || 0)
+        : 0;
+      return Math.max(dom, stats) > 0;
     }
     let state = currentState();
     for (let index = 0; index < 80; index += 1) {
-      const statPins = Number(state.stats.pins || 0);
-      if (Math.max(state.pinCount, statPins) > 0) {
+      if (hasMarkers(state.frame) || hasMarkers(state.topDocument)) {
         break;
       }
       await new Promise((resolve) => setTimeout(resolve, 250));
       state = currentState();
     }
-    const sampleMarkers = Array.from(document.querySelectorAll(".lala-marker"))
-      .slice(0, 8)
-      .map((marker) => ({
-        id: marker.getAttribute("data-lala-place-id") || marker.dataset.lalaPlaceId || "",
-        category: marker.getAttribute("data-lala-category") || marker.dataset.lalaCategory || "",
-        clusterCount: marker.getAttribute("data-lala-cluster-count") || marker.dataset.lalaClusterCount || "",
-        title: marker.getAttribute("title") || ""
-      }));
-    return {
-      pinCount: state.pinCount,
-      clusterCount: state.clusterCount,
-      stats: state.stats,
-      mapLevel: state.container ? state.container.getAttribute("data-lala-map-level") : null,
-      containerPins: state.container ? state.container.getAttribute("data-lala-marker-pins") : null,
-      containerClusters: state.container ? state.container.getAttribute("data-lala-marker-clusters") : null,
-      sampleMarkers
-    };
+    return state;
   }' --raw)"
   printf '%s\n' "$MARKER_STATE" >"$OUTPUT_DIR/flutter-web-marker-state.json"
-  MARKER_STATE="$MARKER_STATE" PLACE_COUNT_PATH="$OUTPUT_DIR/flutter-web-place-count.txt" "$PYTHON" - <<'PY'
-import json
-import os
-
-try:
-    state = json.loads(os.environ["MARKER_STATE"])
-except Exception as exc:
-    raw = os.environ.get("MARKER_STATE", "")
-    raise SystemExit(
-        f"Could not parse Flutter marker state: {exc}; raw={raw[:200]!r}"
-    ) from exc
-
-stats = state.get("stats") if isinstance(state.get("stats"), dict) else {}
-pin_count = int(state.get("pinCount") or 0)
-cluster_count = int(state.get("clusterCount") or 0)
-stat_pins = int(stats.get("pins") or 0)
-stat_clusters = int(stats.get("clusters") or 0)
-stat_total = int(stats.get("total") or 0)
-map_level = int(stats.get("level") or state.get("mapLevel") or 0)
-if max(pin_count, stat_pins) <= 0:
-    raise SystemExit("Flutter location flow rendered no real map pins.")
-if stat_total <= 0:
-    raise SystemExit("Flutter location flow did not pass live places into the map.")
-if max(cluster_count, stat_clusters) > 0 and max(pin_count, stat_pins) <= 0:
-    raise SystemExit("Flutter location flow rendered only clusters without place pins.")
-# V1 pin-first clustering contract (map_helpers.dart): 24+ places (or far zoom
-# >= 10) cluster at ANY level; only a sparse list must stay on individual pins
-# while zoomed in. The count is handed over by the API-response block above.
-place_count = 0
-try:
-    with open(os.environ["PLACE_COUNT_PATH"]) as place_count_file:
-        place_count = int(place_count_file.read().strip() or 0)
-except (KeyError, OSError, ValueError):
-    place_count = 0
-cluster_threshold_engaged = place_count >= 24 or map_level >= 10
-if (
-    not cluster_threshold_engaged
-    and map_level
-    and map_level <= 8
-    and max(cluster_count, stat_clusters) > 0
-):
-    raise SystemExit(
-        "Flutter initial location map clustered places before the user zoomed out."
-    )
-if not state.get("sampleMarkers"):
-    raise SystemExit("Flutter location flow marker sample was empty.")
-PY
+  # Pin-first clustering + exact live-count reconciliation live in the shared
+  # contract validator so its focused tests run in CI (verify_repo.sh).
+  "$PYTHON" "$SCRIPT_DIR/_flutter_web_marker_contract.py" \
+    --state-file "$OUTPUT_DIR/flutter-web-marker-state.json" \
+    --place-count-file "$OUTPUT_DIR/flutter-web-place-count.txt"
 
   if [[ "$CHECK_LOCATION_DENIAL_FALLBACK" == "true" ]]; then
     echo "Driving Flutter web denied-location fallback flow..."

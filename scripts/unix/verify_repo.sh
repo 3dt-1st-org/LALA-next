@@ -133,6 +133,9 @@ echo "Planning local-only dev seed/reset SQL..."
 echo "Verifying Flutter build-env key resolution order (SSM -> Secrets Manager -> isolated dotenv)..."
 "$ROOT/scripts/unix/tests/test_flutter_with_build_env.sh"
 
+echo "Verifying deployed Flutter web map-marker contract (iframe bridge, pin-first clustering)..."
+"$ROOT/scripts/unix/tests/test_flutter_web_marker_contract.sh"
+
 echo "Checking Unix shell script syntax..."
 while IFS= read -r script; do
   bash -n "$script"
