@@ -138,10 +138,7 @@ class LalaApiClient {
     final resp = await _request(
       'PUT',
       '/api/v1/me/preferences',
-      body: {
-        'expected_revision': expectedRevision,
-        'preferences': preferences,
-      },
+      body: {'expected_revision': expectedRevision, 'preferences': preferences},
       requestId: requestId,
       timeout: timeout ?? readTimeout,
       contentType: 'application/json',
@@ -808,7 +805,7 @@ class LalaApiClient {
   }
 
   Future<LalaEnvelope<LalaTripPreferenceOverrideDocument?>>
-  getTripPreferenceOverride({
+      getTripPreferenceOverride({
     required String planDate,
     String? requestId,
     Duration? timeout,
@@ -828,7 +825,7 @@ class LalaApiClient {
   }
 
   Future<LalaEnvelope<LalaTripPreferenceOverrideDocument>>
-  putTripPreferenceOverride({
+      putTripPreferenceOverride({
     required String planDate,
     required int expectedRevision,
     required Map<String, dynamic> override,
@@ -1036,6 +1033,50 @@ class LalaApiClient {
     return _envelopeFromResponse<CommunityLikeState>(
       resp,
       parseData: CommunityLikeState.fromJsonObject,
+    );
+  }
+
+  /// 작성자 팔로우 토글(OAuth). 요청은 내부 사용자 UUID 만 전송한다 —
+  /// issuer/subject 같은 외부 식별자는 통신에 노출하지 않는다.
+  Future<LalaEnvelope<CommunityFollowState>> toggleCommunityFollow({
+    required String followeeUserId,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'POST',
+      '/api/v1/community/follows',
+      body: <String, dynamic>{'followee_user_id': followeeUserId},
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+      contentType: 'application/json',
+    );
+    return _envelopeFromResponse<CommunityFollowState>(
+      resp,
+      parseData: CommunityFollowState.fromJsonObject,
+    );
+  }
+
+  /// 게시글 신고(OAuth). 요청은 제한된 reason_code 만 담고 자유 서술을
+  /// 보내지 않는다. 동일 신고 반복은 서버가 동일 접수 영수증(duplicate)을
+  /// 돌려준다.
+  Future<LalaEnvelope<CommunityReportReceipt>> reportCommunityPost({
+    required String postId,
+    required String reasonCode,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'POST',
+      '/api/v1/community/posts/$postId/reports',
+      body: <String, dynamic>{'reason_code': reasonCode},
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+      contentType: 'application/json',
+    );
+    return _envelopeFromResponse<CommunityReportReceipt>(
+      resp,
+      parseData: CommunityReportReceipt.fromJsonObject,
     );
   }
 
@@ -1974,9 +2015,7 @@ class LalaPlanSlot {
       travelTimeFromPreviousMinutes: _asOptionalInt(
         json['travel_time_from_previous_minutes'],
       ),
-      estimatedOpeningHours: _asOptionalString(
-        json['estimated_opening_hours'],
-      ),
+      estimatedOpeningHours: _asOptionalString(json['estimated_opening_hours']),
       openingHoursValid: _asOptionalBool(json['opening_hours_valid']),
       indoorOutdoor: _asOptionalString(json['indoor_outdoor']),
       recommendationReason: _asOptionalString(json['recommendation_reason']),
@@ -2259,6 +2298,7 @@ class CommunityPost {
     required this.likeCount,
     required this.commentCount,
     required this.viewerLiked,
+    required this.viewerFollowing,
     required this.createdAt,
     this.updatedAt,
   });
@@ -2271,6 +2311,9 @@ class CommunityPost {
   final int likeCount;
   final int commentCount;
   final bool viewerLiked;
+
+  /// 현재 뷰어가 이 글의 작성자를 팔로우 중인지(비로그인=false).
+  final bool viewerFollowing;
   final String createdAt;
   final String? updatedAt;
 
@@ -2292,16 +2335,18 @@ class CommunityPost {
       likeCount: _asInt(json['like_count']),
       commentCount: _asInt(json['comment_count']),
       viewerLiked: _asBool(json['viewer_liked']),
+      viewerFollowing: _asBool(json['viewer_following']),
       createdAt: _asString(json['created_at']),
       updatedAt: _asOptionalString(json['updated_at']),
     );
   }
 
-  /// 좋아요/댓글 수·viewer_liked 만 갱신한 복사본(낙관적 UI 용).
+  /// 좋아요/댓글 수·viewer 상태만 갱신한 복사본(낙관적 UI 용).
   CommunityPost copyWithReactions({
     int? likeCount,
     int? commentCount,
     bool? viewerLiked,
+    bool? viewerFollowing,
   }) {
     return CommunityPost(
       id: id,
@@ -2312,6 +2357,7 @@ class CommunityPost {
       likeCount: likeCount ?? this.likeCount,
       commentCount: commentCount ?? this.commentCount,
       viewerLiked: viewerLiked ?? this.viewerLiked,
+      viewerFollowing: viewerFollowing ?? this.viewerFollowing,
       createdAt: createdAt,
       updatedAt: updatedAt,
     );
@@ -2427,6 +2473,57 @@ class CommunityLikeState {
       postId: _asString(json['post_id']),
       liked: _asBool(json['liked']),
       likeCount: _asInt(json['like_count']),
+    );
+  }
+}
+
+/// 팔로우 토글 응답(followee_user_id/following). 외부 식별자는 포함되지 않는다.
+class CommunityFollowState {
+  const CommunityFollowState({
+    required this.followeeUserId,
+    required this.following,
+  });
+
+  final String followeeUserId;
+  final bool following;
+
+  static CommunityFollowState fromJsonObject(Object? value) {
+    return CommunityFollowState.fromJson(_asMap(value));
+  }
+
+  factory CommunityFollowState.fromJson(Map<String, dynamic> json) {
+    return CommunityFollowState(
+      followeeUserId: _asString(json['followee_user_id']),
+      following: _asBool(json['following']),
+    );
+  }
+}
+
+/// 게시글 신고 접수 영수증(report_id/reason_code/status/duplicate).
+/// unknown status 값은 원본 문자열 그대로 보관한다(지원 상태로 재표기 금지).
+class CommunityReportReceipt {
+  const CommunityReportReceipt({
+    required this.reportId,
+    required this.reasonCode,
+    required this.status,
+    required this.duplicate,
+  });
+
+  final String reportId;
+  final String reasonCode;
+  final String status;
+  final bool duplicate;
+
+  static CommunityReportReceipt fromJsonObject(Object? value) {
+    return CommunityReportReceipt.fromJson(_asMap(value));
+  }
+
+  factory CommunityReportReceipt.fromJson(Map<String, dynamic> json) {
+    return CommunityReportReceipt(
+      reportId: _asString(json['report_id']),
+      reasonCode: _asString(json['reason_code']),
+      status: _asString(json['status']),
+      duplicate: _asBool(json['duplicate']),
     );
   }
 }

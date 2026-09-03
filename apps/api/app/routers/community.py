@@ -15,6 +15,7 @@ from apps.api.app.schemas.community import (
     CommunityCommentCreate,
     CommunityFollowCreate,
     CommunityPostCreate,
+    CommunityReportCreate,
 )
 from apps.api.app.services.community_service import CommunityService, get_community_service
 
@@ -184,7 +185,23 @@ def toggle_follow(
     payload = service.toggle_follow(
         follower_issuer=identity.issuer or "",
         follower_subject=identity.subject or "",
-        followee_issuer=body.followee_issuer,
-        followee_subject=body.followee_subject,
+        followee_user_id=body.followee_user_id,
+    )
+    return success_envelope(request=request, data=payload, meta={"source": "db"})
+
+
+@router.post("/posts/{post_id}/reports")
+def report_post(
+    request: Request,
+    post_id: UUID,
+    body: CommunityReportCreate,
+    identity: Annotated[RequestIdentity, Depends(require_oauth_identity)],
+    service: Annotated[CommunityService, Depends(get_community_service)],
+) -> dict:
+    payload = service.report_post(
+        post_id=post_id,
+        issuer=identity.issuer or "",
+        subject=identity.subject or "",
+        reason_code=body.reason_code,
     )
     return success_envelope(request=request, data=payload, meta={"source": "db"})

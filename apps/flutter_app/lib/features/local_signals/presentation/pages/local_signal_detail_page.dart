@@ -7,24 +7,48 @@ import '../../../../app/lala_visual_tokens.dart';
 import '../../../../auth/auth_controller.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/navigation/local_signal_action.dart';
+import '../../../../core/routing/lala_route_paths.dart';
 import '../../../../shared/l10n/lala_copy.dart';
 import '../../data/local_signal_participation_repository.dart';
 import '../../domain/local_signal_aggregate.dart';
 import '../../domain/local_signal_public.dart';
+import '../local_signal_auth_gate.dart';
+import '../widgets/local_signal_contribution_composer.dart';
 
 class LocalSignalDetailArguments {
   const LocalSignalDetailArguments.public(this.signal)
     : aggregate = null,
-      aggregateEnvelope = null;
+      aggregateEnvelope = null,
+      contribution = false,
+      contributePlace = null,
+      contributeRegion = null;
 
   const LocalSignalDetailArguments.aggregate(
     this.aggregate,
     this.aggregateEnvelope,
-  ) : signal = null;
+  ) : signal = null,
+      contribution = false,
+      contributePlace = null,
+      contributeRegion = null;
+
+  /// S-31 feed-level contribution entry: no signal or aggregate context, an
+  /// optional manual coarse region (never precise coordinates).
+  const LocalSignalDetailArguments.contribute({
+    LocalSignalPlaceContributionContext? place,
+    LocalSignalRegionContributionContext? region,
+  }) : signal = null,
+       aggregate = null,
+       aggregateEnvelope = null,
+       contribution = true,
+       contributePlace = place,
+       contributeRegion = region;
 
   final LocalSignalPublicItem? signal;
   final LocalSignalPlaceAggregate? aggregate;
   final LocalSignalAggregates? aggregateEnvelope;
+  final bool contribution;
+  final LocalSignalPlaceContributionContext? contributePlace;
+  final LocalSignalRegionContributionContext? contributeRegion;
 }
 
 /// S-32: governed Local Signal detail and authenticated participation.
@@ -68,7 +92,15 @@ class _LocalSignalDetailPageState extends State<LocalSignalDetailPage> {
   String? _safeError;
   final TextEditingController _commentController = TextEditingController();
 
+  // Contribution mode guard state mirrored from the embedded composer so the
+  // page-owned AppBar back button runs the same unsaved-input confirmation as
+  // the composer's close action and system back.
+  bool _contributionDirty = false;
+  bool _contributionBusy = false;
+
   LocalSignalPlaceAggregate? get _aggregate => widget.arguments?.aggregate;
+
+  bool get _isContribution => widget.arguments?.contribution ?? false;
 
   @override
   void initState() {
@@ -78,6 +110,11 @@ class _LocalSignalDetailPageState extends State<LocalSignalDetailPage> {
         widget.repository ??
         LalaLocalSignalParticipationRepository(widget.initialConfig);
     _signal = widget.arguments?.signal;
+    if (_isContribution) {
+      // Contribution mode shows the auth gate / composer immediately; there is
+      // no signal to load or comment feed to read.
+      return;
+    }
     if (_signal == null && _aggregate == null) {
       unawaited(_loadSignal());
     } else if (_signal != null) {
@@ -242,19 +279,36 @@ class _LocalSignalDetailPageState extends State<LocalSignalDetailPage> {
   }
 
   Future<void> _shareExperience() async {
-    if (!await _ensureAuthenticated() || !mounted) return;
-    final placeId = _linkedPlaceId;
-    final submitted = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: LalaVisualColors.surface,
-      builder: (context) => _ContributionComposer(
-        language: widget.language,
-        repository: _repository,
-        placeId: placeId,
-        localityCode: _signal?.localityCode,
+    final outcome = await requestLocalSignalAuthentication(
+      context,
+      controller: widget.authController,
+      language: widget.language,
+      actionLabel: _copy(
+        widget.language,
+        ko: '경험 공유',
+        en: 'sharing a Local Signal',
+        ja: '体験の共有',
+        zhHans: '分享体验',
+        zhHant: '分享體驗',
       ),
+    );
+    if (!mounted || outcome != LocalSignalAuthOutcome.alreadyAuthenticated) {
+      return;
+    }
+    final placeId = _linkedPlaceId;
+    final placeContext = placeId == null
+        ? null
+        : (placeId: placeId, placeName: _aggregate?.placeNameKo);
+    final localityCode = _signal?.localityCode;
+    final regionContext = placeContext == null && localityCode != null
+        ? (code: localityCode, label: localityCode)
+        : null;
+    final submitted = await showLocalSignalContributionSheet(
+      context,
+      language: widget.language,
+      repository: _repository,
+      placeContext: placeContext,
+      regionContext: regionContext,
     );
     if (submitted == true && mounted) {
       _showMessage(
@@ -331,28 +385,178 @@ class _LocalSignalDetailPageState extends State<LocalSignalDetailPage> {
         leading: IconButton(
           key: const ValueKey('local-signal-detail-back'),
           tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-          onPressed: () => context.pop(),
+          onPressed: _isContribution ? _closeContribution : () => context.pop(),
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
         ),
         title: Text(
-          _copy(
-            widget.language,
-            ko: '로컬 신호 상세',
-            en: 'Local Signal detail',
-            ja: 'ローカル信号の詳細',
-            zhHans: '本地信号详情',
-            zhHant: '在地訊號詳情',
-          ),
+          _isContribution
+              ? _copy(
+                  widget.language,
+                  ko: '내 경험 보내기',
+                  en: 'Share your experience',
+                  ja: '体験を投稿',
+                  zhHans: '分享体验',
+                  zhHant: '分享體驗',
+                )
+              : _copy(
+                  widget.language,
+                  ko: '로컬 신호 상세',
+                  en: 'Local Signal detail',
+                  ja: 'ローカル信号の詳細',
+                  zhHans: '本地信号详情',
+                  zhHant: '在地訊號詳情',
+                ),
         ),
         centerTitle: true,
       ),
       body: _buildBody(),
     );
-    if (auth == null) return page();
-    return AnimatedBuilder(animation: auth, builder: (context, _) => page());
+    // Contribution mode owns the pop guard at page level: the route can be
+    // the only one on the navigator (go entry / URL restore), so a raw pop
+    // would blank the app and system back must share the AppBar guard.
+    // The embedded composer's own PopScope is disabled to avoid both guards
+    // firing (double discard dialog) on one route.
+    Widget guarded() => _isContribution
+        ? PopScope(
+            canPop: false,
+            onPopInvokedWithResult: (didPop, _) {
+              if (!didPop) _closeContribution();
+            },
+            child: page(),
+          )
+        : page();
+    if (auth == null) return guarded();
+    return AnimatedBuilder(animation: auth, builder: (context, _) => guarded());
+  }
+
+  /// AppBar back in contribution mode routes through the composer's
+  /// unsaved-input guard so the arrow cannot silently discard a draft.
+  Future<void> _closeContribution() async {
+    if (_contributionBusy) return;
+    if (_contributionDirty && mounted) {
+      final discard = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          key: const ValueKey('local-signal-composer-discard-confirm'),
+          title: Text(
+            _copy(
+              widget.language,
+              ko: '작성 중인 내용이 있어요',
+              en: 'You have unsaved text',
+              ja: '入力中の内容があります',
+              zhHans: '还有未保存的内容',
+              zhHant: '還有未儲存的內容',
+            ),
+          ),
+          content: Text(
+            _copy(
+              widget.language,
+              ko: '지금 닫으면 저장하지 않은 내용은 사라져요.',
+              en: 'If you close now, unsaved text will be lost.',
+              ja: '今閉じると、保存していない内容は失われます。',
+              zhHans: '现在关闭将丢失未保存的内容。',
+              zhHant: '現在關閉將遺失未儲存的內容。',
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              key: const ValueKey('local-signal-composer-keep-editing'),
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(
+                _copy(
+                  widget.language,
+                  ko: '계속 작성',
+                  en: 'Keep editing',
+                  ja: '編集を続ける',
+                  zhHans: '继续编辑',
+                  zhHant: '繼續編輯',
+                ),
+              ),
+            ),
+            FilledButton(
+              key: const ValueKey('local-signal-composer-discard'),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(
+                _copy(
+                  widget.language,
+                  ko: '닫기',
+                  en: 'Discard and close',
+                  ja: '閉じる',
+                  zhHans: '关闭',
+                  zhHant: '關閉',
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+      if (discard != true || !mounted) return;
+    }
+    _exitContribution();
+  }
+
+  /// Leaving contribution mode must never pop an empty navigator: the route
+  /// is reached with `go`, so a web refresh or direct URL leaves this page as
+  /// the only route on the stack. Fall back to the Local Signals tab.
+  void _exitContribution() {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(LalaRoutePaths.localSignals);
+    }
+  }
+
+  Widget _buildContributionBody() {
+    final arguments = widget.arguments;
+    if (!_authenticated) {
+      // Guests get a real sign-in path (or an honest "unavailable in this
+      // build") before any draft field appears — authentication is never
+      // simulated.
+      return LocalSignalAuthenticationView(
+        language: widget.language,
+        controller: widget.authController,
+        onAuthenticated: () {
+          if (mounted) setState(() {});
+        },
+      );
+    }
+    return SafeArea(
+      top: false,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            LocalSignalContributionComposer(
+              language: widget.language,
+              repository: _repository,
+              placeContext: arguments?.contributePlace,
+              regionContext: arguments?.contributeRegion,
+              // The page-level PopScope already routes system back through
+              // the guard; a second one here would double the discard dialog.
+              ownsPopGuard: false,
+              onClose: (_) => _exitContribution(),
+              onInputStateChanged: (dirty, busy) {
+                if (mounted &&
+                    (dirty != _contributionDirty ||
+                        busy != _contributionBusy)) {
+                  setState(() {
+                    _contributionDirty = dirty;
+                    _contributionBusy = busy;
+                  });
+                }
+              },
+            ),
+            const SizedBox(height: 16),
+            _PrivacyBoundary(language: widget.language, aggregate: false),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildBody() {
+    if (_isContribution) return _buildContributionBody();
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_safeError != null) {
       return _LoadError(
@@ -431,7 +635,7 @@ class _LocalSignalDetailPageState extends State<LocalSignalDetailPage> {
             ),
             const SizedBox(height: 16),
           ],
-          _ContributionEntry(
+          LocalSignalContributionEntry(
             language: widget.language,
             authenticated: _authenticated,
             onPressed: _shareExperience,
@@ -994,489 +1198,6 @@ class _CommentsSection extends StatelessWidget {
   );
 }
 
-class _ContributionEntry extends StatelessWidget {
-  const _ContributionEntry({
-    required this.language,
-    required this.authenticated,
-    required this.onPressed,
-  });
-
-  final String language;
-  final bool authenticated;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) => _SurfacePanel(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(
-          _copy(
-            language,
-            ko: '내 경험 보태기',
-            en: 'Share your experience',
-            ja: '自分の体験を共有',
-            zhHans: '分享你的体验',
-            zhHant: '分享你的體驗',
-          ),
-          style: const TextStyle(fontWeight: FontWeight.w900),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          _copy(
-            language,
-            ko: '초안은 비공개로 저장되고 검수 승인 뒤에만 공개됩니다.',
-            en: 'Drafts stay private and are published only after review.',
-            ja: '下書きは非公開で保存され、審査承認後にのみ公開されます。',
-            zhHans: '草稿保持私密，仅在审核通过后公开。',
-            zhHant: '草稿維持私密，僅在審核通過後公開。',
-          ),
-          style: const TextStyle(color: LalaVisualColors.muted, height: 1.4),
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
-          child: FilledButton.icon(
-            key: const ValueKey('local-signal-share-experience'),
-            onPressed: onPressed,
-            icon: Icon(
-              authenticated ? Icons.edit_note_rounded : Icons.login_rounded,
-            ),
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(0, LalaVisualTokens.actionHeight),
-            ),
-            label: Text(
-              authenticated
-                  ? _copy(
-                      language,
-                      ko: '경험 초안 작성',
-                      en: 'Write a private draft',
-                      ja: '非公開の下書きを作成',
-                      zhHans: '撰写私密草稿',
-                      zhHant: '撰寫私密草稿',
-                    )
-                  : _copy(
-                      language,
-                      ko: '로그인하고 경험 공유',
-                      en: 'Sign in to contribute',
-                      ja: 'ログインして共有',
-                      zhHans: '登录后分享',
-                      zhHant: '登入後分享',
-                    ),
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-class _ContributionComposer extends StatefulWidget {
-  const _ContributionComposer({
-    required this.language,
-    required this.repository,
-    this.placeId,
-    this.localityCode,
-  });
-
-  final String language;
-  final LocalSignalParticipationRepository repository;
-  final String? placeId;
-  final String? localityCode;
-
-  @override
-  State<_ContributionComposer> createState() => _ContributionComposerState();
-}
-
-class _ContributionComposerState extends State<_ContributionComposer> {
-  final TextEditingController _title = TextEditingController();
-  final TextEditingController _body = TextEditingController();
-  LocalSignalKind _kind = LocalSignalKind.placeTip;
-  LocalSignalCommercialDisclosure _disclosure =
-      LocalSignalCommercialDisclosure.none;
-  bool _aggregateOptIn = false;
-  bool _busy = false;
-  String? _safeError;
-  LocalSignalMutationReceipt? _receipt;
-
-  @override
-  void dispose() {
-    _title.dispose();
-    _body.dispose();
-    super.dispose();
-  }
-
-  LocalSignalDraftInput _input() {
-    final now = DateTime.now();
-    final date =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}'
-        '-${now.day.toString().padLeft(2, '0')}';
-    return LocalSignalDraftInput(
-      kind: _kind,
-      sourceLanguage: _apiLanguage(widget.language),
-      title: _title.text,
-      body: _body.text,
-      observationDate: date,
-      commercialDisclosure: _disclosure,
-      aggregateOptIn: _aggregateOptIn,
-      placeId: widget.placeId,
-      localityCode: widget.placeId == null ? widget.localityCode : null,
-    );
-  }
-
-  bool get _valid =>
-      _title.text.trim().isNotEmpty && _body.text.trim().isNotEmpty;
-
-  Future<void> _save() async {
-    if (_busy || !_valid) return;
-    setState(() {
-      _busy = true;
-      _safeError = null;
-    });
-    try {
-      final receipt = _receipt == null
-          ? await widget.repository.createDraft(_input())
-          : await widget.repository.updateDraft(_receipt!.id, _input());
-      if (mounted) setState(() => _receipt = receipt);
-    } on Object {
-      if (mounted) setState(() => _safeError = _requestFailed(widget.language));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _submit() async {
-    final receipt = _receipt;
-    if (_busy || receipt == null) return;
-    setState(() {
-      _busy = true;
-      _safeError = null;
-    });
-    try {
-      final submitted = await widget.repository.submitDraft(receipt.id);
-      if (!mounted) return;
-      setState(() => _receipt = submitted);
-      context.pop(true);
-    } on Object {
-      if (mounted) setState(() => _safeError = _requestFailed(widget.language));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _delete() async {
-    final receipt = _receipt;
-    if (_busy || receipt == null) return;
-    setState(() => _busy = true);
-    try {
-      await widget.repository.deleteDraft(receipt.id);
-      if (mounted) context.pop(false);
-    } on Object {
-      if (mounted) setState(() => _safeError = _requestFailed(widget.language));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final submitted = _receipt?.status == 'submitted';
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: LalaVisualColors.line,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 18),
-            Text(
-              _copy(
-                widget.language,
-                ko: '경험 초안',
-                en: 'Experience draft',
-                ja: '体験の下書き',
-                zhHans: '体验草稿',
-                zhHant: '體驗草稿',
-              ),
-              style: Theme.of(
-                context,
-              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              _copy(
-                widget.language,
-                ko: '한국어와 영어 원문을 지원합니다. 외국어 화면에서는 영어 원문으로 제출돼요.',
-                en: 'Original contributions currently support Korean and English.',
-                ja: '現在、原文投稿は韓国語と英語に対応しています。',
-                zhHans: '目前原创投稿支持韩文和英文。',
-                zhHant: '目前原創投稿支援韓文與英文。',
-              ),
-              style: const TextStyle(color: LalaVisualColors.muted),
-            ),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<LocalSignalKind>(
-              key: const ValueKey('local-signal-draft-kind'),
-              initialValue: _kind,
-              decoration: InputDecoration(
-                labelText: _copy(
-                  widget.language,
-                  ko: '경험 유형',
-                  en: 'Experience type',
-                  ja: '体験の種類',
-                  zhHans: '体验类型',
-                  zhHant: '體驗類型',
-                ),
-                border: const OutlineInputBorder(),
-              ),
-              items: LocalSignalKind.values
-                  .map(
-                    (kind) => DropdownMenuItem<LocalSignalKind>(
-                      value: kind,
-                      child: Text(kind.label(widget.language)),
-                    ),
-                  )
-                  .toList(growable: false),
-              onChanged: submitted || _busy
-                  ? null
-                  : (value) => setState(() => _kind = value ?? _kind),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              key: const ValueKey('local-signal-draft-title'),
-              controller: _title,
-              enabled: !submitted && !_busy,
-              maxLength: 160,
-              onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                labelText: _copy(
-                  widget.language,
-                  ko: '제목',
-                  en: 'Title',
-                  ja: 'タイトル',
-                  zhHans: '标题',
-                  zhHant: '標題',
-                ),
-                border: const OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              key: const ValueKey('local-signal-draft-body'),
-              controller: _body,
-              enabled: !submitted && !_busy,
-              minLines: 4,
-              maxLines: 8,
-              maxLength: 4000,
-              onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                labelText: _copy(
-                  widget.language,
-                  ko: '언제 무엇을 확인했는지 적어 주세요',
-                  en: 'Describe what you observed and when',
-                  ja: 'いつ何を確認したか記入してください',
-                  zhHans: '请说明何时观察到什么',
-                  zhHant: '請說明何時觀察到什麼',
-                ),
-                border: const OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 8),
-            DropdownButtonFormField<LocalSignalCommercialDisclosure>(
-              key: const ValueKey('local-signal-draft-disclosure'),
-              initialValue: _disclosure,
-              decoration: InputDecoration(
-                labelText: _copy(
-                  widget.language,
-                  ko: '상업 관계 고지',
-                  en: 'Commercial disclosure',
-                  ja: '商業関係の開示',
-                  zhHans: '商业关系披露',
-                  zhHant: '商業關係揭露',
-                ),
-                border: const OutlineInputBorder(),
-              ),
-              items: LocalSignalCommercialDisclosure.values
-                  .map(
-                    (value) => DropdownMenuItem(
-                      value: value,
-                      child: Text(
-                        value == LocalSignalCommercialDisclosure.none
-                            ? _copy(
-                                widget.language,
-                                ko: '해당 없음',
-                                en: 'None',
-                                ja: 'なし',
-                                zhHans: '无',
-                                zhHant: '無',
-                              )
-                            : value.label(widget.language),
-                      ),
-                    ),
-                  )
-                  .toList(growable: false),
-              onChanged: submitted || _busy
-                  ? null
-                  : (value) =>
-                        setState(() => _disclosure = value ?? _disclosure),
-            ),
-            const SizedBox(height: 8),
-            CheckboxListTile(
-              key: const ValueKey('local-signal-draft-aggregate-opt-in'),
-              contentPadding: EdgeInsets.zero,
-              value: _aggregateOptIn,
-              onChanged: submitted || _busy
-                  ? null
-                  : (value) => setState(() => _aggregateOptIn = value ?? false),
-              title: Text(
-                _copy(
-                  widget.language,
-                  ko: '익명 집계에 포함하는 데 동의',
-                  en: 'Allow anonymous aggregate use',
-                  ja: '匿名集計への利用に同意',
-                  zhHans: '同意用于匿名汇总',
-                  zhHant: '同意用於匿名彙總',
-                ),
-              ),
-              subtitle: Text(
-                _copy(
-                  widget.language,
-                  ko: '원문과 작성자 정보는 집계에 공개되지 않아요.',
-                  en: 'Raw text and author identity are never exposed in aggregates.',
-                  ja: '原文や著者情報は集計に公開されません。',
-                  zhHans: '汇总中不会公开原文或作者身份。',
-                  zhHant: '彙總中不會公開原文或作者身分。',
-                ),
-              ),
-            ),
-            if (_safeError != null) ...<Widget>[
-              const SizedBox(height: 8),
-              Text(
-                _safeError!,
-                style: const TextStyle(
-                  color: Color(0xFFBE123C),
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-            if (_receipt != null) ...<Widget>[
-              const SizedBox(height: 8),
-              Text(
-                // Moderation transparency: the receipt's governed status,
-                // review state, and visibility are labeled, never invented —
-                // unknown wire values render as the raw contract value.
-                _copy(
-                  widget.language,
-                  ko: '상태: ${_receipt!.statusLabel(widget.language)} · 검수: ${_receipt!.moderationStateLabel(widget.language)} · 공개 범위: ${_receipt!.visibilityLabel(widget.language)}',
-                  en: 'Status: ${_receipt!.statusLabel(widget.language)} · Review: ${_receipt!.moderationStateLabel(widget.language)} · Visibility: ${_receipt!.visibilityLabel(widget.language)}',
-                  ja: '状態: ${_receipt!.statusLabel(widget.language)} · 審査: ${_receipt!.moderationStateLabel(widget.language)} · 公開範囲: ${_receipt!.visibilityLabel(widget.language)}',
-                  zhHans:
-                      '状态：${_receipt!.statusLabel(widget.language)} · 审核：${_receipt!.moderationStateLabel(widget.language)} · 可见性：${_receipt!.visibilityLabel(widget.language)}',
-                  zhHant:
-                      '狀態：${_receipt!.statusLabel(widget.language)} · 審核：${_receipt!.moderationStateLabel(widget.language)} · 可見性：${_receipt!.visibilityLabel(widget.language)}',
-                ),
-                key: const ValueKey('local-signal-draft-receipt-status'),
-                style: const TextStyle(
-                  color: LalaVisualColors.muted,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-            const SizedBox(height: 16),
-            if (!submitted)
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  key: const ValueKey('local-signal-draft-save'),
-                  onPressed: _busy || !_valid ? null : _save,
-                  icon: const Icon(Icons.save_outlined),
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size(0, LalaVisualTokens.actionHeight),
-                  ),
-                  label: Text(
-                    _receipt == null
-                        ? _copy(
-                            widget.language,
-                            ko: '비공개 초안 저장',
-                            en: 'Save private draft',
-                            ja: '非公開の下書きを保存',
-                            zhHans: '保存私密草稿',
-                            zhHant: '儲存私密草稿',
-                          )
-                        : _copy(
-                            widget.language,
-                            ko: '초안 수정 저장',
-                            en: 'Update draft',
-                            ja: '下書きを更新',
-                            zhHans: '更新草稿',
-                            zhHant: '更新草稿',
-                          ),
-                  ),
-                ),
-              ),
-            if (_receipt != null && !submitted) ...<Widget>[
-              const SizedBox(height: 10),
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: OutlinedButton(
-                      key: const ValueKey('local-signal-draft-delete'),
-                      onPressed: _busy ? null : _delete,
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(0, 48),
-                      ),
-                      child: Text(
-                        _copy(
-                          widget.language,
-                          ko: '초안 삭제',
-                          en: 'Delete draft',
-                          ja: '下書きを削除',
-                          zhHans: '删除草稿',
-                          zhHant: '刪除草稿',
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: FilledButton(
-                      key: const ValueKey('local-signal-draft-submit'),
-                      onPressed: _busy ? null : _submit,
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size(0, 48),
-                      ),
-                      child: Text(
-                        _copy(
-                          widget.language,
-                          ko: '검수 요청',
-                          en: 'Submit for review',
-                          ja: '審査を依頼',
-                          zhHans: '提交审核',
-                          zhHant: '提交審核',
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _ReportSheet extends StatelessWidget {
   const _ReportSheet({required this.language});
 
@@ -1682,15 +1403,6 @@ class _LoadError extends StatelessWidget {
 }
 
 String _apiLanguage(String language) => language == 'ko' ? 'ko' : 'en';
-
-String _requestFailed(String language) => _copy(
-  language,
-  ko: '요청을 완료하지 못했어요. 입력 내용은 화면에 남아 있어요.',
-  en: 'The request failed. Your input remains on this screen.',
-  ja: 'リクエストに失敗しました。入力内容は画面に残っています。',
-  zhHans: '请求失败，输入内容仍保留在页面上。',
-  zhHant: '請求失敗，輸入內容仍保留在畫面上。',
-);
 
 String _dateLabel(String? value, String language) {
   final parsed = value == null ? null : DateTime.tryParse(value)?.toLocal();

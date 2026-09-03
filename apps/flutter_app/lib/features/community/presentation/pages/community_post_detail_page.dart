@@ -1,6 +1,7 @@
 // ONMU P3b: 커뮤니티 게시글 상세.
-// - 게시글 본문 + 태그 + 좋아요 버튼(낙관적 토글).
+// - 게시글 본문 + 태그 + 좋아요 버튼(낙관적 토글) + 작성자 팔로우 토글.
 // - 댓글 리스트 + 하단 댓글 입력(TextField + 전송).
+// - 게시글 신고(제한된 사유 코드, 접수 영수증 안내).
 // - 로딩/에러 상태 분기. SafeArea + 오버플로우 방지.
 import 'package:flutter/material.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
@@ -8,6 +9,7 @@ import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/features/community/presentation/community_api.dart';
 import 'package:lala_next_app/features/community/presentation/community_auth_guard.dart';
+import 'package:lala_next_app/features/community/presentation/community_post_actions.dart';
 import 'package:lala_next_app/auth/auth_controller.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
@@ -49,6 +51,8 @@ class _CommunityPostDetailPageState extends State<CommunityPostDetailPage> {
 
   bool _likeBusy = false;
   bool _commentBusy = false;
+  bool _followBusy = false;
+  bool _reportBusy = false;
   late final TextEditingController _commentController;
 
   @override
@@ -185,6 +189,110 @@ class _CommunityPostDetailPageState extends State<CommunityPostDetailPage> {
     }
   }
 
+  Future<void> _toggleFollow() async {
+    final current = _post;
+    if (current == null || _followBusy) return;
+    final outcome = await requestCommunityAuthentication(
+      context,
+      controller: widget.authController,
+      language: _language,
+      actionLabel: communityFollowActionLabel(_language),
+    );
+    if (!mounted || outcome != CommunityAuthOutcome.alreadyAuthenticated) {
+      return;
+    }
+    // 낙관적 반영(좋아요와 동일한 롤백 계약).
+    setState(() {
+      _post = current.copyWithReactions(
+        viewerFollowing: !current.viewerFollowing,
+      );
+      _followBusy = true;
+    });
+    try {
+      final envelope = await _client.toggleCommunityFollow(
+        followeeUserId: current.authorUserId,
+      );
+      final state = envelope.data;
+      // Why: an ok envelope without data cannot confirm the new follow —
+      // rolling back and stating the failure is safer than keeping the guess.
+      if (state == null) {
+        throw const LalaApiException(
+          code: 'INVALID_RESPONSE',
+          message: 'Follow response carried no data.',
+          statusCode: 200,
+          retryable: true,
+        );
+      }
+      if (!mounted) return;
+      setState(() {
+        _post = current.copyWithReactions(viewerFollowing: state.following);
+        _followBusy = false;
+      });
+    } on LalaApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _post = current;
+        _followBusy = false;
+      });
+      _showSnack(
+        // Why: the server rejects self-follow explicitly (INVALID_FOLLOW_TARGET);
+        // surfacing that exact case avoids presenting it as a transient failure.
+        error.code == 'INVALID_FOLLOW_TARGET'
+            ? communitySelfFollowMessage(_language)
+            : communityFollowFailureMessage(_language),
+      );
+    } on Object {
+      if (!mounted) return;
+      setState(() {
+        _post = current;
+        _followBusy = false;
+      });
+      _showSnack(communityFollowFailureMessage(_language));
+    }
+  }
+
+  Future<void> _reportPost() async {
+    final current = _post;
+    if (current == null || _reportBusy) return;
+    final outcome = await requestCommunityAuthentication(
+      context,
+      controller: widget.authController,
+      language: _language,
+      actionLabel: communityReportActionLabel(_language),
+    );
+    if (!mounted || outcome != CommunityAuthOutcome.alreadyAuthenticated) {
+      return;
+    }
+    final reason = await showCommunityReportReasonSheet(context, _language);
+    if (reason == null || !mounted) return;
+    // 접수 중 재제출 방지(이중 탭/메뉴 재선택 모두 차단).
+    setState(() => _reportBusy = true);
+    try {
+      final envelope = await _client.reportCommunityPost(
+        postId: current.id,
+        reasonCode: reason,
+      );
+      final receipt = envelope.data;
+      // Why: without a receipt the submit cannot be confirmed — reporting
+      // success here would be an optimistic false success.
+      if (receipt == null) {
+        throw const LalaApiException(
+          code: 'INVALID_RESPONSE',
+          message: 'Report response carried no data.',
+          statusCode: 200,
+          retryable: true,
+        );
+      }
+      if (!mounted) return;
+      setState(() => _reportBusy = false);
+      _showSnack(communityReportReceiptMessage(_language, receipt.duplicate));
+    } on Object {
+      if (!mounted) return;
+      setState(() => _reportBusy = false);
+      _showSnack(communityReportFailureMessage(_language));
+    }
+  }
+
   Future<void> _submitComment() async {
     final text = _commentController.text.trim();
     if (text.isEmpty || _commentBusy || _post == null) return;
@@ -285,6 +393,24 @@ class _CommunityPostDetailPageState extends State<CommunityPostDetailPage> {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
+        actions: <Widget>[
+          // 제출 중에는 메뉴 자체를 막아 이중 신고 제출 경로를 원천 차단한다.
+          PopupMenuButton<String>(
+            key: const ValueKey('community-post-menu'),
+            enabled: !_reportBusy,
+            tooltip: communityReportMenuLabel(_language),
+            onSelected: (value) {
+              if (value == 'report') _reportPost();
+            },
+            itemBuilder: (context) => <PopupMenuEntry<String>>[
+              PopupMenuItem<String>(
+                value: 'report',
+                child: Text(communityReportMenuLabel(_language)),
+              ),
+            ],
+          ),
+          const SizedBox(width: 4),
+        ],
       ),
       body: SafeArea(top: false, child: _buildBody()),
       bottomNavigationBar: _post == null
@@ -336,7 +462,9 @@ class _CommunityPostDetailPageState extends State<CommunityPostDetailPage> {
                 post: post,
                 language: _language,
                 likeBusy: _likeBusy,
+                followBusy: _followBusy,
                 onToggleLike: _toggleLike,
+                onToggleFollow: _toggleFollow,
               ),
               const SizedBox(height: 16),
               _CommentSection(comments: _comments, language: _language),
@@ -409,19 +537,23 @@ class _DetailErrorView extends StatelessWidget {
   }
 }
 
-/// 상단 게시글 본문 + 좋아요 버튼.
+/// 상단 게시글 본문 + 좋아요/팔로우 버튼.
 class _PostDetailHeader extends StatelessWidget {
   const _PostDetailHeader({
     required this.post,
     required this.language,
     required this.likeBusy,
+    required this.followBusy,
     required this.onToggleLike,
+    required this.onToggleFollow,
   });
 
   final CommunityPost post;
   final String language;
   final bool likeBusy;
+  final bool followBusy;
   final VoidCallback onToggleLike;
+  final VoidCallback onToggleFollow;
 
   @override
   Widget build(BuildContext context) {
@@ -453,7 +585,7 @@ class _PostDetailHeader extends StatelessWidget {
               ),
               const SizedBox(width: 4),
               Text(
-                shortAuthorLabel(post.authorUserId),
+                authorDisplayLabel(language),
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: const Color(0xFF64748B),
                   fontWeight: FontWeight.w800,
@@ -466,6 +598,13 @@ class _PostDetailHeader extends StatelessWidget {
                   color: const Color(0xFF94A3B8),
                   fontWeight: FontWeight.w700,
                 ),
+              ),
+              const Spacer(),
+              CommunityFollowButton(
+                following: post.viewerFollowing,
+                busy: followBusy,
+                onPressed: onToggleFollow,
+                language: language,
               ),
             ],
           ),
@@ -688,7 +827,7 @@ class _CommentTile extends StatelessWidget {
               const SizedBox(width: 4),
               Flexible(
                 child: Text(
-                  shortAuthorLabel(comment.authorUserId),
+                  authorDisplayLabel(language),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.labelSmall?.copyWith(

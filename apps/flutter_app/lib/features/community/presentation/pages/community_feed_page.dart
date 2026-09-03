@@ -1,5 +1,5 @@
 // ONMU P3b: 커뮤니티 게시판 피드.
-// - 게시글 세로 리스트(제목/요약/태그/좋아요·댓글 수/작성시간).
+// - 게시글 세로 리스트(제목/요약/태그/좋아요·댓글 수/작성시간/작성자 팔로우).
 // - 당겨서 새로고침(RefreshIndicator) + FAB 작성 -> /community/create.
 // - 게시글 탭 -> /community/post/:id 상세.
 // - 로딩/에러/빈 상태 분기. SafeArea + ColorScheme.fromSeed 테마 준수.
@@ -11,6 +11,7 @@ import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/routing/lala_route_paths.dart';
 import 'package:lala_next_app/features/community/presentation/community_api.dart';
 import 'package:lala_next_app/features/community/presentation/community_auth_guard.dart';
+import 'package:lala_next_app/features/community/presentation/community_post_actions.dart';
 import 'package:lala_next_app/auth/auth_controller.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
@@ -55,6 +56,10 @@ class _CommunityFeedPageState extends State<CommunityFeedPage> {
   // Why: pagination failure must be visible and retryable — a silent stop
   // reads as "no more posts", which is a different truth.
   bool _loadMoreFailed = false;
+
+  // 팔로우는 작성자 단위다: 같은 작성자의 카드들을 한 번에 갱신하며,
+  // 진행 중인 작성자의 중복 탭을 막는다.
+  final Set<String> _followBusyAuthors = <String>{};
 
   @override
   void initState() {
@@ -194,6 +199,81 @@ class _CommunityFeedPageState extends State<CommunityFeedPage> {
     context.push(LalaRoutePaths.communityPostFor(post.id));
   }
 
+  List<int> _postIndexesByAuthor(String authorUserId) => <int>[
+    for (var i = 0; i < _posts.length; i++)
+      if (_posts[i].authorUserId == authorUserId) i,
+  ];
+
+  void _setAuthorFollowState(String authorUserId, bool? following, bool busy) {
+    setState(() {
+      if (busy) {
+        _followBusyAuthors.add(authorUserId);
+      } else {
+        _followBusyAuthors.remove(authorUserId);
+      }
+      if (following != null) {
+        for (final i in _postIndexesByAuthor(authorUserId)) {
+          _posts[i] = _posts[i].copyWithReactions(viewerFollowing: following);
+        }
+      }
+    });
+  }
+
+  Future<void> _toggleFollow(CommunityPost post) async {
+    final authorUserId = post.authorUserId;
+    if (_followBusyAuthors.contains(authorUserId)) return;
+    final outcome = await requestCommunityAuthentication(
+      context,
+      controller: widget.authController,
+      language: _language,
+      actionLabel: communityFollowActionLabel(_language),
+    );
+    if (!mounted || outcome != CommunityAuthOutcome.alreadyAuthenticated) {
+      return;
+    }
+    final before = post.viewerFollowing;
+    // 낙관적 반영: 같은 작성자의 모든 카드에 즉시 반영하고 서버 확정값으로 교체.
+    _setAuthorFollowState(authorUserId, !before, true);
+    try {
+      final envelope = await _client.toggleCommunityFollow(
+        followeeUserId: authorUserId,
+      );
+      final state = envelope.data;
+      // Why: an ok envelope without data cannot confirm the follow — roll back
+      // to the previous state instead of keeping the optimistic guess.
+      if (state == null) {
+        throw const LalaApiException(
+          code: 'INVALID_RESPONSE',
+          message: 'Follow response carried no data.',
+          statusCode: 200,
+          retryable: true,
+        );
+      }
+      if (!mounted) return;
+      _setAuthorFollowState(authorUserId, state.following, false);
+    } on LalaApiException catch (error) {
+      if (!mounted) return;
+      _setAuthorFollowState(authorUserId, before, false);
+      _showSnack(
+        // Why: self-follow is a server-rejected target, not a transient error;
+        // the exact case gets its own honest copy.
+        error.code == 'INVALID_FOLLOW_TARGET'
+            ? communitySelfFollowMessage(_language)
+            : communityFollowFailureMessage(_language),
+      );
+    } on Object {
+      if (!mounted) return;
+      _setAuthorFollowState(authorUserId, before, false);
+      _showSnack(communityFollowFailureMessage(_language));
+    }
+  }
+
+  void _showSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), duration: const Duration(seconds: 3)),
+    );
+  }
+
   Future<void> _openChat() async {
     final outcome = await requestCommunityAuthentication(
       context,
@@ -307,6 +387,8 @@ class _CommunityFeedPageState extends State<CommunityFeedPage> {
           language: _language,
           onTap: _openPost,
           onRetryLoadMore: _loadMore,
+          followBusyAuthors: _followBusyAuthors,
+          onToggleFollow: _toggleFollow,
         );
     }
   }
@@ -520,6 +602,8 @@ class _FeedListView extends StatelessWidget {
     required this.language,
     required this.onTap,
     required this.onRetryLoadMore,
+    required this.followBusyAuthors,
+    required this.onToggleFollow,
   });
 
   final ScrollController controller;
@@ -530,6 +614,8 @@ class _FeedListView extends StatelessWidget {
   final String language;
   final ValueChanged<CommunityPost> onTap;
   final VoidCallback onRetryLoadMore;
+  final Set<String> followBusyAuthors;
+  final ValueChanged<CommunityPost> onToggleFollow;
 
   @override
   Widget build(BuildContext context) {
@@ -579,6 +665,8 @@ class _FeedListView extends StatelessWidget {
         return _CommunityPostCard(
           post: post,
           language: language,
+          followBusy: followBusyAuthors.contains(post.authorUserId),
+          onToggleFollow: () => onToggleFollow(post),
           onTap: () => onTap(post),
         );
       },
@@ -586,16 +674,20 @@ class _FeedListView extends StatelessWidget {
   }
 }
 
-/// 게시글 카드 — 피드/상세 공통 본문 표현.
+/// 게시글 카드 — 피드 본문 표현 + 작성자 팔로우 토글.
 class _CommunityPostCard extends StatelessWidget {
   const _CommunityPostCard({
     required this.post,
     required this.language,
+    required this.followBusy,
+    required this.onToggleFollow,
     required this.onTap,
   });
 
   final CommunityPost post;
   final String language;
+  final bool followBusy;
+  final VoidCallback onToggleFollow;
   final VoidCallback onTap;
 
   @override
@@ -624,6 +716,36 @@ class _CommunityPostCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Row(
+                children: [
+                  const Icon(
+                    Icons.person_outline_rounded,
+                    size: 13,
+                    color: Color(0xFF94A3B8),
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      authorDisplayLabel(language),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: const Color(0xFF64748B),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  CommunityFollowButton(
+                    following: post.viewerFollowing,
+                    busy: followBusy,
+                    onPressed: onToggleFollow,
+                    language: language,
+                    compact: true,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
               Text(
                 post.title,
                 maxLines: 2,

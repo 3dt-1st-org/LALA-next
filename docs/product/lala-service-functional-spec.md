@@ -153,7 +153,7 @@ flowchart LR
 | F-060 | RAG 도슨트 스크립트 | P0 | `IMPLEMENTED` | 장소 상세, 도슨트 카드 |
 | F-061 | 도슨트 음성 재생 | P1 | `DISABLED` | 도슨트 오디오 바 |
 | F-070 | Local Signals 열람·집계 | P0 | `PARTIAL` | 로컬 신호 탭 |
-| F-071 | Local Signals 작성·반응 | P1 | `PARTIAL` | API 구현, 앱 연결 미완료 |
+| F-071 | Local Signals 작성·반응 | P1 | `IMPLEMENTED_NOT_RUNTIME_VERIFIED` | 로컬 신호 탭 작성 진입, S-32 상세 |
 | F-080 | 커뮤니티 게시글·댓글 | P1 | `PARTIAL` | `/community/*` |
 | F-081 | 커뮤니티 실시간 채팅 | P2 | `PARTIAL` | `/community/chat/*` |
 | F-090 | 로그인·계정 관리 | P1 | `IMPLEMENTED` | 설정, `/api/v1/me` |
@@ -329,16 +329,17 @@ flowchart LR
 | 기능 | 초안 생성·수정·제출·삭제, 반응, 저장, 댓글, 신고 |
 | 정책 | rate limit, 멱등성 키, 소유권, 검수 상태를 적용한다. |
 | 공개 조건 | 검수·거버넌스 기준을 통과한 신호만 공개한다. |
-| 현재 상태 | API 계약은 구현됐지만 Flutter의 작성·반응 전체 UX는 사용자 기능으로 완결되지 않았다. |
+| 현재 상태 | S-31 공유 진입·공동 기여 컴포저와 S-32 상세의 작성·반응 흐름이 구현·테스트됐다(`IMPLEMENTED_NOT_RUNTIME_VERIFIED`). 실계정 제출·검수·공개 전환은 실구동·운영 데이터 없이 실행하지 않았다. |
 
 ### F-080. 커뮤니티 게시글과 댓글
 
 | 항목 | 정의 |
 | --- | --- |
 | 열람 | 게시글 목록, 상세, 댓글 목록은 공개 탐색 컨텍스트에서 조회한다. |
-| 작성 | 로그인 사용자가 게시글·댓글을 작성하고 좋아요·팔로우를 토글한다. |
+| 작성 | 로그인 사용자가 게시글·댓글을 작성하고 좋아요·팔로우를 토글한다. 팔로우는 내부 사용자 식별자로 동작하며 화면 표시는 중립 문구(예: 여행자/Traveler)만 쓴다. |
+| 신고 | 로그인 사용자가 게시글을 승인된 신고 사유 코드로 접수한다. 자유 텍스트는 받지 않고, 자기 글 신고와 없는 글 신고는 거부되며 같은 사유의 재신고는 중복으로 처리된다. |
 | 목록 | offset 기반 페이지네이션과 새로고침을 제공한다. |
-| 현재 상태 | API와 Flutter 화면은 구현됐으나 하단 탭 진입점이 없고 운영 게시글은 0건이다. |
+| 현재 상태 | API와 Flutter 화면(작가 팔로우, 게시글 신고 포함)은 구현·테스트됐으나 실구동 검증 전(`IMPLEMENTED_NOT_RUNTIME_VERIFIED`)이며, 하단 탭 진입점이 없고 운영 게시글은 0건이다. |
 | 제품 결정 | Local Signals와 일반 커뮤니티의 역할 중복을 해소하고 상시 진입 위치를 확정해야 한다. |
 
 ### F-081. 커뮤니티 실시간 채팅
@@ -507,7 +508,7 @@ flowchart LR
 | P1 | Speech 활성화 | 비용·쿼터·fallback·음성 품질 승인 후 운영 설정 활성화 |
 | P1 | 일정 상황 대응 | 실제 휴무·길찾기 권위 데이터 공급자와 비용 결정 |
 | P1 | 커뮤니티 IA | 하단 탭 추가 여부 또는 Local Signals 안으로 통합 여부 결정 |
-| P1 | Local Signals 쓰기 UX | 작성·수정·신고·반응 Flutter 흐름 완성 |
+| P1 | Local Signals 쓰기 실구동 검증 | 작성·수정·신고·반응 Flutter 흐름은 구현됐고, 실계정 제출·검수·공개 전환 실구동 검증이 남음 |
 | P1 | 전환 KPI | 저장→일정→방문→소비의 익명 집계와 대시보드 구현 |
 | P1 | 외국인 UX 검증 | EN/JA/zh-Hans/zh-Hant 실제 사용자·기기 QA |
 | P2 | 채팅 확장 | 다중 인스턴스 pub/sub, moderation, 알림 정책 정의 |
@@ -524,7 +525,7 @@ flowchart LR
 | 일정 | `POST /api/v1/plans/daily`, `GET /api/v1/plans/intervention` | 4슬롯 일정·개입 |
 | 사용자 계획 | `/api/v1/me/saved-places`, `/api/v1/me/plans/*` | 저장·일정·방문 |
 | Local Signals | `/api/v1/community/signals*` | 공개 신호·집계·작성·반응·신고 |
-| 커뮤니티 | `/api/v1/community/posts*`, `/follows` | 게시글·댓글·좋아요·팔로우 |
+| 커뮤니티 | `/api/v1/community/posts*`, `/follows` | 게시글·댓글·좋아요·팔로우·게시글 신고 |
 | 채팅 | `/api/v1/community/chat/rooms*` | 채팅방·메시지·WebSocket |
 
 ## 13. 변경 관리

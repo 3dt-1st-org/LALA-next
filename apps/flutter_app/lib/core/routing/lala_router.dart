@@ -184,6 +184,21 @@ GoRouter createLalaRouter({
                         context.go(LalaRoutePaths.mapRoute);
                       },
                       onOpenDetail: (arguments) {
+                        // Contribution has no signal id: routing it through
+                        // the detail path would synthesize a fake id and lose
+                        // contribute mode on web refresh. Use the stable
+                        // contribution path; context rides in extra only.
+                        // go (not push) so the browser-facing route becomes
+                        // the contribution URL — pushed routes never reach
+                        // routeInformationProvider by default, and a refresh
+                        // must land back here via the builder fallback.
+                        if (arguments.contribution) {
+                          context.go(
+                            LalaRoutePaths.localSignalContribution,
+                            extra: arguments,
+                          );
+                          return;
+                        }
                         final aggregate = arguments.aggregate;
                         final detailId =
                             arguments.signal?.id ??
@@ -236,6 +251,28 @@ GoRouter createLalaRouter({
               arguments: state.extra is LocalSignalDetailArguments
                   ? state.extra! as LocalSignalDetailArguments
                   : null,
+              authController: authController,
+              onPlaceAction: (request) {
+                signalActionController.dispatch(request);
+                context.go(LalaRoutePaths.mapRoute);
+              },
+            ),
+      ),
+      GoRoute(
+        path: LalaRoutePaths.localSignalContribution,
+        builder: (BuildContext context, GoRouterState state) =>
+            LocalSignalDetailPage(
+              // Contribution mode never fetches a signal, so no real id
+              // exists; an inert non-empty sentinel keeps the page contract.
+              signalId: 'contribute',
+              language: OnboardingState.language,
+              initialConfig: initialConfig,
+              // Why: a web refresh or deep link drops GoRouter extra; the
+              // fallback rebuilds contribute mode (without in-memory region
+              // context) instead of attempting a fake signal fetch.
+              arguments: state.extra is LocalSignalDetailArguments
+                  ? state.extra! as LocalSignalDetailArguments
+                  : const LocalSignalDetailArguments.contribute(),
               authController: authController,
               onPlaceAction: (request) {
                 signalActionController.dispatch(request);

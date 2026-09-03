@@ -23,6 +23,12 @@ abstract final class LalaRoutePaths {
   static const String visitConfirmation = '/plan/:planDate/visit/:slotPeriod';
   static const String interventionComparison = '/plan/change-comparison';
   static const String localSignalDetail = '/local-signals/detail/:signalId';
+
+  /// S-31 feed-level contribution. Stable path so a web refresh or deep link
+  /// rebuilds contribute mode without GoRouter extra; the optional coarse
+  /// region/place context travels in extra only — never in the URL, which
+  /// carries no coordinates or ids beyond this fixed segment.
+  static const String localSignalContribution = '/local-signals/contribute';
   static const String preferenceSyncConflict =
       '/profile/preference-sync-conflict';
   static const String privacyLocation = '/profile/privacy-location';

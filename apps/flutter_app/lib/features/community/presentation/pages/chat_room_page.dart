@@ -25,12 +25,17 @@ class ChatRoomPage extends StatefulWidget {
     this.initialConfig = const LalaAppConfig.fromEnvironment(),
     this.authController,
     this.preferencesStore,
+
+    /// Optional injected client for focused tests; production always builds
+    /// its own from [initialConfig] (same seam as the community feed page).
+    this.client,
   });
 
   final String roomId;
   final LalaAppConfig initialConfig;
   final LalaAuthController? authController;
   final TravelPreferencesStore? preferencesStore;
+  final LalaApiClient? client;
 
   @override
   State<ChatRoomPage> createState() => _ChatRoomPageState();
@@ -63,7 +68,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   void initState() {
     super.initState();
     _config = widget.initialConfig;
-    _client = createCommunityClient(_config);
+    _client = widget.client ?? createCommunityClient(_config);
     _ws = ChatWsClient();
     _preferencesStore =
         widget.preferencesStore ?? TravelPreferencesStore.instance;
@@ -568,7 +573,8 @@ class _MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final author = shortAuthorLabel(message.authorUserId ?? '');
+    // 내부 UUID 는 화면에 노출하지 않는다: 실명 계약이 없으므로 중립 라벨만.
+    final author = authorDisplayLabel(language);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
@@ -596,7 +602,7 @@ class _MessageBubble extends StatelessWidget {
                   ? CrossAxisAlignment.end
                   : CrossAxisAlignment.start,
               children: [
-                if (!mine && author.isNotEmpty)
+                if (!mine)
                   Padding(
                     padding: const EdgeInsets.only(left: 4, bottom: 3),
                     child: Text(

@@ -60,16 +60,18 @@ void main() {
   });
 
   group('ChatWsClient lifecycle', () {
-    test('starts disconnected and disconnect is a safe no-op before connect',
-        () async {
-      final client = ChatWsClient(reconnectDelays: const []);
-      expect(client.currentStatus, ChatWsStatus.disconnected);
-      // send before connect should not throw.
-      client.send('hi');
-      await client.disconnect();
-      expect(client.currentStatus, ChatWsStatus.disconnected);
-      await client.dispose();
-    });
+    test(
+      'starts disconnected and disconnect is a safe no-op before connect',
+      () async {
+        final client = ChatWsClient(reconnectDelays: const []);
+        expect(client.currentStatus, ChatWsStatus.disconnected);
+        // send before connect should not throw.
+        client.send('hi');
+        await client.disconnect();
+        expect(client.currentStatus, ChatWsStatus.disconnected);
+        await client.dispose();
+      },
+    );
 
     test('status stream emits nothing for a redundant disconnect', () async {
       final client = ChatWsClient(reconnectDelays: const []);

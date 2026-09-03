@@ -17,19 +17,25 @@ not claim that every runtime state has been exercised on a device.
 | --- | --- | --- | --- |
 | S-01--S-20 | Implemented on the integration line | Covered by the full Flutter/API/client suites | Prior evidence exists; final exact-head replay pending |
 | S-21--S-25 | Implemented and merged through phase PRs | Covered by focused tests and the full suites | Prior phase evidence exists; final exact-head replay pending |
-| S-30--S-32 | Implemented and reachable from detail, plan, and Local Signals | Covered by focused tests and the full suites | Prior phase evidence exists; final exact-head replay pending |
-| S-40--S-44 | Implemented with public reads and Logto-gated writes/chat; private chat state is discarded on sign-out and late responses cannot reopen it | Focused auth-flow tests and the full suite pass | S-40 public read and the signed-out write gate verified on iPhone 17 Pro; authenticated operations remain gated |
+| S-30--S-32 | Implemented and reachable from detail, plan, and Local Signals; S-31 now carries a share-experience entry into the S-32 contribute mode (F-071 authoring, `IMPLEMENTED_NOT_RUNTIME_VERIFIED`) | Covered by focused tests and the full suites | Prior phase evidence covers reads; the new authoring flow has no runtime verification and final exact-head replay is pending |
+| S-40--S-44 | Implemented with public reads and Logto-gated writes/chat; author follow (internal-UUID identifiers, neutral localized display label) and governed post reports added in round 2 (`IMPLEMENTED_NOT_RUNTIME_VERIFIED`); private chat state is discarded on sign-out and late responses cannot reopen it | Focused auth-flow tests and the full suite pass | S-40 public read and the signed-out write gate verified on iPhone 17 Pro; authenticated operations remain gated and no operational post, follow, or report data exists |
 | S-50--S-59 | Implemented, including persisted privacy and explicit sync resolution | Focused settings tests and the full suite pass | S-50 and S-58 verified on iPhone 17 Pro, including preference persistence across relaunch |
 
-At the final application tree, Flutter analysis, all 832 Flutter tests, API
+At the canonical completion tree, Flutter analysis, all 832 Flutter tests, API
 tests, Dart client tests, Ruff, formatting, pre-commit (including secret
-detection), and diff checks passed. The same tree was installed on an iPhone 17
+detection), and diff checks passed. That tree was installed on an iPhone 17
 Pro simulator after removing the previous bundle. Visual and OCR inspection
 confirmed onboarding, the configured map with real API places, location-denial
 recovery, My Info, S-58, the public community empty state, and the Logto write
-gate without fixture, mock, or demo data standing in for runtime truth. Other
-authenticated, paid-provider, or production-mutating states retain their
-separate gates.
+gate without fixture, mock, or demo data standing in for runtime truth.
+
+The round 2 additions on this branch (S-31 share-experience authoring, S-40/S-41
+author follow, governed post reports) bring the current tree to 970 Flutter
+tests; analysis, the full API suite, 42 Dart client tests, focused API/SQL
+tests, Ruff, formatting, and pre-commit all pass at the integration head. These
+new flows are `IMPLEMENTED_NOT_RUNTIME_VERIFIED`: no live account, operational
+data, or migration apply was exercised. Other authenticated, paid-provider, or
+production-mutating states retain their separate gates.
 
 | ID | Representation | Primary implementation | Entry | Runtime truth |
 | --- | --- | --- | --- | --- |
@@ -52,10 +58,10 @@ separate gates.
 | S-24 | route | `PastTripsPage` | My Info | account plan history |
 | S-25 | route | `VisitConfirmationPage` | plan slot | bounded visit feedback |
 | S-30 | route | `DocentPlayerPage` | detail/plan player | RAG text; voice only when enabled |
-| S-31 | shell route | `LocalSignalsPage` | Local Signals tab | governed public aggregates |
-| S-32 | route | `LocalSignalDetailPage` | S-31 | source-safe detail and moderated action |
-| S-40 | route | `CommunityFeedPage` | My Info | user posts, explicitly not verified signals |
-| S-41 | route | `CommunityPostDetailPage` | S-40 | public read, authenticated reactions |
+| S-31 | shell route | `LocalSignalsPage` | Local Signals tab | governed public aggregates; share-experience entry routes to S-32 contribute mode |
+| S-32 | route | `LocalSignalDetailPage` | S-31 | source-safe detail, moderated action, shared contribution composer |
+| S-40 | route | `CommunityFeedPage` | My Info | user posts, explicitly not verified signals; author follow |
+| S-41 | route | `CommunityPostDetailPage` | S-40 | public read, authenticated reactions, follow, governed reports |
 | S-42 | route | `CommunityCreatePostPage` | S-40 | authenticated explicit publish |
 | S-43 | route | `ChatRoomListPage` | My Info/S-40 | authenticated room membership |
 | S-44 | route | `ChatRoomPage` | S-43 | authenticated REST/WebSocket chat |
