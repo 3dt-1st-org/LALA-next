@@ -298,6 +298,15 @@ class _VisitConfirmationPageState extends State<VisitConfirmationPage> {
                   '到訪記錄已儲存。',
                 ),
         ),
+        // Recovery entry matching the copy: the failed account write can be
+        // retried right here without losing the device-first outcome.
+        action: syncFailed
+            ? SnackBarAction(
+                key: const ValueKey('visit-sync-retry'),
+                label: _copy(language, '다시 시도', 'Retry', '再試行', '重试', '重試'),
+                onPressed: () => unawaited(_store.retryAccountSync()),
+              )
+            : null,
       ),
     );
     Navigator.of(context).pop(true);

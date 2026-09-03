@@ -20,6 +20,7 @@ class PlanSlotTile extends StatelessWidget {
     this.onToggleVisit,
     this.spendBand,
     this.spendUnavailable = false,
+    this.saved,
     this.onPlayDocent,
   });
 
@@ -43,6 +44,12 @@ class PlanSlotTile extends StatelessWidget {
   // [spendUnavailable] (honest-unavailable band); never a fabricated number.
   final SpendBand? spendBand;
   final bool spendUnavailable;
+
+  /// F-030 save-state sharing: whether this slot's place is in the user's
+  /// saved set. null → marker not rendered (callers not wiring it); true →
+  /// bookmark marker; false → no marker (unsaved is the default, not a state
+  /// worth badge noise). Toggling happens on place detail, not here.
+  final bool? saved;
 
   /// 이슈 #120 §6: 슬롯별 도슨트 재생 진입(선택). null 이면 버튼을 만들지 않는다.
   /// 타일 탭(스낵바)과 독립인 제스처 영역이다.
@@ -85,7 +92,9 @@ class PlanSlotTile extends StatelessWidget {
     final airQualityBadText = planSlotAirQualityBadLabel(slot, language);
     final closureStateText = planSlotClosureStateLabel(slot, language);
     // D4 배지 색/아이콘은 원천 state 기반(null → unknown).
-    final closureStateKey = (slot.closureState ?? 'unknown').trim().toLowerCase();
+    final closureStateKey = (slot.closureState ?? 'unknown')
+        .trim()
+        .toLowerCase();
     // 기존 토큰만 재사용(teal=open/positive, red=closed/bad, slate=unknown/neutral).
     final closureBadgeColor = switch (closureStateKey) {
       'open' => const Color(0xFF0F766E),
@@ -97,14 +106,25 @@ class PlanSlotTile extends StatelessWidget {
       'closed' => Icons.cancel_outlined,
       _ => Icons.help_outline,
     };
-    final metaEntries = <String>[
-      ?travelTimeLabel,
-      ?estimatedHoursLabel,
-    ];
+    final metaEntries = <String>[?travelTimeLabel, ?estimatedHoursLabel];
     // V5-B VISIT/SPEND badge text (only when wired by the caller).
-    final visitLabel = visitStatus == null ? null : _visitBadgeLabel(visitStatus!, language);
-    final spendLabel = spendBand?.label ??
+    final visitLabel = visitStatus == null
+        ? null
+        : _visitBadgeLabel(visitStatus!, language);
+    final spendLabel =
+        spendBand?.label ??
         (spendUnavailable ? spendBandUnavailableLabel(language) : null);
+    // F-030: saved marker label (only the positive state renders).
+    final savedLabel = saved == true
+        ? lalaCopyMulti(
+            language,
+            ko: '저장됨',
+            en: 'Saved',
+            ja: '保存済み',
+            zhHans: '已保存',
+            zhHant: '已儲存',
+          )
+        : null;
     // 접근성(§13.5): 슬롯 메타(시간대/실내·야외/이동시간/추정시간/운영상태/예보/대기질)를
     // 하나의 시맨틱 라벨로 합쳐 화면 읽기 사용자에게 전달. 색상 단독 신호를 피하기 위해
     // 실내·야외·운영상태는 모두 아이콘+텍스트+라벨 삼중으로 표현한다.
@@ -120,6 +140,7 @@ class PlanSlotTile extends StatelessWidget {
       ?airQualityBadText,
       ?visitLabel,
       ?spendLabel,
+      ?savedLabel,
     ];
     return Semantics(
       container: true,
@@ -217,220 +238,230 @@ class PlanSlotTile extends StatelessWidget {
                       ],
                     ],
                   ),
-              const SizedBox(height: 6),
-              Text(
-                title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: const Color(0xFF1E293B),
-                  fontWeight: FontWeight.w900,
-                  height: 1.18,
-                ),
-              ),
-              // D4: 운영 상태 배지(open/closed/unknown). 색상 단독 신호를 피하려고
-              // 아이콘+텍스트+시맨틱 라벨 삼중 표시(실내·야외 패턴과 동일). null→unknown.
-              // 기존 칩 배경/보더 토큰에 상태색 보더+아이콘+텍스트만 입힌다(색 토큰 추가 없음).
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 7,
-                    vertical: 3,
+                  const SizedBox(height: 6),
+                  Text(
+                    title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: const Color(0xFF1E293B),
+                      fontWeight: FontWeight.w900,
+                      height: 1.18,
+                    ),
                   ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF1F5F9),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: closureBadgeColor),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(closureBadgeIcon, size: 11, color: closureBadgeColor),
-                      const SizedBox(width: 3),
-                      Text(
-                        closureStateText,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: closureBadgeColor,
-                          fontWeight: FontWeight.w800,
-                        ),
+                  // D4: 운영 상태 배지(open/closed/unknown). 색상 단독 신호를 피하려고
+                  // 아이콘+텍스트+시맨틱 라벨 삼중 표시(실내·야외 패턴과 동일). null→unknown.
+                  // 기존 칩 배경/보더 토큰에 상태색 보더+아이콘+텍스트만 입힌다(색 토큰 추가 없음).
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
                       ),
-                    ],
-                  ),
-                ),
-              ),
-              // V5-B VISIT + SPEND (§V5-B D2/D3): rendered only when the caller
-              // wires them. Existing callers that omit all three params see the
-              // legacy tile shape unchanged. Both reuse the documented slate chip
-              // tokens (no new color); icon+text+semantics so color is never the
-              // sole signal (§13.5).
-              if (visitLabel != null || spendLabel != null) ...[
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 4,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    if (visitLabel != null)
-                      _VisitBadge(
-                        language: language,
-                        status: visitStatus!,
-                        label: visitLabel,
-                        onToggle: onToggleVisit,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: closureBadgeColor),
                       ),
-                    if (spendLabel != null)
-                      _SpendBandChip(
-                        label: spendLabel,
-                        unavailable: spendBand == null && spendUnavailable,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            closureBadgeIcon,
+                            size: 11,
+                            color: closureBadgeColor,
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            closureStateText,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(
+                                  color: closureBadgeColor,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                          ),
+                        ],
                       ),
-                  ],
-                ),
-              ],
-              if (swapReason != null) ...[
-                const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 3,
+                    ),
                   ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEBF4FE),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.swap_horiz,
-                        size: 12,
-                        color: const Color(0xFF2B6CB0),
-                      ),
-                      const SizedBox(width: 3),
-                      Expanded(
-                        child: Text(
-                          swapReason!,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.labelSmall
-                              ?.copyWith(
-                                color: const Color(0xFF2B6CB0),
-                                fontWeight: FontWeight.w700,
-                              ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-              if (subtitle != null) ...[
-                const SizedBox(height: 3),
-                Text(
-                  subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: const Color(0xFF94A3B8),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-              if (detail != null) ...[
-                const SizedBox(height: 6),
-                Text(
-                  detail,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: const Color(0xFF475569),
-                    fontWeight: FontWeight.w600,
-                    height: 1.45,
-                  ),
-                ),
-              ],
-              if (metaEntries.isNotEmpty) ...[
-                const SizedBox(height: 6),
-                Semantics(
-                  container: true,
-                  label: metaEntries.join(', '),
-                  child: Padding(
-                    // Keep the meta row clear of the 44dp tap target below/above.
-                    padding: const EdgeInsets.symmetric(vertical: 2),
-                    child: Wrap(
+                  // V5-B VISIT + SPEND (§V5-B D2/D3) + F-030 saved marker: rendered
+                  // only when the caller wires them. Existing callers that omit these
+                  // params see the legacy tile shape unchanged. All reuse the
+                  // documented slate chip tokens (no new color); icon+text+semantics
+                  // so color is never the sole signal (§13.5).
+                  if (visitLabel != null ||
+                      spendLabel != null ||
+                      savedLabel != null) ...[
+                    const SizedBox(height: 6),
+                    Wrap(
                       spacing: 8,
                       runSpacing: 4,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        for (final entry in metaEntries)
-                          _PlanSlotMetaChip(text: entry),
+                        if (visitLabel != null)
+                          _VisitBadge(
+                            language: language,
+                            status: visitStatus!,
+                            label: visitLabel,
+                            onToggle: onToggleVisit,
+                          ),
+                        if (spendLabel != null)
+                          _SpendBandChip(
+                            label: spendLabel,
+                            unavailable: spendBand == null && spendUnavailable,
+                          ),
+                        if (savedLabel != null)
+                          _SavedMarkerChip(label: savedLabel),
                       ],
                     ),
-                  ),
-                ),
-              ],
-              if (airQualityBadText != null) ...[
-                // D3: 야외 슬롯에만 먼지 나쁨 마커 표시. null/false/실내면 숨긴다
-                // (null 을 "나쁨"으로 조작하지 않는다 — honest-empty). 빨강 토큰 재사용.
-                const SizedBox(height: 6),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(
-                      Icons.warning_amber_rounded,
-                      size: 13,
-                      color: Color(0xFFC53030),
+                  ],
+                  if (swapReason != null) ...[
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEBF4FE),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.swap_horiz,
+                            size: 12,
+                            color: const Color(0xFF2B6CB0),
+                          ),
+                          const SizedBox(width: 3),
+                          Expanded(
+                            child: Text(
+                              swapReason!,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(
+                                    color: const Color(0xFF2B6CB0),
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        airQualityBadText,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: const Color(0xFFC53030),
-                          fontWeight: FontWeight.w800,
+                  ],
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: const Color(0xFF94A3B8),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                  if (detail != null) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      detail,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: const Color(0xFF475569),
+                        fontWeight: FontWeight.w600,
+                        height: 1.45,
+                      ),
+                    ),
+                  ],
+                  if (metaEntries.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Semantics(
+                      container: true,
+                      label: metaEntries.join(', '),
+                      child: Padding(
+                        // Keep the meta row clear of the 44dp tap target below/above.
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            for (final entry in metaEntries)
+                              _PlanSlotMetaChip(text: entry),
+                          ],
                         ),
                       ),
                     ),
                   ],
-                ),
-              ],
-              if (place != null) ...[
-                const SizedBox(height: 7),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: onPlayDocent == null
-                      ? const Icon(
-                          Icons.chevron_right,
-                          color: Color(0xFF94A3B8),
-                          size: 20,
-                        )
-                      : Row(
-                          // 이슈 #120 §6: 슬롯별 도슨트 재생(44dp). 중첩 제스처에서
-                          // 안쪽이 이기므로 버튼 탭은 타일 탭으로 새지 않는다.
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            DocentPlayButton(
-                              key: ValueKey(
-                                'plan-slot-docent-play-${place.placeId}',
-                              ),
-                              language: language,
-                              onPressed: onPlayDocent,
-                              visual: 30,
-                            ),
-                            const SizedBox(width: 4),
-                            const Icon(
+                  if (airQualityBadText != null) ...[
+                    // D3: 야외 슬롯에만 먼지 나쁨 마커 표시. null/false/실내면 숨긴다
+                    // (null 을 "나쁨"으로 조작하지 않는다 — honest-empty). 빨강 토큰 재사용.
+                    const SizedBox(height: 6),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.warning_amber_rounded,
+                          size: 13,
+                          color: Color(0xFFC53030),
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            airQualityBadText,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(
+                                  color: const Color(0xFFC53030),
+                                  fontWeight: FontWeight.w800,
+                                ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (place != null) ...[
+                    const SizedBox(height: 7),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: onPlayDocent == null
+                          ? const Icon(
                               Icons.chevron_right,
                               color: Color(0xFF94A3B8),
                               size: 20,
+                            )
+                          : Row(
+                              // 이슈 #120 §6: 슬롯별 도슨트 재생(44dp). 중첩 제스처에서
+                              // 안쪽이 이기므로 버튼 탭은 타일 탭으로 새지 않는다.
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                DocentPlayButton(
+                                  key: ValueKey(
+                                    'plan-slot-docent-play-${place.placeId}',
+                                  ),
+                                  language: language,
+                                  onPressed: onPlayDocent,
+                                  visual: 30,
+                                ),
+                                const SizedBox(width: 4),
+                                const Icon(
+                                  Icons.chevron_right,
+                                  color: Color(0xFF94A3B8),
+                                  size: 20,
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                ),
-              ],
-            ],
-          ),
-        ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -575,6 +606,47 @@ class _VisitBadge extends StatelessWidget {
             child: chip,
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// F-030 saved marker: informational bookmark chip (the toggle lives on place
+/// detail). Reuses the documented slate meta-chip tokens; icon+text so the
+/// marker is never color- or shape-alone.
+class _SavedMarkerChip extends StatelessWidget {
+  const _SavedMarkerChip({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.bookmark_rounded,
+            size: 12,
+            color: Color(0xFF64748B),
+          ),
+          const SizedBox(width: 3),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: const Color(0xFF475569),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
     );
   }
