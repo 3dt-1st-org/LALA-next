@@ -20,6 +20,7 @@ from apps.api.app.services.community_service import (
 POST_ID = UUID("00000000-0000-0000-0000-000000000001")
 AUTHOR_ID = UUID("00000000-0000-0000-0000-000000000002")
 FOLLOWEE_ID = UUID("00000000-0000-0000-0000-000000000003")
+REPORT_ID = UUID("00000000-0000-0000-0000-000000000004")
 NOW = datetime(2026, 7, 23, tzinfo=UTC)
 ISSUER = "https://issuer.example"
 SUBJECT = "user-subject"
@@ -76,7 +77,11 @@ def _repo(rows: list[Any]) -> tuple[CommunityRepository, list[tuple[str, Any]]]:
     return repository, executed
 
 
-def _post_row(*, viewer_liked: bool = False) -> dict[str, Any]:
+def _post_row(
+    *,
+    viewer_liked: bool = False,
+    viewer_following: bool = False,
+) -> dict[str, Any]:
     return {
         "id": POST_ID,
         "author_issuer": ISSUER,
@@ -90,6 +95,7 @@ def _post_row(*, viewer_liked: bool = False) -> dict[str, Any]:
         "comment_count": 3,
         "like_count": 5,
         "viewer_liked": viewer_liked,
+        "viewer_following": viewer_following,
     }
 
 
@@ -114,8 +120,12 @@ def test_list_posts_emits_count_then_paginated_query_and_returns_rows() -> None:
     assert "FROM community.user_posts p" in list_sql
     assert "JOIN identity.users u" in list_sql
     assert "ORDER BY p.created_at DESC" in list_sql
-    # viewer identity is bound to the viewer_liked subquery first.
-    assert executed[1][1] == (ISSUER, SUBJECT, 20, 0)
+    # Viewer identity is bound once per viewer-state subquery: viewer_liked
+    # first, then viewer_following.
+    assert "AS viewer_liked" in list_sql
+    assert "AS viewer_following" in list_sql
+    assert "FROM community.user_follows f" in list_sql
+    assert executed[1][1] == (ISSUER, SUBJECT, ISSUER, SUBJECT, 20, 0)
 
 
 def test_list_posts_passes_null_viewer_when_anonymous() -> None:
@@ -123,7 +133,7 @@ def test_list_posts_passes_null_viewer_when_anonymous() -> None:
 
     repository.list_posts(limit=10, offset=0, viewer_issuer=None, viewer_subject=None)
 
-    assert executed[1][1] == (None, None, 10, 0)
+    assert executed[1][1] == (None, None, None, None, 10, 0)
 
 
 def test_create_post_inserts_author_identity_tags_and_returns_row() -> None:
@@ -193,19 +203,169 @@ def test_create_comment_returns_none_when_post_missing() -> None:
     )
 
 
-def test_toggle_follow_follows_then_resolves_followee_identity() -> None:
-    repository, executed = _repo([None, {"followee_issuer": ISSUER}, {"id": FOLLOWEE_ID}])
+def test_toggle_follow_follows_by_user_id_with_identity_resolved_server_side() -> None:
+    repository, executed = _repo(
+        [
+            {"issuer": "https://other.example", "subject": "followee-subject"},
+            {"id": AUTHOR_ID},
+            None,
+            {"followee_issuer": "https://other.example"},
+        ]
+    )
 
     result = repository.toggle_follow(
         follower_issuer=ISSUER,
         follower_subject=SUBJECT,
-        followee_issuer="https://other.example",
-        followee_subject="followee-subject",
+        followee_user_id=FOLLOWEE_ID,
     )
 
-    assert result == {"followee_user_id": FOLLOWEE_ID, "following": True}
-    assert "DELETE FROM community.user_follows" in executed[0][0]
-    assert "INSERT INTO community.user_follows" in executed[1][0]
+    assert result == {"outcome": "followed"}
+    # The followee identity is resolved from the internal UUID, never from wire.
+    assert "FROM identity.users WHERE id = %s" in executed[0][0]
+    assert executed[0][1] == (str(FOLLOWEE_ID),)
+    assert executed[1][1] == (ISSUER, SUBJECT)
+    assert "DELETE FROM community.user_follows" in executed[2][0]
+    assert executed[2][1] == (
+        ISSUER,
+        SUBJECT,
+        "https://other.example",
+        "followee-subject",
+    )
+    assert "INSERT INTO community.user_follows" in executed[3][0]
+
+
+def test_toggle_follow_unfollows_when_existing_row_removed() -> None:
+    repository, executed = _repo(
+        [
+            {"issuer": "https://other.example", "subject": "followee-subject"},
+            {"id": AUTHOR_ID},
+            {"followee_issuer": "https://other.example"},
+        ]
+    )
+
+    result = repository.toggle_follow(
+        follower_issuer=ISSUER,
+        follower_subject=SUBJECT,
+        followee_user_id=FOLLOWEE_ID,
+    )
+
+    assert result == {"outcome": "unfollowed"}
+    # Delete hit, so no INSERT statement is issued.
+    assert len(executed) == 3
+    assert "INSERT INTO community.user_follows" not in executed[-1][0]
+
+
+def test_toggle_follow_missing_followee_short_circuits_before_mutation() -> None:
+    repository, executed = _repo([None])
+
+    result = repository.toggle_follow(
+        follower_issuer=ISSUER,
+        follower_subject=SUBJECT,
+        followee_user_id=FOLLOWEE_ID,
+    )
+
+    assert result == {"outcome": "missing_followee"}
+    assert all("user_follows" not in sql for sql, _ in executed)
+
+
+def test_toggle_follow_self_target_returns_outcome_without_mutation() -> None:
+    repository, executed = _repo(
+        [
+            {"issuer": ISSUER, "subject": SUBJECT},
+            {"id": FOLLOWEE_ID},
+        ]
+    )
+
+    result = repository.toggle_follow(
+        follower_issuer=ISSUER,
+        follower_subject=SUBJECT,
+        followee_user_id=FOLLOWEE_ID,
+    )
+
+    assert result == {"outcome": "self_follow"}
+    # The guard runs before the DELETE/INSERT so a self-follow never persists.
+    assert all("user_follows" not in sql for sql, _ in executed)
+
+
+def test_report_post_inserts_bounded_reason_and_returns_receipt() -> None:
+    repository, executed = _repo(
+        [
+            {"author_issuer": "https://other.example", "author_subject": "author"},
+            {
+                "id": REPORT_ID,
+                "reason_code": "spam_promotion",
+                "status": "open",
+                "inserted": True,
+            },
+        ]
+    )
+
+    result = repository.report_post(
+        post_id=POST_ID,
+        issuer=ISSUER,
+        subject=SUBJECT,
+        reason_code="spam_promotion",
+    )
+
+    assert result == {
+        "outcome": "created",
+        "report_id": REPORT_ID,
+        "reason_code": "spam_promotion",
+        "status": "open",
+    }
+    author_sql, author_params = executed[0]
+    assert "FROM community.user_posts" in author_sql
+    assert author_params == (str(POST_ID),)
+    insert_sql, insert_params = executed[1]
+    assert "INSERT INTO community.post_reports" in insert_sql
+    # One unresolved report per reporter/post; a conflict replays the original
+    # receipt instead of taking the new reason.
+    assert "ON CONFLICT (reporter_issuer, reporter_subject, post_id)" in insert_sql
+    assert "DO UPDATE SET reason_code = r.reason_code" in insert_sql
+    assert insert_params == (str(POST_ID), ISSUER, SUBJECT, "spam_promotion")
+
+
+def test_report_post_conflict_returns_original_receipt_as_duplicate() -> None:
+    repository, _ = _repo(
+        [
+            {"author_issuer": "https://other.example", "author_subject": "author"},
+            {
+                "id": REPORT_ID,
+                "reason_code": "privacy_exposure",
+                "status": "open",
+                "inserted": False,
+            },
+        ]
+    )
+
+    result = repository.report_post(
+        post_id=POST_ID,
+        issuer=ISSUER,
+        subject=SUBJECT,
+        reason_code="misinformation",
+    )
+
+    assert result == {
+        "outcome": "duplicate",
+        # The originally recorded reason is the receipt, not the new value.
+        "report_id": REPORT_ID,
+        "reason_code": "privacy_exposure",
+        "status": "open",
+    }
+
+
+def test_report_post_missing_post_and_self_report_short_circuit() -> None:
+    missing, _ = _repo([None])
+    assert missing.report_post(
+        post_id=POST_ID, issuer=ISSUER, subject=SUBJECT, reason_code="misinformation"
+    ) == {"outcome": "missing_post"}
+
+    self_report, executed = _repo([{"author_issuer": ISSUER, "author_subject": SUBJECT}])
+    assert self_report.report_post(
+        post_id=POST_ID, issuer=ISSUER, subject=SUBJECT, reason_code="misinformation"
+    ) == {"outcome": "self_report"}
+    # No INSERT is issued for a self-report.
+    assert all("post_reports" not in sql for sql, _ in executed)
 
 
 def test_repository_without_dsn_is_unavailable() -> None:
@@ -245,6 +405,9 @@ class _UnavailableRepository:
     def toggle_follow(self, **_: Any) -> dict[str, Any]:
         raise CommunityRepositoryUnavailable()
 
+    def report_post(self, **_: Any) -> dict[str, Any]:
+        raise CommunityRepositoryUnavailable()
+
 
 def test_service_maps_repository_unavailability_to_retryable_503() -> None:
     service = CommunityService(_UnavailableRepository())
@@ -257,21 +420,104 @@ def test_service_maps_repository_unavailability_to_retryable_503() -> None:
     assert exc_info.value.retryable is True
 
 
-def test_service_rejects_self_follow_with_422() -> None:
-    service = CommunityService(_UnavailableRepository())
+def test_service_maps_follow_outcomes() -> None:
+    class StubRepository(_UnavailableRepository):
+        def __init__(self, outcome: str) -> None:
+            self.outcome = outcome
 
-    with pytest.raises(ServiceError) as exc_info:
-        service.toggle_follow(
+        def toggle_follow(self, **_: Any) -> dict[str, Any]:
+            return {"outcome": self.outcome}
+
+    followed = CommunityService(StubRepository("followed")).toggle_follow(
+        follower_issuer=ISSUER,
+        follower_subject=SUBJECT,
+        followee_user_id=FOLLOWEE_ID,
+    )
+    assert followed == {"followee_user_id": str(FOLLOWEE_ID), "following": True}
+
+    unfollowed = CommunityService(StubRepository("unfollowed")).toggle_follow(
+        follower_issuer=ISSUER,
+        follower_subject=SUBJECT,
+        followee_user_id=FOLLOWEE_ID,
+    )
+    assert unfollowed == {"followee_user_id": str(FOLLOWEE_ID), "following": False}
+
+    with pytest.raises(ServiceError) as missing_info:
+        CommunityService(StubRepository("missing_followee")).toggle_follow(
             follower_issuer=ISSUER,
             follower_subject=SUBJECT,
-            followee_issuer=ISSUER,
-            followee_subject=SUBJECT,
+            followee_user_id=FOLLOWEE_ID,
         )
+    assert missing_info.value.status_code == 404
+    assert missing_info.value.code == "COMMUNITY_FOLLOWEE_NOT_FOUND"
 
-    assert exc_info.value.status_code == 422
-    assert exc_info.value.code == "INVALID_FOLLOW_TARGET"
-    # Repository is never consulted for self-follow.
-    assert exc_info.value.retryable is False
+    with pytest.raises(ServiceError) as self_info:
+        CommunityService(StubRepository("self_follow")).toggle_follow(
+            follower_issuer=ISSUER,
+            follower_subject=SUBJECT,
+            followee_user_id=FOLLOWEE_ID,
+        )
+    assert self_info.value.status_code == 422
+    assert self_info.value.code == "INVALID_FOLLOW_TARGET"
+    assert self_info.value.retryable is False
+
+
+def test_service_maps_report_outcomes() -> None:
+    class StubRepository(_UnavailableRepository):
+        def __init__(self, outcome: dict[str, Any]) -> None:
+            self.outcome = outcome
+
+        def report_post(self, **_: Any) -> dict[str, Any]:
+            return self.outcome
+
+    created = CommunityService(
+        StubRepository(
+            {
+                "outcome": "created",
+                "report_id": REPORT_ID,
+                "reason_code": "spam_promotion",
+                "status": "open",
+            }
+        )
+    ).report_post(post_id=POST_ID, issuer=ISSUER, subject=SUBJECT, reason_code="spam_promotion")
+    assert created == {
+        "report_id": str(REPORT_ID),
+        "reason_code": "spam_promotion",
+        "status": "open",
+        "duplicate": False,
+    }
+
+    duplicate = CommunityService(
+        StubRepository(
+            {
+                "outcome": "duplicate",
+                "report_id": REPORT_ID,
+                "reason_code": "privacy_exposure",
+                "status": "open",
+            }
+        )
+    ).report_post(post_id=POST_ID, issuer=ISSUER, subject=SUBJECT, reason_code="misinformation")
+    assert duplicate == {
+        "report_id": str(REPORT_ID),
+        "reason_code": "privacy_exposure",
+        "status": "open",
+        "duplicate": True,
+    }
+
+    with pytest.raises(ServiceError) as missing_info:
+        CommunityService(StubRepository({"outcome": "missing_post"})).report_post(
+            post_id=POST_ID, issuer=ISSUER, subject=SUBJECT, reason_code="misinformation"
+        )
+    assert missing_info.value.status_code == 404
+    assert missing_info.value.code == "COMMUNITY_POST_NOT_FOUND"
+
+    with pytest.raises(ServiceError) as self_info:
+        CommunityService(StubRepository({"outcome": "self_report"})).report_post(
+            post_id=POST_ID, issuer=ISSUER, subject=SUBJECT, reason_code="misinformation"
+        )
+    assert self_info.value.status_code == 422
+    assert self_info.value.code == "INVALID_REPORT_TARGET"
+    assert self_info.value.retryable is False
 
 
 def test_service_get_post_maps_missing_row_to_404() -> None:
@@ -291,7 +537,7 @@ def test_service_get_post_maps_missing_row_to_404() -> None:
 def test_service_shapes_post_payload_with_aggregates() -> None:
     class StubRepository(_UnavailableRepository):
         def list_posts(self, **kwargs: Any) -> tuple[list[dict[str, Any]], int]:
-            return ([_post_row(viewer_liked=True)], 1)
+            return ([_post_row(viewer_liked=True, viewer_following=True)], 1)
 
     service = CommunityService(StubRepository())
 
@@ -310,6 +556,7 @@ def test_service_shapes_post_payload_with_aggregates() -> None:
                 "comment_count": 3,
                 "like_count": 5,
                 "viewer_liked": True,
+                "viewer_following": True,
                 "created_at": NOW.isoformat(),
                 "updated_at": NOW.isoformat(),
             }
@@ -326,8 +573,9 @@ class FakeCommunityService:
     def __init__(self) -> None:
         self.created_posts: list[tuple[str, str, str, str, list[str]]] = []
         self.toggled_likes: list[tuple[UUID, str, str]] = []
-        self.follow_calls: list[tuple[str, str, str, str]] = []
-        self.fail_follow_with_self = False
+        self.follow_calls: list[tuple[str, str, UUID]] = []
+        self.report_calls: list[tuple[UUID, str, str, str]] = []
+        self.report_result: dict[str, Any] | None = None
 
     def list_posts(self, **kwargs: Any) -> dict[str, Any]:
         return {"count": 0, "total": 0, "posts": []}
@@ -356,6 +604,7 @@ class FakeCommunityService:
             "comment_count": 0,
             "like_count": 0,
             "viewer_liked": False,
+            "viewer_following": False,
             "created_at": NOW.isoformat(),
             "updated_at": NOW.isoformat(),
         }
@@ -385,14 +634,10 @@ class FakeCommunityService:
             (
                 kwargs["follower_issuer"],
                 kwargs["follower_subject"],
-                kwargs["followee_issuer"],
-                kwargs["followee_subject"],
+                kwargs["followee_user_id"],
             )
         )
-        if (
-            kwargs["follower_issuer"] == kwargs["followee_issuer"]
-            and kwargs["follower_subject"] == kwargs["followee_subject"]
-        ):
+        if kwargs["followee_user_id"] == AUTHOR_ID:
             raise ServiceError(
                 status_code=422,
                 code="INVALID_FOLLOW_TARGET",
@@ -400,6 +645,24 @@ class FakeCommunityService:
                 retryable=False,
             )
         return {"followee_user_id": str(FOLLOWEE_ID), "following": True}
+
+    def report_post(self, **kwargs: Any) -> dict[str, Any]:
+        self.report_calls.append(
+            (
+                kwargs["post_id"],
+                kwargs["issuer"],
+                kwargs["subject"],
+                kwargs["reason_code"],
+            )
+        )
+        if self.report_result is not None:
+            return self.report_result
+        return {
+            "report_id": str(REPORT_ID),
+            "reason_code": kwargs["reason_code"],
+            "status": "open",
+            "duplicate": False,
+        }
 
 
 def _oauth_identity() -> RequestIdentity:
@@ -475,23 +738,7 @@ def test_toggle_like_with_oauth_delegates_identity(client, api_key) -> None:
     assert service.toggled_likes == [(POST_ID, ISSUER, SUBJECT)]
 
 
-def test_toggle_follow_self_target_is_422(client, api_key) -> None:
-    service = FakeCommunityService()
-    _install_fake_service(client, service)
-    client.app.dependency_overrides[require_oauth_identity] = _oauth_identity
-
-    response = client.post(
-        "/api/v1/community/follows",
-        headers={"X-API-Key": api_key},
-        json={"followee_issuer": ISSUER, "followee_subject": SUBJECT},
-    )
-
-    assert response.status_code == 422
-    assert response.json()["error"]["code"] == "INVALID_FOLLOW_TARGET"
-    # The guard runs before any follow is persisted (verified at the service layer).
-
-
-def test_toggle_follow_with_oauth_creates_follow(client, api_key) -> None:
+def test_toggle_follow_rejects_external_identity_fields(client, api_key) -> None:
     service = FakeCommunityService()
     _install_fake_service(client, service)
     client.app.dependency_overrides[require_oauth_identity] = _oauth_identity
@@ -502,9 +749,146 @@ def test_toggle_follow_with_oauth_creates_follow(client, api_key) -> None:
         json={"followee_issuer": "https://other.example", "followee_subject": "other"},
     )
 
+    # Why: issuer/subject must not be addressable on the wire — the only
+    # accepted followee reference is the internal user UUID.
+    assert response.status_code == 422
+    assert service.follow_calls == []
+
+
+def test_toggle_follow_self_target_is_422(client, api_key) -> None:
+    service = FakeCommunityService()
+    _install_fake_service(client, service)
+    client.app.dependency_overrides[require_oauth_identity] = _oauth_identity
+
+    response = client.post(
+        "/api/v1/community/follows",
+        headers={"X-API-Key": api_key},
+        json={"followee_user_id": str(AUTHOR_ID)},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "INVALID_FOLLOW_TARGET"
+    # The guard runs before any follow is persisted (verified at the service layer).
+
+
+def test_toggle_follow_with_oauth_uses_internal_user_uuid(client, api_key) -> None:
+    service = FakeCommunityService()
+    _install_fake_service(client, service)
+    client.app.dependency_overrides[require_oauth_identity] = _oauth_identity
+
+    response = client.post(
+        "/api/v1/community/follows",
+        headers={"X-API-Key": api_key},
+        json={"followee_user_id": str(FOLLOWEE_ID)},
+    )
+
     assert response.status_code == 200
     assert response.json()["data"] == {"followee_user_id": str(FOLLOWEE_ID), "following": True}
-    assert service.follow_calls == [(ISSUER, SUBJECT, "https://other.example", "other")]
+    assert service.follow_calls == [(ISSUER, SUBJECT, FOLLOWEE_ID)]
+
+
+def test_toggle_follow_requires_oauth_identity(client, api_key) -> None:
+    service = FakeCommunityService()
+    _install_fake_service(client, service)
+
+    response = client.post(
+        "/api/v1/community/follows",
+        headers={"X-API-Key": api_key},
+        json={"followee_user_id": str(FOLLOWEE_ID)},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "USER_AUTH_REQUIRED"
+    assert service.follow_calls == []
+
+
+def test_report_post_requires_oauth_identity(client, api_key) -> None:
+    service = FakeCommunityService()
+    _install_fake_service(client, service)
+
+    response = client.post(
+        f"/api/v1/community/posts/{POST_ID}/reports",
+        headers={"X-API-Key": api_key},
+        json={"reason_code": "spam_promotion"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "USER_AUTH_REQUIRED"
+    assert service.report_calls == []
+
+
+@pytest.mark.parametrize(
+    ("payload", "code"),
+    [
+        ({"reason_code": "not_a_real_reason"}, "literal_error"),
+        ({"reason_code": "spam_promotion", "body": "raw free text"}, "extra_forbidden"),
+        ({"reason_code": "spam_promotion", "note": "raw free text"}, "extra_forbidden"),
+        ({}, "missing"),
+    ],
+)
+def test_report_post_rejects_unknown_reason_and_free_text(client, api_key, payload, code) -> None:
+    service = FakeCommunityService()
+    _install_fake_service(client, service)
+    client.app.dependency_overrides[require_oauth_identity] = _oauth_identity
+
+    response = client.post(
+        f"/api/v1/community/posts/{POST_ID}/reports",
+        headers={"X-API-Key": api_key},
+        json=payload,
+    )
+
+    assert response.status_code == 422
+    assert service.report_calls == []
+
+
+def test_report_post_with_oauth_returns_idempotent_receipt(client, api_key) -> None:
+    service = FakeCommunityService()
+    service.report_result = {
+        "report_id": str(REPORT_ID),
+        "reason_code": "spam_promotion",
+        "status": "open",
+        "duplicate": True,
+    }
+    _install_fake_service(client, service)
+    client.app.dependency_overrides[require_oauth_identity] = _oauth_identity
+
+    response = client.post(
+        f"/api/v1/community/posts/{POST_ID}/reports",
+        headers={"X-API-Key": api_key},
+        json={"reason_code": "spam_promotion"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"] == {
+        "report_id": str(REPORT_ID),
+        "reason_code": "spam_promotion",
+        "status": "open",
+        "duplicate": True,
+    }
+    assert service.report_calls == [(POST_ID, ISSUER, SUBJECT, "spam_promotion")]
+
+
+def test_report_post_not_found_maps_to_404_envelope(client, api_key) -> None:
+    class MissingService(FakeCommunityService):
+        def report_post(self, **kwargs: Any) -> dict[str, Any]:
+            raise ServiceError(
+                status_code=404,
+                code="COMMUNITY_POST_NOT_FOUND",
+                message="Community post was not found.",
+                retryable=False,
+            )
+
+    _install_fake_service(client, MissingService())
+    client.app.dependency_overrides[require_oauth_identity] = _oauth_identity
+
+    response = client.post(
+        f"/api/v1/community/posts/{POST_ID}/reports",
+        headers={"X-API-Key": api_key},
+        json={"reason_code": "spam_promotion"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "COMMUNITY_POST_NOT_FOUND"
 
 
 def test_service_unavailability_is_returned_as_503_envelope(client, api_key) -> None:

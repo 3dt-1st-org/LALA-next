@@ -90,10 +90,9 @@ class ChatWsClient {
     if (channel == null) return;
     final text = body.trim();
     if (text.isEmpty) return;
-    channel.sink.add(jsonEncode(<String, dynamic>{
-      'type': 'message',
-      'body': text,
-    }));
+    channel.sink.add(
+      jsonEncode(<String, dynamic>{'type': 'message', 'body': text}),
+    );
   }
 
   /// 연결을 명시적으로 종료한다. 이후 재연결 시도는 하지 않는다.
@@ -178,8 +177,7 @@ class ChatWsClient {
     final uri = _activeUri;
     if (uri == null || _manuallyClosed) return;
     if (reconnectDelays.isEmpty) return;
-    final index =
-        _reconnectAttempt < reconnectDelays.length
+    final index = _reconnectAttempt < reconnectDelays.length
         ? _reconnectAttempt
         : reconnectDelays.length - 1;
     final delay = reconnectDelays[index];
