@@ -7,6 +7,8 @@ import 'package:lala_next_app/features/preferences/domain/travel_preferences.dar
 import 'package:lala_next_app/features/preferences/data/travel_preferences_remote.dart';
 
 const String kTravelPreferencesStorageKey = 'lala.travel_preferences.v1';
+const String kTravelPreferencesUpdatedAtKey =
+    'lala.travel_preferences.v1.updated_at';
 
 typedef SharedPreferencesFactory = Future<SharedPreferences> Function();
 
@@ -37,6 +39,7 @@ class TravelPreferencesStore extends ChangeNotifier {
   bool _hasLocalDocument = false;
   TravelPreferencesRemote? _remote;
   TravelPreferencesRemoteDocument? _serverDocument;
+  String? _deviceUpdatedAt;
   TravelPreferencesSyncStatus _syncStatus =
       TravelPreferencesSyncStatus.localOnly;
   int _syncEpoch = 0;
@@ -46,6 +49,10 @@ class TravelPreferencesStore extends ChangeNotifier {
   bool get hasLocalDocument => _hasLocalDocument;
   TravelPreferencesSyncStatus get syncStatus => _syncStatus;
   int? get serverRevision => _serverDocument?.revision;
+  TravelPreferences? get accountPreferences => _serverDocument?.preferences;
+  String? get accountUpdatedAt => _serverDocument?.updatedAt;
+  String? get deviceUpdatedAt => _deviceUpdatedAt;
+  bool get accountConnected => _remote != null;
 
   Future<void> ensureLoaded() => _loadFuture ??= _load();
 
@@ -56,6 +63,9 @@ class TravelPreferencesStore extends ChangeNotifier {
       if (raw != null) {
         _value = TravelPreferences.fromJson(jsonDecode(raw));
         _hasLocalDocument = true;
+        _deviceUpdatedAt = preferences.getString(
+          kTravelPreferencesUpdatedAtKey,
+        );
       }
     } on Object {
       _value = const TravelPreferences();
@@ -75,13 +85,20 @@ class TravelPreferencesStore extends ChangeNotifier {
     }
   }
 
-  Future<void> _saveLocal(TravelPreferences next) async {
+  Future<void> _saveLocal(TravelPreferences next, {String? updatedAt}) async {
     final preferences = await _preferencesFactory();
+    final resolvedUpdatedAt =
+        updatedAt ?? DateTime.now().toUtc().toIso8601String();
     await preferences.setString(
       kTravelPreferencesStorageKey,
       jsonEncode(next.toJson()),
     );
+    await preferences.setString(
+      kTravelPreferencesUpdatedAtKey,
+      resolvedUpdatedAt,
+    );
     _value = next;
+    _deviceUpdatedAt = resolvedUpdatedAt;
     _loaded = true;
     _hasLocalDocument = true;
     notifyListeners();
@@ -116,7 +133,7 @@ class TravelPreferencesStore extends ChangeNotifier {
     if (server == null) {
       return;
     }
-    await _saveLocal(server.preferences);
+    await _saveLocal(server.preferences, updatedAt: server.updatedAt);
     _syncStatus = TravelPreferencesSyncStatus.synced;
     notifyListeners();
   }
@@ -146,7 +163,7 @@ class TravelPreferencesStore extends ChangeNotifier {
       if (document == null) {
         _syncStatus = TravelPreferencesSyncStatus.serverEmpty;
       } else if (!_hasLocalDocument) {
-        await _saveLocal(document.preferences);
+        await _saveLocal(document.preferences, updatedAt: document.updatedAt);
         if (epoch != _syncEpoch) {
           return;
         }
@@ -214,7 +231,9 @@ class TravelPreferencesStore extends ChangeNotifier {
   Future<void> clear() async {
     final preferences = await _preferencesFactory();
     await preferences.remove(kTravelPreferencesStorageKey);
+    await preferences.remove(kTravelPreferencesUpdatedAtKey);
     _value = const TravelPreferences();
+    _deviceUpdatedAt = null;
     _loaded = true;
     _hasLocalDocument = false;
     notifyListeners();

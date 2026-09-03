@@ -149,6 +149,8 @@ class LocalSignalPublicItem {
     required this.placeLinks,
     required this.translationAvailable,
     required this.displayLanguage,
+    this.reactionCount = 0,
+    this.commentCount = 0,
   });
 
   final String id;
@@ -164,6 +166,8 @@ class LocalSignalPublicItem {
   final List<LocalSignalPlaceLink> placeLinks;
   final bool translationAvailable;
   final String? displayLanguage;
+  final int reactionCount;
+  final int commentCount;
 
   static LocalSignalPublicItem? fromJson(Object? value) {
     if (value is! Map) return null;
@@ -207,6 +211,71 @@ class LocalSignalPublicItem {
       placeLinks: links,
       translationAvailable: json['translation_available'] == true,
       displayLanguage: _optionalString(json['display_language']),
+      reactionCount: _nonNegativeInt(json['reaction_count']),
+      commentCount: _nonNegativeInt(json['comment_count']),
+    );
+  }
+}
+
+class LocalSignalPublicComment {
+  const LocalSignalPublicComment({
+    required this.id,
+    required this.sourceLanguage,
+    required this.body,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String sourceLanguage;
+  final String body;
+  final String createdAt;
+
+  static LocalSignalPublicComment? fromJson(Object? value) {
+    if (value is! Map) return null;
+    final id = _requiredString(value['id']);
+    final sourceLanguage = _requiredString(value['source_language']);
+    final body = _requiredString(value['body']);
+    final createdAt = _requiredString(value['created_at']);
+    if (id == null ||
+        sourceLanguage == null ||
+        body == null ||
+        createdAt == null) {
+      return null;
+    }
+    return LocalSignalPublicComment(
+      id: id,
+      sourceLanguage: sourceLanguage,
+      body: body,
+      createdAt: createdAt,
+    );
+  }
+}
+
+class LocalSignalCommentFeed {
+  const LocalSignalCommentFeed({
+    required this.items,
+    required this.nextCursor,
+    required this.hasMore,
+  });
+
+  final List<LocalSignalPublicComment> items;
+  final String? nextCursor;
+  final bool hasMore;
+
+  static LocalSignalCommentFeed fromJson(Object? value) {
+    if (value is! Map) {
+      throw const FormatException('Invalid Local Signal comment feed.');
+    }
+    final rawItems = value['items'];
+    return LocalSignalCommentFeed(
+      items: rawItems is List
+          ? rawItems
+                .map(LocalSignalPublicComment.fromJson)
+                .whereType<LocalSignalPublicComment>()
+                .toList(growable: false)
+          : const <LocalSignalPublicComment>[],
+      nextCursor: _optionalString(value['next_cursor']),
+      hasMore: value['has_more'] == true,
     );
   }
 }
@@ -269,3 +338,5 @@ String? _optionalString(Object? value) {
   final trimmed = value.trim();
   return trimmed.isEmpty ? null : trimmed;
 }
+
+int _nonNegativeInt(Object? value) => value is int && value >= 0 ? value : 0;

@@ -283,6 +283,173 @@ class LalaApiClient {
     return _envelopeFromResponse<Map<String, dynamic>>(resp, parseData: _asMap);
   }
 
+  Future<LalaEnvelope<Map<String, dynamic>>> getLocalSignal({
+    required String signalId,
+    String language = 'ko',
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'GET',
+      '/api/v1/community/signals/${Uri.encodeComponent(signalId)}',
+      query: {'language': language},
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+    );
+    return _envelopeFromResponse<Map<String, dynamic>>(resp, parseData: _asMap);
+  }
+
+  Future<LalaEnvelope<Map<String, dynamic>>> getLocalSignalComments({
+    required String signalId,
+    String language = 'ko',
+    int limit = 20,
+    String? cursor,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final query = <String, dynamic>{
+      'language': language,
+      'limit': '$limit',
+      if ((cursor ?? '').trim().isNotEmpty) 'cursor': cursor!.trim(),
+    };
+    final resp = await _request(
+      'GET',
+      '/api/v1/community/signals/${Uri.encodeComponent(signalId)}/comments',
+      query: query,
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+    );
+    return _envelopeFromResponse<Map<String, dynamic>>(resp, parseData: _asMap);
+  }
+
+  Future<LalaEnvelope<Map<String, dynamic>>> createLocalSignalDraft({
+    required Map<String, dynamic> draft,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'POST',
+      '/api/v1/community/signals',
+      body: draft,
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+      contentType: 'application/json',
+    );
+    return _envelopeFromResponse<Map<String, dynamic>>(resp, parseData: _asMap);
+  }
+
+  Future<LalaEnvelope<Map<String, dynamic>>> updateLocalSignalDraft({
+    required String signalId,
+    required Map<String, dynamic> patch,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'PATCH',
+      '/api/v1/community/signals/${Uri.encodeComponent(signalId)}',
+      body: patch,
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+      contentType: 'application/json',
+    );
+    return _envelopeFromResponse<Map<String, dynamic>>(resp, parseData: _asMap);
+  }
+
+  Future<LalaEnvelope<Map<String, dynamic>>> submitLocalSignalDraft({
+    required String signalId,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'POST',
+      '/api/v1/community/signals/${Uri.encodeComponent(signalId)}/submit',
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+    );
+    return _envelopeFromResponse<Map<String, dynamic>>(resp, parseData: _asMap);
+  }
+
+  Future<LalaEnvelope<Map<String, dynamic>>> deleteLocalSignalDraft({
+    required String signalId,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'DELETE',
+      '/api/v1/community/signals/${Uri.encodeComponent(signalId)}',
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+    );
+    return _envelopeFromResponse<Map<String, dynamic>>(resp, parseData: _asMap);
+  }
+
+  Future<LalaEnvelope<Map<String, dynamic>>> setLocalSignalReaction({
+    required String signalId,
+    required String reactionType,
+    required bool active,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      active ? 'PUT' : 'DELETE',
+      '/api/v1/community/signals/${Uri.encodeComponent(signalId)}/reactions/'
+      '${Uri.encodeComponent(reactionType)}',
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+    );
+    return _envelopeFromResponse<Map<String, dynamic>>(resp, parseData: _asMap);
+  }
+
+  Future<LalaEnvelope<Map<String, dynamic>>> setLocalSignalSaved({
+    required String signalId,
+    required bool active,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      active ? 'PUT' : 'DELETE',
+      '/api/v1/community/signals/${Uri.encodeComponent(signalId)}/save',
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+    );
+    return _envelopeFromResponse<Map<String, dynamic>>(resp, parseData: _asMap);
+  }
+
+  Future<LalaEnvelope<Map<String, dynamic>>> createLocalSignalComment({
+    required String signalId,
+    required String sourceLanguage,
+    required String body,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'POST',
+      '/api/v1/community/signals/${Uri.encodeComponent(signalId)}/comments',
+      body: {'source_language': sourceLanguage, 'body': body},
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+      contentType: 'application/json',
+    );
+    return _envelopeFromResponse<Map<String, dynamic>>(resp, parseData: _asMap);
+  }
+
+  Future<LalaEnvelope<Map<String, dynamic>>> reportLocalSignal({
+    required String signalId,
+    required String reasonCode,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'POST',
+      '/api/v1/community/signals/${Uri.encodeComponent(signalId)}/reports',
+      body: {'reason_code': reasonCode},
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+      contentType: 'application/json',
+    );
+    return _envelopeFromResponse<Map<String, dynamic>>(resp, parseData: _asMap);
+  }
+
   /// Governed system aggregates (per-place weekly review-mention counts).
   /// Aggregate-only projection: the response shape carries no raw reviews,
   /// authors, external keys, or URLs by construction.

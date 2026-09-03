@@ -133,7 +133,11 @@ class _ProfilePageState extends State<ProfilePage> {
               _SyncNotice(
                 status: syncStatus,
                 language: language,
-                onTap: () => context.push(LalaRoutePaths.travelPreferences),
+                onTap: () => context.push(
+                  syncStatus == TravelPreferencesSyncStatus.conflict
+                      ? LalaRoutePaths.preferenceSyncConflict
+                      : LalaRoutePaths.travelPreferences,
+                ),
               ),
             ],
             const SizedBox(height: LalaVisualTokens.sectionGap),
