@@ -146,14 +146,23 @@ class _CommunityPostDetailPageState extends State<CommunityPostDetailPage> {
     try {
       final envelope = await _client.toggleCommunityLike(postId: current.id);
       final state = envelope.data;
+      // Why: an ok envelope without data cannot confirm the new reaction —
+      // treating it as an invalid response rolls the optimistic toggle back
+      // and states the failure instead of silently keeping the local guess.
+      if (state == null) {
+        throw const LalaApiException(
+          code: 'INVALID_RESPONSE',
+          message: 'Like response carried no data.',
+          statusCode: 200,
+          retryable: true,
+        );
+      }
       if (!mounted) return;
       setState(() {
-        if (state != null) {
-          _post = current.copyWithReactions(
-            viewerLiked: state.liked,
-            likeCount: state.likeCount,
-          );
-        }
+        _post = current.copyWithReactions(
+          viewerLiked: state.liked,
+          likeCount: state.likeCount,
+        );
         _likeBusy = false;
       });
     } on Object {
@@ -202,14 +211,21 @@ class _CommunityPostDetailPageState extends State<CommunityPostDetailPage> {
         body: text,
       );
       final created = envelope.data;
+      // Why: an ok envelope without data never echoed the created comment —
+      // routing it into the API-failure branch keeps the typed text and
+      // reports the failure instead of clearing the composer as if it posted.
+      if (created == null) {
+        throw const LalaApiException(
+          code: 'INVALID_RESPONSE',
+          message: 'Comment response carried no data.',
+          statusCode: 200,
+          retryable: true,
+        );
+      }
       if (!mounted) return;
       setState(() {
-        if (created != null) {
-          _comments = <CommunityComment>[..._comments, created];
-          _post = _post!.copyWithReactions(
-            commentCount: _post!.commentCount + 1,
-          );
-        }
+        _comments = <CommunityComment>[..._comments, created];
+        _post = _post!.copyWithReactions(commentCount: _post!.commentCount + 1);
         _commentBusy = false;
       });
       _commentController.clear();

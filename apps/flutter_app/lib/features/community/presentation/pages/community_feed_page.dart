@@ -94,6 +94,9 @@ class _CommunityFeedPageState extends State<CommunityFeedPage> {
       setState(() {
         _status = _FeedStatus.loading;
         _error = null;
+        // Why: a full reload replaces the list, so a stale pagination failure
+        // must not resurface as a retry row on the refreshed feed.
+        _loadMoreFailed = false;
       });
     }
     try {
