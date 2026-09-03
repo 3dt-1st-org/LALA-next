@@ -4,6 +4,24 @@ import 'package:flutter/services.dart';
 import 'package:lala_next_app/app/lala_visual_tokens.dart';
 import 'package:lala_next_app/features/preferences/domain/travel_preferences.dart';
 
+bool hasRestaurantSafetyRequests(TravelPreferences preferences) =>
+    preferences.dietaryModes.isNotEmpty ||
+    preferences.allergens.isNotEmpty ||
+    preferences.avoidIngredients.trim().isNotEmpty;
+
+/// Korean request text shared by the restaurant card and chat draft helper.
+///
+/// The copy only reflects preferences explicitly stored by the user. It never
+/// infers allergy severity or promises that a restaurant can guarantee safety.
+String buildKoreanRestaurantRequestCard(TravelPreferences preferences) =>
+    _koreanCardText(preferences);
+
+/// A visitor-language mirror of the Korean restaurant request card.
+String buildVisitorRestaurantRequestCard(
+  String language,
+  TravelPreferences preferences,
+) => _visitorCardText(language, preferences);
+
 Future<void> showRestaurantCommunicationSheet({
   required BuildContext context,
   required String language,
@@ -34,15 +52,15 @@ class RestaurantCommunicationSheet extends StatelessWidget {
   final String language;
   final TravelPreferences preferences;
 
-  bool get _hasSafetyRequests =>
-      preferences.dietaryModes.isNotEmpty ||
-      preferences.allergens.isNotEmpty ||
-      preferences.avoidIngredients.trim().isNotEmpty;
+  bool get _hasSafetyRequests => hasRestaurantSafetyRequests(preferences);
 
   @override
   Widget build(BuildContext context) {
-    final koreanCard = _koreanCardText(preferences);
-    final visitorCard = _visitorCardText(language, preferences);
+    final koreanCard = buildKoreanRestaurantRequestCard(preferences);
+    final visitorCard = buildVisitorRestaurantRequestCard(
+      language,
+      preferences,
+    );
 
     return Column(
       children: [
@@ -128,6 +146,35 @@ class RestaurantCommunicationSheet extends StatelessWidget {
                 key: const ValueKey('restaurant-korean-request-card'),
                 text: koreanCard,
                 accent: const Color(0xFFE24A3B),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  key: const ValueKey('restaurant-large-text-mode'),
+                  onPressed: () =>
+                      _showLargeRestaurantCard(context, koreanCard, language),
+                  icon: const Icon(Icons.text_fields_rounded),
+                  label: Text(
+                    _copy(
+                      language,
+                      ko: '큰 글씨로 보여주기',
+                      en: 'Show in large text',
+                      ja: '大きな文字で見せる',
+                      zhHans: '用大字显示',
+                      zhHant: '用大字顯示',
+                    ),
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 48),
+                    foregroundColor: const Color(0xFF0B67D8),
+                    side: const BorderSide(color: Color(0xFF9CC5F3)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
               ),
               if (language != 'ko') ...[
                 const SizedBox(height: 18),
@@ -409,6 +456,116 @@ class _LocalPhrase {
 
   final String korean;
   final String translated;
+}
+
+Future<void> _showLargeRestaurantCard(
+  BuildContext context,
+  String koreanCard,
+  String language,
+) {
+  return showDialog<void>(
+    context: context,
+    useSafeArea: false,
+    builder: (context) => Dialog.fullscreen(
+      backgroundColor: Colors.white,
+      child: SafeArea(
+        child: Column(
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+              child: Row(
+                children: <Widget>[
+                  const SizedBox(width: 44),
+                  Expanded(
+                    child: Text(
+                      _copy(
+                        language,
+                        ko: '직원에게 보여 주세요',
+                        en: 'Show this to staff',
+                        ja: '店員に見せてください',
+                        zhHans: '请给工作人员看',
+                        zhHant: '請給工作人員看',
+                      ),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: LalaVisualColors.ink,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    key: const ValueKey('restaurant-large-text-close'),
+                    tooltip: MaterialLocalizations.of(
+                      context,
+                    ).closeButtonTooltip,
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: SingleChildScrollView(
+                key: const ValueKey('restaurant-large-text-scroll'),
+                padding: const EdgeInsets.fromLTRB(22, 24, 22, 24),
+                child: Container(
+                  key: const ValueKey('restaurant-large-text-card'),
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(22),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFFBF5),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: const Color(0xFFE24A3B),
+                      width: 2,
+                    ),
+                  ),
+                  child: SelectableText(
+                    koreanCard,
+                    style: const TextStyle(
+                      color: LalaVisualColors.ink,
+                      fontSize: 26,
+                      height: 1.55,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+              decoration: const BoxDecoration(
+                border: Border(top: BorderSide(color: LalaVisualColors.line)),
+              ),
+              child: SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: FilledButton.icon(
+                  key: const ValueKey('restaurant-large-text-copy'),
+                  onPressed: () =>
+                      _copyToClipboard(context, koreanCard, language),
+                  icon: const Icon(Icons.copy_outlined),
+                  label: Text(
+                    _copy(
+                      language,
+                      ko: '한국어 문구 복사',
+                      en: 'Copy Korean text',
+                      ja: '韓国語をコピー',
+                      zhHans: '复制韩语文字',
+                      zhHant: '複製韓語文字',
+                    ),
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 List<_LocalPhrase> _localPhrases(String language) => [

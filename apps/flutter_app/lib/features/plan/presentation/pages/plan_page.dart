@@ -28,6 +28,7 @@ import 'package:lala_next_app/features/place/widgets/empty_place_state.dart';
 import 'package:lala_next_app/features/planner/planner_helpers.dart';
 import 'package:lala_next_app/features/planner/spend_band_helpers.dart';
 import 'package:lala_next_app/features/planner/widgets/plan_slot_tile.dart';
+import 'package:lala_next_app/features/planner/widgets/plan_timeline_entry.dart';
 import 'package:lala_next_app/features/planner/widgets/planner_loading_card.dart';
 import 'package:lala_next_app/features/planner/widgets/planner_overview_card.dart';
 import 'package:lala_next_app/features/trip_library/domain/trip_library_models.dart';
@@ -1122,16 +1123,26 @@ class _PlanContent extends StatelessWidget {
             ),
           ),
         const SizedBox(height: 12),
-        ...visibleSlots.map((slot) {
+        ...List<Widget>.generate(visibleSlots.length, (index) {
+          final slot = visibleSlots[index];
           // V5-B VISIT/SPEND: per-slot visit status (persisted in SlotVisitStore)
           // and offline category-band estimate. planDate follows the user's
           // current calendar day so trip settings and visit records do not
           // appear one day behind around local midnight.
           final planDate = tripLibraryDateKey();
           final band = spendBandFor(slot, language);
-          return Padding(
+          return PlanTimelineEntry(
             key: ValueKey('plan-slot-${slot.place?.placeId ?? slot.period}'),
-            padding: const EdgeInsets.only(bottom: 10),
+            first: index == 0,
+            last: index == visibleSlots.length - 1,
+            positionLabel: lalaCopyMulti(
+              language,
+              ko: '일정 ${index + 1}/${visibleSlots.length}',
+              en: 'Plan stop ${index + 1} of ${visibleSlots.length}',
+              ja: '予定 ${index + 1}/${visibleSlots.length}',
+              zhHans: '行程 ${index + 1}/${visibleSlots.length}',
+              zhHant: '行程 ${index + 1}/${visibleSlots.length}',
+            ),
             child: PlanSlotTile(
               slot: slot,
               language: language,
