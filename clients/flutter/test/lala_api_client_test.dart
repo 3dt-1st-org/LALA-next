@@ -1678,8 +1678,7 @@ void main() {
     expect(requests.first.uri.path, '/api/v1/me/plans');
     expect(requests.first.uri.queryParameters['before'], '2026-09-01');
     expect(requests.first.uri.queryParameters['limit'], '10');
-    expect(requests.last.uri.path,
-        '/api/v1/me/plans/2026-08-14/preferences');
+    expect(requests.last.uri.path, '/api/v1/me/plans/2026-08-14/preferences');
     expect(requests.last.data, {
       'expected_revision': 0,
       'override': {'version': 1, 'pace': 'balanced'},
@@ -1727,6 +1726,123 @@ void main() {
       'place_id': 'p1',
       'use_for_recommendations': false,
     });
+  });
+
+  // F-080 community follow/report contracts.
+
+  test('toggleCommunityFollow POSTs only the internal user UUID', () async {
+    final requests = <RequestOptions>[];
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      bearerToken: 'follow-token',
+      dio: _dio(
+        (request) async => _json({
+          'ok': true,
+          'data': {
+            'followee_user_id': '22222222-2222-4222-8222-222222222222',
+            'following': true,
+          },
+          'meta': {'request_id': 'follow-id'},
+          'error': null,
+        }),
+        sink: requests.add,
+      ),
+    );
+
+    final envelope = await client.toggleCommunityFollow(
+      followeeUserId: '22222222-2222-4222-8222-222222222222',
+    );
+
+    expect(requests.single.method, 'POST');
+    expect(requests.single.uri.path, '/api/v1/community/follows');
+    // The body must not carry issuer/subject or any other external identity.
+    expect(requests.single.data, {
+      'followee_user_id': '22222222-2222-4222-8222-222222222222',
+    });
+    expect(envelope.data?.following, isTrue);
+    expect(
+      envelope.data?.followeeUserId,
+      '22222222-2222-4222-8222-222222222222',
+    );
+  });
+
+  test('reportCommunityPost POSTs a bounded reason code and parses the receipt',
+      () async {
+    final requests = <RequestOptions>[];
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      bearerToken: 'report-token',
+      dio: _dio(
+        (request) async => _json({
+          'ok': true,
+          'data': {
+            'report_id': '33333333-3333-4333-8333-333333333333',
+            'reason_code': 'privacy_exposure',
+            'status': 'open',
+            'duplicate': true,
+          },
+          'meta': {'request_id': 'report-id'},
+          'error': null,
+        }),
+        sink: requests.add,
+      ),
+    );
+
+    final envelope = await client.reportCommunityPost(
+      postId: 'post-1',
+      reasonCode: 'privacy_exposure',
+    );
+
+    expect(requests.single.method, 'POST');
+    expect(requests.single.uri.path, '/api/v1/community/posts/post-1/reports');
+    // No free-text field is ever serialized onto the wire.
+    expect(requests.single.data, {'reason_code': 'privacy_exposure'});
+    expect(envelope.data?.duplicate, isTrue);
+    expect(envelope.data?.reasonCode, 'privacy_exposure');
+    expect(envelope.data?.status, 'open');
+    expect(
+      envelope.data?.reportId,
+      '33333333-3333-4333-8333-333333333333',
+    );
+  });
+
+  test('CommunityPost parses viewer_following and copyWith keeps it honest',
+      () {
+    final post = CommunityPost.fromJsonObject(const {
+      'id': 'post-1',
+      'author_user_id': '22222222-2222-4222-8222-222222222222',
+      'title': 't',
+      'body': 'b',
+      'tags': <String>['tips'],
+      'like_count': 2,
+      'comment_count': 1,
+      'viewer_liked': true,
+      'viewer_following': true,
+      'created_at': '2026-09-03T00:00:00Z',
+    });
+    expect(post.viewerLiked, isTrue);
+    expect(post.viewerFollowing, isTrue);
+
+    final toggled = post.copyWithReactions(viewerFollowing: false);
+    expect(toggled.viewerFollowing, isFalse);
+    // Untouched reaction state is preserved by the copy.
+    expect(toggled.viewerLiked, isTrue);
+    expect(toggled.likeCount, 2);
+
+    // A guest payload without viewer_following degrades to false, not an
+    // invented following state.
+    final guest = CommunityPost.fromJsonObject(const {
+      'id': 'post-2',
+      'author_user_id': '22222222-2222-4222-8222-222222222222',
+      'title': 't',
+      'body': 'b',
+      'tags': <String>[],
+      'like_count': 0,
+      'comment_count': 0,
+      'viewer_liked': false,
+      'created_at': '2026-09-03T00:00:00Z',
+    });
+    expect(guest.viewerFollowing, isFalse);
   });
 }
 
