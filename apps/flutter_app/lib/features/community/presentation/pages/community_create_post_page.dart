@@ -6,15 +6,20 @@ import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/features/community/presentation/community_api.dart';
+import 'package:lala_next_app/features/community/presentation/community_auth_guard.dart';
+import 'package:lala_next_app/auth/auth_controller.dart';
+import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 
 class CommunityCreatePostPage extends StatefulWidget {
   const CommunityCreatePostPage({
     this.initialConfig = const LalaAppConfig.fromEnvironment(),
+    this.authController,
     super.key,
   });
 
   final LalaAppConfig initialConfig;
+  final LalaAuthController? authController;
 
   @override
   State<CommunityCreatePostPage> createState() =>
@@ -51,7 +56,7 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
     super.dispose();
   }
 
-  String get _language => _config.lang;
+  String get _language => OnboardingState.language;
 
   bool get _canSubmit {
     if (_busy) return false;
@@ -84,6 +89,24 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
     final title = _titleController.text.trim();
     final body = _bodyController.text.trim();
     if (title.isEmpty || body.isEmpty || _busy) return;
+    final outcome = await requestCommunityAuthentication(
+      context,
+      controller: widget.authController,
+      language: _language,
+      actionLabel: lalaCopyMulti(
+        _language,
+        ko: '게시',
+        en: 'publishing',
+        ja: '投稿',
+        zhHans: '发布',
+        zhHant: '發布',
+      ),
+    );
+    if (!mounted) return;
+    if (outcome != CommunityAuthOutcome.alreadyAuthenticated) {
+      if (outcome == CommunityAuthOutcome.signedInNow) setState(() {});
+      return;
+    }
     setState(() => _busy = true);
     try {
       await _client.createCommunityPost(
@@ -93,18 +116,25 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
       );
       if (!mounted) return;
       Navigator.of(context).pop(true);
-    } on LalaApiException catch (e) {
+    } on LalaApiException {
       if (!mounted) return;
       setState(() => _busy = false);
       _showSnack(
-        e.message.trim().isEmpty
-            ? lalaCopy(_language, ko: '게시에 실패했어요.', en: 'Failed to publish.')
-            : e.message,
+        lalaCopyMulti(
+          _language,
+          ko: '게시에 실패했어요. 내용은 유지됐습니다.',
+          en: 'Failed to publish. Your draft is still here.',
+          ja: '投稿できませんでした。入力内容は保持されています。',
+          zhHans: '发布失败，草稿已保留。',
+          zhHant: '發布失敗，草稿已保留。',
+        ),
       );
     } on Object {
       if (!mounted) return;
       setState(() => _busy = false);
-      _showSnack(lalaCopy(_language, ko: '게시에 실패했어요.', en: 'Failed to publish.'));
+      _showSnack(
+        lalaCopy(_language, ko: '게시에 실패했어요.', en: 'Failed to publish.'),
+      );
     }
   }
 
@@ -132,14 +162,17 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: FilledButton(
+              key: const ValueKey('community-post-submit'),
               onPressed: _canSubmit ? _submit : null,
               style: FilledButton.styleFrom(
                 backgroundColor: theme.colorScheme.primary,
                 foregroundColor: theme.colorScheme.onPrimary,
                 disabledBackgroundColor: const Color(0xFFE2E8F0),
                 textStyle: const TextStyle(fontWeight: FontWeight.w900),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
               ),
               child: _busy
                   ? const SizedBox(
@@ -160,14 +193,40 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
           children: [
+            if (!isCommunityAuthenticated(widget.authController)) ...<Widget>[
+              Container(
+                key: const ValueKey('community-create-auth-notice'),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF7ED),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFFED7AA)),
+                ),
+                child: Text(
+                  lalaCopyMulti(
+                    _language,
+                    ko: '작성 내용은 보존돼요. 게시할 때 Logto 로그인을 연결합니다.',
+                    en: 'Your draft is preserved. LALA asks for Logto sign-in when you publish.',
+                    ja: '入力内容は保持されます。投稿時にLogtoログインを案内します。',
+                    zhHans: '草稿会保留，发布时将提示连接 Logto 登录。',
+                    zhHant: '草稿會保留，發布時將提示連結 Logto 登入。',
+                  ),
+                  style: const TextStyle(
+                    color: Color(0xFF9A3412),
+                    height: 1.35,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+            ],
             TextField(
               controller: _titleController,
               maxLength: 160,
               textInputAction: TextInputAction.next,
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
-                labelText:
-                    lalaCopy(_language, ko: '제목', en: 'Title'),
+                labelText: lalaCopy(_language, ko: '제목', en: 'Title'),
                 labelStyle: const TextStyle(fontWeight: FontWeight.w800),
                 alignLabelWithHint: true,
                 filled: true,
@@ -182,8 +241,10 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
-                  borderSide:
-                      BorderSide(color: theme.colorScheme.primary, width: 1.6),
+                  borderSide: BorderSide(
+                    color: theme.colorScheme.primary,
+                    width: 1.6,
+                  ),
                 ),
               ),
             ),
@@ -195,8 +256,7 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
               maxLines: 12,
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
-                labelText:
-                    lalaCopy(_language, ko: '본문', en: 'Body'),
+                labelText: lalaCopy(_language, ko: '본문', en: 'Body'),
                 labelStyle: const TextStyle(fontWeight: FontWeight.w800),
                 alignLabelWithHint: true,
                 filled: true,
@@ -211,8 +271,10 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
-                  borderSide:
-                      BorderSide(color: theme.colorScheme.primary, width: 1.6),
+                  borderSide: BorderSide(
+                    color: theme.colorScheme.primary,
+                    width: 1.6,
+                  ),
                 ),
               ),
             ),
@@ -252,18 +314,18 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
                       ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide:
-                            const BorderSide(color: Color(0xFFE2E8F0)),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide:
-                            const BorderSide(color: Color(0xFFE2E8F0)),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide(
-                            color: theme.colorScheme.primary, width: 1.6),
+                          color: theme.colorScheme.primary,
+                          width: 1.6,
+                        ),
                       ),
                     ),
                   ),

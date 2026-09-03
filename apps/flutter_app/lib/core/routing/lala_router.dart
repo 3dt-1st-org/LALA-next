@@ -314,7 +314,10 @@ GoRouter createLalaRouter({
       GoRoute(
         path: LalaRoutePaths.community,
         builder: (BuildContext context, GoRouterState state) =>
-            CommunityFeedPage(initialConfig: initialConfig),
+            CommunityFeedPage(
+              initialConfig: initialConfig,
+              authController: authController,
+            ),
       ),
       GoRoute(
         path: LalaRoutePaths.communityPost,
@@ -323,25 +326,36 @@ GoRouter createLalaRouter({
           return CommunityPostDetailPage(
             postId: postId,
             initialConfig: initialConfig,
+            authController: authController,
           );
         },
       ),
       GoRoute(
         path: LalaRoutePaths.communityCreate,
         builder: (BuildContext context, GoRouterState state) =>
-            CommunityCreatePostPage(initialConfig: initialConfig),
+            CommunityCreatePostPage(
+              initialConfig: initialConfig,
+              authController: authController,
+            ),
       ),
       // --- ONMU P3c: 커뮤니티 채팅 push 라우트 ---
       GoRoute(
         path: LalaRoutePaths.communityChat,
         builder: (BuildContext context, GoRouterState state) =>
-            ChatRoomListPage(initialConfig: initialConfig),
+            ChatRoomListPage(
+              initialConfig: initialConfig,
+              authController: authController,
+            ),
       ),
       GoRoute(
         path: LalaRoutePaths.communityChatRoom,
         builder: (BuildContext context, GoRouterState state) {
           final roomId = state.pathParameters['id'] ?? '';
-          return ChatRoomPage(roomId: roomId, initialConfig: initialConfig);
+          return ChatRoomPage(
+            roomId: roomId,
+            initialConfig: initialConfig,
+            authController: authController,
+          );
         },
       ),
     ],
