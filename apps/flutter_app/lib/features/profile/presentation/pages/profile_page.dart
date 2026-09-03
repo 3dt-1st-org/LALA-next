@@ -10,7 +10,6 @@ import 'package:lala_next_app/core/state/saved_place_store.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/features/preferences/data/travel_preferences_store.dart';
 import 'package:lala_next_app/features/preferences/domain/travel_preferences.dart';
-import 'package:lala_next_app/features/settings/widgets/privacy_details_sheet.dart';
 import 'package:lala_next_app/features/trip_library/data/trip_library_store.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 
@@ -262,7 +261,29 @@ class _ProfilePageState extends State<ProfilePage> {
                       zhHans: '隐私与位置',
                       zhHant: '隱私與位置',
                     ),
-                    onTap: () => showPrivacyDetailsSheet(context, language),
+                    onTap: () => context.push(LalaRoutePaths.privacyLocation),
+                  ),
+                  const Divider(height: 1, indent: 56),
+                  _ProfileMenuRow(
+                    key: const ValueKey('profile-community-entry'),
+                    icon: Icons.groups_outlined,
+                    title: lalaCopyMulti(
+                      language,
+                      ko: '여행자 커뮤니티',
+                      en: 'Traveler community',
+                      ja: '旅行者コミュニティ',
+                      zhHans: '旅行者社区',
+                      zhHant: '旅行者社群',
+                    ),
+                    subtitle: lalaCopyMulti(
+                      language,
+                      ko: '사용자 대화 · 검증된 Local Signal과 달라요',
+                      en: 'User conversations, separate from verified Local Signals',
+                      ja: 'ユーザーの会話・検証済みLocal Signalsとは別です',
+                      zhHans: '用户对话，与已验证的 Local Signals 不同',
+                      zhHant: '使用者對話，與已驗證的 Local Signals 不同',
+                    ),
+                    onTap: () => context.push(LalaRoutePaths.community),
                   ),
                   const Divider(height: 1, indent: 56),
                   _ProfileMenuRow(
@@ -567,11 +588,13 @@ class _ProfileMenuRow extends StatelessWidget {
     required this.title,
     required this.onTap,
     this.value,
+    this.subtitle,
   });
 
   final IconData icon;
   final String title;
   final String? value;
+  final String? subtitle;
   final VoidCallback onTap;
 
   @override
@@ -587,6 +610,15 @@ class _ProfileMenuRow extends StatelessWidget {
           fontWeight: FontWeight.w800,
         ),
       ),
+      subtitle: subtitle == null
+          ? null
+          : Text(
+              subtitle!,
+              style: const TextStyle(
+                color: LalaVisualColors.muted,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[

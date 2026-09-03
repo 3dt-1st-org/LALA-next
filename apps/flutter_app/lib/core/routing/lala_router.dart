@@ -36,6 +36,7 @@ import 'package:lala_next_app/features/preferences/presentation/travel_preferenc
 import 'package:lala_next_app/features/preferences/presentation/preference_sync_conflict_page.dart';
 import 'package:lala_next_app/features/profile/presentation/pages/account_page.dart';
 import 'package:lala_next_app/features/profile/presentation/pages/profile_page.dart';
+import 'package:lala_next_app/features/settings/presentation/pages/privacy_location_page.dart';
 import 'package:lala_next_app/features/trip_library/presentation/pages/past_trips_page.dart';
 import 'package:lala_next_app/features/trip_library/presentation/pages/saved_places_page.dart';
 import 'package:lala_next_app/features/trip_library/presentation/pages/trip_settings_page.dart';
@@ -257,6 +258,11 @@ GoRouter createLalaRouter({
         path: LalaRoutePaths.preferenceSyncConflict,
         builder: (BuildContext context, GoRouterState state) =>
             PreferenceSyncConflictPage(language: OnboardingState.language),
+      ),
+      GoRoute(
+        path: LalaRoutePaths.privacyLocation,
+        builder: (BuildContext context, GoRouterState state) =>
+            PrivacyLocationPage(authController: authController),
       ),
       GoRoute(
         path: LalaRoutePaths.savedPlaces,

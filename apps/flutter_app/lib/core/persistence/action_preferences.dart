@@ -229,11 +229,13 @@ class ActionPersistence {
   static VoidCallback? _savedPlacesDisposer;
   static VoidCallback? _slotVisitsDisposer;
   static bool _attached = false;
+  static ActionPreferences? _preferences;
 
   /// Attaches write-through listeners and hydrates the holders from [prefs].
   static Future<void> attachAndHydrate(ActionPreferences prefs) async {
     detach();
     _attached = true;
+    _preferences = prefs;
     final epochAtLoadStart = _epoch;
 
     _savedPlacesDisposer = _listen(
@@ -244,7 +246,8 @@ class ActionPersistence {
     );
     _slotVisitsDisposer = _listen(
       SlotVisitStore.listenable,
-      () => unawaited(_safeWrite(prefs.writeSlotVisits(SlotVisitStore.current))),
+      () =>
+          unawaited(_safeWrite(prefs.writeSlotVisits(SlotVisitStore.current))),
     );
 
     final snapshot = await prefs.load();
@@ -268,6 +271,14 @@ class ActionPersistence {
     _savedPlacesDisposer = null;
     _slotVisitsDisposer = null;
     _attached = false;
+    _preferences = null;
+  }
+
+  /// Clears the persisted and process-local guest action state.
+  static Future<void> clearAndFlush() async {
+    SavedPlaceStore.clear();
+    SlotVisitStore.clear();
+    await _preferences?.clearAll();
   }
 
   static VoidCallback _listen(

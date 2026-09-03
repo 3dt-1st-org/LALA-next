@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app/bootstrap.dart';
 import 'app/lala_app.dart';
+import 'features/settings/data/privacy_settings_store.dart';
 
 // 테스트(test/widget_test.dart)가 main.dart import 로 접근하던 public 심볼 호환용 re-export.
 export 'app/lala_app.dart' show LalaApp;
@@ -44,6 +45,7 @@ Future<void> main() async {
   // frame and the tabs seed from a retained manual region. Storage failure is
   // swallowed inside bootstrapAppState (clean first-run); the app always starts.
   await bootstrapAppState();
+  await PrivacySettingsStore.instance.ensureLoaded();
   // C2: Riverpod 루트. feature 컨트롤러(C3)가 ProviderScope 하위에서 동작한다.
   runApp(const ProviderScope(child: LalaApp()));
 }
