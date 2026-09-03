@@ -726,7 +726,7 @@ class _CommunityPostCard extends StatelessWidget {
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
-                      shortAuthorLabel(post.authorUserId),
+                      authorDisplayLabel(language),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.labelSmall?.copyWith(

@@ -585,7 +585,7 @@ class _PostDetailHeader extends StatelessWidget {
               ),
               const SizedBox(width: 4),
               Text(
-                shortAuthorLabel(post.authorUserId),
+                authorDisplayLabel(language),
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: const Color(0xFF64748B),
                   fontWeight: FontWeight.w800,
@@ -827,7 +827,7 @@ class _CommentTile extends StatelessWidget {
               const SizedBox(width: 4),
               Flexible(
                 child: Text(
-                  shortAuthorLabel(comment.authorUserId),
+                  authorDisplayLabel(language),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.labelSmall?.copyWith(

@@ -570,6 +570,12 @@ void main() {
     expect(tester.takeException(), isNull);
 
     await _fillAndSave(tester);
+    // The save must genuinely land at 200% too: the governed receipt line
+    // appears (proving the press reached the button) and stays overflow-free.
+    expect(
+      find.byKey(const ValueKey('local-signal-draft-receipt-status')),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 }
@@ -588,7 +594,13 @@ Future<void> _fillAndSave(
     body,
   );
   await tester.pump();
-  await tester.tap(find.byKey(const ValueKey('local-signal-draft-save')));
+  // At large text scales the save button sits below the fold of the composer
+  // scroll view; scrolling it into view keeps the tap a real press instead
+  // of a silently missed off-screen pointer event.
+  final saveFinder = find.byKey(const ValueKey('local-signal-draft-save'));
+  await tester.ensureVisible(saveFinder);
+  await tester.pumpAndSettle();
+  await tester.tap(saveFinder, warnIfMissed: true);
   await tester.pumpAndSettle();
 }
 

@@ -47,9 +47,19 @@ String formatRelativeTime(String iso, String language) {
   return '${local.year}-${two(local.month)}-${two(local.day)}';
 }
 
-/// 작성자 식별자를 짧게 축약(UUID 앞 8자리). 화면 표시용.
-String shortAuthorLabel(String authorUserId) {
-  if (authorUserId.isEmpty) return '';
-  if (authorUserId.length <= 8) return authorUserId;
-  return authorUserId.substring(0, 8);
+/// 작성자 화면 표시 라벨. 통신 계약은 내부 사용자 UUID(author_user_id)만 전달하며
+/// 그 식별자는 팔로우·신고 같은 동작 대상으로만 쓰이고 화면에는 노출하지 않는다.
+/// 아직 프로필 표시명 필드가 계약에 없으므로 실명이 있을 때만 쓰고, 없으면 신원을
+/// 추정하지 않는 중립 라벨(현지화 '여행자')을 보여준다.
+String authorDisplayLabel(String language, {String? profileDisplayName}) {
+  final name = profileDisplayName?.trim();
+  if (name != null && name.isNotEmpty) return name;
+  return lalaCopyMulti(
+    language,
+    ko: '여행자',
+    en: 'Traveler',
+    ja: '旅行者',
+    zhHans: '旅行者',
+    zhHant: '旅行者',
+  );
 }
