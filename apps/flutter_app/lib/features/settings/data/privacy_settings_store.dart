@@ -53,4 +53,11 @@ class PrivacySettingsStore extends ChangeNotifier {
       // The in-memory choice remains authoritative for this session.
     }
   }
+
+  @visibleForTesting
+  void resetForTesting() {
+    _loadFuture = null;
+    _loaded = false;
+    _locationRecommendationsEnabled = true;
+  }
 }
