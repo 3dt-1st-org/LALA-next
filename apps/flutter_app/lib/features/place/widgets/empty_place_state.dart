@@ -19,10 +19,13 @@ class EmptyPlaceState extends StatelessWidget {
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Text(
-        lalaCopy(
+        lalaCopyMulti(
           language,
           ko: '이 주변 추천을 준비 중입니다.',
           en: 'Recommendations are still being prepared here.',
+          ja: 'この周辺のおすすめを準備中です。',
+          zhHans: '正在准备这附近的推荐。',
+          zhHant: '正在準備這附近的推薦。',
         ),
       ),
     );

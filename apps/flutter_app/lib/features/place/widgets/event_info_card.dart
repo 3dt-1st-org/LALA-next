@@ -47,7 +47,14 @@ class EventInfoCard extends StatelessWidget {
               const SizedBox(width: 9),
               Expanded(
                 child: Text(
-                  lalaCopy(language, ko: '행사 정보', en: 'Event info'),
+                  lalaCopyMulti(
+                    language,
+                    ko: '행사 정보',
+                    en: 'Event info',
+                    ja: 'イベント情報',
+                    zhHans: '活动信息',
+                    zhHant: '活動資訊',
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
@@ -70,10 +77,13 @@ class EventInfoCard extends StatelessWidget {
             const SizedBox(height: 8),
             InlineIconText(
               icon: Icons.near_me_disabled_outlined,
-              label: lalaCopy(
+              label: lalaCopyMulti(
                 language,
                 ko: '정확한 좌표가 없어 시 중심 위치로 표시돼요',
                 en: 'Exact coordinates are unavailable, so the city center is shown.',
+                ja: '正確な座標がないため、市の中心位置で表示しています。',
+                zhHans: '没有准确坐标，因此显示为市中心位置。',
+                zhHant: '沒有準確座標，因此顯示為市中心位置。',
               ),
             ),
           ],
@@ -86,7 +96,14 @@ class EventInfoCard extends StatelessWidget {
                     launchUrl(eventUrl, mode: LaunchMode.externalApplication),
                 icon: const Icon(Icons.open_in_new, size: 18),
                 label: Text(
-                  lalaCopy(language, ko: '행사 상세 보기', en: 'Open event details'),
+                  lalaCopyMulti(
+                    language,
+                    ko: '행사 상세 보기',
+                    en: 'Open event details',
+                    ja: 'イベント詳細を見る',
+                    zhHans: '查看活动详情',
+                    zhHant: '查看活動詳情',
+                  ),
                 ),
                 style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFF2B6CB0),

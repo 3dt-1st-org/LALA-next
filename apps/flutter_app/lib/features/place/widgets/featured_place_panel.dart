@@ -67,10 +67,13 @@ class FeaturedPlacePanel extends StatelessWidget {
     if (currentPlace == null) {
       return MutedSheetCard(
         icon: Icons.place_outlined,
-        label: lalaCopy(
+        label: lalaCopyMulti(
           language,
           ko: '이 주변 추천을 준비 중입니다. 지도를 움직이거나 잠시 뒤 다시 시도해 주세요.',
           en: 'Recommendations are still being prepared here. Move the map or try again shortly.',
+          ja: 'この周辺のおすすめを準備中です。地図を動かすか、しばらくしてからもう一度お試しください。',
+          zhHans: '正在准备这附近的推荐。请移动地图或稍后重试。',
+          zhHant: '正在準備這附近的推薦。請移動地圖或稍後再試。',
         ),
       );
     }
@@ -137,8 +140,22 @@ class FeaturedPlacePanel extends StatelessWidget {
             ),
             label: Text(
               showEvidence
-                  ? lalaCopy(language, ko: '점수/근거 숨기기', en: 'Hide signals')
-                  : lalaCopy(language, ko: '점수/근거 보기', en: 'Show signals'),
+                  ? lalaCopyMulti(
+                      language,
+                      ko: '점수/근거 숨기기',
+                      en: 'Hide signals',
+                      ja: 'スコア・根拠を隠す',
+                      zhHans: '隐藏评分和依据',
+                      zhHant: '隱藏評分和依據',
+                    )
+                  : lalaCopyMulti(
+                      language,
+                      ko: '점수/근거 보기',
+                      en: 'Show signals',
+                      ja: 'スコア・根拠を見る',
+                      zhHans: '查看评分和依据',
+                      zhHant: '查看評分和依據',
+                    ),
             ),
             style: OutlinedButton.styleFrom(
               foregroundColor: const Color(0xFF1A202C),

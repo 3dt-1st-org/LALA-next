@@ -7,7 +7,8 @@ import 'package:lala_next_app/features/place/widgets/proof_chip.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 
 class PublicDataProofRow extends StatelessWidget {
-  const PublicDataProofRow({super.key,
+  const PublicDataProofRow({
+    super.key,
     required this.place,
     required this.language,
     required this.source,
@@ -37,8 +38,22 @@ class PublicDataProofRow extends StatelessWidget {
           weather: weather,
           score: score,
         )
-        ? lalaCopy(language, ko: '제한적 데이터 근거', en: 'Limited data evidence')
-        : lalaCopy(language, ko: '공식 데이터 근거', en: 'Official data evidence');
+        ? lalaCopyMulti(
+            language,
+            ko: '제한적 데이터 근거',
+            en: 'Limited data evidence',
+            ja: '限定的なデータ根拠',
+            zhHans: '有限数据依据',
+            zhHant: '有限數據依據',
+          )
+        : lalaCopyMulti(
+            language,
+            ko: '공식 데이터 근거',
+            en: 'Official data evidence',
+            ja: '公式データ根拠',
+            zhHans: '官方数据依据',
+            zhHant: '官方數據依據',
+          );
     return Container(
       padding: const EdgeInsets.all(11),
       decoration: BoxDecoration(
