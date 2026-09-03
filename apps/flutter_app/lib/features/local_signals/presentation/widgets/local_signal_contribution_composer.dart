@@ -30,6 +30,7 @@ class LocalSignalContributionComposer extends StatefulWidget {
     this.placeContext,
     this.regionContext,
     this.onInputStateChanged,
+    this.ownsPopGuard = true,
     super.key,
   });
 
@@ -40,6 +41,13 @@ class LocalSignalContributionComposer extends StatefulWidget {
   /// was acknowledged with the Done action, so hosts can tell a finished
   /// submission apart from a close, discard, or delete.
   final ValueChanged<bool> onClose;
+
+  /// Whether this widget installs its own PopScope. Modal hosts (bottom
+  /// sheet) keep the default; a host that already guards the enclosing route
+  /// (e.g. the contribution page) must disable it — two PopScopes on one
+  /// route would both react to a blocked pop and open the discard dialog
+  /// twice.
+  final bool ownsPopGuard;
 
   /// Mirrors the unsaved-input/busy guard to page hosts that own their own
   /// close affordances (e.g. an AppBar back button), so every exit path runs
@@ -331,372 +339,372 @@ class _LocalSignalContributionComposerState
     // Back/system-pop protection mirrors the explicit close: clean input may
     // pop straight away; dirty input must pass the discard confirmation. A
     // busy composer blocks the pop until the request settles.
+    Widget body = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                _copy(
+                  widget.language,
+                  ko: '경험 초안',
+                  en: 'Experience draft',
+                  ja: '体験の下書き',
+                  zhHans: '体验草稿',
+                  zhHant: '體驗草稿',
+                ),
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              key: const ValueKey('local-signal-composer-close'),
+              tooltip: _copy(
+                widget.language,
+                ko: '닫기',
+                en: 'Close',
+                ja: '閉じる',
+                zhHans: '关闭',
+                zhHant: '關閉',
+              ),
+              onPressed: _busy ? null : _requestClose,
+              icon: const Icon(Icons.close_rounded),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          _copy(
+            widget.language,
+            ko: '한국어와 영어 원문을 지원합니다. 외국어 화면에서는 영어 원문으로 제출돼요.',
+            en: 'Original contributions currently support Korean and English.',
+            ja: '現在、原文投稿は韓国語と英語に対応しています。',
+            zhHans: '目前原创投稿支持韩文和英文。',
+            zhHant: '目前原創投稿支援韓文與英文。',
+          ),
+          style: const TextStyle(color: LalaVisualColors.muted),
+        ),
+        const SizedBox(height: 12),
+        _ContextLine(
+          language: widget.language,
+          placeContext: widget.placeContext,
+          regionContext: widget.regionContext,
+        ),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<LocalSignalKind>(
+          key: const ValueKey('local-signal-draft-kind'),
+          // Why: without isExpanded the selected-item row sizes intrinsically
+          // and overflows the field at large text scales.
+          isExpanded: true,
+          initialValue: _kind,
+          decoration: InputDecoration(
+            labelText: _copy(
+              widget.language,
+              ko: '경험 유형',
+              en: 'Experience type',
+              ja: '体験の種類',
+              zhHans: '体验类型',
+              zhHant: '體驗類型',
+            ),
+            border: const OutlineInputBorder(),
+          ),
+          items: LocalSignalKind.values
+              .map(
+                (kind) => DropdownMenuItem<LocalSignalKind>(
+                  value: kind,
+                  child: Text(kind.label(widget.language)),
+                ),
+              )
+              .toList(growable: false),
+          onChanged: submitted || _busy
+              ? null
+              : (value) => setState(() => _kind = value ?? _kind),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          key: const ValueKey('local-signal-draft-title'),
+          controller: _title,
+          enabled: !submitted && !_busy,
+          maxLength: 160,
+          onChanged: (_) {
+            setState(() => _dirtySinceSave = true);
+            _notifyInputState();
+          },
+          decoration: InputDecoration(
+            labelText: _copy(
+              widget.language,
+              ko: '제목',
+              en: 'Title',
+              ja: 'タイトル',
+              zhHans: '标题',
+              zhHant: '標題',
+            ),
+            errorText: _validationShown && !_titleValid
+                ? _copy(
+                    widget.language,
+                    ko: '제목을 입력해 주세요',
+                    en: 'Enter a title',
+                    ja: 'タイトルを入力してください',
+                    zhHans: '请输入标题',
+                    zhHant: '請輸入標題',
+                  )
+                : null,
+            border: const OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          key: const ValueKey('local-signal-draft-body'),
+          controller: _body,
+          enabled: !submitted && !_busy,
+          minLines: 4,
+          maxLines: 8,
+          maxLength: 4000,
+          onChanged: (_) {
+            setState(() => _dirtySinceSave = true);
+            _notifyInputState();
+          },
+          decoration: InputDecoration(
+            labelText: _copy(
+              widget.language,
+              ko: '언제 무엇을 확인했는지 적어 주세요',
+              en: 'Describe what you observed and when',
+              ja: 'いつ何を確認したか記入してください',
+              zhHans: '请说明何时观察到什么',
+              zhHant: '請說明何時觀察到什麼',
+            ),
+            errorText: _validationShown && !_bodyValid
+                ? _copy(
+                    widget.language,
+                    ko: '본문을 입력해 주세요',
+                    en: 'Describe your observation',
+                    ja: '本文を入力してください',
+                    zhHans: '请输入正文',
+                    zhHant: '請輸入內文',
+                  )
+                : null,
+            border: const OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<LocalSignalCommercialDisclosure>(
+          key: const ValueKey('local-signal-draft-disclosure'),
+          isExpanded: true,
+          initialValue: _disclosure,
+          decoration: InputDecoration(
+            labelText: _copy(
+              widget.language,
+              ko: '상업 관계 고지',
+              en: 'Commercial disclosure',
+              ja: '商業関係の開示',
+              zhHans: '商业关系披露',
+              zhHant: '商業關係揭露',
+            ),
+            border: const OutlineInputBorder(),
+          ),
+          items: LocalSignalCommercialDisclosure.values
+              .map(
+                (value) => DropdownMenuItem(
+                  value: value,
+                  child: Text(
+                    value == LocalSignalCommercialDisclosure.none
+                        ? _copy(
+                            widget.language,
+                            ko: '해당 없음',
+                            en: 'None',
+                            ja: 'なし',
+                            zhHans: '无',
+                            zhHant: '無',
+                          )
+                        : value.label(widget.language),
+                  ),
+                ),
+              )
+              .toList(growable: false),
+          onChanged: submitted || _busy
+              ? null
+              : (value) => setState(() => _disclosure = value ?? _disclosure),
+        ),
+        const SizedBox(height: 8),
+        CheckboxListTile(
+          key: const ValueKey('local-signal-draft-aggregate-opt-in'),
+          contentPadding: EdgeInsets.zero,
+          value: _aggregateOptIn,
+          onChanged: submitted || _busy
+              ? null
+              : (value) => setState(() => _aggregateOptIn = value ?? false),
+          title: Text(
+            _copy(
+              widget.language,
+              ko: '익명 집계에 포함하는 데 동의',
+              en: 'Allow anonymous aggregate use',
+              ja: '匿名集計への利用に同意',
+              zhHans: '同意用于匿名汇总',
+              zhHant: '同意用於匿名彙總',
+            ),
+          ),
+          subtitle: Text(
+            _copy(
+              widget.language,
+              ko: '원문과 작성자 정보는 집계에 공개되지 않아요.',
+              en: 'Raw text and author identity are never exposed in aggregates.',
+              ja: '原文や著者情報は集計に公開されません。',
+              zhHans: '汇总中不会公开原文或作者身份。',
+              zhHant: '彙總中不會公開原文或作者身分。',
+            ),
+          ),
+        ),
+        if (_safeError != null) ...<Widget>[
+          const SizedBox(height: 8),
+          Text(
+            _safeError!,
+            key: const ValueKey('local-signal-draft-error'),
+            style: const TextStyle(
+              color: Color(0xFFBE123C),
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+        if (_receipt != null) ...<Widget>[
+          const SizedBox(height: 8),
+          Text(
+            // Moderation transparency: the receipt's governed status,
+            // review state, and visibility are labeled, never invented —
+            // unknown wire values render as the raw contract value.
+            _copy(
+              widget.language,
+              ko: '상태: ${_receipt!.statusLabel(widget.language)} · 검수: ${_receipt!.moderationStateLabel(widget.language)} · 공개 범위: ${_receipt!.visibilityLabel(widget.language)}',
+              en: 'Status: ${_receipt!.statusLabel(widget.language)} · Review: ${_receipt!.moderationStateLabel(widget.language)} · Visibility: ${_receipt!.visibilityLabel(widget.language)}',
+              ja: '状態: ${_receipt!.statusLabel(widget.language)} · 審査: ${_receipt!.moderationStateLabel(widget.language)} · 公開範囲: ${_receipt!.visibilityLabel(widget.language)}',
+              zhHans:
+                  '状态：${_receipt!.statusLabel(widget.language)} · 审核：${_receipt!.moderationStateLabel(widget.language)} · 可见性：${_receipt!.visibilityLabel(widget.language)}',
+              zhHant:
+                  '狀態：${_receipt!.statusLabel(widget.language)} · 審核：${_receipt!.moderationStateLabel(widget.language)} · 可見性：${_receipt!.visibilityLabel(widget.language)}',
+            ),
+            key: const ValueKey('local-signal-draft-receipt-status'),
+            style: const TextStyle(
+              color: LalaVisualColors.muted,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+        const SizedBox(height: 16),
+        if (submitted)
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              key: const ValueKey('local-signal-draft-done'),
+              onPressed: () => _requestClose(submitted: true),
+              icon: const Icon(Icons.check_rounded),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(0, LalaVisualTokens.actionHeight),
+              ),
+              label: Text(
+                _copy(
+                  widget.language,
+                  ko: '완료',
+                  en: 'Done',
+                  ja: '完了',
+                  zhHans: '完成',
+                  zhHant: '完成',
+                ),
+              ),
+            ),
+          )
+        else ...<Widget>[
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              key: const ValueKey('local-signal-draft-save'),
+              onPressed: _busy ? null : _save,
+              icon: _busy
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.save_outlined),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(0, LalaVisualTokens.actionHeight),
+              ),
+              label: Text(
+                _receipt == null
+                    ? _copy(
+                        widget.language,
+                        ko: '비공개 초안 저장',
+                        en: 'Save private draft',
+                        ja: '非公開の下書きを保存',
+                        zhHans: '保存私密草稿',
+                        zhHant: '儲存私密草稿',
+                      )
+                    : _copy(
+                        widget.language,
+                        ko: '초안 수정 저장',
+                        en: 'Update draft',
+                        ja: '下書きを更新',
+                        zhHans: '更新草稿',
+                        zhHant: '更新草稿',
+                      ),
+              ),
+            ),
+          ),
+          if (_receipt != null) ...<Widget>[
+            const SizedBox(height: 10),
+            // Stacked (not side by side) so 200% text-scale labels never
+            // overflow a fixed two-column row.
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                key: const ValueKey('local-signal-draft-delete'),
+                onPressed: _busy ? null : _delete,
+                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
+                child: Text(
+                  _copy(
+                    widget.language,
+                    ko: '초안 삭제',
+                    en: 'Delete draft',
+                    ja: '下書きを削除',
+                    zhHans: '删除草稿',
+                    zhHant: '刪除草稿',
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                key: const ValueKey('local-signal-draft-submit'),
+                onPressed: _busy ? null : _submit,
+                style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
+                child: Text(
+                  _copy(
+                    widget.language,
+                    ko: '검수 요청',
+                    en: 'Submit for review',
+                    ja: '審査を依頼',
+                    zhHans: '提交审核',
+                    zhHant: '提交審核',
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ],
+    );
+    if (!widget.ownsPopGuard) return body;
     return PopScope(
       canPop: !_dirtySinceSave && !_busy,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _requestClose();
       },
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Expanded(
-                child: Text(
-                  _copy(
-                    widget.language,
-                    ko: '경험 초안',
-                    en: 'Experience draft',
-                    ja: '体験の下書き',
-                    zhHans: '体验草稿',
-                    zhHant: '體驗草稿',
-                  ),
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                key: const ValueKey('local-signal-composer-close'),
-                tooltip: _copy(
-                  widget.language,
-                  ko: '닫기',
-                  en: 'Close',
-                  ja: '閉じる',
-                  zhHans: '关闭',
-                  zhHant: '關閉',
-                ),
-                onPressed: _busy ? null : _requestClose,
-                icon: const Icon(Icons.close_rounded),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            _copy(
-              widget.language,
-              ko: '한국어와 영어 원문을 지원합니다. 외국어 화면에서는 영어 원문으로 제출돼요.',
-              en: 'Original contributions currently support Korean and English.',
-              ja: '現在、原文投稿は韓国語と英語に対応しています。',
-              zhHans: '目前原创投稿支持韩文和英文。',
-              zhHant: '目前原創投稿支援韓文與英文。',
-            ),
-            style: const TextStyle(color: LalaVisualColors.muted),
-          ),
-          const SizedBox(height: 12),
-          _ContextLine(
-            language: widget.language,
-            placeContext: widget.placeContext,
-            regionContext: widget.regionContext,
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<LocalSignalKind>(
-            key: const ValueKey('local-signal-draft-kind'),
-            // Why: without isExpanded the selected-item row sizes intrinsically
-            // and overflows the field at large text scales.
-            isExpanded: true,
-            initialValue: _kind,
-            decoration: InputDecoration(
-              labelText: _copy(
-                widget.language,
-                ko: '경험 유형',
-                en: 'Experience type',
-                ja: '体験の種類',
-                zhHans: '体验类型',
-                zhHant: '體驗類型',
-              ),
-              border: const OutlineInputBorder(),
-            ),
-            items: LocalSignalKind.values
-                .map(
-                  (kind) => DropdownMenuItem<LocalSignalKind>(
-                    value: kind,
-                    child: Text(kind.label(widget.language)),
-                  ),
-                )
-                .toList(growable: false),
-            onChanged: submitted || _busy
-                ? null
-                : (value) => setState(() => _kind = value ?? _kind),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            key: const ValueKey('local-signal-draft-title'),
-            controller: _title,
-            enabled: !submitted && !_busy,
-            maxLength: 160,
-            onChanged: (_) {
-              setState(() => _dirtySinceSave = true);
-              _notifyInputState();
-            },
-            decoration: InputDecoration(
-              labelText: _copy(
-                widget.language,
-                ko: '제목',
-                en: 'Title',
-                ja: 'タイトル',
-                zhHans: '标题',
-                zhHant: '標題',
-              ),
-              errorText: _validationShown && !_titleValid
-                  ? _copy(
-                      widget.language,
-                      ko: '제목을 입력해 주세요',
-                      en: 'Enter a title',
-                      ja: 'タイトルを入力してください',
-                      zhHans: '请输入标题',
-                      zhHant: '請輸入標題',
-                    )
-                  : null,
-              border: const OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            key: const ValueKey('local-signal-draft-body'),
-            controller: _body,
-            enabled: !submitted && !_busy,
-            minLines: 4,
-            maxLines: 8,
-            maxLength: 4000,
-            onChanged: (_) {
-              setState(() => _dirtySinceSave = true);
-              _notifyInputState();
-            },
-            decoration: InputDecoration(
-              labelText: _copy(
-                widget.language,
-                ko: '언제 무엇을 확인했는지 적어 주세요',
-                en: 'Describe what you observed and when',
-                ja: 'いつ何を確認したか記入してください',
-                zhHans: '请说明何时观察到什么',
-                zhHant: '請說明何時觀察到什麼',
-              ),
-              errorText: _validationShown && !_bodyValid
-                  ? _copy(
-                      widget.language,
-                      ko: '본문을 입력해 주세요',
-                      en: 'Describe your observation',
-                      ja: '本文を入力してください',
-                      zhHans: '请输入正文',
-                      zhHant: '請輸入內文',
-                    )
-                  : null,
-              border: const OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<LocalSignalCommercialDisclosure>(
-            key: const ValueKey('local-signal-draft-disclosure'),
-            isExpanded: true,
-            initialValue: _disclosure,
-            decoration: InputDecoration(
-              labelText: _copy(
-                widget.language,
-                ko: '상업 관계 고지',
-                en: 'Commercial disclosure',
-                ja: '商業関係の開示',
-                zhHans: '商业关系披露',
-                zhHant: '商業關係揭露',
-              ),
-              border: const OutlineInputBorder(),
-            ),
-            items: LocalSignalCommercialDisclosure.values
-                .map(
-                  (value) => DropdownMenuItem(
-                    value: value,
-                    child: Text(
-                      value == LocalSignalCommercialDisclosure.none
-                          ? _copy(
-                              widget.language,
-                              ko: '해당 없음',
-                              en: 'None',
-                              ja: 'なし',
-                              zhHans: '无',
-                              zhHant: '無',
-                            )
-                          : value.label(widget.language),
-                    ),
-                  ),
-                )
-                .toList(growable: false),
-            onChanged: submitted || _busy
-                ? null
-                : (value) => setState(() => _disclosure = value ?? _disclosure),
-          ),
-          const SizedBox(height: 8),
-          CheckboxListTile(
-            key: const ValueKey('local-signal-draft-aggregate-opt-in'),
-            contentPadding: EdgeInsets.zero,
-            value: _aggregateOptIn,
-            onChanged: submitted || _busy
-                ? null
-                : (value) => setState(() => _aggregateOptIn = value ?? false),
-            title: Text(
-              _copy(
-                widget.language,
-                ko: '익명 집계에 포함하는 데 동의',
-                en: 'Allow anonymous aggregate use',
-                ja: '匿名集計への利用に同意',
-                zhHans: '同意用于匿名汇总',
-                zhHant: '同意用於匿名彙總',
-              ),
-            ),
-            subtitle: Text(
-              _copy(
-                widget.language,
-                ko: '원문과 작성자 정보는 집계에 공개되지 않아요.',
-                en: 'Raw text and author identity are never exposed in aggregates.',
-                ja: '原文や著者情報は集計に公開されません。',
-                zhHans: '汇总中不会公开原文或作者身份。',
-                zhHant: '彙總中不會公開原文或作者身分。',
-              ),
-            ),
-          ),
-          if (_safeError != null) ...<Widget>[
-            const SizedBox(height: 8),
-            Text(
-              _safeError!,
-              key: const ValueKey('local-signal-draft-error'),
-              style: const TextStyle(
-                color: Color(0xFFBE123C),
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
-          if (_receipt != null) ...<Widget>[
-            const SizedBox(height: 8),
-            Text(
-              // Moderation transparency: the receipt's governed status,
-              // review state, and visibility are labeled, never invented —
-              // unknown wire values render as the raw contract value.
-              _copy(
-                widget.language,
-                ko: '상태: ${_receipt!.statusLabel(widget.language)} · 검수: ${_receipt!.moderationStateLabel(widget.language)} · 공개 범위: ${_receipt!.visibilityLabel(widget.language)}',
-                en: 'Status: ${_receipt!.statusLabel(widget.language)} · Review: ${_receipt!.moderationStateLabel(widget.language)} · Visibility: ${_receipt!.visibilityLabel(widget.language)}',
-                ja: '状態: ${_receipt!.statusLabel(widget.language)} · 審査: ${_receipt!.moderationStateLabel(widget.language)} · 公開範囲: ${_receipt!.visibilityLabel(widget.language)}',
-                zhHans:
-                    '状态：${_receipt!.statusLabel(widget.language)} · 审核：${_receipt!.moderationStateLabel(widget.language)} · 可见性：${_receipt!.visibilityLabel(widget.language)}',
-                zhHant:
-                    '狀態：${_receipt!.statusLabel(widget.language)} · 審核：${_receipt!.moderationStateLabel(widget.language)} · 可見性：${_receipt!.visibilityLabel(widget.language)}',
-              ),
-              key: const ValueKey('local-signal-draft-receipt-status'),
-              style: const TextStyle(
-                color: LalaVisualColors.muted,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-          const SizedBox(height: 16),
-          if (submitted)
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                key: const ValueKey('local-signal-draft-done'),
-                onPressed: () => _requestClose(submitted: true),
-                icon: const Icon(Icons.check_rounded),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(0, LalaVisualTokens.actionHeight),
-                ),
-                label: Text(
-                  _copy(
-                    widget.language,
-                    ko: '완료',
-                    en: 'Done',
-                    ja: '完了',
-                    zhHans: '完成',
-                    zhHant: '完成',
-                  ),
-                ),
-              ),
-            )
-          else ...<Widget>[
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                key: const ValueKey('local-signal-draft-save'),
-                onPressed: _busy ? null : _save,
-                icon: _busy
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.save_outlined),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(0, LalaVisualTokens.actionHeight),
-                ),
-                label: Text(
-                  _receipt == null
-                      ? _copy(
-                          widget.language,
-                          ko: '비공개 초안 저장',
-                          en: 'Save private draft',
-                          ja: '非公開の下書きを保存',
-                          zhHans: '保存私密草稿',
-                          zhHant: '儲存私密草稿',
-                        )
-                      : _copy(
-                          widget.language,
-                          ko: '초안 수정 저장',
-                          en: 'Update draft',
-                          ja: '下書きを更新',
-                          zhHans: '更新草稿',
-                          zhHant: '更新草稿',
-                        ),
-                ),
-              ),
-            ),
-            if (_receipt != null) ...<Widget>[
-              const SizedBox(height: 10),
-              // Stacked (not side by side) so 200% text-scale labels never
-              // overflow a fixed two-column row.
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  key: const ValueKey('local-signal-draft-delete'),
-                  onPressed: _busy ? null : _delete,
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(0, 48),
-                  ),
-                  child: Text(
-                    _copy(
-                      widget.language,
-                      ko: '초안 삭제',
-                      en: 'Delete draft',
-                      ja: '下書きを削除',
-                      zhHans: '删除草稿',
-                      zhHant: '刪除草稿',
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  key: const ValueKey('local-signal-draft-submit'),
-                  onPressed: _busy ? null : _submit,
-                  style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
-                  child: Text(
-                    _copy(
-                      widget.language,
-                      ko: '검수 요청',
-                      en: 'Submit for review',
-                      ja: '審査を依頼',
-                      zhHans: '提交审核',
-                      zhHant: '提交審核',
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ],
-      ),
+      child: body,
     );
   }
 }

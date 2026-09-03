@@ -7,6 +7,7 @@ import '../../../../app/lala_visual_tokens.dart';
 import '../../../../auth/auth_controller.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/navigation/local_signal_action.dart';
+import '../../../../core/routing/lala_route_paths.dart';
 import '../../../../shared/l10n/lala_copy.dart';
 import '../../data/local_signal_participation_repository.dart';
 import '../../domain/local_signal_aggregate.dart';
@@ -410,8 +411,22 @@ class _LocalSignalDetailPageState extends State<LocalSignalDetailPage> {
       ),
       body: _buildBody(),
     );
-    if (auth == null) return page();
-    return AnimatedBuilder(animation: auth, builder: (context, _) => page());
+    // Contribution mode owns the pop guard at page level: the route can be
+    // the only one on the navigator (go entry / URL restore), so a raw pop
+    // would blank the app and system back must share the AppBar guard.
+    // The embedded composer's own PopScope is disabled to avoid both guards
+    // firing (double discard dialog) on one route.
+    Widget guarded() => _isContribution
+        ? PopScope(
+            canPop: false,
+            onPopInvokedWithResult: (didPop, _) {
+              if (!didPop) _closeContribution();
+            },
+            child: page(),
+          )
+        : page();
+    if (auth == null) return guarded();
+    return AnimatedBuilder(animation: auth, builder: (context, _) => guarded());
   }
 
   /// AppBar back in contribution mode routes through the composer's
@@ -477,7 +492,18 @@ class _LocalSignalDetailPageState extends State<LocalSignalDetailPage> {
       );
       if (discard != true || !mounted) return;
     }
-    context.pop();
+    _exitContribution();
+  }
+
+  /// Leaving contribution mode must never pop an empty navigator: the route
+  /// is reached with `go`, so a web refresh or direct URL leaves this page as
+  /// the only route on the stack. Fall back to the Local Signals tab.
+  void _exitContribution() {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(LalaRoutePaths.localSignals);
+    }
   }
 
   Widget _buildContributionBody() {
@@ -506,7 +532,10 @@ class _LocalSignalDetailPageState extends State<LocalSignalDetailPage> {
               repository: _repository,
               placeContext: arguments?.contributePlace,
               regionContext: arguments?.contributeRegion,
-              onClose: (_) => context.pop(),
+              // The page-level PopScope already routes system back through
+              // the guard; a second one here would double the discard dialog.
+              ownsPopGuard: false,
+              onClose: (_) => _exitContribution(),
               onInputStateChanged: (dirty, busy) {
                 if (mounted &&
                     (dirty != _contributionDirty ||
