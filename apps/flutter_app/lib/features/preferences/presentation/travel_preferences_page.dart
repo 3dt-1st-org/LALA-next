@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:lala_next_app/app/lala_visual_tokens.dart';
+import 'package:lala_next_app/core/routing/lala_route_paths.dart';
 import 'package:lala_next_app/features/preferences/data/travel_preferences_store.dart';
 import 'package:lala_next_app/features/preferences/domain/travel_preferences.dart';
 import 'package:lala_next_app/features/preferences/presentation/restaurant_communication_sheet.dart';
@@ -423,6 +425,8 @@ class _TravelPreferencesPageState extends State<TravelPreferencesPage> {
                         _runSyncAction(_store.useAccountPreferences),
                     onUseDevice: () =>
                         _runSyncAction(_store.saveDevicePreferencesToAccount),
+                    onReviewConflict: () =>
+                        context.push(LalaRoutePaths.preferenceSyncConflict),
                   ),
                   const SizedBox(height: 24),
                   _SectionTitle(
@@ -2459,6 +2463,7 @@ class _AccountSyncCard extends StatelessWidget {
     required this.onRetry,
     required this.onUseAccount,
     required this.onUseDevice,
+    required this.onReviewConflict,
   });
 
   final TravelPreferencesSyncStatus status;
@@ -2468,6 +2473,7 @@ class _AccountSyncCard extends StatelessWidget {
   final VoidCallback onRetry;
   final VoidCallback onUseAccount;
   final VoidCallback onUseDevice;
+  final VoidCallback onReviewConflict;
 
   @override
   Widget build(BuildContext context) {
@@ -2664,6 +2670,27 @@ class _AccountSyncCard extends StatelessWidget {
                 ],
                 if (status == TravelPreferencesSyncStatus.conflict) ...[
                   const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      key: const ValueKey('review-preference-conflict'),
+                      onPressed: busy || hasUnsavedChanges
+                          ? null
+                          : onReviewConflict,
+                      icon: const Icon(Icons.compare_arrows_rounded, size: 18),
+                      label: Text(
+                        _text(
+                          language,
+                          ko: '차이 자세히 보기',
+                          en: 'Review differences',
+                          ja: '違いを詳しく見る',
+                          zhHans: '查看详细差异',
+                          zhHant: '查看詳細差異',
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,

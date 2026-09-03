@@ -29,8 +29,11 @@ import 'package:lala_next_app/features/map_route/presentation/pages/map_route_pa
 import 'package:lala_next_app/features/plan/presentation/pages/plan_page.dart';
 import 'package:lala_next_app/features/search/presentation/pages/search_page.dart';
 import 'package:lala_next_app/features/local_signals/presentation/pages/local_signals_page.dart';
+import 'package:lala_next_app/features/local_signals/presentation/pages/local_signal_detail_page.dart';
+import 'package:lala_next_app/features/intervention/presentation/pages/intervention_comparison_page.dart';
 import 'package:lala_next_app/features/place/presentation/pages/place_detail_page.dart';
 import 'package:lala_next_app/features/preferences/presentation/travel_preferences_page.dart';
+import 'package:lala_next_app/features/preferences/presentation/preference_sync_conflict_page.dart';
 import 'package:lala_next_app/features/profile/presentation/pages/account_page.dart';
 import 'package:lala_next_app/features/profile/presentation/pages/profile_page.dart';
 import 'package:lala_next_app/features/trip_library/presentation/pages/past_trips_page.dart';
@@ -179,6 +182,17 @@ GoRouter createLalaRouter({
                         signalActionController.dispatch(request);
                         context.go(LalaRoutePaths.mapRoute);
                       },
+                      onOpenDetail: (arguments) {
+                        final aggregate = arguments.aggregate;
+                        final detailId =
+                            arguments.signal?.id ??
+                            '${aggregate?.placeId ?? 'aggregate'}-'
+                                '${aggregate?.weekStart ?? 'unknown'}';
+                        context.push(
+                          LalaRoutePaths.localSignalDetailFor(detailId),
+                          extra: arguments,
+                        );
+                      },
                     ),
               ),
             ],
@@ -211,6 +225,23 @@ GoRouter createLalaRouter({
           );
         },
       ),
+      GoRoute(
+        path: LalaRoutePaths.localSignalDetail,
+        builder: (BuildContext context, GoRouterState state) =>
+            LocalSignalDetailPage(
+              signalId: state.pathParameters['signalId'] ?? '',
+              language: OnboardingState.language,
+              initialConfig: initialConfig,
+              arguments: state.extra is LocalSignalDetailArguments
+                  ? state.extra! as LocalSignalDetailArguments
+                  : null,
+              authController: authController,
+              onPlaceAction: (request) {
+                signalActionController.dispatch(request);
+                context.go(LalaRoutePaths.mapRoute);
+              },
+            ),
+      ),
       if (authController != null)
         GoRoute(
           path: LalaRoutePaths.account,
@@ -221,6 +252,11 @@ GoRouter createLalaRouter({
         path: LalaRoutePaths.travelPreferences,
         builder: (BuildContext context, GoRouterState state) =>
             TravelPreferencesPage(language: OnboardingState.language),
+      ),
+      GoRoute(
+        path: LalaRoutePaths.preferenceSyncConflict,
+        builder: (BuildContext context, GoRouterState state) =>
+            PreferenceSyncConflictPage(language: OnboardingState.language),
       ),
       GoRoute(
         path: LalaRoutePaths.savedPlaces,
@@ -248,6 +284,16 @@ GoRouter createLalaRouter({
               slotPeriod: state.pathParameters['slotPeriod'] ?? '',
               slot: state.extra is LalaPlanSlot
                   ? state.extra! as LalaPlanSlot
+                  : null,
+            ),
+      ),
+      GoRoute(
+        path: LalaRoutePaths.interventionComparison,
+        builder: (BuildContext context, GoRouterState state) =>
+            InterventionComparisonPage(
+              language: OnboardingState.language,
+              arguments: state.extra is InterventionComparisonArguments
+                  ? state.extra! as InterventionComparisonArguments
                   : null,
             ),
       ),

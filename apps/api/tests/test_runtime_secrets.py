@@ -45,6 +45,11 @@ def test_operational_profile_ignores_process_secret_and_requires_aws(monkeypatch
 def test_operational_profile_rejects_placeholder_secret(monkeypatch):
     monkeypatch.setenv("LALA_RUNTIME_PROFILE", "api")
     values = {"db_dsn": "<secret>", "guest_access": True}
+    monkeypatch.setattr(
+        aws_secrets,
+        "get_aws_sm_secret_structured",
+        lambda *args, **kwargs: pytest.fail("AWS called for a supplied placeholder"),
+    )
 
     with pytest.raises(runtime_secrets.RuntimeSecretContractError) as exc_info:
         runtime_secrets.validate_secret_contract("api", values)
@@ -58,6 +63,13 @@ def test_api_settings_fail_closed_without_required_aws_contract(monkeypatch):
     monkeypatch.delenv("LALA_GUEST_ACCESS", raising=False)
     monkeypatch.delenv("LALA_PUBLIC_CONTEST_ACCESS", raising=False)
     monkeypatch.setattr(aws_secrets, "get_aws_sm_secret", lambda *args, **kwargs: "")
+    monkeypatch.setattr(
+        aws_secrets,
+        "get_aws_sm_secret_structured",
+        lambda secret_id: aws_secrets.AwsSecretLookupResult(
+            outcome="missing", logical_name=secret_id
+        ),
+    )
 
     with pytest.raises(runtime_secrets.RuntimeSecretContractError) as exc_info:
         Settings.from_env()

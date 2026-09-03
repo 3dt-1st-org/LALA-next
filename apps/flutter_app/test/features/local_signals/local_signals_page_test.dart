@@ -9,6 +9,7 @@ import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/location/region_context.dart';
 import 'package:lala_next_app/core/navigation/local_signal_action.dart';
 import 'package:lala_next_app/features/local_signals/domain/local_signal_public.dart';
+import 'package:lala_next_app/features/local_signals/presentation/pages/local_signal_detail_page.dart';
 import 'package:lala_next_app/features/local_signals/presentation/pages/local_signals_page.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/manual_location_options.dart';
@@ -37,8 +38,7 @@ void main() {
     expect(find.text('로컬 신호를 준비 중이에요'), findsOneWidget);
   });
 
-  testWidgets(
-    'governed aggregates render with provenance, period, and count', (
+  testWidgets('governed aggregates render with provenance, period, and count', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -106,24 +106,27 @@ void main() {
   });
 
   testWidgets(
-    'aggregate read failure shows honest unavailable, feed unaffected', (
-    tester,
-  ) async {
-    // aggregates: null → the fake throws for the aggregate read.
-    await tester.pumpWidget(_app(_SignalsBackend.loaded()));
-    await tester.pumpAndSettle();
+    'aggregate read failure shows honest unavailable, feed unaffected',
+    (tester) async {
+      // aggregates: null → the fake throws for the aggregate read.
+      await tester.pumpWidget(_app(_SignalsBackend.loaded()));
+      await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(const ValueKey('local-signals-aggregates-provenance')),
-      findsNothing,
-    );
-    expect(
-      find.byKey(const ValueKey('local-signals-aggregates-unavailable')),
-      findsOneWidget,
-    );
-    // The signal feed still renders normally.
-    expect(find.byKey(const ValueKey('local-signal-signal-1')), findsOneWidget);
-  });
+      expect(
+        find.byKey(const ValueKey('local-signals-aggregates-provenance')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('local-signals-aggregates-unavailable')),
+        findsOneWidget,
+      );
+      // The signal feed still renders normally.
+      expect(
+        find.byKey(const ValueKey('local-signal-signal-1')),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('available-but-empty aggregates render no aggregate section', (
     tester,
@@ -402,11 +405,37 @@ void main() {
     expect(find.text('로컬 신호'), findsNothing);
     expect(configs.last.lang, 'en');
   });
+
+  testWidgets('public and aggregate cards open typed S-32 detail arguments', (
+    tester,
+  ) async {
+    final opened = <LocalSignalDetailArguments>[];
+    await tester.pumpWidget(
+      _app(
+        _SignalsBackend.loaded(aggregates: _aggregatesPayload()),
+        onOpenDetail: opened.add,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('local-signal-detail-signal-1')),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('local-signal-aggregate-detail-place-1')),
+    );
+
+    expect(opened, hasLength(2));
+    expect(opened.first.signal?.id, 'signal-1');
+    expect(opened.last.aggregate?.placeId, 'place-1');
+    expect(opened.last.aggregateEnvelope?.available, isTrue);
+  });
 }
 
 Widget _app(
   LalaBackend backend, {
   ValueChanged<LocalSignalPlaceActionRequest>? onPlaceAction,
+  ValueChanged<LocalSignalDetailArguments>? onOpenDetail,
 }) {
   return MaterialApp(
     home: Scaffold(
@@ -415,6 +444,7 @@ Widget _app(
         initialConfig: const LalaAppConfig(baseUri: 'https://api.example.test'),
         backendFactory: (_) => backend,
         onPlaceAction: onPlaceAction,
+        onOpenDetail: onOpenDetail,
       ),
     ),
   );
