@@ -74,7 +74,16 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
       return;
     }
     if (_tags.length >= 8) {
-      _showSnack(lalaCopy(_language, ko: '태그는 최대 8개까지.', en: 'Up to 8 tags.'));
+      _showSnack(
+        lalaCopyMulti(
+          _language,
+          ko: '태그는 최대 8개까지.',
+          en: 'Up to 8 tags.',
+          ja: 'タグは最大8件です。',
+          zhHans: '最多添加 8 个标签。',
+          zhHant: '最多新增 8 個標籤。',
+        ),
+      );
       return;
     }
     setState(() => _tags.add(cleaned));
@@ -133,7 +142,14 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
       if (!mounted) return;
       setState(() => _busy = false);
       _showSnack(
-        lalaCopy(_language, ko: '게시에 실패했어요.', en: 'Failed to publish.'),
+        lalaCopyMulti(
+          _language,
+          ko: '게시에 실패했어요.',
+          en: 'Failed to publish.',
+          ja: '投稿に失敗しました。',
+          zhHans: '发布失败。',
+          zhHant: '發布失敗。',
+        ),
       );
     }
   }
@@ -151,7 +167,14 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
       backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
         title: Text(
-          lalaCopy(_language, ko: '새 게시글', en: 'New Post'),
+          lalaCopyMulti(
+            _language,
+            ko: '새 게시글',
+            en: 'New Post',
+            ja: '新しい投稿',
+            zhHans: '新帖子',
+            zhHant: '新貼文',
+          ),
           style: const TextStyle(fontWeight: FontWeight.w900),
         ),
         backgroundColor: theme.colorScheme.surface,
@@ -183,7 +206,16 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
                         color: Colors.white,
                       ),
                     )
-                  : Text(lalaCopy(_language, ko: '게시', en: 'Post')),
+                  : Text(
+                      lalaCopyMulti(
+                        _language,
+                        ko: '게시',
+                        en: 'Post',
+                        ja: '投稿',
+                        zhHans: '发布',
+                        zhHant: '發布',
+                      ),
+                    ),
             ),
           ),
         ],
@@ -226,7 +258,14 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
               textInputAction: TextInputAction.next,
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
-                labelText: lalaCopy(_language, ko: '제목', en: 'Title'),
+                labelText: lalaCopyMulti(
+                  _language,
+                  ko: '제목',
+                  en: 'Title',
+                  ja: 'タイトル',
+                  zhHans: '标题',
+                  zhHant: '標題',
+                ),
                 labelStyle: const TextStyle(fontWeight: FontWeight.w800),
                 alignLabelWithHint: true,
                 filled: true,
@@ -256,7 +295,14 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
               maxLines: 12,
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
-                labelText: lalaCopy(_language, ko: '본문', en: 'Body'),
+                labelText: lalaCopyMulti(
+                  _language,
+                  ko: '본문',
+                  en: 'Body',
+                  ja: '本文',
+                  zhHans: '正文',
+                  zhHant: '內文',
+                ),
                 labelStyle: const TextStyle(fontWeight: FontWeight.w800),
                 alignLabelWithHint: true,
                 filled: true,
@@ -280,7 +326,14 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
             ),
             const SizedBox(height: 16),
             Text(
-              lalaCopy(_language, ko: '태그', en: 'Tags'),
+              lalaCopyMulti(
+                _language,
+                ko: '태그',
+                en: 'Tags',
+                ja: 'タグ',
+                zhHans: '标签',
+                zhHant: '標籤',
+              ),
               style: theme.textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w900,
                 color: const Color(0xFF334155),
@@ -295,10 +348,13 @@ class _CommunityCreatePostPageState extends State<CommunityCreatePostPage> {
                     textInputAction: TextInputAction.done,
                     onSubmitted: (_) => _addTag(),
                     decoration: InputDecoration(
-                      hintText: lalaCopy(
+                      hintText: lalaCopyMulti(
                         _language,
                         ko: '태그 입력 후 엔터',
                         en: 'Type a tag and press enter',
+                        ja: 'タグを入力してEnter',
+                        zhHans: '输入标签后按回车',
+                        zhHant: '輸入標籤後按 Enter',
                       ),
                       isDense: true,
                       prefixText: '#',
