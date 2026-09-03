@@ -1,9 +1,9 @@
 # LALA Stitch vs LALA-next 화면 비교 보고서 v2
 
-작성일: 2026-09-03  
-성격: 기능·UI 대응 및 검증 상태 업데이트  
-비교 기준: Stitch 통합 프로토타입과 LALA-next canonical 36화면  
-LALA-next 앱 코드 기준: `651b5f245a2eea88acea479f02ff05dd6097fb93`  
+작성일: 2026-09-03
+성격: 기능·UI 대응 및 검증 상태 업데이트
+비교 기준: Stitch 통합 프로토타입과 LALA-next canonical 36화면
+LALA-next 앱 코드 기준: `651b5f245a2eea88acea479f02ff05dd6097fb93`
 검증 빌드 기준: `71c22daa7f1afcc2d5a6d396258a5c6a69fc491c`
 
 ## 1. 요약 판정
