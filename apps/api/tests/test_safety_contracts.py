@@ -682,11 +682,19 @@ def test_flutter_web_smoke_drives_location_flow_and_route_requests():
     assert "Flutter docent script missed route action context." in unix_script
     assert "Flutter docent script did not include the captured PM10 value." in unix_script
     assert "Flutter docent script did not include the captured PM2.5 value." in unix_script
-    assert "Flutter location flow rendered no real map pins." in unix_script
-    assert "Flutter location flow rendered only clusters without place pins." in unix_script
-    assert (
-        "Flutter initial location map clustered places before the user zoomed out." in unix_script
-    )
+    # The unix marker contract moved into a shared validator (iframe bridge,
+    # pin-first clustering, live-count reconciliation); keep guarding it there.
+    marker_contract = (
+        ROOT / "scripts" / "unix" / "_flutter_web_marker_contract.py"
+    ).read_text(encoding="utf-8")
+    assert "_flutter_web_marker_contract.py" in unix_script
+    assert 'FAIL_PREFIX = "Flutter location flow"' in marker_contract
+    assert "rendered no real map pins or clusters." in marker_contract
+    assert "marker rendering did not reconcile with the live place count" in marker_contract
+    assert "clustered a sparse zoomed-in map before the far-zoom boundary" in marker_contract
+    assert "rendered markers in both the map iframe and the top document." in marker_contract
+    verify_repo_script = (ROOT / "scripts" / "unix" / "verify_repo.sh").read_text(encoding="utf-8")
+    assert "test_flutter_web_marker_contract.sh" in verify_repo_script
 
 
 def test_paid_smoke_requires_authenticated_api_key():
