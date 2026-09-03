@@ -220,8 +220,23 @@ class _PlaceDetailPageState extends State<PlaceDetailPage> {
 
   Widget _buildBody(BuildContext context, String language) {
     if (_loading && _place == null) {
-      return const Center(
-        child: CircularProgressIndicator(key: ValueKey('place-detail-loading')),
+      // Why: a bare spinner is invisible to screen readers; announce the
+      // loading state in the active locale (same contract as the map chrome).
+      return Center(
+        child: Semantics(
+          container: true,
+          label: lalaCopyMulti(
+            language,
+            ko: '장소 정보를 불러오는 중',
+            en: 'Loading place details',
+            ja: 'スポット情報を読み込み中',
+            zhHans: '正在加载地点信息',
+            zhHant: '正在載入地點資訊',
+          ),
+          child: const CircularProgressIndicator(
+            key: ValueKey('place-detail-loading'),
+          ),
+        ),
       );
     }
     if (_unavailable) {
@@ -502,14 +517,17 @@ class _ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Why: fixed 68px height + FittedBox(scaleDown) cancelled large-text
+    // growth; the minimum-size style keeps the compact viewport while
+    // letting the button grow under text scaling.
     return SizedBox(
       width: width,
-      height: 68,
       child: primary
           ? FilledButton(
               onPressed: onTap,
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(horizontal: 6),
+                minimumSize: const Size(0, 68),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(
                     LalaVisualTokens.controlRadius,
@@ -522,6 +540,7 @@ class _ActionButton extends StatelessWidget {
               onPressed: onTap,
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(horizontal: 6),
+                minimumSize: const Size(0, 68),
                 foregroundColor: LalaVisualColors.ink,
                 side: const BorderSide(color: LalaVisualColors.line),
                 shape: RoundedRectangleBorder(
@@ -549,13 +568,13 @@ class _ActionContent extends StatelessWidget {
       children: <Widget>[
         Icon(icon, size: 21),
         const SizedBox(height: 4),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(
-            label,
-            maxLines: 1,
-            style: const TextStyle(fontWeight: FontWeight.w900),
-          ),
+        // Two lines + ellipsis instead of scale-down so scaled text grows.
+        Text(
+          label,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontWeight: FontWeight.w900),
         ),
       ],
     );
@@ -605,28 +624,35 @@ class _ContextNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF7ED),
-        borderRadius: BorderRadius.circular(LalaVisualTokens.controlRadius),
-        border: Border.all(color: const Color(0xFFF4C96A)),
-      ),
-      child: Row(
-        children: <Widget>[
-          const Icon(Icons.info_outline_rounded, color: Color(0xFF9A5A00)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(
-                color: LalaVisualColors.ink,
-                height: 1.35,
-                fontWeight: FontWeight.w700,
+    // Why: refresh failures land here after the page is already read; a
+    // live region tells screen-reader users the context is stale.
+    return Semantics(
+      key: const ValueKey('place-detail-stale-notice'),
+      container: true,
+      liveRegion: true,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF7ED),
+          borderRadius: BorderRadius.circular(LalaVisualTokens.controlRadius),
+          border: Border.all(color: const Color(0xFFF4C96A)),
+        ),
+        child: Row(
+          children: <Widget>[
+            const Icon(Icons.info_outline_rounded, color: Color(0xFF9A5A00)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  color: LalaVisualColors.ink,
+                  height: 1.35,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
