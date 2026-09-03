@@ -7,6 +7,9 @@ import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/features/community/presentation/community_api.dart';
+import 'package:lala_next_app/features/community/presentation/community_auth_guard.dart';
+import 'package:lala_next_app/auth/auth_controller.dart';
+import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 
 class CommunityPostDetailPage extends StatefulWidget {
@@ -14,10 +17,12 @@ class CommunityPostDetailPage extends StatefulWidget {
     super.key,
     required this.postId,
     this.initialConfig = const LalaAppConfig.fromEnvironment(),
+    this.authController,
   });
 
   final String postId;
   final LalaAppConfig initialConfig;
+  final LalaAuthController? authController;
 
   @override
   State<CommunityPostDetailPage> createState() =>
@@ -57,7 +62,7 @@ class _CommunityPostDetailPageState extends State<CommunityPostDetailPage> {
     super.dispose();
   }
 
-  String get _language => _config.lang;
+  String get _language => OnboardingState.language;
 
   Future<void> _load() async {
     setState(() {
@@ -66,20 +71,23 @@ class _CommunityPostDetailPageState extends State<CommunityPostDetailPage> {
     });
     try {
       final postFuture = _client.getCommunityPost(postId: widget.postId);
-      final commentsFuture =
-          _client.getCommunityComments(postId: widget.postId, limit: 100);
+      final commentsFuture = _client.getCommunityComments(
+        postId: widget.postId,
+        limit: 100,
+      );
       final postEnvelope = await postFuture;
       final commentsEnvelope = await commentsFuture;
       if (!mounted) return;
       setState(() {
         _post = postEnvelope.data;
-        _comments = commentsEnvelope.data?.comments ?? const <CommunityComment>[];
+        _comments =
+            commentsEnvelope.data?.comments ?? const <CommunityComment>[];
         _status = _DetailStatus.data;
       });
-    } on LalaApiException catch (e) {
+    } on LalaApiException {
       if (!mounted) return;
       setState(() {
-        _error = e.message.trim().isEmpty ? _fallbackError() : e.message;
+        _error = _fallbackError();
         _status = _DetailStatus.error;
       });
     } on Object {
@@ -92,23 +100,38 @@ class _CommunityPostDetailPageState extends State<CommunityPostDetailPage> {
   }
 
   String _fallbackError() => lalaCopyMulti(
-          _language,
-          ko: '게시글을 불러오지 못했어요.',
-          en: 'Could not load this post.',
-          ja: '投稿を読み込めませんでした。',
-          zhHans: '无法加载这篇帖子。',
-          zhHant: '無法載入這篇貼文。',
-        );
+    _language,
+    ko: '게시글을 불러오지 못했어요.',
+    en: 'Could not load this post.',
+    ja: '投稿を読み込めませんでした。',
+    zhHans: '无法加载这篇帖子。',
+    zhHant: '無法載入這篇貼文。',
+  );
 
   Future<void> _toggleLike() async {
     final current = _post;
     if (current == null || _likeBusy) return;
+    final outcome = await requestCommunityAuthentication(
+      context,
+      controller: widget.authController,
+      language: _language,
+      actionLabel: lalaCopyMulti(
+        _language,
+        ko: '좋아요',
+        en: 'reactions',
+        ja: 'いいね',
+        zhHans: '点赞',
+        zhHant: '按讚',
+      ),
+    );
+    if (!mounted || outcome != CommunityAuthOutcome.alreadyAuthenticated) {
+      return;
+    }
     // 낙관적 반영.
     setState(() {
       _post = current.copyWithReactions(
         viewerLiked: !current.viewerLiked,
-        likeCount:
-            current.likeCount + (current.viewerLiked ? -1 : 1),
+        likeCount: current.likeCount + (current.viewerLiked ? -1 : 1),
       );
       _likeBusy = true;
     });
@@ -138,6 +161,22 @@ class _CommunityPostDetailPageState extends State<CommunityPostDetailPage> {
   Future<void> _submitComment() async {
     final text = _commentController.text.trim();
     if (text.isEmpty || _commentBusy || _post == null) return;
+    final outcome = await requestCommunityAuthentication(
+      context,
+      controller: widget.authController,
+      language: _language,
+      actionLabel: lalaCopyMulti(
+        _language,
+        ko: '댓글 작성',
+        en: 'commenting',
+        ja: 'コメント投稿',
+        zhHans: '发表评论',
+        zhHant: '發表留言',
+      ),
+    );
+    if (!mounted || outcome != CommunityAuthOutcome.alreadyAuthenticated) {
+      return;
+    }
     setState(() => _commentBusy = true);
     try {
       final envelope = await _client.createCommunityComment(
@@ -156,32 +195,32 @@ class _CommunityPostDetailPageState extends State<CommunityPostDetailPage> {
         _commentBusy = false;
       });
       _commentController.clear();
-    } on LalaApiException catch (e) {
+    } on LalaApiException {
       if (!mounted) return;
       setState(() => _commentBusy = false);
       _showSnack(
-        e.message.trim().isEmpty
-            ? lalaCopyMulti(
-  _language,
-  ko: '댓글 작성에 실패했어요.',
-  en: 'Failed to post comment.',
-  ja: 'コメントの投稿に失敗しました。',
-  zhHans: '发表评论失败。',
-  zhHant: '發表留言失敗。',
-)
-            : e.message,
+        lalaCopyMulti(
+          _language,
+          ko: '댓글 작성에 실패했어요. 입력 내용은 유지됐습니다.',
+          en: 'Failed to post comment. Your text is still here.',
+          ja: 'コメントを投稿できませんでした。入力内容は保持されています。',
+          zhHans: '发表评论失败，输入内容已保留。',
+          zhHant: '發表留言失敗，輸入內容已保留。',
+        ),
       );
     } on Object {
       if (!mounted) return;
       setState(() => _commentBusy = false);
-      _showSnack(lalaCopyMulti(
-  _language,
-  ko: '댓글 작성에 실패했어요.',
-  en: 'Failed to post comment.',
-  ja: 'コメントの投稿に失敗しました。',
-  zhHans: '发表评论失败。',
-  zhHant: '發表留言失敗。',
-));
+      _showSnack(
+        lalaCopyMulti(
+          _language,
+          ko: '댓글 작성에 실패했어요.',
+          en: 'Failed to post comment.',
+          ja: 'コメントの投稿に失敗しました。',
+          zhHans: '发表评论失败。',
+          zhHant: '發表留言失敗。',
+        ),
+      );
     }
   }
 
@@ -199,13 +238,13 @@ class _CommunityPostDetailPageState extends State<CommunityPostDetailPage> {
       appBar: AppBar(
         title: Text(
           lalaCopyMulti(
-      _language,
-      ko: '게시글',
-      en: 'Post',
-      ja: '投稿',
-      zhHans: '帖子',
-      zhHant: '貼文',
-    ),
+            _language,
+            ko: '게시글',
+            en: 'Post',
+            ja: '投稿',
+            zhHans: '帖子',
+            zhHant: '貼文',
+          ),
           style: const TextStyle(fontWeight: FontWeight.w900),
         ),
         backgroundColor: theme.colorScheme.surface,
@@ -213,10 +252,7 @@ class _CommunityPostDetailPageState extends State<CommunityPostDetailPage> {
         elevation: 0,
         scrolledUnderElevation: 0,
       ),
-      body: SafeArea(
-        top: false,
-        child: _buildBody(),
-      ),
+      body: SafeArea(top: false, child: _buildBody()),
       bottomNavigationBar: _post == null
           ? null
           : SafeArea(
@@ -269,10 +305,7 @@ class _CommunityPostDetailPageState extends State<CommunityPostDetailPage> {
                 onToggleLike: _toggleLike,
               ),
               const SizedBox(height: 16),
-              _CommentSection(
-                comments: _comments,
-                language: _language,
-              ),
+              _CommentSection(comments: _comments, language: _language),
             ],
           ),
         );
@@ -300,7 +333,11 @@ class _DetailErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.cloud_off_rounded, size: 36, color: Color(0xFF94A3B8)),
+            const Icon(
+              Icons.cloud_off_rounded,
+              size: 36,
+              color: Color(0xFF94A3B8),
+            ),
             const SizedBox(height: 12),
             Text(
               message,
@@ -315,14 +352,16 @@ class _DetailErrorView extends StatelessWidget {
             FilledButton.icon(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh_rounded, size: 18),
-              label: Text(lalaCopyMulti(
-      language,
-      ko: '재시도',
-      en: 'Retry',
-      ja: '再試行',
-      zhHans: '重试',
-      zhHant: '重試',
-    )),
+              label: Text(
+                lalaCopyMulti(
+                  language,
+                  ko: '재시도',
+                  en: 'Retry',
+                  ja: '再試行',
+                  zhHans: '重试',
+                  zhHant: '重試',
+                ),
+              ),
               style: FilledButton.styleFrom(
                 backgroundColor: theme.colorScheme.primary,
                 foregroundColor: theme.colorScheme.onPrimary,
@@ -373,7 +412,11 @@ class _PostDetailHeader extends StatelessWidget {
           const SizedBox(height: 10),
           Row(
             children: [
-              const Icon(Icons.person_outline_rounded, size: 14, color: Color(0xFF94A3B8)),
+              const Icon(
+                Icons.person_outline_rounded,
+                size: 14,
+                color: Color(0xFF94A3B8),
+              ),
               const SizedBox(width: 4),
               Text(
                 shortAuthorLabel(post.authorUserId),
@@ -410,8 +453,9 @@ class _PostDetailHeader extends StatelessWidget {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: theme.colorScheme.primaryContainer
-                            .withValues(alpha: 0.5),
+                        color: theme.colorScheme.primaryContainer.withValues(
+                          alpha: 0.5,
+                        ),
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(
@@ -497,14 +541,18 @@ class _LikeButton extends StatelessWidget {
               Icon(
                 liked ? Icons.favorite : Icons.favorite_border,
                 size: 16,
-                color: liked ? const Color(0xFFE11D48) : const Color(0xFF64748B),
+                color: liked
+                    ? const Color(0xFFE11D48)
+                    : const Color(0xFF64748B),
               ),
             const SizedBox(width: 6),
             Text(
               '$count',
               style: theme.textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w900,
-                color: liked ? const Color(0xFFE11D48) : const Color(0xFF64748B),
+                color: liked
+                    ? const Color(0xFFE11D48)
+                    : const Color(0xFF64748B),
               ),
             ),
           ],
@@ -528,13 +576,13 @@ class _CommentSection extends StatelessWidget {
       children: [
         Text(
           lalaCopyMulti(
-              language,
-              ko: '댓글 ${comments.length}',
-              en: 'Comments ${comments.length}',
-              ja: 'コメント ${comments.length}',
-              zhHans: '评论 ${comments.length}',
-              zhHant: '留言 ${comments.length}',
-            ),
+            language,
+            ko: '댓글 ${comments.length}',
+            en: 'Comments ${comments.length}',
+            ja: 'コメント ${comments.length}',
+            zhHans: '评论 ${comments.length}',
+            zhHant: '留言 ${comments.length}',
+          ),
           style: theme.textTheme.titleSmall?.copyWith(
             fontWeight: FontWeight.w900,
             color: const Color(0xFF334155),
@@ -547,13 +595,13 @@ class _CommentSection extends StatelessWidget {
             child: Center(
               child: Text(
                 lalaCopyMulti(
-                    language,
-                    ko: '첫 댓글을 남겨보세요.',
-                    en: 'Be the first to comment.',
-                    ja: '最初のコメントをどうぞ。',
-                    zhHans: '来发表第一条评论吧。',
-                    zhHant: '來發表第一則留言吧。',
-                  ),
+                  language,
+                  ko: '첫 댓글을 남겨보세요.',
+                  en: 'Be the first to comment.',
+                  ja: '最初のコメントをどうぞ。',
+                  zhHans: '来发表第一条评论吧。',
+                  zhHant: '來發表第一則留言吧。',
+                ),
                 style: const TextStyle(
                   color: Color(0xFF94A3B8),
                   fontWeight: FontWeight.w700,
@@ -569,10 +617,7 @@ class _CommentSection extends StatelessWidget {
             separatorBuilder: (context, index) => const SizedBox(height: 10),
             itemBuilder: (context, index) {
               final comment = comments[index];
-              return _CommentTile(
-                comment: comment,
-                language: language,
-              );
+              return _CommentTile(comment: comment, language: language);
             },
           ),
       ],
@@ -675,13 +720,13 @@ class _CommentInputBar extends StatelessWidget {
               onSubmitted: (_) => onSubmit(),
               decoration: InputDecoration(
                 hintText: lalaCopyMulti(
-                    language,
-                    ko: '댓글을 입력하세요',
-                    en: 'Write a comment',
-                    ja: 'コメントを入力',
-                    zhHans: '输入评论',
-                    zhHant: '輸入留言',
-                  ),
+                  language,
+                  ko: '댓글을 입력하세요',
+                  en: 'Write a comment',
+                  ja: 'コメントを入力',
+                  zhHans: '输入评论',
+                  zhHant: '輸入留言',
+                ),
                 isDense: true,
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 14,

@@ -25,6 +25,7 @@ abstract final class LalaRoutePaths {
   static const String localSignalDetail = '/local-signals/detail/:signalId';
   static const String preferenceSyncConflict =
       '/profile/preference-sync-conflict';
+  static const String privacyLocation = '/profile/privacy-location';
 
   /// 온보딩 라우트 공통 접두사. redirect 가 온보딩 라우트 여부를 판별하는 데 사용.
   static const String onboardingPrefix = '/onboarding';

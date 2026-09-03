@@ -134,6 +134,29 @@ class TripLibraryStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Clears device-only trip overrides and visit feedback.
+  ///
+  /// Account-backed data must be managed through the account controls instead;
+  /// refusing while connected prevents a local privacy action from looking like
+  /// a server deletion.
+  Future<void> clearDeviceData() async {
+    await ensureLoaded();
+    if (_remote != null) {
+      throw StateError('Disconnect the account before clearing device data.');
+    }
+    _overrides.clear();
+    _visits.clear();
+    _pastTrips = const <PastTripSummary>[];
+    _syncStatus = TripLibrarySyncStatus.localOnly;
+    try {
+      final preferences = await _preferencesFactory();
+      await preferences.remove(kTripLibraryStorageKey);
+    } on Object {
+      // The in-memory reset remains effective for this session.
+    }
+    notifyListeners();
+  }
+
   Future<void> retryAccountSync() async {
     final remote = _remote;
     if (remote == null || _syncStatus == TripLibrarySyncStatus.syncing) return;

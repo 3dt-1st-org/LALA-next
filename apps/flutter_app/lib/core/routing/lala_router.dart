@@ -36,6 +36,7 @@ import 'package:lala_next_app/features/preferences/presentation/travel_preferenc
 import 'package:lala_next_app/features/preferences/presentation/preference_sync_conflict_page.dart';
 import 'package:lala_next_app/features/profile/presentation/pages/account_page.dart';
 import 'package:lala_next_app/features/profile/presentation/pages/profile_page.dart';
+import 'package:lala_next_app/features/settings/presentation/pages/privacy_location_page.dart';
 import 'package:lala_next_app/features/trip_library/presentation/pages/past_trips_page.dart';
 import 'package:lala_next_app/features/trip_library/presentation/pages/saved_places_page.dart';
 import 'package:lala_next_app/features/trip_library/presentation/pages/trip_settings_page.dart';
@@ -259,6 +260,11 @@ GoRouter createLalaRouter({
             PreferenceSyncConflictPage(language: OnboardingState.language),
       ),
       GoRoute(
+        path: LalaRoutePaths.privacyLocation,
+        builder: (BuildContext context, GoRouterState state) =>
+            PrivacyLocationPage(authController: authController),
+      ),
+      GoRoute(
         path: LalaRoutePaths.savedPlaces,
         builder: (BuildContext context, GoRouterState state) => SavedPlacesPage(
           backendFactory: backendFactory,
@@ -308,7 +314,10 @@ GoRouter createLalaRouter({
       GoRoute(
         path: LalaRoutePaths.community,
         builder: (BuildContext context, GoRouterState state) =>
-            CommunityFeedPage(initialConfig: initialConfig),
+            CommunityFeedPage(
+              initialConfig: initialConfig,
+              authController: authController,
+            ),
       ),
       GoRoute(
         path: LalaRoutePaths.communityPost,
@@ -317,25 +326,36 @@ GoRouter createLalaRouter({
           return CommunityPostDetailPage(
             postId: postId,
             initialConfig: initialConfig,
+            authController: authController,
           );
         },
       ),
       GoRoute(
         path: LalaRoutePaths.communityCreate,
         builder: (BuildContext context, GoRouterState state) =>
-            CommunityCreatePostPage(initialConfig: initialConfig),
+            CommunityCreatePostPage(
+              initialConfig: initialConfig,
+              authController: authController,
+            ),
       ),
       // --- ONMU P3c: 커뮤니티 채팅 push 라우트 ---
       GoRoute(
         path: LalaRoutePaths.communityChat,
         builder: (BuildContext context, GoRouterState state) =>
-            ChatRoomListPage(initialConfig: initialConfig),
+            ChatRoomListPage(
+              initialConfig: initialConfig,
+              authController: authController,
+            ),
       ),
       GoRoute(
         path: LalaRoutePaths.communityChatRoom,
         builder: (BuildContext context, GoRouterState state) {
           final roomId = state.pathParameters['id'] ?? '';
-          return ChatRoomPage(roomId: roomId, initialConfig: initialConfig);
+          return ChatRoomPage(
+            roomId: roomId,
+            initialConfig: initialConfig,
+            authController: authController,
+          );
         },
       ),
     ],

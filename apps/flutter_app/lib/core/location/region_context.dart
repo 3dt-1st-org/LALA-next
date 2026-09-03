@@ -194,6 +194,13 @@ class RegionContextStore {
     unawaited(_safeWriteRegionId(prefs, null));
   }
 
+  /// Clear variant used by an explicit privacy action that waits for storage.
+  static Future<void> clearAndFlush() async {
+    _notifier.value = null;
+    final prefs = _prefs;
+    if (prefs != null) await _safeWriteRegionId(prefs, null);
+  }
+
   static Future<void> _safeWriteRegionId(
     OnboardingPreferences prefs,
     String? id,

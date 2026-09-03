@@ -10,15 +10,20 @@ import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/routing/lala_route_paths.dart';
 import 'package:lala_next_app/features/community/presentation/community_api.dart';
+import 'package:lala_next_app/features/community/presentation/community_auth_guard.dart';
+import 'package:lala_next_app/auth/auth_controller.dart';
+import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 
 class CommunityFeedPage extends StatefulWidget {
   const CommunityFeedPage({
     this.initialConfig = const LalaAppConfig.fromEnvironment(),
+    this.authController,
     super.key,
   });
 
   final LalaAppConfig initialConfig;
+  final LalaAuthController? authController;
 
   @override
   State<CommunityFeedPage> createState() => _CommunityFeedPageState();
@@ -59,7 +64,7 @@ class _CommunityFeedPageState extends State<CommunityFeedPage> {
     super.dispose();
   }
 
-  String get _language => _config.lang;
+  String get _language => OnboardingState.language;
 
   void _onScroll() {
     if (_status != _FeedStatus.data) return;
@@ -94,10 +99,10 @@ class _CommunityFeedPageState extends State<CommunityFeedPage> {
         _hasMore = posts.length < total;
         _status = _FeedStatus.data;
       });
-    } on LalaApiException catch (e) {
+    } on LalaApiException {
       if (!mounted) return;
       setState(() {
-        _error = e.message.trim().isEmpty ? _fallbackError() : e.message;
+        _error = _fallbackError();
         _status = _FeedStatus.error;
       });
     } on Object {
@@ -114,8 +119,10 @@ class _CommunityFeedPageState extends State<CommunityFeedPage> {
     setState(() => _isLoadingMore = true);
     final offset = _posts.length;
     try {
-      final envelope =
-          await _client.getCommunityPosts(limit: _pageSize, offset: offset);
+      final envelope = await _client.getCommunityPosts(
+        limit: _pageSize,
+        offset: offset,
+      );
       final data = envelope.data;
       final more = data?.posts ?? const <CommunityPost>[];
       if (!mounted) return;
@@ -131,17 +138,32 @@ class _CommunityFeedPageState extends State<CommunityFeedPage> {
   }
 
   String _fallbackError() => lalaCopyMulti(
-          _language,
-          ko: '게시글을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.',
-          en: 'Could not load posts. Please try again shortly.',
-          ja: '投稿を読み込めませんでした。しばらくしてからもう一度お試しください。',
-          zhHans: '无法加载帖子，请稍后重试。',
-          zhHant: '無法載入貼文，請稍後重試。',
-        );
+    _language,
+    ko: '게시글을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.',
+    en: 'Could not load posts. Please try again shortly.',
+    ja: '投稿を読み込めませんでした。しばらくしてからもう一度お試しください。',
+    zhHans: '无法加载帖子，请稍后重试。',
+    zhHant: '無法載入貼文，請稍後重試。',
+  );
 
   Future<void> _openCreate() async {
-    final result =
-        await context.push<Object?>(LalaRoutePaths.communityCreate);
+    final outcome = await requestCommunityAuthentication(
+      context,
+      controller: widget.authController,
+      language: _language,
+      actionLabel: lalaCopyMulti(
+        _language,
+        ko: '글쓰기',
+        en: 'writing',
+        ja: '投稿',
+        zhHans: '发帖',
+        zhHant: '發文',
+      ),
+    );
+    if (!mounted || outcome != CommunityAuthOutcome.alreadyAuthenticated) {
+      return;
+    }
+    final result = await context.push<Object?>(LalaRoutePaths.communityCreate);
     if (result == true && mounted) {
       _load(initial: true);
     }
@@ -149,6 +171,27 @@ class _CommunityFeedPageState extends State<CommunityFeedPage> {
 
   void _openPost(CommunityPost post) {
     context.push(LalaRoutePaths.communityPostFor(post.id));
+  }
+
+  Future<void> _openChat() async {
+    final outcome = await requestCommunityAuthentication(
+      context,
+      controller: widget.authController,
+      language: _language,
+      actionLabel: lalaCopyMulti(
+        _language,
+        ko: '채팅',
+        en: 'chat',
+        ja: 'チャット',
+        zhHans: '聊天',
+        zhHant: '聊天',
+      ),
+    );
+    if (!mounted) return;
+    if (outcome == CommunityAuthOutcome.alreadyAuthenticated ||
+        outcome == CommunityAuthOutcome.signedInNow) {
+      context.push(LalaRoutePaths.communityChat);
+    }
   }
 
   @override
@@ -159,13 +202,13 @@ class _CommunityFeedPageState extends State<CommunityFeedPage> {
       appBar: AppBar(
         title: Text(
           lalaCopyMulti(
-      _language,
-      ko: '커뮤니티',
-      en: 'Community',
-      ja: 'コミュニティ',
-      zhHans: '社区',
-      zhHant: '社群',
-    ),
+            _language,
+            ko: '커뮤니티',
+            en: 'Community',
+            ja: 'コミュニティ',
+            zhHans: '社区',
+            zhHant: '社群',
+          ),
           style: const TextStyle(fontWeight: FontWeight.w900),
         ),
         backgroundColor: theme.colorScheme.surface,
@@ -175,24 +218,31 @@ class _CommunityFeedPageState extends State<CommunityFeedPage> {
         actions: [
           IconButton(
             tooltip: lalaCopyMulti(
-  _language,
-  ko: '채팅',
-  en: 'Chat',
-  ja: 'チャット',
-  zhHans: '聊天',
-  zhHant: '聊天',
-),
+              _language,
+              ko: '채팅',
+              en: 'Chat',
+              ja: 'チャット',
+              zhHans: '聊天',
+              zhHant: '聊天',
+            ),
             icon: const Icon(Icons.chat_bubble_outline_rounded),
-            onPressed: () => context.push(LalaRoutePaths.communityChat),
+            onPressed: _openChat,
           ),
           const SizedBox(width: 4),
         ],
       ),
       body: SafeArea(
         top: false,
-        child: RefreshIndicator(
-          onRefresh: () => _load(initial: true),
-          child: _buildBody(),
+        child: Column(
+          children: <Widget>[
+            _CommunityTrustNotice(language: _language),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: () => _load(initial: true),
+                child: _buildBody(),
+              ),
+            ),
+          ],
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -200,13 +250,13 @@ class _CommunityFeedPageState extends State<CommunityFeedPage> {
         icon: const Icon(Icons.edit_outlined),
         label: Text(
           lalaCopyMulti(
-  _language,
-  ko: '글쓰기',
-  en: 'Write',
-  ja: '書き込む',
-  zhHans: '发帖',
-  zhHant: '發文',
-),
+            _language,
+            ko: '글쓰기',
+            en: 'Write',
+            ja: '書き込む',
+            zhHans: '发帖',
+            zhHant: '發文',
+          ),
           style: const TextStyle(fontWeight: FontWeight.w900),
         ),
       ),
@@ -218,7 +268,10 @@ class _CommunityFeedPageState extends State<CommunityFeedPage> {
       case _FeedStatus.loading:
         return const _FeedLoadingView();
       case _FeedStatus.error:
-        return _FeedErrorView(message: _error!, onRetry: () => _load(initial: true));
+        return _FeedErrorView(
+          message: _error!,
+          onRetry: () => _load(initial: true),
+        );
       case _FeedStatus.data:
         if (_posts.isEmpty) {
           return _FeedEmptyView(language: _language);
@@ -232,6 +285,55 @@ class _CommunityFeedPageState extends State<CommunityFeedPage> {
           onTap: _openPost,
         );
     }
+  }
+}
+
+class _CommunityTrustNotice extends StatelessWidget {
+  const _CommunityTrustNotice({required this.language});
+
+  final String language;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey('community-trust-notice'),
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF6FF),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFBFDBFE)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          const Icon(
+            Icons.people_outline_rounded,
+            color: Color(0xFF1D4ED8),
+            size: 20,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              lalaCopyMulti(
+                language,
+                ko: '여행자와 지역 사용자의 대화예요. 출처가 검증된 집계는 Local Signals에서 확인하세요.',
+                en: 'These are traveler and local conversations. See Local Signals for source-governed aggregates.',
+                ja: '旅行者と地域ユーザーの会話です。出典を検証した集計はLocal Signalsで確認できます。',
+                zhHans: '这里是旅行者与当地用户的交流。来源受控的汇总请查看 Local Signals。',
+                zhHant: '這裡是旅行者與在地使用者的交流。來源受控的彙整請查看 Local Signals。',
+              ),
+              style: const TextStyle(
+                color: Color(0xFF1E3A8A),
+                height: 1.35,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -281,7 +383,11 @@ class _FeedErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.cloud_off_rounded, size: 36, color: Color(0xFF94A3B8)),
+            const Icon(
+              Icons.cloud_off_rounded,
+              size: 36,
+              color: Color(0xFF94A3B8),
+            ),
             const SizedBox(height: 12),
             Text(
               message,
@@ -334,13 +440,13 @@ class _FeedEmptyView extends StatelessWidget {
                 const SizedBox(height: 12),
                 Text(
                   lalaCopyMulti(
-                      language,
-                      ko: '아직 게시글이 없어요.\n첫 글을 남겨보세요!',
-                      en: 'No posts yet.\nBe the first to share!',
-                      ja: 'まだ投稿がありません。\n最初の投稿をどうぞ！',
-                      zhHans: '还没有帖子。\n来发第一篇吧！',
-                      zhHant: '還沒有貼文。\n來發第一篇吧！',
-                    ),
+                    language,
+                    ko: '아직 게시글이 없어요.\n첫 글을 남겨보세요!',
+                    en: 'No posts yet.\nBe the first to share!',
+                    ja: 'まだ投稿がありません。\n最初の投稿をどうぞ！',
+                    zhHans: '还没有帖子。\n来发第一篇吧！',
+                    zhHant: '還沒有貼文。\n來發第一篇吧！',
+                  ),
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: Color(0xFF64748B),

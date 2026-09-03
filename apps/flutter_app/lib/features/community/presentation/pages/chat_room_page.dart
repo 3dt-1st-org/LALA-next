@@ -10,7 +10,10 @@ import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/features/community/presentation/community_api.dart';
+import 'package:lala_next_app/features/community/presentation/community_auth_guard.dart';
 import 'package:lala_next_app/features/community/presentation/chat_ws_client.dart';
+import 'package:lala_next_app/auth/auth_controller.dart';
+import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/shared/l10n/lala_copy.dart';
 
 class ChatRoomPage extends StatefulWidget {
@@ -18,16 +21,18 @@ class ChatRoomPage extends StatefulWidget {
     super.key,
     required this.roomId,
     this.initialConfig = const LalaAppConfig.fromEnvironment(),
+    this.authController,
   });
 
   final String roomId;
   final LalaAppConfig initialConfig;
+  final LalaAuthController? authController;
 
   @override
   State<ChatRoomPage> createState() => _ChatRoomPageState();
 }
 
-enum _LoadStatus { loading, data, error }
+enum _LoadStatus { authRequired, loading, data, error }
 
 class _ChatRoomPageState extends State<ChatRoomPage> {
   late final LalaAppConfig _config;
@@ -44,7 +49,9 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   String? _error;
   String? _currentUserId;
   ChatWsStatus _wsStatus = ChatWsStatus.disconnected;
+  bool _initializing = false;
   bool _sending = false;
+  String? _pendingDraft;
 
   @override
   void initState() {
@@ -56,6 +63,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     _scrollController = ScrollController();
     _statusSub = _ws.status.listen(_onWsStatus);
     _errorSub = _ws.errors.listen(_onWsError);
+    widget.authController?.addListener(_onAuthChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _initialize();
     });
@@ -69,27 +77,61 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     _inputController.dispose();
     _scrollController.dispose();
     _ws.dispose();
+    widget.authController?.removeListener(_onAuthChanged);
     _client.close();
     super.dispose();
   }
 
-  String get _language => _config.lang;
+  String get _language => OnboardingState.language;
+
+  bool get _authenticated => isCommunityAuthenticated(widget.authController);
+
+  void _onAuthChanged() {
+    if (!mounted) return;
+    if (_authenticated && _status == _LoadStatus.authRequired) {
+      unawaited(_initialize());
+      return;
+    }
+    if (!_authenticated && _status != _LoadStatus.authRequired) {
+      unawaited(_ws.disconnect());
+      setState(() {
+        _messages = const <ChatMessage>[];
+        _currentUserId = null;
+        _status = _LoadStatus.authRequired;
+        _wsStatus = ChatWsStatus.disconnected;
+      });
+    }
+  }
 
   Future<void> _initialize() async {
-    // 현재 사용자 식별자(본인 말풍선 판별). 실패해도 채팅은 계속 진행.
-    try {
-      final me = await _client.getMe();
-      _currentUserId = me.data?.userId;
-    } on Object {
-      _currentUserId = null;
+    if (_initializing) return;
+    if (!_authenticated) {
+      setState(() => _status = _LoadStatus.authRequired);
+      return;
     }
-    if (!mounted) return;
-    await _loadMessages();
-    if (!mounted) return;
-    await _connectWebSocket();
+    _initializing = true;
+    try {
+      // 현재 사용자 식별자(본인 말풍선 판별). 실패해도 채팅은 계속 진행.
+      try {
+        final me = await _client.getMe();
+        _currentUserId = me.data?.userId;
+      } on Object {
+        _currentUserId = null;
+      }
+      if (!mounted) return;
+      await _loadMessages();
+      if (!mounted) return;
+      await _connectWebSocket();
+    } finally {
+      _initializing = false;
+    }
   }
 
   Future<void> _loadMessages() async {
+    if (!_authenticated) {
+      setState(() => _status = _LoadStatus.authRequired);
+      return;
+    }
     setState(() {
       _status = _LoadStatus.loading;
       _error = null;
@@ -102,19 +144,31 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       final data = envelope.data;
       final messages = data?.messages ?? const <ChatMessage>[];
       if (!mounted) return;
+      if (!_authenticated) {
+        setState(() => _status = _LoadStatus.authRequired);
+        return;
+      }
       setState(() {
         _messages = messages;
         _status = _LoadStatus.data;
       });
       WidgetsBinding.instance.addPostFrameCallback((_) => _jumpToBottom());
-    } on LalaApiException catch (e) {
+    } on LalaApiException {
       if (!mounted) return;
+      if (!_authenticated) {
+        setState(() => _status = _LoadStatus.authRequired);
+        return;
+      }
       setState(() {
-        _error = e.message.trim().isEmpty ? _fallbackError() : e.message;
+        _error = _fallbackError();
         _status = _LoadStatus.error;
       });
     } on Object {
       if (!mounted) return;
+      if (!_authenticated) {
+        setState(() => _status = _LoadStatus.authRequired);
+        return;
+      }
       setState(() {
         _error = _fallbackError();
         _status = _LoadStatus.error;
@@ -123,16 +177,21 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   }
 
   Future<void> _connectWebSocket() async {
+    if (!_authenticated) {
+      setState(() => _wsStatus = ChatWsStatus.disconnected);
+      return;
+    }
     final token = await _client.resolveWebSocketToken();
+    if (!mounted || !_authenticated) {
+      if (mounted) setState(() => _wsStatus = ChatWsStatus.disconnected);
+      return;
+    }
     if (token.isEmpty) {
       // 인증 미지원: 실시간 수신은 불가. REST 메시지 로드는 유지.
       setState(() => _wsStatus = ChatWsStatus.error);
       return;
     }
-    final uri = _client.chatWebSocketUri(
-      roomId: widget.roomId,
-      token: token,
-    );
+    final uri = _client.chatWebSocketUri(roomId: widget.roomId, token: token);
     await _ws.connect(uri);
     // 연결 후 수신 스트림 구독(connect 이후에 구독해야 스트림이 활성).
     _messageSub ??= _ws.messages.listen(_onIncomingMessage);
@@ -143,6 +202,9 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     if (message.roomId != widget.roomId && message.roomId.isNotEmpty) return;
     setState(() {
       _messages = <ChatMessage>[..._messages, message];
+      if (_isMine(message) && message.body.trim() == _pendingDraft) {
+        _pendingDraft = null;
+      }
     });
     WidgetsBinding.instance.addPostFrameCallback((_) => _jumpToBottom());
   }
@@ -152,30 +214,37 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     setState(() => _wsStatus = next);
   }
 
-  void _onWsError(ChatWsError error) {
+  void _onWsError(ChatWsError _) {
     if (!mounted) return;
-    final message = error.message ??
-        lalaCopyMulti(
-  _language,
-  ko: '메시지 전송에 실패했어요.',
-  en: 'Failed to send message.',
-  ja: 'メッセージの送信に失敗しました。',
-  zhHans: '发送消息失败。',
-  zhHant: '傳送訊息失敗。',
-);
+    final draft = _pendingDraft;
+    if (draft != null && _inputController.text.trim().isEmpty) {
+      _inputController.text = draft;
+      _inputController.selection = TextSelection.collapsed(
+        offset: _inputController.text.length,
+      );
+    }
+    _pendingDraft = null;
+    final message = lalaCopyMulti(
+      _language,
+      ko: '메시지를 보내지 못했어요. 입력 내용을 복원했습니다.',
+      en: 'Message not sent. Your text was restored.',
+      ja: 'メッセージを送信できませんでした。入力内容を復元しました。',
+      zhHans: '消息未发送，输入内容已恢复。',
+      zhHant: '訊息未傳送，輸入內容已還原。',
+    );
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), duration: const Duration(seconds: 3)),
     );
   }
 
   String _fallbackError() => lalaCopyMulti(
-          _language,
-          ko: '메시지를 불러오지 못했어요.',
-          en: 'Could not load messages.',
-          ja: 'メッセージを読み込めませんでした。',
-          zhHans: '无法加载消息。',
-          zhHant: '無法載入訊息。',
-        );
+    _language,
+    ko: '메시지를 불러오지 못했어요.',
+    en: 'Could not load messages.',
+    ja: 'メッセージを読み込めませんでした。',
+    zhHans: '无法加载消息。',
+    zhHant: '無法載入訊息。',
+  );
 
   bool _isMine(ChatMessage message) {
     final me = _currentUserId;
@@ -199,7 +268,28 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   Future<void> _sendMessage() async {
     final text = _inputController.text.trim();
     if (text.isEmpty || _sending) return;
+    final outcome = await requestCommunityAuthentication(
+      context,
+      controller: widget.authController,
+      language: _language,
+      actionLabel: lalaCopyMulti(
+        _language,
+        ko: '메시지 보내기',
+        en: 'sending messages',
+        ja: 'メッセージ送信',
+        zhHans: '发送消息',
+        zhHant: '傳送訊息',
+      ),
+    );
+    if (!mounted || outcome != CommunityAuthOutcome.alreadyAuthenticated) {
+      return;
+    }
+    if (_wsStatus != ChatWsStatus.connected) {
+      _onWsError(const ChatWsError(code: 'not_connected'));
+      return;
+    }
     setState(() => _sending = true);
+    _pendingDraft = text;
     _ws.send(text);
     _inputController.clear();
     setState(() => _sending = false);
@@ -213,13 +303,13 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       appBar: AppBar(
         title: Text(
           lalaCopyMulti(
-  _language,
-  ko: '채팅방',
-  en: 'Chat room',
-  ja: 'チャットルーム',
-  zhHans: '聊天室',
-  zhHant: '聊天室',
-),
+            _language,
+            ko: '채팅방',
+            en: 'Chat room',
+            ja: 'チャットルーム',
+            zhHans: '聊天室',
+            zhHant: '聊天室',
+          ),
           style: const TextStyle(fontWeight: FontWeight.w900),
         ),
         backgroundColor: theme.colorScheme.surface,
@@ -259,6 +349,24 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
 
   Widget _buildBody() {
     switch (_status) {
+      case _LoadStatus.authRequired:
+        return CommunityAuthenticationView(
+          language: _language,
+          controller: widget.authController,
+          purpose: lalaCopyMulti(
+            _language,
+            ko: '채팅',
+            en: 'chat',
+            ja: 'チャット',
+            zhHans: '聊天',
+            zhHant: '聊天',
+          ),
+          onAuthenticated: () {
+            if (_status == _LoadStatus.authRequired) {
+              unawaited(_initialize());
+            }
+          },
+        );
       case _LoadStatus.loading:
         return const Center(
           child: SizedBox(
@@ -295,10 +403,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
 }
 
 class _ConnectionBadge extends StatelessWidget {
-  const _ConnectionBadge({
-    required this.status,
-    required this.language,
-  });
+  const _ConnectionBadge({required this.status, required this.language});
 
   final ChatWsStatus status;
   final String language;
@@ -309,46 +414,46 @@ class _ConnectionBadge extends StatelessWidget {
       ChatWsStatus.connected => (
         const Color(0xFF22C55E),
         lalaCopyMulti(
-  language,
-  ko: '온라인',
-  en: 'Online',
-  ja: 'オンライン',
-  zhHans: '在线',
-  zhHant: '線上',
-),
+          language,
+          ko: '온라인',
+          en: 'Online',
+          ja: 'オンライン',
+          zhHans: '在线',
+          zhHant: '線上',
+        ),
       ),
       ChatWsStatus.connecting => (
         const Color(0xFFF59E0B),
         lalaCopyMulti(
-  language,
-  ko: '연결 중',
-  en: 'Connecting',
-  ja: '接続中',
-  zhHans: '连接中',
-  zhHant: '連線中',
-),
+          language,
+          ko: '연결 중',
+          en: 'Connecting',
+          ja: '接続中',
+          zhHans: '连接中',
+          zhHant: '連線中',
+        ),
       ),
       ChatWsStatus.error => (
         const Color(0xFFEF4444),
         lalaCopyMulti(
-  language,
-  ko: '연결 끊김',
-  en: 'Offline',
-  ja: 'オフライン',
-  zhHans: '已断开',
-  zhHant: '已斷線',
-),
+          language,
+          ko: '연결 끊김',
+          en: 'Offline',
+          ja: 'オフライン',
+          zhHans: '已断开',
+          zhHant: '已斷線',
+        ),
       ),
       ChatWsStatus.disconnected => (
         const Color(0xFF94A3B8),
         lalaCopyMulti(
-  language,
-  ko: '미연결',
-  en: 'Idle',
-  ja: '未接続',
-  zhHans: '未连接',
-  zhHant: '未連線',
-),
+          language,
+          ko: '미연결',
+          en: 'Idle',
+          ja: '未接続',
+          zhHans: '未连接',
+          zhHant: '未連線',
+        ),
       ),
     };
     return Center(
@@ -400,8 +505,9 @@ class _MessageBubble extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
-        mainAxisAlignment:
-            mine ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: mine
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (!mine)
@@ -419,8 +525,9 @@ class _MessageBubble extends StatelessWidget {
             ),
           Flexible(
             child: Column(
-              crossAxisAlignment:
-                  mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              crossAxisAlignment: mine
+                  ? CrossAxisAlignment.end
+                  : CrossAxisAlignment.start,
               children: [
                 if (!mine && author.isNotEmpty)
                   Padding(
@@ -463,11 +570,7 @@ class _MessageBubble extends StatelessWidget {
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.only(
-                    left: 4,
-                    right: 4,
-                    top: 3,
-                  ),
+                  padding: const EdgeInsets.only(left: 4, right: 4, top: 3),
                   child: Text(
                     formatRelativeTime(message.createdAt, language),
                     style: theme.textTheme.labelSmall?.copyWith(
@@ -508,9 +611,7 @@ class _ChatInputBar extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
       decoration: const BoxDecoration(
         color: Colors.transparent,
-        border: Border(
-          top: BorderSide(color: Color(0xFFE2E8F0), width: 1),
-        ),
+        border: Border(top: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
       ),
       child: Row(
         children: [
@@ -523,13 +624,13 @@ class _ChatInputBar extends StatelessWidget {
               onSubmitted: (_) => onSend(),
               decoration: InputDecoration(
                 hintText: lalaCopyMulti(
-                    language,
-                    ko: '메시지를 입력하세요',
-                    en: 'Type a message',
-                    ja: 'メッセージを入力',
-                    zhHans: '输入消息',
-                    zhHant: '輸入訊息',
-                  ),
+                  language,
+                  ko: '메시지를 입력하세요',
+                  en: 'Type a message',
+                  ja: 'メッセージを入力',
+                  zhHans: '输入消息',
+                  zhHant: '輸入訊息',
+                ),
                 isDense: true,
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 14,
@@ -560,8 +661,9 @@ class _ChatInputBar extends StatelessWidget {
             style: IconButton.styleFrom(
               backgroundColor: theme.colorScheme.primary,
               foregroundColor: theme.colorScheme.onPrimary,
-              disabledBackgroundColor:
-                  theme.colorScheme.primary.withValues(alpha: 0.4),
+              disabledBackgroundColor: theme.colorScheme.primary.withValues(
+                alpha: 0.4,
+              ),
             ),
           ),
         ],
@@ -590,7 +692,11 @@ class _ChatErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.cloud_off_rounded, size: 36, color: Color(0xFF94A3B8)),
+            const Icon(
+              Icons.cloud_off_rounded,
+              size: 36,
+              color: Color(0xFF94A3B8),
+            ),
             const SizedBox(height: 12),
             Text(
               message,
@@ -605,14 +711,16 @@ class _ChatErrorView extends StatelessWidget {
             FilledButton.icon(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh_rounded, size: 18),
-              label: Text(lalaCopyMulti(
-      language,
-      ko: '재시도',
-      en: 'Retry',
-      ja: '再試行',
-      zhHans: '重试',
-      zhHant: '重試',
-    )),
+              label: Text(
+                lalaCopyMulti(
+                  language,
+                  ko: '재시도',
+                  en: 'Retry',
+                  ja: '再試行',
+                  zhHans: '重试',
+                  zhHant: '重試',
+                ),
+              ),
               style: FilledButton.styleFrom(
                 backgroundColor: theme.colorScheme.primary,
                 foregroundColor: theme.colorScheme.onPrimary,
@@ -637,13 +745,13 @@ class _ChatEmptyView extends StatelessWidget {
         padding: const EdgeInsets.all(32),
         child: Text(
           lalaCopyMulti(
-              language,
-              ko: '아직 메시지가 없어요.\n첫 인사를 남겨보세요!',
-              en: 'No messages yet.\nSay hello!',
-              ja: 'まだメッセージがありません。\n最初のあいさつをどうぞ！',
-              zhHans: '还没有消息。\n来打个招呼吧！',
-              zhHant: '還沒有訊息。\n來打個招呼吧！',
-            ),
+            language,
+            ko: '아직 메시지가 없어요.\n첫 인사를 남겨보세요!',
+            en: 'No messages yet.\nSay hello!',
+            ja: 'まだメッセージがありません。\n最初のあいさつをどうぞ！',
+            zhHans: '还没有消息。\n来打个招呼吧！',
+            zhHant: '還沒有訊息。\n來打個招呼吧！',
+          ),
           textAlign: TextAlign.center,
           style: const TextStyle(
             color: Color(0xFF64748B),
