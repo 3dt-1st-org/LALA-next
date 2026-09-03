@@ -26,6 +26,7 @@ EXPECTED_CANONICAL_MIGRATION_ORDER = (
     "064_planning_action_tables.sql",
     "065_user_travel_preferences.sql",
     "066_trip_library_and_visit_feedback.sql",
+    "067_community_post_reports.sql",
 )
 
 
@@ -63,7 +64,7 @@ def test_load_canonical_sql_plan_is_safe_and_ordered():
     assert plan.ok is True
     assert tuple(item.name for item in plan.files) == EXPECTED_CANONICAL_MIGRATION_ORDER
     assert canonical_sql.CANONICAL_MIGRATION_ORDER == EXPECTED_CANONICAL_MIGRATION_ORDER
-    assert canonical_sql.CANONICAL_MIGRATION_LATEST == "066_trip_library_and_visit_feedback.sql"
+    assert canonical_sql.CANONICAL_MIGRATION_LATEST == "067_community_post_reports.sql"
     assert plan.to_dict()["statement_count"] >= 10
     assert all(len(item.sha256) == 64 for item in plan.files)
 
@@ -97,7 +98,7 @@ def test_canonical_migration_filename_contract_rejects_duplicate_or_invalid_pref
 
 def test_future_migration_does_not_silently_extend_the_merged_baseline():
     future_names = EXPECTED_CANONICAL_MIGRATION_ORDER + (
-        "067_rag_knowledge_retrieval_metadata.sql",
+        "068_rag_knowledge_retrieval_metadata.sql",
     )
 
     with pytest.raises(ValueError, match="baseline drifted"):
@@ -118,6 +119,30 @@ def test_trip_library_migration_is_additive_and_bounded():
     assert "DROP TABLE" not in sql.upper()
     assert "TRUNCATE" not in sql.upper()
     assert "DELETE FROM" not in sql.upper()
+
+
+def test_community_post_reports_migration_is_idempotent_and_governed():
+    sql = (canonical_sql.CANONICAL_SQL_DIR / "067_community_post_reports.sql").read_text(
+        encoding="utf-8"
+    )
+
+    assert "CREATE TABLE IF NOT EXISTS community.post_reports" in sql
+    assert "REFERENCES community.user_posts(id) ON DELETE CASCADE" in sql
+    # The reporter must be a provisioned internal user (ownership constraint).
+    assert "REFERENCES identity.users (issuer, subject)" in sql
+    # Bounded reason vocabulary; no free-text report column exists.
+    assert "post_reports_reason_check" in sql
+    assert "'other_policy'" in sql
+    # One unresolved report per reporter/post is enforced by a partial unique index.
+    assert "CREATE UNIQUE INDEX IF NOT EXISTS idx_post_reports_unresolved" in sql
+    assert "WHERE status IN ('open', 'triaged')" in sql
+    assert "DROP TABLE" not in sql.upper()
+    assert "TRUNCATE" not in sql.upper()
+    assert "DELETE FROM" not in sql.upper()
+    # No raw free-text report body/note column is part of the governed contract.
+    assert "body text" not in sql.lower()
+    assert "note text" not in sql.lower()
+    assert "free_text" not in sql.lower()
 
 
 def test_custom_fake_runner_plan_reports_duplicate_prefix_without_db_access(tmp_path):
