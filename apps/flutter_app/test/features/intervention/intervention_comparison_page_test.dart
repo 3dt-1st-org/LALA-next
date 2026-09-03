@@ -204,6 +204,52 @@ void main() {
     },
   );
 
+  testWidgets('S-21 hides the indoor-outdoor badge for a made-up wire value', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(393, 852));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final intervention = _intervention(
+      originalSlot: const LalaPlanSlot(
+        period: 'afternoon',
+        title: '복합 유리온실',
+        indoorOutdoor: 'glasshouse-arcade',
+        closureState: 'open',
+      ),
+      alternativeSlot: const LalaPlanSlot(
+        period: 'afternoon',
+        title: '실내 도서관',
+        indoorOutdoor: 'bio-dome',
+        closureState: 'open',
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: InterventionComparisonPage(
+          language: 'ko',
+          arguments: InterventionComparisonArguments(
+            intervention: intervention,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Both cards render… (closure chips are unaffected by the wire value)
+    expect(find.text('복합 유리온실'), findsOneWidget);
+    expect(find.text('실내 도서관'), findsOneWidget);
+    expect(find.text('영업중'), findsNWidgets(2));
+    // …but an unknown indoor_outdoor value claims neither mix nor indoor
+    // nor outdoor, with no icon implying any of them (honest-empty badge).
+    expect(find.text('실내·야외 혼합'), findsNothing);
+    expect(find.text('야외'), findsNothing);
+    expect(find.text('실내'), findsNothing);
+    expect(find.byIcon(Icons.balance_outlined), findsNothing);
+    expect(find.byIcon(Icons.park_outlined), findsNothing);
+    expect(find.byIcon(Icons.home_work_outlined), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('S-21 explains a disabled apply when no alternative exists', (
     tester,
   ) async {
