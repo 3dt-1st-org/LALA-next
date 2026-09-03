@@ -1,7 +1,3 @@
-import 'dart:convert';
-import 'dart:typed_data';
-
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
@@ -67,10 +63,9 @@ void main() {
         12,
         (index) => _post('p$index', 'Post number $index'),
       );
-      final adapter = _ScriptedAdapter()
+      final client = _ScriptedCommunityClient()
         ..respondPosts(offset: 0, posts: firstPage, total: 14)
         ..failPostsAt(12);
-      final client = _clientFor(adapter);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -94,7 +89,7 @@ void main() {
       expect(find.text('Post number 11'), findsOneWidget);
 
       // The retry succeeds and appends the remaining page.
-      adapter.respondPosts(
+      client.respondPosts(
         offset: 12,
         posts: <Map<String, Object?>>[
           _post('p12', 'Post number 12'),
@@ -113,14 +108,67 @@ void main() {
     },
   );
 
+  testWidgets(
+    'S-40 a successful full refresh clears the stale load-more retry row',
+    (tester) async {
+      final firstPage = List<Map<String, Object?>>.generate(
+        12,
+        (index) => _post('p$index', 'Post number $index'),
+      );
+      final fullPage = List<Map<String, Object?>>.generate(
+        14,
+        (index) => _post('p$index', 'Post number $index'),
+      );
+      final client = _ScriptedCommunityClient()
+        ..respondPosts(offset: 0, posts: firstPage, total: 14)
+        ..failPostsAt(12);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CommunityFeedPage(
+            initialConfig: _offlineAppConfig,
+            client: client,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Post number 0'), findsOneWidget);
+
+      // Pagination fails and leaves a retry row at the bottom.
+      await tester.fling(find.byType(ListView), const Offset(0, -6000), 2000);
+      await tester.pumpAndSettle();
+      final retryFinder = find.byKey(
+        const ValueKey('community-feed-load-more-retry'),
+      );
+      expect(retryFinder, findsOneWidget);
+
+      // The next full reload returns the complete feed, so after refreshing
+      // there is no more page to fetch and only the stale failure flag could
+      // still render a retry row.
+      client.respondPosts(offset: 0, posts: fullPage, total: 14);
+      await tester.fling(find.byType(ListView), const Offset(0, 6000), 2000);
+      await tester.pumpAndSettle();
+      await tester.fling(find.byType(ListView), const Offset(0, 300), 1000);
+      await tester.pump();
+      await tester.pumpAndSettle();
+
+      // Scroll fully to the bottom (the last post proves we got there) — the
+      // stale pagination failure must not survive the successful refresh.
+      await tester.fling(find.byType(ListView), const Offset(0, -6000), 2000);
+      await tester.pumpAndSettle();
+      expect(find.text('Post number 13'), findsOneWidget);
+      expect(retryFinder, findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('S-41 like failure rolls back and states the failure honestly', (
     tester,
   ) async {
-    final adapter = _ScriptedAdapter()
+    final client = _ScriptedCommunityClient()
       ..respondPost(_post('p1', 'First post title', likeCount: 5))
       ..respondComments()
       ..failLikes = true;
-    final client = _clientFor(adapter);
     final controller = await _authenticatedController();
 
     await tester.pumpWidget(
@@ -140,7 +188,7 @@ void main() {
     await tester.tap(find.byIcon(Icons.favorite_border));
     await tester.pumpAndSettle();
 
-    expect(adapter.likeCalls, 1);
+    expect(client.likeCalls, 1);
     expect(
       find.text('Could not update your like. Please try again.'),
       findsOneWidget,
@@ -149,6 +197,83 @@ void main() {
     expect(find.text('5'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'S-41 like success envelope without data rolls back and states failure',
+    (tester) async {
+      final client = _ScriptedCommunityClient()
+        ..respondPost(_post('p1', 'First post title', likeCount: 5))
+        ..respondComments()
+        ..likeDataIsNull = true;
+      final controller = await _authenticatedController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CommunityPostDetailPage(
+            postId: 'p1',
+            initialConfig: _offlineAppConfig,
+            authController: controller,
+            client: client,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('First post title'), findsOneWidget);
+      expect(find.text('5'), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.favorite_border));
+      await tester.pumpAndSettle();
+
+      expect(client.likeCalls, 1);
+      expect(
+        find.text('Could not update your like. Please try again.'),
+        findsOneWidget,
+      );
+      // The optimistic toggle was rolled back — the server never echoed state.
+      expect(find.text('5'), findsOneWidget);
+      expect(find.byIcon(Icons.favorite_border), findsOneWidget);
+      expect(find.byIcon(Icons.favorite), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'S-41 comment success envelope without data keeps the typed text',
+    (tester) async {
+      final client = _ScriptedCommunityClient()
+        ..respondPost(_post('p1', 'First post title', likeCount: 5))
+        ..respondComments()
+        ..commentDataIsNull = true;
+      final controller = await _authenticatedController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CommunityPostDetailPage(
+            postId: 'p1',
+            initialConfig: _offlineAppConfig,
+            authController: controller,
+            client: client,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('First post title'), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField), 'A helpful reply');
+      await tester.tap(find.byIcon(Icons.send_rounded));
+      await tester.pumpAndSettle();
+
+      expect(client.commentCalls, 1);
+      expect(
+        find.text('Failed to post comment. Your text is still here.'),
+        findsOneWidget,
+      );
+      // Nothing was confirmed posted, so the composer keeps the user's words.
+      expect(find.text('A helpful reply'), findsOneWidget);
+      expect(find.text('Comments 0'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('S-43 loading copy follows the selected language', (
     tester,
@@ -213,12 +338,6 @@ Map<String, Object?> _post(String id, String title, {int likeCount = 0}) =>
       'created_at': '2026-09-03T00:00:00Z',
     };
 
-LalaApiClient _clientFor(_ScriptedAdapter adapter) => LalaApiClient(
-  baseUri: Uri.parse('https://api.example.test'),
-  bearerToken: 'test-token',
-  dio: Dio()..httpClientAdapter = adapter,
-);
-
 Future<LalaAuthController> _authenticatedController() async {
   final controller = LalaAuthController(
     config: _enabledAuthConfig,
@@ -265,14 +384,25 @@ class _FakeAccountApi implements LalaAccountApi {
 }
 
 /// Serves scripted community endpoints for the focused widget tests. No live
-/// network is touched and no production data is created.
-class _ScriptedAdapter implements HttpClientAdapter {
+/// network is touched and no production data is created. Overrides only the
+/// community surface the pages under test consume, so the tests never depend
+/// on the dio transport (a transitive dependency of the app package).
+class _ScriptedCommunityClient extends LalaApiClient {
+  _ScriptedCommunityClient() : super(baseUri: _scriptedBaseUri);
+
+  static final Uri _scriptedBaseUri = Uri.parse('https://api.example.test');
+
   final Map<int, Map<String, Object?>> _pagesByOffset =
       <int, Map<String, Object?>>{};
   final Set<int> _failingOffsets = <int>{};
   Map<String, Object?>? _postDetail;
+  Map<String, Object?>? _comments;
+
   bool failLikes = false;
+  bool likeDataIsNull = false;
+  bool commentDataIsNull = false;
   int likeCalls = 0;
+  int commentCalls = 0;
 
   void respondPosts({
     required int offset,
@@ -289,67 +419,98 @@ class _ScriptedAdapter implements HttpClientAdapter {
   void respondComments() =>
       _comments = <String, Object?>{'comments': <Object?>[], 'total': 0};
 
-  Map<String, Object?>? _comments;
+  LalaEnvelope<T> _okEnvelope<T>(T? data) => LalaEnvelope<T>(
+    ok: true,
+    data: data,
+    meta: const <String, dynamic>{'request_id': 'test-request'},
+    error: null,
+    statusCode: 200,
+    requestId: 'test-request',
+  );
+
+  LalaApiException _unavailable() => const LalaApiException(
+    code: 'HTTP_503',
+    message: 'service unavailable',
+    statusCode: 503,
+    retryable: true,
+  );
 
   @override
-  Future<ResponseBody> fetch(
-    RequestOptions options,
-    Stream<Uint8List>? requestStream,
-    Future<void>? cancelFuture,
-  ) async {
-    final path = options.uri.path;
-    if (path == '/api/v1/community/posts' && options.method == 'GET') {
-      final offset =
-          int.tryParse(options.uri.queryParameters['offset'] ?? '0') ?? 0;
-      if (_failingOffsets.remove(offset) ||
-          !_pagesByOffset.containsKey(offset)) {
-        return _error(503);
-      }
-      return _json(_pagesByOffset[offset]!);
+  Future<LalaEnvelope<CommunityPostsResponse>> getCommunityPosts({
+    int limit = 20,
+    int offset = 0,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    if (_failingOffsets.remove(offset) || !_pagesByOffset.containsKey(offset)) {
+      throw _unavailable();
     }
-    if (path.endsWith('/like')) {
-      likeCalls += 1;
-      if (failLikes) return _error(503);
-      return _json(<String, Object?>{
-        'post_id': 'p1',
-        'liked': true,
-        'like_count': 6,
-      });
-    }
-    if (path.endsWith('/comments') && options.method == 'GET') {
-      return _json(_comments ?? <String, Object?>{'comments': <Object?>[]});
-    }
-    final postMatch = RegExp(r'^/api/v1/community/posts/[^/]+$').hasMatch(path);
-    if (postMatch && _postDetail != null) {
-      return _json(_postDetail!);
-    }
-    return _error(404);
+    return _okEnvelope(
+      CommunityPostsResponse.fromJsonObject(_pagesByOffset[offset]),
+    );
   }
 
   @override
-  void close({bool force = false}) {}
-}
+  Future<LalaEnvelope<CommunityPost>> getCommunityPost({
+    required String postId,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final detail = _postDetail;
+    if (detail == null) throw _unavailable();
+    return _okEnvelope(CommunityPost.fromJsonObject(detail));
+  }
 
-ResponseBody _json(Map<String, Object?> data) {
-  final payload = utf8.encode(
-    jsonEncode(<String, Object?>{
-      'ok': true,
-      'data': data,
-      'meta': <String, Object?>{'request_id': 'test-request'},
-      'error': null,
-    }),
+  @override
+  Future<LalaEnvelope<CommunityCommentsResponse>> getCommunityComments({
+    required String postId,
+    int limit = 50,
+    int offset = 0,
+    String? requestId,
+    Duration? timeout,
+  }) async => _okEnvelope(
+    CommunityCommentsResponse.fromJsonObject(
+      _comments ?? <String, Object?>{'comments': <Object?>[], 'total': 0},
+    ),
   );
-  return ResponseBody(
-    Stream<Uint8List>.value(Uint8List.fromList(payload)),
-    200,
-    headers: <String, List<String>>{
-      'content-type': <String>['application/json; charset=utf-8'],
-    },
-  );
-}
 
-ResponseBody _error(int status) => ResponseBody(
-  Stream<Uint8List>.value(Uint8List(0)),
-  status,
-  statusMessage: 'service unavailable',
-);
+  @override
+  Future<LalaEnvelope<CommunityLikeState>> toggleCommunityLike({
+    required String postId,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    likeCalls += 1;
+    if (failLikes) throw _unavailable();
+    // ok:true with null data — the honest-failure wire shape under test.
+    if (likeDataIsNull) return _okEnvelope(null);
+    return _okEnvelope(
+      CommunityLikeState.fromJsonObject(<String, Object?>{
+        'post_id': postId,
+        'liked': true,
+        'like_count': 6,
+      }),
+    );
+  }
+
+  @override
+  Future<LalaEnvelope<CommunityComment>> createCommunityComment({
+    required String postId,
+    required String body,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    commentCalls += 1;
+    // ok:true with null data — the honest-failure wire shape under test.
+    if (commentDataIsNull) return _okEnvelope(null);
+    return _okEnvelope(
+      CommunityComment.fromJsonObject(<String, Object?>{
+        'id': 'c1',
+        'post_id': postId,
+        'author_user_id': '11111111-1111-4111-8111-111111111111',
+        'body': body,
+        'created_at': '2026-09-03T00:00:00Z',
+      }),
+    );
+  }
+}
