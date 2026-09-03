@@ -745,8 +745,12 @@ inputs yields the same rows (no duplicates, no lost higher-tier enrichments).
   no table or column it creates stores body/title/URL text. Backed by the typed
   governance boundary in
   `apps/api/app/services/review_ingest_governance.py`, which runs the
-  DB-authoritative source gate + register → run → receipt → quarantine →
-  finalize inside one transaction. The aggregate-only receipt/dedupe is
+  source-gate (`load_active_review_source`) → run create/resume → receipt →
+  quarantine → finalize inside one transaction
+  (`persist_review_ingest_run` / `govern_review_ingest_on_cursor`); source
+  registration (`register_review_source`) is a separate admin operation in its
+  own transaction, not part of the batch boundary. The aggregate-only
+  receipt/dedupe is
   **implemented by this same migration**, not held for a separate one: receipts
   key cross-batch dedupe on (source, external_key, `content_sha256`), so an
   exact replay (same triple, any run) yields `rowcount 0` and does not re-emit
