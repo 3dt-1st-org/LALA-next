@@ -12,6 +12,7 @@ import '../../../../shared/l10n/lala_copy.dart';
 import '../../../../shared/widgets/lala_skeleton.dart';
 import '../../domain/local_signal_aggregate.dart';
 import '../../domain/local_signal_public.dart';
+import '../widgets/local_signal_contribution_composer.dart';
 import 'local_signal_detail_page.dart';
 
 enum _LocalSignalsStatus { loading, loaded, empty, disabled, error }
@@ -86,6 +87,34 @@ class _LocalSignalsPageState extends State<LocalSignalsPage> {
       return context!.regionId;
     }
     return null;
+  }
+
+  RegionContext? get _manualRegion {
+    final context = RegionContextStore.current;
+    return context?.source == RegionSource.manual ? context : null;
+  }
+
+  /// F-071: the feed-level contribution entry. Policy: offered once the feed
+  /// resolves to real data or an honest empty (aggregate-only included);
+  /// hidden while loading (transient), on error (retry is the honest next
+  /// action), and in the disabled/readiness state — that flag is externally
+  /// owned and off, so inviting writes the server has not announced readiness
+  /// for would end in a governed 503. Requires a detail route (always present
+  /// in the app) so the button never dead-ends.
+  bool get _shareEntryVisible =>
+      widget.onOpenDetail != null &&
+      (_status == _LocalSignalsStatus.loaded ||
+          _status == _LocalSignalsStatus.empty);
+
+  void _openContribution() {
+    final manual = _manualRegion;
+    widget.onOpenDetail!(
+      LocalSignalDetailArguments.contribute(
+        region: manual == null
+            ? null
+            : (code: manual.regionId, label: manual.label(_language)),
+      ),
+    );
   }
 
   Future<void> _load({bool append = false}) async {
@@ -197,13 +226,13 @@ class _LocalSignalsPageState extends State<LocalSignalsPage> {
     final regionLabel = activeRegion?.source == RegionSource.manual
         ? activeRegion!.label(language)
         : lalaCopyMulti(
-          language,
-          ko: '전국',
-          en: 'Nationwide',
-          ja: '全国',
-          zhHans: '全国',
-          zhHant: '全國',
-        );
+            language,
+            ko: '전국',
+            en: 'Nationwide',
+            ja: '全国',
+            zhHans: '全国',
+            zhHant: '全國',
+          );
     return ColoredBox(
       color: theme.colorScheme.surface,
       child: SafeArea(
@@ -226,6 +255,26 @@ class _LocalSignalsPageState extends State<LocalSignalsPage> {
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 sliver: _contentSliver(language),
               ),
+              if (_shareEntryVisible)
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+                  sliver: SliverToBoxAdapter(
+                    child: LocalSignalContributionEntry(
+                      entryKey: const ValueKey(
+                        'local-signals-contribution-entry',
+                      ),
+                      buttonKey: const ValueKey(
+                        'local-signals-share-experience',
+                      ),
+                      language: language,
+                      // Auth state is unknown on this page; the entry copy
+                      // stays sign-in-honest for both guests and users.
+                      authenticated: null,
+                      contextLabel: _manualRegion?.label(language),
+                      onPressed: _openContribution,
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -712,13 +761,13 @@ class _SignalCard extends StatelessWidget {
                     icon: const Icon(Icons.place_outlined, size: 18),
                     label: Text(
                       lalaCopyMulti(
-                      language,
-                      ko: '장소 보기',
-                      en: 'View place',
-                      ja: 'スポットを見る',
-                      zhHans: '查看地点',
-                      zhHant: '查看地點',
-                    ),
+                        language,
+                        ko: '장소 보기',
+                        en: 'View place',
+                        ja: 'スポットを見る',
+                        zhHans: '查看地点',
+                        zhHant: '查看地點',
+                      ),
                     ),
                   ),
                   TextButton.icon(

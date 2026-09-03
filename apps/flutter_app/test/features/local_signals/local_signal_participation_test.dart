@@ -166,6 +166,13 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('local-signal-draft-submit')));
       await tester.pumpAndSettle();
       expect(repository.submitDraftCalls, 1);
+      // The governed receipt stays readable before the flow closes.
+      expect(
+        find.textContaining('상태: 검수 요청됨 · 검수: 검수 중 · 공개 범위: 검수 후 공개 예정'),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const ValueKey('local-signal-draft-done')));
+      await tester.pumpAndSettle();
       expect(find.text('검수 요청을 보냈어요. 공개 전까지 원문은 비공개로 유지됩니다.'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
