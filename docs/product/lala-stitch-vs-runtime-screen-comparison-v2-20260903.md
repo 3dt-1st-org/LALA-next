@@ -1,10 +1,11 @@
-# LALA Stitch vs LALA-next 화면 비교 보고서 v2.1 · 이미지·누락·차이판
+# LALA Stitch vs LALA-next 화면 비교 보고서 v2.2 · 이미지·누락·차이판
 
 작성일: 2026-09-03
 성격: 기능·UI 대응 및 검증 상태 업데이트
 비교 기준: Stitch 통합 프로토타입과 LALA-next canonical 36화면
 LALA-next 앱 코드 기준: `651b5f245a2eea88acea479f02ff05dd6097fb93`
 검증 빌드 기준: `71c22daa7f1afcc2d5a6d396258a5c6a69fc491c`
+기능 gap 보완 기준: `0d64c666d2ef413602b45e4f3a9fe0dfd07dcb1e`
 
 ## 1. 요약 판정
 
@@ -20,8 +21,11 @@ LALA-next 앱 코드 기준: `651b5f245a2eea88acea479f02ff05dd6097fb93`
 - 최종 exact-head 개별 캡처가 없는 화면: **26개**. 이는 구현 누락이 아니라
   화면별 최종 재생 증거의 공백이다.
 - 최종 통합 PR: `#171`, `#172`, `#173`, `#174` 모두 MERGED
-- 전체 자동 검증: Flutter 832 tests, Dart client 39 tests, API tests, Ruff,
+- 전체 자동 검증: Flutter 836 tests, Dart client 39 tests, API tests, Ruff,
   formatting, pre-commit 및 detect-secrets 통과
+- Stitch에서 가져온 제품화 개선: 음식점 상세의 1탭 소통 도움, 한국어 요청 카드
+  큰 글씨 mode, 일정 슬롯 연결선, 채팅의 저장된 식이 요청·여행 취향 첨부와
+  실패 메시지 재전송 UI
 - exact-head iPhone 17 Pro 실검증: S-02, S-03, S-04, S-05, S-06, S-10,
   S-40, S-42의 비로그인 gate, S-50, S-58
 - exact-head 웹 검증: 온보딩, NAVER 지도 surface, 전역 내비게이션, 내 정보의
@@ -110,7 +114,19 @@ LALA-next 앱 코드 기준: `651b5f245a2eea88acea479f02ff05dd6097fb93`
 따라서 “현재 앱에 아예 없는 화면”은 canonical 범위에서는 **0개**다. 남은 것은
 독립 실계정·운영 상태를 만들지 못한 기능 검증과 26개 화면의 최종 head 개별 캡처다.
 
-### 3.3 어떤 기능이 없거나 아직 끝까지 검증되지 않았는가
+### 3.3 이번 기능 gap 보완에서 새로 닫은 항목
+
+| 화면 | 이전 차이 | 이번 제품 구현 | 사실성·안전 경계 |
+| --- | --- | --- | --- |
+| S-13 | 음식점 상세 아래 설명 카드에서 소통 sheet로 들어가 큰 글씨 도달성이 낮았음 | 음식점 상세 첫 행동 묶음에 `소통 도움`을 추가하고, 한국어 요청 카드에서 26pt 전체 화면 큰 글씨 mode와 복사를 제공 | 저장된 식이·알레르기 조건만 사용하며 위험도를 추정하거나 안전을 보장하지 않음 |
+| S-20 | 실제 슬롯 카드는 있었지만 하루 동선의 시각적 연결이 약했음 | 서버가 돌려준 실제 슬롯 순서에 rail·dot·위치 semantics를 더해 하나의 일정 흐름으로 표현 | 이동 시간이나 수단은 새로 만들지 않고 기존 응답만 표시 |
+| S-44 | 실제 REST/WebSocket 채팅은 있었지만 Stitch의 스마트 첨부와 명시적 실패 bubble이 없었음 | 저장된 식이 요청 카드 또는 여행 취향 요약을 메시지 **초안**에 넣고, WebSocket 전송 실패를 본문·재전송 action으로 보존 | 자동 전송하지 않으며, 위치·계정 식별자·알레르기 심각도를 첨부하지 않음 |
+
+이 세 항목은 독립 화면을 늘린 것이 아니라 이미 존재하는 canonical flow 안에 실제
+상태와 연결된 행동을 보강한 것이다. 반대로 가짜 채팅 상대, 예시 식이 조건, 임의의
+이동 시간은 추가하지 않았다.
+
+### 3.4 어떤 기능이 없거나 아직 끝까지 검증되지 않았는가
 
 | 기능군 | Stitch 프로토타입에 없는 것 | LALA-next 현재 상태 | 남은 공백의 성격 |
 | --- | --- | --- | --- |
@@ -128,7 +144,7 @@ LALA-next 앱 코드 기준: `651b5f245a2eea88acea479f02ff05dd6097fb93`
 계정·채팅처럼 코드는 있으나 실제 계정 상태를 만들지 않은 기능도 있으며, production
 DB write나 유료 음성처럼 의도적으로 승인 경계 뒤에 둔 기능도 있다.
 
-### 3.4 같은 기능인데 어떻게 다른가
+### 3.5 같은 기능인데 어떻게 다른가
 
 | 화면·기능 | Stitch 방식 | LALA-next 방식 | 차이와 선택 이유 |
 | --- | --- | --- | --- |
@@ -136,12 +152,12 @@ DB write나 유료 음성처럼 의도적으로 승인 경계 뒤에 둔 기능�
 | S-10 지도 | 점선 캔버스, 고정 핀·거리·대기 정보 | 실제 NAVER 지도, API 장소, category pin, cluster, 위치·오류 상태 | Stitch는 시각 구성이 선명하고 LALA는 데이터와 지도 동작이 실제임 |
 | S-11 검색 | 예시 장소를 local state로 필터·정렬 | 선택 지역과 API 검색, canonical place ID로 지도·상세 연결 | 겉보기 기능은 같지만 LALA 결과는 다른 화면과 동일 장소 정체성을 유지 |
 | S-12 장소 상세 | 큰 대표 이미지와 세 CTA, 풍부한 예시 날씨·혼잡·출처 | API 상세·추천 근거와 실제 후속 route, unavailable·stale 구분 | Stitch는 첫 화면 탐색성이 우수하고 LALA는 근거성과 상태 진실성이 우수 |
-| S-13 식당 소통 | 독립 카드에 미리 채운 알레르기·요청과 다국어 표현 | 음식점 상세의 focused sheet가 저장된 식이 제약을 사용하고 큰 글씨·복사 제공 | LALA는 사용자가 입력하지 않은 위험도를 만들지 않지만 진입 CTA의 시각 가시성은 더 보강할 수 있음 |
+| S-13 식당 소통 | 독립 카드에 미리 채운 알레르기·요청과 다국어 표현 | 음식점 상세 첫 행동 묶음에서 focused sheet와 큰 글씨·복사로 바로 연결 | LALA는 사용자가 입력하지 않은 위험도를 만들지 않고, 방문자 확인문과 직원용 한국어를 분리함 |
 | S-14 날씨·대기질 | 즉시 풍부한 예시 수치와 활동 적합도 | API 관측시각, unavailable·error·stale 및 일정 개입 진입 | Stitch는 정보 밀도가 높고 LALA는 값이 없을 때 거짓 수치를 만들지 않음 |
-| S-15·S-20·S-21 동선과 일정 회복 | 카드 재배열과 local state 기반 대체, 이동선이 시각적으로 명확 | 선택한 실제 장소, 서버 호환 4슬롯, 원안·대안 비교와 명시 적용 | LALA가 상태 계약은 강하고 Stitch가 슬롯·이동의 시각적 연결은 더 좋음 |
+| S-15·S-20·S-21 동선과 일정 회복 | 카드 재배열과 local state 기반 대체, 이동선이 시각적으로 명확 | 선택한 실제 장소, 서버 호환 4슬롯, 슬롯 rail, 원안·대안 비교와 명시 적용 | LALA는 실제 상태 계약과 시각적 하루 흐름을 함께 유지하고, 근거 없는 이동값을 만들지 않음 |
 | S-30 도슨트 | 완성된 오디오 player처럼 재생되는 시뮬레이션 | RAG text를 기본으로 제공하고 음성은 비용·준비 상태에 따라 disabled/available 분리 | LALA는 가짜 재생을 피하고, Stitch의 player 계층은 음성이 실제 활성화될 때 참고 가능 |
 | S-31~S-32 Local Signals | 큰 mention 수와 최신성을 예시로 채워 풍부하게 표현 | 광고·중복·출처 정책을 통과한 집계만 표시하고 raw 원문·작성자·URL은 비공개 | Stitch는 밀도가 높지만 LALA가 신뢰 등급과 개인정보 경계를 보존 |
-| S-40~S-44 커뮤니티·채팅 | 예시 사용자·게시글·대화가 즉시 보이는 local state | public read와 authenticated write/chat 분리, logout 시 private state와 늦은 응답 폐기 | LALA는 빈 화면이 생겨도 실제 권한·개인정보를 우선 |
+| S-40~S-44 커뮤니티·채팅 | 예시 사용자·게시글·대화가 즉시 보이는 local state | public read와 authenticated write/chat 분리, 취향·식이 카드 초안 첨부, 실패 재전송, logout 시 private state와 늦은 응답 폐기 | LALA는 빈 화면이 생겨도 실제 권한·개인정보와 사용자 전송 결정을 우선 |
 | S-50~S-51 계정 허브 | 연결된 가짜 계정과 동기화 완료를 기본 표시 | guest/account/loading/error/logout과 `/me` 상태를 구분 | 같은 프로필 UI라도 LALA는 인증 결과 전 성공 상태를 보여 주지 않음 |
 | S-52~S-59 개인화 | 다채로운 chip·요약과 React 메모리 저장 | device-first 기본값, account sync, 여행별 override, hard safety constraint, 충돌 해결 | Stitch는 설정 탐색성이 좋고 LALA는 저장 수명주기와 우선순위가 실제 계약에 연결됨 |
 | 전역 내비게이션 | 5개 hash route와 모듈 내부 modal/local state | typed route, shell tab, focused sheet, nested page를 목적에 따라 구분 | LALA는 deep link·복원·ID 전달이 가능하며, 모든 상태를 억지로 top-level route로 만들지 않음 |
@@ -183,8 +199,8 @@ API 장소·날씨·핀·클러스터가 결합된 exact-head 화면이다.*
 ![Stitch 장소 상세 개념안과 LALA-next 음식점 상세 구현 비교](assets/stitch-runtime-comparison-v2/03-place-detail.png)
 
 *그림 4. Stitch는 대표 이미지와 핵심 CTA의 첫 화면 집중도가 높다. LALA-next는
-canonical 장소와 실제 행동을 연결하지만 추천 근거·소통 도움 진입의 시각 계층은
-추가 보정 가치가 있다.*
+canonical 장소와 실제 행동을 연결하며, 음식점에서는 첫 행동 묶음의 소통 도움으로
+저장된 요청 카드에 한 번의 탭으로 진입한다.*
 
 ![Stitch 식이 요청 카드와 LALA-next 식당 소통 도움 비교](assets/stitch-runtime-comparison-v2/08-restaurant-help.png)
 
@@ -196,7 +212,7 @@ canonical 장소와 실제 행동을 연결하지만 추천 근거·소통 도�
 | S-10 지도 탐색 | 지도 핀, 카테고리, 추천 rail | 실제 NAVER map, API 장소, category pin, cluster, 선택·rail 동기화, 오류 회복 | `FULL/E` | iPhone에서 실데이터 장소·날씨·핀 확인. 웹 localhost API는 production CORS를 유지해 데이터 호출이 차단됨 |
 | S-11 검색 | 지역 문맥, 정렬·필터, 장소 선택 | API 검색, 선택 지역, 필터, canonical ID로 지도·상세 연결 | `FULL/P` | phase 증거와 테스트 통과; 최종 head에서 검색 전체 flow는 개별 재캡처하지 않음 |
 | S-12 장소 상세 | 이미지, 근거, 저장, 일정·도슨트·소통 CTA | `PlaceDetailPage`가 canonical API 장소와 추천 근거 및 각 후속 route를 연결 | `FULL/P` | 기능은 실제 binding. Stitch보다 장식은 절제되고 source·unavailable 구분을 우선 |
-| S-13 음식점 방문 도움 | 알레르기·주문 요청을 큰 글씨로 제시 | 저장된 식이 제약을 사용한 식당 소통 sheet, 큰 글씨·복사·안전 고지 | `ADAPTED/P` | 별도 top-level route가 아닌 음식점 상세의 focused sheet. 실매장 사용성·번역 검수는 후속 현장 QA |
+| S-13 음식점 방문 도움 | 알레르기·주문 요청을 큰 글씨로 제시 | 음식점 상세 1탭 action, 저장된 식이 제약 sheet, 26pt 전체 화면 큰 글씨·복사·안전 고지 | `ADAPTED/A` | 별도 top-level route가 아닌 focused sheet. widget 회귀 검증 완료; 실매장 사용성·번역은 후속 현장 QA |
 | S-14 날씨·대기질 | 현재 날씨, PM, 일정 영향과 대안 | 실제 weather/AQ 응답, observed time, 오류·stale, 일정 개입 진입 | `ADAPTED/P` | map/detail의 focused sheet. 유효 데이터가 없을 때 예시값을 만들지 않음 |
 | S-15 동선·투어 | 후보 순서, 이동시간, 일정 초안 | 선택된 실제 장소 기반 `TourSheetContent`, 순서·상태·plan 연결 | `ADAPTED/P` | sheet 표현. 정밀 경로가 아닌 추정 정보의 의미를 구분 |
 
@@ -204,8 +220,8 @@ canonical 장소와 실제 행동을 연결하지만 추천 근거·소통 도�
 
 Stitch의 가장 큰 시각 장점은 장소 상세 안에서 행동을 빠르게 발견하는 구조다.
 LALA-next는 그 구조를 유지하면서 지도와 장소를 예시가 아닌 동일 canonical ID로
-연결했다. 다음 시각 보정에서는 S-12의 추천 이유·출처·신선도 계층과 S-13 진입
-가시성을 우선 다듬을 가치가 있다.
+연결했다. S-13 진입과 큰 글씨 mode는 이번 보완에서 닫혔다. S-12의 추천 이유·출처·
+신선도는 이미 실제값만 표시하며, 이후에는 기능 추가보다 first viewport 밀도 조정이 남는다.
 
 ## 6. Flow 3: 일정과 회복
 
@@ -216,7 +232,7 @@ LALA-next는 그 구조를 유지하면서 지도와 장소를 예시가 아닌 
 
 | ID | Stitch 의도 | LALA-next 현재 대응 | 판정 | 검증·남은 차이 |
 | --- | --- | --- | --- | --- |
-| S-20 하루 일정 | 오전·점심·오후·저녁과 이동 연결 | server-compatible 4슬롯 일정과 장소·도슨트·방문 행동 | `FULL/P` | 전체 suite와 phase 증거. 최종 head 일대일 캡처는 안 함 |
+| S-20 하루 일정 | 오전·점심·오후·저녁과 이동 연결 | server-compatible 4슬롯, 실제 순서 rail, 장소·도슨트·방문 행동 | `FULL/A` | timeline widget·전체 Flutter 회귀 검증 완료. 새 exact-head 기기 캡처는 안 함 |
 | S-21 상황 변화 비교 | 기존 장소와 날씨·대기질 대안을 비교·적용 | 실제 intervention 전후안을 독립 route에서 비교하고 선택 | `FULL/P` | 적용 전 비교 상태가 구현됨; production mutation 없이 검증 |
 | S-22 이번 여행 설정 | 동행·속도·이동·안전 조건의 임시 override | 날짜별 `TripPreferenceOverride`와 server contract, 기본 취향과 우선순위 분리 | `FULL/P` | 코드·API·migration 계약과 phase 검증 완료; production migration apply는 별도 승인 |
 | S-23 저장한 장소 | 저장 목록, 상태 변화, 오늘 일정 추가 | device-first 저장 ID와 계정 동기화 경로, 상세·일정 연결 | `FULL/P` | guest local 흐름과 자동 테스트; account cross-device 상태는 인증 gate |
@@ -225,9 +241,9 @@ LALA-next는 그 구조를 유지하면서 지도와 장소를 예시가 아닌 
 
 ### Flow 판정
 
-Stitch의 이동 연결선과 대체 제안은 여전히 좋은 시각 참고다. LALA-next는 여기에
-실제 전후안, 여행별 override 우선순위, 저장·방문 계약을 붙였다. 남은 차이는 기능
-부재가 아니라 최종 head에서 S-20~S-25를 한 번에 재생한 영상·캡처 증거다.
+Stitch의 이동 연결선과 대체 제안을 LALA-next의 실제 전후안, 여행별 override,
+저장·방문 계약에 결합했다. 슬롯 rail은 실제 응답 순서를 바꾸지 않는다. 남은 차이는
+기능 부재가 아니라 최종 head에서 S-20~S-25를 한 번에 재생한 영상·캡처 증거다.
 
 ## 7. Flow 4: 도슨트와 로컬 정보
 
@@ -261,13 +277,13 @@ Stitch는 수치가 풍부해 보이지만 예시값이었다. LALA-next는 정�
 | S-41 게시글 상세 | 본문, 댓글, 반응, 신고 | public read와 authenticated reaction/comment 경계를 구현 | `GATED/A` | 운영 글을 만들지 않았으므로 실제 detail data는 미재생 |
 | S-42 글 작성 | category, place context, publish | Logto account가 있어야 publish하며 로그인 중단 후 draft 보존 | `GATED/E` | 비로그인 write gate와 draft-preservation 문구 exact-head 확인; 실제 publish는 미실행 |
 | S-43 채팅방 목록 | unread, 상대·가이드별 thread | authenticated membership 기반 room list, loading/empty/error | `GATED/A` | 실제 회원 room 데이터 미사용. 로그아웃 시 private list 즉시 폐기 테스트 통과 |
-| S-44 채팅방 | REST/WebSocket 메시지, 전송·재시도 | authenticated REST/WebSocket flow와 late-response suppression | `GATED/A` | actual private chat은 미실행. logout 뒤 message/user state가 남지 않는 회귀 테스트 통과 |
+| S-44 채팅방 | REST/WebSocket 메시지, 전송·재시도와 스마트 첨부 | authenticated REST/WebSocket, late-response suppression, 저장된 식이·취향 초안 첨부, 실패 bubble·재전송 | `GATED/A` | attachment widget 및 전체 회귀 검증 완료. 실제 private chat은 운영 데이터를 만들지 않아 미실행 |
 
 ### Flow 판정
 
 Stitch의 채팅은 풍부하지만 가짜 사용자와 로컬 메모리였다. LALA-next는 비어 있어도
-실제 public 상태를 보여 주고, private UI는 로그인 직후만 허용한다. 실제 콘텐츠를
-삽입하지 않은 것은 미구현이 아니라 데이터·개인정보 경계를 지킨 결과다.
+실제 public 상태를 보여 주고, private UI는 로그인 직후만 허용한다. 저장된 취향과
+식이 요청은 초안으로만 가져와 사용자가 검토·전송하며, 실패한 메시지는 재시도할 수 있다.
 
 ## 9. Flow 6: 계정과 개인화
 
@@ -317,10 +333,10 @@ Stitch가 제안한 개인화 분류는 대부분 유지됐고, LALA-next는 이
 ### Stitch에서 계속 참고할 부분
 
 1. S-12: 대표 이미지 아래 핵심 행동과 추천 근거를 더 빠르게 스캔하는 계층.
-2. S-20/S-21: 슬롯 사이 이동선과 원안·대안의 시각적 비교.
+2. S-20/S-21: 슬롯 rail은 반영됨. 원안·대안의 비교 계층은 현재 실제값을 유지하며 후속 시각 QA 대상.
 3. S-30: script와 playback 상태를 한눈에 이해하는 player 구성.
 4. S-53~S-57: 긴 설정을 압축하는 색상 chip과 즉시 보이는 선택 요약.
-5. S-13: 식당 직원에게 보여 주는 큰 글씨 mode의 첫 화면 도달성.
+5. S-13: 음식점 상세 1탭 진입과 큰 글씨 mode를 반영함. 실제 매장 번역·가독성 QA가 남음.
 
 ### 가져오면 안 되는 부분
 
@@ -365,7 +381,7 @@ Stitch가 제안한 개인화 분류는 대부분 유지됐고, LALA-next는 이
 | 검증 | 결과 |
 | --- | --- |
 | Flutter analyze | PASS |
-| Flutter tests | PASS, 832 tests |
+| Flutter tests | PASS, 836 tests |
 | community auth/logout focused tests | PASS, 3 tests |
 | Dart client tests | PASS, 39 tests |
 | API tests and safety contracts | PASS |
@@ -385,6 +401,9 @@ Stitch가 제안한 개인화 분류는 대부분 유지됐고, LALA-next는 이
 - 기본 취향, 여행별 override, 저장 장소, 지난 일정, sync conflict UI
 - governed Local Signals와 사용자 커뮤니티의 신뢰 경계
 - Logto-gated community writes/chat 및 logout privacy regression
+- 채팅 식이 요청·여행 취향 초안 첨부와 실패 메시지 재전송
+- 음식점 상세 1탭 소통 도움과 26pt 큰 글씨 직원용 카드
+- 실제 일정 슬롯 순서를 유지하는 하루 timeline rail
 - exact merged-tree 자동 검증과 대표 iPhone/web 실구동
 
 ### 구현됐지만 외부 상태 때문에 아직 끝까지 누르지 않은 것
@@ -401,12 +420,12 @@ Stitch가 제안한 개인화 분류는 대부분 유지됐고, LALA-next는 이
 
 ## 13. 다음 시각 개선 우선순위
 
-1. S-12 장소 상세: 추천 이유·출처·신선도와 세 핵심 행동의 first viewport 밀도 조정.
-2. S-20/S-21 일정: 슬롯 이동선, 원안·대안 비교, 적용·되돌리기의 시각 일관성.
-3. S-13 음식점 도움: 음식점 상세에서 한 번의 탭으로 큰 글씨 카드에 도달하도록 보정.
-4. S-30 도슨트: text-first 기본 상태와 음성 disabled/available 상태의 player 완성도.
-5. S-53~S-57 개인화: 안전 조건을 훼손하지 않는 범위에서 chip·요약·저장 feedback 강화.
-6. S-40~S-44: 실제 계정·운영 데이터가 준비되면 empty, loaded, error, logout을 동일
+1. S-12 장소 상세: 현재 실제 추천 이유·출처·신선도를 유지하며 first viewport 밀도를 실기기에서 조정.
+2. S-21 일정 개입: 적용·유지·되돌리기의 시각 일관성을 실제 개입 응답으로 재검증.
+3. S-30 도슨트: text-first 기본 상태와 음성 disabled/available 상태의 player 완성도.
+4. S-53~S-57 개인화: 안전 조건을 훼손하지 않는 범위에서 chip·요약·저장 feedback 강화.
+5. S-13 음식점 도움: 실제 매장에서 다섯 언어 표현과 큰 글씨 가독성을 현장 검수.
+6. S-40~S-44: 실제 계정·운영 데이터가 준비되면 empty, loaded, error, retry, logout을 동일
    exact head에서 다시 캡처.
 
 시각 개선은 화면 존재 여부를 다시 늘리는 작업이 아니라, 이미 구현된 흐름의 정보
