@@ -4,8 +4,9 @@
 성격: 기능·UI 대응 및 검증 상태 업데이트
 비교 기준: Stitch 통합 프로토타입과 LALA-next canonical 36화면
 LALA-next 앱 코드 기준: `651b5f245a2eea88acea479f02ff05dd6097fb93`
-검증 빌드 기준: `71c22daa7f1afcc2d5a6d396258a5c6a69fc491c`
+기존 통합 검증 빌드 기준: `71c22daa7f1afcc2d5a6d396258a5c6a69fc491c`
 기능 gap 보완 기준: `0d64c666d2ef413602b45e4f3a9fe0dfd07dcb1e`
+기능 gap 실구동 빌드 기준: `43f3defc09b8637d59a88dc39b776a5d54571a97`
 
 ## 1. 요약 판정
 
@@ -18,7 +19,7 @@ LALA-next 앱 코드 기준: `651b5f245a2eea88acea479f02ff05dd6097fb93`
 - LALA-next에서 누락된 canonical ID: **0개**
 - Stitch 정본 시각 자산에서 누락된 ID: **0개**. 다만 Stitch의 “31개 완료”
   메시지는 S-30, S-53, S-55, S-56, S-57을 목록에서 빠뜨렸다.
-- 최종 exact-head 개별 캡처가 없는 화면: **26개**. 이는 구현 누락이 아니라
+- 최종 제품 tree 개별 캡처가 없는 화면: **23개**. 이는 구현 누락이 아니라
   화면별 최종 재생 증거의 공백이다.
 - 최종 통합 PR: `#171`, `#172`, `#173`, `#174` 모두 MERGED
 - 전체 자동 검증: Flutter 836 tests, Dart client 39 tests, API tests, Ruff,
@@ -27,7 +28,7 @@ LALA-next 앱 코드 기준: `651b5f245a2eea88acea479f02ff05dd6097fb93`
   큰 글씨 mode, 일정 슬롯 연결선, 채팅의 저장된 식이 요청·여행 취향 첨부와
   실패 메시지 재전송 UI
 - exact-head iPhone 17 Pro 실검증: S-02, S-03, S-04, S-05, S-06, S-10,
-  S-40, S-42의 비로그인 gate, S-50, S-58
+  S-12, S-13, S-20, S-40, S-42의 비로그인 gate, S-50, S-58
 - exact-head 웹 검증: 온보딩, NAVER 지도 surface, 전역 내비게이션, 내 정보의
   모바일·데스크톱 반응형
 - 흐름별 시각 비교: Stitch 개념안과 LALA-next 실구동을 맞붙인 비교판 11장
@@ -109,10 +110,10 @@ LALA-next 앱 코드 기준: `651b5f245a2eea88acea479f02ff05dd6097fb93`
 | Stitch 정본 시각 자산 | **없음** | 내보내기 명세가 36개 자산을 S-01~S-59에 일대일 배정한다. S-05와 S-52~S-57은 `_14`, `_8`, `_5`, `_17`, `_11`, `_10`, `_18`처럼 일반 폴더명으로 생성됐지만 자산은 존재한다. |
 | Stitch “31개 완료” 메시지 | S-30, S-53, S-55, S-56, S-57이 목록에서 누락 | 메시지의 열거 오류다. 다섯 화면 모두 실제 생성 자산과 36화면 내보내기 명세에 있으므로 디자인 자체가 없다는 뜻은 아니다. |
 | 초기 3-ZIP Stitch 통합 미리보기 | S-03 독립 화면 부재. S-20~S-25와 S-40~S-44 일부, S-59가 독립 URL route가 아닌 모달·조건부 상태 | 다섯 전역 hash route만 있고 대부분의 하위 화면은 React local state로 전환됐다. 보이는 UI 상태는 있어도 canonical route parity와 상태 복원 계약은 없었다. 이후 선택한 36개 정본 자산과 구분해야 한다. |
-| LALA-next 최종 exact-head 개별 캡처 | S-01, S-11~S-15, S-20~S-25, S-30~S-32, S-41, S-43~S-44, S-51~S-57, S-59 | 총 26개다. 코드·focused test·전체 회귀 검증 또는 이전 phase 캡처는 있지만, `71c22da`에서 각 화면을 다시 열어 저장한 개별 이미지는 없다. **증거 누락이지 화면 누락이 아니다.** |
+| LALA-next 최종 제품 tree 개별 캡처 | S-01, S-11, S-14~S-15, S-21~S-25, S-30~S-32, S-41, S-43~S-44, S-51~S-57, S-59 | 총 23개다. 코드·focused test·전체 회귀 검증 또는 이전 phase 캡처는 있지만, 현재 제품 tree에서 각 화면을 다시 열어 저장한 개별 이미지는 없다. **증거 누락이지 화면 누락이 아니다.** |
 
 따라서 “현재 앱에 아예 없는 화면”은 canonical 범위에서는 **0개**다. 남은 것은
-독립 실계정·운영 상태를 만들지 못한 기능 검증과 26개 화면의 최종 head 개별 캡처다.
+독립 실계정·운영 상태를 만들지 못한 기능 검증과 23개 화면의 최종 제품 tree 개별 캡처다.
 
 ### 3.3 이번 기능 gap 보완에서 새로 닫은 항목
 
@@ -211,8 +212,8 @@ canonical 장소와 실제 행동을 연결하며, 음식점에서는 첫 행동
 | --- | --- | --- | --- | --- |
 | S-10 지도 탐색 | 지도 핀, 카테고리, 추천 rail | 실제 NAVER map, API 장소, category pin, cluster, 선택·rail 동기화, 오류 회복 | `FULL/E` | iPhone에서 실데이터 장소·날씨·핀 확인. 웹 localhost API는 production CORS를 유지해 데이터 호출이 차단됨 |
 | S-11 검색 | 지역 문맥, 정렬·필터, 장소 선택 | API 검색, 선택 지역, 필터, canonical ID로 지도·상세 연결 | `FULL/P` | phase 증거와 테스트 통과; 최종 head에서 검색 전체 flow는 개별 재캡처하지 않음 |
-| S-12 장소 상세 | 이미지, 근거, 저장, 일정·도슨트·소통 CTA | `PlaceDetailPage`가 canonical API 장소와 추천 근거 및 각 후속 route를 연결 | `FULL/P` | 기능은 실제 binding. Stitch보다 장식은 절제되고 source·unavailable 구분을 우선 |
-| S-13 음식점 방문 도움 | 알레르기·주문 요청을 큰 글씨로 제시 | 음식점 상세 1탭 action, 저장된 식이 제약 sheet, 26pt 전체 화면 큰 글씨·복사·안전 고지 | `ADAPTED/A` | 별도 top-level route가 아닌 focused sheet. widget 회귀 검증 완료; 실매장 사용성·번역은 후속 현장 QA |
+| S-12 장소 상세 | 이미지, 근거, 저장, 일정·도슨트·소통 CTA | `PlaceDetailPage`가 canonical API 장소와 추천 근거 및 각 후속 route를 연결 | `FULL/E` | iPhone 17 Pro에서 실제 음식점·주소·거리·날씨·대기질과 소통 도움 진입을 확인 |
+| S-13 음식점 방문 도움 | 알레르기·주문 요청을 큰 글씨로 제시 | 음식점 상세 1탭 action, 저장된 식이 제약 sheet, 26pt 전체 화면 큰 글씨·복사·안전 고지 | `ADAPTED/E` | focused sheet와 큰 글씨 전체 화면을 실제 탭으로 확인. 저장 요청이 없을 때 이를 명시하며, 실매장 번역·사용성은 후속 현장 QA |
 | S-14 날씨·대기질 | 현재 날씨, PM, 일정 영향과 대안 | 실제 weather/AQ 응답, observed time, 오류·stale, 일정 개입 진입 | `ADAPTED/P` | map/detail의 focused sheet. 유효 데이터가 없을 때 예시값을 만들지 않음 |
 | S-15 동선·투어 | 후보 순서, 이동시간, 일정 초안 | 선택된 실제 장소 기반 `TourSheetContent`, 순서·상태·plan 연결 | `ADAPTED/P` | sheet 표현. 정밀 경로가 아닌 추정 정보의 의미를 구분 |
 
@@ -232,7 +233,7 @@ LALA-next는 그 구조를 유지하면서 지도와 장소를 예시가 아닌 
 
 | ID | Stitch 의도 | LALA-next 현재 대응 | 판정 | 검증·남은 차이 |
 | --- | --- | --- | --- | --- |
-| S-20 하루 일정 | 오전·점심·오후·저녁과 이동 연결 | server-compatible 4슬롯, 실제 순서 rail, 장소·도슨트·방문 행동 | `FULL/A` | timeline widget·전체 Flutter 회귀 검증 완료. 새 exact-head 기기 캡처는 안 함 |
+| S-20 하루 일정 | 오전·점심·오후·저녁과 이동 연결 | server-compatible 4슬롯, 실제 순서 rail, 장소·도슨트·방문 행동 | `FULL/E` | iPhone 17 Pro에서 실제 4슬롯과 시작·중간·종료 rail, 기존 장소·상태·예산·도슨트 행동을 확인 |
 | S-21 상황 변화 비교 | 기존 장소와 날씨·대기질 대안을 비교·적용 | 실제 intervention 전후안을 독립 route에서 비교하고 선택 | `FULL/P` | 적용 전 비교 상태가 구현됨; production mutation 없이 검증 |
 | S-22 이번 여행 설정 | 동행·속도·이동·안전 조건의 임시 override | 날짜별 `TripPreferenceOverride`와 server contract, 기본 취향과 우선순위 분리 | `FULL/P` | 코드·API·migration 계약과 phase 검증 완료; production migration apply는 별도 승인 |
 | S-23 저장한 장소 | 저장 목록, 상태 변화, 오늘 일정 추가 | device-first 저장 ID와 계정 동기화 경로, 상세·일정 연결 | `FULL/P` | guest local 흐름과 자동 테스트; account cross-device 상태는 인증 gate |
@@ -360,6 +361,11 @@ Stitch가 제안한 개인화 분류는 대부분 유지됐고, LALA-next는 이
 - exact `71c22da` 캡처: 11개, SHA-256 모두 상이
 - 로컬 증거 경로:
   `/tmp/lala-canonical-screen-audit-20260903/output/local/runtime-evidence/pr174-iphone17pro/exact-71c22da/`
+- 기능 gap 보완 tree `43f3def` 추가 캡처: 일정 타임라인, 실제 음식점 상세,
+  소통 도움 sheet, 26pt 큰 글씨 화면. 네 캡처의 SHA-256은 모두 상이하다.
+- OCR 확인: `오늘 일정`, 실제 4개 일정, `식당에서 보여주기`, 저장된 식이 요청
+  없음 안내, `큰 글씨로 보여주기`, `직원에게 보여 주세요`와 한국어 문구를 확인했다.
+- 추가 로컬 증거 경로: `/tmp/lala-gap-expansion-evidence/`
 
 ### 웹
 
