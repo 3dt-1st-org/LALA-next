@@ -426,3 +426,75 @@ def test_openapi_documents_account_operations(client):
     )
     assert "current configured LOGTO_ENDPOINT" in account_path["get"]["description"]
     assert "current configured LOGTO_ENDPOINT" in account_path["delete"]["description"]
+
+
+def test_openapi_documents_preference_context_and_effects(client):
+    schema = client.get("/openapi.json").json()
+    schemas = schema["components"]["schemas"]
+
+    # 요청 측: preference_context 는 strict PlanPreferenceContext 로만 참조된다.
+    daily_plan = schemas["DailyPlanRequest"]["properties"]
+    assert daily_plan["preference_context"]["anyOf"][0] == {
+        "$ref": "#/components/schemas/PlanPreferenceContext"
+    }
+    context_props = schemas["PlanPreferenceContext"]["properties"]
+    assert set(context_props.keys()) == {
+        "indoor_outdoor",
+        "weather_sensitivity",
+        "walking_band",
+        "max_one_way_minutes",
+        "food_cuisines",
+        "budget_band",
+        "exclude_closing_soon",
+    }
+    # 민감/알 수 없는 키는 계약상 존재할 수 없다(strict).
+    assert schemas["PlanPreferenceContext"]["additionalProperties"] is False
+    for forbidden in ("dietary_modes", "allergens", "avoid_ingredients", "avoid_stairs"):
+        assert forbidden not in context_props
+    assert context_props["max_one_way_minutes"]["enum"] == [15, 30, 60, 90]
+    assert context_props["food_cuisines"]["items"]["enum"] == [
+        "korean",
+        "streetFood",
+        "cafeDessert",
+        "marketFood",
+        "worldCuisine",
+    ]
+
+    # 응답 측: preference_effects 는 additive(optional) 이고 항목은 bounded enum.
+    effects = schemas["DailyPlanData"]["properties"]["preference_effects"]
+    assert effects["items"] == {"$ref": "#/components/schemas/PreferenceEffect"}
+    assert "preference_effects" not in schemas["DailyPlanData"]["required"]
+    effect_props = schemas["PreferenceEffect"]["properties"]
+    assert set(effect_props.keys()) == {
+        "field",
+        "applied",
+        "reason_code",
+        "explanation",
+        "details",
+    }
+    assert set(effect_props["field"]["enum"]) == {
+        "indoor_outdoor",
+        "max_one_way_minutes",
+        "walking_band",
+        "food_cuisines",
+        "budget_band",
+        "exclude_closing_soon",
+    }
+    assert set(effect_props["reason_code"]["enum"]) <= {
+        "RADIUS_CAPPED_TO_WALKING_TIME",
+        "RADIUS_CAP_NOT_BINDING",
+        "INDOOR_ORDERING_APPLIED",
+        "WEATHER_SAFETY_INDOOR_PRIORITY",
+        "INDOOR_ORDERING_NOT_DIRECTIONAL",
+        "INDOOR_ORDERING_NO_CHANGE",
+        "INDOOR_STATUS_UNAVAILABLE",
+        "CUISINE_FACET_UNAVAILABLE",
+        "PRICE_FACET_UNAVAILABLE",
+        "CLOSING_SOON_FACET_UNAVAILABLE",
+    }
+    assert schemas["PreferenceEffect"]["required"] == [
+        "field",
+        "applied",
+        "reason_code",
+        "explanation",
+    ]

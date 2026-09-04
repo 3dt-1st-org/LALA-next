@@ -90,6 +90,7 @@ def _add_client_auth_security(schema: dict[str, Any]) -> None:
         _success_envelope_schema("DocentScriptData"),
     )
     schemas.setdefault("DailyPlanSlot", _daily_plan_slot_schema())
+    schemas.setdefault("PreferenceEffect", _preference_effect_schema())
     schemas.setdefault("DailyPlanData", _daily_plan_data_schema())
     schemas.setdefault("DailyPlanSuccessEnvelope", _success_envelope_schema("DailyPlanData"))
     schemas.setdefault("InterventionData", _intervention_data_schema())
@@ -1009,6 +1010,63 @@ def _daily_plan_slot_schema() -> dict[str, Any]:
     }
 
 
+def _preference_effect_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": ["field", "applied", "reason_code", "explanation"],
+        "description": (
+            "One grounded (or honestly unapplied) travel-preference effect on the "
+            "plan. Field names, reason codes and details are bounded enums/keys; "
+            "raw preference documents and sensitive values are never included."
+        ),
+        "properties": {
+            "field": {
+                "type": "string",
+                "enum": [
+                    "indoor_outdoor",
+                    "max_one_way_minutes",
+                    "walking_band",
+                    "food_cuisines",
+                    "budget_band",
+                    "exclude_closing_soon",
+                ],
+                "description": "Preference-context field this effect reports on.",
+            },
+            "applied": {
+                "type": "boolean",
+                "description": "True only when the effect observably changed the plan.",
+            },
+            "reason_code": {
+                "type": "string",
+                "enum": [
+                    "RADIUS_CAPPED_TO_WALKING_TIME",
+                    "RADIUS_CAP_NOT_BINDING",
+                    "INDOOR_ORDERING_APPLIED",
+                    "WEATHER_SAFETY_INDOOR_PRIORITY",
+                    "INDOOR_ORDERING_NOT_DIRECTIONAL",
+                    "INDOOR_ORDERING_NO_CHANGE",
+                    "INDOOR_STATUS_UNAVAILABLE",
+                    "CUISINE_FACET_UNAVAILABLE",
+                    "PRICE_FACET_UNAVAILABLE",
+                    "CLOSING_SOON_FACET_UNAVAILABLE",
+                ],
+            },
+            "explanation": {
+                "type": "string",
+                "description": "Localized (ko/en) user-safe explanation.",
+            },
+            "details": {
+                "type": "object",
+                "description": (
+                    "Bounded structured facts (e.g. requested vs effective radius, "
+                    "weather status, ordering provenance)."
+                ),
+            },
+        },
+        "additionalProperties": False,
+    }
+
+
 def _daily_plan_data_schema() -> dict[str, Any]:
     return {
         "type": "object",
@@ -1037,6 +1095,16 @@ def _daily_plan_data_schema() -> dict[str, Any]:
             },
             "request_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
             "cache_key": {"type": "string"},
+            # CP1 additive: present only when the request carried a
+            # preference_context (legacy responses omit the key entirely).
+            "preference_effects": {
+                "type": "array",
+                "items": {"$ref": "#/components/schemas/PreferenceEffect"},
+                "description": (
+                    "Grounded effects of the supplied travel-preference context. "
+                    "Absent when no preference_context was supplied."
+                ),
+            },
         },
         "additionalProperties": False,
     }

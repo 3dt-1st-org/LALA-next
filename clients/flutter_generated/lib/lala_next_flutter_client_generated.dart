@@ -42,6 +42,8 @@ export 'package:lala_next_flutter_client_generated/src/model/place_score_compone
 export 'package:lala_next_flutter_client_generated/src/model/places_data.dart';
 export 'package:lala_next_flutter_client_generated/src/model/places_query.dart';
 export 'package:lala_next_flutter_client_generated/src/model/places_success_envelope.dart';
+export 'package:lala_next_flutter_client_generated/src/model/plan_preference_context.dart';
+export 'package:lala_next_flutter_client_generated/src/model/preference_effect.dart';
 export 'package:lala_next_flutter_client_generated/src/model/readiness_checks.dart';
 export 'package:lala_next_flutter_client_generated/src/model/readyz_data.dart';
 export 'package:lala_next_flutter_client_generated/src/model/readyz_success_envelope.dart';

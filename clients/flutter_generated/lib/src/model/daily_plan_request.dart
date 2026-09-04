@@ -6,6 +6,8 @@
 import 'package:built_value/built_value.dart';
 import 'package:built_value/serializer.dart';
 
+import 'package:lala_next_flutter_client_generated/src/model/plan_preference_context.dart';
+
 part 'daily_plan_request.g.dart';
 
 /// DailyPlanRequest
@@ -14,6 +16,7 @@ part 'daily_plan_request.g.dart';
 /// * [language]
 /// * [lat]
 /// * [lng]
+/// * [preferenceContext]
 /// * [radiusM]
 /// * [selectedPlaceId]
 @BuiltValue()
@@ -26,6 +29,9 @@ abstract class DailyPlanRequest implements Built<DailyPlanRequest, DailyPlanRequ
 
   @BuiltValueField(wireName: r'lng')
   num get lng;
+
+  @BuiltValueField(wireName: r'preference_context')
+  PlanPreferenceContext? get preferenceContext;
 
   @BuiltValueField(wireName: r'radius_m')
   int? get radiusM;
@@ -75,6 +81,13 @@ class _$DailyPlanRequestSerializer implements PrimitiveSerializer<DailyPlanReque
       object.lng,
       specifiedType: const FullType(num),
     );
+    if (object.preferenceContext != null) {
+      yield r'preference_context';
+      yield serializers.serialize(
+        object.preferenceContext,
+        specifiedType: const FullType(PlanPreferenceContext),
+      );
+    }
     if (object.radiusM != null) {
       yield r'radius_m';
       yield serializers.serialize(
@@ -132,6 +145,13 @@ class _$DailyPlanRequestSerializer implements PrimitiveSerializer<DailyPlanReque
             specifiedType: const FullType(num),
           ) as num;
           result.lng = valueDes;
+          break;
+        case r'preference_context':
+          final valueDes = serializers.deserialize(
+            value,
+            specifiedType: const FullType(PlanPreferenceContext),
+          ) as PlanPreferenceContext;
+          result.preferenceContext = valueDes.toBuilder();
           break;
         case r'radius_m':
           final valueDes = serializers.deserialize(

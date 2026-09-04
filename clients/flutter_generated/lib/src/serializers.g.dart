@@ -54,6 +54,15 @@ Serializers _$serializers = (Serializers().toBuilder()
       ..add(PlacesQueryCategoryEnum.serializer)
       ..add(PlacesQueryLanguageEnum.serializer)
       ..add(PlacesSuccessEnvelope.serializer)
+      ..add(PlanPreferenceContext.serializer)
+      ..add(PlanPreferenceContextBudgetBandEnum.serializer)
+      ..add(PlanPreferenceContextFoodCuisinesEnum.serializer)
+      ..add(PlanPreferenceContextIndoorOutdoorEnum.serializer)
+      ..add(PlanPreferenceContextWalkingBandEnum.serializer)
+      ..add(PlanPreferenceContextWeatherSensitivityEnum.serializer)
+      ..add(PreferenceEffect.serializer)
+      ..add(PreferenceEffectFieldEnum.serializer)
+      ..add(PreferenceEffectReasonCodeEnum.serializer)
       ..add(ReadinessChecks.serializer)
       ..add(ReadinessChecksApiKeyEnum.serializer)
       ..add(ReadinessChecksAzureOpenaiDeploymentEnum.serializer)
@@ -100,14 +109,21 @@ Serializers _$serializers = (Serializers().toBuilder()
       ..add(WeatherDataSource_Enum.serializer)
       ..add(WeatherSuccessEnvelope.serializer)
       ..addBuilderFactory(
-          const FullType(BuiltList, const [const FullType(DailyPlanSlot)]),
-          () => ListBuilder<DailyPlanSlot>())
-      ..addBuilderFactory(
           const FullType(BuiltList, const [const FullType(ForecastItem)]),
           () => ListBuilder<ForecastItem>())
       ..addBuilderFactory(
           const FullType(BuiltList, const [const FullType(Place)]),
           () => ListBuilder<Place>())
+      ..addBuilderFactory(
+          const FullType(BuiltList,
+              const [const FullType(PlanPreferenceContextFoodCuisinesEnum)]),
+          () => ListBuilder<PlanPreferenceContextFoodCuisinesEnum>())
+      ..addBuilderFactory(
+          const FullType(BuiltList, const [const FullType(PreferenceEffect)]),
+          () => ListBuilder<PreferenceEffect>())
+      ..addBuilderFactory(
+          const FullType(BuiltList, const [const FullType(DailyPlanSlot)]),
+          () => ListBuilder<DailyPlanSlot>())
       ..addBuilderFactory(
           const FullType(BuiltList, const [const FullType(String)]),
           () => ListBuilder<String>())

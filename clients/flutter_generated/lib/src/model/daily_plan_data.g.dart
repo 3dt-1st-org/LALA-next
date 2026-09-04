@@ -135,6 +135,8 @@ class _$DailyPlanData extends DailyPlanData {
   @override
   final DailyPlanDataLanguageEnum language;
   @override
+  final BuiltList<PreferenceEffect>? preferenceEffects;
+  @override
   final int radiusM;
   @override
   final String requestHash;
@@ -152,6 +154,7 @@ class _$DailyPlanData extends DailyPlanData {
       {required this.cacheKey,
       required this.center,
       required this.language,
+      this.preferenceEffects,
       required this.radiusM,
       required this.requestHash,
       required this.slots,
@@ -172,6 +175,7 @@ class _$DailyPlanData extends DailyPlanData {
         cacheKey == other.cacheKey &&
         center == other.center &&
         language == other.language &&
+        preferenceEffects == other.preferenceEffects &&
         radiusM == other.radiusM &&
         requestHash == other.requestHash &&
         slots == other.slots &&
@@ -185,6 +189,7 @@ class _$DailyPlanData extends DailyPlanData {
     _$hash = $jc(_$hash, cacheKey.hashCode);
     _$hash = $jc(_$hash, center.hashCode);
     _$hash = $jc(_$hash, language.hashCode);
+    _$hash = $jc(_$hash, preferenceEffects.hashCode);
     _$hash = $jc(_$hash, radiusM.hashCode);
     _$hash = $jc(_$hash, requestHash.hashCode);
     _$hash = $jc(_$hash, slots.hashCode);
@@ -200,6 +205,7 @@ class _$DailyPlanData extends DailyPlanData {
           ..add('cacheKey', cacheKey)
           ..add('center', center)
           ..add('language', language)
+          ..add('preferenceEffects', preferenceEffects)
           ..add('radiusM', radiusM)
           ..add('requestHash', requestHash)
           ..add('slots', slots)
@@ -225,6 +231,12 @@ class DailyPlanDataBuilder
   DailyPlanDataLanguageEnum? get language => _$this._language;
   set language(DailyPlanDataLanguageEnum? language) =>
       _$this._language = language;
+
+  ListBuilder<PreferenceEffect>? _preferenceEffects;
+  ListBuilder<PreferenceEffect> get preferenceEffects =>
+      _$this._preferenceEffects ??= ListBuilder<PreferenceEffect>();
+  set preferenceEffects(ListBuilder<PreferenceEffect>? preferenceEffects) =>
+      _$this._preferenceEffects = preferenceEffects;
 
   int? _radiusM;
   int? get radiusM => _$this._radiusM;
@@ -257,6 +269,7 @@ class DailyPlanDataBuilder
       _cacheKey = $v.cacheKey;
       _center = $v.center.toBuilder();
       _language = $v.language;
+      _preferenceEffects = $v.preferenceEffects?.toBuilder();
       _radiusM = $v.radiusM;
       _requestHash = $v.requestHash;
       _slots = $v.slots.toBuilder();
@@ -290,6 +303,7 @@ class DailyPlanDataBuilder
             center: center.build(),
             language: BuiltValueNullFieldError.checkNotNull(
                 language, r'DailyPlanData', 'language'),
+            preferenceEffects: _preferenceEffects?.build(),
             radiusM: BuiltValueNullFieldError.checkNotNull(
                 radiusM, r'DailyPlanData', 'radiusM'),
             requestHash: BuiltValueNullFieldError.checkNotNull(
@@ -304,6 +318,9 @@ class DailyPlanDataBuilder
       try {
         _$failedField = 'center';
         center.build();
+
+        _$failedField = 'preferenceEffects';
+        _preferenceEffects?.build();
 
         _$failedField = 'slots';
         slots.build();

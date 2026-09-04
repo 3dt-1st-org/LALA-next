@@ -6,6 +6,7 @@
 import 'package:lala_next_flutter_client_generated/src/model/coordinate.dart';
 import 'package:lala_next_flutter_client_generated/src/model/daily_plan_slot.dart';
 import 'package:built_collection/built_collection.dart';
+import 'package:lala_next_flutter_client_generated/src/model/preference_effect.dart';
 import 'package:lala_next_flutter_client_generated/src/model/weather_data.dart';
 import 'package:built_value/json_object.dart';
 import 'package:built_value/built_value.dart';
@@ -19,6 +20,7 @@ part 'daily_plan_data.g.dart';
 /// * [cacheKey] 
 /// * [center] 
 /// * [language] 
+/// * [preferenceEffects] 
 /// * [radiusM] 
 /// * [requestHash] 
 /// * [slots] 
@@ -35,6 +37,9 @@ abstract class DailyPlanData implements Built<DailyPlanData, DailyPlanDataBuilde
   @BuiltValueField(wireName: r'language')
   DailyPlanDataLanguageEnum get language;
   // enum languageEnum {  ko,  en,  };
+
+  @BuiltValueField(wireName: r'preference_effects')
+  BuiltList<PreferenceEffect>? get preferenceEffects;
 
   @BuiltValueField(wireName: r'radius_m')
   int get radiusM;
@@ -90,6 +95,13 @@ class _$DailyPlanDataSerializer implements PrimitiveSerializer<DailyPlanData> {
       object.language,
       specifiedType: const FullType(DailyPlanDataLanguageEnum),
     );
+    if (object.preferenceEffects != null) {
+      yield r'preference_effects';
+      yield serializers.serialize(
+        object.preferenceEffects,
+        specifiedType: const FullType(BuiltList, [FullType(PreferenceEffect)]),
+      );
+    }
     yield r'radius_m';
     yield serializers.serialize(
       object.radiusM,
@@ -158,6 +170,13 @@ class _$DailyPlanDataSerializer implements PrimitiveSerializer<DailyPlanData> {
             specifiedType: const FullType(DailyPlanDataLanguageEnum),
           ) as DailyPlanDataLanguageEnum;
           result.language = valueDes;
+          break;
+        case r'preference_effects':
+          final valueDes = serializers.deserialize(
+            value,
+            specifiedType: const FullType(BuiltList, [FullType(PreferenceEffect)]),
+          ) as BuiltList<PreferenceEffect>;
+          result.preferenceEffects.replace(valueDes);
           break;
         case r'radius_m':
           final valueDes = serializers.deserialize(

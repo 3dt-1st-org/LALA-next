@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 from apps.api.app.core.config import get_settings
 from apps.api.app.core.errors import ServiceError
-from apps.api.app.schemas.planner import DailyPlanRequest
+from apps.api.app.schemas.planner import DailyPlanRequest, PlanPreferenceContext
 from apps.api.app.services.normalization import normalize_language
 from apps.api.app.services.opening_hours_service import (
     estimated_opening_hours,
@@ -18,28 +18,70 @@ from apps.api.app.services.travel_time_service import (
     live_routing_enabled,
     period_start_time,
     resolve_travel_time_authority_minutes,
+    walking_distance_m,
 )
 from apps.api.app.services.weather_service import current_weather
+
+# CP1: walking_band → 상한 분 매핑. max_one_way_minutes 바운드({15,30,60,90})의
+# 하위 집합으로 밴드를 표현한다(short=15, medium=30, long=60). 문서화된 값이며
+# 실측 authority 가 아님을 effect 설명에서 그대로 밝힌다.
+_WALKING_BAND_MAX_MINUTES: dict[str, int] = {"short": 15, "medium": 30, "long": 60}
+
+_WEATHER_SENSITIVE = frozenset({"medium", "high"})
 
 
 def daily_plan(request: DailyPlanRequest) -> dict:
     language = normalize_language(request.language)
     weather = current_weather(lat=request.lat, lng=request.lng)
+    preference = request.preference_context
+    # CP1: 반경 상한은 문서화된 도보 추정치(4 km/h)로만 산출하고 요청 반경을
+    # 절대 초과하지 않는다(없으면 요청 반경 그대로 — 기존 호출 형태 보존).
+    effective_radius_m = request.radius_m
+    one_way_minutes: int = 0
+    one_way_source_fields: list[str] = []
+    if preference is not None:
+        one_way_minutes, one_way_source_fields = _effective_one_way_minutes(preference)
+        effective_radius_m = min(request.radius_m, walking_distance_m(one_way_minutes))
     places = list_places(
         lat=request.lat,
         lng=request.lng,
-        radius_m=request.radius_m,
+        radius_m=effective_radius_m,
         category="all",
         language=language,
     )
     source = _combined_source(places.get("source"), weather.get("source"))
     place_candidates = places.get("places") or []
+    # CP1: 실내/야외 정렬은 안정적(stable) 파티션만 — 입력 순서를 깨뜨리지 않고,
+    # 관측 가능한 변화가 없으면 applied 로 보고하지 않는다.
+    ordering_ordered_by: str | None = None
+    ordering_preferred: str | None = None
+    ordering_changed = False
+    ordering_has_known = False
+    if preference is not None and preference.indoor_outdoor != "balanced":
+        preferred_direction: str = preference.indoor_outdoor
+        ordered_by: str
+        weather_safety = (
+            weather.get("outdoor_status") == "bad"
+            and preference.weather_sensitivity in _WEATHER_SENSITIVE
+        )
+        if weather_safety and preferred_direction == "outdoor":
+            # 나쁜 날씨 + medium/high 민감도가 outdoor soft 선호를 이긴다(안전 우선).
+            # unknown 실내 상태는 실내로 취급하지 않는다(honest).
+            preferred_direction = "indoor"
+            ordered_by = "weather_safety"
+        else:
+            ordered_by = "preference"
+        place_candidates, ordering_has_known, ordering_changed = _stable_partition_by_indoor(
+            place_candidates, preferred_direction
+        )
+        ordering_ordered_by = ordered_by
+        ordering_preferred = preferred_direction
     selected_place = _resolve_selected_place(
         place_candidates=place_candidates,
         selected_place_id=request.selected_place_id,
         language=language,
     )
-    return {
+    payload = {
         "language": language,
         "center": {"lat": request.lat, "lng": request.lng},
         "radius_m": request.radius_m,
@@ -53,6 +95,22 @@ def daily_plan(request: DailyPlanRequest) -> dict:
         "source": source,
         **daily_plan_identity(request, language=language),
     }
+    if preference is not None:
+        # CP1: preference_effects 는 컨텍스트가 있을 때만 추가(legacy 응답 보존).
+        # 지원 근거가 없는 효과는 applied=false + 사유 코드로 정직하게 보고한다.
+        payload["preference_effects"] = _preference_effects(
+            language=language,
+            requested_radius_m=request.radius_m,
+            effective_radius_m=effective_radius_m,
+            one_way_minutes=one_way_minutes,
+            one_way_source_fields=one_way_source_fields,
+            ordered_by=ordering_ordered_by,
+            preferred_direction=ordering_preferred,
+            ordering_changed=ordering_changed,
+            ordering_has_known=ordering_has_known,
+            weather_outdoor_status=weather.get("outdoor_status"),
+        )
+    return payload
 
 
 def _resolve_selected_place(
@@ -79,6 +137,265 @@ def _resolve_selected_place(
         message=message,
         retryable=False,
     )
+
+
+def _effective_one_way_minutes(preference: PlanPreferenceContext) -> tuple[int, list[str]]:
+    """선호 컨텍스트에서 유효 이동시간 상한(분)과 그 근거 필드를 산출한다.
+
+    max_one_way_minutes(명시 분)와 walking_band(문서화 밴드 분) 중 더 작은 쪽.
+    동점이면 명시 필드(max_one_way_minutes)를 근거로 내보낸다(결정적 tie-break).
+    """
+    minutes = int(preference.max_one_way_minutes)
+    source_fields = ["max_one_way_minutes"]
+    band_minutes = _WALKING_BAND_MAX_MINUTES[preference.walking_band]
+    if band_minutes < minutes:
+        minutes = band_minutes
+        source_fields = ["walking_band"]
+    return minutes, source_fields
+
+
+def _stable_partition_by_indoor(
+    place_candidates: list[dict], preferred: str
+) -> tuple[list[dict], bool, bool]:
+    """선호 방향에 맞춰 후보를 안정적(stable) 파티션 정렬한다.
+
+    - preferred="indoor": is_indoor 가 True 로 *확인된* 후보가 먼저.
+    - preferred="outdoor": is_indoor 가 False 로 확인된 후보가 먼저.
+    - is_indoor 미확인(None/키 없음)은 실내로 취급하지 않고 뒤쪽에 원래 순서로.
+    반환: (ordered, has_known_status, order_changed).
+    """
+    want_indoor = preferred == "indoor"
+
+    def _matches(candidate: dict) -> bool:
+        is_indoor = candidate.get("is_indoor")
+        return (want_indoor and is_indoor is True) or (not want_indoor and is_indoor is False)
+
+    has_known_status = any(candidate.get("is_indoor") is not None for candidate in place_candidates)
+    ordered = sorted(place_candidates, key=lambda candidate: 0 if _matches(candidate) else 1)
+    order_changed = [id(candidate) for candidate in ordered] != [
+        id(candidate) for candidate in place_candidates
+    ]
+    return ordered, has_known_status, order_changed
+
+
+def _effect_explanation_ko(
+    *,
+    reason_code: str,
+    requested_radius_m: int,
+    effective_radius_m: int,
+    one_way_minutes: int,
+) -> str:
+    if reason_code == "RADIUS_CAPPED_TO_WALKING_TIME":
+        return (
+            f"이동 시간 선호({one_way_minutes}분)에 맞춰 탐색 반경을 "
+            f"{requested_radius_m}m에서 {effective_radius_m}m로 줄였어요. "
+            "도보 4km/h 기준 추정이에요."
+        )
+    if reason_code == "RADIUS_CAP_NOT_BINDING":
+        return (
+            f"요청한 반경이 이미 이동 시간 선호({one_way_minutes}분 이내)에 "
+            "들어와 그대로 유지했어요."
+        )
+    if reason_code == "INDOOR_ORDERING_APPLIED":
+        return "실내/야외 선호에 따라 후보 순서를 조정했어요."
+    if reason_code == "WEATHER_SAFETY_INDOOR_PRIORITY":
+        return "날씨가 좋지 않아 야외 선호보다 실내 후보를 우선 배치했어요."
+    if reason_code == "INDOOR_ORDERING_NOT_DIRECTIONAL":
+        return "실내/야외 중립 선호라 순서를 바꾸지 않았어요."
+    if reason_code == "INDOOR_ORDERING_NO_CHANGE":
+        return "후보가 이미 선호에 맞는 순서라 바뀐 항목이 없어요."
+    if reason_code == "INDOOR_STATUS_UNAVAILABLE":
+        return "실내/야외 정보가 있는 장소가 없어 순서를 바꾸지 못했어요."
+    if reason_code == "CUISINE_FACET_UNAVAILABLE":
+        return "장소 데이터에 요리 정보가 없어 요리 선호를 반영하지 못했어요."
+    if reason_code == "PRICE_FACET_UNAVAILABLE":
+        return "장소 데이터에 가격 정보가 없어 예산 선호를 반영하지 못했어요."
+    if reason_code == "CLOSING_SOON_FACET_UNAVAILABLE":
+        return "장소 데이터에 마감 임박 정보가 없어 제외 선호를 반영하지 못했어요."
+    return ""
+
+
+def _effect_explanation_en(
+    *,
+    reason_code: str,
+    requested_radius_m: int,
+    effective_radius_m: int,
+    one_way_minutes: int,
+) -> str:
+    if reason_code == "RADIUS_CAPPED_TO_WALKING_TIME":
+        return (
+            f"Capped the search radius from {requested_radius_m}m to "
+            f"{effective_radius_m}m to match the {one_way_minutes}-minute one-way "
+            "preference (estimated at a 4 km/h walk)."
+        )
+    if reason_code == "RADIUS_CAP_NOT_BINDING":
+        return (
+            f"The requested radius already fits the {one_way_minutes}-minute "
+            "one-way preference, so it was kept as-is."
+        )
+    if reason_code == "INDOOR_ORDERING_APPLIED":
+        return "Candidate order was adjusted to match the indoor/outdoor preference."
+    if reason_code == "WEATHER_SAFETY_INDOOR_PRIORITY":
+        return (
+            "Weather is bad, so known indoor candidates were prioritized over the "
+            "outdoor preference."
+        )
+    if reason_code == "INDOOR_ORDERING_NOT_DIRECTIONAL":
+        return "The indoor/outdoor preference is neutral, so no ordering was applied."
+    if reason_code == "INDOOR_ORDERING_NO_CHANGE":
+        return "Candidates were already ordered per the preference, so nothing changed."
+    if reason_code == "INDOOR_STATUS_UNAVAILABLE":
+        return "No place carries indoor/outdoor provenance, so no ordering was possible."
+    if reason_code == "CUISINE_FACET_UNAVAILABLE":
+        return "Place data has no cuisine facet, so the cuisine preference was not applied."
+    if reason_code == "PRICE_FACET_UNAVAILABLE":
+        return "Place data has no price facet, so the budget preference was not applied."
+    if reason_code == "CLOSING_SOON_FACET_UNAVAILABLE":
+        return "Place data has no closing-soon facet, so the exclusion preference was not applied."
+    return ""
+
+
+def _effect_entry(
+    *,
+    field: str,
+    applied: bool,
+    reason_code: str,
+    language: str,
+    details: dict[str, object] | None = None,
+    requested_radius_m: int = 0,
+    effective_radius_m: int = 0,
+    one_way_minutes: int = 0,
+) -> dict:
+    ko = language == "ko"
+    explanation = (
+        _effect_explanation_ko(
+            reason_code=reason_code,
+            requested_radius_m=requested_radius_m,
+            effective_radius_m=effective_radius_m,
+            one_way_minutes=one_way_minutes,
+        )
+        if ko
+        else _effect_explanation_en(
+            reason_code=reason_code,
+            requested_radius_m=requested_radius_m,
+            effective_radius_m=effective_radius_m,
+            one_way_minutes=one_way_minutes,
+        )
+    )
+    entry: dict[str, object] = {
+        "field": field,
+        "applied": applied,
+        "reason_code": reason_code,
+        "explanation": explanation,
+    }
+    if details is not None:
+        entry["details"] = details
+    return entry
+
+
+def _preference_effects(
+    *,
+    language: str,
+    requested_radius_m: int,
+    effective_radius_m: int,
+    one_way_minutes: int,
+    one_way_source_fields: list[str],
+    ordered_by: str | None,
+    preferred_direction: str | None,
+    ordering_changed: bool,
+    ordering_has_known: bool,
+    weather_outdoor_status: object,
+) -> list[dict]:
+    """CP1 preference_effects: 관측 가능한 효과만, 정직한 사유 코드와 함께.
+
+    항상 5개의 안정적 순서 항목을 낸다: 반경 상한(max_one_way_minutes 또는
+    walking_band 근거), 실내/야외 정렬(indoor_outdoor), 그리고 데이터 근거가
+    없어 반영하지 못한 food_cuisines/budget_band/exclude_closing_soon.
+    원시 선호 문서나 민감 값은 절대 포함하지 않는다.
+    """
+    effects: list[dict] = []
+    radius_applied = effective_radius_m < requested_radius_m
+    effects.append(
+        _effect_entry(
+            field=one_way_source_fields[0],
+            applied=radius_applied,
+            reason_code=(
+                "RADIUS_CAPPED_TO_WALKING_TIME" if radius_applied else "RADIUS_CAP_NOT_BINDING"
+            ),
+            language=language,
+            details={
+                "requested_radius_m": requested_radius_m,
+                "effective_radius_m": effective_radius_m,
+                "effective_one_way_minutes": one_way_minutes,
+                "source_fields": list(one_way_source_fields),
+                "walking_estimate": "haversine_4kmh",
+            },
+            requested_radius_m=requested_radius_m,
+            effective_radius_m=effective_radius_m,
+            one_way_minutes=one_way_minutes,
+        )
+    )
+    if preferred_direction is None:
+        effects.append(
+            _effect_entry(
+                field="indoor_outdoor",
+                applied=False,
+                reason_code="INDOOR_ORDERING_NOT_DIRECTIONAL",
+                language=language,
+                details={"weather_outdoor_status": weather_outdoor_status},
+            )
+        )
+    else:
+        if not ordering_has_known:
+            ordering_reason = "INDOOR_STATUS_UNAVAILABLE"
+            ordering_applied = False
+        elif not ordering_changed:
+            ordering_reason = "INDOOR_ORDERING_NO_CHANGE"
+            ordering_applied = False
+        elif ordered_by == "weather_safety":
+            ordering_reason = "WEATHER_SAFETY_INDOOR_PRIORITY"
+            ordering_applied = True
+        else:
+            ordering_reason = "INDOOR_ORDERING_APPLIED"
+            ordering_applied = True
+        effects.append(
+            _effect_entry(
+                field="indoor_outdoor",
+                applied=ordering_applied,
+                reason_code=ordering_reason,
+                language=language,
+                details={
+                    "weather_outdoor_status": weather_outdoor_status,
+                    "ordered_by": ordered_by,
+                    "preferred": preferred_direction,
+                },
+            )
+        )
+    effects.append(
+        _effect_entry(
+            field="food_cuisines",
+            applied=False,
+            reason_code="CUISINE_FACET_UNAVAILABLE",
+            language=language,
+        )
+    )
+    effects.append(
+        _effect_entry(
+            field="budget_band",
+            applied=False,
+            reason_code="PRICE_FACET_UNAVAILABLE",
+            language=language,
+        )
+    )
+    effects.append(
+        _effect_entry(
+            field="exclude_closing_soon",
+            applied=False,
+            reason_code="CLOSING_SOON_FACET_UNAVAILABLE",
+            language=language,
+        )
+    )
+    return effects
 
 
 def intervention(*, lat: float, lng: float, radius_m: int, language: str = "en") -> dict:
@@ -655,4 +972,8 @@ def daily_plan_identity(
     }
     if request.selected_place_id is not None:
         payload["selected_place_id"] = request.selected_place_id
+    # CP1: preference_context 도 None 이면 페이로드에 키를 넣지 않는다 —
+    # 컨텍스트 없는 요청의 정체성이 기존 바이트와 동일하게 유지되기 위해서다.
+    if request.preference_context is not None:
+        payload["preference_context"] = request.preference_context.model_dump()
     return generation_identity("daily_plan", payload)
