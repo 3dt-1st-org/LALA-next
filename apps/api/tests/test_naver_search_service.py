@@ -22,6 +22,7 @@ from apps.api.app.services.naver_search_service import (
     PlaceCollectionResult,
     TransientNaverPost,
 )
+from apps.api.app.services.region_catalog import manual_region_place_names
 from apps.api.app.services.review_ingest_governance import (
     ApprovedReviewAggregate,
     ReviewGovernanceError,
@@ -142,12 +143,13 @@ def _fake_place(
     place_id: str = "place-1",
     name_ko: str = PLACE_NAME,
     category: str = "attraction",
+    region_name_ko: str = "서울",
 ) -> ReviewMentionPlace:
     return ReviewMentionPlace(
         place_id=place_id,
         name_ko=name_ko,
         category=category,
-        region_name_ko="서울",
+        region_name_ko=region_name_ko,
     )
 
 
@@ -293,7 +295,9 @@ def _setup_tool_monkeypatch(
         monkeypatch.setattr(tool, "load_active_review_source", lambda *a, **kw: reg)
 
     monkeypatch.setattr(
-        tool, "_read_places_on_cursor", lambda cur, limit: places or [_fake_place()]
+        tool,
+        "_read_places_on_cursor",
+        lambda cur, limit, region_place_names=None: places or [_fake_place()],
     )
     if collection_fn is not None:
         monkeypatch.setattr(tool, "collect_mentions_for_place", collection_fn)
@@ -971,3 +975,184 @@ def test_no_db_connection_during_acquisition(monkeypatch, capsys):
     assert lifecycle["acquire_unclosed"] == 0
     assert lifecycle["open"] == 2
     assert lifecycle["close"] == 2
+
+
+# == Tool: --region place-window filter (region-filter fix) ===================
+
+
+_NO_REGION_PLACE_SQL = """
+        SELECT place_id, name_ko, category, region_name_ko
+        FROM travel.places
+        WHERE name_ko IS NOT NULL
+        ORDER BY place_id
+        LIMIT %s
+    """
+
+
+class _PlaceQueryCursor:
+    """Recording cursor: captures the place query + params, returns canned rows."""
+
+    def __init__(self, rows: list[tuple] | None = None) -> None:
+        self.queries: list[tuple[str, tuple]] = []
+        self._rows = rows if rows is not None else [("place-1", PLACE_NAME, "attraction", "성동구")]
+
+    def execute(self, sql, params):
+        self.queries.append((sql, params))
+
+    def fetchall(self):
+        return list(self._rows)
+
+
+def test_read_places_region_query_is_canonical_any():
+    """A valid region adds region_name_ko = ANY(%s) with the catalog's names."""
+    names = manual_region_place_names("seoul-seongdong")
+    assert names is not None
+    assert "성동구" in names
+    cur = _PlaceQueryCursor()
+    places = tool._read_places_on_cursor(cur, 50, names)
+
+    sql, params = cur.queries[0]
+    assert "AND region_name_ko = ANY(%s)" in sql
+    assert sql.index("ANY(%s)") < sql.index("ORDER BY place_id") < sql.index("LIMIT %s")
+    assert params == (list(names), 50)
+    assert [p.region_name_ko for p in places] == ["성동구"]
+
+
+def test_read_places_region_limit_applies_within_region():
+    """--limit stays region-local: the ANY filter precedes and parameterizes
+    before the limit, so the window is cut inside the selected region."""
+    cur = _PlaceQueryCursor()
+    tool._read_places_on_cursor(cur, 7, ("성동", "성동구"))
+    sql, params = cur.queries[0]
+    assert params[-1] == 7
+    assert sql.index("ANY(%s)") < sql.index("LIMIT %s")
+
+
+@pytest.mark.parametrize("explicit_none", [False, True], ids=["omitted", "explicit_none"])
+def test_read_places_no_region_sql_unchanged(explicit_none):
+    """Regression: without --region the query and params are byte-identical to
+    the pre-region behavior."""
+    cur = _PlaceQueryCursor()
+    if explicit_none:
+        tool._read_places_on_cursor(cur, 50, None)
+    else:
+        tool._read_places_on_cursor(cur, 50)
+    sql, params = cur.queries[0]
+    assert sql == _NO_REGION_PLACE_SQL
+    assert "ANY" not in sql
+    assert params == (50,)
+
+
+def _counting_region_monkeypatch(monkeypatch: pytest.MonkeyPatch) -> dict[str, list]:
+    """Count every external touch: connections, acquisitions, and writes."""
+    calls: dict[str, list] = {"open": [], "acquire": [], "govern": [], "insert": [], "job_run": []}
+    monkeypatch.setattr(
+        tool, "_open_connection", lambda *a, **kw: calls["open"].append(1) or _FakeConn()
+    )
+    monkeypatch.setattr(
+        tool,
+        "collect_mentions_for_place",
+        lambda **kw: calls["acquire"].append(kw) or _make_collection(),
+    )
+    monkeypatch.setattr(
+        tool,
+        "govern_review_ingest_on_cursor",
+        lambda *a, **kw: calls["govern"].append(1) or _fake_ingest_result(),
+    )
+    monkeypatch.setattr(
+        tool,
+        "insert_review_mention_aggregates_on_cursor",
+        lambda *a, **kw: calls["insert"].append(1) or 0,
+    )
+    monkeypatch.setattr(tool, "record_job_run", lambda **kw: calls["job_run"].append(1))
+    return calls
+
+
+def test_unmapped_region_preview_fails_closed(monkeypatch, capsys):
+    """Unmapped id => zero connections, zero acquisition, zero writes."""
+    calls = _counting_region_monkeypatch(monkeypatch)
+    monkeypatch.delenv("DB_DSN", raising=False)
+
+    rc = tool.main(["--preview", "--json", "--region", "seoul"])
+    assert rc == 2
+    out = json.loads(capsys.readouterr().out)
+    assert out["ok"] is False
+    assert out["region"] == "seoul"
+    assert out["region_applied"] is False
+    assert "cannot be mapped" in out["error"]
+    assert calls == {"open": [], "acquire": [], "govern": [], "insert": [], "job_run": []}
+
+
+def test_unmapped_region_apply_fails_closed(monkeypatch, capsys):
+    """Unmapped id under full apply guards => still zero of everything,
+    including the best-effort job-run accounting write."""
+    calls = _counting_region_monkeypatch(monkeypatch)
+    monkeypatch.setenv(tool.ALLOW_ENV, "1")
+
+    rc = tool.main(["--apply", "--json", "--confirm", tool.CONFIRM_TEXT, "--region", "seoul"])
+    assert rc == 2
+    out = json.loads(capsys.readouterr().out)
+    assert out["ok"] is False
+    assert out["region"] == "seoul"
+    assert out["region_applied"] is False
+    assert calls == {"open": [], "acquire": [], "govern": [], "insert": [], "job_run": []}
+
+
+def test_preview_region_scopes_place_read_and_output(monkeypatch, capsys):
+    """A valid region reaches the place read and is echoed with
+    region_applied=true; --limit travels with it."""
+    read_calls: list[tuple[int, tuple[str, ...] | None]] = []
+
+    def fake_read(cur, limit, region_place_names=None):
+        read_calls.append((limit, region_place_names))
+        return [_fake_place(region_name_ko="성동구")]
+
+    _setup_tool_monkeypatch(monkeypatch)
+    monkeypatch.setattr(tool, "_read_places_on_cursor", fake_read)
+
+    rc = tool.main(["--preview", "--json", "--region", "seoul-seongdong", "--limit", "7"])
+    assert rc == 0
+    assert read_calls == [(7, manual_region_place_names("seoul-seongdong"))]
+    out = json.loads(capsys.readouterr().out)
+    assert out["region"] == "seoul-seongdong"
+    assert out["region_applied"] is True
+    assert out["places"] == 1
+
+
+def test_apply_region_scopes_place_read_and_output(monkeypatch, capsys):
+    """Apply threads the region through preflight identically and reports it."""
+    read_calls: list[tuple[int, tuple[str, ...] | None]] = []
+
+    def fake_read(cur, limit, region_place_names=None):
+        read_calls.append((limit, region_place_names))
+        return [_fake_place(region_name_ko="해운대구")]
+
+    _setup_tool_monkeypatch(monkeypatch)
+    monkeypatch.setattr(tool, "_read_places_on_cursor", fake_read)
+    monkeypatch.setattr(
+        tool, "govern_review_ingest_on_cursor", lambda cur, **kw: _fake_ingest_result()
+    )
+    monkeypatch.setattr(tool, "insert_review_mention_aggregates_on_cursor", lambda cur, aggs: 0)
+    monkeypatch.setattr(tool, "record_job_run", lambda **kw: None)
+    monkeypatch.setenv(tool.ALLOW_ENV, "1")
+
+    rc = tool.main(
+        ["--apply", "--json", "--confirm", tool.CONFIRM_TEXT, "--region", "busan-haeundae"]
+    )
+    assert rc == 0
+    assert read_calls == [(50, manual_region_place_names("busan-haeundae"))]
+    out = json.loads(capsys.readouterr().out)
+    assert out["region"] == "busan-haeundae"
+    assert out["region_applied"] is True
+
+
+def test_no_region_output_reports_region_not_applied(monkeypatch, capsys):
+    """Without --region the payload honestly reports region=null,
+    region_applied=false (mirroring the Local Signals read-path contract)."""
+    _setup_tool_monkeypatch(monkeypatch)
+
+    rc = tool.main(["--preview", "--json"])
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["region"] is None
+    assert out["region_applied"] is False

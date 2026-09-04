@@ -19,6 +19,13 @@ distinct, non-colliding signals.
 auth_missing/quota_exceeded/network_error/parse_error or governance quarantines
 records, the top-level status is ``degraded``. If all providers fail, ``failed``.
 
+**Region-targeted place window (region-filter fix):** ``--region
+<manual-region-id>`` scopes the place query to the region's canonical
+``travel.places.region_name_ko`` spellings via
+``region_catalog.manual_region_place_names`` (``= ANY(%s)``), with ``--limit``
+applying within the region. Unmappable ids fail closed before any network call
+or write. Without ``--region`` the place query and ordering are unchanged.
+
 Raw provider text (title/body/url) is NEVER persisted, logged, or written to
 community.posts. Only content_sha256 + opaque external_key + provenance reach
 the governance boundary; only aggregate counts reach community.place_mentions_weekly.
@@ -45,6 +52,7 @@ from apps.api.app.services.naver_search_service import (
     TransientNaverPost,
     collect_mentions_for_place,
 )
+from apps.api.app.services.region_catalog import manual_region_place_names
 from apps.api.app.services.review_ingest_governance import (
     ReviewGovernanceError,
     ReviewSourceRegistration,
@@ -112,6 +120,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--confirm", default="", help=f"Required with --apply: {CONFIRM_TEXT}")
     parser.add_argument("--limit", type=int, default=50, help="Max places to process.")
+    parser.add_argument(
+        "--region",
+        default=None,
+        help=(
+            "Optional manual-region id (e.g. seoul-seongdong); scopes the place "
+            "window to the region's canonical places, with --limit applying "
+            "within the region. Unmappable ids fail closed."
+        ),
+    )
     parser.add_argument("--display", type=int, default=5, help="Results per Naver endpoint.")
     parser.add_argument("--connect-timeout", type=int, default=5)
     args = parser.parse_args(argv)
@@ -122,6 +139,29 @@ def main(argv: list[str] | None = None) -> int:
     if args.apply and args.preview:
         _write(args, {"ok": False, "mode": "plan", "error": "Use either --apply or --preview."})
         return 2
+
+    # Fail closed on unmappable ids before any connection, gate check, or
+    # acquisition: a typo'd region must never degrade into the global place
+    # window (which can contain zero places of the target region).
+    region_place_names: tuple[str, ...] | None = None
+    if args.region is not None:
+        region_place_names = manual_region_place_names(args.region)
+        if region_place_names is None:
+            _write(
+                args,
+                {
+                    "ok": False,
+                    "mode": _mode(args),
+                    "error": (
+                        "--region id is unknown or cannot be mapped to canonical "
+                        "region names; no acquisition or write was performed."
+                    ),
+                    "region": args.region,
+                    "region_applied": False,
+                },
+            )
+            return 2
+
     if not args.apply and not args.preview:
         _write(args, _plan_payload())
         return 0
@@ -139,14 +179,16 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     if args.apply:
-        return _run_apply(args, dsn)
-    return _run_preview(args, dsn)
+        return _run_apply(args, dsn, region_place_names)
+    return _run_preview(args, dsn, region_place_names)
 
 
 # --- preview: read-only gate + places, then in-memory acquire + classify ---
 
 
-def _run_preview(args: argparse.Namespace, dsn: str) -> int:
+def _run_preview(
+    args: argparse.Namespace, dsn: str, region_place_names: tuple[str, ...] | None
+) -> int:
     conn = _open_connection(dsn, args.connect_timeout)
     try:
         with conn:
@@ -157,7 +199,7 @@ def _run_preview(args: argparse.Namespace, dsn: str) -> int:
                     expected_provider=EXPECTED_PROVIDER,
                     expected_terms_version=EXPECTED_TERMS_VERSION,
                 )
-                places = _read_places_on_cursor(cur, args.limit)
+                places = _read_places_on_cursor(cur, args.limit, region_place_names)
     except ReviewGovernanceError as exc:
         _write(
             args,
@@ -181,6 +223,8 @@ def _run_preview(args: argparse.Namespace, dsn: str) -> int:
             "status": status,
             "mode": "preview",
             "source_name": SOURCE_NAME,
+            "region": args.region,
+            "region_applied": region_place_names is not None,
             "places": batch.places_count,
             "candidates": batch.candidates,
             "ad_filtered_out": batch.ad_filtered,
@@ -194,7 +238,9 @@ def _run_preview(args: argparse.Namespace, dsn: str) -> int:
 # --- apply: preflight gate → acquire (no DB) → atomic write transaction ---
 
 
-def _run_apply(args: argparse.Namespace, dsn: str) -> int:
+def _run_apply(
+    args: argparse.Namespace, dsn: str, region_place_names: tuple[str, ...] | None
+) -> int:
     started_at = datetime.now(UTC)
     window_start = _week_start(started_at)
 
@@ -214,7 +260,7 @@ def _run_apply(args: argparse.Namespace, dsn: str) -> int:
                         expected_provider=EXPECTED_PROVIDER,
                         expected_terms_version=EXPECTED_TERMS_VERSION,
                     )
-                    places = _read_places_on_cursor(cur, args.limit)
+                    places = _read_places_on_cursor(cur, args.limit, region_place_names)
         finally:
             preflight_conn.close()
     except ReviewGovernanceError as exc:
@@ -290,6 +336,8 @@ def _run_apply(args: argparse.Namespace, dsn: str) -> int:
             "status": status,
             "mode": "apply",
             "source_name": SOURCE_NAME,
+            "region": args.region,
+            "region_applied": region_place_names is not None,
             "places": batch.places_count,
             "candidates": batch.candidates,
             "ad_filtered_out": batch.ad_filtered,
@@ -316,15 +364,26 @@ def _open_connection(dsn: str, connect_timeout: int):
     return psycopg2.connect(dsn, connect_timeout=connect_timeout)
 
 
-def _read_places_on_cursor(cur, limit: int) -> list[ReviewMentionPlace]:
-    sql = """
+def _read_places_on_cursor(
+    cur, limit: int, region_place_names: tuple[str, ...] | None = None
+) -> list[ReviewMentionPlace]:
+    # The region clause must narrow the window BEFORE LIMIT: the global
+    # ORDER BY place_id head can otherwise contain zero places of the target
+    # region (Seongdong: 132 canonical places, 0 in the head-50 window).
+    region_clause = ""
+    params: list[Any] = []
+    if region_place_names is not None:
+        region_clause = "  AND region_name_ko = ANY(%s)\n"
+        params.append(list(region_place_names))
+    sql = f"""
         SELECT place_id, name_ko, category, region_name_ko
         FROM travel.places
         WHERE name_ko IS NOT NULL
-        ORDER BY place_id
+{region_clause}        ORDER BY place_id
         LIMIT %s
     """
-    cur.execute(sql, (limit,))
+    params.append(limit)
+    cur.execute(sql, tuple(params))
     return [
         ReviewMentionPlace(
             place_id=str(row[0]),
@@ -577,10 +636,14 @@ def _write(args: argparse.Namespace, payload: dict[str, Any]) -> None:
     print(f"source_name={SOURCE_NAME}")
     if payload.get("error"):
         print(f"error={payload['error']}")
+        if payload.get("region") is not None:
+            print(f"region={payload['region']}")
         if payload.get("governance_code"):
             print(f"governance_code={payload['governance_code']}")
         return
     for key in (
+        "region",
+        "region_applied",
         "places",
         "candidates",
         "ad_filtered_out",
@@ -604,7 +667,11 @@ def _duration_ms(started_at: datetime, finished_at: datetime) -> int:
 
 
 def _mode(args: argparse.Namespace) -> str:
-    return "apply" if args.apply else "preview"
+    if args.apply:
+        return "apply"
+    if args.preview:
+        return "preview"
+    return "plan"
 
 
 if __name__ == "__main__":
