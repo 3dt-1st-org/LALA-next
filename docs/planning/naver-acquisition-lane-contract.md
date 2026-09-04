@@ -121,6 +121,26 @@ counts leave the lane.
    failure categories + counts. If ALL providers fail, status is `failed`.
    Only a fully clean run (all ok/empty, zero quarantine) is `succeeded`.
 
+## Optional region targeting (`--region`)
+
+`--preview` and `--apply` accept an optional `--region <manual-region-id>` —
+the client's canonical manual selector id (e.g. `seoul-seongdong`), the same
+id space the Local Signals read path resolves. The id is resolved through
+`region_catalog.manual_region_place_names` into the canonical
+`travel.places.region_name_ko` spellings and added to the place query as
+`AND region_name_ko = ANY(%s)`; `--limit` applies **within** the selected
+region. This corrects the global `ORDER BY place_id LIMIT` place window,
+which at a given batch size can contain zero places of a target region (a
+region-scoped refresh then cannot populate that region's Local Signals).
+
+**Fail-closed:** an unknown or unmappable id aborts before any network call,
+DB connection, or write (including job-run accounting), returning only the
+submitted selector id (`region`) with `region_applied=false` — no raw values
+beyond the submitted id. Without `--region`, the place query, parameters, and
+ordering are byte-identical to the no-region behavior. Preview/apply output
+includes the requested canonical region id and `region_applied`; the
+aggregate-only, no-raw-text output contract is unchanged.
+
 ## Required tests (focused; reconcile PR body count with reality)
 
 - DG-1 gate fail-closed: no/disabled/rejected/mismatched source ⇒ no network
@@ -148,6 +168,11 @@ counts leave the lane.
 - Accurate counts: inserted/duplicate/quarantined match rowcount, not
   attempt count; ad-bearing candidates are excluded from organic.
 - Non-mutating preview: preview writes no rows (assert row counts unchanged).
+- Region filter: a valid `--region` produces the canonical
+  `region_name_ko = ANY(%s)` query and parameters; `--limit` stays
+  region-local; an unmapped id makes zero acquisition calls and zero writes
+  in preview and apply; the no-region query path is byte-identical to the
+  pre-region behavior.
 
 ## Out of scope / unrelated
 
