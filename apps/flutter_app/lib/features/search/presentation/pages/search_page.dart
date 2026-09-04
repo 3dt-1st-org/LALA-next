@@ -465,6 +465,23 @@ class _SearchPageState extends State<SearchPage> {
           },
         );
       case _SearchLoadStatus.loaded:
+        // D-2: 실제 결과가 있어도 query/category 필터로 보이는 목록이 비면 빈 리스트가
+        // 아니라 기존 로컬라이즈 빈 상태(초기화 액션 포함)를 보여준다. transport 의
+        // empty/unavailable/error/loading 구분은 그대로 유지된다(_status 분기).
+        if (_visiblePlaces.isEmpty) {
+          return _SearchEmptyView(
+            key: const ValueKey('search-filtered-empty-view'),
+            language: _language,
+            hasQuery: true,
+            onResetFilters: () {
+              _searchController.clear();
+              setState(() {
+                _query = '';
+                _selectedCategory = 'all';
+              });
+            },
+          );
+        }
         return _SearchResultsView(
           places: _visiblePlaces,
           language: _language,
@@ -969,6 +986,7 @@ class _SearchFailureView extends StatelessWidget {
 /// 실패 카피와 구분되는 고유 안내문을 쓰며, '불러오는 중' 로딩 상태와도 섞이지 않는다.
 class _SearchEmptyView extends StatelessWidget {
   const _SearchEmptyView({
+    super.key,
     required this.language,
     required this.hasQuery,
     required this.onResetFilters,
@@ -1034,6 +1052,7 @@ class _SearchEmptyView extends StatelessWidget {
               ConstrainedBox(
                 constraints: const BoxConstraints(minHeight: 44),
                 child: OutlinedButton.icon(
+                  key: const ValueKey('search-empty-reset-filters'),
                   onPressed: onResetFilters,
                   icon: const Icon(Icons.filter_alt_off_outlined, size: 18),
                   label: Text(actionLabel),
