@@ -310,6 +310,30 @@ void main() {
     expect(harness.backend.scriptRequests, 0);
   });
 
+  test('큐 없는 unavailable 만 미니플레이어 가시성을 끈다(큐 진행/failed 는 유지)', () async {
+    final single = _Harness()..backend.liveSpeech = false;
+    addTearDown(single.controller.dispose);
+
+    await single.controller.playPlace(_place('p1'));
+    expect(single.controller.currentState.phase, DocentExperiencePhase.unavailable);
+    expect(single.controller.currentState.visible, isFalse);
+
+    final queued = _Harness()..backend.liveSpeech = false;
+    addTearDown(queued.controller.dispose);
+
+    await queued.controller.playQueue(<LalaPlace>[_place('q1'), _place('q2')]);
+    expect(queued.controller.currentState.phase, DocentExperiencePhase.unavailable);
+    expect(queued.controller.currentState.queueActive, isTrue);
+    expect(queued.controller.currentState.visible, isTrue);
+
+    final failed = _Harness()..backend.failScript = true;
+    addTearDown(failed.controller.dispose);
+
+    await failed.controller.playPlace(_place('p1'));
+    expect(failed.controller.currentState.phase, DocentExperiencePhase.failed);
+    expect(failed.controller.currentState.visible, isTrue);
+  });
+
   test('한 장소 happy path: 준비 → 재생 → 일시정지 → 재개 → 정지', () async {
     final harness = _Harness();
     addTearDown(harness.controller.dispose);
