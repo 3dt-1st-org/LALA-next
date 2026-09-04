@@ -75,10 +75,15 @@ class ExplodingRepository(FakeAggregatesRepository):
 
 
 def _service(
-    repository: FakeAggregatesRepository, *, aggregate_read: bool = True
+    repository: FakeAggregatesRepository,
+    *,
+    aggregate_read: bool = True,
+    now: Any = None,
 ) -> LocalSignalsAggregatesService:
     return LocalSignalsAggregatesService(
-        repository, settings=_settings(aggregate_read=aggregate_read)
+        repository,
+        settings=_settings(aggregate_read=aggregate_read),
+        now=now,
     )
 
 
@@ -417,3 +422,249 @@ def test_repository_join_uses_governed_source_name_not_sub_provider():
     joined_sql = "".join(sql for sql, _ in executed)
     assert "sources.source_name = mentions.attributes->>'source'" in joined_sql
     assert "sources.provider = mentions.provider" not in joined_sql
+
+
+class _SqlCaptureConnection:
+    """Minimal psycopg2-shaped connection capturing executed SQL."""
+
+    def __init__(self) -> None:
+        self.executed: list[tuple[str, Any]] = []
+
+    def __enter__(self) -> _SqlCaptureConnection:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+    def close(self) -> None:
+        return None
+
+    def cursor(self, **_: Any) -> Any:
+        executed = self.executed
+
+        class Cursor:
+            def __enter__(self) -> Cursor:
+                return self
+
+            def __exit__(self, *args: object) -> None:
+                return None
+
+            def execute(self, sql: str, params: Any = None) -> None:
+                executed.append((sql, params))
+
+            def fetchall(self) -> list[dict[str, Any]]:
+                return []
+
+            def fetchone(self) -> dict[str, Any] | None:
+                return {"last_refreshed_at": REFRESHED_AT}
+
+        return Cursor()
+
+
+def _capturing_repository() -> tuple[LocalSignalsAggregatesRepository, list[tuple[str, Any]]]:
+    connection = _SqlCaptureConnection()
+    repository = LocalSignalsAggregatesRepository(
+        Settings(db_dsn="postgresql://redacted"),
+        connect=lambda **_: connection,
+    )
+    return repository, connection.executed
+
+
+def test_region_request_is_mapped_to_canonical_place_names() -> None:
+    repository = FakeAggregatesRepository()
+
+    _service(repository).list_place_aggregates(
+        weeks=4, limit=20, place_id=None, category=None, region="gyeonggi-suwon"
+    )
+
+    assert repository.calls[0]["region_names"] == ("수원", "수원시")
+
+
+def test_unmappable_region_fails_closed_to_scoped_empty_without_repository() -> None:
+    repository = FakeAggregatesRepository()
+
+    payload = _service(repository).list_place_aggregates(
+        weeks=4, limit=20, place_id=None, category=None, region="not-a-region"
+    )
+
+    assert payload["available"] is True
+    assert payload["region"] == "not-a-region"
+    assert payload["region_applied"] is False
+    assert payload["items"] == []
+    assert payload["computed_at"] is None
+    assert payload["last_refreshed_at"] is None
+    assert payload["freshness"]["state"] == "unknown"
+    assert repository.calls == []
+
+
+def test_mapped_region_with_no_rows_is_applied_empty_not_fallback() -> None:
+    repository = FakeAggregatesRepository([])
+
+    payload = _service(repository).list_place_aggregates(
+        weeks=4, limit=20, place_id=None, category=None, region="gyeonggi-suwon"
+    )
+
+    assert payload["region_applied"] is True
+    assert payload["items"] == []
+    assert payload["last_refreshed_at"] is None
+    assert payload["freshness"]["state"] == "unknown"
+
+
+def test_region_scoped_freshness_derives_from_scoped_rows_only() -> None:
+    # A newer nationwide refresh must not stamp a region result: the scoped
+    # rows' own max is the honest aggregation date.
+    class NewerGlobalRefresh(FakeAggregatesRepository):
+        def latest_refresh_at(self) -> datetime:
+            return datetime(2026, 9, 1, tzinfo=UTC)
+
+    repository = NewerGlobalRefresh([_aggregate_row()])
+
+    payload = _service(repository).list_place_aggregates(
+        weeks=4, limit=20, place_id=None, category=None, region="gyeonggi-suwon"
+    )
+
+    assert payload["last_refreshed_at"] == REFRESHED_AT.isoformat()
+
+
+def test_nationwide_read_keeps_store_wide_latest_refresh_at() -> None:
+    class NewerGlobalRefresh(FakeAggregatesRepository):
+        def latest_refresh_at(self) -> datetime:
+            return datetime(2026, 9, 1, tzinfo=UTC)
+
+    repository = NewerGlobalRefresh([])
+
+    payload = _service(repository).list_place_aggregates(
+        weeks=4, limit=20, place_id=None, category=None
+    )
+
+    assert payload["last_refreshed_at"] == "2026-09-01T00:00:00+00:00"
+
+
+def test_freshness_threshold_boundary_classifies_stale_fresh_unknown() -> None:
+    from datetime import timedelta
+
+    from apps.api.app.services.local_signals_aggregates import (
+        FRESHNESS_THRESHOLD_DAYS,
+    )
+
+    assert FRESHNESS_THRESHOLD_DAYS == 14
+    repository = FakeAggregatesRepository()
+
+    def _freshness(now: datetime) -> dict[str, Any]:
+        return _service(repository, now=lambda: now).list_place_aggregates(
+            weeks=4, limit=20, place_id=None, category=None
+        )["freshness"]
+
+    # 15 days past the last refresh crosses the 14-day threshold (two weekly
+    # aggregation cycles); 13 days stays fresh. Injected clock → deterministic.
+    assert _freshness(REFRESHED_AT + timedelta(days=15)) == {
+        "state": "stale",
+        "threshold_days": 14,
+    }
+    assert _freshness(REFRESHED_AT + timedelta(days=13)) == {
+        "state": "fresh",
+        "threshold_days": 14,
+    }
+
+    class NeverRefreshedRepository(FakeAggregatesRepository):
+        def latest_refresh_at(self) -> Any:
+            return None
+
+    unknown = _service(NeverRefreshedRepository(rows=[])).list_place_aggregates(
+        weeks=4, limit=20, place_id=None, category=None
+    )["freshness"]
+    assert unknown == {"state": "unknown", "threshold_days": 14}
+
+
+def test_flag_off_payload_freshness_is_unknown() -> None:
+    payload = _service(FakeAggregatesRepository(), aggregate_read=False).list_place_aggregates(
+        weeks=4, limit=20, place_id=None, category=None, region="gyeonggi-suwon"
+    )
+
+    assert payload["freshness"] == {"state": "unknown", "threshold_days": 14}
+    assert payload["region"] == "gyeonggi-suwon"
+    assert payload["region_applied"] is False
+
+
+def test_repository_sql_region_clause_matches_places_without_selecting_them() -> None:
+    repository, executed = _capturing_repository()
+
+    repository.list_place_aggregates(
+        weeks=4,
+        limit=5,
+        place_id=None,
+        category=None,
+        region_names=("수원", "수원시"),
+    )
+
+    sql, params = executed[0]
+    assert "FROM travel.places region_place" in sql
+    assert "region_place.region_name_ko = ANY(%s)" in sql
+    assert ["수원", "수원시"] in [list(p) for p in params if isinstance(p, list)]
+    # The places join exists only for matching; place columns stay unselected
+    # (no coordinates or addresses in the projection).
+    for forbidden in ("latitude", "longitude", "address", "region_place.*"):
+        assert forbidden not in sql
+
+
+def test_repository_sql_without_region_is_unchanged_regression() -> None:
+    repository_with, executed_with = _capturing_repository()
+    repository_without, executed_without = _capturing_repository()
+
+    repository_with.list_place_aggregates(
+        weeks=4, limit=5, place_id=None, category=None, region_names=("수원시",)
+    )
+    repository_without.list_place_aggregates(
+        weeks=4, limit=5, place_id=None, category=None, region_names=None
+    )
+
+    sql_with = executed_with[0][0]
+    sql_without = executed_without[0][0]
+    assert "travel.places" not in sql_without
+    # Stripping the region clause from the scoped query must yield exactly the
+    # unscoped query — the region path changes nothing else in the read.
+    region_clause = (
+        " AND EXISTS ( SELECT 1 FROM travel.places region_place "
+        "WHERE region_place.place_id = mentions.place_id "
+        "AND region_place.region_name_ko = ANY(%s) )"
+    )
+
+    def normalize(sql: str) -> str:
+        return " ".join(sql.split())
+
+    assert normalize(sql_with).replace(region_clause, "") == normalize(sql_without)
+
+
+def test_aggregates_route_forwards_region_to_service(
+    client: Any, api_key: str, monkeypatch: Any
+) -> None:
+    monkeypatch.setenv("LALA_LOCAL_SIGNALS_AGGREGATE_READ", "true")
+    repository = FakeAggregatesRepository()
+    service = _service(repository)
+    client.app.dependency_overrides[get_local_signals_aggregates_service] = lambda: service
+
+    response = client.get(
+        "/api/v1/community/signals/aggregates",
+        params={"region": "gyeonggi-suwon"},
+        headers={"X-API-Key": api_key},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["data"]["region"] == "gyeonggi-suwon"
+    assert body["data"]["region_applied"] is True
+    assert repository.calls[0]["region_names"] == ("수원", "수원시")
+
+
+def test_aggregates_openapi_documents_region_scope_and_freshness(client: Any, api_key: str) -> None:
+    schema = client.get("/openapi.json").json()
+
+    parameters = schema["paths"]["/api/v1/community/signals/aggregates"]["get"]["parameters"]
+    region_parameter = next(p for p in parameters if p["name"] == "region")
+    assert region_parameter["required"] is False
+    data_properties = schema["components"]["schemas"]["LocalSignalPlaceAggregatesData"][
+        "properties"
+    ]
+    assert set(("region", "region_applied", "freshness")) <= set(data_properties)
+    freshness = data_properties["freshness"]
+    assert set(freshness.get("required", ())) == {"state", "threshold_days"}
