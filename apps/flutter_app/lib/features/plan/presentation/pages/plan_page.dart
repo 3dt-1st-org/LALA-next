@@ -10,6 +10,7 @@ import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 
 import 'package:lala_next_app/core/backend/lala_backend.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
+import 'package:lala_next_app/core/geo/geo_helpers.dart' show distanceMeters;
 import 'package:lala_next_app/core/location/lala_location.dart';
 import 'package:lala_next_app/core/location/region_context.dart';
 import 'package:lala_next_app/core/routing/lala_route_paths.dart';
@@ -182,7 +183,7 @@ class _PlanPageState extends State<PlanPage> {
     SavedPlaceStore.listenable.addListener(_onSavedPlacesChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        _load();
+        _load(adoptIfCompatible: true);
       }
     });
   }
@@ -380,7 +381,7 @@ class _PlanPageState extends State<PlanPage> {
     );
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool adoptIfCompatible = false}) async {
     final generation = ++_loadGeneration;
     setState(() {
       _status = _PlanLoadStatus.loading;
@@ -422,9 +423,48 @@ class _PlanPageState extends State<PlanPage> {
     }
 
     _config = _baseConfig.copyWith(lat: lat, lng: lng);
+    // D-1: 첫 진입(adoptIfCompatible)에서 현재 요청 컨텍스트와 같은 활성 플랜이
+    // 공유 스토어에 이미 있으면 그 인스턴스를 그대로 쓴다 — 재요청/재생성은 뷰
+    // 전환만으로 슬롯을 뒤섞는 결함의 근원이었다. 명시적 새로고침(재생성/달력/재시도)
+    // 와 지역·언어 변경은 기본 경로(항상 생성)를 탄다.
+    if (adoptIfCompatible) {
+      final shared = PlanContextStore.current;
+      if (shared != null && _canAdoptSharedPlan(shared, lat: lat, lng: lng)) {
+        if (generation != _loadGeneration || !mounted) {
+          return;
+        }
+        setState(() {
+          _dailyPlan = shared;
+          _failureMessage = '';
+          _interventionDismissed = false;
+          _status = _visibleSlotsFrom(shared).isEmpty
+              ? _PlanLoadStatus.empty
+              : _PlanLoadStatus.loaded;
+        });
+        return;
+      }
+    }
     _backend.close();
     _backend = _backendFactory(_config);
     await _fetchPlan(generation);
+  }
+
+  /// 공유 플랜 채택 조건: 같은 radius + 같은 API 언어 + 플랜 중심이 이 탭의 요청
+  /// 중심(지역/기본 좌표) 플랜 반경 이내. 지도 탭의 카메라 인접 플랜과 place-detail
+  /// 고정 플랜(지역 중심) 모두 자연스럽게 채택되고, 실제 지역/언어 변경은 걸린다.
+  bool _canAdoptSharedPlan(
+    LalaDailyPlan plan, {
+    required double lat,
+    required double lng,
+  }) {
+    if (plan.radiusM != _config.radiusM) {
+      return false;
+    }
+    if (plan.language != apiRequestLanguage(_config.lang)) {
+      return false;
+    }
+    return distanceMeters(plan.center.lat, plan.center.lng, lat, lng) <=
+        plan.radiusM;
   }
 
   /// 공유 store 의 컨텍스트로 백엔드를 재구성한다. 기기 위치를 다시 요청하지 않으므로,

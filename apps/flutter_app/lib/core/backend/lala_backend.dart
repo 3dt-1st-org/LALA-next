@@ -42,7 +42,9 @@ abstract class LalaBackend {
 
   Future<LalaEnvelope<LalaIntervention>> getIntervention();
 
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan();
+  /// D-1: [selectedPlaceId] 를 주면 해당 카노니컬 장소를 플랜에 정확히 한 번
+  /// 고정 배정 요청한다. 서버가 후보에서 해석하지 못하면 정직하게 실패한다.
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId});
 
   Future<LalaEnvelope<LalaDocentScript>> createDocentScript({
     required LalaPlace place,
@@ -156,12 +158,13 @@ class LalaApiBackend implements LalaBackend {
   }
 
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan() {
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId}) {
     return _client.createDailyPlan(
       lat: config.lat,
       lng: config.lng,
       radiusM: config.radiusM,
       language: apiRequestLanguage(config.lang),
+      selectedPlaceId: selectedPlaceId,
     );
   }
 

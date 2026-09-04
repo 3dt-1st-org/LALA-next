@@ -627,6 +627,7 @@ class LalaApiClient {
     required double lng,
     int radiusM = 3000,
     String language = 'ko',
+    String? selectedPlaceId,
     String? requestId,
     Duration? timeout,
   }) async {
@@ -634,7 +635,9 @@ class LalaApiClient {
       ..lat = lat
       ..lng = lng
       ..radiusM = radiusM
-      ..language = language;
+      ..language = language
+      // D-1: 선택 장소 고정 배정 요청. null 이면 키를 실어 보내지 않는다(기존 계약 유지).
+      ..selectedPlaceId = selectedPlaceId;
     final body = _serializers.serialize(
       request.build(),
       specifiedType: const FullType(DailyPlanRequest),

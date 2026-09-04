@@ -1121,6 +1121,52 @@ void main() {
     expect(body['language'], 'en');
   });
 
+  test('createDailyPlan sends selected_place_id only when pinned', () async {
+    late RequestOptions pinnedRequest;
+    late RequestOptions unpinnedRequest;
+    Map<String, Object?> planData() => <String, Object?>{
+          'language': 'ko',
+          'center': {'lat': 37.2, 'lng': 127.0},
+          'radius_m': 3000,
+          'weather': _weatherPayload(),
+          'slots': <Map<String, dynamic>>[],
+          'source': 'db',
+          'request_hash':
+              'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
+          'cache_key': 'daily_plan:abcdef0123456789abcdef0123456789',
+        };
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      apiKey: 'migration-key',
+      dio: _dio((request) async {
+        final isPinned = (request.data as Map).containsKey('selected_place_id');
+        if (isPinned) {
+          pinnedRequest = request;
+        } else {
+          unpinnedRequest = request;
+        }
+        return _json({
+          'ok': true,
+          'data': planData(),
+          'meta': {'request_id': 'plan-request-id'},
+          'error': null,
+        });
+      }),
+    );
+
+    await client.createDailyPlan(
+      lat: 37.2,
+      lng: 127.0,
+      selectedPlaceId: 'tour-api-126508',
+    );
+    await client.createDailyPlan(lat: 37.2, lng: 127.0);
+
+    final pinnedBody = pinnedRequest.data as Map;
+    expect(pinnedBody['selected_place_id'], 'tour-api-126508');
+    // 미지정 호출은 키 자체를 실어 보내지 않는다(기존 unpinned 요청 바이트 유지).
+    expect((unpinnedRequest.data as Map).containsKey('selected_place_id'), isFalse);
+  });
+
   test('createDocentAudio returns mpeg bytes and request id', () async {
     late RequestOptions captured;
     final client = LalaApiClient(

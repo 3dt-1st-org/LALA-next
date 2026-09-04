@@ -4022,7 +4022,7 @@ class FakeBackend implements LalaBackend {
   }
 
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan() async {
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId}) async {
     dailyPlanRequests += 1;
     dailyPlanRequestConfigs.add(config);
     await _delayIfNeeded(dailyPlanDelay);
@@ -4201,7 +4201,7 @@ class SnapshotFallbackBackend extends FakeBackend {
   }
 
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan() async {
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId}) async {
     final place = _offlineFallbackPlace();
     return _envelope(
       LalaDailyPlan(
@@ -4245,7 +4245,7 @@ class BilingualInterventionBackend extends FakeBackend {
   }
 
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan() async {
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId}) async {
     dailyPlanRequests += 1;
     final place = (places ?? [_bilingualPlace()]).first;
     return _envelope(

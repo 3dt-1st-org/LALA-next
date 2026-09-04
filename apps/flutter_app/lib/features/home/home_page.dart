@@ -145,6 +145,8 @@ class _LalaHomePageState extends State<LalaHomePage> {
   LalaEnvelope<LalaWeather>? _weather;
   LalaEnvelope<LalaIntervention>? _intervention;
   LalaEnvelope<LalaDailyPlan>? _dailyPlan;
+  // D-1: addToPlan 고정 플랜 생성 중복 발사 방지(더블탭/액션 재시도).
+  bool _pinnedPlanGenerationInFlight = false;
   LalaEnvelope<LalaDocentScript>? _docentScript;
   LalaAudioResponse? _docentAudio;
   LalaAudioResponse? _tourAudio;
@@ -999,10 +1001,64 @@ class _LalaHomePageState extends State<LalaHomePage> {
     if (request.action == LocalSignalPlaceAction.addToPlan) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && SelectedPlaceStore.current == place.placeId) {
-          _openSheet(ActiveMapSheet.planner);
+          unawaited(_generatePinnedPlanForPlace(place));
         }
       });
     }
+  }
+
+  /// D-1: addToPlan 액션의 단일 플랜 생성 지점. 요청받은 카노니컬 장소를
+  /// selectedPlaceId 로 고정 배정 요청하고, 응답의 '정확한 플랜'을 공유 스토어에
+  /// 게시한다(스토어 게시 = 크로스탭 persistence 기록). 포함이 확인되지 않으면
+  /// 플래너 시트를 열지 않고 정직한 실패 안내만 낸다 — 장소가 추가된 척하지 않는다.
+  Future<void> _generatePinnedPlanForPlace(LalaPlace place) async {
+    if (_pinnedPlanGenerationInFlight) return;
+    _pinnedPlanGenerationInFlight = true;
+    try {
+      final envelope = await _backend.createDailyPlan(
+        selectedPlaceId: place.placeId,
+      );
+      final plan = envelope.data;
+      if (!mounted) return;
+      // 서버 계약(고정 배정 또는 422)에 대한 방어: 성공 응답인데 장소가 없으면
+      // 추가된 것으로 주장할 수 없다.
+      final included =
+          envelope.ok &&
+          plan != null &&
+          plan.slots.any((slot) => slot.place?.placeId == place.placeId);
+      if (!included) {
+        _showAddToPlanFailure();
+        return;
+      }
+      setState(() {
+        _dailyPlan = envelope;
+      });
+      PlanContextStore.set(plan);
+      _openSheet(ActiveMapSheet.planner);
+    } on Object {
+      if (mounted) {
+        _showAddToPlanFailure();
+      }
+    } finally {
+      _pinnedPlanGenerationInFlight = false;
+    }
+  }
+
+  void _showAddToPlanFailure() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          lalaCopyMulti(
+            _uiLanguage,
+            ko: '이 장소를 일정에 추가하지 못했어요. 잠시 후 다시 시도해 주세요.',
+            en: 'Could not add this place to the plan. Please try again shortly.',
+            ja: 'このスポットをプランに追加できませんでした。しばらくしてからもう一度お試しください。',
+            zhHans: '未能将此地点添加到行程，请稍后重试。',
+            zhHant: '未能將此地點加入行程，請稍後重試。',
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _resolveLocalSignalPlaceAcrossCategories(
@@ -1038,7 +1094,7 @@ class _LalaHomePageState extends State<LalaHomePage> {
       if (request.action == LocalSignalPlaceAction.addToPlan) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted && SelectedPlaceStore.current == place.placeId) {
-            _openSheet(ActiveMapSheet.planner);
+            unawaited(_generatePinnedPlanForPlace(place));
           }
         });
       }

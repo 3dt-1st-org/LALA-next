@@ -136,7 +136,7 @@ class _ReadyBackend implements LalaBackend {
   }
 
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan() async {
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId}) async {
     throw UnimplementedError();
   }
 }

@@ -123,7 +123,7 @@ class _EpochBackend implements LalaBackend {
   Future<LalaEnvelope<LalaIntervention>> getIntervention() =>
       throw StateError('disabled');
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan() =>
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId}) =>
       throw StateError('disabled');
   @override
   Future<LalaEnvelope<LalaDocentScript>> createDocentScript({
