@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 
 from apps.api.app.core.config import get_settings
+from apps.api.app.core.errors import ServiceError
 from apps.api.app.schemas.planner import DailyPlanRequest
 from apps.api.app.services.normalization import normalize_language
 from apps.api.app.services.opening_hours_service import (
@@ -32,17 +34,51 @@ def daily_plan(request: DailyPlanRequest) -> dict:
     )
     source = _combined_source(places.get("source"), weather.get("source"))
     place_candidates = places.get("places") or []
+    selected_place = _resolve_selected_place(
+        place_candidates=place_candidates,
+        selected_place_id=request.selected_place_id,
+        language=language,
+    )
     return {
         "language": language,
         "center": {"lat": request.lat, "lng": request.lng},
         "radius_m": request.radius_m,
         "weather": weather,
         "slots": _daily_plan_slots(
-            place_candidates=place_candidates, weather=weather, language=language
+            place_candidates=place_candidates,
+            weather=weather,
+            language=language,
+            selected_place=selected_place,
         ),
         "source": source,
         **daily_plan_identity(request, language=language),
     }
+
+
+def _resolve_selected_place(
+    *, place_candidates: list[dict], selected_place_id: str | None, language: str
+) -> dict | None:
+    """D-1: 선택된 장소를 실제 candidate 안에서만 해석한다(대체 장소 발명 금지).
+
+    해석에 실패하면 성공 envelope 으로 '포함하지 못한 플랜'을 돌려주지 않고
+    SELECTED_PLACE_UNAVAILABLE 오류로 정직하게 실패한다.
+    """
+    if selected_place_id is None:
+        return None
+    for candidate in place_candidates:
+        if candidate.get("place_id") == selected_place_id:
+            return candidate
+    message = (
+        "선택한 장소를 이 일정에 포함할 수 없어요."
+        if language == "ko"
+        else "The selected place cannot be included in this plan."
+    )
+    raise ServiceError(
+        status_code=422,
+        code="SELECTED_PLACE_UNAVAILABLE",
+        message=message,
+        retryable=False,
+    )
 
 
 def intervention(*, lat: float, lng: float, radius_m: int, language: str = "en") -> dict:
@@ -213,13 +249,22 @@ def _combined_source(place_source: str | None, weather_source: str | None) -> st
 _PERIOD_ORDER = ("morning", "lunch", "afternoon", "dinner")
 
 
-def _daily_plan_slots(*, place_candidates: list[dict], weather: dict, language: str) -> list[dict]:
+def _daily_plan_slots(
+    *,
+    place_candidates: list[dict],
+    weather: dict,
+    language: str,
+    selected_place: dict | None = None,
+) -> list[dict]:
     """정확히 4 period 슬롯(morning/lunch/afternoon/dinner)을 발생한다(순서 고정).
 
     truthfulness: place 는 실제 candidate 만 dedupe 배정한다. travel-time /
     opening-hours / franchise 등 authority 가 없으면 관련 필드는 null(honest
     unavailable)이고, 후보가 부족해 place 가 없는 slot 은 unavailable_reason 로
     정직한 부재를 전달한다. timestamp/fake authority 값은 절대 발명하지 않는다.
+
+    D-1: selected_place 가 있으면 해당 종류의 첫 슬롯(restaurant → lunch, 그 외 →
+    morning)에 정확히 한 번 배정하고 used 처리해 나머지 배정에서 제외한다(이중 배정 금지).
     """
     ko = language == "ko"
     titles = {
@@ -238,6 +283,15 @@ def _daily_plan_slots(*, place_candidates: list[dict], weather: dict, language: 
     used_place_ids: set[str] = set()
     ri = 0
     ni = 0
+
+    # D-1 고정 배정: 선택 장소는 첫 슬롯에 배정 후 used 처리 — 아래 deterministic
+    # allocation 은 나머지 3슬롯만 채운다(선택 장소의 중복/재배정 없음).
+    selected_period: str | None = None
+    if selected_place is not None:
+        selected_period = "lunch" if selected_place.get("category") == "restaurant" else "morning"
+        selected_id = selected_place.get("place_id")
+        if selected_id is not None:
+            used_place_ids.add(selected_id)
 
     def _take_restaurant() -> dict | None:
         return _take_deduping(restaurants, "r")
@@ -268,9 +322,14 @@ def _daily_plan_slots(*, place_candidates: list[dict], weather: dict, language: 
             ni = i
         return None
 
+    def _take_pinned_or(period: str, take: Callable[[], dict | None]) -> dict | None:
+        if period == selected_period:
+            return selected_place
+        return take()
+
     # deterministic allocation: primary list, fallback to the other list.
-    morning = _take_other()
-    lunch = _take_restaurant()
+    morning = _take_pinned_or("morning", _take_other)
+    lunch = _take_pinned_or("lunch", _take_restaurant)
     if lunch is None:
         lunch = _take_other()
     afternoon = _take_other()
@@ -586,12 +645,14 @@ def _recommended_action(*, weather_status: str, candidate_name: str, language: s
 def daily_plan_identity(
     request: DailyPlanRequest, *, language: str | None = None
 ) -> dict[str, str]:
-    return generation_identity(
-        "daily_plan",
-        {
-            "lat": request.lat,
-            "lng": request.lng,
-            "radius_m": request.radius_m,
-            "language": language or normalize_language(request.language),
-        },
-    )
+    # D-1: selected_place_id 는 None(미지정)일 때 페이로드에 키를 넣지 않는다 —
+    # 기존 비지정 플랜의 request_hash/cache_key 를 바이트 단위로 보존하기 위해서다.
+    payload: dict[str, object] = {
+        "lat": request.lat,
+        "lng": request.lng,
+        "radius_m": request.radius_m,
+        "language": language or normalize_language(request.language),
+    }
+    if request.selected_place_id is not None:
+        payload["selected_place_id"] = request.selected_place_id
+    return generation_identity("daily_plan", payload)

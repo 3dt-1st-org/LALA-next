@@ -1714,3 +1714,121 @@ def test_intervention_uses_public_snapshot_candidate_in_snapshot_fallback(client
     assert body["data"]["source"] == "mixed"
     assert body["data"]["place"]["source"] == "public_mvp_snapshot"
     assert body["data"]["place"]["place_id"] == expected_place["place_id"]
+
+
+# ---------------------------------------------------------------------------
+# D-1: plans/daily 선택 장소(selected_place_id) 고정 배정 라우트 계약.
+# ---------------------------------------------------------------------------
+
+
+def test_daily_plan_route_includes_selected_place_once(client, auth_headers, monkeypatch):
+    monkeypatch.setattr(
+        "apps.api.app.services.planner_service.list_places",
+        lambda **kwargs: {
+            "count": 4,
+            "places": [
+                {
+                    "place_id": "pin-place",
+                    "name": "고정 맛집",
+                    "category": "restaurant",
+                    "lat": 37.2,
+                    "lng": 127.0,
+                    "address": "주소",
+                    "distance_m": 30,
+                    "source": "db",
+                },
+                {
+                    "place_id": "other-place",
+                    "name": "다른 명소",
+                    "category": "attraction",
+                    "lat": 37.21,
+                    "lng": 127.01,
+                    "address": "주소2",
+                    "distance_m": 90,
+                    "source": "db",
+                },
+            ],
+            "query": kwargs,
+            "source": "db",
+        },
+    )
+
+    response = client.post(
+        "/api/v1/plans/daily",
+        headers=auth_headers,
+        json={
+            "lat": 37.2,
+            "lng": 127.0,
+            "radius_m": 1200,
+            "language": "ko",
+            "selected_place_id": "pin-place",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is True
+    slots = body["data"]["slots"]
+    assigned = [s["place"]["place_id"] for s in slots if s["place"]]
+    assert assigned.count("pin-place") == 1
+    lunch = next(s for s in slots if s["period"] == "lunch")
+    assert lunch["place"]["place_id"] == "pin-place"
+    # 고정 플랜의 정체성은 비지정 플랜과 구분된다(같은 좌표/반경/언어에서).
+    unpinned = client.post(
+        "/api/v1/plans/daily",
+        headers=auth_headers,
+        json={"lat": 37.2, "lng": 127.0, "radius_m": 1200, "language": "ko"},
+    )
+    assert unpinned.json()["data"]["request_hash"] != body["data"]["request_hash"]
+
+
+def test_daily_plan_route_unresolvable_selected_place_returns_422_envelope(
+    client, auth_headers, monkeypatch
+):
+    monkeypatch.setattr(
+        "apps.api.app.services.planner_service.list_places",
+        lambda **kwargs: {
+            "count": 0,
+            "places": [],
+            "query": kwargs,
+            "source": "db",
+        },
+    )
+
+    response = client.post(
+        "/api/v1/plans/daily",
+        headers=auth_headers,
+        json={
+            "lat": 37.2,
+            "lng": 127.0,
+            "radius_m": 1200,
+            "language": "ko",
+            "selected_place_id": "ghost-place",
+        },
+    )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert body["ok"] is False
+    assert body["error"]["code"] == "SELECTED_PLACE_UNAVAILABLE"
+    assert body["error"]["message"] == "선택한 장소를 이 일정에 포함할 수 없어요."
+    assert body["error"]["retryable"] is False
+
+
+def test_daily_plan_route_whitespace_only_selected_place_id_rejected(client, auth_headers):
+    response = client.post(
+        "/api/v1/plans/daily",
+        headers=auth_headers,
+        json={
+            "lat": 37.2,
+            "lng": 127.0,
+            "radius_m": 1200,
+            "language": "ko",
+            "selected_place_id": "   ",
+        },
+    )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert body["ok"] is False
+    assert body["error"]["code"] == "VALIDATION_ERROR"

@@ -4,9 +4,12 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
+from pydantic import ValidationError
 
+from apps.api.app.core.errors import ServiceError
 from apps.api.app.schemas.planner import DailyPlanRequest
 from apps.api.app.services import places_service, planner_service
+from apps.api.app.services.request_identity import generation_identity
 
 
 @pytest.mark.parametrize(
@@ -779,3 +782,232 @@ def test_intervention_excludes_original_from_alternatives(monkeypatch):
     assert alt["place"]["place_id"] != result["place"]["place_id"], (
         "alternative must differ from original"
     )
+
+
+# ---------------------------------------------------------------------------
+# D-1: 선택 장소(selected_place_id) 고정 배정 계약.
+# ---------------------------------------------------------------------------
+
+
+def test_daily_plan_slots_pins_selected_restaurant_to_lunch_exactly_once() -> None:
+    weather = {"outdoor_status": "good"}
+    candidates = [
+        _cand("n1", "attraction"),
+        _cand("r1", "restaurant"),
+        _cand("n2", "culture_venue"),
+        _cand("r2", "restaurant"),
+        _cand("n3", "attraction"),
+    ]
+    selected = next(c for c in candidates if c["place_id"] == "r1")
+
+    slots = planner_service._daily_plan_slots(
+        place_candidates=candidates,
+        weather=weather,
+        language="ko",
+        selected_place=selected,
+    )
+
+    assigned_ids = [slot["place"]["place_id"] for slot in slots if slot["place"]]
+    # 정확히 한 번, 식사 슬롯 중 첫 번째(lunch)에 배정.
+    assert assigned_ids.count("r1") == 1
+    assert slots[1]["period"] == "lunch"
+    assert slots[1]["place"]["place_id"] == "r1"
+    # 나머지 슬롯은 기존 deterministic 규칙 유지(중복 없음, 4슬롯 유지).
+    assert len(slots) == 4
+    assert len(set(assigned_ids)) == len(assigned_ids)
+    assert slots[0]["place"]["place_id"] == "n1"
+    assert slots[2]["place"]["place_id"] == "n2"
+
+
+def test_daily_plan_slots_pins_selected_non_restaurant_to_morning() -> None:
+    weather = {"outdoor_status": "good"}
+    candidates = [
+        _cand("n1", "attraction"),
+        _cand("r1", "restaurant"),
+        _cand("n2", "culture_venue"),
+        _cand("r2", "restaurant"),
+    ]
+    selected = next(c for c in candidates if c["place_id"] == "n2")
+
+    slots = planner_service._daily_plan_slots(
+        place_candidates=candidates,
+        weather=weather,
+        language="ko",
+        selected_place=selected,
+    )
+
+    assigned_ids = [slot["place"]["place_id"] for slot in slots if slot["place"]]
+    assert assigned_ids.count("n2") == 1
+    assert slots[0]["period"] == "morning"
+    assert slots[0]["place"]["place_id"] == "n2"
+    # morning 을 차지했어도 나머지 후보는 기존 fallback 규칙대로 배정된다.
+    assert slots[1]["place"]["place_id"] == "r1"
+    assert slots[2]["place"]["place_id"] == "n1"
+    assert slots[3]["place"]["place_id"] == "r2"
+
+
+def test_daily_plan_slots_selected_place_not_in_swappable_alternatives(
+    monkeypatch,
+) -> None:
+    # swappable_alternatives 는 PLAN_FULL_SLOTS 게이트가 켜져야 채워진다(V3 D6).
+    monkeypatch.setattr(
+        planner_service,
+        "get_settings",
+        lambda: SimpleNamespace(feature_flags={"PLAN_FULL_SLOTS": True}),
+    )
+    weather = {"outdoor_status": "good"}
+    candidates = [
+        _cand("n1", "attraction"),
+        _cand("r1", "restaurant"),
+        _cand("n2", "attraction"),
+        _cand("r2", "restaurant"),
+        _cand("n3", "attraction"),
+    ]
+    selected = next(c for c in candidates if c["place_id"] == "r1")
+
+    slots = planner_service._daily_plan_slots(
+        place_candidates=candidates,
+        weather=weather,
+        language="ko",
+        selected_place=selected,
+    )
+
+    alternatives_all = [
+        alt["place_id"] for slot in slots for alt in (slot.get("swappable_alternatives") or [])
+    ]
+    # 게이트가 켜져 leftover 가 존재하며, 고정 장소는 후보에도 남지 않는다.
+    assert alternatives_all, "leftover alternatives should be populated"
+    assert "r1" not in alternatives_all
+
+
+def _patch_daily_plan_sources(monkeypatch, places: list[dict]) -> None:
+    monkeypatch.setattr(
+        planner_service, "list_places", lambda **kw: {"source": "db", "places": places}
+    )
+    monkeypatch.setattr(
+        planner_service,
+        "current_weather",
+        lambda **kw: {"outdoor_status": "good", "source": "kma"},
+    )
+
+
+def test_daily_plan_includes_selected_place_once(monkeypatch) -> None:
+    places = [
+        {"place_id": "p1", "name": "수원화성", "category": "attraction"},
+        {"place_id": "p2", "name": "로컬 식당", "category": "restaurant"},
+        {"place_id": "p3", "name": "행궁", "category": "attraction"},
+        {"place_id": "p4", "name": "카페", "category": "culture_venue"},
+    ]
+    _patch_daily_plan_sources(monkeypatch, places)
+
+    request = DailyPlanRequest(
+        lat=37.5, lng=127.0, radius_m=3000, language="ko", selected_place_id="p2"
+    )
+    result = planner_service.daily_plan(request)
+
+    assigned = [slot["place"]["place_id"] for slot in result["slots"] if slot["place"]]
+    assert assigned.count("p2") == 1
+    lunch_slot = next(s for s in result["slots"] if s["period"] == "lunch")
+    assert lunch_slot["place"]["place_id"] == "p2"
+
+
+def test_daily_plan_unresolvable_selected_place_fails_honestly(monkeypatch) -> None:
+    _patch_daily_plan_sources(
+        monkeypatch,
+        [
+            {"place_id": "p1", "name": "수원화성", "category": "attraction"},
+        ],
+    )
+
+    request = DailyPlanRequest(
+        lat=37.5, lng=127.0, radius_m=3000, language="ko", selected_place_id="ghost"
+    )
+
+    with pytest.raises(ServiceError) as excinfo:
+        planner_service.daily_plan(request)
+
+    assert excinfo.value.status_code == 422
+    assert excinfo.value.code == "SELECTED_PLACE_UNAVAILABLE"
+    assert excinfo.value.message == "선택한 장소를 이 일정에 포함할 수 없어요."
+    assert excinfo.value.retryable is False
+
+
+def test_daily_plan_unresolvable_selected_place_message_localizes(monkeypatch) -> None:
+    _patch_daily_plan_sources(monkeypatch, [])
+
+    request = DailyPlanRequest(
+        lat=37.5, lng=127.0, radius_m=3000, language="en", selected_place_id="ghost"
+    )
+
+    with pytest.raises(ServiceError) as excinfo:
+        planner_service.daily_plan(request)
+
+    assert excinfo.value.message == "The selected place cannot be included in this plan."
+
+
+def test_daily_plan_strips_selected_place_id_whitespace(monkeypatch) -> None:
+    _patch_daily_plan_sources(
+        monkeypatch,
+        [
+            {"place_id": "p1", "name": "수원화성", "category": "attraction"},
+            {"place_id": "p2", "name": "로컬 식당", "category": "restaurant"},
+        ],
+    )
+
+    request = DailyPlanRequest(
+        lat=37.5, lng=127.0, radius_m=3000, language="ko", selected_place_id="  p2  "
+    )
+    result = planner_service.daily_plan(request)
+
+    # BeforeValidator 정규화 후 실제 candidate 로 해석된다.
+    lunch_slot = next(s for s in result["slots"] if s["period"] == "lunch")
+    assert lunch_slot["place"]["place_id"] == "p2"
+
+
+def test_daily_plan_whitespace_only_selected_place_id_is_rejected() -> None:
+    # 거부 계약: 공백 전용 문자열은 미지정이 아니라 VALIDATION_ERROR 이다.
+    with pytest.raises(ValidationError):
+        DailyPlanRequest(lat=37.5, lng=127.0, radius_m=3000, language="ko", selected_place_id="   ")
+
+
+def test_daily_plan_identity_preserves_legacy_unpinned_payload_bytes() -> None:
+    unpinned = DailyPlanRequest(lat=37.5665, lng=126.978, radius_m=3000, language="ko")
+
+    identity = planner_service.daily_plan_identity(unpinned, language="ko")
+
+    # 기존(D-1 이전) 페이로드를 그대로 재구성해 hash 가 바이트 단위로 같은지 검증한다.
+    legacy_payload = {
+        "lat": 37.5665,
+        "lng": 126.978,
+        "radius_m": 3000,
+        "language": "ko",
+    }
+    legacy = generation_identity("daily_plan", legacy_payload)
+    assert identity == legacy
+
+
+def test_daily_plan_identity_distinguishes_selected_place() -> None:
+    unpinned = DailyPlanRequest(lat=37.5665, lng=126.978, radius_m=3000, language="ko")
+    pinned = DailyPlanRequest(
+        lat=37.5665,
+        lng=126.978,
+        radius_m=3000,
+        language="ko",
+        selected_place_id="p2",
+    )
+
+    unpinned_identity = planner_service.daily_plan_identity(unpinned, language="ko")
+    pinned_identity = planner_service.daily_plan_identity(pinned, language="ko")
+
+    assert unpinned_identity["request_hash"] != pinned_identity["request_hash"]
+    assert unpinned_identity["cache_key"] != pinned_identity["cache_key"]
+    # 서로 다른 고정 장소도 서로 다른 정체성을 갖는다.
+    other_pinned = DailyPlanRequest(
+        lat=37.5665,
+        lng=126.978,
+        radius_m=3000,
+        language="ko",
+        selected_place_id="p3",
+    )
+    other_identity = planner_service.daily_plan_identity(other_pinned, language="ko")
+    assert pinned_identity["request_hash"] != other_identity["request_hash"]
