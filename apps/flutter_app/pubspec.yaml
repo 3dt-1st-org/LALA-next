@@ -33,6 +33,10 @@ dependencies:
   # V4-B: docent narration playback. Plays only real LalaAudioResponse.bytes;
   # provider-agnostic. Pinned exactly for reproducible resolution.
   audioplayers: 6.8.1
+  # CP2: restaurant-card Korean pronunciation help. Wraps the on-device
+  # system speech engines (AVSpeechSynthesizer/TextToSpeech/speechSynthesis)
+  # only — no network speech, no paid provider, no fallback audio.
+  flutter_tts: ^4.2.3
 
 dev_dependencies:
   flutter_test:
