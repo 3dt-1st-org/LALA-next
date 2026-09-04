@@ -6,35 +6,33 @@ part of 'preference_effect.dart';
 // BuiltValueGenerator
 // **************************************************************************
 
-const PreferenceEffectFieldEnum _$preferenceEffectFieldEnum_indoor_outdoor =
+const PreferenceEffectFieldEnum _$preferenceEffectFieldEnum_indoorOutdoor =
     const PreferenceEffectFieldEnum._('indoorOutdoor');
-const PreferenceEffectFieldEnum
-    _$preferenceEffectFieldEnum_max_one_way_minutes =
+const PreferenceEffectFieldEnum _$preferenceEffectFieldEnum_maxOneWayMinutes =
     const PreferenceEffectFieldEnum._('maxOneWayMinutes');
-const PreferenceEffectFieldEnum _$preferenceEffectFieldEnum_walking_band =
+const PreferenceEffectFieldEnum _$preferenceEffectFieldEnum_walkingBand =
     const PreferenceEffectFieldEnum._('walkingBand');
-const PreferenceEffectFieldEnum _$preferenceEffectFieldEnum_food_cuisines =
+const PreferenceEffectFieldEnum _$preferenceEffectFieldEnum_foodCuisines =
     const PreferenceEffectFieldEnum._('foodCuisines');
-const PreferenceEffectFieldEnum _$preferenceEffectFieldEnum_budget_band =
+const PreferenceEffectFieldEnum _$preferenceEffectFieldEnum_budgetBand =
     const PreferenceEffectFieldEnum._('budgetBand');
-const PreferenceEffectFieldEnum
-    _$preferenceEffectFieldEnum_exclude_closing_soon =
+const PreferenceEffectFieldEnum _$preferenceEffectFieldEnum_excludeClosingSoon =
     const PreferenceEffectFieldEnum._('excludeClosingSoon');
 
 PreferenceEffectFieldEnum _$preferenceEffectFieldEnumValueOf(String name) {
   switch (name) {
     case 'indoorOutdoor':
-      return _$preferenceEffectFieldEnum_indoor_outdoor;
+      return _$preferenceEffectFieldEnum_indoorOutdoor;
     case 'maxOneWayMinutes':
-      return _$preferenceEffectFieldEnum_max_one_way_minutes;
+      return _$preferenceEffectFieldEnum_maxOneWayMinutes;
     case 'walkingBand':
-      return _$preferenceEffectFieldEnum_walking_band;
+      return _$preferenceEffectFieldEnum_walkingBand;
     case 'foodCuisines':
-      return _$preferenceEffectFieldEnum_food_cuisines;
+      return _$preferenceEffectFieldEnum_foodCuisines;
     case 'budgetBand':
-      return _$preferenceEffectFieldEnum_budget_band;
+      return _$preferenceEffectFieldEnum_budgetBand;
     case 'excludeClosingSoon':
-      return _$preferenceEffectFieldEnum_exclude_closing_soon;
+      return _$preferenceEffectFieldEnum_excludeClosingSoon;
     default:
       throw ArgumentError(name);
   }
@@ -42,67 +40,67 @@ PreferenceEffectFieldEnum _$preferenceEffectFieldEnumValueOf(String name) {
 
 final BuiltSet<PreferenceEffectFieldEnum> _$preferenceEffectFieldEnumValues =
     BuiltSet<PreferenceEffectFieldEnum>(const <PreferenceEffectFieldEnum>[
-  _$preferenceEffectFieldEnum_indoor_outdoor,
-  _$preferenceEffectFieldEnum_max_one_way_minutes,
-  _$preferenceEffectFieldEnum_walking_band,
-  _$preferenceEffectFieldEnum_food_cuisines,
-  _$preferenceEffectFieldEnum_budget_band,
-  _$preferenceEffectFieldEnum_exclude_closing_soon,
+  _$preferenceEffectFieldEnum_indoorOutdoor,
+  _$preferenceEffectFieldEnum_maxOneWayMinutes,
+  _$preferenceEffectFieldEnum_walkingBand,
+  _$preferenceEffectFieldEnum_foodCuisines,
+  _$preferenceEffectFieldEnum_budgetBand,
+  _$preferenceEffectFieldEnum_excludeClosingSoon,
 ]);
 
 const PreferenceEffectReasonCodeEnum
     _$preferenceEffectReasonCodeEnum_RADIUS_CAPPED_TO_WALKING_TIME =
-    const PreferenceEffectReasonCodeEnum._('radiusCappedToWalkingTime');
+    const PreferenceEffectReasonCodeEnum._('RADIUS_CAPPED_TO_WALKING_TIME');
 const PreferenceEffectReasonCodeEnum
     _$preferenceEffectReasonCodeEnum_RADIUS_CAP_NOT_BINDING =
-    const PreferenceEffectReasonCodeEnum._('radiusCapNotBinding');
+    const PreferenceEffectReasonCodeEnum._('RADIUS_CAP_NOT_BINDING');
 const PreferenceEffectReasonCodeEnum
     _$preferenceEffectReasonCodeEnum_INDOOR_ORDERING_APPLIED =
-    const PreferenceEffectReasonCodeEnum._('indoorOrderingApplied');
+    const PreferenceEffectReasonCodeEnum._('INDOOR_ORDERING_APPLIED');
 const PreferenceEffectReasonCodeEnum
     _$preferenceEffectReasonCodeEnum_WEATHER_SAFETY_INDOOR_PRIORITY =
-    const PreferenceEffectReasonCodeEnum._('weatherSafetyIndoorPriority');
+    const PreferenceEffectReasonCodeEnum._('WEATHER_SAFETY_INDOOR_PRIORITY');
 const PreferenceEffectReasonCodeEnum
     _$preferenceEffectReasonCodeEnum_INDOOR_ORDERING_NOT_DIRECTIONAL =
-    const PreferenceEffectReasonCodeEnum._('indoorOrderingNotDirectional');
+    const PreferenceEffectReasonCodeEnum._('INDOOR_ORDERING_NOT_DIRECTIONAL');
 const PreferenceEffectReasonCodeEnum
     _$preferenceEffectReasonCodeEnum_INDOOR_ORDERING_NO_CHANGE =
-    const PreferenceEffectReasonCodeEnum._('indoorOrderingNoChange');
+    const PreferenceEffectReasonCodeEnum._('INDOOR_ORDERING_NO_CHANGE');
 const PreferenceEffectReasonCodeEnum
     _$preferenceEffectReasonCodeEnum_INDOOR_STATUS_UNAVAILABLE =
-    const PreferenceEffectReasonCodeEnum._('indoorStatusUnavailable');
+    const PreferenceEffectReasonCodeEnum._('INDOOR_STATUS_UNAVAILABLE');
 const PreferenceEffectReasonCodeEnum
     _$preferenceEffectReasonCodeEnum_CUISINE_FACET_UNAVAILABLE =
-    const PreferenceEffectReasonCodeEnum._('cuisineFacetUnavailable');
+    const PreferenceEffectReasonCodeEnum._('CUISINE_FACET_UNAVAILABLE');
 const PreferenceEffectReasonCodeEnum
     _$preferenceEffectReasonCodeEnum_PRICE_FACET_UNAVAILABLE =
-    const PreferenceEffectReasonCodeEnum._('priceFacetUnavailable');
+    const PreferenceEffectReasonCodeEnum._('PRICE_FACET_UNAVAILABLE');
 const PreferenceEffectReasonCodeEnum
     _$preferenceEffectReasonCodeEnum_CLOSING_SOON_FACET_UNAVAILABLE =
-    const PreferenceEffectReasonCodeEnum._('closingSoonFacetUnavailable');
+    const PreferenceEffectReasonCodeEnum._('CLOSING_SOON_FACET_UNAVAILABLE');
 
 PreferenceEffectReasonCodeEnum _$preferenceEffectReasonCodeEnumValueOf(
     String name) {
   switch (name) {
-    case 'radiusCappedToWalkingTime':
+    case 'RADIUS_CAPPED_TO_WALKING_TIME':
       return _$preferenceEffectReasonCodeEnum_RADIUS_CAPPED_TO_WALKING_TIME;
-    case 'radiusCapNotBinding':
+    case 'RADIUS_CAP_NOT_BINDING':
       return _$preferenceEffectReasonCodeEnum_RADIUS_CAP_NOT_BINDING;
-    case 'indoorOrderingApplied':
+    case 'INDOOR_ORDERING_APPLIED':
       return _$preferenceEffectReasonCodeEnum_INDOOR_ORDERING_APPLIED;
-    case 'weatherSafetyIndoorPriority':
+    case 'WEATHER_SAFETY_INDOOR_PRIORITY':
       return _$preferenceEffectReasonCodeEnum_WEATHER_SAFETY_INDOOR_PRIORITY;
-    case 'indoorOrderingNotDirectional':
+    case 'INDOOR_ORDERING_NOT_DIRECTIONAL':
       return _$preferenceEffectReasonCodeEnum_INDOOR_ORDERING_NOT_DIRECTIONAL;
-    case 'indoorOrderingNoChange':
+    case 'INDOOR_ORDERING_NO_CHANGE':
       return _$preferenceEffectReasonCodeEnum_INDOOR_ORDERING_NO_CHANGE;
-    case 'indoorStatusUnavailable':
+    case 'INDOOR_STATUS_UNAVAILABLE':
       return _$preferenceEffectReasonCodeEnum_INDOOR_STATUS_UNAVAILABLE;
-    case 'cuisineFacetUnavailable':
+    case 'CUISINE_FACET_UNAVAILABLE':
       return _$preferenceEffectReasonCodeEnum_CUISINE_FACET_UNAVAILABLE;
-    case 'priceFacetUnavailable':
+    case 'PRICE_FACET_UNAVAILABLE':
       return _$preferenceEffectReasonCodeEnum_PRICE_FACET_UNAVAILABLE;
-    case 'closingSoonFacetUnavailable':
+    case 'CLOSING_SOON_FACET_UNAVAILABLE':
       return _$preferenceEffectReasonCodeEnum_CLOSING_SOON_FACET_UNAVAILABLE;
     default:
       throw ArgumentError(name);
@@ -170,28 +168,28 @@ class _$PreferenceEffectFieldEnumSerializer
 class _$PreferenceEffectReasonCodeEnumSerializer
     implements PrimitiveSerializer<PreferenceEffectReasonCodeEnum> {
   static const Map<String, Object> _toWire = const <String, Object>{
-    'radiusCappedToWalkingTime': 'RADIUS_CAPPED_TO_WALKING_TIME',
-    'radiusCapNotBinding': 'RADIUS_CAP_NOT_BINDING',
-    'indoorOrderingApplied': 'INDOOR_ORDERING_APPLIED',
-    'weatherSafetyIndoorPriority': 'WEATHER_SAFETY_INDOOR_PRIORITY',
-    'indoorOrderingNotDirectional': 'INDOOR_ORDERING_NOT_DIRECTIONAL',
-    'indoorOrderingNoChange': 'INDOOR_ORDERING_NO_CHANGE',
-    'indoorStatusUnavailable': 'INDOOR_STATUS_UNAVAILABLE',
-    'cuisineFacetUnavailable': 'CUISINE_FACET_UNAVAILABLE',
-    'priceFacetUnavailable': 'PRICE_FACET_UNAVAILABLE',
-    'closingSoonFacetUnavailable': 'CLOSING_SOON_FACET_UNAVAILABLE',
+    'RADIUS_CAPPED_TO_WALKING_TIME': 'RADIUS_CAPPED_TO_WALKING_TIME',
+    'RADIUS_CAP_NOT_BINDING': 'RADIUS_CAP_NOT_BINDING',
+    'INDOOR_ORDERING_APPLIED': 'INDOOR_ORDERING_APPLIED',
+    'WEATHER_SAFETY_INDOOR_PRIORITY': 'WEATHER_SAFETY_INDOOR_PRIORITY',
+    'INDOOR_ORDERING_NOT_DIRECTIONAL': 'INDOOR_ORDERING_NOT_DIRECTIONAL',
+    'INDOOR_ORDERING_NO_CHANGE': 'INDOOR_ORDERING_NO_CHANGE',
+    'INDOOR_STATUS_UNAVAILABLE': 'INDOOR_STATUS_UNAVAILABLE',
+    'CUISINE_FACET_UNAVAILABLE': 'CUISINE_FACET_UNAVAILABLE',
+    'PRICE_FACET_UNAVAILABLE': 'PRICE_FACET_UNAVAILABLE',
+    'CLOSING_SOON_FACET_UNAVAILABLE': 'CLOSING_SOON_FACET_UNAVAILABLE',
   };
   static const Map<Object, String> _fromWire = const <Object, String>{
-    'RADIUS_CAPPED_TO_WALKING_TIME': 'radiusCappedToWalkingTime',
-    'RADIUS_CAP_NOT_BINDING': 'radiusCapNotBinding',
-    'INDOOR_ORDERING_APPLIED': 'indoorOrderingApplied',
-    'WEATHER_SAFETY_INDOOR_PRIORITY': 'weatherSafetyIndoorPriority',
-    'INDOOR_ORDERING_NOT_DIRECTIONAL': 'indoorOrderingNotDirectional',
-    'INDOOR_ORDERING_NO_CHANGE': 'indoorOrderingNoChange',
-    'INDOOR_STATUS_UNAVAILABLE': 'indoorStatusUnavailable',
-    'CUISINE_FACET_UNAVAILABLE': 'cuisineFacetUnavailable',
-    'PRICE_FACET_UNAVAILABLE': 'priceFacetUnavailable',
-    'CLOSING_SOON_FACET_UNAVAILABLE': 'closingSoonFacetUnavailable',
+    'RADIUS_CAPPED_TO_WALKING_TIME': 'RADIUS_CAPPED_TO_WALKING_TIME',
+    'RADIUS_CAP_NOT_BINDING': 'RADIUS_CAP_NOT_BINDING',
+    'INDOOR_ORDERING_APPLIED': 'INDOOR_ORDERING_APPLIED',
+    'WEATHER_SAFETY_INDOOR_PRIORITY': 'WEATHER_SAFETY_INDOOR_PRIORITY',
+    'INDOOR_ORDERING_NOT_DIRECTIONAL': 'INDOOR_ORDERING_NOT_DIRECTIONAL',
+    'INDOOR_ORDERING_NO_CHANGE': 'INDOOR_ORDERING_NO_CHANGE',
+    'INDOOR_STATUS_UNAVAILABLE': 'INDOOR_STATUS_UNAVAILABLE',
+    'CUISINE_FACET_UNAVAILABLE': 'CUISINE_FACET_UNAVAILABLE',
+    'PRICE_FACET_UNAVAILABLE': 'PRICE_FACET_UNAVAILABLE',
+    'CLOSING_SOON_FACET_UNAVAILABLE': 'CLOSING_SOON_FACET_UNAVAILABLE',
   };
 
   @override

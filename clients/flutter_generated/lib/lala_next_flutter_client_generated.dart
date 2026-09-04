@@ -52,4 +52,3 @@ export 'package:lala_next_flutter_client_generated/src/model/validation_error.da
 export 'package:lala_next_flutter_client_generated/src/model/validation_error_loc_inner.dart';
 export 'package:lala_next_flutter_client_generated/src/model/weather_data.dart';
 export 'package:lala_next_flutter_client_generated/src/model/weather_success_envelope.dart';
-

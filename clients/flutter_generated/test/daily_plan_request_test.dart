@@ -57,7 +57,7 @@ void main() {
     test('embeds preference_context with snake_case keys when supplied', () {
       final context = PlanPreferenceContextBuilder()
         ..indoorOutdoor = PlanPreferenceContextIndoorOutdoorEnum.indoor
-        ..maxOneWayMinutes = 15;
+        ..maxOneWayMinutes = PlanPreferenceContextMaxOneWayMinutesEnum.number15;
       final request = DailyPlanRequestBuilder()
         ..lat = 37.2
         ..lng = 127.0

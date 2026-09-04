@@ -4,12 +4,13 @@
 
 // ignore_for_file: unused_element
 import 'package:built_collection/built_collection.dart';
+import 'package:built_value/json_object.dart';
 import 'package:built_value/built_value.dart';
 import 'package:built_value/serializer.dart';
 
 part 'plan_preference_context.g.dart';
 
-/// PlanPreferenceContext
+/// CP1: 일정 생성에 반영할 수 있는 비민감 soft 선호 값만 담는다.  계약 경계(중요): 이 객체는 public plan endpoint 로 전송 가능한 값만 허용한다. 알레르겐·식이·기피 식재료·이동약성/접근성 선언·인증 클레임·PII·계정 식별자는 필드로 존재할 수 없다(extra=\"forbid\" 로 알 수 없는 키도 거부). 값 집합과 상한은 TravelPreferenceSoft 와 같은 소스(schemas/preferences.py)를 재사용한다.
 ///
 /// Properties:
 /// * [budgetBand]
@@ -29,7 +30,7 @@ abstract class PlanPreferenceContext implements Built<PlanPreferenceContext, Pla
   bool? get excludeClosingSoon;
 
   @BuiltValueField(wireName: r'food_cuisines')
-  BuiltList<PlanPreferenceContextFoodCuisinesEnum>? get foodCuisines;
+  BuiltList<TravelPreferenceSoftFoodCuisinesEnum>? get foodCuisines;
   // enum foodCuisinesEnum {  korean,  streetFood,  cafeDessert,  marketFood,  worldCuisine,  };
 
   @BuiltValueField(wireName: r'indoor_outdoor')
@@ -37,7 +38,8 @@ abstract class PlanPreferenceContext implements Built<PlanPreferenceContext, Pla
   // enum indoorOutdoorEnum {  indoor,  balanced,  outdoor,  };
 
   @BuiltValueField(wireName: r'max_one_way_minutes')
-  int? get maxOneWayMinutes;
+  PlanPreferenceContextMaxOneWayMinutesEnum? get maxOneWayMinutes;
+  // enum maxOneWayMinutesEnum {  15,  30,  60,  90,  };
 
   @BuiltValueField(wireName: r'walking_band')
   PlanPreferenceContextWalkingBandEnum? get walkingBand;
@@ -53,12 +55,12 @@ abstract class PlanPreferenceContext implements Built<PlanPreferenceContext, Pla
 
   @BuiltValueHook(initializeBuilder: true)
   static void _defaults(PlanPreferenceContextBuilder b) => b
-    ..indoorOutdoor = PlanPreferenceContextIndoorOutdoorEnum.balanced
-    ..weatherSensitivity = PlanPreferenceContextWeatherSensitivityEnum.medium
-    ..walkingBand = PlanPreferenceContextWalkingBandEnum.medium
-    ..maxOneWayMinutes = 30
-    ..budgetBand = PlanPreferenceContextBudgetBandEnum.balanced
-    ..excludeClosingSoon = true;
+      ..budgetBand = const PlanPreferenceContextBudgetBandEnum._('balanced')
+      ..excludeClosingSoon = true
+      ..indoorOutdoor = const PlanPreferenceContextIndoorOutdoorEnum._('balanced')
+      ..maxOneWayMinutes = const PlanPreferenceContextMaxOneWayMinutesEnum._('number30')
+      ..walkingBand = const PlanPreferenceContextWalkingBandEnum._('medium')
+      ..weatherSensitivity = const PlanPreferenceContextWeatherSensitivityEnum._('medium');
 
   @BuiltValueSerializer(custom: true)
   static Serializer<PlanPreferenceContext> get serializer => _$PlanPreferenceContextSerializer();
@@ -94,7 +96,7 @@ class _$PlanPreferenceContextSerializer implements PrimitiveSerializer<PlanPrefe
       yield r'food_cuisines';
       yield serializers.serialize(
         object.foodCuisines,
-        specifiedType: const FullType(BuiltList, [FullType(PlanPreferenceContextFoodCuisinesEnum)]),
+        specifiedType: const FullType(BuiltList, [FullType(TravelPreferenceSoftFoodCuisinesEnum)]),
       );
     }
     if (object.indoorOutdoor != null) {
@@ -108,7 +110,7 @@ class _$PlanPreferenceContextSerializer implements PrimitiveSerializer<PlanPrefe
       yield r'max_one_way_minutes';
       yield serializers.serialize(
         object.maxOneWayMinutes,
-        specifiedType: const FullType(int),
+        specifiedType: const FullType(PlanPreferenceContextMaxOneWayMinutesEnum),
       );
     }
     if (object.walkingBand != null) {
@@ -165,8 +167,8 @@ class _$PlanPreferenceContextSerializer implements PrimitiveSerializer<PlanPrefe
         case r'food_cuisines':
           final valueDes = serializers.deserialize(
             value,
-            specifiedType: const FullType(BuiltList, [FullType(PlanPreferenceContextFoodCuisinesEnum)]),
-          ) as BuiltList<PlanPreferenceContextFoodCuisinesEnum>;
+            specifiedType: const FullType(BuiltList, [FullType(TravelPreferenceSoftFoodCuisinesEnum)]),
+          ) as BuiltList<TravelPreferenceSoftFoodCuisinesEnum>;
           result.foodCuisines.replace(valueDes);
           break;
         case r'indoor_outdoor':
@@ -179,8 +181,8 @@ class _$PlanPreferenceContextSerializer implements PrimitiveSerializer<PlanPrefe
         case r'max_one_way_minutes':
           final valueDes = serializers.deserialize(
             value,
-            specifiedType: const FullType(int),
-          ) as int;
+            specifiedType: const FullType(PlanPreferenceContextMaxOneWayMinutesEnum),
+          ) as PlanPreferenceContextMaxOneWayMinutesEnum;
           result.maxOneWayMinutes = valueDes;
           break;
         case r'walking_band':
@@ -243,25 +245,25 @@ class PlanPreferenceContextBudgetBandEnum extends EnumClass {
   static PlanPreferenceContextBudgetBandEnum valueOf(String name) => _$planPreferenceContextBudgetBandEnumValueOf(name);
 }
 
-class PlanPreferenceContextFoodCuisinesEnum extends EnumClass {
+class TravelPreferenceSoftFoodCuisinesEnum extends EnumClass {
 
   @BuiltValueEnumConst(wireName: r'korean')
-  static const PlanPreferenceContextFoodCuisinesEnum korean = _$planPreferenceContextFoodCuisinesEnum_korean;
+  static const TravelPreferenceSoftFoodCuisinesEnum korean = _$travelPreferenceSoftFoodCuisinesEnum_korean;
   @BuiltValueEnumConst(wireName: r'streetFood')
-  static const PlanPreferenceContextFoodCuisinesEnum streetFood = _$planPreferenceContextFoodCuisinesEnum_streetFood;
+  static const TravelPreferenceSoftFoodCuisinesEnum streetFood = _$travelPreferenceSoftFoodCuisinesEnum_streetFood;
   @BuiltValueEnumConst(wireName: r'cafeDessert')
-  static const PlanPreferenceContextFoodCuisinesEnum cafeDessert = _$planPreferenceContextFoodCuisinesEnum_cafeDessert;
+  static const TravelPreferenceSoftFoodCuisinesEnum cafeDessert = _$travelPreferenceSoftFoodCuisinesEnum_cafeDessert;
   @BuiltValueEnumConst(wireName: r'marketFood')
-  static const PlanPreferenceContextFoodCuisinesEnum marketFood = _$planPreferenceContextFoodCuisinesEnum_marketFood;
+  static const TravelPreferenceSoftFoodCuisinesEnum marketFood = _$travelPreferenceSoftFoodCuisinesEnum_marketFood;
   @BuiltValueEnumConst(wireName: r'worldCuisine')
-  static const PlanPreferenceContextFoodCuisinesEnum worldCuisine = _$planPreferenceContextFoodCuisinesEnum_worldCuisine;
+  static const TravelPreferenceSoftFoodCuisinesEnum worldCuisine = _$travelPreferenceSoftFoodCuisinesEnum_worldCuisine;
 
-  static Serializer<PlanPreferenceContextFoodCuisinesEnum> get serializer => _$planPreferenceContextFoodCuisinesEnumSerializer;
+  static Serializer<TravelPreferenceSoftFoodCuisinesEnum> get serializer => _$travelPreferenceSoftFoodCuisinesEnumSerializer;
 
-  const PlanPreferenceContextFoodCuisinesEnum._(String name): super(name);
+  const TravelPreferenceSoftFoodCuisinesEnum._(String name): super(name);
 
-  static BuiltSet<PlanPreferenceContextFoodCuisinesEnum> get values => _$planPreferenceContextFoodCuisinesEnumValues;
-  static PlanPreferenceContextFoodCuisinesEnum valueOf(String name) => _$planPreferenceContextFoodCuisinesEnumValueOf(name);
+  static BuiltSet<TravelPreferenceSoftFoodCuisinesEnum> get values => _$travelPreferenceSoftFoodCuisinesEnumValues;
+  static TravelPreferenceSoftFoodCuisinesEnum valueOf(String name) => _$travelPreferenceSoftFoodCuisinesEnumValueOf(name);
 }
 
 class PlanPreferenceContextIndoorOutdoorEnum extends EnumClass {
@@ -279,6 +281,25 @@ class PlanPreferenceContextIndoorOutdoorEnum extends EnumClass {
 
   static BuiltSet<PlanPreferenceContextIndoorOutdoorEnum> get values => _$planPreferenceContextIndoorOutdoorEnumValues;
   static PlanPreferenceContextIndoorOutdoorEnum valueOf(String name) => _$planPreferenceContextIndoorOutdoorEnumValueOf(name);
+}
+
+class PlanPreferenceContextMaxOneWayMinutesEnum extends EnumClass {
+
+  @BuiltValueEnumConst(wireNumber: 15)
+  static const PlanPreferenceContextMaxOneWayMinutesEnum number15 = _$planPreferenceContextMaxOneWayMinutesEnum_number15;
+  @BuiltValueEnumConst(wireNumber: 30)
+  static const PlanPreferenceContextMaxOneWayMinutesEnum number30 = _$planPreferenceContextMaxOneWayMinutesEnum_number30;
+  @BuiltValueEnumConst(wireNumber: 60)
+  static const PlanPreferenceContextMaxOneWayMinutesEnum number60 = _$planPreferenceContextMaxOneWayMinutesEnum_number60;
+  @BuiltValueEnumConst(wireNumber: 90)
+  static const PlanPreferenceContextMaxOneWayMinutesEnum number90 = _$planPreferenceContextMaxOneWayMinutesEnum_number90;
+
+  static Serializer<PlanPreferenceContextMaxOneWayMinutesEnum> get serializer => _$planPreferenceContextMaxOneWayMinutesEnumSerializer;
+
+  const PlanPreferenceContextMaxOneWayMinutesEnum._(String name): super(name);
+
+  static BuiltSet<PlanPreferenceContextMaxOneWayMinutesEnum> get values => _$planPreferenceContextMaxOneWayMinutesEnumValues;
+  static PlanPreferenceContextMaxOneWayMinutesEnum valueOf(String name) => _$planPreferenceContextMaxOneWayMinutesEnumValueOf(name);
 }
 
 class PlanPreferenceContextWalkingBandEnum extends EnumClass {

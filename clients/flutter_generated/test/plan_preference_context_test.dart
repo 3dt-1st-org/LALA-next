@@ -11,10 +11,10 @@ void main() {
         ..indoorOutdoor = PlanPreferenceContextIndoorOutdoorEnum.outdoor
         ..weatherSensitivity = PlanPreferenceContextWeatherSensitivityEnum.high
         ..walkingBand = PlanPreferenceContextWalkingBandEnum.short
-        ..maxOneWayMinutes = 15
-        ..foodCuisines = ListBuilder<PlanPreferenceContextFoodCuisinesEnum>([
-          PlanPreferenceContextFoodCuisinesEnum.korean,
-          PlanPreferenceContextFoodCuisinesEnum.cafeDessert,
+        ..maxOneWayMinutes = PlanPreferenceContextMaxOneWayMinutesEnum.number15
+        ..foodCuisines = ListBuilder<TravelPreferenceSoftFoodCuisinesEnum>([
+          TravelPreferenceSoftFoodCuisinesEnum.korean,
+          TravelPreferenceSoftFoodCuisinesEnum.cafeDessert,
         ])
         ..budgetBand = PlanPreferenceContextBudgetBandEnum.value
         ..excludeClosingSoon = false;
@@ -44,7 +44,7 @@ void main() {
         PlanPreferenceContextWeatherSensitivityEnum.medium,
       );
       expect(context.walkingBand, PlanPreferenceContextWalkingBandEnum.medium);
-      expect(context.maxOneWayMinutes, 30);
+      expect(context.maxOneWayMinutes, PlanPreferenceContextMaxOneWayMinutesEnum.number30);
       expect(context.foodCuisines, isNull);
       expect(context.budgetBand, PlanPreferenceContextBudgetBandEnum.balanced);
       expect(context.excludeClosingSoon, isTrue);
@@ -53,9 +53,9 @@ void main() {
     test('round-trips through the standard serializers', () {
       final builder = PlanPreferenceContextBuilder()
         ..indoorOutdoor = PlanPreferenceContextIndoorOutdoorEnum.indoor
-        ..maxOneWayMinutes = 60
-        ..foodCuisines = ListBuilder<PlanPreferenceContextFoodCuisinesEnum>(
-          [PlanPreferenceContextFoodCuisinesEnum.marketFood],
+        ..maxOneWayMinutes = PlanPreferenceContextMaxOneWayMinutesEnum.number60
+        ..foodCuisines = ListBuilder<TravelPreferenceSoftFoodCuisinesEnum>(
+          [TravelPreferenceSoftFoodCuisinesEnum.marketFood],
         );
       final context = builder.build();
 
@@ -69,10 +69,10 @@ void main() {
       )!;
 
       expect(decoded.indoorOutdoor, PlanPreferenceContextIndoorOutdoorEnum.indoor);
-      expect(decoded.maxOneWayMinutes, 60);
+      expect(decoded.maxOneWayMinutes, PlanPreferenceContextMaxOneWayMinutesEnum.number60);
       expect(
         decoded.foodCuisines!.single,
-        PlanPreferenceContextFoodCuisinesEnum.marketFood,
+        TravelPreferenceSoftFoodCuisinesEnum.marketFood,
       );
     });
   });

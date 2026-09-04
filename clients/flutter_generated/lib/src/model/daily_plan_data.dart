@@ -5,8 +5,8 @@
 // ignore_for_file: unused_element
 import 'package:lala_next_flutter_client_generated/src/model/coordinate.dart';
 import 'package:lala_next_flutter_client_generated/src/model/daily_plan_slot.dart';
-import 'package:built_collection/built_collection.dart';
 import 'package:lala_next_flutter_client_generated/src/model/preference_effect.dart';
+import 'package:built_collection/built_collection.dart';
 import 'package:lala_next_flutter_client_generated/src/model/weather_data.dart';
 import 'package:built_value/json_object.dart';
 import 'package:built_value/built_value.dart';
@@ -20,7 +20,7 @@ part 'daily_plan_data.g.dart';
 /// * [cacheKey] 
 /// * [center] 
 /// * [language] 
-/// * [preferenceEffects] 
+/// * [preferenceEffects] - Grounded effects of the supplied travel-preference context. Absent when no preference_context was supplied.
 /// * [radiusM] 
 /// * [requestHash] 
 /// * [slots] 
@@ -38,6 +38,7 @@ abstract class DailyPlanData implements Built<DailyPlanData, DailyPlanDataBuilde
   DailyPlanDataLanguageEnum get language;
   // enum languageEnum {  ko,  en,  };
 
+  /// Grounded effects of the supplied travel-preference context. Absent when no preference_context was supplied.
   @BuiltValueField(wireName: r'preference_effects')
   BuiltList<PreferenceEffect>? get preferenceEffects;
 

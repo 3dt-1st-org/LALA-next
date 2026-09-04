@@ -3,10 +3,9 @@
 //
 
 // ignore_for_file: unused_element
+import 'package:lala_next_flutter_client_generated/src/model/plan_preference_context.dart';
 import 'package:built_value/built_value.dart';
 import 'package:built_value/serializer.dart';
-
-import 'package:lala_next_flutter_client_generated/src/model/plan_preference_context.dart';
 
 part 'daily_plan_request.g.dart';
 
@@ -85,7 +84,7 @@ class _$DailyPlanRequestSerializer implements PrimitiveSerializer<DailyPlanReque
       yield r'preference_context';
       yield serializers.serialize(
         object.preferenceContext,
-        specifiedType: const FullType(PlanPreferenceContext),
+        specifiedType: const FullType.nullable(PlanPreferenceContext),
       );
     }
     if (object.radiusM != null) {
@@ -99,7 +98,7 @@ class _$DailyPlanRequestSerializer implements PrimitiveSerializer<DailyPlanReque
       yield r'selected_place_id';
       yield serializers.serialize(
         object.selectedPlaceId,
-        specifiedType: const FullType(String),
+        specifiedType: const FullType.nullable(String),
       );
     }
   }
@@ -149,8 +148,9 @@ class _$DailyPlanRequestSerializer implements PrimitiveSerializer<DailyPlanReque
         case r'preference_context':
           final valueDes = serializers.deserialize(
             value,
-            specifiedType: const FullType(PlanPreferenceContext),
-          ) as PlanPreferenceContext;
+            specifiedType: const FullType.nullable(PlanPreferenceContext),
+          ) as PlanPreferenceContext?;
+          if (valueDes == null) continue;
           result.preferenceContext = valueDes.toBuilder();
           break;
         case r'radius_m':
@@ -163,8 +163,9 @@ class _$DailyPlanRequestSerializer implements PrimitiveSerializer<DailyPlanReque
         case r'selected_place_id':
           final valueDes = serializers.deserialize(
             value,
-            specifiedType: const FullType(String),
-          ) as String;
+            specifiedType: const FullType.nullable(String),
+          ) as String?;
+          if (valueDes == null) continue;
           result.selectedPlaceId = valueDes;
           break;
         default:

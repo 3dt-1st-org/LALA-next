@@ -106,7 +106,8 @@ class _ControlledPlanBackend implements LalaBackend {
   @override
   Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({
     String? selectedPlaceId,
-  }) {
+    LalaPlanPreferenceContext? preferenceContext,
+    }) {
     planRequestCount++;
     return planCompleter.future;
   }
@@ -139,7 +140,8 @@ class _NoFetchBackend implements LalaBackend {
   @override
   Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({
     String? selectedPlaceId,
-  }) async {
+    LalaPlanPreferenceContext? preferenceContext,
+    }) async {
     planRequestCount++;
     return _envelope(_freshPlan());
   }

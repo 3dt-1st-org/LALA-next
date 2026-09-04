@@ -73,7 +73,6 @@ part 'serializers.g.dart';
   DocentScriptSuccessEnvelope,
   Dust,
   ForecastItem,
-  HTTPValidationError,
   HealthzData,
   HealthzSuccessEnvelope,
   InterventionData,

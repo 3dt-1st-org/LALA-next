@@ -126,7 +126,8 @@ class _RecordingPlanBackend implements LalaBackend {
   @override
   Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({
     String? selectedPlaceId,
-  }) async {
+    LalaPlanPreferenceContext? preferenceContext,
+    }) async {
     requestedSelectedPlaceIds.add(selectedPlaceId);
     final failure = planFailure?.call(selectedPlaceId);
     if (failure != null) {

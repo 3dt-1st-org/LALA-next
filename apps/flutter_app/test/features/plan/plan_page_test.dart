@@ -358,7 +358,7 @@ class _PendingPlanBackend implements LalaBackend {
   }
 
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId}) =>
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId, LalaPlanPreferenceContext? preferenceContext}) =>
       _planCompleter.future;
 
   @override
@@ -376,7 +376,7 @@ class _PendingPlanBackend implements LalaBackend {
 /// 실제 일정(슬롯 + 날씨)을 반환하는 테스트용 백엔드.
 class _LoadedPlanBackend implements LalaBackend {
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId}) async => _envelope(
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId, LalaPlanPreferenceContext? preferenceContext}) async => _envelope(
     LalaDailyPlan(
       language: 'ko',
       center: const LalaCoordinate(lat: 37.2636, lng: 127.0286),
@@ -406,7 +406,7 @@ class _EmptySlotsBackend implements LalaBackend {
   int planRequests = 0;
 
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId}) async {
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId, LalaPlanPreferenceContext? preferenceContext}) async {
     planRequests += 1;
     return _envelope(
       LalaDailyPlan(
@@ -434,7 +434,7 @@ class _EmptySlotsBackend implements LalaBackend {
 /// 표시 가능한 슬롯이 없는(preparing placeholder 만 → 필터링됨) 테스트용 백엔드.
 class _HiddenSlotsBackend implements LalaBackend {
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId}) async => _envelope(
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId, LalaPlanPreferenceContext? preferenceContext}) async => _envelope(
     LalaDailyPlan(
       language: 'ko',
       center: const LalaCoordinate(lat: 37.2636, lng: 127.0286),
@@ -461,7 +461,7 @@ class _HiddenSlotsBackend implements LalaBackend {
 /// to check against SavedPlaceStore (F-030 marker wiring).
 class _PlaceSlotBackend implements LalaBackend {
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId}) async => _envelope(
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId, LalaPlanPreferenceContext? preferenceContext}) async => _envelope(
     LalaDailyPlan(
       language: 'ko',
       center: const LalaCoordinate(lat: 37.2636, lng: 127.0286),

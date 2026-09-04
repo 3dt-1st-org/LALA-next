@@ -10,25 +10,29 @@ import 'package:built_value/serializer.dart';
 
 part 'preference_effect.g.dart';
 
-/// PreferenceEffect
+/// One grounded (or honestly unapplied) travel-preference effect on the plan. Field names, reason codes and details are bounded enums/keys; raw preference documents and sensitive values are never included.
 ///
 /// Properties:
-/// * [applied]
-/// * [details]
-/// * [explanation]
-/// * [field]
+/// * [applied] - True only when the effect observably changed the plan.
+/// * [details] - Bounded structured facts (e.g. requested vs effective radius, weather status, ordering provenance).
+/// * [explanation] - Localized (ko/en) user-safe explanation.
+/// * [field] - Preference-context field this effect reports on.
 /// * [reasonCode]
 @BuiltValue()
 abstract class PreferenceEffect implements Built<PreferenceEffect, PreferenceEffectBuilder> {
+  /// True only when the effect observably changed the plan.
   @BuiltValueField(wireName: r'applied')
   bool get applied;
 
+  /// Bounded structured facts (e.g. requested vs effective radius, weather status, ordering provenance).
   @BuiltValueField(wireName: r'details')
   JsonObject? get details;
 
+  /// Localized (ko/en) user-safe explanation.
   @BuiltValueField(wireName: r'explanation')
   String get explanation;
 
+  /// Preference-context field this effect reports on.
   @BuiltValueField(wireName: r'field')
   PreferenceEffectFieldEnum get field;
   // enum fieldEnum {  indoor_outdoor,  max_one_way_minutes,  walking_band,  food_cuisines,  budget_band,  exclude_closing_soon,  };
@@ -176,18 +180,24 @@ class _$PreferenceEffectSerializer implements PrimitiveSerializer<PreferenceEffe
 
 class PreferenceEffectFieldEnum extends EnumClass {
 
+  /// Preference-context field this effect reports on.
   @BuiltValueEnumConst(wireName: r'indoor_outdoor')
-  static const PreferenceEffectFieldEnum indoorOutdoor = _$preferenceEffectFieldEnum_indoor_outdoor;
+  static const PreferenceEffectFieldEnum indoorOutdoor = _$preferenceEffectFieldEnum_indoorOutdoor;
+  /// Preference-context field this effect reports on.
   @BuiltValueEnumConst(wireName: r'max_one_way_minutes')
-  static const PreferenceEffectFieldEnum maxOneWayMinutes = _$preferenceEffectFieldEnum_max_one_way_minutes;
+  static const PreferenceEffectFieldEnum maxOneWayMinutes = _$preferenceEffectFieldEnum_maxOneWayMinutes;
+  /// Preference-context field this effect reports on.
   @BuiltValueEnumConst(wireName: r'walking_band')
-  static const PreferenceEffectFieldEnum walkingBand = _$preferenceEffectFieldEnum_walking_band;
+  static const PreferenceEffectFieldEnum walkingBand = _$preferenceEffectFieldEnum_walkingBand;
+  /// Preference-context field this effect reports on.
   @BuiltValueEnumConst(wireName: r'food_cuisines')
-  static const PreferenceEffectFieldEnum foodCuisines = _$preferenceEffectFieldEnum_food_cuisines;
+  static const PreferenceEffectFieldEnum foodCuisines = _$preferenceEffectFieldEnum_foodCuisines;
+  /// Preference-context field this effect reports on.
   @BuiltValueEnumConst(wireName: r'budget_band')
-  static const PreferenceEffectFieldEnum budgetBand = _$preferenceEffectFieldEnum_budget_band;
+  static const PreferenceEffectFieldEnum budgetBand = _$preferenceEffectFieldEnum_budgetBand;
+  /// Preference-context field this effect reports on.
   @BuiltValueEnumConst(wireName: r'exclude_closing_soon')
-  static const PreferenceEffectFieldEnum excludeClosingSoon = _$preferenceEffectFieldEnum_exclude_closing_soon;
+  static const PreferenceEffectFieldEnum excludeClosingSoon = _$preferenceEffectFieldEnum_excludeClosingSoon;
 
   static Serializer<PreferenceEffectFieldEnum> get serializer => _$preferenceEffectFieldEnumSerializer;
 
@@ -200,25 +210,25 @@ class PreferenceEffectFieldEnum extends EnumClass {
 class PreferenceEffectReasonCodeEnum extends EnumClass {
 
   @BuiltValueEnumConst(wireName: r'RADIUS_CAPPED_TO_WALKING_TIME')
-  static const PreferenceEffectReasonCodeEnum radiusCappedToWalkingTime = _$preferenceEffectReasonCodeEnum_RADIUS_CAPPED_TO_WALKING_TIME;
+  static const PreferenceEffectReasonCodeEnum RADIUS_CAPPED_TO_WALKING_TIME = _$preferenceEffectReasonCodeEnum_RADIUS_CAPPED_TO_WALKING_TIME;
   @BuiltValueEnumConst(wireName: r'RADIUS_CAP_NOT_BINDING')
-  static const PreferenceEffectReasonCodeEnum radiusCapNotBinding = _$preferenceEffectReasonCodeEnum_RADIUS_CAP_NOT_BINDING;
+  static const PreferenceEffectReasonCodeEnum RADIUS_CAP_NOT_BINDING = _$preferenceEffectReasonCodeEnum_RADIUS_CAP_NOT_BINDING;
   @BuiltValueEnumConst(wireName: r'INDOOR_ORDERING_APPLIED')
-  static const PreferenceEffectReasonCodeEnum indoorOrderingApplied = _$preferenceEffectReasonCodeEnum_INDOOR_ORDERING_APPLIED;
+  static const PreferenceEffectReasonCodeEnum INDOOR_ORDERING_APPLIED = _$preferenceEffectReasonCodeEnum_INDOOR_ORDERING_APPLIED;
   @BuiltValueEnumConst(wireName: r'WEATHER_SAFETY_INDOOR_PRIORITY')
-  static const PreferenceEffectReasonCodeEnum weatherSafetyIndoorPriority = _$preferenceEffectReasonCodeEnum_WEATHER_SAFETY_INDOOR_PRIORITY;
+  static const PreferenceEffectReasonCodeEnum WEATHER_SAFETY_INDOOR_PRIORITY = _$preferenceEffectReasonCodeEnum_WEATHER_SAFETY_INDOOR_PRIORITY;
   @BuiltValueEnumConst(wireName: r'INDOOR_ORDERING_NOT_DIRECTIONAL')
-  static const PreferenceEffectReasonCodeEnum indoorOrderingNotDirectional = _$preferenceEffectReasonCodeEnum_INDOOR_ORDERING_NOT_DIRECTIONAL;
+  static const PreferenceEffectReasonCodeEnum INDOOR_ORDERING_NOT_DIRECTIONAL = _$preferenceEffectReasonCodeEnum_INDOOR_ORDERING_NOT_DIRECTIONAL;
   @BuiltValueEnumConst(wireName: r'INDOOR_ORDERING_NO_CHANGE')
-  static const PreferenceEffectReasonCodeEnum indoorOrderingNoChange = _$preferenceEffectReasonCodeEnum_INDOOR_ORDERING_NO_CHANGE;
+  static const PreferenceEffectReasonCodeEnum INDOOR_ORDERING_NO_CHANGE = _$preferenceEffectReasonCodeEnum_INDOOR_ORDERING_NO_CHANGE;
   @BuiltValueEnumConst(wireName: r'INDOOR_STATUS_UNAVAILABLE')
-  static const PreferenceEffectReasonCodeEnum indoorStatusUnavailable = _$preferenceEffectReasonCodeEnum_INDOOR_STATUS_UNAVAILABLE;
+  static const PreferenceEffectReasonCodeEnum INDOOR_STATUS_UNAVAILABLE = _$preferenceEffectReasonCodeEnum_INDOOR_STATUS_UNAVAILABLE;
   @BuiltValueEnumConst(wireName: r'CUISINE_FACET_UNAVAILABLE')
-  static const PreferenceEffectReasonCodeEnum cuisineFacetUnavailable = _$preferenceEffectReasonCodeEnum_CUISINE_FACET_UNAVAILABLE;
+  static const PreferenceEffectReasonCodeEnum CUISINE_FACET_UNAVAILABLE = _$preferenceEffectReasonCodeEnum_CUISINE_FACET_UNAVAILABLE;
   @BuiltValueEnumConst(wireName: r'PRICE_FACET_UNAVAILABLE')
-  static const PreferenceEffectReasonCodeEnum priceFacetUnavailable = _$preferenceEffectReasonCodeEnum_PRICE_FACET_UNAVAILABLE;
+  static const PreferenceEffectReasonCodeEnum PRICE_FACET_UNAVAILABLE = _$preferenceEffectReasonCodeEnum_PRICE_FACET_UNAVAILABLE;
   @BuiltValueEnumConst(wireName: r'CLOSING_SOON_FACET_UNAVAILABLE')
-  static const PreferenceEffectReasonCodeEnum closingSoonFacetUnavailable = _$preferenceEffectReasonCodeEnum_CLOSING_SOON_FACET_UNAVAILABLE;
+  static const PreferenceEffectReasonCodeEnum CLOSING_SOON_FACET_UNAVAILABLE = _$preferenceEffectReasonCodeEnum_CLOSING_SOON_FACET_UNAVAILABLE;
 
   static Serializer<PreferenceEffectReasonCodeEnum> get serializer => _$preferenceEffectReasonCodeEnumSerializer;
 

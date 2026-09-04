@@ -38,48 +38,48 @@ final BuiltSet<PlanPreferenceContextBudgetBandEnum>
   _$planPreferenceContextBudgetBandEnum_special,
 ]);
 
-const PlanPreferenceContextFoodCuisinesEnum
-    _$planPreferenceContextFoodCuisinesEnum_korean =
-    const PlanPreferenceContextFoodCuisinesEnum._('korean');
-const PlanPreferenceContextFoodCuisinesEnum
-    _$planPreferenceContextFoodCuisinesEnum_streetFood =
-    const PlanPreferenceContextFoodCuisinesEnum._('streetFood');
-const PlanPreferenceContextFoodCuisinesEnum
-    _$planPreferenceContextFoodCuisinesEnum_cafeDessert =
-    const PlanPreferenceContextFoodCuisinesEnum._('cafeDessert');
-const PlanPreferenceContextFoodCuisinesEnum
-    _$planPreferenceContextFoodCuisinesEnum_marketFood =
-    const PlanPreferenceContextFoodCuisinesEnum._('marketFood');
-const PlanPreferenceContextFoodCuisinesEnum
-    _$planPreferenceContextFoodCuisinesEnum_worldCuisine =
-    const PlanPreferenceContextFoodCuisinesEnum._('worldCuisine');
+const TravelPreferenceSoftFoodCuisinesEnum
+    _$travelPreferenceSoftFoodCuisinesEnum_korean =
+    const TravelPreferenceSoftFoodCuisinesEnum._('korean');
+const TravelPreferenceSoftFoodCuisinesEnum
+    _$travelPreferenceSoftFoodCuisinesEnum_streetFood =
+    const TravelPreferenceSoftFoodCuisinesEnum._('streetFood');
+const TravelPreferenceSoftFoodCuisinesEnum
+    _$travelPreferenceSoftFoodCuisinesEnum_cafeDessert =
+    const TravelPreferenceSoftFoodCuisinesEnum._('cafeDessert');
+const TravelPreferenceSoftFoodCuisinesEnum
+    _$travelPreferenceSoftFoodCuisinesEnum_marketFood =
+    const TravelPreferenceSoftFoodCuisinesEnum._('marketFood');
+const TravelPreferenceSoftFoodCuisinesEnum
+    _$travelPreferenceSoftFoodCuisinesEnum_worldCuisine =
+    const TravelPreferenceSoftFoodCuisinesEnum._('worldCuisine');
 
-PlanPreferenceContextFoodCuisinesEnum
-    _$planPreferenceContextFoodCuisinesEnumValueOf(String name) {
+TravelPreferenceSoftFoodCuisinesEnum
+    _$travelPreferenceSoftFoodCuisinesEnumValueOf(String name) {
   switch (name) {
     case 'korean':
-      return _$planPreferenceContextFoodCuisinesEnum_korean;
+      return _$travelPreferenceSoftFoodCuisinesEnum_korean;
     case 'streetFood':
-      return _$planPreferenceContextFoodCuisinesEnum_streetFood;
+      return _$travelPreferenceSoftFoodCuisinesEnum_streetFood;
     case 'cafeDessert':
-      return _$planPreferenceContextFoodCuisinesEnum_cafeDessert;
+      return _$travelPreferenceSoftFoodCuisinesEnum_cafeDessert;
     case 'marketFood':
-      return _$planPreferenceContextFoodCuisinesEnum_marketFood;
+      return _$travelPreferenceSoftFoodCuisinesEnum_marketFood;
     case 'worldCuisine':
-      return _$planPreferenceContextFoodCuisinesEnum_worldCuisine;
+      return _$travelPreferenceSoftFoodCuisinesEnum_worldCuisine;
     default:
       throw ArgumentError(name);
   }
 }
 
-final BuiltSet<PlanPreferenceContextFoodCuisinesEnum>
-    _$planPreferenceContextFoodCuisinesEnumValues = BuiltSet<
-        PlanPreferenceContextFoodCuisinesEnum>(const <PlanPreferenceContextFoodCuisinesEnum>[
-  _$planPreferenceContextFoodCuisinesEnum_korean,
-  _$planPreferenceContextFoodCuisinesEnum_streetFood,
-  _$planPreferenceContextFoodCuisinesEnum_cafeDessert,
-  _$planPreferenceContextFoodCuisinesEnum_marketFood,
-  _$planPreferenceContextFoodCuisinesEnum_worldCuisine,
+final BuiltSet<TravelPreferenceSoftFoodCuisinesEnum>
+    _$travelPreferenceSoftFoodCuisinesEnumValues = BuiltSet<
+        TravelPreferenceSoftFoodCuisinesEnum>(const <TravelPreferenceSoftFoodCuisinesEnum>[
+  _$travelPreferenceSoftFoodCuisinesEnum_korean,
+  _$travelPreferenceSoftFoodCuisinesEnum_streetFood,
+  _$travelPreferenceSoftFoodCuisinesEnum_cafeDessert,
+  _$travelPreferenceSoftFoodCuisinesEnum_marketFood,
+  _$travelPreferenceSoftFoodCuisinesEnum_worldCuisine,
 ]);
 
 const PlanPreferenceContextIndoorOutdoorEnum
@@ -112,6 +112,44 @@ final BuiltSet<PlanPreferenceContextIndoorOutdoorEnum>
   _$planPreferenceContextIndoorOutdoorEnum_indoor,
   _$planPreferenceContextIndoorOutdoorEnum_balanced,
   _$planPreferenceContextIndoorOutdoorEnum_outdoor,
+]);
+
+const PlanPreferenceContextMaxOneWayMinutesEnum
+    _$planPreferenceContextMaxOneWayMinutesEnum_number15 =
+    const PlanPreferenceContextMaxOneWayMinutesEnum._('number15');
+const PlanPreferenceContextMaxOneWayMinutesEnum
+    _$planPreferenceContextMaxOneWayMinutesEnum_number30 =
+    const PlanPreferenceContextMaxOneWayMinutesEnum._('number30');
+const PlanPreferenceContextMaxOneWayMinutesEnum
+    _$planPreferenceContextMaxOneWayMinutesEnum_number60 =
+    const PlanPreferenceContextMaxOneWayMinutesEnum._('number60');
+const PlanPreferenceContextMaxOneWayMinutesEnum
+    _$planPreferenceContextMaxOneWayMinutesEnum_number90 =
+    const PlanPreferenceContextMaxOneWayMinutesEnum._('number90');
+
+PlanPreferenceContextMaxOneWayMinutesEnum
+    _$planPreferenceContextMaxOneWayMinutesEnumValueOf(String name) {
+  switch (name) {
+    case 'number15':
+      return _$planPreferenceContextMaxOneWayMinutesEnum_number15;
+    case 'number30':
+      return _$planPreferenceContextMaxOneWayMinutesEnum_number30;
+    case 'number60':
+      return _$planPreferenceContextMaxOneWayMinutesEnum_number60;
+    case 'number90':
+      return _$planPreferenceContextMaxOneWayMinutesEnum_number90;
+    default:
+      throw ArgumentError(name);
+  }
+}
+
+final BuiltSet<PlanPreferenceContextMaxOneWayMinutesEnum>
+    _$planPreferenceContextMaxOneWayMinutesEnumValues = BuiltSet<
+        PlanPreferenceContextMaxOneWayMinutesEnum>(const <PlanPreferenceContextMaxOneWayMinutesEnum>[
+  _$planPreferenceContextMaxOneWayMinutesEnum_number15,
+  _$planPreferenceContextMaxOneWayMinutesEnum_number30,
+  _$planPreferenceContextMaxOneWayMinutesEnum_number60,
+  _$planPreferenceContextMaxOneWayMinutesEnum_number90,
 ]);
 
 const PlanPreferenceContextWalkingBandEnum
@@ -181,12 +219,15 @@ final BuiltSet<PlanPreferenceContextWeatherSensitivityEnum>
 Serializer<PlanPreferenceContextBudgetBandEnum>
     _$planPreferenceContextBudgetBandEnumSerializer =
     _$PlanPreferenceContextBudgetBandEnumSerializer();
-Serializer<PlanPreferenceContextFoodCuisinesEnum>
-    _$planPreferenceContextFoodCuisinesEnumSerializer =
-    _$PlanPreferenceContextFoodCuisinesEnumSerializer();
+Serializer<TravelPreferenceSoftFoodCuisinesEnum>
+    _$travelPreferenceSoftFoodCuisinesEnumSerializer =
+    _$TravelPreferenceSoftFoodCuisinesEnumSerializer();
 Serializer<PlanPreferenceContextIndoorOutdoorEnum>
     _$planPreferenceContextIndoorOutdoorEnumSerializer =
     _$PlanPreferenceContextIndoorOutdoorEnumSerializer();
+Serializer<PlanPreferenceContextMaxOneWayMinutesEnum>
+    _$planPreferenceContextMaxOneWayMinutesEnumSerializer =
+    _$PlanPreferenceContextMaxOneWayMinutesEnumSerializer();
 Serializer<PlanPreferenceContextWalkingBandEnum>
     _$planPreferenceContextWalkingBandEnumSerializer =
     _$PlanPreferenceContextWalkingBandEnumSerializer();
@@ -228,8 +269,8 @@ class _$PlanPreferenceContextBudgetBandEnumSerializer
           _fromWire[serialized] ?? (serialized is String ? serialized : ''));
 }
 
-class _$PlanPreferenceContextFoodCuisinesEnumSerializer
-    implements PrimitiveSerializer<PlanPreferenceContextFoodCuisinesEnum> {
+class _$TravelPreferenceSoftFoodCuisinesEnumSerializer
+    implements PrimitiveSerializer<TravelPreferenceSoftFoodCuisinesEnum> {
   static const Map<String, Object> _toWire = const <String, Object>{
     'korean': 'korean',
     'streetFood': 'streetFood',
@@ -247,22 +288,22 @@ class _$PlanPreferenceContextFoodCuisinesEnumSerializer
 
   @override
   final Iterable<Type> types = const <Type>[
-    PlanPreferenceContextFoodCuisinesEnum
+    TravelPreferenceSoftFoodCuisinesEnum
   ];
   @override
-  final String wireName = 'PlanPreferenceContextFoodCuisinesEnum';
+  final String wireName = 'TravelPreferenceSoftFoodCuisinesEnum';
 
   @override
   Object serialize(
-          Serializers serializers, PlanPreferenceContextFoodCuisinesEnum object,
+          Serializers serializers, TravelPreferenceSoftFoodCuisinesEnum object,
           {FullType specifiedType = FullType.unspecified}) =>
       _toWire[object.name] ?? object.name;
 
   @override
-  PlanPreferenceContextFoodCuisinesEnum deserialize(
+  TravelPreferenceSoftFoodCuisinesEnum deserialize(
           Serializers serializers, Object serialized,
           {FullType specifiedType = FullType.unspecified}) =>
-      PlanPreferenceContextFoodCuisinesEnum.valueOf(
+      TravelPreferenceSoftFoodCuisinesEnum.valueOf(
           _fromWire[serialized] ?? (serialized is String ? serialized : ''));
 }
 
@@ -297,6 +338,42 @@ class _$PlanPreferenceContextIndoorOutdoorEnumSerializer
           Serializers serializers, Object serialized,
           {FullType specifiedType = FullType.unspecified}) =>
       PlanPreferenceContextIndoorOutdoorEnum.valueOf(
+          _fromWire[serialized] ?? (serialized is String ? serialized : ''));
+}
+
+class _$PlanPreferenceContextMaxOneWayMinutesEnumSerializer
+    implements PrimitiveSerializer<PlanPreferenceContextMaxOneWayMinutesEnum> {
+  static const Map<String, Object> _toWire = const <String, Object>{
+    'number15': 15,
+    'number30': 30,
+    'number60': 60,
+    'number90': 90,
+  };
+  static const Map<Object, String> _fromWire = const <Object, String>{
+    15: 'number15',
+    30: 'number30',
+    60: 'number60',
+    90: 'number90',
+  };
+
+  @override
+  final Iterable<Type> types = const <Type>[
+    PlanPreferenceContextMaxOneWayMinutesEnum
+  ];
+  @override
+  final String wireName = 'PlanPreferenceContextMaxOneWayMinutesEnum';
+
+  @override
+  Object serialize(Serializers serializers,
+          PlanPreferenceContextMaxOneWayMinutesEnum object,
+          {FullType specifiedType = FullType.unspecified}) =>
+      _toWire[object.name] ?? object.name;
+
+  @override
+  PlanPreferenceContextMaxOneWayMinutesEnum deserialize(
+          Serializers serializers, Object serialized,
+          {FullType specifiedType = FullType.unspecified}) =>
+      PlanPreferenceContextMaxOneWayMinutesEnum.valueOf(
           _fromWire[serialized] ?? (serialized is String ? serialized : ''));
 }
 
@@ -375,11 +452,11 @@ class _$PlanPreferenceContext extends PlanPreferenceContext {
   @override
   final bool? excludeClosingSoon;
   @override
-  final BuiltList<PlanPreferenceContextFoodCuisinesEnum>? foodCuisines;
+  final BuiltList<TravelPreferenceSoftFoodCuisinesEnum>? foodCuisines;
   @override
   final PlanPreferenceContextIndoorOutdoorEnum? indoorOutdoor;
   @override
-  final int? maxOneWayMinutes;
+  final PlanPreferenceContextMaxOneWayMinutesEnum? maxOneWayMinutes;
   @override
   final PlanPreferenceContextWalkingBandEnum? walkingBand;
   @override
@@ -462,12 +539,12 @@ class PlanPreferenceContextBuilder
   set excludeClosingSoon(bool? excludeClosingSoon) =>
       _$this._excludeClosingSoon = excludeClosingSoon;
 
-  ListBuilder<PlanPreferenceContextFoodCuisinesEnum>? _foodCuisines;
-  ListBuilder<PlanPreferenceContextFoodCuisinesEnum> get foodCuisines =>
+  ListBuilder<TravelPreferenceSoftFoodCuisinesEnum>? _foodCuisines;
+  ListBuilder<TravelPreferenceSoftFoodCuisinesEnum> get foodCuisines =>
       _$this._foodCuisines ??=
-          ListBuilder<PlanPreferenceContextFoodCuisinesEnum>();
+          ListBuilder<TravelPreferenceSoftFoodCuisinesEnum>();
   set foodCuisines(
-          ListBuilder<PlanPreferenceContextFoodCuisinesEnum>? foodCuisines) =>
+          ListBuilder<TravelPreferenceSoftFoodCuisinesEnum>? foodCuisines) =>
       _$this._foodCuisines = foodCuisines;
 
   PlanPreferenceContextIndoorOutdoorEnum? _indoorOutdoor;
@@ -476,9 +553,11 @@ class PlanPreferenceContextBuilder
   set indoorOutdoor(PlanPreferenceContextIndoorOutdoorEnum? indoorOutdoor) =>
       _$this._indoorOutdoor = indoorOutdoor;
 
-  int? _maxOneWayMinutes;
-  int? get maxOneWayMinutes => _$this._maxOneWayMinutes;
-  set maxOneWayMinutes(int? maxOneWayMinutes) =>
+  PlanPreferenceContextMaxOneWayMinutesEnum? _maxOneWayMinutes;
+  PlanPreferenceContextMaxOneWayMinutesEnum? get maxOneWayMinutes =>
+      _$this._maxOneWayMinutes;
+  set maxOneWayMinutes(
+          PlanPreferenceContextMaxOneWayMinutesEnum? maxOneWayMinutes) =>
       _$this._maxOneWayMinutes = maxOneWayMinutes;
 
   PlanPreferenceContextWalkingBandEnum? _walkingBand;

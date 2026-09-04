@@ -156,11 +156,11 @@ void main() {
       expect(effects.length, 2);
       expect(effects[0].field, PreferenceEffectFieldEnum.indoorOutdoor);
       expect(effects[0].applied, isTrue);
-      expect(effects[0].reasonCode, PreferenceEffectReasonCodeEnum.indoorOrderingApplied);
+      expect(effects[0].reasonCode, PreferenceEffectReasonCodeEnum.INDOOR_ORDERING_APPLIED);
       expect(effects[1].applied, isFalse);
       expect(
         effects[1].reasonCode,
-        PreferenceEffectReasonCodeEnum.cuisineFacetUnavailable,
+        PreferenceEffectReasonCodeEnum.CUISINE_FACET_UNAVAILABLE,
       );
     });
   });

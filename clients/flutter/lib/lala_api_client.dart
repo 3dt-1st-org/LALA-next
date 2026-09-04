@@ -2009,17 +2009,23 @@ class LalaPlanPreferenceContext {
         walkingBand,
         PlanPreferenceContextWalkingBandEnum.medium,
       )
-      ..maxOneWayMinutes = maxOneWayMinutes
-      ..foodCuisines = ListBuilder<PlanPreferenceContextFoodCuisinesEnum>(
+      // 정수 enum(wireNumber): 바운드 값 {15,30,60,90} 외 값은 서버 기본(30)으로.
+      ..maxOneWayMinutes = switch (maxOneWayMinutes) {
+        15 => PlanPreferenceContextMaxOneWayMinutesEnum.number15,
+        60 => PlanPreferenceContextMaxOneWayMinutesEnum.number60,
+        90 => PlanPreferenceContextMaxOneWayMinutesEnum.number90,
+        _ => PlanPreferenceContextMaxOneWayMinutesEnum.number30,
+      }
+      ..foodCuisines = ListBuilder<TravelPreferenceSoftFoodCuisinesEnum>(
         foodCuisines
             .map(
-              (name) => _contextEnum<PlanPreferenceContextFoodCuisinesEnum>(
-                PlanPreferenceContextFoodCuisinesEnum.values,
+              (name) => _contextEnum<TravelPreferenceSoftFoodCuisinesEnum>(
+                TravelPreferenceSoftFoodCuisinesEnum.values,
                 name,
                 null,
               ),
             )
-            .whereType<PlanPreferenceContextFoodCuisinesEnum>(),
+            .whereType<TravelPreferenceSoftFoodCuisinesEnum>(),
       )
       ..budgetBand = _contextEnum(
         PlanPreferenceContextBudgetBandEnum.values,

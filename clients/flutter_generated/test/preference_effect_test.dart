@@ -33,7 +33,7 @@ void main() {
       expect(effect.applied, isTrue);
       expect(
         effect.reasonCode,
-        PreferenceEffectReasonCodeEnum.radiusCappedToWalkingTime,
+        PreferenceEffectReasonCodeEnum.RADIUS_CAPPED_TO_WALKING_TIME,
       );
       expect(effect.explanation, contains('1005'));
       expect(effect.details, isNotNull);
@@ -60,7 +60,7 @@ void main() {
       expect(effect.applied, isFalse);
       expect(
         effect.reasonCode,
-        PreferenceEffectReasonCodeEnum.cuisineFacetUnavailable,
+        PreferenceEffectReasonCodeEnum.CUISINE_FACET_UNAVAILABLE,
       );
       expect(effect.details, isNull);
     });

@@ -165,7 +165,8 @@ class _RaceBackend implements LalaBackend {
   @override
   Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({
     String? selectedPlaceId,
-  }) {
+    LalaPlanPreferenceContext? preferenceContext,
+    }) {
     if (selectedPlaceId == null) {
       unpinnedPlanCalls++;
       return unpinnedPlanCompleter.future;
