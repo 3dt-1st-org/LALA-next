@@ -119,6 +119,7 @@ def list_signal_aggregates(
     limit: Annotated[int, Query(gt=0, le=50)] = 20,
     place_id: Annotated[str | None, Query(min_length=1, max_length=128)] = None,
     category: Annotated[str | None, Query(min_length=1, max_length=64)] = None,
+    region: Annotated[str | None, Query(min_length=1, max_length=64)] = None,
     service: Annotated[
         LocalSignalsAggregatesService, Depends(get_local_signals_aggregates_service)
     ] = None,  # type: ignore[assignment]
@@ -127,7 +128,10 @@ def list_signal_aggregates(
 
     Aggregate-only output from the whitelisted governed source; never raw
     reviews, authors, external keys, or URLs. The dedicated governance flag is
-    default-off, and flag-off is an honest unavailable empty result.
+    default-off, and flag-off is an honest unavailable empty result. A coarse
+    canonical ``region`` scopes rows to that region's canonical places; a
+    region that cannot be safely mapped is an honest region-scoped empty
+    result, never a nationwide fallback.
     """
 
     payload = service.list_place_aggregates(
@@ -135,6 +139,7 @@ def list_signal_aggregates(
         limit=limit,
         place_id=place_id,
         category=category,
+        region=region,
     )
     _record_event(request, "read")
     return success_envelope(request=request, data=payload, meta={"source": "db"})

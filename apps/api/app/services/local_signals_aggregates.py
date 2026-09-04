@@ -29,13 +29,14 @@ Safety invariants:
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import closing, contextmanager
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from apps.api.app.core.config import Settings, get_settings
 from apps.api.app.core.errors import ServiceError
+from apps.api.app.services.region_catalog import manual_region_place_names
 from apps.api.app.services.review_ingest_governance import ALLOWED_LICENSE_CLASSES
 
 READ_MODEL_NAME = "local_signals_place_aggregates"
@@ -43,6 +44,15 @@ READ_MODEL_VERSION = "v1"
 # The aggregate table stores one row per (week, place, provider, category).
 # A consumer sees one card per place, so providers are summed into one row.
 _MAX_ITEMS = 50
+
+# Freshness contract: the source table aggregates weekly, so a read model whose
+# latest refresh is older than two full aggregation cycles can no longer be
+# presented as current. The classification is deterministic against this
+# documented threshold; clients render it, they never re-derive it.
+FRESHNESS_THRESHOLD_DAYS = 14
+_FRESHNESS_STALE = "stale"
+_FRESHNESS_FRESH = "fresh"
+_FRESHNESS_UNKNOWN = "unknown"
 
 _LICENSE_CLASSES_SQL = ", ".join(repr(license_class) for license_class in ALLOWED_LICENSE_CLASSES)
 
@@ -70,11 +80,15 @@ class LocalSignalsAggregatesRepository:
         limit: int,
         place_id: str | None,
         category: str | None,
+        region_names: Sequence[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Return approved place aggregates rolled up per place and week.
 
         Explicit column projection only: ``mentions.attributes`` is never
         selected, so the nested external-key lists cannot enter the read model.
+        ``region_names`` restricts rows to places whose canonical
+        ``travel.places.region_name_ko`` matches — a region-scoped read can
+        therefore return fewer rows, never other regions' rows.
         """
 
         sql = f"""
@@ -106,6 +120,19 @@ class LocalSignalsAggregatesRepository:
         if category:
             sql += " AND mentions.category = %s"
             params.append(category)
+        if region_names:
+            # Correlated EXISTS keeps the projection untouched: travel.places is
+            # only compared on region_name_ko, never selected (coordinates and
+            # addresses must not enter the read model).
+            sql += """
+            AND EXISTS (
+                SELECT 1
+                FROM travel.places region_place
+                WHERE region_place.place_id = mentions.place_id
+                  AND region_place.region_name_ko = ANY(%s)
+            )
+            """
+            params.append(list(region_names))
         sql += """
             GROUP BY
                 mentions.place_id,
@@ -171,9 +198,11 @@ class LocalSignalsAggregatesService:
         repository: LocalSignalsAggregatesRepository,
         *,
         settings: Settings | None = None,
+        now: Callable[[], datetime] | None = None,
     ) -> None:
         self._repository = repository
         self._settings = settings or get_settings()
+        self._now = now or (lambda: datetime.now(UTC))
 
     def _aggregate_read_enabled(self) -> bool:
         return bool(self._settings.feature_flags.get("LOCAL_SIGNALS_AGGREGATE_READ", False))
@@ -185,19 +214,40 @@ class LocalSignalsAggregatesService:
         limit: int,
         place_id: str | None,
         category: str | None,
+        region: str | None = None,
     ) -> dict[str, Any]:
+        requested_region = (region or "").strip() or None
         # Default-safe: governance flag off is an honest unavailable result with
         # zero items, never an error and never fabricated rows.
         if not self._aggregate_read_enabled():
-            return _unavailable_payload()
+            payload = _unavailable_payload()
+            payload["region"] = requested_region
+            payload["region_applied"] = False
+            payload["freshness"] = _freshness_payload(None, self._now())
+            return payload
+        region_names: Sequence[str] | None = None
+        if requested_region is not None:
+            region_names = manual_region_place_names(requested_region)
+            if region_names is None:
+                # Fail closed: a region id that cannot be safely mapped to the
+                # canonical place schema gets an honest region-scoped empty
+                # result — never a silent nationwide fallback.
+                return _region_scoped_empty_payload(requested_region, self._now())
         try:
             rows = self._repository.list_place_aggregates(
                 weeks=weeks,
                 limit=limit,
                 place_id=place_id,
                 category=category,
+                region_names=region_names,
             )
-            refreshed = self._repository.latest_refresh_at()
+            if region_names is None:
+                refreshed = self._repository.latest_refresh_at()
+            else:
+                # Region-scoped freshness derives from the scoped rows only; the
+                # store-wide max would stamp another region's refresh onto an
+                # empty or older region result.
+                refreshed = _max_row_value(rows, "last_refreshed_at")
         except LocalSignalsAggregatesRepositoryUnavailable as exc:
             # A closed gate is honest-empty; an unreachable store is a retryable
             # service error so the client can show its error state, matching the
@@ -209,12 +259,15 @@ class LocalSignalsAggregatesService:
             "source": "governed_review_mention_aggregation",
             "provider_class": "aggregated_review_mentions",
             "available": True,
+            "region": requested_region,
+            "region_applied": region_names is not None,
             "items": [_aggregate_item(row) for row in rows],
             "computed_at": _max_datetime(
                 refreshed,
                 *(row["computed_at"] for row in rows),
             ),
             "last_refreshed_at": _iso_or_none(refreshed),
+            "freshness": _freshness_payload(refreshed, self._now()),
         }
 
 
@@ -263,6 +316,49 @@ def _max_datetime(*values: Any) -> str | None:
     if not candidates:
         return None
     return _iso_or_none(max(candidates))
+
+
+def _max_row_value(rows: Sequence[Mapping[str, Any]], key: str) -> Any:
+    candidates = [row[key] for row in rows if row.get(key) is not None]
+    if not candidates:
+        return None
+    return max(candidates)
+
+
+def _freshness_state(refreshed_at: Any, now: datetime) -> str:
+    if refreshed_at is None:
+        return _FRESHNESS_UNKNOWN
+    if not isinstance(refreshed_at, datetime):
+        return _FRESHNESS_UNKNOWN
+    evaluated_at = refreshed_at if refreshed_at.tzinfo else refreshed_at.replace(tzinfo=UTC)
+    return (
+        _FRESHNESS_STALE
+        if now - evaluated_at > timedelta(days=FRESHNESS_THRESHOLD_DAYS)
+        else _FRESHNESS_FRESH
+    )
+
+
+def _freshness_payload(refreshed_at: Any, now: datetime) -> dict[str, Any]:
+    return {
+        "state": _freshness_state(refreshed_at, now),
+        "threshold_days": FRESHNESS_THRESHOLD_DAYS,
+    }
+
+
+def _region_scoped_empty_payload(requested_region: str, now: datetime) -> dict[str, Any]:
+    return {
+        "read_model": READ_MODEL_NAME,
+        "read_model_version": READ_MODEL_VERSION,
+        "source": "governed_review_mention_aggregation",
+        "provider_class": "aggregated_review_mentions",
+        "available": True,
+        "region": requested_region,
+        "region_applied": False,
+        "items": [],
+        "computed_at": None,
+        "last_refreshed_at": None,
+        "freshness": _freshness_payload(None, now),
+    }
 
 
 def _unavailable_payload() -> dict[str, Any]:

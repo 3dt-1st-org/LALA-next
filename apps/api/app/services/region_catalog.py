@@ -104,7 +104,11 @@ _REGION_NAME_EN_OVERRIDES = {
 
 
 @lru_cache(maxsize=1)
-def _load_catalog() -> tuple[tuple[ProvinceMetadata, ...], dict[str, dict[str, str]]]:
+def _load_catalog() -> tuple[
+    tuple[ProvinceMetadata, ...],
+    dict[str, dict[str, str]],
+    dict[str, tuple[str, str]],
+]:
     text = _MANUAL_LOCATION_PATH.read_text(encoding="utf-8")
     provinces = tuple(
         ProvinceMetadata(
@@ -119,14 +123,16 @@ def _load_catalog() -> tuple[tuple[ProvinceMetadata, ...], dict[str, dict[str, s
         for province_id, label_ko, label_en, short_ko, short_en in _PROVINCE_PATTERN.findall(text)
     )
     regions_by_province: dict[str, dict[str, str]] = {}
-    for _, _, province_ko, _, label_ko, label_en in _OPTION_PATTERN.findall(text):
+    manual_region_by_id: dict[str, tuple[str, str]] = {}
+    for option_id, _, province_ko, _, label_ko, label_en in _OPTION_PATTERN.findall(text):
         regions_by_province.setdefault(province_ko, {})[label_ko] = label_en
+        manual_region_by_id[option_id] = (province_ko, label_ko)
     for province_ko, overrides in _REGION_NAME_EN_OVERRIDES.items():
         regions_by_province.setdefault(province_ko, {}).update(overrides)
-    return provinces, regions_by_province
+    return provinces, regions_by_province, manual_region_by_id
 
 
-PROVINCES, REGION_NAME_EN_BY_PROVINCE = _load_catalog()
+PROVINCES, REGION_NAME_EN_BY_PROVINCE, MANUAL_REGION_BY_ID = _load_catalog()
 PROVINCE_BY_KO = {province.label_ko: province for province in PROVINCES}
 PROVINCE_NAME_EN = {province.label_ko: province.label_en for province in PROVINCES}
 PROVINCE_BY_KOPIS_SIGNGUCODE = {province.kopis_signgucode: province for province in PROVINCES}
@@ -171,6 +177,48 @@ for province_ko, region_map in REGION_NAME_EN_BY_PROVINCE.items():
         for alias in _region_aliases(region_name_ko):
             aliases.setdefault(alias, region_name_ko)
     REGION_ALIAS_TO_KO_BY_PROVINCE[province_ko] = aliases
+
+
+def manual_region_scope(region_id: object) -> tuple[str, str] | None:
+    """(province_ko, region_ko) for a manual selector id like ``gyeonggi-suwon``.
+
+    The selector ids are the client's coarse manual-region identifiers (the
+    same source file this catalog parses), so a manual selection can be mapped
+    to canonical Korean region names without any coordinate lookup. Unknown or
+    ambiguous ids resolve to ``None`` so callers can fail closed instead of
+    guessing a scope.
+    """
+    text = _optional_text(region_id)
+    if not text:
+        return None
+    return MANUAL_REGION_BY_ID.get(text)
+
+
+def manual_region_place_names(region_id: object) -> tuple[str, ...] | None:
+    """Canonical ``travel.places.region_name_ko`` values for a manual region id.
+
+    Covers the region's aliases (e.g. 수원시/수원) and, when the option names
+    the province itself (special cities like 세종), the province aliases — the
+    two spellings ``region_name_ko`` can carry. ``None`` when the id cannot be
+    safely mapped.
+    """
+    scope = manual_region_scope(region_id)
+    if scope is None:
+        return None
+    province_ko, region_ko = scope
+    names = set(_region_aliases(region_ko))
+    if region_ko == province_ko:
+        names.update(
+            alias
+            for alias in (
+                province_ko,
+                PROVINCE_BY_KO[province_ko].short_ko,
+                _compact(province_ko),
+                _compact(PROVINCE_BY_KO[province_ko].short_ko),
+            )
+            if alias
+        )
+    return tuple(sorted(names))
 
 
 _global_alias_candidates: dict[str, set[str]] = {}

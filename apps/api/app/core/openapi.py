@@ -1373,7 +1373,10 @@ def _local_signal_place_aggregates_data_schema() -> dict[str, Any]:
         "description": (
             "Governed system aggregates read model. available=false is the "
             "honest empty state (governance flag off or no approved data), "
-            "never an error and never fabricated rows."
+            "never an error and never fabricated rows. region/region_applied "
+            "carry the coarse region scope: region_applied=false with items=[] "
+            "means the requested region cannot be safely mapped or has no "
+            "approved aggregates — never a nationwide fallback."
         ),
         "properties": {
             "read_model": {"type": "string"},
@@ -1387,6 +1390,18 @@ def _local_signal_place_aggregates_data_schema() -> dict[str, Any]:
                 "enum": ["aggregated_review_mentions"],
             },
             "available": {"type": "boolean"},
+            "region": {
+                "anyOf": [{"type": "string"}, {"type": "null"}],
+                "description": "Echo of the requested coarse canonical region id.",
+            },
+            "region_applied": {
+                "anyOf": [{"type": "boolean"}, {"type": "null"}],
+                "description": (
+                    "True when the read was region-scoped; false when a region "
+                    "was requested but could not be safely mapped (items is "
+                    "empty by construction); null for nationwide reads."
+                ),
+            },
             "items": {
                 "type": "array",
                 "items": {"$ref": "#/components/schemas/LocalSignalPlaceAggregate"},
@@ -1396,6 +1411,27 @@ def _local_signal_place_aggregates_data_schema() -> dict[str, Any]:
             },
             "last_refreshed_at": {
                 "anyOf": [{"type": "string", "format": "date-time"}, {"type": "null"}],
+                "description": (
+                    "Latest aggregation refresh in scope; region-scoped reads "
+                    "derive it from the region's rows only."
+                ),
+            },
+            "freshness": {
+                "type": "object",
+                "required": ["state", "threshold_days"],
+                "description": (
+                    "Deterministic staleness classification of "
+                    "last_refreshed_at against the documented weekly-cadence "
+                    "threshold (two aggregation cycles)."
+                ),
+                "properties": {
+                    "state": {
+                        "type": "string",
+                        "enum": ["fresh", "stale", "unknown"],
+                    },
+                    "threshold_days": {"type": "integer", "minimum": 1},
+                },
+                "additionalProperties": False,
             },
         },
         "additionalProperties": False,

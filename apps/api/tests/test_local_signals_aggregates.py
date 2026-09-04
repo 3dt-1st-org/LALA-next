@@ -165,9 +165,12 @@ def test_aggregate_item_shape_has_no_raw_or_identity_field() -> None:
         "source",
         "provider_class",
         "available",
+        "region",
+        "region_applied",
         "items",
         "computed_at",
         "last_refreshed_at",
+        "freshness",
     }
 
 
