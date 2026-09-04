@@ -30,6 +30,8 @@ class PlanPreferenceContext(BaseModel):
     알레르겐·식이·기피 식재료·이동약성/접근성 선언·인증 클레임·PII·계정 식별자는
     필드로 존재할 수 없다(extra="forbid" 로 알 수 없는 키도 거부). 값 집합과
     상한은 TravelPreferenceSoft 와 같은 소스(schemas/preferences.py)를 재사용한다.
+    CP2: 맵기(spice_level)와 주문 요청(order_requests)도 여기에 올 수 없다 —
+    식당 커뮤니케이션 전용 soft 값으로 public plan endpoint 로 절대 전송되지 않는다.
     """
 
     model_config = ConfigDict(extra="forbid")

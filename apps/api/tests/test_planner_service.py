@@ -1026,6 +1026,10 @@ def test_preference_context_rejects_unknown_and_sensitive_fields() -> None:
         {"avoid_ingredients": "고수"},
         {"wheelchair_access": True},
         {"user_id": "u-1"},
+        # CP2: 식당 커뮤니케이션 전용 soft 값도 public plan endpoint 로
+        # 전송될 수 없다(extra="forbid" 로 거부).
+        {"spice_level": "mild"},
+        {"order_requests": ["quietTable"]},
     ):
         with pytest.raises(ValidationError):
             DailyPlanRequest(

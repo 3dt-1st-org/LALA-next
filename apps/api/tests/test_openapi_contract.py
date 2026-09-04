@@ -449,8 +449,33 @@ def test_openapi_documents_preference_context_and_effects(client):
     }
     # 민감/알 수 없는 키는 계약상 존재할 수 없다(strict).
     assert schemas["PlanPreferenceContext"]["additionalProperties"] is False
-    for forbidden in ("dietary_modes", "allergens", "avoid_ingredients", "avoid_stairs"):
+    for forbidden in (
+        "dietary_modes",
+        "allergens",
+        "avoid_ingredients",
+        "avoid_stairs",
+        # CP2: 식당 커뮤니케이션 soft 값도 public plan endpoint 로 전송 불가.
+        "spice_level",
+        "order_requests",
+    ):
         assert forbidden not in context_props
+    # CP2: 계정 preference 저장소 스키마는 맵기/주문 요청을 bounded enum 으로
+    # 문서화한다(old 문서 호환 기본값 포함; 맵기는 nullable anyOf 로 문서화됨).
+    soft_props = schemas["TravelPreferenceSoft"]["properties"]
+    spice = soft_props["spice_level"]
+    assert spice["anyOf"][0]["enum"] == ["mild", "medium", "spicy"]
+    assert spice["anyOf"][1] == {"type": "null"}
+    assert soft_props["order_requests"]["items"]["enum"] == [
+        "staffRecommendation",
+        "smallPortion",
+        "quietTable",
+        "takeout",
+    ]
+    assert soft_props["order_requests"]["maxItems"] == 4
+    # old 문서 호환: 두 필드 모두 선택(기본값 있음)이라 required 에 없다.
+    required_soft = schemas["TravelPreferenceSoft"].get("required", [])
+    assert "spice_level" not in required_soft
+    assert "order_requests" not in required_soft
     assert context_props["max_one_way_minutes"]["enum"] == [15, 30, 60, 90]
     assert context_props["food_cuisines"]["items"]["enum"] == [
         "korean",
