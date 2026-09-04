@@ -87,12 +87,41 @@ class LocalSignalAggregates {
     required this.items,
     required this.computedAt,
     required this.lastRefreshedAt,
+    this.readAvailable = false,
+    this.region,
+    this.regionApplied = false,
+    this.freshnessState,
+    this.freshnessThresholdDays,
   });
 
   final bool available;
   final List<LocalSignalPlaceAggregate> items;
   final String? computedAt;
   final String? lastRefreshedAt;
+
+  /// Wire-level availability (governance read on, payload `available: true`),
+  /// kept separate from [available]: a region-scoped read can be wire-available
+  /// with zero rows — an honest region empty, not the flag-off state.
+  final bool readAvailable;
+
+  /// Echoed coarse region id from the request; null when unscoped.
+  final String? region;
+
+  /// True only when the server actually applied the region filter; a region
+  /// id it cannot safely map stays false with zero items (fail-closed, no
+  /// nationwide fallback).
+  final bool regionApplied;
+
+  /// Server-classified freshness ('fresh' | 'stale' | 'unknown'); null when
+  /// an older server omitted the field — render the date without a suffix.
+  final String? freshnessState;
+  final int? freshnessThresholdDays;
+
+  bool get isStale => freshnessState == 'stale';
+
+  /// The read model is on but the scoped region has no aggregate rows —
+  /// surfaced as a small honest-empty notice instead of a hidden section.
+  bool get regionScopedEmpty => readAvailable && items.isEmpty;
 
   static LocalSignalAggregates fromJson(Object? value) {
     if (value is! Map) {
@@ -106,15 +135,29 @@ class LocalSignalAggregates {
               .whereType<LocalSignalPlaceAggregate>()
               .toList(growable: false)
         : const <LocalSignalPlaceAggregate>[];
+    final freshness = json['freshness'];
+    final freshnessMap = freshness is Map
+        ? freshness.map((key, value) => MapEntry('$key', value))
+        : const <String, Object?>{};
+    final readAvailable = json['available'] == true;
     return LocalSignalAggregates(
-      available: json['available'] == true && items.isNotEmpty,
+      available: readAvailable && items.isNotEmpty,
       items: items,
       computedAt: _optionalString(json['computed_at']),
       lastRefreshedAt: _optionalString(json['last_refreshed_at']),
+      readAvailable: readAvailable,
+      region: _optionalString(json['region']),
+      regionApplied: json['region_applied'] == true,
+      freshnessState: _optionalString(freshnessMap['state']),
+      freshnessThresholdDays: freshnessMap['threshold_days'] is int
+          ? freshnessMap['threshold_days'] as int
+          : null,
     );
   }
 
-  /// Honest freshness label for the aggregate section header.
+  /// Honest freshness label for the aggregate section header. The server owns
+  /// the fresh/stale classification so the label never depends on the device
+  /// wall clock; a missing state renders the bare date (older-server compat).
   String freshnessLabel(String language) {
     final refreshed = lastRefreshedAt ?? computedAt;
     if (refreshed == null) {
@@ -128,15 +171,46 @@ class LocalSignalAggregates {
       );
     }
     final datePart = refreshed.length >= 10 ? refreshed.substring(0, 10) : refreshed;
-    return lalaCopyMulti(
-      language,
-      ko: '집계 기준 $datePart',
-      en: 'Aggregated as of $datePart',
-      ja: '$datePart 時点の集計',
-      zhHans: '汇总截至 $datePart',
-      zhHant: '彙總截至 $datePart',
-    );
+    switch (freshnessState) {
+      case 'stale':
+        return lalaCopyMulti(
+          language,
+          ko: '집계 기준 $datePart · 최신 아님',
+          en: 'Aggregated as of $datePart · may be outdated',
+          ja: '$datePart 時点の集計 · 最新ではない',
+          zhHans: '汇总截至 $datePart · 可能已过期',
+          zhHant: '彙總截至 $datePart · 可能已過期',
+        );
+      case 'fresh':
+        return lalaCopyMulti(
+          language,
+          ko: '집계 기준 $datePart · 최신',
+          en: 'Aggregated as of $datePart · current',
+          ja: '$datePart 時点の集計 · 最新',
+          zhHans: '汇总截至 $datePart · 最新',
+          zhHant: '彙總截至 $datePart · 最新',
+        );
+      default:
+        return lalaCopyMulti(
+          language,
+          ko: '집계 기준 $datePart',
+          en: 'Aggregated as of $datePart',
+          ja: '$datePart 時点の集計',
+          zhHans: '汇总截至 $datePart',
+          zhHant: '彙總截至 $datePart',
+        );
+    }
   }
+
+  /// Prominent notice for the stale row under the aggregates header.
+  String staleNoticeLabel(String language) => lalaCopyMulti(
+        language,
+        ko: '집계 데이터가 오래되어 최신 상태와 다를 수 있어요',
+        en: 'This aggregate data is stale and may differ from current conditions',
+        ja: '集計データが古く、最新の状態と異なる場合があります',
+        zhHans: '汇总数据已过期，可能与当前状态不同',
+        zhHant: '彙總資料已過期，可能與目前狀態不同',
+      );
 }
 
 String? _requiredString(Object? value) {

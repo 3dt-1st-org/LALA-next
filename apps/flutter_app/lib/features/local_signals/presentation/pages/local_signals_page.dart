@@ -193,6 +193,10 @@ class _LocalSignalsPageState extends State<LocalSignalsPage> {
         limit: 10,
         placeId: null,
         category: null,
+        // S-31: scope the governed aggregate to the same coarse region as the
+        // feed — an unscoped read would mix other regions' places into the
+        // region the visitor selected.
+        region: _coarseRegion,
       );
       final data = response.data;
       if (data == null) throw const FormatException('Missing aggregates data.');
@@ -304,6 +308,16 @@ class _LocalSignalsPageState extends State<LocalSignalsPage> {
             ],
           );
         }
+        if (_regionScopedAggregatesEmpty) {
+          return SliverMainAxisGroup(
+            slivers: <Widget>[
+              SliverToBoxAdapter(
+                child: _AggregatesRegionEmpty(language: language),
+              ),
+              SliverToBoxAdapter(child: _EmptyState(language: language)),
+            ],
+          );
+        }
         return SliverToBoxAdapter(child: _EmptyState(language: language));
       case _LocalSignalsStatus.loaded:
         // available=false means the governed read model honestly has no
@@ -327,9 +341,29 @@ class _LocalSignalsPageState extends State<LocalSignalsPage> {
             ],
           );
         }
+        if (_regionScopedAggregatesEmpty) {
+          return SliverMainAxisGroup(
+            slivers: <Widget>[
+              SliverToBoxAdapter(
+                child: _AggregatesRegionEmpty(language: language),
+              ),
+              _signalsList(language),
+            ],
+          );
+        }
         return _signalsList(language);
     }
   }
+
+  /// True when the visitor picked a manual region and the governed read was
+  /// on but returned zero rows for it (applied-but-empty or fail-closed
+  /// unmapped region) — a small honest notice replaces the hidden section.
+  /// Nationwide + empty keeps hiding the section entirely (pre-region
+  /// behavior, covered by an existing test).
+  bool get _regionScopedAggregatesEmpty =>
+      _coarseRegion != null &&
+      _aggregates != null &&
+      _aggregates!.regionScopedEmpty;
 
   SliverList _signalsList(String language) {
     return SliverList(
@@ -380,6 +414,9 @@ class _LocalSignalsPageState extends State<LocalSignalsPage> {
   /// cannot mistake these for user posts; place/plan actions reuse the same
   /// callbacks as signal cards.
   Widget _aggregatesSliver(String language, LocalSignalAggregates aggregates) {
+    // The stale notice occupies the slot right under the header so the age of
+    // the data is visible before any card.
+    final itemOffset = aggregates.isStale ? 2 : 1;
     return SliverPadding(
       padding: const EdgeInsets.only(bottom: 16),
       sliver: SliverList(
@@ -393,7 +430,15 @@ class _LocalSignalsPageState extends State<LocalSignalsPage> {
               ),
             );
           }
-          final aggregate = aggregates.items[index - 1];
+          if (aggregates.isStale && index == 1) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _AggregatesStaleNotice(
+                notice: aggregates.staleNoticeLabel(language),
+              ),
+            );
+          }
+          final aggregate = aggregates.items[index - itemOffset];
           return Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: _AggregateCard(
@@ -407,7 +452,7 @@ class _LocalSignalsPageState extends State<LocalSignalsPage> {
               onOpenDetail: widget.onOpenDetail,
             ),
           );
-        }, childCount: 1 + aggregates.items.length),
+        }, childCount: itemOffset + aggregates.items.length),
       ),
     );
   }
@@ -831,13 +876,15 @@ class _AggregatesHeader extends StatelessWidget {
             const SizedBox(width: 6),
             Expanded(
               child: Text(
+                // Neutral title: the read model is a rolling 4-week window,
+                // so a "this month" claim is not supported by the data.
                 lalaCopyMulti(
                   language,
-                  ko: '이번 달 로컬 관심 지표',
-                  en: 'Local interest this month',
-                  ja: '今月のローカル注目度',
-                  zhHans: '本月本地关注指标',
-                  zhHant: '本月在地關注指標',
+                  ko: '로컬 관심 지표',
+                  en: 'Local interest',
+                  ja: 'ローカル注目度',
+                  zhHans: '本地关注指标',
+                  zhHant: '在地關注指標',
                 ),
                 style: theme.textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w800,
@@ -1042,6 +1089,85 @@ class _AggregatesUnavailable extends StatelessWidget {
                 zhHant: '暫時無法載入彙總指標',
               ),
               key: const ValueKey('local-signals-aggregates-unavailable'),
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Server-classified stale data notice, shown as its own prominent row under
+/// the aggregates header — the staleness verdict comes from the server so the
+/// UI never guesses from the device clock.
+class _AggregatesStaleNotice extends StatelessWidget {
+  const _AggregatesStaleNotice({required this.notice});
+
+  final String notice;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: <Widget>[
+          Icon(
+            Icons.schedule_outlined,
+            size: 16,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              notice,
+              key: const ValueKey('local-signals-aggregates-stale'),
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Honest region-scoped empty: the visitor picked a region and the governed
+/// read is on, but that region has no aggregate rows. Never falls back to
+/// nationwide rows.
+class _AggregatesRegionEmpty extends StatelessWidget {
+  const _AggregatesRegionEmpty({required this.language});
+
+  final String language;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: <Widget>[
+          Icon(
+            Icons.inbox_outlined,
+            size: 16,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              lalaCopyMulti(
+                language,
+                ko: '선택한 지역의 집계 데이터가 아직 없어요',
+                en: 'No aggregate data for the selected region yet',
+                ja: '選択した地域の集計データはまだありません',
+                zhHans: '所选地区暂无汇总数据',
+                zhHant: '所選地區暫無彙總資料',
+              ),
+              key: const ValueKey('local-signals-aggregates-region-empty'),
               style: theme.textTheme.labelMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),

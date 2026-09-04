@@ -3967,6 +3967,7 @@ class FakeBackend implements LalaBackend {
     int limit = 20,
     String? placeId,
     String? category,
+    String? region,
   }) async {
     throw const LalaApiException(
       code: 'LOCAL_SIGNALS_DISABLED',

@@ -114,6 +114,7 @@ class _EpochBackend implements LalaBackend {
     int limit = 20,
     String? placeId,
     String? category,
+    String? region,
   }) => throw StateError('disabled');
   @override
   Future<LalaEnvelope<LalaWeather>> getWeather() =>

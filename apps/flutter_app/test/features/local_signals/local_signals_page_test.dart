@@ -8,6 +8,7 @@ import 'package:lala_next_app/core/backend/lala_backend.dart';
 import 'package:lala_next_app/core/config/app_config.dart';
 import 'package:lala_next_app/core/location/region_context.dart';
 import 'package:lala_next_app/core/navigation/local_signal_action.dart';
+import 'package:lala_next_app/features/local_signals/domain/local_signal_aggregate.dart';
 import 'package:lala_next_app/features/local_signals/domain/local_signal_public.dart';
 import 'package:lala_next_app/features/local_signals/presentation/pages/local_signal_detail_page.dart';
 import 'package:lala_next_app/features/local_signals/presentation/pages/local_signals_page.dart';
@@ -173,6 +174,232 @@ void main() {
     // Visitor locale must not leak Korean aggregate copy.
     expect(find.text('언급 12건'), findsNothing);
     expect(find.text('리뷰 언급 집계'), findsNothing);
+  });
+
+  testWidgets('aggregates request carries the manual coarse region', (
+    tester,
+  ) async {
+    final backend = _SignalsBackend.loaded(aggregates: _aggregatesPayload());
+    RegionContextStore.set(RegionContext.manual(_busanOption));
+    await tester.pumpWidget(_app(backend));
+    await tester.pumpAndSettle();
+
+    // S-31: the governed aggregate read must be scoped by the same coarse
+    // region id as the feed — an unscoped read mixes other regions' places.
+    expect(backend.requestedAggregateRegions, <String?>['busan-haeundae']);
+    expect(backend.requestedRegions, <String?>['busan-haeundae']);
+  });
+
+  testWidgets(
+    'nationwide aggregates request carries no region scope',
+    (tester) async {
+      final backend = _SignalsBackend.loaded(aggregates: _aggregatesPayload());
+      await tester.pumpWidget(_app(backend));
+      await tester.pumpAndSettle();
+
+      expect(backend.requestedAggregateRegions, <String?>[null]);
+    },
+  );
+
+  testWidgets(
+    'region-scoped empty aggregates show an honest region-empty row',
+    (tester) async {
+      final backend = _SignalsBackend.loaded(
+        aggregates: _aggregatesPayload(
+          items: const <Map<String, dynamic>>[],
+          region: 'busan-haeundae',
+          regionApplied: true,
+        ),
+      );
+      RegionContextStore.set(RegionContext.manual(_busanOption));
+      await tester.pumpWidget(_app(backend));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('local-signals-aggregates-region-empty')),
+        findsOneWidget,
+      );
+      // No aggregate cards sneak in from other regions.
+      expect(
+        find.byKey(const ValueKey('local-signals-aggregates-provenance')),
+        findsNothing,
+      );
+      expect(find.text('수원화성'), findsNothing);
+      // The feed itself still renders.
+      expect(
+        find.byKey(const ValueKey('local-signal-signal-1')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'unmapped region fail-closed payload also shows the region-empty row',
+    (tester) async {
+      final backend = _SignalsBackend.loaded(
+        aggregates: _aggregatesPayload(
+          items: const <Map<String, dynamic>>[],
+          region: 'busan-haeundae',
+          regionApplied: false,
+        ),
+      );
+      RegionContextStore.set(RegionContext.manual(_busanOption));
+      await tester.pumpWidget(_app(backend));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('local-signals-aggregates-region-empty')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('local-signals-aggregates-provenance')),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
+    'stale aggregates show a prominent stale row and drop the monthly claim',
+    (tester) async {
+      await tester.pumpWidget(
+        _app(
+          _SignalsBackend.loaded(aggregates: _aggregatesPayload(freshnessState: 'stale')),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('local-signals-aggregates-stale')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('집계 기준 2026-08-04 · 최신 아님'), findsOneWidget);
+      // The header must not claim a monthly window the data does not have.
+      expect(find.textContaining('이번 달'), findsNothing);
+      expect(find.text('로컬 관심 지표'), findsOneWidget);
+      // Aggregate cards still render under the stale notice.
+      expect(find.text('수원화성'), findsOneWidget);
+    },
+  );
+
+  testWidgets('fresh aggregates render without the stale row', (tester) async {
+    await tester.pumpWidget(
+      _app(
+        _SignalsBackend.loaded(aggregates: _aggregatesPayload(freshnessState: 'fresh')),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('local-signals-aggregates-stale')),
+      findsNothing,
+    );
+    expect(find.textContaining('집계 기준 2026-08-04 · 최신'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('local-signals-aggregates-provenance')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('en locale region-empty copy without Korean leak', (tester) async {
+    OnboardingState.selectLanguage('en');
+    final backend = _SignalsBackend.loaded(
+      aggregates: _aggregatesPayload(
+        items: const <Map<String, dynamic>>[],
+        region: 'busan-haeundae',
+        regionApplied: true,
+      ),
+    );
+    RegionContextStore.set(RegionContext.manual(_busanOption));
+    await tester.pumpWidget(_app(backend));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('No aggregate data for the selected region yet'),
+      findsOneWidget,
+    );
+    expect(find.text('선택한 지역의 집계 데이터가 아직 없어요'), findsNothing);
+  });
+
+  testWidgets('ja locale region-empty copy without Korean leak', (tester) async {
+    OnboardingState.selectLanguage('ja');
+    final backend = _SignalsBackend.loaded(
+      aggregates: _aggregatesPayload(
+        items: const <Map<String, dynamic>>[],
+        region: 'busan-haeundae',
+        regionApplied: true,
+      ),
+    );
+    RegionContextStore.set(RegionContext.manual(_busanOption));
+    await tester.pumpWidget(_app(backend));
+    await tester.pumpAndSettle();
+
+    expect(find.text('選択した地域の集計データはまだありません'), findsOneWidget);
+    expect(find.text('선택한 지역의 집계 데이터가 아직 없어요'), findsNothing);
+  });
+
+  test('domain freshnessLabel localizes every state across five locales', () {
+    LocalSignalAggregates build({
+      String? state,
+      String? refreshed = '2026-08-17T06:30:00Z',
+    }) => LocalSignalAggregates(
+      available: refreshed != null,
+      items: const <LocalSignalPlaceAggregate>[],
+      computedAt: refreshed,
+      lastRefreshedAt: refreshed,
+      readAvailable: true,
+      freshnessState: state,
+      freshnessThresholdDays: 14,
+    );
+
+    final stale = build(state: 'stale');
+    expect(stale.freshnessLabel('ko'), '집계 기준 2026-08-17 · 최신 아님');
+    expect(
+      stale.freshnessLabel('en'),
+      'Aggregated as of 2026-08-17 · may be outdated',
+    );
+    expect(stale.freshnessLabel('ja'), '2026-08-17 時点の集計 · 最新ではない');
+    expect(stale.freshnessLabel('zh-Hans'), '汇总截至 2026-08-17 · 可能已过期');
+    expect(stale.freshnessLabel('zh-Hant'), '彙總截至 2026-08-17 · 可能已過期');
+
+    final fresh = build(state: 'fresh');
+    expect(fresh.freshnessLabel('ko'), '집계 기준 2026-08-17 · 최신');
+    expect(fresh.freshnessLabel('en'), 'Aggregated as of 2026-08-17 · current');
+    expect(fresh.freshnessLabel('ja'), '2026-08-17 時点の集計 · 最新');
+
+    // Older server without the freshness field: bare date, no suffix.
+    final legacy = build(state: null);
+    expect(legacy.freshnessLabel('ko'), '집계 기준 2026-08-17');
+    expect(legacy.freshnessLabel('en'), 'Aggregated as of 2026-08-17');
+
+    expect(build(state: 'fresh', refreshed: null).freshnessLabel('ko'), '집계 시점 미확인');
+  });
+
+  test('domain parses region scope and freshness from the wire payload', () {
+    final parsed = LocalSignalAggregates.fromJson(
+      _aggregatesPayload(
+        region: 'gyeonggi-suwon',
+        regionApplied: true,
+        freshnessState: 'stale',
+      ),
+    );
+
+    expect(parsed.region, 'gyeonggi-suwon');
+    expect(parsed.regionApplied, isTrue);
+    expect(parsed.freshnessState, 'stale');
+    expect(parsed.freshnessThresholdDays, 14);
+    expect(parsed.isStale, isTrue);
+    expect(parsed.available, isTrue);
+
+    final regionEmpty = LocalSignalAggregates.fromJson(
+      _aggregatesPayload(
+        items: const <Map<String, dynamic>>[],
+        region: 'busan-haeundae',
+        regionApplied: true,
+      ),
+    );
+    expect(regionEmpty.readAvailable, isTrue);
+    expect(regionEmpty.available, isFalse);
+    expect(regionEmpty.regionScopedEmpty, isTrue);
   });
 
   testWidgets('guest can read public signals but has no write or identity UI', (
@@ -692,6 +919,7 @@ class _SignalsBackend implements LalaBackend {
   /// unavailable path), empty-available = honest no-aggregate-data.
   final Map<String, dynamic>? aggregates;
   final List<String?> requestedRegions = <String?>[];
+  final List<String?> requestedAggregateRegions = <String?>[];
 
   void complete(LocalSignalsFeed value) {
     completer!.complete(_envelope(value));
@@ -720,7 +948,9 @@ class _SignalsBackend implements LalaBackend {
     int limit = 20,
     String? placeId,
     String? category,
+    String? region,
   }) {
+    requestedAggregateRegions.add(region);
     if (aggregates == null) {
       return Future<LalaEnvelope<Map<String, dynamic>>>.error(
         const LalaApiException(
@@ -891,13 +1121,20 @@ Map<String, dynamic> _aggregatesPayload({
       'provider_class': 'aggregated_review_mentions',
     },
   ],
+  String? freshnessState,
+  String? region,
+  bool regionApplied = false,
 }) => <String, dynamic>{
   'read_model': 'local_signals_place_aggregates',
   'read_model_version': 'v1',
   'source': 'governed_review_mention_aggregation',
   'provider_class': 'aggregated_review_mentions',
   'available': true,
+  'region': region,
+  'region_applied': regionApplied,
   'items': items,
   'computed_at': '2026-08-04T06:30:00Z',
   'last_refreshed_at': '2026-08-04T06:30:00Z',
+  if (freshnessState != null)
+    'freshness': {'state': freshnessState, 'threshold_days': 14},
 };

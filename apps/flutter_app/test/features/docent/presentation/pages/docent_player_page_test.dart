@@ -125,6 +125,7 @@ class _ScriptedBackend implements LalaBackend {
     int limit = 20,
     String? placeId,
     String? category,
+    String? region,
   }) async {
     throw UnimplementedError();
   }
@@ -342,6 +343,7 @@ class _StepBackend implements LalaBackend {
     int limit = 20,
     String? placeId,
     String? category,
+    String? region,
   }) {
     throw UnimplementedError();
   }
@@ -779,6 +781,84 @@ void main() {
       DocentExperiencePhase.ready,
       reason: '재시도 후 게이트가 열려 있으면 실제 준비가 진행된다',
     );
+  });
+
+  testWidgets('unavailable 에서는 정지 컨트롤 자체를 만들지 않는다(잔류 사각형 제거)', (
+    tester,
+  ) async {
+    OnboardingState.selectLanguage('ko');
+    final backend = _StepBackend(speechEnabled: false);
+    final player = _RecordingFakePlayer();
+    final controller = _stepController(backend: backend, player: player);
+    await controller.playPlace(_place());
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(wrapApp(DocentPlayerPage(controller: controller)));
+    await tester.pumpAndSettle();
+
+    expect(controller.currentState.phase, DocentExperiencePhase.unavailable);
+    // unavailable 은 readiness 게이트 — 멈출 스크립트/음성 세션이 없으므로
+    // 44x44 회색 stop 잔류 사각형이 만들어지지 않아야 한다.
+    expect(find.byIcon(Icons.stop_rounded), findsNothing);
+    final retryButton = find.byKey(const ValueKey('docent-retry-button'));
+    await tester.scrollUntilVisible(retryButton, 120);
+    expect(retryButton, findsOneWidget);
+  });
+
+  testWidgets('큐 진행 중 unavailable 은 정지(=큐 취소) 컨트롤을 유지한다', (
+    tester,
+  ) async {
+    OnboardingState.selectLanguage('ko');
+    final backend = _StepBackend(speechEnabled: false);
+    final player = _RecordingFakePlayer();
+    final controller = _stepController(backend: backend, player: player);
+    final nextStop = LalaPlace(
+      placeId: 'player-p2',
+      name: '수원 화성 동화',
+      category: 'culture',
+      lat: 37.28,
+      lng: 127.01,
+      address: '테스트 주소 2',
+      distanceM: 90,
+      source: 'db',
+      nameKo: '수원 화성 동화',
+    );
+    await controller.playQueue(<LalaPlace>[_place(), nextStop]);
+    addTearDown(controller.dispose);
+
+    // 정지 핸들러는 GoRouter.pop 경로를 공유하므로 라우터 하니스로 감싼다
+    // (단일 루트 → canPop false → pop 없이 세션만 종료).
+    final router = GoRouter(
+      routes: <RouteBase>[
+        GoRoute(
+          path: '/',
+          builder: (context, state) =>
+              DocentPlayerPage(controller: controller),
+        ),
+      ],
+    );
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpAndSettle();
+
+    expect(controller.currentState.phase, DocentExperiencePhase.unavailable);
+    expect(controller.currentState.queueActive, isTrue);
+    // 큐가 살아 있으면 정지는 '큐 취소'라는 유효 동작이다 — 컨트롤 유지.
+    final stopIcon = find.byIcon(Icons.stop_rounded);
+    expect(stopIcon, findsOneWidget);
+    final stopButton = find.ancestor(
+      of: stopIcon,
+      matching: find.byType(IconButton),
+    );
+    await tester.scrollUntilVisible(stopButton, 120);
+    await tester.ensureVisible(stopButton);
+    await tester.pumpAndSettle();
+
+    await tester.tap(stopButton);
+    await tester.pumpAndSettle();
+
+    expect(controller.currentState.phase, DocentExperiencePhase.idle);
+    expect(controller.currentState.queueActive, isFalse);
+    expect(controller.currentState.queue, isEmpty);
   });
 
   testWidgets('음성 준비 실패는 안전 문구·재시도와 함께 실제 스크립트를 계속 보여준다', (tester) async {

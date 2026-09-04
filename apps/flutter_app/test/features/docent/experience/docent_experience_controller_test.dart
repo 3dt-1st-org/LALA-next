@@ -155,6 +155,7 @@ class _ScriptedBackend implements LalaBackend {
     int limit = 20,
     String? placeId,
     String? category,
+    String? region,
   }) async {
     throw UnimplementedError();
   }

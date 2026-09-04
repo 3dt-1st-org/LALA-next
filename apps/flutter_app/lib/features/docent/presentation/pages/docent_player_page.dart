@@ -353,6 +353,11 @@ class _DocentPlaybackCard extends StatelessWidget {
     final stopColor = isUnavailable
         ? const Color(0xFF64748B)
         : const Color(0xFFC87F11);
+    // Why: unavailable is a readiness gate — no script/audio session exists to
+    // stop, so the control would render as a dead 44x44 square. While a plan
+    // queue is advancing, stop still means "cancel the queue", so it stays.
+    final stopVisible =
+        state.queueActive || phase != DocentExperiencePhase.unavailable;
     final stopButton = SizedBox(
       width: 44,
       height: 44,
@@ -369,7 +374,8 @@ class _DocentPlaybackCard extends StatelessWidget {
     );
     final List<Widget> controls;
     if (isRetry) {
-      // unavailable/failed: 보이는 재시도 CTA(명시적 사용자 행동) + 정지.
+      // unavailable/failed: 보이는 재시도 CTA(명시적 사용자 행동). 정지는 멈출
+      // 대상이 있을 때만(실패한 실제 세션 또는 진행 중 큐).
       controls = <Widget>[
         Expanded(
           child: OutlinedButton.icon(
@@ -385,8 +391,7 @@ class _DocentPlaybackCard extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(width: 8),
-        stopButton,
+        if (stopVisible) ...<Widget>[const SizedBox(width: 8), stopButton],
       ];
     } else {
       controls = <Widget>[

@@ -114,6 +114,7 @@ class _MiniBackend implements LalaBackend {
     int limit = 20,
     String? placeId,
     String? category,
+    String? region,
   }) {
     throw UnimplementedError();
   }

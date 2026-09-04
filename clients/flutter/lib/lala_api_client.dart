@@ -455,6 +455,7 @@ class LalaApiClient {
     int limit = 20,
     String? placeId,
     String? category,
+    String? region,
     String? requestId,
     Duration? timeout,
   }) async {
@@ -464,6 +465,9 @@ class LalaApiClient {
     }
     if (category != null && category.trim().isNotEmpty) {
       query['category'] = category.trim();
+    }
+    if (region != null && region.trim().isNotEmpty) {
+      query['region'] = region.trim();
     }
     final resp = await _request(
       'GET',

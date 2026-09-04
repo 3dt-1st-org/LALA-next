@@ -29,11 +29,13 @@ abstract class LalaBackend {
 
   /// Governed system aggregates (weekly review-mention counts per place).
   /// System-aggregate read model — never user posts, never raw review data.
+  /// [region] is a coarse canonical region id, mirroring [getLocalSignals].
   Future<LalaEnvelope<Map<String, dynamic>>> getLocalSignalAggregates({
     int weeks,
     int limit,
     String? placeId,
     String? category,
+    String? region,
   });
 
   Future<LalaEnvelope<LalaWeather>> getWeather();
@@ -128,12 +130,14 @@ class LalaApiBackend implements LalaBackend {
     int limit = 20,
     String? placeId,
     String? category,
+    String? region,
   }) {
     return _client.getLocalSignalAggregates(
       weeks: weeks,
       limit: limit,
       placeId: placeId,
       category: category,
+      region: region,
     );
   }
 
