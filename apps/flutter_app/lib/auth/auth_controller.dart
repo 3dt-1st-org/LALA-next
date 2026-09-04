@@ -169,15 +169,13 @@ class LalaAuthController extends ChangeNotifier {
     }
 
     _setState(const LalaAuthState.busy());
+    final hasUsableSession = await _probeStoredSession();
+    if (!hasUsableSession) {
+      _invalidateSession();
+      _setState(const LalaAuthState.signedOut());
+      return;
+    }
     try {
-      final hasStoredSession = await _gateway.isAuthenticated;
-      final hasUsableSession =
-          hasStoredSession && await _validateStoredSession();
-      if (!hasUsableSession) {
-        _invalidateSession();
-        _setState(const LalaAuthState.signedOut());
-        return;
-      }
       await _restoreAuthenticatedSession();
     } on Object {
       _invalidateSession();
@@ -369,6 +367,20 @@ class LalaAuthController extends ChangeNotifier {
 
   bool _isCurrentSession(int revision) {
     return !_disposed && revision == _sessionRevision;
+  }
+
+  /// Cold-start probe of the stored provider session. The Logto SDK reads and
+  /// parses its secure-stored ID token inside `isAuthenticated`, so malformed
+  /// restored keychain storage makes the probe throw; a probe failure is not a
+  /// failed user sign-in and reports no usable session. Stale SDK storage is
+  /// left for the next real sign-in to replace — clearing it here would need
+  /// package-internal APIs.
+  Future<bool> _probeStoredSession() async {
+    try {
+      return await _gateway.isAuthenticated && await _validateStoredSession();
+    } on Object {
+      return false;
+    }
   }
 
   Future<bool> _validateStoredSession() {
