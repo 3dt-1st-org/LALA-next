@@ -375,6 +375,48 @@ void main() {
     expect(envelope.data?.revision, 5);
   });
 
+  test('putTravelPreferences carries CP2 spice and order requests verbatim',
+      () async {
+    late RequestOptions captured;
+    // The reference client treats the stored preferences document as an
+    // opaque map; the CP2 fields must cross the wire unchanged.
+    final preferences = <String, dynamic>{
+      'version': 1,
+      'soft': <String, Object?>{
+        'spice_level': 'mild',
+        'order_requests': <String>['quietTable', 'takeout'],
+      },
+      'hard': <String, Object?>{},
+      'locale': <String, Object?>{'pronunciation_help': true},
+    };
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      dio: _dio((request) async {
+        captured = request;
+        return _json({
+          'ok': true,
+          'data': {
+            'preferences': preferences,
+            'revision': 2,
+            'updated_at': '2026-09-05T00:00:00Z',
+          },
+          'meta': {'source': 'db'},
+          'error': null,
+        });
+      }),
+    );
+
+    await client.putTravelPreferences(
+      expectedRevision: 1,
+      preferences: preferences,
+    );
+
+    final sent = (captured.data as Map<String, dynamic>)['preferences'] as Map;
+    expect(sent['soft']['spice_level'], 'mild');
+    expect(sent['soft']['order_requests'], <String>['quietTable', 'takeout']);
+    expect(sent['locale']['pronunciation_help'], isTrue);
+  });
+
   test('deleteMe sends JSON confirmation and dynamic auth, accepting only 204',
       () async {
     late RequestOptions captured;
@@ -1164,7 +1206,8 @@ void main() {
     final pinnedBody = pinnedRequest.data as Map;
     expect(pinnedBody['selected_place_id'], 'tour-api-126508');
     // 미지정 호출은 키 자체를 실어 보내지 않는다(기존 unpinned 요청 바이트 유지).
-    expect((unpinnedRequest.data as Map).containsKey('selected_place_id'), isFalse);
+    expect((unpinnedRequest.data as Map).containsKey('selected_place_id'),
+        isFalse);
   });
 
   test('createDailyPlan sends preference_context only when supplied', () async {
@@ -1205,7 +1248,8 @@ void main() {
       baseUri: Uri.parse('http://api.example.test'),
       apiKey: 'migration-key',
       dio: _dio((request) async {
-        final hasContext = (request.data as Map).containsKey('preference_context');
+        final hasContext =
+            (request.data as Map).containsKey('preference_context');
         if (hasContext) {
           withContextRequest = request;
         } else {
@@ -1254,9 +1298,11 @@ void main() {
     expect(contextful.data!.appliedPreferenceEffectCount, 1);
     expect(contextful.data!.preferenceEffects[0].field, 'max_one_way_minutes');
     expect(contextful.data!.preferenceEffects[0].applied, isTrue);
-    expect(contextful.data!.preferenceEffects[0].details['effective_radius_m'], 1005);
+    expect(contextful.data!.preferenceEffects[0].details['effective_radius_m'],
+        1005);
     expect(contextful.data!.preferenceEffects[1].applied, isFalse);
-    expect(contextful.data!.preferenceEffects[1].reasonCode, 'CUISINE_FACET_UNAVAILABLE');
+    expect(contextful.data!.preferenceEffects[1].reasonCode,
+        'CUISINE_FACET_UNAVAILABLE');
     expect(contextless.data!.preferenceEffects, isEmpty);
     expect(contextless.data!.appliedPreferenceEffectCount, 0);
   });
