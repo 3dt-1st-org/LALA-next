@@ -85,7 +85,9 @@ and reverted, not committed.
 
 - API: `uv run pytest apps/api/tests` → **1974 passed** (includes +29 CP1 tests).
 - Generated client: `dart test` in `clients/flutter_generated` → **239 passed**;
-  `dart analyze` → 0 errors in the curated tree.
+  `dart analyze` → 0 errors in the curated tree (the package is NOT warning-free:
+  pre-existing generator-style warnings remain — unused imports, unused optional
+  `specifiedType` parameters, etc.).
 - Reference client: `dart test` in `clients/flutter` → **45 passed**; analyze clean.
 - Flutter: `flutter analyze` → No issues found; full `flutter test` → **1024 passed**
   (includes +15 CP1 tests: compose precedence, cross-zone regression, entry-point
@@ -94,6 +96,43 @@ and reverted, not committed.
   `uv run pre-commit run --all-files` all Passed; `git diff --check` clean.
 - Generator idempotency: consecutive `bash scripts/generate_dart_client.sh` runs
   produce identical trees (hashes above).
+
+## Correction (2026-09-05, independent verification): two defects
+
+### D1: patch-script regression tests (missing)
+
+The extended `patch_dart_dio_serializers.py` shipped without unit coverage. Added
+`apps/api/tests/test_patch_dart_dio_serializers.py` — direct module import (no Java,
+npx, network, or generator), `tmp_path` fixture reproducing the real dart-dio 7.12
+output shape. Covers: (1) nullable nested cast + raw assign → `toBuilder()`;
+(2) scalar cast + over-emitted `toBuilder()` → plain assignment; (3) non-nullable
+nested cast + raw assign → `toBuilder()`; (4) single-line integer-enum default
+`const E._(E.number30)` → `const E._('number30')`; (5) assign with no preceding cast
+unchanged; plus idempotence (second `patch_file` run returns False, content stable).
+Full API suite **1975 passed**.
+
+### D2: five-locale effect explanations (raw server copy leaked)
+
+`PlanPreferenceEffectsSummary` previously rendered the server KO/EN explanation
+verbatim, so JA/zh-Hans/zh-Hant users saw Korean/English sentences. The widget now
+maps every known bounded reason code (all 10) to client-owned KO/EN/JA/zh-Hans/
+zh-Hant copy (`localizedPreferenceEffectExplanation`), interpolating only the
+bounded details for radius effects (requested/effective meters, effective minutes);
+the raw server explanation survives only as the fallback for unknown codes or
+missing interpolation details. Applied/not-applied labels and 200% soft-wrap
+behavior are unchanged. Tests: every code × every locale renders its localized
+fragment with the raw server sentence proven absent (distinctive marker), KO/EN
+rows keep labels + radius interpolation, unknown-code and missing-details cases
+fall back to the raw text honestly. (Loop tests key the widget per code — a shared
+ExpansionTile state made the expansion tap nondeterministic across iterations.)
+Full Flutter suite **1032 passed**; `flutter analyze` clean.
+
+Verification for the correction: focused D1/D2 tests first, then
+`uv run pytest apps/api/tests --tb=no -p no:warnings` (1975 passed),
+`uv run ruff check .` / `ruff format --check .` clean, `uv run pre-commit run
+--all-files` all Passed, `git diff --check` clean, `flutter analyze` (No issues)
+and full `flutter test` (1032 passed). Reference/generated client tests not re-run
+(no tracked client files changed; client not regenerated).
 
 ## Honest limitations
 
