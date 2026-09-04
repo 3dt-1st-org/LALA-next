@@ -136,8 +136,10 @@ and full `flutter test` (1032 passed). Reference/generated client tests not re-r
 
 ## Honest limitations
 
-- Server effect explanations are ko/en only (planner API convention); the client-owned
-  summary copy is 5-locale and shows server explanations verbatim in the detail list.
+- Server effect explanations remain ko/en only (planner API convention); the client
+  maps all 10 known bounded reason codes to KO/EN/JA/zh-Hans/zh-Hant copy, and the
+  raw server text is shown only for unknown codes or missing bounded details
+  (D2 correction).
 - Radius cap uses the Haversine 4 km/h documented estimate, not a routing authority;
   `radius_m` in the response remains the request echo (requested/effective distinction
   lives in `preference_effects.details`).
