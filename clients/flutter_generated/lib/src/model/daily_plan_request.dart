@@ -11,10 +11,11 @@ part 'daily_plan_request.g.dart';
 /// DailyPlanRequest
 ///
 /// Properties:
-/// * [language] 
-/// * [lat] 
-/// * [lng] 
-/// * [radiusM] 
+/// * [language]
+/// * [lat]
+/// * [lng]
+/// * [radiusM]
+/// * [selectedPlaceId]
 @BuiltValue()
 abstract class DailyPlanRequest implements Built<DailyPlanRequest, DailyPlanRequestBuilder> {
   @BuiltValueField(wireName: r'language')
@@ -28,6 +29,9 @@ abstract class DailyPlanRequest implements Built<DailyPlanRequest, DailyPlanRequ
 
   @BuiltValueField(wireName: r'radius_m')
   int? get radiusM;
+
+  @BuiltValueField(wireName: r'selected_place_id')
+  String? get selectedPlaceId;
 
   DailyPlanRequest._();
 
@@ -76,6 +80,13 @@ class _$DailyPlanRequestSerializer implements PrimitiveSerializer<DailyPlanReque
       yield serializers.serialize(
         object.radiusM,
         specifiedType: const FullType(int),
+      );
+    }
+    if (object.selectedPlaceId != null) {
+      yield r'selected_place_id';
+      yield serializers.serialize(
+        object.selectedPlaceId,
+        specifiedType: const FullType(String),
       );
     }
   }
@@ -128,6 +139,13 @@ class _$DailyPlanRequestSerializer implements PrimitiveSerializer<DailyPlanReque
             specifiedType: const FullType(int),
           ) as int;
           result.radiusM = valueDes;
+          break;
+        case r'selected_place_id':
+          final valueDes = serializers.deserialize(
+            value,
+            specifiedType: const FullType(String),
+          ) as String;
+          result.selectedPlaceId = valueDes;
           break;
         default:
           unhandled.add(key);

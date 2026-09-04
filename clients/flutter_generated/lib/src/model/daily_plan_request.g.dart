@@ -15,13 +15,19 @@ class _$DailyPlanRequest extends DailyPlanRequest {
   final num lng;
   @override
   final int? radiusM;
+  @override
+  final String? selectedPlaceId;
 
   factory _$DailyPlanRequest(
           [void Function(DailyPlanRequestBuilder)? updates]) =>
       (DailyPlanRequestBuilder()..update(updates))._build();
 
   _$DailyPlanRequest._(
-      {this.language, required this.lat, required this.lng, this.radiusM})
+      {this.language,
+      required this.lat,
+      required this.lng,
+      this.radiusM,
+      this.selectedPlaceId})
       : super._();
   @override
   DailyPlanRequest rebuild(void Function(DailyPlanRequestBuilder) updates) =>
@@ -38,7 +44,8 @@ class _$DailyPlanRequest extends DailyPlanRequest {
         language == other.language &&
         lat == other.lat &&
         lng == other.lng &&
-        radiusM == other.radiusM;
+        radiusM == other.radiusM &&
+        selectedPlaceId == other.selectedPlaceId;
   }
 
   @override
@@ -48,6 +55,7 @@ class _$DailyPlanRequest extends DailyPlanRequest {
     _$hash = $jc(_$hash, lat.hashCode);
     _$hash = $jc(_$hash, lng.hashCode);
     _$hash = $jc(_$hash, radiusM.hashCode);
+    _$hash = $jc(_$hash, selectedPlaceId.hashCode);
     _$hash = $jf(_$hash);
     return _$hash;
   }
@@ -58,7 +66,8 @@ class _$DailyPlanRequest extends DailyPlanRequest {
           ..add('language', language)
           ..add('lat', lat)
           ..add('lng', lng)
-          ..add('radiusM', radiusM))
+          ..add('radiusM', radiusM)
+          ..add('selectedPlaceId', selectedPlaceId))
         .toString();
   }
 }
@@ -83,6 +92,11 @@ class DailyPlanRequestBuilder
   int? get radiusM => _$this._radiusM;
   set radiusM(int? radiusM) => _$this._radiusM = radiusM;
 
+  String? _selectedPlaceId;
+  String? get selectedPlaceId => _$this._selectedPlaceId;
+  set selectedPlaceId(String? selectedPlaceId) =>
+      _$this._selectedPlaceId = selectedPlaceId;
+
   DailyPlanRequestBuilder() {
     DailyPlanRequest._defaults(this);
   }
@@ -94,6 +108,7 @@ class DailyPlanRequestBuilder
       _lat = $v.lat;
       _lng = $v.lng;
       _radiusM = $v.radiusM;
+      _selectedPlaceId = $v.selectedPlaceId;
       _$v = null;
     }
     return this;
@@ -121,6 +136,7 @@ class DailyPlanRequestBuilder
           lng: BuiltValueNullFieldError.checkNotNull(
               lng, r'DailyPlanRequest', 'lng'),
           radiusM: radiusM,
+          selectedPlaceId: selectedPlaceId,
         );
     replace(_$result);
     return _$result;
