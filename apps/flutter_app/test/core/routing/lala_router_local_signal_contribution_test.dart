@@ -254,6 +254,7 @@ class _RoutingSignalsBackend implements LalaBackend {
     int limit = 20,
     String? placeId,
     String? category,
+    String? region,
   }) async {
     // Aggregates are best-effort; honest-unavailable keeps the feed usable.
     return Future<LalaEnvelope<Map<String, dynamic>>>.error(

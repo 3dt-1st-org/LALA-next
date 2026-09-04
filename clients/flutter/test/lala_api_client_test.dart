@@ -750,6 +750,52 @@ void main() {
     expect(response.data?['next_cursor'], 'opaque-next-cursor');
   });
 
+  test('getLocalSignalAggregates encodes the coarse region scope', () async {
+    late RequestOptions captured;
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test/base'),
+      accessTokenProvider: () async => 'guest-read-token',
+      dio: _dio((request) async {
+        captured = request;
+        return _json({
+          'ok': true,
+          'data': {
+            'read_model': 'local_signals_place_aggregates',
+            'available': true,
+            'region': 'gyeonggi-suwon',
+            'region_applied': true,
+            'items': <Object?>[],
+            'computed_at': null,
+            'last_refreshed_at': null,
+            'freshness': {'state': 'unknown', 'threshold_days': 14},
+          },
+          'meta': <String, Object?>{},
+          'error': null,
+        });
+      }),
+    );
+
+    final response = await client.getLocalSignalAggregates(
+      weeks: 4,
+      limit: 10,
+      region: '  gyeonggi-suwon  ',
+    );
+
+    expect(captured.method, 'GET');
+    expect(captured.uri.path, '/base/api/v1/community/signals/aggregates');
+    expect(captured.uri.queryParameters, {
+      'weeks': '4',
+      'limit': '10',
+      'region': 'gyeonggi-suwon',
+    });
+    expect(response.data?['region_applied'], isTrue);
+
+    // Blank region must not produce an empty-string query param — that would
+    // hit the server's min_length=1 validation as a 422.
+    await client.getLocalSignalAggregates(region: '   ');
+    expect(captured.uri.queryParameters.containsKey('region'), isFalse);
+  });
+
   test('createDocentScript falls back to migration API key auth', () async {
     late RequestOptions captured;
     final client = LalaApiClient(
