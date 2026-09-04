@@ -138,6 +138,18 @@ String _summary(String language, TravelPreferences preferences) {
       preferences.dietaryModes.length +
       preferences.allergens.length +
       (preferences.avoidIngredients.trim().isEmpty ? 0 : 1);
+  final hasSoftContent =
+      preferences.spiceLevel != null || preferences.orderRequests.isNotEmpty;
+  if (safetyCount == 0 && hasSoftContent) {
+    return _copy(
+      language,
+      ko: '저장한 맵기·주문 요청을 한국어 요청 카드에 반영해요.',
+      en: 'Your saved spice level and order requests are included in the Korean card.',
+      ja: '保存した辛さ・注文リクエストを韓国語カードに反映します。',
+      zhHans: '韩语需求卡将包含已保存的辣度和点餐请求。',
+      zhHant: '韓語需求卡將包含已儲存的辣度和點餐請求。',
+    );
+  }
   if (safetyCount == 0) {
     return _copy(
       language,
