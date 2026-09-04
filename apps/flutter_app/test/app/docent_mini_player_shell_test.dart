@@ -23,7 +23,12 @@ import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/shared/widgets/lala_bottom_nav_bar.dart';
 
 /// 즉시 성공하는 최소 백엔드 — readiness/스크립트/오디오만 구현.
+/// speechEnabled=false 면 readiness 가 음성 사용 불가를 보고한다.
 class _ReadyBackend implements LalaBackend {
+  _ReadyBackend({this.speechEnabled = true});
+
+  final bool speechEnabled;
+
   @override
   Future<LalaAudioResponse> createDocentAudio({required String script}) async {
     return LalaAudioResponse(
@@ -67,12 +72,14 @@ class _ReadyBackend implements LalaBackend {
       ok: true,
       data: LalaReadiness(
         status: 'ok',
-        checks: const <String, String>{'live_speech': 'enabled'},
+        checks: <String, String>{
+          'live_speech': speechEnabled ? 'enabled' : 'disabled',
+        },
         mode: LalaRuntimeMode(
           overall: 'ok',
           data: 'db-backed',
           ai: 'disabled',
-          speech: 'live-azure',
+          speech: speechEnabled ? 'live-azure' : 'off',
           worker: 'dry-run',
         ),
       ),
@@ -255,6 +262,31 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('docent-mini-player')), findsNothing);
+    expect(find.byType(LalaBottomNavBar), findsOneWidget);
+  });
+
+  testWidgets('큐 없는 unavailable 세션은 쉘 표면에 미니플레이어·정지·재시도를 남기지 않는다', (tester) async {
+    OnboardingState.selectLanguage('ko');
+    OnboardingState.markCompleted();
+    final controller = DocentExperienceController(
+      backendFactory: (_) => _ReadyBackend(speechEnabled: false),
+      baseConfig: const LalaAppConfig(baseUri: 'http://api.test'),
+      player: _EmittingFakePlayer(),
+    );
+    addTearDown(controller.dispose);
+    await controller.playPlace(_place());
+
+    await tester.pumpWidget(buildApp(controller));
+    await tester.pumpAndSettle();
+
+    // 런타임 C-2: unavailable 단일 장소 뒤 쉘 탭마다 재시도+정지 스트립이
+    // 남던 고스트 — 이제 쉘 표면에 아무 컨트롤도 만들지 않는다.
+    expect(controller.currentState.phase, DocentExperiencePhase.unavailable);
+    expect(controller.currentState.queueActive, isFalse);
+    expect(find.byKey(const ValueKey('docent-mini-player')), findsNothing);
+    expect(find.byIcon(Icons.stop_rounded), findsNothing);
+    expect(find.byIcon(Icons.refresh_rounded), findsNothing);
+    expect(find.text('음성 도슨트를 사용할 수 없어요'), findsNothing);
     expect(find.byType(LalaBottomNavBar), findsOneWidget);
   });
 
