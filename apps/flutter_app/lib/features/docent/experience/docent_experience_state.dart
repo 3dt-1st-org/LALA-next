@@ -39,8 +39,13 @@ class DocentExperienceState {
   /// 플랜 큐 재생이 세션을 소유 중인지(플랜 탭 Play-all → Stop 전환 판단).
   bool get queueActive => queue.isNotEmpty;
 
-  /// 미니플레이어 노출 여부 — idle 에서만 숨긴다(나머지 단계는 정직한 상태 표시).
-  bool get visible => phase != DocentExperiencePhase.idle;
+  /// 미니플레이어 노출 여부 — idle 과 큐 없는 unavailable 은 숨긴다.
+  /// unavailable 단일 장소는 멈추거나 재생할 세션이 없어 고스트 스트립만
+  /// 남긴다(안내·재시도는 전체 플레이어 페이지가 정직한 자리). 큐 진행 중
+  /// unavailable 은 정지(=큐 취소) 탈출구가 필요해 그대로 노출한다.
+  bool get visible =>
+      phase != DocentExperiencePhase.idle &&
+      (phase != DocentExperiencePhase.unavailable || queueActive);
 
   /// 준비/재생 계열 단계(중복 탭 무시 판단에 사용).
   bool get preparing =>

@@ -29,7 +29,8 @@ class DocentMiniPlayer extends StatelessWidget {
     return ValueListenableBuilder<DocentExperienceState>(
       valueListenable: controller.state,
       builder: (BuildContext context, DocentExperienceState state, Widget? _) {
-        // idle 세션은 미니플레이어를 완전히 숨긴다(§9 위젯 계약).
+        // idle/큐 없는 unavailable 세션은 미니플레이어 전체를 숨긴다
+        // (§9 위젯 계약 — 판단은 상태 모델의 visible 이 단일 출처다).
         final place = state.place;
         if (!state.visible || place == null) {
           return const SizedBox.shrink();
