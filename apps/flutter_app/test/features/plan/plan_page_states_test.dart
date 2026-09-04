@@ -325,7 +325,7 @@ class _FoundLocationProvider implements LalaLocationProvider {
 /// 일정 응답을 영원히 대기(hanging) — loading 상태 고정용. mock 데이터 없음.
 class _HangingPlanBackend implements LalaBackend {
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId}) =>
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId, LalaPlanPreferenceContext? preferenceContext}) =>
       Completer<LalaEnvelope<LalaDailyPlan>>().future;
 
   @override
@@ -342,7 +342,7 @@ class _HangingPlanBackend implements LalaBackend {
 
 class _LoadedPlanBackend implements LalaBackend {
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId}) async => _envelope(
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId, LalaPlanPreferenceContext? preferenceContext}) async => _envelope(
         LalaDailyPlan(
           language: 'ko',
           center: const LalaCoordinate(lat: 37.2636, lng: 127.0286),
@@ -369,7 +369,7 @@ class _LoadedPlanBackend implements LalaBackend {
 /// period/이동시간/추정시간/실내 를 모두 가진 슬롯(시맨틱 집계 검증용).
 class _RichSlotBackend implements LalaBackend {
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId}) async => _envelope(
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId, LalaPlanPreferenceContext? preferenceContext}) async => _envelope(
         LalaDailyPlan(
           language: 'ko',
           center: const LalaCoordinate(lat: 37.2636, lng: 127.0286),
@@ -410,7 +410,7 @@ class _RichSlotBackend implements LalaBackend {
 
 class _EmptySlotsBackend implements LalaBackend {
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId}) async => _envelope(
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId, LalaPlanPreferenceContext? preferenceContext}) async => _envelope(
         LalaDailyPlan(
           language: 'ko',
           center: const LalaCoordinate(lat: 37.2636, lng: 127.0286),
@@ -438,7 +438,7 @@ class _ThrowingPlanBackend implements LalaBackend {
   final Object failure;
 
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId}) async {
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId, LalaPlanPreferenceContext? preferenceContext}) async {
     throw failure;
   }
 

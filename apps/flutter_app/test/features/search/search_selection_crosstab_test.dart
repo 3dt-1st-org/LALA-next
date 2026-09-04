@@ -108,7 +108,7 @@ class _MapFakeBackend implements LalaBackend {
       _envelope(_placesResponse());
 
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId}) async => _envelope(
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId, LalaPlanPreferenceContext? preferenceContext}) async => _envelope(
     LalaDailyPlan(
       language: 'ko',
       center: const LalaCoordinate(lat: 37.2828, lng: 127.0101),

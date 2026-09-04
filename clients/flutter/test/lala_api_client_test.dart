@@ -1167,6 +1167,100 @@ void main() {
     expect((unpinnedRequest.data as Map).containsKey('selected_place_id'), isFalse);
   });
 
+  test('createDailyPlan sends preference_context only when supplied', () async {
+    late RequestOptions withContextRequest;
+    late RequestOptions withoutContextRequest;
+    Map<String, Object?> planData({bool withEffects = false}) =>
+        <String, Object?>{
+          'language': 'ko',
+          'center': {'lat': 37.2, 'lng': 127.0},
+          'radius_m': 3000,
+          'weather': _weatherPayload(),
+          'slots': <Map<String, dynamic>>[],
+          'source': 'db',
+          'request_hash':
+              'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
+          'cache_key': 'daily_plan:abcdef0123456789abcdef0123456789',
+          if (withEffects)
+            'preference_effects': <Map<String, dynamic>>[
+              {
+                'field': 'max_one_way_minutes',
+                'applied': true,
+                'reason_code': 'RADIUS_CAPPED_TO_WALKING_TIME',
+                'explanation': 'Capped the search radius from 5000m to 1005m.',
+                'details': {
+                  'requested_radius_m': 5000,
+                  'effective_radius_m': 1005,
+                },
+              },
+              {
+                'field': 'food_cuisines',
+                'applied': false,
+                'reason_code': 'CUISINE_FACET_UNAVAILABLE',
+                'explanation': 'Place data has no cuisine facet.',
+              },
+            ],
+        };
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      apiKey: 'migration-key',
+      dio: _dio((request) async {
+        final hasContext = (request.data as Map).containsKey('preference_context');
+        if (hasContext) {
+          withContextRequest = request;
+        } else {
+          withoutContextRequest = request;
+        }
+        return _json({
+          'ok': true,
+          'data': planData(withEffects: hasContext),
+          'meta': {'request_id': 'plan-request-id'},
+          'error': null,
+        });
+      }),
+    );
+
+    final contextful = await client.createDailyPlan(
+      lat: 37.2,
+      lng: 127.0,
+      preferenceContext: const LalaPlanPreferenceContext(
+        indoorOutdoor: 'indoor',
+        weatherSensitivity: 'high',
+        walkingBand: 'short',
+        maxOneWayMinutes: 15,
+        foodCuisines: ['korean', 'cafeDessert'],
+        budgetBand: 'value',
+        excludeClosingSoon: false,
+      ),
+    );
+    final contextless = await client.createDailyPlan(lat: 37.2, lng: 127.0);
+
+    final contextBody = withContextRequest.data as Map;
+    final context = contextBody['preference_context'] as Map;
+    expect(context['indoor_outdoor'], 'indoor');
+    expect(context['weather_sensitivity'], 'high');
+    expect(context['walking_band'], 'short');
+    expect(context['max_one_way_minutes'], 15);
+    expect(context['food_cuisines'], ['korean', 'cafeDessert']);
+    expect(context['budget_band'], 'value');
+    expect(context['exclude_closing_soon'], false);
+    // 미제공 호출은 키 자체를 실어 보내지 않는다(기존 요청 직렬화 바이트 유지).
+    expect(
+      (withoutContextRequest.data as Map).containsKey('preference_context'),
+      isFalse,
+    );
+    // 응답 파싱: effects 는 컨텍스트 있는 플랜에서만 채워진다.
+    expect(contextful.data!.preferenceEffects.length, 2);
+    expect(contextful.data!.appliedPreferenceEffectCount, 1);
+    expect(contextful.data!.preferenceEffects[0].field, 'max_one_way_minutes');
+    expect(contextful.data!.preferenceEffects[0].applied, isTrue);
+    expect(contextful.data!.preferenceEffects[0].details['effective_radius_m'], 1005);
+    expect(contextful.data!.preferenceEffects[1].applied, isFalse);
+    expect(contextful.data!.preferenceEffects[1].reasonCode, 'CUISINE_FACET_UNAVAILABLE');
+    expect(contextless.data!.preferenceEffects, isEmpty);
+    expect(contextless.data!.appliedPreferenceEffectCount, 0);
+  });
+
   test('createDocentAudio returns mpeg bytes and request id', () async {
     late RequestOptions captured;
     final client = LalaApiClient(

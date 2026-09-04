@@ -31,7 +31,6 @@ Serializers _$serializers = (Serializers().toBuilder()
       ..add(DocentScriptSuccessEnvelope.serializer)
       ..add(Dust.serializer)
       ..add(ForecastItem.serializer)
-      ..add(HTTPValidationError.serializer)
       ..add(HealthzData.serializer)
       ..add(HealthzDataServiceEnum.serializer)
       ..add(HealthzDataStatusEnum.serializer)
@@ -54,6 +53,15 @@ Serializers _$serializers = (Serializers().toBuilder()
       ..add(PlacesQueryCategoryEnum.serializer)
       ..add(PlacesQueryLanguageEnum.serializer)
       ..add(PlacesSuccessEnvelope.serializer)
+      ..add(PlanPreferenceContext.serializer)
+      ..add(PlanPreferenceContextBudgetBandEnum.serializer)
+      ..add(PlanPreferenceContextIndoorOutdoorEnum.serializer)
+      ..add(PlanPreferenceContextMaxOneWayMinutesEnum.serializer)
+      ..add(PlanPreferenceContextWalkingBandEnum.serializer)
+      ..add(PlanPreferenceContextWeatherSensitivityEnum.serializer)
+      ..add(PreferenceEffect.serializer)
+      ..add(PreferenceEffectFieldEnum.serializer)
+      ..add(PreferenceEffectReasonCodeEnum.serializer)
       ..add(ReadinessChecks.serializer)
       ..add(ReadinessChecksApiKeyEnum.serializer)
       ..add(ReadinessChecksAzureOpenaiDeploymentEnum.serializer)
@@ -93,6 +101,7 @@ Serializers _$serializers = (Serializers().toBuilder()
       ..add(RuntimeModeOverallEnum.serializer)
       ..add(RuntimeModeSpeechEnum.serializer)
       ..add(RuntimeModeWorkerEnum.serializer)
+      ..add(TravelPreferenceSoftFoodCuisinesEnum.serializer)
       ..add(ValidationError.serializer)
       ..add(ValidationErrorLocInner.serializer)
       ..add(WeatherData.serializer)
@@ -100,20 +109,24 @@ Serializers _$serializers = (Serializers().toBuilder()
       ..add(WeatherDataSource_Enum.serializer)
       ..add(WeatherSuccessEnvelope.serializer)
       ..addBuilderFactory(
-          const FullType(BuiltList, const [const FullType(DailyPlanSlot)]),
-          () => ListBuilder<DailyPlanSlot>())
-      ..addBuilderFactory(
           const FullType(BuiltList, const [const FullType(ForecastItem)]),
           () => ListBuilder<ForecastItem>())
       ..addBuilderFactory(
           const FullType(BuiltList, const [const FullType(Place)]),
           () => ListBuilder<Place>())
       ..addBuilderFactory(
+          const FullType(BuiltList, const [const FullType(PreferenceEffect)]),
+          () => ListBuilder<PreferenceEffect>())
+      ..addBuilderFactory(
+          const FullType(BuiltList, const [const FullType(DailyPlanSlot)]),
+          () => ListBuilder<DailyPlanSlot>())
+      ..addBuilderFactory(
           const FullType(BuiltList, const [const FullType(String)]),
           () => ListBuilder<String>())
       ..addBuilderFactory(
-          const FullType(BuiltList, const [const FullType(ValidationError)]),
-          () => ListBuilder<ValidationError>())
+          const FullType(BuiltList,
+              const [const FullType(TravelPreferenceSoftFoodCuisinesEnum)]),
+          () => ListBuilder<TravelPreferenceSoftFoodCuisinesEnum>())
       ..addBuilderFactory(
           const FullType(
               BuiltList, const [const FullType(ValidationErrorLocInner)]),

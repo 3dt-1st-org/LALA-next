@@ -8,14 +8,15 @@ import 'package:lala_next_flutter_client_generated/api.dart';
 ## Properties
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**cacheKey** | **String** |  | 
-**center** | [**Coordinate**](Coordinate.md) |  | 
-**language** | **String** |  | 
-**radiusM** | **int** |  | 
-**requestHash** | **String** |  | 
-**slots** | [**BuiltList&lt;DailyPlanSlot&gt;**](DailyPlanSlot.md) |  | 
-**source_** | **String** |  | 
-**weather** | [**WeatherData**](WeatherData.md) |  | 
+**cacheKey** | **String** |  |
+**center** | [**Coordinate**](Coordinate.md) |  |
+**language** | **String** |  |
+**preferenceEffects** | [**BuiltList&lt;PreferenceEffect&gt;**](PreferenceEffect.md) | Grounded effects of the supplied travel-preference context. Absent when no preference_context was supplied. | [optional]
+**radiusM** | **int** |  |
+**requestHash** | **String** |  |
+**slots** | [**BuiltList&lt;DailyPlanSlot&gt;**](DailyPlanSlot.md) |  |
+**source_** | **String** |  |
+**weather** | [**WeatherData**](WeatherData.md) |  |
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 

@@ -43,6 +43,8 @@ import 'package:lala_next_flutter_client_generated/src/model/place_score_compone
 import 'package:lala_next_flutter_client_generated/src/model/places_data.dart';
 import 'package:lala_next_flutter_client_generated/src/model/places_query.dart';
 import 'package:lala_next_flutter_client_generated/src/model/places_success_envelope.dart';
+import 'package:lala_next_flutter_client_generated/src/model/plan_preference_context.dart';
+import 'package:lala_next_flutter_client_generated/src/model/preference_effect.dart';
 import 'package:lala_next_flutter_client_generated/src/model/readiness_checks.dart';
 import 'package:lala_next_flutter_client_generated/src/model/readyz_data.dart';
 import 'package:lala_next_flutter_client_generated/src/model/readyz_success_envelope.dart';
@@ -71,7 +73,6 @@ part 'serializers.g.dart';
   DocentScriptSuccessEnvelope,
   Dust,
   ForecastItem,
-  HTTPValidationError,
   HealthzData,
   HealthzSuccessEnvelope,
   InterventionData,
@@ -84,6 +85,8 @@ part 'serializers.g.dart';
   PlacesData,
   PlacesQuery,
   PlacesSuccessEnvelope,
+  PlanPreferenceContext,
+  PreferenceEffect,
   ReadinessChecks,
   ReadyzData,
   ReadyzSuccessEnvelope,

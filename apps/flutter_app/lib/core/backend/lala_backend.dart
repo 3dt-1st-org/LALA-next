@@ -44,7 +44,13 @@ abstract class LalaBackend {
 
   /// D-1: [selectedPlaceId] 를 주면 해당 카노니컬 장소를 플랜에 정확히 한 번
   /// 고정 배정 요청한다. 서버가 후보에서 해석하지 못하면 정직하게 실패한다.
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId});
+  ///
+  /// CP1: [preferenceContext] 를 주면 비민감 soft 선호를 플랜 생성 입력으로
+  /// 보낸다. null 이면 키를 실어 보내지 않는다(기존 요청 직렬화 보존).
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({
+    String? selectedPlaceId,
+    LalaPlanPreferenceContext? preferenceContext,
+  });
 
   Future<LalaEnvelope<LalaDocentScript>> createDocentScript({
     required LalaPlace place,
@@ -158,13 +164,17 @@ class LalaApiBackend implements LalaBackend {
   }
 
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId}) {
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({
+    String? selectedPlaceId,
+    LalaPlanPreferenceContext? preferenceContext,
+  }) {
     return _client.createDailyPlan(
       lat: config.lat,
       lng: config.lng,
       radiusM: config.radiusM,
       language: apiRequestLanguage(config.lang),
       selectedPlaceId: selectedPlaceId,
+      preferenceContext: preferenceContext,
     );
   }
 

@@ -66,7 +66,7 @@ void main() {
 
 class _InterventionBackend implements LalaBackend {
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId}) async => _envelope(
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId, LalaPlanPreferenceContext? preferenceContext}) async => _envelope(
     LalaDailyPlan(
       language: 'ko',
       center: const LalaCoordinate(lat: 37.55, lng: 127.04),

@@ -916,7 +916,7 @@ class _NoopBackend implements LalaBackend {
   );
 
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId}) async => _envelope(
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId, LalaPlanPreferenceContext? preferenceContext}) async => _envelope(
     LalaDailyPlan(
       language: 'ko',
       center: const LalaCoordinate(lat: 37.2636, lng: 127.0286),
@@ -968,7 +968,7 @@ class _LoadedPlacesBackend implements LalaBackend {
 
 class _LoadedPlanBackend implements LalaBackend {
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId}) async => _envelope(
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId, LalaPlanPreferenceContext? preferenceContext}) async => _envelope(
     LalaDailyPlan(
       language: 'ko',
       center: const LalaCoordinate(lat: 35.16665, lng: 129.16792),

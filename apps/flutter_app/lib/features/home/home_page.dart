@@ -31,6 +31,7 @@ import 'package:lala_next_app/features/location/widgets/permanently_denied_recov
 import 'package:lala_next_app/features/map/domain/active_map_sheet.dart';
 import 'package:lala_next_app/features/map/map_helpers.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
+import 'package:lala_next_app/features/planning/domain/plan_preference_context.dart';
 import 'package:lala_next_app/features/settings/widgets/user_settings_sheet.dart';
 import 'package:lala_next_app/features/settings/data/privacy_settings_store.dart';
 import 'package:lala_next_app/features/tour/tour_helpers.dart';
@@ -57,6 +58,7 @@ class LalaHomePage extends StatefulWidget {
     this.localSignalActionController,
     this.docentExperienceController,
     this.privacySettingsStore,
+    this.preferenceContextProvider,
     super.key,
   }) : assert(authController != null || authControllerFactory != null);
 
@@ -72,6 +74,10 @@ class LalaHomePage extends StatefulWidget {
   /// null 이면 레일 카드에 재생 버튼을 만들지 않는다.
   final DocentExperienceController? docentExperienceController;
   final PrivacySettingsStore? privacySettingsStore;
+
+  /// CP1: 플랜 생성에 실을 유효 선호 컨텍스트 공급자(선택 — 테스트 주입).
+  /// null 이면 기본 공급자(기기 선호 기본값 + 여행 날짜 override 합성)를 쓴다.
+  final LalaPlanPreferenceContextProvider? preferenceContextProvider;
 
   @override
   State<LalaHomePage> createState() => _LalaHomePageState();
@@ -682,8 +688,12 @@ class _LalaHomePageState extends State<LalaHomePage> {
         _scheduleRecommendationRecovery(reason: 'places-load-failed');
       }
 
+      // CP1: 이 refresh dispatch 가 실을 유효 선호 컨텍스트를 한 번만 합성한다.
+      // 모든 플랜 생성 진입점이 같은 공급자를 쓰므로 동일한 유효 컨텍스트가
+      // 요청된다(숨은 전역 변경 없음 — 읽기 전용 합성).
+      final preferenceContext = await _currentPreferenceContext();
       final dailyPlanFuture = loadOptional(
-        _backend.createDailyPlan,
+        () => _backend.createDailyPlan(preferenceContext: preferenceContext),
         reportError: false,
       );
 
@@ -780,6 +790,13 @@ class _LalaHomePageState extends State<LalaHomePage> {
       }
       _tryResolveLocalSignalAction();
     }
+  }
+
+  /// CP1: 이 페이지의 플랜 생성에 실을 유효 선호 컨텍스트. 주입된 공급자가
+  /// 우선; 없으면 기본 공급자(기기 선호 + 여행 override 합성)를 쓴다.
+  Future<LalaPlanPreferenceContext> _currentPreferenceContext() {
+    return widget.preferenceContextProvider?.call() ??
+        composePlanPreferenceContext();
   }
 
   String _safeErrorMessage(
@@ -1042,8 +1059,12 @@ class _LalaHomePageState extends State<LalaHomePage> {
       });
     }
     try {
+      // CP1: 고정 생성도 지도 리프레시와 동일한 유효 선호 컨텍스트를 실어
+      // 보낸다(같은 공급자 — 진입점 간 유효 컨텍스트 불일치 방지).
+      final preferenceContext = await _currentPreferenceContext();
       final envelope = await _backend.createDailyPlan(
         selectedPlaceId: place.placeId,
+        preferenceContext: preferenceContext,
       );
       final plan = envelope.data;
       if (!mounted) return;

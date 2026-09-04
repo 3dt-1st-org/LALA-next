@@ -27,8 +27,10 @@ import 'package:lala_next_app/features/intervention/widgets/intervention_toast.d
 import 'package:lala_next_app/features/location/widgets/default_region_indicator.dart';
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/features/place/widgets/empty_place_state.dart';
+import 'package:lala_next_app/features/planning/domain/plan_preference_context.dart';
 import 'package:lala_next_app/features/planner/planner_helpers.dart';
 import 'package:lala_next_app/features/planner/spend_band_helpers.dart';
+import 'package:lala_next_app/features/planner/widgets/plan_preference_effects_summary.dart';
 import 'package:lala_next_app/features/planner/widgets/plan_slot_tile.dart';
 import 'package:lala_next_app/features/planner/widgets/plan_timeline_entry.dart';
 import 'package:lala_next_app/features/planner/widgets/planner_loading_card.dart';
@@ -45,6 +47,7 @@ class PlanPage extends StatefulWidget {
     this.backendFactory,
     this.initialConfig = const LalaAppConfig.fromEnvironment(),
     this.docentExperienceController,
+    this.preferenceContextProvider,
     super.key,
   });
 
@@ -61,6 +64,10 @@ class PlanPage extends StatefulWidget {
   /// 이슈 #120 §6: 앱 루트 단일 도슨트 경험 컨트롤러(선택 — 라우터가 주입).
   /// null 이면 '전체 듣기'/슬롯 재생 버튼을 만들지 않는다.
   final DocentExperienceController? docentExperienceController;
+
+  /// CP1: 플랜 생성에 실을 유효 선호 컨텍스트 공급자(선택 — 테스트 주입).
+  /// null 이면 기본 공급자(기기 선호 기본값 + 여행 날짜 override 합성)를 쓴다.
+  final LalaPlanPreferenceContextProvider? preferenceContextProvider;
 
   @override
   State<PlanPage> createState() => _PlanPageState();
@@ -209,6 +216,13 @@ class _PlanPageState extends State<PlanPage> {
 
   String get _language => _config.lang;
 
+  /// CP1: 이 탭의 플랜 생성에 실을 유효 선호 컨텍스트. 주입된 공급자가 우선;
+  /// 없으면 기본 공급자(기기 선호 + 여행 override 합성)를 쓴다.
+  Future<LalaPlanPreferenceContext> _currentPreferenceContext() {
+    return widget.preferenceContextProvider?.call() ??
+        composePlanPreferenceContext();
+  }
+
   // True when the plan is built from the disclosed default region (no real
   // current/manual context). The UI must badge this honestly.
   bool get _regionIsDefault => _region == null;
@@ -343,6 +357,8 @@ class _PlanPageState extends State<PlanPage> {
       source: previous.source,
       requestHash: previous.requestHash,
       cacheKey: previous.cacheKey,
+      // CP1: 로컬 슬롯 치환이어도 선호 효과 요약은 원본 플랜의 보고를 유지한다.
+      preferenceEffects: previous.preferenceEffects,
     );
     setState(() {
       _dailyPlan = updated;
@@ -514,9 +530,17 @@ class _PlanPageState extends State<PlanPage> {
     // 일정 라인은 실패 사유를 버리지 않고 캡처 — unavailable(도달 실패)과
     // error(오류 응답)을 구분해 서로 다른 안내문을 내기 위함. 개입은 부가이므로
     // 여전히 null 로 흡수한다.
+    // CP1: 지도 탭/고정 생성과 같은 공급자로 유효 선호 컨텍스트를 합성해
+    // 모든 진입점이 동일한 컨텍스트를 보내게 한다.
+    final preferenceContext = await _currentPreferenceContext();
     Future<({LalaDailyPlan? plan, Object? failure})> loadPlan() async {
       try {
-        return (plan: (await _backend.createDailyPlan()).data, failure: null);
+        return (
+          plan: (await _backend.createDailyPlan(
+            preferenceContext: preferenceContext,
+          )).data,
+          failure: null,
+        );
       } on Object catch (failure) {
         return (plan: null, failure: failure);
       }
@@ -668,6 +692,16 @@ class _PlanPageState extends State<PlanPage> {
               ),
             ),
             if (_regionIsDefault) DefaultRegionIndicator(language: _language),
+            // CP1: 요청에 선호 컨텍스트가 실렸던 플랜만 간단한 선호 반영 요약을
+            // 보여준다(legacy 플랜 = 빈 리스트 = 렌더링 안 함).
+            if (_dailyPlan?.preferenceEffects.isNotEmpty ?? false)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                child: PlanPreferenceEffectsSummary(
+                  effects: _dailyPlan!.preferenceEffects,
+                  language: _language,
+                ),
+              ),
             if (_shouldShowInterventionToast)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),

@@ -46,6 +46,15 @@ TransportMode = Literal["walk", "transit", "taxi", "car", "bicycle"]
 DietaryMode = Literal["vegetarian", "vegan", "halal", "kosher"]
 Allergen = Literal["nuts", "shellfish", "dairy", "eggs", "gluten", "soy"]
 
+# CP1 shared soft-preference value sets. The daily-plan preference_context reuses
+# these exact enums/bounds so one value vocabulary spans the preference stores
+# and the public plan endpoint (no second source of truth).
+IndoorOutdoorPreference = Literal["indoor", "balanced", "outdoor"]
+WeatherSensitivity = Literal["low", "medium", "high"]
+WalkingBand = Literal["short", "medium", "long"]
+BudgetBand = Literal["value", "balanced", "special"]
+MaxOneWayMinutes = Literal[15, 30, 60, 90]
+
 
 class _PreferenceSection(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -54,19 +63,19 @@ class _PreferenceSection(BaseModel):
 class TravelPreferenceSoft(_PreferenceSection):
     pace: Literal["relaxed", "balanced", "packed"] = "balanced"
     crowd_tolerance: Literal["quiet", "balanced", "popular"] = "balanced"
-    walking_band: Literal["short", "medium", "long"] = "medium"
+    walking_band: WalkingBand = "medium"
     interests: list[TravelInterest] = Field(default_factory=list, max_length=5)
     travel_styles: list[TravelStyle] = Field(default_factory=list, max_length=3)
-    indoor_outdoor: Literal["indoor", "balanced", "outdoor"] = "balanced"
-    weather_sensitivity: Literal["low", "medium", "high"] = "medium"
+    indoor_outdoor: IndoorOutdoorPreference = "balanced"
+    weather_sensitivity: WeatherSensitivity = "medium"
     food_cuisines: list[FoodCuisine] = Field(default_factory=list, max_length=4)
     food_adventure: Literal["familiar", "balanced", "adventurous"] = "balanced"
     companions: list[TravelCompanion] = Field(default_factory=lambda: ["solo"])
     transport_modes: list[TransportMode] = Field(default_factory=lambda: ["transit", "walk"])
     rest_frequency: Literal["low", "balanced", "frequent"] = "balanced"
-    max_one_way_minutes: Literal[15, 30, 60, 90] = 30
+    max_one_way_minutes: MaxOneWayMinutes = 30
     max_transfers: Literal[0, 1, 2, 3] = 2
-    budget_band: Literal["value", "balanced", "special"] = "balanced"
+    budget_band: BudgetBand = "balanced"
     day_rhythm: Literal["morning", "daytime", "night"] = "daytime"
     exclude_closing_soon: bool = True
     docent_depth: Literal["short", "standard", "deep"] = "standard"

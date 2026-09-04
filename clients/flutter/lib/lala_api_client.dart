@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:built_collection/built_collection.dart';
+import 'package:built_value/built_value.dart';
 import 'package:built_value/serializer.dart';
 import 'package:dio/dio.dart';
 import 'package:lala_next_flutter_client_generated/lala_next_flutter_client_generated.dart';
@@ -628,6 +630,7 @@ class LalaApiClient {
     int radiusM = 3000,
     String language = 'ko',
     String? selectedPlaceId,
+    LalaPlanPreferenceContext? preferenceContext,
     String? requestId,
     Duration? timeout,
   }) async {
@@ -637,7 +640,9 @@ class LalaApiClient {
       ..radiusM = radiusM
       ..language = language
       // D-1: 선택 장소 고정 배정 요청. null 이면 키를 실어 보내지 않는다(기존 계약 유지).
-      ..selectedPlaceId = selectedPlaceId;
+      ..selectedPlaceId = selectedPlaceId
+      // CP1: 유효 선호 컨텍스트. null 이면 키를 실어 보내지 않는다(기존 계약 유지).
+      ..preferenceContext = preferenceContext?.toBuilder();
     final body = _serializers.serialize(
       request.build(),
       specifiedType: const FullType(DailyPlanRequest),
@@ -1924,6 +1929,7 @@ class LalaDailyPlan {
     required this.source,
     required this.requestHash,
     required this.cacheKey,
+    this.preferenceEffects = const <LalaPlanPreferenceEffect>[],
   });
 
   final String language;
@@ -1934,6 +1940,14 @@ class LalaDailyPlan {
   final String source;
   final String requestHash;
   final String cacheKey;
+
+  /// CP1: 요청이 preference_context 를 실었을 때만 존재하는 grounded-effect 목록.
+  /// Legacy 플랜(컨텍스트 없음)은 빈 리스트 — 원시 선호 문서나 민감 값은 없다.
+  final List<LalaPlanPreferenceEffect> preferenceEffects;
+
+  /// 이 플랜에 실제로 반영된(grounded) 선호 효과 수. UI 요약 카운트에 쓴다.
+  int get appliedPreferenceEffectCount =>
+      preferenceEffects.where((effect) => effect.applied).length;
 
   static LalaDailyPlan fromJsonObject(Object? value) {
     return LalaDailyPlan.fromJson(_asMap(value));
@@ -1949,6 +1963,145 @@ class LalaDailyPlan {
       source: _asString(json['source']),
       requestHash: _asString(json['request_hash']),
       cacheKey: _asString(json['cache_key']),
+      preferenceEffects: _asList(json['preference_effects'])
+          .whereType<Map<String, dynamic>>()
+          .map(LalaPlanPreferenceEffect.fromJson)
+          .toList(growable: false),
+    );
+  }
+}
+
+/// CP1: 플랜 생성 요청에 실을 비민감 soft 선호 컨텍스트(값 타입).
+/// 알레르겐·식이·이동약성/접근성·PII 는 이 타입에 존재하지 않는다(계약 경계).
+class LalaPlanPreferenceContext {
+  const LalaPlanPreferenceContext({
+    this.indoorOutdoor = 'balanced',
+    this.weatherSensitivity = 'medium',
+    this.walkingBand = 'medium',
+    this.maxOneWayMinutes = 30,
+    this.foodCuisines = const <String>[],
+    this.budgetBand = 'balanced',
+    this.excludeClosingSoon = true,
+  });
+
+  final String indoorOutdoor;
+  final String weatherSensitivity;
+  final String walkingBand;
+  final int maxOneWayMinutes;
+  final List<String> foodCuisines;
+  final String budgetBand;
+  final bool excludeClosingSoon;
+
+  PlanPreferenceContextBuilder toBuilder() {
+    return PlanPreferenceContextBuilder()
+      ..indoorOutdoor = _contextEnum(
+        PlanPreferenceContextIndoorOutdoorEnum.values,
+        indoorOutdoor,
+        PlanPreferenceContextIndoorOutdoorEnum.balanced,
+      )
+      ..weatherSensitivity = _contextEnum(
+        PlanPreferenceContextWeatherSensitivityEnum.values,
+        weatherSensitivity,
+        PlanPreferenceContextWeatherSensitivityEnum.medium,
+      )
+      ..walkingBand = _contextEnum(
+        PlanPreferenceContextWalkingBandEnum.values,
+        walkingBand,
+        PlanPreferenceContextWalkingBandEnum.medium,
+      )
+      // 정수 enum(wireNumber): 바운드 값 {15,30,60,90} 외 값은 서버 기본(30)으로.
+      ..maxOneWayMinutes = switch (maxOneWayMinutes) {
+        15 => PlanPreferenceContextMaxOneWayMinutesEnum.number15,
+        60 => PlanPreferenceContextMaxOneWayMinutesEnum.number60,
+        90 => PlanPreferenceContextMaxOneWayMinutesEnum.number90,
+        _ => PlanPreferenceContextMaxOneWayMinutesEnum.number30,
+      }
+      ..foodCuisines = ListBuilder<TravelPreferenceSoftFoodCuisinesEnum>(
+        foodCuisines
+            .map(
+              (name) => _contextEnum<TravelPreferenceSoftFoodCuisinesEnum>(
+                TravelPreferenceSoftFoodCuisinesEnum.values,
+                name,
+                null,
+              ),
+            )
+            .whereType<TravelPreferenceSoftFoodCuisinesEnum>(),
+      )
+      ..budgetBand = _contextEnum(
+        PlanPreferenceContextBudgetBandEnum.values,
+        budgetBand,
+        PlanPreferenceContextBudgetBandEnum.balanced,
+      )
+      ..excludeClosingSoon = excludeClosingSoon;
+  }
+
+  static T? _contextEnum<T extends EnumClass>(
+    BuiltSet<T> values,
+    String? wireName,
+    T? fallback,
+  ) {
+    if (wireName == null) return fallback;
+    for (final value in values) {
+      if (value.name == wireName) return value;
+    }
+    return fallback;
+  }
+
+  static bool _stringListEquals(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is LalaPlanPreferenceContext &&
+      other.indoorOutdoor == indoorOutdoor &&
+      other.weatherSensitivity == weatherSensitivity &&
+      other.walkingBand == walkingBand &&
+      other.maxOneWayMinutes == maxOneWayMinutes &&
+      _stringListEquals(other.foodCuisines, foodCuisines) &&
+      other.budgetBand == budgetBand &&
+      other.excludeClosingSoon == excludeClosingSoon;
+
+  @override
+  int get hashCode => Object.hash(
+        indoorOutdoor,
+        weatherSensitivity,
+        walkingBand,
+        maxOneWayMinutes,
+        Object.hashAll(foodCuisines),
+        budgetBand,
+        excludeClosingSoon,
+      );
+}
+
+/// CP1: 서버가 보고한 선호 효과 한 건(applied 여부 + 기계 사유 코드 + 안내 문구).
+class LalaPlanPreferenceEffect {
+  const LalaPlanPreferenceEffect({
+    required this.field,
+    required this.applied,
+    required this.reasonCode,
+    required this.explanation,
+    this.details = const <String, dynamic>{},
+  });
+
+  final String field;
+  final bool applied;
+  final String reasonCode;
+  final String explanation;
+  final Map<String, dynamic> details;
+
+  factory LalaPlanPreferenceEffect.fromJson(Map<String, dynamic> json) {
+    final rawDetails = json['details'];
+    return LalaPlanPreferenceEffect(
+      field: _asString(json['field']),
+      applied: _asBool(json['applied']),
+      reasonCode: _asString(json['reason_code']),
+      explanation: _asString(json['explanation']),
+      details: rawDetails is Map<String, dynamic> ? rawDetails : const {},
     );
   }
 }
