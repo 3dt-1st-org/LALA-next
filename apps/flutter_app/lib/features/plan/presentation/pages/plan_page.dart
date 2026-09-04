@@ -148,12 +148,20 @@ class _PlanPageState extends State<PlanPage> {
     // Plan: adopt a non-null timeline published by another tab (e.g. the map tab's
     // createDailyPlan). No-op-skip our own publishes (same instance) and external
     // clears (null) so our view is never wiped by another tab's transient null.
+    // A plan from a DIFFERENT active context (language/radius/region) is ignored
+    // via the same _canAdoptSharedPlan contract as first-open adoption — checked
+    // against the CURRENT request context (_config), which region/language
+    // reloads update synchronously, so an old-context publish arriving mid-reload
+    // cannot adopt either.
     _onPlanChanged = () {
       if (!mounted) {
         return;
       }
       final next = PlanContextStore.current;
       if (next == null || next == _dailyPlan) {
+        return;
+      }
+      if (!_canAdoptSharedPlan(next, lat: _config.lat, lng: _config.lng)) {
         return;
       }
       setState(() {

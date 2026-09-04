@@ -109,3 +109,86 @@ No live provider calls, no deploy, no DB writes, no simulator/browser ops, no se
 
 No simulator/browser run — widget/API/client tests only. Runtime re-validation on a device
 build remains a follow-up gate.
+
+## Correction (2026-09-04, PR #187 review): two cross-tab races the completion claim missed
+
+The D-1 report above claimed "`_refresh`'s unpinned publish can no longer clobber the pinned
+plan" because generation runs "after any action-triggered refresh completed". Review confirmed
+this is only true for that serialized path — two interleavings remained (PR kept Draft).
+
+### Confirmed races (code reading, no runtime repro)
+
+- **P1 (stale unpinned overwrite, `home_page.dart`)**: `_refresh` captures the monotonic epoch
+  (`++_refreshEpoch`) but `_generatePinnedPlanForPlace` never touched it. An unpinned refresh
+  that captured the *current* epoch could still be in flight (suspended at its
+  `createDailyPlan` await) when the pinned generation published; the pinned publish did not
+  invalidate it, so the older refresh passed its `epoch == _refreshEpoch` guard afterwards,
+  overwrote `_dailyPlan` and re-published its unpinned plan to `PlanContextStore`.
+- **P2 (incompatible cross-tab adoption, `plan_page.dart`)**: `PlanPage._onPlanChanged`
+  adopted ANY non-null shared plan after mount — the `_canAdoptSharedPlan` contract (same
+  radius + API language + center within `plan.radiusM`) was only applied at first open. A plan
+  from a different active language/radius/region (including one published during a region or
+  language reload, when it is by definition stale for the new context) was adopted and
+  reshuffled the timeline — the exact defect D-1 set out to remove.
+
+### Correction (smallest change; stale-response guards and explicit refresh untouched)
+
+- `home_page.dart` `_generatePinnedPlanForPlace` now bumps `_refreshEpoch` at generation
+  start, invalidating every earlier `_refresh` dispatch before it can update state or
+  `PlanContextStore`. Because an invalidated dispatch's `finally` only clears `_loading`
+  while `epoch == _refreshEpoch`, the bump also clears `_loading` directly (otherwise the
+  spinner would stick). A refresh started AFTER the bump captures the newer epoch and keeps
+  its existing stale-discard/explicit-refresh semantics. Added `@visibleForTesting`
+  `LalaHomePage.dailyPlanStateForTesting` (state seam, mirroring the D5 places seam).
+- `plan_page.dart` `_onPlanChanged` now gates adoption through the existing
+  `_canAdoptSharedPlan(next, lat: _config.lat, lng: _config.lng)`; region/language reloads
+  update `_config` synchronously, so an old-context publish arriving mid-reload is rejected
+  against the NEW context. Compatible adoption behavior is unchanged; rejection is a no-op
+  (no refetch is triggered).
+
+### Regression coverage (deterministic; completers/fakes only, no sleeps)
+
+- New `test/features/map/map_pinned_plan_stale_refresh_race_test.dart`: the exact P1
+  interleaving — unpinned refresh begins first (completer-suspended at its plan await),
+  pinned request completes first and publishes, the older unpinned request completes last.
+  Asserts the exact pinned plan survives in `HomePage` state (`dailyPlanStateForTesting`),
+  `PlanContextStore` (identical instance), the planner sheet UI (pinned place present,
+  unpinned-only slot absent), `SelectedPlaceStore` still holds the place, and `_loading` is
+  not stuck. Verified the test FAILS on the pre-fix code (`Expected: pinned-race-test /
+  Actual: unpinned-race-test`).
+- `plan_tab_shared_plan_adoption_test.dart` +5 cases: post-mount incompatible (language,
+  radius) not adopted; post-mount compatible publish still adopted (same instance, no
+  refetch); old-region plan published during a region reload not adopted (loading view
+  survives, reload fetch then renders); KO plan published during a language reload not
+  adopted. All four incompatible cases FAIL on the pre-fix code; compatible adoption passes
+  on both.
+
+### Verification (exact commands, this correction only)
+
+- `flutter test test/features/map/map_pinned_plan_stale_refresh_race_test.dart` → 1 passed.
+- `flutter test test/features/plan/plan_tab_shared_plan_adoption_test.dart` → 9 passed.
+- Existing related suites re-run:
+  `flutter test test/features/map/map_add_to_plan_pinned_generation_test.dart
+  test/features/plan/plan_page_test.dart test/features/plan/plan_page_states_test.dart
+  test/bounds_home_page_epoch_test.dart test/crosstab_reactive_propagation_test.dart
+  test/core/state/crosstab_plan_context_store_test.dart` → 46 passed (47 total with the new
+  race test in the same invocation);
+  `flutter test test/app/cold_start_persistence_test.dart
+  test/core/routing/lala_router_local_signal_contribution_test.dart
+  test/features/search/search_selection_crosstab_test.dart
+  test/features/trip_library/trip_library_pages_test.dart
+  test/features/trip_library/trip_library_store_test.dart test/widget_test.dart` → 150
+  passed; `flutter test test/app/auth_token_provider_wiring_test.dart` → 2 passed.
+- `flutter analyze` → No issues found. `git diff --check` → clean.
+- Full `flutter test` suite NOT re-run for this correction (earlier full-suite result above
+  predates these changes); coverage here is the focused + cross-tab-adjacent set listed.
+
+### Remaining risk / honest limitation
+
+- Still no simulator/device runtime validation (unchanged gate). The P1 interleaving is
+  proven deterministically at the widget level only; real-network timing could surface
+  additional windows (e.g. a refresh dispatched between the pinned publish and sheet open
+  still intentionally overwrites, per explicit-refresh semantics).
+- A shared plan published while PlanPage is still resolving initial device location is
+  checked against the base-config center (conservative rejection, no adoption); it is not
+  re-adopted retroactively after location resolves — the tab fetches its own plan instead.

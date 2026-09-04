@@ -114,6 +114,18 @@ class LalaHomePage extends StatefulWidget {
       loading: state?._loading ?? false,
     );
   }
+
+  /// Test-only diagnostic (D-1 race): the daily-plan envelope currently held in
+  /// state, so a pinned plan's survival against a late stale unpinned refresh
+  /// can be verified against HomePage state directly (not only via the shared
+  /// store or UI text).
+  @visibleForTesting
+  static LalaEnvelope<LalaDailyPlan>? dailyPlanStateForTesting(
+    BuildContext context,
+  ) {
+    final state = context.findAncestorStateOfType<_LalaHomePageState>();
+    return state?._dailyPlan;
+  }
 }
 
 class _LalaHomePageState extends State<LalaHomePage> {
@@ -1014,6 +1026,21 @@ class _LalaHomePageState extends State<LalaHomePage> {
   Future<void> _generatePinnedPlanForPlace(LalaPlace place) async {
     if (_pinnedPlanGenerationInFlight) return;
     _pinnedPlanGenerationInFlight = true;
+    // D-1 race(P1): a pinned generation supersedes every earlier _refresh
+    // dispatch. Bump the epoch so their stale guards discard any late unpinned
+    // result BEFORE it can touch _dailyPlan/PlanContextStore — without this,
+    // a refresh that captured the current epoch can still finish after the
+    // pinned plan is published and overwrite it. The bump also orphans the
+    // loading flag those invalidated dispatches can no longer clear themselves
+    // (their finally only resets it while epoch == _refreshEpoch), so clear it
+    // here. A refresh started AFTER this point captures the newer epoch and
+    // keeps its normal stale-response/explicit-refresh behavior.
+    ++_refreshEpoch;
+    if (_loading) {
+      setState(() {
+        _loading = false;
+      });
+    }
     try {
       final envelope = await _backend.createDailyPlan(
         selectedPlaceId: place.placeId,
