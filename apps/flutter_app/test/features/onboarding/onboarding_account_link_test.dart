@@ -102,6 +102,37 @@ void main() {
     expect(OnboardingState.isCompleted, isTrue);
   });
 
+  testWidgets(
+    'cold-start stored-session failure shows the guest page, not a sign-in failure',
+    (tester) async {
+      final gateway = _OnboardingGateway(
+        authenticatedError: StateError('keychain restore leaked-detail'),
+      );
+      final controller = LalaAuthController(
+        config: config,
+        gateway: gateway,
+        accountApi: _OnboardingAccountApi(me: me),
+      );
+
+      await controller.initialize();
+      await _pumpAccountRouter(tester, controller);
+
+      expect(controller.state.status, LalaAuthStatus.signedOut);
+      // The reproduced S-06 defect rendered this failure copy before the user
+      // ever attempted sign-in; a cold-start recovery must not.
+      expect(
+        find.text(
+          '로그인을 완료하지 못했어요. 다시 시도하거나 게스트로 계속할 수 있어요.',
+        ),
+        findsNothing,
+      );
+      expect(find.text('로그인'), findsOneWidget);
+      expect(find.text('게스트로 둘러보기'), findsOneWidget);
+      expect(gateway.signInCalls, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('guest escape stays reachable at 320dp and 200 percent text', (
     tester,
   ) async {
@@ -157,14 +188,23 @@ Future<void> _pumpAccountRouter(
 }
 
 class _OnboardingGateway implements LalaSessionGateway {
-  _OnboardingGateway({this.profileValue});
+  _OnboardingGateway({this.profileValue, this.authenticatedError});
 
   bool authenticated = false;
   final LalaAuthProfile? profileValue;
+
+  /// Thrown by [isAuthenticated] to emulate the Logto SDK reading malformed
+  /// restored keychain storage at cold start.
+  final Object? authenticatedError;
   int signInCalls = 0;
 
   @override
-  Future<bool> get isAuthenticated async => authenticated;
+  Future<bool> get isAuthenticated async {
+    if (authenticatedError != null) {
+      throw authenticatedError!;
+    }
+    return authenticated;
+  }
 
   @override
   Future<LalaAuthProfile?> get profile async => profileValue;
