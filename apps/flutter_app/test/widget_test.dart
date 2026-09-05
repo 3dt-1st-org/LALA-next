@@ -2793,7 +2793,7 @@ void main() {
     expect(find.text('Hwaseong Haenggung'), findsAtLeastNWidgets(1));
     expect(find.text('Daily Plan'), findsOneWidget);
     expect(
-      find.text('Loading the docent script. Please check again shortly.'),
+      find.text('A docent script is not available for this place yet.'),
       findsAtLeastNWidgets(1),
     );
     expect(find.text('Listen'), findsNothing);
@@ -3148,7 +3148,10 @@ void main() {
     await expandMapDockIfCollapsed(tester);
 
     expect(backend.docentScriptRequests, ['brief:hwaseong-haenggung']);
-    expect(find.textContaining('도슨트 스크립트를 불러오는 중입니다'), findsAtLeastNWidgets(1));
+    expect(
+      find.textContaining('도슨트 스크립트는 아직 준비되지 않았습니다'),
+      findsAtLeastNWidgets(1),
+    );
     expect(find.textContaining('migration skeleton'), findsNothing);
     expect(find.textContaining('공식 관광·문화 데이터'), findsNothing);
     expect(find.textContaining('로컬 코스입니다'), findsNothing);
@@ -3164,7 +3167,7 @@ void main() {
     await expandMapDockIfCollapsed(tester);
 
     expect(
-      find.textContaining('Loading the docent script'),
+      find.textContaining('A docent script is not available'),
       findsAtLeastNWidgets(1),
     );
     expect(find.textContaining('connects official tourism'), findsNothing);

@@ -121,8 +121,10 @@ void main() {
         find.byKey(const ValueKey('search-empty-reset-filters')),
         findsOneWidget,
       );
+      expect(find.byKey(const ValueKey('search-empty-icon')), findsOneWidget);
       // transport no-data 카피와는 다른 문구다.
       expect(find.text('이 주변엔 아직 추천이 없어요.'), findsNothing);
+      expect(find.text('이 주변 추천을 준비 중입니다.'), findsNothing);
     },
   );
 
@@ -141,6 +143,7 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('조건에 맞는 장소가 없어요.'), findsOneWidget);
+      expect(find.text('이 주변 추천을 준비 중입니다.'), findsNothing);
       expect(find.text('행궁동 카페'), findsNothing);
     },
   );
