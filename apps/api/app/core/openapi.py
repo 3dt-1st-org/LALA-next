@@ -22,6 +22,16 @@ ME_PATH = "/api/v1/me"
 ME_PATH_PREFIX = "/api/v1/me/"
 LOCAL_SIGNALS_PATH_PREFIX = "/api/v1/community/signals"
 LOCAL_SIGNALS_PLACES_PATH_PREFIX = "/api/v1/community/places/"
+COMMUNITY_MUTATION_PATHS = frozenset(
+    {
+        "/api/v1/community/posts",
+        "/api/v1/community/posts/{post_id}/comments",
+        "/api/v1/community/posts/{post_id}/like",
+        "/api/v1/community/posts/{post_id}/reports",
+        "/api/v1/community/follows",
+        "/api/v1/community/chat/rooms",
+    }
+)
 
 OPERATION_TIMEOUT_SECONDS = {
     HEALTHZ_PATH: 3,
@@ -166,6 +176,8 @@ def _add_client_auth_security(schema: dict[str, Any]) -> None:
                         operation,
                         write=method.lower() != "get",
                     )
+                elif path in COMMUNITY_MUTATION_PATHS and method.lower() == "post":
+                    _add_community_write_error_responses(operation)
                 if path == ME_PATH:
                     _add_account_error_responses(
                         operation,
@@ -266,6 +278,19 @@ def _add_local_signal_error_responses(
                 },
             },
         )
+
+
+def _add_community_write_error_responses(operation: dict[str, Any]) -> None:
+    responses = operation.setdefault("responses", {})
+    responses.setdefault(
+        "429",
+        {
+            "description": "The community write rate limit was exceeded.",
+            "content": {
+                "application/json": {"schema": {"$ref": "#/components/schemas/ApiErrorEnvelope"}}
+            },
+        },
+    )
 
 
 def _fix_docent_audio_success_content(schema: dict[str, Any]) -> None:
