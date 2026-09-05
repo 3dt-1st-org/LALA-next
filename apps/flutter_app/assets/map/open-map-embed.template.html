@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>LALA Open Map</title>
+  <!--
+    LALA open-vector map embed (Draft #187 locale-aware map checkpoint).
+
+    Runtime: MapLibre GL JS __MAPLIBRE_GL_VERSION__ inlined below so the page
+    is fully self-contained for the Flutter web iframe (same-origin
+    /assets/map/open-map-embed.html) and the native WebView
+    (loadFlutterAsset). No unpinned remote scripts are loaded.
+
+    Style/data: OpenFreeMap public instance (OpenMapTiles schema, OpenStreetMap
+    data) selected by the style URL pushed from Flutter - the single
+    replaceable provider boundary (dart-define LALA_OPEN_MAP_STYLE_URL on the
+    Flutter side). The public instance has no SLA.
+
+    Label localization: only symbol layers whose current text-field actually
+    references OpenMapTiles multilingual name properties (name / name:*) are
+    rewritten with the locale coalesce expression supplied by Flutter. Icons
+    and all other layout expressions are preserved. If the style cannot prove
+    such layers at runtime, the page reports the blocker honestly
+    (no_multilingual_labels) instead of claiming localization.
+
+    No prefetch and no offline tile downloading. The OSM community raster
+    tile service is intentionally not used; vector tiles come only from the
+    configured style's provider.
+  -->
+  <style>
+__MAPLIBRE_GL_CSS__
+    html,
+    body,
+    #map {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #eaf2fb;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .notice {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10000;
+      max-width: 80%;
+      padding: 8px 14px;
+      border-radius: 12px;
+      background: rgba(17, 24, 39, 0.86);
+      box-shadow: 0 6px 18px rgba(15, 23, 42, 0.18);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 800;
+      text-align: center;
+      pointer-events: none;
+    }
+
+    .lala-marker {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      pointer-events: auto;
+      filter: drop-shadow(0 8px 18px rgba(15, 23, 42, 0.26));
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    .lala-marker-name {
+      max-width: 132px;
+      padding: 5px 10px;
+      overflow: hidden;
+      border-radius: 12px;
+      background: rgba(17, 24, 39, 0.84);
+      box-shadow: 0 6px 18px rgba(15, 23, 42, 0.18);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 800;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .lala-marker-circle {
+      display: grid;
+      box-sizing: border-box;
+      place-items: center;
+      border: 3px solid #fff;
+      border-radius: 50%;
+      box-shadow: 0 6px 14px rgba(15, 23, 42, 0.22);
+    }
+
+    .lala-marker-label {
+      display: grid;
+      place-items: center;
+      font-weight: 900;
+      line-height: 1;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="map" role="application" aria-label="LALA open map"></div>
+  <div id="notice" class="notice" hidden></div>
+  <script>
+__MAPLIBRE_GL_JS__
+  </script>
+  <script>
+    (function () {
+      "use strict";
+
+      const mapElement = document.getElementById("map");
+      const noticeElement = document.getElementById("notice");
+      const DEFAULT_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
+      const ATTRIBUTION_TEXT = "\u00A9 OpenStreetMap contributors \u00B7 \u00A9 OpenMapTiles \u00B7 OpenFreeMap";
+      const CONFIG_SOURCE_MARKER = "lala-flutter-map-config";
+      const BRIDGE_SOURCE = "lala-open-map";
+      const STYLE_TIMEOUT_MS = 20000;
+      const SUPPRESS_IDLE_MS = 750;
+
+      const COPY = {
+        loading: {
+          en: "Loading the open map...",
+          ja: "オープン地図を読み込み中...",
+          "zh-Hans": "正在加载开放地图...",
+          "zh-Hant": "正在載入開放地圖..."
+        },
+        unavailable: {
+          en: "The live map is not available right now.",
+          ja: "現在、地図を表示できません。",
+          "zh-Hans": "当前无法显示地图。",
+          "zh-Hant": "目前無法顯示地圖。"
+        },
+        labelBlocked: {
+          en: "Map label localization is unavailable for this provider.",
+          ja: "このプロバイダでは地図ラベルのローカライズができません。",
+          "zh-Hans": "此提供商无法本地化地图标签。",
+          "zh-Hant": "此供應商無法在地化地圖標籤。"
+        }
+      };
+      const ARIA_LABELS = {
+        en: "LALA open map",
+        ja: "LALA オープン地図",
+        "zh-Hans": "LALA 开放地图",
+        "zh-Hant": "LALA 開放地圖"
+      };
+      const PLACE_NAME_FALLBACK = {
+        en: "Local place",
+        ja: "スポット",
+        "zh-Hans": "地点",
+        "zh-Hant": "地點"
+      };
+
+      let map = null;
+      let markers = [];
+      let config = sanitizeConfig({});
+      let suppressIdleUntil = 0;
+      let styleReady = false;
+      let labelDecisionReported = false;
+      let runtimeErrorReported = false;
+      let labelLayerCount = -1;
+      let styleWatchdog = 0;
+
+      window.LalaMapEmbed = {
+        setConfig: function (next) {
+          config = sanitizeConfig(next || {});
+          updateLanguage();
+          if (!map) {
+            showNotice("loading");
+            ensureMap();
+            return;
+          }
+          applyConfigToMap();
+        }
+      };
+
+      window.addEventListener("message", function (event) {
+        if (event.origin !== window.location.origin || event.source !== window.parent) return;
+        let next = event.data;
+        if (typeof next === "string") {
+          try {
+            next = JSON.parse(next);
+          } catch (_) {
+            return;
+          }
+        }
+        if (!next || next.source !== CONFIG_SOURCE_MARKER) return;
+        window.LalaMapEmbed.setConfig(next);
+      });
+
+      function finiteNumber(value, fallback) {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : fallback;
+      }
+
+      function clamp(value, minimum, maximum) {
+        return Math.max(minimum, Math.min(maximum, value));
+      }
+
+      function normalizeLanguage(value) {
+        if (value === "en" || value === "ja" || value === "zh-Hans" || value === "zh-Hant") {
+          return value;
+        }
+        const raw = String(value || "").toLowerCase();
+        if (raw.indexOf("zh") === 0) {
+          if (raw.indexOf("hant") >= 0 || raw.indexOf("-tw") >= 0 ||
+            raw.indexOf("-hk") >= 0 || raw.indexOf("-mo") >= 0) {
+            return "zh-Hant";
+          }
+          return "zh-Hans";
+        }
+        return "en";
+      }
+
+      function safeStyleUrl(value) {
+        const raw = String(value || "").trim();
+        return raw.indexOf("https://") === 0 ? raw : DEFAULT_STYLE_URL;
+      }
+
+      function sanitizeLabelField(value) {
+        if (!Array.isArray(value) || value.length < 2 || value[0] !== "coalesce") {
+          return null;
+        }
+        const expression = ["coalesce"];
+        for (let i = 1; i < value.length; i += 1) {
+          const operand = value[i];
+          if (!Array.isArray(operand) || operand.length !== 2 || operand[0] !== "get") {
+            return null;
+          }
+          const key = operand[1];
+          if (typeof key !== "string" || !/^name(:[A-Za-z0-9-]+)?$/.test(key)) {
+            return null;
+          }
+          expression.push(["get", key]);
+        }
+        return expression;
+      }
+
+      function sanitizeConfig(value) {
+        return {
+          bridgeId: String(value.bridgeId || "").trim(),
+          language: normalizeLanguage(value.language),
+          interactive: value.interactive !== false,
+          centerLat: finiteNumber(value.lat, 37.2823),
+          centerLng: finiteNumber(value.lng, 127.0179),
+          level: clamp(Math.round(finiteNumber(value.level, 6)), 2, 10),
+          styleUrl: safeStyleUrl(value.styleUrl),
+          labelField: sanitizeLabelField(value.labelField),
+          places: Array.isArray(value.places) ? value.places : []
+        };
+      }
+
+      function updateLanguage() {
+        document.documentElement.lang = config.language;
+        mapElement.setAttribute("aria-label", ARIA_LABELS[config.language] || ARIA_LABELS.en);
+        mapElement.dataset.lalaMapLanguage = config.language;
+      }
+
+      function appLevelToZoom(value) {
+        return 19 - clamp(Math.round(value), 2, 10);
+      }
+
+      function zoomToAppLevel(value) {
+        return clamp(19 - Math.round(value), 2, 10);
+      }
+
+      function showNotice(kind) {
+        const copy = COPY[kind] || COPY.unavailable;
+        noticeElement.textContent = copy[config.language] || copy.en;
+        noticeElement.hidden = false;
+      }
+
+      function hideNotice() {
+        noticeElement.hidden = true;
+      }
+
+      function sendToFlutter(payload) {
+        const raw = JSON.stringify(Object.assign({
+          source: BRIDGE_SOURCE,
+          bridgeId: config.bridgeId
+        }, payload));
+        if (window.LalaMap && typeof window.LalaMap.postMessage === "function") {
+          window.LalaMap.postMessage(raw);
+          return;
+        }
+        if (window.parent !== window) {
+          window.parent.postMessage(raw, window.location.origin);
+        }
+      }
+
+      function ensureMap() {
+        if (map) return;
+        if (!window.maplibregl) {
+          showNotice("unavailable");
+          sendToFlutter({ type: "mapError", code: "runtime_missing" });
+          return;
+        }
+        map = new window.maplibregl.Map({
+          container: mapElement,
+          style: config.styleUrl,
+          center: [config.centerLng, config.centerLat],
+          zoom: appLevelToZoom(config.level),
+          minZoom: appLevelToZoom(10),
+          maxZoom: appLevelToZoom(2),
+          attributionControl: {
+            compact: false,
+            customAttribution: ATTRIBUTION_TEXT
+          }
+        });
+        styleWatchdog = window.setTimeout(onStyleTimeout, STYLE_TIMEOUT_MS);
+        map.on("style.load", onStyleReady);
+        map.on("styledata", onStyleData);
+        map.on("error", onMapError);
+        map.on("moveend", onMoveEnd);
+        applyConfigToMap();
+      }
+
+      function onStyleReady() {
+        styleReady = true;
+        window.clearTimeout(styleWatchdog);
+        hideNotice();
+        applyLabelLocale();
+        renderMarkers();
+      }
+
+      function onStyleData() {
+        // Re-apply after any style (re)load so localized labels survive
+        // style reloads, not just the initial style.load.
+        if (!styleReady) return;
+        applyLabelLocale();
+      }
+
+      function onMapError(event) {
+        if (!styleReady) {
+          window.clearTimeout(styleWatchdog);
+          showNotice("unavailable");
+          sendToFlutter({ type: "mapError", code: "style_load" });
+          return;
+        }
+        if (!runtimeErrorReported) {
+          runtimeErrorReported = true;
+          sendToFlutter({ type: "mapError", code: "runtime" });
+        }
+      }
+
+      function onStyleTimeout() {
+        if (styleReady) return;
+        showNotice("unavailable");
+        sendToFlutter({ type: "mapError", code: "style_timeout" });
+      }
+
+      function currentTextField(layerId) {
+        try {
+          const property = map.getLayoutProperty(layerId, "text-field");
+          if (!property) return null;
+          return typeof property === "object" && Object.prototype.hasOwnProperty.call(property, "value")
+            ? property.value
+            : property;
+        } catch (_) {
+          return null;
+        }
+      }
+
+      function referencesNameProperty(expression) {
+        if (!Array.isArray(expression)) return false;
+        for (let i = 0; i < expression.length; i += 1) {
+          const item = expression[i];
+          if (Array.isArray(item)) {
+            if (referencesNameProperty(item)) return true;
+          } else if (item === "get" && i + 1 < expression.length) {
+            const key = expression[i + 1];
+            if (typeof key === "string" && (key === "name" || key.indexOf("name:") === 0)) {
+              return true;
+            }
+          }
+        }
+        return false;
+      }
+
+      function applyLabelLocale() {
+        if (!map || !styleReady) return;
+        const style = map.getStyle();
+        if (!style || !Array.isArray(style.layers)) return;
+        const labelField = config.labelField;
+        const target = labelField ? JSON.stringify(labelField) : null;
+        let localizable = 0;
+        style.layers.forEach(function (layer) {
+          if (!layer || layer.type !== "symbol") return;
+          const current = currentTextField(layer.id);
+          if (!referencesNameProperty(current)) return;
+          localizable += 1;
+          if (target !== null && JSON.stringify(current) !== target) {
+            map.setLayoutProperty(layer.id, "text-field", labelField);
+          }
+        });
+        labelLayerCount = localizable;
+        mapElement.dataset.lalaLabelLayers = String(localizable);
+        if (localizable === 0 || target === null) {
+          reportLabelBlocker();
+        } else {
+          labelDecisionReported = true;
+        }
+      }
+
+      function reportLabelBlocker() {
+        if (labelDecisionReported) return;
+        labelDecisionReported = true;
+        showNotice("labelBlocked");
+        sendToFlutter({ type: "mapError", code: "no_multilingual_labels" });
+      }
+
+      function applyConfigToMap() {
+        if (!map) return;
+        applyInteractivity();
+        applyCamera();
+        renderMarkers();
+        applyLabelLocale();
+      }
+
+      function applyInteractivity() {
+        if (!map) return;
+        const enabled = config.interactive;
+        const handlerNames = [
+          "scrollZoom", "boxZoom", "dragPan", "keyboard", "doubleClickZoom", "touchZoomRotate"
+        ];
+        handlerNames.forEach(function (name) {
+          const handler = map[name];
+          if (handler && typeof handler.enable === "function" && typeof handler.disable === "function") {
+            if (enabled) {
+              handler.enable();
+            } else {
+              handler.disable();
+            }
+          }
+        });
+      }
+
+      function applyCamera() {
+        if (!map) return;
+        const targetZoom = appLevelToZoom(config.level);
+        const center = map.getCenter();
+        const changed = Math.abs(center.lat - config.centerLat) > 0.0000001 ||
+          Math.abs(center.lng - config.centerLng) > 0.0000001 ||
+          Math.abs(map.getZoom() - targetZoom) > 0.000001;
+        if (changed) {
+          suppressIdleUntil = Date.now() + SUPPRESS_IDLE_MS;
+          map.jumpTo({ center: [config.centerLng, config.centerLat], zoom: targetZoom });
+        }
+      }
+
+      function onMoveEnd() {
+        if (!map || !config.interactive || Date.now() < suppressIdleUntil) return;
+        const center = map.getCenter();
+        const bounds = map.getBounds();
+        const payload = {
+          type: "cameraIdle",
+          lat: center.lat,
+          lng: center.lng,
+          level: zoomToAppLevel(map.getZoom())
+        };
+        if (bounds) {
+          payload.sw_lat = bounds.getSouth();
+          payload.sw_lng = bounds.getWest();
+          payload.ne_lat = bounds.getNorth();
+          payload.ne_lng = bounds.getEast();
+        }
+        sendToFlutter(payload);
+      }
+
+      function renderMarkers() {
+        if (!map) return;
+        markers.forEach(function (marker) { marker.remove(); });
+        markers = [];
+        let renderedPins = 0;
+        let renderedClusters = 0;
+        config.places.forEach(function (place) {
+          const isCluster = Number(place.clusterCount || 0) > 1;
+          const element = buildMarkerView(place, isCluster);
+          const marker = new window.maplibregl.Marker({ element: element, anchor: "bottom" })
+            .setLngLat([Number(place.lng), Number(place.lat)])
+            .addTo(map);
+          markers.push(marker);
+          if (isCluster) {
+            renderedClusters += 1;
+          } else {
+            renderedPins += 1;
+          }
+          element.addEventListener("click", function (event) {
+            event.stopPropagation();
+            const placeId = String(place.id || "").trim();
+            if (config.interactive && placeId) {
+              sendToFlutter({ type: "placeTap", placeId: placeId });
+            }
+          });
+        });
+        mapElement.dataset.lalaMarkerPins = String(renderedPins);
+        mapElement.dataset.lalaMarkerClusters = String(renderedClusters);
+        mapElement.dataset.lalaMapLevel = String(config.level);
+        mapElement.dataset.lalaMapProvider = "open-vector";
+        window.__lalaLastMapMarkerStats = {
+          provider: "open-vector",
+          pins: renderedPins,
+          clusters: renderedClusters,
+          total: config.places.length,
+          level: config.level,
+          labelLayers: labelLayerCount
+        };
+      }
+
+      function buildMarkerView(place, isCluster) {
+        const marker = document.createElement("div");
+        marker.className = "lala-marker " + (isCluster ? "lala-marker-cluster" : "lala-marker-pin");
+        marker.dataset.lalaPlaceId = String(place.id || "");
+        marker.dataset.lalaCategory = String(place.category || "");
+        marker.setAttribute("role", "button");
+        marker.setAttribute("aria-label", String(place.name || "Local place"));
+
+        const selected = Boolean(place.selected) && !isCluster;
+        marker.style.zIndex = selected ? 1000 : (isCluster ? 850 : 900);
+        if (selected) {
+          const namePill = document.createElement("div");
+          namePill.className = "lala-marker-name";
+          namePill.textContent = shortName(place.name);
+          marker.appendChild(namePill);
+        }
+
+        const size = isCluster ? 48 : (selected ? 48 : 40);
+        const categoryColor = colorFor(place.category);
+        const circle = document.createElement("div");
+        circle.className = "lala-marker-circle";
+        circle.style.width = size + "px";
+        circle.style.height = size + "px";
+
+        const label = document.createElement("div");
+        label.className = "lala-marker-label";
+        if (isCluster) {
+          marker.dataset.lalaClusterCount = String(place.clusterCount || "");
+          circle.style.background = "#fff";
+          circle.style.borderColor = categoryColor;
+          label.style.color = clusterTextColorFor(place.category);
+          label.style.fontSize = "14px";
+          label.textContent = String(place.clusterCount || "");
+        } else {
+          marker.dataset.lalaMarkerShape = "pin";
+          circle.style.background = categoryColor;
+          label.style.color = markerTextColorFor(place.category);
+          label.style.fontSize = selected ? "14px" : "12px";
+          label.innerHTML = iconSvgFor(place.category);
+        }
+        circle.appendChild(label);
+        marker.appendChild(circle);
+
+        return marker;
+      }
+
+      function colorFor(category) {
+        if (category === "attraction") return "#C53030";
+        if (category === "restaurant") return "#F5C842";
+        if (category === "event") return "#2B6CB0";
+        if (category === "culture_venue") return "#0F766E";
+        return "#1A202C";
+      }
+
+      function markerTextColorFor(category) {
+        return category === "restaurant" ? "#1A202C" : "#fff";
+      }
+
+      function clusterTextColorFor(category) {
+        return category === "restaurant" ? "#6B4F0D" : colorFor(category);
+      }
+
+      function shortName(name) {
+        const fallback = PLACE_NAME_FALLBACK[config.language] || PLACE_NAME_FALLBACK.en;
+        const value = String(name || fallback);
+        return value.length > 14 ? value.slice(0, 14) + "..." : value;
+      }
+
+      function iconSvgFor(category) {
+        if (category === "restaurant") {
+          return '<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M7 3v8M5 3v8M9 3v8M5 11h4v10M16 3v18M16 3c3 2 4 5 3 9h-3" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        }
+        if (category === "event") {
+          return '<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M8 3v4M16 3v4M4 10h16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
+        }
+        return '<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M4 10h16L12 4 4 10ZM6 10v8M10 10v8M14 10v8M18 10v8M4 20h16" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      }
+    })();
+  </script>
+</body>
+</html>

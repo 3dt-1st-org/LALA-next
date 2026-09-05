@@ -163,7 +163,7 @@ class _PlanSlotsBackend implements LalaBackend {
   final bool duplicateMorningPlace;
 
   @override
-  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan() async {
+  Future<LalaEnvelope<LalaDailyPlan>> createDailyPlan({String? selectedPlaceId, LalaPlanPreferenceContext? preferenceContext}) async {
     return _envelope(
       LalaDailyPlan(
         language: 'ko',

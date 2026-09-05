@@ -1693,6 +1693,55 @@ def test_intervention_route_returns_envelope(client, auth_headers):
     assert body["data"]["place"] is None
 
 
+def test_intervention_route_emits_distinct_bad_air_quality_trigger(
+    client, auth_headers, monkeypatch
+):
+    # P4 end-to-end: an AQ-only adverse weather payload (explicit provenance)
+    # must surface as bad_air_quality through the public envelope — never as a
+    # weather-only trigger/factor.
+    from apps.api.app.services import planner_service
+
+    monkeypatch.setattr(
+        planner_service,
+        "current_weather",
+        lambda **kw: {
+            "source": "kma_ultra_srt_ncst+airkorea_sido_realtime",
+            "outdoor_status": "bad",
+            "weather_outdoor_status": "good",
+            "air_quality_outdoor_status": "bad",
+            "dust": {"grade": "bad"},
+            "forecast": [],
+        },
+    )
+    monkeypatch.setattr(
+        planner_service,
+        "list_places",
+        lambda **kw: {"source": "db", "places": []},
+    )
+
+    response = client.get(
+        "/api/v1/plans/intervention?lat=37.2&lng=127.0&radius_m=1000",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["should_intervene"] is True
+    assert data["trigger_type"] == "bad_air_quality"
+    assert data["trigger_factors"] == [{"factor": "air_quality_dust_grade", "value": "bad"}]
+    assert "Air quality is poor" in data["reason"]
+    assert "Weather is not ideal" not in data["reason"]
+
+
+def test_weather_route_reports_provenance_when_unavailable(client, auth_headers):
+    response = client.get("/api/v1/weather?lat=37.2&lng=127.0", headers=auth_headers)
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["weather_outdoor_status"] == "unknown"
+    assert data["air_quality_outdoor_status"] == "unknown"
+
+
 def test_intervention_uses_public_snapshot_candidate_in_snapshot_fallback(client, monkeypatch):
     monkeypatch.delenv("IOS_API_KEY", raising=False)
     monkeypatch.delenv("API_BEARER_TOKEN", raising=False)
@@ -1714,3 +1763,336 @@ def test_intervention_uses_public_snapshot_candidate_in_snapshot_fallback(client
     assert body["data"]["source"] == "mixed"
     assert body["data"]["place"]["source"] == "public_mvp_snapshot"
     assert body["data"]["place"]["place_id"] == expected_place["place_id"]
+
+
+# ---------------------------------------------------------------------------
+# D-1: plans/daily 선택 장소(selected_place_id) 고정 배정 라우트 계약.
+# ---------------------------------------------------------------------------
+
+
+def test_daily_plan_route_includes_selected_place_once(client, auth_headers, monkeypatch):
+    monkeypatch.setattr(
+        "apps.api.app.services.planner_service.list_places",
+        lambda **kwargs: {
+            "count": 4,
+            "places": [
+                {
+                    "place_id": "pin-place",
+                    "name": "고정 맛집",
+                    "category": "restaurant",
+                    "lat": 37.2,
+                    "lng": 127.0,
+                    "address": "주소",
+                    "distance_m": 30,
+                    "source": "db",
+                },
+                {
+                    "place_id": "other-place",
+                    "name": "다른 명소",
+                    "category": "attraction",
+                    "lat": 37.21,
+                    "lng": 127.01,
+                    "address": "주소2",
+                    "distance_m": 90,
+                    "source": "db",
+                },
+            ],
+            "query": kwargs,
+            "source": "db",
+        },
+    )
+
+    response = client.post(
+        "/api/v1/plans/daily",
+        headers=auth_headers,
+        json={
+            "lat": 37.2,
+            "lng": 127.0,
+            "radius_m": 1200,
+            "language": "ko",
+            "selected_place_id": "pin-place",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is True
+    slots = body["data"]["slots"]
+    assigned = [s["place"]["place_id"] for s in slots if s["place"]]
+    assert assigned.count("pin-place") == 1
+    lunch = next(s for s in slots if s["period"] == "lunch")
+    assert lunch["place"]["place_id"] == "pin-place"
+    # 고정 플랜의 정체성은 비지정 플랜과 구분된다(같은 좌표/반경/언어에서).
+    unpinned = client.post(
+        "/api/v1/plans/daily",
+        headers=auth_headers,
+        json={"lat": 37.2, "lng": 127.0, "radius_m": 1200, "language": "ko"},
+    )
+    assert unpinned.json()["data"]["request_hash"] != body["data"]["request_hash"]
+
+
+def test_daily_plan_route_unresolvable_selected_place_returns_422_envelope(
+    client, auth_headers, monkeypatch
+):
+    monkeypatch.setattr(
+        "apps.api.app.services.planner_service.list_places",
+        lambda **kwargs: {
+            "count": 0,
+            "places": [],
+            "query": kwargs,
+            "source": "db",
+        },
+    )
+
+    response = client.post(
+        "/api/v1/plans/daily",
+        headers=auth_headers,
+        json={
+            "lat": 37.2,
+            "lng": 127.0,
+            "radius_m": 1200,
+            "language": "ko",
+            "selected_place_id": "ghost-place",
+        },
+    )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert body["ok"] is False
+    assert body["error"]["code"] == "SELECTED_PLACE_UNAVAILABLE"
+    assert body["error"]["message"] == "선택한 장소를 이 일정에 포함할 수 없어요."
+    assert body["error"]["retryable"] is False
+
+
+def test_daily_plan_route_whitespace_only_selected_place_id_rejected(client, auth_headers):
+    response = client.post(
+        "/api/v1/plans/daily",
+        headers=auth_headers,
+        json={
+            "lat": 37.2,
+            "lng": 127.0,
+            "radius_m": 1200,
+            "language": "ko",
+            "selected_place_id": "   ",
+        },
+    )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert body["ok"] is False
+    assert body["error"]["code"] == "VALIDATION_ERROR"
+
+
+# ---------------------------------------------------------------------------
+# CP1: plans/daily preference_context 라우트 계약(grounded effects + 정직한 거부).
+# ---------------------------------------------------------------------------
+
+
+def test_daily_plan_route_preference_context_returns_effects(client, auth_headers, monkeypatch):
+    monkeypatch.setattr(
+        "apps.api.app.services.planner_service.list_places",
+        lambda **kwargs: {
+            "count": 0,
+            "places": [
+                {
+                    "place_id": "out1",
+                    "name": "야외 공원",
+                    "category": "attraction",
+                    "lat": 37.2,
+                    "lng": 127.0,
+                    "address": "주소",
+                    "distance_m": 40,
+                    "source": "db",
+                    "is_indoor": False,
+                },
+                {
+                    "place_id": "in1",
+                    "name": "실내 미술관",
+                    "category": "culture_venue",
+                    "lat": 37.21,
+                    "lng": 127.01,
+                    "address": "주소2",
+                    "distance_m": 90,
+                    "source": "db",
+                    "is_indoor": True,
+                },
+            ],
+            "query": kwargs,
+            "source": "db",
+        },
+    )
+
+    response = client.post(
+        "/api/v1/plans/daily",
+        headers=auth_headers,
+        json={
+            "lat": 37.2,
+            "lng": 127.0,
+            "radius_m": 5000,
+            "language": "ko",
+            "preference_context": {
+                "indoor_outdoor": "indoor",
+                "max_one_way_minutes": 15,
+                "food_cuisines": ["korean"],
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is True
+    effects = body["data"]["preference_effects"]
+    by_field = {effect["field"]: effect for effect in effects}
+    assert by_field["max_one_way_minutes"]["applied"] is True
+    assert by_field["max_one_way_minutes"]["details"]["effective_radius_m"] == 15 * 67
+    assert by_field["indoor_outdoor"]["applied"] is True
+    assert body["data"]["slots"][0]["place"]["place_id"] == "in1"
+    # 컨텍스트 없는 요청과 정체성이 구분된다.
+    unpinned = client.post(
+        "/api/v1/plans/daily",
+        headers=auth_headers,
+        json={"lat": 37.2, "lng": 127.0, "radius_m": 5000, "language": "ko"},
+    )
+    assert unpinned.json()["data"]["request_hash"] != body["data"]["request_hash"]
+
+
+def test_daily_plan_route_no_context_response_shape_unchanged(client, auth_headers):
+    response = client.post(
+        "/api/v1/plans/daily",
+        headers=auth_headers,
+        json={"lat": 37.2, "lng": 127.0, "radius_m": 1200, "language": "ko"},
+    )
+
+    assert response.status_code == 200
+    # legacy 응답 키 집합 그대로(preference_effects 키 없음).
+    assert set(response.json()["data"].keys()) == {
+        "language",
+        "center",
+        "radius_m",
+        "weather",
+        "slots",
+        "source",
+        "request_hash",
+        "cache_key",
+    }
+
+
+def test_daily_plan_route_preference_context_unknown_field_rejected(client, auth_headers):
+    response = client.post(
+        "/api/v1/plans/daily",
+        headers=auth_headers,
+        json={
+            "lat": 37.2,
+            "lng": 127.0,
+            "preference_context": {"indoor_outdoor": "indoor", "allergens": ["nuts"]},
+        },
+    )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert body["ok"] is False
+    assert body["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_daily_plan_route_preference_context_invalid_enum_rejected(client, auth_headers):
+    response = client.post(
+        "/api/v1/plans/daily",
+        headers=auth_headers,
+        json={
+            "lat": 37.2,
+            "lng": 127.0,
+            "preference_context": {"max_one_way_minutes": 45},
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_daily_plan_route_preference_context_caps_query_radius(client, auth_headers, monkeypatch):
+    captured: dict[str, object] = {}
+
+    def fake_list_places(**kwargs: object) -> dict:
+        captured.update(kwargs)
+        return {"count": 0, "places": [], "query": kwargs, "source": "db"}
+
+    monkeypatch.setattr("apps.api.app.services.planner_service.list_places", fake_list_places)
+
+    response = client.post(
+        "/api/v1/plans/daily",
+        headers=auth_headers,
+        json={
+            "lat": 37.2,
+            "lng": 127.0,
+            "radius_m": 20000,
+            "language": "ko",
+            "preference_context": {"walking_band": "short"},
+        },
+    )
+
+    assert response.status_code == 200
+    # short 밴드(15분)가 max_one_way_minutes 기본(30분)보다 작으므로 상한 근거.
+    assert captured["radius_m"] == 15 * 67
+    effects = response.json()["data"]["preference_effects"]
+    assert effects[0]["field"] == "walking_band"
+    assert effects[0]["applied"] is True
+    # 응답 radius_m 은 요청 에코 — 요청/유효 구분은 details 가 진실하게 담는다.
+    assert response.json()["data"]["radius_m"] == 20000
+
+
+def test_daily_plan_route_preference_context_pins_selected_place_once(
+    client, auth_headers, monkeypatch
+):
+    monkeypatch.setattr(
+        "apps.api.app.services.planner_service.list_places",
+        lambda **kwargs: {
+            "count": 2,
+            "places": [
+                {
+                    "place_id": "pin-place",
+                    "name": "고정 맛집",
+                    "category": "restaurant",
+                    "lat": 37.2,
+                    "lng": 127.0,
+                    "address": "주소",
+                    "distance_m": 30,
+                    "source": "db",
+                    "is_indoor": True,
+                },
+                {
+                    "place_id": "other-place",
+                    "name": "다른 명소",
+                    "category": "attraction",
+                    "lat": 37.21,
+                    "lng": 127.01,
+                    "address": "주소2",
+                    "distance_m": 90,
+                    "source": "db",
+                    "is_indoor": False,
+                },
+            ],
+            "query": kwargs,
+            "source": "db",
+        },
+    )
+
+    response = client.post(
+        "/api/v1/plans/daily",
+        headers=auth_headers,
+        json={
+            "lat": 37.2,
+            "lng": 127.0,
+            "radius_m": 1200,
+            "language": "ko",
+            "selected_place_id": "pin-place",
+            "preference_context": {"indoor_outdoor": "indoor"},
+        },
+    )
+
+    assert response.status_code == 200
+    slots = response.json()["data"]["slots"]
+    assigned = [s["place"]["place_id"] for s in slots if s["place"]]
+    assert assigned.count("pin-place") == 1
+    lunch = next(s for s in slots if s["period"] == "lunch")
+    assert lunch["place"]["place_id"] == "pin-place"
+    assert "preference_effects" in response.json()["data"]

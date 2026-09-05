@@ -54,7 +54,15 @@ class TravelPreferencesStore extends ChangeNotifier {
   String? get deviceUpdatedAt => _deviceUpdatedAt;
   bool get accountConnected => _remote != null;
 
-  Future<void> ensureLoaded() => _loadFuture ??= _load();
+  /// Zone-safe load gate (CP1). When already loaded, hand out a *fresh*
+  /// completed future created in the caller's zone — awaiting a future that
+  /// completed inside an earlier Flutter test zone can hang that later zone's
+  /// fake async (the cached `_loadFuture` belongs to a dead zone). Concurrent
+  /// first-load deduplication (`_loadFuture ??=`) is unchanged.
+  Future<void> ensureLoaded() {
+    if (_loaded) return Future<void>.value();
+    return _loadFuture ??= _load();
+  }
 
   Future<void> _load() async {
     try {

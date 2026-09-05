@@ -1,8 +1,14 @@
 """Sanitize a Lane C live docent QA run report for safe local storage.
 
-Strips anything that could carry private/raw review content or secrets, keeps
-short evidence excerpts, and aggregates per-dimension verdicts from both the
-deterministic precheck and the manual review notes file.
+Redacts secret-like text, coordinate pairs, and direct PII forms (email /
+phone), emits only visibly elided script excerpts (never a byte-complete
+script, even for scripts shorter than the cap), and aggregates per-dimension
+verdicts from the deterministic audits in :mod:`docent_qa_dimensions` plus the
+manual review notes file. Every dimension reports pass / flagged /
+not-applicable counts; dimensions without enough evidence are counted as
+not-applicable, never as a silent pass. Sanitized artifacts still contain
+bounded redacted excerpts — they are not raw-script-free by construction, and
+broad safety/factual-truth/source-rights judgments stay external gates.
 
 Input:  output/local/docent-qa-lane-c/live-docent-qa-*.json (gitignored run report)
 Output: output/local/docent-qa-lane-c/sanitized-report.md (safe summary + evidence)
@@ -21,21 +27,49 @@ _REPO_ROOT = Path(__file__).resolve().parents[4]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from apps.api.app.services import docent_qa_dimensions  # noqa: E402
+
 _SECRET_RE = re.compile(
     r"(sk-[A-Za-z0-9]{8,}|Bearer\s+[A-Za-z0-9._-]{8,}|postgres(?:ql)?://[^\s\"']+|"
     r"Key Vault|vault\.azure\.net)",
     re.IGNORECASE,
 )
+# Coordinate-like latitude/longitude pairs and common direct PII forms.
+# Deliberately narrow (separators required for phone groups, decimal pairs only
+# for coordinates) so template text like "PM10 30, PM2.5 12" never matches.
+_PII_RE = re.compile(
+    r"(?:\b\d{1,3}\.\d{2,}\s*,\s*\d{1,3}\.\d{2,}\b"
+    r"|\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"
+    r"|\b(?:\+\d{1,3}[-.\s])?(?:0\d{0,2}|\d{1,4})[-.\s]\d{3,4}[-.\s]\d{4}\b)"
+)
+_EXCERPT_SUFFIX = " ..."
+_EXCERPT_LIMIT = 240
 
 
 def sanitize_text(value: str, limit: int = 700) -> str:
+    """Collapse whitespace, redact secrets/coordinates/direct PII, cap length."""
     cleaned = _SECRET_RE.sub("[redacted]", " ".join((value or "").split()))
+    cleaned = _PII_RE.sub("[redacted]", cleaned)
     return cleaned[: limit - 3] + "..." if len(cleaned) > limit else cleaned
+
+
+def script_excerpt(value: str, limit: int = _EXCERPT_LIMIT) -> str:
+    """Redacted, visibly elided script excerpt.
+
+    Never byte-for-byte equal to the entire input script: at least one source
+    character is always omitted and a visible ellipsis suffix marks the elision,
+    even when the script is shorter than ``limit``.
+    """
+    cleaned = _SECRET_RE.sub("[redacted]", " ".join((value or "").split()))
+    cleaned = _PII_RE.sub("[redacted]", cleaned)
+    if not cleaned:
+        return ""
+    keep = min(limit - len(_EXCERPT_SUFFIX), len(cleaned) - 1)
+    return cleaned[:keep].rstrip() + _EXCERPT_SUFFIX
 
 
 def build_sanitized_report(report: dict[str, Any], manual_notes: dict[str, Any]) -> dict[str, Any]:
     records = report.get("records") or []
-    by_dimension: dict[str, dict[str, int]] = {}
     issue_counts: dict[str, int] = {}
     category_scores: dict[str, list[int]] = {}
     language_scores: dict[str, list[int]] = {}
@@ -49,28 +83,7 @@ def build_sanitized_report(report: dict[str, Any], manual_notes: dict[str, Any])
         if score is not None:
             category_scores.setdefault(record["category"], []).append(int(score))
             language_scores.setdefault(record["language"], []).append(int(score))
-        failed = set(precheck.get("issue_tags") or [])
-        dimension_map = {
-            "grounding": ["no_rag_chunks", "missing_place_name"],
-            "source_attribution": [],
-            "local_context": [],
-            "advertising_leakage": ["fallback_or_mock_wording"],
-            "hallucination": ["raw_score_leakage"],
-            "language_purity_ko_en": ["language_purity"],
-            "usefulness": ["route_action_missing", "missing_pm_context", "category_persona_weak"],
-            "safety": ["secret_like_text"],
-            "repetition": [],
-        }
-        for dimension, tags in dimension_map.items():
-            slot = by_dimension.setdefault(
-                dimension, {"pass": 0, "flagged": 0, "not_applicable": 0}
-            )
-            if not tags:
-                slot["not_applicable"] += 1
-            elif failed & set(tags):
-                slot["flagged"] += 1
-            else:
-                slot["pass"] += 1
+        dimension_audits = docent_qa_dimensions.audit_record_dimensions(record)
         manual = (manual_notes.get("places") or {}).get(record["place_id"]) or {}
         out_records.append(
             {
@@ -88,10 +101,14 @@ def build_sanitized_report(report: dict[str, Any], manual_notes: dict[str, Any])
                 "auto_precheck_score": score,
                 "blocker": precheck.get("blocker"),
                 "issue_tags": precheck.get("issue_tags"),
+                "dimension_verdicts": {
+                    dimension: audit.to_public_dict()
+                    for dimension, audit in dimension_audits.items()
+                },
                 "manual_scores": manual.get("scores"),
                 "manual_verdict": manual.get("verdict"),
                 "manual_notes": sanitize_text(str(manual.get("notes") or ""), 300),
-                "script_excerpt": sanitize_text(str(record.get("script") or ""), 240),
+                "script_excerpt": script_excerpt(str(record.get("script") or "")),
             }
         )
 
@@ -118,9 +135,7 @@ def build_sanitized_report(report: dict[str, Any], manual_notes: dict[str, Any])
             "category_average": {k: avg(v) for k, v in sorted(category_scores.items())},
             "language_average": {k: avg(v) for k, v in sorted(language_scores.items())},
             "issue_counts": dict(sorted(issue_counts.items())),
-            "dimension_flags": {
-                dim: {"pass": s["pass"], "flagged": s["flagged"]} for dim, s in by_dimension.items()
-            },
+            "dimension_flags": docent_qa_dimensions.summarize_dimension_audits(records),
         },
         "records": out_records,
     }
@@ -164,13 +179,15 @@ def main(argv: list[str] | None = None) -> int:
         f"- Language averages: `{json.dumps(summary['language_average'], ensure_ascii=False)}`",
         f"- Issue counts: `{json.dumps(summary['issue_counts'], ensure_ascii=False)}`",
         "",
-        "## Dimension flags (deterministic precheck)",
+        "## Dimension flags (deterministic audits)",
         "",
-        "| Dimension | Pass | Flagged |",
-        "|---|---:|---:|",
+        "| Dimension | Pass | Flagged | Not applicable |",
+        "|---|---:|---:|---:|",
     ]
     for dim, flags in summary["dimension_flags"].items():
-        lines.append(f"| {dim} | {flags['pass']} | {flags['flagged']} |")
+        lines.append(
+            f"| {dim} | {flags['pass']} | {flags['flagged']} | {flags['not_applicable']} |"
+        )
 
     lines.extend(["", "## Per-record results", ""])
     lines.append(

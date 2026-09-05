@@ -70,16 +70,38 @@ void main() {
     );
     await tester.tap(find.byKey(const ValueKey('food-preferences-entry')));
     await tester.pumpAndSettle();
-    expect(find.text('안전·식이 조건'), findsOneWidget);
-
-    await tester.ensureVisible(
-      find.byKey(const ValueKey('food-cuisine-korean')),
-    );
+    // Favorite food chips sit at the top of the page; the CP2 spice/order
+    // sections above the safety panel push the rest below the lazy fold, so
+    // scroll the remaining targets in. The hub page behind this route also
+    // owns a scrollable, so scope to the food page's list.
     await tester.tap(find.byKey(const ValueKey('food-cuisine-korean')));
-    await tester.ensureVisible(
-      find.byKey(const ValueKey('enum-DietaryMode.halal')),
+    final foodScrollable = find
+        .descendant(
+          of: find.byType(FoodPreferencesPage),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    await tester.scrollUntilVisible(
+      find.text('안전·식이 조건'),
+      200,
+      scrollable: foodScrollable,
     );
-    await tester.tap(find.byKey(const ValueKey('enum-DietaryMode.halal')));
+    expect(find.text('안전·식이 조건'), findsOneWidget);
+    final halalChip = find.byKey(const ValueKey('enum-DietaryMode.halal'));
+    await tester.scrollUntilVisible(
+      halalChip,
+      200,
+      scrollable: foodScrollable,
+    );
+    // Nudge it fully clear of the pinned apply bar before tapping.
+    var halalGuard = 0;
+    while (
+        halalChip.hitTestable().evaluate().isEmpty && halalGuard < 8) {
+      await tester.drag(foodScrollable, const Offset(0, -120));
+      await tester.pumpAndSettle();
+      halalGuard += 1;
+    }
+    await tester.tap(halalChip);
     await tester.enterText(
       find.byKey(const ValueKey('avoid-ingredients-field')),
       '돼지고기',
@@ -195,6 +217,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    // The CP2 sections push the safety panel below the fold; scroll first.
+    await tester.scrollUntilVisible(
+      find.text('알레르기·민감 식품'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('알레르기·민감 식품'), findsOneWidget);
     expect(find.text('피해야 하는 재료'), findsOneWidget);
     expect(find.text('알러지'), findsNothing);

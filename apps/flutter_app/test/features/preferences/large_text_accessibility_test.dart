@@ -66,6 +66,16 @@ void main() {
         StylePreferencesPage(language: 'ko', initialValue: TravelPreferences()),
     'S-54 food': () =>
         FoodPreferencesPage(language: 'ko', initialValue: TravelPreferences()),
+    'S-54 food with saved restaurant requests': () => FoodPreferencesPage(
+      language: 'ko',
+      initialValue: const TravelPreferences(
+        spiceLevel: SpicePreference.spicy,
+        orderRequests: {
+          RestaurantOrderRequest.quietTable,
+          RestaurantOrderRequest.takeout,
+        },
+      ),
+    ),
     'S-55 mobility': () => MobilityPreferencesPage(
       language: 'ko',
       initialValue: TravelPreferences(),
@@ -124,9 +134,17 @@ void main() {
         find.byType(ListView).first,
         const Offset(0, -120),
       );
-      await tester.tap(
-        find.byKey(const ValueKey('restaurant-communication-card')),
-      );
+      // The CP2 spice/order sections make the page taller; keep scrolling
+      // until the button is fully clear of the pinned bottom apply bar, or
+      // the tap would hit the apply action instead.
+      final openCard = find.byKey(const ValueKey('restaurant-communication-card'));
+      var guard = 0;
+      while (!openCard.hitTestable().evaluate().isNotEmpty && guard < 8) {
+        await tester.drag(find.byType(ListView).first, const Offset(0, -120));
+        await tester.pumpAndSettle();
+        guard += 1;
+      }
+      await tester.tap(openCard);
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);

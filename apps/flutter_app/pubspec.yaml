@@ -33,6 +33,10 @@ dependencies:
   # V4-B: docent narration playback. Plays only real LalaAudioResponse.bytes;
   # provider-agnostic. Pinned exactly for reproducible resolution.
   audioplayers: 6.8.1
+  # CP2: restaurant-card Korean pronunciation help. Wraps the on-device
+  # system speech engines (AVSpeechSynthesizer/TextToSpeech/speechSynthesis)
+  # only — no network speech, no paid provider, no fallback audio.
+  flutter_tts: ^4.2.3
 
 dev_dependencies:
   flutter_test:
@@ -44,3 +48,8 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/lala-hwaseong-haenggung.png
+    # Locale-aware open-vector map embed (Draft #187): the assembled
+    # open-map-embed.html bundles the version-pinned MapLibre GL JS runtime
+    # and is served to the web iframe and the native WebView alike. The
+    # template is the reviewable source for tool/build_open_map_embed.sh.
+    - assets/map/

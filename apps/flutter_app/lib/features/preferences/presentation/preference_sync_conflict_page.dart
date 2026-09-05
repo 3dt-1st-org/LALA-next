@@ -920,7 +920,36 @@ String _foodSummary(TravelPreferences value, String language) => <String>[
       zhHans: '已保存忌口备注',
       zhHant: '已儲存忌口備註',
     ),
+  // CP2: 맵기·주문 요청도 식당 카드에 실리는 저장 값이므로 충돌 비교에 보인다.
+  if (value.spiceLevel != null) _spiceSummaryLabel(value.spiceLevel!, language),
+  if (value.orderRequests.isNotEmpty)
+    _copy(
+      language,
+      ko: '주문 요청 ${value.orderRequests.length}개',
+      en: '${value.orderRequests.length} order requests',
+      ja: '注文リクエスト${value.orderRequests.length}件',
+      zhHans: '${value.orderRequests.length} 项点餐请求',
+      zhHant: '${value.orderRequests.length} 項點餐請求',
+    ),
 ].join(' · ');
+
+String _spiceSummaryLabel(SpicePreference value, String language) {
+  // Why a dedicated resolver: the shared `_enumLabel` map is keyed by bare
+  // enum names and `medium`/`mild` would collide with walking-band labels.
+  final labels = <SpicePreference, List<String>>{
+    SpicePreference.mild: ['맵기: 안 매운 음식', 'Spice: mild', '辛さ：辛くない', '辣度：不辣', '辣度：不辣'],
+    SpicePreference.medium: ['맵기: 보통', 'Spice: medium', '辛さ：普通', '辣度：适中', '辣度：適中'],
+    SpicePreference.spicy: ['맵기: 매운 것 선호', 'Spice: enjoys spicy', '辛さ：辛いのが好き', '辣度：爱吃辣', '辣度：愛吃辣'],
+  };
+  final list = labels[value]!;
+  return switch (language) {
+    'en' => list[1],
+    'ja' => list[2],
+    'zh-Hans' => list[3],
+    'zh-Hant' => list[4],
+    _ => list[0],
+  };
+}
 
 String _mobilitySummary(TravelPreferences value, String language) => <String>[
   _enumLabel(value.walkingBand.name, language),

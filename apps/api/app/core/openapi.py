@@ -22,6 +22,16 @@ ME_PATH = "/api/v1/me"
 ME_PATH_PREFIX = "/api/v1/me/"
 LOCAL_SIGNALS_PATH_PREFIX = "/api/v1/community/signals"
 LOCAL_SIGNALS_PLACES_PATH_PREFIX = "/api/v1/community/places/"
+COMMUNITY_MUTATION_PATHS = frozenset(
+    {
+        "/api/v1/community/posts",
+        "/api/v1/community/posts/{post_id}/comments",
+        "/api/v1/community/posts/{post_id}/like",
+        "/api/v1/community/posts/{post_id}/reports",
+        "/api/v1/community/follows",
+        "/api/v1/community/chat/rooms",
+    }
+)
 
 OPERATION_TIMEOUT_SECONDS = {
     HEALTHZ_PATH: 3,
@@ -90,6 +100,7 @@ def _add_client_auth_security(schema: dict[str, Any]) -> None:
         _success_envelope_schema("DocentScriptData"),
     )
     schemas.setdefault("DailyPlanSlot", _daily_plan_slot_schema())
+    schemas.setdefault("PreferenceEffect", _preference_effect_schema())
     schemas.setdefault("DailyPlanData", _daily_plan_data_schema())
     schemas.setdefault("DailyPlanSuccessEnvelope", _success_envelope_schema("DailyPlanData"))
     schemas.setdefault("InterventionData", _intervention_data_schema())
@@ -165,6 +176,8 @@ def _add_client_auth_security(schema: dict[str, Any]) -> None:
                         operation,
                         write=method.lower() != "get",
                     )
+                elif path in COMMUNITY_MUTATION_PATHS and method.lower() == "post":
+                    _add_community_write_error_responses(operation)
                 if path == ME_PATH:
                     _add_account_error_responses(
                         operation,
@@ -265,6 +278,19 @@ def _add_local_signal_error_responses(
                 },
             },
         )
+
+
+def _add_community_write_error_responses(operation: dict[str, Any]) -> None:
+    responses = operation.setdefault("responses", {})
+    responses.setdefault(
+        "429",
+        {
+            "description": "The community write rate limit was exceeded.",
+            "content": {
+                "application/json": {"schema": {"$ref": "#/components/schemas/ApiErrorEnvelope"}}
+            },
+        },
+    )
 
 
 def _fix_docent_audio_success_content(schema: dict[str, Any]) -> None:
@@ -868,6 +894,28 @@ def _weather_data_schema() -> dict[str, Any]:
                 "items": {"$ref": "#/components/schemas/ForecastItem"},
             },
             "outdoor_status": {"type": "string", "enum": ["good", "bad", "unknown"]},
+            # P4 additive provenance (optional): distinguishes the observed
+            # weather cause from the observed air-quality cause behind the merged
+            # aggregate outdoor_status. Unknown stays unknown — weather is never
+            # inferred from the merged status/icon/temperature or an
+            # AirKorea-only response, and an unknown dust grade is never
+            # classified good/bad.
+            "weather_outdoor_status": {
+                "type": "string",
+                "enum": ["good", "bad", "unknown"],
+                "description": "Observed weather-only status (KMA nowcast / DB "
+                "weather flags without the dust flag); 'unknown' when no weather "
+                "observation exists (an AirKorea-only response or a payload "
+                "without the explicit provenance key) — never inferred from the "
+                "merged outdoor_status.",
+            },
+            "air_quality_outdoor_status": {
+                "type": "string",
+                "enum": ["good", "bad", "unknown"],
+                "description": "Observed air-quality status derived only from the "
+                "normalized dust grades (bad/very_bad → bad, good/normal → good); "
+                "an unknown dust grade stays 'unknown'.",
+            },
             "force": {"type": "boolean"},
             "location_match": {"type": "boolean", "nullable": True},
             "record_time": {"type": "string", "nullable": True},
@@ -991,6 +1039,17 @@ def _daily_plan_slot_schema() -> dict[str, Any]:
                 "description": "Projection of the category-based hours estimate (D4); "
                 "real temporary/holiday closure is not knowable offline.",
             },
+            # P4 closing-soon additive projection (PLAN_FULL_SLOTS). True only when
+            # the slot start falls inside the bounded pre-close window of the same
+            # category-based estimate; mutually exclusive with closure_state=closed.
+            "closing_soon": {
+                "anyOf": [{"type": "boolean"}, {"type": "null"}],
+                "description": "True when the slot start is within the bounded "
+                "closing-soon window (60 minutes) before the estimated close (P4); "
+                "estimated projection, not an authority — never true when "
+                "closure_state is closed; null when the flag is off or times are "
+                "unparseable.",
+            },
             "forecast_window": {
                 "anyOf": [
                     {"$ref": "#/components/schemas/ForecastItem"},
@@ -1003,6 +1062,63 @@ def _daily_plan_slot_schema() -> dict[str, Any]:
                 "anyOf": [{"type": "boolean"}, {"type": "null"}],
                 "description": "Outdoor-only bad-AQ flag projected from plan dust grade "
                 "(D3); null for indoor slots or unknown grade.",
+            },
+        },
+        "additionalProperties": False,
+    }
+
+
+def _preference_effect_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "required": ["field", "applied", "reason_code", "explanation"],
+        "description": (
+            "One grounded (or honestly unapplied) travel-preference effect on the "
+            "plan. Field names, reason codes and details are bounded enums/keys; "
+            "raw preference documents and sensitive values are never included."
+        ),
+        "properties": {
+            "field": {
+                "type": "string",
+                "enum": [
+                    "indoor_outdoor",
+                    "max_one_way_minutes",
+                    "walking_band",
+                    "food_cuisines",
+                    "budget_band",
+                    "exclude_closing_soon",
+                ],
+                "description": "Preference-context field this effect reports on.",
+            },
+            "applied": {
+                "type": "boolean",
+                "description": "True only when the effect observably changed the plan.",
+            },
+            "reason_code": {
+                "type": "string",
+                "enum": [
+                    "RADIUS_CAPPED_TO_WALKING_TIME",
+                    "RADIUS_CAP_NOT_BINDING",
+                    "INDOOR_ORDERING_APPLIED",
+                    "WEATHER_SAFETY_INDOOR_PRIORITY",
+                    "INDOOR_ORDERING_NOT_DIRECTIONAL",
+                    "INDOOR_ORDERING_NO_CHANGE",
+                    "INDOOR_STATUS_UNAVAILABLE",
+                    "CUISINE_FACET_UNAVAILABLE",
+                    "PRICE_FACET_UNAVAILABLE",
+                    "CLOSING_SOON_FACET_UNAVAILABLE",
+                ],
+            },
+            "explanation": {
+                "type": "string",
+                "description": "Localized (ko/en) user-safe explanation.",
+            },
+            "details": {
+                "type": "object",
+                "description": (
+                    "Bounded structured facts (e.g. requested vs effective radius, "
+                    "weather status, ordering provenance)."
+                ),
             },
         },
         "additionalProperties": False,
@@ -1037,6 +1153,16 @@ def _daily_plan_data_schema() -> dict[str, Any]:
             },
             "request_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
             "cache_key": {"type": "string"},
+            # CP1 additive: present only when the request carried a
+            # preference_context (legacy responses omit the key entirely).
+            "preference_effects": {
+                "type": "array",
+                "items": {"$ref": "#/components/schemas/PreferenceEffect"},
+                "description": (
+                    "Grounded effects of the supplied travel-preference context. "
+                    "Absent when no preference_context was supplied."
+                ),
+            },
         },
         "additionalProperties": False,
     }
@@ -1080,8 +1206,14 @@ def _intervention_data_schema() -> dict[str, Any]:
             },
             "trigger_type": {
                 "anyOf": [{"type": "string"}, {"type": "null"}],
-                "description": "Observable trigger (e.g. bad_weather, closure_detected, "
-                "bad_weather_and_closure) or null.",
+                "description": "Observable trigger (e.g. bad_weather, bad_air_quality, "
+                "closure_detected, closing_soon, bad_weather_and_closure, "
+                "bad_weather_and_air_quality, bad_air_quality_and_closure, "
+                "bad_weather_and_air_quality_and_closure, bad_weather_and_closing_soon, "
+                "bad_air_quality_and_closing_soon, "
+                "bad_weather_and_air_quality_and_closing_soon) or null. "
+                "closure_detected/closing_soon come from the category-based estimated "
+                "hours projection — never an observed or authoritative closure.",
             },
             "trigger_factors": {
                 "type": "array",
@@ -1093,7 +1225,8 @@ def _intervention_data_schema() -> dict[str, Any]:
                         "value": {"type": "string"},
                         "period": {
                             "anyOf": [{"type": "string"}, {"type": "null"}],
-                            "description": "Slot period when present (e.g. closure factor).",
+                            "description": "Slot period when present (e.g. closure/"
+                            "closing-soon factor).",
                         },
                     },
                     "additionalProperties": False,

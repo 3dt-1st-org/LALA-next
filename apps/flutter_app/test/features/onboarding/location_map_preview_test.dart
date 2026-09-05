@@ -53,8 +53,33 @@ void main() {
     await tester.pump();
 
     expect(find.text('現在、地図を表示できません。'), findsOneWidget);
-    expect(find.bySemanticsLabel(RegExp('LALA ネイバー地図プレビュー')), findsOneWidget);
+    // ja falls back to the open-vector map surface, so the semantics name
+    // follows the provider that actually renders.
+    expect(find.bySemanticsLabel(RegExp('LALA オープン地図プレビュー')), findsOneWidget);
     expect(find.text('현재 지도를 표시할 수 없습니다.'), findsNothing);
+    semantics.dispose();
+  });
+
+  testWidgets('Korean keeps the NAVER preview semantics name', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Material(
+          child: LocationMapPreview(
+            naverMapClientId: '',
+            language: 'ko',
+            centerLat: 37.2636,
+            centerLng: 127.0286,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.bySemanticsLabel(RegExp('LALA 네이버 지도 미리보기')),
+      findsOneWidget,
+    );
     semantics.dispose();
   });
 }

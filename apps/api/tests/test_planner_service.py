@@ -4,9 +4,12 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
+from pydantic import ValidationError
 
+from apps.api.app.core.errors import ServiceError
 from apps.api.app.schemas.planner import DailyPlanRequest
 from apps.api.app.services import places_service, planner_service
+from apps.api.app.services.request_identity import generation_identity
 
 
 @pytest.mark.parametrize(
@@ -382,7 +385,7 @@ def test_daily_plan_normalizes_language_and_translates_slots(monkeypatch) -> Non
     monkeypatch.setattr(
         planner_service,
         "current_weather",
-        lambda **kwargs: {"source": "db", "outdoor_status": "bad"},
+        lambda **kwargs: {"source": "db", "outdoor_status": "bad", "weather_outdoor_status": "bad"},
     )
     monkeypatch.setattr(
         planner_service,
@@ -474,7 +477,11 @@ def test_daily_plan_handles_unavailable_sources(monkeypatch) -> None:
 
 def test_intervention_flags_bad_weather_and_keeps_top_place(monkeypatch) -> None:
     captured: dict[str, object] = {}
-    weather = {"source": "db", "outdoor_status": "bad"}
+    weather = {
+        "source": "db",
+        "outdoor_status": "bad",
+        "weather_outdoor_status": "bad",
+    }
     places = {
         "source": "db",
         "places": [{"name": "남산서울타워", "category": "landmark"}],
@@ -518,7 +525,11 @@ def test_intervention_skips_when_weather_is_good(monkeypatch) -> None:
     monkeypatch.setattr(
         planner_service,
         "current_weather",
-        lambda **kwargs: {"source": "public_mvp_snapshot", "outdoor_status": "good"},
+        lambda **kwargs: {
+            "source": "public_mvp_snapshot",
+            "outdoor_status": "good",
+            "weather_outdoor_status": "good",
+        },
     )
     monkeypatch.setattr(
         planner_service,
@@ -566,7 +577,7 @@ def test_intervention_retains_original_and_alternative_slots(monkeypatch) -> Non
     monkeypatch.setattr(
         planner_service,
         "current_weather",
-        lambda **kwargs: {"source": "db", "outdoor_status": "bad"},
+        lambda **kwargs: {"source": "db", "outdoor_status": "bad", "weather_outdoor_status": "bad"},
     )
     monkeypatch.setattr(
         planner_service,
@@ -592,7 +603,7 @@ def test_intervention_trigger_type_reflects_bad_weather(monkeypatch) -> None:
     monkeypatch.setattr(
         planner_service,
         "current_weather",
-        lambda **kwargs: {"source": "db", "outdoor_status": "bad"},
+        lambda **kwargs: {"source": "db", "outdoor_status": "bad", "weather_outdoor_status": "bad"},
     )
     monkeypatch.setattr(
         planner_service, "list_places", lambda **kwargs: {"source": "db", "places": []}
@@ -616,7 +627,7 @@ def test_intervention_distance_comparison_null_without_authority(monkeypatch) ->
     monkeypatch.setattr(
         planner_service,
         "current_weather",
-        lambda **kwargs: {"source": "db", "outdoor_status": "bad"},
+        lambda **kwargs: {"source": "db", "outdoor_status": "bad", "weather_outdoor_status": "bad"},
     )
     monkeypatch.setattr(
         planner_service,
@@ -637,7 +648,7 @@ def test_intervention_decision_default_pending_not_applied(monkeypatch) -> None:
     monkeypatch.setattr(
         planner_service,
         "current_weather",
-        lambda **kwargs: {"source": "db", "outdoor_status": "bad"},
+        lambda **kwargs: {"source": "db", "outdoor_status": "bad", "weather_outdoor_status": "bad"},
     )
     monkeypatch.setattr(
         planner_service, "list_places", lambda **kwargs: {"source": "db", "places": []}
@@ -655,7 +666,7 @@ def test_intervention_observable_factors_only(monkeypatch) -> None:
     monkeypatch.setattr(
         planner_service,
         "current_weather",
-        lambda **kwargs: {"source": "db", "outdoor_status": "bad"},
+        lambda **kwargs: {"source": "db", "outdoor_status": "bad", "weather_outdoor_status": "bad"},
     )
     monkeypatch.setattr(
         planner_service, "list_places", lambda **kwargs: {"source": "db", "places": []}
@@ -675,7 +686,7 @@ def test_intervention_ko_en_exclusive_reasons(monkeypatch) -> None:
     monkeypatch.setattr(
         planner_service,
         "current_weather",
-        lambda **kwargs: {"source": "db", "outdoor_status": "bad"},
+        lambda **kwargs: {"source": "db", "outdoor_status": "bad", "weather_outdoor_status": "bad"},
     )
     monkeypatch.setattr(
         planner_service,
@@ -709,7 +720,13 @@ def test_intervention_bad_weather_finds_indoor_alternative(monkeypatch):
         planner_service, "list_places", lambda **kw: {"source": "db", "places": places}
     )
     monkeypatch.setattr(
-        planner_service, "current_weather", lambda **kw: {"outdoor_status": "bad", "source": "kma"}
+        planner_service,
+        "current_weather",
+        lambda **kw: {
+            "outdoor_status": "bad",
+            "weather_outdoor_status": "bad",
+            "source": "kma",
+        },
     )
 
     result = planner_service.intervention(lat=37.5, lng=127.0, radius_m=3000, language="ko")
@@ -732,7 +749,13 @@ def test_intervention_bad_weather_no_indoor_alternative(monkeypatch):
         planner_service, "list_places", lambda **kw: {"source": "db", "places": places}
     )
     monkeypatch.setattr(
-        planner_service, "current_weather", lambda **kw: {"outdoor_status": "bad", "source": "kma"}
+        planner_service,
+        "current_weather",
+        lambda **kw: {
+            "outdoor_status": "bad",
+            "weather_outdoor_status": "bad",
+            "source": "kma",
+        },
     )
 
     result = planner_service.intervention(lat=37.5, lng=127.0, radius_m=3000, language="ko")
@@ -769,7 +792,13 @@ def test_intervention_excludes_original_from_alternatives(monkeypatch):
         planner_service, "list_places", lambda **kw: {"source": "db", "places": places}
     )
     monkeypatch.setattr(
-        planner_service, "current_weather", lambda **kw: {"outdoor_status": "bad", "source": "kma"}
+        planner_service,
+        "current_weather",
+        lambda **kw: {
+            "outdoor_status": "bad",
+            "weather_outdoor_status": "bad",
+            "source": "kma",
+        },
     )
 
     result = planner_service.intervention(lat=37.5, lng=127.0, radius_m=3000, language="ko")
@@ -778,4 +807,1375 @@ def test_intervention_excludes_original_from_alternatives(monkeypatch):
     assert alt is not None
     assert alt["place"]["place_id"] != result["place"]["place_id"], (
         "alternative must differ from original"
+    )
+
+
+# ---------------------------------------------------------------------------
+# D-1: 선택 장소(selected_place_id) 고정 배정 계약.
+# ---------------------------------------------------------------------------
+
+
+def test_daily_plan_slots_pins_selected_restaurant_to_lunch_exactly_once() -> None:
+    weather = {"outdoor_status": "good"}
+    candidates = [
+        _cand("n1", "attraction"),
+        _cand("r1", "restaurant"),
+        _cand("n2", "culture_venue"),
+        _cand("r2", "restaurant"),
+        _cand("n3", "attraction"),
+    ]
+    selected = next(c for c in candidates if c["place_id"] == "r1")
+
+    slots = planner_service._daily_plan_slots(
+        place_candidates=candidates,
+        weather=weather,
+        language="ko",
+        selected_place=selected,
+    )
+
+    assigned_ids = [slot["place"]["place_id"] for slot in slots if slot["place"]]
+    # 정확히 한 번, 식사 슬롯 중 첫 번째(lunch)에 배정.
+    assert assigned_ids.count("r1") == 1
+    assert slots[1]["period"] == "lunch"
+    assert slots[1]["place"]["place_id"] == "r1"
+    # 나머지 슬롯은 기존 deterministic 규칙 유지(중복 없음, 4슬롯 유지).
+    assert len(slots) == 4
+    assert len(set(assigned_ids)) == len(assigned_ids)
+    assert slots[0]["place"]["place_id"] == "n1"
+    assert slots[2]["place"]["place_id"] == "n2"
+
+
+def test_daily_plan_slots_pins_selected_non_restaurant_to_morning() -> None:
+    weather = {"outdoor_status": "good"}
+    candidates = [
+        _cand("n1", "attraction"),
+        _cand("r1", "restaurant"),
+        _cand("n2", "culture_venue"),
+        _cand("r2", "restaurant"),
+    ]
+    selected = next(c for c in candidates if c["place_id"] == "n2")
+
+    slots = planner_service._daily_plan_slots(
+        place_candidates=candidates,
+        weather=weather,
+        language="ko",
+        selected_place=selected,
+    )
+
+    assigned_ids = [slot["place"]["place_id"] for slot in slots if slot["place"]]
+    assert assigned_ids.count("n2") == 1
+    assert slots[0]["period"] == "morning"
+    assert slots[0]["place"]["place_id"] == "n2"
+    # morning 을 차지했어도 나머지 후보는 기존 fallback 규칙대로 배정된다.
+    assert slots[1]["place"]["place_id"] == "r1"
+    assert slots[2]["place"]["place_id"] == "n1"
+    assert slots[3]["place"]["place_id"] == "r2"
+
+
+def test_daily_plan_slots_selected_place_not_in_swappable_alternatives(
+    monkeypatch,
+) -> None:
+    # swappable_alternatives 는 PLAN_FULL_SLOTS 게이트가 켜져야 채워진다(V3 D6).
+    monkeypatch.setattr(
+        planner_service,
+        "get_settings",
+        lambda: SimpleNamespace(feature_flags={"PLAN_FULL_SLOTS": True}),
+    )
+    weather = {"outdoor_status": "good"}
+    candidates = [
+        _cand("n1", "attraction"),
+        _cand("r1", "restaurant"),
+        _cand("n2", "attraction"),
+        _cand("r2", "restaurant"),
+        _cand("n3", "attraction"),
+    ]
+    selected = next(c for c in candidates if c["place_id"] == "r1")
+
+    slots = planner_service._daily_plan_slots(
+        place_candidates=candidates,
+        weather=weather,
+        language="ko",
+        selected_place=selected,
+    )
+
+    alternatives_all = [
+        alt["place_id"] for slot in slots for alt in (slot.get("swappable_alternatives") or [])
+    ]
+    # 게이트가 켜져 leftover 가 존재하며, 고정 장소는 후보에도 남지 않는다.
+    assert alternatives_all, "leftover alternatives should be populated"
+    assert "r1" not in alternatives_all
+
+
+def _patch_daily_plan_sources(monkeypatch, places: list[dict]) -> None:
+    monkeypatch.setattr(
+        planner_service, "list_places", lambda **kw: {"source": "db", "places": places}
+    )
+    monkeypatch.setattr(
+        planner_service,
+        "current_weather",
+        lambda **kw: {"outdoor_status": "good", "source": "kma"},
+    )
+
+
+def test_daily_plan_includes_selected_place_once(monkeypatch) -> None:
+    places = [
+        {"place_id": "p1", "name": "수원화성", "category": "attraction"},
+        {"place_id": "p2", "name": "로컬 식당", "category": "restaurant"},
+        {"place_id": "p3", "name": "행궁", "category": "attraction"},
+        {"place_id": "p4", "name": "카페", "category": "culture_venue"},
+    ]
+    _patch_daily_plan_sources(monkeypatch, places)
+
+    request = DailyPlanRequest(
+        lat=37.5, lng=127.0, radius_m=3000, language="ko", selected_place_id="p2"
+    )
+    result = planner_service.daily_plan(request)
+
+    assigned = [slot["place"]["place_id"] for slot in result["slots"] if slot["place"]]
+    assert assigned.count("p2") == 1
+    lunch_slot = next(s for s in result["slots"] if s["period"] == "lunch")
+    assert lunch_slot["place"]["place_id"] == "p2"
+
+
+def test_daily_plan_unresolvable_selected_place_fails_honestly(monkeypatch) -> None:
+    _patch_daily_plan_sources(
+        monkeypatch,
+        [
+            {"place_id": "p1", "name": "수원화성", "category": "attraction"},
+        ],
+    )
+
+    request = DailyPlanRequest(
+        lat=37.5, lng=127.0, radius_m=3000, language="ko", selected_place_id="ghost"
+    )
+
+    with pytest.raises(ServiceError) as excinfo:
+        planner_service.daily_plan(request)
+
+    assert excinfo.value.status_code == 422
+    assert excinfo.value.code == "SELECTED_PLACE_UNAVAILABLE"
+    assert excinfo.value.message == "선택한 장소를 이 일정에 포함할 수 없어요."
+    assert excinfo.value.retryable is False
+
+
+def test_daily_plan_unresolvable_selected_place_message_localizes(monkeypatch) -> None:
+    _patch_daily_plan_sources(monkeypatch, [])
+
+    request = DailyPlanRequest(
+        lat=37.5, lng=127.0, radius_m=3000, language="en", selected_place_id="ghost"
+    )
+
+    with pytest.raises(ServiceError) as excinfo:
+        planner_service.daily_plan(request)
+
+    assert excinfo.value.message == "The selected place cannot be included in this plan."
+
+
+def test_daily_plan_strips_selected_place_id_whitespace(monkeypatch) -> None:
+    _patch_daily_plan_sources(
+        monkeypatch,
+        [
+            {"place_id": "p1", "name": "수원화성", "category": "attraction"},
+            {"place_id": "p2", "name": "로컬 식당", "category": "restaurant"},
+        ],
+    )
+
+    request = DailyPlanRequest(
+        lat=37.5, lng=127.0, radius_m=3000, language="ko", selected_place_id="  p2  "
+    )
+    result = planner_service.daily_plan(request)
+
+    # BeforeValidator 정규화 후 실제 candidate 로 해석된다.
+    lunch_slot = next(s for s in result["slots"] if s["period"] == "lunch")
+    assert lunch_slot["place"]["place_id"] == "p2"
+
+
+def test_daily_plan_whitespace_only_selected_place_id_is_rejected() -> None:
+    # 거부 계약: 공백 전용 문자열은 미지정이 아니라 VALIDATION_ERROR 이다.
+    with pytest.raises(ValidationError):
+        DailyPlanRequest(lat=37.5, lng=127.0, radius_m=3000, language="ko", selected_place_id="   ")
+
+
+def test_daily_plan_identity_preserves_legacy_unpinned_payload_bytes() -> None:
+    unpinned = DailyPlanRequest(lat=37.5665, lng=126.978, radius_m=3000, language="ko")
+
+    identity = planner_service.daily_plan_identity(unpinned, language="ko")
+
+    # 기존(D-1 이전) 페이로드를 그대로 재구성해 hash 가 바이트 단위로 같은지 검증한다.
+    legacy_payload = {
+        "lat": 37.5665,
+        "lng": 126.978,
+        "radius_m": 3000,
+        "language": "ko",
+    }
+    legacy = generation_identity("daily_plan", legacy_payload)
+    assert identity == legacy
+
+
+def test_daily_plan_identity_distinguishes_selected_place() -> None:
+    unpinned = DailyPlanRequest(lat=37.5665, lng=126.978, radius_m=3000, language="ko")
+    pinned = DailyPlanRequest(
+        lat=37.5665,
+        lng=126.978,
+        radius_m=3000,
+        language="ko",
+        selected_place_id="p2",
+    )
+
+    unpinned_identity = planner_service.daily_plan_identity(unpinned, language="ko")
+    pinned_identity = planner_service.daily_plan_identity(pinned, language="ko")
+
+    assert unpinned_identity["request_hash"] != pinned_identity["request_hash"]
+    assert unpinned_identity["cache_key"] != pinned_identity["cache_key"]
+    # 서로 다른 고정 장소도 서로 다른 정체성을 갖는다.
+    other_pinned = DailyPlanRequest(
+        lat=37.5665,
+        lng=126.978,
+        radius_m=3000,
+        language="ko",
+        selected_place_id="p3",
+    )
+    other_identity = planner_service.daily_plan_identity(other_pinned, language="ko")
+    assert pinned_identity["request_hash"] != other_identity["request_hash"]
+
+
+# ---------------------------------------------------------------------------
+# CP1: preference_context — grounded effects + honest reporting 계약.
+# ---------------------------------------------------------------------------
+
+
+def test_preference_context_rejects_unknown_and_sensitive_fields() -> None:
+    # strict 계약: 알 수 없는 키와 민감 키(알레르겐/식이/PII)는 422 로 거부된다.
+    for sensitive in (
+        {"allergens": ["nuts"]},
+        {"dietary_modes": ["vegan"]},
+        {"avoid_ingredients": "고수"},
+        {"wheelchair_access": True},
+        {"user_id": "u-1"},
+        # CP2: 식당 커뮤니케이션 전용 soft 값도 public plan endpoint 로
+        # 전송될 수 없다(extra="forbid" 로 거부).
+        {"spice_level": "mild"},
+        {"order_requests": ["quietTable"]},
+    ):
+        with pytest.raises(ValidationError):
+            DailyPlanRequest(
+                lat=37.5,
+                lng=127.0,
+                preference_context={"indoor_outdoor": "indoor", **sensitive},
+            )
+
+
+def test_preference_context_rejects_invalid_enums_bounds_and_duplicates() -> None:
+    for invalid in (
+        {"indoor_outdoor": "somewhere"},
+        {"weather_sensitivity": "extreme"},
+        {"walking_band": "marathon"},
+        {"max_one_way_minutes": 45},
+        {"budget_band": "luxury"},
+        {"food_cuisines": ["italian"]},
+        {"food_cuisines": ["korean", "korean"]},
+        {"food_cuisines": ["korean", "cafeDessert", "streetFood", "marketFood", "worldCuisine"]},
+    ):
+        with pytest.raises(ValidationError):
+            DailyPlanRequest(lat=37.5, lng=127.0, preference_context=invalid)
+
+
+def test_preference_context_defaults_reuse_preference_store_bounds() -> None:
+    request = DailyPlanRequest(lat=37.5, lng=127.0, preference_context={"indoor_outdoor": "indoor"})
+
+    context = request.preference_context
+    assert context is not None
+    assert context.weather_sensitivity == "medium"
+    assert context.walking_band == "medium"
+    assert context.max_one_way_minutes == 30
+    assert context.food_cuisines == []
+    assert context.budget_band == "balanced"
+    assert context.exclude_closing_soon is True
+
+
+def test_daily_plan_without_preference_context_omits_effects_and_keeps_identity(
+    monkeypatch,
+) -> None:
+    captured = _capture_plan_sources(monkeypatch, [])
+
+    request = DailyPlanRequest(lat=37.5665, lng=126.978, radius_m=3000, language="ko")
+    plan = planner_service.daily_plan(request)
+
+    # 컨텍스트 없는 응답은 preference_effects 키 자체가 없다(legacy 형태 보존).
+    assert "preference_effects" not in plan
+    assert captured["radius_m"] == 3000
+    # D-1 과 동일한 방식: 정체성 페이로드가 기존 바이트와 같은지 직접 검증.
+    legacy_payload = {
+        "lat": 37.5665,
+        "lng": 126.978,
+        "radius_m": 3000,
+        "language": "ko",
+    }
+    assert plan["request_hash"] == generation_identity("daily_plan", legacy_payload)["request_hash"]
+    assert plan["cache_key"] == generation_identity("daily_plan", legacy_payload)["cache_key"]
+
+
+def test_daily_plan_identity_includes_preference_context_only_when_present(
+    monkeypatch,
+) -> None:
+    _patch_daily_plan_sources(monkeypatch, [])
+    base = DailyPlanRequest(lat=37.5, lng=127.0, radius_m=3000, language="ko")
+    with_context = DailyPlanRequest(
+        lat=37.5,
+        lng=127.0,
+        radius_m=3000,
+        language="ko",
+        preference_context={"indoor_outdoor": "indoor"},
+    )
+
+    base_identity = planner_service.daily_plan_identity(base, language="ko")
+    context_identity = planner_service.daily_plan_identity(with_context, language="ko")
+
+    assert base_identity["request_hash"] != context_identity["request_hash"]
+    assert context_identity == planner_service.daily_plan_identity(with_context, language="ko")
+
+
+def _capture_plan_sources(monkeypatch, places: list[dict], outdoor_status: str = "good"):
+    captured: dict[str, object] = {}
+
+    def fake_list_places(**kwargs: object) -> dict:
+        captured.update(kwargs)
+        return {"source": "db", "places": places}
+
+    monkeypatch.setattr(planner_service, "list_places", fake_list_places)
+    monkeypatch.setattr(
+        planner_service,
+        "current_weather",
+        lambda **kw: {"outdoor_status": outdoor_status, "source": "kma"},
+    )
+    return captured
+
+
+def test_daily_plan_caps_query_radius_from_max_one_way_minutes(monkeypatch) -> None:
+    places = [{"place_id": f"p{i}", "name": f"장소{i}", "category": "attraction"} for i in range(4)]
+    captured = _capture_plan_sources(monkeypatch, places)
+
+    request = DailyPlanRequest(
+        lat=37.5,
+        lng=127.0,
+        radius_m=5000,
+        language="ko",
+        preference_context={"max_one_way_minutes": 15},
+    )
+    plan = planner_service.daily_plan(request)
+
+    # 문서화된 도보 추정: 15분 × 67 m/min = 1005m. 요청 반경을 초과하지 않는다.
+    assert captured["radius_m"] == 15 * 67
+    assert plan["radius_m"] == 5000  # 응답은 요청 에코(요청/유효 구분은 effects 가 진실)
+    radius_effect = plan["preference_effects"][0]
+    assert radius_effect["field"] == "max_one_way_minutes"
+    assert radius_effect["applied"] is True
+    assert radius_effect["reason_code"] == "RADIUS_CAPPED_TO_WALKING_TIME"
+    assert radius_effect["details"]["requested_radius_m"] == 5000
+    assert radius_effect["details"]["effective_radius_m"] == 15 * 67
+    assert radius_effect["details"]["effective_one_way_minutes"] == 15
+    assert radius_effect["details"]["walking_estimate"] == "haversine_4kmh"
+    assert "1005" in radius_effect["explanation"]
+
+
+def test_daily_plan_radius_cap_attributes_to_walking_band_when_stricter(monkeypatch) -> None:
+    captured = _capture_plan_sources(monkeypatch, [])
+
+    request = DailyPlanRequest(
+        lat=37.5,
+        lng=127.0,
+        radius_m=50000,
+        language="ko",
+        preference_context={"walking_band": "short", "max_one_way_minutes": 90},
+    )
+    plan = planner_service.daily_plan(request)
+
+    # 밴드(15분)가 명시 분(90분)보다 작으므로 상한의 근거는 walking_band.
+    assert captured["radius_m"] == 15 * 67
+    radius_effect = plan["preference_effects"][0]
+    assert radius_effect["field"] == "walking_band"
+    assert radius_effect["applied"] is True
+    assert radius_effect["details"]["source_fields"] == ["walking_band"]
+
+
+def test_daily_plan_radius_cap_not_binding_reports_honest_reason(monkeypatch) -> None:
+    captured = _capture_plan_sources(monkeypatch, [])
+
+    # 기본 컨텍스트(30분 → 2010m)는 요청 반경 1000m를 줄이지 못한다.
+    request = DailyPlanRequest(
+        lat=37.5, lng=127.0, radius_m=1000, language="ko", preference_context={}
+    )
+    plan = planner_service.daily_plan(request)
+
+    assert captured["radius_m"] == 1000
+    radius_effect = plan["preference_effects"][0]
+    assert radius_effect["field"] == "max_one_way_minutes"
+    assert radius_effect["applied"] is False
+    assert radius_effect["reason_code"] == "RADIUS_CAP_NOT_BINDING"
+    assert radius_effect["details"]["effective_radius_m"] == 1000
+
+
+def test_daily_plan_orders_indoor_first_under_indoor_preference_good_weather(
+    monkeypatch,
+) -> None:
+    places = [
+        {"place_id": "out1", "name": "야외 공원", "category": "attraction", "is_indoor": False},
+        {"place_id": "in1", "name": "실내 미술관", "category": "culture_venue", "is_indoor": True},
+        {"place_id": "out2", "name": "야외 시장", "category": "attraction", "is_indoor": False},
+        {"place_id": "in2", "name": "실내 카페", "category": "restaurant", "is_indoor": True},
+    ]
+    _capture_plan_sources(monkeypatch, places)
+
+    request = DailyPlanRequest(
+        lat=37.5,
+        lng=127.0,
+        language="ko",
+        preference_context={"indoor_outdoor": "indoor"},
+    )
+    plan = planner_service.daily_plan(request)
+
+    # morning/afternoon 은 non-restaurant 후보 순서를 따른다: in1 → out1 → out2.
+    morning_place = plan["slots"][0]["place"]["place_id"]
+    afternoon_place = plan["slots"][2]["place"]["place_id"]
+    assert morning_place == "in1"
+    assert afternoon_place == "out1"
+    indoor_effect = plan["preference_effects"][1]
+    assert indoor_effect["applied"] is True
+    assert indoor_effect["reason_code"] == "INDOOR_ORDERING_APPLIED"
+    assert indoor_effect["details"]["ordered_by"] == "preference"
+    assert indoor_effect["details"]["preferred"] == "indoor"
+
+
+def test_daily_plan_orders_outdoor_first_under_outdoor_preference_good_weather(
+    monkeypatch,
+) -> None:
+    places = [
+        {"place_id": "in1", "name": "실내 미술관", "category": "attraction", "is_indoor": True},
+        {"place_id": "out1", "name": "야외 공원", "category": "culture_venue", "is_indoor": False},
+    ]
+    _capture_plan_sources(monkeypatch, places)
+
+    request = DailyPlanRequest(
+        lat=37.5,
+        lng=127.0,
+        language="ko",
+        preference_context={"indoor_outdoor": "outdoor", "weather_sensitivity": "high"},
+    )
+    plan = planner_service.daily_plan(request)
+
+    assert plan["slots"][0]["place"]["place_id"] == "out1"
+    indoor_effect = plan["preference_effects"][1]
+    assert indoor_effect["applied"] is True
+    assert indoor_effect["reason_code"] == "INDOOR_ORDERING_APPLIED"
+    assert indoor_effect["details"]["preferred"] == "outdoor"
+
+
+def test_daily_plan_bad_weather_prefers_indoor_over_outdoor_preference(monkeypatch) -> None:
+    places = [
+        {"place_id": "out1", "name": "야외 공원", "category": "attraction", "is_indoor": False},
+        {"place_id": "in1", "name": "실내 미술관", "category": "culture_venue", "is_indoor": True},
+    ]
+    _capture_plan_sources(monkeypatch, places, outdoor_status="bad")
+
+    request = DailyPlanRequest(
+        lat=37.5,
+        lng=127.0,
+        language="ko",
+        preference_context={"indoor_outdoor": "outdoor", "weather_sensitivity": "medium"},
+    )
+    plan = planner_service.daily_plan(request)
+
+    # 안전 우선: 나쁜 날씨 + medium/high 민감도는 outdoor soft 선호를 이긴다.
+    assert plan["slots"][0]["place"]["place_id"] == "in1"
+    indoor_effect = plan["preference_effects"][1]
+    assert indoor_effect["applied"] is True
+    assert indoor_effect["reason_code"] == "WEATHER_SAFETY_INDOOR_PRIORITY"
+    assert indoor_effect["details"]["ordered_by"] == "weather_safety"
+    assert indoor_effect["details"]["weather_outdoor_status"] == "bad"
+
+
+def test_daily_plan_bad_weather_high_sensitivity_beats_outdoor_preference_too(
+    monkeypatch,
+) -> None:
+    places = [
+        {"place_id": "out1", "name": "야외 공원", "category": "attraction", "is_indoor": False},
+        {"place_id": "in1", "name": "실내 미술관", "category": "attraction", "is_indoor": True},
+    ]
+    _capture_plan_sources(monkeypatch, places, outdoor_status="bad")
+
+    request = DailyPlanRequest(
+        lat=37.5,
+        lng=127.0,
+        language="ko",
+        preference_context={"indoor_outdoor": "outdoor", "weather_sensitivity": "high"},
+    )
+    plan = planner_service.daily_plan(request)
+
+    assert plan["slots"][0]["place"]["place_id"] == "in1"
+    assert plan["preference_effects"][1]["reason_code"] == "WEATHER_SAFETY_INDOOR_PRIORITY"
+
+
+def test_daily_plan_bad_weather_low_sensitivity_keeps_outdoor_preference(monkeypatch) -> None:
+    places = [
+        {"place_id": "in1", "name": "실내 미술관", "category": "attraction", "is_indoor": True},
+        {"place_id": "out1", "name": "야외 공원", "category": "culture_venue", "is_indoor": False},
+    ]
+    _capture_plan_sources(monkeypatch, places, outdoor_status="bad")
+
+    request = DailyPlanRequest(
+        lat=37.5,
+        lng=127.0,
+        language="ko",
+        preference_context={"indoor_outdoor": "outdoor", "weather_sensitivity": "low"},
+    )
+    plan = planner_service.daily_plan(request)
+
+    # low 민감도는 안전 오버라이드를 발동하지 않는다(선호가 그대로 유지).
+    assert plan["slots"][0]["place"]["place_id"] == "out1"
+    assert plan["preference_effects"][1]["reason_code"] == "INDOOR_ORDERING_APPLIED"
+
+
+def test_daily_plan_unknown_indoor_status_not_treated_as_indoor(monkeypatch) -> None:
+    places = [
+        {"place_id": "u1", "name": "미확인 장소1", "category": "attraction"},
+        {"place_id": "in1", "name": "실내 미술관", "category": "culture_venue", "is_indoor": True},
+        {"place_id": "u2", "name": "미확인 장소2", "category": "attraction", "is_indoor": None},
+    ]
+    _capture_plan_sources(monkeypatch, places)
+
+    request = DailyPlanRequest(
+        lat=37.5,
+        lng=127.0,
+        language="ko",
+        preference_context={"indoor_outdoor": "indoor"},
+    )
+    plan = planner_service.daily_plan(request)
+
+    # known indoor 먼저, unknown 은 실내로 취급하지 않고 입력 순서대로 뒤에 위치.
+    assigned = [slot["place"]["place_id"] for slot in plan["slots"] if slot["place"]]
+    assert assigned == ["in1", "u1", "u2"]
+
+
+def test_daily_plan_all_unknown_indoor_reports_honest_unavailable(monkeypatch) -> None:
+    places = [
+        {"place_id": "u1", "name": "미확인1", "category": "attraction"},
+        {"place_id": "u2", "name": "미확인2", "category": "attraction"},
+    ]
+    _capture_plan_sources(monkeypatch, places)
+
+    request = DailyPlanRequest(
+        lat=37.5,
+        lng=127.0,
+        language="ko",
+        preference_context={"indoor_outdoor": "indoor"},
+    )
+    plan = planner_service.daily_plan(request)
+
+    indoor_effect = plan["preference_effects"][1]
+    assert indoor_effect["applied"] is False
+    assert indoor_effect["reason_code"] == "INDOOR_STATUS_UNAVAILABLE"
+    # 순서도 바뀌지 않는다(발명 금지).
+    assert plan["slots"][0]["place"]["place_id"] == "u1"
+
+
+def test_daily_plan_balanced_preference_reports_not_directional(monkeypatch) -> None:
+    places = [
+        {"place_id": "out1", "name": "야외 공원", "category": "attraction", "is_indoor": False},
+        {"place_id": "in1", "name": "실내 미술관", "category": "attraction", "is_indoor": True},
+    ]
+    _capture_plan_sources(monkeypatch, places)
+
+    request = DailyPlanRequest(
+        lat=37.5, lng=127.0, language="ko", preference_context={"indoor_outdoor": "balanced"}
+    )
+    plan = planner_service.daily_plan(request)
+
+    indoor_effect = plan["preference_effects"][1]
+    assert indoor_effect["applied"] is False
+    assert indoor_effect["reason_code"] == "INDOOR_ORDERING_NOT_DIRECTIONAL"
+    # 중립 선호는 순서를 바꾸지 않는다(기존 배정 규칙 그대로).
+    assert plan["slots"][0]["place"]["place_id"] == "out1"
+
+
+def test_daily_plan_indoor_ordering_no_change_reports_honest_reason(monkeypatch) -> None:
+    places = [
+        {"place_id": "in1", "name": "실내 미술관", "category": "attraction", "is_indoor": True},
+        {"place_id": "out1", "name": "야외 공원", "category": "culture_venue", "is_indoor": False},
+    ]
+    _capture_plan_sources(monkeypatch, places)
+
+    request = DailyPlanRequest(
+        lat=37.5, lng=127.0, language="ko", preference_context={"indoor_outdoor": "indoor"}
+    )
+    plan = planner_service.daily_plan(request)
+
+    indoor_effect = plan["preference_effects"][1]
+    assert indoor_effect["applied"] is False
+    assert indoor_effect["reason_code"] == "INDOOR_ORDERING_NO_CHANGE"
+
+
+def test_preference_effects_report_unsupported_fields_honestly(monkeypatch) -> None:
+    _capture_plan_sources(monkeypatch, [])
+    request = DailyPlanRequest(
+        lat=37.5,
+        lng=127.0,
+        language="ko",
+        preference_context={
+            "food_cuisines": ["korean"],
+            "budget_band": "value",
+            "exclude_closing_soon": True,
+        },
+    )
+    plan = planner_service.daily_plan(request)
+
+    by_field = {effect["field"]: effect for effect in plan["preference_effects"]}
+    assert by_field["food_cuisines"] == {
+        "field": "food_cuisines",
+        "applied": False,
+        "reason_code": "CUISINE_FACET_UNAVAILABLE",
+        "explanation": "장소 데이터에 요리 정보가 없어 요리 선호를 반영하지 못했어요.",
+    }
+    assert by_field["budget_band"]["applied"] is False
+    assert by_field["budget_band"]["reason_code"] == "PRICE_FACET_UNAVAILABLE"
+    assert by_field["exclude_closing_soon"]["applied"] is False
+    assert by_field["exclude_closing_soon"]["reason_code"] == "CLOSING_SOON_FACET_UNAVAILABLE"
+    # 정의된 효과는 5개 뿐(안정적 순서), 필터링을 주장하지 않는다.
+    assert len(plan["preference_effects"]) == 5
+
+
+def test_preference_effects_explanations_localize_ko_en(monkeypatch) -> None:
+    places = [
+        {"place_id": "out1", "name": "야외 공원", "category": "attraction", "is_indoor": False},
+        {"place_id": "in1", "name": "실내 미술관", "category": "attraction", "is_indoor": True},
+    ]
+    _capture_plan_sources(monkeypatch, places)
+    ko_request = DailyPlanRequest(
+        lat=37.5,
+        lng=127.0,
+        language="ko",
+        radius_m=5000,
+        preference_context={"indoor_outdoor": "indoor", "max_one_way_minutes": 15},
+    )
+    _capture_plan_sources(monkeypatch, places, outdoor_status="bad")
+    en_request = DailyPlanRequest(
+        lat=37.5,
+        lng=127.0,
+        language="en",
+        radius_m=5000,
+        preference_context={
+            "indoor_outdoor": "outdoor",
+            "weather_sensitivity": "medium",
+            "max_one_way_minutes": 15,
+        },
+    )
+
+    ko_plan = planner_service.daily_plan(ko_request)
+    en_plan = planner_service.daily_plan(en_request)
+
+    ko_radius = ko_plan["preference_effects"][0]
+    en_effects = en_plan["preference_effects"]
+    assert "줄였어요" in ko_radius["explanation"]
+    assert "Capped the search radius" in en_effects[0]["explanation"]
+    assert en_effects[1]["reason_code"] == "WEATHER_SAFETY_INDOOR_PRIORITY"
+    assert "Weather is bad" in en_effects[1]["explanation"]
+
+
+def test_preference_effects_never_leak_raw_or_sensitive_values(monkeypatch) -> None:
+    _capture_plan_sources(monkeypatch, [])
+    request = DailyPlanRequest(
+        lat=37.5,
+        lng=127.0,
+        language="ko",
+        preference_context={"food_cuisines": ["korean"], "budget_band": "value"},
+    )
+    plan = planner_service.daily_plan(request)
+
+    serialized = repr(plan["preference_effects"])
+    for forbidden in ("korean", "value", "allergen", "dietary", "wheelchair"):
+        assert forbidden not in serialized
+
+
+def test_daily_plan_pins_selected_place_once_with_preference_context(monkeypatch) -> None:
+    places = [
+        {"place_id": "out1", "name": "야외 공원", "category": "attraction", "is_indoor": False},
+        {"place_id": "pin", "name": "고정 맛집", "category": "restaurant", "is_indoor": True},
+        {"place_id": "in1", "name": "실내 미술관", "category": "attraction", "is_indoor": True},
+        {"place_id": "out2", "name": "야외 시장", "category": "attraction", "is_indoor": False},
+    ]
+    _capture_plan_sources(monkeypatch, places)
+
+    request = DailyPlanRequest(
+        lat=37.5,
+        lng=127.0,
+        radius_m=5000,
+        language="ko",
+        selected_place_id="pin",
+        preference_context={"indoor_outdoor": "indoor", "max_one_way_minutes": 15},
+    )
+    plan = planner_service.daily_plan(request)
+
+    assigned = [slot["place"]["place_id"] for slot in plan["slots"] if slot["place"]]
+    assert assigned.count("pin") == 1
+    lunch = next(s for s in plan["slots"] if s["period"] == "lunch")
+    assert lunch["place"]["place_id"] == "pin"
+    # 정렬된 후보 순서도 유지: indoor 우선(morning=in1, afternoon=out1).
+    assert plan["slots"][0]["place"]["place_id"] == "in1"
+    assert plan["slots"][2]["place"]["place_id"] == "out1"
+
+
+def test_daily_plan_selected_place_outside_capped_radius_fails_honestly(monkeypatch) -> None:
+    # 축소된 유효 반경 안의 후보만 돌려주는 list_places(double): 반경 밖 고정 장소는
+    # 유효 후보 집합에 존재할 수 없다 → 기존 정직한 422.
+    places_in_cap = [
+        {"place_id": "in1", "name": "실내 미술관", "category": "attraction", "is_indoor": True},
+    ]
+
+    def fake_list_places(**kwargs: object) -> dict:
+        # 캡된 반경 밖 후보는 애초에 반환되지 않는다(실제 쿼리와 동일).
+        return {"source": "db", "places": list(places_in_cap)}
+
+    monkeypatch.setattr(planner_service, "list_places", fake_list_places)
+    monkeypatch.setattr(
+        planner_service,
+        "current_weather",
+        lambda **kw: {"outdoor_status": "good", "source": "kma"},
+    )
+
+    request = DailyPlanRequest(
+        lat=37.5,
+        lng=127.0,
+        radius_m=5000,
+        language="ko",
+        selected_place_id="far-pin",
+        preference_context={"max_one_way_minutes": 15},
+    )
+
+    with pytest.raises(ServiceError) as excinfo:
+        planner_service.daily_plan(request)
+
+    assert excinfo.value.status_code == 422
+    assert excinfo.value.code == "SELECTED_PLACE_UNAVAILABLE"
+
+
+# ---------------------------------------------------------------------------
+# P4: distinct weather vs air-quality intervention causes.
+# ---------------------------------------------------------------------------
+
+
+def _p4_weather(
+    *,
+    weather_status: str,
+    air_quality_status: str,
+    dust_grade: str,
+    aggregate: str,
+) -> dict:
+    """Weather payload with explicit P4 provenance (current_weather shape)."""
+    return {
+        "source": "kma_ultra_srt_ncst+airkorea_sido_realtime",
+        "outdoor_status": aggregate,
+        "weather_outdoor_status": weather_status,
+        "air_quality_outdoor_status": air_quality_status,
+        "dust": {"grade": dust_grade},
+        "forecast": [],
+    }
+
+
+def _patch_intervention_sources(
+    monkeypatch,
+    places: list[dict],
+    weather: dict,
+) -> None:
+    monkeypatch.setattr(
+        planner_service, "list_places", lambda **kw: {"source": "db", "places": places}
+    )
+    monkeypatch.setattr(planner_service, "current_weather", lambda **kw: dict(weather))
+
+
+def test_intervention_bad_air_quality_only_emits_distinct_trigger(monkeypatch) -> None:
+    """AQ sole observed cause → bad_air_quality trigger + AQ factor + AQ copy."""
+    _patch_intervention_sources(
+        monkeypatch,
+        [{"place_id": "p1", "name": "야외 공원", "category": "attraction"}],
+        _p4_weather(
+            weather_status="good",
+            air_quality_status="bad",
+            dust_grade="bad",
+            aggregate="bad",
+        ),
+    )
+
+    result = planner_service.intervention(lat=37.5, lng=127.0, radius_m=3000, language="en")
+
+    assert result["should_intervene"] is True
+    assert result["trigger_type"] == "bad_air_quality"
+    assert result["trigger_factors"] == [{"factor": "air_quality_dust_grade", "value": "bad"}]
+    # Cause-correct copy: AQ-only never claims weather.
+    assert result["reason"] == (
+        "Air quality is poor; prioritize short-walk or indoor-friendly options near 야외 공원."
+    )
+    assert result["recommended_action"] == (
+        "Show indoor or short-walk alternatives around 야외 공원."
+    )
+
+
+def test_intervention_bad_air_quality_very_bad_discloses_observed_grade(
+    monkeypatch,
+) -> None:
+    _patch_intervention_sources(
+        monkeypatch,
+        [],
+        _p4_weather(
+            weather_status="unknown",
+            air_quality_status="bad",
+            dust_grade="very_bad",
+            aggregate="bad",
+        ),
+    )
+
+    result = planner_service.intervention(lat=37.5, lng=127.0, radius_m=3000)
+
+    assert result["trigger_type"] == "bad_air_quality"
+    assert result["trigger_factors"] == [{"factor": "air_quality_dust_grade", "value": "very_bad"}]
+
+
+def test_intervention_bad_air_quality_copy_localizes_ko_en(monkeypatch) -> None:
+    _patch_intervention_sources(
+        monkeypatch,
+        [{"place_id": "p1", "name": "행궁동 카페"}],
+        _p4_weather(
+            weather_status="good",
+            air_quality_status="bad",
+            dust_grade="bad",
+            aggregate="bad",
+        ),
+    )
+
+    ko = planner_service.intervention(lat=37.2, lng=127.0, radius_m=2000, language="ko")
+    en = planner_service.intervention(lat=37.2, lng=127.0, radius_m=2000, language="en")
+
+    assert "미세먼지가 나빠요" in ko["reason"]
+    assert "Air quality is poor" in en["reason"]
+    assert "날씨가 좋지 않아요" not in ko["reason"]
+    assert "Weather is not ideal" not in en["reason"]
+    assert "Weather is not ideal" not in ko["reason"]
+    assert "날씨가 좋지 않아요" not in en["reason"]
+
+
+def test_intervention_weather_and_air_quality_combine_truthfully(monkeypatch) -> None:
+    _patch_intervention_sources(
+        monkeypatch,
+        [],
+        _p4_weather(
+            weather_status="bad",
+            air_quality_status="bad",
+            dust_grade="bad",
+            aggregate="bad",
+        ),
+    )
+
+    result = planner_service.intervention(lat=37.2, lng=127.0, radius_m=2000, language="en")
+
+    assert result["trigger_type"] == "bad_weather_and_air_quality"
+    assert result["trigger_factors"] == [
+        {"factor": "weather_outdoor_status", "value": "bad"},
+        {"factor": "air_quality_dust_grade", "value": "bad"},
+    ]
+    assert result["reason"].startswith("Weather and air quality are both poor")
+
+    ko = planner_service.intervention(lat=37.2, lng=127.0, radius_m=2000, language="ko")
+    assert "날씨와 미세먼지가 모두 좋지 않아요" in ko["reason"]
+
+
+def test_intervention_air_quality_and_closure_combine(monkeypatch) -> None:
+    monkeypatch.setattr(
+        planner_service,
+        "get_settings",
+        lambda: SimpleNamespace(feature_flags={"PLAN_FULL_SLOTS": True}),
+    )
+    monkeypatch.setattr(planner_service, "is_within_hours", lambda *a, **k: False)
+    _patch_intervention_sources(
+        monkeypatch,
+        [{"place_id": "p1", "name": "x"}],
+        _p4_weather(
+            weather_status="good",
+            air_quality_status="bad",
+            dust_grade="bad",
+            aggregate="bad",
+        ),
+    )
+
+    result = planner_service.intervention(lat=37.2, lng=127.0, radius_m=2000)
+
+    assert result["trigger_type"] == "bad_air_quality_and_closure"
+    assert result["trigger_factors"] == [
+        {"factor": "air_quality_dust_grade", "value": "bad"},
+        {"factor": "slot_closure_state", "value": "closed", "period": "afternoon"},
+    ]
+
+
+def test_intervention_weather_air_quality_and_closure_triple_trigger(monkeypatch) -> None:
+    monkeypatch.setattr(
+        planner_service,
+        "get_settings",
+        lambda: SimpleNamespace(feature_flags={"PLAN_FULL_SLOTS": True}),
+    )
+    monkeypatch.setattr(planner_service, "is_within_hours", lambda *a, **k: False)
+    _patch_intervention_sources(
+        monkeypatch,
+        [{"place_id": "p1", "name": "x"}],
+        _p4_weather(
+            weather_status="bad",
+            air_quality_status="bad",
+            dust_grade="bad",
+            aggregate="bad",
+        ),
+    )
+
+    result = planner_service.intervention(lat=37.2, lng=127.0, radius_m=2000)
+
+    assert result["trigger_type"] == "bad_weather_and_air_quality_and_closure"
+    assert [factor["factor"] for factor in result["trigger_factors"]] == [
+        "weather_outdoor_status",
+        "air_quality_dust_grade",
+        "slot_closure_state",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("is_bad_weather", "is_bad_air_quality", "is_closure", "expected"),
+    [
+        (False, False, False, None),
+        (True, False, False, "bad_weather"),
+        (False, True, False, "bad_air_quality"),
+        (False, False, True, "closure_detected"),
+        (True, True, False, "bad_weather_and_air_quality"),
+        (True, False, True, "bad_weather_and_closure"),
+        (False, True, True, "bad_air_quality_and_closure"),
+        (True, True, True, "bad_weather_and_air_quality_and_closure"),
+    ],
+)
+def test_intervention_trigger_type_air_quality_combination_logic(
+    is_bad_weather: bool,
+    is_bad_air_quality: bool,
+    is_closure: bool,
+    expected: str | None,
+) -> None:
+    assert (
+        planner_service._intervention_trigger_type(
+            is_bad_weather=is_bad_weather,
+            is_closure=is_closure,
+            is_bad_air_quality=is_bad_air_quality,
+        )
+        == expected
+    )
+
+
+def test_intervention_unknown_air_quality_does_not_intervene(monkeypatch) -> None:
+    """Unknown dust grade / unknown weather → no invented cause, no trigger."""
+    _patch_intervention_sources(
+        monkeypatch,
+        [{"place_id": "p1", "name": "x"}],
+        _p4_weather(
+            weather_status="unknown",
+            air_quality_status="unknown",
+            dust_grade="unknown",
+            aggregate="unknown",
+        ),
+    )
+
+    result = planner_service.intervention(lat=37.2, lng=127.0, radius_m=2000)
+
+    assert result["should_intervene"] is False
+    assert result["trigger_type"] is None
+    assert result["trigger_factors"] == []
+    assert result["alternative_slot"] is None
+
+
+def test_intervention_unknown_dust_with_bad_weather_keeps_weather_only(
+    monkeypatch,
+) -> None:
+    _patch_intervention_sources(
+        monkeypatch,
+        [],
+        _p4_weather(
+            weather_status="bad",
+            air_quality_status="unknown",
+            dust_grade="unknown",
+            aggregate="bad",
+        ),
+    )
+
+    result = planner_service.intervention(lat=37.2, lng=127.0, radius_m=2000)
+
+    # Unknown AQ is not a cause and never collapses into the weather factor.
+    assert result["trigger_type"] == "bad_weather"
+    assert result["trigger_factors"] == [{"factor": "weather_outdoor_status", "value": "bad"}]
+
+
+def test_intervention_bad_air_quality_finds_indoor_alternative(monkeypatch) -> None:
+    places = [
+        {"place_id": "p1", "name": "야외 공원", "category": "attraction", "is_indoor": False},
+        {"place_id": "p2", "name": "실내 미술관", "category": "culture_venue", "is_indoor": True},
+    ]
+    _patch_intervention_sources(
+        monkeypatch,
+        places,
+        _p4_weather(
+            weather_status="good",
+            air_quality_status="bad",
+            dust_grade="bad",
+            aggregate="bad",
+        ),
+    )
+
+    result = planner_service.intervention(lat=37.5, lng=127.0, radius_m=3000, language="ko")
+
+    assert result["should_intervene"] is True
+    alt = result["alternative_slot"]
+    assert alt is not None, "adverse AQ should offer an indoor alternative"
+    assert alt["place"]["place_id"] == "p2"
+    assert alt["indoor_outdoor"] == "indoor"
+    assert alt["place"]["place_id"] != result["place"]["place_id"]
+
+
+def test_intervention_bad_air_quality_no_indoor_alternative_honest_null(
+    monkeypatch,
+) -> None:
+    places = [
+        {"place_id": "p1", "name": "야외 공원", "category": "attraction", "is_indoor": False},
+        {"place_id": "p2", "name": "야외 카페", "category": "restaurant", "is_indoor": False},
+    ]
+    _patch_intervention_sources(
+        monkeypatch,
+        places,
+        _p4_weather(
+            weather_status="unknown",
+            air_quality_status="bad",
+            dust_grade="bad",
+            aggregate="bad",
+        ),
+    )
+
+    result = planner_service.intervention(lat=37.5, lng=127.0, radius_m=3000, language="ko")
+
+    assert result["should_intervene"] is True
+    assert result["alternative_slot"] is None, "no indoor provenance → honest null"
+
+
+def test_intervention_good_air_quality_bad_weather_keeps_existing_payload(
+    monkeypatch,
+) -> None:
+    """Weather-only cause keeps the exact pre-P4 bad_weather payload bytes."""
+    _patch_intervention_sources(
+        monkeypatch,
+        [{"place_id": "p1", "name": "남산서울타워", "category": "landmark"}],
+        _p4_weather(
+            weather_status="bad",
+            air_quality_status="good",
+            dust_grade="good",
+            aggregate="bad",
+        ),
+    )
+
+    result = planner_service.intervention(lat=37.5665, lng=126.978, radius_m=2000)
+
+    assert result["should_intervene"] is True
+    assert result["trigger_type"] == "bad_weather"
+    assert result["trigger_factors"] == [{"factor": "weather_outdoor_status", "value": "bad"}]
+    assert result["reason"] == (
+        "Weather is not ideal; prioritize short-walk or indoor-friendly options near 남산서울타워."
+    )
+    assert result["recommended_action"] == (
+        "Show indoor or short-walk alternatives around 남산서울타워."
+    )
+
+
+def test_intervention_legacy_aggregate_bad_with_current_aq_bad_is_aq_only(
+    monkeypatch,
+) -> None:
+    """Legacy aggregate bad (no weather provenance) + explicit current AQ bad →
+    the AQ cause is disclosed; no weather factor or weather reason is invented."""
+    monkeypatch.setattr(planner_service, "list_places", lambda **kw: {"source": "db", "places": []})
+    monkeypatch.setattr(
+        planner_service,
+        "current_weather",
+        lambda **kw: {
+            "source": "db+airkorea_sido_realtime",
+            "outdoor_status": "bad",
+            "air_quality_outdoor_status": "bad",
+            "dust": {"grade": "bad"},
+        },
+    )
+
+    result = planner_service.intervention(lat=37.2, lng=127.0, radius_m=2000, language="en")
+
+    assert result["should_intervene"] is True
+    assert result["trigger_type"] == "bad_air_quality"
+    assert result["trigger_factors"] == [{"factor": "air_quality_dust_grade", "value": "bad"}]
+    assert "Air quality is poor" in result["reason"]
+    assert "Weather" not in result["reason"].split("Air quality")[0]
+
+
+def test_intervention_legacy_aggregate_bad_with_current_aq_good_never_triggers_weather(
+    monkeypatch,
+) -> None:
+    """Legacy aggregate bad + current AQ good → no observed cause at all: the
+    aggregate is never promoted to a weather trigger or weather reason."""
+    monkeypatch.setattr(planner_service, "list_places", lambda **kw: {"source": "db", "places": []})
+    monkeypatch.setattr(
+        planner_service,
+        "current_weather",
+        lambda **kw: {
+            "source": "db+airkorea_sido_realtime",
+            "outdoor_status": "bad",
+            "air_quality_outdoor_status": "good",
+            "dust": {"grade": "good"},
+        },
+    )
+
+    result = planner_service.intervention(lat=37.2, lng=127.0, radius_m=2000, language="en")
+
+    assert result["should_intervene"] is False
+    assert result["trigger_type"] is None
+    assert result["trigger_factors"] == []
+    assert result["alternative_slot"] is None
+    # Honest unknown-weather copy — not a weather-adverse reason.
+    assert result["reason"] == (
+        "Weather data is still pending, so keep nearby local places as the current option."
+    )
+    assert "indoor" not in result["recommended_action"].lower()
+
+
+def test_intervention_legacy_payload_without_any_provenance_never_triggers(
+    monkeypatch,
+) -> None:
+    """A pre-P4 payload (no provenance keys, even with a bad dust grade) carries
+    no observable cause: no trigger, no weather factor, honest unknown copy."""
+    monkeypatch.setattr(planner_service, "list_places", lambda **kw: {"source": "db", "places": []})
+    monkeypatch.setattr(
+        planner_service,
+        "current_weather",
+        lambda **kw: {"source": "db", "outdoor_status": "bad", "dust": {"grade": "bad"}},
+    )
+
+    result = planner_service.intervention(lat=37.2, lng=127.0, radius_m=2000)
+
+    assert result["should_intervene"] is False
+    assert result["trigger_type"] is None
+    assert result["trigger_factors"] == []
+    assert result["alternative_slot"] is None
+
+
+@pytest.mark.parametrize(
+    ("provenance", "aggregate", "expected_reason_fragment"),
+    [
+        # Only explicit bad weather provenance produces a weather reason.
+        ({"weather_outdoor_status": "bad"}, "bad", "Weather is not ideal"),
+        ({"weather_outdoor_status": "good"}, "good", "Weather is suitable"),
+        # Missing/unknown weather provenance never yields a weather reason even
+        # when the aggregate says bad.
+        ({}, "bad", "Weather data is still pending"),
+        ({"weather_outdoor_status": "unknown"}, "bad", "Weather data is still pending"),
+    ],
+)
+def test_intervention_weather_reason_requires_explicit_bad_weather_provenance(
+    monkeypatch,
+    provenance: dict,
+    aggregate: str,
+    expected_reason_fragment: str,
+) -> None:
+    monkeypatch.setattr(planner_service, "list_places", lambda **kw: {"source": "db", "places": []})
+    monkeypatch.setattr(
+        planner_service,
+        "current_weather",
+        lambda **kw: {"source": "db", "outdoor_status": aggregate, **provenance},
+    )
+
+    result = planner_service.intervention(lat=37.2, lng=127.0, radius_m=2000, language="en")
+
+    assert expected_reason_fragment in result["reason"]
+
+
+@pytest.mark.parametrize(
+    ("weather_status", "air_quality_status", "expected_fragment"),
+    [
+        ("good", "bad", "Air quality is poor"),
+        ("unknown", "bad", "Air quality is poor"),
+        ("bad", "bad", "Weather and air quality are both poor"),
+    ],
+)
+def test_intervention_reason_air_quality_branches(
+    weather_status: str, air_quality_status: str, expected_fragment: str
+) -> None:
+    reason = planner_service._intervention_reason(
+        weather_status=weather_status,
+        candidate_name="한강공원",
+        air_quality_status=air_quality_status,
+    )
+    action = planner_service._recommended_action(
+        weather_status=weather_status,
+        candidate_name="한강공원",
+        air_quality_status=air_quality_status,
+    )
+
+    assert expected_fragment in reason
+    assert action == "Show indoor or short-walk alternatives around 한강공원."
+
+
+# ---------------------------------------------------------------------------
+# P4 closing-soon/closure: estimated-hours cause copy. The category-based hours
+# estimate is never an authority — copy always says estimated + check-needed and
+# never claims observed/confirmed/permanent/temporary/holiday closure.
+# ---------------------------------------------------------------------------
+
+
+def test_intervention_reason_closure_only_names_estimated_cause() -> None:
+    """Estimated out-of-hours is the sole cause → reason/action name it and never
+    mention bad weather or bad air quality."""
+    reason = planner_service._intervention_reason(
+        weather_status="good",
+        candidate_name="야외 공원",
+        air_quality_status="unknown",
+        closing_cause="closed",
+        estimated_hours="10:00-19:00",
+    )
+    action = planner_service._recommended_action(
+        weather_status="good",
+        candidate_name="야외 공원",
+        air_quality_status="unknown",
+        closing_cause="closed",
+    )
+    assert reason == (
+        "This slot is outside the estimated hours (10:00-19:00) for 야외 공원; "
+        "the actual opening status needs a check."
+    )
+    assert action == "Check nearby options covered by the estimated hours instead of 야외 공원."
+    for forbidden in ("Weather", "Air quality", "indoor"):
+        assert forbidden not in reason
+    assert "indoor" not in action
+
+
+def test_intervention_reason_closing_soon_only_names_estimated_cause() -> None:
+    reason = planner_service._intervention_reason(
+        weather_status="unknown",
+        candidate_name="야외 공원",
+        air_quality_status="unknown",
+        closing_cause="closing_soon",
+        estimated_hours="10:00-19:00",
+    )
+    action = planner_service._recommended_action(
+        weather_status="unknown",
+        candidate_name="야외 공원",
+        air_quality_status="unknown",
+        closing_cause="closing_soon",
+    )
+    assert reason == (
+        "This slot is near the estimated closing time for 야외 공원 "
+        "(estimated hours 10:00-19:00); the actual opening status needs a check."
+    )
+    assert action == (
+        "Check the estimated closing time for 야외 공원 and review other nearby options too."
+    )
+    for forbidden in ("Weather", "Air quality", "indoor"):
+        assert forbidden not in reason
+        assert forbidden not in action
+
+
+def test_intervention_reason_estimated_cause_ko_copy() -> None:
+    ko_reason = planner_service._intervention_reason(
+        weather_status="good",
+        candidate_name="야외 공원",
+        language="ko",
+        closing_cause="closed",
+        estimated_hours="10:00-19:00",
+    )
+    ko_action = planner_service._recommended_action(
+        weather_status="good",
+        candidate_name="야외 공원",
+        language="ko",
+        closing_cause="closed",
+    )
+    assert ko_reason == (
+        "이번 일정 시간은 야외 공원의 추정 운영시간(10:00-19:00) 밖이에요. "
+        "실제 영업 여부는 확인이 필요해요."
+    )
+    assert (
+        ko_action
+        == "야외 공원 대신 추정 운영시간이 이번 일정을 커버하는 근처 옵션을 확인해 보세요."
+    )
+    assert "날씨" not in ko_reason
+    assert "미세먼지" not in ko_reason
+    # Permanent/observed closure vocabulary must never appear on this path.
+    for forbidden in ("폐업", "휴업", "영구", "관측", "확인됨"):
+        assert forbidden not in ko_reason
+        assert forbidden not in ko_action
+
+
+@pytest.mark.parametrize(
+    (
+        "weather_status",
+        "air_quality_status",
+        "closing_cause",
+        "expected_fragments",
+        "forbidden_fragments",
+    ),
+    [
+        # Combined causes name each actual cause.
+        (
+            "bad",
+            "unknown",
+            "closed",
+            ["Weather is not ideal", "outside the estimated hours (10:00-19:00)"],
+            ["Air quality"],
+        ),
+        (
+            "good",
+            "bad",
+            "closing_soon",
+            ["Air quality is poor", "near the estimated closing time"],
+            ["Weather"],
+        ),
+        (
+            "bad",
+            "bad",
+            "closed",
+            [
+                "Weather and air quality are both poor",
+                "outside the estimated hours (10:00-19:00)",
+            ],
+            [],
+        ),
+    ],
+)
+def test_intervention_reason_combined_estimated_causes_name_every_cause(
+    weather_status: str,
+    air_quality_status: str,
+    closing_cause: str,
+    expected_fragments: list[str],
+    forbidden_fragments: list[str],
+) -> None:
+    reason = planner_service._intervention_reason(
+        weather_status=weather_status,
+        candidate_name="야외 공원",
+        air_quality_status=air_quality_status,
+        closing_cause=closing_cause,
+        estimated_hours="10:00-19:00",
+    )
+    for fragment in expected_fragments:
+        assert fragment in reason
+    for fragment in forbidden_fragments:
+        assert fragment not in reason
+    # The check-needed caveat is always present on estimated-hours causes.
+    assert "the actual opening status needs a check" in reason
+
+
+def test_intervention_combined_estimated_action_names_both_causes() -> None:
+    action = planner_service._recommended_action(
+        weather_status="bad",
+        candidate_name="야외 공원",
+        air_quality_status="unknown",
+        closing_cause="closing_soon",
+    )
+    assert action == (
+        "Weigh the weather and the estimated hours together: check indoor options near 야외 공원."
     )

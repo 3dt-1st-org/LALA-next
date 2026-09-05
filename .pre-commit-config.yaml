@@ -38,6 +38,9 @@ repos:
       - id: check-toml
       - id: check-merge-conflict
       - id: check-added-large-files
+        # open-map-embed.html: 고정된 MapLibre GL JS 런타임을 인라인한 배포용
+        # vendor 에셋(SHA-256 핀 + 무결성 테스트로 관리) — 대형 파일 게이트에서 의도적 제외.
+        exclude: '^apps/flutter_app/assets/map/open-map-embed\.html$'
 
   # 참고: flutter analyze 훅은 main.dart(9,812줄) 정리(C3) 후 추가 예정.
   # 현재는 CI 의 verify_flutter_app.ps1 이 Flutter 게이트를 담당.

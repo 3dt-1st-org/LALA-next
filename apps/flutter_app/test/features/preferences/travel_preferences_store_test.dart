@@ -25,6 +25,11 @@ void main() {
       weatherSensitivity: WeatherSensitivity.high,
       cuisines: const {FoodCuisine.korean, FoodCuisine.marketFood},
       foodAdventure: FoodAdventure.adventurous,
+      spiceLevel: SpicePreference.mild,
+      orderRequests: const {
+        RestaurantOrderRequest.quietTable,
+        RestaurantOrderRequest.takeout,
+      },
       dietaryModes: const {DietaryMode.halal},
       allergens: const {Allergen.shellfish},
       avoidIngredients: '고수',
@@ -64,6 +69,10 @@ void main() {
         TransportMode.walk,
         TransportMode.transit,
       },
+      orderRequests: <RestaurantOrderRequest>{
+        RestaurantOrderRequest.takeout,
+        RestaurantOrderRequest.smallPortion,
+      },
     );
     final second = TravelPreferences(
       interests: <TravelInterest>{
@@ -74,10 +83,77 @@ void main() {
         TransportMode.transit,
         TransportMode.walk,
       },
+      orderRequests: <RestaurantOrderRequest>{
+        RestaurantOrderRequest.smallPortion,
+        RestaurantOrderRequest.takeout,
+      },
     );
 
     expect(first, second);
     expect(first.hashCode, second.hashCode);
+  });
+
+  test('spice and order requests round-trip and clear through copyWith', () {
+    const base = TravelPreferences(
+      spiceLevel: SpicePreference.spicy,
+      orderRequests: {RestaurantOrderRequest.staffRecommendation},
+    );
+
+    final encoded = jsonEncode(base.toJson());
+    expect(encoded, contains('"spice_level":"spicy"'));
+    expect(encoded, contains('"order_requests":["staffRecommendation"]'));
+    // Explicitly saved values survive the round trip.
+    expect(TravelPreferences.fromJson(jsonDecode(encoded)), base);
+
+    // The sentinel lets callers clear the saved value back to "not saved".
+    final cleared = base.copyWith(spiceLevel: null);
+    expect(cleared.spiceLevel, isNull);
+    expect(cleared.orderRequests, base.orderRequests);
+    expect(cleared, isNot(base));
+  });
+
+  test('old payloads default to not-saved spice and empty order requests', () {
+    // CP1-era stored document: no CP2 keys at all.
+    final decoded = TravelPreferences.fromJson(<String, Object>{
+      'version': TravelPreferences.schemaVersion,
+      'soft': <String, Object>{'food_cuisines': <String>['korean']},
+      'hard': <String, Object>{},
+      'locale': <String, Object>{},
+    });
+
+    expect(decoded.spiceLevel, isNull);
+    expect(decoded.orderRequests, isEmpty);
+    expect(decoded.cuisines, {FoodCuisine.korean});
+    expect(decoded, isNot(const TravelPreferences(spiceLevel: null)));
+  });
+
+  test('malformed restaurant values are bounded honestly', () {
+    final decoded = TravelPreferences.fromJson(<String, Object>{
+      'version': TravelPreferences.schemaVersion,
+      'soft': <String, Object>{
+        // Unknown spice value falls back to "not saved" — never a guess.
+        'spice_level': 'volcanic',
+        // Unknown entries are dropped; the bounded cap keeps at most 4.
+        'order_requests': <String>[
+          'staffRecommendation',
+          'smallPortion',
+          'quietTable',
+          'takeout',
+          'extraNapkins',
+        ],
+      },
+      'hard': <String, Object>{},
+      'locale': <String, Object>{},
+    });
+
+    expect(decoded.spiceLevel, isNull);
+    expect(decoded.orderRequests, {
+      RestaurantOrderRequest.staffRecommendation,
+      RestaurantOrderRequest.smallPortion,
+      RestaurantOrderRequest.quietTable,
+      RestaurantOrderRequest.takeout,
+    });
+    expect(decoded.orderRequests, hasLength(TravelPreferences.maxOrderRequests));
   });
 
   test('rejects unknown schema and safely bounds malformed values', () {
@@ -202,6 +278,35 @@ void main() {
     expect(remote.account, device);
     expect(store.syncStatus, TravelPreferencesSyncStatus.synced);
     expect(store.serverRevision, 6);
+  });
+
+  test('account sync round-trips spice and order requests honestly', () async {
+    // A device with saved CP2 values vs an account without them is a real
+    // conflict (nothing silently overwritten), and the explicit device
+    // upload carries the values verbatim.
+    final store = TravelPreferencesStore();
+    await store.ensureLoaded();
+    const device = TravelPreferences(
+      spiceLevel: SpicePreference.medium,
+      orderRequests: {RestaurantOrderRequest.quietTable},
+    );
+    await store.save(device);
+    final remote = _MemoryRemote(
+      account: const TravelPreferences(),
+      revision: 2,
+    );
+
+    await store.connectAccount(remote);
+
+    expect(store.syncStatus, TravelPreferencesSyncStatus.conflict);
+    expect(store.value.spiceLevel, SpicePreference.medium);
+    expect(store.value.orderRequests, {RestaurantOrderRequest.quietTable});
+
+    await store.saveDevicePreferencesToAccount();
+
+    expect(remote.account?.spiceLevel, SpicePreference.medium);
+    expect(remote.account?.orderRequests, {RestaurantOrderRequest.quietTable});
+    expect(store.syncStatus, TravelPreferencesSyncStatus.synced);
   });
 }
 

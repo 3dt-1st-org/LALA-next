@@ -46,8 +46,11 @@ class ChatPreferenceAttachmentSheet extends StatelessWidget {
       builder: (context, _) {
         final preferences = store.value;
         final hasSavedPreferences = store.hasLocalDocument;
+        // CP2: the dietary-request card also carries the saved spice level
+        // and order requests, so any saved restaurant-card content enables it.
         final hasDietaryNeeds =
-            hasSavedPreferences && hasRestaurantSafetyRequests(preferences);
+            hasSavedPreferences &&
+            hasRestaurantCommunicationContent(preferences);
         return Padding(
           padding: EdgeInsets.fromLTRB(
             20,
@@ -117,19 +120,19 @@ class ChatPreferenceAttachmentSheet extends StatelessWidget {
                 description: hasDietaryNeeds
                     ? lalaCopyMulti(
                         language,
-                        ko: '저장한 식이·알레르기 조건을 방문자 언어와 한국어로 첨부해요.',
-                        en: 'Adds your saved dietary needs in your language and Korean.',
-                        ja: '保存した食事条件を自分の言語と韓国語で追加します。',
-                        zhHans: '用您的语言和韩语添加已保存的饮食需求。',
-                        zhHant: '用您的語言和韓語新增已儲存的飲食需求。',
+                        ko: '저장한 식이·알레르기 조건과 맵기·주문 요청을 방문자 언어와 한국어로 첨부해요.',
+                        en: 'Adds your saved dietary needs, spice level, and order requests in your language and Korean.',
+                        ja: '保存した食事・アレルギー条件と辛さ・注文リクエストを自分の言語と韓国語で追加します。',
+                        zhHans: '用您的语言和韩语添加已保存的饮食需求、辣度和点餐请求。',
+                        zhHant: '用您的語言和韓語新增已儲存的飲食需求、辣度和點餐請求。',
                       )
                     : lalaCopyMulti(
                         language,
-                        ko: '먼저 음식 설정에서 식이·알레르기 조건을 저장해 주세요.',
-                        en: 'Save dietary or allergy needs in Food settings first.',
-                        ja: '先に食事設定で食事・アレルギー条件を保存してください。',
-                        zhHans: '请先在饮食设置中保存饮食或过敏需求。',
-                        zhHant: '請先在飲食設定中儲存飲食或過敏需求。',
+                        ko: '먼저 음식 설정에서 식이·알레르기 조건이나 맵기·주문 요청을 저장해 주세요.',
+                        en: 'Save dietary or allergy needs, spice, or order requests in Food settings first.',
+                        ja: '先に食事設定で食事・アレルギー条件や辛さ・注文リクエストを保存してください。',
+                        zhHans: '请先在饮食设置中保存饮食或过敏需求、辣度或点餐请求。',
+                        zhHant: '請先在飲食設定中儲存飲食或過敏需求、辣度或點餐請求。',
                       ),
                 enabled: hasDietaryNeeds,
                 onTap: () => Navigator.of(

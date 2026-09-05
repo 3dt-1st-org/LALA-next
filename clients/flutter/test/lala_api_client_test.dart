@@ -375,6 +375,48 @@ void main() {
     expect(envelope.data?.revision, 5);
   });
 
+  test('putTravelPreferences carries CP2 spice and order requests verbatim',
+      () async {
+    late RequestOptions captured;
+    // The reference client treats the stored preferences document as an
+    // opaque map; the CP2 fields must cross the wire unchanged.
+    final preferences = <String, dynamic>{
+      'version': 1,
+      'soft': <String, Object?>{
+        'spice_level': 'mild',
+        'order_requests': <String>['quietTable', 'takeout'],
+      },
+      'hard': <String, Object?>{},
+      'locale': <String, Object?>{'pronunciation_help': true},
+    };
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      dio: _dio((request) async {
+        captured = request;
+        return _json({
+          'ok': true,
+          'data': {
+            'preferences': preferences,
+            'revision': 2,
+            'updated_at': '2026-09-05T00:00:00Z',
+          },
+          'meta': {'source': 'db'},
+          'error': null,
+        });
+      }),
+    );
+
+    await client.putTravelPreferences(
+      expectedRevision: 1,
+      preferences: preferences,
+    );
+
+    final sent = (captured.data as Map<String, dynamic>)['preferences'] as Map;
+    expect(sent['soft']['spice_level'], 'mild');
+    expect(sent['soft']['order_requests'], <String>['quietTable', 'takeout']);
+    expect(sent['locale']['pronunciation_help'], isTrue);
+  });
+
   test('deleteMe sends JSON confirmation and dynamic auth, accepting only 204',
       () async {
     late RequestOptions captured;
@@ -1081,6 +1123,31 @@ void main() {
     expect(intervention.data?.history, isEmpty);
   });
 
+  test('LalaPlanSlot parses the P4 closing_soon projection additively', () {
+    // closing_soon=true parses; missing/false map to honest null/false.
+    final closingSoon = LalaPlanSlot.fromJson(const {
+      'period': 'dinner',
+      'title': 'Dinner',
+      'closing_soon': true,
+      'closure_state': 'open',
+    });
+    expect(closingSoon.closingSoon, isTrue);
+    expect(closingSoon.closureState, 'open');
+
+    final notClosing = LalaPlanSlot.fromJson(const {
+      'period': 'dinner',
+      'title': 'Dinner',
+      'closing_soon': false,
+      'closure_state': 'open',
+    });
+    expect(notClosing.closingSoon, isFalse);
+
+    // Pre-P4 payloads (key absent, PLAN_FULL_SLOTS off) stay null.
+    final legacy =
+        LalaPlanSlot.fromJson(const {'period': 'dinner', 'title': 'Dinner'});
+    expect(legacy.closingSoon, isNull);
+  });
+
   test('createDailyPlan sends the selected radius and language', () async {
     late RequestOptions captured;
     final client = LalaApiClient(
@@ -1119,6 +1186,150 @@ void main() {
     expect(captured.uri.path, '/api/v1/plans/daily');
     expect(body['radius_m'], 42000);
     expect(body['language'], 'en');
+  });
+
+  test('createDailyPlan sends selected_place_id only when pinned', () async {
+    late RequestOptions pinnedRequest;
+    late RequestOptions unpinnedRequest;
+    Map<String, Object?> planData() => <String, Object?>{
+          'language': 'ko',
+          'center': {'lat': 37.2, 'lng': 127.0},
+          'radius_m': 3000,
+          'weather': _weatherPayload(),
+          'slots': <Map<String, dynamic>>[],
+          'source': 'db',
+          'request_hash':
+              'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
+          'cache_key': 'daily_plan:abcdef0123456789abcdef0123456789',
+        };
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      apiKey: 'migration-key',
+      dio: _dio((request) async {
+        final isPinned = (request.data as Map).containsKey('selected_place_id');
+        if (isPinned) {
+          pinnedRequest = request;
+        } else {
+          unpinnedRequest = request;
+        }
+        return _json({
+          'ok': true,
+          'data': planData(),
+          'meta': {'request_id': 'plan-request-id'},
+          'error': null,
+        });
+      }),
+    );
+
+    await client.createDailyPlan(
+      lat: 37.2,
+      lng: 127.0,
+      selectedPlaceId: 'tour-api-126508',
+    );
+    await client.createDailyPlan(lat: 37.2, lng: 127.0);
+
+    final pinnedBody = pinnedRequest.data as Map;
+    expect(pinnedBody['selected_place_id'], 'tour-api-126508');
+    // 미지정 호출은 키 자체를 실어 보내지 않는다(기존 unpinned 요청 바이트 유지).
+    expect((unpinnedRequest.data as Map).containsKey('selected_place_id'),
+        isFalse);
+  });
+
+  test('createDailyPlan sends preference_context only when supplied', () async {
+    late RequestOptions withContextRequest;
+    late RequestOptions withoutContextRequest;
+    Map<String, Object?> planData({bool withEffects = false}) =>
+        <String, Object?>{
+          'language': 'ko',
+          'center': {'lat': 37.2, 'lng': 127.0},
+          'radius_m': 3000,
+          'weather': _weatherPayload(),
+          'slots': <Map<String, dynamic>>[],
+          'source': 'db',
+          'request_hash':
+              'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
+          'cache_key': 'daily_plan:abcdef0123456789abcdef0123456789',
+          if (withEffects)
+            'preference_effects': <Map<String, dynamic>>[
+              {
+                'field': 'max_one_way_minutes',
+                'applied': true,
+                'reason_code': 'RADIUS_CAPPED_TO_WALKING_TIME',
+                'explanation': 'Capped the search radius from 5000m to 1005m.',
+                'details': {
+                  'requested_radius_m': 5000,
+                  'effective_radius_m': 1005,
+                },
+              },
+              {
+                'field': 'food_cuisines',
+                'applied': false,
+                'reason_code': 'CUISINE_FACET_UNAVAILABLE',
+                'explanation': 'Place data has no cuisine facet.',
+              },
+            ],
+        };
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      apiKey: 'migration-key',
+      dio: _dio((request) async {
+        final hasContext =
+            (request.data as Map).containsKey('preference_context');
+        if (hasContext) {
+          withContextRequest = request;
+        } else {
+          withoutContextRequest = request;
+        }
+        return _json({
+          'ok': true,
+          'data': planData(withEffects: hasContext),
+          'meta': {'request_id': 'plan-request-id'},
+          'error': null,
+        });
+      }),
+    );
+
+    final contextful = await client.createDailyPlan(
+      lat: 37.2,
+      lng: 127.0,
+      preferenceContext: const LalaPlanPreferenceContext(
+        indoorOutdoor: 'indoor',
+        weatherSensitivity: 'high',
+        walkingBand: 'short',
+        maxOneWayMinutes: 15,
+        foodCuisines: ['korean', 'cafeDessert'],
+        budgetBand: 'value',
+        excludeClosingSoon: false,
+      ),
+    );
+    final contextless = await client.createDailyPlan(lat: 37.2, lng: 127.0);
+
+    final contextBody = withContextRequest.data as Map;
+    final context = contextBody['preference_context'] as Map;
+    expect(context['indoor_outdoor'], 'indoor');
+    expect(context['weather_sensitivity'], 'high');
+    expect(context['walking_band'], 'short');
+    expect(context['max_one_way_minutes'], 15);
+    expect(context['food_cuisines'], ['korean', 'cafeDessert']);
+    expect(context['budget_band'], 'value');
+    expect(context['exclude_closing_soon'], false);
+    // 미제공 호출은 키 자체를 실어 보내지 않는다(기존 요청 직렬화 바이트 유지).
+    expect(
+      (withoutContextRequest.data as Map).containsKey('preference_context'),
+      isFalse,
+    );
+    // 응답 파싱: effects 는 컨텍스트 있는 플랜에서만 채워진다.
+    expect(contextful.data!.preferenceEffects.length, 2);
+    expect(contextful.data!.appliedPreferenceEffectCount, 1);
+    expect(contextful.data!.preferenceEffects[0].field, 'max_one_way_minutes');
+    expect(contextful.data!.preferenceEffects[0].applied, isTrue);
+    expect(contextful.data!.preferenceEffects[0].details['effective_radius_m'],
+        1005);
+    expect(contextful.data!.preferenceEffects[1].applied, isFalse);
+    expect(contextful.data!.preferenceEffects[1].reasonCode,
+        'CUISINE_FACET_UNAVAILABLE');
+    expect(contextless.data!.preferenceEffects, isEmpty);
+    expect(contextless.data!.appliedPreferenceEffectCount, 0);
   });
 
   test('createDocentAudio returns mpeg bytes and request id', () async {
@@ -1307,6 +1518,53 @@ void main() {
       );
       client.close();
     });
+  });
+
+  test('getWeather parses P4 weather/AQ provenance, absent stays null',
+      () async {
+    // AQ-only adverse payload: the merged aggregate is bad while the causes stay
+    // distinct (weather observed good, AQ observed bad).
+    final provenancePayload = _weatherPayload()
+      ..['outdoor_status'] = 'bad'
+      ..['weather_outdoor_status'] = 'good'
+      ..['air_quality_outdoor_status'] = 'bad';
+
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      dio: _dio((request) async {
+        return _json({
+          'ok': true,
+          'data': provenancePayload,
+          'meta': {'request_id': 'weather-provenance-id'},
+          'error': null,
+        });
+      }),
+    );
+    addTearDown(client.close);
+
+    final provenance = await client.getWeather(lat: 37.2, lng: 127.0);
+    expect(provenance.data?.outdoorStatus, 'bad');
+    expect(provenance.data?.weatherOutdoorStatus, 'good');
+    expect(provenance.data?.airQualityOutdoorStatus, 'bad');
+
+    // Pre-P4 payload without provenance keys parses with honest nulls.
+    final legacyClient = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      dio: _dio((request) async {
+        return _json({
+          'ok': true,
+          'data': _weatherPayload(),
+          'meta': {'request_id': 'weather-legacy-id'},
+          'error': null,
+        });
+      }),
+    );
+    addTearDown(legacyClient.close);
+
+    final legacy = await legacyClient.getWeather(lat: 37.2, lng: 127.0);
+    expect(legacy.data?.outdoorStatus, 'unknown');
+    expect(legacy.data?.weatherOutdoorStatus, isNull);
+    expect(legacy.data?.airQualityOutdoorStatus, isNull);
   });
 
   test(
