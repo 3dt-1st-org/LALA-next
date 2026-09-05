@@ -105,8 +105,10 @@ Serializers _$serializers = (Serializers().toBuilder()
       ..add(ValidationError.serializer)
       ..add(ValidationErrorLocInner.serializer)
       ..add(WeatherData.serializer)
+      ..add(WeatherDataAirQualityOutdoorStatusEnum.serializer)
       ..add(WeatherDataOutdoorStatusEnum.serializer)
       ..add(WeatherDataSource_Enum.serializer)
+      ..add(WeatherDataWeatherOutdoorStatusEnum.serializer)
       ..add(WeatherSuccessEnvelope.serializer)
       ..addBuilderFactory(
           const FullType(BuiltList, const [const FullType(ForecastItem)]),

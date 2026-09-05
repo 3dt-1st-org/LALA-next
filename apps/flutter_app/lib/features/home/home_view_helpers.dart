@@ -323,9 +323,83 @@ String interventionToastLabel(LalaIntervention intervention, String language) {
   return _interventionFallbackCopy(intervention.triggerType, place, language);
 }
 
+/// triggerType 에 따른 한 줄 배지 라벨(5개 로케일 단일 언어). null/알 수 없음은
+/// 배지 없음(null). P4: 미세먼지(AQ) 트리거는 날씨 배지 라벨을 재사용하지 않는다 —
+/// 나쁜 대기질이 '날씨 변화'(또는 그 번역)로만 표시되는 일이 없어야 한다.
+String? interventionTriggerBadgeLabel(String? trigger, String language) {
+  switch (trigger) {
+    case 'closure_detected':
+      return lalaCopyMulti(
+        language,
+        ko: '폐업 의심',
+        en: 'Possible closure',
+        ja: '休業の可能性',
+        zhHans: '疑似停业',
+        zhHant: '疑似停業',
+      );
+    case 'bad_air_quality':
+      return lalaCopyMulti(
+        language,
+        ko: '미세먼지 나쁨',
+        en: 'Poor air quality',
+        ja: '大気が悪い',
+        zhHans: '空气质量差',
+        zhHant: '空氣品質差',
+      );
+    case 'bad_weather_and_air_quality':
+      return lalaCopyMulti(
+        language,
+        ko: '날씨 + 미세먼지',
+        en: 'Weather + air quality',
+        ja: '気象 + 大気',
+        zhHans: '天气 + 空气质量',
+        zhHant: '天氣 + 空氣品質',
+      );
+    case 'bad_air_quality_and_closure':
+      return lalaCopyMulti(
+        language,
+        ko: '미세먼지 + 폐업',
+        en: 'Air quality + closure',
+        ja: '大気 + 休業',
+        zhHans: '空气质量 + 停业',
+        zhHant: '空氣品質 + 停業',
+      );
+    case 'bad_weather_and_air_quality_and_closure':
+      return lalaCopyMulti(
+        language,
+        ko: '날씨 + 미세먼지 + 폐업',
+        en: 'Weather + air + closure',
+        ja: '気象 + 大気 + 休業',
+        zhHans: '天气 + 空气质量 + 停业',
+        zhHant: '天氣 + 空氣品質 + 停業',
+      );
+    case 'bad_weather_and_closure':
+      return lalaCopyMulti(
+        language,
+        ko: '날씨 + 폐업',
+        en: 'Weather + closure',
+        ja: '気象 + 休業',
+        zhHans: '天气 + 停业',
+        zhHant: '天氣 + 停業',
+      );
+    case 'bad_weather':
+      return lalaCopyMulti(
+        language,
+        ko: '날씨 변화',
+        en: 'Weather change',
+        ja: '気象の変化',
+        zhHans: '天气变化',
+        zhHant: '天氣變化',
+      );
+    default:
+      return null;
+  }
+}
+
 /// triggerType 에 따른 honest fallback 카피(KO/EN 배타). API 카피가 비었을 때만
 /// 쓰인다. bad_weather/null 은 기존 weather 카피와 동일(역호환), closure_detected
-/// 와 bad_weather_and_closure 는 새 카피. 대체 장소가 없어도 위조하지 않는다.
+/// 와 bad_weather_and_closure 는 새 카피. P4: bad_air_quality 및 조합은 원인에 맞는
+/// 카피를 쓴다(미세먼지 원인을 날씨로 위조하지 않는다). 대체 장소가 없어도 위조하지 않는다.
 String _interventionFallbackCopy(String? trigger, String? place, String language) {
   switch (trigger) {
     case 'closure_detected':
@@ -346,6 +420,78 @@ String _interventionFallbackCopy(String? trigger, String? place, String language
                 zhHans: '所选地点可能已打烊。请重新查看路线。',
                 zhHant: '所選地點可能已打烊。請重新查看路線。',
               );
+    case 'bad_air_quality':
+      return place != null
+          ? lalaCopyMulti(
+                language,
+                ko: '미세먼지가 나빠요. $place 중심으로 실내 동선을 확인해보세요.',
+                en: 'Air quality is poor. Check indoor routes near $place.',
+                ja: '大気が悪いです。$place を中心に屋内ルートをご確認ください。',
+                zhHans: '空气质量差。请查看 $place 附近的室内路线。',
+                zhHant: '空氣品質差。請查看 $place 附近的室內路線。',
+              )
+          : lalaCopyMulti(
+              language,
+              ko: '미세먼지가 나빠요. 실내 동선을 확인해보세요.',
+              en: 'Air quality is poor. Check indoor routes.',
+              ja: '大気が悪いです。屋内ルートをご確認ください。',
+              zhHans: '空气质量差。请查看室内路线。',
+              zhHant: '空氣品質差。請查看室內路線。',
+            );
+    case 'bad_weather_and_air_quality':
+      return place != null
+          ? lalaCopyMulti(
+                language,
+                ko: '날씨와 미세먼지가 모두 좋지 않아요. $place 근처 실내 대안을 확인해 보세요.',
+                en: 'Weather and air quality are both poor. Check indoor alternatives near $place.',
+                ja: '天気も大気も悪いです。$place 付近の屋内の代替をご確認ください。',
+                zhHans: '天气和空气质量都不佳。请查看 $place 附近的室内替代方案。',
+                zhHant: '天氣和空氣品質都不佳。請查看 $place 附近的室內替代方案。',
+              )
+          : lalaCopyMulti(
+              language,
+              ko: '날씨와 미세먼지가 모두 좋지 않아요. 실내 대안을 확인해 보세요.',
+              en: 'Weather and air quality are both poor. Check indoor alternatives.',
+              ja: '天気も大気も悪いです。屋内の代替をご確認ください。',
+              zhHans: '天气和空气质量都不佳。请查看室内替代方案。',
+              zhHant: '天氣和空氣品質都不佳。請查看室內替代方案。',
+            );
+    case 'bad_air_quality_and_closure':
+      return place != null
+          ? lalaCopyMulti(
+                language,
+                ko: '미세먼지가 나쁘고 $place 도 영업 중이 아닐 수 있어요. 실내 대안을 확인해 보세요.',
+                en: 'Air quality is poor and $place may be closed. Check indoor alternatives.',
+                ja: '大気が悪く、$place も営業していない可能性があります。屋内の代替をご確認ください。',
+                zhHans: '空气质量差，$place 也可能已打烊。请查看室内替代方案。',
+                zhHant: '空氣品質差，$place 也可能已打烊。請查看室內替代方案。',
+              )
+          : lalaCopyMulti(
+              language,
+              ko: '미세먼지가 나쁘고 일부 장소가 영업 중이 아닐 수 있어요. 실내 대안을 확인해 보세요.',
+              en: 'Air quality is poor and some places may be closed. Check indoor alternatives.',
+              ja: '大気が悪く、一部のスポットは営業していない可能性があります。屋内の代替をご確認ください。',
+              zhHans: '空气质量差，部分地点可能已打烊。请查看室内替代方案。',
+              zhHant: '空氣品質差，部分地點可能已打烊。請查看室內替代方案。',
+            );
+    case 'bad_weather_and_air_quality_and_closure':
+      return place != null
+          ? lalaCopyMulti(
+                language,
+                ko: '날씨와 미세먼지가 좋지 않고 $place 도 영업 중이 아닐 수 있어요. 실내 대안을 확인해 보세요.',
+                en: 'Weather and air quality are poor and $place may be closed. Check indoor alternatives.',
+                ja: '天気と大気が悪く、$place も営業していない可能性があります。屋内の代替をご確認ください。',
+                zhHans: '天气和空气质量不佳，$place 也可能已打烊。请查看室内替代方案。',
+                zhHant: '天氣和空氣品質不佳，$place 也可能已打烊。請查看室內替代方案。',
+              )
+          : lalaCopyMulti(
+              language,
+              ko: '날씨와 미세먼지가 좋지 않고 일부 장소가 영업 중이 아닐 수 있어요. 실내 대안을 확인해 보세요.',
+              en: 'Weather and air quality are poor and some places may be closed. Check indoor alternatives.',
+              ja: '天気と大気が悪く、一部のスポットは営業していない可能性があります。屋内の代替をご確認ください。',
+              zhHans: '天气和空气质量不佳，部分地点可能已打烊。请查看室内替代方案。',
+              zhHant: '天氣和空氣品質不佳，部分地點可能已打烊。請查看室內替代方案。',
+            );
     case 'bad_weather_and_closure':
       return place != null
           ? lalaCopyMulti(
