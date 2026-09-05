@@ -2020,3 +2020,162 @@ def test_intervention_reason_air_quality_branches(
 
     assert expected_fragment in reason
     assert action == "Show indoor or short-walk alternatives around 한강공원."
+
+
+# ---------------------------------------------------------------------------
+# P4 closing-soon/closure: estimated-hours cause copy. The category-based hours
+# estimate is never an authority — copy always says estimated + check-needed and
+# never claims observed/confirmed/permanent/temporary/holiday closure.
+# ---------------------------------------------------------------------------
+
+
+def test_intervention_reason_closure_only_names_estimated_cause() -> None:
+    """Estimated out-of-hours is the sole cause → reason/action name it and never
+    mention bad weather or bad air quality."""
+    reason = planner_service._intervention_reason(
+        weather_status="good",
+        candidate_name="야외 공원",
+        air_quality_status="unknown",
+        closing_cause="closed",
+        estimated_hours="10:00-19:00",
+    )
+    action = planner_service._recommended_action(
+        weather_status="good",
+        candidate_name="야외 공원",
+        air_quality_status="unknown",
+        closing_cause="closed",
+    )
+    assert reason == (
+        "This slot is outside the estimated hours (10:00-19:00) for 야외 공원; "
+        "the actual opening status needs a check."
+    )
+    assert action == "Check nearby options covered by the estimated hours instead of 야외 공원."
+    for forbidden in ("Weather", "Air quality", "indoor"):
+        assert forbidden not in reason
+    assert "indoor" not in action
+
+
+def test_intervention_reason_closing_soon_only_names_estimated_cause() -> None:
+    reason = planner_service._intervention_reason(
+        weather_status="unknown",
+        candidate_name="야외 공원",
+        air_quality_status="unknown",
+        closing_cause="closing_soon",
+        estimated_hours="10:00-19:00",
+    )
+    action = planner_service._recommended_action(
+        weather_status="unknown",
+        candidate_name="야외 공원",
+        air_quality_status="unknown",
+        closing_cause="closing_soon",
+    )
+    assert reason == (
+        "This slot is near the estimated closing time for 야외 공원 "
+        "(estimated hours 10:00-19:00); the actual opening status needs a check."
+    )
+    assert action == (
+        "Check the estimated closing time for 야외 공원 and review other nearby options too."
+    )
+    for forbidden in ("Weather", "Air quality", "indoor"):
+        assert forbidden not in reason
+        assert forbidden not in action
+
+
+def test_intervention_reason_estimated_cause_ko_copy() -> None:
+    ko_reason = planner_service._intervention_reason(
+        weather_status="good",
+        candidate_name="야외 공원",
+        language="ko",
+        closing_cause="closed",
+        estimated_hours="10:00-19:00",
+    )
+    ko_action = planner_service._recommended_action(
+        weather_status="good",
+        candidate_name="야외 공원",
+        language="ko",
+        closing_cause="closed",
+    )
+    assert ko_reason == (
+        "이번 일정 시간은 야외 공원의 추정 운영시간(10:00-19:00) 밖이에요. "
+        "실제 영업 여부는 확인이 필요해요."
+    )
+    assert (
+        ko_action
+        == "야외 공원 대신 추정 운영시간이 이번 일정을 커버하는 근처 옵션을 확인해 보세요."
+    )
+    assert "날씨" not in ko_reason
+    assert "미세먼지" not in ko_reason
+    # Permanent/observed closure vocabulary must never appear on this path.
+    for forbidden in ("폐업", "휴업", "영구", "관측", "확인됨"):
+        assert forbidden not in ko_reason
+        assert forbidden not in ko_action
+
+
+@pytest.mark.parametrize(
+    (
+        "weather_status",
+        "air_quality_status",
+        "closing_cause",
+        "expected_fragments",
+        "forbidden_fragments",
+    ),
+    [
+        # Combined causes name each actual cause.
+        (
+            "bad",
+            "unknown",
+            "closed",
+            ["Weather is not ideal", "outside the estimated hours (10:00-19:00)"],
+            ["Air quality"],
+        ),
+        (
+            "good",
+            "bad",
+            "closing_soon",
+            ["Air quality is poor", "near the estimated closing time"],
+            ["Weather"],
+        ),
+        (
+            "bad",
+            "bad",
+            "closed",
+            [
+                "Weather and air quality are both poor",
+                "outside the estimated hours (10:00-19:00)",
+            ],
+            [],
+        ),
+    ],
+)
+def test_intervention_reason_combined_estimated_causes_name_every_cause(
+    weather_status: str,
+    air_quality_status: str,
+    closing_cause: str,
+    expected_fragments: list[str],
+    forbidden_fragments: list[str],
+) -> None:
+    reason = planner_service._intervention_reason(
+        weather_status=weather_status,
+        candidate_name="야외 공원",
+        air_quality_status=air_quality_status,
+        closing_cause=closing_cause,
+        estimated_hours="10:00-19:00",
+    )
+    for fragment in expected_fragments:
+        assert fragment in reason
+    for fragment in forbidden_fragments:
+        assert fragment not in reason
+    # The check-needed caveat is always present on estimated-hours causes.
+    assert "the actual opening status needs a check" in reason
+
+
+def test_intervention_combined_estimated_action_names_both_causes() -> None:
+    action = planner_service._recommended_action(
+        weather_status="bad",
+        candidate_name="야외 공원",
+        air_quality_status="unknown",
+        closing_cause="closing_soon",
+    )
+    assert action == (
+        "Weigh the weather and the estimated hours together: check indoor options near 야외 공원."
+    )

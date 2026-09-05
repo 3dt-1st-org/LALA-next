@@ -9,6 +9,7 @@ from apps.api.app.schemas.planner import DailyPlanRequest, PlanPreferenceContext
 from apps.api.app.services.normalization import normalize_language
 from apps.api.app.services.opening_hours_service import (
     estimated_opening_hours,
+    is_closing_soon,
     is_within_hours,
 )
 from apps.api.app.services.places_service import list_places
@@ -447,30 +448,46 @@ def intervention(*, lat: float, lng: float, radius_m: int, language: str = "en")
         closure_factors = [
             {"factor": "slot_closure_state", "value": "closed", "period": "afternoon"}
         ]
+    # P4 closing-soon: distinct trigger from the same category-based estimated-hours
+    # projection — the slot start falls inside the bounded pre-close window
+    # (opening_hours_service.CLOSING_SOON_WINDOW_MINUTES). Mutually exclusive with the
+    # closure trigger by construction (closing-soon implies within-hours), and the
+    # explicit `not is_closure` guard keeps that invariant even for degenerate inputs.
+    # Flag-off / missing or malformed times → never triggers.
+    is_closing_soon_trigger = (
+        full_slots and not is_closure and original_slot.get("closing_soon") is True
+    )
+    closing_soon_factors: list[dict] = []
+    if is_closing_soon_trigger:
+        closing_soon_factors = [
+            {
+                "factor": "slot_closing_soon",
+                "value": "within_estimated_window",
+                "period": "afternoon",
+            }
+        ]
+    # P4 truth: the reason/action copy must name the estimated-hours cause (never
+    # permanent/temporary/holiday closure claims) and, when combined with bad
+    # weather/air, must name every actual cause.
+    closing_cause = "closed" if is_closure else "closing_soon" if is_closing_soon_trigger else None
+    estimated_hours = original_slot.get("estimated_opening_hours") if closing_cause else None
     # P5B §12.4: observable trigger classification + honest-unavailable fields.
     # authority(travel-time/indoor-outdoor)가 없으면 값을 차단할 뿐 contract 는 유지.
-    return {
-        "center": {"lat": lat, "lng": lng},
-        "radius_m": radius_m,
-        "should_intervene": is_adverse_outdoor or is_closure,
-        "reason": _intervention_reason(
-            weather_status=weather_cause_status,
-            candidate_name=candidate_name,
+    if is_adverse_outdoor and closing_cause:
+        # Combined causes: the alternative must satisfy both — indoor (weather/AQ)
+        # AND estimated hours that cover the slot without the closing-soon window.
+        alternative_slot = _find_open_hours_alternative(
+            place_candidates=places.get("places") or [],
+            exclude_place_id=(candidate or {}).get("place_id"),
             language=normalized,
-            air_quality_status=air_quality_status,
-        ),
-        "recommended_action": _recommended_action(
-            weather_status=weather_cause_status,
-            candidate_name=candidate_name,
-            language=normalized,
-            air_quality_status=air_quality_status,
-        ),
-        "place": candidate,
-        "source": source,
-        "original_slot": original_slot,
-        # indoor/outdoor provenance: bad weather 시 실내 대체 장소 검색(AI enrichment 기반).
-        # P4: adverse air quality 에도 동일하게 실내 대안을 제안한다.
-        "alternative_slot": _find_indoor_alternative(
+            weather_hint=outdoor_status,
+            unavailable_reason=unavailable_reason,
+            weather=weather,
+            full_slots=full_slots,
+            require_indoor=True,
+        )
+    elif is_adverse_outdoor:
+        alternative_slot = _find_indoor_alternative(
             place_candidates=places.get("places") or [],
             exclude_place_id=(candidate or {}).get("place_id"),
             language=normalized,
@@ -479,18 +496,59 @@ def intervention(*, lat: float, lng: float, radius_m: int, language: str = "en")
             weather=weather,
             full_slots=full_slots,
         )
-        if is_adverse_outdoor
-        else None,
+    elif closing_cause:
+        # Estimated-hours cause: a real existing candidate whose estimated hours
+        # cover the slot outside the closing-soon window. Honest null when none.
+        alternative_slot = _find_open_hours_alternative(
+            place_candidates=places.get("places") or [],
+            exclude_place_id=(candidate or {}).get("place_id"),
+            language=normalized,
+            weather_hint=outdoor_status,
+            unavailable_reason=unavailable_reason,
+            weather=weather,
+            full_slots=full_slots,
+            require_indoor=False,
+        )
+    else:
+        alternative_slot = None
+    return {
+        "center": {"lat": lat, "lng": lng},
+        "radius_m": radius_m,
+        "should_intervene": is_adverse_outdoor or is_closure or is_closing_soon_trigger,
+        "reason": _intervention_reason(
+            weather_status=weather_cause_status,
+            candidate_name=candidate_name,
+            language=normalized,
+            air_quality_status=air_quality_status,
+            closing_cause=closing_cause,
+            estimated_hours=estimated_hours,
+        ),
+        "recommended_action": _recommended_action(
+            weather_status=weather_cause_status,
+            candidate_name=candidate_name,
+            language=normalized,
+            air_quality_status=air_quality_status,
+            closing_cause=closing_cause,
+        ),
+        "place": candidate,
+        "source": source,
+        "original_slot": original_slot,
+        # alternative provenance: real already-fetched candidates only — indoor for
+        # adverse weather/AQ (P4), estimated-hours-covered for closing causes.
+        # No suitable candidate → honest null (no fixture/demo place).
+        "alternative_slot": alternative_slot,
         # observable trigger 만. good/unknown + closure 없음 → null. 발명 금지.
         "trigger_type": _intervention_trigger_type(
             is_bad_weather=is_bad_weather,
             is_closure=is_closure,
             is_bad_air_quality=is_bad_air_quality,
+            is_closing_soon=is_closing_soon_trigger,
         ),
         "trigger_factors": _intervention_trigger_factors(
             is_bad_weather=is_bad_weather,
             air_quality_grade=air_quality_grade if is_bad_air_quality else None,
             closure_factors=closure_factors,
+            closing_soon_factors=closing_soon_factors,
         ),
         # travel-time authority 부재 → 거리/이동시간 비교 불가(honest null).
         "distance_comparison": None,
@@ -542,6 +600,7 @@ def _intervention_trigger_type(
     is_bad_weather: bool,
     is_closure: bool,
     is_bad_air_quality: bool = False,
+    is_closing_soon: bool = False,
 ) -> str | None:
     # D5: additive enum widening on a nullable string. Flag-off ⇒ is_closure False ⇒
     # the pre-V3 "bad_weather"/None result is preserved exactly.
@@ -549,20 +608,31 @@ def _intervention_trigger_type(
     # deterministic order (weather → air quality → closure); the pre-P4
     # bad_weather / closure_detected / bad_weather_and_closure payloads are
     # unchanged for weather/closure-only causes.
-    if is_bad_weather and is_bad_air_quality and is_closure:
-        return "bad_weather_and_air_quality_and_closure"
+    # P4 closing-soon: closing_soon is a distinct estimated-hours trigger, mutually
+    # exclusive with closure (closing-soon implies within-hours). If a degenerate
+    # input ever set both, closure deterministically dominates.
+    if is_closure:
+        if is_bad_weather and is_bad_air_quality:
+            return "bad_weather_and_air_quality_and_closure"
+        if is_bad_air_quality:
+            return "bad_air_quality_and_closure"
+        if is_bad_weather:
+            return "bad_weather_and_closure"
+        return "closure_detected"
+    if is_closing_soon:
+        if is_bad_weather and is_bad_air_quality:
+            return "bad_weather_and_air_quality_and_closing_soon"
+        if is_bad_air_quality:
+            return "bad_air_quality_and_closing_soon"
+        if is_bad_weather:
+            return "bad_weather_and_closing_soon"
+        return "closing_soon"
     if is_bad_weather and is_bad_air_quality:
         return "bad_weather_and_air_quality"
-    if is_bad_air_quality and is_closure:
-        return "bad_air_quality_and_closure"
-    if is_bad_weather and is_closure:
-        return "bad_weather_and_closure"
     if is_bad_weather:
         return "bad_weather"
     if is_bad_air_quality:
         return "bad_air_quality"
-    if is_closure:
-        return "closure_detected"
     return None
 
 
@@ -571,13 +641,14 @@ def _intervention_trigger_factors(
     is_bad_weather: bool,
     air_quality_grade: str | None = None,
     closure_factors: list[dict] | None = None,
+    closing_soon_factors: list[dict] | None = None,
 ) -> list[dict]:
     """관측가능 trigger 요소만. 발명된 factor 없음(honest).
 
     P4: factors disclose the actual observed cause(s) — a bad dust grade emits
     its own air_quality_dust_grade factor with the observed grade value, never
     collapsed into the weather factor. Deterministic order: weather → air
-    quality → closure.
+    quality → closure → closing-soon.
     """
     factors: list[dict] = []
     if is_bad_weather:
@@ -586,6 +657,8 @@ def _intervention_trigger_factors(
         factors.append({"factor": "air_quality_dust_grade", "value": air_quality_grade})
     if closure_factors:
         factors.extend(closure_factors)
+    if closing_soon_factors:
+        factors.extend(closing_soon_factors)
     return factors
 
 
@@ -617,6 +690,48 @@ def _find_indoor_alternative(
                 weather=weather,
                 full_slots=full_slots,
             )
+    return None
+
+
+def _find_open_hours_alternative(
+    *,
+    place_candidates: list[dict],
+    exclude_place_id: str | None,
+    language: str,
+    weather_hint: str | None,
+    unavailable_reason: str,
+    weather: dict | None = None,
+    full_slots: bool = False,
+    require_indoor: bool = False,
+) -> dict | None:
+    """P4 closing-soon/closure 대안: 이미 가져온 실제 candidate 중 추정 운영시간이
+    슬롯을 커버하면서 closing-soon window 밖인 첫 장소를 slot으로 반환.
+
+    require_indoor=True면 adverse weather/air 조합 원인에서처럼 실내 장소만 쓴다.
+    조건을 만족하는 candidate이 없으면 None(honest). 발명된 대체 금지 —
+    fixture/demo 장소를 일반 경로에 넣지 않는다.
+    """
+    start_t = period_start_time("afternoon")
+    for place in place_candidates:
+        if place.get("place_id") == exclude_place_id:
+            continue
+        if require_indoor and place.get("is_indoor") is not True:
+            continue
+        open_t, close_t = estimated_opening_hours(place.get("category", ""))
+        if is_within_hours(start_t, open_t, close_t) is not True:
+            continue
+        if is_closing_soon(start_t, open_t, close_t) is True:
+            continue
+        return _plan_slot(
+            period="afternoon",
+            title="오후" if language == "ko" else "Afternoon",
+            place=place,
+            weather_hint=weather_hint,
+            unavailable_reason=unavailable_reason,
+            language=language,
+            weather=weather,
+            full_slots=full_slots,
+        )
     return None
 
 
@@ -862,6 +977,10 @@ def _plan_slot(
     open_t, close_t = estimated_opening_hours(place.get("category", "") if place else "")
     start_t = period_start_time(period)
     oh_valid = is_within_hours(start_t, open_t, close_t) if place else None
+    # P4 closing-soon: 슬롯 시작~추정 마감 거리가 bounded window 이내인지(estimated).
+    # is_closing_soon=True는 운영시간 내에서만 나오므로 closure_state="closed"와
+    # 구조적으로 상호 배제다. 파싱 불가/장소 없음 → None(unknown).
+    cs_valid = is_closing_soon(start_t, open_t, close_t) if place else None
 
     slot = {
         "period": period,
@@ -886,6 +1005,7 @@ def _plan_slot(
         # the slot payload stays byte-for-byte the pre-V3 shape; values are projections
         # of already-fetched weather/AQ + opening-hours data (no new external call).
         slot["closure_state"] = _closure_state(oh_valid=oh_valid, place=place)
+        slot["closing_soon"] = cs_valid
         slot["forecast_window"] = _nearest_forecast_window(start_time=start_t, weather=weather)
         slot["air_quality_bad"] = _air_quality_bad(indoor_outdoor=indoor_outdoor, weather=weather)
     if routing_authority_enabled:
@@ -990,10 +1110,49 @@ def _intervention_reason(
     candidate_name: str,
     language: str = "en",
     air_quality_status: str = "unknown",
+    closing_cause: str | None = None,
+    estimated_hours: str | None = None,
 ) -> str:
     ko = language == "ko"
     # P4: cause-correct copy. Air-quality adversity is never described as
     # weather; both-bad states both causes explicitly.
+    # P4 closing-soon/closure: the estimated-hours cause is always named as an
+    # estimate with a check-needed caveat — never observed/confirmed/permanent/
+    # temporary/holiday closure. Combined causes name every actual cause.
+    if closing_cause is not None:
+        hours = estimated_hours or ""
+        ko_clause = (
+            f"이번 일정 시간은 {candidate_name}의 추정 운영시간({hours}) 마감에 가까워요."
+            if closing_cause == "closing_soon"
+            else f"이번 일정 시간은 {candidate_name}의 추정 운영시간({hours}) 밖이에요."
+        )
+        en_clause = (
+            f"This slot is near the estimated closing time for {candidate_name} "
+            f"(estimated hours {hours})"
+            if closing_cause == "closing_soon"
+            else f"This slot is outside the estimated hours ({hours}) for {candidate_name}"
+        )
+        ko_suffix = "실제 영업 여부는 확인이 필요해요."
+        en_suffix = "; the actual opening status needs a check."
+        if air_quality_status == "bad" and weather_status == "bad":
+            return (
+                f"날씨와 미세먼지가 모두 좋지 않아요. {ko_clause} {ko_suffix}"
+                if ko
+                else f"Weather and air quality are both poor. {en_clause}{en_suffix}"
+            )
+        if air_quality_status == "bad":
+            return (
+                f"미세먼지가 나빠요. {ko_clause} {ko_suffix}"
+                if ko
+                else f"Air quality is poor. {en_clause}{en_suffix}"
+            )
+        if weather_status == "bad":
+            return (
+                f"날씨가 좋지 않아요. {ko_clause} {ko_suffix}"
+                if ko
+                else f"Weather is not ideal. {en_clause}{en_suffix}"
+            )
+        return f"{ko_clause} {ko_suffix}" if ko else f"{en_clause}{en_suffix}"
     if air_quality_status == "bad" and weather_status == "bad":
         return (
             f"날씨와 미세먼지가 모두 좋지 않아요. {candidate_name} 근처의 가까운 실내 동선을 우선해요."
@@ -1040,8 +1199,41 @@ def _recommended_action(
     candidate_name: str,
     language: str = "en",
     air_quality_status: str = "unknown",
+    closing_cause: str | None = None,
 ) -> str:
     ko = language == "ko"
+    # P4 closing-soon/closure: the action names the estimated-hours cause (and
+    # each combined weather/air cause) without claiming any closure authority.
+    if closing_cause is not None:
+        if air_quality_status == "bad" and weather_status == "bad":
+            return (
+                f"날씨, 미세먼지와 추정 운영시간을 함께 고려해 {candidate_name} 근처의 실내 옵션을 확인해 보세요."
+                if ko
+                else f"Weigh weather, air quality and the estimated hours together: check indoor options near {candidate_name}."
+            )
+        if air_quality_status == "bad":
+            return (
+                f"미세먼지와 추정 운영시간을 함께 고려해 {candidate_name} 근처의 실내 옵션을 확인해 보세요."
+                if ko
+                else f"Weigh air quality and the estimated hours together: check indoor options near {candidate_name}."
+            )
+        if weather_status == "bad":
+            return (
+                f"날씨와 추정 운영시간을 함께 고려해 {candidate_name} 근처의 실내 옵션을 확인해 보세요."
+                if ko
+                else f"Weigh the weather and the estimated hours together: check indoor options near {candidate_name}."
+            )
+        if closing_cause == "closing_soon":
+            return (
+                f"{candidate_name}의 추정 마감 시간을 확인하고 근처 다른 옵션도 함께 검토해 보세요."
+                if ko
+                else f"Check the estimated closing time for {candidate_name} and review other nearby options too."
+            )
+        return (
+            f"{candidate_name} 대신 추정 운영시간이 이번 일정을 커버하는 근처 옵션을 확인해 보세요."
+            if ko
+            else f"Check nearby options covered by the estimated hours instead of {candidate_name}."
+        )
     if air_quality_status == "bad" or weather_status == "bad":
         # Weather-neutral adverse-outdoor action: indoor/short-walk alternatives
         # help for bad weather and bad air quality alike.
