@@ -1693,6 +1693,55 @@ def test_intervention_route_returns_envelope(client, auth_headers):
     assert body["data"]["place"] is None
 
 
+def test_intervention_route_emits_distinct_bad_air_quality_trigger(
+    client, auth_headers, monkeypatch
+):
+    # P4 end-to-end: an AQ-only adverse weather payload (explicit provenance)
+    # must surface as bad_air_quality through the public envelope — never as a
+    # weather-only trigger/factor.
+    from apps.api.app.services import planner_service
+
+    monkeypatch.setattr(
+        planner_service,
+        "current_weather",
+        lambda **kw: {
+            "source": "kma_ultra_srt_ncst+airkorea_sido_realtime",
+            "outdoor_status": "bad",
+            "weather_outdoor_status": "good",
+            "air_quality_outdoor_status": "bad",
+            "dust": {"grade": "bad"},
+            "forecast": [],
+        },
+    )
+    monkeypatch.setattr(
+        planner_service,
+        "list_places",
+        lambda **kw: {"source": "db", "places": []},
+    )
+
+    response = client.get(
+        "/api/v1/plans/intervention?lat=37.2&lng=127.0&radius_m=1000",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["should_intervene"] is True
+    assert data["trigger_type"] == "bad_air_quality"
+    assert data["trigger_factors"] == [{"factor": "air_quality_dust_grade", "value": "bad"}]
+    assert "Air quality is poor" in data["reason"]
+    assert "Weather is not ideal" not in data["reason"]
+
+
+def test_weather_route_reports_provenance_when_unavailable(client, auth_headers):
+    response = client.get("/api/v1/weather?lat=37.2&lng=127.0", headers=auth_headers)
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["weather_outdoor_status"] == "unknown"
+    assert data["air_quality_outdoor_status"] == "unknown"
+
+
 def test_intervention_uses_public_snapshot_candidate_in_snapshot_fallback(client, monkeypatch):
     monkeypatch.delenv("IOS_API_KEY", raising=False)
     monkeypatch.delenv("API_BEARER_TOKEN", raising=False)

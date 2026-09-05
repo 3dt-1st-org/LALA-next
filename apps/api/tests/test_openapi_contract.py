@@ -306,6 +306,16 @@ def test_openapi_documents_v1_success_data_schemas(client):
         "kma_ultra_srt_ncst+airkorea_sido_realtime",
         "unavailable",
     ]
+    # P4 additive provenance: optional weather/AQ cause fields behind the merged
+    # aggregate. Optional (never required) so older payloads stay valid.
+    for provenance_field in ("weather_outdoor_status", "air_quality_outdoor_status"):
+        provenance = schemas["WeatherData"]["properties"][provenance_field]
+        assert provenance["enum"] == ["good", "bad", "unknown"]
+        assert provenance_field not in schemas["WeatherData"]["required"]
+    assert (
+        "bad_air_quality"
+        in schemas["InterventionData"]["properties"]["trigger_type"]["description"]
+    )
     assert schemas["DocentScriptData"]["properties"]["source"]["enum"] == [
         "rule_based_curation",
         "db_cache",

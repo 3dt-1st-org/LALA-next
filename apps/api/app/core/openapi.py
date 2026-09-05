@@ -869,6 +869,28 @@ def _weather_data_schema() -> dict[str, Any]:
                 "items": {"$ref": "#/components/schemas/ForecastItem"},
             },
             "outdoor_status": {"type": "string", "enum": ["good", "bad", "unknown"]},
+            # P4 additive provenance (optional): distinguishes the observed
+            # weather cause from the observed air-quality cause behind the merged
+            # aggregate outdoor_status. Unknown stays unknown — weather is never
+            # inferred from the merged status/icon/temperature or an
+            # AirKorea-only response, and an unknown dust grade is never
+            # classified good/bad.
+            "weather_outdoor_status": {
+                "type": "string",
+                "enum": ["good", "bad", "unknown"],
+                "description": "Observed weather-only status (KMA nowcast / DB "
+                "weather flags without the dust flag); 'unknown' when no weather "
+                "observation exists (an AirKorea-only response or a payload "
+                "without the explicit provenance key) — never inferred from the "
+                "merged outdoor_status.",
+            },
+            "air_quality_outdoor_status": {
+                "type": "string",
+                "enum": ["good", "bad", "unknown"],
+                "description": "Observed air-quality status derived only from the "
+                "normalized dust grades (bad/very_bad → bad, good/normal → good); "
+                "an unknown dust grade stays 'unknown'.",
+            },
             "force": {"type": "boolean"},
             "location_match": {"type": "boolean", "nullable": True},
             "record_time": {"type": "string", "nullable": True},
@@ -1148,8 +1170,10 @@ def _intervention_data_schema() -> dict[str, Any]:
             },
             "trigger_type": {
                 "anyOf": [{"type": "string"}, {"type": "null"}],
-                "description": "Observable trigger (e.g. bad_weather, closure_detected, "
-                "bad_weather_and_closure) or null.",
+                "description": "Observable trigger (e.g. bad_weather, bad_air_quality, "
+                "closure_detected, bad_weather_and_closure, bad_weather_and_air_quality, "
+                "bad_air_quality_and_closure, bad_weather_and_air_quality_and_closure) "
+                "or null.",
             },
             "trigger_factors": {
                 "type": "array",

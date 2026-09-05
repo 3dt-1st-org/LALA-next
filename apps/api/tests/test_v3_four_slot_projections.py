@@ -323,7 +323,12 @@ def test_intervention_bad_weather_and_closure_combines_trigger(monkeypatch) -> N
     monkeypatch.setattr(
         planner_service,
         "current_weather",
-        lambda **kw: {"source": "db", "outdoor_status": "bad", "forecast": []},
+        lambda **kw: {
+            "source": "db",
+            "outdoor_status": "bad",
+            "weather_outdoor_status": "bad",
+            "forecast": [],
+        },
     )
     monkeypatch.setattr(
         planner_service,

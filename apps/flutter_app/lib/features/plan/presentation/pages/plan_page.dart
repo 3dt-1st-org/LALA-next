@@ -21,7 +21,7 @@ import 'package:lala_next_app/features/docent/experience/docent_experience_contr
 import 'package:lala_next_app/features/docent/experience/docent_experience_copy.dart';
 import 'package:lala_next_app/features/docent/experience/docent_experience_state.dart';
 import 'package:lala_next_app/features/home/home_view_helpers.dart'
-    show interventionToastLabel;
+    show interventionToastLabel, interventionTriggerBadgeLabel;
 import 'package:lala_next_app/features/intervention/presentation/pages/intervention_comparison_page.dart';
 import 'package:lala_next_app/features/intervention/widgets/intervention_toast.dart';
 import 'package:lala_next_app/features/location/widgets/default_region_indicator.dart';
@@ -241,39 +241,12 @@ class _PlanPageState extends State<PlanPage> {
       _intervention!.shouldIntervene &&
       !_interventionDismissed;
 
-  // V3-D: 트리터 종류를 한 줄 배지로 표시(KO/EN 배타). null/알 수 없음은 배지 없음.
+  // V3-D: 트리거 종류를 한 줄 배지로 표시. 라벨 SSOT 는 home_view_helpers 의
+  // interventionTriggerBadgeLabel(5개 로케일 단일 언어). null/알 수 없음은 배지 없음.
+  // P4: 미세먼지(AQ) 트리거는 날씨 배지와 구분되는 자기 라벨을 쓴다 — 나쁜
+  // 대기질이 '날씨 변화' 로만 표시되는 일이 없어야 한다.
   String? _interventionTriggerBadge(LalaIntervention intervention) {
-    switch (intervention.triggerType) {
-      case 'closure_detected':
-        return lalaCopyMulti(
-          _language,
-          ko: '폐업 의심',
-          en: 'Possible closure',
-          ja: '休業の可能性',
-          zhHans: '疑似停业',
-          zhHant: '疑似停業',
-        );
-      case 'bad_weather_and_closure':
-        return lalaCopyMulti(
-          _language,
-          ko: '날씨 + 폐업',
-          en: 'Weather + closure',
-          ja: '気象 + 休業',
-          zhHans: '天气 + 停业',
-          zhHant: '天氣 + 停業',
-        );
-      case 'bad_weather':
-        return lalaCopyMulti(
-          _language,
-          ko: '날씨 변화',
-          en: 'Weather change',
-          ja: '気象の変化',
-          zhHans: '天气变化',
-          zhHant: '天氣變化',
-        );
-      default:
-        return null;
-    }
+    return interventionTriggerBadgeLabel(intervention.triggerType, _language);
   }
 
   // 대체 장소(swap) 버튼 라벨. alternativeSlot 이 있을 때만. 위조 금지 — null 이면 null.

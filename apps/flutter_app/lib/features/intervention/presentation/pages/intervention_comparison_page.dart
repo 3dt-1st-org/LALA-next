@@ -789,6 +789,14 @@ String _triggerLabel(String? trigger, String language) => switch (trigger) {
     zhHans: '天气变化可能影响行程',
     zhHant: '天氣變化可能影響行程',
   ),
+  'bad_air_quality' => _copy(
+    language,
+    ko: '미세먼지가 일정에 영향을 줘요',
+    en: 'Air quality may affect this plan',
+    ja: '大気が予定に影響します',
+    zhHans: '空气质量可能影响行程',
+    zhHant: '空氣品質可能影響行程',
+  ),
   'closure_detected' => _copy(
     language,
     ko: '운영 상태를 다시 확인해야 해요',
@@ -804,6 +812,30 @@ String _triggerLabel(String? trigger, String language) => switch (trigger) {
     ja: '天候と営業状況の両方が変わりました',
     zhHans: '天气与营业状态均有变化',
     zhHant: '天氣與營業狀態均有變化',
+  ),
+  'bad_weather_and_air_quality' => _copy(
+    language,
+    ko: '날씨와 미세먼지가 함께 영향을 줘요',
+    en: 'Weather and air quality both affect this plan',
+    ja: '天候と大気の両方が予定に影響します',
+    zhHans: '天气与空气质量均影响行程',
+    zhHant: '天氣與空氣品質均影響行程',
+  ),
+  'bad_air_quality_and_closure' => _copy(
+    language,
+    ko: '미세먼지와 운영 상태를 함께 확인해야 해요',
+    en: 'Air quality and opening status both need attention',
+    ja: '大気と営業状況の両方を確認してください',
+    zhHans: '需同时关注空气质量与营业状态',
+    zhHant: '需同時關注空氣品質與營業狀態',
+  ),
+  'bad_weather_and_air_quality_and_closure' => _copy(
+    language,
+    ko: '날씨·미세먼지·운영 상태를 모두 확인해야 해요',
+    en: 'Weather, air quality and opening status all need attention',
+    ja: '天候・大気・営業状況をすべて確認してください',
+    zhHans: '需同时关注天气、空气质量与营业状态',
+    zhHant: '需同時關注天氣、空氣品質與營業狀態',
   ),
   _ => _copy(
     language,
@@ -852,6 +884,18 @@ String? _factorLabel(Map<String, dynamic> factor, String language) {
       zhHant: '目前不適合戶外活動。',
     );
   }
+  // P4: the observed bad dust grade discloses the air-quality cause on its own —
+  // never folded into the weather wording above.
+  if (kind == 'air_quality_dust_grade' && (value == 'bad' || value == 'very_bad')) {
+    return _copy(
+      language,
+      ko: '관측된 미세먼지 등급이 나빠요.',
+      en: 'The observed air-quality grade is poor.',
+      ja: '観測された大気の等級が悪いです。',
+      zhHans: '观测到的空气质量等级较差。',
+      zhHant: '觀測到的空氣品質等級較差。',
+    );
+  }
   // Why: the API emits the closure factor as slot_closure_state (planner
   // service), so mapping only the legacy closure_state/opening_hours kinds
   // silently dropped the closure reason from the evidence panel.
@@ -892,6 +936,18 @@ String? _factorChipLabel(Map<String, dynamic> factor, String language) {
       ja: '天候悪化',
       zhHans: '天气恶劣',
       zhHant: '天氣惡劣',
+    );
+  }
+  // P4: AQ factor gets its own chip label — poor air quality never renders as a
+  // weather chip.
+  if (kind == 'air_quality_dust_grade' && (value == 'bad' || value == 'very_bad')) {
+    return _copy(
+      language,
+      ko: '미세먼지 나쁨',
+      en: 'Poor air quality',
+      ja: '大気悪化',
+      zhHans: '空气质量差',
+      zhHant: '空氣品質差',
     );
   }
   if (kind == 'slot_closure_state' ||

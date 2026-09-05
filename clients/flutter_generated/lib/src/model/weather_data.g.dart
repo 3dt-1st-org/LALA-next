@@ -6,6 +6,38 @@ part of 'weather_data.dart';
 // BuiltValueGenerator
 // **************************************************************************
 
+const WeatherDataAirQualityOutdoorStatusEnum
+    _$weatherDataAirQualityOutdoorStatusEnum_good =
+    const WeatherDataAirQualityOutdoorStatusEnum._('good');
+const WeatherDataAirQualityOutdoorStatusEnum
+    _$weatherDataAirQualityOutdoorStatusEnum_bad =
+    const WeatherDataAirQualityOutdoorStatusEnum._('bad');
+const WeatherDataAirQualityOutdoorStatusEnum
+    _$weatherDataAirQualityOutdoorStatusEnum_unknown =
+    const WeatherDataAirQualityOutdoorStatusEnum._('unknown');
+
+WeatherDataAirQualityOutdoorStatusEnum
+    _$weatherDataAirQualityOutdoorStatusEnumValueOf(String name) {
+  switch (name) {
+    case 'good':
+      return _$weatherDataAirQualityOutdoorStatusEnum_good;
+    case 'bad':
+      return _$weatherDataAirQualityOutdoorStatusEnum_bad;
+    case 'unknown':
+      return _$weatherDataAirQualityOutdoorStatusEnum_unknown;
+    default:
+      throw ArgumentError(name);
+  }
+}
+
+final BuiltSet<WeatherDataAirQualityOutdoorStatusEnum>
+    _$weatherDataAirQualityOutdoorStatusEnumValues = BuiltSet<
+        WeatherDataAirQualityOutdoorStatusEnum>(const <WeatherDataAirQualityOutdoorStatusEnum>[
+  _$weatherDataAirQualityOutdoorStatusEnum_good,
+  _$weatherDataAirQualityOutdoorStatusEnum_bad,
+  _$weatherDataAirQualityOutdoorStatusEnum_unknown,
+]);
+
 const WeatherDataOutdoorStatusEnum _$weatherDataOutdoorStatusEnum_good =
     const WeatherDataOutdoorStatusEnum._('good');
 const WeatherDataOutdoorStatusEnum _$weatherDataOutdoorStatusEnum_bad =
@@ -79,11 +111,83 @@ final BuiltSet<WeatherDataSource_Enum> _$weatherDataSourceEnumValues =
   _$weatherDataSourceEnum_unavailable,
 ]);
 
+const WeatherDataWeatherOutdoorStatusEnum
+    _$weatherDataWeatherOutdoorStatusEnum_good =
+    const WeatherDataWeatherOutdoorStatusEnum._('good');
+const WeatherDataWeatherOutdoorStatusEnum
+    _$weatherDataWeatherOutdoorStatusEnum_bad =
+    const WeatherDataWeatherOutdoorStatusEnum._('bad');
+const WeatherDataWeatherOutdoorStatusEnum
+    _$weatherDataWeatherOutdoorStatusEnum_unknown =
+    const WeatherDataWeatherOutdoorStatusEnum._('unknown');
+
+WeatherDataWeatherOutdoorStatusEnum
+    _$weatherDataWeatherOutdoorStatusEnumValueOf(String name) {
+  switch (name) {
+    case 'good':
+      return _$weatherDataWeatherOutdoorStatusEnum_good;
+    case 'bad':
+      return _$weatherDataWeatherOutdoorStatusEnum_bad;
+    case 'unknown':
+      return _$weatherDataWeatherOutdoorStatusEnum_unknown;
+    default:
+      throw ArgumentError(name);
+  }
+}
+
+final BuiltSet<WeatherDataWeatherOutdoorStatusEnum>
+    _$weatherDataWeatherOutdoorStatusEnumValues = BuiltSet<
+        WeatherDataWeatherOutdoorStatusEnum>(const <WeatherDataWeatherOutdoorStatusEnum>[
+  _$weatherDataWeatherOutdoorStatusEnum_good,
+  _$weatherDataWeatherOutdoorStatusEnum_bad,
+  _$weatherDataWeatherOutdoorStatusEnum_unknown,
+]);
+
+Serializer<WeatherDataAirQualityOutdoorStatusEnum>
+    _$weatherDataAirQualityOutdoorStatusEnumSerializer =
+    _$WeatherDataAirQualityOutdoorStatusEnumSerializer();
 Serializer<WeatherDataOutdoorStatusEnum>
     _$weatherDataOutdoorStatusEnumSerializer =
     _$WeatherDataOutdoorStatusEnumSerializer();
 Serializer<WeatherDataSource_Enum> _$weatherDataSourceEnumSerializer =
     _$WeatherDataSource_EnumSerializer();
+Serializer<WeatherDataWeatherOutdoorStatusEnum>
+    _$weatherDataWeatherOutdoorStatusEnumSerializer =
+    _$WeatherDataWeatherOutdoorStatusEnumSerializer();
+
+class _$WeatherDataAirQualityOutdoorStatusEnumSerializer
+    implements PrimitiveSerializer<WeatherDataAirQualityOutdoorStatusEnum> {
+  static const Map<String, Object> _toWire = const <String, Object>{
+    'good': 'good',
+    'bad': 'bad',
+    'unknown': 'unknown',
+  };
+  static const Map<Object, String> _fromWire = const <Object, String>{
+    'good': 'good',
+    'bad': 'bad',
+    'unknown': 'unknown',
+  };
+
+  @override
+  final Iterable<Type> types = const <Type>[
+    WeatherDataAirQualityOutdoorStatusEnum
+  ];
+  @override
+  final String wireName = 'WeatherDataAirQualityOutdoorStatusEnum';
+
+  @override
+  Object serialize(Serializers serializers,
+          WeatherDataAirQualityOutdoorStatusEnum object,
+          {FullType specifiedType = FullType.unspecified}) =>
+      _toWire[object.name] ?? object.name;
+
+  @override
+  WeatherDataAirQualityOutdoorStatusEnum deserialize(
+          Serializers serializers, Object serialized,
+          {FullType specifiedType = FullType.unspecified}) =>
+      WeatherDataAirQualityOutdoorStatusEnum.valueOf(
+          _fromWire[serialized] ?? (serialized is String ? serialized : ''));
+}
 
 class _$WeatherDataOutdoorStatusEnumSerializer
     implements PrimitiveSerializer<WeatherDataOutdoorStatusEnum> {
@@ -154,7 +258,43 @@ class _$WeatherDataSource_EnumSerializer
           _fromWire[serialized] ?? (serialized is String ? serialized : ''));
 }
 
+class _$WeatherDataWeatherOutdoorStatusEnumSerializer
+    implements PrimitiveSerializer<WeatherDataWeatherOutdoorStatusEnum> {
+  static const Map<String, Object> _toWire = const <String, Object>{
+    'good': 'good',
+    'bad': 'bad',
+    'unknown': 'unknown',
+  };
+  static const Map<Object, String> _fromWire = const <Object, String>{
+    'good': 'good',
+    'bad': 'bad',
+    'unknown': 'unknown',
+  };
+
+  @override
+  final Iterable<Type> types = const <Type>[
+    WeatherDataWeatherOutdoorStatusEnum
+  ];
+  @override
+  final String wireName = 'WeatherDataWeatherOutdoorStatusEnum';
+
+  @override
+  Object serialize(
+          Serializers serializers, WeatherDataWeatherOutdoorStatusEnum object,
+          {FullType specifiedType = FullType.unspecified}) =>
+      _toWire[object.name] ?? object.name;
+
+  @override
+  WeatherDataWeatherOutdoorStatusEnum deserialize(
+          Serializers serializers, Object serialized,
+          {FullType specifiedType = FullType.unspecified}) =>
+      WeatherDataWeatherOutdoorStatusEnum.valueOf(
+          _fromWire[serialized] ?? (serialized is String ? serialized : ''));
+}
+
 class _$WeatherData extends WeatherData {
+  @override
+  final WeatherDataAirQualityOutdoorStatusEnum? airQualityOutdoorStatus;
   @override
   final Dust dust;
   @override
@@ -179,12 +319,15 @@ class _$WeatherData extends WeatherData {
   final WeatherDataSource_Enum source_;
   @override
   final String temp;
+  @override
+  final WeatherDataWeatherOutdoorStatusEnum? weatherOutdoorStatus;
 
   factory _$WeatherData([void Function(WeatherDataBuilder)? updates]) =>
       (WeatherDataBuilder()..update(updates))._build();
 
   _$WeatherData._(
-      {required this.dust,
+      {this.airQualityOutdoorStatus,
+      required this.dust,
       required this.force,
       required this.forecast,
       required this.icon,
@@ -195,7 +338,8 @@ class _$WeatherData extends WeatherData {
       required this.outdoorStatus,
       this.recordTime,
       required this.source_,
-      required this.temp})
+      required this.temp,
+      this.weatherOutdoorStatus})
       : super._();
   @override
   WeatherData rebuild(void Function(WeatherDataBuilder) updates) =>
@@ -208,6 +352,7 @@ class _$WeatherData extends WeatherData {
   bool operator ==(Object other) {
     if (identical(other, this)) return true;
     return other is WeatherData &&
+        airQualityOutdoorStatus == other.airQualityOutdoorStatus &&
         dust == other.dust &&
         force == other.force &&
         forecast == other.forecast &&
@@ -219,12 +364,14 @@ class _$WeatherData extends WeatherData {
         outdoorStatus == other.outdoorStatus &&
         recordTime == other.recordTime &&
         source_ == other.source_ &&
-        temp == other.temp;
+        temp == other.temp &&
+        weatherOutdoorStatus == other.weatherOutdoorStatus;
   }
 
   @override
   int get hashCode {
     var _$hash = 0;
+    _$hash = $jc(_$hash, airQualityOutdoorStatus.hashCode);
     _$hash = $jc(_$hash, dust.hashCode);
     _$hash = $jc(_$hash, force.hashCode);
     _$hash = $jc(_$hash, forecast.hashCode);
@@ -237,6 +384,7 @@ class _$WeatherData extends WeatherData {
     _$hash = $jc(_$hash, recordTime.hashCode);
     _$hash = $jc(_$hash, source_.hashCode);
     _$hash = $jc(_$hash, temp.hashCode);
+    _$hash = $jc(_$hash, weatherOutdoorStatus.hashCode);
     _$hash = $jf(_$hash);
     return _$hash;
   }
@@ -244,6 +392,7 @@ class _$WeatherData extends WeatherData {
   @override
   String toString() {
     return (newBuiltValueToStringHelper(r'WeatherData')
+          ..add('airQualityOutdoorStatus', airQualityOutdoorStatus)
           ..add('dust', dust)
           ..add('force', force)
           ..add('forecast', forecast)
@@ -255,13 +404,21 @@ class _$WeatherData extends WeatherData {
           ..add('outdoorStatus', outdoorStatus)
           ..add('recordTime', recordTime)
           ..add('source_', source_)
-          ..add('temp', temp))
+          ..add('temp', temp)
+          ..add('weatherOutdoorStatus', weatherOutdoorStatus))
         .toString();
   }
 }
 
 class WeatherDataBuilder implements Builder<WeatherData, WeatherDataBuilder> {
   _$WeatherData? _$v;
+
+  WeatherDataAirQualityOutdoorStatusEnum? _airQualityOutdoorStatus;
+  WeatherDataAirQualityOutdoorStatusEnum? get airQualityOutdoorStatus =>
+      _$this._airQualityOutdoorStatus;
+  set airQualityOutdoorStatus(
+          WeatherDataAirQualityOutdoorStatusEnum? airQualityOutdoorStatus) =>
+      _$this._airQualityOutdoorStatus = airQualityOutdoorStatus;
 
   DustBuilder? _dust;
   DustBuilder get dust => _$this._dust ??= DustBuilder();
@@ -315,6 +472,13 @@ class WeatherDataBuilder implements Builder<WeatherData, WeatherDataBuilder> {
   String? get temp => _$this._temp;
   set temp(String? temp) => _$this._temp = temp;
 
+  WeatherDataWeatherOutdoorStatusEnum? _weatherOutdoorStatus;
+  WeatherDataWeatherOutdoorStatusEnum? get weatherOutdoorStatus =>
+      _$this._weatherOutdoorStatus;
+  set weatherOutdoorStatus(
+          WeatherDataWeatherOutdoorStatusEnum? weatherOutdoorStatus) =>
+      _$this._weatherOutdoorStatus = weatherOutdoorStatus;
+
   WeatherDataBuilder() {
     WeatherData._defaults(this);
   }
@@ -322,6 +486,7 @@ class WeatherDataBuilder implements Builder<WeatherData, WeatherDataBuilder> {
   WeatherDataBuilder get _$this {
     final $v = _$v;
     if ($v != null) {
+      _airQualityOutdoorStatus = $v.airQualityOutdoorStatus;
       _dust = $v.dust.toBuilder();
       _force = $v.force;
       _forecast = $v.forecast.toBuilder();
@@ -334,6 +499,7 @@ class WeatherDataBuilder implements Builder<WeatherData, WeatherDataBuilder> {
       _recordTime = $v.recordTime;
       _source_ = $v.source_;
       _temp = $v.temp;
+      _weatherOutdoorStatus = $v.weatherOutdoorStatus;
       _$v = null;
     }
     return this;
@@ -357,6 +523,7 @@ class WeatherDataBuilder implements Builder<WeatherData, WeatherDataBuilder> {
     try {
       _$result = _$v ??
           _$WeatherData._(
+            airQualityOutdoorStatus: airQualityOutdoorStatus,
             dust: dust.build(),
             force: BuiltValueNullFieldError.checkNotNull(
                 force, r'WeatherData', 'force'),
@@ -376,6 +543,7 @@ class WeatherDataBuilder implements Builder<WeatherData, WeatherDataBuilder> {
                 source_, r'WeatherData', 'source_'),
             temp: BuiltValueNullFieldError.checkNotNull(
                 temp, r'WeatherData', 'temp'),
+            weatherOutdoorStatus: weatherOutdoorStatus,
           );
     } catch (_) {
       late String _$failedField;

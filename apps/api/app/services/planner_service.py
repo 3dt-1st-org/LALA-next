@@ -412,7 +412,18 @@ def intervention(*, lat: float, lng: float, radius_m: int, language: str = "en")
     source = _combined_source(places.get("source"), weather.get("source"))
     candidate_name = (candidate or {}).get("name") or _fallback_candidate_name(normalized)
     outdoor_status = weather["outdoor_status"]
-    is_bad_weather = outdoor_status == "bad"
+    # P4: distinct observed causes. Weather adversity comes only from the
+    # weather-only provenance (KMA/DB weather flags); AQ adversity only from the
+    # dust-derived provenance. The merged aggregate outdoor_status is preserved
+    # for display/transport but is NEVER promoted to a weather cause or weather
+    # reason — a legacy payload without provenance yields no observed cause and
+    # unknown stays unknown.
+    weather_cause_status = _weather_cause_status(weather)
+    air_quality_status = _air_quality_cause_status(weather)
+    is_bad_weather = weather_cause_status == "bad"
+    is_bad_air_quality = air_quality_status == "bad"
+    is_adverse_outdoor = is_bad_weather or is_bad_air_quality
+    air_quality_grade = str(((weather.get("dust") or {}).get("grade")) or "").strip() or None
     full_slots = _full_slots_enabled()
     unavailable_reason = (
         "추천 장소가 부족해요" if normalized == "ko" else "Not enough nearby options"
@@ -441,21 +452,24 @@ def intervention(*, lat: float, lng: float, radius_m: int, language: str = "en")
     return {
         "center": {"lat": lat, "lng": lng},
         "radius_m": radius_m,
-        "should_intervene": is_bad_weather or is_closure,
+        "should_intervene": is_adverse_outdoor or is_closure,
         "reason": _intervention_reason(
-            weather_status=outdoor_status,
+            weather_status=weather_cause_status,
             candidate_name=candidate_name,
             language=normalized,
+            air_quality_status=air_quality_status,
         ),
         "recommended_action": _recommended_action(
-            weather_status=outdoor_status,
+            weather_status=weather_cause_status,
             candidate_name=candidate_name,
             language=normalized,
+            air_quality_status=air_quality_status,
         ),
         "place": candidate,
         "source": source,
         "original_slot": original_slot,
         # indoor/outdoor provenance: bad weather 시 실내 대체 장소 검색(AI enrichment 기반).
+        # P4: adverse air quality 에도 동일하게 실내 대안을 제안한다.
         "alternative_slot": _find_indoor_alternative(
             place_candidates=places.get("places") or [],
             exclude_place_id=(candidate or {}).get("place_id"),
@@ -465,14 +479,18 @@ def intervention(*, lat: float, lng: float, radius_m: int, language: str = "en")
             weather=weather,
             full_slots=full_slots,
         )
-        if is_bad_weather
+        if is_adverse_outdoor
         else None,
         # observable trigger 만. good/unknown + closure 없음 → null. 발명 금지.
         "trigger_type": _intervention_trigger_type(
-            is_bad_weather=is_bad_weather, is_closure=is_closure
+            is_bad_weather=is_bad_weather,
+            is_closure=is_closure,
+            is_bad_air_quality=is_bad_air_quality,
         ),
         "trigger_factors": _intervention_trigger_factors(
-            outdoor_status=outdoor_status, closure_factors=closure_factors
+            is_bad_weather=is_bad_weather,
+            air_quality_grade=air_quality_grade if is_bad_air_quality else None,
+            closure_factors=closure_factors,
         ),
         # travel-time authority 부재 → 거리/이동시간 비교 불가(honest null).
         "distance_comparison": None,
@@ -481,6 +499,30 @@ def intervention(*, lat: float, lng: float, radius_m: int, language: str = "en")
         "apply_state": "not_applied",
         "history": [],
     }
+
+
+def _weather_cause_status(weather: dict) -> str:
+    """P4: weather cause from explicit weather-only provenance only.
+
+    A payload without the provenance key carries no observable weather cause —
+    the merged aggregate outdoor_status (which may already include dust) is
+    never promoted to a weather cause or weather reason. Missing/empty/
+    unrecognized values all stay "unknown".
+    """
+    text = str(weather.get("weather_outdoor_status") or "").strip()
+    if text in {"good", "bad"}:
+        return text
+    return "unknown"
+
+
+def _air_quality_cause_status(weather: dict) -> str:
+    """P4: AQ cause only from the dust-derived provenance (weather_service
+    derives it from the current normalized dust payload). A payload without the
+    provenance key carries no observed AQ cause — unknown stays unknown."""
+    text = str(weather.get("air_quality_outdoor_status") or "").strip()
+    if text in {"good", "bad"}:
+        return text
+    return "unknown"
 
 
 def _fallback_candidate_name(language: str) -> str:
@@ -495,25 +537,53 @@ def _full_slots_enabled() -> bool:
     return bool(flags.get("PLAN_FULL_SLOTS", False))
 
 
-def _intervention_trigger_type(*, is_bad_weather: bool, is_closure: bool) -> str | None:
+def _intervention_trigger_type(
+    *,
+    is_bad_weather: bool,
+    is_closure: bool,
+    is_bad_air_quality: bool = False,
+) -> str | None:
     # D5: additive enum widening on a nullable string. Flag-off ⇒ is_closure False ⇒
     # the pre-V3 "bad_weather"/None result is preserved exactly.
+    # P4: bad_air_quality / combinations are additive widenings with a fixed
+    # deterministic order (weather → air quality → closure); the pre-P4
+    # bad_weather / closure_detected / bad_weather_and_closure payloads are
+    # unchanged for weather/closure-only causes.
+    if is_bad_weather and is_bad_air_quality and is_closure:
+        return "bad_weather_and_air_quality_and_closure"
+    if is_bad_weather and is_bad_air_quality:
+        return "bad_weather_and_air_quality"
+    if is_bad_air_quality and is_closure:
+        return "bad_air_quality_and_closure"
     if is_bad_weather and is_closure:
         return "bad_weather_and_closure"
     if is_bad_weather:
         return "bad_weather"
+    if is_bad_air_quality:
+        return "bad_air_quality"
     if is_closure:
         return "closure_detected"
     return None
 
 
 def _intervention_trigger_factors(
-    *, outdoor_status: str, closure_factors: list[dict] | None = None
+    *,
+    is_bad_weather: bool,
+    air_quality_grade: str | None = None,
+    closure_factors: list[dict] | None = None,
 ) -> list[dict]:
-    """관측가능 trigger 요소만. 발명된 factor 없음(honest)."""
+    """관측가능 trigger 요소만. 발명된 factor 없음(honest).
+
+    P4: factors disclose the actual observed cause(s) — a bad dust grade emits
+    its own air_quality_dust_grade factor with the observed grade value, never
+    collapsed into the weather factor. Deterministic order: weather → air
+    quality → closure.
+    """
     factors: list[dict] = []
-    if outdoor_status == "bad":
+    if is_bad_weather:
         factors.append({"factor": "weather_outdoor_status", "value": "bad"})
+    if air_quality_grade in _BAD_DUST_GRADES:
+        factors.append({"factor": "air_quality_dust_grade", "value": air_quality_grade})
     if closure_factors:
         factors.extend(closure_factors)
     return factors
@@ -914,8 +984,34 @@ def _air_quality_bad(*, indoor_outdoor: str | None, weather: dict | None) -> boo
     return None
 
 
-def _intervention_reason(*, weather_status: str, candidate_name: str, language: str = "en") -> str:
+def _intervention_reason(
+    *,
+    weather_status: str,
+    candidate_name: str,
+    language: str = "en",
+    air_quality_status: str = "unknown",
+) -> str:
     ko = language == "ko"
+    # P4: cause-correct copy. Air-quality adversity is never described as
+    # weather; both-bad states both causes explicitly.
+    if air_quality_status == "bad" and weather_status == "bad":
+        return (
+            f"날씨와 미세먼지가 모두 좋지 않아요. {candidate_name} 근처의 가까운 실내 동선을 우선해요."
+            if ko
+            else (
+                "Weather and air quality are both poor; prioritize short-walk or "
+                f"indoor-friendly options near {candidate_name}."
+            )
+        )
+    if air_quality_status == "bad":
+        return (
+            f"미세먼지가 나빠요. {candidate_name} 근처의 가까운 실내 동선을 우선해요."
+            if ko
+            else (
+                "Air quality is poor; prioritize short-walk or indoor-friendly "
+                f"options near {candidate_name}."
+            )
+        )
     if weather_status == "good":
         return (
             f"날씨가 좋아 {candidate_name} 방향으로 일정을 유지해요."
@@ -938,8 +1034,22 @@ def _intervention_reason(*, weather_status: str, candidate_name: str, language: 
     )
 
 
-def _recommended_action(*, weather_status: str, candidate_name: str, language: str = "en") -> str:
+def _recommended_action(
+    *,
+    weather_status: str,
+    candidate_name: str,
+    language: str = "en",
+    air_quality_status: str = "unknown",
+) -> str:
     ko = language == "ko"
+    if air_quality_status == "bad" or weather_status == "bad":
+        # Weather-neutral adverse-outdoor action: indoor/short-walk alternatives
+        # help for bad weather and bad air quality alike.
+        return (
+            f"{candidate_name} 주변의 실내 또는 가까운 동선을 보여줘요."
+            if ko
+            else f"Show indoor or short-walk alternatives around {candidate_name}."
+        )
     if weather_status == "good":
         return (
             f"{candidate_name}을(를) 우선 추천해요."
