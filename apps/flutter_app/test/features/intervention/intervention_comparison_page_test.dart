@@ -110,10 +110,13 @@ void main() {
 
       // Hierarchy chips: one per observable factor, scannable before the prose.
       expect(find.text('날씨 악화'), findsOneWidget);
-      expect(find.text('운영 상태 변화'), findsOneWidget);
+      expect(find.text('예상 운영시간'), findsOneWidget);
       // The closure factor previously never rendered because only the legacy
       // closure_state/opening_hours kinds were mapped.
-      expect(find.text('추정 운영시간 기준으로 영업 종료 가능성이 관측됐어요.'), findsOneWidget);
+      expect(
+        find.text('추정 운영시간 기준으로 이번 일정은 영업 시간 밖이에요. 실제 영업 여부는 확인이 필요해요.'),
+        findsOneWidget,
+      );
       expect(find.text('현재 야외 활동 조건이 좋지 않아요.'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
@@ -154,36 +157,38 @@ void main() {
     },
   );
 
-  testWidgets(
-    'P4/S-21 weather+AQ factors render both cause chips together',
-    (tester) async {
-      await tester.binding.setSurfaceSize(const Size(393, 852));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-      final intervention = _intervention(
-        triggerType: 'bad_weather_and_air_quality',
-        triggerFactors: const <Map<String, dynamic>>[
-          <String, dynamic>{'factor': 'weather_outdoor_status', 'value': 'bad'},
-          <String, dynamic>{'factor': 'air_quality_dust_grade', 'value': 'very_bad'},
-        ],
-      );
-      await tester.pumpWidget(
-        MaterialApp(
-          home: InterventionComparisonPage(
-            language: 'ko',
-            arguments: InterventionComparisonArguments(
-              intervention: intervention,
-            ),
+  testWidgets('P4/S-21 weather+AQ factors render both cause chips together', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(393, 852));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final intervention = _intervention(
+      triggerType: 'bad_weather_and_air_quality',
+      triggerFactors: const <Map<String, dynamic>>[
+        <String, dynamic>{'factor': 'weather_outdoor_status', 'value': 'bad'},
+        <String, dynamic>{
+          'factor': 'air_quality_dust_grade',
+          'value': 'very_bad',
+        },
+      ],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: InterventionComparisonPage(
+          language: 'ko',
+          arguments: InterventionComparisonArguments(
+            intervention: intervention,
           ),
         ),
-      );
-      await tester.pumpAndSettle();
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      expect(find.text('날씨와 미세먼지가 함께 영향을 줘요'), findsOneWidget);
-      expect(find.text('날씨 악화'), findsOneWidget);
-      expect(find.text('미세먼지 나쁨'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    },
-  );
+    expect(find.text('날씨와 미세먼지가 함께 영향을 줘요'), findsOneWidget);
+    expect(find.text('날씨 악화'), findsOneWidget);
+    expect(find.text('미세먼지 나쁨'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'P4/S-21 AQ trigger localizes in en/ja/zh-Hans/zh-Hant (single-language)',
@@ -202,7 +207,10 @@ void main() {
         final intervention = _intervention(
           triggerType: 'bad_air_quality',
           triggerFactors: const <Map<String, dynamic>>[
-            <String, dynamic>{'factor': 'air_quality_dust_grade', 'value': 'bad'},
+            <String, dynamic>{
+              'factor': 'air_quality_dust_grade',
+              'value': 'bad',
+            },
           ],
         );
         await tester.pumpWidget(
@@ -236,7 +244,10 @@ void main() {
         triggerType: 'bad_weather_and_air_quality_and_closure',
         triggerFactors: const <Map<String, dynamic>>[
           <String, dynamic>{'factor': 'weather_outdoor_status', 'value': 'bad'},
-          <String, dynamic>{'factor': 'air_quality_dust_grade', 'value': 'very_bad'},
+          <String, dynamic>{
+            'factor': 'air_quality_dust_grade',
+            'value': 'very_bad',
+          },
           <String, dynamic>{
             'factor': 'slot_closure_state',
             'value': 'closed',
@@ -247,7 +258,9 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context).copyWith(textScaler: const TextScaler.linear(2)),
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(2)),
             child: child!,
           ),
           home: InterventionComparisonPage(
@@ -260,11 +273,11 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('날씨·미세먼지·운영 상태를 모두 확인해야 해요'), findsOneWidget);
+      expect(find.text('날씨·미세먼지가 나쁘고 예상 운영시간을 벗어났어요'), findsOneWidget);
       // Triple-cause chips all wrap within the narrow, doubled-text viewport.
       expect(find.text('날씨 악화'), findsOneWidget);
       expect(find.text('미세먼지 나쁨'), findsOneWidget);
-      expect(find.text('운영 상태 변화'), findsOneWidget);
+      expect(find.text('예상 운영시간'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -302,7 +315,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // The original card visibly carries the reported problem states…
-      expect(find.text('영업종료'), findsOneWidget);
+      expect(find.text('예상 마감'), findsOneWidget);
       expect(find.text('외부 대기질 나쁨'), findsOneWidget);
       expect(find.text('야외'), findsOneWidget);
       // …and the alternative shows the improving states.
@@ -460,6 +473,199 @@ void main() {
     await tester.pumpAndSettle();
     expect(decision, InterventionComparisonDecision.keepCurrent);
   });
+
+  testWidgets(
+    'P4/S-21 closing-soon trigger shows the estimated-hours title/chip/evidence',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(393, 852));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final intervention = _intervention(
+        triggerType: 'closing_soon',
+        triggerFactors: const <Map<String, dynamic>>[
+          <String, dynamic>{
+            'factor': 'slot_closing_soon',
+            'value': 'within_estimated_window',
+            'period': 'afternoon',
+          },
+        ],
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: InterventionComparisonPage(
+            language: 'ko',
+            arguments: InterventionComparisonArguments(
+              intervention: intervention,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('예상 마감 시간이 가까워요'), findsOneWidget);
+      expect(find.text('예상 운영시간'), findsOneWidget);
+      expect(
+        find.text('추정 운영시간 기준으로 마감이 가까워요. 실제 영업 여부는 확인이 필요해요.'),
+        findsOneWidget,
+      );
+      // Never mislabeled as weather or air quality.
+      expect(find.text('날씨 변화가 일정에 영향을 줘요'), findsNothing);
+      expect(find.text('날씨 악화'), findsNothing);
+      expect(find.text('미세먼지 나쁨'), findsNothing);
+      expect(find.text('관측된 미세먼지 등급이 나빠요.'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'P4/S-21 slot cards carry the closing-soon badge next to the open badge',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(393, 852));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final intervention = _intervention(
+        originalSlot: const LalaPlanSlot(
+          period: 'afternoon',
+          title: '야외 산책',
+          indoorOutdoor: 'outdoor',
+          closureState: 'open',
+          closingSoon: true,
+        ),
+        alternativeSlot: const LalaPlanSlot(
+          period: 'afternoon',
+          title: '실내 전시',
+          indoorOutdoor: 'indoor',
+          closureState: 'open',
+          closingSoon: false,
+        ),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: InterventionComparisonPage(
+            language: 'ko',
+            arguments: InterventionComparisonArguments(
+              intervention: intervention,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Original: open + closing-soon side by side (mutually exclusive with closed).
+      expect(find.text('마감 임박(예상)'), findsOneWidget);
+      expect(find.text('영업중'), findsNWidgets(2));
+      expect(find.text('예상 마감'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'P4/S-21 closing-soon localizes in en/ja/zh-Hans/zh-Hant (single-language)',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(393, 852));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      const expectedByLanguage = <String, String>{
+        'en': 'The estimated closing time is near',
+        'ja': '推定閉店時間が近づいています',
+        'zh-Hans': '预计打烊时间临近',
+        'zh-Hant': '預計打烊時間臨近',
+      };
+      for (final entry in expectedByLanguage.entries) {
+        final language = entry.key;
+        final expectedTitle = entry.value;
+        final intervention = _intervention(
+          triggerType: 'closing_soon',
+          triggerFactors: const <Map<String, dynamic>>[
+            <String, dynamic>{
+              'factor': 'slot_closing_soon',
+              'value': 'within_estimated_window',
+              'period': 'afternoon',
+            },
+          ],
+          originalSlot: const LalaPlanSlot(
+            period: 'afternoon',
+            title: '야외 산책',
+            closureState: 'open',
+            closingSoon: true,
+          ),
+        );
+        await tester.pumpWidget(
+          MaterialApp(
+            home: InterventionComparisonPage(
+              language: language,
+              arguments: InterventionComparisonArguments(
+                intervention: intervention,
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text(expectedTitle), findsOneWidget, reason: language);
+        // Single-language: no Korean leaks onto visitor locales.
+        expect(find.text('예상 마감 시간이 가까워요'), findsNothing, reason: language);
+        expect(find.text('마감 임박(예상)'), findsNothing, reason: language);
+        expect(tester.takeException(), isNull);
+      }
+    },
+  );
+
+  testWidgets(
+    'P4/S-21 closing-soon comparison page: 320dp + TextScaler.linear(2), no overflow',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final intervention = _intervention(
+        triggerType: 'closing_soon',
+        triggerFactors: const <Map<String, dynamic>>[
+          <String, dynamic>{
+            'factor': 'slot_closing_soon',
+            'value': 'within_estimated_window',
+            'period': 'afternoon',
+          },
+        ],
+        originalSlot: const LalaPlanSlot(
+          period: 'afternoon',
+          title: '야외 산책',
+          indoorOutdoor: 'outdoor',
+          closureState: 'open',
+          closingSoon: true,
+          airQualityBad: true,
+        ),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(2)),
+            child: child!,
+          ),
+          home: InterventionComparisonPage(
+            language: 'ko',
+            arguments: InterventionComparisonArguments(
+              intervention: intervention,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('예상 마감 시간이 가까워요'), findsOneWidget);
+      // Estimated-hours chip + closing-soon slot badge wrap in the doubled-text
+      // narrow viewport without overflow.
+      expect(find.text('예상 운영시간'), findsOneWidget);
+      // The slot cards live below the fold at this scale — scroll them in and
+      // assert the closing-soon badge renders without any layout exception.
+      await tester.scrollUntilVisible(
+        find.text('마감 임박(예상)'),
+        240.0,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('마감 임박(예상)'), findsOneWidget);
+      expect(find.text('외부 대기질 나쁨'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
 
 LalaIntervention _intervention({

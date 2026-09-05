@@ -326,16 +326,27 @@ String interventionToastLabel(LalaIntervention intervention, String language) {
 /// triggerType 에 따른 한 줄 배지 라벨(5개 로케일 단일 언어). null/알 수 없음은
 /// 배지 없음(null). P4: 미세먼지(AQ) 트리거는 날씨 배지 라벨을 재사용하지 않는다 —
 /// 나쁜 대기질이 '날씨 변화'(또는 그 번역)로만 표시되는 일이 없어야 한다.
+/// P4 closing-soon: closure/closing-soon 계열은 카테고리 기반 '추정 운영시간'
+/// 투영임을 항상 명시한다(폐업/영업종료 등 확정·영구 마감 표현 금지).
 String? interventionTriggerBadgeLabel(String? trigger, String language) {
   switch (trigger) {
     case 'closure_detected':
       return lalaCopyMulti(
         language,
-        ko: '폐업 의심',
-        en: 'Possible closure',
-        ja: '休業の可能性',
-        zhHans: '疑似停业',
-        zhHant: '疑似停業',
+        ko: '예상 운영시간 외',
+        en: 'Outside est. hours',
+        ja: '推定営業時間外',
+        zhHans: '预计营业时间外',
+        zhHant: '預計營業時間外',
+      );
+    case 'closing_soon':
+      return lalaCopyMulti(
+        language,
+        ko: '마감 임박(예상)',
+        en: 'Closing soon (est.)',
+        ja: '閉店間近（推定）',
+        zhHans: '即将打烊（预计）',
+        zhHant: '即將打烊（預計）',
       );
     case 'bad_air_quality':
       return lalaCopyMulti(
@@ -358,29 +369,56 @@ String? interventionTriggerBadgeLabel(String? trigger, String language) {
     case 'bad_air_quality_and_closure':
       return lalaCopyMulti(
         language,
-        ko: '미세먼지 + 폐업',
-        en: 'Air quality + closure',
-        ja: '大気 + 休業',
-        zhHans: '空气质量 + 停业',
-        zhHant: '空氣品質 + 停業',
+        ko: '미세먼지 + 예상 운영시간 외',
+        en: 'Air quality + est. hours',
+        ja: '大気 + 推定営業時間外',
+        zhHans: '空气质量 + 预计营业时间外',
+        zhHant: '空氣品質 + 預計營業時間外',
+      );
+    case 'bad_air_quality_and_closing_soon':
+      return lalaCopyMulti(
+        language,
+        ko: '미세먼지 + 마감 임박(예상)',
+        en: 'Air quality + closing soon (est.)',
+        ja: '大気 + 閉店間近（推定）',
+        zhHans: '空气质量 + 即将打烊（预计）',
+        zhHant: '空氣品質 + 即將打烊（預計）',
       );
     case 'bad_weather_and_air_quality_and_closure':
       return lalaCopyMulti(
         language,
-        ko: '날씨 + 미세먼지 + 폐업',
-        en: 'Weather + air + closure',
-        ja: '気象 + 大気 + 休業',
-        zhHans: '天气 + 空气质量 + 停业',
-        zhHant: '天氣 + 空氣品質 + 停業',
+        ko: '날씨 + 미세먼지 + 예상 운영시간 외',
+        en: 'Weather + air + est. hours',
+        ja: '気象 + 大気 + 推定営業時間外',
+        zhHans: '天气 + 空气质量 + 预计营业时间外',
+        zhHant: '天氣 + 空氣品質 + 預計營業時間外',
+      );
+    case 'bad_weather_and_air_quality_and_closing_soon':
+      return lalaCopyMulti(
+        language,
+        ko: '날씨 + 미세먼지 + 마감 임박(예상)',
+        en: 'Weather + air + closing soon (est.)',
+        ja: '気象 + 大気 + 閉店間近（推定）',
+        zhHans: '天气 + 空气质量 + 即将打烊（预计）',
+        zhHant: '天氣 + 空氣品質 + 即將打烊（預計）',
       );
     case 'bad_weather_and_closure':
       return lalaCopyMulti(
         language,
-        ko: '날씨 + 폐업',
-        en: 'Weather + closure',
-        ja: '気象 + 休業',
-        zhHans: '天气 + 停业',
-        zhHant: '天氣 + 停業',
+        ko: '날씨 + 예상 운영시간 외',
+        en: 'Weather + est. hours',
+        ja: '気象 + 推定営業時間外',
+        zhHans: '天气 + 预计营业时间外',
+        zhHant: '天氣 + 預計營業時間外',
+      );
+    case 'bad_weather_and_closing_soon':
+      return lalaCopyMulti(
+        language,
+        ko: '날씨 + 마감 임박(예상)',
+        en: 'Weather + closing soon (est.)',
+        ja: '気象 + 閉店間近（推定）',
+        zhHans: '天气 + 即将打烊（预计）',
+        zhHant: '天氣 + 即將打烊（預計）',
       );
     case 'bad_weather':
       return lalaCopyMulti(
@@ -397,28 +435,48 @@ String? interventionTriggerBadgeLabel(String? trigger, String language) {
 }
 
 /// triggerType 에 따른 honest fallback 카피(KO/EN 배타). API 카피가 비었을 때만
-/// 쓰인다. bad_weather/null 은 기존 weather 카피와 동일(역호환), closure_detected
-/// 와 bad_weather_and_closure 는 새 카피. P4: bad_air_quality 및 조합은 원인에 맞는
-/// 카피를 쓴다(미세먼지 원인을 날씨로 위조하지 않는다). 대체 장소가 없어도 위조하지 않는다.
+/// 쓰인다. bad_weather/null 은 기존 weather 카피와 동일(역호환). P4: bad_air_quality
+/// 및 조합은 원인에 맞는 카피를 쓴다(미세먼지 원인을 날씨로 위조하지 않는다).
+/// P4 closing-soon: closure/closing-soon 계열은 '추정 운영시간' 원인을 명시하고
+/// 실제 영업 여부 확인이 필요함을 전제한다(폐업/영구 마감 표현 금지). 대체 장소가
+/// 없어도 위조하지 않는다.
 String _interventionFallbackCopy(String? trigger, String? place, String language) {
   switch (trigger) {
     case 'closure_detected':
       return place != null
           ? lalaCopyMulti(
                 language,
-                ko: '선택한 장소가 영업 중이 아닐 수 있어요. $place 근처 다른 옵션을 확인해 보세요.',
-                en: 'The chosen place may be closed. Check other options near $place.',
-                ja: '選択したスポットは営業していない可能性があります。$place 付近の他の選択肢をご確認ください。',
-                zhHans: '所选地点可能已打烊。请查看 $place 附近的其他选择。',
-                zhHant: '所選地點可能已打烊。請查看 $place 附近的其他選擇。',
+                ko: '예상 운영시간을 벗어난 일정이에요. $place 근처 다른 옵션을 확인해 보세요.',
+                en: 'This slot is outside the estimated hours. Check other options near $place.',
+                ja: '推定営業時間外の時間帯です。$place 付近の他の選択肢をご確認ください。',
+                zhHans: '该时段超出预计营业时间。请查看 $place 附近的其他选择。',
+                zhHant: '該時段超出預計營業時間。請查看 $place 附近的其他選擇。',
               )
           : lalaCopyMulti(
                 language,
-                ko: '선택한 장소가 영업 중이 아닐 수 있어요. 동선을 다시 확인해 보세요.',
-                en: 'The chosen place may be closed. Review the route.',
-                ja: '選択したスポットは営業していない可能性があります。ルートをご確認ください。',
-                zhHans: '所选地点可能已打烊。请重新查看路线。',
-                zhHant: '所選地點可能已打烊。請重新查看路線。',
+                ko: '예상 운영시간을 벗어난 일정이에요. 동선을 다시 확인해 보세요.',
+                en: 'This slot is outside the estimated hours. Review the route.',
+                ja: '推定営業時間外の時間帯です。ルートをご確認ください。',
+                zhHans: '该时段超出预计营业时间。请重新查看路线。',
+                zhHant: '該時段超出預計營業時間。請重新查看路線。',
+              );
+    case 'closing_soon':
+      return place != null
+          ? lalaCopyMulti(
+                language,
+                ko: '예상 마감 시간이 가까워요. $place 근처 다른 옵션을 확인해 보세요.',
+                en: 'The estimated closing time is near. Check other options near $place.',
+                ja: '推定閉店時間が近づいています。$place 付近の他の選択肢をご確認ください。',
+                zhHans: '预计打烊时间临近。请查看 $place 附近的其他选择。',
+                zhHant: '預計打烊時間臨近。請查看 $place 附近的其他選擇。',
+              )
+          : lalaCopyMulti(
+                language,
+                ko: '예상 마감 시간이 가까워요. 동선을 다시 확인해 보세요.',
+                en: 'The estimated closing time is near. Review the route.',
+                ja: '推定閉店時間が近づいています。ルートをご確認ください。',
+                zhHans: '预计打烊时间临近。请重新查看路线。',
+                zhHant: '預計打烊時間臨近。請重新查看路線。',
               );
     case 'bad_air_quality':
       return place != null
@@ -460,56 +518,110 @@ String _interventionFallbackCopy(String? trigger, String? place, String language
       return place != null
           ? lalaCopyMulti(
                 language,
-                ko: '미세먼지가 나쁘고 $place 도 영업 중이 아닐 수 있어요. 실내 대안을 확인해 보세요.',
-                en: 'Air quality is poor and $place may be closed. Check indoor alternatives.',
-                ja: '大気が悪く、$place も営業していない可能性があります。屋内の代替をご確認ください。',
-                zhHans: '空气质量差，$place 也可能已打烊。请查看室内替代方案。',
-                zhHant: '空氣品質差，$place 也可能已打烊。請查看室內替代方案。',
+                ko: '미세먼지가 나빠요. $place 일정이 예상 운영시간을 벗어났어요. 실내 대안을 확인해 보세요.',
+                en: 'Air quality is poor and the slot is outside the estimated hours for $place. Check indoor alternatives.',
+                ja: '大気が悪く、$place の予定は推定営業時間外です。屋内の代替をご確認ください。',
+                zhHans: '空气质量差，且该时段超出 $place 的预计营业时间。请查看室内替代方案。',
+                zhHant: '空氣品質差，且該時段超出 $place 的預計營業時間。請查看室內替代方案。',
               )
           : lalaCopyMulti(
               language,
-              ko: '미세먼지가 나쁘고 일부 장소가 영업 중이 아닐 수 있어요. 실내 대안을 확인해 보세요.',
-              en: 'Air quality is poor and some places may be closed. Check indoor alternatives.',
-              ja: '大気が悪く、一部のスポットは営業していない可能性があります。屋内の代替をご確認ください。',
-              zhHans: '空气质量差，部分地点可能已打烊。请查看室内替代方案。',
-              zhHant: '空氣品質差，部分地點可能已打烊。請查看室內替代方案。',
+              ko: '미세먼지가 나빠요. 일부 일정이 예상 운영시간을 벗어났어요. 실내 대안을 확인해 보세요.',
+              en: 'Air quality is poor and some slots are outside the estimated hours. Check indoor alternatives.',
+              ja: '大気が悪く、一部の予定は推定営業時間外です。屋内の代替をご確認ください。',
+              zhHans: '空气质量差，部分时段超出预计营业时间。请查看室内替代方案。',
+              zhHant: '空氣品質差，部分時段超出預計營業時間。請查看室內替代方案。',
+            );
+    case 'bad_air_quality_and_closing_soon':
+      return place != null
+          ? lalaCopyMulti(
+                language,
+                ko: '미세먼지가 나빠요. $place 예상 마감 시간이 가까워요. 실내 대안을 확인해 보세요.',
+                en: 'Air quality is poor and the estimated closing time for $place is near. Check indoor alternatives.',
+                ja: '大気が悪く、$place の推定閉店時間が近づいています。屋内の代替をご確認ください。',
+                zhHans: '空气质量差，且 $place 的预计打烊时间临近。请查看室内替代方案。',
+                zhHant: '空氣品質差，且 $place 的預計打烊時間臨近。請查看室內替代方案。',
+              )
+          : lalaCopyMulti(
+              language,
+              ko: '미세먼지가 나빠요. 예상 마감 시간이 가까워요. 실내 대안을 확인해 보세요.',
+              en: 'Air quality is poor and the estimated closing time is near. Check indoor alternatives.',
+              ja: '大気が悪く、推定閉店時間が近づいています。屋内の代替をご確認ください。',
+              zhHans: '空气质量差，预计打烊时间临近。请查看室内替代方案。',
+              zhHant: '空氣品質差，預計打烊時間臨近。請查看室內替代方案。',
             );
     case 'bad_weather_and_air_quality_and_closure':
       return place != null
           ? lalaCopyMulti(
                 language,
-                ko: '날씨와 미세먼지가 좋지 않고 $place 도 영업 중이 아닐 수 있어요. 실내 대안을 확인해 보세요.',
-                en: 'Weather and air quality are poor and $place may be closed. Check indoor alternatives.',
-                ja: '天気と大気が悪く、$place も営業していない可能性があります。屋内の代替をご確認ください。',
-                zhHans: '天气和空气质量不佳，$place 也可能已打烊。请查看室内替代方案。',
-                zhHant: '天氣和空氣品質不佳，$place 也可能已打烊。請查看室內替代方案。',
+                ko: '날씨와 미세먼지가 좋지 않고 $place 일정이 예상 운영시간을 벗어났어요. 실내 대안을 확인해 보세요.',
+                en: 'Weather and air quality are poor and the slot is outside the estimated hours for $place. Check indoor alternatives.',
+                ja: '天気も大気も悪く、$place の予定は推定営業時間外です。屋内の代替をご確認ください。',
+                zhHans: '天气和空气质量不佳，且该时段超出 $place 的预计营业时间。请查看室内替代方案。',
+                zhHant: '天氣和空氣品質不佳，且該時段超出 $place 的預計營業時間。請查看室內替代方案。',
               )
           : lalaCopyMulti(
               language,
-              ko: '날씨와 미세먼지가 좋지 않고 일부 장소가 영업 중이 아닐 수 있어요. 실내 대안을 확인해 보세요.',
-              en: 'Weather and air quality are poor and some places may be closed. Check indoor alternatives.',
-              ja: '天気と大気が悪く、一部のスポットは営業していない可能性があります。屋内の代替をご確認ください。',
-              zhHans: '天气和空气质量不佳，部分地点可能已打烊。请查看室内替代方案。',
-              zhHant: '天氣和空氣品質不佳，部分地點可能已打烊。請查看室內替代方案。',
+              ko: '날씨와 미세먼지가 좋지 않고 일부 일정이 예상 운영시간을 벗어났어요. 실내 대안을 확인해 보세요.',
+              en: 'Weather and air quality are poor and some slots are outside the estimated hours. Check indoor alternatives.',
+              ja: '天気も大気も悪く、一部の予定は推定営業時間外です。屋内の代替をご確認ください。',
+              zhHans: '天气和空气质量不佳，部分时段超出预计营业时间。请查看室内替代方案。',
+              zhHant: '天氣和空氣品質不佳，部分時段超出預計營業時間。請查看室內替代方案。',
+            );
+    case 'bad_weather_and_air_quality_and_closing_soon':
+      return place != null
+          ? lalaCopyMulti(
+                language,
+                ko: '날씨와 미세먼지가 좋지 않고 $place 예상 마감 시간이 가까워요. 실내 대안을 확인해 보세요.',
+                en: 'Weather and air quality are poor and the estimated closing time for $place is near. Check indoor alternatives.',
+                ja: '天気も大気も悪く、$place の推定閉店時間が近づいています。屋内の代替をご確認ください。',
+                zhHans: '天气和空气质量不佳，且 $place 的预计打烊时间临近。请查看室内替代方案。',
+                zhHant: '天氣和空氣品質不佳，且 $place 的預計打烊時間臨近。請查看室內替代方案。',
+              )
+          : lalaCopyMulti(
+              language,
+              ko: '날씨와 미세먼지가 좋지 않고 예상 마감 시간이 가까워요. 실내 대안을 확인해 보세요.',
+              en: 'Weather and air quality are poor and the estimated closing time is near. Check indoor alternatives.',
+              ja: '天気も大気も悪く、推定閉店時間が近づいています。屋内の代替をご確認ください。',
+              zhHans: '天气和空气质量不佳，预计打烊时间临近。请查看室内替代方案。',
+              zhHant: '天氣和空氣品質不佳，預計打烊時間臨近。請查看室內替代方案。',
             );
     case 'bad_weather_and_closure':
       return place != null
           ? lalaCopyMulti(
                 language,
-                ko: '날씨가 좋지 않고 $place 도 영업 중이 아닐 수 있어요. 실내 대안을 확인해 보세요.',
-                en: 'Weather is poor and $place may be closed. Check indoor alternatives.',
-                ja: '天気が悪く、$place も営業していない可能性があります。屋内の代替をご確認ください。',
-                zhHans: '天气不佳，$place 也可能已打烊。请查看室内替代方案。',
-                zhHant: '天氣不佳，$place 也可能已打烊。請查看室內替代方案。',
+                ko: '날씨가 좋지 않고 $place 일정이 예상 운영시간을 벗어났어요. 실내 대안을 확인해 보세요.',
+                en: 'Weather is poor and the slot is outside the estimated hours for $place. Check indoor alternatives.',
+                ja: '天気が悪く、$place の予定は推定営業時間外です。屋内の代替をご確認ください。',
+                zhHans: '天气不佳，且该时段超出 $place 的预计营业时间。请查看室内替代方案。',
+                zhHant: '天氣不佳，且該時段超出 $place 的預計營業時間。請查看室內替代方案。',
               )
           : lalaCopyMulti(
+              language,
+              ko: '날씨가 좋지 않고 일부 일정이 예상 운영시간을 벗어났어요. 실내 대안을 확인해 보세요.',
+              en: 'Weather is poor and some slots are outside the estimated hours. Check indoor alternatives.',
+              ja: '天気が悪く、一部の予定は推定営業時間外です。屋内の代替をご確認ください。',
+              zhHans: '天气不佳，部分时段超出预计营业时间。请查看室内替代方案。',
+              zhHant: '天氣不佳，部分時段超出預計營業時間。請查看室內替代方案。',
+            );
+    case 'bad_weather_and_closing_soon':
+      return place != null
+          ? lalaCopyMulti(
                 language,
-                ko: '날씨가 좋지 않고 일부 장소가 영업 중이 아닐 수 있어요. 실내 대안을 확인해 보세요.',
-                en: 'Weather is poor and some places may be closed. Check indoor alternatives.',
-                ja: '天気が悪く、一部のスポットは営業していない可能性があります。屋内の代替をご確認ください。',
-                zhHans: '天气不佳，部分地点可能已打烊。请查看室内替代方案。',
-                zhHant: '天氣不佳，部分地點可能已打烊。請查看室內替代方案。',
-              );
+                ko: '날씨가 좋지 않고 $place 예상 마감 시간이 가까워요. 실내 대안을 확인해 보세요.',
+                en: 'Weather is poor and the estimated closing time for $place is near. Check indoor alternatives.',
+                ja: '天気が悪く、$place の推定閉店時間が近づいています。屋内の代替をご確認ください。',
+                zhHans: '天气不佳，且 $place 的预计打烊时间临近。请查看室内替代方案。',
+                zhHant: '天氣不佳，且 $place 的預計打烊時間臨近。請查看室內替代方案。',
+              )
+          : lalaCopyMulti(
+              language,
+              ko: '날씨가 좋지 않고 예상 마감 시간이 가까워요. 실내 대안을 확인해 보세요.',
+              en: 'Weather is poor and the estimated closing time is near. Check indoor alternatives.',
+              ja: '天気が悪く、推定閉店時間が近づいています。屋内の代替をご確認ください。',
+              zhHans: '天气不佳，预计打烊时间临近。请查看室内替代方案。',
+              zhHant: '天氣不佳，預計打烊時間臨近。請查看室內替代方案。',
+            );
     case 'bad_weather':
     default:
       // null / 알 수 없는 트리거도 기존 weather 카피와 동일(역호환) — V3 이전

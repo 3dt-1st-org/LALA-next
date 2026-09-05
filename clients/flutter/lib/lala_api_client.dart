@@ -817,7 +817,7 @@ class LalaApiClient {
   }
 
   Future<LalaEnvelope<LalaTripPreferenceOverrideDocument?>>
-      getTripPreferenceOverride({
+  getTripPreferenceOverride({
     required String planDate,
     String? requestId,
     Duration? timeout,
@@ -837,7 +837,7 @@ class LalaApiClient {
   }
 
   Future<LalaEnvelope<LalaTripPreferenceOverrideDocument>>
-      putTripPreferenceOverride({
+  putTripPreferenceOverride({
     required String planDate,
     required int expectedRevision,
     required Map<String, dynamic> override,
@@ -1277,8 +1277,9 @@ class LalaApiClient {
     final raw = resp.data;
     if (raw is! Map<String, dynamic>) {
       throw LalaApiException(
-        code:
-            status < 200 || status >= 300 ? 'HTTP_$status' : 'INVALID_RESPONSE',
+        code: status < 200 || status >= 300
+            ? 'HTTP_$status'
+            : 'INVALID_RESPONSE',
         message: 'Expected a JSON object response.',
         statusCode: status,
         retryable: status >= 500,
@@ -1444,8 +1445,9 @@ class LalaEnvelope<T> {
     T Function(Object?)? parseData,
   }) {
     final rawMeta = json['meta'];
-    final meta =
-        rawMeta is Map<String, dynamic> ? rawMeta : <String, dynamic>{};
+    final meta = rawMeta is Map<String, dynamic>
+        ? rawMeta
+        : <String, dynamic>{};
     final rawData = json['data'];
     final data = parseData == null
         ? (rawData is T ? rawData : null)
@@ -1811,7 +1813,9 @@ class LalaWeather {
       recordTime: _asOptionalString(json['record_time']),
       locationMatch: _asOptionalBool(json['location_match']),
       weatherOutdoorStatus: _asOptionalString(json['weather_outdoor_status']),
-      airQualityOutdoorStatus: _asOptionalString(json['air_quality_outdoor_status']),
+      airQualityOutdoorStatus: _asOptionalString(
+        json['air_quality_outdoor_status'],
+      ),
     );
   }
 }
@@ -2081,14 +2085,14 @@ class LalaPlanPreferenceContext {
 
   @override
   int get hashCode => Object.hash(
-        indoorOutdoor,
-        weatherSensitivity,
-        walkingBand,
-        maxOneWayMinutes,
-        Object.hashAll(foodCuisines),
-        budgetBand,
-        excludeClosingSoon,
-      );
+    indoorOutdoor,
+    weatherSensitivity,
+    walkingBand,
+    maxOneWayMinutes,
+    Object.hashAll(foodCuisines),
+    budgetBand,
+    excludeClosingSoon,
+  );
 }
 
 /// CP1: 서버가 보고한 선호 효과 한 건(applied 여부 + 기계 사유 코드 + 안내 문구).
@@ -2138,6 +2142,7 @@ class LalaPlanSlot {
     this.forecastWindow,
     this.airQualityBad,
     this.closureState,
+    this.closingSoon,
   });
 
   final String period;
@@ -2166,9 +2171,12 @@ class LalaPlanSlot {
   // forecastWindow: nearest-time projection from the plan-level forecast (D2).
   // airQualityBad: outdoor-only bad-AQ flag from plan dust grade (D3).
   // closureState: "open"|"closed"|"unknown" projection of the hours estimate (D4).
+  // closingSoon (P4): true when the slot start is inside the bounded pre-close
+  // window of the same hours estimate; never true together with a "closed" state.
   final LalaForecastItem? forecastWindow;
   final bool? airQualityBad;
   final String? closureState;
+  final bool? closingSoon;
 
   static LalaPlanSlot fromJsonObject(Object? value) {
     return LalaPlanSlot.fromJson(_asMap(value));
@@ -2204,6 +2212,7 @@ class LalaPlanSlot {
           : null,
       airQualityBad: _asOptionalBool(json['air_quality_bad']),
       closureState: _asOptionalString(json['closure_state']),
+      closingSoon: _asOptionalBool(json['closing_soon']),
     );
   }
 }
