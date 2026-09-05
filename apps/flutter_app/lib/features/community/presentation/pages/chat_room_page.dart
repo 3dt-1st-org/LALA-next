@@ -62,7 +62,11 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   bool _initializing = false;
   bool _sending = false;
   String? _pendingDraft;
+  String? _pendingDraftKey;
   String? _failedDraft;
+  String? _failedDraftKey;
+  bool _wsPermissionDenied = false;
+  int _idempotencySeq = 0;
 
   @override
   void initState() {
@@ -114,7 +118,9 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
         _status = _LoadStatus.authRequired;
         _wsStatus = ChatWsStatus.disconnected;
         _pendingDraft = null;
+        _pendingDraftKey = null;
         _failedDraft = null;
+        _failedDraftKey = null;
       });
     }
   }
@@ -143,15 +149,17 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     }
   }
 
-  Future<void> _loadMessages() async {
+  Future<void> _loadMessages({bool silent = false}) async {
     if (!_authenticated) {
       setState(() => _status = _LoadStatus.authRequired);
       return;
     }
-    setState(() {
-      _status = _LoadStatus.loading;
-      _error = null;
-    });
+    if (!silent) {
+      setState(() {
+        _status = _LoadStatus.loading;
+        _error = null;
+      });
+    }
     try {
       final envelope = await _client.getChatMessages(
         roomId: widget.roomId,
@@ -168,28 +176,45 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
         _messages = messages;
         _status = _LoadStatus.data;
       });
-      WidgetsBinding.instance.addPostFrameCallback((_) => _jumpToBottom());
+      if (!silent) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _jumpToBottom());
+      }
     } on LalaApiException {
       if (!mounted) return;
       if (!_authenticated) {
         setState(() => _status = _LoadStatus.authRequired);
         return;
       }
-      setState(() {
-        _error = _fallbackError();
-        _status = _LoadStatus.error;
-      });
+      if (!silent) {
+        setState(() {
+          _error = _fallbackError();
+          _status = _LoadStatus.error;
+        });
+      }
     } on Object {
       if (!mounted) return;
       if (!_authenticated) {
         setState(() => _status = _LoadStatus.authRequired);
         return;
       }
-      setState(() {
-        _error = _fallbackError();
-        _status = _LoadStatus.error;
-      });
+      if (!silent) {
+        setState(() {
+          _error = _fallbackError();
+          _status = _LoadStatus.error;
+        });
+      }
     }
+  }
+
+  /// 일회용 티켓을 발급받아 WebSocket URI 를 만든다. 연결/재연결 시도마다
+  /// 새 티켓이 발급된다(티켯은 단일 사용 + 60 초 만료).
+  Future<Uri> _freshWebSocketUri() async {
+    final envelope = await _client.createChatWsTicket(roomId: widget.roomId);
+    final ticket = envelope.data?.ticket ?? '';
+    if (ticket.isEmpty) {
+      throw StateError('empty ws ticket');
+    }
+    return _client.chatWebSocketUri(roomId: widget.roomId, ticket: ticket);
   }
 
   Future<void> _connectWebSocket() async {
@@ -197,18 +222,27 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
       setState(() => _wsStatus = ChatWsStatus.disconnected);
       return;
     }
-    final token = await _client.resolveWebSocketToken();
-    if (!mounted || !_authenticated) {
-      if (mounted) setState(() => _wsStatus = ChatWsStatus.disconnected);
-      return;
-    }
-    if (token.isEmpty) {
-      // 인증 미지원: 실시간 수신은 불가. REST 메시지 로드는 유지.
+    _wsPermissionDenied = false;
+    // connect() 는 공급자 실패를 삼키고 재시도하지 않는다. 권한 거부는
+    // 여기서 명시적으로 판정해 어떤 재시도 루프도 남기지 않는다.
+    await _ws.connect(() async {
+      try {
+        return await _freshWebSocketUri();
+      } on LalaApiException catch (error) {
+        // 방 접근 거부(비공개 방 비멤버/존재하지 않는 방)는 재시도하지
+        // 않는다: 404 로 동일하게 응답하므로 존재 여부도 추정하지 않는다.
+        if (error.statusCode == 404 || error.statusCode == 403) {
+          _wsPermissionDenied = true;
+        }
+        rethrow;
+      }
+    });
+    if (!mounted) return;
+    if (_wsPermissionDenied) {
+      // 권한 거부: REST 히스토리/전송만 유지하고 실시간 경로는 종료.
       setState(() => _wsStatus = ChatWsStatus.error);
       return;
     }
-    final uri = _client.chatWebSocketUri(roomId: widget.roomId, token: token);
-    await _ws.connect(uri);
     // 연결 후 수신 스트림 구독(connect 이후에 구독해야 스트림이 활성).
     _messageSub ??= _ws.messages.listen(_onIncomingMessage);
   }
@@ -216,11 +250,17 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   void _onIncomingMessage(ChatMessage message) {
     // 방 필터(브로드캐스트는 동일 방에만 가지만 안전하게 가드).
     if (message.roomId != widget.roomId && message.roomId.isNotEmpty) return;
+    // 재연결/REST 폴백과 브로드캐스트가 겹칠 때 같은 id 는 한 번만 표시.
+    if (message.id.isNotEmpty && _messages.any((m) => m.id == message.id)) {
+      return;
+    }
     setState(() {
       _messages = <ChatMessage>[..._messages, message];
       if (_isMine(message) && message.body.trim() == _pendingDraft) {
         _pendingDraft = null;
+        _pendingDraftKey = null;
         _failedDraft = null;
+        _failedDraftKey = null;
       }
     });
     WidgetsBinding.instance.addPostFrameCallback((_) => _jumpToBottom());
@@ -228,22 +268,33 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
 
   void _onWsStatus(ChatWsStatus next) {
     if (!mounted) return;
+    final wasError = _wsStatus == ChatWsStatus.error;
     setState(() => _wsStatus = next);
+    // 재연결 성공: 연결이 끊긴 동안 놓친 메시지를 REST 히스토리로 회수.
+    if (next == ChatWsStatus.connected && wasError && !_wsPermissionDenied) {
+      unawaited(_loadMessages(silent: true));
+    }
   }
 
-  void _onWsError(ChatWsError _) {
+  void _onWsError(ChatWsError error) {
     if (!mounted) return;
     final draft = _pendingDraft;
+    // INVALID_* 는 내용 자체가 거부된 것: 같은 키로 재시도해도 소용없다.
+    // 그 외(연결 끊김/레이트리밋)는 같은 키 재전송으로 서버 중복 방어.
+    final invalidContent =
+        error.code == 'INVALID_MESSAGE' || error.code == 'INVALID_JSON';
+    setState(() {
+      _failedDraft = draft;
+      _failedDraftKey = invalidContent ? null : _pendingDraftKey;
+      _pendingDraft = null;
+      _pendingDraftKey = null;
+    });
     if (draft != null && _inputController.text.trim().isEmpty) {
       _inputController.text = draft;
       _inputController.selection = TextSelection.collapsed(
         offset: _inputController.text.length,
       );
     }
-    setState(() {
-      _pendingDraft = null;
-      _failedDraft = draft;
-    });
     final message = lalaCopyMulti(
       _language,
       ko: '메시지를 보내지 못했어요. 입력 내용을 복원했습니다.',
@@ -285,6 +336,12 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     }
   }
 
+  String _newIdempotencyKey() {
+    _idempotencySeq += 1;
+    final micros = DateTime.now().microsecondsSinceEpoch;
+    return 'app-$micros-$_idempotencySeq';
+  }
+
   Future<void> _sendMessage() async {
     final text = _inputController.text.trim();
     if (text.isEmpty || _sending) return;
@@ -304,19 +361,86 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     if (!mounted || outcome != CommunityAuthOutcome.alreadyAuthenticated) {
       return;
     }
-    if (_wsStatus != ChatWsStatus.connected) {
-      _onWsError(const ChatWsError(code: 'not_connected'));
-      return;
-    }
     setState(() {
       _sending = true;
       _failedDraft = null;
     });
-    _pendingDraft = text;
-    _ws.send(text);
-    _inputController.clear();
-    setState(() => _sending = false);
+    final key = _failedDraftKey ?? _newIdempotencyKey();
+    if (_wsStatus == ChatWsStatus.connected) {
+      _pendingDraft = text;
+      _pendingDraftKey = key;
+      _ws.send(text, idempotencyKey: key);
+      _inputController.clear();
+      setState(() => _sending = false);
+      return;
+    }
+    // REST 폴백: WebSocket 미연결/거부 상태에서도 전송은 가능해야 한다.
+    await _sendViaRest(text, key);
   }
+
+  Future<void> _sendViaRest(String text, String key) async {
+    try {
+      final envelope = await _client.sendChatMessage(
+        roomId: widget.roomId,
+        body: text,
+        idempotencyKey: key,
+      );
+      final message = envelope.data;
+      if (!mounted) return;
+      if (message != null) {
+        _onIncomingMessage(message);
+        _inputController.clear();
+        setState(() {
+          _sending = false;
+          _failedDraft = null;
+          _failedDraftKey = null;
+        });
+        return;
+      }
+      setState(() => _sending = false);
+    } on LalaApiException catch (error) {
+      if (!mounted) return;
+      if (error.statusCode == 404 || error.statusCode == 403) {
+        // 비공개 방 비멤버(또는 없는 방): 재시도로 해결되지 않는 상태.
+        setState(() => _sending = false);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_noAccessMessage()),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        return;
+      }
+      _restoreFailedDraft(text, key);
+    } on Object {
+      if (!mounted) return;
+      _restoreFailedDraft(text, key);
+    }
+  }
+
+  void _restoreFailedDraft(String text, String key) {
+    if (_inputController.text.trim().isEmpty) {
+      _inputController.text = text;
+      _inputController.selection = TextSelection.collapsed(
+        offset: _inputController.text.length,
+      );
+    }
+    setState(() {
+      _sending = false;
+      _failedDraft = text;
+      _failedDraftKey = key;
+    });
+  }
+
+  String _noAccessMessage() => lalaCopyMulti(
+    _language,
+    ko: '이 채팅방에 메시지를 보낼 수 없어요.',
+    en: 'You cannot send messages in this chat room.',
+    ja: 'このチャットルームではメッセージを送信できません。',
+    zhHans: '无法在此聊天室发送消息。',
+    zhHant: '無法在此聊天室傳送訊息。',
+  );
 
   Future<void> _retryFailedMessage() async {
     final draft = _failedDraft;
