@@ -120,6 +120,156 @@ void main() {
   );
 
   testWidgets(
+    'P4/S-21 AQ-only trigger shows the AQ title, chip and evidence — never weather',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(393, 852));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final intervention = _intervention(
+        triggerType: 'bad_air_quality',
+        triggerFactors: const <Map<String, dynamic>>[
+          <String, dynamic>{'factor': 'air_quality_dust_grade', 'value': 'bad'},
+        ],
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: InterventionComparisonPage(
+            language: 'ko',
+            arguments: InterventionComparisonArguments(
+              intervention: intervention,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // AQ cause is disclosed as itself: AQ title, AQ chip, AQ evidence line.
+      expect(find.text('미세먼지가 일정에 영향을 줘요'), findsOneWidget);
+      expect(find.text('미세먼지 나쁨'), findsOneWidget);
+      expect(find.text('관측된 미세먼지 등급이 나빠요.'), findsOneWidget);
+      // …and never mislabeled as weather.
+      expect(find.text('날씨 변화가 일정에 영향을 줘요'), findsNothing);
+      expect(find.text('날씨 악화'), findsNothing);
+      expect(find.text('현재 야외 활동 조건이 좋지 않아요.'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'P4/S-21 weather+AQ factors render both cause chips together',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(393, 852));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final intervention = _intervention(
+        triggerType: 'bad_weather_and_air_quality',
+        triggerFactors: const <Map<String, dynamic>>[
+          <String, dynamic>{'factor': 'weather_outdoor_status', 'value': 'bad'},
+          <String, dynamic>{'factor': 'air_quality_dust_grade', 'value': 'very_bad'},
+        ],
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: InterventionComparisonPage(
+            language: 'ko',
+            arguments: InterventionComparisonArguments(
+              intervention: intervention,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('날씨와 미세먼지가 함께 영향을 줘요'), findsOneWidget);
+      expect(find.text('날씨 악화'), findsOneWidget);
+      expect(find.text('미세먼지 나쁨'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'P4/S-21 AQ trigger localizes in en/ja/zh-Hans/zh-Hant (single-language)',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(393, 852));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      const expectedByLanguage = <String, String>{
+        'en': 'Air quality may affect this plan',
+        'ja': '大気が予定に影響します',
+        'zh-Hans': '空气质量可能影响行程',
+        'zh-Hant': '空氣品質可能影響行程',
+      };
+      for (final entry in expectedByLanguage.entries) {
+        final language = entry.key;
+        final expectedTitle = entry.value;
+        final intervention = _intervention(
+          triggerType: 'bad_air_quality',
+          triggerFactors: const <Map<String, dynamic>>[
+            <String, dynamic>{'factor': 'air_quality_dust_grade', 'value': 'bad'},
+          ],
+        );
+        await tester.pumpWidget(
+          MaterialApp(
+            home: InterventionComparisonPage(
+              language: language,
+              arguments: InterventionComparisonArguments(
+                intervention: intervention,
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text(expectedTitle), findsOneWidget, reason: language);
+        // Single-language: no Korean leaks onto visitor locales.
+        expect(find.text('미세먼지가 일정에 영향을 줘요'), findsNothing, reason: language);
+        expect(find.text('날씨 변화가 일정에 영향을 줘요'), findsNothing, reason: language);
+        expect(tester.takeException(), isNull);
+      }
+    },
+  );
+
+  testWidgets(
+    'P4/S-21 AQ comparison page: 320dp + TextScaler.linear(2), no overflow',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final intervention = _intervention(
+        triggerType: 'bad_weather_and_air_quality_and_closure',
+        triggerFactors: const <Map<String, dynamic>>[
+          <String, dynamic>{'factor': 'weather_outdoor_status', 'value': 'bad'},
+          <String, dynamic>{'factor': 'air_quality_dust_grade', 'value': 'very_bad'},
+          <String, dynamic>{
+            'factor': 'slot_closure_state',
+            'value': 'closed',
+            'period': 'afternoon',
+          },
+        ],
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(textScaler: const TextScaler.linear(2)),
+            child: child!,
+          ),
+          home: InterventionComparisonPage(
+            language: 'ko',
+            arguments: InterventionComparisonArguments(
+              intervention: intervention,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('날씨·미세먼지·운영 상태를 모두 확인해야 해요'), findsOneWidget);
+      // Triple-cause chips all wrap within the narrow, doubled-text viewport.
+      expect(find.text('날씨 악화'), findsOneWidget);
+      expect(find.text('미세먼지 나쁨'), findsOneWidget);
+      expect(find.text('운영 상태 변화'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'S-21 cards carry real per-slot constraint badges (closure/AQ/indoor)',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(393, 852));

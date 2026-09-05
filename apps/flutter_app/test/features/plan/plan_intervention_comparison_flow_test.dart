@@ -41,6 +41,9 @@ void main() {
     await tester.pumpWidget(MaterialApp.router(routerConfig: router));
     await tester.pumpAndSettle();
     expect(find.text('야외 산책'), findsOneWidget);
+    // P4: the AQ-only trigger carries its own badge — never '날씨 변화'.
+    expect(find.text('미세먼지 나쁨'), findsOneWidget);
+    expect(find.text('날씨 변화'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('intervention-toast-swap')));
     await tester.pumpAndSettle();

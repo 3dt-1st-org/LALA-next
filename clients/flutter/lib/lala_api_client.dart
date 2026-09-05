@@ -1764,6 +1764,8 @@ class LalaWeather {
     this.location,
     this.recordTime,
     this.locationMatch,
+    this.weatherOutdoorStatus,
+    this.airQualityOutdoorStatus,
   });
 
   final double lat;
@@ -1778,6 +1780,15 @@ class LalaWeather {
   final String? location;
   final String? recordTime;
   final bool? locationMatch;
+
+  /// P4 provenance behind the merged [outdoorStatus]: weather-only cause
+  /// (KMA/DB weather flags). Null on pre-P4 payloads; 'unknown' means no
+  /// weather observation — never inferred from the aggregate.
+  final String? weatherOutdoorStatus;
+
+  /// P4 provenance: air-quality cause derived only from normalized dust
+  /// grades. Null on pre-P4 payloads; unknown grade stays 'unknown'.
+  final String? airQualityOutdoorStatus;
 
   static LalaWeather fromJsonObject(Object? value) {
     return LalaWeather.fromJson(_asMap(value));
@@ -1799,6 +1810,8 @@ class LalaWeather {
       location: _asOptionalString(json['location']),
       recordTime: _asOptionalString(json['record_time']),
       locationMatch: _asOptionalBool(json['location_match']),
+      weatherOutdoorStatus: _asOptionalString(json['weather_outdoor_status']),
+      airQualityOutdoorStatus: _asOptionalString(json['air_quality_outdoor_status']),
     );
   }
 }

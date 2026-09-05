@@ -1495,6 +1495,52 @@ void main() {
     });
   });
 
+  test('getWeather parses P4 weather/AQ provenance, absent stays null', () async {
+    // AQ-only adverse payload: the merged aggregate is bad while the causes stay
+    // distinct (weather observed good, AQ observed bad).
+    final provenancePayload = _weatherPayload()
+      ..['outdoor_status'] = 'bad'
+      ..['weather_outdoor_status'] = 'good'
+      ..['air_quality_outdoor_status'] = 'bad';
+
+    final client = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      dio: _dio((request) async {
+        return _json({
+          'ok': true,
+          'data': provenancePayload,
+          'meta': {'request_id': 'weather-provenance-id'},
+          'error': null,
+        });
+      }),
+    );
+    addTearDown(client.close);
+
+    final provenance = await client.getWeather(lat: 37.2, lng: 127.0);
+    expect(provenance.data?.outdoorStatus, 'bad');
+    expect(provenance.data?.weatherOutdoorStatus, 'good');
+    expect(provenance.data?.airQualityOutdoorStatus, 'bad');
+
+    // Pre-P4 payload without provenance keys parses with honest nulls.
+    final legacyClient = LalaApiClient(
+      baseUri: Uri.parse('http://api.example.test'),
+      dio: _dio((request) async {
+        return _json({
+          'ok': true,
+          'data': _weatherPayload(),
+          'meta': {'request_id': 'weather-legacy-id'},
+          'error': null,
+        });
+      }),
+    );
+    addTearDown(legacyClient.close);
+
+    final legacy = await legacyClient.getWeather(lat: 37.2, lng: 127.0);
+    expect(legacy.data?.outdoorStatus, 'unknown');
+    expect(legacy.data?.weatherOutdoorStatus, isNull);
+    expect(legacy.data?.airQualityOutdoorStatus, isNull);
+  });
+
   test(
       '/api/v1 routes can be sent without client auth when caller has no token',
       () async {
