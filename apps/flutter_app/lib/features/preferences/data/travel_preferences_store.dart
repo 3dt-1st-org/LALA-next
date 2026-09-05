@@ -85,11 +85,38 @@ class TravelPreferencesStore extends ChangeNotifier {
   }
 
   Future<void> save(TravelPreferences next) async {
+    // Fence the save to the account scope it was made under. If the account
+    // disconnected or switched while the local write was in flight, the edit
+    // stays local — it must never silently upload to a different account.
+    final epoch = _syncEpoch;
     await _saveLocal(next);
+    if (epoch != _syncEpoch) {
+      _reconcileAfterOutOfBandLocalWrite();
+      return;
+    }
     if (_syncStatus == TravelPreferencesSyncStatus.synced &&
         _serverDocument != null &&
         _remote != null) {
       await _saveToAccount(next, expectedRevision: _serverDocument!.revision);
+    }
+  }
+
+  /// Re-derives an honest sync status after a local write raced an
+  /// account-scope change. A `synced` pairing can no longer be true once the
+  /// device copy differs from the account document, so surface the conflict
+  /// instead of leaving a stale synced claim that the next save would trust.
+  void _reconcileAfterOutOfBandLocalWrite() {
+    if (_remote == null) {
+      return;
+    }
+    final server = _serverDocument;
+    if (server == null) {
+      return;
+    }
+    if (_syncStatus == TravelPreferencesSyncStatus.synced &&
+        _value != server.preferences) {
+      _syncStatus = TravelPreferencesSyncStatus.conflict;
+      notifyListeners();
     }
   }
 
@@ -141,7 +168,14 @@ class TravelPreferencesStore extends ChangeNotifier {
     if (server == null) {
       return;
     }
+    // The explicit user choice lands locally, but a `synced` claim is only
+    // honest while the same account scope is still connected.
+    final epoch = _syncEpoch;
     await _saveLocal(server.preferences, updatedAt: server.updatedAt);
+    if (epoch != _syncEpoch) {
+      _reconcileAfterOutOfBandLocalWrite();
+      return;
+    }
     _syncStatus = TravelPreferencesSyncStatus.synced;
     notifyListeners();
   }
