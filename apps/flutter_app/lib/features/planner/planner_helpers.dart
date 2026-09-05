@@ -145,10 +145,10 @@ String? planSlotEstimatedHoursLabel(LalaPlanSlot slot, String language) {
   );
 }
 
-/// D4: 슬롯 운영 상태(open/closed/unknown) KO/EN 라벨.
+/// D4: 슬롯 운영 상태(open/closed/unknown) 5-로케일 라벨.
 /// §V3-C: closure_state 는 카테고리 기반 추정 운영시간의 투영이며 authority 가
-/// 아니므로 "영업중/Open"은 추정 상태 표시이지 보증이 아니다("확정/Confirmed" 금지).
-/// null 은 honest-empty 로 "unknown" 취급한다.
+/// 아니므로 모든 closing/closed 라벨은 추정임을 명시한다("확정/Confirmed" 금지,
+/// 폐업 등 영구 마감 표현 금지). null 은 honest-empty 로 "unknown" 취급한다.
 String planSlotClosureStateLabel(LalaPlanSlot slot, String language) {
   final state = (slot.closureState ?? 'unknown').trim().toLowerCase();
   return switch (state) {
@@ -162,11 +162,11 @@ String planSlotClosureStateLabel(LalaPlanSlot slot, String language) {
     ),
     'closed' => lalaCopyMulti(
       language,
-      ko: '영업종료',
-      en: 'Closed',
-      ja: '営業終了',
-      zhHans: '已打烊',
-      zhHant: '已打烊',
+      ko: '예상 마감',
+      en: 'Est. closed',
+      ja: '推定営業終了',
+      zhHans: '预计已打烊',
+      zhHant: '預計已打烊',
     ),
     _ => lalaCopyMulti(
       language,
@@ -177,6 +177,21 @@ String planSlotClosureStateLabel(LalaPlanSlot slot, String language) {
       zhHant: '未確認',
     ),
   };
+}
+
+/// P4 closing-soon: 슬롯 시작이 추정 마감 window(분 단위 bounded) 안에 들어올 때만
+/// 라벨을 반환한다. closing_soon=true 는 운영시간 내에서만 나오므로 '예상 마감'
+/// (closed) 배지와 공존하지 않는다. null/false 는 배지 없음(honest-empty).
+String? planSlotClosingSoonLabel(LalaPlanSlot slot, String language) {
+  if (slot.closingSoon != true) return null;
+  return lalaCopyMulti(
+    language,
+    ko: '마감 임박(예상)',
+    en: 'Closing soon (est.)',
+    ja: '閉店間近（推定）',
+    zhHans: '即将打烊（预计）',
+    zhHant: '即將打烊（預計）',
+  );
 }
 
 /// D2: 슬롯 예보 창(forecast_window) 표시 라벨.

@@ -1123,6 +1123,31 @@ void main() {
     expect(intervention.data?.history, isEmpty);
   });
 
+  test('LalaPlanSlot parses the P4 closing_soon projection additively', () {
+    // closing_soon=true parses; missing/false map to honest null/false.
+    final closingSoon = LalaPlanSlot.fromJson(const {
+      'period': 'dinner',
+      'title': 'Dinner',
+      'closing_soon': true,
+      'closure_state': 'open',
+    });
+    expect(closingSoon.closingSoon, isTrue);
+    expect(closingSoon.closureState, 'open');
+
+    final notClosing = LalaPlanSlot.fromJson(const {
+      'period': 'dinner',
+      'title': 'Dinner',
+      'closing_soon': false,
+      'closure_state': 'open',
+    });
+    expect(notClosing.closingSoon, isFalse);
+
+    // Pre-P4 payloads (key absent, PLAN_FULL_SLOTS off) stay null.
+    final legacy =
+        LalaPlanSlot.fromJson(const {'period': 'dinner', 'title': 'Dinner'});
+    expect(legacy.closingSoon, isNull);
+  });
+
   test('createDailyPlan sends the selected radius and language', () async {
     late RequestOptions captured;
     final client = LalaApiClient(
@@ -1495,7 +1520,8 @@ void main() {
     });
   });
 
-  test('getWeather parses P4 weather/AQ provenance, absent stays null', () async {
+  test('getWeather parses P4 weather/AQ provenance, absent stays null',
+      () async {
     // AQ-only adverse payload: the merged aggregate is bad while the causes stay
     // distinct (weather observed good, AQ observed bad).
     final provenancePayload = _weatherPayload()
