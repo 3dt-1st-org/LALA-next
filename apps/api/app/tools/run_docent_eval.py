@@ -31,12 +31,22 @@ REPORT_PATH = _REPO_ROOT / "output" / "local" / "docent-eval" / "report.json"
 def _summary(report: dict[str, Any]) -> str:
     counts = report["category_counts"]
     parts = [f"{category}={counts[category]}" for category in docent_eval.CATEGORIES]
+    language_counts = report.get("language_case_counts") or {}
+    language_parts = ",".join(
+        f"{language}={language_counts.get(language, 0)}" for language in docent_eval.LANGUAGES
+    )
     honest = ", ".join(report["honest_empty_place_ids"]) or "none"
+    flagged = sum(
+        dimension.get("flagged", 0)
+        for dimension in (report.get("dimension_summary") or {}).values()
+    )
     return (
         f"places={report['total_places']} "
+        f"language_cases={report.get('total_language_cases', 0)}({language_parts}) "
         f"categories({', '.join(parts)}) "
         f"honest_empty=[{honest}] "
         f"live_client_constructions={report['live_client_constructions']} "
+        f"dimension_flagged={flagged} "
         f"passed={report['passed']}"
     )
 

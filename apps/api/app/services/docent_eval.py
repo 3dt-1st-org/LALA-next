@@ -1,9 +1,14 @@
-"""Offline docent QA evaluation harness (V4-C).
+"""Offline docent QA evaluation harness (V4-C, extended in P6A).
 
-Loads a committed synthetic eval fixture of representative places, exercises the existing
-``docent_service.generate_script`` rule-based path with the OpenAI client mocked at the
-boundary (no network, no DB, ``LALA_ENABLE_LIVE_AI`` stays off), and returns structured
-per-place/per-language results that the CLI harness turns into a pass/fail report.
+Loads a committed synthetic eval fixture of representative places (P6A: exactly
+40 places, 10 per category, every place exercising exactly Korean and English →
+80 language cases), exercises the existing ``docent_service.generate_script``
+rule-based path with the OpenAI client mocked at the boundary (no network, no
+DB, ``LALA_ENABLE_LIVE_AI`` stays off), and returns structured per-place /
+per-language results that the CLI harness turns into a pass/fail report. The
+report also carries a deterministic per-dimension audit summary
+(:mod:`docent_qa_dimensions`): pass / flagged / not-applicable counts only —
+honest-empty cases are counted as not-applicable, never as pass.
 
 This module never edits ``docent_service``; it imports it read-only. Fixture places are
 synthetic (``eval_`` prefix) — never real product data.
@@ -26,8 +31,10 @@ from typing import Any
 from apps.api.app.core.errors import ServiceError
 from apps.api.app.schemas.docent import DocentScriptRequest
 from apps.api.app.services import docent_service
+from apps.api.app.services.docent_qa_dimensions import summarize_dimension_audits
 
 CATEGORIES = ("attraction", "restaurant", "event", "culture_venue")
+LANGUAGES = ("ko", "en")
 FIXTURE_DEFAULT = (
     Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "docent_eval_places.json"
 )
@@ -73,12 +80,15 @@ class PlaceResult:
 @dataclass
 class EvalReport:
     total_places: int
+    total_language_cases: int
     category_counts: dict[str, int]
+    language_case_counts: dict[str, int]
     place_results: list[PlaceResult]
     passed: bool
     live_client_constructions: int
     failures: list[str] = field(default_factory=list)
     honest_empty_place_ids: list[str] = field(default_factory=list)
+    dimension_summary: dict[str, dict[str, int]] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -208,8 +218,15 @@ def evaluate_docent(places: list[dict[str, Any]]) -> EvalReport:
     place_results: list[PlaceResult] = []
     honest_empty_ids: list[str] = []
     failures: list[str] = []
+    dimension_records: list[dict[str, Any]] = []
 
     for place in places:
+        samples = place.get("language_samples") or []
+        if sorted(samples) != sorted(LANGUAGES) or len(samples) != len(LANGUAGES):
+            failures.append(
+                f"{place.get('place_id', '<unknown>')}: language_samples must be exactly "
+                f"{list(LANGUAGES)} (got {samples})"
+            )
         result = evaluate_place(place)
         place_results.append(result)
         if result.category in category_counts:
@@ -232,6 +249,16 @@ def evaluate_docent(places: list[dict[str, Any]]) -> EvalReport:
             # live branch executed despite the guard.
             if result.expect_nonempty and lang.source == "openai":
                 failures.append(f"{lang_id}: live-AI source used (expected rule_based_curation)")
+            dimension_records.append(
+                {
+                    "place_id": result.place_id,
+                    "category": result.category,
+                    "language": lang.language,
+                    "source": lang.source,
+                    "script": lang.script,
+                    "auto_precheck": {"issue_tags": []},
+                }
+            )
 
     missing_categories = [category for category in CATEGORIES if category_counts[category] == 0]
     if missing_categories:
@@ -245,14 +272,23 @@ def evaluate_docent(places: list[dict[str, Any]]) -> EvalReport:
             f"live OpenAI client constructed {live_constructions} time(s) (expected zero)"
         )
 
+    language_case_counts = {
+        language: sum(
+            1 for result in place_results for lang in result.languages if lang.language == language
+        )
+        for language in LANGUAGES
+    }
     return EvalReport(
         total_places=len(places),
+        total_language_cases=sum(len(result.languages) for result in place_results),
         category_counts=category_counts,
+        language_case_counts=language_case_counts,
         place_results=place_results,
         passed=not failures,
         live_client_constructions=live_constructions,
         failures=failures,
         honest_empty_place_ids=honest_empty_ids,
+        dimension_summary=summarize_dimension_audits(dimension_records),
     )
 
 

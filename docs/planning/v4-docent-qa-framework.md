@@ -18,10 +18,13 @@ replaces that gap with a **synthetic, committed** fixture and a **repeatable off
 
 | File | Role |
 |---|---|
-| `apps/api/tests/fixtures/docent_eval_places.json` | Synthetic 30–50-place fixture (`eval_` prefix, all 4 categories, ≥1 honest-empty). |
-| `apps/api/app/services/docent_eval.py` | Eval logic: load fixture, build `DocentScriptRequest`, run `docent_service.generate_script`, return structured results. Imports `docent_service` read-only. |
+| `apps/api/tests/fixtures/docent_eval_places.json` | Synthetic fixture — P6A: exactly 40 places (10 per category, `eval_` prefix, ≥1 honest-empty), every place exercising exactly `["ko","en"]` → 80 language cases. |
+| `apps/api/app/services/docent_eval.py` | Eval logic: load fixture, build `DocentScriptRequest`, run `docent_service.generate_script`, return structured results incl. `total_places` / `total_language_cases` / per-dimension audit summary. Imports `docent_service` read-only. |
+| `apps/api/app/services/docent_qa_dimensions.py` | P6A: deterministic per-dimension audits (source attribution, local context, language purity, usefulness, safety, repetition, grounding, advertising leakage, hallucination) over evidence already present in QA records; pass / flagged / not-applicable only — never a silent pass without evidence. |
 | `apps/api/app/tools/run_docent_eval.py` | CLI harness: load → eval → assert → write `output/local/docent-eval/report.json` → pass/fail exit. |
-| `apps/api/tests/test_docent_eval_harness.py` | Fixture schema, harness pass/fail, category coverage, honest-empty, single-language, boundary mock. |
+| `apps/api/app/tools/sanitize_docent_qa_report.py` | Lane C sanitizer; P6A: aggregates the deterministic dimension audits and preserves pass/flagged/not-applicable counts in the report schema and markdown. |
+| `apps/api/tests/test_docent_eval_harness.py` | Fixture schema (40/80, exact KO+EN pairing, 10-per-category balance), harness pass/fail, honest-empty, single-language, boundary mock, honest dimension accounting. |
+| `apps/api/tests/test_docent_qa_dimensions.py` | P6A: dimension evidence gating, pass/flag/N-A accounting, sanitizer schema, adversarial repetition cases. |
 | `docs/planning/v4-docent-qa-framework.md` | This document. |
 
 **Not edited (hard boundary):** `docent_service.py`, `docent_quality_qa.py`,
@@ -55,8 +58,11 @@ A JSON array of 30–50 synthetic place objects. Each object:
   `scores`/`weather` — this exercises the honest-empty path (the docent service surfaces its
   `DOCENT_CONTEXT_REQUIRED` unavailable state rather than fabricating a script).
 
-Current committed fixture: **35 places** — attraction 10, restaurant 9, event 7,
-culture_venue 9, including 1 honest-empty (`eval_minimal_context_00`).
+Current committed fixture (P6A): **exactly 40 places** — 10 in each of `attraction`,
+`restaurant`, `event`, `culture_venue`, including 1 honest-empty
+(`eval_minimal_context_00`). Every place exercises exactly `["ko", "en"]`, yielding
+**exactly 80 language cases**; `evaluate_docent` fails any place whose
+`language_samples` is not exactly KO+EN.
 
 ## 4. Harness behavior
 
@@ -72,10 +78,15 @@ culture_venue 9, including 1 honest-empty (`eval_minimal_context_00`).
 3. For each place × `language_samples`, builds a `DocentScriptRequest` and calls
    `docent_service.generate_script`. `ServiceError` is caught and recorded as the
    empty/unavailable state (no crash).
-4. Asserts: 30–50 places; all 4 categories covered; each `expect_nonempty` place yields
-   non-empty single-language text in BOTH KO and EN with `source == rule_based_curation`; the
-   honest-empty fixture yields empty/unavailable with no fabricated content; no internal
-   `eval_` ID leaks into any script; no placeholder/mock terms.
+4. Asserts: exactly 40 places / 80 language cases with exact KO+EN pairing per place; all 4
+   categories at 10 each; each `expect_nonempty` place yields non-empty single-language text
+   in BOTH KO and EN with `source == rule_based_curation`; the honest-empty fixture yields
+   empty/unavailable with no fabricated content; no internal `eval_` ID leaks into any
+   script; no placeholder/mock terms. The report also carries
+   `dimension_summary` — deterministic per-dimension audits
+   (`docent_qa_dimensions`) over the generated scripts with honest
+   pass/flagged/not-applicable counts (honest-empty language cases are counted as
+   not-applicable, never as pass).
 5. Writes a deterministic JSON report to `output/local/docent-eval/report.json` (gitignored).
 6. Prints a pass/fail summary; exits 0 on all-pass, non-zero otherwise.
 
@@ -100,12 +111,12 @@ python -m app.tools.run_docent_eval
 
 | # | Criterion | Where |
 |---|---|---|
-| C1 | 30–50 synthetic fixture places; `eval_` prefix; all 4 categories; ≥1 honest-empty | fixture + `test_fixture_*` |
+| C1 | Exactly 40 synthetic fixture places (10 per category); `eval_` prefix; exactly KO+EN per place (80 language cases); ≥1 honest-empty | fixture + `test_fixture_*` |
 | C2 | Offline with OpenAI mocked at boundary; zero live calls; flag stays False | `offline_openai_guard` + `live_client_constructions` counter |
 | C3 | Each `expect_nonempty` place yields non-empty KO and EN single-language scripts | `test_nonempty_places_render_single_language_scripts` |
 | C4 | Honest-empty fixture yields empty/unavailable, no crash, no fabricated content | `test_honest_empty_yields_unavailable_no_fabrication` |
 | C5 | Deterministic JSON report; exit code reflects pass/fail | `run_docent_eval.main` + `test_run_docent_eval_cli_exits_zero_on_pass` |
-| C6 | `test_docent_eval_harness.py` green | 14 tests |
+| C6 | `test_docent_eval_harness.py` + `test_docent_qa_dimensions.py` green | 19 + 32 tests (P6A) |
 | C7 | No edit to `docent_service.py`/`docent_quality_qa.py`/`run_docent_quality_qa.py`/`ai_service.py`/schemas/openapi; no Flutter edit | diff is new-files-only |
 | C8 | `ruff check`+`ruff format --check` clean; pytest green (focused + no regression) | verification section below |
 | C9 | This doc present with V7 manual-QA checklist | §6 |
@@ -155,3 +166,36 @@ QA operator (or the supervisor) performs the steps below on a real device with t
 ### 6.5 V7 exit criteria
 - [ ] Every fixture place passes §6.2 for both languages, OR a documented honesty exception is
       filed; the live judge score distribution is recorded for the fixture set.
+
+---
+
+## 7. P6A checkpoint status (2026-09-05)
+
+**Offline 40/80 is reproducible after this change.** Exactly:
+
+- `apps/api/tests/fixtures/docent_eval_places.json` holds exactly 40 synthetic `eval_`
+  places (10 per category, ≥1 honest-empty, no real account data / coordinates / raw
+  reviews / secret or cloud identifiers / unsupported factual claims), each exercising
+  exactly `["ko","en"]` → exactly 80 language cases.
+- `docent_eval.evaluate_docent` exposes and enforces `total_places == 40`,
+  `total_language_cases == 80` (per-language counts included), fails non-KO+EN pairing,
+  and keeps the honest-empty path plus the live-client prohibition
+  (`live_client_constructions == 0` under `offline_openai_guard`).
+- Deterministic QA dimensions (source attribution, local context, language purity,
+  usefulness, safety, repetition — plus grounding, advertising leakage, hallucination)
+  are machine-checkable via `docent_qa_dimensions`: pass / flagged / not-applicable only.
+  A dimension without enough evidence is reported `not_applicable`, never silently
+  counted as pass. Repetition checks are deterministic, linear-bounded, and immune to
+  short/common particles (compact-length floors; 20,000-char scan bound), with
+  adversarial tests in `test_docent_qa_dimensions.py`.
+- The Lane C sanitizer report schema preserves pass / flagged / not-applicable counts for
+  every dimension; sanitized artifacts carry verdict/reason codes and bounded, redacted
+  excerpts only — never raw scripts, reviews, PII, coordinates, prompts, tokens, secrets,
+  or cloud identifiers.
+
+**Remaining separate external gates (out of scope for P6A):**
+
+- Paid live generation against the deployed API (Lane C runner, capped).
+- Model-judge scoring (`docent_qa` LLM judge — explicitly not implemented here).
+- Voice playback / on-device speech QA (V4-B/V7).
+- Manual human QA rubric review (`docent-quality-manual-qa-strategy.md`).
