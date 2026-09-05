@@ -790,6 +790,76 @@ def test_persisted_outcomes_never_carry_raw_script_or_secret_text() -> None:
     assert "postgres://" not in first_reason
 
 
+# --- Public identity projection (place_id / language serialization) ------------
+
+
+def test_allowed_eval_identity_is_preserved_in_outcome_and_summary() -> None:
+    run = judge.run_judge_batch(
+        [_record("eval_attraction_01", "ko"), _record("eval_minimal_context_00", "en")],
+        provider=judge.FakeJudgeProvider(),
+    )
+    outcome = run.outcomes[0].to_public_dict()
+    assert outcome["place_id"] == "eval_attraction_01"
+    assert outcome["language"] == "ko"
+    summary = run.summarize()
+    assert summary["outcomes"][0]["place_id"] == "eval_attraction_01"
+    assert summary["outcomes"][1]["place_id"] == "eval_minimal_context_00"
+    assert summary["outcomes"][1]["language"] == "en"
+
+
+def test_uuid_like_place_id_is_redacted_in_outcome_and_summary() -> None:
+    raw_uuid = "3f2a1b9c-8d4e-4f6a-9b7c-1e2d3f4a5b6c"
+    run = judge.run_judge_batch([_record(raw_uuid, "ko")], provider=judge.FakeJudgeProvider())
+    outcome = run.outcomes[0].to_public_dict()
+    assert outcome["place_id"] == judge.PUBLIC_IDENTITY_REDACTED
+    assert raw_uuid not in json.dumps(outcome)
+    summary = run.summarize()
+    assert summary["outcomes"][0]["place_id"] == judge.PUBLIC_IDENTITY_REDACTED
+    assert raw_uuid not in json.dumps(summary)
+
+
+def test_overlong_and_unsafe_eval_identities_are_redacted() -> None:
+    overlong = "eval_" + "a" * 100  # 105 chars > the 64-char public bound
+    unsafe_charset = "eval_place;DROP"
+    unsafe_unicode = "eval_장소_01"
+    records = [
+        _record(overlong, "ko"),
+        _record(unsafe_charset, "ko"),
+        _record(unsafe_unicode, "ko"),
+    ]
+    run = judge.run_judge_batch(records, provider=judge.FakeJudgeProvider())
+    blob = json.dumps(run.summarize(), ensure_ascii=False)
+    for outcome in run.outcomes:
+        public = outcome.to_public_dict()
+        assert public["place_id"] == judge.PUBLIC_IDENTITY_REDACTED
+    assert overlong not in blob
+    assert "eval_place;DROP" not in blob
+    assert "eval_장소_01" not in blob
+
+
+def test_oversized_or_unknown_language_is_reported_unknown() -> None:
+    oversized_language = "ko" * 5_000  # 10,000 chars
+    records = [
+        _record("eval_place_01", oversized_language),
+        _record("eval_place_02", "en"),
+    ]
+    run = judge.run_judge_batch(records, provider=judge.FakeJudgeProvider())
+    outcome = run.outcomes[0].to_public_dict()
+    assert outcome["language"] == judge.PUBLIC_LANGUAGE_UNKNOWN
+    assert len(outcome["language"]) == 7  # bounded literal, never the raw value
+    summary = run.summarize()
+    assert summary["outcomes"][0]["language"] == judge.PUBLIC_LANGUAGE_UNKNOWN
+    assert oversized_language not in json.dumps(summary)
+    assert summary["outcomes"][1]["language"] == "en"
+
+
+def test_identity_boundary_lengths_split_exactly_at_sixty_four() -> None:
+    exactly = "eval_" + "a" * 59  # 64 chars total: allowed
+    beyond = "eval_" + "a" * 60  # 65 chars: redacted
+    assert judge._safe_public_place_id(exactly) == exactly
+    assert judge._safe_public_place_id(beyond) == judge.PUBLIC_IDENTITY_REDACTED
+
+
 def test_prompt_never_carries_secrets_or_full_overlong_scripts() -> None:
     long_script = "골목 산책 동선 안내. " * 600
     record = _record("eval_long_01", "ko", long_script)

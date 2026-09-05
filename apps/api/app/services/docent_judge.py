@@ -38,10 +38,14 @@ Honesty rules (binding):
   independently unit-testable without any provider.
 - Nothing raw is logged or persisted: no raw provider payloads, raw review
   text, secrets, personal data, precise coordinates, or cloud identifiers.
-  Persisted outcomes carry only the sanitized record identity, the decision,
-  dimension statuses/reason codes (sanitized on every public serialization
-  path), bounded redacted script excerpts via the P6A sanitizer, and
-  aggregate counters.
+  Persisted outcomes carry only the projected public identity (bounded
+  synthetic ``eval_`` ids retained for offline traceability; every other
+  identity — internal, UUID-like, unsafe-charset, or oversized — replaced by
+  the constant honest redacted marker ``internal_redacted``; language
+  whitelisted to ``ko``/``en`` else ``unknown``), the decision, dimension
+  statuses/reason codes (sanitized on every public serialization path),
+  bounded redacted script excerpts via the P6A sanitizer, and aggregate
+  counters. Raw identity stays in-memory for batch accounting only.
 - The judge gate is a separate optional gate on the offline QA report; when no
   judge ran it reports exactly ``{"status": "NOT_RUN"}``, never ``PASS``. The
   aggregate gate returns ``PASS`` only when every judgeable in-cap record has
@@ -59,6 +63,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from collections.abc import Sequence
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -110,6 +115,19 @@ MAX_PROMPT_SCRIPT_CHARS = 4_000
 _ALLOWED_PROMPT_LANGUAGES = ("ko", "en")
 _ALLOWED_PROMPT_CATEGORIES = ("attraction", "restaurant", "event", "culture_venue")
 _PROMPT_METADATA_UNKNOWN = "unknown"
+
+# Public-identity projection (P6B final correction): persisted outcomes keep
+# bounded synthetic traceability ONLY for strict safe identities in the
+# established ``eval_`` namespace (lowercase ASCII letters/digits/underscore/
+# hyphen, bounded length). Every other identity — internal, UUID-like,
+# unsafe-charset, or oversized — is replaced by this constant honest redacted
+# marker: not the raw value, not reversible, not a hash.
+PUBLIC_IDENTITY_REDACTED = "internal_redacted"
+MAX_PUBLIC_PLACE_ID_CHARS = 64
+_SAFE_PUBLIC_PLACE_ID_RE = re.compile(r"eval_[a-z0-9_-]+")
+# Language is whitelisted to the current 40/80 judge contract (ko/en); any
+# other or oversized value is reported as the bounded literal "unknown".
+PUBLIC_LANGUAGE_UNKNOWN = "unknown"
 
 DOCENT_JUDGE_TIMEOUT_SECONDS = 8.0
 DOCENT_JUDGE_MAX_COMPLETION_TOKENS = 500
@@ -521,9 +539,38 @@ class JudgeBatchPlan:
     dropped_by_cap: int
 
 
+def _safe_public_place_id(value: str) -> str:
+    """Project a place identity for public serialization.
+
+    Keeps the bounded synthetic ``eval_`` identity only (conservative ASCII
+    charset + length allowlist); every other identity — internal, UUID-like,
+    unsafe-charset, or oversized — becomes the constant honest redacted
+    marker. Never emits a reversible value or a raw hash.
+    """
+    if (
+        len(value) <= MAX_PUBLIC_PLACE_ID_CHARS
+        and _SAFE_PUBLIC_PLACE_ID_RE.fullmatch(value) is not None
+    ):
+        return value
+    return PUBLIC_IDENTITY_REDACTED
+
+
+def _safe_public_language(value: str) -> str:
+    """Whitelist the persisted language to the current judge contract."""
+    return value if value in _ALLOWED_PROMPT_LANGUAGES else PUBLIC_LANGUAGE_UNKNOWN
+
+
 @dataclass(frozen=True)
 class JudgeRecordOutcome:
-    """The only per-record judge data that may be persisted (sanitized)."""
+    """The only per-record judge data that may be persisted.
+
+    The in-memory fields keep the raw identity for batch accounting
+    (``_has_outcome``); every public serialization path projects identity
+    through :func:`_safe_public_place_id` / :func:`_safe_public_language`, so
+    ``to_public_dict`` (and therefore ``JudgeBatchRun.summarize``) never emits
+    a raw internal/UUID-like/oversized ``place_id`` or an unrestricted
+    language value.
+    """
 
     place_id: str
     language: str
@@ -535,8 +582,8 @@ class JudgeRecordOutcome:
 
     def to_public_dict(self) -> dict[str, Any]:
         return {
-            "place_id": self.place_id,
-            "language": self.language,
+            "place_id": _safe_public_place_id(self.place_id),
+            "language": _safe_public_language(self.language),
             "decision": self.decision,
             "failure_reason": self.failure_reason,
             "error_code": self.error_code,
