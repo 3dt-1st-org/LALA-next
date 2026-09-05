@@ -9,6 +9,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import 'lala_map_fallback.dart';
 import 'lala_map_models.dart';
+import 'lala_map_provider.dart';
 
 Widget buildLalaMapView({
   required String clientId,
@@ -21,8 +22,9 @@ Widget buildLalaMapView({
   ValueChanged<String>? onPlaceTap,
   ValueChanged<LalaMapCamera>? onCameraIdle,
 }) {
+  final provider = selectLalaMapProvider(language);
   final normalizedClientId = clientId.trim();
-  if (normalizedClientId.isEmpty) {
+  if (provider == LalaMapProviderKind.naver && normalizedClientId.isEmpty) {
     return _LalaMapNativeUnavailable(
       message: liveMapUnavailableLabel(language),
       language: language,
@@ -45,6 +47,7 @@ Widget buildLalaMapView({
   }
 
   return _LalaMapNativeWebView(
+    provider: provider,
     clientId: normalizedClientId,
     language: language,
     centerLat: centerLat,
@@ -59,6 +62,7 @@ Widget buildLalaMapView({
 
 class _LalaMapNativeWebView extends StatefulWidget {
   const _LalaMapNativeWebView({
+    required this.provider,
     required this.clientId,
     required this.language,
     required this.centerLat,
@@ -70,6 +74,7 @@ class _LalaMapNativeWebView extends StatefulWidget {
     this.onCameraIdle,
   });
 
+  final LalaMapProviderKind provider;
   final String clientId;
   final String language;
   final double centerLat;
@@ -107,6 +112,11 @@ class _LalaMapNativeWebViewState extends State<_LalaMapNativeWebView> {
           onPageFinished: (_) async => _pushConfig(),
           onNavigationRequest: (request) {
             final uri = Uri.tryParse(request.url);
+            if (widget.provider == LalaMapProviderKind.openVector) {
+              return isOpenVectorNavigationAllowed(uri)
+                  ? NavigationDecision.navigate
+                  : NavigationDecision.prevent;
+            }
             if (uri == null) {
               return NavigationDecision.prevent;
             }
@@ -117,8 +127,12 @@ class _LalaMapNativeWebViewState extends State<_LalaMapNativeWebView> {
                 : NavigationDecision.prevent;
           },
         ),
-      )
-      ..loadRequest(_nextMapUri());
+      );
+    if (widget.provider == LalaMapProviderKind.openVector) {
+      unawaited(_controller.loadFlutterAsset(kLalaOpenMapEmbedAssetPath));
+    } else {
+      unawaited(_controller.loadRequest(_nextNaverMapUri()));
+    }
   }
 
   @override
@@ -131,9 +145,14 @@ class _LalaMapNativeWebViewState extends State<_LalaMapNativeWebView> {
         oldWidget.level != widget.level ||
         oldWidget.interactionEnabled != widget.interactionEnabled ||
         !sameLalaMapPlaces(oldWidget.places, widget.places)) {
-      if (oldWidget.clientId != widget.clientId ||
-          oldWidget.language != widget.language) {
-        _controller.loadRequest(_nextMapUri());
+      // Only the NAVER embed is identity-bound to its client id and SDK
+      // language; the open-vector embed swaps locale via config only and is
+      // bundled, so a branch build needs no main deployment to render.
+      final reloadIdentity = widget.provider == LalaMapProviderKind.naver &&
+          (oldWidget.clientId != widget.clientId ||
+              oldWidget.language != widget.language);
+      if (reloadIdentity) {
+        _controller.loadRequest(_nextNaverMapUri());
       } else {
         unawaited(_pushConfig());
       }
@@ -148,7 +167,7 @@ class _LalaMapNativeWebViewState extends State<_LalaMapNativeWebView> {
     );
   }
 
-  Uri _nextMapUri() {
+  Uri _nextNaverMapUri() {
     _revision += 1;
     return Uri.https('lala-next.cloud', '/naver-map-embed.html', {
       'r': '$_revision',
@@ -156,29 +175,41 @@ class _LalaMapNativeWebViewState extends State<_LalaMapNativeWebView> {
   }
 
   Future<void> _pushConfig() {
-    final config = jsonEncode({
-      'bridgeId': _bridgeId,
-      'clientId': widget.clientId,
-      'language': widget.language,
-      'interactive': widget.interactionEnabled,
-      'lat': widget.centerLat,
-      'lng': widget.centerLng,
-      'level': widget.level,
-      'places': widget.places
-          .map(
-            (place) => {
-              'id': place.id,
-              'name': place.name,
-              'category': place.category,
-              'lat': place.lat,
-              'lng': place.lng,
-              'clusterCount': place.clusterCount,
-              'clusterMemberIds': place.clusterMemberIds,
-              'selected': place.selected,
+    final config = jsonEncode(
+      widget.provider == LalaMapProviderKind.openVector
+          ? buildOpenVectorMapConfigPayload(
+              bridgeId: _bridgeId,
+              language: widget.language,
+              centerLat: widget.centerLat,
+              centerLng: widget.centerLng,
+              level: widget.level,
+              places: widget.places,
+              interactionEnabled: widget.interactionEnabled,
+            )
+          : <String, Object?>{
+              'bridgeId': _bridgeId,
+              'clientId': widget.clientId,
+              'language': widget.language,
+              'interactive': widget.interactionEnabled,
+              'lat': widget.centerLat,
+              'lng': widget.centerLng,
+              'level': widget.level,
+              'places': widget.places
+                  .map(
+                    (place) => <String, Object?>{
+                      'id': place.id,
+                      'name': place.name,
+                      'category': place.category,
+                      'lat': place.lat,
+                      'lng': place.lng,
+                      'clusterCount': place.clusterCount,
+                      'clusterMemberIds': place.clusterMemberIds,
+                      'selected': place.selected,
+                    },
+                  )
+                  .toList(),
             },
-          )
-          .toList(),
-    });
+    );
     return _controller.runJavaScript(
       'window.LalaMapEmbed && window.LalaMapEmbed.setConfig($config);',
     );
@@ -195,8 +226,11 @@ class _LalaMapNativeWebViewState extends State<_LalaMapNativeWebView> {
     } on FormatException {
       decoded = null;
     }
+    final expectedSource = widget.provider == LalaMapProviderKind.openVector
+        ? kLalaOpenMapBridgeSource
+        : 'lala-naver-map';
     if (decoded is Map<String, dynamic> &&
-        decoded['source'] == 'lala-naver-map' &&
+        decoded['source'] == expectedSource &&
         decoded['bridgeId'] == _bridgeId) {
       final camera = decodeLalaMapCameraIdlePayload(decoded);
       if (camera != null) {
@@ -213,8 +247,7 @@ class _LalaMapNativeWebViewState extends State<_LalaMapNativeWebView> {
   }
 }
 
-class _LalaMapNativeUnavailable extends StatelessWidget {
-  const _LalaMapNativeUnavailable({
+class _LalaMapNativeUnavailable extends StatelessWidget {  const _LalaMapNativeUnavailable({
     required this.message,
     required this.language,
     required this.centerLat,
@@ -239,6 +272,6 @@ class _LalaMapNativeUnavailable extends StatelessWidget {
       centerLng: centerLng,
       places: places,
       onPlaceTap: onPlaceTap,
-    );
-  }
+     );
+   }
 }
