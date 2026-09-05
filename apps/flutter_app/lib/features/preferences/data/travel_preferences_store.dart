@@ -44,12 +44,20 @@ class TravelPreferencesStore extends ChangeNotifier {
       TravelPreferencesSyncStatus.localOnly;
   int _syncEpoch = 0;
 
-  /// Generation of the newest committed local document state. Every committed
-  /// `_saveLocal`/`_load` apply/`clear` bumps it, so a *derived* write (server
-  /// adoption, initial-load apply, use-account echo) that was suspended at the
-  /// storage seam can detect that a newer document already landed and discard
-  /// itself instead of overwriting it.
-  int _localWriteGeneration = 0;
+  /// Chained-future critical section guarding every actual platform mutation.
+  /// Each `setString`/`remove` on `SharedPreferences` is an asynchronous
+  /// platform call whose true linearization point is inside the platform
+  /// layer, so all persisted mutations (and the initial load) run through this
+  /// single queue: call order becomes commit order at the storage seam.
+  Future<void> _storageTail = Future<void>.value();
+
+  /// Generation of the newest local write *intent*. `save`,
+  /// `useAccountPreferences`, and `clear` bump it synchronously at call time —
+  /// before any suspension — so a *derived* write (server adoption, account
+  /// echo) that reaches the storage queue after a newer intent was declared
+  /// can detect that at the head of its critical section and discard itself
+  /// instead of overwriting it.
+  int _localIntentGeneration = 0;
 
   /// Generation of the newest `clear()`. Only a deliberate document deletion
   /// supersedes an in-flight *user* edit; ordinary writes must not discard
@@ -76,31 +84,29 @@ class TravelPreferencesStore extends ChangeNotifier {
     return _loadFuture ??= _load();
   }
 
-  Future<void> _load() async {
-    // The stored document is only authoritative if no newer local write
-    // committed while the storage read was in flight; otherwise applying it
-    // would resurrect stale storage over a fresh in-memory edit.
-    final generation = _localWriteGeneration;
-    try {
-      final preferences = await _preferencesFactory();
-      final raw = preferences.getString(kTravelPreferencesStorageKey);
-      if (raw != null && _localWriteGeneration == generation) {
-        _value = TravelPreferences.fromJson(jsonDecode(raw));
-        _hasLocalDocument = true;
-        _deviceUpdatedAt = preferences.getString(
-          kTravelPreferencesUpdatedAtKey,
-        );
-        _localWriteGeneration += 1;
-      }
-    } on Object {
-      if (_localWriteGeneration == generation) {
+  Future<void> _load() {
+    // Serialized with all mutations: a racing `save`/`clear` commits in call
+    // order at the storage seam, so the stored document read here can never
+    // be stale by the time it is applied.
+    return _serialize<void>(() async {
+      try {
+        final preferences = await _preferencesFactory();
+        final raw = preferences.getString(kTravelPreferencesStorageKey);
+        if (raw != null) {
+          _value = TravelPreferences.fromJson(jsonDecode(raw));
+          _hasLocalDocument = true;
+          _deviceUpdatedAt = preferences.getString(
+            kTravelPreferencesUpdatedAtKey,
+          );
+        }
+      } on Object {
         _value = const TravelPreferences();
         _hasLocalDocument = false;
+      } finally {
+        _loaded = true;
+        notifyListeners();
       }
-    } finally {
-      _loaded = true;
-      notifyListeners();
-    }
+    });
   }
 
   Future<void> save(TravelPreferences next) async {
@@ -111,8 +117,12 @@ class TravelPreferencesStore extends ChangeNotifier {
     // An explicit edit survives every interleaving except a newer deliberate
     // document deletion, which must not be resurrected by a pre-clear write.
     final clearGeneration = _clearGeneration;
-    await _saveLocal(next, requireClearGeneration: clearGeneration);
-    if (epoch != _syncEpoch) {
+    _localIntentGeneration += 1;
+    final landed = await _saveLocal(
+      next,
+      requireClearGeneration: clearGeneration,
+    );
+    if (!landed || epoch != _syncEpoch) {
       _reconcileAfterOutOfBandLocalWrite();
       return;
     }
@@ -142,43 +152,60 @@ class TravelPreferencesStore extends ChangeNotifier {
     }
   }
 
+  /// Runs [section] through the single storage critical section. Enqueue is
+  /// synchronous, the section starts only after the previous mutation (or the
+  /// initial load) has fully completed, and a failed section never breaks the
+  /// chain for later writers. Sections must not nest `_serialize` calls.
+  Future<T> _serialize<T>(Future<T> Function() section) {
+    final previous = _storageTail;
+    final run = previous.then<T>((_) => section());
+    _storageTail = run.then<void>((_) {}, onError: (Object _) {});
+    return run;
+  }
+
   /// Commits [next] unless a newer committed state superseded this write's
   /// basis while it was suspended at the storage seam. Derived writes pass
-  /// [requireGeneration] (discard when any newer write landed); explicit user
-  /// edits pass [requireClearGeneration] (discard only when a newer `clear()`
-  /// landed). Returns whether the write actually committed.
+  /// [requireEpoch]/[requireIntentGeneration] (discard when a newer intent or
+  /// account-scope change superseded them); explicit user edits pass
+  /// [requireClearGeneration] (discard only when a newer `clear()` landed).
+  /// Returns whether the write actually committed.
   Future<bool> _saveLocal(
     TravelPreferences next, {
     String? updatedAt,
-    int? requireGeneration,
+    int? requireEpoch,
+    int? requireIntentGeneration,
     int? requireClearGeneration,
-  }) async {
-    final preferences = await _preferencesFactory();
-    if (requireGeneration != null &&
-        requireGeneration != _localWriteGeneration) {
-      return false;
-    }
-    if (requireClearGeneration != null &&
-        requireClearGeneration != _clearGeneration) {
-      return false;
-    }
-    final resolvedUpdatedAt =
-        updatedAt ?? DateTime.now().toUtc().toIso8601String();
-    await preferences.setString(
-      kTravelPreferencesStorageKey,
-      jsonEncode(next.toJson()),
-    );
-    await preferences.setString(
-      kTravelPreferencesUpdatedAtKey,
-      resolvedUpdatedAt,
-    );
-    _value = next;
-    _deviceUpdatedAt = resolvedUpdatedAt;
-    _loaded = true;
-    _hasLocalDocument = true;
-    _localWriteGeneration += 1;
-    notifyListeners();
-    return true;
+  }) {
+    return _serialize<bool>(() async {
+      if (requireEpoch != null && requireEpoch != _syncEpoch) {
+        return false;
+      }
+      if (requireIntentGeneration != null &&
+          requireIntentGeneration != _localIntentGeneration) {
+        return false;
+      }
+      if (requireClearGeneration != null &&
+          requireClearGeneration != _clearGeneration) {
+        return false;
+      }
+      final resolvedUpdatedAt =
+          updatedAt ?? DateTime.now().toUtc().toIso8601String();
+      final preferences = await _preferencesFactory();
+      await preferences.setString(
+        kTravelPreferencesStorageKey,
+        jsonEncode(next.toJson()),
+      );
+      await preferences.setString(
+        kTravelPreferencesUpdatedAtKey,
+        resolvedUpdatedAt,
+      );
+      _value = next;
+      _deviceUpdatedAt = resolvedUpdatedAt;
+      _loaded = true;
+      _hasLocalDocument = true;
+      notifyListeners();
+      return true;
+    });
   }
 
   Future<void> connectAccount(TravelPreferencesRemote remote) {
@@ -215,11 +242,13 @@ class TravelPreferencesStore extends ChangeNotifier {
     // document must not overwrite a newer committed local edit that landed
     // while this choice was in flight.
     final epoch = _syncEpoch;
-    final generation = _localWriteGeneration;
+    _localIntentGeneration += 1;
+    final generation = _localIntentGeneration;
     final landed = await _saveLocal(
       server.preferences,
       updatedAt: server.updatedAt,
-      requireGeneration: generation,
+      requireEpoch: epoch,
+      requireIntentGeneration: generation,
     );
     if (!landed || epoch != _syncEpoch) {
       _reconcileAfterOutOfBandLocalWrite();
@@ -248,7 +277,7 @@ class TravelPreferencesStore extends ChangeNotifier {
     // Adoption may only land while it is still the newest local write; a
     // stale account's adoption must never overwrite a successor account's
     // adopted value or a committed user edit.
-    final generation = _localWriteGeneration;
+    final generation = _localIntentGeneration;
     try {
       final document = await remote.get();
       if (epoch != _syncEpoch) {
@@ -259,7 +288,8 @@ class TravelPreferencesStore extends ChangeNotifier {
         await _saveLocal(
           document.preferences,
           updatedAt: document.updatedAt,
-          requireGeneration: generation,
+          requireEpoch: epoch,
+          requireIntentGeneration: generation,
         );
         if (epoch != _syncEpoch) {
           return;
@@ -341,18 +371,20 @@ class TravelPreferencesStore extends ChangeNotifier {
     // adoption/echo writes and explicit edits), and only then remove storage.
     _syncEpoch += 1;
     _clearGeneration += 1;
-    _localWriteGeneration += 1;
-    final preferences = await _preferencesFactory();
-    await preferences.remove(kTravelPreferencesStorageKey);
-    await preferences.remove(kTravelPreferencesUpdatedAtKey);
-    _value = const TravelPreferences();
-    _deviceUpdatedAt = null;
-    _loaded = true;
-    _hasLocalDocument = false;
-    // The device copy is gone but the account document (if any) still exists;
-    // report the honest pairing instead of a stale claim.
-    _syncStatus = _statusAfterLocalReset();
-    notifyListeners();
+    _localIntentGeneration += 1;
+    await _serialize<void>(() async {
+      final preferences = await _preferencesFactory();
+      await preferences.remove(kTravelPreferencesStorageKey);
+      await preferences.remove(kTravelPreferencesUpdatedAtKey);
+      _value = const TravelPreferences();
+      _deviceUpdatedAt = null;
+      _loaded = true;
+      _hasLocalDocument = false;
+      // The device copy is gone but the account document (if any) still
+      // exists; report the honest pairing instead of a stale claim.
+      _syncStatus = _statusAfterLocalReset();
+      notifyListeners();
+    });
   }
 
   TravelPreferencesSyncStatus _statusAfterLocalReset() {
