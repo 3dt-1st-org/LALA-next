@@ -25,6 +25,8 @@ replaces that gap with a **synthetic, committed** fixture and a **repeatable off
 | `apps/api/app/tools/sanitize_docent_qa_report.py` | Lane C sanitizer; P6A: aggregates the deterministic dimension audits and preserves pass/flagged/not-applicable counts in the report schema and markdown. |
 | `apps/api/tests/test_docent_eval_harness.py` | Fixture schema (40/80, exact KO+EN pairing, 10-per-category balance), harness pass/fail, honest-empty, single-language, boundary mock, honest dimension accounting. |
 | `apps/api/tests/test_docent_qa_dimensions.py` | P6A: dimension evidence gating, pass/flag/N-A accounting, sanitizer schema, adversarial repetition cases. |
+| `apps/api/app/services/docent_judge.py` | P6B: strict fail-closed model-judge contract (one `PASS`/`REWRITE` decision + 11 bounded dimension results), the double live gate (existing live-AI gate + separate `docent_qa_judge` opt-in, resolving the `docent_qa` role separately from docent generation), the provider boundary (injected fake offline, gated live client with `max_retries=0`), and the bounded batch policy/runner (hard 80-record cap, sequential canary, finite concurrency, per-record timeout, no retries, malformed/failure/usage stop-loss). |
+| `apps/api/tests/test_docent_judge.py` | P6B: strict parsing, every fail-closed class, gate-off behavior, injected fake-provider batches, canary sequencing, 80-record cap, stop-loss, timeout/no-retry accounting, honest-empty skip, KO+EN examples, sanitizer safety, stable aggregates, and the report's separate judge gate (`NOT_RUN` default). |
 | `docs/planning/v4-docent-qa-framework.md` | This document. |
 
 **Not edited (hard boundary):** `docent_service.py`, `docent_quality_qa.py`,
@@ -217,3 +219,81 @@ QA operator (or the supervisor) performs the steps below on a real device with t
 - Source-rights usability verification beyond label presence (manual gate).
 - Voice playback / on-device speech QA (V4-B/V7).
 - Manual human QA rubric review (`docent-quality-manual-qa-strategy.md`).
+
+---
+
+## 8. P6B checkpoint status (2026-09-05): offline-tested model-judge contract
+
+P6B adds the smallest coherent **offline-testable, fail-closed model-judge
+boundary** for the established `docent_qa` role. It changes no P6A behavior:
+40 synthetic places / 10 per category / exact KO+EN pairing / 80 language
+cases / honest-empty / no-live-client guard / evidence-gated deterministic
+audits / sanitized artifacts are preserved exactly.
+
+**Implemented scope (exactly):**
+
+- **Strict judge result** (`apps/api/app/services/docent_judge.py`): one
+  overall decision `PASS` or `REWRITE`, plus exactly one bounded result per
+  dimension — language purity, factual grounding, local context, persona fit,
+  useful visitor guidance, unsafe or unsupported claims, source-rights
+  caution, Markdown/TTS suitability, weather contradiction, repetition, and
+  internal-score leakage — each with a machine-readable status
+  (`pass`/`flagged`) and a concise reason code. Parsing is strict: missing,
+  malformed, duplicate, unknown, non-finite, out-of-range, or contradictory
+  fields (including `PASS` with any flagged dimension) fail closed to
+  `REWRITE` with a machine-readable failure reason code; dimension results
+  from an untrusted payload are discarded.
+- **Separate role resolution:** the judge resolves the established
+  `docent_qa` model role via the existing `model_client.resolve`
+  (standard-OpenAI firewall included). No new provider, Azure path, raw-key
+  path, or direct-token path was added.
+- **Live judging OFF by default:** a production call requires the existing
+  explicit live-AI gate (`LALA_ENABLE_LIVE_AI` + API key + base-URL
+  firewall) **and** the separate `docent_qa_judge` feature flag
+  (`LALA_DOCENT_QA_JUDGE`, default False — the existing registry entry, no
+  flag edits). The live client is constructed only inside
+  `build_live_provider` behind the double gate, with `max_retries=0`.
+  Tests and the offline evaluator inject a fake provider at the boundary and
+  make zero network or paid calls.
+- **Bounded batch policy** (`JudgeBatchPolicy`, pure data, provider-free and
+  independently unit-testable): hard maximum 80 language records (the
+  existing 40-place × KO+EN roster; no policy may exceed it), a small
+  sequential canary before the remainder, finite concurrency (≤16, executor
+  bounded), a per-record timeout, exactly one provider call per record (no
+  automatic retries that could multiply spend), and a stop-loss halting the
+  batch on malformed responses, repeated provider failures (timeouts
+  included), or a configured cumulative token/usage ceiling. Halted batches
+  mark every unjudged record explicitly skipped — never silently passed.
+- **Sanitized persistence only:** outcomes carry the sanitized record
+  identity (`eval_` place id + language), the decision, failure/error codes,
+  dimension statuses with redacted bounded reason codes, a bounded redacted
+  script excerpt reused from the P6A sanitizer (same 240-char visibly elided
+  route; secrets/coordinates/email/phone redacted), and aggregate counters.
+  Raw provider payloads, raw review text, secrets, personal data, precise
+  coordinates, and cloud identifiers are never logged or persisted.
+- **Separate optional report gate:** the offline QA report carries a
+  `judge_gate` section. Default: `{"status": "NOT_RUN"}` — never `PASS`.
+  `run_docent_eval --judge-fake` runs the full judge pipeline offline with
+  the committed `FakeJudgeProvider` (78 judged, 2 honest-empty skips on the
+  committed fixture). The judge gate never modifies the deterministic P6A
+  results or the CLI exit code.
+
+**Scope honesty:** the model-judge gate evaluates only what the (live or
+fake) provider returns under the strict schema. An offline fake `PASS` says
+nothing about model quality; even a live `PASS` is a narrow structured
+verdict, not proof of broad factual truth, content safety, source rights, or
+production readiness. Those remain external gates below.
+
+**Remaining separate external gates (explicitly NOT executed in P6B):**
+
+1. **Paid canary** — a real paid live-judge canary run against the deployed
+   API with the double gate on, under the batch stop-loss.
+2. **Real 40-place/80-script regeneration** — regenerating real production
+   docent scripts (Lane C) and judging those, not the synthetic roster.
+3. **Human manual QA** — the manual rubric review
+   (`docent-quality-manual-qa-strategy.md`).
+4. **Source-rights review** — usability verification beyond label presence.
+5. **On-device audio QA** — voice playback / speech QA (V4-B/V7).
+6. **Production runtime wiring** — wiring the judge gate into any production
+   runtime/routing surface (none exists; the offline report gate is the only
+   consumer).
