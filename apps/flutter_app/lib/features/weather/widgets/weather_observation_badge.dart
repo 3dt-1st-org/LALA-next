@@ -12,16 +12,22 @@ class WeatherObservationBadge extends StatelessWidget {
     super.key,
     required this.recordTime,
     required this.language,
+    this.now,
   });
 
   final String? recordTime;
   final String language;
 
+  /// Clock dependency (clock dependency). In production it is always
+  /// `DateTime.now()`; tests inject a fixed time to guarantee determinism. It is
+  /// never used for anything other than freshness determination/labeling.
+  final DateTime? now;
+
   @override
   Widget build(BuildContext context) {
     final info = weatherObservationInfo(
       recordTime: recordTime,
-      now: DateTime.now(),
+      now: now ?? DateTime.now(),
       language: language,
     );
     final isStale = info.freshness == WeatherObservationFreshness.stale;

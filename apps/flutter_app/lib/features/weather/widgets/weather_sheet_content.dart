@@ -18,10 +18,15 @@ class WeatherSheetContent extends StatelessWidget {
     super.key,
     required this.language,
     required this.weather,
+    this.now,
   });
 
   final String language;
   final LalaWeather? weather;
+
+  /// 관측 배지 clock 주입용 테스트 심(좁은 범위). 프로덕션 호출점은 전달하지
+  /// 않아 배지가 `DateTime.now()` 를 쓴다(동작 무변경).
+  final DateTime? now;
 
   @override
   Widget build(BuildContext context) {
@@ -38,6 +43,7 @@ class WeatherSheetContent extends StatelessWidget {
         WeatherObservationBadge(
           recordTime: data.recordTime,
           language: language,
+          now: now,
         ),
         const SizedBox(height: 12),
         Wrap(

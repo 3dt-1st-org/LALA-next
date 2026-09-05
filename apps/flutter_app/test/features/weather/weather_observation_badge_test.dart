@@ -5,6 +5,10 @@
 // - 스크린 리더 semantics(label 결합) 존재.
 // - 320dp 폭 / TextScaler.linear(2) 에서 overflow 없음(배지 단독 + 시트 통합).
 // - 기존 unavailable 동작 보존: placeholder 날씨는 여전히 unavailable 카드만.
+// 결정성: 모든 케이스가 배지/시트의 clock 주입 심(now)에 고정 UTC 시각을
+// 넣고, 관측 시각은 명시적 wire 값(+09:00 / 비-타임존 KST / Z)만 쓴다.
+// 벽시계 DateTime.now() 나 로컬 직렬화를 쓰지 않으므로 KST 자정 경계와
+// 실행 호스트 타임존(비-KST CI 포함) 모두와 무관하다.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
@@ -13,12 +17,8 @@ import 'package:lala_next_app/features/weather/widgets/weather_observation_badge
 import 'package:lala_next_app/features/weather/widgets/weather_sheet_content.dart';
 
 void main() {
-  // 파싱 성공 케이스는 고정된 'now-상대' 관측 시각을 쓴다(라벨은 record_time
-  // 자체에서만 유도되므로 결정적). stale 경계 판정은 헬퍼 단위 테스트가 담당.
-  final freshRecordTime = DateTime.now()
-      .subtract(const Duration(minutes: 30))
-      .toUtc()
-      .toIso8601String();
+  // 고정 clock: 2026-09-05 02:30Z == KST 2026-09-05 11:30(헬퍼 단위 테스트와 동일 앵커).
+  final fixedNow = DateTime.utc(2026, 9, 5, 2, 30);
 
   Future<void> pumpBadge(
     WidgetTester tester, {
@@ -26,6 +26,7 @@ void main() {
     String language = 'ko',
     TextScaler textScaler = TextScaler.noScaling,
     Size size = const Size(402, 874),
+    DateTime? now,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -44,6 +45,7 @@ void main() {
                 WeatherObservationBadge(
                   recordTime: recordTime,
                   language: language,
+                  now: now ?? fixedNow,
                 ),
               ],
             ),
@@ -53,13 +55,41 @@ void main() {
     );
   }
 
-  testWidgets('valid fresh 관측: 시각 + 최신 관측 칩', (tester) async {
-    await pumpBadge(tester, recordTime: freshRecordTime);
+  testWidgets('valid fresh 관측: 시각 + 최신 관측 칩(고정 clock 결정적)', (tester) async {
+    // 30분 전 관측(2026-09-05 11:00 KST) — 같은 KST 날 → 시각만 표시.
+    await pumpBadge(tester, recordTime: '2026-09-05T11:00:00+09:00');
     expect(find.byKey(const ValueKey('weather-observed-time')), findsOneWidget);
+    expect(find.text('관측 시각 11:00'), findsOneWidget);
     expect(find.text('최신 관측'), findsOneWidget);
-    // '관측 시각 HH:mm' 패턴 노출(상대 나이 문구 아님).
-    expect(find.textContaining(RegExp(r'^관측 시각 \d{2}:\d{2}$')), findsOneWidget);
     expect(find.textContaining('방금'), findsNothing);
+  });
+
+  testWidgets('KST 같은 날/다른 날 라벨 전환(자정 경계 결정적)', (tester) async {
+    // now = KST 2026-09-05 11:30.
+    // 같은 날 자정 직후 관측 → 시각만.
+    await pumpBadge(tester, recordTime: '2026-09-05T00:01:00+09:00');
+    expect(find.text('관측 시각 00:01'), findsOneWidget);
+    expect(find.textContaining(RegExp(r'^관측 시각 \d{4}-')), findsNothing);
+    // 전날 마지막 관측 → 날짜 포함.
+    await pumpBadge(tester, recordTime: '2026-09-04T23:59:00+09:00');
+    expect(find.text('관측 시각 2026-09-04 23:59'), findsOneWidget);
+  });
+
+  testWidgets('동일 순간의 서로 다른 wire 표현이 동일 라벨/상태를 만든다(호스트 타임존 무관)', (
+    tester,
+  ) async {
+    // 2026-09-04 23:00 KST == 2026-09-04 14:00Z. 어떤 표현으로 와도 KST 벽시계
+    // 라벨과 stale 상태는 동일해야 한다(비-KST CI 호스트에서도 동일).
+    for (final wire in [
+      '2026-09-04T23:00:00+09:00', // ISO-8601 +09:00
+      '2026-09-04 23:00', // 비-타임존 dataTime(KST 해석)
+      '2026-09-04T14:00:00Z', // UTC Z
+      '2026-09-04T14:00:00+00:00', // +00:00 오프셋
+    ]) {
+      await pumpBadge(tester, recordTime: wire);
+      expect(find.text('관측 시각 2026-09-04 23:00'), findsOneWidget, reason: wire);
+      expect(find.text('이전 관측값'), findsOneWidget, reason: wire);
+    }
   });
 
   testWidgets('stale 관측(고정 과거일): 날짜 포함 라벨 + 이전 관측값 칩', (tester) async {
@@ -90,10 +120,8 @@ void main() {
   });
 
   testWidgets('미래 skew 관측: 나이를 발명하지 않고 미확인 문구', (tester) async {
-    final future = DateTime.now()
-        .add(const Duration(minutes: 30))
-        .toIso8601String();
-    await pumpBadge(tester, recordTime: future);
+    // 고정 clock 대비 3분 미래(명시적 KST wire 값 — 호스트 직렬화 불사용).
+    await pumpBadge(tester, recordTime: '2026-09-05T11:33:00+09:00');
     expect(find.text('관측 시각 확인 중'), findsOneWidget);
     expect(find.textContaining('방금'), findsNothing);
     expect(find.textContaining('후'), findsNothing);
@@ -187,7 +215,13 @@ void main() {
               padding: const EdgeInsets.all(12),
               child: ListView(
                 children: [
-                  WeatherSheetContent(language: language, weather: weather),
+                  // 시트의 좁은 clock 테스트 심으로 고정 시각만 주입한다.
+                  // 언어/날씨 인자는 프로덕션 호출점과 동일한 형태.
+                  WeatherSheetContent(
+                    language: language,
+                    weather: weather,
+                    now: fixedNow,
+                  ),
                 ],
               ),
             ),
@@ -197,11 +231,15 @@ void main() {
     }
 
     testWidgets('실측 날씨 시트: 히어로 카드 아래 관측 배지가 함께 렌더링', (tester) async {
-      await pumpSheet(tester, weather: _weather(recordTime: freshRecordTime));
+      await pumpSheet(
+        tester,
+        weather: _weather(recordTime: '2026-09-05T11:00:00+09:00'),
+      );
       expect(
         find.byKey(const ValueKey('weather-observed-time')),
         findsOneWidget,
       );
+      expect(find.text('관측 시각 11:00'), findsOneWidget);
       expect(find.text('최신 관측'), findsOneWidget);
       expect(find.byKey(const ValueKey('weather-source-chip')), findsOneWidget);
     });
