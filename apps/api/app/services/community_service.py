@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Iterator
 from contextlib import closing, contextmanager
 from typing import Any
@@ -7,6 +8,10 @@ from uuid import UUID
 
 from apps.api.app.core.config import Settings, get_settings
 from apps.api.app.core.errors import ServiceError
+from apps.api.app.services.community_idempotency import canonical_request_hash
+
+IDEMPOTENCY_TTL_SECONDS = 24 * 60 * 60
+IDEMPOTENCY_SCOPE_POST_CREATE = "community.post.create"
 
 
 class CommunityRepositoryUnavailable(RuntimeError):
@@ -152,8 +157,108 @@ class CommunityRepository:
         with self._cursor() as cur:
             cur.execute(sql, (issuer, subject, title, body, tags))
             row = cur.fetchone()
-        assert row is not None  # RETURNING always yields one row on insert.
+            assert row is not None  # RETURNING always yields one row on insert.
+            row["author_user_id"] = _resolve_author_user_id(cur, issuer, subject)
         return row
+
+    def create_post_idempotent(
+        self,
+        *,
+        issuer: str,
+        subject: str,
+        title: str,
+        body: str,
+        tags: list[str],
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        """Durable idempotent post creation (see chat counterpart for design).
+
+        One transaction: purge expired keys for this actor, claim the key with
+        a placeholder response, insert the post, store the real response.
+        Concurrent same-key writers serialize on the primary key; the loser
+        replays the committed response or is rejected as a conflict.
+        """
+
+        request_hash = canonical_request_hash({"title": title, "body": body, "tags": list(tags)})
+        purge_sql = """
+            DELETE FROM community.idempotency_keys
+            WHERE scope = %s AND actor_issuer = %s AND actor_subject = %s
+              AND expires_at < now()
+        """
+        claim_sql = """
+            INSERT INTO community.idempotency_keys
+                (scope, actor_issuer, actor_subject, idempotency_key,
+                 request_hash, response_json, status_code, expires_at)
+            VALUES (%s, %s, %s, %s, %s, 'null'::jsonb, 200,
+                    now() + make_interval(secs => %s))
+            ON CONFLICT (scope, actor_issuer, actor_subject, idempotency_key)
+                DO NOTHING
+            RETURNING idempotency_key
+        """
+        existing_sql = """
+            SELECT request_hash, response_json
+            FROM community.idempotency_keys
+            WHERE scope = %s AND actor_issuer = %s AND actor_subject = %s
+              AND idempotency_key = %s
+        """
+        store_sql = """
+            UPDATE community.idempotency_keys
+            SET response_json = %s::jsonb
+            WHERE scope = %s AND actor_issuer = %s AND actor_subject = %s
+              AND idempotency_key = %s
+        """
+        insert_sql = """
+            INSERT INTO community.user_posts
+                (author_issuer, author_subject, title, body, tags)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING
+                id, author_issuer, author_subject, title, body, tags,
+                created_at, updated_at
+        """
+        with self._cursor() as cur:
+            cur.execute(purge_sql, (IDEMPOTENCY_SCOPE_POST_CREATE, issuer, subject))
+            cur.execute(
+                claim_sql,
+                (
+                    IDEMPOTENCY_SCOPE_POST_CREATE,
+                    issuer,
+                    subject,
+                    idempotency_key,
+                    request_hash,
+                    IDEMPOTENCY_TTL_SECONDS,
+                ),
+            )
+            claimed = cur.fetchone() is not None
+            if not claimed:
+                cur.execute(
+                    existing_sql,
+                    (IDEMPOTENCY_SCOPE_POST_CREATE, issuer, subject, idempotency_key),
+                )
+                existing = cur.fetchone()
+                if existing is None:
+                    raise CommunityRepositoryUnavailable()
+                if existing["request_hash"] != request_hash:
+                    return {"outcome": "conflict", "row": None}
+                response = existing["response_json"]
+                if response is None:
+                    raise CommunityRepositoryUnavailable()
+                return {"outcome": "replayed", "row": dict(response)}
+            cur.execute(insert_sql, (issuer, subject, title, body, tags))
+            row = cur.fetchone()
+            assert row is not None  # RETURNING always yields one row on insert.
+            row["author_user_id"] = _resolve_author_user_id(cur, issuer, subject)
+            payload = _post_payload(row)
+            cur.execute(
+                store_sql,
+                (
+                    json.dumps(payload),
+                    IDEMPOTENCY_SCOPE_POST_CREATE,
+                    issuer,
+                    subject,
+                    idempotency_key,
+                ),
+            )
+            return {"outcome": "created", "row": payload}
 
     def list_comments(
         self, *, post_id: UUID, limit: int, offset: int
@@ -413,6 +518,15 @@ def _connect(*, dsn: str, connect_timeout: int):
     return psycopg2.connect(dsn, connect_timeout=connect_timeout)
 
 
+def _resolve_author_user_id(cur: Any, issuer: str, subject: str) -> Any:
+    cur.execute(
+        "SELECT id AS author_user_id FROM identity.users WHERE issuer = %s AND subject = %s",
+        (issuer, subject),
+    )
+    identity_row = cur.fetchone()
+    return identity_row["id"] if identity_row else None
+
+
 class CommunityService:
     """Thin orchestration layer that shapes repository rows and maps DB errors."""
 
@@ -465,18 +579,44 @@ class CommunityService:
         title: str,
         body: str,
         tags: list[str],
+        idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         try:
-            row = self._repository.create_post(
-                issuer=issuer,
-                subject=subject,
-                title=title,
-                body=body,
-                tags=tags,
-            )
-            return _post_payload(row)
+            if idempotency_key:
+                result = self._repository.create_post_idempotent(
+                    issuer=issuer,
+                    subject=subject,
+                    title=title,
+                    body=body,
+                    tags=tags,
+                    idempotency_key=idempotency_key,
+                )
+            else:
+                row = self._repository.create_post(
+                    issuer=issuer,
+                    subject=subject,
+                    title=title,
+                    body=body,
+                    tags=tags,
+                )
+                result = {"outcome": "created", "row": row}
         except CommunityRepositoryUnavailable as exc:
             raise _database_unavailable() from exc
+        outcome = result["outcome"]
+        if outcome == "conflict":
+            raise ServiceError(
+                status_code=409,
+                code="IDEMPOTENCY_KEY_CONFLICT",
+                message=("This idempotency key was already used with a different payload."),
+                retryable=False,
+            )
+        row = result["row"]
+        assert row is not None  # created/replayed always carry a row.
+        if outcome == "replayed":
+            # The stored response is already wire-shaped; returning it verbatim
+            # is what makes a retry byte-identical to the original response.
+            return row
+        return _post_payload(row)
 
     def list_comments(self, *, post_id: UUID, limit: int, offset: int) -> dict[str, Any]:
         try:
