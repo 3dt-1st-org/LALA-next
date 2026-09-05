@@ -137,3 +137,27 @@ git diff --check
 
 정정 후 테스트 109개(93 → 109), 전체 API 스위트 2181 passed, ruff/format/
 pre-commit/git diff --check 모두 녹색.
+
+## 최종 정정 (2026-09-05, 재검증 verdict 반영 — 공개 신원 직렬화)
+
+재검증(수정 head `0cdcef94` 대상)은 6개 결함 중 5개 수정을 확인하고 남은
+하나의 구현 가능한 결함을 지적했다: `JudgeRecordOutcome.to_public_dict`
+(및 그 안에 outcome을 중첩하는 `JudgeBatchRun.summarize`)이 원시 내부
+place_id(UUID형 포함)와 비제한 언어 문자열(10,000자 포함)을 그대로 내보낸
+것. 단일 직렬화 초크 포인트에서 공개 신원 투영(projection)으로 수정했다:
+
+- **place_id**: 확립된 `eval_` 네임스페이스의 엄격한 안전 신원(소문자 ASCII
+  글자/숫자/언더스코어/하이픈, ≤64자)만 오프라인 추적성을 위해 유지.
+  그 외 모든 신원(내부형·UUID형·안전하지 않은 문자셋·과장)은 상수 정직
+  리덕션 마커 `internal_redacted`로 대체 — 원시 값도, 가역값도, 원시
+  해시도 아님.
+- **language**: 현행 40/80 저지 계약의 `ko`/`en`만 화이트리스트; 그 외
+  또는 과장 값은 경계 리터럴 `unknown`.
+- 원시 신원은 배치 회계(`_has_outcome`)를 위한 메모리 내 필드에만 존재;
+  모든 공개/리포트 직렬화는 안전 투영을 통과.
+- 회귀 테스트: 허용 `eval_` 신원 유지(outcome+summary), UUID형 신원
+  리덕션, 과장(105자)·안전하지 않은 문자셋·비ASCII `eval_` 신원 리덕션,
+  10,000자 언어 → `unknown`, 64자 경계 정확 분할.
+
+게이트/타임아웃/페이크 시맨틱·`.secrets.baseline`·기타 파일은 무변경.
+최종 정정 후 저지 테스트 114개(109 → 114), 전체 API 스위트 녹색.
