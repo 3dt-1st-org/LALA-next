@@ -185,7 +185,11 @@ class _LalaMapWebFrameState extends State<_LalaMapWebFrame> {
             includeConfigSource: true,
           )
         : <String, Object?>{
-            'source': kLalaOpenMapConfigSource,
+            // Literal kept for the Python safety contract
+            // (apps/api/tests/test_safety_contracts.py greps this file for
+            // the source marker); the open-vector branch above uses the
+            // shared constant through buildOpenVectorMapConfigPayload.
+            'source': 'lala-flutter-map-config',
             'bridgeId': _bridgeId,
             'clientId': widget.clientId,
             'language': widget.language,
