@@ -289,7 +289,19 @@ class LalaAuthController extends ChangeNotifier {
         (_state.status == LalaAuthStatus.error && !_state.authenticated)) {
       return Future<String?>.value();
     }
-    return _gateway.accessToken(config.apiAudience);
+    // Fence in-flight token resolutions to the session they started under.
+    // A request that began under account A must never be authorized with a
+    // later account B's token (rapid A/B switch), and a sign-out must fence
+    // pending account writes instead of arming them with a fresh token.
+    final revision = _sessionRevision;
+    return _gateway
+        .accessToken(config.apiAudience)
+        .then<String?>((token) {
+          if (token == null || !_isCurrentSession(revision)) {
+            return null;
+          }
+          return token;
+        });
   }
 
   Future<void> retryAccountSync() async {
