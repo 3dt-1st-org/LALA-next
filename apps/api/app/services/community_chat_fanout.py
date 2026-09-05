@@ -6,6 +6,7 @@ import json
 import logging
 import threading
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from typing import Any
 from uuid import UUID
 
@@ -17,6 +18,24 @@ logger = logging.getLogger(__name__)
 # Bounded reconnect backoff for the listener thread (seconds).
 _RECONNECT_BACKOFF_SECONDS = (1, 2, 4, 8, 15, 30, 60)
 _SELECT_TIMEOUT_SECONDS = 15.0
+
+
+@dataclass
+class _ListenerGeneration:
+    """State owned by exactly one listener thread.
+
+    Nothing here is shared across generations: the old thread's ``finally``
+    only mutates its own generation, so a late wind-down can never clear a
+    successor's connection, stop event or event loop. ``terminated`` is set
+    by the owning thread itself when it has fully exited (its connection
+    closed by the same thread), which is the only signal ``stop`` trusts.
+    """
+
+    thread: threading.Thread
+    stop: threading.Event
+    loop: asyncio.AbstractEventLoop
+    terminated: threading.Event = field(default_factory=threading.Event)
+    connection: Any = None
 
 
 class ChatFanoutBridge:
@@ -32,6 +51,23 @@ class ChatFanoutBridge:
     listener is down, cross-instance delivery pauses until it reconnects; the
     messages remain committed and readable through the REST history endpoint,
     and clients recover by refreshing history on reconnect.
+
+    Lifecycle ownership rules (deterministically regression-tested):
+
+    * There is at most one listener thread per bridge. ``start`` is a no-op
+      while a healthy generation is serving and *refuses* (returns ``False``)
+      while a previous generation is still winding down — confirmed
+      termination is required before a restart.
+    * Each generation owns its connection, stop event, event loop and
+      delivery scheduling; a stale generation can neither deliver after being
+      replaced nor mutate the successor's state.
+    * The owning thread closes its own connection in its own ``finally``.
+      ``stop`` only asks it to leave (stop event + advisory ``cancel()``) and
+      then waits a bounded time for ``terminated``; ``connection.cancel()``
+      aborts a server round trip but is *not* guaranteed to interrupt a
+      locally blocked ``select``, so on timeout the generation is retained
+      (not force-closed, not replaced) and simply refuses restarts until the
+      thread itself confirms exit.
     """
 
     def __init__(
@@ -44,77 +80,106 @@ class ChatFanoutBridge:
         self._fetcher_factory = fetcher_factory
         self._deliver = deliver
         self._channel = channel
-        self._thread: threading.Thread | None = None
-        self._loop: asyncio.AbstractEventLoop | None = None
-        self._stop = threading.Event()
-        self._connection: Any = None
+        self._generation: _ListenerGeneration | None = None
         self._lifecycle_lock = threading.Lock()
 
     # -- Lifecycle -----------------------------------------------------------
 
     @property
     def running(self) -> bool:
-        return self._thread is not None and self._thread.is_alive()
+        generation = self._generation
+        return (
+            generation is not None and generation.thread.is_alive() and not generation.stop.is_set()
+        )
+
+    @property
+    def winding_down(self) -> bool:
+        generation = self._generation
+        return generation is not None and generation.thread.is_alive() and generation.stop.is_set()
 
     def start(self, loop: asyncio.AbstractEventLoop) -> bool:
-        """Start the listener thread once; returns whether it is running.
+        """Start one listener generation.
 
-        Callers must only invoke this when a database is configured: without
-        ``DB_DSN`` the bridge stays off and WebSocket delivery degrades to
-        same-instance only (documented in the P7 runbook). Lifecycle is
-        serialized through ``_lifecycle_lock`` so at most one listener thread
-        exists even across rapid stop/start cycles.
+        Returns ``True`` when a generation is serving (existing or freshly
+        started) and ``False`` when a previous generation is still winding
+        down — in that case no thread is spawned and the caller may retry
+        once the old generation confirms termination. Callers must only
+        invoke this when a database is configured: without ``DB_DSN`` the
+        bridge stays off and WebSocket delivery degrades to same-instance
+        only (documented in the P7 runbook).
         """
 
         with self._lifecycle_lock:
-            thread = self._thread
-            if thread is not None and thread.is_alive() and not self._stop.is_set():
-                return True
-            self._stop.clear()
-            self._loop = loop
+            generation = self._generation
+            if generation is not None and generation.thread.is_alive():
+                # Already serving: no second listener. Winding down: refuse —
+                # restart only after the old generation confirms termination.
+                return not generation.stop.is_set()
+            # Build the generation object first so the thread closes over the
+            # exact object stored on the bridge (identity-checked delivery).
+            new_generation = _ListenerGeneration(
+                thread=None,  # type: ignore[arg-type]
+                stop=threading.Event(),
+                loop=loop,
+            )
             thread = threading.Thread(
                 target=self._listen_loop,
+                args=(new_generation,),
                 name="community-chat-fanout-bridge",
                 daemon=True,
             )
-            self._thread = thread
+            new_generation.thread = thread
+            self._generation = new_generation
             thread.start()
             return True
 
-    def stop(self, timeout: float = 3.0) -> None:
-        """Bounded shutdown: cancel the blocking select, join, then close.
+    def stop(self, timeout: float = 3.0) -> bool:
+        """Bounded shutdown of the current generation.
 
-        ``connection.cancel()`` is safe from another thread and aborts the
-        in-flight ``select()``, so the listener observes the stop event without
-        waiting out the full select timeout; overlapping old/new listeners
-        cannot outlive this call by more than the join timeout, and ``start``
-        refuses to spawn a second thread while one is still winding down.
+        Sets the generation-owned stop event and issues an advisory
+        ``connection.cancel()`` (safe from this thread; may not interrupt a
+        locally blocked ``select``). Waits up to ``timeout`` for the owning
+        thread to confirm its own termination — the thread closes its own
+        connection, so this side never closes a connection it does not own.
+        Returns ``True`` when termination was confirmed within ``timeout``.
+        On timeout the generation is retained untouched: it keeps ownership
+        of its connection and refuses restarts (``start`` returns ``False``)
+        until the thread itself exits; bounded callers are never blocked
+        waiting for that to happen.
         """
 
         with self._lifecycle_lock:
-            self._stop.set()
-            thread = self._thread
-            connection = self._connection
-            if connection is not None:
-                with contextlib.suppress(Exception):
-                    connection.cancel()
-            if thread is not None and thread.is_alive():
-                thread.join(timeout=timeout)
-            if connection is not None:
-                with contextlib.suppress(Exception):
-                    connection.close()
-            self._connection = None
-            self._thread = None
-            self._loop = None
+            generation = self._generation
+        if generation is None:
+            return True
+        generation.stop.set()
+        connection = generation.connection
+        if connection is not None:
+            with contextlib.suppress(Exception):
+                connection.cancel()
+        confirmed = generation.terminated.wait(timeout=timeout)
+        if confirmed:
+            with self._lifecycle_lock:
+                if self._generation is generation:
+                    self._generation = None
+        return confirmed
 
     # -- Notification handling (unit-testable without a thread) -------------
 
-    def handle_notification(self, payload_json: str) -> dict[str, Any] | None:
+    def handle_notification(
+        self,
+        payload_json: str,
+        *,
+        generation: _ListenerGeneration | None = None,
+    ) -> dict[str, Any] | None:
         """Parse one NOTIFY payload and schedule local delivery.
 
-        Returns the fetched message payload (for tests/diagnostics) or
-        ``None`` when the payload is malformed or the message is no longer
-        readable. Never raises: a bad notification only skips delivery.
+        ``generation`` is the listener the notification came from (``None``
+        means "the current one"). A stale generation — replaced or stopped —
+        never delivers. Returns the fetched message payload (for
+        tests/diagnostics) or ``None`` when the payload is malformed, the
+        listener is gone, or the message is no longer readable. Never raises:
+        a bad notification only skips delivery.
         """
 
         try:
@@ -132,54 +197,68 @@ class ChatFanoutBridge:
             UUID(message_id)
         except ValueError:
             return None
+        current = self._generation
+        if generation is not None and current is not generation:
+            return None  # stale generation: never deliver after replacement
+        if current is None:
+            return None  # no listener: delivery is honestly skipped
         try:
             fetcher = self._fetcher_factory()
             message = fetcher.fetch_message_for_fanout(message_id=UUID(message_id))
         except Exception:
             # Exception-safe fetch: a transient store error skips this
-            # delivery without killing the listener loop.
+            # delivery without killing the listener loop. The exception text
+            # can embed connection details, so it is not logged.
             return None
         if message is None:
             return None
         fetched = message if isinstance(message, dict) else dict(message)
         if str(fetched.get("room_id")) != room_id:
             return None
-        self._schedule_deliver(fetched)
+        self._schedule_deliver(current, fetched)
         return fetched
 
-    def _schedule_deliver(self, payload: dict[str, Any]) -> None:
-        loop = self._loop
+    def _schedule_deliver(self, generation: _ListenerGeneration, payload: dict[str, Any]) -> None:
+        # Re-checked at schedule time: the generation may have been replaced
+        # or stopped while the fetch was in flight.
+        if self._generation is not generation or generation.stop.is_set():
+            return
+        loop = generation.loop
         if loop is None or loop.is_closed():
             return
         asyncio.run_coroutine_threadsafe(self._deliver(payload), loop)
 
     # -- Listener thread -----------------------------------------------------
 
-    def _listen_loop(self) -> None:
-        reconnect_attempt = 0
-        while not self._stop.is_set():
-            connection = None
-            try:
-                connection = self._open_listener_connection()
-                self._connection = connection
-                reconnect_attempt = 0
-                self._drain_notifications(connection)
-            except Exception:
-                # Content-free: the durable store is unaffected; delivery
-                # resumes when the listener reconnects.
-                logger.warning("community chat fanout listener disconnected; retrying")
-            finally:
-                self._connection = None
-                if connection is not None:
-                    with contextlib.suppress(Exception):
-                        connection.close()
-            if self._stop.is_set():
-                break
-            delay = _RECONNECT_BACKOFF_SECONDS[
-                min(reconnect_attempt, len(_RECONNECT_BACKOFF_SECONDS) - 1)
-            ]
-            reconnect_attempt += 1
-            self._stop.wait(delay)
+    def _listen_loop(self, generation: _ListenerGeneration) -> None:
+        try:
+            reconnect_attempt = 0
+            while not generation.stop.is_set():
+                connection = None
+                try:
+                    connection = self._open_listener_connection()
+                    generation.connection = connection
+                    reconnect_attempt = 0
+                    self._drain_notifications(generation, connection)
+                except Exception:
+                    # Content-free: the durable store is unaffected; delivery
+                    # resumes when the listener reconnects. Exception details
+                    # (DSN/payload) are deliberately not logged.
+                    logger.warning("community chat fanout listener disconnected; retrying")
+                finally:
+                    generation.connection = None
+                    if connection is not None:
+                        with contextlib.suppress(Exception):
+                            connection.close()
+                if generation.stop.is_set():
+                    break
+                delay = _RECONNECT_BACKOFF_SECONDS[
+                    min(reconnect_attempt, len(_RECONNECT_BACKOFF_SECONDS) - 1)
+                ]
+                reconnect_attempt += 1
+                generation.stop.wait(delay)
+        finally:
+            generation.terminated.set()
 
     def _open_listener_connection(self):
         import psycopg2
@@ -193,17 +272,17 @@ class ChatFanoutBridge:
             cur.execute(f"LISTEN {self._channel}")
         return connection
 
-    def _drain_notifications(self, connection) -> None:
+    def _drain_notifications(self, generation: _ListenerGeneration, connection) -> None:
         import select
 
-        while not self._stop.is_set():
+        while not generation.stop.is_set():
             ready, _, _ = select.select([connection], [], [], _SELECT_TIMEOUT_SECONDS)
             if not ready:
                 continue
             connection.poll()
             while connection.notifies:
                 notification = connection.notifies.pop(0)
-                self.handle_notification(notification.payload)
+                self.handle_notification(notification.payload, generation=generation)
 
 
 _default_bridge: ChatFanoutBridge | None = None

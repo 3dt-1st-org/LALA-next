@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
@@ -16,6 +17,7 @@ from apps.api.app.routers.community_chat import (
     ConnectionManager,
     manager,
 )
+from apps.api.app.services.community_chat_fanout import ChatFanoutBridge
 from apps.api.app.services.community_chat_service import (
     FANOUT_CHANNEL,
     WS_TICKET_TTL_SECONDS,
@@ -1366,6 +1368,24 @@ def _wire_payload() -> dict[str, Any]:
     }
 
 
+def _arm_generation(bridge) -> Any:
+    """Install a synthetic current generation (no thread) for notification tests."""
+
+    from apps.api.app.services.community_chat_fanout import _ListenerGeneration
+
+    generation = _ListenerGeneration(
+        thread=object(),  # type: ignore[arg-type]
+        stop=threading.Event(),
+        loop=None,
+    )
+    bridge._generation = generation
+    return generation
+
+
+def _notification_json() -> str:
+    return json.dumps({"room_id": str(ROOM_ID), "message_id": str(MESSAGE_ID)})
+
+
 def test_fanout_handle_notification_delivers_committed_message() -> None:
     from apps.api.app.services.community_chat_fanout import ChatFanoutBridge
 
@@ -1375,11 +1395,14 @@ def test_fanout_handle_notification_delivers_committed_message() -> None:
         fetcher_factory=lambda: fetcher,
         deliver=lambda payload: scheduled.append(payload),
     )
-    bridge._schedule_deliver = lambda payload: scheduled.append(payload)  # type: ignore[method-assign]
+    _arm_generation(bridge)
 
-    result = bridge.handle_notification(
-        json.dumps({"room_id": str(ROOM_ID), "message_id": str(MESSAGE_ID)})
-    )
+    def recording_schedule(generation: Any, payload: dict[str, Any]) -> None:
+        scheduled.append(payload)
+
+    bridge._schedule_deliver = recording_schedule  # type: ignore[method-assign]
+
+    result = bridge.handle_notification(_notification_json())
 
     assert result is not None
     assert result["id"] == str(MESSAGE_ID)
@@ -1403,35 +1426,68 @@ def test_fanout_handle_notification_ignores_malformed_payloads() -> None:
     assert fetcher.fetched == []
 
 
+def test_fanout_handle_notification_requires_a_live_generation() -> None:
+    from apps.api.app.services.community_chat_fanout import ChatFanoutBridge
+
+    fetcher = FakeFanoutFetcher(_wire_payload())
+    bridge = ChatFanoutBridge(
+        fetcher_factory=lambda: fetcher,
+        deliver=lambda payload: None,
+    )
+
+    # No listener at all: delivery is honestly skipped (no fetch either).
+    assert bridge.handle_notification(_notification_json()) is None
+    assert fetcher.fetched == []
+
+
+def test_fanout_schedule_refuses_stopped_or_replaced_generation() -> None:
+    import asyncio as asyncio_mod
+
+    def exploding_deliver(payload: dict[str, Any]) -> Any:
+        raise AssertionError("deliver must not be reached for stale generations")
+
+    bridge = ChatFanoutBridge(
+        fetcher_factory=lambda: FakeFanoutFetcher(None),
+        deliver=exploding_deliver,
+    )
+    first = _arm_generation(bridge)
+    first.loop = asyncio_mod.new_event_loop()
+
+    # Stopped generation: scheduling refuses before touching the deliverer.
+    first.stop.set()
+    bridge._schedule_deliver(first, {"id": "m"})
+
+    # Replaced generation: identity check refuses scheduling.
+    first.stop.clear()
+    second = _arm_generation(bridge)  # replaces the current generation
+    second.loop = asyncio_mod.new_event_loop()
+    bridge._schedule_deliver(first, {"id": "m"})
+
+    first.loop.close()
+    second.loop.close()
+
+
 def test_fanout_handle_notification_skips_when_message_or_room_mismatch() -> None:
     from apps.api.app.services.community_chat_fanout import ChatFanoutBridge
 
     scheduled: list[dict[str, Any]] = []
 
     class RecordingBridge(ChatFanoutBridge):
-        def _schedule_deliver(self, payload: dict[str, Any]) -> None:
+        def _schedule_deliver(self, generation: Any, payload: dict[str, Any]) -> None:
             scheduled.append(payload)
 
     missing = RecordingBridge(
         fetcher_factory=lambda: FakeFanoutFetcher(None), deliver=lambda p: None
     )
-    assert (
-        missing.handle_notification(
-            json.dumps({"room_id": str(ROOM_ID), "message_id": str(MESSAGE_ID)})
-        )
-        is None
-    )
+    _arm_generation(missing)
+    assert missing.handle_notification(_notification_json()) is None
 
     mismatch_row = dict(_wire_payload(), room_id=str(OTHER_ROOM_ID))
     mismatch = RecordingBridge(
         fetcher_factory=lambda: FakeFanoutFetcher(mismatch_row), deliver=lambda p: None
     )
-    assert (
-        mismatch.handle_notification(
-            json.dumps({"room_id": str(ROOM_ID), "message_id": str(MESSAGE_ID)})
-        )
-        is None
-    )
+    _arm_generation(mismatch)
+    assert mismatch.handle_notification(_notification_json()) is None
     assert scheduled == []
 
 
@@ -1451,65 +1507,210 @@ def test_fanout_handle_notification_is_exception_safe_on_fetch() -> None:
             raise RuntimeError("store hiccup")
 
     bridge = ChatFanoutBridge(fetcher_factory=lambda: ExplodingFetcher(), deliver=lambda p: None)
+    _arm_generation(bridge)
 
-    assert (
-        bridge.handle_notification(
-            json.dumps({"room_id": str(ROOM_ID), "message_id": str(MESSAGE_ID)})
-        )
-        is None
-    )
+    assert bridge.handle_notification(_notification_json()) is None
 
 
-class FakeCancellableConnection:
+# ===========================================================================
+# Fanout bridge lifecycle: deterministic Thread/Event regression at the real
+# start/stop boundary (no sleeps, no real sockets; drains block until the
+# test explicitly releases them).
+# ===========================================================================
+
+
+class FakeGenerationConnection:
     def __init__(self) -> None:
         self.cancelled = False
-        self.closed = False
+        self.close_count = 0
 
     def cancel(self) -> None:
         self.cancelled = True
 
     def close(self) -> None:
-        self.closed = True
+        self.close_count += 1
 
 
-def test_fanout_stop_cancels_blocking_listener_and_closes_connection() -> None:
-    from apps.api.app.services.community_chat_fanout import ChatFanoutBridge
+class DeterministicLifecycleBridge(ChatFanoutBridge):
+    """Real lifecycle bookkeeping with a controllable drain.
 
-    bridge = ChatFanoutBridge(
-        fetcher_factory=lambda: FakeFanoutFetcher(None), deliver=lambda p: None
-    )
-    connection = FakeCancellableConnection()
-    bridge._connection = connection
+    ``ignore_stop_in_drain=True`` simulates a drain blocked past the stop
+    timeout (``connection.cancel()`` cannot interrupt a locally blocked
+    select): it returns only when the test sets ``release``. The clean mode
+    wakes on the generation stop event, so ``stop`` confirms termination
+    deterministically. Either way the owning thread closes its own
+    connection through the real ``_listen_loop`` finally block.
+    """
 
-    bridge.stop(timeout=0.5)
+    def __init__(self, *, ignore_stop_in_drain: bool, fetcher: Any = None) -> None:
+        super().__init__(
+            fetcher_factory=lambda: fetcher or FakeFanoutFetcher(None),
+            deliver=lambda payload: None,
+        )
+        self.ignore_stop_in_drain = ignore_stop_in_drain
+        self.drain_entered = threading.Event()
+        self.release = threading.Event()
+        self.opened: list[FakeGenerationConnection] = []
+        self.generations: list[Any] = []
 
-    assert connection.cancelled is True
-    assert connection.closed is True
-    assert bridge._thread is None
-    assert bridge._loop is None
-    assert bridge.running is False
+    def _open_listener_connection(self) -> FakeGenerationConnection:
+        connection = FakeGenerationConnection()
+        self.opened.append(connection)
+        return connection
+
+    def _drain_notifications(self, generation: Any, connection: Any) -> None:
+        self.generations.append(generation)
+        self.drain_entered.set()
+        if self.ignore_stop_in_drain:
+            self.release.wait(timeout=30)
+        else:
+            generation.stop.wait(timeout=30)
 
 
-def test_fanout_start_refuses_second_thread_while_running() -> None:
-    from apps.api.app.services.community_chat_fanout import ChatFanoutBridge
+def test_fanout_stop_timeout_retains_generation_until_thread_exits() -> None:
+    import asyncio as asyncio_mod
 
-    started: list[str] = []
-
-    class SlowBridge(ChatFanoutBridge):
-        def _listen_loop(self) -> None:
-            started.append("thread")
-            self._stop.wait(5.0)
-
-    import asyncio as _asyncio
-
-    bridge = SlowBridge(fetcher_factory=lambda: FakeFanoutFetcher(None), deliver=lambda p: None)
+    bridge = DeterministicLifecycleBridge(ignore_stop_in_drain=True)
+    loop = asyncio_mod.new_event_loop()
     try:
-        assert bridge.start(_asyncio.new_event_loop()) is True
-        first_thread = bridge._thread
-        assert first_thread is not None and first_thread.is_alive()
-        # A second start while healthy must not spawn another listener.
-        assert bridge.start(_asyncio.new_event_loop()) is True
-        assert bridge._thread is first_thread
+        assert bridge.start(loop) is True
+        assert bridge.drain_entered.wait(timeout=5)
+        assert bridge.running is True
+
+        # The drain is blocked past the stop timeout: bounded stop returns
+        # unconfirmed while the thread keeps ownership of its connection.
+        assert bridge.stop(timeout=0.2) is False
+        assert bridge.running is False
+        assert bridge.winding_down is True
+        assert bridge._generation is bridge.generations[0]
+
+        # Restart during wind-down honestly refuses: no second listener.
+        assert bridge.start(loop) is False
+        assert len(bridge.opened) == 1
+
+        # Releasing the drain lets the owning thread exit and close its own
+        # connection exactly once; stop already issued the advisory cancel.
+        bridge.release.set()
+        generation = bridge.generations[0]
+        assert generation.terminated.wait(timeout=5)
+        assert bridge.opened[0].close_count == 1
+        assert bridge.opened[0].cancelled is True
+
+        # Confirmed termination makes a clean restart possible.
+        bridge.drain_entered.clear()
+        bridge.release.clear()
+        assert bridge.start(loop) is True
+        assert bridge.drain_entered.wait(timeout=5)
+        assert len(bridge.opened) == 2
+        assert bridge.opened[1].close_count == 0
+
+        bridge.release.set()
+        assert bridge.stop(timeout=5) is True
     finally:
-        bridge.stop(timeout=2.0)
-    assert started == ["thread"]
+        bridge.release.set()
+        bridge.stop(timeout=5)
+        loop.close()
+
+
+def test_fanout_start_is_idempotent_while_serving_and_clean_stop_confirms() -> None:
+    import asyncio as asyncio_mod
+
+    bridge = DeterministicLifecycleBridge(ignore_stop_in_drain=False)
+    loop = asyncio_mod.new_event_loop()
+    try:
+        assert bridge.start(loop) is True
+        assert bridge.drain_entered.wait(timeout=5)
+        first = bridge._generation
+        assert first is not None
+
+        # Already serving: start reports success without spawning anything.
+        assert bridge.start(loop) is True
+        assert bridge._generation is first
+        assert len(bridge.opened) == 1
+
+        # Clean stop: drain wakes on the stop event, the thread closes its
+        # own connection and termination is confirmed within the bound.
+        assert bridge.stop(timeout=5) is True
+        assert bridge.running is False
+        assert bridge.winding_down is False
+        assert bridge._generation is None
+        assert bridge.opened[0].close_count == 1
+
+        # Stopping with no generation is an unconfirmed-work-free success.
+        assert bridge.stop(timeout=1) is True
+    finally:
+        bridge.release.set()
+        bridge.stop(timeout=5)
+        loop.close()
+
+
+def test_fanout_repeated_stop_start_cycles_keep_one_owner_per_connection() -> None:
+    import asyncio as asyncio_mod
+
+    bridge = DeterministicLifecycleBridge(ignore_stop_in_drain=False)
+    loop = asyncio_mod.new_event_loop()
+    try:
+        for _ in range(3):
+            assert bridge.start(loop) is True
+            assert bridge.drain_entered.wait(timeout=5)
+            bridge.drain_entered.clear()
+            assert bridge.stop(timeout=5) is True
+
+        assert len(bridge.opened) == 3
+        assert [connection.close_count for connection in bridge.opened] == [1, 1, 1]
+        assert len({id(generation) for generation in bridge.generations}) == 3
+    finally:
+        bridge.release.set()
+        bridge.stop(timeout=5)
+        loop.close()
+
+
+def test_fanout_old_generation_never_clobbers_or_delivers_after_replacement() -> None:
+    import asyncio as asyncio_mod
+
+    fetcher = FakeFanoutFetcher(_wire_payload())
+    bridge = DeterministicLifecycleBridge(ignore_stop_in_drain=True, fetcher=fetcher)
+    loop = asyncio_mod.new_event_loop()
+    try:
+        assert bridge.start(loop) is True
+        assert bridge.drain_entered.wait(timeout=5)
+        old_generation = bridge.generations[0]
+        old_connection = bridge.opened[0]
+
+        # Old thread blocked in its drain while stop times out.
+        assert bridge.stop(timeout=0.2) is False
+        bridge.release.set()
+        assert old_generation.terminated.wait(timeout=5)
+        assert old_connection.close_count == 1
+
+        # Successor generation starts with its own state objects.
+        bridge.drain_entered.clear()
+        bridge.release.clear()
+        assert bridge.start(loop) is True
+        assert bridge.drain_entered.wait(timeout=5)
+        new_generation = bridge.generations[1]
+        new_connection = bridge.opened[1]
+        assert new_generation is not old_generation
+        assert bridge._generation is new_generation
+        assert new_generation.connection is new_connection
+        assert new_connection.close_count == 0  # untouched by the old exit
+
+        # A notification arriving "from" the old generation never delivers;
+        # the current generation still delivers exactly once.
+        scheduled: list[dict[str, Any]] = []
+        bridge._schedule_deliver = (  # type: ignore[method-assign]
+            lambda generation, payload: scheduled.append(payload)
+        )
+        assert bridge.handle_notification(_notification_json(), generation=old_generation) is None
+        assert scheduled == []
+        assert (
+            bridge.handle_notification(_notification_json(), generation=new_generation) is not None
+        )
+        assert len(scheduled) == 1
+
+        bridge.release.set()
+        assert bridge.stop(timeout=5) is True
+    finally:
+        bridge.release.set()
+        bridge.stop(timeout=5)
+        loop.close()

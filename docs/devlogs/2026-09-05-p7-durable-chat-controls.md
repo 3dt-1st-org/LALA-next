@@ -115,11 +115,50 @@ found on the way:
   message is never delivered twice to local sockets. Postgres remains the only
   durable truth; the set is a delivery optimization, not durability.
 - Honest degradation: listener down ⇒ cross-instance realtime pauses until
-  reconnect (bounded backoff, `connection.cancel()` for prompt stop; lifecycle
-  lock guarantees at most one listener thread); messages stay committed and
-  readable via REST, and clients recover by refreshing history on reconnect.
-  No Redis was introduced; the in-memory registry is never represented as
-  cross-instance delivery.
+  reconnect (bounded backoff); messages stay committed and readable via REST,
+  and clients recover by refreshing history on reconnect. No Redis was
+  introduced; the in-memory registry is never represented as cross-instance
+  delivery.
+
+### Listener lifecycle ownership (2026-09-06 correction, supersedes earlier text)
+
+The earlier wording claimed "stop cancels the blocking select and closes under
+a lifecycle lock (no overlapping old/new listeners)" — that guarantee was
+**false** and is superseded: `connection.cancel()` aborts a server round trip
+but is not guaranteed to interrupt a locally blocked `select`, the shared
+thread/connection/event references let a late `finally` clobber a successor,
+and `start` could replace a still-alive winding-down thread after clearing the
+shared stop event (two listeners). Corrected contract, now enforced by
+deterministic Thread/Event regression tests at the real lifecycle boundary
+(no sleep/timing assumptions; drains block until the test releases them):
+
+- State is generation-scoped (`_ListenerGeneration`): each listener thread
+  owns its connection, stop event, event loop and `terminated` event. The old
+  thread's `finally` only mutates its own generation and closes its own
+  connection — a successor's state can never be cleared from outside.
+- `stop` is bounded and honest: it sets the generation stop event, issues the
+  advisory `cancel()`, and waits up to the timeout for the owning thread to
+  confirm its own termination (`terminated`). On timeout the generation is
+  retained untouched (never force-closed, never replaced): it keeps ownership
+  of its connection and refuses restarts until the thread itself exits.
+- `start` is a no-op while a healthy generation serves and **returns `False`**
+  while a previous generation is still winding down — a restart is only
+  possible after confirmed termination, so two listeners cannot coexist.
+- Stale generations never deliver: notification handling is generation-aware;
+  a replaced or stopped generation skips before fetching and again before
+  scheduling onto the event loop.
+- Listener failure logging stays content-free (no DSN/payload, no exc_info).
+
+Regression coverage (`apps/api/tests/test_community_chat.py`):
+`test_fanout_stop_timeout_retains_generation_until_thread_exits` (blocked
+drain past stop timeout, refusal, thread-closes-own-connection, clean
+restart), `test_fanout_start_is_idempotent_while_serving_and_clean_stop_confirms`,
+`test_fanout_repeated_stop_start_cycles_keep_one_owner_per_connection`,
+`test_fanout_old_generation_never_clobbers_or_delivers_after_replacement`
+(late old exit + stale-generation delivery skip),
+`test_fanout_schedule_refuses_stopped_or_replaced_generation`, and the
+generation-aware `handle_notification` tests (malformed payloads, room
+mismatch, missing live generation, exception-safe fetch).
 
 ## Runtime client (criterion 5)
 
@@ -142,8 +181,9 @@ found on the way:
   room with no remaining accessors becomes inert (invisible to everyone, never
   leaked to public).
 - Idempotency rows FK-cascade on actor deletion; expired rows purge scope-wide.
-- `ChatFanoutBridge.stop()` cancels the blocking select under a lifecycle lock
-  (no overlapping listeners) and `handle_notification` is exception-safe.
+- `ChatFanoutBridge` lifecycle corrected to generation-scoped ownership (see
+  "Listener lifecycle ownership" above — supersedes this round's earlier stop
+  guarantee) and `handle_notification` is exception-safe.
 
 ## Migration rehearsal (disposable DB, no production credentials)
 
@@ -179,9 +219,11 @@ cross-session.
 
 ## Evidence
 
-- API: focused community suites (chat 66 + guards 30 + idempotency 9 + canonical
-  16 + community 37) and the full suite **2,470 passed**; `ruff check`/`format`
-  clean; OpenAPI compat tests green (new paths are additive).
+- API: focused community suites (chat 74 — including the deterministic fanout
+  lifecycle regressions, run five consecutive times green — guards 30,
+  idempotency 9, canonical 16, community 37) and the full suite **2,474
+  passed** (2026-09-06 correction run); `ruff check`/`format` clean; OpenAPI
+  compat tests green (new paths are additive).
 - Flutter app: `flutter analyze` clean; community suites 65 passed; full suite
   **1,189 passed**.
 - Reference client: 49 tests passed (dart test).
