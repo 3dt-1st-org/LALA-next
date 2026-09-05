@@ -2,14 +2,16 @@ import 'package:flutter/material.dart';
 
 import '../../../shared/l10n/lala_copy.dart';
 
-/// 날씨/폐업 개입(intervention) 알림 토스트.
+/// 날씨/운영시간 개입(intervention) 알림 토스트.
 ///
 /// presentational 위젯 — 표시할 [label] 은 호출부(plan_page / dashboard)에서
 /// `interventionToastLabel(intervention, language)` 로 계산해 전달한다.
 ///
-/// V3-D: 폐업 트리거(closure_detected) + 대체 장소(swap) 제안 + 일정 재생성 을
-/// 추가한다. 모든 새 파라미터는 선택 옵셔널(defaulted) 이며, 기존 호출부(dashboard)
-/// 가 하나도 넘기지 않으면 오늘의 모양 그대로 렌더된다(역호환).
+/// V3-D: 추정 운영시간 트리거(closure_detected/closing_soon) + 대체 장소(swap)
+/// 제안 + 일정 재생성 을 추가한다. 트리거 라벨은 카테고리 기반 추정 운영시간
+/// 투영임을 명시한다(폐업 등 확정·영구 마감 표현 금지). 모든 새 파라미터는 선택
+/// 옵셔널(defaulted) 이며, 기존 호출부(dashboard) 가 하나도 넘기지 않으면 오늘의
+/// 모양 그대로 렌더된다(역호환).
 class InterventionToast extends StatelessWidget {
   const InterventionToast({
     super.key,
@@ -202,7 +204,7 @@ class _TriggerBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Text 자체가 semantics label("폐업 의심" 등)을 노출하므로 중복 Semantics
+    // Text 자체가 semantics label("예상 운영시간 외" 등)을 노출하므로 중복 Semantics
     // 래퍼는 생략 — 병합으로 라벨이 중복되는 것을 막는다.
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -249,11 +251,7 @@ class _ToastAction extends StatelessWidget {
         child: TextButton.icon(
           onPressed: onPressed,
           icon: Icon(icon, size: 15),
-          label: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+          label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
           style: TextButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 8),
             minimumSize: const Size(0, 34),

@@ -37,68 +37,93 @@ const List<String> _kLanguages = <String>[
 ];
 
 void main() {
-  group('P4 — interventionTriggerBadgeLabel covers every trigger in 5 locales', () {
-    const badgeByTrigger = <String, String>{
-      'closure_detected': '폐업 의심',
-      'bad_air_quality': '미세먼지 나쁨',
-      'bad_weather': '날씨 변화',
-      'bad_weather_and_closure': '날씨 + 폐업',
-      'bad_weather_and_air_quality': '날씨 + 미세먼지',
-      'bad_air_quality_and_closure': '미세먼지 + 폐업',
-      'bad_weather_and_air_quality_and_closure': '날씨 + 미세먼지 + 폐업',
-    };
-
-    test('KO badge per trigger (exact copy)', () {
-      badgeByTrigger.forEach((trigger, koLabel) {
-        expect(interventionTriggerBadgeLabel(trigger, 'ko'), koLabel);
-      });
-    });
-
-    test('every trigger has a non-empty single-language badge in 5 locales', () {
-      for (final trigger in badgeByTrigger.keys) {
-        for (final language in _kLanguages) {
-          final label = interventionTriggerBadgeLabel(trigger, language);
-          expect(label, isNotNull, reason: '$trigger/$language');
-          expect(label!.trim(), isNotEmpty, reason: '$trigger/$language');
-          if (language != 'ko') {
-            expect(RegExp(r'[가-힣]').hasMatch(label), isFalse,
-                reason: '$trigger/$language must not leak Korean');
-          }
-        }
-      }
-    });
-
-    test('AQ-only trigger never renders the weather badge label', () {
-      const weatherOnlyLabels = <String>{
-        '날씨 변화',
-        'Weather change',
-        '気象の変化',
-        '天气变化',
-        '天氣變化',
+  group(
+    'P4 — interventionTriggerBadgeLabel covers every trigger in 5 locales',
+    () {
+      const badgeByTrigger = <String, String>{
+        'closure_detected': '예상 운영시간 외',
+        'closing_soon': '마감 임박(예상)',
+        'bad_air_quality': '미세먼지 나쁨',
+        'bad_weather': '날씨 변화',
+        'bad_weather_and_closure': '날씨 + 예상 운영시간 외',
+        'bad_weather_and_closing_soon': '날씨 + 마감 임박(예상)',
+        'bad_weather_and_air_quality': '날씨 + 미세먼지',
+        'bad_air_quality_and_closure': '미세먼지 + 예상 운영시간 외',
+        'bad_air_quality_and_closing_soon': '미세먼지 + 마감 임박(예상)',
+        'bad_weather_and_air_quality_and_closure': '날씨 + 미세먼지 + 예상 운영시간 외',
+        'bad_weather_and_air_quality_and_closing_soon': '날씨 + 미세먼지 + 마감 임박(예상)',
       };
-      for (final language in _kLanguages) {
-        final label = interventionTriggerBadgeLabel('bad_air_quality', language);
-        expect(weatherOnlyLabels, isNot(contains(label)),
-            reason: 'AQ-only badge must be distinct in $language');
-      }
-    });
 
-    test('null/unknown trigger keeps no badge (honest)', () {
-      expect(interventionTriggerBadgeLabel(null, 'ko'), isNull);
-      expect(interventionTriggerBadgeLabel('something_new', 'en'), isNull);
-    });
-  });
+      test('KO badge per trigger (exact copy)', () {
+        badgeByTrigger.forEach((trigger, koLabel) {
+          expect(interventionTriggerBadgeLabel(trigger, 'ko'), koLabel);
+        });
+      });
+
+      test(
+        'every trigger has a non-empty single-language badge in 5 locales',
+        () {
+          for (final trigger in badgeByTrigger.keys) {
+            for (final language in _kLanguages) {
+              final label = interventionTriggerBadgeLabel(trigger, language);
+              expect(label, isNotNull, reason: '$trigger/$language');
+              expect(label!.trim(), isNotEmpty, reason: '$trigger/$language');
+              if (language != 'ko') {
+                expect(
+                  RegExp(r'[가-힣]').hasMatch(label),
+                  isFalse,
+                  reason: '$trigger/$language must not leak Korean',
+                );
+              }
+            }
+          }
+        },
+      );
+
+      test('AQ-only trigger never renders the weather badge label', () {
+        const weatherOnlyLabels = <String>{
+          '날씨 변화',
+          'Weather change',
+          '気象の変化',
+          '天气变化',
+          '天氣變化',
+        };
+        for (final language in _kLanguages) {
+          final label = interventionTriggerBadgeLabel(
+            'bad_air_quality',
+            language,
+          );
+          expect(
+            weatherOnlyLabels,
+            isNot(contains(label)),
+            reason: 'AQ-only badge must be distinct in $language',
+          );
+        }
+      });
+
+      test('null/unknown trigger keeps no badge (honest)', () {
+        expect(interventionTriggerBadgeLabel(null, 'ko'), isNull);
+        expect(interventionTriggerBadgeLabel('something_new', 'en'), isNull);
+      });
+    },
+  );
 
   group('P4 — interventionToastLabel honest fallback for AQ triggers', () {
     test('bad_air_quality KO → AQ copy, no weather wording', () {
-      final label = interventionToastLabel(_intervention(triggerType: 'bad_air_quality'), 'ko');
+      final label = interventionToastLabel(
+        _intervention(triggerType: 'bad_air_quality'),
+        'ko',
+      );
       expect(label, contains('미세먼지가 나빠요'));
       expect(label, isNot(contains('날씨가 바뀌었어요')));
       expect(label, isNot(contains('날씨와')));
     });
 
     test('bad_air_quality EN → AQ copy, single-language', () {
-      final label = interventionToastLabel(_intervention(triggerType: 'bad_air_quality'), 'en');
+      final label = interventionToastLabel(
+        _intervention(triggerType: 'bad_air_quality'),
+        'en',
+      );
       expect(label, contains('Air quality is poor'));
       expect(label, isNot(contains('Weather changed')));
       expect(RegExp(r'[가-힣]').hasMatch(label), isFalse);
@@ -127,19 +152,22 @@ void main() {
       expect(label, contains('카페 솔'));
     });
 
-    test('combined weather+AQ fallback mentions both causes (KO/EN exclusive)', () {
-      final ko = interventionToastLabel(
-        _intervention(triggerType: 'bad_weather_and_air_quality'),
-        'ko',
-      );
-      final en = interventionToastLabel(
-        _intervention(triggerType: 'bad_weather_and_air_quality'),
-        'en',
-      );
-      expect(ko, contains('날씨와 미세먼지가 모두 좋지 않아요'));
-      expect(en, contains('Weather and air quality are both poor'));
-      expect(RegExp(r'[가-힣]').hasMatch(en), isFalse);
-    });
+    test(
+      'combined weather+AQ fallback mentions both causes (KO/EN exclusive)',
+      () {
+        final ko = interventionToastLabel(
+          _intervention(triggerType: 'bad_weather_and_air_quality'),
+          'ko',
+        );
+        final en = interventionToastLabel(
+          _intervention(triggerType: 'bad_weather_and_air_quality'),
+          'en',
+        );
+        expect(ko, contains('날씨와 미세먼지가 모두 좋지 않아요'));
+        expect(en, contains('Weather and air quality are both poor'));
+        expect(RegExp(r'[가-힣]').hasMatch(en), isFalse);
+      },
+    );
 
     test('AQ+closure fallback mentions both causes', () {
       final ko = interventionToastLabel(
@@ -150,10 +178,10 @@ void main() {
         _intervention(triggerType: 'bad_air_quality_and_closure'),
         'en',
       );
-      expect(ko, contains('미세먼지가 나쁘고'));
-      expect(ko, contains('영업 중이 아닐'));
+      expect(ko, contains('미세먼지가 나빠요'));
+      expect(ko, contains('예상 운영시간을 벗어났어요'));
       expect(en, contains('Air quality is poor'));
-      expect(en, contains('may be closed'));
+      expect(en, contains('outside the estimated hours'));
     });
 
     test('weather+AQ+closure fallback mentions all three causes', () {
@@ -166,9 +194,9 @@ void main() {
         'en',
       );
       expect(ko, contains('날씨와 미세먼지가 좋지 않고'));
-      expect(ko, contains('영업 중이 아닐'));
+      expect(ko, contains('예상 운영시간을 벗어났어요'));
       expect(en, contains('Weather and air quality are poor'));
-      expect(en, contains('may be closed'));
+      expect(en, contains('outside the estimated hours'));
     });
 
     test('AQ fallback is single-language across 5 locales', () {
@@ -181,26 +209,226 @@ void main() {
           'bad_weather_and_air_quality',
           'bad_air_quality_and_closure',
           'bad_weather_and_air_quality_and_closure',
+          'bad_air_quality_and_closing_soon',
+          'bad_weather_and_air_quality_and_closing_soon',
         ]) {
-          final label = interventionToastLabel(_intervention(triggerType: trigger), language);
+          final label = interventionToastLabel(
+            _intervention(triggerType: trigger),
+            language,
+          );
           expect(label.trim(), isNotEmpty, reason: '$trigger/$language');
-          expect(RegExp(r'[가-힣]').hasMatch(label), isFalse,
-              reason: '$trigger/$language must not leak Korean');
+          expect(
+            RegExp(r'[가-힣]').hasMatch(label),
+            isFalse,
+            reason: '$trigger/$language must not leak Korean',
+          );
         }
       }
     });
 
-    test('API reason/action still win over the AQ fallback (copy priority intact)', () {
-      final label = interventionToastLabel(
-        _intervention(
-          triggerType: 'bad_air_quality',
-          reason: '미세먼지가 나빠져 실내 대안을 추천해요.',
-          recommendedAction: '실내 전시로 바꿔보세요.',
-        ),
+    test(
+      'API reason/action still win over the AQ fallback (copy priority intact)',
+      () {
+        final label = interventionToastLabel(
+          _intervention(
+            triggerType: 'bad_air_quality',
+            reason: '미세먼지가 나빠져 실내 대안을 추천해요.',
+            recommendedAction: '실내 전시로 바꿔보세요.',
+          ),
+          'ko',
+        );
+        expect(label, contains('미세먼지가 나빠져'));
+        expect(label, isNot(contains('실내 동선을 확인해보세요')));
+      },
+    );
+  });
+
+  group('P4 — estimated closing-soon/closure copy honesty (5 locales)', () {
+    // Permanent/observed closure vocabulary must never appear on the
+    // estimated-hours path in any locale.
+    const bannedFragments = <String>[
+      '폐업',
+      'Possible closure',
+      'may be closed',
+      '休業の可能性',
+      '疑似停业',
+      '疑似停業',
+      '영업 종료 가능성',
+      'A possible closure was observed',
+    ];
+
+    test(
+      'closure/closing-soon fallback never uses permanent-closure wording',
+      () {
+        const triggers = <String>[
+          'closure_detected',
+          'closing_soon',
+          'bad_weather_and_closure',
+          'bad_weather_and_closing_soon',
+          'bad_air_quality_and_closure',
+          'bad_air_quality_and_closing_soon',
+          'bad_weather_and_air_quality_and_closure',
+          'bad_weather_and_air_quality_and_closing_soon',
+        ];
+        for (final trigger in triggers) {
+          for (final language in _kLanguages) {
+            for (final place in <LalaPlace?>[
+              null,
+              LalaPlace(
+                placeId: 'p1',
+                name: '카페 솔',
+                nameKo: '카페 솔',
+                nameEn: 'Cafe Sol',
+                category: 'cafe',
+                lat: 37.0,
+                lng: 127.0,
+                address: '서울',
+                distanceM: 120,
+                source: 'test',
+              ),
+            ]) {
+              final label = interventionToastLabel(
+                _intervention(triggerType: trigger, place: place),
+                language,
+              );
+              for (final banned in bannedFragments) {
+                expect(
+                  label,
+                  isNot(contains(banned)),
+                  reason: '$trigger/$language must not say "$banned"',
+                );
+              }
+              final badge = interventionTriggerBadgeLabel(trigger, language);
+              if (badge != null) {
+                for (final banned in bannedFragments) {
+                  expect(
+                    badge,
+                    isNot(contains(banned)),
+                    reason: '$trigger/$language badge must not say "$banned"',
+                  );
+                }
+              }
+            }
+          }
+        }
+      },
+    );
+
+    test('closing_soon-only fallback names the estimated-hours cause only', () {
+      final ko = interventionToastLabel(
+        _intervention(triggerType: 'closing_soon'),
         'ko',
       );
-      expect(label, contains('미세먼지가 나빠져'));
-      expect(label, isNot(contains('실내 동선을 확인해보세요')));
+      final en = interventionToastLabel(
+        _intervention(triggerType: 'closing_soon'),
+        'en',
+      );
+      expect(ko, contains('예상 마감 시간이 가까워요'));
+      expect(ko, isNot(contains('날씨')));
+      expect(ko, isNot(contains('미세먼지')));
+      expect(en, contains('The estimated closing time is near'));
+      expect(en, isNot(contains('Weather')));
+      expect(en, isNot(contains('Air quality')));
+    });
+
+    test('closure-only fallback names the estimated-hours cause only', () {
+      final ko = interventionToastLabel(
+        _intervention(triggerType: 'closure_detected'),
+        'ko',
+      );
+      final en = interventionToastLabel(
+        _intervention(triggerType: 'closure_detected'),
+        'en',
+      );
+      expect(ko, contains('예상 운영시간을 벗어난 일정이에요'));
+      expect(ko, isNot(contains('날씨')));
+      expect(ko, isNot(contains('미세먼지')));
+      expect(en, contains('outside the estimated hours'));
+      expect(en, isNot(contains('Weather')));
+      expect(en, isNot(contains('Air quality')));
+    });
+  });
+
+  group('S-20 — closing-soon toast overflow safety (estimated cause)', () {
+    Future<void> pumpClosingSoonToast(
+      WidgetTester tester, {
+      String language = 'ko',
+      TextScaler textScaler = TextScaler.noScaling,
+      Size size = const Size(402, 874),
+    }) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+            child: child!,
+          ),
+          home: Scaffold(
+            body: Center(
+              child: InterventionToast(
+                label: interventionToastLabel(
+                  _intervention(triggerType: 'closing_soon'),
+                  language,
+                ),
+                language: language,
+                onOpenPlanner: () {},
+                onDismiss: () {},
+                triggerBadge: interventionTriggerBadgeLabel(
+                  'closing_soon',
+                  language,
+                ),
+                noAlternativeLabel: language == 'ko'
+                    ? '지금은 대체 장소가 없어요.'
+                    : 'No alternative right now.',
+                regenerateLabel: language == 'ko' ? '일정 다시 짜기' : 'Regenerate',
+                onRegenerate: () {},
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+    }
+
+    testWidgets(
+      '320dp width: closing-soon badge + honest no-alternative, no overflow',
+      (tester) async {
+        await pumpClosingSoonToast(tester, size: const Size(320, 640));
+        expect(find.text('마감 임박(예상)'), findsOneWidget);
+        expect(find.text('지금은 대체 장소가 없어요.'), findsOneWidget);
+        final width = tester.getSize(find.byType(InterventionToast)).width;
+        expect(width, lessThanOrEqualTo(430));
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      '320dp + TextScaler.linear(2): closing-soon toast wraps without overflow',
+      (tester) async {
+        await pumpClosingSoonToast(
+          tester,
+          textScaler: const TextScaler.linear(2),
+          size: const Size(320, 800),
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets('320dp + TextScaler.linear(2) in EN stays single-language', (
+      tester,
+    ) async {
+      await pumpClosingSoonToast(
+        tester,
+        language: 'en',
+        textScaler: const TextScaler.linear(2),
+        size: const Size(320, 800),
+      );
+      expect(find.text('Closing soon (est.)'), findsOneWidget);
+      expect(find.text('폐업 의심'), findsNothing);
+      expect(find.text('Possible closure'), findsNothing);
+      expect(tester.takeException(), isNull);
     });
   });
 
@@ -230,8 +458,13 @@ void main() {
                 language: language,
                 onOpenPlanner: () {},
                 onDismiss: () {},
-                triggerBadge: interventionTriggerBadgeLabel('bad_air_quality', language),
-                noAlternativeLabel: language == 'ko' ? '지금은 대체 장소가 없어요.' : 'No alternative right now.',
+                triggerBadge: interventionTriggerBadgeLabel(
+                  'bad_air_quality',
+                  language,
+                ),
+                noAlternativeLabel: language == 'ko'
+                    ? '지금은 대체 장소가 없어요.'
+                    : 'No alternative right now.',
                 regenerateLabel: language == 'ko' ? '일정 다시 짜기' : 'Regenerate',
                 onRegenerate: () {},
               ),
@@ -242,7 +475,9 @@ void main() {
       await tester.pump();
     }
 
-    testWidgets('320dp width: AQ badge + honest no-alternative, no overflow', (tester) async {
+    testWidgets('320dp width: AQ badge + honest no-alternative, no overflow', (
+      tester,
+    ) async {
       await pumpToast(tester, size: const Size(320, 640));
       expect(find.text('미세먼지 나쁨'), findsOneWidget);
       expect(find.text('지금은 대체 장소가 없어요.'), findsOneWidget);
@@ -251,16 +486,21 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('320dp + TextScaler.linear(2): AQ toast wraps without overflow', (tester) async {
-      await pumpToast(
-        tester,
-        textScaler: const TextScaler.linear(2),
-        size: const Size(320, 800),
-      );
-      expect(tester.takeException(), isNull);
-    });
+    testWidgets(
+      '320dp + TextScaler.linear(2): AQ toast wraps without overflow',
+      (tester) async {
+        await pumpToast(
+          tester,
+          textScaler: const TextScaler.linear(2),
+          size: const Size(320, 800),
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
 
-    testWidgets('320dp + TextScaler.linear(2) in EN stays single-language', (tester) async {
+    testWidgets('320dp + TextScaler.linear(2) in EN stays single-language', (
+      tester,
+    ) async {
       await pumpToast(
         tester,
         language: 'en',

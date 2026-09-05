@@ -270,6 +270,10 @@ class _SlotCard extends StatelessWidget {
     final closureKey = value == null
         ? 'unknown'
         : (value.closureState ?? 'unknown').trim().toLowerCase();
+    // P4 closing-soon badge: same estimated projection the plan tile shows.
+    final closingSoonLabel = value == null
+        ? null
+        : planSlotClosingSoonLabel(value, language);
     // Shared with the plan tile so balanced never renders as an outdoor claim.
     final indoorOutdoorLabel = value == null
         ? null
@@ -285,6 +289,7 @@ class _SlotCard extends StatelessWidget {
       title,
       if (value != null) _slotTime(value, language),
       closureLabel,
+      closingSoonLabel,
       indoorOutdoorLabel,
       weatherHint,
       airQualityLabel,
@@ -326,6 +331,11 @@ class _SlotCard extends StatelessWidget {
                 runSpacing: 4,
                 children: <Widget>[
                   _ClosureChip(label: closureLabel!, stateKey: closureKey),
+                  if (closingSoonLabel != null)
+                    _ConstraintChip(
+                      label: closingSoonLabel,
+                      icon: Icons.schedule_outlined,
+                    ),
                   if (indoorOutdoorLabel != null)
                     _ConstraintChip(
                       label: indoorOutdoorLabel,
@@ -797,21 +807,39 @@ String _triggerLabel(String? trigger, String language) => switch (trigger) {
     zhHans: '空气质量可能影响行程',
     zhHant: '空氣品質可能影響行程',
   ),
+  // P4: closure/closing-soon 계열은 카테고리 기반 '추정 운영시간' 투영임을 명시
+  // (확정/영구/관측 마감 표현 금지 — 실제 영업 여부는 확인 필요).
   'closure_detected' => _copy(
     language,
-    ko: '운영 상태를 다시 확인해야 해요',
-    en: 'The opening status needs another look',
-    ja: '営業状況を再確認してください',
-    zhHans: '需要重新确认营业状态',
-    zhHant: '需要重新確認營業狀態',
+    ko: '예상 운영시간을 벗어난 일정이에요',
+    en: 'The slot is outside the estimated hours',
+    ja: '推定営業時間外の時間帯です',
+    zhHans: '该时段超出预计营业时间',
+    zhHant: '該時段超出預計營業時間',
+  ),
+  'closing_soon' => _copy(
+    language,
+    ko: '예상 마감 시간이 가까워요',
+    en: 'The estimated closing time is near',
+    ja: '推定閉店時間が近づいています',
+    zhHans: '预计打烊时间临近',
+    zhHant: '預計打烊時間臨近',
   ),
   'bad_weather_and_closure' => _copy(
     language,
-    ko: '날씨와 운영 상태가 함께 달라졌어요',
-    en: 'Weather and opening status both changed',
-    ja: '天候と営業状況の両方が変わりました',
-    zhHans: '天气与营业状态均有变化',
-    zhHant: '天氣與營業狀態均有變化',
+    ko: '날씨가 좋지 않고 예상 운영시간을 벗어났어요',
+    en: 'Weather is poor and the slot is outside the estimated hours',
+    ja: '天気が悪く、推定営業時間外の時間帯です',
+    zhHans: '天气不佳，且超出预计营业时间',
+    zhHant: '天氣不佳，且超出預計營業時間',
+  ),
+  'bad_weather_and_closing_soon' => _copy(
+    language,
+    ko: '날씨가 좋지 않고 예상 마감 시간이 가까워요',
+    en: 'Weather is poor and the estimated closing time is near',
+    ja: '天気が悪く、推定閉店時間が近づいています',
+    zhHans: '天气不佳，且预计打烊时间临近',
+    zhHant: '天氣不佳，且預計打烊時間臨近',
   ),
   'bad_weather_and_air_quality' => _copy(
     language,
@@ -823,19 +851,35 @@ String _triggerLabel(String? trigger, String language) => switch (trigger) {
   ),
   'bad_air_quality_and_closure' => _copy(
     language,
-    ko: '미세먼지와 운영 상태를 함께 확인해야 해요',
-    en: 'Air quality and opening status both need attention',
-    ja: '大気と営業状況の両方を確認してください',
-    zhHans: '需同时关注空气质量与营业状态',
-    zhHant: '需同時關注空氣品質與營業狀態',
+    ko: '미세먼지가 나쁘고 예상 운영시간을 벗어났어요',
+    en: 'Air quality is poor and the slot is outside the estimated hours',
+    ja: '大気が悪く、推定営業時間外の時間帯です',
+    zhHans: '空气质量差，且超出预计营业时间',
+    zhHant: '空氣品質差，且超出預計營業時間',
+  ),
+  'bad_air_quality_and_closing_soon' => _copy(
+    language,
+    ko: '미세먼지가 나쁘고 예상 마감 시간이 가까워요',
+    en: 'Air quality is poor and the estimated closing time is near',
+    ja: '大気が悪く、推定閉店時間が近づいています',
+    zhHans: '空气质量差，且预计打烊时间临近',
+    zhHant: '空氣品質差，且預計打烊時間臨近',
   ),
   'bad_weather_and_air_quality_and_closure' => _copy(
     language,
-    ko: '날씨·미세먼지·운영 상태를 모두 확인해야 해요',
-    en: 'Weather, air quality and opening status all need attention',
-    ja: '天候・大気・営業状況をすべて確認してください',
-    zhHans: '需同时关注天气、空气质量与营业状态',
-    zhHant: '需同時關注天氣、空氣品質與營業狀態',
+    ko: '날씨·미세먼지가 나쁘고 예상 운영시간을 벗어났어요',
+    en: 'Weather and air quality are poor and the slot is outside the estimated hours',
+    ja: '天気と大気が悪く、推定営業時間外の時間帯です',
+    zhHans: '天气与空气质量不佳，且超出预计营业时间',
+    zhHant: '天氣與空氣品質不佳，且超出預計營業時間',
+  ),
+  'bad_weather_and_air_quality_and_closing_soon' => _copy(
+    language,
+    ko: '날씨·미세먼지가 나쁘고 예상 마감 시간이 가까워요',
+    en: 'Weather and air quality are poor and the estimated closing time is near',
+    ja: '天気と大気が悪く、推定閉店時間が近づいています',
+    zhHans: '天气与空气质量不佳，且预计打烊时间临近',
+    zhHant: '天氣與空氣品質不佳，且預計打烊時間臨近',
   ),
   _ => _copy(
     language,
@@ -886,7 +930,8 @@ String? _factorLabel(Map<String, dynamic> factor, String language) {
   }
   // P4: the observed bad dust grade discloses the air-quality cause on its own —
   // never folded into the weather wording above.
-  if (kind == 'air_quality_dust_grade' && (value == 'bad' || value == 'very_bad')) {
+  if (kind == 'air_quality_dust_grade' &&
+      (value == 'bad' || value == 'very_bad')) {
     return _copy(
       language,
       ko: '관측된 미세먼지 등급이 나빠요.',
@@ -899,14 +944,27 @@ String? _factorLabel(Map<String, dynamic> factor, String language) {
   // Why: the API emits the closure factor as slot_closure_state (planner
   // service), so mapping only the legacy closure_state/opening_hours kinds
   // silently dropped the closure reason from the evidence panel.
+  // P4: wording is estimated + check-needed — never observed/confirmed closure.
   if (kind == 'slot_closure_state' || kind == 'closure_state') {
     return _copy(
       language,
-      ko: '추정 운영시간 기준으로 영업 종료 가능성이 관측됐어요.',
-      en: 'A possible closure was observed from the estimated opening hours.',
-      ja: '推定営業時間に基づき、営業終了の可能性が確認されました。',
-      zhHans: '根据估算营业时间，观测到可能已打烊。',
-      zhHant: '根據估算營業時間，觀測到可能已打烊。',
+      ko: '추정 운영시간 기준으로 이번 일정은 영업 시간 밖이에요. 실제 영업 여부는 확인이 필요해요.',
+      en: 'The estimated hours put this slot outside opening times; the actual status needs a check.',
+      ja: '推定営業時間では営業時間外の時間帯です。実際の営業状況は確認が必要です。',
+      zhHans: '按预计营业时间，该时段在营业时间之外。实际营业状态需要确认。',
+      zhHant: '按預計營業時間，該時段在營業時間之外。實際營業狀態需要確認。',
+    );
+  }
+  // P4 closing-soon: the planner emits slot_closing_soon when the slot start is
+  // inside the bounded pre-close window of the same hours estimate.
+  if (kind == 'slot_closing_soon') {
+    return _copy(
+      language,
+      ko: '추정 운영시간 기준으로 마감이 가까워요. 실제 영업 여부는 확인이 필요해요.',
+      en: 'The estimated hours put this slot near the closing time; the actual status needs a check.',
+      ja: '推定営業時間では閉店が近づいています。実際の営業状況は確認が必要です。',
+      zhHans: '按预计营业时间，即将到达打烊时间。实际营业状态需要确认。',
+      zhHant: '按預計營業時間，即將到達打烊時間。實際營業狀態需要確認。',
     );
   }
   if (kind == 'opening_hours') {
@@ -940,7 +998,8 @@ String? _factorChipLabel(Map<String, dynamic> factor, String language) {
   }
   // P4: AQ factor gets its own chip label — poor air quality never renders as a
   // weather chip.
-  if (kind == 'air_quality_dust_grade' && (value == 'bad' || value == 'very_bad')) {
+  if (kind == 'air_quality_dust_grade' &&
+      (value == 'bad' || value == 'very_bad')) {
     return _copy(
       language,
       ko: '미세먼지 나쁨',
@@ -950,16 +1009,19 @@ String? _factorChipLabel(Map<String, dynamic> factor, String language) {
       zhHant: '空氣品質差',
     );
   }
+  // P4: the closure/closing-soon family shares one estimated-hours chip — the
+  // planner's hours projection is an estimate, never an opening-status authority.
   if (kind == 'slot_closure_state' ||
       kind == 'closure_state' ||
+      kind == 'slot_closing_soon' ||
       kind == 'opening_hours') {
     return _copy(
       language,
-      ko: '운영 상태 변화',
-      en: 'Opening-status change',
-      ja: '営業状況の変化',
-      zhHans: '营业状态变化',
-      zhHant: '營業狀態變化',
+      ko: '예상 운영시간',
+      en: 'Estimated hours',
+      ja: '推定営業時間',
+      zhHans: '预计营业时间',
+      zhHant: '預計營業時間',
     );
   }
   return null;
