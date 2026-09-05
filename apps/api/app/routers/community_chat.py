@@ -6,6 +6,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, WebSocket, WebSocketDisconnect
+from pydantic import ValidationError
 
 from apps.api.app.core.auth import (
     RequestIdentity,
@@ -13,14 +14,18 @@ from apps.api.app.core.auth import (
     require_oauth_identity,
 )
 from apps.api.app.core.config import Settings, get_settings
-from apps.api.app.core.errors import ServiceError
+from apps.api.app.core.errors import ApiError, ServiceError
 from apps.api.app.core.jwt_auth import (
     JwtValidationRejected,
     JwtValidationUnavailable,
     validate_oauth_jwt,
 )
+from apps.api.app.core.rate_limit import (
+    enforce_chat_message_rate_limit,
+    enforce_community_write_rate_limit,
+)
 from apps.api.app.core.responses import success_envelope
-from apps.api.app.schemas.community_chat import ChatRoomCreate
+from apps.api.app.schemas.community_chat import ChatMessageIn, ChatRoomCreate
 from apps.api.app.services.community_chat_service import (
     CommunityChatService,
     get_community_chat_service,
@@ -33,6 +38,18 @@ router = APIRouter(
     # gate the WebSocket handshake (which authenticates via a ``?token=`` query
     # param instead of headers). Each HTTP route declares the dependency itself.
 )
+
+# Documented per-actor/per-client write limits (requests/messages per minute).
+# Reads are not throttled at this seam. Room creation is enforced inside the
+# handler (after OAuth identity validation); WebSocket frames are validated
+# with ``ChatMessageIn`` and throttled per actor+client before persistence, so
+# a rejected frame never reaches the service/repository or the broadcast.
+ROOM_CREATE_LIMIT_PER_MINUTE = 5
+CHAT_MESSAGE_LIMIT_PER_MINUTE = 30
+
+# Bounded, content-free help text for rejected frames: states the wire contract
+# without echoing any part of the rejected payload.
+_INVALID_BODY_HELP = "Message must be a JSON object with a body of 1-4000 characters."
 
 
 # ---------------------------------------------------------------------------
@@ -128,6 +145,17 @@ def _identity_from_token(token: str | None, settings: Settings) -> tuple[str, st
     return issuer, subject
 
 
+def _actor_key(issuer: str, subject: str) -> str:
+    return f"{issuer}:{subject}"
+
+
+def _ws_client_key(websocket: WebSocket) -> str:
+    client = websocket.client
+    if client and client.host:
+        return client.host
+    return "unknown"
+
+
 # ---------------------------------------------------------------------------
 # REST routes.
 # ---------------------------------------------------------------------------
@@ -161,6 +189,12 @@ def create_room(
     identity: Annotated[RequestIdentity, Depends(require_oauth_identity)],
     service: Annotated[CommunityChatService, Depends(get_community_chat_service)],
 ) -> dict:
+    enforce_community_write_rate_limit(
+        request,
+        route_key="community-chat-room-create",
+        actor_key=_actor_key(identity.issuer or "", identity.subject or ""),
+        limit_per_minute=ROOM_CREATE_LIMIT_PER_MINUTE,
+    )
     payload = service.create_room(name=body.name)
     return success_envelope(request=request, data=payload, meta={"source": "db"})
 
@@ -208,6 +242,7 @@ async def chat_room_ws(
         return
 
     await manager.connect(websocket, room_id=room_id, issuer=issuer, subject=subject)
+    client_key = _ws_client_key(websocket)
     try:
         while True:
             raw = await websocket.receive_text()
@@ -216,6 +251,7 @@ async def chat_room_ws(
                 room_id=room_id,
                 issuer=issuer,
                 subject=subject,
+                client_key=client_key,
                 raw=raw,
                 service=service,
             )
@@ -229,20 +265,46 @@ async def _handle_chat_message(
     room_id: UUID,
     issuer: str,
     subject: str,
+    client_key: str,
     raw: str,
     service: CommunityChatService | None,
 ) -> None:
-    """Parse an inbound text frame, persist it, and broadcast to the room."""
+    """Parse, validate, throttle, persist, and broadcast one inbound frame.
+
+    Every rejection path answers with exactly one bounded error frame that
+    never echoes message, token, or identity content, and never persists or
+    broadcasts the rejected payload. The connection stays open afterwards.
+    """
     try:
         parsed = json.loads(raw)
     except (json.JSONDecodeError, TypeError):
         await websocket.send_json({"type": "error", "error": {"code": "INVALID_JSON"}})
         return
 
-    body_text = parsed.get("body") if isinstance(parsed, dict) else None
-    if not isinstance(body_text, str) or not body_text.strip():
+    if not isinstance(parsed, dict):
         await websocket.send_json(
-            {"type": "error", "error": {"code": "INVALID_MESSAGE", "message": "body is required"}}
+            {"type": "error", "error": {"code": "INVALID_MESSAGE", "message": _INVALID_BODY_HELP}}
+        )
+        return
+
+    try:
+        message = ChatMessageIn.model_validate(parsed)
+    except ValidationError:
+        await websocket.send_json(
+            {"type": "error", "error": {"code": "INVALID_MESSAGE", "message": _INVALID_BODY_HELP}}
+        )
+        return
+
+    try:
+        enforce_chat_message_rate_limit(
+            route_key="community-chat-message",
+            actor_key=_actor_key(issuer, subject),
+            client_key=client_key,
+            limit_per_minute=CHAT_MESSAGE_LIMIT_PER_MINUTE,
+        )
+    except ApiError as exc:
+        await websocket.send_json(
+            {"type": "error", "error": {"code": exc.code, "message": exc.message}}
         )
         return
 
@@ -252,7 +314,7 @@ async def _handle_chat_message(
             room_id=room_id,
             issuer=issuer,
             subject=subject,
-            body=body_text,
+            body=message.body,
         )
     except ServiceError as exc:
         await websocket.send_json(
