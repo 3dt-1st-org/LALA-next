@@ -77,13 +77,14 @@ def current_weather(*, lat: float, lng: float, force: bool = False) -> dict:
     db_weather = db_repository.fetch_latest_weather(lat=lat, lng=lng)
     if db_weather:
         # P4 provenance: the weather-only status must be captured before the dust
-        # merge overwrites outdoor_status. Prefer the DB's explicit weather-only
-        # key (flags without is_bad_dust); a legacy row without it falls back to
-        # its pre-merge aggregate. Never inferred from icon/temp/merged status.
-        weather_only_status = _normalize_outdoor_status(
-            db_weather["weather_outdoor_status"]
+        # merge overwrites outdoor_status. Only the DB's explicit weather-only
+        # key (flags without is_bad_dust) is a weather observation — a legacy row
+        # without the key carries no weather provenance, so it stays "unknown".
+        # Never inferred from the merged aggregate, icon or temperature.
+        weather_only_status = (
+            _normalize_outdoor_status(db_weather.get("weather_outdoor_status"))
             if "weather_outdoor_status" in db_weather
-            else db_weather.get("outdoor_status")
+            else "unknown"
         )
         air_quality = _fetch_airkorea_sido_air_quality(lat=lat, lng=lng)
         if air_quality:

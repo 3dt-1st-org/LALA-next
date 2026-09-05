@@ -412,11 +412,12 @@ def intervention(*, lat: float, lng: float, radius_m: int, language: str = "en")
     source = _combined_source(places.get("source"), weather.get("source"))
     candidate_name = (candidate or {}).get("name") or _fallback_candidate_name(normalized)
     outdoor_status = weather["outdoor_status"]
-    # P4: distinct observed causes. Weather adversity comes from the weather-only
-    # provenance (KMA/DB weather flags); AQ adversity only from the dust-derived
-    # provenance. Legacy payloads without provenance keep the pre-P4 aggregate
-    # interpretation (bad aggregate ⇒ weather cause) so old responses and their
-    # bad_weather payloads stay byte-compatible. Unknown remains unknown.
+    # P4: distinct observed causes. Weather adversity comes only from the
+    # weather-only provenance (KMA/DB weather flags); AQ adversity only from the
+    # dust-derived provenance. The merged aggregate outdoor_status is preserved
+    # for display/transport but is NEVER promoted to a weather cause or weather
+    # reason — a legacy payload without provenance yields no observed cause and
+    # unknown stays unknown.
     weather_cause_status = _weather_cause_status(weather)
     air_quality_status = _air_quality_cause_status(weather)
     is_bad_weather = weather_cause_status == "bad"
@@ -501,19 +502,26 @@ def intervention(*, lat: float, lng: float, radius_m: int, language: str = "en")
 
 
 def _weather_cause_status(weather: dict) -> str:
-    """P4: weather-only cause status. Explicit provenance wins; a legacy payload
-    without provenance keeps the aggregate as its weather cause (pre-P4 compat).
+    """P4: weather cause from explicit weather-only provenance only.
+
+    A payload without the provenance key carries no observable weather cause —
+    the merged aggregate outdoor_status (which may already include dust) is
+    never promoted to a weather cause or weather reason. Missing/empty/
+    unrecognized values all stay "unknown".
     """
-    if "weather_outdoor_status" in weather:
-        return str(weather.get("weather_outdoor_status") or "").strip()
-    return str(weather.get("outdoor_status") or "").strip()
+    text = str(weather.get("weather_outdoor_status") or "").strip()
+    if text in {"good", "bad"}:
+        return text
+    return "unknown"
 
 
 def _air_quality_cause_status(weather: dict) -> str:
-    """P4: AQ cause status only from the dust-derived provenance. Legacy payloads
-    without provenance carry no observed AQ cause (honest "unknown")."""
-    if "air_quality_outdoor_status" in weather:
-        return str(weather.get("air_quality_outdoor_status") or "").strip()
+    """P4: AQ cause only from the dust-derived provenance (weather_service
+    derives it from the current normalized dust payload). A payload without the
+    provenance key carries no observed AQ cause — unknown stays unknown."""
+    text = str(weather.get("air_quality_outdoor_status") or "").strip()
+    if text in {"good", "bad"}:
+        return text
     return "unknown"
 
 

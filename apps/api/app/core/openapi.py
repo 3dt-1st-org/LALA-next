@@ -880,7 +880,9 @@ def _weather_data_schema() -> dict[str, Any]:
                 "enum": ["good", "bad", "unknown"],
                 "description": "Observed weather-only status (KMA nowcast / DB "
                 "weather flags without the dust flag); 'unknown' when no weather "
-                "observation exists (e.g. AirKorea-only response).",
+                "observation exists (an AirKorea-only response or a payload "
+                "without the explicit provenance key) — never inferred from the "
+                "merged outdoor_status.",
             },
             "air_quality_outdoor_status": {
                 "type": "string",
