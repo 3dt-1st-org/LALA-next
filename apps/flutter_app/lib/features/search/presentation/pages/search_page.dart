@@ -24,7 +24,6 @@ import 'package:lala_next_app/features/location/widgets/manual_location_sheet.da
 import 'package:lala_next_app/features/onboarding/onboarding_state.dart';
 import 'package:lala_next_app/features/place/place_helpers.dart';
 import 'package:lala_next_app/features/place/widgets/category_badge.dart';
-import 'package:lala_next_app/features/place/widgets/empty_place_state.dart';
 import 'package:lala_next_app/features/place/widgets/place_image.dart';
 import 'package:lala_next_app/features/place/widgets/place_reason_freshness.dart';
 import 'package:lala_next_app/manual_location_options.dart';
@@ -1033,8 +1032,13 @@ class _SearchEmptyView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            EmptyPlaceState(language: language),
-            const SizedBox(height: 12),
+            const Icon(
+              Icons.search_off_rounded,
+              key: ValueKey('search-empty-icon'),
+              size: 42,
+              color: Color(0xFF64748B),
+            ),
+            const SizedBox(height: 16),
             Semantics(
               container: true,
               label: semanticsLabel,
