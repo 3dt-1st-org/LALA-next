@@ -57,6 +57,11 @@ class _CommunityFeedPageState extends State<CommunityFeedPage> {
   // reads as "no more posts", which is a different truth.
   bool _loadMoreFailed = false;
 
+  // S-40 race guard: monotonic request generation. Every full reload advances
+  // it; a response whose generation is older may not touch the list, the
+  // pagination flags, or the visible status.
+  int _feedGeneration = 0;
+
   // 팔로우는 작성자 단위다: 같은 작성자의 카드들을 한 번에 갱신하며,
   // 진행 중인 작성자의 중복 탭을 막는다.
   final Set<String> _followBusyAuthors = <String>{};
@@ -95,12 +100,17 @@ class _CommunityFeedPageState extends State<CommunityFeedPage> {
   }
 
   Future<void> _load({bool initial = false}) async {
+    // Advance the generation first: a full reload supersedes every request
+    // already in flight, so their late results fail the check below.
+    final generation = ++_feedGeneration;
     if (initial) {
       setState(() {
         _status = _FeedStatus.loading;
         _error = null;
         // Why: a full reload replaces the list, so a stale pagination failure
-        // must not resurface as a retry row on the refreshed feed.
+        // must not resurface as a retry row on the refreshed feed, and a
+        // load-more still in flight must not leave a bottom spinner behind.
+        _isLoadingMore = false;
         _loadMoreFailed = false;
       });
     }
@@ -112,7 +122,7 @@ class _CommunityFeedPageState extends State<CommunityFeedPage> {
       final data = envelope.data;
       final posts = data?.posts ?? const <CommunityPost>[];
       final total = data?.total ?? posts.length;
-      if (!mounted) return;
+      if (!mounted || generation != _feedGeneration) return;
       setState(() {
         _posts = posts;
         _total = total;
@@ -120,13 +130,13 @@ class _CommunityFeedPageState extends State<CommunityFeedPage> {
         _status = _FeedStatus.data;
       });
     } on LalaApiException {
-      if (!mounted) return;
+      if (!mounted || generation != _feedGeneration) return;
       setState(() {
         _error = _fallbackError();
         _status = _FeedStatus.error;
       });
     } on Object {
-      if (!mounted) return;
+      if (!mounted || generation != _feedGeneration) return;
       setState(() {
         _error = _fallbackError();
         _status = _FeedStatus.error;
@@ -136,11 +146,15 @@ class _CommunityFeedPageState extends State<CommunityFeedPage> {
 
   Future<void> _loadMore() async {
     if (_isLoadingMore) return;
+    // Capture the generation and page offset this request belongs to. If a
+    // full reload supersedes it, the late result is dropped entirely —
+    // appending here would graft stale rows onto a replaced list (S-40).
+    final generation = _feedGeneration;
+    final offset = _posts.length;
     setState(() {
       _isLoadingMore = true;
       _loadMoreFailed = false;
     });
-    final offset = _posts.length;
     try {
       final envelope = await _client.getCommunityPosts(
         limit: _pageSize,
@@ -148,14 +162,14 @@ class _CommunityFeedPageState extends State<CommunityFeedPage> {
       );
       final data = envelope.data;
       final more = data?.posts ?? const <CommunityPost>[];
-      if (!mounted) return;
+      if (!mounted || generation != _feedGeneration) return;
       setState(() {
         _posts = <CommunityPost>[..._posts, ...more];
         _hasMore = _posts.length < (data?.total ?? _posts.length);
         _isLoadingMore = false;
       });
     } on Object {
-      if (!mounted) return;
+      if (!mounted || generation != _feedGeneration) return;
       setState(() {
         _isLoadingMore = false;
         _loadMoreFailed = true;
