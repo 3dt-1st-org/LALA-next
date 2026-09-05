@@ -192,14 +192,29 @@ def test_grounding_flags_zero_grounding_count() -> None:
     assert audit.reason == "no_grounding_metadata"
 
 
+def test_grounding_flags_invalid_grounding_count() -> None:
+    record = _record(grounding_count="many")
+    audit = dims.audit_grounding(record)
+    assert audit.status == dims.STATUS_FLAGGED
+    assert audit.reason == "invalid_grounding_metadata"
+
+
 def test_grounding_flags_precheck_tags() -> None:
     record = _record(grounding_count=None, auto_precheck={"issue_tags": ["no_rag_chunks"]})
     assert dims.audit_grounding(record).status == dims.STATUS_FLAGGED
 
 
-def test_grounding_passes_when_count_metadata_absent() -> None:
+def test_grounding_is_not_applicable_when_evidence_absent() -> None:
+    """Absent grounding evidence is N/A, never a silent pass (verifier defect #1)."""
     record = _record(grounding_count=None)
-    assert dims.audit_grounding(record).status == dims.STATUS_PASS
+    audit = dims.audit_grounding(record)
+    assert audit.status == dims.STATUS_NOT_APPLICABLE
+    assert audit.reason == "no_grounding_metadata"
+
+
+def test_grounding_passes_only_on_positive_explicit_count() -> None:
+    assert dims.audit_grounding(_record(grounding_count=1)).status == dims.STATUS_PASS
+    assert dims.audit_grounding(_record(grounding_count=2)).status == dims.STATUS_PASS
 
 
 # --- Repetition: adversarial cases ---------------------------------------------
@@ -324,6 +339,10 @@ def test_sanitized_report_preserves_all_three_dimension_counts() -> None:
 
 def test_sanitized_records_carry_verdict_codes_not_raw_evidence() -> None:
     sanitized = sanitizer.build_sanitized_report(_lane_c_report(), {})
+    raw_scripts = {
+        record["place_id"]: str(record.get("script") or "")
+        for record in _lane_c_report()["records"]
+    }
     for record in sanitized["records"]:
         verdicts = record["dimension_verdicts"]
         assert set(verdicts) == set(dims.DIMENSION_ORDER)
@@ -331,7 +350,13 @@ def test_sanitized_records_carry_verdict_codes_not_raw_evidence() -> None:
             assert verdict["status"] in _ALLOWED_STATUSES
             assert verdict["reason"].isascii()
         assert "script" not in record
-        assert len(record["script_excerpt"]) <= 243
+        assert len(record["script_excerpt"]) <= 240
+        raw = raw_scripts[record["place_id"]]
+        if raw.strip():
+            # Verifier defect #5: an excerpt must never equal the whole script.
+            assert record["script_excerpt"] != raw
+            assert record["script_excerpt"] != " ".join(raw.split())
+            assert record["script_excerpt"].endswith(sanitizer._EXCERPT_SUFFIX)
 
 
 def test_sanitized_excerpt_redacts_secret_like_text() -> None:
@@ -339,6 +364,76 @@ def test_sanitized_excerpt_redacts_secret_like_text() -> None:
     secret_record = next(r for r in sanitized["records"] if r["place_id"] == "eval-dim-secret")
     assert "sk-AbCdEf123456" not in secret_record["script_excerpt"]
     assert "[redacted]" in secret_record["script_excerpt"]
+
+
+def test_excerpt_never_equals_short_full_script() -> None:
+    short = "이 장소는 짧은 안내입니다."
+    excerpt = sanitizer.script_excerpt(short)
+    assert excerpt != short
+    assert excerpt != " ".join(short.split())
+    assert excerpt.endswith(sanitizer._EXCERPT_SUFFIX)
+    # Deterministic: same input, same elided output.
+    assert excerpt == sanitizer.script_excerpt(short)
+
+
+def test_excerpt_elides_at_least_one_source_character() -> None:
+    for script in ("네.", "안내.", "x" * 239, "x" * 240, "x" * 1000):
+        excerpt = sanitizer.script_excerpt(script)
+        assert excerpt != script
+        assert len(excerpt.replace(sanitizer._EXCERPT_SUFFIX, "")) < len(script)
+
+
+def test_excerpt_redacts_coordinate_pairs() -> None:
+    script = "만남 위치는 37.5665, 126.9780 부근이고 골목 산책 동선으로 이어집니다."
+    excerpt = sanitizer.script_excerpt(script)
+    assert "37.5665" not in excerpt
+    assert "126.9780" not in excerpt
+    assert "[redacted]" in excerpt
+
+
+def test_excerpt_redacts_email_and_phone() -> None:
+    script = (
+        "문의는 guide@example.com 으로 하시고 사전 예약은 010-1234-5678 로 연락하세요. "
+        "대표 번호는 +82 2 1234 5678 입니다. 근처 동산 코스도 안내합니다."
+    )
+    excerpt = sanitizer.script_excerpt(script)
+    assert "guide@example.com" not in excerpt
+    assert "010-1234-5678" not in excerpt
+    assert "1234 5678" not in excerpt
+    assert excerpt.count("[redacted]") >= 3
+
+
+def test_excerpt_does_not_redact_pm_template_text() -> None:
+    script = (
+        "오늘은 미세먼지 PM10 30, 초미세먼지 PM2.5 12 수준이라 야외 정원 산책도 무리가 없습니다."
+    )
+    excerpt = sanitizer.script_excerpt(script)
+    assert "PM10 30" in excerpt
+    assert "PM2.5 12" in excerpt
+    assert "[redacted]" not in excerpt
+
+
+def test_manual_notes_redact_coordinates_email_phone_and_secrets() -> None:
+    report = _lane_c_report()
+    notes = {
+        "places": {
+            "eval-dim-good": {
+                "verdict": "flagged",
+                "notes": (
+                    "리뷰어가 좌표 37.5665, 126.9780 와 이메일 reviewer@example.com,"
+                    " 전화 010-1234-5678, 키 sk-AbCdEf1234567890 을 메모로 남겼습니다."
+                ),
+            }
+        }
+    }
+    sanitized = sanitizer.build_sanitized_report(report, notes)
+    record = next(r for r in sanitized["records"] if r["place_id"] == "eval-dim-good")
+    notes_text = record["manual_notes"]
+    assert "37.5665" not in notes_text
+    assert "reviewer@example.com" not in notes_text
+    assert "010-1234-5678" not in notes_text
+    assert "sk-AbCdEf1234567890" not in notes_text
+    assert notes_text.count("[redacted]") >= 4
 
 
 def test_sanitizer_cli_writes_dimension_table_with_not_applicable(tmp_path) -> None:

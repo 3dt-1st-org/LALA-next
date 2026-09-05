@@ -8,7 +8,10 @@ DB, ``LALA_ENABLE_LIVE_AI`` stays off), and returns structured per-place /
 per-language results that the CLI harness turns into a pass/fail report. The
 report also carries a deterministic per-dimension audit summary
 (:mod:`docent_qa_dimensions`): pass / flagged / not-applicable counts only —
-honest-empty cases are counted as not-applicable, never as pass.
+honest-empty cases are counted as not-applicable, never as pass. Grounding
+passes are evidence-backed: each language case carries its originating
+fixture's ``grounding_anchors`` count into the audit (a case without explicit
+grounding evidence is not-applicable, an explicit zero is flagged).
 
 This module never edits ``docent_service``; it imports it read-only. Fixture places are
 synthetic (``eval_`` prefix) — never real product data.
@@ -66,6 +69,9 @@ class LanguageResult:
     no_placeholder: bool
     unavailable: bool = False
     reason: str | None = None
+    # Deterministic offline grounding evidence carried from the originating
+    # fixture's ``grounding_anchors``; feeds the grounding dimension audit.
+    grounding_anchor_count: int = 0
 
 
 @dataclass
@@ -165,6 +171,7 @@ def _single_language_ok(script: str, language: str) -> bool:
 
 def _evaluate_language(place: dict[str, Any], language: str) -> LanguageResult:
     request = build_request(place, language)
+    anchor_count = len(place.get("grounding_anchors") or [])
     try:
         response = docent_service.generate_script(request)
     except ServiceError as exc:
@@ -179,6 +186,7 @@ def _evaluate_language(place: dict[str, Any], language: str) -> LanguageResult:
             no_placeholder=True,
             unavailable=True,
             reason=exc.code,
+            grounding_anchor_count=anchor_count,
         )
     script = str(response.get("script") or "")
     return LanguageResult(
@@ -191,6 +199,7 @@ def _evaluate_language(place: dict[str, Any], language: str) -> LanguageResult:
         no_placeholder=not _PLACEHOLDER_RE.search(script),
         unavailable=False,
         reason=None,
+        grounding_anchor_count=anchor_count,
     )
 
 
@@ -256,6 +265,10 @@ def evaluate_docent(places: list[dict[str, Any]]) -> EvalReport:
                     "language": lang.language,
                     "source": lang.source,
                     "script": lang.script,
+                    # Deterministic offline grounding evidence from the fixture's
+                    # committed anchors: generated cases pass the grounding audit
+                    # only when this count is positive; honest-empty stays N/A.
+                    "grounding_count": lang.grounding_anchor_count,
                     "auto_precheck": {"issue_tags": []},
                 }
             )

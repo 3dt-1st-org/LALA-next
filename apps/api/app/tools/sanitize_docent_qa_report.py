@@ -1,11 +1,14 @@
 """Sanitize a Lane C live docent QA run report for safe local storage.
 
-Strips anything that could carry private/raw review content or secrets, keeps
-short evidence excerpts, and aggregates per-dimension verdicts from the
-deterministic audits in :mod:`docent_qa_dimensions` plus the manual review
-notes file. Every dimension reports pass / flagged / not-applicable counts;
-dimensions without enough evidence are counted as not-applicable, never as a
-silent pass.
+Redacts secret-like text, coordinate pairs, and direct PII forms (email /
+phone), emits only visibly elided script excerpts (never a byte-complete
+script, even for scripts shorter than the cap), and aggregates per-dimension
+verdicts from the deterministic audits in :mod:`docent_qa_dimensions` plus the
+manual review notes file. Every dimension reports pass / flagged /
+not-applicable counts; dimensions without enough evidence are counted as
+not-applicable, never as a silent pass. Sanitized artifacts still contain
+bounded redacted excerpts — they are not raw-script-free by construction, and
+broad safety/factual-truth/source-rights judgments stay external gates.
 
 Input:  output/local/docent-qa-lane-c/live-docent-qa-*.json (gitignored run report)
 Output: output/local/docent-qa-lane-c/sanitized-report.md (safe summary + evidence)
@@ -31,11 +34,38 @@ _SECRET_RE = re.compile(
     r"Key Vault|vault\.azure\.net)",
     re.IGNORECASE,
 )
+# Coordinate-like latitude/longitude pairs and common direct PII forms.
+# Deliberately narrow (separators required for phone groups, decimal pairs only
+# for coordinates) so template text like "PM10 30, PM2.5 12" never matches.
+_PII_RE = re.compile(
+    r"(?:\b\d{1,3}\.\d{2,}\s*,\s*\d{1,3}\.\d{2,}\b"
+    r"|\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"
+    r"|\b(?:\+\d{1,3}[-.\s])?(?:0\d{0,2}|\d{1,4})[-.\s]\d{3,4}[-.\s]\d{4}\b)"
+)
+_EXCERPT_SUFFIX = " ..."
+_EXCERPT_LIMIT = 240
 
 
 def sanitize_text(value: str, limit: int = 700) -> str:
+    """Collapse whitespace, redact secrets/coordinates/direct PII, cap length."""
     cleaned = _SECRET_RE.sub("[redacted]", " ".join((value or "").split()))
+    cleaned = _PII_RE.sub("[redacted]", cleaned)
     return cleaned[: limit - 3] + "..." if len(cleaned) > limit else cleaned
+
+
+def script_excerpt(value: str, limit: int = _EXCERPT_LIMIT) -> str:
+    """Redacted, visibly elided script excerpt.
+
+    Never byte-for-byte equal to the entire input script: at least one source
+    character is always omitted and a visible ellipsis suffix marks the elision,
+    even when the script is shorter than ``limit``.
+    """
+    cleaned = _SECRET_RE.sub("[redacted]", " ".join((value or "").split()))
+    cleaned = _PII_RE.sub("[redacted]", cleaned)
+    if not cleaned:
+        return ""
+    keep = min(limit - len(_EXCERPT_SUFFIX), len(cleaned) - 1)
+    return cleaned[:keep].rstrip() + _EXCERPT_SUFFIX
 
 
 def build_sanitized_report(report: dict[str, Any], manual_notes: dict[str, Any]) -> dict[str, Any]:
@@ -78,7 +108,7 @@ def build_sanitized_report(report: dict[str, Any], manual_notes: dict[str, Any])
                 "manual_scores": manual.get("scores"),
                 "manual_verdict": manual.get("verdict"),
                 "manual_notes": sanitize_text(str(manual.get("notes") or ""), 300),
-                "script_excerpt": sanitize_text(str(record.get("script") or ""), 240),
+                "script_excerpt": script_excerpt(str(record.get("script") or "")),
             }
         )
 
