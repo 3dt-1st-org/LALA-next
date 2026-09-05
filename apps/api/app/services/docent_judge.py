@@ -12,27 +12,45 @@ Honesty rules (binding):
   reason code.
 - Parsing is strict and fail-closed: missing, malformed, duplicate, unknown,
   non-finite, out-of-range, or contradictory fields always collapse the record
-  verdict to ``REWRITE`` with a machine-readable failure reason code. A
-  ``PASS`` with any flagged dimension is contradictory and fails closed.
+  verdict to ``REWRITE`` with a machine-readable failure reason code. Both
+  contradiction directions fail closed: ``PASS`` with any flagged dimension
+  and ``REWRITE`` with every dimension ``pass``.
 - Live model judging is OFF by default. A production code path requires the
   existing explicit live-AI gate (``LALA_ENABLE_LIVE_AI`` + standard OpenAI
   key, Azure base URLs rejected) AND the separate ``docent_qa_judge``
   opt-in flag, and resolves the ``docent_qa`` model role separately from
   docent generation. No new provider, Azure path, raw-key path, or
   direct-token path is introduced.
+- Provider input is sanitized and bounded before invocation: the prompt never
+  carries a raw internal place identifier, language/category are whitelist
+  labels, and the script is P6A-redacted (secrets, coordinates, direct PII)
+  before the length bound.
 - The batch is bounded: hard maximum 80 language records, a small canary
   before the remainder, finite concurrency, a per-record timeout, exactly one
   provider call per record (no automatic retries that could multiply spend),
   and a stop-loss halting the batch on malformed responses, repeated provider
-  failures, or a configured token-usage ceiling. The policy is pure data and
-  is independently unit-testable without any provider.
+  failures, or a configured token-usage ceiling (reported usage clamped to
+  >= 0 so it can never reduce stop-loss accounting). Honest-empty records are
+  classified and recorded before any executor submission in both phases, so
+  provider invocations equal the judgeable records. The batch wait timeout
+  abandons the wait only — it never terminates an already-running call; the
+  live client's own timeout is authoritative. The policy is pure data and is
+  independently unit-testable without any provider.
 - Nothing raw is logged or persisted: no raw provider payloads, raw review
   text, secrets, personal data, precise coordinates, or cloud identifiers.
   Persisted outcomes carry only the sanitized record identity, the decision,
-  dimension statuses/reason codes (sanitized), bounded redacted script
-  excerpts via the P6A sanitizer, and aggregate counters.
+  dimension statuses/reason codes (sanitized on every public serialization
+  path), bounded redacted script excerpts via the P6A sanitizer, and
+  aggregate counters.
 - The judge gate is a separate optional gate on the offline QA report; when no
-  judge ran it reports ``NOT_RUN``, never ``PASS``. It never upgrades the
+  judge ran it reports exactly ``{"status": "NOT_RUN"}``, never ``PASS``. The
+  aggregate gate returns ``PASS`` only when every judgeable in-cap record has
+  a valid ``PASS`` and there are no provider failures, timeouts, incomplete
+  outcomes, halted skips, or cap drops; otherwise it reports an explicit
+  non-PASS status (``REWRITE`` > ``HALTED`` > ``INCOMPLETE`` >
+  ``NO_VERDICTS``). An offline fake-provider run is labeled ``SIMULATED``
+  (``OFFLINE_FAKE``) in both JSON and CLI summary — it can never satisfy or
+  be mistaken for the real gate's semantics. The gate never upgrades the
   deterministic P6A results into claims of broad factual truth or production
   readiness.
 """
@@ -43,7 +61,7 @@ import json
 import math
 from collections.abc import Sequence
 from concurrent.futures import Future, ThreadPoolExecutor
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from apps.api.app.core.config import get_settings, resolve_openai_base_url_host
@@ -55,6 +73,13 @@ DECISION_PASS = "PASS"
 DECISION_REWRITE = "REWRITE"
 DIMENSION_STATUS_PASS = "pass"
 DIMENSION_STATUS_FLAGGED = "flagged"
+# Aggregate real-judge gate statuses (never produced for a simulated run).
+GATE_HALTED = "HALTED"
+GATE_INCOMPLETE = "INCOMPLETE"
+GATE_NO_VERDICTS = "NO_VERDICTS"
+# Simulated (offline fake-provider) labeling — never equal to a real gate PASS.
+GATE_SIMULATED = "SIMULATED"
+SIMULATED_PROVIDER_LABEL = "OFFLINE_FAKE"
 _ALLOWED_DECISIONS = (DECISION_PASS, DECISION_REWRITE)
 _ALLOWED_DIMENSION_STATUSES = (DIMENSION_STATUS_PASS, DIMENSION_STATUS_FLAGGED)
 
@@ -76,9 +101,15 @@ JUDGE_DIMENSIONS: tuple[str, ...] = (
 _DIMENSION_SET = frozenset(JUDGE_DIMENSIONS)
 
 MAX_REASON_CHARS = 200
-# The script handed to the judge prompt is bounded so a single record can never
-# blow up per-record spend.
+# The script handed to the judge prompt is P6A-redacted and bounded so a
+# single record can never leak secrets/coordinates/PII or blow up spend.
 MAX_PROMPT_SCRIPT_CHARS = 4_000
+
+# Whitelisted prompt metadata labels: anything outside these sets is sent as
+# the bounded literal "unknown" — never a raw/unbounded record field.
+_ALLOWED_PROMPT_LANGUAGES = ("ko", "en")
+_ALLOWED_PROMPT_CATEGORIES = ("attraction", "restaurant", "event", "culture_venue")
+_PROMPT_METADATA_UNKNOWN = "unknown"
 
 DOCENT_JUDGE_TIMEOUT_SECONDS = 8.0
 DOCENT_JUDGE_MAX_COMPLETION_TOKENS = 500
@@ -97,7 +128,13 @@ class JudgeDimensionResult:
     reason: str
 
     def to_public_dict(self) -> dict[str, str]:
-        return asdict(self)
+        # Model-authored reasons are sanitized on every public serialization
+        # path: redacted (secrets/coordinates/direct PII) and bounded.
+        return {
+            "dimension": self.dimension,
+            "status": self.status,
+            "reason": sanitize_text(self.reason, limit=MAX_REASON_CHARS),
+        }
 
 
 @dataclass(frozen=True)
@@ -143,8 +180,10 @@ def parse_judge_payload(payload: Any) -> JudgeResult:
     [{"dimension", "status", "reason", "confidence"}, ...]}`` with exactly one
     entry per known dimension (no duplicates, no unknown dimensions, no
     unknown fields, no missing fields). ``reason`` is 1..200 characters;
-    ``confidence`` is a finite number in [0, 1] (bools rejected). A ``PASS``
-    decision with any flagged dimension is contradictory and fails closed.
+    ``confidence`` is a finite number in [0, 1] (bools rejected). Both
+    contradiction directions fail closed with the same bounded reason code:
+    ``PASS`` with any flagged dimension, and ``REWRITE`` with every dimension
+    ``pass``.
     """
     if not isinstance(payload, dict):
         return _fail_closed("payload_not_object")
@@ -196,9 +235,12 @@ def parse_judge_payload(payload: Any) -> JudgeResult:
             return _fail_closed("invalid_confidence")
         results.append(JudgeDimensionResult(dimension=dimension, status=status, reason=reason))
 
-    if decision == DECISION_PASS and any(
-        result.status == DIMENSION_STATUS_FLAGGED for result in results
-    ):
+    any_flagged = any(result.status == DIMENSION_STATUS_FLAGGED for result in results)
+    if decision == DECISION_PASS and any_flagged:
+        return _fail_closed("contradictory_decision")
+    if decision == DECISION_REWRITE and not any_flagged:
+        # Reverse contradiction: a REWRITE with zero flagged dimensions has no
+        # supporting evidence — fail closed just like PASS+flagged.
         return _fail_closed("contradictory_decision")
     return JudgeResult(decision=decision, dimensions=tuple(results))
 
@@ -240,11 +282,21 @@ def judge_live_enabled(settings: Any | None = None) -> bool:
     return resolve_feature_flags().get("docent_qa_judge") is True
 
 
+def _prompt_metadata_label(value: Any, allowed: tuple[str, ...]) -> str:
+    """Whitelist one prompt metadata label; anything else becomes ``unknown``."""
+    normalized = str(value or "").strip().lower()
+    return normalized if normalized in allowed else _PROMPT_METADATA_UNKNOWN
+
+
 def build_judge_prompt(record: dict[str, Any]) -> tuple[str, str]:
     """Build the (system, user) judge prompt for one record.
 
-    The prompt carries only the sanitized record identity and a bounded script
-    excerpt as input; it never carries secrets by construction.
+    Provider input is sanitized and bounded before invocation: the prompt
+    never carries a raw internal place identifier (identity stays in the
+    record dict for accounting only), language/category are whitelist labels
+    (anything else becomes the bounded literal ``unknown``), and the script is
+    P6A-redacted (secret-like text, coordinate pairs, email/phone) before the
+    4000-character bound.
     """
     dimension_names = ", ".join(JUDGE_DIMENSIONS)
     system = (
@@ -257,13 +309,10 @@ def build_judge_prompt(record: dict[str, Any]) -> tuple[str, str]:
         "decision must be PASS only when every dimension status is pass; otherwise REWRITE. "
         "Add no other field."
     )
-    script = str(record.get("script") or "")[:MAX_PROMPT_SCRIPT_CHARS]
-    user = (
-        f"Place id: {record.get('place_id')}\n"
-        f"Language: {record.get('language')}\n"
-        f"Category: {record.get('category')}\n"
-        f"Script:\n{script}"
-    )
+    language = _prompt_metadata_label(record.get("language"), _ALLOWED_PROMPT_LANGUAGES)
+    category = _prompt_metadata_label(record.get("category"), _ALLOWED_PROMPT_CATEGORIES)
+    script = sanitize_text(str(record.get("script") or ""), limit=MAX_PROMPT_SCRIPT_CHARS)
+    user = f"Language: {language}\nCategory: {category}\nScript:\n{script}"
     return system, user
 
 
@@ -527,15 +576,39 @@ class JudgeBatchRun:
     total_tokens: int = 0
 
     def gate_status(self) -> str:
-        """Overall judge-gate status; ``NOT_RUN`` is reported by the caller
-        when no judge ran at all, and can never be produced here as a pass."""
+        """Aggregate real-judge gate status (never a simulated label).
+
+        ``PASS`` is returned only when every judgeable in-cap record has a
+        valid ``PASS`` and there are no provider failures, timeouts,
+        incomplete outcomes, halted skips, or cap drops. Honest-empty skips
+        stay explicit and neutral. Precedence: ``REWRITE`` > ``HALTED`` >
+        ``INCOMPLETE`` > ``PASS`` > ``NO_VERDICTS``. ``NOT_RUN`` is reported
+        by the caller when no judge ran at all, and can never be produced
+        here as a pass.
+        """
         if any(outcome.decision == DECISION_REWRITE for outcome in self.outcomes):
             return DECISION_REWRITE
         if self.halted:
-            return "HALTED"
+            return GATE_HALTED
+        incomplete_error_codes = {
+            ERROR_PROVIDER_FAILURE,
+            ERROR_PROVIDER_TIMEOUT,
+            ERROR_SKIPPED_BATCH_HALTED,
+        }
+        has_incomplete_outcome = any(
+            outcome.error_code in incomplete_error_codes for outcome in self.outcomes
+        )
+        if (
+            self.counters.get("provider_failures", 0) > 0
+            or self.counters.get("provider_timeouts", 0) > 0
+            or self.counters.get("skipped_batch_halted", 0) > 0
+            or self.counters.get("dropped_by_cap", 0) > 0
+            or has_incomplete_outcome
+        ):
+            return GATE_INCOMPLETE
         if any(outcome.decision == DECISION_PASS for outcome in self.outcomes):
             return DECISION_PASS
-        return "NO_VERDICTS"
+        return GATE_NO_VERDICTS
 
     def summarize(self) -> dict[str, Any]:
         """Stable, secret-free aggregate for the offline QA report."""
@@ -570,10 +643,15 @@ def run_judge_batch(
     """Run one bounded judge batch with an injected provider.
 
     The canary phase runs sequentially first; the remainder runs in bounded-
-    concurrency waves. Each record gets exactly one provider call (no retries).
-    The batch halts on malformed responses, repeated provider failures
-    (timeouts included), or the cumulative token ceiling; every unjudged
-    remainder record is explicitly skipped, never silently passed.
+    concurrency waves. Each judgeable record gets exactly one provider call
+    (no retries); honest-empty records are classified and recorded before any
+    executor submission in both phases, so provider invocations equal the
+    judgeable records. The batch halts on malformed responses, repeated
+    provider failures (timeouts included), or the cumulative token ceiling
+    (reported usage clamped to >= 0); every unjudged remainder record is
+    explicitly skipped, never silently passed. Sub-stop-loss errors, halted
+    skips, and cap drops make the aggregate gate ``INCOMPLETE``, never
+    ``PASS``.
     """
     policy = policy or JudgeBatchPolicy()
     policy.validate()
@@ -607,25 +685,13 @@ def run_judge_batch(
         return None
 
     def judge_one(record: dict[str, Any], future: Future[JudgeProviderReply]) -> None:
-        script = str(record.get("script") or "").strip()
-        if not script:
-            # Honest-empty record: nothing to judge. Skipped, never a pass.
-            run.counters["skipped_no_script"] += 1
-            run.outcomes.append(
-                JudgeRecordOutcome(
-                    place_id=str(record.get("place_id")),
-                    language=str(record.get("language")),
-                    decision=None,
-                    failure_reason=None,
-                    error_code=ERROR_SKIPPED_NO_SCRIPT,
-                    dimensions=(),
-                    script_excerpt="",
-                )
-            )
-            return
+        """Collect one already-submitted judgeable record (non-empty only)."""
         try:
             reply = future.result(timeout=policy.per_record_timeout_seconds)
         except TimeoutError:
+            # The wait is abandoned, not the call: the already-running thread
+            # is never terminated here — the live client's own timeout is
+            # authoritative. Counted once; never retried.
             run.counters["provider_timeouts"] += 1
             run.outcomes.append(_error_outcome(record, ERROR_PROVIDER_TIMEOUT))
             return
@@ -634,7 +700,13 @@ def run_judge_batch(
             run.counters["provider_failures"] += 1
             run.outcomes.append(_error_outcome(record, ERROR_PROVIDER_FAILURE))
             return
-        run.total_tokens += int(reply.total_tokens or 0)
+        try:
+            usage = max(0, int(reply.total_tokens or 0))
+        except (TypeError, ValueError):
+            # Invalid reported usage can neither crash the batch nor perturb
+            # stop-loss accounting.
+            usage = 0
+        run.total_tokens += usage
         result = parse_judge_response(reply.text)
         if result.is_fail_closed:
             run.counters["malformed_responses"] += 1
@@ -651,34 +723,71 @@ def run_judge_batch(
                 failure_reason=result.failure_reason,
                 error_code=None,
                 dimensions=result.dimensions,
-                script_excerpt=script_excerpt(script),
+                script_excerpt=script_excerpt(str(record.get("script") or "")),
             )
         )
 
-    # Explicit shutdown: a per-record timeout abandons the wait (accounted as a
-    # failure) without blocking the batch on a hung call; cancelling queued
-    # futures on halt stops unstarted paid calls. At most max_concurrency
-    # already-running calls linger, each bounded by the provider's own timeout.
+    def is_honest_empty(record: dict[str, Any]) -> bool:
+        return not str(record.get("script") or "").strip()
+
+    def skip_honest_empty(record: dict[str, Any]) -> None:
+        """Classify and record an honest-empty skip; never submitted, judged,
+        or passed."""
+        run.counters["skipped_no_script"] += 1
+        run.outcomes.append(
+            JudgeRecordOutcome(
+                place_id=str(record.get("place_id")),
+                language=str(record.get("language")),
+                decision=None,
+                failure_reason=None,
+                error_code=ERROR_SKIPPED_NO_SCRIPT,
+                dimensions=(),
+                script_excerpt="",
+            )
+        )
+
+    # Explicit shutdown: a per-record wait timeout abandons only the wait
+    # (accounted as a failure) — it never terminates an already-running call,
+    # whose duration is bounded by the provider client's own timeout.
+    # Cancelling queued futures on halt stops unstarted paid calls; at most
+    # max_concurrency already-running calls linger.
     executor = ThreadPoolExecutor(max_workers=policy.max_concurrency)
     try:
         # Canary: sequential, smallest blast radius before the remainder.
+        # Honest-empty records are classified and recorded BEFORE any
+        # executor submission, so the provider never sees them.
         for index, record in enumerate(plan.canary):
             if (reason := stop_loss_reason()) is not None:
                 pending = [*plan.canary[index:], *plan.remainder]
                 _mark_halted(run, pending, reason)
                 return run
+            if is_honest_empty(record):
+                skip_honest_empty(record)
+                continue
             judge_one(record, executor.submit(provider.judge, record))
         if (reason := stop_loss_reason()) is not None:
             _mark_halted(run, plan.remainder, reason)
             return run
-        # Remainder: bounded-concurrency waves; stop-loss checked between waves.
+        # Remainder: bounded-concurrency waves; stop-loss checked between
+        # waves so no new paid wave starts once a threshold is crossed.
+        # Empties are classified before the wave's submissions.
         waves = [
             plan.remainder[index : index + policy.max_concurrency]
             for index in range(0, len(plan.remainder), policy.max_concurrency)
         ]
         for wave in waves:
-            futures = [(record, executor.submit(provider.judge, record)) for record in wave]
-            for record, future in futures:
+            submissions = iter(
+                [
+                    (record, executor.submit(provider.judge, record))
+                    for record in wave
+                    if not is_honest_empty(record)
+                ]
+            )
+            for record in wave:
+                if is_honest_empty(record):
+                    skip_honest_empty(record)
+                    continue
+                _submitted, future = next(submissions)
                 judge_one(record, future)
             if (reason := stop_loss_reason()) is not None:
                 pending = [record for record in plan.remainder if not _has_outcome(run, record)]
@@ -714,12 +823,25 @@ def _mark_halted(run: JudgeBatchRun, pending: Sequence[dict[str, Any]], reason: 
         run.outcomes.append(_error_outcome(record, ERROR_SKIPPED_BATCH_HALTED))
 
 
-def judge_gate_section(run: JudgeBatchRun | None) -> dict[str, Any]:
+def judge_gate_section(run: JudgeBatchRun | None, *, simulated: bool = False) -> dict[str, Any]:
     """Build the separate optional judge-gate section for the offline report.
 
     When no judge ran the section is exactly ``{"status": "NOT_RUN"}`` — never
-    a PASS — and never modifies the deterministic P6A results.
+    a PASS — and the default invocation is provider-free. A simulated run
+    (offline fake provider) is labeled unmistakably: top status ``SIMULATED``,
+    ``provider: OFFLINE_FAKE``, ``simulated: true``, with the run's aggregate
+    nested under ``simulated_result`` — the top status can never equal the
+    real gate's ``PASS``, so a fake run can never satisfy or be mistaken for
+    a real model-judge acceptance gate. Never modifies the deterministic P6A
+    results.
     """
     if run is None:
         return {"status": "NOT_RUN"}
+    if simulated:
+        return {
+            "status": GATE_SIMULATED,
+            "provider": SIMULATED_PROVIDER_LABEL,
+            "simulated": True,
+            "simulated_result": run.summarize(),
+        }
     return run.summarize()
