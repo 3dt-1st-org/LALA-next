@@ -628,12 +628,14 @@ def fetch_latest_weather(*, lat: float, lng: float) -> dict[str, Any] | None:
     if not row:
         return None
 
-    outdoor_status = (
+    # P4 provenance: weather-only adversity excludes the dust flag so callers can
+    # distinguish observed weather conditions from observed air quality. The
+    # merged outdoor_status key keeps its pre-P4 shape (dust included).
+    weather_outdoor_status = (
         "bad"
         if any(
             [
                 row.get("is_rain_snow"),
-                row.get("is_bad_dust"),
                 row.get("is_heatwave"),
                 row.get("is_coldwave"),
                 row.get("is_strong_wind"),
@@ -641,6 +643,7 @@ def fetch_latest_weather(*, lat: float, lng: float) -> dict[str, Any] | None:
         )
         else "good"
     )
+    outdoor_status = "bad" if weather_outdoor_status == "bad" or row.get("is_bad_dust") else "good"
     return {
         "lat": lat,
         "lng": lng,
@@ -654,6 +657,7 @@ def fetch_latest_weather(*, lat: float, lng: float) -> dict[str, Any] | None:
         ),
         "forecast": [],
         "outdoor_status": outdoor_status,
+        "weather_outdoor_status": weather_outdoor_status,
         "location_match": row.get("location_match_rank") == 0,
         "record_time": row.get("record_time").isoformat() if row.get("record_time") else None,
         "source": "db",
