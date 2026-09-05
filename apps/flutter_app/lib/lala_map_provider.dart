@@ -43,13 +43,12 @@ const String kLalaOpenMapStyleUrl = String.fromEnvironment(
 );
 
 /// Hosts the native WebView may navigate to while the open-vector embed is
-/// active: the OpenFreeMap style/tile host plus the Android
-/// `WebViewAssetLoader` host that serves `loadFlutterAsset` content.
-/// Subresource fetches (tiles/glyphs) stay on the style host; nothing else is
-/// permitted.
+/// active: the OpenFreeMap style/tile host only. The embed document itself
+/// is a bundled asset delivered as a `file://` URL (see
+/// [isBundledOpenMapEmbedAssetUri]); subresource fetches (tiles/glyphs) stay
+/// on the style host; nothing else is permitted.
 const Set<String> kLalaOpenMapNavigationHosts = <String>{
   'tiles.openfreemap.org',
-  'appassets.androidplatform.net',
 };
 
 /// Selects the map provider for [language] after normalization.
@@ -63,18 +62,113 @@ LalaMapProviderKind selectLalaMapProvider(String? language) {
       : LalaMapProviderKind.openVector;
 }
 
+/// Whether [uri] is exactly the bundled open-vector embed document as
+/// produced by the installed `webview_flutter` platform implementations of
+/// `loadFlutterAsset`:
+///
+/// - iOS (`webview_flutter_wkwebview`) resolves the asset inside the app
+///   bundle and calls `WKWebView.loadFileURL`, producing a `file://` URL
+///   with an empty host whose path ends in
+///   `/flutter_assets/<kLalaOpenMapEmbedAssetPath>`. That programmatic
+///   main-frame load IS routed through the navigation delegate, so the gate
+///   must admit it.
+/// - Android (`webview_flutter_android`) loads
+///   `file:///android_asset/flutter_assets/<asset key>`.
+///
+/// The suffix match admits only this one document under a `flutter_assets`
+/// directory; arbitrary `file://` paths (and the `flutter-assets://` scheme
+/// that no installed platform emits) are still rejected.
+bool isBundledOpenMapEmbedAssetUri(Uri uri) {
+  if (uri.scheme.toLowerCase() != 'file' || uri.host.isNotEmpty) {
+    return false;
+  }
+  return uri.path.endsWith('/flutter_assets/$kLalaOpenMapEmbedAssetPath');
+}
+
 /// Native WebView navigation gate for the open-vector embed. Allows only the
-/// hosts in [kLalaOpenMapNavigationHosts] plus the `flutter-assets` scheme
-/// used by `webview_flutter`'s `loadFlutterAsset` on iOS. Anything else
-/// (including the NAVER hosts) is rejected.
+/// hosts in [kLalaOpenMapNavigationHosts] plus the exact bundled embed
+/// document URI `loadFlutterAsset` produces ([isBundledOpenMapEmbedAssetUri]).
+/// Anything else (including the NAVER hosts and arbitrary `file://` URLs) is
+/// rejected.
 bool isOpenVectorNavigationAllowed(Uri? uri) {
   if (uri == null) {
     return false;
   }
-  if (uri.scheme.toLowerCase() == 'flutter-assets') {
+  if (kLalaOpenMapNavigationHosts.contains(uri.host.toLowerCase())) {
     return true;
   }
-  return kLalaOpenMapNavigationHosts.contains(uri.host.toLowerCase());
+  return isBundledOpenMapEmbedAssetUri(uri);
+}
+
+/// Document-transition decision shared by the native WebView host and the
+/// web iframe host, so a provider swap can never leave the wrong embed
+/// document on screen (the NAVER embed cannot render an open-vector config,
+/// and the open-vector embed never sees NAVER identity).
+enum LalaMapDocumentTransition {
+  /// Keep the loaded document; ordinary config changes are delivered via a
+  /// config push (no reload, so no camera reset).
+  keepDocument,
+
+  /// Load the bundled open-vector embed document
+  /// (`loadFlutterAsset` / iframe src swap); config follows on page load.
+  swapToOpenVectorEmbed,
+
+  /// Load the NAVER embed document (`loadRequest` / iframe src swap);
+  /// config follows on page load.
+  swapToNaverEmbed,
+}
+
+/// Resolves what the embed host must do when its widget updates.
+///
+/// - A provider change always swaps the document, in both directions.
+/// - Same provider: only the NAVER embed is identity-bound to its client id
+///   and SDK language, so a change there reloads the NAVER document. The
+///   open-vector embed swaps locale via config only (no reload, no camera
+///   reset) and is bundled, so a branch build needs no main deployment.
+LalaMapDocumentTransition resolveLalaMapDocumentTransition({
+  required LalaMapProviderKind oldProvider,
+  required LalaMapProviderKind newProvider,
+  required bool clientIdChanged,
+  required bool languageChanged,
+}) {
+  if (oldProvider != newProvider) {
+    return newProvider == LalaMapProviderKind.openVector
+        ? LalaMapDocumentTransition.swapToOpenVectorEmbed
+        : LalaMapDocumentTransition.swapToNaverEmbed;
+  }
+  if (newProvider == LalaMapProviderKind.naver &&
+      (clientIdChanged || languageChanged)) {
+    return LalaMapDocumentTransition.swapToNaverEmbed;
+  }
+  return LalaMapDocumentTransition.keepDocument;
+}
+
+/// Bridge source marker stamped by the NAVER embed (mirrors
+/// [kLalaOpenMapBridgeSource] on the open-vector path).
+const String kLalaNaverBridgeSource = 'lala-naver-map';
+
+/// Source marker the embed for [provider] stamps on every bridge message.
+String expectedLalaMapBridgeSource(LalaMapProviderKind provider) {
+  return provider == LalaMapProviderKind.openVector
+      ? kLalaOpenMapBridgeSource
+      : kLalaNaverBridgeSource;
+}
+
+/// Whether a decoded embed -> Flutter message may be accepted for [provider]
+/// and the live host's [bridgeId]: the source marker must match the
+/// provider's embed and the bridge id must match. Bridge events cannot cross
+/// providers, so a stale document after a provider swap (or any other
+/// origin) is rejected.
+bool isLalaMapEmbedMessageAccepted({
+  required LalaMapProviderKind provider,
+  required String bridgeId,
+  Map<String, dynamic>? message,
+}) {
+  if (message == null) {
+    return false;
+  }
+  return message['source'] == expectedLalaMapBridgeSource(provider) &&
+      message['bridgeId'] == bridgeId;
 }
 
 /// MapLibre style-spec `text-field` expression that drives honest,

@@ -3,8 +3,12 @@
 // - en/ja/zh-Hans/zh-Hant select the no-secret open-vector path.
 // - Label fallback order is honest and data-driven (OpenMapTiles name:*),
 //   with no fabricated translations.
-// - Navigation stays minimal: only the OpenFreeMap host plus the WebView
-//   asset-loader hosts; the NAVER hosts are NOT allowed on the open path.
+// - Navigation stays minimal: the OpenFreeMap style host plus exactly the
+//   bundled embed document URI the installed webview_flutter platforms load
+//   for loadFlutterAsset (file:// bundle URLs); the NAVER hosts, arbitrary
+//   file paths, and phantom schemes/hosts are NOT allowed on the open path.
+// - Provider swaps swap embed documents; same-provider updates are
+//   config-only (no camera reset), and bridge events cannot cross providers.
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -126,24 +130,82 @@ void main() {
   });
 
   group('isOpenVectorNavigationAllowed — minimal navigation surface', () {
-    test('allows the OpenFreeMap host and WebView asset loader only', () {
+    test('allows the OpenFreeMap style host', () {
       expect(
         isOpenVectorNavigationAllowed(
           Uri.parse('https://tiles.openfreemap.org/styles/liberty'),
         ),
         isTrue,
       );
+    });
+
+    test('allows the exact bundled embed URIs loadFlutterAsset produces', () {
+      // iOS (webview_flutter_wkwebview): Bundle.url(forResource:) file URL
+      // with an empty host, ending in flutter_assets/<asset key>.
       expect(
         isOpenVectorNavigationAllowed(
-          Uri.parse('https://appassets.androidplatform.net/assets/map/x.html'),
+          Uri.parse(
+            'file:///private/var/containers/Bundle/Application/11111111-2222-3333-4444-555555555555/Runner.app/Frameworks/App.framework/flutter_assets/assets/map/open-map-embed.html',
+          ),
         ),
         isTrue,
       );
+      // Android (webview_flutter_android): file:///android_asset/... URL.
+      expect(
+        isOpenVectorNavigationAllowed(
+          Uri.parse(
+            'file:///android_asset/flutter_assets/assets/map/open-map-embed.html',
+          ),
+        ),
+        isTrue,
+      );
+    });
+
+    test('rejects schemes/hosts no installed platform emits', () {
+      // The `flutter-assets` scheme appears nowhere in the installed
+      // webview_flutter 4.14.0 / wkwebview 3.26.0 / android 4.13.0 packages.
       expect(
         isOpenVectorNavigationAllowed(
           Uri.parse('flutter-assets:///assets/map/open-map-embed.html'),
         ),
-        isTrue,
+        isFalse,
+      );
+      // webview_flutter_android loads file:///android_asset/... directly,
+      // not through the WebViewAssetLoader virtual host.
+      expect(
+        isOpenVectorNavigationAllowed(
+          Uri.parse('https://appassets.androidplatform.net/assets/map/x.html'),
+        ),
+        isFalse,
+      );
+    });
+
+    test('rejects arbitrary file paths, foreign hosts, and other assets', () {
+      expect(
+        isOpenVectorNavigationAllowed(Uri.parse('file:///etc/passwd')),
+        isFalse,
+      );
+      expect(
+        isOpenVectorNavigationAllowed(
+          Uri.parse('file:///var/mobile/Library/evil.html'),
+        ),
+        isFalse,
+      );
+      expect(
+        isOpenVectorNavigationAllowed(
+          Uri.parse(
+            'file:///android_asset/flutter_assets/assets/map/other.html',
+          ),
+        ),
+        isFalse,
+      );
+      expect(
+        isOpenVectorNavigationAllowed(
+          Uri.parse(
+            'file://localhost/flutter_assets/assets/map/open-map-embed.html',
+          ),
+        ),
+        isFalse,
       );
     });
 
@@ -165,6 +227,168 @@ void main() {
         isFalse,
       );
       expect(isOpenVectorNavigationAllowed(null), isFalse);
+    });
+  });
+
+  group('resolveLalaMapDocumentTransition — provider/document transitions', () {
+    LalaMapDocumentTransition resolve(
+      LalaMapProviderKind oldProvider,
+      LalaMapProviderKind newProvider, {
+      bool clientIdChanged = false,
+      bool languageChanged = false,
+    }) {
+      return resolveLalaMapDocumentTransition(
+        oldProvider: oldProvider,
+        newProvider: newProvider,
+        clientIdChanged: clientIdChanged,
+        languageChanged: languageChanged,
+      );
+    }
+
+    test('full locale chain KO->EN->JA->zh-Hans->zh-Hant->KO', () {
+      // KO -> EN must swap to the bundled open-vector document (regression:
+      // the NAVER document used to be reused and receive a clientId-less
+      // open-vector config, rendering the NAVER unavailable overlay).
+      expect(
+        resolve(LalaMapProviderKind.naver, LalaMapProviderKind.openVector,
+            languageChanged: true),
+        LalaMapDocumentTransition.swapToOpenVectorEmbed,
+      );
+      // Same-provider locale swaps are config-only: no reload, so no camera
+      // reset on ordinary updates.
+      const openVector = LalaMapProviderKind.openVector;
+      for (final language in <String>['en', 'ja', 'zh-Hans', 'zh-Hant']) {
+        expect(
+          resolve(openVector, openVector, languageChanged: true),
+          LalaMapDocumentTransition.keepDocument,
+          reason: 'language: $language',
+        );
+      }
+      // zh-Hant -> KO must swap back to the NAVER document.
+      expect(
+        resolve(LalaMapProviderKind.openVector, LalaMapProviderKind.naver,
+            languageChanged: true),
+        LalaMapDocumentTransition.swapToNaverEmbed,
+      );
+    });
+
+    test('NAVER stays identity-bound to its client id and SDK language', () {
+      const naver = LalaMapProviderKind.naver;
+      expect(
+        resolve(naver, naver, clientIdChanged: true),
+        LalaMapDocumentTransition.swapToNaverEmbed,
+      );
+      expect(
+        resolve(naver, naver, languageChanged: true),
+        LalaMapDocumentTransition.swapToNaverEmbed,
+      );
+    });
+
+    test('open-vector is not identity-bound; ordinary updates keep the doc', () {
+      const openVector = LalaMapProviderKind.openVector;
+      expect(
+        resolve(openVector, openVector, clientIdChanged: true),
+        LalaMapDocumentTransition.keepDocument,
+      );
+      expect(
+        resolve(openVector, openVector),
+        LalaMapDocumentTransition.keepDocument,
+      );
+      expect(
+        resolve(LalaMapProviderKind.naver, LalaMapProviderKind.naver),
+        LalaMapDocumentTransition.keepDocument,
+      );
+    });
+  });
+
+  group('isLalaMapEmbedMessageAccepted — bridge events cannot cross providers',
+      () {
+    test('accepts only the live provider marker with the live bridge id', () {
+      expect(
+        isLalaMapEmbedMessageAccepted(
+          provider: LalaMapProviderKind.openVector,
+          bridgeId: 'bridge-1',
+          message: <String, dynamic>{
+            'source': 'lala-open-map',
+            'bridgeId': 'bridge-1',
+            'type': 'cameraIdle',
+          },
+        ),
+        isTrue,
+      );
+      expect(
+        isLalaMapEmbedMessageAccepted(
+          provider: LalaMapProviderKind.naver,
+          bridgeId: 'bridge-2',
+          message: <String, dynamic>{
+            'source': 'lala-naver-map',
+            'bridgeId': 'bridge-2',
+            'type': 'placeTap',
+          },
+        ),
+        isTrue,
+      );
+    });
+
+    test('a stale document from the other provider is rejected after a swap',
+        () {
+      // Late cameraIdle from the NAVER document while open-vector is live
+      // (naver -> openVector swap) must be dropped...
+      expect(
+        isLalaMapEmbedMessageAccepted(
+          provider: LalaMapProviderKind.openVector,
+          bridgeId: 'bridge-1',
+          message: <String, dynamic>{
+            'source': 'lala-naver-map',
+            'bridgeId': 'bridge-1',
+            'type': 'cameraIdle',
+          },
+        ),
+        isFalse,
+      );
+      // ...and symmetrically for open-vector -> naver.
+      expect(
+        isLalaMapEmbedMessageAccepted(
+          provider: LalaMapProviderKind.naver,
+          bridgeId: 'bridge-1',
+          message: <String, dynamic>{
+            'source': 'lala-open-map',
+            'bridgeId': 'bridge-1',
+            'type': 'mapError',
+            'code': 'style_timeout',
+          },
+        ),
+        isFalse,
+      );
+    });
+
+    test('bridge id mismatches and malformed input are rejected', () {
+      expect(
+        isLalaMapEmbedMessageAccepted(
+          provider: LalaMapProviderKind.openVector,
+          bridgeId: 'bridge-1',
+          message: <String, dynamic>{
+            'source': 'lala-open-map',
+            'bridgeId': 'other-bridge',
+            'type': 'placeTap',
+          },
+        ),
+        isFalse,
+      );
+      expect(
+        isLalaMapEmbedMessageAccepted(
+          provider: LalaMapProviderKind.openVector,
+          bridgeId: 'bridge-1',
+          message: null,
+        ),
+        isFalse,
+      );
+      expect(expectedLalaMapBridgeSource(LalaMapProviderKind.openVector),
+          kLalaOpenMapBridgeSource);
+      expect(
+        expectedLalaMapBridgeSource(LalaMapProviderKind.naver),
+        kLalaNaverBridgeSource,
+      );
     });
   });
 
