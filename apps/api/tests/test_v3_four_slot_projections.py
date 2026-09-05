@@ -547,6 +547,106 @@ def test_closing_soon_null_when_no_place(monkeypatch) -> None:
     assert slot["closure_state"] == "unknown"
 
 
+def _patch_hours(monkeypatch, hours: tuple[str, str]) -> None:
+    # 검증자 정정 재현용 estimated-hours seam: _plan_slot 이 쓰는 추정 운영시간을
+    # 임의 범위(자정 넘김/파손 포함)로 교체한다. 카테고리 데이터는 건드리지 않는다.
+    monkeypatch.setattr(planner_service, "estimated_opening_hours", lambda category: hours)
+
+
+def test_plan_slot_overnight_2000_0930_morning_open_and_closing_soon(monkeypatch) -> None:
+    """검증자 지정 사례의 payload 증명: 20:00-09:30 × morning(09:00).
+
+    09:00은 close(09:30) 이전(익일 측)이므로 운영중이고 마감까지 30분 →
+    closure_state="open" + closing_soon=True (closed 와 공존하지 않음).
+    """
+    _enable_full_slots(monkeypatch)
+    _patch_hours(monkeypatch, ("20:00", "09:30"))
+    weather = {"outdoor_status": "good", "forecast": [], "dust": {"grade": "good"}}
+    morning = planner_service._plan_slot(
+        period="morning",
+        title="Morning",
+        place={"place_id": "p", "category": "attraction", "is_indoor": False},
+        weather_hint="good",
+        unavailable_reason="x",
+        language="en",
+        weather=weather,
+        full_slots=True,
+    )
+    assert morning["opening_hours_valid"] is True
+    assert morning["closure_state"] == "open"
+    assert morning["closing_soon"] is True
+
+    # 같은 범위의 나머지 period 시작(12:00/14:00/18:00)은 open-close 사이 →
+    # closed + closing_soon False (상호 배제의 반대편 증명).
+    for period in ("lunch", "afternoon", "dinner"):
+        slot = planner_service._plan_slot(
+            period=period,
+            title=period,
+            place={"place_id": "p", "category": "attraction", "is_indoor": False},
+            weather_hint="good",
+            unavailable_reason="x",
+            language="en",
+            weather=weather,
+            full_slots=True,
+        )
+        assert slot["closure_state"] == "closed", period
+        assert slot["closing_soon"] is False, period
+
+
+def test_plan_slot_overnight_2000_0200_all_periods_closed_not_closing_soon(
+    monkeypatch,
+) -> None:
+    """20:00-02:00: 표준 period 시작(09/12/14/18)은 모두 open-close 사이 →
+
+    closed + closing_soon=False — payload 에서 두 상태가 공존하지 않는다.
+    """
+    _enable_full_slots(monkeypatch)
+    _patch_hours(monkeypatch, ("20:00", "02:00"))
+    weather = {"outdoor_status": "good", "forecast": [], "dust": {"grade": "good"}}
+    for period in ("morning", "lunch", "afternoon", "dinner"):
+        slot = planner_service._plan_slot(
+            period=period,
+            title=period,
+            place={"place_id": "p", "category": "attraction", "is_indoor": False},
+            weather_hint="good",
+            unavailable_reason="x",
+            language="en",
+            weather=weather,
+            full_slots=True,
+        )
+        assert slot["closure_state"] == "closed", period
+        assert slot["closing_soon"] is False, period
+
+
+@pytest.mark.parametrize(
+    "hours",
+    [
+        ("2a:00", "22:00"),  # malformed open
+        ("11:00", "２2:00"),  # fullwidth digit close
+        ("11:000", "22:00"),  # overlong open
+        ("24:00", "22:00"),  # out-of-range hour
+        ("11:00", "22:60"),  # out-of-range minute
+    ],
+)
+def test_plan_slot_malformed_hours_yield_unknown_not_positive(monkeypatch, hours) -> None:
+    """파손된 추정시간은 payload 에서 unknown — 긍정(closing_soon/open) 판정 없음."""
+    _enable_full_slots(monkeypatch)
+    _patch_hours(monkeypatch, hours)
+    slot = planner_service._plan_slot(
+        period="afternoon",
+        title="Afternoon",
+        place={"place_id": "p", "category": "attraction", "is_indoor": False},
+        weather_hint="good",
+        unavailable_reason="x",
+        language="en",
+        weather={"outdoor_status": "good", "forecast": [], "dust": {"grade": "good"}},
+        full_slots=True,
+    )
+    assert slot["opening_hours_valid"] is None
+    assert slot["closure_state"] == "unknown"
+    assert slot["closing_soon"] is None
+
+
 def _patch_tight_hours(monkeypatch) -> None:
     # Estimated-hours seam: a "tight" category closes at 15:00 so the fixed
     # afternoon(14:00) original slot lands inside the 60min pre-close window;
