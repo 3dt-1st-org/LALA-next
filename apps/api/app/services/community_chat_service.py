@@ -344,8 +344,7 @@ class CommunityChatRepository:
         """
         purge_sql = """
             DELETE FROM community.idempotency_keys
-            WHERE scope = %s AND actor_issuer = %s AND actor_subject = %s
-              AND expires_at < now()
+            WHERE scope = %s AND expires_at < now()
         """
         store_sql = """
             UPDATE community.idempotency_keys
@@ -374,7 +373,7 @@ class CommunityChatRepository:
         """
         access = _access_params(issuer, subject)
         with self._cursor() as cur:
-            cur.execute(purge_sql, (IDEMPOTENCY_SCOPE_CHAT_MESSAGE, issuer, subject))
+            cur.execute(purge_sql, (IDEMPOTENCY_SCOPE_CHAT_MESSAGE,))
             cur.execute(
                 claim_sql,
                 (
@@ -449,7 +448,7 @@ class CommunityChatRepository:
 
         purge_sql = """
             DELETE FROM community.chat_ws_tickets
-            WHERE issuer = %s AND subject = %s AND expires_at < now()
+            WHERE expires_at < now()
         """
         insert_sql = """
             INSERT INTO community.chat_ws_tickets
@@ -460,7 +459,7 @@ class CommunityChatRepository:
         ticket = secrets.token_urlsafe(32)
         ticket_hash = hashlib.sha256(ticket.encode("utf-8")).hexdigest()
         with self._cursor() as cur:
-            cur.execute(purge_sql, (issuer, subject))
+            cur.execute(purge_sql)
             cur.execute(
                 insert_sql,
                 (ticket_hash, str(room_id), issuer, subject, ttl_seconds),
@@ -609,6 +608,16 @@ class CommunityChatService:
         issuer: str,
         subject: str,
     ) -> dict[str, Any]:
+        if visibility == "private" and not (issuer and subject):
+            # Defense in depth: a private room always records an owner anchor.
+            # Unreachable through the REST router (OAuth required); documented
+            # account-deletion lifecycle (creator SET NULL) lives in 068.
+            raise ServiceError(
+                status_code=422,
+                code="COMMUNITY_CHAT_ROOM_CREATOR_REQUIRED",
+                message="A private room requires a verified creator.",
+                retryable=False,
+            )
         try:
             row = self._repository.create_room(
                 name=name, visibility=visibility, issuer=issuer, subject=subject

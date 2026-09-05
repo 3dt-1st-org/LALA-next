@@ -291,7 +291,9 @@ def test_create_message_idempotent_created_path_claims_stores_and_notifies() -> 
     assert result["message"]["author_user_id"] == str(AUTHOR_ID)
     purge_sql, purge_params = executed[0]
     assert "DELETE FROM community.idempotency_keys" in purge_sql
-    assert purge_params == ("community.chat.message.create", ISSUER, SUBJECT)
+    # Scope-wide purge: retention is bounded for every actor, not just the
+    # current writer.
+    assert purge_params == ("community.chat.message.create",)
     claim_sql, claim_params = executed[1]
     assert "ON CONFLICT (scope, actor_issuer, actor_subject, idempotency_key)" in claim_sql
     assert "DO NOTHING" in claim_sql
@@ -393,7 +395,7 @@ def test_issue_ws_ticket_stores_only_sha256_digest() -> None:
     assert row["expires_at"] == NOW
     purge_sql, purge_params = executed[0]
     assert "DELETE FROM community.chat_ws_tickets" in purge_sql
-    assert purge_params == (ISSUER, SUBJECT)
+    assert purge_params is None
     insert_sql, insert_params = executed[1]
     assert "INSERT INTO community.chat_ws_tickets" in insert_sql
     import hashlib
@@ -688,6 +690,16 @@ def test_service_add_room_member_reports_added_state() -> None:
         "member_user_id": str(MEMBER_USER_ID),
         "added": False,
     }
+
+
+def test_service_create_room_requires_creator_for_private_rooms() -> None:
+    service = CommunityChatService(_UnavailableRepository())
+
+    with pytest.raises(ServiceError) as exc_info:
+        service.create_room(name="secret", visibility="private", issuer="", subject="")
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.code == "COMMUNITY_CHAT_ROOM_CREATOR_REQUIRED"
 
 
 def test_service_shapes_room_payload_with_visibility() -> None:
@@ -1429,3 +1441,75 @@ def test_fanout_bridge_disabled_without_dsn() -> None:
 
     assert fanout_bridge_enabled(Settings(db_dsn="")) is False
     assert fanout_bridge_enabled(Settings(db_dsn=DB_DSN)) is True
+
+
+def test_fanout_handle_notification_is_exception_safe_on_fetch() -> None:
+    from apps.api.app.services.community_chat_fanout import ChatFanoutBridge
+
+    class ExplodingFetcher:
+        def fetch_message_for_fanout(self, **_: Any) -> dict[str, Any] | None:
+            raise RuntimeError("store hiccup")
+
+    bridge = ChatFanoutBridge(fetcher_factory=lambda: ExplodingFetcher(), deliver=lambda p: None)
+
+    assert (
+        bridge.handle_notification(
+            json.dumps({"room_id": str(ROOM_ID), "message_id": str(MESSAGE_ID)})
+        )
+        is None
+    )
+
+
+class FakeCancellableConnection:
+    def __init__(self) -> None:
+        self.cancelled = False
+        self.closed = False
+
+    def cancel(self) -> None:
+        self.cancelled = True
+
+    def close(self) -> None:
+        self.closed = True
+
+
+def test_fanout_stop_cancels_blocking_listener_and_closes_connection() -> None:
+    from apps.api.app.services.community_chat_fanout import ChatFanoutBridge
+
+    bridge = ChatFanoutBridge(
+        fetcher_factory=lambda: FakeFanoutFetcher(None), deliver=lambda p: None
+    )
+    connection = FakeCancellableConnection()
+    bridge._connection = connection
+
+    bridge.stop(timeout=0.5)
+
+    assert connection.cancelled is True
+    assert connection.closed is True
+    assert bridge._thread is None
+    assert bridge._loop is None
+    assert bridge.running is False
+
+
+def test_fanout_start_refuses_second_thread_while_running() -> None:
+    from apps.api.app.services.community_chat_fanout import ChatFanoutBridge
+
+    started: list[str] = []
+
+    class SlowBridge(ChatFanoutBridge):
+        def _listen_loop(self) -> None:
+            started.append("thread")
+            self._stop.wait(5.0)
+
+    import asyncio as _asyncio
+
+    bridge = SlowBridge(fetcher_factory=lambda: FakeFanoutFetcher(None), deliver=lambda p: None)
+    try:
+        assert bridge.start(_asyncio.new_event_loop()) is True
+        first_thread = bridge._thread
+        assert first_thread is not None and first_thread.is_alive()
+        # A second start while healthy must not spawn another listener.
+        assert bridge.start(_asyncio.new_event_loop()) is True
+        assert bridge._thread is first_thread
+    finally:
+        bridge.stop(timeout=2.0)
+    assert started == ["thread"]

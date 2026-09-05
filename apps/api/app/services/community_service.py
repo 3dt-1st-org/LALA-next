@@ -182,8 +182,7 @@ class CommunityRepository:
         request_hash = canonical_request_hash({"title": title, "body": body, "tags": list(tags)})
         purge_sql = """
             DELETE FROM community.idempotency_keys
-            WHERE scope = %s AND actor_issuer = %s AND actor_subject = %s
-              AND expires_at < now()
+            WHERE scope = %s AND expires_at < now()
         """
         claim_sql = """
             INSERT INTO community.idempotency_keys
@@ -216,7 +215,7 @@ class CommunityRepository:
                 created_at, updated_at
         """
         with self._cursor() as cur:
-            cur.execute(purge_sql, (IDEMPOTENCY_SCOPE_POST_CREATE, issuer, subject))
+            cur.execute(purge_sql, (IDEMPOTENCY_SCOPE_POST_CREATE,))
             cur.execute(
                 claim_sql,
                 (

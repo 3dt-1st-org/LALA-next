@@ -47,6 +47,8 @@ class ChatFanoutBridge:
         self._thread: threading.Thread | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._stop = threading.Event()
+        self._connection: Any = None
+        self._lifecycle_lock = threading.Lock()
 
     # -- Lifecycle -----------------------------------------------------------
 
@@ -59,29 +61,51 @@ class ChatFanoutBridge:
 
         Callers must only invoke this when a database is configured: without
         ``DB_DSN`` the bridge stays off and WebSocket delivery degrades to
-        same-instance only (documented in the P7 runbook).
+        same-instance only (documented in the P7 runbook). Lifecycle is
+        serialized through ``_lifecycle_lock`` so at most one listener thread
+        exists even across rapid stop/start cycles.
         """
 
-        if self.running:
+        with self._lifecycle_lock:
+            thread = self._thread
+            if thread is not None and thread.is_alive() and not self._stop.is_set():
+                return True
+            self._stop.clear()
+            self._loop = loop
+            thread = threading.Thread(
+                target=self._listen_loop,
+                name="community-chat-fanout-bridge",
+                daemon=True,
+            )
+            self._thread = thread
+            thread.start()
             return True
-        self._stop.clear()
-        self._loop = loop
-        thread = threading.Thread(
-            target=self._listen_loop,
-            name="community-chat-fanout-bridge",
-            daemon=True,
-        )
-        self._thread = thread
-        thread.start()
-        return True
 
-    def stop(self, timeout: float = 1.0) -> None:
-        self._stop.set()
-        thread = self._thread
-        if thread is not None and thread.is_alive():
-            thread.join(timeout=timeout)
-        self._thread = None
-        self._loop = None
+    def stop(self, timeout: float = 3.0) -> None:
+        """Bounded shutdown: cancel the blocking select, join, then close.
+
+        ``connection.cancel()`` is safe from another thread and aborts the
+        in-flight ``select()``, so the listener observes the stop event without
+        waiting out the full select timeout; overlapping old/new listeners
+        cannot outlive this call by more than the join timeout, and ``start``
+        refuses to spawn a second thread while one is still winding down.
+        """
+
+        with self._lifecycle_lock:
+            self._stop.set()
+            thread = self._thread
+            connection = self._connection
+            if connection is not None:
+                with contextlib.suppress(Exception):
+                    connection.cancel()
+            if thread is not None and thread.is_alive():
+                thread.join(timeout=timeout)
+            if connection is not None:
+                with contextlib.suppress(Exception):
+                    connection.close()
+            self._connection = None
+            self._thread = None
+            self._loop = None
 
     # -- Notification handling (unit-testable without a thread) -------------
 
@@ -108,8 +132,13 @@ class ChatFanoutBridge:
             UUID(message_id)
         except ValueError:
             return None
-        fetcher = self._fetcher_factory()
-        message = fetcher.fetch_message_for_fanout(message_id=UUID(message_id))
+        try:
+            fetcher = self._fetcher_factory()
+            message = fetcher.fetch_message_for_fanout(message_id=UUID(message_id))
+        except Exception:
+            # Exception-safe fetch: a transient store error skips this
+            # delivery without killing the listener loop.
+            return None
         if message is None:
             return None
         fetched = message if isinstance(message, dict) else dict(message)
@@ -132,6 +161,7 @@ class ChatFanoutBridge:
             connection = None
             try:
                 connection = self._open_listener_connection()
+                self._connection = connection
                 reconnect_attempt = 0
                 self._drain_notifications(connection)
             except Exception:
@@ -139,6 +169,7 @@ class ChatFanoutBridge:
                 # resumes when the listener reconnects.
                 logger.warning("community chat fanout listener disconnected; retrying")
             finally:
+                self._connection = None
                 if connection is not None:
                     with contextlib.suppress(Exception):
                         connection.close()

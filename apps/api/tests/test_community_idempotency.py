@@ -120,7 +120,7 @@ def test_post_idempotent_created_path_claims_stores_and_returns_payload() -> Non
     assert payload["author_user_id"] == str(AUTHOR_USER_ID)
     purge_sql, purge_params = executed[0]
     assert "DELETE FROM community.idempotency_keys" in purge_sql
-    assert purge_params == ("community.post.create", ISSUER, SUBJECT)
+    assert purge_params == ("community.post.create",)
     claim_sql, claim_params = executed[1]
     assert "ON CONFLICT (scope, actor_issuer, actor_subject, idempotency_key)" in claim_sql
     assert claim_params[4] == request_hash

@@ -156,15 +156,23 @@ def test_community_chat_durable_controls_migration_is_additive_and_governed():
     assert "chat_rooms_visibility_check" in sql
     assert "'private'" in sql
     # Private access is explicit: creator ownership plus a membership table.
+    # Creator columns are ON DELETE SET NULL and intentionally carry no
+    # non-null CHECK: account deletion must never be blocked by chat rooms.
     assert "ADD COLUMN IF NOT EXISTS created_by_issuer text" in sql
     assert "ADD COLUMN IF NOT EXISTS created_by_subject text" in sql
+    assert "ON DELETE SET NULL" in sql
+    assert "private_creator_check" not in sql
     assert "CREATE TABLE IF NOT EXISTS community.chat_room_members" in sql
     assert "role IN ('owner', 'member')" in sql
     assert "REFERENCES identity.users (issuer, subject)" in sql
     # Durable idempotency: unique primary key on (scope, actor, key), hashed
-    # payloads, bounded key length, expiry-driven TTL.
+    # payloads, bounded key length, expiry-driven TTL, and account-deletion
+    # participation through the actor FK cascade (no replay copies survive
+    # account deletion).
     assert "CREATE TABLE IF NOT EXISTS community.idempotency_keys" in sql
     assert "PRIMARY KEY (scope, actor_issuer, actor_subject, idempotency_key)" in sql
+    assert "fk_idempotency_keys_actor" in sql
+    assert "ON DELETE CASCADE" in sql
     assert "char_length(request_hash) = 64" in sql
     assert "char_length(idempotency_key) BETWEEN 1 AND 200" in sql
     assert "CREATE INDEX IF NOT EXISTS idx_idempotency_keys_expiry" in sql

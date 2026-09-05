@@ -39,15 +39,13 @@ ALTER TABLE community.chat_rooms
         REFERENCES identity.users (issuer, subject)
         ON DELETE SET NULL;
 
--- A private room must carry its creator so ownership is never ambiguous.
--- Public rooms may predate the column, hence the visibility guard.
-ALTER TABLE community.chat_rooms
-    DROP CONSTRAINT IF EXISTS chat_rooms_private_creator_check;
-
-ALTER TABLE community.chat_rooms
-    ADD CONSTRAINT chat_rooms_private_creator_check
-    CHECK (visibility = 'public' OR (created_by_issuer IS NOT NULL
-        AND created_by_subject IS NOT NULL));
+-- A private room must record its creator: this is enforced by the API layer
+-- (room creation requires verified OAuth identity) rather than by a CHECK.
+-- Reason: created_by_* is ON DELETE SET NULL so account deletion cannot be
+-- blocked by this table. After creator deletion a private room simply loses
+-- its owner anchor; it stays private (visibility column), remaining member
+-- rows keep explicit access, and a room with no owner and no members becomes
+-- inert (invisible to everyone, never leaked to public). See devlog runbook.
 
 CREATE INDEX IF NOT EXISTS idx_chat_rooms_visibility
     ON community.chat_rooms (visibility, created_at DESC);
@@ -82,8 +80,10 @@ CREATE INDEX IF NOT EXISTS idx_chat_room_members_member
 -- with response_json = JSON null, performs the guarded insert, then stores the
 -- real response -- all in one transaction, so the committed row always carries
 -- the full response; a failed business insert rolls the claim back entirely
--- (the key is never burned by a failure). TTL: rows are pruned by the API
--- after expiry (default 24h, see devlog) with an index for bounded purges.
+-- (the key is never burned by a failure). Retention lifecycle is intentional:
+-- the actor FK CASCADEs on account deletion (no replay copies of a deleted
+-- account's writes survive), and expired rows are purged scope-wide by the API
+-- (TTL 24h, see devlog) so retention is bounded even for inactive actors.
 CREATE TABLE IF NOT EXISTS community.idempotency_keys (
     scope text NOT NULL,
     actor_issuer text NOT NULL,
@@ -100,6 +100,10 @@ CREATE TABLE IF NOT EXISTS community.idempotency_keys (
         CHECK (char_length(idempotency_key) BETWEEN 1 AND 200),
     CONSTRAINT idempotency_keys_hash_len_check
         CHECK (char_length(request_hash) = 64),
+    CONSTRAINT fk_idempotency_keys_actor
+        FOREIGN KEY (actor_issuer, actor_subject)
+        REFERENCES identity.users (issuer, subject)
+        ON DELETE CASCADE,
     PRIMARY KEY (scope, actor_issuer, actor_subject, idempotency_key)
 );
 
