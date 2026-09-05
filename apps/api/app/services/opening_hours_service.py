@@ -18,6 +18,12 @@ _CATEGORY_HOURS: dict[str, tuple[str, str]] = {
 
 _DEFAULT_HOURS: tuple[str, str] = ("09:00", "21:00")
 
+# P4 closing-soon: 슬롯 시작 시각부터 "추정 마감 시각"까지의 거리가 이 window(분)
+# 이하일 때만 closing-soon으로 판정한다. 결정론적·문서화된 bounded window이며
+# 실측 authority가 아니라 카테고리 추정 운영시간의 투영임을 전제로 한다.
+# 예: dinner(18:00) 슬롯 × culture_venue(10:00-19:00) → 마감까지 60분 → True.
+CLOSING_SOON_WINDOW_MINUTES = 60
+
 
 def estimated_opening_hours(category: str) -> tuple[str, str]:
     """카테고리별 추정 운영시간(open, close)을 반환.
@@ -44,3 +50,59 @@ def is_within_hours(slot_time: str | None, open_time: str, close_time: str) -> b
         return open_min <= slot_min <= close_min
     except (ValueError, IndexError):
         return None
+
+
+def _hhmm_minutes(value: str | None) -> int | None:
+    if not value or len(value) < 5:
+        return None
+    try:
+        return int(value[:2]) * 60 + int(value[3:5])
+    except (ValueError, IndexError):
+        return None
+
+
+def is_closing_soon(
+    slot_time: str | None,
+    open_time: str,
+    close_time: str,
+    window_minutes: int = CLOSING_SOON_WINDOW_MINUTES,
+) -> bool | None:
+    """슬롯 시작 시각이 추정 마감 window 안에 들어오는지 검증(estimated, authority 아님).
+
+    결정론적 정의:
+        - 운영시간 내(아래 경계 규칙)이면서 추정 마감까지 남은 분이
+          window_minutes 이하 → True. 마감 시각 딱 그 순간(남은 분 0)도 True다
+          (is_within_hours가 마감 시각을 포함하므로 closed와 상호 배제가 유지된다).
+        - 운영시간 밖(영업 전/마감 후)이거나 마감까지 window보다 이름 → False.
+        - 값 파싱 불가/누락, open==close(마감 시각 미정의), window_minutes <= 0 →
+          None (추측 금지, unknown).
+
+    자정 넘김 범위(close < open, 예: 20:00-02:00)는 당일 오픈 이후 또는 익일
+    마감 이전을 운영중로 본다. closing_soon=True는 항상 운영시간 내에서만
+    나오므로 closure_state="closed"와 구조적으로 공존하지 않는다.
+
+    Returns:
+        True: 마감 임박 window 안(운영중).
+        False: window 밖(영업 전/마감 후/여유 있음).
+        None: 판단 불가(unknown).
+    """
+    if window_minutes <= 0:
+        return None
+    slot_min = _hhmm_minutes(slot_time)
+    open_min = _hhmm_minutes(open_time)
+    close_min = _hhmm_minutes(close_time)
+    if slot_min is None or open_min is None or close_min is None:
+        return None
+    if open_min == close_min:
+        return None
+    if close_min > open_min:
+        within = open_min <= slot_min <= close_min
+        remaining = close_min - slot_min
+    else:
+        within = slot_min >= open_min or slot_min <= close_min
+        remaining = (
+            close_min - slot_min if slot_min <= close_min else close_min + 24 * 60 - slot_min
+        )
+    if not within:
+        return False
+    return remaining <= window_minutes

@@ -1014,6 +1014,17 @@ def _daily_plan_slot_schema() -> dict[str, Any]:
                 "description": "Projection of the category-based hours estimate (D4); "
                 "real temporary/holiday closure is not knowable offline.",
             },
+            # P4 closing-soon additive projection (PLAN_FULL_SLOTS). True only when
+            # the slot start falls inside the bounded pre-close window of the same
+            # category-based estimate; mutually exclusive with closure_state=closed.
+            "closing_soon": {
+                "anyOf": [{"type": "boolean"}, {"type": "null"}],
+                "description": "True when the slot start is within the bounded "
+                "closing-soon window (60 minutes) before the estimated close (P4); "
+                "estimated projection, not an authority — never true when "
+                "closure_state is closed; null when the flag is off or times are "
+                "unparseable.",
+            },
             "forecast_window": {
                 "anyOf": [
                     {"$ref": "#/components/schemas/ForecastItem"},
@@ -1171,9 +1182,13 @@ def _intervention_data_schema() -> dict[str, Any]:
             "trigger_type": {
                 "anyOf": [{"type": "string"}, {"type": "null"}],
                 "description": "Observable trigger (e.g. bad_weather, bad_air_quality, "
-                "closure_detected, bad_weather_and_closure, bad_weather_and_air_quality, "
-                "bad_air_quality_and_closure, bad_weather_and_air_quality_and_closure) "
-                "or null.",
+                "closure_detected, closing_soon, bad_weather_and_closure, "
+                "bad_weather_and_air_quality, bad_air_quality_and_closure, "
+                "bad_weather_and_air_quality_and_closure, bad_weather_and_closing_soon, "
+                "bad_air_quality_and_closing_soon, "
+                "bad_weather_and_air_quality_and_closing_soon) or null. "
+                "closure_detected/closing_soon come from the category-based estimated "
+                "hours projection — never an observed or authoritative closure.",
             },
             "trigger_factors": {
                 "type": "array",
@@ -1185,7 +1200,8 @@ def _intervention_data_schema() -> dict[str, Any]:
                         "value": {"type": "string"},
                         "period": {
                             "anyOf": [{"type": "string"}, {"type": "null"}],
-                            "description": "Slot period when present (e.g. closure factor).",
+                            "description": "Slot period when present (e.g. closure/"
+                            "closing-soon factor).",
                         },
                     },
                     "additionalProperties": False,
