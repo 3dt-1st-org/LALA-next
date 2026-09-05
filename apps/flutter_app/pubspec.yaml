@@ -48,3 +48,8 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/lala-hwaseong-haenggung.png
+    # Locale-aware open-vector map embed (Draft #187): the assembled
+    # open-map-embed.html bundles the version-pinned MapLibre GL JS runtime
+    # and is served to the web iframe and the native WebView alike. The
+    # template is the reviewable source for tool/build_open_map_embed.sh.
+    - assets/map/
