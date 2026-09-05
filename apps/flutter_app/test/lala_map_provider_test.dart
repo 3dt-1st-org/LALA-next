@@ -115,6 +115,14 @@ void main() {
       expect(kLalaOpenMapEmbedAssetPath, 'assets/map/open-map-embed.html');
       expect(kLalaOpenMapConfigSource, 'lala-flutter-map-config');
     });
+
+    test('web iframe URL is the asset key under the assets base', () {
+      // Flutter web serves asset keys from the `assets/` base directory, so
+      // the iframe must load /assets/ + asset key. Pinning the relationship
+      // guards against silently breaking the web embed URL.
+      expect(kLalaOpenMapEmbedWebPath, 'assets/$kLalaOpenMapEmbedAssetPath');
+      expect(kLalaOpenMapEmbedWebPath, startsWith('assets/assets/map/'));
+    });
   });
 
   group('isOpenVectorNavigationAllowed — minimal navigation surface', () {

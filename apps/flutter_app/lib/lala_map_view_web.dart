@@ -161,10 +161,11 @@ class _LalaMapWebFrameState extends State<_LalaMapWebFrame> {
 
   Uri _embedUrl() {
     if (widget.provider == LalaMapProviderKind.openVector) {
-      // Bundled asset served same-origin by the Flutter web build; the
-      // version-pinned MapLibre runtime is inlined, so no cache busting of a
-      // remote document is needed and locale swaps go through config.
-      return Uri.base.resolve('assets/map/open-map-embed.html');
+      // Bundled asset served same-origin by the Flutter web build (asset
+      // keys are prefixed with the `assets/` base); the version-pinned
+      // MapLibre runtime is inlined, so no cache busting of a remote
+      // document is needed and locale swaps go through config.
+      return Uri.base.resolve(kLalaOpenMapEmbedWebPath);
     }
     return Uri.base
         .resolve('naver-map-embed.html')

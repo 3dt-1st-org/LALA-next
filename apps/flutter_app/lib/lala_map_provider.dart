@@ -17,11 +17,15 @@ enum LalaMapProviderKind { naver, openVector }
 /// `lala-naver-map` on the Korean path).
 const String kLalaOpenMapBridgeSource = 'lala-open-map';
 
-/// Bundled embed page served to both the web iframe (same-origin
-/// `/assets/map/open-map-embed.html`) and the native WebView
+/// Bundled embed page served to both the web iframe and the native WebView
 /// (`loadFlutterAsset`). Version-pinned MapLibre GL JS is inlined, so the
 /// asset is self-contained and never loads an unpinned remote script.
 const String kLalaOpenMapEmbedAssetPath = 'assets/map/open-map-embed.html';
+
+/// URL the web iframe loads. Flutter web serves asset keys from the `assets/`
+/// base, so the browser path is `/assets/` + [kLalaOpenMapEmbedAssetPath];
+/// this stays in sync by construction and is pinned by tests.
+const String kLalaOpenMapEmbedWebPath = 'assets/assets/map/open-map-embed.html';
 
 /// Config-message source marker for Flutter -> embed messages (shared with the
 /// NAVER embed contract).
