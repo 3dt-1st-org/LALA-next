@@ -20,7 +20,7 @@ replaces that gap with a **synthetic, committed** fixture and a **repeatable off
 |---|---|
 | `apps/api/tests/fixtures/docent_eval_places.json` | Synthetic fixture — P6A: exactly 40 places (10 per category, `eval_` prefix, ≥1 honest-empty), every place exercising exactly `["ko","en"]` → 80 language cases. |
 | `apps/api/app/services/docent_eval.py` | Eval logic: load fixture, build `DocentScriptRequest`, run `docent_service.generate_script`, return structured results incl. `total_places` / `total_language_cases` / per-dimension audit summary. Imports `docent_service` read-only. |
-| `apps/api/app/services/docent_qa_dimensions.py` | P6A: deterministic per-dimension audits (source attribution, local context, language purity, usefulness, safety, repetition, grounding, advertising leakage, hallucination) over evidence already present in QA records; pass / flagged / not-applicable only — never a silent pass without evidence. |
+| `apps/api/app/services/docent_qa_dimensions.py` | P6A: deterministic per-dimension audits (source attribution, local context, language purity, usefulness, safety, repetition, grounding, advertising leakage, hallucination) over evidence already present in QA records; pass / flagged / not-applicable only — never a silent pass without evidence. Each audit certifies only its named narrow proxy (e.g. safety = no secret-like text, hallucination = no raw-score leakage, source attribution = clean label presence); broad factual truth, content safety, and source rights are external model/human gates. |
 | `apps/api/app/tools/run_docent_eval.py` | CLI harness: load → eval → assert → write `output/local/docent-eval/report.json` → pass/fail exit. |
 | `apps/api/app/tools/sanitize_docent_qa_report.py` | Lane C sanitizer; P6A: aggregates the deterministic dimension audits and preserves pass/flagged/not-applicable counts in the report schema and markdown. |
 | `apps/api/tests/test_docent_eval_harness.py` | Fixture schema (40/80, exact KO+EN pairing, 10-per-category balance), harness pass/fail, honest-empty, single-language, boundary mock, honest dimension accounting. |
@@ -82,11 +82,14 @@ Current committed fixture (P6A): **exactly 40 places** — 10 in each of `attrac
    categories at 10 each; each `expect_nonempty` place yields non-empty single-language text
    in BOTH KO and EN with `source == rule_based_curation`; the honest-empty fixture yields
    empty/unavailable with no fabricated content; no internal `eval_` ID leaks into any
-   script; no placeholder/mock terms. The report also carries
-   `dimension_summary` — deterministic per-dimension audits
-   (`docent_qa_dimensions`) over the generated scripts with honest
-   pass/flagged/not-applicable counts (honest-empty language cases are counted as
-   not-applicable, never as pass).
+    script; no placeholder/mock terms. The report also carries
+    `dimension_summary` — deterministic per-dimension audits
+    (`docent_qa_dimensions`) over the generated scripts with honest
+    pass/flagged/not-applicable counts (honest-empty language cases are counted as
+    not-applicable, never as pass). Grounding passes are evidence-backed: each
+    language-case record carries its fixture's `grounding_anchors` count, so a
+    generated case passes grounding only on a proven positive anchor count
+    (absent evidence → not-applicable, explicit zero → flagged).
 5. Writes a deterministic JSON report to `output/local/docent-eval/report.json` (gitignored).
 6. Prints a pass/fail summary; exits 0 on all-pass, non-zero otherwise.
 
@@ -116,7 +119,7 @@ python -m app.tools.run_docent_eval
 | C3 | Each `expect_nonempty` place yields non-empty KO and EN single-language scripts | `test_nonempty_places_render_single_language_scripts` |
 | C4 | Honest-empty fixture yields empty/unavailable, no crash, no fabricated content | `test_honest_empty_yields_unavailable_no_fabrication` |
 | C5 | Deterministic JSON report; exit code reflects pass/fail | `run_docent_eval.main` + `test_run_docent_eval_cli_exits_zero_on_pass` |
-| C6 | `test_docent_eval_harness.py` + `test_docent_qa_dimensions.py` green | 19 + 32 tests (P6A) |
+| C6 | `test_docent_eval_harness.py` + `test_docent_qa_dimensions.py` green | 21 + 40 tests (P6A + correction) |
 | C7 | No edit to `docent_service.py`/`docent_quality_qa.py`/`run_docent_quality_qa.py`/`ai_service.py`/schemas/openapi; no Flutter edit | diff is new-files-only |
 | C8 | `ruff check`+`ruff format --check` clean; pytest green (focused + no regression) | verification section below |
 | C9 | This doc present with V7 manual-QA checklist | §6 |
@@ -185,17 +188,32 @@ QA operator (or the supervisor) performs the steps below on a real device with t
   usefulness, safety, repetition — plus grounding, advertising leakage, hallucination)
   are machine-checkable via `docent_qa_dimensions`: pass / flagged / not-applicable only.
   A dimension without enough evidence is reported `not_applicable`, never silently
-  counted as pass. Repetition checks are deterministic, linear-bounded, and immune to
-  short/common particles (compact-length floors; 20,000-char scan bound), with
-  adversarial tests in `test_docent_qa_dimensions.py`.
-- The Lane C sanitizer report schema preserves pass / flagged / not-applicable counts for
-  every dimension; sanitized artifacts carry verdict/reason codes and bounded, redacted
-  excerpts only — never raw scripts, reviews, PII, coordinates, prompts, tokens, secrets,
-  or cloud identifiers.
+  counted as pass. Grounding is evidence-gated: absent `grounding_count` evidence is
+  `not_applicable`, an explicit zero/invalid count is `flagged`, and every offline
+  grounding pass traces to a positive committed `grounding_anchors` count carried
+  deterministically into each language-case record (honest-empty stays N/A). Repetition
+  checks are deterministic, linear-bounded, and immune to short/common particles
+  (compact-length floors; 20,000-char scan bound), with adversarial tests in
+  `test_docent_qa_dimensions.py`.
+- **Scope honesty:** each offline audit certifies only its named narrow proxy —
+  `safety` proves absence of secret-like text, `hallucination` absence of raw-score
+  leakage, `source_attribution` presence of a clean source label. A regex non-hit
+  never proves broad content safety, factual truth, or source-rights usability;
+  those judgments remain model/human external gates (below).
+- The Lane C sanitizer report schema preserves pass / flagged / not-applicable counts
+  for every dimension; sanitized artifacts carry verdict/reason codes and bounded,
+  visibly elided, redacted excerpts — at most the first 240 redacted characters of a
+  script, never a byte-complete script, with secret-like text, coordinate pairs,
+  emails, and phone numbers redacted from excerpts and manual notes. They are not
+  raw-text-free by construction: bounded redacted excerpts remain, and raw run
+  reports stay gitignored under `output/local/`.
 
 **Remaining separate external gates (out of scope for P6A):**
 
 - Paid live generation against the deployed API (Lane C runner, capped).
-- Model-judge scoring (`docent_qa` LLM judge — explicitly not implemented here).
+- Model-judge scoring (`docent_qa` LLM judge — explicitly not implemented here),
+  including broad factual-hallucination review beyond the raw-score proxy.
+- Broad content-safety review beyond the secret-leakage proxy (manual/model gate).
+- Source-rights usability verification beyond label presence (manual gate).
 - Voice playback / on-device speech QA (V4-B/V7).
 - Manual human QA rubric review (`docent-quality-manual-qa-strategy.md`).

@@ -132,6 +132,45 @@ def test_eval_dimension_summary_counts_honest_empty_as_not_applicable(
         assert counts["flagged"] == 0, (dimension, counts)
 
 
+def test_eval_grounding_passes_are_backed_by_positive_anchor_evidence(
+    fixture_places: list[dict],
+) -> None:
+    """Every offline grounding PASS must trace to a committed positive anchor count."""
+    with docent_eval.offline_openai_guard():
+        report = docent_eval.evaluate_docent(fixture_places)
+    assert report.dimension_summary["grounding"] == {
+        "pass": 78,
+        "flagged": 0,
+        "not_applicable": 2,
+    }
+    nonempty = [p for p in fixture_places if p["expect_nonempty"]]
+    assert len(nonempty) == 39
+    for place in nonempty:
+        assert len(place["grounding_anchors"]) >= 1, place["place_id"]
+    for result in report.place_results:
+        for lang in result.languages:
+            if result.expect_nonempty:
+                assert lang.nonempty is True
+                # The generated case's grounding pass is backed by its fixture's anchors.
+                assert lang.grounding_anchor_count >= 1, (result.place_id, lang.language)
+
+
+def test_eval_grounding_flags_nonempty_case_with_zero_anchor_evidence(
+    fixture_places: list[dict],
+) -> None:
+    stripped = [dict(place) for place in fixture_places]
+    stripped[0]["grounding_anchors"] = []
+    with docent_eval.offline_openai_guard():
+        report = docent_eval.evaluate_docent(stripped)
+    # The zero-anchor place still generates scripts (explicit zero evidence -> flagged),
+    # the honest-empty cases stay N/A, and every other pass keeps its anchor backing.
+    assert report.dimension_summary["grounding"] == {
+        "pass": 76,
+        "flagged": 2,
+        "not_applicable": 2,
+    }
+
+
 # --- Honest-empty path --------------------------------------------------------
 
 

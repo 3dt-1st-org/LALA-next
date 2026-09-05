@@ -11,8 +11,16 @@ Honesty rules (binding):
   stable reason code), never silently counted as a pass.
 - Records without a script (honest-empty / generation-error / transport-error
   rows) are ``not_applicable`` for every dimension.
+- Grounding needs explicit evidence: a nonempty script with no ``grounding_count``
+  (and no grounding issue tags) is ``not_applicable``; an explicit zero/invalid
+  count is ``flagged``; a pass requires a positive count.
 - Every check is deterministic, offline, and linear-bounded. No model judge is
   involved here; the ``docent_qa`` model judge stays a separate external gate.
+- Each audit certifies only its named narrow proxy — e.g. ``safety`` proves only
+  the absence of secret-like text, ``hallucination`` only the absence of raw-score
+  leakage, ``source_attribution`` only the presence of a clean source label.
+  Absence of a regex hit never proves broad content safety, factual truth, or
+  source rights; those stay model/human external gates.
 """
 
 from __future__ import annotations
@@ -262,12 +270,15 @@ def audit_grounding(record: dict[str, Any]) -> DimensionAudit:
     if flagged_tags:
         return DimensionAudit(dimension, STATUS_FLAGGED, flagged_tags[0])
     grounding_count = record.get("grounding_count")
-    if grounding_count is not None:
-        try:
-            if int(grounding_count) <= 0:
-                return DimensionAudit(dimension, STATUS_FLAGGED, "no_grounding_metadata")
-        except (TypeError, ValueError):
-            return DimensionAudit(dimension, STATUS_FLAGGED, "invalid_grounding_metadata")
+    if grounding_count is None:
+        # No explicit grounding evidence in the record: not applicable, never a pass.
+        return _na(dimension, "no_grounding_metadata")
+    try:
+        count = int(grounding_count)
+    except (TypeError, ValueError):
+        return DimensionAudit(dimension, STATUS_FLAGGED, "invalid_grounding_metadata")
+    if count <= 0:
+        return DimensionAudit(dimension, STATUS_FLAGGED, "no_grounding_metadata")
     return DimensionAudit(dimension, STATUS_PASS, "grounding_metadata_present")
 
 
