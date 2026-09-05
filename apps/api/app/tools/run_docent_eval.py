@@ -85,7 +85,10 @@ def main(argv: list[str] | None = None) -> int:
     report_dict = report.to_dict()
     # The judge gate is a separate optional gate on the report. It never
     # modifies the deterministic P6A results or the exit code; when no judge
-    # ran it reports NOT_RUN — never PASS.
+    # ran it reports exactly NOT_RUN — never PASS. The --judge-fake run is
+    # simulation-only and is labeled SIMULATED (OFFLINE_FAKE) in both the
+    # report JSON and the CLI summary: it can never satisfy or be mistaken
+    # for the real model-judge acceptance gate.
     if args.judge_fake:
         judge_records = [
             {
@@ -102,7 +105,7 @@ def main(argv: list[str] | None = None) -> int:
             provider=docent_judge.FakeJudgeProvider(),
             policy=docent_judge.JudgeBatchPolicy(),
         )
-        report_dict["judge_gate"] = docent_judge.judge_gate_section(judge_run)
+        report_dict["judge_gate"] = docent_judge.judge_gate_section(judge_run, simulated=True)
     else:
         report_dict["judge_gate"] = docent_judge.judge_gate_section(None)
 

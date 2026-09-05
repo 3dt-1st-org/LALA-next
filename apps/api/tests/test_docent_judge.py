@@ -88,7 +88,9 @@ class _ScriptedProvider:
     """Test provider: canned replies in call order, exceptions raised, sleeps.
 
     A reply item may be a ``JudgeProviderReply``, a raw ``str`` (payload JSON),
-    a ``dict`` (payload), or an ``Exception`` instance (raised).
+    a ``dict`` (payload), or an ``Exception`` instance (raised). When
+    ``fast_after`` is set, only the first N calls sleep for ``sleep_seconds``;
+    later calls return immediately.
     """
 
     def __init__(
@@ -97,16 +99,18 @@ class _ScriptedProvider:
         *,
         sleep_seconds: float = 0.0,
         total_tokens: int = 700,
+        fast_after: int | None = None,
     ) -> None:
         self.replies = list(replies)
         self.sleep_seconds = sleep_seconds
         self.total_tokens = total_tokens
+        self.fast_after = fast_after
         self.seen: list[tuple[str, str]] = []
 
     def judge(self, record: dict[str, Any]) -> judge.JudgeProviderReply:
         key = (str(record.get("place_id")), str(record.get("language")))
         self.seen.append(key)
-        if self.sleep_seconds:
+        if self.sleep_seconds and (self.fast_after is None or len(self.seen) <= self.fast_after):
             time.sleep(self.sleep_seconds)
         reply = self.replies[min(len(self.seen) - 1, len(self.replies) - 1)]
         if isinstance(reply, Exception):
@@ -318,6 +322,17 @@ def test_contradictory_pass_with_flagged_dimension_fails_closed() -> None:
     assert result.dimensions == ()
 
 
+def test_contradictory_rewrite_with_all_pass_dimensions_fails_closed() -> None:
+    """Reverse contradiction: REWRITE with zero flagged dimensions has no
+    supporting evidence and must fail closed exactly like PASS+flagged."""
+    payload = _payload(decision="REWRITE")  # every dimension status is pass
+    result = judge.parse_judge_payload(payload)
+    assert result.decision == judge.DECISION_REWRITE
+    assert result.failure_reason == "contradictory_decision"
+    assert result.dimensions == ()
+    assert result.is_fail_closed is True
+
+
 def test_fail_closed_result_shape_is_machine_readable() -> None:
     result = judge.parse_judge_payload("not-a-payload")
     public = result.to_public_dict()
@@ -520,6 +535,136 @@ def test_batch_judges_ko_and_en_and_skips_honest_empty() -> None:
     assert run.gate_status() == judge.DECISION_PASS
 
 
+# --- Honest-empty records are skipped BEFORE provider submission ----------------
+
+
+def test_empty_in_nonfinal_canary_position_is_never_submitted() -> None:
+    """Empty at canary index 1 (not last): classified before submission, so
+    provider invocations equal the judgeable records exactly."""
+    provider = _ScriptedProvider([json.dumps(_payload())])
+    policy = judge.JudgeBatchPolicy(canary_size=4, max_concurrency=1)
+    records = _roster(6, empty_at=(1,))
+    run = judge.run_judge_batch(records, provider=provider, policy=policy)
+    judgeable = [r for r in records if r["script"].strip()]
+    assert len(judgeable) == 5
+    assert len(provider.seen) == len(judgeable)
+    assert ("eval_place_00", "en") not in provider.seen  # the empty record
+    empty_outcome = next(o for o in run.outcomes if o.error_code == judge.ERROR_SKIPPED_NO_SCRIPT)
+    assert empty_outcome.place_id == "eval_place_00"
+    assert empty_outcome.language == "en"
+    assert run.counters["skipped_no_script"] == 1
+    assert run.counters["judged"] == 5
+
+
+def test_multiple_empties_in_remainder_waves_are_never_submitted() -> None:
+    """Empties at roster indices 5 and 9 (inside remainder waves): invocation
+    count equals the non-empty submitted records, never the full roster."""
+    provider = _ScriptedProvider([json.dumps(_payload())])
+    policy = judge.JudgeBatchPolicy(canary_size=4, max_concurrency=4)
+    records = _roster(12, empty_at=(5, 9))
+    run = judge.run_judge_batch(records, provider=provider, policy=policy)
+    judgeable = [r for r in records if r["script"].strip()]
+    assert len(judgeable) == 10
+    assert len(provider.seen) == 10, "empties must never reach the provider"
+    assert run.counters["skipped_no_script"] == 2
+    assert run.counters["judged"] == 10
+    assert run.counters["dropped_by_cap"] == 0
+    assert run.gate_status() == judge.DECISION_PASS
+
+
+def test_provider_invocations_equal_judgeable_records_on_fixture_shaped_roster() -> None:
+    """A fixture-shaped roster with the honest-empty pair at positions 18/19
+    (inside the remainder) must consume exactly 78 provider calls for 78
+    judgeable records."""
+    provider = judge.FakeJudgeProvider()
+    records = _roster(80, empty_at=(18, 19))
+    run = judge.run_judge_batch(records, provider=provider)
+    assert len(provider.seen) == 78
+    assert run.counters["judged"] == 78
+    assert run.counters["skipped_no_script"] == 2
+
+
+# --- Aggregate gate: sub-stop-loss errors never yield PASS ----------------------
+
+
+def test_mixed_pass_and_provider_error_is_incomplete_not_pass() -> None:
+    provider = _ScriptedProvider([RuntimeError("boom")] + [json.dumps(_payload())] * 7)
+    policy = judge.JudgeBatchPolicy(canary_size=4, max_concurrency=4, max_provider_failures=3)
+    run = judge.run_judge_batch(_roster(8), provider=provider, policy=policy)
+    assert run.halted is False
+    assert run.counters["provider_failures"] == 1
+    assert run.counters["judged"] == 7
+    assert run.gate_status() == judge.GATE_INCOMPLETE
+    assert run.gate_status() != judge.DECISION_PASS
+
+
+def test_mixed_pass_and_timeout_is_incomplete_not_pass() -> None:
+    provider = _ScriptedProvider([json.dumps(_payload())], sleep_seconds=0.15, fast_after=1)
+    policy = judge.JudgeBatchPolicy(
+        canary_size=4,
+        max_concurrency=4,
+        per_record_timeout_seconds=0.03,
+        max_provider_failures=3,
+    )
+    run = judge.run_judge_batch(_roster(8), provider=provider, policy=policy)
+    assert run.counters["provider_timeouts"] >= 1
+    assert run.halted is False
+    assert run.gate_status() == judge.GATE_INCOMPLETE
+
+
+def test_halted_run_reports_halted_not_pass() -> None:
+    provider = _ScriptedProvider([json.dumps(_payload())], total_tokens=400_000)
+    policy = judge.JudgeBatchPolicy(canary_size=1, max_total_tokens=300_000)
+    run = judge.run_judge_batch(_roster(4), provider=provider, policy=policy)
+    assert run.halted is True
+    assert run.gate_status() == judge.GATE_HALTED
+
+
+def test_rewrite_keeps_precedence_over_incomplete_and_halted() -> None:
+    provider = _ScriptedProvider(["<not-json>", RuntimeError("boom")])
+    policy = judge.JudgeBatchPolicy(canary_size=2, max_concurrency=1, max_provider_failures=3)
+    run = judge.run_judge_batch(_roster(6), provider=provider, policy=policy)
+    assert run.counters["malformed_responses"] == 1
+    assert run.counters["provider_failures"] >= 1
+    # The malformed record's fail-closed REWRITE outranks every other status.
+    assert run.gate_status() == judge.DECISION_REWRITE
+
+
+def test_all_honest_empty_roster_reports_no_verdicts() -> None:
+    provider = judge.FakeJudgeProvider()
+    records = [_record("eval_minimal", "ko", ""), _record("eval_minimal", "en", "")]
+    run = judge.run_judge_batch(records, provider=provider)
+    assert provider.seen == []
+    assert run.counters["skipped_no_script"] == 2
+    assert run.gate_status() == judge.GATE_NO_VERDICTS
+
+
+# --- Reported usage is clamped before stop-loss accounting ----------------------
+
+
+def test_negative_token_usage_cannot_reduce_stop_loss_accounting() -> None:
+    negative = judge.JudgeProviderReply(text=json.dumps(_payload()), total_tokens=-500_000)
+    provider = _ScriptedProvider([negative])
+    run = judge.run_judge_batch([_record()], provider=provider)
+    assert run.total_tokens == 0
+    assert run.halted is False  # negative usage neither halted nor reduced anything
+    # A subsequent real ceiling still trips on its own merits.
+    ceiling = judge.JudgeProviderReply(text=json.dumps(_payload()), total_tokens=300_000)
+    provider = _ScriptedProvider([ceiling])
+    policy = judge.JudgeBatchPolicy(canary_size=1, max_total_tokens=300_000)
+    run = judge.run_judge_batch(_roster(4), provider=provider, policy=policy)
+    assert run.halted is True
+    assert run.halt_reason == judge.HALT_USAGE
+
+
+def test_invalid_token_usage_type_is_counted_as_zero() -> None:
+    bogus = judge.JudgeProviderReply(text=json.dumps(_payload()), total_tokens="not-a-number")
+    provider = _ScriptedProvider([bogus])
+    run = judge.run_judge_batch([_record()], provider=provider)
+    assert run.total_tokens == 0
+    assert run.counters["judged"] == 1
+
+
 def test_canary_runs_before_remainder_in_roster_order() -> None:
     provider = _ScriptedProvider([json.dumps(_payload())])
     policy = judge.JudgeBatchPolicy(canary_size=4, max_concurrency=1)
@@ -604,7 +749,9 @@ def test_eighty_record_hard_cap_drops_overflow() -> None:
     assert run.counters["judged"] == 80
     assert len(run.outcomes) == 80
     assert len(provider.seen) == 80
-    assert run.gate_status() == judge.DECISION_PASS
+    # Cap overflow fails closed: records beyond the hard cap were never judged,
+    # so the aggregate gate can never report PASS.
+    assert run.gate_status() == judge.GATE_INCOMPLETE
 
 
 def test_empty_roster_reports_no_verdicts_never_pass() -> None:
@@ -651,11 +798,62 @@ def test_prompt_never_carries_secrets_or_full_overlong_scripts() -> None:
     assert judge.MAX_PROMPT_SCRIPT_CHARS == 4_000
 
 
+def test_prompt_redacts_secrets_coordinates_and_direct_pii() -> None:
+    dirty_script = (
+        "관리자 키 sk-AbCdEf1234567890 로 접속하세요. 만남 위치는 37.5665, 126.9780 "
+        "부근이고 문의는 guide@example.com 으로하세요. 골목 산책 동선도 안내합니다."
+    )
+    _system, user = judge.build_judge_prompt(_record("eval_dirty_01", "ko", dirty_script))
+    assert "sk-AbCdEf1234567890" not in user
+    assert "37.5665" not in user
+    assert "126.9780" not in user
+    assert "guide@example.com" not in user
+    assert "[redacted]" in user
+
+
+def test_prompt_omits_raw_place_id_and_whitelists_metadata() -> None:
+    huge_id = "eval_" + "x" * 100_000
+    record = _record(huge_id, "ko", _KO_SCRIPT)
+    record["language"] = "ko" * 10_000
+    record["category"] = "category" * 10_000
+    _system, user = judge.build_judge_prompt(record)
+    # No raw internal place identifier is ever sent to the provider.
+    assert "Place id:" not in user
+    assert "eval_x" not in user
+    assert huge_id not in user
+    # Metadata is whitelist-bounded: unknown values become the literal unknown.
+    assert "Language: unknown" in user
+    assert "Category: unknown" in user
+    assert "Language: koko" not in user
+    assert len(user) < 1_000
+
+
+def test_prompt_keeps_whitelisted_language_and_category_labels() -> None:
+    record = _record("eval_attraction_01", "en", _EN_SCRIPT)
+    record["category"] = "restaurant"
+    _system, user = judge.build_judge_prompt(record)
+    assert "Language: en" in user
+    assert "Category: restaurant" in user
+
+
+def test_judge_result_public_dict_sanitizes_model_authored_reasons() -> None:
+    payload = _payload(reason="leak postgres://user:pw@host/db")  # pragma: allowlist secret
+    result = judge.parse_judge_payload(payload)
+    assert result.failure_reason is None
+    public = result.to_public_dict()
+    blob = json.dumps(public, ensure_ascii=False)
+    assert "postgres://" not in blob
+    assert "[redacted]" in public["dimensions"][0]["reason"]
+    assert public["dimensions"][0]["dimension"] == judge.JUDGE_DIMENSIONS[0]
+
+
 # --- Judge gate section (separate optional gate on the report) -----------------
 
 
 def test_judge_gate_section_not_run_when_no_judge_ran() -> None:
     assert judge.judge_gate_section(None) == {"status": "NOT_RUN"}
+    # The default invocation is provider-free and exactly NOT_RUN.
+    assert judge.judge_gate_section(None, simulated=True) == {"status": "NOT_RUN"}
 
 
 def test_judge_gate_section_carries_run_summary() -> None:
@@ -664,6 +862,20 @@ def test_judge_gate_section_carries_run_summary() -> None:
     assert section["status"] == judge.DECISION_PASS
     assert section == run.summarize()
     assert set(section["per_dimension"]) == set(judge.JUDGE_DIMENSIONS)
+
+
+def test_simulated_gate_section_is_labeled_and_never_equals_real_pass() -> None:
+    run = judge.run_judge_batch(_roster(4), provider=judge.FakeJudgeProvider())
+    section = judge.judge_gate_section(run, simulated=True)
+    assert section["status"] == judge.GATE_SIMULATED
+    assert section["status"] != judge.DECISION_PASS
+    assert section["provider"] == judge.SIMULATED_PROVIDER_LABEL
+    assert section["simulated"] is True
+    # The real aggregate semantics live nested and clearly subordinate.
+    assert section["simulated_result"] == run.summarize()
+    assert section["simulated_result"]["status"] == judge.DECISION_PASS
+    # A simulated section can never be confused with a real-run summary shape.
+    assert set(section) == {"status", "provider", "simulated", "simulated_result"}
 
 
 # --- Offline QA report integration (run_docent_eval CLI) -----------------------
@@ -695,16 +907,23 @@ def test_offline_report_defaults_to_judge_not_run(tmp_path) -> None:
     assert report["live_client_constructions"] == 0
 
 
-def test_offline_report_judge_fake_runs_full_pipeline_offline(tmp_path) -> None:
+def test_offline_report_judge_fake_is_labeled_simulated(tmp_path, capsys) -> None:
     report = _run_eval_cli(tmp_path, "--judge-fake")
     gate = report["judge_gate"]
-    assert gate["status"] == judge.DECISION_PASS
-    assert gate["counters"]["judged"] == 78
-    assert gate["counters"]["skipped_no_script"] == 2
-    assert gate["counters"]["pass_decisions"] == 78
-    assert gate["halted"] is False
-    assert gate["policy"]["max_records"] == 80
-    assert set(gate["per_dimension"]) == set(judge.JUDGE_DIMENSIONS)
+    # Simulation-only labeling: the top status can never equal the real gate PASS.
+    assert gate["status"] == judge.GATE_SIMULATED
+    assert gate["status"] != judge.DECISION_PASS
+    assert gate["provider"] == judge.SIMULATED_PROVIDER_LABEL
+    assert gate["simulated"] is True
+    simulated = gate["simulated_result"]
+    assert simulated["counters"]["judged"] == 78
+    assert simulated["counters"]["skipped_no_script"] == 2
+    assert simulated["counters"]["pass_decisions"] == 78
+    assert simulated["halted"] is False
+    assert simulated["policy"]["max_records"] == 80
+    assert set(simulated["per_dimension"]) == set(judge.JUDGE_DIMENSIONS)
+    # The CLI summary is visibly simulation-only too.
+    assert "judge_gate=SIMULATED" in capsys.readouterr().out
     # The deterministic P6A fields stay identical with the judge gate present.
     assert report["passed"] is True
     assert report["total_places"] == 40
