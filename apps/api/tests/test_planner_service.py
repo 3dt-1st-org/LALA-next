@@ -385,7 +385,7 @@ def test_daily_plan_normalizes_language_and_translates_slots(monkeypatch) -> Non
     monkeypatch.setattr(
         planner_service,
         "current_weather",
-        lambda **kwargs: {"source": "db", "outdoor_status": "bad"},
+        lambda **kwargs: {"source": "db", "outdoor_status": "bad", "weather_outdoor_status": "bad"},
     )
     monkeypatch.setattr(
         planner_service,
@@ -477,7 +477,11 @@ def test_daily_plan_handles_unavailable_sources(monkeypatch) -> None:
 
 def test_intervention_flags_bad_weather_and_keeps_top_place(monkeypatch) -> None:
     captured: dict[str, object] = {}
-    weather = {"source": "db", "outdoor_status": "bad"}
+    weather = {
+        "source": "db",
+        "outdoor_status": "bad",
+        "weather_outdoor_status": "bad",
+    }
     places = {
         "source": "db",
         "places": [{"name": "남산서울타워", "category": "landmark"}],
@@ -521,7 +525,11 @@ def test_intervention_skips_when_weather_is_good(monkeypatch) -> None:
     monkeypatch.setattr(
         planner_service,
         "current_weather",
-        lambda **kwargs: {"source": "public_mvp_snapshot", "outdoor_status": "good"},
+        lambda **kwargs: {
+            "source": "public_mvp_snapshot",
+            "outdoor_status": "good",
+            "weather_outdoor_status": "good",
+        },
     )
     monkeypatch.setattr(
         planner_service,
@@ -569,7 +577,7 @@ def test_intervention_retains_original_and_alternative_slots(monkeypatch) -> Non
     monkeypatch.setattr(
         planner_service,
         "current_weather",
-        lambda **kwargs: {"source": "db", "outdoor_status": "bad"},
+        lambda **kwargs: {"source": "db", "outdoor_status": "bad", "weather_outdoor_status": "bad"},
     )
     monkeypatch.setattr(
         planner_service,
@@ -595,7 +603,7 @@ def test_intervention_trigger_type_reflects_bad_weather(monkeypatch) -> None:
     monkeypatch.setattr(
         planner_service,
         "current_weather",
-        lambda **kwargs: {"source": "db", "outdoor_status": "bad"},
+        lambda **kwargs: {"source": "db", "outdoor_status": "bad", "weather_outdoor_status": "bad"},
     )
     monkeypatch.setattr(
         planner_service, "list_places", lambda **kwargs: {"source": "db", "places": []}
@@ -619,7 +627,7 @@ def test_intervention_distance_comparison_null_without_authority(monkeypatch) ->
     monkeypatch.setattr(
         planner_service,
         "current_weather",
-        lambda **kwargs: {"source": "db", "outdoor_status": "bad"},
+        lambda **kwargs: {"source": "db", "outdoor_status": "bad", "weather_outdoor_status": "bad"},
     )
     monkeypatch.setattr(
         planner_service,
@@ -640,7 +648,7 @@ def test_intervention_decision_default_pending_not_applied(monkeypatch) -> None:
     monkeypatch.setattr(
         planner_service,
         "current_weather",
-        lambda **kwargs: {"source": "db", "outdoor_status": "bad"},
+        lambda **kwargs: {"source": "db", "outdoor_status": "bad", "weather_outdoor_status": "bad"},
     )
     monkeypatch.setattr(
         planner_service, "list_places", lambda **kwargs: {"source": "db", "places": []}
@@ -658,7 +666,7 @@ def test_intervention_observable_factors_only(monkeypatch) -> None:
     monkeypatch.setattr(
         planner_service,
         "current_weather",
-        lambda **kwargs: {"source": "db", "outdoor_status": "bad"},
+        lambda **kwargs: {"source": "db", "outdoor_status": "bad", "weather_outdoor_status": "bad"},
     )
     monkeypatch.setattr(
         planner_service, "list_places", lambda **kwargs: {"source": "db", "places": []}
@@ -678,7 +686,7 @@ def test_intervention_ko_en_exclusive_reasons(monkeypatch) -> None:
     monkeypatch.setattr(
         planner_service,
         "current_weather",
-        lambda **kwargs: {"source": "db", "outdoor_status": "bad"},
+        lambda **kwargs: {"source": "db", "outdoor_status": "bad", "weather_outdoor_status": "bad"},
     )
     monkeypatch.setattr(
         planner_service,
@@ -712,7 +720,13 @@ def test_intervention_bad_weather_finds_indoor_alternative(monkeypatch):
         planner_service, "list_places", lambda **kw: {"source": "db", "places": places}
     )
     monkeypatch.setattr(
-        planner_service, "current_weather", lambda **kw: {"outdoor_status": "bad", "source": "kma"}
+        planner_service,
+        "current_weather",
+        lambda **kw: {
+            "outdoor_status": "bad",
+            "weather_outdoor_status": "bad",
+            "source": "kma",
+        },
     )
 
     result = planner_service.intervention(lat=37.5, lng=127.0, radius_m=3000, language="ko")
@@ -735,7 +749,13 @@ def test_intervention_bad_weather_no_indoor_alternative(monkeypatch):
         planner_service, "list_places", lambda **kw: {"source": "db", "places": places}
     )
     monkeypatch.setattr(
-        planner_service, "current_weather", lambda **kw: {"outdoor_status": "bad", "source": "kma"}
+        planner_service,
+        "current_weather",
+        lambda **kw: {
+            "outdoor_status": "bad",
+            "weather_outdoor_status": "bad",
+            "source": "kma",
+        },
     )
 
     result = planner_service.intervention(lat=37.5, lng=127.0, radius_m=3000, language="ko")
@@ -772,7 +792,13 @@ def test_intervention_excludes_original_from_alternatives(monkeypatch):
         planner_service, "list_places", lambda **kw: {"source": "db", "places": places}
     )
     monkeypatch.setattr(
-        planner_service, "current_weather", lambda **kw: {"outdoor_status": "bad", "source": "kma"}
+        planner_service,
+        "current_weather",
+        lambda **kw: {
+            "outdoor_status": "bad",
+            "weather_outdoor_status": "bad",
+            "source": "kma",
+        },
     )
 
     result = planner_service.intervention(lat=37.5, lng=127.0, radius_m=3000, language="ko")
@@ -1864,11 +1890,67 @@ def test_intervention_good_air_quality_bad_weather_keeps_existing_payload(
     )
 
 
-def test_intervention_legacy_payload_without_provenance_keeps_bad_weather(
+def test_intervention_legacy_aggregate_bad_with_current_aq_bad_is_aq_only(
     monkeypatch,
 ) -> None:
-    """Pre-P4 payloads (no provenance keys) keep the aggregate interpretation —
-    even a bad dust grade on a legacy payload must not invent an AQ cause."""
+    """Legacy aggregate bad (no weather provenance) + explicit current AQ bad →
+    the AQ cause is disclosed; no weather factor or weather reason is invented."""
+    monkeypatch.setattr(planner_service, "list_places", lambda **kw: {"source": "db", "places": []})
+    monkeypatch.setattr(
+        planner_service,
+        "current_weather",
+        lambda **kw: {
+            "source": "db+airkorea_sido_realtime",
+            "outdoor_status": "bad",
+            "air_quality_outdoor_status": "bad",
+            "dust": {"grade": "bad"},
+        },
+    )
+
+    result = planner_service.intervention(lat=37.2, lng=127.0, radius_m=2000, language="en")
+
+    assert result["should_intervene"] is True
+    assert result["trigger_type"] == "bad_air_quality"
+    assert result["trigger_factors"] == [{"factor": "air_quality_dust_grade", "value": "bad"}]
+    assert "Air quality is poor" in result["reason"]
+    assert "Weather" not in result["reason"].split("Air quality")[0]
+
+
+def test_intervention_legacy_aggregate_bad_with_current_aq_good_never_triggers_weather(
+    monkeypatch,
+) -> None:
+    """Legacy aggregate bad + current AQ good → no observed cause at all: the
+    aggregate is never promoted to a weather trigger or weather reason."""
+    monkeypatch.setattr(planner_service, "list_places", lambda **kw: {"source": "db", "places": []})
+    monkeypatch.setattr(
+        planner_service,
+        "current_weather",
+        lambda **kw: {
+            "source": "db+airkorea_sido_realtime",
+            "outdoor_status": "bad",
+            "air_quality_outdoor_status": "good",
+            "dust": {"grade": "good"},
+        },
+    )
+
+    result = planner_service.intervention(lat=37.2, lng=127.0, radius_m=2000, language="en")
+
+    assert result["should_intervene"] is False
+    assert result["trigger_type"] is None
+    assert result["trigger_factors"] == []
+    assert result["alternative_slot"] is None
+    # Honest unknown-weather copy — not a weather-adverse reason.
+    assert result["reason"] == (
+        "Weather data is still pending, so keep nearby local places as the current option."
+    )
+    assert "indoor" not in result["recommended_action"].lower()
+
+
+def test_intervention_legacy_payload_without_any_provenance_never_triggers(
+    monkeypatch,
+) -> None:
+    """A pre-P4 payload (no provenance keys, even with a bad dust grade) carries
+    no observable cause: no trigger, no weather factor, honest unknown copy."""
     monkeypatch.setattr(planner_service, "list_places", lambda **kw: {"source": "db", "places": []})
     monkeypatch.setattr(
         planner_service,
@@ -1878,9 +1960,40 @@ def test_intervention_legacy_payload_without_provenance_keeps_bad_weather(
 
     result = planner_service.intervention(lat=37.2, lng=127.0, radius_m=2000)
 
-    assert result["should_intervene"] is True
-    assert result["trigger_type"] == "bad_weather"
-    assert result["trigger_factors"] == [{"factor": "weather_outdoor_status", "value": "bad"}]
+    assert result["should_intervene"] is False
+    assert result["trigger_type"] is None
+    assert result["trigger_factors"] == []
+    assert result["alternative_slot"] is None
+
+
+@pytest.mark.parametrize(
+    ("provenance", "aggregate", "expected_reason_fragment"),
+    [
+        # Only explicit bad weather provenance produces a weather reason.
+        ({"weather_outdoor_status": "bad"}, "bad", "Weather is not ideal"),
+        ({"weather_outdoor_status": "good"}, "good", "Weather is suitable"),
+        # Missing/unknown weather provenance never yields a weather reason even
+        # when the aggregate says bad.
+        ({}, "bad", "Weather data is still pending"),
+        ({"weather_outdoor_status": "unknown"}, "bad", "Weather data is still pending"),
+    ],
+)
+def test_intervention_weather_reason_requires_explicit_bad_weather_provenance(
+    monkeypatch,
+    provenance: dict,
+    aggregate: str,
+    expected_reason_fragment: str,
+) -> None:
+    monkeypatch.setattr(planner_service, "list_places", lambda **kw: {"source": "db", "places": []})
+    monkeypatch.setattr(
+        planner_service,
+        "current_weather",
+        lambda **kw: {"source": "db", "outdoor_status": aggregate, **provenance},
+    )
+
+    result = planner_service.intervention(lat=37.2, lng=127.0, radius_m=2000, language="en")
+
+    assert expected_reason_fragment in result["reason"]
 
 
 @pytest.mark.parametrize(

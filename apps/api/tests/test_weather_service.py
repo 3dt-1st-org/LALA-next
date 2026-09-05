@@ -612,12 +612,12 @@ def test_current_weather_provenance_db_row_prefers_weather_only_key(monkeypatch)
     assert weather["air_quality_outdoor_status"] == "bad"
 
 
-def test_current_weather_provenance_legacy_db_row_falls_back_to_pre_merge_status(
+def test_current_weather_provenance_legacy_db_row_without_key_stays_unknown(
     monkeypatch,
 ) -> None:
-    # A legacy DB row without the weather-only key: the pre-merge aggregate is the
-    # best available weather signal (pre-P4 compat, never inferred from the
-    # merged-with-dust value).
+    # A legacy DB row carries no explicit weather-only key. Its aggregate may
+    # already include dust, so it must NOT become weather provenance — unknown
+    # stays unknown. The aggregate itself is preserved for display/transport.
     db_weather = {
         "lat": 37.5665,
         "lng": 126.9780,
@@ -645,8 +645,131 @@ def test_current_weather_provenance_legacy_db_row_falls_back_to_pre_merge_status
 
     weather = weather_service.current_weather(lat=37.5665, lng=126.9780)
 
-    assert weather["weather_outdoor_status"] == "bad"
+    assert weather["outdoor_status"] == "bad"
+    assert weather["weather_outdoor_status"] == "unknown"
     assert weather["air_quality_outdoor_status"] == "good"
+
+
+def test_current_weather_provenance_legacy_aggregate_bad_with_current_bad_aq(
+    monkeypatch,
+) -> None:
+    # Legacy aggregate bad + current AQ bad: the AQ cause is observed, the
+    # weather cause is not (no explicit weather provenance).
+    db_weather = {
+        "lat": 37.5665,
+        "lng": 126.9780,
+        "location": "서울",
+        "temp": "21.4",
+        "icon": "partly-cloudy",
+        "dust": weather_service.build_dust_payload(pm10="121", pm25="48"),
+        "forecast": [],
+        "outdoor_status": "bad",
+        "force": False,
+        "location_match": True,
+        "record_time": "2026-09-05T12:00:00+09:00",
+        "source": "db",
+    }
+    air_quality = {
+        "sido_name": "서울",
+        "location": "중구",
+        "record_time": "2026-09-05 12:00",
+        "dust": weather_service.build_dust_payload(pm10="150", pm25="90"),
+    }
+    monkeypatch.setattr(
+        weather_service.db_repository,
+        "fetch_latest_weather",
+        lambda **kwargs: dict(db_weather),
+    )
+    monkeypatch.setattr(
+        weather_service,
+        "_fetch_airkorea_sido_air_quality",
+        lambda **kwargs: dict(air_quality),
+    )
+
+    weather = weather_service.current_weather(lat=37.5665, lng=126.9780)
+
+    assert weather["outdoor_status"] == "bad"
+    assert weather["weather_outdoor_status"] == "unknown"
+    assert weather["air_quality_outdoor_status"] == "bad"
+
+
+def test_current_weather_provenance_legacy_aggregate_bad_with_current_good_aq(
+    monkeypatch,
+) -> None:
+    # Legacy aggregate bad (e.g. historical dust flags) + current AQ good: the
+    # aggregate is preserved but neither a weather cause nor an AQ cause is bad.
+    db_weather = {
+        "lat": 37.5665,
+        "lng": 126.9780,
+        "location": "서울",
+        "temp": "21.4",
+        "icon": "partly-cloudy",
+        "dust": weather_service.build_dust_payload(pm10="121", pm25="48"),
+        "forecast": [],
+        "outdoor_status": "bad",
+        "force": False,
+        "location_match": True,
+        "record_time": "2026-09-05T12:00:00+09:00",
+        "source": "db",
+    }
+    air_quality = {
+        "sido_name": "서울",
+        "location": "중구",
+        "record_time": "2026-09-05 12:00",
+        "dust": weather_service.build_dust_payload(
+            pm10="9", pm25="3", pm10_grade="1", pm25_grade="1"
+        ),
+    }
+    monkeypatch.setattr(
+        weather_service.db_repository,
+        "fetch_latest_weather",
+        lambda **kwargs: dict(db_weather),
+    )
+    monkeypatch.setattr(
+        weather_service,
+        "_fetch_airkorea_sido_air_quality",
+        lambda **kwargs: dict(air_quality),
+    )
+
+    weather = weather_service.current_weather(lat=37.5665, lng=126.9780)
+
+    assert weather["outdoor_status"] == "bad"
+    assert weather["weather_outdoor_status"] == "unknown"
+    assert weather["air_quality_outdoor_status"] == "good"
+
+
+def test_current_weather_provenance_missing_dust_stays_unknown(monkeypatch) -> None:
+    # A legacy DB row without any dust payload: AQ provenance stays unknown —
+    # missing dust is never classified good/bad.
+    db_weather = {
+        "lat": 37.5665,
+        "lng": 126.9780,
+        "location": "서울",
+        "temp": "21.4",
+        "icon": "partly-cloudy",
+        "forecast": [],
+        "outdoor_status": "good",
+        "force": False,
+        "location_match": True,
+        "record_time": "2026-09-05T12:00:00+09:00",
+        "source": "db",
+    }
+    monkeypatch.setattr(
+        weather_service.db_repository,
+        "fetch_latest_weather",
+        lambda **kwargs: dict(db_weather),
+    )
+    monkeypatch.setattr(
+        weather_service,
+        "_fetch_airkorea_sido_air_quality",
+        lambda **kwargs: None,
+    )
+
+    weather = weather_service.current_weather(lat=37.5665, lng=126.9780)
+
+    assert weather["weather_outdoor_status"] == "unknown"
+    assert weather["air_quality_outdoor_status"] == "unknown"
+    assert weather["outdoor_status"] == "good"
 
 
 def test_current_weather_unavailable_reports_unknown_provenance(monkeypatch) -> None:
