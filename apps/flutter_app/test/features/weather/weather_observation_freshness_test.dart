@@ -55,6 +55,21 @@ void main() {
       expect(result.freshness, WeatherObservationFreshness.stale);
       expect(result.label, '관측 시각 2026-09-04 23:00');
     });
+
+    test('분이 0이 아닌 음수 오프셋(-05:30): 부호가 시·분 모두에 적용된다', () {
+      // 2026-09-04T09:00 -05:30 == 2026-09-04 14:30Z == KST 2026-09-04 23:30.
+      // 부호를 시에만 적용하면 -04:30 으로 잘못 계산된다(회귀 방지).
+      final result = info('2026-09-04T09:00:00-05:30');
+      expect(result.freshness, WeatherObservationFreshness.stale);
+      expect(result.label, '관측 시각 2026-09-04 23:30');
+    });
+
+    test('분이 0이 아닌 양수 오프셋(+05:30)도 정확히 환산된다', () {
+      // 2026-09-05T08:00 +05:30 == 2026-09-05 02:30Z == now → age 0, KST 11:30.
+      final result = info('2026-09-05T08:00:00+05:30');
+      expect(result.freshness, WeatherObservationFreshness.current);
+      expect(result.label, '관측 시각 11:30');
+    });
   });
 
   group('freshness 창 경계(kWeatherObservationCurrentWindow = 60분)', () {
@@ -111,6 +126,34 @@ void main() {
         );
         expect(result.label, '관측 시각 확인 중', reason: raw);
       }
+    });
+
+    test('정규화로 넘어가는 무효 성분은 명시적으로 거부(2월 30일 등)', () {
+      // DateTime 은 범위 밖 성분을 이월 계산한다(2/30→3/2). 정규화 결과를
+      // 관측 시각으로 fabricate 하지 않도록 왕복 검사로 거부한다.
+      for (final raw in [
+        '2026-02-30T09:00:00+09:00', // 존재하지 않는 날짜(2월 30일)
+        '2026-09-31 09:00', // 존재하지 않는 날짜(9월 31일, dataTime 형식)
+        '2026-02-29T09:00:00+09:00', // 평년 2월 29일(2026은 평년)
+        '2026-09-05T24:00:00+09:00', // 불가능한 시(24시 → 다음날 0시 정규화)
+        '2026-09-05T09:60:00+09:00', // 불가능한 분(60분 → +1시간 정규화)
+        '2026-09-05T09:00:60+09:00', // 불가능한 초(60초 → +1분 정규화)
+      ]) {
+        final result = info(raw);
+        expect(
+          result.freshness,
+          WeatherObservationFreshness.unknown,
+          reason: raw,
+        );
+        expect(result.label, '관측 시각 확인 중', reason: raw);
+      }
+    });
+
+    test('윤년 2월 29일은 유효하게 통과한다(거부 과잉 없음)', () {
+      // 2024-02-29 23:00 KST == 2024-02-29 14:00Z — 아주 오래전 관측(stale).
+      final result = info('2024-02-29T23:00:00+09:00');
+      expect(result.freshness, WeatherObservationFreshness.stale);
+      expect(result.label, '관측 시각 2024-02-29 23:00');
     });
 
     test('미래 skew(허용치 초과) → unknown, 절대 "방금 전"류 나이를 만들지 않는다', () {

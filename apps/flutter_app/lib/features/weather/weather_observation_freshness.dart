@@ -170,15 +170,20 @@ DateTime? _parseRecordTime(String? raw) {
   }
 
   final zone = match.group(8);
-  final wall = DateTime.tryParse(
-    '${year.toString().padLeft(4, '0')}-'
-    '${month.toString().padLeft(2, '0')}-'
-    '${day.toString().padLeft(2, '0')}T'
-    '${hour.toString().padLeft(2, '0')}:'
-    '${minute.toString().padLeft(2, '0')}:'
-    '${second.toString().padLeft(2, '0')}.${micros.toString().padLeft(6, '0')}Z',
-  );
-  if (wall == null) return null;
+
+  // DateTime 은 범위 밖 성분을 정규화한다(2월 30일→3월 2일, 24시→다음날 0시).
+  // 정규화에 기대면 존재하지 않는 관측 시각을 fabricate 하게 되므로, 왕복 검사로
+  // 성분이 그대로인 경우만 받는다(무효 date/hour/minute/second 는 명시적 거부).
+  final probe = DateTime.utc(year, month, day, hour, minute, second);
+  if (probe.year != year ||
+      probe.month != month ||
+      probe.day != day ||
+      probe.hour != hour ||
+      probe.minute != minute ||
+      probe.second != second) {
+    return null;
+  }
+  final wall = probe.add(Duration(microseconds: micros));
 
   if (zone == null) {
     // 비-타임존 dataTime 형식은 KST 벽시계로 해석한다(timezone truth).
@@ -195,5 +200,6 @@ DateTime? _parseRecordTime(String? raw) {
   if (zoneHour == null || zoneMinute == null) return null;
   // ISO-8601 오프셋 범위(±23:59) 밖이면 망가진 값으로 취급.
   if (zoneHour > 23 || zoneMinute > 59) return null;
-  return wall.subtract(Duration(hours: sign * zoneHour, minutes: zoneMinute));
+  // 부호는 시·분 모두에 적용된다(-05:30 == -330분).
+  return wall.subtract(Duration(minutes: sign * (zoneHour * 60 + zoneMinute)));
 }
