@@ -9,9 +9,16 @@ Current app surface:
 - Public `/healthz` and `/readyz` status before auth is available.
 - Runtime mode display from `/readyz.data.mode`.
 - Runtime editable backend base URL.
-- Naver Dynamic Map background, loaded with `NAVER_MAP_CLIENT_ID` at Flutter web
-  build time and through the registered `https://lala-next.cloud`
-  `naver-map-embed.html` page for native iOS/Android WebView builds.
+- Naver Dynamic Map background for the Korean locale, loaded with
+  `NAVER_MAP_CLIENT_ID` at Flutter web build time and through the registered
+  `https://lala-next.cloud` `naver-map-embed.html` page for native iOS/Android
+  WebView builds.
+- Locale-aware open-vector map for `en`/`ja`/`zh-Hans`/`zh-Hant`: the
+  self-contained `assets/map/open-map-embed.html` (version-pinned MapLibre GL
+  JS v3.6.2 inlined via `tool/build_open_map_embed.sh`) renders
+  OpenFreeMap/OpenMapTiles/OSM data with data-driven label localization. The
+  style URL is the single replaceable provider boundary
+  (`LALA_OPEN_MAP_STYLE_URL` dart-define); the public instance has no SLA.
 - 3 km current-location recommendation radius for the Seoul/Gyeonggi launch dataset.
 - Bearer token or migration API key input for `/api/v1/*`.
 - Recommendation-first home surface that highlights the top place, local-value
