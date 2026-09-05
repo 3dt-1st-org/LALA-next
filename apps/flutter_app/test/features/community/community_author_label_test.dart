@@ -281,7 +281,16 @@ class _LabelScriptedClient extends LalaApiClient {
   );
 
   @override
-  Future<String> resolveWebSocketToken() async => '';
+  Future<LalaEnvelope<ChatWsTicket>> createChatWsTicket({
+    required String roomId,
+    String? requestId,
+    Duration? timeout,
+  }) async => throw const LalaApiException(
+    code: 'HTTP_404',
+    message: 'room not accessible',
+    statusCode: 404,
+    retryable: false,
+  );
 
   @override
   Future<void> close() async {}

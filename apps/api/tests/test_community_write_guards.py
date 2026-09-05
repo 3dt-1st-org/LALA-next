@@ -22,7 +22,11 @@ from apps.api.app.routers.community import (
     REPORT_CREATE_LIMIT_PER_MINUTE,
 )
 from apps.api.app.routers.community_chat import (
+    CHAT_MESSAGE_LIMIT_PER_MINUTE,
+    CHAT_MESSAGE_REST_LIMIT_PER_MINUTE,
+    MEMBER_ADD_LIMIT_PER_MINUTE,
     ROOM_CREATE_LIMIT_PER_MINUTE,
+    WS_TICKET_LIMIT_PER_MINUTE,
     manager,
 )
 from apps.api.app.services.community_chat_service import get_community_chat_service
@@ -80,17 +84,49 @@ class CountingChatService:
     def __init__(self) -> None:
         self.created_rooms: list[str] = []
         self.created_messages: list[tuple[UUID, str, str, str]] = []
+        # Ticket -> actor identity; tickets are single-use per handshake test.
+        self.ticket_identities = {
+            "valid": (ISSUER, SUBJECT),
+            "alice": (ISSUER, SUBJECT),
+            "bob": (ISSUER, OTHER_SUBJECT),
+        }
+
+    def list_rooms(self, **kwargs: Any) -> dict[str, Any]:
+        return {"count": 0, "total": 0, "rooms": []}
 
     def create_room(self, **kwargs: Any) -> dict[str, Any]:
         self.created_rooms.append(kwargs["name"])
         return {"id": str(ROOM_ID)}
 
+    def room_access(self, **kwargs: Any) -> dict[str, Any] | None:
+        return {"id": str(ROOM_ID), "visibility": "public"}
+
+    def add_room_member(self, **kwargs: Any) -> dict[str, Any]:
+        return {"room_id": str(kwargs["room_id"]), "member_user_id": "m", "added": True}
+
+    def list_messages(self, **kwargs: Any) -> dict[str, Any]:
+        return {"count": 0, "total": 0, "messages": []}
+
+    def issue_ws_ticket(self, **kwargs: Any) -> dict[str, Any]:
+        return {"room_id": str(kwargs["room_id"]), "ticket": "t", "expires_at": "soon"}
+
+    def claim_ws_ticket(self, **kwargs: Any) -> dict[str, Any] | None:
+        identity = self.ticket_identities.get(kwargs["ticket"])
+        if identity is None:
+            return None
+        return {"issuer": identity[0], "subject": identity[1]}
+
+    def fetch_message_for_fanout(self, **kwargs: Any) -> dict[str, Any] | None:
+        return None
+
     def create_message(self, **kwargs: Any) -> dict[str, Any]:
         self.created_messages.append(
             (kwargs["room_id"], kwargs["issuer"], kwargs["subject"], kwargs["body"])
         )
+        # Unique id per created message so delivery dedup stays per-message.
+        unique_id = UUID(f"00000000-0000-0000-0000-{len(self.created_messages):012d}")
         return {
-            "id": str(MESSAGE_ID),
+            "id": str(unique_id),
             "room_id": str(kwargs["room_id"]),
             "author_user_id": None,
             "body": kwargs["body"],
@@ -113,15 +149,17 @@ def _install(
         client.app.dependency_overrides[get_community_chat_service] = lambda: chat
 
 
-def _ws_url(token: str = "valid") -> str:
-    return f"/api/v1/community/chat/rooms/{ROOM_ID}/ws?token={token}"
+def _ws_url(ticket: str = "valid") -> str:
+    return f"/api/v1/community/chat/rooms/{ROOM_ID}/ws?ticket={ticket}"
 
 
-def _authorize_ws(monkeypatch: pytest.MonkeyPatch, identities: dict[str, tuple[str, str]]) -> None:
-    monkeypatch.setattr(
-        "apps.api.app.routers.community_chat._identity_from_token",
-        lambda token, settings: identities[token],
-    )
+@pytest.fixture(autouse=True)
+def _reset_chat_delivery_state() -> None:
+    manager._rooms.clear()
+    manager.reset_delivery_dedup_for_tests()
+    yield
+    manager._rooms.clear()
+    manager.reset_delivery_dedup_for_tests()
 
 
 # ---------------------------------------------------------------------------
@@ -383,8 +421,6 @@ def test_clients_are_isolated_from_each_others_windows(client, api_key, monkeypa
 
 
 def test_documented_limits_are_explicit_and_bounded() -> None:
-    from apps.api.app.routers.community_chat import CHAT_MESSAGE_LIMIT_PER_MINUTE
-
     documented = {
         "community-post-create": POST_CREATE_LIMIT_PER_MINUTE,
         "community-comment-create": COMMENT_CREATE_LIMIT_PER_MINUTE,
@@ -393,6 +429,9 @@ def test_documented_limits_are_explicit_and_bounded() -> None:
         "community-report-create": REPORT_CREATE_LIMIT_PER_MINUTE,
         "community-chat-room-create": ROOM_CREATE_LIMIT_PER_MINUTE,
         "community-chat-message": CHAT_MESSAGE_LIMIT_PER_MINUTE,
+        "community-chat-message-rest": CHAT_MESSAGE_REST_LIMIT_PER_MINUTE,
+        "community-chat-ws-ticket": WS_TICKET_LIMIT_PER_MINUTE,
+        "community-chat-member-add": MEMBER_ADD_LIMIT_PER_MINUTE,
     }
     assert documented == {
         "community-post-create": 10,
@@ -402,6 +441,9 @@ def test_documented_limits_are_explicit_and_bounded() -> None:
         "community-report-create": 5,
         "community-chat-room-create": 5,
         "community-chat-message": 30,
+        "community-chat-message-rest": 30,
+        "community-chat-ws-ticket": 30,
+        "community-chat-member-add": 20,
     }
     assert all(0 < limit <= 120 for limit in documented.values())
 
@@ -496,7 +538,6 @@ def test_ws_rejects_invalid_frames_without_persistence_or_broadcast(
 ) -> None:
     service = CountingChatService()
     _install(client, chat=service)
-    _authorize_ws(monkeypatch, {"valid": (ISSUER, SUBJECT)})
     broadcasts: list[dict] = []
 
     async def spy_broadcast(**kwargs):
@@ -518,7 +559,6 @@ def test_ws_rejects_invalid_frames_without_persistence_or_broadcast(
 def test_ws_persists_valid_boundary_bodies_exactly(client, api_key, monkeypatch, body) -> None:
     service = CountingChatService()
     _install(client, chat=service)
-    _authorize_ws(monkeypatch, {"valid": (ISSUER, SUBJECT)})
 
     with client.websocket_connect(_ws_url()) as ws:
         ws.send_text(json.dumps({"body": body}))
@@ -536,7 +576,6 @@ def test_ws_rate_limit_sends_one_bounded_error_frame_and_stays_open(
     monkeypatch.setattr(chat_router, "CHAT_MESSAGE_LIMIT_PER_MINUTE", 2)
     service = CountingChatService()
     _install(client, chat=service)
-    _authorize_ws(monkeypatch, {"valid": (ISSUER, SUBJECT)})
     broadcasts: list[dict] = []
     real_broadcast = manager.broadcast
 
@@ -581,13 +620,6 @@ def test_ws_rate_limit_actors_are_isolated(client, api_key, monkeypatch) -> None
     monkeypatch.setattr(chat_router, "CHAT_MESSAGE_LIMIT_PER_MINUTE", 1)
     service = CountingChatService()
     _install(client, chat=service)
-    _authorize_ws(
-        monkeypatch,
-        {
-            "alice": (ISSUER, SUBJECT),
-            "bob": (ISSUER, OTHER_SUBJECT),
-        },
-    )
 
     with client.websocket_connect(_ws_url("alice")) as alice:
         alice.send_text(json.dumps({"body": "alice-1"}))
@@ -611,14 +643,15 @@ def test_ws_failed_handshake_does_not_consume_message_window(client, api_key, mo
     chat_router = pytest.importorskip("apps.api.app.routers.community_chat")
     monkeypatch.setattr(chat_router, "CHAT_MESSAGE_LIMIT_PER_MINUTE", 1)
 
+    # No service installed: the ticket store is unavailable, so the handshake
+    # is rejected with 1013 (retry later) before any message window use.
     with pytest.raises(WebSocketDisconnect) as rejected:
         with client.websocket_connect(_ws_url()):
             pass  # pragma: no cover - handshake must fail first
-    assert rejected.value.code == 1008
+    assert rejected.value.code == 1013
 
     service = CountingChatService()
     _install(client, chat=service)
-    _authorize_ws(monkeypatch, {"valid": (ISSUER, SUBJECT)})
     with client.websocket_connect(_ws_url()) as ws:
         ws.send_text(json.dumps({"body": "hello"}))
         assert ws.receive_json()["type"] == "message"
@@ -642,6 +675,9 @@ def test_openapi_documents_429_on_community_write_mutations(client) -> None:
         "/api/v1/community/posts/{post_id}/reports",
         "/api/v1/community/follows",
         "/api/v1/community/chat/rooms",
+        "/api/v1/community/chat/rooms/{room_id}/messages",
+        "/api/v1/community/chat/rooms/{room_id}/ws-ticket",
+        "/api/v1/community/chat/rooms/{room_id}/members",
     ):
         response = paths[path]["post"]["responses"]["429"]
         assert response["description"] == "The community write rate limit was exceeded."

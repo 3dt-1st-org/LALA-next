@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Header, Query, Request
 
 from apps.api.app.core.auth import (
     RequestIdentity,
@@ -18,6 +18,7 @@ from apps.api.app.schemas.community import (
     CommunityPostCreate,
     CommunityReportCreate,
 )
+from apps.api.app.services.community_idempotency import validate_idempotency_key
 from apps.api.app.services.community_service import CommunityService, get_community_service
 
 router = APIRouter(
@@ -86,7 +87,16 @@ def create_post(
     body: CommunityPostCreate,
     identity: Annotated[RequestIdentity, Depends(require_oauth_identity)],
     service: Annotated[CommunityService, Depends(get_community_service)],
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> dict:
+    """Create a post; durable-idempotent when ``Idempotency-Key`` is present.
+
+    The key is scoped to the verified actor and this endpoint; the same key
+    with the same canonical payload replays the stored response (across
+    restarts), a different payload with the same key is a deterministic 409.
+    """
+
+    key = validate_idempotency_key(idempotency_key)
     enforce_community_write_rate_limit(
         request,
         route_key="community-post-create",
@@ -99,6 +109,7 @@ def create_post(
         title=body.title,
         body=body.body,
         tags=body.tags or [],
+        idempotency_key=key,
     )
     return success_envelope(request=request, data=payload, meta={"source": "db"})
 
