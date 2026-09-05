@@ -118,14 +118,20 @@ class _LalaMapWebFrameState extends State<_LalaMapWebFrame> {
     super.didUpdateWidget(oldWidget);
     _frame.style.pointerEvents = widget.interactionEnabled ? 'auto' : 'none';
     _frame.setAttribute('title', _mapTitle(widget.provider, widget.language));
-    // Only the NAVER embed is identity-bound to its client id and SDK
-    // language; the open-vector embed swaps locale via config only.
-    final reloadIdentity = widget.provider == LalaMapProviderKind.naver &&
-        (oldWidget.clientId != widget.clientId ||
-            oldWidget.language != widget.language);
-    if (reloadIdentity) {
+    // Provider swaps must point the iframe at the other embed document; the
+    // onLoad listener delivers config once it is live. Same-provider updates
+    // keep the document (no camera reset) and post config only.
+    final transition = resolveLalaMapDocumentTransition(
+      oldProvider: oldWidget.provider,
+      newProvider: widget.provider,
+      clientIdChanged: oldWidget.clientId != widget.clientId,
+      languageChanged: oldWidget.language != widget.language,
+    );
+    if (transition != LalaMapDocumentTransition.keepDocument) {
       _reloadFrame();
-    } else if (oldWidget.centerLat != widget.centerLat ||
+      return;
+    }
+    if (oldWidget.centerLat != widget.centerLat ||
         oldWidget.centerLng != widget.centerLng ||
         oldWidget.level != widget.level ||
         oldWidget.language != widget.language ||

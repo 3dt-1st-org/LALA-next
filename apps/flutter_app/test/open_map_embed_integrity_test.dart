@@ -99,6 +99,15 @@ void main() {
       expect(template, contains('ne_lng'));
       expect(template, contains('zoomToAppLevel'));
     });
+
+    test('honest loading/error notices for every visitor locale', () {
+      // First setConfig shows a loading notice; style failures fall back to
+      // the unavailable notice with a mapError event (never silent blank).
+      expect(template, contains('Loading the open map...'));
+      expect(template, contains('STYLE_TIMEOUT_MS'));
+      expect(template, contains('onStyleTimeout'));
+      expect(template, contains('showNotice("unavailable")'));
+    });
   });
 
   group('assembled open-map-embed.html (bundled asset)', () {

@@ -138,6 +138,25 @@ class _LalaMapNativeWebViewState extends State<_LalaMapNativeWebView> {
   @override
   void didUpdateWidget(covariant _LalaMapNativeWebView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // Provider swaps must load the other embed document; config delivery
+    // happens in onPageFinished once that document is live. Same-provider
+    // updates keep the document (no camera reset) and push config only.
+    final transition = resolveLalaMapDocumentTransition(
+      oldProvider: oldWidget.provider,
+      newProvider: widget.provider,
+      clientIdChanged: oldWidget.clientId != widget.clientId,
+      languageChanged: oldWidget.language != widget.language,
+    );
+    switch (transition) {
+      case LalaMapDocumentTransition.swapToOpenVectorEmbed:
+        unawaited(_controller.loadFlutterAsset(kLalaOpenMapEmbedAssetPath));
+        return;
+      case LalaMapDocumentTransition.swapToNaverEmbed:
+        unawaited(_controller.loadRequest(_nextNaverMapUri()));
+        return;
+      case LalaMapDocumentTransition.keepDocument:
+        break;
+    }
     if (oldWidget.clientId != widget.clientId ||
         oldWidget.language != widget.language ||
         oldWidget.centerLat != widget.centerLat ||
@@ -145,17 +164,7 @@ class _LalaMapNativeWebViewState extends State<_LalaMapNativeWebView> {
         oldWidget.level != widget.level ||
         oldWidget.interactionEnabled != widget.interactionEnabled ||
         !sameLalaMapPlaces(oldWidget.places, widget.places)) {
-      // Only the NAVER embed is identity-bound to its client id and SDK
-      // language; the open-vector embed swaps locale via config only and is
-      // bundled, so a branch build needs no main deployment to render.
-      final reloadIdentity = widget.provider == LalaMapProviderKind.naver &&
-          (oldWidget.clientId != widget.clientId ||
-              oldWidget.language != widget.language);
-      if (reloadIdentity) {
-        _controller.loadRequest(_nextNaverMapUri());
-      } else {
-        unawaited(_pushConfig());
-      }
+      unawaited(_pushConfig());
     }
   }
 
@@ -226,23 +235,25 @@ class _LalaMapNativeWebViewState extends State<_LalaMapNativeWebView> {
     } on FormatException {
       decoded = null;
     }
-    final expectedSource = widget.provider == LalaMapProviderKind.openVector
-        ? kLalaOpenMapBridgeSource
-        : 'lala-naver-map';
-    if (decoded is Map<String, dynamic> &&
-        decoded['source'] == expectedSource &&
-        decoded['bridgeId'] == _bridgeId) {
-      final camera = decodeLalaMapCameraIdlePayload(decoded);
-      if (camera != null) {
-        widget.onCameraIdle?.call(camera);
-        return;
-      }
-      final placeId = decoded['placeId']?.toString().trim();
-      if (decoded['type'] == 'placeTap' &&
-          placeId != null &&
-          placeId.isNotEmpty) {
-        widget.onPlaceTap?.call(placeId);
-      }
+    final decodedMessage = decoded is Map<String, dynamic> ? decoded : null;
+    if (!isLalaMapEmbedMessageAccepted(
+      provider: widget.provider,
+      bridgeId: _bridgeId,
+      message: decodedMessage,
+    )) {
+      return;
+    }
+    final message = decodedMessage!;
+    final camera = decodeLalaMapCameraIdlePayload(message);
+    if (camera != null) {
+      widget.onCameraIdle?.call(camera);
+      return;
+    }
+    final placeId = message['placeId']?.toString().trim();
+    if (message['type'] == 'placeTap' &&
+        placeId != null &&
+        placeId.isNotEmpty) {
+      widget.onPlaceTap?.call(placeId);
     }
   }
 }
