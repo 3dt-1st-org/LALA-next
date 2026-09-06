@@ -2097,3 +2097,193 @@ def test_p5cc_new_apply_result_carries_qualified_marker(monkeypatch, capsys, tmp
     assert rc == 0
     payload = _out(capsys)
     assert payload["scope_contract"] == "tour_api_province_qualified_v1"
+
+
+# == P5C compatibility: genuine historical snapshot shapes + nonfatal failures ==
+
+
+def _literal_old_entry(region, **overrides):
+    """LITERAL 1aeb6249-era entry shape — no qualified_scope, no top-level marker.
+
+    Built by hand (NOT via _entry, which injects the new field) so the fixture
+    cannot accidentally relabel historical files.
+    """
+    from datetime import UTC as _UTC
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
+
+    entry = {
+        "region": region,
+        "next_after_place_id": None,
+        "input_after_place_id": None,
+        "exhausted": False,
+        "whole_region_complete": False,
+        "empty_scope": None,
+        "stop_reason": None,
+        "blocked": None,
+        "requests_used": 4,
+        "observation_time": (_dt.now(_UTC) - _td(hours=1)).isoformat(),
+    }
+    entry.update(overrides)
+    return entry
+
+
+def _write_raw_snapshot(path, entries, *, scope_contract=None):
+    import json as _json
+
+    document = {
+        "schema_version": 1,
+        "source": "naver_review_collect_apply_payloads",
+        "entries": entries,
+    }
+    if scope_contract is not None:
+        document["scope_contract"] = scope_contract
+    path.write_text(_json.dumps(document))
+
+
+def test_literal_old_fresh_entry_becomes_conservative_due(monkeypatch, capsys, tmp_path):
+    _no_io_wiring(monkeypatch)
+    snap = tmp_path / "old.json"
+    _write_raw_snapshot(
+        snap,
+        [
+            _literal_old_entry(
+                "busan-haeundae",
+                exhausted=True,
+                whole_region_complete=True,
+                input_after_place_id=None,
+            )
+        ],
+    )
+    rc = tool.main(
+        ["--schedule", "--json", "--checkpoint-snapshot", str(snap), "--regions", "busan-haeundae"]
+    )
+    assert rc == 0
+    payload = _out(capsys)
+    # Old fresh completion is NOT trusted under the qualified predicate.
+    assert payload["region_states"]["busan-haeundae"] == "DUE"
+    planned = {p["region"]: p for p in payload["planned_arguments"]}
+    assert planned["busan-haeundae"]["after_place_id"] is None
+
+
+def test_literal_old_partial_cursor_does_not_transfer(monkeypatch, capsys, tmp_path):
+    _no_io_wiring(monkeypatch)
+    snap = tmp_path / "old.json"
+    _write_raw_snapshot(snap, [_literal_old_entry("seoul-seongdong", next_after_place_id="p5")])
+    rc = tool.main(
+        ["--schedule", "--json", "--checkpoint-snapshot", str(snap), "--regions", "seoul-seongdong"]
+    )
+    assert rc == 0
+    payload = _out(capsys)
+    assert payload["region_states"]["seoul-seongdong"] == "DUE"
+    planned = {p["region"]: p for p in payload["planned_arguments"]}
+    assert planned["seoul-seongdong"]["after_place_id"] is None
+
+
+def test_literal_old_blocked_entry_stops_other_regions(monkeypatch, capsys, tmp_path):
+    _no_io_wiring(monkeypatch)
+    snap = tmp_path / "old.json"
+    _write_raw_snapshot(
+        snap,
+        [
+            _literal_old_entry(
+                "daegu-jung",
+                blocked="auth_quota",
+                stop_reason="fatal_provider_failure",
+            )
+        ],
+    )
+    rc = tool.main(
+        [
+            "--schedule",
+            "--json",
+            "--checkpoint-snapshot",
+            str(snap),
+            "--regions",
+            "seoul-seongdong,incheon-yeonsu",
+        ]
+    )
+    assert rc == 0
+    payload = _out(capsys)
+    assert payload["auth_quota_blocked"] is True
+    assert payload["planned_argv"] == []
+    assert payload["planned_arguments"] == []
+
+
+def test_interim_marker_without_bool_is_conservatively_unqualified(monkeypatch, capsys, tmp_path):
+    # Interim 13920092 shape: top-level scope_contract present, entries lack
+    # the qualified_scope bool — conservatively unqualified, no credit.
+    _no_io_wiring(monkeypatch)
+    snap = tmp_path / "interim.json"
+    _write_raw_snapshot(
+        snap,
+        [_literal_old_entry("busan-haeundae", exhausted=True, whole_region_complete=True)],
+        scope_contract="tour_api_province_qualified_v1",
+    )
+    rc = tool.main(
+        ["--schedule", "--json", "--checkpoint-snapshot", str(snap), "--regions", "busan-haeundae"]
+    )
+    assert rc == 0
+    payload = _out(capsys)
+    assert payload["region_states"]["busan-haeundae"] == "DUE"
+
+
+def test_committed_nonfatal_failed_result_is_observation_without_freshness(
+    monkeypatch, capsys, tmp_path
+):
+    import json as _json
+    from datetime import UTC as _UTC
+    from datetime import datetime as _dt
+
+    _no_io_wiring(monkeypatch)
+    frozen = _dt(2026, 9, 6, 12, 0, tzinfo=_UTC)
+    monkeypatch.setattr(tool, "_now_utc", lambda: frozen)
+    # Internally consistent committed NONFATAL failed run: every provider
+    # network-failed (status failed / ok False), nothing settled.
+    result = _apply_result(
+        ok=False,
+        status="failed",
+        exhausted=False,
+        places=2,
+        places_attempted=2,
+        places_completed=0,
+        places_deferred=0,
+        stop_reason="fatal_provider_failure",
+        next_after_place_id="p0",
+        after_place_id="p0",
+        failure_tally={
+            "naver_blog": {"network_error": 1},
+            "naver_cafe": {"network_error": 1},
+        },
+    )
+    result_file = tmp_path / "r.json"
+    result_file.write_text(_json.dumps(result))
+    rc = tool.main(["--export-checkpoint", "--json", "--from-collector-result", str(result_file)])
+    assert rc == 0
+    snapshot_doc = _json.loads(capsys.readouterr().out)
+    entry = snapshot_doc["entries"][0]
+    assert entry["qualified_scope"] is True  # new predicate provenance kept
+    assert entry["whole_region_complete"] is False
+    assert entry["blocked"] is None
+    assert entry["next_after_place_id"] == "p0" == entry["input_after_place_id"]
+
+    snapshot_doc["entries"][0] = entry
+    snap = tmp_path / "cp.json"
+    snap.write_text(_json.dumps(snapshot_doc))
+    rc = tool.main(
+        [
+            "--schedule",
+            "--json",
+            "--checkpoint-snapshot",
+            str(snap),
+            "--regions",
+            "busan-haeundae,seoul-seongdong",
+        ]
+    )
+    assert rc == 0
+    payload = _out(capsys)
+    # Not a global block (nonfatal) — but also never fresh: the region stays
+    # an honest retry candidate and OTHER regions still get planned argv.
+    assert payload["auth_quota_blocked"] is False
+    assert payload["region_states"]["busan-haeundae"] == "RESUME_PARTIAL"
+    assert any(p["region"] == "seoul-seongdong" for p in payload["planned_arguments"])

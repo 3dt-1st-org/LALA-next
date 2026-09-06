@@ -103,6 +103,11 @@ STATUS_BLOCKED_SCOPE = "BLOCKED_SCOPE"
 # retained for coverage accounting of the alias overlap.
 _SCOPE_COLLISIONS: dict[str, tuple[str, ...]] | None = None
 
+# Historical 1aeb6249-era entries lack qualified_scope entirely; a missing
+# qualifier is conservatively UNQUALIFIED (never defaulted to True). The
+# interim 13920092 shape (top-level scope_contract present, entries without
+# the bool) lands in the same conservative bucket via this rule.
+_ENTRY_KEYS_OPTIONAL = frozenset({"qualified_scope"})
 _ENTRY_KEYS = frozenset(
     {
         "region",
@@ -115,7 +120,6 @@ _ENTRY_KEYS = frozenset(
         "blocked",
         "requests_used",
         "observation_time",
-        "qualified_scope",
     }
 )
 
@@ -133,8 +137,9 @@ def region_alias_collisions() -> dict[str, tuple[str, ...]]:
     """Canonical regions whose alias names collide with another region's.
 
     Offline deterministic catalog computation: {region_id: (colliding ids)}.
-    A region in this map cannot be safely planned with the collector's
-    current region_name_ko = ANY(...) predicate.
+    Since P5C the collector's region predicate is province-qualified in the
+    proven TourAPI areacode namespace, so these regions ARE safely plannable;
+    the mapping is retained for coverage accounting of the alias overlap.
     """
     global _SCOPE_COLLISIONS
     if _SCOPE_COLLISIONS is None:
@@ -230,8 +235,10 @@ def build_region_checkpoint(payload: Mapping) -> dict:
     place identity, nonnegative tally values, and a timezone-aware
     ``observation_time`` emitted by the collector itself (never the export
     clock). Successful runs (succeeded/degraded) bridge as observations;
-    FAILED runs are accepted ONLY when they carry an auth/quota stop signal,
-    exporting as BLOCKED with unchanged cursor and no completion credit.
+    committed FAILED runs of BOTH kinds bridge as observations with an
+    unchanged cursor and no completion credit — auth/quota failures export as
+    BLOCKED (the account-wide stop), nonfatal failures stay honest retry
+    candidates, and no failure is ever fresh.
     Whole-region freshness additionally requires status ``succeeded`` with
     every selected place settled and a clean sweep — degraded/quarantined or
     partially-settled results never certify recency. Preview / failed-before-
@@ -308,14 +315,11 @@ def build_region_checkpoint(payload: Mapping) -> dict:
     next_cursor = _validate_cursor(payload.get("next_after_place_id"), "result cursor")
     input_cursor = _validate_cursor(payload.get("after_place_id"), "result input cursor")
     if failed_run:
-        if blocked != "auth_quota":
-            # A committed run that failed WITHOUT an account-level auth/quota
-            # signal is not an actionable observation: rejected (and never
-            # certified fresh).
-            raise CheckpointSnapshotError(
-                "failed result carries no auth/quota stop signal to preserve"
-            )
-        # Preserve the stop with an UNCHANGED cursor and zero completion credit.
+        # Controller decision (P5C compatibility): BOTH committed failure kinds
+        # are observations — nonfatal failures are recorded WITHOUT freshness
+        # or whole-completion credit and with an UNCHANGED cursor; auth/quota
+        # failures additionally carry the account-wide stop. No failure is ever
+        # fresh, and only auth/quota blocks globally.
         next_cursor = input_cursor
     if not qualified_scope:
         # Legacy alias-only result exported by a NEW binary is never upgraded:
@@ -411,7 +415,7 @@ def load_checkpoint_snapshot(path: Path) -> dict[str, dict]:
             entry_keys = set(entry)
         except TypeError as exc:
             raise CheckpointSnapshotError("checkpoint entry has unexpected fields") from exc
-        if entry_keys != _ENTRY_KEYS:
+        if entry_keys not in (_ENTRY_KEYS, _ENTRY_KEYS | _ENTRY_KEYS_OPTIONAL):
             raise CheckpointSnapshotError("checkpoint entry has unexpected fields")
         region = entry["region"]
         if (
@@ -427,7 +431,11 @@ def load_checkpoint_snapshot(path: Path) -> dict[str, dict]:
         whole_complete = _strict_bool(
             entry["whole_region_complete"], "checkpoint whole_region_complete"
         )
-        qualified_scope = _strict_bool(entry["qualified_scope"], "checkpoint qualified_scope")
+        qualified_scope = (
+            _strict_bool(entry["qualified_scope"], "checkpoint qualified_scope")
+            if "qualified_scope" in entry
+            else False
+        )
         requests_used = entry["requests_used"]
         if type(requests_used) is not int or not 0 <= requests_used <= _REQUESTS_USED_MAX:
             raise CheckpointSnapshotError("checkpoint requests_used is malformed")
@@ -521,8 +529,9 @@ def plan_regional_collection(
     B2: the auth/quota stop inspects ALL loaded evidence, not only the
     requested subset — any valid blocked entry anywhere prevents new
     acquisition argv until an operator reset supplies refreshed evidence.
-    Selection order is deterministic; ambiguous-scope regions are BLOCKED_SCOPE
-    with no argv, retained in coverage accounting; emitted per-region caps sum
+    Selection order is deterministic; alias-colliding regions are qualified
+    and counted under the province-qualified predicate (unknown/non-canonical
+    --regions ids fail closed earlier); emitted per-region caps sum
     within the TOTAL ceiling honoring reserve-two; regions that no longer fit
     are DEFERRED.
     """
