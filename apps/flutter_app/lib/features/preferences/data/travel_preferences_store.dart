@@ -423,36 +423,48 @@ class TravelPreferencesStore extends ChangeNotifier {
     final epoch = ++_syncEpoch;
     _clearGeneration += 1;
     _localWriteGeneration += 1;
-    final preferences = await _preferencesFactory();
-    final cleared = await _serialize<bool>(() async {
-      // A remove that acknowledges failure (`false`, no throw) must not claim
-      // deletion: the device copy and its pairing stay untouched.
-      if (!await preferences.remove(kTravelPreferencesStorageKey)) {
-        return false;
-      }
-      if (!await preferences.remove(kTravelPreferencesUpdatedAtKey)) {
-        return false;
-      }
-      _value = const TravelPreferences();
-      _deviceUpdatedAt = null;
-      _loaded = true;
-      _hasLocalDocument = false;
-      _localDocumentUserOwned = false;
-      // The device copy is gone but the account document (if any) still
-      // exists; report the honest pairing instead of a stale claim.
-      _syncStatus = _statusAfterLocalReset();
-      notifyListeners();
-      return true;
-    });
+    bool cleared = false;
+    Object? failure;
+    try {
+      final preferences = await _preferencesFactory();
+      cleared = await _serialize<bool>(() async {
+        // A remove that acknowledges failure (`false`, no throw) must not
+        // claim deletion: the device copy and its pairing stay untouched.
+        if (!await preferences.remove(kTravelPreferencesStorageKey)) {
+          return false;
+        }
+        if (!await preferences.remove(kTravelPreferencesUpdatedAtKey)) {
+          return false;
+        }
+        _value = const TravelPreferences();
+        _deviceUpdatedAt = null;
+        _loaded = true;
+        _hasLocalDocument = false;
+        _localDocumentUserOwned = false;
+        // The device copy is gone but the account document (if any) still
+        // exists; report the honest pairing instead of a stale claim.
+        _syncStatus = _statusAfterLocalReset();
+        notifyListeners();
+        return true;
+      });
+    } on Object catch (error) {
+      // Thrown removes and acquisition failures bypass the `!cleared` path;
+      // every failure mode shares the same recovery below.
+      failure = error;
+    }
     if (!cleared) {
       // The epoch bump above fenced any in-flight account work; a `checking`
       // status stranded by that canceled operation must be repaired before
       // surfacing the failure. Only this clear's still-current epoch may do
-      // it, so an older failed clear never overwrites a newer account scope.
+      // it, so an older failed clear never overwrites a newer account
+      // scope's live checking.
       if (epoch == _syncEpoch &&
           _syncStatus == TravelPreferencesSyncStatus.checking) {
         _syncStatus = _statusAfterLocalReset();
         notifyListeners();
+      }
+      if (failure != null) {
+        throw failure;
       }
       throw const TravelPreferencesPersistenceException(
         'the travel preferences document was not deleted from storage',
