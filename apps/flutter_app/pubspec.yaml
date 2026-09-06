@@ -43,6 +43,9 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^6.0.0
   xml: ^6.6.1
+  # Tests gate the real SharedPreferencesStorePlatform seam; declared so the
+  # direct test import satisfies depend_on_referenced_packages.
+  shared_preferences_platform_interface: ^2.4.2
 
 flutter:
   uses-material-design: true
