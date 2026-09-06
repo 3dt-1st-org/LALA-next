@@ -1,5 +1,7 @@
 // ONMU P3c: ChatWsClient 프레임 파싱 + 수명주기 단위 테스트.
 // 실제 소켓 연결 없이 parseFrame 정적 헬퍼와 공개 스트림 수명주기를 검증한다.
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lala_next_flutter_client_reference/lala_api_client.dart';
 import 'package:lala_next_app/features/community/presentation/chat_ws_client.dart';
@@ -59,6 +61,23 @@ void main() {
     });
   });
 
+  group('ChatWsClient.encodeSendFrame', () {
+    test('matches the strict server schema without extra fields', () {
+      final frame = ChatWsClient.encodeSendFrame('안녕');
+      expect(frame, '{"body":"안녕"}');
+      // ``type`` 등 추가 필드는 서버 extra=forbid 로 거부된다.
+      expect(frame.contains('type'), isFalse);
+    });
+
+    test('carries the idempotency key when provided', () {
+      final frame = ChatWsClient.encodeSendFrame(
+        'hello',
+        idempotencyKey: 'retry-9',
+      );
+      expect(frame, '{"body":"hello","idempotency_key":"retry-9"}');
+    });
+  });
+
   group('ChatWsClient lifecycle', () {
     test(
       'starts disconnected and disconnect is a safe no-op before connect',
@@ -84,6 +103,56 @@ void main() {
       await sub.cancel();
       await client.dispose();
       expect(statuses, isEmpty);
+    });
+
+    testWidgets('provider failure does not auto-retry', (tester) async {
+      final client = ChatWsClient(reconnectDelays: const [Duration(seconds: 1)]);
+      final requested = <int>[];
+      Future<Uri> provider() async {
+        requested.add(requested.length + 1);
+        throw StateError('ticket unavailable');
+      }
+
+      unawaited(client.connect(provider));
+      await tester.pump(const Duration(milliseconds: 10));
+      expect(requested, [1]);
+      expect(client.currentStatus, ChatWsStatus.error);
+
+      // 호출측 정책이 재시도를 결정한다: 타이머로 재시도하지 않는다.
+      await tester.pump(const Duration(seconds: 10));
+      expect(requested, [1]);
+      await client.dispose();
+    });
+
+    testWidgets('socket termination refetches a fresh URI per attempt', (
+      tester,
+    ) async {
+      final client = ChatWsClient(reconnectDelays: const [Duration(seconds: 1)]);
+      final attempts = <int>[];
+      Future<Uri> provider() async {
+        attempts.add(attempts.length + 1);
+        return Uri.parse('ws://127.0.0.1:1/room/ws?ticket=t${attempts.length}');
+      }
+
+      unawaited(client.connect(provider));
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(attempts, [1]);
+
+      // 연결 종료(서버/네트워크) 시뮬레이션 → 자동 재연결 예약.
+      client.debugHandleTermination('done');
+      expect(client.currentStatus, ChatWsStatus.error);
+
+      // 첫 재시도(1초 후)에서 공급자를 다시 호출한다 = 새 티켓 발급.
+      await tester.pump(const Duration(seconds: 2));
+      expect(attempts.length, greaterThanOrEqualTo(2));
+
+      client.debugHandleTermination('done');
+      await client.disconnect();
+      await tester.pump(const Duration(seconds: 5));
+      final count = attempts.length;
+      await tester.pump(const Duration(seconds: 5));
+      expect(attempts.length, count);
+      await client.dispose();
     });
   });
 }

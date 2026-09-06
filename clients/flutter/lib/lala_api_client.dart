@@ -1112,16 +1112,21 @@ class LalaApiClient {
     );
   }
 
-  /// ONMU P3c: 채팅방 생성(OAuth). 본문은 단순 JSON 맵(name).
+  /// ONMU P3c/P7: 채팅방 생성(OAuth). [visibility] 는 'public'(기본) 또는 'private'.
   Future<LalaEnvelope<ChatRoom>> createChatRoom({
     required String name,
+    String? visibility,
     String? requestId,
     Duration? timeout,
   }) async {
+    final resolved = visibility?.trim();
     final resp = await _request(
       'POST',
       '/api/v1/community/chat/rooms',
-      body: <String, dynamic>{'name': name},
+      body: <String, dynamic>{
+        'name': name,
+        if (resolved != null && resolved.isNotEmpty) 'visibility': resolved,
+      },
       requestId: requestId,
       timeout: timeout ?? readTimeout,
       contentType: 'application/json',
@@ -1153,27 +1158,58 @@ class LalaApiClient {
     );
   }
 
-  /// ONMU P3c: 채팅 WebSocket 핸드셰이크에 사용할 bearer 토큰을 해석.
-  /// 동적 access token provider 가 있으면 이를, 아니면 static bearerToken 을 반환.
-  /// 빈 문자열이면 연결할 수 없다(호출측에서 가드).
-  Future<String> resolveWebSocketToken() async {
-    if (accessTokenProvider != null) {
-      try {
-        final provided = (await accessTokenProvider!())?.trim();
-        if (provided != null && provided.isNotEmpty) {
-          return provided;
-        }
-      } catch (_) {
-        // 폴백으로 static bearer 시도.
-      }
-    }
-    final static = bearerToken?.trim();
-    return static ?? '';
+  /// P7: 채팅 WebSocket 핸드셰이크용 일회용 티켓 발급(OAuth).
+  /// Bearer 토큰을 URL 에 노출하지 않는다: 이 응답의 ticket 은 단 한 번
+  /// 핸드셰이크에 사용되고 60 초 후 만료된다.
+  Future<LalaEnvelope<ChatWsTicket>> createChatWsTicket({
+    required String roomId,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final resp = await _request(
+      'POST',
+      '/api/v1/community/chat/rooms/$roomId/ws-ticket',
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+    );
+    return _envelopeFromResponse<ChatWsTicket>(
+      resp,
+      parseData: ChatWsTicket.fromJsonObject,
+    );
   }
 
-  /// ONMU P3c: 채팅방 WebSocket URI 를 구성(baseUri 의 scheme 을 ws/wss 로 변환).
-  /// [token] 은 query param ?token= 로 전달(브라우저 핸드셰이크는 헤더 미지원).
-  Uri chatWebSocketUri({required String roomId, required String token}) {
+  /// P7: 채팅 메시지 REST 전송(WebSocket 폴백 + 재시도 경로).
+  /// [idempotencyKey] 를 주면 서버가 같은 키+본문 재시도에 동일 응답을
+  /// 재생하므로 중복 메시지가 만들어지지 않는다.
+  Future<LalaEnvelope<ChatMessage>> sendChatMessage({
+    required String roomId,
+    required String body,
+    String? idempotencyKey,
+    String? requestId,
+    Duration? timeout,
+  }) async {
+    final key = idempotencyKey?.trim();
+    final resp = await _request(
+      'POST',
+      '/api/v1/community/chat/rooms/$roomId/messages',
+      body: <String, dynamic>{'body': body},
+      requestId: requestId,
+      timeout: timeout ?? readTimeout,
+      contentType: 'application/json',
+      extraHeaders:
+          key != null && key.isNotEmpty ? {'Idempotency-Key': key} : null,
+    );
+    return _envelopeFromResponse<ChatMessage>(
+      resp,
+      parseData: ChatMessage.fromJsonObject,
+    );
+  }
+
+  /// P7: 채팅방 WebSocket URI 구성(baseUri scheme 을 ws/wss 로 변환).
+  /// [ticket] 읔 createChatWsTicket 으로 발급받은 일회용 티켓만 사용한다
+  /// (브라우저 핸드셰이크는 커스텀 헤더를 지원하지 않고, bearer 를 URL 에
+  /// 싣는 것은 접근 로그 유출 경로가 된다).
+  Uri chatWebSocketUri({required String roomId, required String ticket}) {
     final isSecure = baseUri.scheme == 'https' || baseUri.scheme == 'wss';
     final scheme = isSecure ? 'wss' : 'ws';
     final basePath = baseUri.path.endsWith('/')
@@ -1184,7 +1220,7 @@ class LalaApiClient {
     return baseUri.replace(
       scheme: scheme,
       path: mergedPath,
-      queryParameters: {'token': token},
+      queryParameters: {'ticket': ticket},
     );
   }
 
@@ -1203,6 +1239,7 @@ class LalaApiClient {
     ResponseType responseType = ResponseType.json,
     String accept = 'application/json',
     String? contentType,
+    Map<String, String>? extraHeaders,
   }) async {
     final auth = await _resolveAuth(includeAuth);
     final headers = <String, String>{'Accept': accept};
@@ -1219,6 +1256,7 @@ class LalaApiClient {
     if (reqId != null && reqId.isNotEmpty) {
       headers['X-Request-ID'] = reqId;
     }
+    headers.addAll(extraHeaders ?? const <String, String>{});
 
     final uri = _uri(path, query: query);
     try {
@@ -2721,21 +2759,55 @@ class ChatRoom {
     required this.id,
     required this.name,
     required this.createdAt,
+    this.visibility = 'public',
   });
 
   final String id;
   final String name;
   final String createdAt;
 
+  /// P7: 'public' | 'private'. 이전 서버 응답에는 없으므로 기본값 public.
+  final String visibility;
+
   static ChatRoom fromJsonObject(Object? value) {
     return ChatRoom.fromJson(_asMap(value));
   }
 
   factory ChatRoom.fromJson(Map<String, dynamic> json) {
+    final rawVisibility = json['visibility'];
     return ChatRoom(
       id: _asString(json['id']),
       name: _asString(json['name']),
       createdAt: _asString(json['created_at']),
+      visibility: rawVisibility is String && rawVisibility.isNotEmpty
+          ? rawVisibility
+          : 'public',
+    );
+  }
+}
+
+/// P7: 일회용 WebSocket 핸드셰이크 티켓. 발급 응답에만 원문이 존재하고
+/// 서버 저장값은 sha256 다이제스트뿐이다.
+class ChatWsTicket {
+  const ChatWsTicket({
+    required this.roomId,
+    required this.ticket,
+    required this.expiresAt,
+  });
+
+  final String roomId;
+  final String ticket;
+  final String expiresAt;
+
+  static ChatWsTicket fromJsonObject(Object? value) {
+    return ChatWsTicket.fromJson(_asMap(value));
+  }
+
+  factory ChatWsTicket.fromJson(Map<String, dynamic> json) {
+    return ChatWsTicket(
+      roomId: _asString(json['room_id']),
+      ticket: _asString(json['ticket']),
+      expiresAt: _asString(json['expires_at']),
     );
   }
 }

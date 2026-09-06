@@ -30,6 +30,9 @@ COMMUNITY_MUTATION_PATHS = frozenset(
         "/api/v1/community/posts/{post_id}/reports",
         "/api/v1/community/follows",
         "/api/v1/community/chat/rooms",
+        "/api/v1/community/chat/rooms/{room_id}/messages",
+        "/api/v1/community/chat/rooms/{room_id}/ws-ticket",
+        "/api/v1/community/chat/rooms/{room_id}/members",
     }
 )
 

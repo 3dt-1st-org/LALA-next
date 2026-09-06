@@ -27,6 +27,7 @@ EXPECTED_CANONICAL_MIGRATION_ORDER = (
     "065_user_travel_preferences.sql",
     "066_trip_library_and_visit_feedback.sql",
     "067_community_post_reports.sql",
+    "068_community_chat_durable_controls.sql",
 )
 
 
@@ -64,7 +65,7 @@ def test_load_canonical_sql_plan_is_safe_and_ordered():
     assert plan.ok is True
     assert tuple(item.name for item in plan.files) == EXPECTED_CANONICAL_MIGRATION_ORDER
     assert canonical_sql.CANONICAL_MIGRATION_ORDER == EXPECTED_CANONICAL_MIGRATION_ORDER
-    assert canonical_sql.CANONICAL_MIGRATION_LATEST == "067_community_post_reports.sql"
+    assert canonical_sql.CANONICAL_MIGRATION_LATEST == "068_community_chat_durable_controls.sql"
     assert plan.to_dict()["statement_count"] >= 10
     assert all(len(item.sha256) == 64 for item in plan.files)
 
@@ -98,7 +99,7 @@ def test_canonical_migration_filename_contract_rejects_duplicate_or_invalid_pref
 
 def test_future_migration_does_not_silently_extend_the_merged_baseline():
     future_names = EXPECTED_CANONICAL_MIGRATION_ORDER + (
-        "068_rag_knowledge_retrieval_metadata.sql",
+        "069_rag_knowledge_retrieval_metadata.sql",
     )
 
     with pytest.raises(ValueError, match="baseline drifted"):
@@ -143,6 +144,46 @@ def test_community_post_reports_migration_is_idempotent_and_governed():
     assert "body text" not in sql.lower()
     assert "note text" not in sql.lower()
     assert "free_text" not in sql.lower()
+
+
+def test_community_chat_durable_controls_migration_is_additive_and_governed():
+    sql = (canonical_sql.CANONICAL_SQL_DIR / "068_community_chat_durable_controls.sql").read_text(
+        encoding="utf-8"
+    )
+
+    # Room visibility defaults to public so pre-existing rooms keep semantics.
+    assert "ADD COLUMN IF NOT EXISTS visibility text NOT NULL DEFAULT 'public'" in sql
+    assert "chat_rooms_visibility_check" in sql
+    assert "'private'" in sql
+    # Private access is explicit: creator ownership plus a membership table.
+    # Creator columns are ON DELETE SET NULL and intentionally carry no
+    # non-null CHECK: account deletion must never be blocked by chat rooms.
+    assert "ADD COLUMN IF NOT EXISTS created_by_issuer text" in sql
+    assert "ADD COLUMN IF NOT EXISTS created_by_subject text" in sql
+    assert "ON DELETE SET NULL" in sql
+    assert "private_creator_check" not in sql
+    assert "CREATE TABLE IF NOT EXISTS community.chat_room_members" in sql
+    assert "role IN ('owner', 'member')" in sql
+    assert "REFERENCES identity.users (issuer, subject)" in sql
+    # Durable idempotency: unique primary key on (scope, actor, key), hashed
+    # payloads, bounded key length, expiry-driven TTL, and account-deletion
+    # participation through the actor FK cascade (no replay copies survive
+    # account deletion).
+    assert "CREATE TABLE IF NOT EXISTS community.idempotency_keys" in sql
+    assert "PRIMARY KEY (scope, actor_issuer, actor_subject, idempotency_key)" in sql
+    assert "fk_idempotency_keys_actor" in sql
+    assert "ON DELETE CASCADE" in sql
+    assert "char_length(request_hash) = 64" in sql
+    assert "char_length(idempotency_key) BETWEEN 1 AND 200" in sql
+    assert "CREATE INDEX IF NOT EXISTS idx_idempotency_keys_expiry" in sql
+    # WebSocket tickets: only sha256 hashes at rest, single-use + expiry.
+    assert "CREATE TABLE IF NOT EXISTS community.chat_ws_tickets" in sql
+    assert "ticket_hash text PRIMARY KEY" in sql
+    assert "char_length(ticket_hash) = 64" in sql
+    assert "used_at timestamptz" in sql
+    assert "DROP TABLE" not in sql.upper()
+    assert "TRUNCATE" not in sql.upper()
+    assert "DELETE FROM" not in sql.upper()
 
 
 def test_custom_fake_runner_plan_reports_duplicate_prefix_without_db_access(tmp_path):

@@ -1733,44 +1733,110 @@ void main() {
     expect(envelope.data?.messages.last.authorUserId, 'user-42');
   });
 
-  test('chatWebSocketUri builds ws/wss URI with token query param', () {
+  test('chatWebSocketUri builds ws/wss URI with single-use ticket param', () {
     final insecure = LalaApiClient(
       baseUri: Uri.parse('http://api.example.test:8080'),
     );
     final wsUri = insecure.chatWebSocketUri(
       roomId: 'room-9',
-      token: 'abc.def.ghi',
+      ticket: 'one-shot-ticket',
     );
     expect(wsUri.scheme, 'ws');
     expect(wsUri.host, 'api.example.test');
     expect(wsUri.port, 8080);
     expect(wsUri.path, '/api/v1/community/chat/rooms/room-9/ws');
-    expect(wsUri.queryParameters['token'], 'abc.def.ghi');
+    expect(wsUri.queryParameters['ticket'], 'one-shot-ticket');
+    // The bearer credential must never ride the URL.
+    expect(wsUri.queryParameters.containsKey('token'), isFalse);
 
     final secure =
         LalaApiClient(baseUri: Uri.parse('https://api.example.test'));
-    final wssUri = secure.chatWebSocketUri(roomId: 'r', token: 't');
+    final wssUri = secure.chatWebSocketUri(roomId: 'r', ticket: 't');
     expect(wssUri.scheme, 'wss');
     expect(wssUri.path, '/api/v1/community/chat/rooms/r/ws');
   });
 
-  test('resolveWebSocketToken prefers provider token then static bearer',
-      () async {
-    final withProvider = LalaApiClient(
+  test('createChatWsTicket posts to the ticket endpoint', () async {
+    late RequestOptions captured;
+    final client = LalaApiClient(
       baseUri: Uri.parse('http://api.example.test'),
-      bearerToken: 'static-bearer',
-      accessTokenProvider: () async => 'dynamic-token',
+      dio: _dio(
+        (request) async {
+          captured = request;
+          return _json({
+            'ok': true,
+            'data': {
+              'room_id': 'room-1',
+              'ticket': 'issued-one-shot',
+              'expires_at': '2026-09-05T12:00:00Z',
+            },
+            'meta': <String, Object?>{},
+            'error': null,
+          });
+        },
+      ),
     );
-    expect(await withProvider.resolveWebSocketToken(), 'dynamic-token');
 
-    final staticOnly = LalaApiClient(
+    final envelope = await client.createChatWsTicket(roomId: 'room-1');
+
+    expect(captured.method, 'POST');
+    expect(captured.uri.path, '/api/v1/community/chat/rooms/room-1/ws-ticket');
+    expect(envelope.data?.ticket, 'issued-one-shot');
+    expect(envelope.data?.roomId, 'room-1');
+    expect(envelope.data?.expiresAt, '2026-09-05T12:00:00Z');
+  });
+
+  test('sendChatMessage posts body and Idempotency-Key header', () async {
+    late RequestOptions captured;
+    final client = LalaApiClient(
       baseUri: Uri.parse('http://api.example.test'),
-      bearerToken: '  static-bearer  ',
+      dio: _dio(
+        (request) async {
+          captured = request;
+          return _json({
+            'ok': true,
+            'data': {
+              'id': 'm9',
+              'room_id': 'room-1',
+              'author_user_id': 'user-1',
+              'body': 'hello',
+              'created_at': '2026-09-05T12:00:00Z',
+            },
+            'meta': <String, Object?>{},
+            'error': null,
+          });
+        },
+      ),
     );
-    expect(await staticOnly.resolveWebSocketToken(), 'static-bearer');
 
-    final none = LalaApiClient(baseUri: Uri.parse('http://api.example.test'));
-    expect(await none.resolveWebSocketToken(), '');
+    final envelope = await client.sendChatMessage(
+      roomId: 'room-1',
+      body: 'hello',
+      idempotencyKey: 'retry-9',
+    );
+
+    expect(captured.method, 'POST');
+    expect(captured.uri.path, '/api/v1/community/chat/rooms/room-1/messages');
+    expect(captured.headers['Idempotency-Key'], 'retry-9');
+    expect(envelope.data?.id, 'm9');
+    expect(envelope.data?.body, 'hello');
+  });
+
+  test('ChatRoom parses visibility and keeps public default', () {
+    final private = ChatRoom.fromJsonObject(const {
+      'id': 'r1',
+      'name': 'secret',
+      'created_at': '2026-09-05T00:00:00Z',
+      'visibility': 'private',
+    });
+    expect(private.visibility, 'private');
+
+    final legacy = ChatRoom.fromJsonObject(const {
+      'id': 'r2',
+      'name': 'general',
+      'created_at': '2026-09-05T00:00:00Z',
+    });
+    expect(legacy.visibility, 'public');
   });
 
   // V5-A planning action models + endpoints.
