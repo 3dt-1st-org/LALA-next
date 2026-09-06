@@ -56,6 +56,20 @@ const Set<String> kLalaOpenMapNavigationHosts = <String>{
 /// Korean (and unknown values, which normalize to Korean) stay on NAVER;
 /// every supported visitor locale uses the open-vector path. This is the only
 /// place the locale-to-provider decision is made.
+/// Bottom inset reserving visible map space for the OpenVector credits row.
+///
+/// The MapLibre attribution sits at the map container's bottom edge — bottom-
+/// LEFT in the embed (the app's floating controls own the bottom-right band
+/// above the dock) — so with a full-bleed canvas it hides behind the bottom
+/// place-peek dock. Returns the dock height for the openVector provider so
+/// the credits always sit on readable map space directly above the dock; the
+/// Naver path keeps its existing full-bleed layout (provider-managed
+/// attribution, untouched).
+double mapCreditsBottomInset(LalaMapProviderKind provider, double dockHeight) =>
+    provider == LalaMapProviderKind.openVector && dockHeight > 0
+    ? dockHeight
+    : 0.0;
+
 LalaMapProviderKind selectLalaMapProvider(String? language) {
   return normalizeLalaLanguage(language) == 'ko'
       ? LalaMapProviderKind.naver
@@ -184,12 +198,7 @@ bool isLalaMapEmbedMessageAccepted({
 /// - ko is unreachable here (provider selection keeps Korean on NAVER); the
 ///   defensive order is `name:ko` -> `name:latin` -> local `name`.
 List<Object> openVectorLabelFieldExpression(String? language) {
-  const List<String> en = <String>[
-    'coalesce',
-    'name:en',
-    'name:latin',
-    'name',
-  ];
+  const List<String> en = <String>['coalesce', 'name:en', 'name:latin', 'name'];
   const List<String> ja = <String>['coalesce', 'name:ja', 'name:en', 'name'];
   const List<String> zhHans = <String>[
     'coalesce',
@@ -203,12 +212,7 @@ List<Object> openVectorLabelFieldExpression(String? language) {
     'name:zh',
     'name',
   ];
-  const List<String> ko = <String>[
-    'coalesce',
-    'name:ko',
-    'name:latin',
-    'name',
-  ];
+  const List<String> ko = <String>['coalesce', 'name:ko', 'name:latin', 'name'];
   final List<String> names = switch (normalizeLalaLanguage(language)) {
     'en' => en,
     'ja' => ja,

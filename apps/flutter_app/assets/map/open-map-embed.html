@@ -362,12 +362,19 @@ return maplibregl$1;
           zoom: appLevelToZoom(config.level),
           minZoom: appLevelToZoom(10),
           maxZoom: appLevelToZoom(2),
-          attributionControl: {
-            compact: false,
-            customAttribution: ATTRIBUTION_TEXT
-          }
+          attributionControl: false
         });
         styleWatchdog = window.setTimeout(onStyleTimeout, STYLE_TIMEOUT_MS);
+        // Bottom-LEFT credits: the app's floating map controls occupy the
+        // bottom-right band above the place dock, so the default bottom-right
+        // attribution would sit under them. Content/links unchanged.
+        map.addControl(
+          new window.maplibregl.AttributionControl({
+            compact: false,
+            customAttribution: ATTRIBUTION_TEXT
+          }),
+          "bottom-left"
+        );
         map.on("style.load", onStyleReady);
         map.on("styledata", onStyleData);
         map.on("error", onMapError);
