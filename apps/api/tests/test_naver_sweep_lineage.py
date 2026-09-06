@@ -266,7 +266,9 @@ def test_degraded_page_advances_without_terminal_credit(monkeypatch, capsys, tmp
     assert entry["sweep_pages"] == 2
     assert entry["next_after_place_id"] == "p4"  # ACTUAL committed cursor preserved
     assert entry["whole_region_complete"] is False
-    # A later terminal page from the preserved cursor may still close the chain.
+    # ORIGINAL CONTRACT (H2 correction): an advancing degraded contribution
+    # TAINTS the chain — a later clean terminal page alone must NOT grant
+    # whole-region credit; the committed cursor stays preserved for resumption.
     assert (
         _export_state(
             monkeypatch,
@@ -288,7 +290,31 @@ def test_degraded_page_advances_without_terminal_credit(monkeypatch, capsys, tmp
     )
     capsys.readouterr()
     entry = json.loads(state.read_text(encoding="utf-8"))["entries"][0]
-    assert entry["sweep_pages"] == 3 and entry["whole_region_complete"] is True
+    assert entry["sweep_pages"] == 3
+    assert entry["sweep_clean"] is False
+    assert entry["whole_region_complete"] is False
+    # A genuinely NEW clean null-start requalifies on its own.
+    assert (
+        _export_state(
+            monkeypatch,
+            capsys,
+            tmp_path,
+            state,
+            _raw_page(
+                input_cursor=None,
+                next_cursor="q2",
+                exhausted=False,
+                observed="2026-09-06T13:00:00+00:00",
+            ),
+            "fresh.json",
+        )
+        == 0
+    )
+    capsys.readouterr()
+    entry = json.loads(state.read_text(encoding="utf-8"))["entries"][0]
+    assert entry["sweep_pages"] == 1
+    assert entry["sweep_clean"] is True
+    assert entry["next_after_place_id"] == "q2"
 
 
 def test_failed_page_keeps_head_and_no_credit(monkeypatch, capsys, tmp_path):
@@ -441,3 +467,84 @@ def test_standalone_tail_stays_unknown_and_legacy_gains_no_credit(monkeypatch, c
     assert json.loads(capsys.readouterr().out)["region_states"]["busan-haeundae"] == (
         "UNKNOWN_COMPLETION"
     )
+
+
+def test_new_shape_counterexamples_fail_closed(monkeypatch, tmp_path):
+    """Pre-commit review counterexamples: explicit null kind, tainted/impure
+    whole credit, and orphan sweep_clean all fail safely; literal historical
+    shapes stay loadable without new fields."""
+    import json as _json
+
+    from apps.api.app.services import collector_checkpoint as cc
+
+    base = {
+        "region": "busan-haeundae",
+        "next_after_place_id": "p4",
+        "input_after_place_id": "p2",
+        "exhausted": True,
+        "whole_region_complete": True,
+        "empty_scope": None,
+        "stop_reason": None,
+        "blocked": None,
+        "requests_used": 4,
+        "observation_time": "2026-09-06T12:00:00+00:00",
+        "qualified_scope": True,
+        "lineage_page_kind": "terminal_clean",
+        "sweep_pages": 2,
+        "sweep_chain_started_at": "2026-09-06T11:00:00+00:00",
+        "sweep_clean": True,
+    }
+
+    def _load_with(entry):
+        doc = {
+            "schema_version": 1,
+            "source": "naver_review_collect_apply_payloads",
+            "scope_contract": "tour_api_province_qualified_v1",
+            "entries": [entry],
+        }
+        path = tmp_path / "case.json"
+        path.write_text(_json.dumps(doc))
+        try:
+            cc.load_checkpoint_snapshot(path)
+            return None
+        except cc.CheckpointSnapshotError as exc:
+            return str(exc)
+
+    # Valid complete new shape loads.
+    assert _load_with(base) is None
+
+    # Explicitly present NULL kind with paired proof is rejected.
+    err = _load_with({**base, "lineage_page_kind": None})
+    assert err == "checkpoint lineage_page_kind is unknown"
+
+    # Whole multi-page credit with a tainted chain is rejected.
+    err = _load_with({**base, "sweep_clean": False})
+    assert err == "checkpoint entry is internally inconsistent"
+
+    # Whole credit with nonterminal/failed/degraded page kinds is rejected.
+    for kind in ("clean_prefix", "degraded_page", "failed_page"):
+        err = _load_with({**base, "lineage_page_kind": kind})
+        assert err == "checkpoint entry is internally inconsistent", kind
+
+    # Orphan sweep_clean without the complete lineage shape is rejected.
+    orphan = {k: v for k, v in base.items() if k not in ("sweep_pages", "sweep_chain_started_at")}
+    orphan["whole_region_complete"] = False
+    err = _load_with(orphan)
+    assert err == "checkpoint lineage metadata is partial"
+
+    # Literal pre-P5D2 historical shape (no kind/sweep fields) still loads
+    # with its conservative single-page semantics.
+    legacy = {
+        k: v
+        for k, v in base.items()
+        if k
+        not in (
+            "lineage_page_kind",
+            "sweep_pages",
+            "sweep_chain_started_at",
+            "sweep_clean",
+            "input_after_place_id",
+        )
+    }
+    legacy["input_after_place_id"] = None
+    assert _load_with(legacy) is None
