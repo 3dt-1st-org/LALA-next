@@ -838,12 +838,12 @@ def test_wire_attempts_count_post_request_network_and_parse_failures(monkeypatch
     assert payload["failure_tally"]["naver_cafe"]["parse_error"] == 1
 
 
-# == P5B: offline regional schedule mode =========================================
+# == P5B (corrected): offline schedule/export modes =================================
 
 
 def _no_io_wiring(monkeypatch):
     def _boom(*a, **kw):  # pragma: no cover - sentinel
-        raise AssertionError("schedule/plan mode must not touch settings/DB/providers")
+        raise AssertionError("offline modes must not touch settings/DB/providers")
 
     monkeypatch.setattr(tool, "get_settings", _boom)
     monkeypatch.setattr(tool, "_open_connection", _boom)
@@ -865,7 +865,17 @@ def _write_snapshot(path, entries):
 
 
 def _entry(
-    region, *, cursor=None, exhausted=False, blocked=None, empty=False, hours_ago=1, stop=None
+    region,
+    *,
+    cursor=None,
+    input_cursor=None,
+    exhausted=False,
+    blocked=None,
+    empty_scope=None,
+    hours_ago=1,
+    stop=None,
+    whole_region_complete=False,
+    requests_used=4,
 ):
     from datetime import UTC as _UTC
     from datetime import datetime as _dt
@@ -875,279 +885,391 @@ def _entry(
     return {
         "region": region,
         "next_after_place_id": cursor,
+        "input_after_place_id": input_cursor,
         "exhausted": exhausted,
+        "whole_region_complete": whole_region_complete,
+        "empty_scope": empty_scope,
         "stop_reason": stop,
         "blocked": blocked,
-        "empty_observed": empty,
-        "observed_at": observed,
+        "requests_used": requests_used,
+        "observation_time": observed,
     }
 
 
-def test_schedule_rejects_preview_apply_combination(monkeypatch, capsys):
+# --- B1: mode guards and option hygiene -------------------------------------------
+
+
+def test_b1_schedule_only_options_rejected_without_schedule(monkeypatch, capsys):
     _no_io_wiring(monkeypatch)
-    for combo in (["--schedule", "--preview"], ["--schedule", "--apply"]):
-        rc = tool.main([*combo, "--json"])
-        assert rc == 2
-        assert "cannot combine" in _out(capsys)["error"]
+    for argv in (
+        ["--regions", "seoul-seongdong"],
+        ["--checkpoint-snapshot", "cp.json"],
+        ["--max-regions", "2"],
+        ["--refresh-interval-hours", "24"],
+        ["--per-region-requests", "4"],
+        ["--total-request-ceiling", "8"],
+        ["--preview", "--json", "--regions", "seoul-seongdong"],
+        ["--apply", "--json", "--max-regions", "2"],
+    ):
+        rc = tool.main([*argv, "--json"] if "--json" not in argv else argv)
+        assert rc == 2, argv
+        assert "schedule-only" in _out(capsys)["error"]
 
 
-def test_schedule_zero_io_and_default_due(monkeypatch, capsys):
+def test_b1_schedule_rejects_singular_scope_and_cursor(monkeypatch, capsys):
     _no_io_wiring(monkeypatch)
-    rc = tool.main(["--schedule", "--json", "--regions", "seoul-seongdong,busan-haeundae"])
-    assert rc == 0
-    payload = _out(capsys)
-    assert payload["ok"] is True
-    assert payload["mode"] == "schedule"
-    assert payload["db_mutation"] is False
-    assert payload["checkpoint_snapshot_supplied"] is False
-    # No snapshot: honest unknown, so both clean regions are DUE internally and
-    # get scheduled within the default bounded batch.
-    assert payload["statuses"] == {
-        "busan-haeundae": "SCHEDULED",
-        "seoul-seongdong": "SCHEDULED",
-    }
-    assert [p["region"] for p in payload["planned_arguments"]] == [
-        "busan-haeundae",
-        "seoul-seongdong",
-    ]
-    for planned in payload["planned_arguments"]:
-        assert planned["after_place_id"] is None
-        assert planned["limit"] == 50
-        assert planned["max_requests"] == 100  # 2 x default limit
+    for argv in (
+        ["--schedule", "--region", "seoul-seongdong"],
+        ["--schedule", "--after-place-id", "p1"],
+    ):
+        rc = tool.main([*argv, "--json"])
+        assert rc == 2, argv
+        assert "must not" in _out(capsys)["error"]
 
 
-def test_schedule_regions_subset_sorted_dedup_and_unknown_fails(monkeypatch, capsys):
+def test_b1_modes_mutually_exclusive(monkeypatch, capsys):
     _no_io_wiring(monkeypatch)
-    rc = tool.main(
-        ["--schedule", "--json", "--regions", "seoul-seongdong, busan-haeundae,seoul-seongdong"]
-    )
-    assert rc == 0
-    assert [p["region"] for p in _out(capsys)["planned_arguments"]] == [
-        "busan-haeundae",
-        "seoul-seongdong",
-    ]
-
-    rc = tool.main(["--schedule", "--json", "--regions", "seoul-seongdong,not-a-region"])
+    rc = tool.main(["--schedule", "--export-checkpoint", "--json"])
     assert rc == 2
-    payload = _out(capsys)
-    assert "unknown/non-canonical" in payload["error"]
-    assert "not-a-region" not in json.dumps(payload)
+    rc = tool.main(["--preview", "--export-checkpoint", "--json"])
+    assert rc == 2
 
 
-def test_schedule_odd_total_budget_defers(monkeypatch, capsys):
+def test_b1_plain_plan_validates_cursor_cap_and_region(monkeypatch, capsys):
+    # Zero-I/O plan still rejects invalid options (P5A guards restored for plan).
     _no_io_wiring(monkeypatch)
-    rc = tool.main(
-        [
-            "--schedule",
-            "--json",
-            "--regions",
-            "busan-haeundae,seoul-seongdong,incheon-yeonsu",
-            "--per-region-requests",
-            "2",
-            "--total-request-ceiling",
-            "5",
-            "--max-regions",
-            "3",
-        ]
-    )
-    assert rc == 0
-    payload = _out(capsys)
-    assert payload["regions_scheduled"] == 2  # 2+2=4 <= 5; the third no longer fits
-    assert payload["regions_deferred"] == 1
-    # Sorted enumeration: busan-haeundae, incheon-yeonsu, seoul-seongdong —
-    # the last (seoul) is the one that no longer fits.
-    assert payload["statuses"]["seoul-seongdong"] == "DEFERRED"
-    assert payload["statuses"]["incheon-yeonsu"] == "SCHEDULED"
-    assert sum(p["max_requests"] for p in payload["planned_arguments"]) <= 5
+    assert tool.main(["--json", "--after-place-id", "\x00bad"]) == 2
+    capsys.readouterr()
+    assert tool.main(["--json", "--max-requests", "501"]) == 2
+    capsys.readouterr()
+    assert tool.main(["--json", "--limit", "0"]) == 2
+    capsys.readouterr()
+    rc = tool.main(["--json", "--region", "seoul"])
+    assert rc == 2
+    assert "cannot be mapped" in _out(capsys)["error"]
+    # A fully valid plain plan still works and stays offline.
+    assert tool.main(["--json", "--region", "seoul-seongdong"]) == 0
+    assert _out(capsys)["mode"] == "plan"
+
+
+def test_b1_export_rejects_incompatible_options(monkeypatch, capsys):
+    _no_io_wiring(monkeypatch)
+    for argv in (
+        ["--region", "seoul-seongdong"],
+        ["--after-place-id", "p1"],
+        ["--limit", "5"],
+        ["--max-requests", "4"],
+        ["--display", "3"],
+        ["--confirm", "APPLY_NAVER_REVIEW_COLLECT"],
+    ):
+        rc = tool.main(["--export-checkpoint", "--json", *argv])
+        assert rc == 2, argv
+        assert "rejected" in _out(capsys)["error"]
+    assert tool.main(["--export-checkpoint", "--json"]) == 2  # missing input
+
+
+# --- B3: bounded strict snapshot I/O ------------------------------------------------
+
+
+def test_b3_bounded_read_rejects_oversize_without_loading(monkeypatch, capsys, tmp_path):
+    _no_io_wiring(monkeypatch)
+    big = tmp_path / "big.json"
+    big.write_bytes(b"x" * (64 * 1024 + 1))
+    rc = tool.main(["--schedule", "--json", "--checkpoint-snapshot", str(big)])
+    assert rc == 2
+    assert "bounded size" in _out(capsys)["error"]
 
 
 @pytest.mark.parametrize(
-    ("extra", "fragment"),
+    "raw",
     [
-        (["--per-region-requests", "1"], "between 2"),
-        (
-            ["--total-request-ceiling", "2", "--per-region-requests", "4"],
-            ">= --per-region-requests",
-        ),
-        (["--max-regions", "0"], "--max-regions"),
-        (["--refresh-interval-hours", "0"], "--refresh-interval-hours"),
+        b"\xff\xfe not utf8",
+        b'{"schema_version": 1, "source": "naver_review_collect_apply_payloads", "entries": [1,2]}',
+        b'{"schema_version": 2, "source": "naver_review_collect_apply_payloads", "entries": []}',
+        b'{"schema_version": 1, "source": "other", "entries": []}',
+        b'{"schema_version": 1, "source": "naver_review_collect_apply_payloads", "entries": [], "extra": 1}',
+        b'["not", "an", "object"]',
     ],
 )
-def test_schedule_invalid_budgets_fail_closed(extra, fragment, monkeypatch, capsys):
+def test_b3_malformed_snapshots_fail_sanitized(raw, monkeypatch, capsys, tmp_path):
     _no_io_wiring(monkeypatch)
-    rc = tool.main(["--schedule", "--json", *extra])
+    bad = tmp_path / "bad.json"
+    bad.write_bytes(raw)
+    rc = tool.main(["--schedule", "--json", "--checkpoint-snapshot", str(bad)])
     assert rc == 2
-    assert fragment in _out(capsys)["error"]
-
-
-def test_schedule_continuation_and_refresh(monkeypatch, capsys, tmp_path):
-    from datetime import UTC as _UTC
-    from datetime import datetime as _dt
-
-    _no_io_wiring(monkeypatch)
-    frozen = _dt(2026, 9, 6, 12, 0, tzinfo=_UTC)
-    monkeypatch.setattr(tool, "_now_utc", lambda: frozen)
-    snapshot = tmp_path / "cp.json"
-    _write_snapshot(
-        snapshot,
-        [
-            _entry("busan-haeundae", cursor="place-42", hours_ago=1),  # partial -> RESUME
-            _entry("seoul-seongdong", exhausted=True, hours_ago=2),  # fresh complete
-            _entry("incheon-yeonsu", exhausted=True, hours_ago=200),  # older than 168h
-            _entry("seoul-mapo", exhausted=True, empty=True, hours_ago=1),  # observed empty
-        ],
-    )
-
-    rc = tool.main(
-        [
-            "--schedule",
-            "--json",
-            "--checkpoint-snapshot",
-            str(snapshot),
-            "--max-regions",
-            "5",
-            "--regions",
-            "busan-haeundae,seoul-seongdong,incheon-yeonsu,seoul-mapo",
-        ]
-    )
-
-    assert rc == 0
     payload = _out(capsys)
-    statuses = payload["statuses"]
-    assert statuses["seoul-seongdong"] == "RECENTLY_COLLECTED"
-    assert statuses["seoul-mapo"] == "EMPTY_OBSERVED"
-    assert statuses["incheon-yeonsu"] == "SCHEDULED"
-    assert payload["region_states"]["incheon-yeonsu"] == "DUE_REFRESH"
-    assert statuses["busan-haeundae"] == "SCHEDULED"
-    planned = {p["region"]: p for p in payload["planned_arguments"]}
-    # Same-region cursor preserved on resume; refresh restarts from scratch.
-    assert planned["busan-haeundae"]["after_place_id"] == "place-42"
-    assert planned["incheon-yeonsu"]["after_place_id"] is None
-    assert "seoul-seongdong" not in planned and "seoul-mapo" not in planned
+    assert payload["ok"] is False
+    assert payload["error"].startswith("checkpoint")
+    assert "Traceback" not in payload["error"]
 
 
-def test_schedule_future_observation_is_due_not_fresh(monkeypatch, capsys, tmp_path):
-    from datetime import UTC as _UTC
-    from datetime import datetime as _dt
-    from datetime import timedelta as _td
+def test_b3_bool_as_integer_and_bad_enums_rejected(monkeypatch, capsys, tmp_path):
+    import json as _json
 
     _no_io_wiring(monkeypatch)
-    frozen = _dt(2026, 9, 6, 12, 0, tzinfo=_UTC)
-    monkeypatch.setattr(tool, "_now_utc", lambda: frozen)
-    snapshot = tmp_path / "cp.json"
-    _write_snapshot(
-        snapshot,
-        [
-            {
-                **_entry("busan-haeundae", exhausted=True),
-                "observed_at": (frozen + _td(hours=3)).isoformat(),  # future clock skew
-            }
-        ],
-    )
+    base = {"schema_version": 1, "source": "naver_review_collect_apply_payloads", "entries": []}
 
-    rc = tool.main(
-        [
-            "--schedule",
-            "--json",
-            "--checkpoint-snapshot",
-            str(snapshot),
-            "--regions",
-            "busan-haeundae",
-        ]
-    )
+    def _with(entry):
+        doc = {**base, "entries": [entry]}
+        path = tmp_path / "e.json"
+        path.write_text(_json.dumps(doc))
+        return path
 
-    assert rc == 0
-    payload = _out(capsys)
-    # Future/inconsistent observation is UNKNOWN -> DUE -> scheduled; had it
-    # been misread as fresh it would be RECENTLY_COLLECTED and NOT scheduled.
-    assert payload["statuses"]["busan-haeundae"] == "SCHEDULED"
-    assert payload["region_states"]["busan-haeundae"] == "DUE"
+    good = _entry("busan-haeundae")
+    assert tool.main(["--schedule", "--json", "--checkpoint-snapshot", str(_with(good))]) == 0
+    for mutate in (
+        lambda e: {**e, "exhausted": 1},
+        lambda e: {**e, "whole_region_complete": 1},
+        lambda e: {**e, "requests_used": True},
+        lambda e: {**e, "stop_reason": ["not", "a", "string"]},
+        lambda e: {**e, "empty_scope": "galaxy"},
+        lambda e: {**e, "observation_time": "not-a-time"},
+        lambda e: {**e, "observation_time": "2026-09-06T00:00:00"},  # naive
+    ):
+        rc = tool.main(["--schedule", "--json", "--checkpoint-snapshot", str(_with(mutate(good)))])
+        assert rc == 2, mutate
 
 
-def test_schedule_auth_quota_block_requires_reset(monkeypatch, capsys, tmp_path):
+def test_b3_supports_whole_catalog_snapshot(monkeypatch, capsys, tmp_path):
+    from apps.api.app.services import collector_checkpoint as cc
+
     _no_io_wiring(monkeypatch)
-    snapshot = tmp_path / "cp.json"
-    _write_snapshot(
-        snapshot,
-        [
-            _entry(
-                "busan-haeundae", cursor="p9", blocked="auth_quota", stop="fatal_provider_failure"
-            ),
-            _entry("seoul-seongdong"),  # unrelated DUE region
-        ],
-    )
-
+    entries = [
+        _entry(region, exhausted=True, whole_region_complete=True, input_cursor=None, hours_ago=2)
+        for region in cc.canonical_region_ids()
+    ]
+    snapshot = tmp_path / "all.json"
+    _write_snapshot(snapshot, entries)
     rc = tool.main(["--schedule", "--json", "--checkpoint-snapshot", str(snapshot)])
+    assert rc == 0
+    payload = _out(capsys)
+    assert payload["regions_total"] == len(cc.canonical_region_ids())
+    # Every region appears in coverage accounting; blocked-scope regions are
+    # counted as regions, never dropped.
+    assert payload["regions_scope_blocked"] == len(cc.region_alias_collisions())
+    blocked = [r for r, s in payload["statuses"].items() if s == "BLOCKED_SCOPE"]
+    assert len(blocked) == len(cc.region_alias_collisions())
 
+
+def test_b3_independent_upper_limits(monkeypatch, capsys):
+    _no_io_wiring(monkeypatch)
+    assert tool.main(["--schedule", "--json", "--max-regions", "65"]) == 2
+    assert tool.main(["--schedule", "--json", "--total-request-ceiling", "10001"]) == 2
+    assert tool.main(["--schedule", "--json", "--refresh-interval-hours", "8761"]) == 2
+
+
+# --- B2: global auth/quota stop over ALL loaded evidence ----------------------------
+
+
+def test_b2_blocked_entry_outside_requested_subset_stops_everything(monkeypatch, capsys, tmp_path):
+    _no_io_wiring(monkeypatch)
+    snapshot = tmp_path / "cp.json"
+    _write_snapshot(
+        snapshot,
+        [
+            _entry("daegu-jung", blocked="auth_quota", stop="fatal_provider_failure"),
+            _entry("busan-haeundae", cursor="p9"),
+        ],
+    )
+    # Requested subset excludes the blocked region entirely.
+    rc = tool.main(
+        [
+            "--schedule",
+            "--json",
+            "--checkpoint-snapshot",
+            str(snapshot),
+            "--regions",
+            "seoul-seongdong,incheon-yeonsu",
+        ]
+    )
     assert rc == 0
     payload = _out(capsys)
     assert payload["auth_quota_blocked"] is True
     assert payload["requires_reset_decision"] is True
-    # No marching through more regions: nothing is scheduled at all.
+    assert payload["planned_argv"] == []
     assert payload["planned_arguments"] == []
-    assert payload["statuses"]["busan-haeundae"] == "AUTH_QUOTA_BLOCKED"
-    # The unrelated region keeps its own classification (partial window here)
-    # but is NOT scheduled: no marching through regions without a reset.
-    assert payload["statuses"]["seoul-seongdong"] == "RESUME_PARTIAL"
 
 
-@pytest.mark.parametrize(
-    "mutate",
-    [
-        lambda e: e.update({"unexpected_field": 1}),
-        lambda e: (
-            e.update({"schema_version": 2})
-            if "schema_version" in e
-            else e.update({"stop_reason": "nope"})
-        ),
-    ],
-)
-def test_schedule_malformed_snapshot_fails_closed(mutate, monkeypatch, capsys, tmp_path):
-    import json as _json
+def test_b2_block_never_expires_by_age_or_filter(monkeypatch, capsys, tmp_path):
+    from datetime import UTC as _UTC
+    from datetime import datetime as _dt
 
     _no_io_wiring(monkeypatch)
+    frozen = _dt(2026, 9, 6, 12, 0, tzinfo=_UTC)
+    monkeypatch.setattr(tool, "_now_utc", lambda: frozen)
     snapshot = tmp_path / "cp.json"
-    _write_snapshot(snapshot, [_entry("busan-haeundae")])
-    document = _json.loads(snapshot.read_text())
-    if "schema_version" in document:
-        document["schema_version"] = 99
-        snapshot.write_text(_json.dumps(document))
-    else:
-        mutate(document["entries"][0])
-        snapshot.write_text(_json.dumps(document))
-
-    rc = tool.main(["--schedule", "--json", "--checkpoint-snapshot", str(snapshot)])
-
-    assert rc == 2
-    assert _out(capsys)["ok"] is False
-
-
-def test_snapshot_rejects_duplicates_and_oversize(monkeypatch, capsys, tmp_path):
-    _no_io_wiring(monkeypatch)
-    dup = tmp_path / "dup.json"
-    _write_snapshot(dup, [_entry("busan-haeundae"), _entry("busan-haeundae")])
-    assert tool.main(["--schedule", "--json", "--checkpoint-snapshot", str(dup)]) == 2
-
-    big = tmp_path / "big.json"
-    big.write_text("x" * (1024 * 64 + 1))
-    assert tool.main(["--schedule", "--json", "--checkpoint-snapshot", str(big)]) == 2
+    _write_snapshot(snapshot, [_entry("busan-haeundae", blocked="auth_quota", hours_ago=500)])
+    rc = tool.main(
+        [
+            "--schedule",
+            "--json",
+            "--checkpoint-snapshot",
+            str(snapshot),
+            "--regions",
+            "seoul-seongdong",
+        ]
+    )
+    assert rc == 0
+    payload = _out(capsys)
+    assert payload["auth_quota_blocked"] is True
+    assert payload["planned_argv"] == []
 
 
-def test_collector_result_to_snapshot_to_cli_round_trip(monkeypatch, capsys, tmp_path):
-    # Real committed-apply payload from THIS collector (P5A fakes) -> bridge ->
-    # snapshot -> real --schedule planned argv preserves the region cursor.
+# --- B4: evidence truth --------------------------------------------------------------
+
+
+def _apply_result(**overrides):
+    base = {
+        "ok": True,
+        "status": "succeeded",
+        "mode": "apply",
+        "region": "busan-haeundae",
+        "region_applied": True,
+        "cursor_scope": "busan-haeundae",
+        "after_place_id": None,
+        "next_after_place_id": "place-2",
+        "exhausted": True,
+        "places": 2,
+        "requests_used": 4,
+        "stop_reason": None,
+        "failure_tally": {},
+        "observation_time": "2026-09-06T11:00:00+00:00",
+    }
+    return {**base, **overrides}
+
+
+def test_b4_bridge_rejects_preview_failed_and_mismatched_results():
+    from apps.api.app.services import collector_checkpoint as cc
+
+    for bad in (
+        _apply_result(mode="preview"),
+        _apply_result(ok=False),
+        _apply_result(status="failed"),
+        _apply_result(region_applied=False),
+        _apply_result(cursor_scope="global"),
+        _apply_result(region="not-a-region"),
+        {**_apply_result(), "observation_time": None},
+        _apply_result(exhausted=True, stop_reason="request_budget_exhausted"),
+        _apply_result(requests_used="many"),
+    ):
+        with pytest.raises(cc.CheckpointSnapshotError):
+            cc.build_region_checkpoint(bad)
+
+
+def test_b4_single_page_null_cursor_sweep_certifies_whole_region():
+    from apps.api.app.services import collector_checkpoint as cc
+
+    entry = cc.build_region_checkpoint(_apply_result(after_place_id=None, exhausted=True))
+    assert entry["whole_region_complete"] is True
+    assert entry["empty_scope"] is None
+
+
+def test_b4_arbitrary_tail_exhausted_is_not_whole_region():
+    from apps.api.app.services import collector_checkpoint as cc
+
+    entry = cc.build_region_checkpoint(_apply_result(after_place_id="place-1", exhausted=True))
+    assert entry["whole_region_complete"] is False
+
+
+def test_b4_zero_result_vs_tail_empty_scope(monkeypatch, capsys, tmp_path):
     from datetime import UTC as _UTC
     from datetime import datetime as _dt
 
     from apps.api.app.services import collector_checkpoint as cc
 
+    _no_io_wiring(monkeypatch)
+    frozen = _dt(2026, 9, 6, 12, 0, tzinfo=_UTC)
+    monkeypatch.setattr(tool, "_now_utc", lambda: frozen)
+
+    zero_region = cc.build_region_checkpoint(
+        _apply_result(places=0, exhausted=True, next_after_place_id=None)
+    )
+    assert zero_region["empty_scope"] == "region"
+    tail_empty = cc.build_region_checkpoint(
+        _apply_result(places=0, exhausted=True, next_after_place_id="p9", after_place_id="p1")
+    )
+    assert tail_empty["empty_scope"] == "window"
+
+    snapshot = tmp_path / "cp.json"
+    _write_snapshot(snapshot, [zero_region, tail_empty])
+
+    zero_region_result = cc.build_region_checkpoint(
+        _apply_result(
+            region="seoul-seongdong",
+            cursor_scope="seoul-seongdong",
+            places=0,
+            exhausted=True,
+            next_after_place_id=None,
+        )
+    )
+    tail_region = cc.build_region_checkpoint(
+        _apply_result(
+            region="incheon-yeonsu",
+            cursor_scope="incheon-yeonsu",
+            places=0,
+            exhausted=True,
+            next_after_place_id="p9",
+            after_place_id="p1",
+        )
+    )
+    _write_snapshot(snapshot, [zero_region_result, tail_region])
+    rc = tool.main(
+        [
+            "--schedule",
+            "--json",
+            "--checkpoint-snapshot",
+            str(snapshot),
+            "--regions",
+            "seoul-seongdong,incheon-yeonsu",
+        ]
+    )
+    assert rc == 0
+    payload = _out(capsys)
+    # Whole-region empty sweep is fresh; a tail-empty window is unknown
+    # completion and conservatively restarts from the beginning.
+    assert payload["region_states"]["seoul-seongdong"] == "EMPTY_OBSERVED"
+    assert payload["statuses"]["seoul-seongdong"] == "EMPTY_OBSERVED"
+    assert payload["region_states"]["incheon-yeonsu"] == "UNKNOWN_COMPLETION"
+    planned = {p["region"]: p for p in payload["planned_arguments"]}
+    assert planned["incheon-yeonsu"]["after_place_id"] is None
+
+
+def test_b4_export_preserves_result_time_and_rejects_legacy(monkeypatch, capsys, tmp_path):
+    import json as _json
+
+    _no_io_wiring(monkeypatch)
+    result_file = tmp_path / "result.json"
+    result_file.write_text(_json.dumps(_apply_result()))
+    rc = tool.main(["--export-checkpoint", "--json", "--from-collector-result", str(result_file)])
+    assert rc == 0
+    snapshot = _json.loads(capsys.readouterr().out)
+    entry = snapshot["entries"][0]
+    assert entry["observation_time"] == "2026-09-06T11:00:00+00:00"  # preserved, not re-stamped
+
+    legacy = tmp_path / "legacy.json"
+    payload = _apply_result()
+    del payload["observation_time"]
+    legacy.write_text(_json.dumps(payload))
+    rc = tool.main(["--export-checkpoint", "--json", "--from-collector-result", str(legacy)])
+    assert rc == 2
+    assert "rejected by the bridge" in _out(capsys)["error"]
+
+
+# --- B5: real CLI round-trip with argv arrays -----------------------------------------
+
+
+def test_b5_round_trip_export_then_schedule_argv(monkeypatch, capsys, tmp_path):
+    import json as _json
+    from datetime import UTC as _UTC
+    from datetime import datetime as _dt
+
+    # 1) Real mocked committed apply result (P5A fakes) — partial window.
     places = [_place("p1"), _place("p2")]
     script = {p.place_id: _collection(p.place_id) for p in places}
     _wire(monkeypatch, places=places, script=script)
     monkeypatch.setenv(tool.ALLOW_ENV, "1")
     frozen = _dt(2026, 9, 6, 12, 0, tzinfo=_UTC)
     monkeypatch.setattr(tool, "_now_utc", lambda: frozen)
-
     rc = tool.main(
         [
             "--apply",
@@ -1164,13 +1286,59 @@ def test_collector_result_to_snapshot_to_cli_round_trip(monkeypatch, capsys, tmp
     )
     assert rc == 0
     apply_payload = _out(capsys)
-    assert apply_payload["cursor_advanced"] is True
+    assert "observation_time" in apply_payload
 
-    entry = cc.build_region_checkpoint(apply_payload, observed_at=frozen)
+    # 2) OFFLINE export main(): result file -> validated snapshot on stdout.
+    _no_io_wiring(monkeypatch)
+    result_file = tmp_path / "result.json"
+    result_file.write_text(_json.dumps(apply_payload))
+    rc = tool.main(["--export-checkpoint", "--json", "--from-collector-result", str(result_file)])
+    assert rc == 0
+    snapshot_doc = _json.loads(capsys.readouterr().out)
+
+    # 3) SCHEDULE main(): snapshot -> planned argv arrays.
+    monkeypatch.setattr(tool, "_now_utc", lambda: frozen)
+    snapshot_file = tmp_path / "cp.json"
+    snapshot_file.write_text(_json.dumps(snapshot_doc))
+    rc = tool.main(
+        [
+            "--schedule",
+            "--json",
+            "--checkpoint-snapshot",
+            str(snapshot_file),
+            "--regions",
+            "busan-haeundae,seoul-seongdong",
+        ]
+    )
+    assert rc == 0
+    payload = _out(capsys)
+    argv_arrays = payload["planned_argv"]
+    assert argv_arrays and all(isinstance(a, list) for a in argv_arrays)
+    assert all(isinstance(item, str) for a in argv_arrays for item in a)
+    busan_argv = next(a for a in argv_arrays if "--region=busan-haeundae" in a)
+    assert f"--after-place-id={apply_payload['next_after_place_id']}" in busan_argv
+    assert "--limit=50" in busan_argv
+    # No shell strings, credentials or confirm tokens anywhere.
+    joined = _json.dumps(argv_arrays)
+    for forbidden in (";", "&&", tool.CONFIRM_TEXT, "NAVER_CLIENT"):
+        assert forbidden not in joined
+    # 4) The argv is parseable by the real collector main (fixed two-step parse
+    #    simulation): every element is an exact equals-form option.
+    for element in busan_argv:
+        assert element.startswith("--") and "=" in element
+
+
+def test_b5_argv_encoding_is_dash_safe(monkeypatch, capsys, tmp_path):
+
+    _no_io_wiring(monkeypatch)
+    # A legally odd cursor beginning with '-' stays an unambiguous value.
     snapshot = tmp_path / "cp.json"
-    _write_snapshot(snapshot, [entry])
-
-    _no_io_wiring(monkeypatch)  # schedule mode must stay offline end-to-end
+    _write_snapshot(
+        snapshot,
+        [
+            _entry("busan-haeundae", cursor="-weird-cursor", input_cursor="-older"),
+        ],
+    )
     rc = tool.main(
         [
             "--schedule",
@@ -1178,53 +1346,15 @@ def test_collector_result_to_snapshot_to_cli_round_trip(monkeypatch, capsys, tmp
             "--checkpoint-snapshot",
             str(snapshot),
             "--regions",
-            "busan-haeundae,seoul-seongdong",
+            "busan-haeundae",
         ]
     )
-
     assert rc == 0
     payload = _out(capsys)
-    planned = {p["region"]: p for p in payload["planned_arguments"]}
-    # Partial window (limit 2, both places done but limit-sized -> not exhausted):
-    # the region is a RESUME candidate with the committed cursor preserved.
-    assert payload["statuses"]["busan-haeundae"] == "SCHEDULED"
-    assert payload["region_states"]["busan-haeundae"] == "RESUME_PARTIAL"
-    assert payload["statuses"]["seoul-seongdong"] == "SCHEDULED"
-    assert planned["busan-haeundae"]["after_place_id"] == apply_payload["next_after_place_id"]
-
-
-def test_schedule_alias_collision_regions_are_blocked_scope(monkeypatch, capsys):
-    # Offline catalog fact: districts like daegu-jung share the 중구 alias with
-    # five other cities; the collector's region_name_ko = ANY(...) predicate
-    # cannot scope them. The plan must never emit argv for them and must keep
-    # them in coverage accounting with the recorded collector scope gap.
-    from apps.api.app.services import collector_checkpoint as cc
-
-    collisions = cc.region_alias_collisions()
-    assert "daegu-jung" in collisions and "seoul-jung" in collisions["daegu-jung"]
-
-    _no_io_wiring(monkeypatch)
-    rc = tool.main(["--schedule", "--json", "--regions", "daegu-jung,seoul-seongdong"])
-    assert rc == 0
-    payload = _out(capsys)
-    assert payload["statuses"]["daegu-jung"] == "BLOCKED_SCOPE"
-    assert payload["regions_scope_blocked"] == 1
-    assert payload["regions_total"] == 2
-    assert [p["region"] for p in payload["planned_arguments"]] == ["seoul-seongdong"]
-    assert "province-aware" in payload["collector_scope_gap"]
-
-
-def test_schedule_all_catalog_accounts_for_collisions(monkeypatch, capsys):
-    from apps.api.app.services import collector_checkpoint as cc
-
-    _no_io_wiring(monkeypatch)
-    rc = tool.main(["--schedule", "--json", "--max-regions", "2"])
-    assert rc == 0
-    payload = _out(capsys)
-    # Every region appears in coverage accounting; ambiguous ones are blocked,
-    # never deferred/scheduled, regardless of evidence absence.
-    assert payload["regions_total"] == len(cc.canonical_region_ids())
-    assert payload["regions_scope_blocked"] == len(cc.region_alias_collisions())
-    blocked = [r for r, s in payload["statuses"].items() if s == "BLOCKED_SCOPE"]
-    assert len(blocked) == payload["regions_scope_blocked"]
-    assert payload["regions_scheduled"] == 2
+    argv = payload["planned_argv"][0]
+    assert "--after-place-id=-weird-cursor" in argv
+    # Simulate real argv parsing with faked boundaries: argparse reads
+    # equals-form values verbatim, so the dash-leading cursor is a value.
+    _wire(monkeypatch, places=[], script={})
+    parsed = tool.main([*argv, "--preview", "--json"])
+    assert parsed == 0

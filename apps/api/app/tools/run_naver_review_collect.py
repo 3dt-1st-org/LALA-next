@@ -180,7 +180,9 @@ def main(argv: list[str] | None = None) -> int:
         help="Govern + upsert place_mentions_weekly in ONE atomic transaction.",
     )
     parser.add_argument("--confirm", default="", help=f"Required with --apply: {CONFIRM_TEXT}")
-    parser.add_argument("--limit", type=int, default=50, help="Max places to process.")
+    parser.add_argument(
+        "--limit", type=int, default=None, help="Max places to process (default 50)."
+    )
     parser.add_argument(
         "--region",
         default=None,
@@ -190,7 +192,9 @@ def main(argv: list[str] | None = None) -> int:
             "within the region. Unmappable ids fail closed."
         ),
     )
-    parser.add_argument("--display", type=int, default=5, help="Results per Naver endpoint.")
+    parser.add_argument(
+        "--display", type=int, default=None, help="Results per Naver endpoint (default 5)."
+    )
     parser.add_argument(
         "--after-place-id",
         default=None,
@@ -211,7 +215,9 @@ def main(argv: list[str] | None = None) -> int:
             f"(preserves today's safe upper bound); hard cap {MAX_REQUESTS_HARD_CAP}."
         ),
     )
-    parser.add_argument("--connect-timeout", type=int, default=5)
+    parser.add_argument(
+        "--connect-timeout", type=int, default=None, help="Connection timeout seconds (default 5)."
+    )
     parser.add_argument(
         "--schedule",
         action="store_true",
@@ -244,14 +250,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--refresh-interval-hours",
         type=int,
-        default=168,
+        default=None,
         help="Schedule mode only: completed sweeps older than this restart (default 168h).",
     )
     parser.add_argument(
         "--max-regions",
         type=int,
-        default=3,
-        help="Schedule mode only: bounded batch size of scheduled regions (default 3).",
+        default=None,
+        help="Schedule mode only: bounded batch size of scheduled regions (default 3.",
     )
     parser.add_argument(
         "--per-region-requests",
@@ -273,7 +279,129 @@ def main(argv: list[str] | None = None) -> int:
             "sum within it; regions that no longer fit are DEFERRED."
         ),
     )
+    parser.add_argument(
+        "--export-checkpoint",
+        action="store_true",
+        help=(
+            "P5B offline export: read ONE bounded committed --apply result JSON "
+            "(--from-collector-result) and emit a validated versioned checkpoint "
+            "snapshot to stdout. Zero settings/DB/provider I/O; never executes "
+            "or authorizes collection."
+        ),
+    )
+    parser.add_argument(
+        "--from-collector-result",
+        default=None,
+        help="Export mode only: explicit local collector apply-result JSON file.",
+    )
     args = parser.parse_args(argv)
+
+    _SCHEDULE_ONLY = (
+        "--regions",
+        "--checkpoint-snapshot",
+        "--refresh-interval-hours",
+        "--max-regions",
+        "--per-region-requests",
+        "--total-request-ceiling",
+    )
+
+    def _explicitly_supplied() -> list[str]:
+        supplied = []
+        if args.regions is not None:
+            supplied.append("--regions")
+        if args.checkpoint_snapshot is not None:
+            supplied.append("--checkpoint-snapshot")
+        if args.refresh_interval_hours is not None:
+            supplied.append("--refresh-interval-hours")
+        if args.max_regions is not None:
+            supplied.append("--max-regions")
+        if args.per_region_requests is not None:
+            supplied.append("--per-region-requests")
+        if args.total_request_ceiling is not None:
+            supplied.append("--total-request-ceiling")
+        return supplied
+
+    # B1: mutually exclusive offline modes; fixed usage errors before any I/O.
+    modes = [args.apply, args.preview, args.schedule, args.export_checkpoint]
+    if sum(1 for on in modes if on) > 1:
+        _write(
+            args,
+            {
+                "ok": False,
+                "mode": "plan",
+                "error": (
+                    "--apply, --preview, --schedule and --export-checkpoint are mutually exclusive."
+                ),
+            },
+        )
+        return 2
+    if not args.schedule and not args.export_checkpoint and _explicitly_supplied():
+        _write(
+            args,
+            {
+                "ok": False,
+                "mode": "plan",
+                "error": (
+                    "schedule-only options require --schedule; no acquisition, "
+                    "plan or export was performed."
+                ),
+            },
+        )
+        return 2
+    if args.schedule and (args.region is not None or args.after_place_id is not None):
+        _write(
+            args,
+            {
+                "ok": False,
+                "mode": "schedule",
+                "error": (
+                    "--schedule plans regional batches itself; --region and "
+                    "--after-place-id are collection-run options it must not "
+                    "silently ignore."
+                ),
+            },
+        )
+        return 2
+    if args.export_checkpoint:
+        incompatible = _explicitly_supplied() + [
+            flag
+            for flag, value in (
+                ("--region", args.region),
+                ("--after-place-id", args.after_place_id),
+                ("--max-requests", args.max_requests),
+                ("--limit", args.limit),
+                ("--display", args.display),
+                ("--connect-timeout", args.connect_timeout),
+            )
+            if value is not None
+        ]
+        if incompatible or args.confirm:
+            _write(
+                args,
+                {
+                    "ok": False,
+                    "mode": "export",
+                    "error": (
+                        "--export-checkpoint accepts only --from-collector-result "
+                        "(plus output flags); collection/schedule options are "
+                        "rejected."
+                    ),
+                },
+            )
+            return 2
+        return _run_export(args)
+
+    # Normalize sentinel defaults after mode checks (B1 explicit-supply detection).
+    if args.limit is None:
+        args.limit = 50
+    if args.display is None:
+        args.display = 5
+    if args.connect_timeout is None:
+        args.connect_timeout = 5
+    if args.max_regions is None:
+        args.max_regions = 3
+    if args.refresh_interval_hours is None:
+        args.refresh_interval_hours = 168
 
     if args.schedule and (args.apply or args.preview):
         _write(
@@ -293,13 +421,7 @@ def main(argv: list[str] | None = None) -> int:
         _write(args, {"ok": False, "mode": "plan", "error": "Use either --apply or --preview."})
         return 2
 
-    if not args.apply and not args.preview and not args.schedule:
-        _write(args, _plan_payload())
-        return 0
-    if args.schedule:
-        return _run_schedule(args)
-
-    # P5A bounds: default ceiling preserves the existing small batch's upper
+    # P5A bounds (validated for EVERY non-export mode, including plain plan). default ceiling preserves the existing small batch's upper
     # bound (limit places x 2 endpoints); explicit values are finitely bounded.
     request_cap = (
         args.max_requests if args.max_requests is not None else _ENDPOINTS_PER_PLACE * args.limit
@@ -358,6 +480,9 @@ def main(argv: list[str] | None = None) -> int:
                 },
             )
             return 2
+
+    if args.schedule:
+        return _run_schedule(args)
 
     if not args.apply and not args.preview:
         _write(args, _plan_payload())
@@ -435,13 +560,20 @@ def _run_schedule(args: argparse.Namespace) -> int:
             },
         )
         return 2
-    if args.max_regions < 1:
-        _write(args, {"ok": False, "mode": "schedule", "error": "--max-regions must be >= 1."})
+    if not 1 <= args.max_regions <= cc.SCHEDULE_MAX_REGIONS_LIMIT:
+        _write(
+            args,
+            {
+                "ok": False,
+                "mode": "schedule",
+                "error": (f"--max-regions must be between 1 and {cc.SCHEDULE_MAX_REGIONS_LIMIT}."),
+            },
+        )
         return 2
     total_ceiling = args.total_request_ceiling
     if total_ceiling is None:
         total_ceiling = per_region * args.max_regions
-    if not 2 <= total_ceiling <= MAX_REQUESTS_HARD_CAP * args.max_regions:
+    if not 2 <= total_ceiling <= cc.SCHEDULE_TOTAL_REQUEST_CEILING_LIMIT:
         _write(
             args,
             {
@@ -463,7 +595,7 @@ def _run_schedule(args: argparse.Namespace) -> int:
             },
         )
         return 2
-    if args.refresh_interval_hours < 1:
+    if not 1 <= args.refresh_interval_hours <= cc.SCHEDULE_REFRESH_HOURS_LIMIT:
         _write(
             args,
             {"ok": False, "mode": "schedule", "error": "--refresh-interval-hours must be >= 1."},
@@ -531,6 +663,84 @@ def _run_schedule(args: argparse.Namespace) -> int:
             ),
         },
     )
+    return 0
+
+
+# --- P5B offline export: collector result -> validated checkpoint snapshot ---
+
+
+def _run_export(args: argparse.Namespace) -> int:
+    """Offline bridge consumer: ONE bounded apply result -> snapshot on stdout.
+
+    Zero settings/DB/provider I/O; the ONLY input is the explicitly supplied
+    bounded local file, and the ONLY output is the validated versioned
+    snapshot. The observation time comes from the result itself (B4) — a
+    legacy/missing-time result is rejected, never silently refreshed.
+    """
+    import json as _json
+    from pathlib import Path
+
+    from apps.api.app.services import collector_checkpoint as cc
+
+    if args.from_collector_result is None:
+        _write(
+            args,
+            {
+                "ok": False,
+                "mode": "export",
+                "error": "--export-checkpoint requires --from-collector-result <path>.",
+            },
+        )
+        return 2
+    path = Path(args.from_collector_result)
+    try:
+        with open(path, "rb") as handle:
+            raw = handle.read(cc.SNAPSHOT_MAX_BYTES + 1)
+    except OSError:
+        _write(args, {"ok": False, "mode": "export", "error": "collector result could not be read"})
+        return 2
+    if len(raw) > cc.SNAPSHOT_MAX_BYTES:
+        _write(
+            args,
+            {
+                "ok": False,
+                "mode": "export",
+                "error": "collector result exceeds the bounded size limit",
+            },
+        )
+        return 2
+    try:
+        payload = _json.loads(raw)
+        entry = cc.build_region_checkpoint(payload)
+    except (UnicodeDecodeError, ValueError, TypeError):
+        _write(
+            args,
+            {
+                "ok": False,
+                "mode": "export",
+                "error": (
+                    "collector result was rejected by the bridge (only committed "
+                    "region-scoped apply results with their own observation_time "
+                    "are accepted)"
+                ),
+            },
+        )
+        return 2
+    snapshot = {
+        "schema_version": cc.SNAPSHOT_SCHEMA_VERSION,
+        "source": cc.SNAPSHOT_SOURCE,
+        "entries": [entry],
+    }
+    if args.json:
+        print(_json.dumps(snapshot, ensure_ascii=False, indent=2, sort_keys=True))
+        return 0
+    print("LALA-next collector checkpoint export (offline)")
+    print(f"region={entry['region']}")
+    print(f"next_after_place_id={entry['next_after_place_id']}")
+    print(f"whole_region_complete={str(entry['whole_region_complete']).lower()}")
+    print(f"observation_time={entry['observation_time']}")
+    print("snapshot_json_follows")
+    print(_json.dumps(snapshot, ensure_ascii=False, sort_keys=True))
     return 0
 
 
@@ -771,6 +981,9 @@ def _run_apply(
             "stop_reason": batch.stop_reason,
             "exhausted": _window_exhausted(batch, args.limit),
             "window_full": batch.places_count >= args.limit,
+            # B4: this run's own collection/commit observation time. The
+            # offline export preserves it verbatim — never re-stamped.
+            "observation_time": datetime.now(UTC).isoformat(),
         },
     )
     return 0

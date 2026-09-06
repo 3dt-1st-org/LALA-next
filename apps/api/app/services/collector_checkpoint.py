@@ -1,40 +1,44 @@
-"""Scope-bound collector checkpoint snapshot + offline regional work-plan (P5B).
+"""Scope-bound collector checkpoint snapshot + offline regional work-plan (P5B, corrected).
 
-Honesty contract (P5B):
-- A receipt timestamp with an opaque key is NOT per-place/per-region coverage
-  proof. The ONLY evidence accepted here is an explicit, caller-supplied,
-  versioned, secret-free checkpoint snapshot whose entries are built from THIS
-  collector's own result fields (region, next_after_place_id, exhausted,
-  stop_reason, blocked category, empty_observed, observed_at).
-- This module computes collection SCHEDULING/RECENCY only. It never proves
-  source-data freshness, nationwide coverage, or place availability — catalog
-  inclusion is not data availability.
-- Missing/unknown/malformed/future/inconsistent evidence classifies as
-  UNKNOWN/DUE (or fails closed at load time), never as fresh/complete.
-- No DB, no provider, no settings access. Pure functions over explicit inputs.
+Honesty contract (P5B/B4):
+- Only committed, scope-matched ``--apply`` RESULT metadata may become an
+  accepted observation, via :func:`build_region_checkpoint` (strict field/
+  mode/status/region checks). Preview/failed/mismatched input is rejected.
+- The observation time is the collector's OWN emitted ``observation_time``
+  (collection/commit time it actually observed). Export never stamps an old
+  result fresh; legacy/missing-time input is rejected. Collection time is NOT
+  source-data freshness — provenance stays caller-supplied, unverified.
+- ``exhausted`` means end-of-selected-window. A whole-region completion is
+  certified only for a single-page full sweep (null input cursor, all work
+  completed). Multi-page tails without validated prior-checkpoint continuity
+  are UNKNOWN_COMPLETION and conservatively restart from the beginning — no
+  invented history, no boolean promoted into proven coverage.
+- An empty FINAL page after populated pages is an empty window, not an empty
+  region; only a null-cursor empty sweep records region-scoped emptiness.
+- A receipt timestamp with an opaque key is NOT coverage proof. This module
+  computes collection SCHEDULING/RECENCY only, never data availability.
+
+No DB, no provider, no settings access. Pure functions over explicit inputs.
 
 Snapshot schema (strict, v1) — exact keys only, unexpected fields rejected:
 
-    {
-      "schema_version": 1,
-      "source": "naver_review_collect_apply_payloads",
-      "entries": [
-        {
-          "region": "<canonical manual region id>",
-          "next_after_place_id": "<printable cursor>" | null,
-          "exhausted": true|false,
-          "stop_reason": null|"request_budget_exhausted"|"fatal_provider_failure",
-          "blocked": null|"auth_quota",
-          "empty_observed": true|false,
-          "observed_at": "<ISO-8601 UTC timestamp>"
-        },
-        ...
-      ]
-    }
+    {"schema_version": 1, "source": "naver_review_collect_apply_payloads",
+     "entries": [{
+        "region": str,                      # canonical manual region id
+        "next_after_place_id": str | null,   # committed continuation cursor
+        "input_after_place_id": str | null,  # the run's input cursor
+        "exhausted": bool,                  # end-of-selected-window
+        "whole_region_complete": bool,      # single-page null-cursor sweep only
+        "empty_scope": null | "region" | "window",
+        "stop_reason": null | "request_budget_exhausted" | "fatal_provider_failure",
+        "blocked": null | "auth_quota",
+        "requests_used": int,
+        "observation_time": str,             # ISO-8601 UTC, from the result itself
+     }]}
 
-Operational note: the collector does not yet persist these entries anywhere —
-an operator (or a later scoped persistence task) assembles the snapshot from
-the collector's apply JSON payloads via :func:`build_region_checkpoint`.
+Operational note: entries are produced by the offline export mode of the
+collector CLI (``--export-checkpoint``) from committed apply result JSON.
+Persistent operational storage of snapshots remains a later scoped gap.
 """
 
 from __future__ import annotations
@@ -50,73 +54,61 @@ from apps.api.app.services.region_catalog import MANUAL_REGION_BY_ID, manual_reg
 SNAPSHOT_SCHEMA_VERSION = 1
 SNAPSHOT_SOURCE = "naver_review_collect_apply_payloads"
 
-# Strict bounded snapshot limits: reject unbounded blobs rather than loading them.
+# Strict bounded snapshot limits (independent constants; B3).
 SNAPSHOT_MAX_BYTES = 64 * 1024
-SNAPSHOT_MAX_ENTRIES = 64
+SNAPSHOT_MAX_ENTRIES = 256  # supports the current 229-region catalog, still bounded
+_REGION_ID_MAX_LENGTH = 64
 _CURSOR_MAX_LENGTH = 128
+_TIMESTAMP_MAX_LENGTH = 64
 _KNOWN_STOP_REASONS = frozenset({"request_budget_exhausted", "fatal_provider_failure"})
+_KNOWN_FAILURE_CATEGORIES = frozenset(
+    {"ok", "empty", "auth_missing", "quota_exceeded", "network_error", "parse_error"}
+)
+_KNOWN_APPLY_STATUSES = frozenset({"succeeded", "degraded"})
+_REQUESTS_USED_MAX = 10_000
+
+# Independent bounded CLI argument ceilings (B3): no upper limit is derived
+# solely from the same unbounded user argument.
+SCHEDULE_MAX_REGIONS_LIMIT = 64
+SCHEDULE_TOTAL_REQUEST_CEILING_LIMIT = 10_000
+SCHEDULE_REFRESH_HOURS_LIMIT = 8760  # one year of hours; conservative default stays 168
 
 # Region plan statuses (bounded, public vocabulary).
-STATUS_DUE = "DUE"  # no/unknown evidence for the region
-STATUS_DUE_REFRESH = "DUE_REFRESH"  # completed sweep older than the refresh interval
-STATUS_RECENTLY_COLLECTED = "RECENTLY_COLLECTED"  # completed sweep inside the interval
-STATUS_RESUME_PARTIAL = "RESUME_PARTIAL"  # unfinished window; retry/resume candidate
-STATUS_EMPTY_OBSERVED = "EMPTY_OBSERVED"  # completed sweep observed empty (still fresh)
-STATUS_AUTH_QUOTA_BLOCKED = "AUTH_QUOTA_BLOCKED"  # needs an explicit reset decision
-STATUS_SCHEDULED = "SCHEDULED"  # selected for this plan's bounded batch
-STATUS_DEFERRED = "DEFERRED"  # wanted, but max-regions/request budget ran out
-STATUS_BLOCKED_SCOPE = "BLOCKED_SCOPE"  # alias collision: collector predicate is ambiguous
+STATUS_DUE = "DUE"
+STATUS_DUE_REFRESH = "DUE_REFRESH"
+STATUS_RECENTLY_COLLECTED = "RECENTLY_COLLECTED"
+STATUS_RESUME_PARTIAL = "RESUME_PARTIAL"
+STATUS_EMPTY_OBSERVED = "EMPTY_OBSERVED"
+STATUS_UNKNOWN_COMPLETION = "UNKNOWN_COMPLETION"
+STATUS_AUTH_QUOTA_BLOCKED = "AUTH_QUOTA_BLOCKED"
+STATUS_SCHEDULED = "SCHEDULED"
+STATUS_DEFERRED = "DEFERRED"
+STATUS_BLOCKED_SCOPE = "BLOCKED_SCOPE"
 
-# Known offline catalog fact: the collector's place-window predicate filters
-# ONLY region_name_ko = ANY(<region aliases>). Distinct canonical regions can
-# share district aliases across provinces (e.g. 중구 in six cities), so those
-# regions are NOT safely scoped by the existing predicate. Planning must not
-# emit collection argv for them; the collector needs a province-aware scope
-# predicate first (bounded later correction — no guessed mapping here).
+# B6: offline catalog fact — the collector's place-window predicate filters
+# ONLY region_name_ko = ANY(<aliases>); regions sharing district aliases across
+# provinces cannot be safely scoped. Planning never emits argv for them; a
+# province-aware collector predicate is the bounded P5C correction.
 _SCOPE_COLLISIONS: dict[str, tuple[str, ...]] | None = None
-
-
-def region_alias_collisions() -> dict[str, tuple[str, ...]]:
-    """Canonical regions whose alias names collide with another region's.
-
-    Offline deterministic catalog computation: {region_id: (other_region_ids
-    sharing at least one place-name alias)}. A region in this map cannot be
-    safely planned with the collector's current region_name_ko = ANY(...)
-    predicate — its scope would bleed into the colliding regions.
-    """
-    global _SCOPE_COLLISIONS
-    if _SCOPE_COLLISIONS is None:
-        name_to_regions: dict[str, list[str]] = {}
-        for region_id in canonical_region_ids():
-            for name in manual_region_place_names(region_id) or ():
-                name_to_regions.setdefault(name, []).append(region_id)
-        collisions: dict[str, tuple[str, ...]] = {}
-        for owners in name_to_regions.values():
-            if len(owners) > 1:
-                for region_id in owners:
-                    others = collisions.setdefault(region_id, set())
-                    others.update(other for other in owners if other != region_id)
-        _SCOPE_COLLISIONS = {
-            rid: tuple(sorted(others)) for rid, others in sorted(collisions.items())
-        }
-    return _SCOPE_COLLISIONS
-
 
 _ENTRY_KEYS = frozenset(
     {
         "region",
         "next_after_place_id",
+        "input_after_place_id",
         "exhausted",
+        "whole_region_complete",
+        "empty_scope",
         "stop_reason",
         "blocked",
-        "empty_observed",
-        "observed_at",
+        "requests_used",
+        "observation_time",
     }
 )
 
 
 class CheckpointSnapshotError(ValueError):
-    """Malformed snapshot — the caller must fail closed (rc 2), never plan on it."""
+    """Malformed snapshot/result — the caller must fail closed (rc 2)."""
 
 
 def canonical_region_ids() -> tuple[str, ...]:
@@ -124,7 +116,40 @@ def canonical_region_ids() -> tuple[str, ...]:
     return tuple(sorted(MANUAL_REGION_BY_ID))
 
 
-def _validate_cursor(value: object) -> str | None:
+def region_alias_collisions() -> dict[str, tuple[str, ...]]:
+    """Canonical regions whose alias names collide with another region's.
+
+    Offline deterministic catalog computation: {region_id: (colliding ids)}.
+    A region in this map cannot be safely planned with the collector's
+    current region_name_ko = ANY(...) predicate.
+    """
+    global _SCOPE_COLLISIONS
+    if _SCOPE_COLLISIONS is None:
+        name_to_regions: dict[str, list[str]] = {}
+        for region_id in canonical_region_ids():
+            for alias in manual_region_place_names(region_id) or ():
+                name_to_regions.setdefault(alias, []).append(region_id)
+        collisions: dict[str, set[str]] = {}
+        for owners in name_to_regions.values():
+            if len(owners) > 1:
+                for region_id in owners:
+                    collisions.setdefault(region_id, set()).update(
+                        other for other in owners if other != region_id
+                    )
+        _SCOPE_COLLISIONS = {
+            rid: tuple(sorted(others)) for rid, others in sorted(collisions.items())
+        }
+    return _SCOPE_COLLISIONS
+
+
+def _strict_bool(value: object, label: str) -> bool:
+    # type-is-bool: reject bool-as-integer (True is an int in Python).
+    if type(value) is not bool:
+        raise CheckpointSnapshotError(f"{label} must be a boolean")
+    return value
+
+
+def _validate_cursor(value: object, label: str) -> str | None:
     if value is None:
         return None
     if (
@@ -134,75 +159,131 @@ def _validate_cursor(value: object) -> str | None:
         or not value.isprintable()
         or any(ch.isspace() for ch in value)
     ):
-        raise CheckpointSnapshotError("checkpoint entry has a malformed cursor")
+        raise CheckpointSnapshotError(f"{label} is malformed")
     return value
 
 
-def _parse_observed_at(value: object) -> datetime:
-    if not isinstance(value, str) or not value:
-        raise CheckpointSnapshotError("checkpoint entry is missing observed_at")
+def _parse_timestamp(value: object, label: str) -> datetime:
+    if not isinstance(value, str) or not value or len(value) > _TIMESTAMP_MAX_LENGTH:
+        raise CheckpointSnapshotError(f"{label} is missing or oversized")
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError as exc:
-        raise CheckpointSnapshotError("checkpoint entry has a malformed observed_at") from exc
+        raise CheckpointSnapshotError(f"{label} is malformed") from exc
     if parsed.tzinfo is None:
-        raise CheckpointSnapshotError("checkpoint observed_at must be timezone-aware")
+        raise CheckpointSnapshotError(f"{label} must be timezone-aware")
     return parsed.astimezone(UTC)
 
 
-def build_region_checkpoint(collector_payload: Mapping, *, observed_at: datetime) -> dict:
-    """Bridge THIS collector's result payload into one validated snapshot entry.
+def _failure_blocked_category(payload: Mapping) -> str | None:
+    tally = payload.get("failure_tally")
+    if not isinstance(tally, dict):
+        raise CheckpointSnapshotError("result failure_tally is malformed")
+    blocked: str | None = None
+    for provider, tallies in tally.items():
+        if not isinstance(provider, str) or not isinstance(tallies, dict):
+            raise CheckpointSnapshotError("result failure_tally is malformed")
+        for category in tallies:
+            if category not in _KNOWN_FAILURE_CATEGORIES:
+                raise CheckpointSnapshotError("result failure_tally has an unknown category")
+            if category in ("auth_missing", "quota_exceeded"):
+                blocked = "auth_quota"
+    return blocked
 
-    ``collector_payload`` is the JSON payload of a successful (committed) apply
-    run for exactly one ``--region`` scope. The bounded result fields are
-    projected verbatim — nothing about coverage/freshness is invented: the entry
-    states only what that run observed. ``observed_at`` must be timezone-aware
-    UTC (the commit time supplied by the caller).
+
+def build_region_checkpoint(payload: Mapping) -> dict:
+    """Bridge ONE committed, scope-matched collector apply RESULT into an entry.
+
+    Strict acceptance (B4): mode ``apply``, ``ok`` true, status
+    succeeded/degraded, region_applied true, canonical region whose id equals
+    cursor_scope, typed booleans/counts, and a timezone-aware
+    ``observation_time`` emitted by the collector itself (never the export
+    clock). Preview/failed/mismatched/legacy input raises — it is never
+    silently classified as recent completion.
     """
-    region = collector_payload.get("region")
+    if not isinstance(payload, Mapping):
+        raise CheckpointSnapshotError("result payload is not an object")
+    if payload.get("mode") != "apply":
+        raise CheckpointSnapshotError("only committed --apply results may become observations")
+    if payload.get("ok") is not True:
+        raise CheckpointSnapshotError("result was not a successful committed run")
+    if payload.get("status") not in _KNOWN_APPLY_STATUSES:
+        raise CheckpointSnapshotError("result status is not an accepted apply status")
+    region = payload.get("region")
     if not isinstance(region, str) or region not in MANUAL_REGION_BY_ID:
-        raise CheckpointSnapshotError("payload region is not a canonical manual region id")
-    failure_tally = collector_payload.get("failure_tally") or {}
-    blocked = None
-    for tallies in failure_tally.values():
-        if "auth_missing" in tallies or "quota_exceeded" in tallies:
-            blocked = "auth_quota"
-            break
+        raise CheckpointSnapshotError("result region is not a canonical manual region id")
+    if len(region) > _REGION_ID_MAX_LENGTH:
+        raise CheckpointSnapshotError("result region id is oversized")
+    if payload.get("region_applied") is not True:
+        raise CheckpointSnapshotError("result was not region-scoped")
+    if payload.get("cursor_scope") != region:
+        raise CheckpointSnapshotError("result cursor_scope does not match its region")
+    exhausted = _strict_bool(payload.get("exhausted"), "result exhausted")
+    places = payload.get("places")
+    if type(places) is not int or places < 0:
+        raise CheckpointSnapshotError("result places count is malformed")
+    requests_used = payload.get("requests_used")
+    if type(requests_used) is not int or not 0 <= requests_used <= _REQUESTS_USED_MAX:
+        raise CheckpointSnapshotError("result requests_used is malformed")
+    stop_reason = payload.get("stop_reason")
+    if stop_reason is not None and stop_reason not in _KNOWN_STOP_REASONS:
+        raise CheckpointSnapshotError("result stop_reason is unknown")
+    if exhausted and stop_reason is not None:
+        raise CheckpointSnapshotError("result is internally inconsistent")
+    observation_time = _parse_timestamp(payload.get("observation_time"), "result observation_time")
+    blocked = _failure_blocked_category(payload)
+    next_cursor = _validate_cursor(payload.get("next_after_place_id"), "result cursor")
+    input_cursor = _validate_cursor(payload.get("after_place_id"), "result input cursor")
+
+    # Sweep semantics (B4): exhausted == end-of-selected-window. Whole-region
+    # completion is certified ONLY for a single-page sweep started from a null
+    # cursor; a non-null tail page stays conservatively unproven.
+    single_page_sweep = input_cursor is None
+    whole_region_complete = bool(exhausted and single_page_sweep and blocked is None)
+    empty_scope = ("region" if single_page_sweep else "window") if places == 0 else None
     return {
         "region": region,
-        "next_after_place_id": _validate_cursor(collector_payload.get("next_after_place_id")),
-        "exhausted": bool(collector_payload.get("exhausted")),
-        "stop_reason": collector_payload.get("stop_reason"),
+        "next_after_place_id": next_cursor,
+        "input_after_place_id": input_cursor,
+        "exhausted": exhausted,
+        "whole_region_complete": whole_region_complete,
+        "empty_scope": empty_scope,
+        "stop_reason": stop_reason,
         "blocked": blocked,
-        "empty_observed": bool(collector_payload.get("places") == 0),
-        "observed_at": observed_at.astimezone(UTC).isoformat(),
+        "requests_used": requests_used,
+        "observation_time": observation_time.isoformat(),
     }
 
 
 def load_checkpoint_snapshot(path: Path) -> dict[str, dict]:
-    """Strictly load + validate a caller-supplied snapshot file.
+    """Strictly load + validate a caller-supplied snapshot file (bounded read).
 
-    Returns {region: entry}. Fails closed (raises) on: missing file, oversize
-    blob, invalid JSON, wrong schema_version/source, unexpected keys anywhere,
-    unknown regions, malformed cursors/times/stop reasons, duplicate entries,
-    or too many entries. Never loads raw reviews/credentials by construction —
-    only the bounded v1 entry shape above is accepted.
+    Reads at most SNAPSHOT_MAX_BYTES+1 bytes (oversize fails closed without
+    loading the blob). Rejects invalid encoding/JSON, unsupported versions,
+    unexpected keys anywhere, non-dict entries, bool-as-integer counts,
+    malformed cursors/times/states, duplicates and over-count — always with a
+    fixed sanitized message (no traceback, no raw invalid input echo).
     """
     try:
-        raw = path.read_bytes()
+        with open(path, "rb") as handle:
+            raw = handle.read(SNAPSHOT_MAX_BYTES + 1)
     except OSError as exc:
         raise CheckpointSnapshotError("checkpoint snapshot could not be read") from exc
     if len(raw) > SNAPSHOT_MAX_BYTES:
         raise CheckpointSnapshotError("checkpoint snapshot exceeds the bounded size limit")
     try:
         document = json.loads(raw)
-    except json.JSONDecodeError as exc:
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
         raise CheckpointSnapshotError("checkpoint snapshot is not valid JSON") from exc
-    if not isinstance(document, dict) or set(document) != {
-        "schema_version",
-        "source",
-        "entries",
-    }:
+    if not isinstance(document, dict):
+        raise CheckpointSnapshotError("checkpoint snapshot has an unexpected top-level shape")
+    try:
+        keys = set(document)
+    except TypeError as exc:
+        raise CheckpointSnapshotError(
+            "checkpoint snapshot has an unexpected top-level shape"
+        ) from exc
+    if keys != {"schema_version", "source", "entries"}:
         raise CheckpointSnapshotError("checkpoint snapshot has an unexpected top-level shape")
     if (
         document["schema_version"] != SNAPSHOT_SCHEMA_VERSION
@@ -215,26 +296,59 @@ def load_checkpoint_snapshot(path: Path) -> dict[str, dict]:
 
     by_region: dict[str, dict] = {}
     for entry in entries:
-        if not isinstance(entry, dict) or set(entry) != _ENTRY_KEYS:
+        if not isinstance(entry, dict):
+            raise CheckpointSnapshotError("checkpoint entry is not an object")
+        try:
+            entry_keys = set(entry)
+        except TypeError as exc:
+            raise CheckpointSnapshotError("checkpoint entry has unexpected fields") from exc
+        if entry_keys != _ENTRY_KEYS:
             raise CheckpointSnapshotError("checkpoint entry has unexpected fields")
         region = entry["region"]
-        if not isinstance(region, str) or region not in MANUAL_REGION_BY_ID:
+        if (
+            not isinstance(region, str)
+            or not region
+            or len(region) > _REGION_ID_MAX_LENGTH
+            or region not in MANUAL_REGION_BY_ID
+        ):
             raise CheckpointSnapshotError("checkpoint entry has an unknown region id")
         if region in by_region:
             raise CheckpointSnapshotError("checkpoint snapshot has duplicate region entries")
-        if not isinstance(entry["exhausted"], bool) or not isinstance(
-            entry["empty_observed"], bool
+        exhausted = _strict_bool(entry["exhausted"], "checkpoint exhausted")
+        whole_complete = _strict_bool(
+            entry["whole_region_complete"], "checkpoint whole_region_complete"
+        )
+        requests_used = entry["requests_used"]
+        if type(requests_used) is not int or not 0 <= requests_used <= _REQUESTS_USED_MAX:
+            raise CheckpointSnapshotError("checkpoint requests_used is malformed")
+        stop_reason = entry["stop_reason"]
+        if stop_reason is not None and (
+            not isinstance(stop_reason, str) or stop_reason not in _KNOWN_STOP_REASONS
         ):
-            raise CheckpointSnapshotError("checkpoint entry has malformed booleans")
-        if entry["stop_reason"] is not None and entry["stop_reason"] not in _KNOWN_STOP_REASONS:
             raise CheckpointSnapshotError("checkpoint entry has an unknown stop_reason")
-        if entry["blocked"] not in (None, "auth_quota"):
+        blocked = entry["blocked"]
+        if blocked is not None and (not isinstance(blocked, str) or blocked != "auth_quota"):
             raise CheckpointSnapshotError("checkpoint entry has an unknown blocked category")
-        observed_at = _parse_observed_at(entry["observed_at"])
-        _validate_cursor(entry["next_after_place_id"])
-        if entry["exhausted"] and entry["stop_reason"] is not None:
+        empty_scope = entry["empty_scope"]
+        if empty_scope is not None and (
+            not isinstance(empty_scope, str) or empty_scope not in ("region", "window")
+        ):
+            raise CheckpointSnapshotError("checkpoint entry has an unknown empty_scope")
+        next_cursor = _validate_cursor(entry["next_after_place_id"], "checkpoint cursor")
+        input_cursor = _validate_cursor(entry["input_after_place_id"], "checkpoint input cursor")
+        observed_at = _parse_timestamp(entry["observation_time"], "checkpoint observation_time")
+        if exhausted and entry["stop_reason"] is not None:
             raise CheckpointSnapshotError("checkpoint entry is internally inconsistent")
-        by_region[region] = {**entry, "_observed_at_dt": observed_at}
+        if whole_complete and not (exhausted and input_cursor is None):
+            raise CheckpointSnapshotError("checkpoint entry is internally inconsistent")
+        if entry["empty_scope"] == "region" and input_cursor is not None:
+            raise CheckpointSnapshotError("checkpoint entry is internally inconsistent")
+        by_region[region] = {
+            **entry,
+            "next_after_place_id": next_cursor,
+            "input_after_place_id": input_cursor,
+            "_observed_at_dt": observed_at,
+        }
     return by_region
 
 
@@ -244,10 +358,10 @@ def classify_region(
     now: datetime,
     refresh_interval: timedelta,
 ) -> str:
-    """Classify one region's recency state from its (optional) checkpoint entry.
+    """Classify one region's recency state from its (optional) entry.
 
-    Malformed-at-load entries never reach here; a FUTURE observed_at (clock
-    skew / inconsistent metadata) classifies as DUE (unknown), never fresh.
+    Blocked evidence never expires and never resets by age/filter (B2).
+    Future observation times classify DUE (unknown), never fresh.
     """
     if entry is None:
         return STATUS_DUE
@@ -256,12 +370,18 @@ def classify_region(
     observed_at: datetime = entry["_observed_at_dt"]
     if observed_at > now:
         return STATUS_DUE
-    if not entry["exhausted"]:
+    if not entry["whole_region_complete"]:
+        # End-of-window without proven whole-region completion: a partial
+        # window resumes from its committed cursor; an unproven multi-page
+        # tail is UNKNOWN_COMPLETION and conservatively restarts (no holes,
+        # dedup absorbs re-collection). Never marked recently collected.
+        if entry["exhausted"] and entry["input_after_place_id"] is not None:
+            return STATUS_UNKNOWN_COMPLETION
         return STATUS_RESUME_PARTIAL
     age = now - observed_at
     if age > refresh_interval:
         return STATUS_DUE_REFRESH
-    if entry["empty_observed"]:
+    if entry["empty_scope"] == "region":
         return STATUS_EMPTY_OBSERVED
     return STATUS_RECENTLY_COLLECTED
 
@@ -279,44 +399,46 @@ def plan_regional_collection(
 ) -> dict[str, Any]:
     """Compute the bounded offline regional work-plan (pure; no I/O).
 
-    Selection order is deterministic (sorted region ids). Candidates are the
-    regions needing work (DUE, DUE_REFRESH, RESUME_PARTIAL); a global
-    auth/quota block anywhere in the evidence stops recommendation of further
-    acquisition without an explicit reset decision (the plan then only reports
-    statuses). Emitted per-region caps always sum within the TOTAL ceiling and
-    honor the reserve-two minimum; regions that no longer fit are DEFERRED.
+    B2: the auth/quota stop inspects ALL loaded evidence, not only the
+    requested subset — any valid blocked entry anywhere prevents new
+    acquisition argv until an operator reset supplies refreshed evidence.
+    Selection order is deterministic; ambiguous-scope regions are BLOCKED_SCOPE
+    with no argv, retained in coverage accounting; emitted per-region caps sum
+    within the TOTAL ceiling honoring reserve-two; regions that no longer fit
+    are DEFERRED.
     """
     statuses: dict[str, str] = {}
+    region_states: dict[str, str] = {}
     planned: list[dict[str, Any]] = []
+    planned_argv: list[list[str]] = []
     deferred: list[str] = []
     scope_blocked: list[str] = []
     remaining_budget = total_request_ceiling
     scheduled_count = 0
-    global_block = any(
-        entries_by_region.get(region, {}).get("blocked") == "auth_quota" for region in regions
-    )
+    global_block = any(entry.get("blocked") == "auth_quota" for entry in entries_by_region.values())
 
-    region_states: dict[str, str] = {}
     for region in regions:
         status = classify_region(
             entries_by_region.get(region), now=now, refresh_interval=refresh_interval
         )
         region_states[region] = status
-        needs_work = status in (STATUS_DUE, STATUS_DUE_REFRESH, STATUS_RESUME_PARTIAL)
-        if not needs_work:
-            statuses[region] = status
-            continue
         if region in region_alias_collisions():
-            # Alias collision: the collector's current region predicate cannot
-            # scope this region safely. Never emit argv for it; keep it in
-            # coverage accounting as BLOCKED_SCOPE pending a province-aware
-            # collector predicate (recorded gap, not guessed around).
+            # B6: an ambiguous predicate taints even "fresh" evidence — the
+            # sweep scope bled across provinces. Always BLOCKED_SCOPE, kept in
+            # coverage accounting, until the P5C province-aware predicate.
             statuses[region] = STATUS_BLOCKED_SCOPE
             scope_blocked.append(region)
             continue
+        needs_work = status in (
+            STATUS_DUE,
+            STATUS_DUE_REFRESH,
+            STATUS_RESUME_PARTIAL,
+            STATUS_UNKNOWN_COMPLETION,
+        )
+        if status == STATUS_AUTH_QUOTA_BLOCKED or not needs_work:
+            statuses[region] = status
+            continue
         if global_block:
-            # Auth/quota is account-level: never march through more regions
-            # until an operator resets and supplies refreshed evidence.
             statuses[region] = status
             continue
         if scheduled_count >= max_regions or remaining_budget < per_region_requests:
@@ -326,14 +448,11 @@ def plan_regional_collection(
         entry = entries_by_region.get(region)
         cursor = None
         if status == STATUS_RESUME_PARTIAL and entry is not None:
-            # Same-region cursor preserved: unfinished windows resume without
-            # skipping; completed sweeps restart from the beginning.
             cursor = entry.get("next_after_place_id")
+        # UNKNOWN_COMPLETION / DUE / DUE_REFRESH restart from the beginning.
         statuses[region] = STATUS_SCHEDULED
         scheduled_count += 1
         remaining_budget -= per_region_requests
-        # Argument ARRAY for the real collector — plain data, never a shell
-        # command, never executed, no confirmation/credentials inside.
         planned.append(
             {
                 "region": region,
@@ -342,20 +461,25 @@ def plan_regional_collection(
                 "max_requests": per_region_requests,
             }
         )
+        # Parseable real-collector argv ARRAY (equals-form option encoding so a
+        # cursor beginning with '-' can never be read as an option). Pending
+        # approval only — never executed, no credentials or confirm tokens.
+        argv = [
+            f"--region={region}",
+            f"--limit={per_region_limit}",
+            f"--max-requests={per_region_requests}",
+        ]
+        if cursor is not None:
+            argv.insert(1, f"--after-place-id={cursor}")
+        planned_argv.append(argv)
 
     return {
         "regions_total": len(regions),
         "regions_scheduled": scheduled_count,
         "regions_deferred": len(deferred),
         "regions_scope_blocked": len(scope_blocked),
-        "collector_scope_gap": (
-            "regions with BLOCKED_SCOPE share district-name aliases across "
-            "provinces; the collector's region_name_ko = ANY(...) predicate "
-            "cannot scope them safely. A province-aware place-window predicate "
-            "is a bounded later correction — no collection argv is emitted for "
-            "them until then."
-        ),
         "planned_arguments": planned,
+        "planned_argv": planned_argv,
         "statuses": statuses,
         "region_states": region_states,
         "auth_quota_blocked": global_block,
@@ -363,7 +487,12 @@ def plan_regional_collection(
         "request_budget_total": total_request_ceiling,
         "request_budget_remaining": remaining_budget,
         "per_region_requests": per_region_requests,
-        # Scheduling/recency semantics only — NOT source-data freshness or
-        # coverage proof (catalog inclusion is not data availability).
+        "collector_scope_gap": (
+            "regions with BLOCKED_SCOPE share district-name aliases across "
+            "provinces; the collector's region_name_ko = ANY(...) predicate "
+            "cannot scope them safely. A province-aware place-window predicate "
+            "is the bounded P5C correction — no collection argv is emitted for "
+            "them until then."
+        ),
         "semantics": "collection_scheduling_recency_only",
     }
