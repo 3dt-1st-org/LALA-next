@@ -65,6 +65,14 @@ class TravelPreferencesStore extends ChangeNotifier {
   /// explicit user intent, and a cleared document must not be resurrected.
   int _clearGeneration = 0;
 
+  /// Whether the current local document was produced by *user intent* (an
+  /// explicit save, an explicit use-account choice, or a pre-existing stored
+  /// document applied by the initial load) as opposed to a derived account
+  /// adoption. An adoption suspended at the storage seam must never overwrite
+  /// a user-intent document that landed while it was queued — but a newer
+  /// account's adoption may still supersede an older account's adopted copy.
+  bool _localDocumentUserOwned = false;
+
   TravelPreferences get value => _value;
   bool get isLoaded => _loaded;
   bool get hasLocalDocument => _hasLocalDocument;
@@ -103,6 +111,9 @@ class TravelPreferencesStore extends ChangeNotifier {
           _deviceUpdatedAt = preferences.getString(
             kTravelPreferencesUpdatedAtKey,
           );
+          // A stored document predates any account connect, so it carries
+          // user ownership: later adoptions must not overwrite it.
+          _localDocumentUserOwned = true;
           _localWriteGeneration += 1;
         }
       });
@@ -174,14 +185,19 @@ class TravelPreferencesStore extends ChangeNotifier {
   /// basis while it was suspended at the storage seam. Derived writes pass
   /// [requireEpoch]/[requireGeneration] (discard when the account scope
   /// changed or any newer write landed); explicit user edits pass
-  /// [requireClearGeneration] (discard only when a newer `clear()` landed).
-  /// Returns whether the write actually committed.
+  /// [requireClearGeneration] (discard only when a newer `clear()` landed);
+  /// adoption additionally passes [requireNoUserDocument] (discard when a
+  /// user-intent document exists by the time the section runs). A platform
+  /// write that acknowledges failure (`false`, no throw) fails the whole
+  /// pair: nothing is claimed, applied, or uploaded. Returns whether the
+  /// write actually committed.
   Future<bool> _saveLocal(
     TravelPreferences next, {
     String? updatedAt,
     int? requireEpoch,
     int? requireGeneration,
     int? requireClearGeneration,
+    bool requireNoUserDocument = false,
   }) async {
     // Acquire the storage handle before enqueueing: a suspended factory must
     // never park the serialized queue behind unrelated callers.
@@ -198,20 +214,30 @@ class TravelPreferencesStore extends ChangeNotifier {
           requireClearGeneration != _clearGeneration) {
         return false;
       }
+      if (requireNoUserDocument &&
+          _hasLocalDocument &&
+          _localDocumentUserOwned) {
+        return false;
+      }
       final resolvedUpdatedAt =
           updatedAt ?? DateTime.now().toUtc().toIso8601String();
-      await preferences.setString(
+      if (!await preferences.setString(
         kTravelPreferencesStorageKey,
         jsonEncode(next.toJson()),
-      );
-      await preferences.setString(
+      )) {
+        return false;
+      }
+      if (!await preferences.setString(
         kTravelPreferencesUpdatedAtKey,
         resolvedUpdatedAt,
-      );
+      )) {
+        return false;
+      }
       _value = next;
       _deviceUpdatedAt = resolvedUpdatedAt;
       _loaded = true;
       _hasLocalDocument = true;
+      _localDocumentUserOwned = !requireNoUserDocument;
       _localWriteGeneration += 1;
       notifyListeners();
       return true;
@@ -290,12 +316,14 @@ class TravelPreferencesStore extends ChangeNotifier {
       _serverDocument = document;
       if (document != null && !_hasLocalDocument) {
         // Adoption may only land while the same account scope is still
-        // connected; a stale account's adoption must never overwrite a
+        // connected and no user-intent document exists by the time its
+        // section runs; a stale account's adoption must never overwrite a
         // successor account's adopted value or a committed user edit.
         await _saveLocal(
           document.preferences,
           updatedAt: document.updatedAt,
           requireEpoch: epoch,
+          requireNoUserDocument: true,
         );
         if (epoch != _syncEpoch) {
           return;
@@ -379,17 +407,25 @@ class TravelPreferencesStore extends ChangeNotifier {
     _clearGeneration += 1;
     _localWriteGeneration += 1;
     final preferences = await _preferencesFactory();
-    await _serialize<void>(() async {
-      await preferences.remove(kTravelPreferencesStorageKey);
-      await preferences.remove(kTravelPreferencesUpdatedAtKey);
+    await _serialize<bool>(() async {
+      // A remove that acknowledges failure (`false`, no throw) must not claim
+      // deletion: the device copy and its pairing stay untouched.
+      if (!await preferences.remove(kTravelPreferencesStorageKey)) {
+        return false;
+      }
+      if (!await preferences.remove(kTravelPreferencesUpdatedAtKey)) {
+        return false;
+      }
       _value = const TravelPreferences();
       _deviceUpdatedAt = null;
       _loaded = true;
       _hasLocalDocument = false;
+      _localDocumentUserOwned = false;
       // The device copy is gone but the account document (if any) still
       // exists; report the honest pairing instead of a stale claim.
       _syncStatus = _statusAfterLocalReset();
       notifyListeners();
+      return true;
     });
   }
 
