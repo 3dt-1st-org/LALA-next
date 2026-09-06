@@ -276,12 +276,78 @@ String? eventDateRangeText(LalaPlace place, String language) {
 
 /// 추천 reason 원문. null/빈이면 null(미출력). 모든 표면이 동일 텍스트를 그리도록
 /// 게이트/원문의 SSOT 로 사용한다(위젯별 재계산/재문구 금지).
-String? placeReasonText(LalaPlace place) {
+///
+/// [language] 를 주면 방문객 로케일(ja/zh-Hans/zh-Hant)에서 서버가 보낸 고정
+/// EN reason 세그먼트를 동일한 의미의 고정 번역문으로 바꿔 그린다(아래
+/// [_reasonSegmentCopy] 계약). ko/en 은 서버 원문을 바이트 그대로 반환하고,
+/// 매핑에 없는 세그먼트(지명/출처 구문 등 원본 데이터)는 변역 없이 보존한다.
+/// [language] 를 생략하면 서버 원문 그대로(하위 호환 — 아직 language 를 모르는
+/// 호출측은 정직한 EN 폴백을 유지한다).
+String? placeReasonText(LalaPlace place, [String? language]) {
   final reason = place.reason;
   if (reason == null || reason.isEmpty) {
     return null;
   }
-  return reason;
+  if (language == null) {
+    return reason;
+  }
+  return localizePlaceReasonText(reason, language);
+}
+
+/// 방문객 로케일 reason 고정 카피 매핑(유계 집합).
+///
+/// 계약(다섯 로케일 reason 카피):
+/// - 서버 /places language 계약은 ko/en 이고 클라이언트는 방문객 로케일을
+///   en 로 요청하므로(lala_copy.dart apiRequestLanguage), 방문객 화면에 오는
+///   reason 은 고정 EN 세그먼트다. 여기서는 그 유한한 고정 세그먼트만
+///   대응 로케일 고정 문구로 바꾼다 — 원본 텍스트(지명/주소/출처 기관명)를
+///   기계 번역하거나 조작하지 않는다.
+/// - 서버가 이미 운영 상태 주장(영업중/Open now)을 내보내지 않으므로 이
+///   매핑에도 운영 토큰이 없다. 구버전 서버의 잔여 토큰은 매핑되지 않은
+///   세그먼트로 취급되어 EN 폴백으로 남는다(검증된 주장으로 번역 금지).
+/// - ko/en 은 서버 원문 SSOT 그대로(바이트 동일).
+const Map<String, Map<String, String>> _reasonSegmentCopies = {
+  // 날씨 밴드(S3) — 실내 적합 포함.
+  'Indoor-friendly': {
+    'ja': '屋内活動に適した',
+    'zh-Hans': '适合室内活动',
+    'zh-Hant': '適合室內活動',
+  },
+  'Cold weather': {'ja': '寒い天気', 'zh-Hans': '寒冷天气', 'zh-Hant': '寒冷天氣'},
+  'Cool weather': {'ja': '過ごしやすい天気', 'zh-Hans': '凉爽天气', 'zh-Hant': '涼爽天氣'},
+  'Warm weather': {'ja': '暖かい天気', 'zh-Hans': '温暖天气', 'zh-Hant': '溫暖天氣'},
+  'Hot weather': {'ja': '暑い天気', 'zh-Hans': '炎热天气', 'zh-Hant': '炎熱天氣'},
+  // 로컬 활동(S2).
+  'Active local spending': {
+    'ja': '地元の消費が活発',
+    'zh-Hans': '本地消费活跃',
+    'zh-Hant': '本地消費活躍',
+  },
+  // 행사(D4) — is_ongoing 은 구조화된 행사일 메타데이터만 근거로 함.
+  'Ongoing event': {'ja': '開催中のイベント', 'zh-Hans': '进行中的活动', 'zh-Hant': '進行中的活動'},
+  'Linked event': {'ja': '関連イベント', 'zh-Hans': '关联活动', 'zh-Hant': '關聯活動'},
+  // 근접.
+  'Nearby': {'ja': '近く', 'zh-Hans': '近距离', 'zh-Hant': '近距離'},
+};
+
+/// reason 문자열의 고정 세그먼트를 [language] 로케일 고정 카피로 바꾼다.
+///
+/// - ko/en → 원문 그대로(서버가 이미 해당 언어로 조합한 SSOT).
+/// - 방문객 로케일 → ' · ' 구분 세그먼트별로 [_reasonSegmentCopies] 매핑;
+///   매핑에 없는 세그먼트(출처 구문/지명 등)는 원문 보존 — 출처 인용을
+///   훼손하지 않고 지명을 번역해 만들지 않는다.
+String localizePlaceReasonText(String reason, String language) {
+  final normalized = normalizeLalaLanguage(language);
+  if (normalized == 'ko' || normalized == 'en') {
+    return reason;
+  }
+  return reason
+      .split(' · ')
+      .map(
+        (segment) =>
+            _reasonSegmentCopies[segment.trim()]?[normalized] ?? segment,
+      )
+      .join(' · ');
 }
 
 /// 장소 데이터 신선도 원문. reason 과 동일한 SSOT 규칙(null/빈 → null).
@@ -305,6 +371,6 @@ String placeCardSemanticsLabel(LalaPlace place, String language) {
     categoryFilterLabel(place.category, language),
     ?distance,
     if (region.isNotEmpty) region,
-    if (placeReasonText(place) case final String reason) reason,
+    if (placeReasonText(place, language) case final String reason) reason,
   ].join(', ');
 }

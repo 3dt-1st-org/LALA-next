@@ -187,6 +187,7 @@ class MapRailPlaceCard extends StatelessWidget {
                             PlaceReasonLine(
                               place: place,
                               topSpacing: 2,
+                              language: language,
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 10,
