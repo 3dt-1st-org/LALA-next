@@ -743,6 +743,19 @@ def test_r5_mixed_fatal_stop_priority_and_cap(cap, monkeypatch, capsys, tmp_path
         capsys.readouterr()
         cursor = nxt
 
+    from datetime import UTC as _UTC
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
+
+    _base = _dt(2026, 9, 6, 11, 0, tzinfo=_UTC)
+    # The fatal observation is STRICTLY newer than the final chain page
+    # (11:00 + (cap-1) minutes), and the reset strictly after the fatal.
+    fatal_time = (_base + _td(minutes=cap)).isoformat()
+    reset_time = (_base + _td(minutes=cap + 5)).isoformat()
+    before_fatal = json.loads(state.read_text(encoding="utf-8"))["entries"]
+    pages_at_cap = {e["region"]: e["sweep_pages"] for e in before_fatal if "sweep_pages" in e}
+    assert pages_at_cap.get("busan-haeundae") == cap  # proof at the cap head
+
     # Mixed success+fatal status=degraded with ZERO progress at the cap head:
     # sticky stop recorded (rc0), not a page-cap rejection.
     mixed = _raw_page(
@@ -754,7 +767,7 @@ def test_r5_mixed_fatal_stop_priority_and_cap(cap, monkeypatch, capsys, tmp_path
         attempted=2,
         completed=1,
         tally={"naver_blog": {"ok": 1}, "naver_cafe": {"quota_exceeded": 1}},
-        observed="2026-09-06T12:00:00+00:00",
+        observed=fatal_time,
     )
     rc = _export_state(monkeypatch, capsys, tmp_path, state, mixed, "r5-m.json")
     assert rc == 0
@@ -762,19 +775,21 @@ def test_r5_mixed_fatal_stop_priority_and_cap(cap, monkeypatch, capsys, tmp_path
     entries = {e["region"]: e for e in json.loads(state.read_text(encoding="utf-8"))["entries"]}
     assert entries["busan-haeundae"]["blocked"] == "auth_quota"
     assert entries["busan-haeundae"]["whole_region_complete"] is False
+    # The stop did NOT drop the at-cap proof via any stale bypass.
+    assert entries["busan-haeundae"]["sweep_pages"] == cap
     assert entries["seoul-seongdong"]["next_after_place_id"] == "s-2"  # preserved
     stopped = state.read_bytes()
 
-    # Later clean reset attempt unchanged: sticky rejection.
-    clean_reset = _chain_page(cursor, f"{cursor}-next", "2026-09-06T13:00:00+00:00")
+    # Later clean reset attempt (STRICTLY after the fatal) unchanged: sticky.
+    clean_reset = _chain_page(cursor, f"{cursor}-next", reset_time)
     rc = _export_state(monkeypatch, capsys, tmp_path, state, clean_reset, "r5-r.json")
     assert rc == 2
     assert "sticky" in json.loads(capsys.readouterr().out)["error"]
     assert state.read_bytes() == stopped
 
-    # Older VALID fatal stays sticky too (fresh state, newer success first) —
-    # proving STATE2 itself retained the old stop with the newer region's
-    # cursor/time preserved, then scheduling STATE2 (not the first scenario).
+    # CROSS-REGION sticky case (fresh state, newer success in another region):
+    # proving STATE2 itself retained the old stop with the OTHER region's
+    # newer cursor/time preserved, then scheduling STATE2.
     state2 = tmp_path / "state5b.json"
     assert (
         _export_state(
