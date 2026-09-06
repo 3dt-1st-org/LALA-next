@@ -108,6 +108,11 @@ _SCOPE_COLLISIONS: dict[str, tuple[str, ...]] | None = None
 # qualifier is conservatively UNQUALIFIED (never defaulted to True). The
 # interim 13920092 shape (top-level scope_contract present, entries without
 # the bool) lands in the same conservative bucket via this rule.
+# P5D2 bounded lineage: a live chain proof. Historical entries lack these
+# keys entirely — absence never grants multi-page chain credit.
+SWEEP_MAX_PAGES = 64
+_KNOWN_PAGE_KINDS = frozenset({"clean_prefix", "degraded_page", "terminal_clean", "failed_page"})
+_ENTRY_KEYS_LINEAGE = frozenset({"sweep_pages", "sweep_chain_started_at", "lineage_page_kind"})
 _ENTRY_KEYS_OPTIONAL = frozenset({"qualified_scope"})
 _ENTRY_KEYS = frozenset(
     {
@@ -330,6 +335,17 @@ def build_region_checkpoint(payload: Mapping) -> dict:
     # Sweep semantics (B4): exhausted == end-of-selected-window. Whole-region
     # completion is certified ONLY for a single-page sweep started from a null
     # cursor; a non-null tail page stays conservatively unproven.
+    # P5D2 per-page eligibility, derived ONLY here from raw committed facts
+    # (status + failure tally) — never inferred later from reduced fields.
+    if failed_run:
+        lineage_page_kind = "failed_page"
+    elif status == "degraded" or not sweep_clean:
+        lineage_page_kind = "degraded_page"
+    elif exhausted:
+        lineage_page_kind = "terminal_clean"
+    else:
+        lineage_page_kind = "clean_prefix"
+
     single_page_sweep = input_cursor is None
     whole_region_complete = bool(
         exhausted
@@ -358,6 +374,7 @@ def build_region_checkpoint(payload: Mapping) -> dict:
         "requests_used": requests_used,
         "observation_time": observation_time.isoformat(),
         "qualified_scope": qualified_scope,
+        "lineage_page_kind": lineage_page_kind,
     }
 
 
@@ -416,7 +433,11 @@ def load_checkpoint_snapshot(path: Path) -> dict[str, dict]:
             entry_keys = set(entry)
         except TypeError as exc:
             raise CheckpointSnapshotError("checkpoint entry has unexpected fields") from exc
-        if entry_keys not in (_ENTRY_KEYS, _ENTRY_KEYS | _ENTRY_KEYS_OPTIONAL):
+        allowed = _ENTRY_KEYS | _ENTRY_KEYS_OPTIONAL | _ENTRY_KEYS_LINEAGE
+        if not entry_keys >= _ENTRY_KEYS or not entry_keys <= allowed:
+            # Exact known shapes only: core required; optional qualifiers and
+            # lineage keys allowed individually (a fresh bridge entry carries
+            # lineage_page_kind alone; chain proof keys must co-appear below).
             raise CheckpointSnapshotError("checkpoint entry has unexpected fields")
         region = entry["region"]
         if (
@@ -456,9 +477,33 @@ def load_checkpoint_snapshot(path: Path) -> dict[str, dict]:
         next_cursor = _validate_cursor(entry["next_after_place_id"], "checkpoint cursor")
         input_cursor = _validate_cursor(entry["input_after_place_id"], "checkpoint input cursor")
         observed_at = _parse_timestamp(entry["observation_time"], "checkpoint observation_time")
+        if "lineage_page_kind" in entry and entry["lineage_page_kind"] not in _KNOWN_PAGE_KINDS:
+            raise CheckpointSnapshotError("checkpoint lineage_page_kind is unknown")
+        if ("sweep_pages" in entry) != ("sweep_chain_started_at" in entry):
+            raise CheckpointSnapshotError("checkpoint lineage metadata is partial")
+        if "sweep_pages" in entry or "sweep_chain_started_at" in entry:
+            # Exact lineage shape: both keys, strict types, bounded count, and
+            # the chain start can never postdate the last observation.
+            if not ("sweep_pages" in entry and "sweep_chain_started_at" in entry):
+                raise CheckpointSnapshotError("checkpoint lineage metadata is partial")
+            sweep_pages = entry["sweep_pages"]
+            if type(sweep_pages) is not int or not 1 <= sweep_pages <= SWEEP_MAX_PAGES:
+                raise CheckpointSnapshotError("checkpoint sweep_pages is malformed")
+            chain_started = _parse_timestamp(
+                entry["sweep_chain_started_at"], "checkpoint sweep_chain_started_at"
+            )
+            if chain_started > observed_at:
+                raise CheckpointSnapshotError("checkpoint entry is internally inconsistent")
+            if whole_complete and input_cursor is not None and "sweep_pages" not in entry:
+                raise CheckpointSnapshotError("checkpoint entry is internally inconsistent")
+        elif whole_complete and input_cursor is not None:
+            # A non-null tail can only carry whole completion WITH lineage proof.
+            raise CheckpointSnapshotError("checkpoint entry is internally inconsistent")
         if exhausted and entry["stop_reason"] is not None:
             raise CheckpointSnapshotError("checkpoint entry is internally inconsistent")
-        if whole_complete and not (exhausted and input_cursor is None):
+        if whole_complete and not exhausted:
+            raise CheckpointSnapshotError("checkpoint entry is internally inconsistent")
+        if whole_complete and blocked is not None:
             raise CheckpointSnapshotError("checkpoint entry is internally inconsistent")
         if entry["empty_scope"] == "region" and input_cursor is not None:
             raise CheckpointSnapshotError("checkpoint entry is internally inconsistent")
@@ -467,6 +512,11 @@ def load_checkpoint_snapshot(path: Path) -> dict[str, dict]:
             "next_after_place_id": next_cursor,
             "input_after_place_id": input_cursor,
             "_observed_at_dt": observed_at,
+            "_chain_started_dt": (
+                _parse_timestamp(entry["sweep_chain_started_at"], "chain start")
+                if "sweep_chain_started_at" in entry
+                else observed_at
+            ),
             # Snapshot-level legacy OR per-entry unqualified result provenance:
             # either way the entry carries no cursor/freshness credit, while
             # account-wide auth/quota stops always survive.
@@ -506,7 +556,7 @@ def classify_region(
         if entry["exhausted"] and entry["input_after_place_id"] is not None:
             return STATUS_UNKNOWN_COMPLETION
         return STATUS_RESUME_PARTIAL
-    age = now - observed_at
+    age = now - entry.get("_chain_started_dt", observed_at)
     if age > refresh_interval:
         return STATUS_DUE_REFRESH
     if entry["empty_scope"] == "region":
@@ -658,11 +708,110 @@ def _canonical_entry(entry: Mapping) -> dict:
     canonical["qualified_scope"] = bool(entry.get("qualified_scope")) and not entry.get(
         "_legacy_scope"
     )
+    if "lineage_page_kind" in entry and not entry.get("_legacy_scope"):
+        canonical["lineage_page_kind"] = entry["lineage_page_kind"]
+    if "sweep_pages" in entry and not entry.get("_legacy_scope"):
+        # Bounded chain proof survives reserialization; legacy stores never
+        # gain it (absent metadata grants no new chain credit).
+        canonical["sweep_pages"] = entry["sweep_pages"]
+        canonical["sweep_chain_started_at"] = entry["sweep_chain_started_at"]
     return canonical
 
 
 def _entry_observation_time(entry: Mapping) -> datetime:
     return _parse_timestamp(entry["observation_time"], "entry observation_time")
+
+
+def _apply_sweep_lineage(stored: dict | None, incoming: dict) -> dict:
+    """Attach bounded multi-page chain proof to an incoming canonical entry.
+
+    Per-page eligibility comes ONLY from ``lineage_page_kind`` derived by the
+    bridge from raw committed result facts (status + failure tally) — degraded,
+    quarantined and failed pages can never masquerade as clean. A chain starts
+    ONLY from a qualified CLEAN null-input page; extension requires the SAME
+    region with an input cursor exactly equal to the stored head's committed
+    next cursor and a strictly newer observation. Clean/degraded pages advance
+    with their ACTUAL committed cursor (never reset); degraded and failed pages
+    never earn terminal credit; failed pages keep the head without increment.
+    Wrong-cursor tails carry no chain (a hole is never self-mended). Only a
+    terminal_clean page closes the chain (whole-sweep recency anchored to the
+    EARLIEST chain observation; an empty terminal tail is an empty WINDOW,
+    never an empty region). Overflow past SWEEP_MAX_PAGES fails closed. A
+    same-time exact replay re-derives the identical lineage (idempotent).
+    """
+    kind = incoming.get("lineage_page_kind")
+    if incoming["input_after_place_id"] is None:
+        if incoming["qualified_scope"] and kind in ("clean_prefix", "terminal_clean"):
+            incoming["sweep_pages"] = 1
+            incoming["sweep_chain_started_at"] = incoming["observation_time"]
+        return incoming
+
+    if stored is None or "sweep_pages" not in stored or not stored["qualified_scope"]:
+        return incoming  # non-null tail without a live chain head: no credit
+    head_cursor = stored["next_after_place_id"]
+    if incoming["input_after_place_id"] != head_cursor:
+        return incoming  # hole / unrelated restart: lineage never mends itself
+
+    prior_time = _entry_observation_time(stored)
+    incoming_time = _entry_observation_time(incoming)
+    if incoming_time == prior_time:
+        # Same-time exact replay of the stored page: re-derive the identical
+        # lineage (idempotent after final publication). Comparison uses the
+        # PAGE facts only — whole_region_complete/empty_scope are chain-derived
+        # state a fresh bridge entry cannot know.
+        page_keys = (
+            "region",
+            "next_after_place_id",
+            "input_after_place_id",
+            "exhausted",
+            "stop_reason",
+            "blocked",
+            "requests_used",
+            "observation_time",
+            "qualified_scope",
+            "lineage_page_kind",
+        )
+        if all(stored.get(k) == incoming.get(k) for k in page_keys):
+            incoming["sweep_pages"] = stored["sweep_pages"]
+            incoming["sweep_chain_started_at"] = stored["sweep_chain_started_at"]
+            incoming["whole_region_complete"] = stored["whole_region_complete"]
+            incoming["empty_scope"] = stored["empty_scope"]
+        return incoming
+    if incoming_time < prior_time:
+        return incoming  # older page: handled by the monotonic rules
+
+    if kind == "failed_page":
+        # Failed page at the exact head: chain stays alive at the same head
+        # with the page's own facts preserved (bridge kept cursor unchanged).
+        incoming["sweep_pages"] = stored["sweep_pages"]
+        incoming["sweep_chain_started_at"] = stored["sweep_chain_started_at"]
+        incoming["whole_region_complete"] = False
+        return incoming
+
+    if (
+        incoming["next_after_place_id"] == incoming["input_after_place_id"]
+        and not incoming["exhausted"]
+    ):
+        raise CheckpointStateError("zero-progress nonterminal page; rejected")
+
+    pages = stored["sweep_pages"] + 1
+    if pages > SWEEP_MAX_PAGES:
+        raise CheckpointStateError(
+            "sweep lineage exceeds the bounded page count; no credit granted"
+        )
+    incoming["sweep_pages"] = pages
+    incoming["sweep_chain_started_at"] = stored["sweep_chain_started_at"]
+
+    if kind == "terminal_clean":
+        incoming["whole_region_complete"] = True
+        incoming["empty_scope"] = (
+            "window" if incoming["next_after_place_id"] == head_cursor else None
+        )
+        return incoming
+    # clean_prefix / degraded_page: advance with the ACTUAL committed cursor;
+    # degraded earns no completion credit (whole_region_complete stays False).
+    incoming["whole_region_complete"] = False
+    return incoming
 
 
 def update_checkpoint_state(state_path: Path, entry: Mapping) -> dict[str, Any]:
@@ -731,6 +880,7 @@ def update_checkpoint_state(state_path: Path, entry: Mapping) -> dict[str, Any]:
         merged: dict[str, dict] = {
             region: _canonical_entry(stored) for region, stored in prior.items()
         }
+        incoming = _apply_sweep_lineage(merged.get(incoming_region), incoming)
 
         if incoming["blocked"] != "auth_quota" and any(
             stored.get("blocked") == "auth_quota" for stored in merged.values()
