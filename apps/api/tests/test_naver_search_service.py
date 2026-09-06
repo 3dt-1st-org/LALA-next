@@ -297,7 +297,9 @@ def _setup_tool_monkeypatch(
     monkeypatch.setattr(
         tool,
         "_read_places_on_cursor",
-        lambda cur, limit, region_place_names=None: places or [_fake_place()],
+        lambda cur, limit, region_place_names=None, after_place_id=None, tour_api_area=None: (
+            places or [_fake_place()]
+        ),
     )
     if collection_fn is not None:
         monkeypatch.setattr(tool, "collect_mentions_for_place", collection_fn)
@@ -1103,7 +1105,7 @@ def test_preview_region_scopes_place_read_and_output(monkeypatch, capsys):
     region_applied=true; --limit travels with it."""
     read_calls: list[tuple[int, tuple[str, ...] | None]] = []
 
-    def fake_read(cur, limit, region_place_names=None):
+    def fake_read(cur, limit, region_place_names=None, after_place_id=None, tour_api_area=None):
         read_calls.append((limit, region_place_names))
         return [_fake_place(region_name_ko="성동구")]
 
@@ -1123,7 +1125,7 @@ def test_apply_region_scopes_place_read_and_output(monkeypatch, capsys):
     """Apply threads the region through preflight identically and reports it."""
     read_calls: list[tuple[int, tuple[str, ...] | None]] = []
 
-    def fake_read(cur, limit, region_place_names=None):
+    def fake_read(cur, limit, region_place_names=None, after_place_id=None, tour_api_area=None):
         read_calls.append((limit, region_place_names))
         return [_fake_place(region_name_ko="해운대구")]
 

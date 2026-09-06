@@ -20,7 +20,10 @@ from apps.api.app.services.naver_search_service import (
     PlaceCollectionResult,
     TransientNaverPost,
 )
-from apps.api.app.services.region_catalog import manual_region_place_names
+from apps.api.app.services.region_catalog import (
+    manual_region_place_names,
+    manual_region_tour_api_area_code,
+)
 from apps.api.app.services.review_ingest_governance import (
     ReviewGovernanceError,
     ReviewIngestResult,
@@ -201,7 +204,7 @@ def _wire(
     )
     monkeypatch.setattr(tool, "get_settings", lambda: calls["settings"].append(1))
 
-    def fake_read(cur, limit, region_place_names=None, after_place_id=None):
+    def fake_read(cur, limit, region_place_names=None, after_place_id=None, tour_api_area=None):
         calls["read"].append((limit, region_place_names, after_place_id))
         return list(places)
 
@@ -743,7 +746,9 @@ def _wire_real_acquisition(
     monkeypatch.setattr(tool, "_open_connection", lambda *a, **kw: _FakeConn())
     monkeypatch.setattr(tool, "load_active_review_source", lambda *a, **kw: _registration())
     monkeypatch.setattr(
-        tool, "_read_places_on_cursor", lambda cur, limit, names=None, cursor=None: list(places)
+        tool,
+        "_read_places_on_cursor",
+        lambda cur, limit, names=None, cursor=None, area=None: list(places),
     )
     monkeypatch.setattr(tool, "record_job_run", lambda **kw: None)
     monkeypatch.setenv("DB_DSN", "host=localhost dbname=test")
@@ -858,6 +863,7 @@ def _write_snapshot(path, entries):
             {
                 "schema_version": 1,
                 "source": "naver_review_collect_apply_payloads",
+                "scope_contract": "tour_api_province_qualified_v1",
                 "entries": entries,
             }
         )
@@ -1044,11 +1050,11 @@ def test_b3_supports_whole_catalog_snapshot(monkeypatch, capsys, tmp_path):
     assert rc == 0
     payload = _out(capsys)
     assert payload["regions_total"] == len(cc.canonical_region_ids())
-    # Every region appears in coverage accounting; blocked-scope regions are
-    # counted as regions, never dropped.
-    assert payload["regions_scope_blocked"] == len(cc.region_alias_collisions())
-    blocked = [r for r, s in payload["statuses"].items() if s == "BLOCKED_SCOPE"]
-    assert len(blocked) == len(cc.region_alias_collisions())
+    # P5C: the province-qualified predicate unblocks alias-colliding regions;
+    # they are counted as qualified (scheduled as RECENT evidence allows).
+    assert payload["regions_scope_blocked"] == 0
+    assert payload["regions_alias_qualified"] == len(cc.region_alias_collisions())
+    assert payload["scope_contract"] == "tour_api_province_qualified_v1"
 
 
 def test_b3_independent_upper_limits(monkeypatch, capsys):
@@ -1536,8 +1542,9 @@ def test_s3_full_catalog_state_fits_bounded_ceiling(monkeypatch, capsys, tmp_pat
     assert rc == 0
     payload = _out(capsys)
     assert payload["regions_total"] == len(cc.canonical_region_ids())
-    # Ambiguous regions stay BLOCKED_SCOPE even as resume candidates.
-    assert payload["regions_scope_blocked"] == len(cc.region_alias_collisions())
+    # P5C: alias-colliding resume candidates are qualified and scheduled now.
+    assert payload["regions_scope_blocked"] == 0
+    assert payload["regions_alias_qualified"] == len(cc.region_alias_collisions())
 
 
 def test_committed_auth_quota_failure_round_trip_blocks_other_regions(
@@ -1707,3 +1714,253 @@ def test_audit_valid_all_name_skipped_sweep_certifies_freshness():
         )
     )
     assert entry["whole_region_complete"] is True
+
+
+# == P5C: province-qualified region predicate =======================================
+
+
+def test_p5c_qualified_sql_predicate_parameterized_before_limit():
+    names = manual_region_place_names("daegu-jung")
+    cur = _RecordingCursor([("p9", PLACE_NAME, "attraction", "중구")])
+
+    tool._read_places_on_cursor(cur, 25, names, "p1", "4")
+
+    sql, params = cur.queries[0]
+    # Same district (중구) in multiple provinces resolves to DISTINCT proven
+    # TourAPI area codes: daegu 4 (not kopis 27, not seoul 1).
+    assert manual_region_tour_api_area_code("seoul-jung") == "1"
+    assert manual_region_tour_api_area_code("daegu-jung") == "4"
+    assert manual_region_tour_api_area_code("busan-jung") == "6"
+    assert "region_name_ko = ANY(%s)" in sql
+    assert "province_code = %s" in sql
+    assert "primary_source = 'tour_api'" in sql
+    assert "place_id > %s" in sql
+    assert (
+        sql.index("ANY(%s)")
+        < sql.index("province_code = %s")
+        < sql.index("place_id > %s")
+        < sql.index("ORDER BY place_id")
+        < sql.index("LIMIT %s")
+    )
+    assert params == (list(names), "4", "p1", 25)
+
+
+def test_p5c_area_code_none_keeps_alias_only_shape_and_global_unchanged():
+    names = manual_region_place_names("seoul-seongdong")
+    cur = _RecordingCursor()
+    tool._read_places_on_cursor(cur, 25, names, None, None)
+    sql, params = cur.queries[0]
+    assert "province_code" not in sql and "primary_source" not in sql
+    assert params == (list(names), 25)
+
+    cur2 = _RecordingCursor()
+    tool._read_places_on_cursor(cur2, 25, None, None, None)
+    sql2, params2 = cur2.queries[0]
+    # Global mode stays byte-identical: no region/province/source/cursor parts.
+    assert "ANY" not in sql2 and "province_code" not in sql2 and "place_id >" not in sql2
+    assert "ORDER BY place_id" in sql2 and "LIMIT %s" in sql2
+    assert params2 == (25,)
+
+
+def test_p5c_helper_fail_closed_and_provenance():
+    from apps.api.app.services.region_catalog import (
+        _KOPIS_SIGNGUCODES,
+        _TOUR_API_AREA_CODES,
+        manual_region_scope,
+    )
+
+    assert manual_region_tour_api_area_code("not-a-region") is None
+    assert manual_region_tour_api_area_code(None) is None
+    scope = manual_region_scope("daegu-jung")
+    assert scope is not None
+    # TourAPI areacode namespace (4): a KOPIS signgucode value never appears,
+    # and the code is exactly one of the catalog's TourAPI province codes.
+    tour_code = manual_region_tour_api_area_code("daegu-jung")
+    assert tour_code == "4"
+    assert tour_code not in set(_KOPIS_SIGNGUCODES.values())
+    assert tour_code in set(_TOUR_API_AREA_CODES.values())
+
+
+def test_p5c_preview_and_apply_thread_the_qualified_scope(monkeypatch, capsys):
+    reads: list[tuple] = []
+
+    def fake_read(cur, limit, names=None, after=None, area=None):
+        reads.append((limit, names, after, area))
+        return [_place("p1")]
+
+    monkeypatch.setattr(tool, "_open_connection", lambda *a, **kw: _FakeConn())
+    monkeypatch.setattr(tool, "load_active_review_source", lambda *a, **kw: _registration())
+    monkeypatch.setattr(tool, "_read_places_on_cursor", fake_read)
+    monkeypatch.setattr(
+        tool, "collect_mentions_for_place", lambda **kw: _collection(kw["place_id"])
+    )
+    monkeypatch.setenv("DB_DSN", "host=localhost dbname=test")
+
+    rc = tool.main(["--preview", "--json", "--region", "daegu-jung", "--after-place-id", "p1"])
+    assert rc == 0
+    monkeypatch.setattr(tool, "govern_review_ingest_on_cursor", lambda cur, **kw: _ingest_result())
+    monkeypatch.setattr(tool, "insert_review_mention_aggregates_on_cursor", lambda cur, aggs: 0)
+    monkeypatch.setattr(tool, "record_job_run", lambda **kw: None)
+    monkeypatch.setenv(tool.ALLOW_ENV, "1")
+    rc = tool.main(["--apply", "--json", "--confirm", tool.CONFIRM_TEXT, "--region", "daegu-jung"])
+    assert rc == 0
+
+    # Identical qualified scope on both paths: aliases + proven area code 4.
+    assert reads[0] == (50, manual_region_place_names("daegu-jung"), "p1", "4")
+    assert reads[1] == (50, manual_region_place_names("daegu-jung"), None, "4")
+
+
+def test_p5c_ambiguous_regions_get_qualified_plans_not_blocks(monkeypatch, capsys):
+    from apps.api.app.services import collector_checkpoint as cc
+
+    _no_io_wiring(monkeypatch)
+    rc = tool.main(["--schedule", "--json", "--regions", "daegu-jung,seoul-jung,busan-jung"])
+    assert rc == 0
+    payload = _out(capsys)
+    assert payload["regions_scope_blocked"] == 0
+    assert payload["regions_alias_qualified"] == len(cc.region_alias_collisions())
+    assert {p["region"] for p in payload["planned_arguments"]} == {
+        "busan-jung",
+        "daegu-jung",
+        "seoul-jung",
+    }
+    # Eligibility is scoped to qualified rows, never whole-region data proof.
+    assert "coverage gap" in payload["collector_scope_gap"]
+
+
+def test_p5c_legacy_snapshot_transfers_no_credit_but_keeps_quota_stop(
+    monkeypatch, capsys, tmp_path
+):
+    import json as _json
+
+    _no_io_wiring(monkeypatch)
+    legacy = tmp_path / "legacy.json"
+    # Alias-only snapshot (no scope_contract): partial cursor + fresh completion.
+    legacy.write_text(
+        _json.dumps(
+            {
+                "schema_version": 1,
+                "source": "naver_review_collect_apply_payloads",
+                "entries": [
+                    _entry("seoul-seongdong", cursor="p5", exhausted=False),
+                    _entry("busan-haeundae", exhausted=True, whole_region_complete=True),
+                ],
+            }
+        )
+    )
+    rc = tool.main(
+        [
+            "--schedule",
+            "--json",
+            "--checkpoint-snapshot",
+            str(legacy),
+            "--regions",
+            "seoul-seongdong,busan-haeundae",
+        ]
+    )
+    assert rc == 0
+    payload = _out(capsys)
+    # No cursor and no freshness credit from legacy evidence...
+    assert payload["region_states"]["seoul-seongdong"] == "DUE"
+    assert payload["region_states"]["busan-haeundae"] == "DUE"
+    planned = {p["region"]: p for p in payload["planned_arguments"]}
+    assert planned["seoul-seongdong"]["after_place_id"] is None
+    # ...but account-wide stops always survive the contract change.
+    blocked = tmp_path / "blocked.json"
+    blocked.write_text(
+        _json.dumps(
+            {
+                "schema_version": 1,
+                "source": "naver_review_collect_apply_payloads",
+                "entries": [_entry("daegu-jung", blocked="auth_quota")],
+            }
+        )
+    )
+    rc = tool.main(
+        [
+            "--schedule",
+            "--json",
+            "--checkpoint-snapshot",
+            str(blocked),
+            "--regions",
+            "seoul-seongdong",
+        ]
+    )
+    assert rc == 0
+    payload = _out(capsys)
+    assert payload["auth_quota_blocked"] is True
+    assert payload["planned_argv"] == []
+
+
+def test_p5c_mismatched_scope_contract_fails_closed(monkeypatch, capsys, tmp_path):
+    import json as _json
+
+    _no_io_wiring(monkeypatch)
+    bad = tmp_path / "bad.json"
+    bad.write_text(
+        _json.dumps(
+            {
+                "schema_version": 1,
+                "source": "naver_review_collect_apply_payloads",
+                "scope_contract": "some-future-contract",
+                "entries": [],
+            }
+        )
+    )
+    rc = tool.main(["--schedule", "--json", "--checkpoint-snapshot", str(bad)])
+    assert rc == 2
+    assert "scope contract mismatch" in _out(capsys)["error"]
+
+
+def test_p5c_round_trip_retains_scope_provenance(monkeypatch, capsys, tmp_path):
+    import json as _json
+
+    # Real scoped apply on an AMBIGUOUS district under the qualified predicate.
+    places = [_place("p1")]
+    script = {p.place_id: _collection(p.place_id) for p in places}
+    _wire(monkeypatch, places=places, script=script)
+    monkeypatch.setenv(tool.ALLOW_ENV, "1")
+    rc = tool.main(
+        [
+            "--apply",
+            "--json",
+            "--confirm",
+            tool.CONFIRM_TEXT,
+            "--region",
+            "daegu-jung",
+            "--limit",
+            "2",
+        ]
+    )
+    assert rc == 0
+    apply_payload = _out(capsys)
+
+    _no_io_wiring(monkeypatch)
+    result = tmp_path / "r.json"
+    result.write_text(_json.dumps(apply_payload))
+    rc = tool.main(["--export-checkpoint", "--json", "--from-collector-result", str(result)])
+    assert rc == 0
+    snapshot_doc = _json.loads(capsys.readouterr().out)
+    assert snapshot_doc["scope_contract"] == "tour_api_province_qualified_v1"
+
+    snap = tmp_path / "cp.json"
+    snap.write_text(_json.dumps(snapshot_doc))
+    rc = tool.main(
+        [
+            "--schedule",
+            "--json",
+            "--checkpoint-snapshot",
+            str(snap),
+            "--regions",
+            "daegu-jung,seoul-seongdong",
+        ]
+    )
+    assert rc == 0
+    payload = _out(capsys)
+    # New-contract evidence carries real credit: daegu-jung resumes/schedules.
+    assert payload["region_states"]["daegu-jung"] != "DUE"
+    argv_regions = {a[0] for a in payload["planned_argv"]}
+    assert "daegu-jung" in argv_regions or payload["region_states"]["daegu-jung"] in {
+        "RECENTLY_COLLECTED",
+        "EMPTY_OBSERVED",
+    }

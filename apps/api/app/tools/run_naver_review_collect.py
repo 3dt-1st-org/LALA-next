@@ -75,7 +75,10 @@ from apps.api.app.services.naver_search_service import (
     TransientNaverPost,
     collect_mentions_for_place,
 )
-from apps.api.app.services.region_catalog import manual_region_place_names
+from apps.api.app.services.region_catalog import (
+    manual_region_place_names,
+    manual_region_tour_api_area_code,
+)
 from apps.api.app.services.review_ingest_governance import (
     ReviewGovernanceError,
     ReviewSourceRegistration,
@@ -475,9 +478,11 @@ def main(argv: list[str] | None = None) -> int:
     # acquisition: a typo'd region must never degrade into the global place
     # window (which can contain zero places of the target region).
     region_place_names: tuple[str, ...] | None = None
+    region_tour_api_area_code: str | None = None
     if args.region is not None:
         region_place_names = manual_region_place_names(args.region)
-        if region_place_names is None:
+        region_tour_api_area_code = manual_region_tour_api_area_code(args.region)
+        if region_place_names is None or region_tour_api_area_code is None:
             _write(
                 args,
                 {
@@ -513,12 +518,15 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     if args.apply:
-        return _run_apply(args, dsn, region_place_names, request_cap)
-    return _run_preview(args, dsn, region_place_names, request_cap)
+        return _run_apply(args, dsn, region_place_names, region_tour_api_area_code, request_cap)
+    return _run_preview(args, dsn, region_place_names, region_tour_api_area_code, request_cap)
 
 
 def _read_window(
-    cur, args: argparse.Namespace, region_place_names: tuple[str, ...] | None
+    cur,
+    args: argparse.Namespace,
+    region_place_names: tuple[str, ...] | None,
+    region_tour_api_area_code: str | None,
 ) -> list[ReviewMentionPlace]:
     """Read the place window, threading the cursor only when present.
 
@@ -527,8 +535,12 @@ def _read_window(
     keyset ``place_id > %s`` is added inside the same scoped query.
     """
     if args.after_place_id is None:
-        return _read_places_on_cursor(cur, args.limit, region_place_names)
-    return _read_places_on_cursor(cur, args.limit, region_place_names, args.after_place_id)
+        return _read_places_on_cursor(
+            cur, args.limit, region_place_names, None, region_tour_api_area_code
+        )
+    return _read_places_on_cursor(
+        cur, args.limit, region_place_names, args.after_place_id, region_tour_api_area_code
+    )
 
 
 def _cursor_scope(args: argparse.Namespace) -> str:
@@ -741,6 +753,9 @@ def _run_export(args: argparse.Namespace) -> int:
     snapshot = {
         "schema_version": cc.SNAPSHOT_SCHEMA_VERSION,
         "source": cc.SNAPSHOT_SOURCE,
+        # P5C provenance: this snapshot's cursor/freshness evidence was
+        # produced under the province-qualified collector predicate.
+        "scope_contract": cc.SNAPSHOT_SCOPE_CONTRACT,
         "entries": [entry],
     }
     if args.json:
@@ -763,6 +778,7 @@ def _run_preview(
     args: argparse.Namespace,
     dsn: str,
     region_place_names: tuple[str, ...] | None,
+    region_tour_api_area_code: str | None,
     request_cap: int,
 ) -> int:
     conn = _open_connection(dsn, args.connect_timeout)
@@ -775,7 +791,7 @@ def _run_preview(
                     expected_provider=EXPECTED_PROVIDER,
                     expected_terms_version=EXPECTED_TERMS_VERSION,
                 )
-                places = _read_window(cur, args, region_place_names)
+                places = _read_window(cur, args, region_place_names, region_tour_api_area_code)
     except ReviewGovernanceError as exc:
         _write(
             args,
@@ -842,6 +858,7 @@ def _run_apply(
     args: argparse.Namespace,
     dsn: str,
     region_place_names: tuple[str, ...] | None,
+    region_tour_api_area_code: str | None,
     request_cap: int,
 ) -> int:
     started_at = datetime.now(UTC)
@@ -863,7 +880,7 @@ def _run_apply(
                         expected_provider=EXPECTED_PROVIDER,
                         expected_terms_version=EXPECTED_TERMS_VERSION,
                     )
-                    places = _read_window(cur, args, region_place_names)
+                    places = _read_window(cur, args, region_place_names, region_tour_api_area_code)
         finally:
             preflight_conn.close()
     except ReviewGovernanceError as exc:
@@ -1022,20 +1039,36 @@ def _read_places_on_cursor(
     limit: int,
     region_place_names: tuple[str, ...] | None = None,
     after_place_id: str | None = None,
+    region_tour_api_area_code: str | None = None,
 ) -> list[ReviewMentionPlace]:
-    # The region clause must narrow the window BEFORE LIMIT: the global
-    # ORDER BY place_id head can otherwise contain zero places of the target
-    # region (Seongdong: 132 canonical places, 0 in the head-50 window).
-    # P5A: the optional keyset cursor narrows the same window with a bound
-    # parameter (place_id > %s) — input is NEVER interpolated into the SQL.
-    # Omitted region/cursor keep the query and params byte-identical to the
-    # pre-P5A contract.
+    """Read the place window with the P5C province-qualified region predicate.
+
+    The region clause must narrow the window BEFORE LIMIT: the global
+    ORDER BY place_id head can otherwise contain zero places of the target
+    region (Seongdong: 132 canonical places, 0 in the head-50 window).
+    P5C qualification: district aliases alone are ambiguous (29 catalog
+    regions share names like 중구 across provinces). The only PROVEN
+    province discriminator is TourAPI's areacode namespace
+    (travel.places.province_code written by tour_api_ingest with
+    primary_source='tour_api'), so a region scope now ALSO requires
+    province_code = <area code> AND primary_source = 'tour_api'. Rows in
+    other namespaces / NULL province codes are excluded — collection
+    eligibility is scoped to qualified canonical rows, NOT proof that every
+    administrative place has data (excluded rows stay a coverage gap).
+    P5A: the optional keyset cursor narrows the same window with a bound
+    parameter (place_id > %s) — input is NEVER interpolated into the SQL.
+    Omitted region/cursor keep the query and params byte-identical to the
+    pre-P5A contract.
+    """
     region_clause = ""
     cursor_clause = ""
     params: list[Any] = []
     if region_place_names is not None:
         region_clause = "  AND region_name_ko = ANY(%s)\n"
         params.append(list(region_place_names))
+        if region_tour_api_area_code is not None:
+            region_clause += "  AND province_code = %s\n  AND primary_source = 'tour_api'\n"
+            params.append(region_tour_api_area_code)
     if after_place_id is not None:
         cursor_clause = "  AND place_id > %s\n"
         params.append(after_place_id)

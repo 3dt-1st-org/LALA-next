@@ -194,6 +194,24 @@ def manual_region_scope(region_id: object) -> tuple[str, str] | None:
     return MANUAL_REGION_BY_ID.get(text)
 
 
+def manual_region_tour_api_area_code(region_id: object) -> str | None:
+    """Proven TourAPI area code for a manual region's province, else None.
+
+    The ONLY proven province_code namespace in travel.places is TourAPI's
+    areacode (tour_api_ingest writes area_code -> province_code with
+    primary_source='tour_api'; the official source adapter routes the same
+    field). This returns that province's area code from the static catalog —
+    never a guessed government code, city-name inference, or coordinate lookup.
+    Callers must fail closed on None and must pair the code with the
+    primary_source namespace qualifier.
+    """
+    scope = manual_region_scope(region_id)
+    if scope is None:
+        return None
+    province = PROVINCE_BY_KO.get(scope[0])
+    return province.tour_api_area_code if province else None
+
+
 def manual_region_place_names(region_id: object) -> tuple[str, ...] | None:
     """Canonical ``travel.places.region_name_ko`` values for a manual region id.
 

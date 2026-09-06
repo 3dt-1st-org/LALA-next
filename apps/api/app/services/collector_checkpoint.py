@@ -53,6 +53,13 @@ from apps.api.app.services.region_catalog import MANUAL_REGION_BY_ID, manual_reg
 
 SNAPSHOT_SCHEMA_VERSION = 1
 SNAPSHOT_SOURCE = "naver_review_collect_apply_payloads"
+# P5C scope contract: the collector's region predicate is province-qualified
+# in the proven TourAPI areacode namespace (province_code + primary_source
+# 'tour_api'). Snapshots written under this contract may carry cursor and
+# freshness credit; older alias-only snapshots are legacy: their cursor and
+# completion evidence predate the qualified predicate and confer NO credit,
+# while account-wide auth/quota stop signals are always preserved.
+SNAPSHOT_SCOPE_CONTRACT = "tour_api_province_qualified_v1"
 
 # Strict bounded snapshot limits (independent constants; B3).
 # Independently bounded ceiling chosen to hold the supported full-catalog state
@@ -351,8 +358,14 @@ def load_checkpoint_snapshot(path: Path) -> dict[str, dict]:
         raise CheckpointSnapshotError(
             "checkpoint snapshot has an unexpected top-level shape"
         ) from exc
-    if keys != {"schema_version", "source", "entries"}:
+    if keys not in (
+        {"schema_version", "source", "entries"},
+        {"schema_version", "source", "entries", "scope_contract"},
+    ):
         raise CheckpointSnapshotError("checkpoint snapshot has an unexpected top-level shape")
+    legacy_scope = "scope_contract" not in document
+    if not legacy_scope and document["scope_contract"] != SNAPSHOT_SCOPE_CONTRACT:
+        raise CheckpointSnapshotError("checkpoint snapshot scope contract mismatch")
     if (
         type(document["schema_version"]) is not int
         or document["schema_version"] != SNAPSHOT_SCHEMA_VERSION
@@ -418,6 +431,7 @@ def load_checkpoint_snapshot(path: Path) -> dict[str, dict]:
             "next_after_place_id": next_cursor,
             "input_after_place_id": input_cursor,
             "_observed_at_dt": observed_at,
+            "_legacy_scope": legacy_scope,
         }
     return by_region
 
@@ -436,7 +450,12 @@ def classify_region(
     if entry is None:
         return STATUS_DUE
     if entry.get("blocked") == "auth_quota":
+        # Account-wide stop signals survive every scope-contract change.
         return STATUS_AUTH_QUOTA_BLOCKED
+    if entry.get("_legacy_scope"):
+        # Alias-only evidence predates the qualified predicate: no cursor or
+        # freshness credit may transfer; conservatively DUE (fresh sweep).
+        return STATUS_DUE
     observed_at: datetime = entry["_observed_at_dt"]
     if observed_at > now:
         return STATUS_DUE
@@ -492,13 +511,6 @@ def plan_regional_collection(
             entries_by_region.get(region), now=now, refresh_interval=refresh_interval
         )
         region_states[region] = status
-        if region in region_alias_collisions():
-            # B6: an ambiguous predicate taints even "fresh" evidence — the
-            # sweep scope bled across provinces. Always BLOCKED_SCOPE, kept in
-            # coverage accounting, until the P5C province-aware predicate.
-            statuses[region] = STATUS_BLOCKED_SCOPE
-            scope_blocked.append(region)
-            continue
         needs_work = status in (
             STATUS_DUE,
             STATUS_DUE_REFRESH,
@@ -557,12 +569,16 @@ def plan_regional_collection(
         "request_budget_total": total_request_ceiling,
         "request_budget_remaining": remaining_budget,
         "per_region_requests": per_region_requests,
+        "scope_contract": SNAPSHOT_SCOPE_CONTRACT,
+        "regions_alias_qualified": len(region_alias_collisions()),
         "collector_scope_gap": (
-            "regions with BLOCKED_SCOPE share district-name aliases across "
-            "provinces; the collector's region_name_ko = ANY(...) predicate "
-            "cannot scope them safely. A province-aware place-window predicate "
-            "is the bounded P5C correction — no collection argv is emitted for "
-            "them until then."
+            "the collector's region predicate is province-qualified in the "
+            "proven TourAPI areacode namespace (province_code + "
+            "primary_source='tour_api'); district aliases alone no longer "
+            "block canonical regions, but rows outside that namespace (other "
+            "providers' codes, NULL province) are excluded — a coverage gap, "
+            "not empty-region proof. Unknown/non-canonical --regions ids fail "
+            "closed before any I/O."
         ),
         "semantics": "collection_scheduling_recency_only",
     }
