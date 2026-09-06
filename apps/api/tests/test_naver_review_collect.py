@@ -1531,7 +1531,7 @@ def test_s3_full_catalog_state_fits_bounded_ceiling(monkeypatch, capsys, tmp_pat
     blob = _json.dumps(doc, ensure_ascii=False, indent=2, sort_keys=True)
     assert len(blob.encode("utf-8")) <= cc.SNAPSHOT_MAX_BYTES
     snap = tmp_path / "all.json"
-    snap.write_text(blob)
+    snap.write_text(blob, encoding="utf-8")
     rc = tool.main(["--schedule", "--json", "--checkpoint-snapshot", str(snap)])
     assert rc == 0
     payload = _out(capsys)
@@ -1650,3 +1650,60 @@ def test_rollback_control_never_exports(monkeypatch, capsys, tmp_path):
     rc = tool.main(["--export-checkpoint", "--json", "--from-collector-result", str(result)])
     assert rc == 2
     assert "rejected by the bridge" in _out(capsys)["error"]
+
+
+def test_audit_unsettled_places_never_certify_freshness():
+    from apps.api.app.services import collector_checkpoint as cc
+
+    # Real-shaped otherwise-valid payload: 2 places, 2 attempted, 0 completed,
+    # nothing deferred, exhausted=True with a clean tally — internally the
+    # consistency identity holds (2 == 2+0+0), but settled != selected, so the
+    # region is NOT whole-region complete.
+    entry = cc.build_region_checkpoint(
+        _apply_result(
+            status="degraded",
+            exhausted=True,
+            places=2,
+            places_attempted=2,
+            places_completed=0,
+            places_deferred=0,
+            failure_tally={},  # clean acquisition tally, yet nothing settled
+        )
+    )
+    assert entry["whole_region_complete"] is False
+    assert entry["empty_scope"] is None
+
+
+def test_audit_degraded_by_quarantine_never_certifies_freshness():
+    from apps.api.app.services import collector_checkpoint as cc
+
+    # status=degraded caused by governance quarantine keeps a clean acquisition
+    # tally; whole-region freshness must still be denied.
+    entry = cc.build_region_checkpoint(
+        _apply_result(
+            status="degraded",
+            exhausted=True,
+            quarantined=3,
+        )
+    )
+    assert entry["whole_region_complete"] is False
+
+
+def test_audit_valid_all_name_skipped_sweep_certifies_freshness():
+    from apps.api.app.services import collector_checkpoint as cc
+
+    # Deterministic all-skip window: attempted 0, completed == places via
+    # name-skips, succeeded + exhausted + null cursor → legitimately fresh.
+    entry = cc.build_region_checkpoint(
+        _apply_result(
+            places=2,
+            places_attempted=0,
+            places_completed=2,
+            places_deferred=0,
+            places_name_skipped=2,
+            requests_used=0,
+            exhausted=True,
+            next_after_place_id=None,
+        )
+    )
+    assert entry["whole_region_complete"] is True

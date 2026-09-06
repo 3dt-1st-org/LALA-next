@@ -214,12 +214,18 @@ def _failure_signal(payload: Mapping) -> tuple[str | None, bool]:
 def build_region_checkpoint(payload: Mapping) -> dict:
     """Bridge ONE committed, scope-matched collector apply RESULT into an entry.
 
-    Strict acceptance (B4): mode ``apply``, ``ok`` true, status
-    succeeded/degraded, region_applied true, canonical region whose id equals
-    cursor_scope, typed booleans/counts, and a timezone-aware
+    Strict acceptance (B4): mode ``apply``, a True ``committed`` transaction
+    flag, ok/status consistency, region_applied true, canonical region whose
+    id equals cursor_scope, typed nonnegative counters satisfying the real
+    place identity, nonnegative tally values, and a timezone-aware
     ``observation_time`` emitted by the collector itself (never the export
-    clock). Preview/failed/mismatched/legacy input raises — it is never
-    silently classified as recent completion.
+    clock). Successful runs (succeeded/degraded) bridge as observations;
+    FAILED runs are accepted ONLY when they carry an auth/quota stop signal,
+    exporting as BLOCKED with unchanged cursor and no completion credit.
+    Whole-region freshness additionally requires status ``succeeded`` with
+    every selected place settled and a clean sweep — degraded/quarantined or
+    partially-settled results never certify recency. Preview / failed-before-
+    commit / mismatched / legacy input raises outright.
     """
     if not isinstance(payload, Mapping):
         raise CheckpointSnapshotError("result payload is not an object")
@@ -290,7 +296,13 @@ def build_region_checkpoint(payload: Mapping) -> dict:
     # cursor; a non-null tail page stays conservatively unproven.
     single_page_sweep = input_cursor is None
     whole_region_complete = bool(
-        exhausted and single_page_sweep and blocked is None and not failed_run and sweep_clean
+        exhausted
+        and single_page_sweep
+        and blocked is None
+        and not failed_run
+        and sweep_clean
+        and status == "succeeded"
+        and counts["places_completed"] == counts["places"]
     )
     empty_scope = (
         ("region" if single_page_sweep else "window")
