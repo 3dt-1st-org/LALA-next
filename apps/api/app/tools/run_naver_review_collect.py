@@ -736,6 +736,10 @@ def _run_export(args: argparse.Namespace) -> int:
     try:
         payload = _json.loads(raw)
         entry = cc.build_region_checkpoint(payload)
+    except cc.CheckpointSnapshotError as exc:
+        # Sanitized fixed bridge message (no raw invalid input echo).
+        _write(args, {"ok": False, "mode": "export", "error": str(exc)})
+        return 2
     except (UnicodeDecodeError, ValueError, TypeError):
         _write(
             args,
@@ -861,6 +865,8 @@ def _run_apply(
     region_tour_api_area_code: str | None,
     request_cap: int,
 ) -> int:
+    from apps.api.app.services import collector_checkpoint
+
     started_at = datetime.now(UTC)
     window_start = _week_start(started_at)
 
@@ -1019,6 +1025,14 @@ def _run_apply(
             # B4: this run's own collection/commit observation time. The
             # offline export preserves it verbatim — never re-stamped.
             "observation_time": datetime.now(UTC).isoformat(),
+            # P5C provenance: the predicate this result was actually produced
+            # under. The bridge/exporter never upgrades a marker-less legacy
+            # result to qualified credit.
+            "scope_contract": (
+                collector_checkpoint.SNAPSHOT_SCOPE_CONTRACT
+                if region_place_names is not None
+                else "global_unscoped_v1"
+            ),
         },
     )
     return 0
@@ -1064,11 +1078,21 @@ def _read_places_on_cursor(
     cursor_clause = ""
     params: list[Any] = []
     if region_place_names is not None:
-        region_clause = "  AND region_name_ko = ANY(%s)\n"
+        # P5C fail-closed: a region scope REQUIRES the proven province
+        # discriminator — an alias-only fallback would bleed across the 29
+        # alias-colliding regions. Only the global mode stays unqualified.
+        if region_tour_api_area_code is None:
+            raise ValueError(
+                "region scope requires a proven TourAPI province area code; "
+                "refusing to fall back to an alias-only predicate"
+            )
+        region_clause = (
+            "  AND region_name_ko = ANY(%s)\n"
+            "  AND province_code = %s\n"
+            "  AND primary_source = 'tour_api'\n"
+        )
         params.append(list(region_place_names))
-        if region_tour_api_area_code is not None:
-            region_clause += "  AND province_code = %s\n  AND primary_source = 'tour_api'\n"
-            params.append(region_tour_api_area_code)
+        params.append(region_tour_api_area_code)
     if after_place_id is not None:
         cursor_clause = "  AND place_id > %s\n"
         params.append(after_place_id)

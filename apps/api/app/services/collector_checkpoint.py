@@ -34,6 +34,7 @@ Snapshot schema (strict, v1) — exact keys only, unexpected fields rejected:
         "blocked": null | "auth_quota",
         "requests_used": int,
         "observation_time": str,             # ISO-8601 UTC, from the result itself
+        "qualified_scope": bool,             # produced under the qualified predicate
      }]}
 
 Operational note: entries are produced by the offline export mode of the
@@ -95,10 +96,11 @@ STATUS_SCHEDULED = "SCHEDULED"
 STATUS_DEFERRED = "DEFERRED"
 STATUS_BLOCKED_SCOPE = "BLOCKED_SCOPE"
 
-# B6: offline catalog fact — the collector's place-window predicate filters
-# ONLY region_name_ko = ANY(<aliases>); regions sharing district aliases across
-# provinces cannot be safely scoped. Planning never emits argv for them; a
-# province-aware collector predicate is the bounded P5C correction.
+# Offline catalog fact (P5C-resolved): 29 canonical regions share district
+# aliases across provinces. The collector's region predicate is now
+# province-qualified in the proven TourAPI areacode namespace, so these
+# regions are QUALIFIED for planning (counted, not blocked); the mapping is
+# retained for coverage accounting of the alias overlap.
 _SCOPE_COLLISIONS: dict[str, tuple[str, ...]] | None = None
 
 _ENTRY_KEYS = frozenset(
@@ -113,6 +115,7 @@ _ENTRY_KEYS = frozenset(
         "blocked",
         "requests_used",
         "observation_time",
+        "qualified_scope",
     }
 )
 
@@ -258,6 +261,13 @@ def build_region_checkpoint(payload: Mapping) -> dict:
         raise CheckpointSnapshotError("result was not region-scoped")
     if payload.get("cursor_scope") != region:
         raise CheckpointSnapshotError("result cursor_scope does not match its region")
+    result_contract = payload.get("scope_contract")
+    if result_contract is not None and not isinstance(result_contract, str):
+        raise CheckpointSnapshotError("result scope_contract is malformed")
+    if result_contract is not None and result_contract != SNAPSHOT_SCOPE_CONTRACT:
+        # Fail closed on unknown/future markers (explicitly, not silently).
+        raise CheckpointSnapshotError("result scope contract is unknown to this bridge")
+    qualified_scope = result_contract == SNAPSHOT_SCOPE_CONTRACT
     exhausted = _strict_bool(payload.get("exhausted"), "result exhausted")
     places = payload.get("places")
     if type(places) is not int or places < 0:
@@ -297,6 +307,20 @@ def build_region_checkpoint(payload: Mapping) -> dict:
     blocked, sweep_clean = _failure_signal(payload)
     next_cursor = _validate_cursor(payload.get("next_after_place_id"), "result cursor")
     input_cursor = _validate_cursor(payload.get("after_place_id"), "result input cursor")
+    if failed_run:
+        if blocked != "auth_quota":
+            # A committed run that failed WITHOUT an account-level auth/quota
+            # signal is not an actionable observation: rejected (and never
+            # certified fresh).
+            raise CheckpointSnapshotError(
+                "failed result carries no auth/quota stop signal to preserve"
+            )
+        # Preserve the stop with an UNCHANGED cursor and zero completion credit.
+        next_cursor = input_cursor
+    if not qualified_scope:
+        # Legacy alias-only result exported by a NEW binary is never upgraded:
+        # cursor/freshness credit is stripped, auth/quota stops survive above.
+        next_cursor = input_cursor
 
     # Sweep semantics (B4): exhausted == end-of-selected-window. Whole-region
     # completion is certified ONLY for a single-page sweep started from a null
@@ -310,6 +334,7 @@ def build_region_checkpoint(payload: Mapping) -> dict:
         and sweep_clean
         and status == "succeeded"
         and counts["places_completed"] == counts["places"]
+        and qualified_scope
     )
     empty_scope = (
         ("region" if single_page_sweep else "window")
@@ -327,6 +352,7 @@ def build_region_checkpoint(payload: Mapping) -> dict:
         "blocked": blocked,
         "requests_used": requests_used,
         "observation_time": observation_time.isoformat(),
+        "qualified_scope": qualified_scope,
     }
 
 
@@ -401,6 +427,7 @@ def load_checkpoint_snapshot(path: Path) -> dict[str, dict]:
         whole_complete = _strict_bool(
             entry["whole_region_complete"], "checkpoint whole_region_complete"
         )
+        qualified_scope = _strict_bool(entry["qualified_scope"], "checkpoint qualified_scope")
         requests_used = entry["requests_used"]
         if type(requests_used) is not int or not 0 <= requests_used <= _REQUESTS_USED_MAX:
             raise CheckpointSnapshotError("checkpoint requests_used is malformed")
@@ -431,7 +458,10 @@ def load_checkpoint_snapshot(path: Path) -> dict[str, dict]:
             "next_after_place_id": next_cursor,
             "input_after_place_id": input_cursor,
             "_observed_at_dt": observed_at,
-            "_legacy_scope": legacy_scope,
+            # Snapshot-level legacy OR per-entry unqualified result provenance:
+            # either way the entry carries no cursor/freshness credit, while
+            # account-wide auth/quota stops always survive.
+            "_legacy_scope": legacy_scope or not qualified_scope,
         }
     return by_region
 

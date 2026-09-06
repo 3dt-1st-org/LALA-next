@@ -331,14 +331,19 @@ def test_cursor_sql_is_parameterized_keyset_inside_region_scope():
     names = manual_region_place_names("seoul-seongdong")
     cur = _RecordingCursor([("p9", PLACE_NAME, "attraction", "성동구")])
 
-    tool._read_places_on_cursor(cur, 25, names, "p1")
+    # P5C: the scoped helper REQUIRES the proven qualifier (Seoul area code 1).
+    tool._read_places_on_cursor(cur, 25, names, "p1", "1")
 
     sql, params = cur.queries[0]
     assert "AND region_name_ko = ANY(%s)" in sql
     assert "AND place_id > %s" in sql
-    assert sql.index("ANY(%s)") < sql.index("place_id > %s") < sql.index("ORDER BY place_id")
-    assert sql.index("place_id > %s") < sql.index("LIMIT %s")
-    assert params == (list(names), "p1", 25)
+    assert (
+        sql.index("ANY(%s)")
+        < sql.index("place_id > %s")
+        < sql.index("ORDER BY place_id")
+        < sql.index("LIMIT %s")
+    )
+    assert params == (list(names), "1", "p1", 25)
 
 
 def test_cursor_sql_global_scope_without_region():
@@ -899,6 +904,7 @@ def _entry(
         "blocked": blocked,
         "requests_used": requests_used,
         "observation_time": observed,
+        "qualified_scope": True,
     }
 
 
@@ -1146,6 +1152,7 @@ def _apply_result(**overrides):
         "stop_reason": None,
         "failure_tally": {},
         "observation_time": "2026-09-06T11:00:00+00:00",
+        "scope_contract": "tour_api_province_qualified_v1",
     }
     return {**base, **overrides}
 
@@ -1285,7 +1292,7 @@ def test_b4_export_preserves_result_time_and_rejects_legacy(monkeypatch, capsys,
     legacy.write_text(_json.dumps(payload))
     rc = tool.main(["--export-checkpoint", "--json", "--from-collector-result", str(legacy)])
     assert rc == 2
-    assert "rejected by the bridge" in _out(capsys)["error"]
+    assert _out(capsys)["error"].startswith("result ")  # specific bridge reason
 
 
 # --- B5: real CLI round-trip with argv arrays -----------------------------------------
@@ -1496,7 +1503,7 @@ def test_s2_timestamp_overflow_is_sanitized_everywhere(bad_time, monkeypatch, ca
     result.write_text(_json.dumps(_apply_result(observation_time=bad_time)))
     rc = tool.main(["--export-checkpoint", "--json", "--from-collector-result", str(result)])
     assert rc == 2
-    assert "rejected by the bridge" in _out(capsys)["error"]
+    assert _out(capsys)["error"].startswith("result ")  # specific bridge reason
 
     # Loader path: overflow inside snapshot entry parsing.
     entry = _entry("busan-haeundae")
@@ -1656,7 +1663,7 @@ def test_rollback_control_never_exports(monkeypatch, capsys, tmp_path):
     result.write_text(_json.dumps(rolled))
     rc = tool.main(["--export-checkpoint", "--json", "--from-collector-result", str(result)])
     assert rc == 2
-    assert "rejected by the bridge" in _out(capsys)["error"]
+    assert _out(capsys)["error"].startswith("result ")  # specific bridge reason
 
 
 def test_audit_unsettled_places_never_certify_freshness():
@@ -1745,13 +1752,12 @@ def test_p5c_qualified_sql_predicate_parameterized_before_limit():
     assert params == (list(names), "4", "p1", 25)
 
 
-def test_p5c_area_code_none_keeps_alias_only_shape_and_global_unchanged():
+def test_p5c_area_code_none_fails_closed_for_region_scope():
     names = manual_region_place_names("seoul-seongdong")
     cur = _RecordingCursor()
-    tool._read_places_on_cursor(cur, 25, names, None, None)
-    sql, params = cur.queries[0]
-    assert "province_code" not in sql and "primary_source" not in sql
-    assert params == (list(names), 25)
+    with pytest.raises(ValueError, match="proven TourAPI province area code"):
+        tool._read_places_on_cursor(cur, 25, names, None, None)
+    assert cur.queries == []  # nothing executed
 
     cur2 = _RecordingCursor()
     tool._read_places_on_cursor(cur2, 25, None, None, None)
@@ -1964,3 +1970,130 @@ def test_p5c_round_trip_retains_scope_provenance(monkeypatch, capsys, tmp_path):
         "RECENTLY_COLLECTED",
         "EMPTY_OBSERVED",
     }
+
+
+# == P5C provenance correction: legacy results are never upgraded ====================
+
+
+def test_p5cc_legacy_succeeded_result_exports_creditless(monkeypatch, capsys, tmp_path):
+    import json as _json
+
+    _no_io_wiring(monkeypatch)
+    # OLD raw apply result (pre-P5C shape: NO scope_contract) that fully
+    # succeeded a null-cursor sweep. The NEW exporter must not upgrade it.
+    legacy = _apply_result()
+    del legacy["scope_contract"]
+    result = tmp_path / "old.json"
+    result.write_text(_json.dumps(legacy))
+
+    rc = tool.main(["--export-checkpoint", "--json", "--from-collector-result", str(result)])
+    assert rc == 0
+    snapshot_doc = _json.loads(capsys.readouterr().out)
+    entry = snapshot_doc["entries"][0]
+    assert entry["qualified_scope"] is False
+    assert entry["whole_region_complete"] is False
+
+    snapshot_doc["scope_contract"] = "tour_api_province_qualified_v1"
+    snap = tmp_path / "cp.json"
+    snap.write_text(_json.dumps(snapshot_doc))
+    rc = tool.main(
+        ["--schedule", "--json", "--checkpoint-snapshot", str(snap), "--regions", "busan-haeundae"]
+    )
+    assert rc == 0
+    payload = _out(capsys)
+    assert payload["region_states"]["busan-haeundae"] == "DUE"  # never RECENTLY_COLLECTED
+
+
+def test_p5cc_legacy_partial_result_cursor_does_not_transfer(monkeypatch, capsys, tmp_path):
+    import json as _json
+
+    _no_io_wiring(monkeypatch)
+    legacy = _apply_result(
+        scope_contract=None,
+        exhausted=False,
+        places=2,
+        places_attempted=2,
+        places_completed=2,
+        stop_reason="request_budget_exhausted",
+        next_after_place_id="place-2",
+    )
+    del legacy["scope_contract"]
+    result = tmp_path / "old.json"
+    result.write_text(_json.dumps(legacy))
+    rc = tool.main(["--export-checkpoint", "--json", "--from-collector-result", str(result)])
+    assert rc == 0
+    entry = _json.loads(capsys.readouterr().out)["entries"][0]
+    assert entry["qualified_scope"] is False
+    # Legacy cursor credit stripped: next == input (here null start).
+    assert entry["next_after_place_id"] == entry["input_after_place_id"]
+
+
+def test_p5cc_legacy_committed_quota_result_keeps_global_stop(monkeypatch, capsys, tmp_path):
+    import json as _json
+
+    _no_io_wiring(monkeypatch)
+    legacy = _apply_result(
+        ok=False,
+        status="failed",
+        exhausted=False,
+        places=1,
+        places_attempted=1,
+        places_completed=0,
+        places_deferred=0,
+        stop_reason="fatal_provider_failure",
+        next_after_place_id="p0",
+        after_place_id="p0",
+        failure_tally={"naver_blog": {"quota_exceeded": 1}},
+    )
+    del legacy["scope_contract"]
+    result = tmp_path / "old.json"
+    result.write_text(_json.dumps(legacy))
+    rc = tool.main(["--export-checkpoint", "--json", "--from-collector-result", str(result)])
+    assert rc == 0
+    snapshot_doc = _json.loads(capsys.readouterr().out)
+    entry = snapshot_doc["entries"][0]
+    assert entry["blocked"] == "auth_quota"  # stop signal survives invalidation
+    assert entry["qualified_scope"] is False
+
+    snapshot_doc["scope_contract"] = "tour_api_province_qualified_v1"
+    snap = tmp_path / "cp.json"
+    snap.write_text(_json.dumps(snapshot_doc))
+    rc = tool.main(
+        [
+            "--schedule",
+            "--json",
+            "--checkpoint-snapshot",
+            str(snap),
+            "--regions",
+            "seoul-seongdong,incheon-yeonsu",
+        ]
+    )
+    assert rc == 0
+    payload = _out(capsys)
+    assert payload["auth_quota_blocked"] is True
+    assert payload["planned_argv"] == []
+
+
+def test_p5cc_unknown_result_marker_fails_closed(monkeypatch, capsys, tmp_path):
+    import json as _json
+
+    _no_io_wiring(monkeypatch)
+    result = tmp_path / "future.json"
+    result.write_text(_json.dumps(_apply_result(scope_contract="future-contract")))
+    rc = tool.main(["--export-checkpoint", "--json", "--from-collector-result", str(result)])
+    assert rc == 2
+    assert "unknown to this bridge" in _out(capsys)["error"]
+
+
+def test_p5cc_new_apply_result_carries_qualified_marker(monkeypatch, capsys, tmp_path):
+
+    places = [_place("p1")]
+    script = {p.place_id: _collection(p.place_id) for p in places}
+    _wire(monkeypatch, places=places, script=script)
+    monkeypatch.setenv(tool.ALLOW_ENV, "1")
+    rc = tool.main(
+        ["--apply", "--json", "--confirm", tool.CONFIRM_TEXT, "--region", "busan-haeundae"]
+    )
+    assert rc == 0
+    payload = _out(capsys)
+    assert payload["scope_contract"] == "tour_api_province_qualified_v1"
