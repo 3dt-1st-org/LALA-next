@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 from collections import deque
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Annotated
 from urllib.parse import urlsplit
@@ -113,12 +115,35 @@ class ConnectionManager:
     ``broadcast_once`` deduplicates by message id so the local fast path and
     the NOTIFY path never deliver the same committed message twice to local
     sockets.
+
+    Delivery-time authorization: admission (ticket claim) validates access
+    once, so a socket can outlive its authorization (membership revoked,
+    account deleted). Every broadcast therefore revalidates each connected
+    actor's current room access through the attached verifier before any
+    payload is written to a socket. The verifier applies the same
+    room-access predicate as reads/writes; a denied actor is disconnected
+    content-free (1008, indistinguishable from admission denial) while
+    authorized recipients still receive exactly one frame. If the verifier is
+    missing or fails, delivery fails closed: no payload is sent, sockets are
+    kept for the retryable REST/reconnect paths, and no permissive fallback
+    exists.
     """
 
     def __init__(self) -> None:
         self._rooms: dict[UUID, list[_Connection]] = {}
         self._recent_ids: deque[str] = deque()
         self._recent_id_set: set[str] = set()
+        self._access_verifier: (
+            Callable[[UUID, list[tuple[str, str]]], Awaitable[set[str]]] | None
+        ) = None
+
+    def attach_access_verifier(
+        self,
+        verifier: Callable[[UUID, list[tuple[str, str]]], Awaitable[set[str]]],
+    ) -> None:
+        """Attach the delivery-time access verifier (actor keys allowed now)."""
+
+        self._access_verifier = verifier
 
     async def connect(
         self,
@@ -149,9 +174,25 @@ class ConnectionManager:
         exclude: WebSocket | None = None,
     ) -> None:
         connections = list(self._rooms.get(room_id, []))
+        if not connections:
+            return
+        allowed = await self._resolve_allowed_actors(room_id, connections)
         dead: list[_Connection] = []
         for connection in connections:
             if exclude is not None and connection.websocket is exclude:
+                continue
+            if allowed is None:
+                # Cannot verify (verifier missing/unavailable): fail closed
+                # with no delivery and no permissive fallback; sockets stay
+                # for the retryable REST/reconnect paths.
+                continue
+            if connection.actor_key not in allowed:
+                # Revoked after admission: close content-free and evict. The
+                # same 1008 policy code as a failed handshake keeps denial
+                # indistinguishable and never echoes payload or identity.
+                with contextlib.suppress(Exception):
+                    await connection.websocket.close(code=1008)
+                dead.append(connection)
                 continue
             try:
                 await connection.websocket.send_json(payload)
@@ -159,6 +200,29 @@ class ConnectionManager:
                 dead.append(connection)
         for connection in dead:
             self.disconnect(connection.websocket, room_id)
+
+    async def _resolve_allowed_actors(
+        self,
+        room_id: UUID,
+        connections: list[_Connection],
+    ) -> frozenset[str] | None:
+        """Authoritative allowed-actor set, or ``None`` when unverifiable.
+
+        ``None`` (verifier missing or failing) means fail closed while
+        keeping sockets; an empty-or-partial set is an authoritative denial
+        for the actors it omits.
+        """
+
+        verifier = self._access_verifier
+        if verifier is None:
+            return None
+        actors = sorted({(c.issuer, c.subject) for c in connections})
+        try:
+            allowed = await verifier(room_id, actors)
+        except Exception:
+            # Infrastructure failure is not denial: no delivery, sockets kept.
+            return None
+        return frozenset(allowed)
 
     async def broadcast_once(
         self,
@@ -204,6 +268,41 @@ class ConnectionManager:
 
 
 manager = ConnectionManager()
+
+
+async def _verify_room_access_for_actors(
+    room_id: UUID,
+    actors: list[tuple[str, str]],
+) -> set[str]:
+    """Current room access for each connected actor (delivery-time gate).
+
+    Uses the same ``room_access`` service contract as reads/writes — no
+    parallel authorization policy. Each check is a bounded single query run
+    off the event loop via ``asyncio.to_thread`` (work is bounded by the
+    per-room connection cap). Any store failure propagates so the manager
+    fails closed while keeping sockets for the retryable REST path.
+    """
+
+    service = get_community_chat_service()
+    results = await asyncio.gather(
+        *(
+            asyncio.to_thread(
+                service.room_access,
+                room_id=room_id,
+                viewer_issuer=issuer,
+                viewer_subject=subject,
+            )
+            for issuer, subject in actors
+        )
+    )
+    allowed: set[str] = set()
+    for (issuer, subject), row in zip(actors, results, strict=True):
+        if row is not None:
+            allowed.add(f"{issuer}:{subject}")
+    return allowed
+
+
+manager.attach_access_verifier(_verify_room_access_for_actors)
 
 
 async def _deliver_fanout_payload(payload: dict) -> None:

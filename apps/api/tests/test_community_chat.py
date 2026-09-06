@@ -130,13 +130,28 @@ def _inserted_message_row() -> dict[str, Any]:
     }
 
 
+async def _allow_all_verifier(room_id: UUID, actors: list[tuple[str, str]]) -> set[str]:
+    """Synthetic allow-all verifier: for fan-out mechanics tests only.
+
+    Authorization behavior itself is covered by the delivery-guard tests
+    below, which use selective/raising/absent verifiers.
+    """
+
+    return {f"{issuer}:{subject}" for issuer, subject in actors}
+
+
 @pytest.fixture(autouse=True)
 def _reset_connection_manager() -> None:
+    from apps.api.app.routers.community_chat import _verify_room_access_for_actors
+
     manager._rooms.clear()
     manager.reset_delivery_dedup_for_tests()
+    manager.attach_access_verifier(_allow_all_verifier)
     yield
     manager._rooms.clear()
     manager.reset_delivery_dedup_for_tests()
+    # Restore the production verifier the router attached at import.
+    manager.attach_access_verifier(_verify_room_access_for_actors)
 
 
 # ===========================================================================
@@ -323,6 +338,7 @@ def test_create_message_idempotent_replays_committed_response() -> None:
         [
             None,  # claim loses (concurrent winner committed first)
             {"request_hash": request_hash, "response_json": stored},
+            {"id": ROOM_ID},  # replay access revalidation (still a member)
         ]
     )
 
@@ -339,6 +355,55 @@ def test_create_message_idempotent_replays_committed_response() -> None:
     # No message insert, no notify: the replay must not create anything.
     assert not any("INSERT INTO community.chat_messages" in sql for sql, _ in executed)
     assert not any("pg_notify" in sql for sql, _ in executed)
+
+
+def test_create_message_idempotent_replay_denied_after_revocation() -> None:
+    stored = {
+        "id": str(MESSAGE_ID),
+        "room_id": str(ROOM_ID),
+        "author_user_id": str(AUTHOR_ID),
+        "body": "hello",
+        "created_at": NOW.isoformat(),
+    }
+    request_hash = canonical_request_hash({"room_id": str(ROOM_ID), "body": "hello"})
+    repository, executed = _repo(
+        [
+            None,  # claim loses to the committed winner
+            {"request_hash": request_hash, "response_json": stored},
+            None,  # replay access revalidation: actor no longer has access
+        ]
+    )
+
+    result = repository.create_message_idempotent(
+        room_id=ROOM_ID,
+        issuer=ISSUER,
+        subject=SUBJECT,
+        body="hello",
+        idempotency_key="key-1",
+    )
+
+    # Denial must be indistinguishable from a missing room and must never
+    # return the stored private payload.
+    assert result == {"outcome": "denied", "message": None}
+    assert not any("INSERT INTO community.chat_messages" in sql for sql, _ in executed)
+    assert not any("pg_notify" in sql for sql, _ in executed)
+    # The stored key is not burned: only the scope-wide TTL purge ran, never
+    # the claim-release DELETE, so a future authorized replay still works.
+    deletes = [sql for sql, _ in executed if "DELETE FROM community.idempotency_keys" in sql]
+    assert deletes == [deletes[0]]  # exactly the purge statement, once
+    assert "expires_at < now()" in deletes[0]
+    # Access revalidation used the same predicate and actor scoping.
+    access_sql, access_params = executed[3]
+    assert "community.chat_room_members" in access_sql
+    assert "r.visibility = 'public'" in access_sql
+    assert access_params == (
+        str(ROOM_ID),
+        ISSUER,
+        ISSUER,
+        SUBJECT,
+        ISSUER,
+        SUBJECT,
+    )
 
 
 def test_create_message_idempotent_conflicts_on_different_payload() -> None:
@@ -735,6 +800,7 @@ class MockWebSocket:
         self.sent: list[dict] = []
         self.accepted = False
         self.send_should_fail = False
+        self.closed_with: int | None = None
 
     async def accept(self) -> None:
         self.accepted = True
@@ -744,8 +810,8 @@ class MockWebSocket:
             raise RuntimeError("connection lost")
         self.sent.append(payload)
 
-    async def close(self, code: int = 1000) -> None:  # pragma: no cover - not used in unit tests
-        return None
+    async def close(self, code: int = 1000) -> None:
+        self.closed_with = code
 
 
 def test_connection_manager_connect_accepts_and_tracks_per_room() -> None:
@@ -764,6 +830,7 @@ def test_connection_manager_connect_accepts_and_tracks_per_room() -> None:
 def test_connection_manager_broadcast_once_delivers_each_message_exactly_once() -> None:
     async def run() -> None:
         cm = ConnectionManager()
+        cm.attach_access_verifier(_allow_all_verifier)
         ws = MockWebSocket()
         await cm.connect(ws, room_id=ROOM_ID, issuer=ISSUER, subject=SUBJECT)
         frame = {
@@ -788,9 +855,151 @@ def test_connection_manager_dedup_is_bounded() -> None:
     assert cm._claim_delivery("m299") is False
 
 
+def test_broadcast_denies_revoked_recipient_and_preserves_authorized() -> None:
+    async def run() -> None:
+        cm = ConnectionManager()
+
+        async def member_only(room_id: UUID, actors: list[tuple[str, str]]) -> set[str]:
+            return {f"{ISSUER}:{SUBJECT}"}
+
+        cm.attach_access_verifier(member_only)
+        member_ws = MockWebSocket()
+        revoked_ws = MockWebSocket()
+        await cm.connect(member_ws, room_id=ROOM_ID, issuer=ISSUER, subject=SUBJECT)
+        await cm.connect(revoked_ws, room_id=ROOM_ID, issuer="https://revoked", subject="revoked")
+        frame = {"type": "message", "data": {"id": str(MESSAGE_ID), "body": "hi"}}
+
+        await cm.broadcast(room_id=ROOM_ID, payload=frame)
+
+        # Authorized recipient: exactly one frame. Revoked recipient: closed
+        # content-free with the same 1008 policy code as admission denial,
+        # evicted, and never sees the payload.
+        assert member_ws.sent == [frame]
+        assert revoked_ws.sent == []
+        assert revoked_ws.closed_with == 1008
+        assert cm.room_connection_count(ROOM_ID) == 1
+
+    asyncio.run(run())
+
+
+def test_broadcast_fails_closed_when_verifier_unavailable() -> None:
+    async def run() -> None:
+        cm = ConnectionManager()
+
+        async def unavailable(room_id: UUID, actors: list[tuple[str, str]]) -> set[str]:
+            raise RuntimeError("store unavailable")
+
+        cm.attach_access_verifier(unavailable)
+        ws = MockWebSocket()
+        await cm.connect(ws, room_id=ROOM_ID, issuer=ISSUER, subject=SUBJECT)
+
+        await cm.broadcast(room_id=ROOM_ID, payload={"type": "message", "data": {}})
+
+        # Infrastructure failure fails closed: no delivery, but the socket is
+        # kept (denial vs unavailability stay distinguishable; REST/reconnect
+        # remain the retry path).
+        assert ws.sent == []
+        assert ws.closed_with is None
+        assert cm.room_connection_count(ROOM_ID) == 1
+
+    asyncio.run(run())
+
+
+def test_broadcast_without_verifier_delivers_nothing() -> None:
+    async def run() -> None:
+        cm = ConnectionManager()  # no verifier attached: fail closed
+        ws = MockWebSocket()
+        await cm.connect(ws, room_id=ROOM_ID, issuer=ISSUER, subject=SUBJECT)
+
+        await cm.broadcast(room_id=ROOM_ID, payload={"type": "message", "data": {}})
+
+        assert ws.sent == []
+        assert ws.closed_with is None
+        assert cm.room_connection_count(ROOM_ID) == 1
+
+    asyncio.run(run())
+
+
+def test_verify_room_access_for_actors_aggregates_and_propagates_failure(
+    monkeypatch,
+) -> None:
+    from apps.api.app.routers import community_chat as chat_router
+
+    class AccessService:
+        def __init__(self, rows: dict[tuple[str, str], Any]) -> None:
+            self.rows = rows
+            self.checked: list[tuple[str, str]] = []
+
+        def room_access(self, **kwargs: Any) -> dict[str, Any] | None:
+            key = (kwargs["viewer_issuer"], kwargs["viewer_subject"])
+            self.checked.append(key)
+            return self.rows.get(key)
+
+    service = AccessService(
+        {
+            (ISSUER, SUBJECT): _room_row("private"),
+            ("https://revoked", "revoked"): None,
+        }
+    )
+    monkeypatch.setattr(chat_router, "get_community_chat_service", lambda: service)
+
+    allowed = asyncio.run(
+        chat_router._verify_room_access_for_actors(
+            ROOM_ID, [(ISSUER, SUBJECT), ("https://revoked", "revoked")]
+        )
+    )
+
+    assert allowed == {f"{ISSUER}:{SUBJECT}"}
+    assert service.checked == [(ISSUER, SUBJECT), ("https://revoked", "revoked")]
+
+    class FailingService:
+        def room_access(self, **_: Any) -> dict[str, Any] | None:
+            raise ServiceError(
+                status_code=503,
+                code="COMMUNITY_CHAT_DB_UNAVAILABLE",
+                message="Community chat store is temporarily unavailable.",
+                retryable=True,
+            )
+
+    monkeypatch.setattr(chat_router, "get_community_chat_service", lambda: FailingService())
+    try:
+        asyncio.run(chat_router._verify_room_access_for_actors(ROOM_ID, [(ISSUER, SUBJECT)]))
+        raise AssertionError("store failure must propagate (fail closed)")
+    except ServiceError:
+        pass
+
+
+def test_notify_delivery_route_revalidates_access_before_delivery() -> None:
+    from apps.api.app.routers.community_chat import _deliver_fanout_payload
+
+    async def run() -> None:
+        # Module manager with a selective verifier (fixture restored after).
+
+        async def member_only(room_id: UUID, actors: list[tuple[str, str]]) -> set[str]:
+            return {f"{ISSUER}:{SUBJECT}"}
+
+        manager.attach_access_verifier(member_only)
+        member_ws = MockWebSocket()
+        revoked_ws = MockWebSocket()
+        await manager.connect(member_ws, room_id=ROOM_ID, issuer=ISSUER, subject=SUBJECT)
+        await manager.connect(
+            revoked_ws, room_id=ROOM_ID, issuer="https://revoked", subject="revoked"
+        )
+
+        await _deliver_fanout_payload(_wire_payload())
+
+        assert member_ws.sent == [{"type": "message", "data": _wire_payload()}]
+        assert revoked_ws.sent == []
+        assert revoked_ws.closed_with == 1008
+        assert manager.room_connection_count(ROOM_ID) == 1
+
+    asyncio.run(run())
+
+
 def test_connection_manager_broadcast_fans_out_to_room_only() -> None:
     async def run() -> None:
         cm = ConnectionManager()
+        cm.attach_access_verifier(_allow_all_verifier)
         ws_a = MockWebSocket()
         ws_b = MockWebSocket()
         ws_other = MockWebSocket()
@@ -822,6 +1031,7 @@ def test_connection_manager_actor_connection_count_spans_rooms() -> None:
 def test_connection_manager_broadcast_evicts_dead_clients() -> None:
     async def run() -> None:
         cm = ConnectionManager()
+        cm.attach_access_verifier(_allow_all_verifier)
         ws_dead = MockWebSocket()
         ws_dead.send_should_fail = True
         ws_alive = MockWebSocket()
@@ -1086,6 +1296,26 @@ def test_rest_send_message_persists_and_returns_envelope(client, api_key) -> Non
             "idempotency_key": "retry-1",
         }
     ]
+
+
+def test_rest_send_reaches_connected_ws_socket_through_delivery_guard(client, api_key) -> None:
+    service = FakeChatService()
+    _install_fake_service(client, service)
+    client.app.dependency_overrides[require_oauth_identity] = _oauth_identity
+
+    with client.websocket_connect(_ws_url()) as ws:
+        response = client.post(
+            f"/api/v1/community/chat/rooms/{ROOM_ID}/messages",
+            headers={"X-API-Key": api_key},
+            json={"body": "via rest"},
+        )
+        assert response.status_code == 200
+        # The REST-created message fans out to the connected socket through
+        # the same access-guarded broadcast path (fixture verifier armed).
+        frame = ws.receive_json()
+
+    assert frame["type"] == "message"
+    assert frame["data"]["body"] == "via rest"
 
 
 def test_rest_send_message_rejects_malformed_idempotency_key(client, api_key) -> None:

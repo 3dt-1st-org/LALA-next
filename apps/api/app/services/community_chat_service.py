@@ -322,7 +322,12 @@ class CommunityChatRepository:
         the same key serialize on the primary key; the loser replays the
         committed response or is rejected as a payload conflict. Business
         failures (room inaccessible) roll the claim back so the key is not
-        burned. Returns ``{"outcome": ..., "message": ...}``.
+        burned. Replay is authorization-gated: the stored response is only
+        returned when the actor *currently* passes the same room access
+        predicate as a fresh send — a revoked member cannot replay their old
+        key/body back out of the store, and denial neither leaks the stored
+        private payload nor burns the key for a future authorized replay.
+        Returns ``{"outcome": ..., "message": ...}``.
         """
 
         request_hash = canonical_request_hash({"room_id": str(room_id), "body": body})
@@ -341,6 +346,11 @@ class CommunityChatRepository:
             FROM community.idempotency_keys
             WHERE scope = %s AND actor_issuer = %s AND actor_subject = %s
               AND idempotency_key = %s
+        """
+        replay_access_sql = f"""
+            SELECT r.id
+            FROM community.chat_rooms r
+            WHERE r.id = %s AND {_ROOM_ACCESS_SQL}
         """
         purge_sql = """
             DELETE FROM community.idempotency_keys
@@ -401,6 +411,16 @@ class CommunityChatRepository:
                 response = existing["response_json"]
                 if response is None:
                     raise CommunityChatRepositoryUnavailable()
+                # Replay authorization gate: valid idempotency is not current
+                # authorization. The stored response leaves the store only
+                # when the actor still passes the fresh-send access predicate
+                # (same predicate, same actor scoping, same transaction).
+                cur.execute(
+                    replay_access_sql,
+                    (str(room_id), *access),
+                )
+                if cur.fetchone() is None:
+                    return {"outcome": "denied", "message": None}
                 return {"outcome": "replayed", "message": dict(response)}
             cur.execute(
                 insert_sql,

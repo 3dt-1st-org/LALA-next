@@ -155,11 +155,20 @@ def _ws_url(ticket: str = "valid") -> str:
 
 @pytest.fixture(autouse=True)
 def _reset_chat_delivery_state() -> None:
+    from apps.api.app.routers.community_chat import _verify_room_access_for_actors
+
+    async def _allow_all(room_id: UUID, actors: list[tuple[str, str]]) -> set[str]:
+        # Mechanics/rate-limit tests only; delivery authorization is covered
+        # by the dedicated guard regressions in test_community_chat.py.
+        return {f"{issuer}:{subject}" for issuer, subject in actors}
+
     manager._rooms.clear()
     manager.reset_delivery_dedup_for_tests()
+    manager.attach_access_verifier(_allow_all)
     yield
     manager._rooms.clear()
     manager.reset_delivery_dedup_for_tests()
+    manager.attach_access_verifier(_verify_room_access_for_actors)
 
 
 # ---------------------------------------------------------------------------

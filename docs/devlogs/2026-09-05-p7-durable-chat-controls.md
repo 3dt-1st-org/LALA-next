@@ -160,6 +160,42 @@ restart), `test_fanout_start_is_idempotent_while_serving_and_clean_stop_confirms
 generation-aware `handle_notification` tests (malformed payloads, room
 mismatch, missing live generation, exception-safe fetch).
 
+### Authorization-lifecycle correction (2026-09-06, verifier-confirmed F3/F4)
+
+Independent verification at `6bb1ab2a` confirmed two defects, both fixed:
+
+- **F3 — fanout without re-admission.** Ticket claim validated access only at
+  admission, so a socket could outlive its authorization (membership revoked,
+  account deleted) and keep receiving fresh private messages; junk frames
+  reset the idle timeout, so the timeout was never revocation. Every delivery
+  route (WebSocket-created local, REST-created local, cross-instance NOTIFY)
+  now funnels through one seam — `ConnectionManager.broadcast` — which first
+  revalidates each connected actor's *current* room access through an
+  attached verifier that calls the same `room_access` service contract as
+  reads/writes (no parallel auth policy), off the event loop via
+  `asyncio.to_thread` and bounded by the room cap. A denied actor is closed
+  content-free with the same 1008 code as admission denial and evicted, while
+  authorized recipients still receive exactly one frame. A missing or failing
+  verifier fails closed (no delivery, sockets kept, denial and
+  unavailability stay distinguishable; REST/reconnect remain the retry
+  paths). Public rooms keep guest-readable semantics via the same predicate.
+- **F4 — unguarded idempotent replay.** `create_message_idempotent` returned
+  the stored response before any access check, so a revoked member could
+  replay their old key/body. The replay branch now re-runs the exact
+  fresh-send access predicate (same transaction, same actor scoping) before
+  returning `response_json`; denial maps to the same indistinguishable 404,
+  never leaks the stored payload, and does not burn the key for a future
+  authorized replay. Authorized identical replay still returns the stable
+  stored response with no new INSERT or NOTIFY; conflict and concurrent-claim
+  semantics are unchanged.
+
+Regressions: manager-level revoked-recipient denial (1008, no payload,
+authorized recipient served exactly once), verifier-unavailable and
+missing-verifier fail-closed, verifier aggregation/failure propagation,
+NOTIFY-route and REST-route guarded delivery, repository-level revoked-replay
+denial (no INSERT/NOTIFY, key not burned, predicate/scoping asserted), and
+the updated authorized-replay script.
+
 ## Runtime client (criterion 5)
 
 - `ChatWsClient` connects through a URI provider: every (re)connect fetches a
@@ -221,8 +257,8 @@ cross-session.
 
 - API: focused community suites (chat 74 — including the deterministic fanout
   lifecycle regressions, run five consecutive times green — guards 30,
-  idempotency 9, canonical 16, community 37) and the full suite **2,474
-  passed** (2026-09-06 correction run); `ruff check`/`format` clean; OpenAPI
+  idempotency 9, canonical 16, community 37) and the full suite **2,481
+  passed** (2026-09-06 authorization-lifecycle correction run); `ruff check`/`format` clean; OpenAPI
   compat tests green (new paths are additive).
 - Flutter app: `flutter analyze` clean; community suites 65 passed; full suite
   **1,189 passed**.
