@@ -9,12 +9,18 @@ import '../place_helpers.dart';
 /// [style] 로 배경에 맞춰 색/크기를 덮는다(예: 이미지 오버레이 카드의 흰색 텍스트).
 /// [topSpacing] > 0 일 때 reason 이 있으면 상단 간격도 같이 렌더하고, 없으면 0(빈 공간
 /// 없음) — 호출측의 조건부 간격 분기를 대체한다.
+///
+/// [language] 를 주면 방문객 로케일(ja/zh-Hans/zh-Hant)에서 고정 EN reason
+/// 세그먼트를 해당 로케일 고정 카피로 바꿔 그린다(placeReasonText SSOT 계약).
+/// 생략하면 서버 원문 그대로 — 아직 language 를 넘기지 않는 호출측은 정직한
+/// EN 폴백을 유지한다(한국어 노출 없음).
 class PlaceReasonLine extends StatelessWidget {
   const PlaceReasonLine({
     super.key,
     required this.place,
     this.style,
     this.topSpacing = 0,
+    this.language,
   });
 
   final LalaPlace place;
@@ -23,9 +29,12 @@ class PlaceReasonLine extends StatelessWidget {
   final TextStyle? style;
   final double topSpacing;
 
+  /// 표시 로케일(정규화 전 원본 코드). null 이면 서버 원문.
+  final String? language;
+
   @override
   Widget build(BuildContext context) {
-    final reason = placeReasonText(place);
+    final reason = placeReasonText(place, language);
     if (reason == null) {
       return const SizedBox.shrink();
     }

@@ -1163,7 +1163,7 @@ class _SearchPlaceTile extends StatelessWidget {
     // S2 계약: source/dataset data_as_of 가 없으면 source/freshness 칩을 숨긴다.
     final sourceChip = sourceLabel(datasetSource, language: language);
     final freshnessChip = datasetFreshnessLabel(datasetDataAsOf, language);
-    final reason = placeReasonText(place);
+    final reason = placeReasonText(place, language);
     final accent = categoryColor(place.category);
     return Material(
       color: LalaVisualColors.card,
