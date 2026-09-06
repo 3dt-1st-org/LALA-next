@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from apps.api.app.tools import run_naver_review_collect as tool
 
 
@@ -645,9 +647,10 @@ def test_r3_same_time_conflict_and_older_rejection(monkeypatch, capsys, tmp_path
     capsys.readouterr()
     prior = state.read_bytes()
 
-    # EXACT stored observation time, one normalized page fact changed.
-    conflicting = _chain_page("place-202", "place-204", stored_time)
-    conflicting["requests_used"] = 6  # one normalized page fact changed
+    # EXACT stored observation time; the conflicting page is DERIVED from the
+    # stored page so ONLY requests_used differs (cursors identical).
+    stored_page = _chain_page(None, "place-202", stored_time)
+    conflicting = {**stored_page, "requests_used": 6}
     rc = _export_state(monkeypatch, capsys, tmp_path, state, conflicting, "r3-c.json")
     assert rc == 2
     assert "conflicting evidence" in json.loads(capsys.readouterr().out)["error"]
@@ -697,11 +700,14 @@ def test_r4_incomplete_exhausted_tail_counters_not_hole(monkeypatch, capsys, tmp
     assert payload["region_states"]["busan-haeundae"] != "EMPTY_OBSERVED"
 
 
-def test_r5_mixed_fatal_stop_priority_and_cap(monkeypatch, capsys, tmp_path):
+@pytest.mark.parametrize("cap", [2, 64])
+def test_r5_mixed_fatal_stop_priority_and_cap(cap, monkeypatch, capsys, tmp_path):
     from apps.api.app.services import collector_checkpoint as cc
 
     _no_io(monkeypatch)
-    monkeypatch.setattr(cc, "SWEEP_MAX_PAGES", 2)
+    # cap=2 exercises the boundary with a short real chain; cap=64 proves the
+    # same semantics at the ACTUAL default limit with a full real chain.
+    monkeypatch.setattr(cc, "SWEEP_MAX_PAGES", cap)
     state = tmp_path / "state5.json"
     # Other region preserved across every stop interaction.
     other = _raw_page(
@@ -713,38 +719,35 @@ def test_r5_mixed_fatal_stop_priority_and_cap(monkeypatch, capsys, tmp_path):
     )
     assert _export_state(monkeypatch, capsys, tmp_path, state, other, "r5-o.json") == 0
     capsys.readouterr()
-    # Chain to the cap: two clean pages.
-    assert (
-        _export_state(
-            monkeypatch,
-            capsys,
-            tmp_path,
-            state,
-            _chain_page(None, "place-402", "2026-09-06T11:00:00+00:00"),
-            "r5-a.json",
+    # Real chain to the cap through actual exports (2 or 64 clean pages;
+    # cap=64 exercises the ACTUAL default limit, not a lowered boundary).
+    cursor = "place-402"
+    for i in range(cap):
+        nxt = f"place-{404 + 2 * i}"
+        from datetime import UTC as _UTC
+        from datetime import datetime as _dt
+        from datetime import timedelta as _td
+
+        observed = (_dt(2026, 9, 6, 11, 0, tzinfo=_UTC) + _td(minutes=i)).isoformat()
+        assert (
+            _export_state(
+                monkeypatch,
+                capsys,
+                tmp_path,
+                state,
+                _chain_page(None if i == 0 else cursor, nxt, observed),
+                f"r5-chain-{i}.json",
+            )
+            == 0
         )
-        == 0
-    )
-    capsys.readouterr()
-    assert (
-        _export_state(
-            monkeypatch,
-            capsys,
-            tmp_path,
-            state,
-            _chain_page("place-402", "place-404", "2026-09-06T11:30:00+00:00"),
-            "r5-b.json",
-        )
-        == 0
-    )
-    capsys.readouterr()
-    at_cap = state.read_bytes()
+        capsys.readouterr()
+        cursor = nxt
 
     # Mixed success+fatal status=degraded with ZERO progress at the cap head:
     # sticky stop recorded (rc0), not a page-cap rejection.
     mixed = _raw_page(
-        input_cursor="place-404",
-        next_cursor="place-404",
+        input_cursor=cursor,
+        next_cursor=cursor,
         exhausted=False,
         status="degraded",
         places=2,
@@ -763,13 +766,15 @@ def test_r5_mixed_fatal_stop_priority_and_cap(monkeypatch, capsys, tmp_path):
     stopped = state.read_bytes()
 
     # Later clean reset attempt unchanged: sticky rejection.
-    clean_reset = _chain_page("place-404", "place-406", "2026-09-06T13:00:00+00:00")
+    clean_reset = _chain_page(cursor, f"{cursor}-next", "2026-09-06T13:00:00+00:00")
     rc = _export_state(monkeypatch, capsys, tmp_path, state, clean_reset, "r5-r.json")
     assert rc == 2
     assert "sticky" in json.loads(capsys.readouterr().out)["error"]
     assert state.read_bytes() == stopped
 
-    # Older VALID fatal stays sticky too (fresh state, newer success first).
+    # Older VALID fatal stays sticky too (fresh state, newer success first) —
+    # proving STATE2 itself retained the old stop with the newer region's
+    # cursor/time preserved, then scheduling STATE2 (not the first scenario).
     state2 = tmp_path / "state5b.json"
     assert (
         _export_state(
@@ -784,6 +789,7 @@ def test_r5_mixed_fatal_stop_priority_and_cap(monkeypatch, capsys, tmp_path):
     )
     capsys.readouterr()
     older_fatal = _raw_page(
+        region="incheon-yeonsu",
         input_cursor=None,
         next_cursor=None,
         exhausted=False,
@@ -800,9 +806,19 @@ def test_r5_mixed_fatal_stop_priority_and_cap(monkeypatch, capsys, tmp_path):
     rc = _export_state(monkeypatch, capsys, tmp_path, state2, older_fatal, "r5-of.json")
     assert rc == 0
     capsys.readouterr()
-    doc = json.loads(state2.read_text(encoding="utf-8"))
-    assert doc["scope_contract"] == "tour_api_province_qualified_v1"  # sanity
-    assert at_cap  # referenced: cap snapshot existed before the stop
+    state2_entries = {
+        e["region"]: e for e in json.loads(state2.read_text(encoding="utf-8"))["entries"]
+    }
+    # STATE2 retained the OLD fatal stop…
+    assert state2_entries["incheon-yeonsu"]["blocked"] == "auth_quota"
+    assert state2_entries["incheon-yeonsu"]["observation_time"] == ("2026-09-06T10:00:00+00:00")
+    # …while preserving the newer region's actual cursor and time.
+    assert state2_entries["busan-haeundae"]["next_after_place_id"] == "place-502"
+    assert state2_entries["busan-haeundae"]["observation_time"] == "2026-09-06T12:00:00+00:00"
+    payload2 = _schedule(monkeypatch, capsys, state2, regions="busan-haeundae,seoul-seongdong")
+    assert payload2["auth_quota_blocked"] is True
+    assert payload2["planned_argv"] == []
+    # The FIRST scenario's state still blocks globally too.
     payload = _schedule(monkeypatch, capsys, state)
     assert payload["auth_quota_blocked"] is True
     assert payload["planned_argv"] == []
@@ -877,9 +893,11 @@ def test_r7_newer_failed_retry_then_clean_success(monkeypatch, capsys, tmp_path)
     assert entry["next_after_place_id"] == "place-704"
 
 
-def test_r8_quarantined_tally_taints_like_degraded(monkeypatch, capsys, tmp_path):
-    """Raw ACCEPTED status=succeeded page with a real nonclean (network_error)
-    tally taints the chain exactly like degraded status."""
+def test_r8_nonclean_tally_taints_like_degraded(monkeypatch, capsys, tmp_path):
+    """Raw ACCEPTED status=succeeded page with a REAL nonclean acquisition
+    tally (network_error — a genuine collector failure category, not a
+    fabricated quarantine enum) taints the chain exactly like degraded
+    status; e.g. quarantine surfaces through the same degrading categories."""
     from datetime import UTC, datetime
 
     _no_io(monkeypatch)
