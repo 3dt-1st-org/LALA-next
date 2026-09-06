@@ -1100,9 +1100,11 @@ def _run_apply(
             "stop_reason": batch.stop_reason,
             "exhausted": _window_exhausted(batch, args.limit),
             "window_full": batch.places_count >= args.limit,
-            # B4: this run's own collection/commit observation time. The
-            # offline export preserves it verbatim — never re-stamped.
-            "observation_time": datetime.now(UTC).isoformat(),
+            # B4: this run's own collection/commit observation time via the
+            # clock seam (tests freeze producer AND scheduler consistently;
+            # runtime stays real UTC). The offline export preserves it
+            # verbatim — never re-stamped.
+            "observation_time": _now_utc().isoformat(),
             # P5C provenance: the predicate this result was actually produced
             # under. The bridge/exporter never upgrades a marker-less legacy
             # result to qualified credit.
