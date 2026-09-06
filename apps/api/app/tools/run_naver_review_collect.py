@@ -297,7 +297,19 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Export mode only: explicit local collector apply-result JSON file.",
     )
+    parser.add_argument(
+        "--checkpoint-state",
+        default=None,
+        help=(
+            "Export mode only: additionally update this named local state file "
+            "from the committed result (lock + atomic publication; other "
+            "regions and sticky auth/quota stops preserved). Without it, "
+            "export stays stdout-only."
+        ),
+    )
     args = parser.parse_args(argv)
+
+    from pathlib import Path as _Path
 
     _SCHEDULE_ONLY = (
         "--regions",
@@ -350,6 +362,18 @@ def main(argv: list[str] | None = None) -> int:
             },
         )
         return 2
+    if args.checkpoint_state is not None and not args.export_checkpoint:
+        _write(
+            args,
+            {
+                "ok": False,
+                "mode": "plan",
+                "error": (
+                    "--checkpoint-state requires --export-checkpoint; no file was read or written."
+                ),
+            },
+        )
+        return 2
     if not args.schedule and not args.export_checkpoint and _explicitly_supplied():
         _write(
             args,
@@ -378,6 +402,34 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
     if args.export_checkpoint:
+        if args.checkpoint_state is not None and not str(args.checkpoint_state).strip():
+            _write(
+                args,
+                {
+                    "ok": False,
+                    "mode": "export",
+                    "error": "--checkpoint-state path must be a non-empty explicit path.",
+                },
+            )
+            return 2
+        if (
+            args.checkpoint_state is not None
+            and args.from_collector_result is not None
+            and _Path(args.checkpoint_state).absolute()
+            == _Path(args.from_collector_result).absolute()
+        ):
+            _write(
+                args,
+                {
+                    "ok": False,
+                    "mode": "export",
+                    "error": (
+                        "--checkpoint-state and --from-collector-result must be "
+                        "different files; no state was written."
+                    ),
+                },
+            )
+            return 2
         incompatible = _explicitly_supplied() + [
             flag
             for flag, value in (
@@ -754,6 +806,13 @@ def _run_export(args: argparse.Namespace) -> int:
             },
         )
         return 2
+    state_result = None
+    if args.checkpoint_state is not None:
+        try:
+            state_result = cc.update_checkpoint_state(Path(args.checkpoint_state), entry)
+        except cc.CheckpointStateError as exc:
+            _write(args, {"ok": False, "mode": "export", "error": str(exc)})
+            return 2
     snapshot = {
         "schema_version": cc.SNAPSHOT_SCHEMA_VERSION,
         "source": cc.SNAPSHOT_SOURCE,
@@ -763,6 +822,25 @@ def _run_export(args: argparse.Namespace) -> int:
         "entries": [entry],
     }
     if args.json:
+        if state_result is not None:
+            # Explicit disk-commit outcome — stdout JSON alone must never be
+            # mistaken for persistence.
+            print(
+                _json.dumps(
+                    {
+                        "ok": True,
+                        "mode": "export",
+                        "state_updated": True,
+                        "state_path": str(Path(args.checkpoint_state)),
+                        "region": state_result["region"],
+                        "entries_total": state_result["entries_total"],
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
+            return 0
         print(_json.dumps(snapshot, ensure_ascii=False, indent=2, sort_keys=True))
         return 0
     print("LALA-next collector checkpoint export (offline)")

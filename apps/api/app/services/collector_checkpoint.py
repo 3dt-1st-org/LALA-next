@@ -44,6 +44,7 @@ Persistent operational storage of snapshots remains a later scoped gap.
 
 from __future__ import annotations
 
+import contextlib
 import json
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
@@ -621,3 +622,185 @@ def plan_regional_collection(
         ),
         "semantics": "collection_scheduling_recency_only",
     }
+
+
+# --- P5D1: bounded offline local checkpoint state store ---------------------------
+
+
+class CheckpointStateError(ValueError):
+    """Local state-file update failed — prior bytes stay unchanged."""
+
+
+def _canonical_entry(entry: Mapping) -> dict:
+    """Serialize ONLY the validated bounded entry fields (no privates).
+
+    Historical tolerance: entries loaded from genuine old state files may lack
+    ``qualified_scope`` entirely, and a legacy TOP-LEVEL marker must demote
+    even a stored ``qualified_scope: true`` (it predates the qualified
+    predicate). Both normalize to an explicit False in the new-format store —
+    never relabeled current, never a KeyError on real old bytes.
+    """
+    canonical = {
+        key: entry[key]
+        for key in (
+            "region",
+            "next_after_place_id",
+            "input_after_place_id",
+            "exhausted",
+            "whole_region_complete",
+            "empty_scope",
+            "stop_reason",
+            "blocked",
+            "requests_used",
+            "observation_time",
+        )
+    }
+    canonical["qualified_scope"] = bool(entry.get("qualified_scope")) and not entry.get(
+        "_legacy_scope"
+    )
+    return canonical
+
+
+def _entry_observation_time(entry: Mapping) -> datetime:
+    return _parse_timestamp(entry["observation_time"], "entry observation_time")
+
+
+def update_checkpoint_state(state_path: Path, entry: Mapping) -> dict[str, Any]:
+    """Atomically merge ONE validated entry into a bounded local state file.
+
+    Cooperating-writer safety (NOT a distributed guarantee): a portable
+    exclusive lock ``<state>.lock`` is acquired (O_CREAT|O_EXCL) BEFORE any
+    read; a busy/stale lock fails with a sanitized error (no retry storm, no
+    stealing, never removing someone else's lock/temp/file). Publication is a
+    same-directory temp file + os.replace with restrictive permissions; any
+    permission/parse/validation/replace failure leaves the prior bytes
+    untouched (owned temp cleaned up in finally).
+
+    Merge policy: other regions are always preserved. Same region: older
+    NONBLOCKING evidence is rejected; identical same-time replay is
+    idempotent; conflicting same-time evidence fails closed. An auth/quota
+    stop is sticky — a recorded stop survives any newer success, older
+    evidence, subset selection, or scope/version transition, and newly
+    observed valid blocked evidence is never dropped as stale. No auto reset,
+    age expiry, or reset flag: clearing a stop is an explicit later operator
+    decision. Historical shapes load under the strict legacy rules and are
+    normalized to an explicit unqualified bool in the new-format store — never
+    relabeled current. The final encoded document is revalidated (bounded
+    size/count, strict markers/types) before publication.
+    """
+    import os
+    import tempfile
+
+    if not str(state_path) or str(state_path) in (".", ".."):
+        raise CheckpointStateError("state path is empty or invalid")
+    state_path = state_path.absolute()
+    parent = state_path.parent
+    if not parent.is_dir():
+        raise CheckpointStateError("state parent directory must already exist")
+    if state_path.exists() and not state_path.is_file():
+        raise CheckpointStateError("state target is not a regular file")
+    if state_path.is_symlink():
+        raise CheckpointStateError("state target is a symlink; refusing to overwrite")
+
+    lock_path = state_path.with_name(state_path.name + ".lock")
+    try:
+        lock_fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError as exc:
+        raise CheckpointStateError(
+            "state lock is busy (another cooperating writer holds it); no retry attempted"
+        ) from exc
+    except OSError as exc:
+        raise CheckpointStateError("state lock could not be created") from exc
+
+    temp_path: Path | None = None
+    try:
+        with os.fdopen(lock_fd, "w"):
+            pass  # hold the lock via the file's existence; fd closed cleanly
+
+        prior: dict[str, dict] = {}
+        try:
+            if state_path.exists():
+                prior = load_checkpoint_snapshot(state_path)
+        except CheckpointSnapshotError as exc:
+            raise CheckpointStateError(f"prior state is invalid: {exc}") from exc
+        except OSError as exc:
+            raise CheckpointStateError("prior state could not be read") from exc
+
+        incoming = _canonical_entry(entry)
+        incoming_region = incoming["region"]
+        merged: dict[str, dict] = {
+            region: _canonical_entry(stored) for region, stored in prior.items()
+        }
+
+        if incoming["blocked"] != "auth_quota" and any(
+            stored.get("blocked") == "auth_quota" for stored in merged.values()
+        ):
+            raise CheckpointStateError(
+                "an auth/quota stop is recorded in this state; it is sticky "
+                "until an explicit operator reset — no update applied"
+            )
+
+        existing = merged.get(incoming_region)
+        if existing is not None:
+            prior_time = _entry_observation_time(existing)
+            incoming_time = _entry_observation_time(incoming)
+            if incoming_time == prior_time and existing != incoming:
+                raise CheckpointStateError(
+                    "conflicting evidence at the same observation time; rejected"
+                )
+            if incoming["blocked"] == "auth_quota":
+                # Valid blocked evidence is never dropped as stale.
+                merged[incoming_region] = incoming
+            elif existing.get("blocked") == "auth_quota":
+                raise CheckpointStateError(
+                    "an auth/quota stop is recorded for this region; it is "
+                    "sticky until an explicit operator reset — no update applied"
+                )
+            elif incoming_time < prior_time:
+                raise CheckpointStateError(
+                    "incoming observation is older than the stored one; rejected"
+                )
+            else:
+                merged[incoming_region] = incoming
+        else:
+            merged[incoming_region] = incoming
+
+        document = {
+            "schema_version": SNAPSHOT_SCHEMA_VERSION,
+            "source": SNAPSHOT_SOURCE,
+            "scope_contract": SNAPSHOT_SCOPE_CONTRACT,
+            "entries": [merged[region] for region in sorted(merged)],
+        }
+        blob = json.dumps(document, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+        if len(blob) > SNAPSHOT_MAX_BYTES:
+            raise CheckpointStateError("merged state exceeds the bounded size limit")
+        # Revalidate the FINAL encoded document through the strict loader
+        # before any bytes are replaced.
+        try:
+            with tempfile.NamedTemporaryFile(
+                "wb", dir=parent, prefix=".state-", suffix=".tmp", delete=False
+            ) as handle:
+                temp_path = Path(handle.name)  # owned from open, cleaned in finally
+                handle.write(blob)
+                handle.flush()
+                os.fsync(handle.fileno())
+        except OSError as exc:
+            raise CheckpointStateError("state serialization failed") from exc
+        os.chmod(temp_path, 0o600)
+        try:
+            load_checkpoint_snapshot(temp_path)
+            os.replace(temp_path, state_path)
+            temp_path = None
+        except OSError as exc:
+            raise CheckpointStateError("atomic state publication failed") from exc
+        return {
+            "state_updated": True,
+            "region": incoming_region,
+            "entries_total": len(merged),
+        }
+    finally:
+        if temp_path is not None and temp_path.exists():
+            with contextlib.suppress(OSError):
+                temp_path.unlink()
+        with contextlib.suppress(OSError):
+            lock_path.unlink()  # release ONLY our own lock

@@ -2287,3 +2287,632 @@ def test_committed_nonfatal_failed_result_is_observation_without_freshness(
     assert payload["auth_quota_blocked"] is False
     assert payload["region_states"]["busan-haeundae"] == "RESUME_PARTIAL"
     assert any(p["region"] == "seoul-seongdong" for p in payload["planned_arguments"])
+
+
+# == P5D1: bounded offline local checkpoint state store =============================
+
+
+def _state_result_file(tmp_path, name, **overrides):
+    import json as _json
+
+    path = tmp_path / name
+    path.write_text(_json.dumps(_apply_result(**overrides)))
+    return path
+
+
+def test_p5d_state_requires_export_and_guards(monkeypatch, capsys):
+    _no_io_wiring(monkeypatch)
+    rc = tool.main(["--preview", "--json", "--checkpoint-state", "state.json"])
+    assert rc == 2
+    assert "requires --export-checkpoint" in _out(capsys)["error"]
+    rc = tool.main(["--export-checkpoint", "--json", "--checkpoint-state", "  "])
+    assert rc == 2
+    assert "non-empty" in _out(capsys)["error"]
+
+
+def test_p5d_state_create_append_update_preserves_regions(monkeypatch, capsys, tmp_path):
+    import json as _json
+
+    _no_io_wiring(monkeypatch)
+    state = tmp_path / "state.json"
+
+    r1 = _state_result_file(
+        tmp_path, "r1.json", region="busan-haeundae", cursor_scope="busan-haeundae"
+    )
+    rc = tool.main(
+        [
+            "--export-checkpoint",
+            "--json",
+            "--from-collector-result",
+            str(r1),
+            "--checkpoint-state",
+            str(state),
+        ]
+    )
+    assert rc == 0
+    payload = _out(capsys)
+    assert payload["state_updated"] is True and payload["entries_total"] == 1
+    doc = _json.loads(state.read_text(encoding="utf-8"))
+    assert doc["scope_contract"] == "tour_api_province_qualified_v1"
+
+    r2 = _state_result_file(
+        tmp_path,
+        "r2.json",
+        region="seoul-seongdong",
+        cursor_scope="seoul-seongdong",
+        observation_time="2026-09-06T11:30:00+00:00",
+    )
+    rc = tool.main(
+        [
+            "--export-checkpoint",
+            "--json",
+            "--from-collector-result",
+            str(r2),
+            "--checkpoint-state",
+            str(state),
+        ]
+    )
+    assert rc == 0
+    assert _out(capsys)["entries_total"] == 2
+
+    # Update the FIRST region with newer evidence; second region preserved.
+    r1b = _state_result_file(
+        tmp_path,
+        "r1b.json",
+        region="busan-haeundae",
+        cursor_scope="busan-haeundae",
+        observation_time="2026-09-06T12:00:00+00:00",
+    )
+    rc = tool.main(
+        [
+            "--export-checkpoint",
+            "--json",
+            "--from-collector-result",
+            str(r1b),
+            "--checkpoint-state",
+            str(state),
+        ]
+    )
+    assert rc == 0
+    capsys.readouterr()
+    doc = _json.loads(state.read_text(encoding="utf-8"))
+    assert [e["region"] for e in doc["entries"]] == ["busan-haeundae", "seoul-seongdong"]
+    assert doc["entries"][0]["observation_time"] == "2026-09-06T12:00:00+00:00"
+
+
+def test_p5d_state_older_equal_idempotent_and_conflict(monkeypatch, capsys, tmp_path):
+    _no_io_wiring(monkeypatch)
+    state = tmp_path / "state.json"
+    base = _state_result_file(tmp_path, "base.json")
+    assert (
+        tool.main(
+            [
+                "--export-checkpoint",
+                "--json",
+                "--from-collector-result",
+                str(base),
+                "--checkpoint-state",
+                str(state),
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+    prior_bytes = state.read_bytes()
+
+    older = _state_result_file(tmp_path, "older.json", observation_time="2026-09-06T10:00:00+00:00")
+    rc = tool.main(
+        [
+            "--export-checkpoint",
+            "--json",
+            "--from-collector-result",
+            str(older),
+            "--checkpoint-state",
+            str(state),
+        ]
+    )
+    assert rc == 2
+    assert "older" in _out(capsys)["error"]
+    assert state.read_bytes() == prior_bytes
+
+    same = _state_result_file(tmp_path, "same.json")
+    rc = tool.main(
+        [
+            "--export-checkpoint",
+            "--json",
+            "--from-collector-result",
+            str(same),
+            "--checkpoint-state",
+            str(state),
+        ]
+    )
+    assert rc == 0  # identical same-time replay is idempotent
+    capsys.readouterr()
+    assert state.read_bytes() == prior_bytes
+
+    conflict = _state_result_file(tmp_path, "conflict.json", requests_used=6)
+    rc = tool.main(
+        [
+            "--export-checkpoint",
+            "--json",
+            "--from-collector-result",
+            str(conflict),
+            "--checkpoint-state",
+            str(state),
+        ]
+    )
+    assert rc == 2
+    assert "conflicting" in _out(capsys)["error"]
+    assert state.read_bytes() == prior_bytes
+
+
+def test_p5d_state_legacy_shape_migration_no_new_credit(monkeypatch, capsys, tmp_path):
+    import json as _json
+
+    _no_io_wiring(monkeypatch)
+    state = tmp_path / "state.json"
+    _write_raw_snapshot(
+        state, [_literal_old_entry("daegu-jung", exhausted=True, whole_region_complete=True)]
+    )
+    newer = _state_result_file(
+        tmp_path,
+        "new.json",
+        region="seoul-seongdong",
+        cursor_scope="seoul-seongdong",
+        observation_time="2026-09-06T12:00:00+00:00",
+    )
+    rc = tool.main(
+        [
+            "--export-checkpoint",
+            "--json",
+            "--from-collector-result",
+            str(newer),
+            "--checkpoint-state",
+            str(state),
+        ]
+    )
+    assert rc == 0
+    capsys.readouterr()
+    doc = _json.loads(state.read_text(encoding="utf-8"))
+    entry = {e["region"]: e for e in doc["entries"]}
+    # Legacy entry normalized explicitly unqualified in the new-format store.
+    assert entry["daegu-jung"]["qualified_scope"] is False
+    assert entry["seoul-seongdong"]["qualified_scope"] is True
+
+    # State file is immediately usable by --schedule; legacy region stays DUE.
+    from datetime import UTC as _UTC
+    from datetime import datetime as _dt
+
+    monkeypatch.setattr(tool, "_now_utc", lambda: _dt(2026, 9, 6, 13, 0, tzinfo=_UTC))
+    rc = tool.main(
+        [
+            "--schedule",
+            "--json",
+            "--checkpoint-snapshot",
+            str(state),
+            "--regions",
+            "daegu-jung,seoul-seongdong",
+        ]
+    )
+    assert rc == 0
+    payload = _out(capsys)
+    assert payload["region_states"]["daegu-jung"] == "DUE"
+    assert payload["region_states"]["seoul-seongdong"] == "RECENTLY_COLLECTED"
+
+
+def test_p5d_state_sticky_quota_stop(monkeypatch, capsys, tmp_path):
+    _no_io_wiring(monkeypatch)
+    state = tmp_path / "state.json"
+    blocked = _state_result_file(
+        tmp_path,
+        "blocked.json",
+        region="daegu-jung",
+        cursor_scope="daegu-jung",
+        ok=False,
+        status="failed",
+        exhausted=False,
+        places=1,
+        places_attempted=1,
+        places_completed=0,
+        places_deferred=0,
+        stop_reason="fatal_provider_failure",
+        next_after_place_id="p0",
+        after_place_id="p0",
+        failure_tally={"naver_blog": {"quota_exceeded": 1}},
+        observation_time="2026-09-06T10:00:00+00:00",
+    )
+    assert (
+        tool.main(
+            [
+                "--export-checkpoint",
+                "--json",
+                "--from-collector-result",
+                str(blocked),
+                "--checkpoint-state",
+                str(state),
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+    prior_bytes = state.read_bytes()
+
+    # Newer SUCCESS for a different region cannot erase the stop.
+    success = _state_result_file(
+        tmp_path,
+        "success.json",
+        region="seoul-seongdong",
+        cursor_scope="seoul-seongdong",
+        observation_time="2026-09-06T12:00:00+00:00",
+    )
+    rc = tool.main(
+        [
+            "--export-checkpoint",
+            "--json",
+            "--from-collector-result",
+            str(success),
+            "--checkpoint-state",
+            str(state),
+        ]
+    )
+    assert rc == 2
+    assert "sticky" in _out(capsys)["error"]
+    assert state.read_bytes() == prior_bytes
+
+    # A NEWER blocked observation for the same region still updates the stop.
+    blocked2 = _state_result_file(
+        tmp_path,
+        "blocked2.json",
+        region="daegu-jung",
+        cursor_scope="daegu-jung",
+        ok=False,
+        status="failed",
+        exhausted=False,
+        places=1,
+        places_attempted=1,
+        places_completed=0,
+        places_deferred=0,
+        stop_reason="fatal_provider_failure",
+        next_after_place_id="p0",
+        after_place_id="p0",
+        failure_tally={"naver_cafe": {"auth_missing": 1}},
+        observation_time="2026-09-06T11:00:00+00:00",
+    )
+    rc = tool.main(
+        [
+            "--export-checkpoint",
+            "--json",
+            "--from-collector-result",
+            str(blocked2),
+            "--checkpoint-state",
+            str(state),
+        ]
+    )
+    assert rc == 0
+    capsys.readouterr()
+
+    # Older blocked input is never dropped as stale when the store has success.
+    state2 = tmp_path / "state2.json"
+    newer_success = _state_result_file(
+        tmp_path,
+        "ns.json",
+        region="incheon-yeonsu",
+        cursor_scope="incheon-yeonsu",
+        observation_time="2026-09-06T12:00:00+00:00",
+    )
+    assert (
+        tool.main(
+            [
+                "--export-checkpoint",
+                "--json",
+                "--from-collector-result",
+                str(newer_success),
+                "--checkpoint-state",
+                str(state2),
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+    older_blocked = _state_result_file(
+        tmp_path,
+        "ob.json",
+        region="incheon-yeonsu",
+        cursor_scope="incheon-yeonsu",
+        ok=False,
+        status="failed",
+        exhausted=False,
+        places=1,
+        places_attempted=1,
+        places_completed=0,
+        places_deferred=0,
+        stop_reason="fatal_provider_failure",
+        next_after_place_id="p0",
+        after_place_id="p0",
+        failure_tally={"naver_blog": {"quota_exceeded": 1}},
+        observation_time="2026-09-06T09:00:00+00:00",
+    )
+    rc = tool.main(
+        [
+            "--export-checkpoint",
+            "--json",
+            "--from-collector-result",
+            str(older_blocked),
+            "--checkpoint-state",
+            str(state2),
+        ]
+    )
+    assert rc == 0
+    capsys.readouterr()
+    import json as _json
+
+    doc = _json.loads(state2.read_text(encoding="utf-8"))
+    assert doc["entries"][0]["blocked"] == "auth_quota"
+
+
+def test_p5d_state_invalid_input_and_target_guards(monkeypatch, capsys, tmp_path):
+    import json as _json
+
+    _no_io_wiring(monkeypatch)
+    state = tmp_path / "state.json"
+    good = _state_result_file(tmp_path, "g.json")
+    assert (
+        tool.main(
+            [
+                "--export-checkpoint",
+                "--json",
+                "--from-collector-result",
+                str(good),
+                "--checkpoint-state",
+                str(state),
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+    prior_bytes = state.read_bytes()
+
+    # Invalid result input leaves prior bytes untouched.
+    bad = tmp_path / "bad.json"
+    bad.write_text(_json.dumps({"mode": "preview"}))
+    rc = tool.main(
+        [
+            "--export-checkpoint",
+            "--json",
+            "--from-collector-result",
+            str(bad),
+            "--checkpoint-state",
+            str(state),
+        ]
+    )
+    assert rc == 2
+    capsys.readouterr()
+    assert state.read_bytes() == prior_bytes
+
+    # target == input collision.
+    rc = tool.main(
+        [
+            "--export-checkpoint",
+            "--json",
+            "--from-collector-result",
+            str(state),
+            "--checkpoint-state",
+            str(state),
+        ]
+    )
+    assert rc == 2
+    assert "different files" in _out(capsys)["error"]
+    assert state.read_bytes() == prior_bytes
+
+    # Symlink target refused.
+    link = tmp_path / "link.json"
+    link.symlink_to(state)
+    rc = tool.main(
+        [
+            "--export-checkpoint",
+            "--json",
+            "--from-collector-result",
+            str(good),
+            "--checkpoint-state",
+            str(link),
+        ]
+    )
+    assert rc == 2
+    assert "symlink" in _out(capsys)["error"]
+
+    # Parent directory must already exist.
+    rc = tool.main(
+        [
+            "--export-checkpoint",
+            "--json",
+            "--from-collector-result",
+            str(good),
+            "--checkpoint-state",
+            str(tmp_path / "missing" / "s.json"),
+        ]
+    )
+    assert rc == 2
+    assert "parent" in _out(capsys)["error"]
+
+
+def test_p5d_state_lock_busy_and_failed_replace(monkeypatch, capsys, tmp_path):
+    import os
+
+    _no_io_wiring(monkeypatch)
+    state = tmp_path / "state.json"
+    good = _state_result_file(tmp_path, "g.json")
+    assert (
+        tool.main(
+            [
+                "--export-checkpoint",
+                "--json",
+                "--from-collector-result",
+                str(good),
+                "--checkpoint-state",
+                str(state),
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+    prior_bytes = state.read_bytes()
+
+    # Busy lock: another cooperating writer holds it — sanitized failure, no
+    # retry, no lock stealing (the foreign lock file stays).
+    lock = tmp_path / "state.json.lock"
+    lock.write_text("held", encoding="utf-8")
+    rc = tool.main(
+        [
+            "--export-checkpoint",
+            "--json",
+            "--from-collector-result",
+            str(good),
+            "--checkpoint-state",
+            str(state),
+        ]
+    )
+    assert rc == 2
+    assert "busy" in _out(capsys)["error"]
+    assert lock.exists()
+    assert state.read_bytes() == prior_bytes
+    lock.unlink()
+
+    # Failed atomic replace: prior bytes unchanged, no temp/lock residue.
+    real_replace = os.replace
+
+    def boom(*a, **kw):
+        raise OSError("replace failed")
+
+    monkeypatch.setattr(os, "replace", boom)
+    rc = tool.main(
+        [
+            "--export-checkpoint",
+            "--json",
+            "--from-collector-result",
+            str(
+                _state_result_file(
+                    tmp_path, "g2.json", observation_time="2026-09-06T12:00:00+00:00"
+                )
+            ),
+            "--checkpoint-state",
+            str(state),
+        ]
+    )
+    monkeypatch.setattr(os, "replace", real_replace)
+    assert rc == 2
+    assert "publication failed" in _out(capsys)["error"]
+    assert state.read_bytes() == prior_bytes
+    assert not (tmp_path / "state.json.lock").exists()
+    assert [p.name for p in tmp_path.glob(".state-*.tmp")] == []
+
+
+def test_p5d_state_stdout_only_export_unchanged(monkeypatch, capsys, tmp_path):
+    import json as _json
+
+    _no_io_wiring(monkeypatch)
+    result = _state_result_file(tmp_path, "r.json")
+    rc = tool.main(["--export-checkpoint", "--json", "--from-collector-result", str(result)])
+    assert rc == 0
+    snapshot_doc = _json.loads(capsys.readouterr().out)
+    assert snapshot_doc["schema_version"] == 1  # full snapshot, no state touched
+
+
+def test_p5d_audit_regressions(monkeypatch, capsys, tmp_path):
+    """Controller-audit regressions: real preseeded OLD state files, sanitized
+    loader/OSError failures, and temp ownership on write failure."""
+    import json as _json
+    import os
+
+    _no_io_wiring(monkeypatch)
+    good = _state_result_file(
+        tmp_path, "g.json", region="seoul-seongdong", cursor_scope="seoul-seongdong"
+    )
+
+    # 1) REAL preseeded old state (entries lack qualified_scope entirely):
+    #    updating another region migrates without KeyError and demotes the old
+    #    entry to an explicit unqualified bool.
+    state = tmp_path / "old-state.json"
+    _write_raw_snapshot(state, [_literal_old_entry("busan-haeundae")])
+    rc = tool.main(
+        [
+            "--export-checkpoint",
+            "--json",
+            "--from-collector-result",
+            str(good),
+            "--checkpoint-state",
+            str(state),
+        ]
+    )
+    assert rc == 0
+    capsys.readouterr()
+    doc = _json.loads(state.read_text(encoding="utf-8"))
+    entries = {e["region"]: e for e in doc["entries"]}
+    assert entries["busan-haeundae"]["qualified_scope"] is False
+    assert entries["seoul-seongdong"]["qualified_scope"] is True
+
+    # 2) Preseeded LEGACY top-marker state WITH qualified_scope:True entries:
+    #    migration demotes them (legacy marker wins, never promoted).
+    state2 = tmp_path / "legacy-marker.json"
+    promoted = _entry("incheon-yeonsu", exhausted=True, whole_region_complete=True)
+    _write_raw_snapshot(state2, [promoted])  # no top-level scope_contract
+    rc = tool.main(
+        [
+            "--export-checkpoint",
+            "--json",
+            "--from-collector-result",
+            str(good),
+            "--checkpoint-state",
+            str(state2),
+        ]
+    )
+    assert rc == 0
+    capsys.readouterr()
+    doc2 = _json.loads(state2.read_text(encoding="utf-8"))
+    entries2 = {e["region"]: e for e in doc2["entries"]}
+    assert entries2["incheon-yeonsu"]["qualified_scope"] is False  # demoted, not promoted
+    assert doc2["scope_contract"] == "tour_api_province_qualified_v1"
+
+    # 3) Corrupt prior state bytes: sanitized rc2, prior bytes unchanged.
+    state3 = tmp_path / "corrupt.json"
+    state3.write_bytes(b"{not json")
+    prior = state3.read_bytes()
+    rc = tool.main(
+        [
+            "--export-checkpoint",
+            "--json",
+            "--from-collector-result",
+            str(good),
+            "--checkpoint-state",
+            str(state3),
+        ]
+    )
+    assert rc == 2
+    assert "prior state is invalid" in _out(capsys)["error"]
+    assert state3.read_bytes() == prior
+
+    # 4) Temp ownership from open: a write/fsync failure cleans the owned temp
+    #    and releases the lock while prior bytes stay unchanged.
+    state4 = tmp_path / "fsync.json"
+    _write_raw_snapshot(state4, [_literal_old_entry("busan-haeundae")])
+    prior4 = state4.read_bytes()
+    real_fsync = os.fsync
+
+    def boom(fd):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(os, "fsync", boom)
+    rc = tool.main(
+        [
+            "--export-checkpoint",
+            "--json",
+            "--from-collector-result",
+            str(good),
+            "--checkpoint-state",
+            str(state4),
+        ]
+    )
+    monkeypatch.setattr(os, "fsync", real_fsync)
+    assert rc == 2
+    assert state4.read_bytes() == prior4
+    assert not (tmp_path / "fsync.json.lock").exists()
+    assert [p.name for p in tmp_path.glob(".state-*.tmp")] == []
