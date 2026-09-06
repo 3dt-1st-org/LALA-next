@@ -26,6 +26,25 @@ records, the top-level status is ``degraded``. If all providers fail, ``failed``
 applying within the region. Unmappable ids fail closed before any network call
 or write. Without ``--region`` the place query and ordering are unchanged.
 
+**Bounded resumable continuation (P5A):** ``--after-place-id <cursor>`` resumes
+the region-scoped ``ORDER BY place_id`` window strictly AFTER the cursor
+(keyset ``place_id > %s``, parameterized — never interpolated). The published
+``next_after_place_id`` only ever advances past CONSECUTIVELY COMPLETED
+places: a place with any degrading endpoint outcome, or any unattempted place
+(budget stop / fatal stop), stops advancement so the next run re-selects it —
+an unattempted or partially failed place is never skipped. On apply rollback
+or governance recheck failure NO advanced cursor is published. Resume MUST
+reuse the same ``--region`` scope (the cursor is only meaningful inside it);
+the payload echoes ``cursor_scope`` for that contract.
+
+**Per-run request ceiling (P5A):** ``--max-requests`` bounds actual provider
+endpoint requests (blog + cafearticle = up to 2 per place, counted from the
+real per-endpoint outcomes, including failed attempts). Default = 2 × limit
+(preserves the existing small batch's safe upper bound); hard validation cap
+500. A place is only started when the whole per-place endpoint pair fits the
+remaining budget; ``auth_missing``/``quota_exceeded`` stop the run instead of
+marching through the remaining places. No retries, no fallback provider.
+
 Raw provider text (title/body/url) is NEVER persisted, logged, or written to
 community.posts. Only content_sha256 + opaque external_key + provenance reach
 the governance boundary; only aggregate counts reach community.place_mentions_weekly.
@@ -37,6 +56,7 @@ import argparse
 import contextlib
 import json
 import os
+import re
 from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -81,6 +101,24 @@ _DEGRADING_CATEGORIES = frozenset(
     {"auth_missing", "quota_exceeded", "network_error", "parse_error"}
 )
 
+# P5A: acquisition stops immediately on these (no marching through remaining
+# places, no retry storm, no provider fallback).
+_FATAL_CATEGORIES = frozenset({"auth_missing", "quota_exceeded"})
+
+# P5A: the existing provider boundary is blog + cafearticle — exactly two
+# endpoint requests per place. A place is only started when the whole pair
+# fits the remaining request budget (never split mid-place).
+_ENDPOINTS_PER_PLACE = 2
+
+# P5A: hard validation ceiling for --max-requests. Finite and documented; the
+# default (2 x limit) preserves the existing small batch's safe upper bound.
+MAX_REQUESTS_HARD_CAP = 500
+
+# P5A: bounded cursor contract. place_id slugs are short printable tokens; a
+# cursor with whitespace/control characters or unreasonable length is malformed
+# and fails closed before settings, DB, or acquisition.
+_CURSOR_PATTERN = re.compile(r"[^\s]{1,128}")
+
 
 @dataclass(frozen=True)
 class _AggregateProvenance:
@@ -103,6 +141,15 @@ class _AcquireResult:
     organic_records: list[dict[str, Any]] = field(default_factory=list)
     sha_lookup: dict[str, _AggregateProvenance] = field(default_factory=dict)
     places_count: int = 0
+    # P5A continuation bookkeeping (honest, never fabricated).
+    places_attempted: int = 0
+    places_completed: int = 0
+    places_deferred: int = 0
+    places_name_skipped: int = 0
+    requests_used: int = 0
+    request_cap: int = 0
+    next_after_place_id: str | None = None
+    stop_reason: str | None = None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -130,6 +177,26 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument("--display", type=int, default=5, help="Results per Naver endpoint.")
+    parser.add_argument(
+        "--after-place-id",
+        default=None,
+        help=(
+            "P5A continuation cursor: resume the region-scoped ORDER BY place_id "
+            "window strictly AFTER this place_id (keyset, parameterized). Reuse "
+            "the SAME --region scope you started with; the payload's "
+            "next_after_place_id is only meaningful inside that scope."
+        ),
+    )
+    parser.add_argument(
+        "--max-requests",
+        type=int,
+        default=None,
+        help=(
+            "P5A per-run ceiling on actual provider endpoint requests "
+            "(blog + cafearticle; failed attempts count). Default 2x --limit "
+            f"(preserves today's safe upper bound); hard cap {MAX_REQUESTS_HARD_CAP}."
+        ),
+    )
     parser.add_argument("--connect-timeout", type=int, default=5)
     args = parser.parse_args(argv)
 
@@ -138,6 +205,42 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.apply and args.preview:
         _write(args, {"ok": False, "mode": "plan", "error": "Use either --apply or --preview."})
+        return 2
+
+    # P5A bounds: default ceiling preserves the existing small batch's upper
+    # bound (limit places x 2 endpoints); explicit values are finitely bounded.
+    request_cap = (
+        args.max_requests if args.max_requests is not None else _ENDPOINTS_PER_PLACE * args.limit
+    )
+    if not 1 <= request_cap <= MAX_REQUESTS_HARD_CAP:
+        _write(
+            args,
+            {
+                "ok": False,
+                "mode": _mode(args),
+                "error": (
+                    f"--max-requests must be between 1 and {MAX_REQUESTS_HARD_CAP} "
+                    f"(default is 2 x --limit)."
+                ),
+            },
+        )
+        return 2
+
+    # P5A cursor: malformed values fail closed BEFORE settings, DB, gate, or
+    # acquisition — a garbage cursor must never reach a query parameter.
+    if args.after_place_id is not None and _CURSOR_PATTERN.fullmatch(args.after_place_id) is None:
+        _write(
+            args,
+            {
+                "ok": False,
+                "mode": _mode(args),
+                "error": (
+                    "--after-place-id is malformed (expected 1-128 printable, "
+                    "whitespace-free characters); no settings, DB, or acquisition "
+                    "was performed."
+                ),
+            },
+        )
         return 2
 
     # Fail closed on unmappable ids before any connection, gate check, or
@@ -179,15 +282,37 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     if args.apply:
-        return _run_apply(args, dsn, region_place_names)
-    return _run_preview(args, dsn, region_place_names)
+        return _run_apply(args, dsn, region_place_names, request_cap)
+    return _run_preview(args, dsn, region_place_names, request_cap)
+
+
+def _read_window(
+    cur, args: argparse.Namespace, region_place_names: tuple[str, ...] | None
+) -> list[ReviewMentionPlace]:
+    """Read the place window, threading the cursor only when present.
+
+    Without --after-place-id the call is byte-identical to the pre-P5A shape
+    (same positional args, same SQL, same params); with it, a parameterized
+    keyset ``place_id > %s`` is added inside the same scoped query.
+    """
+    if args.after_place_id is None:
+        return _read_places_on_cursor(cur, args.limit, region_place_names)
+    return _read_places_on_cursor(cur, args.limit, region_place_names, args.after_place_id)
+
+
+def _cursor_scope(args: argparse.Namespace) -> str:
+    """Human-readable scope the cursor is valid inside (resume contract)."""
+    return args.region if args.region is not None else "global"
 
 
 # --- preview: read-only gate + places, then in-memory acquire + classify ---
 
 
 def _run_preview(
-    args: argparse.Namespace, dsn: str, region_place_names: tuple[str, ...] | None
+    args: argparse.Namespace,
+    dsn: str,
+    region_place_names: tuple[str, ...] | None,
+    request_cap: int,
 ) -> int:
     conn = _open_connection(dsn, args.connect_timeout)
     try:
@@ -199,7 +324,7 @@ def _run_preview(
                     expected_provider=EXPECTED_PROVIDER,
                     expected_terms_version=EXPECTED_TERMS_VERSION,
                 )
-                places = _read_places_on_cursor(cur, args.limit, region_place_names)
+                places = _read_window(cur, args, region_place_names)
     except ReviewGovernanceError as exc:
         _write(
             args,
@@ -214,8 +339,15 @@ def _run_preview(
     finally:
         conn.close()
 
-    batch = _acquire_and_classify(places=places, display=args.display, registration=registration)
+    batch = _acquire_and_classify(
+        places=places,
+        display=args.display,
+        registration=registration,
+        after_place_id=args.after_place_id,
+        request_cap=request_cap,
+    )
     status = _compute_status(batch.failure_tally, 0)
+    window_full = batch.places_count >= args.limit
     _write(
         args,
         {
@@ -230,6 +362,22 @@ def _run_preview(
             "ad_filtered_out": batch.ad_filtered,
             "organic": len(batch.organic_records),
             "failure_tally": batch.failure_tally,
+            # P5A continuation (advisory in preview — nothing is written).
+            "after_place_id": args.after_place_id,
+            "cursor_scope": _cursor_scope(args),
+            "next_after_place_id": batch.next_after_place_id,
+            "places_attempted": batch.places_attempted,
+            "places_completed": batch.places_completed,
+            "places_deferred": batch.places_deferred,
+            "places_name_skipped": batch.places_name_skipped,
+            "requests_used": batch.requests_used,
+            "request_cap": batch.request_cap,
+            "stop_reason": batch.stop_reason,
+            # Exhausted = the whole scoped window was selected and every
+            # selected place settled (no budget/fatal stop). window_full only
+            # says the limit-sized window MAY have more after it.
+            "exhausted": batch.places_count < args.limit and batch.places_deferred == 0,
+            "window_full": window_full,
         },
     )
     return 0
@@ -239,7 +387,10 @@ def _run_preview(
 
 
 def _run_apply(
-    args: argparse.Namespace, dsn: str, region_place_names: tuple[str, ...] | None
+    args: argparse.Namespace,
+    dsn: str,
+    region_place_names: tuple[str, ...] | None,
+    request_cap: int,
 ) -> int:
     started_at = datetime.now(UTC)
     window_start = _week_start(started_at)
@@ -260,7 +411,7 @@ def _run_apply(
                         expected_provider=EXPECTED_PROVIDER,
                         expected_terms_version=EXPECTED_TERMS_VERSION,
                     )
-                    places = _read_places_on_cursor(cur, args.limit, region_place_names)
+                    places = _read_window(cur, args, region_place_names)
         finally:
             preflight_conn.close()
     except ReviewGovernanceError as exc:
@@ -272,6 +423,9 @@ def _run_apply(
                 "mode": "apply",
                 "error": exc.message,
                 "governance_code": exc.code,
+                # P5A: nothing committed → no advanced cursor is published.
+                "next_after_place_id": None,
+                "cursor_advanced": False,
             },
         )
         return 2
@@ -279,7 +433,13 @@ def _run_apply(
     # Phase 2: Acquire + classify OUTSIDE any DB transaction.
     # No PostgreSQL connection is open during Naver network I/O — avoids
     # idle-in-transaction timeouts, bloat, and lock contention at scale.
-    batch = _acquire_and_classify(places=places, display=args.display, registration=registration)
+    batch = _acquire_and_classify(
+        places=places,
+        display=args.display,
+        registration=registration,
+        after_place_id=args.after_place_id,
+        request_cap=request_cap,
+    )
 
     # Phase 3: Atomic write transaction (ONE connection, ONE ``with conn:``).
     # govern_review_ingest_on_cursor RE-CHECKS the DG-1 gate inside this
@@ -315,13 +475,28 @@ def _run_apply(
                 "mode": "apply",
                 "error": exc.message,
                 "governance_code": exc.code,
+                # P5A: governance recheck failed inside the transaction → the
+                # advanced cursor MUST NOT be published (re-run resumes from
+                # the original cursor).
+                "next_after_place_id": None,
+                "cursor_advanced": False,
             },
         )
         return 2
     except Exception as exc:
         error_msg = redact_secret_text(str(exc) or exc.__class__.__name__, (dsn,))
         _best_effort_job_run(args, dsn, started_at, "failed", error_msg)
-        _write(args, {"ok": False, "mode": "apply", "error": error_msg})
+        _write(
+            args,
+            {
+                "ok": False,
+                "mode": "apply",
+                "error": error_msg,
+                # P5A: apply rolled back → no advanced committed cursor.
+                "next_after_place_id": None,
+                "cursor_advanced": False,
+            },
+        )
         return 2
     finally:
         conn.close()
@@ -349,6 +524,22 @@ def _run_apply(
             "inserted_rows": inserted_rows,
             "window_start": window_start.isoformat(),
             "failure_tally": batch.failure_tally,
+            # P5A continuation — published ONLY after the atomic transaction
+            # committed above. next_after_place_id never skips an unattempted
+            # or partially failed place (see _acquire_and_classify).
+            "after_place_id": args.after_place_id,
+            "cursor_scope": _cursor_scope(args),
+            "next_after_place_id": batch.next_after_place_id,
+            "cursor_advanced": batch.next_after_place_id != args.after_place_id,
+            "places_attempted": batch.places_attempted,
+            "places_completed": batch.places_completed,
+            "places_deferred": batch.places_deferred,
+            "places_name_skipped": batch.places_name_skipped,
+            "requests_used": batch.requests_used,
+            "request_cap": batch.request_cap,
+            "stop_reason": batch.stop_reason,
+            "exhausted": batch.places_count < args.limit and batch.places_deferred == 0,
+            "window_full": batch.places_count >= args.limit,
         },
     )
     return 0
@@ -365,21 +556,32 @@ def _open_connection(dsn: str, connect_timeout: int):
 
 
 def _read_places_on_cursor(
-    cur, limit: int, region_place_names: tuple[str, ...] | None = None
+    cur,
+    limit: int,
+    region_place_names: tuple[str, ...] | None = None,
+    after_place_id: str | None = None,
 ) -> list[ReviewMentionPlace]:
     # The region clause must narrow the window BEFORE LIMIT: the global
     # ORDER BY place_id head can otherwise contain zero places of the target
     # region (Seongdong: 132 canonical places, 0 in the head-50 window).
+    # P5A: the optional keyset cursor narrows the same window with a bound
+    # parameter (place_id > %s) — input is NEVER interpolated into the SQL.
+    # Omitted region/cursor keep the query and params byte-identical to the
+    # pre-P5A contract.
     region_clause = ""
+    cursor_clause = ""
     params: list[Any] = []
     if region_place_names is not None:
         region_clause = "  AND region_name_ko = ANY(%s)\n"
         params.append(list(region_place_names))
+    if after_place_id is not None:
+        cursor_clause = "  AND place_id > %s\n"
+        params.append(after_place_id)
     sql = f"""
         SELECT place_id, name_ko, category, region_name_ko
         FROM travel.places
         WHERE name_ko IS NOT NULL
-{region_clause}        ORDER BY place_id
+{region_clause}{cursor_clause}        ORDER BY place_id
         LIMIT %s
     """
     params.append(limit)
@@ -403,16 +605,56 @@ def _acquire_and_classify(
     places: list[ReviewMentionPlace],
     display: int,
     registration: ReviewSourceRegistration,
+    after_place_id: str | None = None,
+    request_cap: int = _ENDPOINTS_PER_PLACE * 50,
 ) -> _AcquireResult:
+    """Bounded, resumable acquire + classify over the selected window.
+
+    P5A invariants (see the module docstring):
+    - ``requests_used`` counts ACTUAL provider endpoint attempts (from the real
+      per-endpoint outcomes, failures included) and never exceeds
+      ``request_cap``; a place is started only when the whole endpoint pair
+      fits the remaining budget (never split mid-place).
+    - ``auth_missing``/``quota_exceeded`` stop the run after the current place
+      instead of marching through the remaining places. No retries/fallback.
+    - ``next_after_place_id`` only advances past CONSECUTIVELY COMPLETED
+      places. A place with any degrading outcome, or an unattempted place
+      (budget/fatal stop), halts advancement so the next run re-selects it —
+      an unattempted or partially failed place is never skipped. Deterministic
+      name-length skips settle a place with zero requests and do not block.
+    """
     failure_tally: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     candidates = 0
     ad_filtered = 0
     organic_records: list[dict[str, Any]] = []
     sha_lookup: dict[str, _AggregateProvenance] = {}
 
-    for place in places:
+    requests_used = 0
+    attempted = 0
+    completed = 0
+    deferred = 0
+    name_skipped = 0
+    stop_reason: str | None = None
+    # Cursor advances only while every place so far settled cleanly; the first
+    # non-clean place freezes it (its id stays >= next resume point).
+    advanced = after_place_id
+    cursor_frozen = False
+
+    for index, place in enumerate(places):
         if not place.name_ko or len(place.name_ko) < 2:
+            # Deterministic skip (idempotent, zero requests): settles the place
+            # without acquisition so it cannot block cursor advancement.
+            name_skipped += 1
+            completed += 1
+            advanced = place.place_id
             continue
+
+        if request_cap - requests_used < _ENDPOINTS_PER_PLACE:
+            deferred += 1
+            stop_reason = "request_budget_exhausted"
+            cursor_frozen = True
+            continue
+
         result = collect_mentions_for_place(
             place_id=place.place_id,
             place_name=place.name_ko,
@@ -420,8 +662,17 @@ def _acquire_and_classify(
             category=place.category,
             display=display,
         )
+        attempted += 1
+        requests_used += len(result.outcomes)
+        place_clean = True
+        fatal = False
         for outcome in result.outcomes:
             failure_tally[outcome.provider][outcome.category] += 1
+            if outcome.category in _DEGRADING_CATEGORIES:
+                place_clean = False
+                if outcome.category in _FATAL_CATEGORIES:
+                    fatal = True
+
         candidates += len(result.posts)
 
         for post in result.posts:
@@ -443,6 +694,18 @@ def _acquire_and_classify(
                     week_start=decision.week_start,
                 )
 
+        if place_clean:
+            completed += 1
+            if not cursor_frozen:
+                advanced = place.place_id
+        else:
+            cursor_frozen = True
+            if fatal:
+                stop_reason = "fatal_provider_failure"
+                # Every place after the fatal one stays unattempted/deferred.
+                deferred += len(places) - (index + 1)
+                break
+
     return _AcquireResult(
         failure_tally={k: dict(v) for k, v in failure_tally.items()},
         candidates=candidates,
@@ -450,6 +713,14 @@ def _acquire_and_classify(
         organic_records=organic_records,
         sha_lookup=sha_lookup,
         places_count=len(places),
+        places_attempted=attempted,
+        places_completed=completed,
+        places_deferred=deferred,
+        places_name_skipped=name_skipped,
+        requests_used=requests_used,
+        request_cap=request_cap,
+        next_after_place_id=advanced,
+        stop_reason=stop_reason,
     )
 
 
@@ -611,6 +882,40 @@ def _plan_payload() -> dict[str, Any]:
             "accurate_rowcount_counts",
             "one_transaction_atomic_receipts_aggregates",
         ],
+        # P5A bounded continuation contract (offline documentation only — this
+        # plan loads no settings, opens no DB connection, and calls no provider;
+        # actual coverage/freshness remain unknown until a governed run).
+        "continuation": {
+            "cursor_arg": "--after-place-id",
+            "cursor_semantics": (
+                "keyset place_id > cursor inside the SAME --region scope; "
+                "parameterized SQL, never interpolated; malformed cursors and "
+                "unknown regions fail closed before settings/DB/acquisition"
+            ),
+            "resume_contract": (
+                "pass back next_after_place_id with the identical --region; "
+                "the cursor never skips an unattempted or partially failed "
+                "place, and apply failures publish no advanced cursor"
+            ),
+            "request_cap": (
+                "--max-requests bounds actual provider endpoint requests "
+                "(blog + cafearticle = 2 per place, failed attempts included); "
+                "default 2 x --limit preserves the existing safe upper bound; "
+                f"hard validation cap {MAX_REQUESTS_HARD_CAP}"
+            ),
+            "stop_behavior": (
+                "auth_missing/quota_exceeded stop the run after the current "
+                "place; no retry storm, no provider fallback; budget stops "
+                "defer whole places (endpoint pair never split)"
+            ),
+            "counters": (
+                "places/attempted/completed/deferred/name_skipped and "
+                "requests_used vs request_cap are reported per run; exhausted "
+                "means the whole scoped window settled, distinct from an "
+                "honest zero-result success"
+            ),
+            "coverage": "unknown_until_governed_run",
+        },
     }
 
 
@@ -653,6 +958,19 @@ def _write(args: argparse.Namespace, payload: dict[str, Any]) -> None:
         "quarantined",
         "aggregated",
         "inserted_rows",
+        "after_place_id",
+        "cursor_scope",
+        "next_after_place_id",
+        "cursor_advanced",
+        "places_attempted",
+        "places_completed",
+        "places_deferred",
+        "places_name_skipped",
+        "requests_used",
+        "request_cap",
+        "stop_reason",
+        "exhausted",
+        "window_full",
     ):
         if key in payload:
             print(f"{key}={payload[key]}")
