@@ -179,7 +179,7 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Govern + upsert place_mentions_weekly in ONE atomic transaction.",
     )
-    parser.add_argument("--confirm", default="", help=f"Required with --apply: {CONFIRM_TEXT}")
+    parser.add_argument("--confirm", default=None, help=f"Required with --apply: {CONFIRM_TEXT}")
     parser.add_argument(
         "--limit", type=int, default=None, help="Max places to process (default 50)."
     )
@@ -335,6 +335,18 @@ def main(argv: list[str] | None = None) -> int:
             },
         )
         return 2
+    if args.from_collector_result is not None and not args.export_checkpoint:
+        _write(
+            args,
+            {
+                "ok": False,
+                "mode": "plan",
+                "error": (
+                    "--from-collector-result requires --export-checkpoint; no file was read."
+                ),
+            },
+        )
+        return 2
     if not args.schedule and not args.export_checkpoint and _explicitly_supplied():
         _write(
             args,
@@ -375,7 +387,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             if value is not None
         ]
-        if incompatible or args.confirm:
+        if incompatible or args.confirm is not None:
             _write(
                 args,
                 {
@@ -863,6 +875,7 @@ def _run_apply(
                 "mode": "apply",
                 "error": exc.message,
                 "governance_code": exc.code,
+                "committed": False,
                 # P5A: nothing committed → no advanced cursor is published.
                 "next_after_place_id": None,
                 "cursor_advanced": False,
@@ -915,6 +928,7 @@ def _run_apply(
                 "mode": "apply",
                 "error": exc.message,
                 "governance_code": exc.code,
+                "committed": False,
                 # P5A: governance recheck failed inside the transaction → the
                 # advanced cursor MUST NOT be published (re-run resumes from
                 # the original cursor).
@@ -932,6 +946,7 @@ def _run_apply(
                 "ok": False,
                 "mode": "apply",
                 "error": error_msg,
+                "committed": False,
                 # P5A: apply rolled back → no advanced committed cursor.
                 "next_after_place_id": None,
                 "cursor_advanced": False,
@@ -950,6 +965,9 @@ def _run_apply(
             "ok": status != "failed",
             "status": status,
             "mode": "apply",
+            # True ONLY after the atomic receipts+aggregates transaction
+            # committed above; every failure path below reports committed=False.
+            "committed": True,
             "source_name": SOURCE_NAME,
             "region": args.region,
             "region_applied": region_place_names is not None,

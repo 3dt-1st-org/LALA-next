@@ -974,7 +974,7 @@ def test_b1_export_rejects_incompatible_options(monkeypatch, capsys):
 def test_b3_bounded_read_rejects_oversize_without_loading(monkeypatch, capsys, tmp_path):
     _no_io_wiring(monkeypatch)
     big = tmp_path / "big.json"
-    big.write_bytes(b"x" * (64 * 1024 + 1))
+    big.write_bytes(b"x" * (1024 * 1024 + 1))
     rc = tool.main(["--schedule", "--json", "--checkpoint-snapshot", str(big)])
     assert rc == 2
     assert "bounded size" in _out(capsys)["error"]
@@ -1119,10 +1119,12 @@ def test_b2_block_never_expires_by_age_or_filter(monkeypatch, capsys, tmp_path):
 
 
 def _apply_result(**overrides):
+    """REAL committed apply result shape (P5A counters + committed flag)."""
     base = {
         "ok": True,
         "status": "succeeded",
         "mode": "apply",
+        "committed": True,
         "region": "busan-haeundae",
         "region_applied": True,
         "cursor_scope": "busan-haeundae",
@@ -1130,6 +1132,10 @@ def _apply_result(**overrides):
         "next_after_place_id": "place-2",
         "exhausted": True,
         "places": 2,
+        "places_attempted": 2,
+        "places_completed": 2,
+        "places_deferred": 0,
+        "places_name_skipped": 0,
         "requests_used": 4,
         "stop_reason": None,
         "failure_tally": {},
@@ -1182,11 +1188,26 @@ def test_b4_zero_result_vs_tail_empty_scope(monkeypatch, capsys, tmp_path):
     monkeypatch.setattr(tool, "_now_utc", lambda: frozen)
 
     zero_region = cc.build_region_checkpoint(
-        _apply_result(places=0, exhausted=True, next_after_place_id=None)
+        _apply_result(
+            places=0,
+            places_attempted=0,
+            places_completed=0,
+            places_deferred=0,
+            exhausted=True,
+            next_after_place_id=None,
+        )
     )
     assert zero_region["empty_scope"] == "region"
     tail_empty = cc.build_region_checkpoint(
-        _apply_result(places=0, exhausted=True, next_after_place_id="p9", after_place_id="p1")
+        _apply_result(
+            places=0,
+            places_attempted=0,
+            places_completed=0,
+            places_deferred=0,
+            exhausted=True,
+            next_after_place_id="p9",
+            after_place_id="p1",
+        )
     )
     assert tail_empty["empty_scope"] == "window"
 
@@ -1198,6 +1219,9 @@ def test_b4_zero_result_vs_tail_empty_scope(monkeypatch, capsys, tmp_path):
             region="seoul-seongdong",
             cursor_scope="seoul-seongdong",
             places=0,
+            places_attempted=0,
+            places_completed=0,
+            places_deferred=0,
             exhausted=True,
             next_after_place_id=None,
         )
@@ -1207,6 +1231,9 @@ def test_b4_zero_result_vs_tail_empty_scope(monkeypatch, capsys, tmp_path):
             region="incheon-yeonsu",
             cursor_scope="incheon-yeonsu",
             places=0,
+            places_attempted=0,
+            places_completed=0,
+            places_deferred=0,
             exhausted=True,
             next_after_place_id="p9",
             after_place_id="p1",
@@ -1358,3 +1385,268 @@ def test_b5_argv_encoding_is_dash_safe(monkeypatch, capsys, tmp_path):
     _wire(monkeypatch, places=[], script={})
     parsed = tool.main([*argv, "--preview", "--json"])
     assert parsed == 0
+
+
+# == P5B final residual corrections (R1/R2/S1-S3 + committed fatal stop) ============
+
+
+def test_r1_from_collector_result_requires_export(monkeypatch, capsys):
+    _no_io_wiring(monkeypatch)
+    rc = tool.main(["--json", "--from-collector-result", "result.json"])
+    assert rc == 2
+    payload = _out(capsys)
+    assert "requires --export-checkpoint" in payload["error"]
+    # Explicitly empty value is still "supplied" and rejected the same way.
+    rc = tool.main(["--json", "--from-collector-result", ""])
+    assert rc == 2
+
+
+def test_r1_export_rejects_explicitly_empty_confirm(monkeypatch, capsys):
+    _no_io_wiring(monkeypatch)
+    rc = tool.main(
+        ["--export-checkpoint", "--json", "--from-collector-result", "r.json", "--confirm", ""]
+    )
+    assert rc == 2
+    assert "rejected" in _out(capsys)["error"]
+
+
+def test_r2_schema_version_bool_is_rejected(monkeypatch, capsys, tmp_path):
+    import json as _json
+
+    _no_io_wiring(monkeypatch)
+    doc = tmp_path / "boolver.json"
+    doc.write_text(_json.dumps({"schema_version": True, "source": "x", "entries": []}))
+    rc = tool.main(["--schedule", "--json", "--checkpoint-snapshot", str(doc)])
+    assert rc == 2
+    assert "version/source mismatch" in _out(capsys)["error"]
+
+
+def test_s1_zero_completed_with_network_failure_never_certifies_fresh():
+    from apps.api.app.services import collector_checkpoint as cc
+
+    # Committed degraded run: 2 places, 0 completed, network failures only.
+    entry = cc.build_region_checkpoint(
+        _apply_result(
+            status="degraded",
+            exhausted=False,
+            places=2,
+            places_attempted=2,
+            places_completed=0,
+            failure_tally={"naver_blog": {"network_error": 2}},
+        )
+    )
+    assert entry["whole_region_complete"] is False
+    assert entry["empty_scope"] is None
+    # Even an "exhausted" clean-shaped window with network failures stays unproven.
+    entry2 = cc.build_region_checkpoint(
+        _apply_result(
+            status="degraded",
+            exhausted=True,
+            places=2,
+            places_attempted=2,
+            places_completed=2,
+            failure_tally={"naver_blog": {"network_error": 1}},
+        )
+    )
+    assert entry2["whole_region_complete"] is False
+
+
+def test_s1_legitimate_empty_and_partial_prefixes_preserved():
+    from apps.api.app.services import collector_checkpoint as cc
+
+    empty = cc.build_region_checkpoint(
+        _apply_result(
+            places=0,
+            places_attempted=0,
+            places_completed=0,
+            exhausted=True,
+            next_after_place_id=None,
+        )
+    )
+    assert empty["whole_region_complete"] is True
+    assert empty["empty_scope"] == "region"
+    partial = cc.build_region_checkpoint(
+        _apply_result(
+            exhausted=False,
+            places=3,
+            places_attempted=2,
+            places_completed=2,
+            places_deferred=1,
+            stop_reason="request_budget_exhausted",
+            next_after_place_id="p2",
+        )
+    )
+    assert partial["whole_region_complete"] is False
+    assert partial["next_after_place_id"] == "p2"
+
+
+@pytest.mark.parametrize("bad_time", ["0001-01-01T00:00:00+14:00", "9999-12-31T23:59:59-14:00"])
+def test_s2_timestamp_overflow_is_sanitized_everywhere(bad_time, monkeypatch, capsys, tmp_path):
+    import json as _json
+
+    _no_io_wiring(monkeypatch)
+    # Export path: overflow inside the result bridge.
+    result = tmp_path / "r.json"
+    result.write_text(_json.dumps(_apply_result(observation_time=bad_time)))
+    rc = tool.main(["--export-checkpoint", "--json", "--from-collector-result", str(result)])
+    assert rc == 2
+    assert "rejected by the bridge" in _out(capsys)["error"]
+
+    # Loader path: overflow inside snapshot entry parsing.
+    entry = _entry("busan-haeundae")
+    entry["observation_time"] = bad_time
+    snap = tmp_path / "cp.json"
+    _write_snapshot(snap, [entry])
+    rc = tool.main(["--schedule", "--json", "--checkpoint-snapshot", str(snap)])
+    assert rc == 2
+    err = _out(capsys)["error"]
+    assert err.startswith("checkpoint")
+    assert bad_time not in err  # no raw input echo
+
+
+def test_s3_full_catalog_state_fits_bounded_ceiling(monkeypatch, capsys, tmp_path):
+    import json as _json
+
+    from apps.api.app.services import collector_checkpoint as cc
+
+    _no_io_wiring(monkeypatch)
+    cursor = "-" + "가" * 63 + "x" * 64  # 128 printable non-ASCII dash-leading cursor
+    entries = [
+        _entry(
+            region,
+            cursor=cursor,
+            input_cursor=cursor,
+            exhausted=False,
+            requests_used=4,
+            hours_ago=1,
+        )
+        for region in cc.canonical_region_ids()
+    ]
+    # Serialize with the exporter's actual formatting (indent=2, sort_keys).
+    doc = {
+        "schema_version": 1,
+        "source": "naver_review_collect_apply_payloads",
+        "entries": entries,
+    }
+    blob = _json.dumps(doc, ensure_ascii=False, indent=2, sort_keys=True)
+    assert len(blob.encode("utf-8")) <= cc.SNAPSHOT_MAX_BYTES
+    snap = tmp_path / "all.json"
+    snap.write_text(blob)
+    rc = tool.main(["--schedule", "--json", "--checkpoint-snapshot", str(snap)])
+    assert rc == 0
+    payload = _out(capsys)
+    assert payload["regions_total"] == len(cc.canonical_region_ids())
+    # Ambiguous regions stay BLOCKED_SCOPE even as resume candidates.
+    assert payload["regions_scope_blocked"] == len(cc.region_alias_collisions())
+
+
+def test_committed_auth_quota_failure_round_trip_blocks_other_regions(
+    monkeypatch, capsys, tmp_path
+):
+    import io as _io
+    import json as _json
+    import urllib.error
+    from datetime import UTC as _UTC
+    from datetime import datetime as _dt
+
+    # REAL apply path with faked wire boundary: FIRST provider endpoint
+    # quota-fails; no second endpoint, no later place.
+    places = [_place("p1"), _place("p2")]
+    script = {p.place_id: _collection(p.place_id) for p in places}
+    _wire(monkeypatch, places=places, script=script)
+    monkeypatch.setenv(tool.ALLOW_ENV, "1")
+    monkeypatch.setenv("NAVER_CLIENT_ID", "test-cid")
+    monkeypatch.setenv("NAVER_CLIENT_SECRET", "test-csec")
+
+    def fatal_fetch(endpoint, *a, **kw):
+        raise urllib.error.HTTPError("u", 429, "Too Many", {}, _io.BytesIO(b""))
+
+    from apps.api.app.services import naver_search_service as svc
+
+    monkeypatch.setattr(svc, "_fetch_items", fatal_fetch)
+    # Use the REAL acquisition path (fake credentials + fake wire boundary stay
+    # installed for the entire test, including this first-request failure).
+    monkeypatch.setattr(tool, "collect_mentions_for_place", svc.collect_mentions_for_place)
+    frozen = _dt(2026, 9, 6, 12, 0, tzinfo=_UTC)
+    monkeypatch.setattr(tool, "_now_utc", lambda: frozen)
+
+    rc = tool.main(
+        [
+            "--apply",
+            "--json",
+            "--confirm",
+            tool.CONFIRM_TEXT,
+            "--region",
+            "busan-haeundae",
+            "--after-place-id",
+            "p0",
+        ]
+    )
+    assert rc == 0
+    failed_payload = _out(capsys)
+    # Committed empty bookkeeping, but the run failed on the first request.
+    assert failed_payload["ok"] is False
+    assert failed_payload["status"] == "failed"
+    assert failed_payload["committed"] is True
+    assert failed_payload["requests_used"] == 1
+    assert failed_payload["places_attempted"] == 1
+    assert failed_payload["places_deferred"] == 1
+
+    # OFFLINE export: the committed fatal failure becomes a BLOCKED observation.
+    _no_io_wiring(monkeypatch)
+    result = tmp_path / "r.json"
+    result.write_text(_json.dumps(failed_payload))
+    rc = tool.main(["--export-checkpoint", "--json", "--from-collector-result", str(result)])
+    assert rc == 0
+    snapshot_doc = _json.loads(capsys.readouterr().out)
+    entry = snapshot_doc["entries"][0]
+    assert entry["blocked"] == "auth_quota"
+    assert entry["whole_region_complete"] is False
+    assert entry["next_after_place_id"] == "p0"  # unchanged cursor, no credit
+
+    # Scheduling ANOTHER region => global block, zero argv.
+    snap = tmp_path / "cp.json"
+    snap.write_text(_json.dumps(snapshot_doc))
+    rc = tool.main(
+        [
+            "--schedule",
+            "--json",
+            "--checkpoint-snapshot",
+            str(snap),
+            "--regions",
+            "seoul-seongdong,incheon-yeonsu",
+        ]
+    )
+    assert rc == 0
+    payload = _out(capsys)
+    assert payload["auth_quota_blocked"] is True
+    assert payload["planned_argv"] == []
+    assert payload["planned_arguments"] == []
+
+
+def test_rollback_control_never_exports(monkeypatch, capsys, tmp_path):
+    import json as _json
+
+    # Rollback inside the write transaction => committed False => export rejects.
+    places = [_place("p1")]
+    script = {p.place_id: _collection(p.place_id) for p in places}
+    _wire(monkeypatch, places=places, script=script)
+    monkeypatch.setenv(tool.ALLOW_ENV, "1")
+
+    def _boom(cur, aggs):
+        raise RuntimeError("aggregate upsert failed")
+
+    monkeypatch.setattr(tool, "insert_review_mention_aggregates_on_cursor", _boom)
+    rc = tool.main(
+        ["--apply", "--json", "--confirm", tool.CONFIRM_TEXT, "--region", "busan-haeundae"]
+    )
+    assert rc == 2
+    rolled = _out(capsys)
+    assert rolled["committed"] is False
+
+    _no_io_wiring(monkeypatch)
+    result = tmp_path / "r.json"
+    result.write_text(_json.dumps(rolled))
+    rc = tool.main(["--export-checkpoint", "--json", "--from-collector-result", str(result)])
+    assert rc == 2
+    assert "rejected by the bridge" in _out(capsys)["error"]

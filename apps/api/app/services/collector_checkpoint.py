@@ -55,8 +55,11 @@ SNAPSHOT_SCHEMA_VERSION = 1
 SNAPSHOT_SOURCE = "naver_review_collect_apply_payloads"
 
 # Strict bounded snapshot limits (independent constants; B3).
-SNAPSHOT_MAX_BYTES = 64 * 1024
-SNAPSHOT_MAX_ENTRIES = 256  # supports the current 229-region catalog, still bounded
+# Independently bounded ceiling chosen to hold the supported full-catalog state
+# (229 entries, two 128-char cursors each, exporter's indent=2 formatting) with
+# margin, while staying a finite explicit bound. Reads stay MAX+1 bounded.
+SNAPSHOT_MAX_BYTES = 1024 * 1024
+SNAPSHOT_MAX_ENTRIES = 256
 _REGION_ID_MAX_LENGTH = 64
 _CURSOR_MAX_LENGTH = 128
 _TIMESTAMP_MAX_LENGTH = 64
@@ -168,27 +171,44 @@ def _parse_timestamp(value: object, label: str) -> datetime:
         raise CheckpointSnapshotError(f"{label} is missing or oversized")
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError as exc:
+    except (ValueError, OverflowError) as exc:
         raise CheckpointSnapshotError(f"{label} is malformed") from exc
     if parsed.tzinfo is None:
+        # Naive timestamps are never assumed-local (that would silently shift
+        # the observation); they must carry their own offset.
         raise CheckpointSnapshotError(f"{label} must be timezone-aware")
-    return parsed.astimezone(UTC)
+    try:
+        return parsed.astimezone(UTC)
+    except (OverflowError, OSError, ValueError) as exc:
+        raise CheckpointSnapshotError(f"{label} is malformed") from exc
 
 
-def _failure_blocked_category(payload: Mapping) -> str | None:
+def _failure_signal(payload: Mapping) -> tuple[str | None, bool]:
+    """(blocked_category, sweep_was_clean) from the result's failure tally.
+
+    blocked is set for account-level auth/quota evidence. sweep_was_clean is
+    True only when every tallied category is ok/empty — any degrading failure
+    (network/parse/auth/quota) means the sweep is not a clean completion, so it
+    can never certify fresh whole-region recency.
+    """
     tally = payload.get("failure_tally")
     if not isinstance(tally, dict):
         raise CheckpointSnapshotError("result failure_tally is malformed")
     blocked: str | None = None
+    clean = True
     for provider, tallies in tally.items():
         if not isinstance(provider, str) or not isinstance(tallies, dict):
             raise CheckpointSnapshotError("result failure_tally is malformed")
-        for category in tallies:
+        for category, count in tallies.items():
             if category not in _KNOWN_FAILURE_CATEGORIES:
                 raise CheckpointSnapshotError("result failure_tally has an unknown category")
+            if type(count) is not int or count < 0:
+                raise CheckpointSnapshotError("result failure_tally has a malformed count")
             if category in ("auth_missing", "quota_exceeded"):
                 blocked = "auth_quota"
-    return blocked
+            if category not in ("ok", "empty"):
+                clean = False
+    return blocked, clean
 
 
 def build_region_checkpoint(payload: Mapping) -> dict:
@@ -205,10 +225,17 @@ def build_region_checkpoint(payload: Mapping) -> dict:
         raise CheckpointSnapshotError("result payload is not an object")
     if payload.get("mode") != "apply":
         raise CheckpointSnapshotError("only committed --apply results may become observations")
-    if payload.get("ok") is not True:
-        raise CheckpointSnapshotError("result was not a successful committed run")
-    if payload.get("status") not in _KNOWN_APPLY_STATUSES:
+    if payload.get("committed") is not True:
+        # Failed-before-commit / governance-rejected / rollback / legacy
+        # payloads carry no proof of an atomic commit: rejected outright.
+        raise CheckpointSnapshotError("result carries no committed-transaction proof")
+    status = payload.get("status")
+    if status not in _KNOWN_APPLY_STATUSES and status != "failed":
         raise CheckpointSnapshotError("result status is not an accepted apply status")
+    ok = payload.get("ok")
+    if type(ok) is not bool or ok != (status != "failed"):
+        raise CheckpointSnapshotError("result ok/status are inconsistent")
+    failed_run = status == "failed"
     region = payload.get("region")
     if not isinstance(region, str) or region not in MANUAL_REGION_BY_ID:
         raise CheckpointSnapshotError("result region is not a canonical manual region id")
@@ -225,13 +252,36 @@ def build_region_checkpoint(payload: Mapping) -> dict:
     requests_used = payload.get("requests_used")
     if type(requests_used) is not int or not 0 <= requests_used <= _REQUESTS_USED_MAX:
         raise CheckpointSnapshotError("result requests_used is malformed")
+    counts = {}
+    for field in (
+        "places",
+        "places_attempted",
+        "places_completed",
+        "places_deferred",
+        "places_name_skipped",
+    ):
+        value = payload.get(field)
+        if type(value) is not int or value < 0:
+            raise CheckpointSnapshotError(f"result {field} is malformed")
+        counts[field] = value
+    # completed already includes deterministic name-skips (never double-counted);
+    # every selected place is exactly one of attempted / deferred / name-skipped,
+    # and the clean share of attempts is what completed adds beyond the skips.
+    settled_clean = counts["places_completed"] - counts["places_name_skipped"]
+    if settled_clean < 0 or settled_clean > counts["places_attempted"]:
+        raise CheckpointSnapshotError("result place counts are inconsistent")
+    if (
+        counts["places_attempted"] + counts["places_deferred"] + counts["places_name_skipped"]
+        != counts["places"]
+    ):
+        raise CheckpointSnapshotError("result place counts are inconsistent")
     stop_reason = payload.get("stop_reason")
     if stop_reason is not None and stop_reason not in _KNOWN_STOP_REASONS:
         raise CheckpointSnapshotError("result stop_reason is unknown")
     if exhausted and stop_reason is not None:
         raise CheckpointSnapshotError("result is internally inconsistent")
     observation_time = _parse_timestamp(payload.get("observation_time"), "result observation_time")
-    blocked = _failure_blocked_category(payload)
+    blocked, sweep_clean = _failure_signal(payload)
     next_cursor = _validate_cursor(payload.get("next_after_place_id"), "result cursor")
     input_cursor = _validate_cursor(payload.get("after_place_id"), "result input cursor")
 
@@ -239,8 +289,14 @@ def build_region_checkpoint(payload: Mapping) -> dict:
     # completion is certified ONLY for a single-page sweep started from a null
     # cursor; a non-null tail page stays conservatively unproven.
     single_page_sweep = input_cursor is None
-    whole_region_complete = bool(exhausted and single_page_sweep and blocked is None)
-    empty_scope = ("region" if single_page_sweep else "window") if places == 0 else None
+    whole_region_complete = bool(
+        exhausted and single_page_sweep and blocked is None and not failed_run and sweep_clean
+    )
+    empty_scope = (
+        ("region" if single_page_sweep else "window")
+        if places == 0 and not failed_run and sweep_clean
+        else None
+    )
     return {
         "region": region,
         "next_after_place_id": next_cursor,
@@ -286,7 +342,9 @@ def load_checkpoint_snapshot(path: Path) -> dict[str, dict]:
     if keys != {"schema_version", "source", "entries"}:
         raise CheckpointSnapshotError("checkpoint snapshot has an unexpected top-level shape")
     if (
-        document["schema_version"] != SNAPSHOT_SCHEMA_VERSION
+        type(document["schema_version"]) is not int
+        or document["schema_version"] != SNAPSHOT_SCHEMA_VERSION
+        or not isinstance(document["source"], str)
         or document["source"] != SNAPSHOT_SOURCE
     ):
         raise CheckpointSnapshotError("checkpoint snapshot version/source mismatch")
