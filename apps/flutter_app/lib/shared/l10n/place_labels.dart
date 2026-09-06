@@ -175,7 +175,7 @@ String outdoorLabel(String status, {String language = 'ko'}) {
       // Blank omission contract: an empty source stays empty (callers skip
       // blank segments). Unsupported nonempty statuses must never leak the
       // raw internal token — an honest localized missing-data label instead.
-      final status when status.isEmpty => status,
+      final status when status.trim().isEmpty => status,
       _ => lalaCopyMulti(
         language,
         ko: '정보 없음',
@@ -190,7 +190,7 @@ String outdoorLabel(String status, {String language = 'ko'}) {
     'good' => '좋음',
     'normal' => '보통',
     'bad' => '주의',
-    final status when status.isEmpty => status,
+    final status when status.trim().isEmpty => status,
     _ => '정보 없음',
   };
 }

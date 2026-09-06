@@ -73,6 +73,11 @@ void main() {
     test('KO keeps the Korean grade name when provided', () {
       expect(dustGradeLabel('normal', '보통', 'ko'), '보통');
     });
+    test('KO known code with absent KO name gets the known Korean label', () {
+      expect(dustGradeLabel('good', '', 'ko'), '좋음');
+      expect(dustGradeLabel('bad', '', 'ko'), '나쁨');
+      expect(dustGradeLabel('very_bad', '', 'ko'), '매우 나쁨');
+    });
     test('KO unknown code with missing Korean name is localized', () {
       expect(dustGradeLabel('unknown', '', 'ko'), '정보 없음');
     });
@@ -110,8 +115,22 @@ void main() {
       },
     );
 
-    test('null/placeholder weather stays honest null', () {
+    test('null and placeholder weather stay honest null', () {
       expect(publicWeatherSummary(null, 'en').summary, isNull);
+      // Placeholder-shaped object (empty everything) is filtered by
+      // publicWeatherOrNull → honest null, never a fabricated summary.
+      const placeholder = LalaWeather(
+        lat: 0,
+        lng: 0,
+        temp: '',
+        icon: '',
+        dust: LalaDust(pm10: '', pm25: '', grade: '', gradeKo: ''),
+        forecast: <LalaForecastItem>[],
+        outdoorStatus: '',
+        force: false,
+        source: '',
+      );
+      expect(publicWeatherSummary(placeholder, 'en').summary, isNull);
     });
   });
 }

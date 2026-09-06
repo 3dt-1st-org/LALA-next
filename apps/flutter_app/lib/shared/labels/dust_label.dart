@@ -18,9 +18,25 @@ String dustGradeLabel(String gradeCode, String gradeKo, String language) {
     if (localizedKo != null) {
       return localizedKo;
     }
-    // Blank omission contract: empty code+empty KO name stays empty.
-    // An unrecognized nonempty code must not leak the raw token.
-    return gradeCode.isEmpty ? gradeCode : '정보 없음';
+    final code = gradeCode.trim();
+    // Blank omission contract: whitespace-only code+missing KO name stays
+    // empty. A KNOWN code with an absent Korean name still gets its correct
+    // known Korean label; only unrecognized nonempty codes fall through to
+    // the honest missing-data label (never the raw token).
+    switch (code) {
+      case '':
+        return gradeCode;
+      case 'good':
+        return '좋음';
+      case 'normal':
+        return '보통';
+      case 'bad':
+        return '나쁨';
+      case 'very_bad':
+        return '매우 나쁨';
+      default:
+        return '정보 없음';
+    }
   }
   if (normalizeLalaLanguage(language) != 'en') {
     return switch (gradeCode.trim()) {
