@@ -37,10 +37,7 @@ void main() {
       expect(template, contains('window.LalaMapEmbed'));
       expect(template, contains('setConfig'));
       // Same-origin + parent-frame gating for config messages (web path).
-      expect(
-        template,
-        contains('event.origin !== window.location.origin'),
-      );
+      expect(template, contains('event.origin !== window.location.origin'));
     });
 
     test('keeps the embed->Flutter bridge contract', () {
@@ -72,6 +69,31 @@ void main() {
       expect(template, contains('OpenFreeMap'));
       expect(template, contains('attributionControl'));
       expect(template, contains('compact: false'));
+    });
+
+    test('credits wrap inside a width excluding the right controls band', () {
+      // Runtime-reproduced defect (PR204 iPhone EN/JA collapsed): the
+      // default nowrap attribution line ran under the bottom-right floating
+      // controls (12dp right gutter + 44dp FAB hit target + 20dp margin =
+      // 76px reserved band; see dashboard.dart AnimatedPositioned right: 12
+      // and the 44dp MapFab visual contract). The rule must keep every
+      // provider name/link visible via wrapping — never clip/ellipsis.
+      const reservedBandCss = 'max-width: calc(100% - 76px)';
+      expect(template, contains('.maplibregl-ctrl-bottom-left'));
+      expect(template, contains('.maplibregl-ctrl-attrib'));
+      expect(template, contains(reservedBandCss));
+      expect(template, contains('white-space: normal'));
+      // No clipping/ellipsis fallback may sneak into the credits rule itself
+      // (marker labels elsewhere may legitimately ellipsize).
+      final attribRuleStart = template.indexOf(
+        '.maplibregl-ctrl-bottom-left .maplibregl-ctrl-attrib {',
+      );
+      expect(attribRuleStart, greaterThan(0));
+      final attribRuleEnd = template.indexOf('}', attribRuleStart);
+      final attribRule = template.substring(attribRuleStart, attribRuleEnd);
+      expect(attribRule, isNot(contains('ellipsis')));
+      expect(attribRule, isNot(contains('overflow: hidden')));
+      expect(attribRule, isNot(contains('display: none')));
     });
 
     test('keeps the single replaceable provider boundary', () {
@@ -121,12 +143,18 @@ void main() {
       expect(embed, startsWith('<!DOCTYPE html>'));
       expect(embed, contains('maplibre-gl@3.6.2'));
       // Public upstream dist checksums (integrity pins, not credentials).
-      expect(embed, contains(
-        'c46084df69bbaa995b301a515274a86ec53905c78459b80dccbc27a0c0b8d13b', // pragma: allowlist secret
-      ));
-      expect(embed, contains(
-        '731181d400d65a8b09d842f55b70bc4dc11010b15b8549e2c65a69d233fbdd2e', // pragma: allowlist secret
-      ));
+      expect(
+        embed,
+        contains(
+          'c46084df69bbaa995b301a515274a86ec53905c78459b80dccbc27a0c0b8d13b', // pragma: allowlist secret
+        ),
+      );
+      expect(
+        embed,
+        contains(
+          '731181d400d65a8b09d842f55b70bc4dc11010b15b8549e2c65a69d233fbdd2e', // pragma: allowlist secret
+        ),
+      );
       // The runtime is really inlined, not referenced.
       expect(embed.length, greaterThan(700 * 1024));
       expect(embed, isNot(contains('__MAPLIBRE_GL_JS__')));
@@ -146,16 +174,21 @@ void main() {
         'attributionControl',
         'https://tiles.openfreemap.org/styles/liberty',
         'OpenStreetMap contributors',
+        // Credits exclusion band must survive the pinned regeneration.
+        'max-width: calc(100% - 76px)',
+        '.maplibregl-ctrl-bottom-left',
       ]) {
         expect(embed, contains(marker), reason: 'missing marker: $marker');
       }
     });
 
-    test('does not leak the maplibre global assignment into page scope oddly',
-        () {
-      // The UMD bundle must define window.maplibregl for the bridge to use.
-      expect(embed, contains('maplibregl'));
-    });
+    test(
+      'does not leak the maplibre global assignment into page scope oddly',
+      () {
+        // The UMD bundle must define window.maplibregl for the bridge to use.
+        expect(embed, contains('maplibregl'));
+      },
+    );
 
     test('renders valid UTF-8 JSON-transportable content', () {
       final bytes = utf8.encode(embed);
