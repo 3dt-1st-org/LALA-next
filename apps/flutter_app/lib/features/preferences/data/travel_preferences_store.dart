@@ -12,6 +12,19 @@ const String kTravelPreferencesUpdatedAtKey =
 
 typedef SharedPreferencesFactory = Future<SharedPreferences> Function();
 
+/// Raised when the persisted preferences store cannot confirm a platform
+/// write or removal (`false` acknowledgement, no throw). Deliberate
+/// supersession — a write discarded by a fence — is NOT a failure and never
+/// throws; public callers can treat this exception as "please retry".
+class TravelPreferencesPersistenceException implements Exception {
+  const TravelPreferencesPersistenceException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => 'TravelPreferencesPersistenceException: $message';
+}
+
 enum TravelPreferencesSyncStatus {
   localOnly,
   checking,
@@ -188,9 +201,9 @@ class TravelPreferencesStore extends ChangeNotifier {
   /// [requireClearGeneration] (discard only when a newer `clear()` landed);
   /// adoption additionally passes [requireNoUserDocument] (discard when a
   /// user-intent document exists by the time the section runs). A platform
-  /// write that acknowledges failure (`false`, no throw) fails the whole
-  /// pair: nothing is claimed, applied, or uploaded. Returns whether the
-  /// write actually committed.
+  /// write that acknowledges failure (`false`, no throw) throws
+  /// [TravelPreferencesPersistenceException]: nothing is claimed, applied,
+  /// or uploaded. Returns whether the write actually committed.
   Future<bool> _saveLocal(
     TravelPreferences next, {
     String? updatedAt,
@@ -225,13 +238,17 @@ class TravelPreferencesStore extends ChangeNotifier {
         kTravelPreferencesStorageKey,
         jsonEncode(next.toJson()),
       )) {
-        return false;
+        throw const TravelPreferencesPersistenceException(
+          'the travel preferences document was not acknowledged by storage',
+        );
       }
       if (!await preferences.setString(
         kTravelPreferencesUpdatedAtKey,
         resolvedUpdatedAt,
       )) {
-        return false;
+        throw const TravelPreferencesPersistenceException(
+          'the travel preferences timestamp was not acknowledged by storage',
+        );
       }
       _value = next;
       _deviceUpdatedAt = resolvedUpdatedAt;
@@ -403,11 +420,11 @@ class TravelPreferencesStore extends ChangeNotifier {
     // Deletion is the newest local intent: fence pending remote work, discard
     // pre-clear local writes still suspended at the storage seam (both derived
     // adoption/echo writes and explicit edits), and only then remove storage.
-    _syncEpoch += 1;
+    final epoch = ++_syncEpoch;
     _clearGeneration += 1;
     _localWriteGeneration += 1;
     final preferences = await _preferencesFactory();
-    await _serialize<bool>(() async {
+    final cleared = await _serialize<bool>(() async {
       // A remove that acknowledges failure (`false`, no throw) must not claim
       // deletion: the device copy and its pairing stay untouched.
       if (!await preferences.remove(kTravelPreferencesStorageKey)) {
@@ -427,6 +444,20 @@ class TravelPreferencesStore extends ChangeNotifier {
       notifyListeners();
       return true;
     });
+    if (!cleared) {
+      // The epoch bump above fenced any in-flight account work; a `checking`
+      // status stranded by that canceled operation must be repaired before
+      // surfacing the failure. Only this clear's still-current epoch may do
+      // it, so an older failed clear never overwrites a newer account scope.
+      if (epoch == _syncEpoch &&
+          _syncStatus == TravelPreferencesSyncStatus.checking) {
+        _syncStatus = _statusAfterLocalReset();
+        notifyListeners();
+      }
+      throw const TravelPreferencesPersistenceException(
+        'the travel preferences document was not deleted from storage',
+      );
+    }
   }
 
   TravelPreferencesSyncStatus _statusAfterLocalReset() {
