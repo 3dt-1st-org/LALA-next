@@ -313,26 +313,10 @@ const Map<String, Map<String, String>> _reasonSegmentCopies = {
     'zh-Hans': '适合室内活动',
     'zh-Hant': '適合室內活動',
   },
-  'Cold weather': {
-    'ja': '寒い天気',
-    'zh-Hans': '寒冷天气',
-    'zh-Hant': '寒冷天氣',
-  },
-  'Cool weather': {
-    'ja': '過ごしやすい天気',
-    'zh-Hans': '凉爽天气',
-    'zh-Hant': '涼爽天氣',
-  },
-  'Warm weather': {
-    'ja': '暖かい天気',
-    'zh-Hans': '温暖天气',
-    'zh-Hant': '溫暖天氣',
-  },
-  'Hot weather': {
-    'ja': '暑い天気',
-    'zh-Hans': '炎热天气',
-    'zh-Hant': '炎熱天氣',
-  },
+  'Cold weather': {'ja': '寒い天気', 'zh-Hans': '寒冷天气', 'zh-Hant': '寒冷天氣'},
+  'Cool weather': {'ja': '過ごしやすい天気', 'zh-Hans': '凉爽天气', 'zh-Hant': '涼爽天氣'},
+  'Warm weather': {'ja': '暖かい天気', 'zh-Hans': '温暖天气', 'zh-Hant': '溫暖天氣'},
+  'Hot weather': {'ja': '暑い天気', 'zh-Hans': '炎热天气', 'zh-Hant': '炎熱天氣'},
   // 로컬 활동(S2).
   'Active local spending': {
     'ja': '地元の消費が活発',
@@ -340,22 +324,10 @@ const Map<String, Map<String, String>> _reasonSegmentCopies = {
     'zh-Hant': '本地消費活躍',
   },
   // 행사(D4) — is_ongoing 은 구조화된 행사일 메타데이터만 근거로 함.
-  'Ongoing event': {
-    'ja': '開催中のイベント',
-    'zh-Hans': '进行中的活动',
-    'zh-Hant': '進行中的活動',
-  },
-  'Linked event': {
-    'ja': '関連イベント',
-    'zh-Hans': '关联活动',
-    'zh-Hant': '關聯活動',
-  },
+  'Ongoing event': {'ja': '開催中のイベント', 'zh-Hans': '进行中的活动', 'zh-Hant': '進行中的活動'},
+  'Linked event': {'ja': '関連イベント', 'zh-Hans': '关联活动', 'zh-Hant': '關聯活動'},
   // 근접.
-  'Nearby': {
-    'ja': '近く',
-    'zh-Hans': '近距离',
-    'zh-Hant': '近距離',
-  },
+  'Nearby': {'ja': '近く', 'zh-Hans': '近距离', 'zh-Hant': '近距離'},
 };
 
 /// reason 문자열의 고정 세그먼트를 [language] 로케일 고정 카피로 바꾼다.

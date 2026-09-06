@@ -132,7 +132,12 @@ void main() {
       const reason = 'Warm weather · Nearby · Korea Tourism Organization data';
       await pumpChild(
         tester,
-        SingleChildScrollView(child: PlaceReasonLine(place: _place(reason: reason), language: 'ja')),
+        SingleChildScrollView(
+          child: PlaceReasonLine(
+            place: _place(reason: reason),
+            language: 'ja',
+          ),
+        ),
       );
       expect(
         find.text('暖かい天気 · 近く · Korea Tourism Organization data'),
@@ -146,7 +151,12 @@ void main() {
       // 매핑 안 된 EN 폴백(구 토큰)은 번역되어 보이지 않는다.
       await pumpChild(
         tester,
-        SingleChildScrollView(child: PlaceReasonLine(place: _place(reason: 'Open now'), language: 'zh-Hans')),
+        SingleChildScrollView(
+          child: PlaceReasonLine(
+            place: _place(reason: 'Open now'),
+            language: 'zh-Hans',
+          ),
+        ),
       );
       expect(find.text('Open now'), findsOneWidget);
     });
@@ -155,7 +165,12 @@ void main() {
       const enReason = 'Cool weather · Nearby';
       await pumpChild(
         tester,
-        SingleChildScrollView(child: PlaceReasonLine(place: _place(reason: enReason), language: 'en')),
+        SingleChildScrollView(
+          child: PlaceReasonLine(
+            place: _place(reason: enReason),
+            language: 'en',
+          ),
+        ),
       );
       expect(find.text(enReason), findsOneWidget);
     });
@@ -182,7 +197,10 @@ void main() {
           'Suwon Hwaseong Cultural Festival Extra Long Tail Segment';
       await pumpChild(
         tester,
-        PlaceReasonLine(place: _place(reason: reason), language: 'ja'),
+        PlaceReasonLine(
+          place: _place(reason: reason),
+          language: 'ja',
+        ),
       );
       expect(tester.takeException(), isNull);
       final text = tester.widget<Text>(find.byType(Text).first);

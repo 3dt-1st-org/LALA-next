@@ -303,7 +303,11 @@ class MapBottomDock extends StatelessWidget {
                   TinyMeta(label),
               ],
             ),
-            PlaceReasonLine(place: currentPlace, topSpacing: 8, language: uiLanguage),
+            PlaceReasonLine(
+              place: currentPlace,
+              topSpacing: 8,
+              language: uiLanguage,
+            ),
             PlaceWeatherSourceLine(
               weather: weather,
               language: uiLanguage,

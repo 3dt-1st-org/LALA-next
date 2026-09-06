@@ -104,7 +104,11 @@ class RecommendedPlaceCard extends StatelessWidget {
                 ),
                 // V1-RC2: per-place reason(없으면 PlaceReasonLine 이 렌더 생략).
                 // 방문객 로케일은 고정 EN 세그먼트를 로케일 고정 카피로 표시.
-                PlaceReasonLine(place: place, topSpacing: 6, language: language),
+                PlaceReasonLine(
+                  place: place,
+                  topSpacing: 6,
+                  language: language,
+                ),
               ],
             ),
           ),
