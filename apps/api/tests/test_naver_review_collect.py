@@ -2916,3 +2916,119 @@ def test_p5d_audit_regressions(monkeypatch, capsys, tmp_path):
     assert state4.read_bytes() == prior4
     assert not (tmp_path / "fsync.json.lock").exists()
     assert [p.name for p in tmp_path.glob(".state-*.tmp")] == []
+
+
+# == P5D1 sanitized publication regressions =========================================
+
+
+def test_p5d1_chmod_failure_is_sanitized_rc2(monkeypatch, capsys, tmp_path):
+    """Injected chmod failure: fixed rc2 message, no raw exception/path echo,
+    byte-identical prior state, no owned temp/lock leaks."""
+    import os
+
+    _no_io_wiring(monkeypatch)
+    state = tmp_path / "state.json"
+    good = _state_result_file(tmp_path, "g.json")
+    assert (
+        tool.main(
+            [
+                "--export-checkpoint",
+                "--json",
+                "--from-collector-result",
+                str(good),
+                "--checkpoint-state",
+                str(state),
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+    prior = state.read_bytes()
+
+    real_chmod = os.chmod
+
+    def boom(path, mode):
+        raise OSError("chmod denied")
+
+    monkeypatch.setattr(os, "chmod", boom)
+    rc = tool.main(
+        [
+            "--export-checkpoint",
+            "--json",
+            "--from-collector-result",
+            str(
+                _state_result_file(
+                    tmp_path, "g2.json", observation_time="2026-09-06T12:00:00+00:00"
+                )
+            ),
+            "--checkpoint-state",
+            str(state),
+        ]
+    )
+    monkeypatch.setattr(os, "chmod", real_chmod)
+    assert rc == 2
+    payload = _out(capsys)
+    assert payload["ok"] is False
+    assert payload["error"] == "state publication could not secure permissions"
+    assert "chmod" not in payload["error"] and str(state) not in payload["error"]
+    assert state.read_bytes() == prior
+    assert not (tmp_path / "state.json.lock").exists()
+    assert [p.name for p in tmp_path.glob(".state-*.tmp")] == []
+
+
+def test_p5d1_final_revalidation_failure_is_sanitized_rc2(monkeypatch, capsys, tmp_path):
+    """Injected final-loader failure: fixed rc2 message, prior bytes unchanged,
+    no owned temp/lock leaks — never an escaping CheckpointSnapshotError."""
+    from apps.api.app.services import collector_checkpoint as cc
+
+    _no_io_wiring(monkeypatch)
+    state = tmp_path / "state.json"
+    good = _state_result_file(tmp_path, "g.json")
+    assert (
+        tool.main(
+            [
+                "--export-checkpoint",
+                "--json",
+                "--from-collector-result",
+                str(good),
+                "--checkpoint-state",
+                str(state),
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+    prior = state.read_bytes()
+
+    real_load = cc.load_checkpoint_snapshot
+    calls = {"n": 0}
+
+    def flaky_load(path):
+        calls["n"] += 1
+        if calls["n"] > 1:  # first load = prior state read; later = final revalidation
+            raise cc.CheckpointSnapshotError("revalidation exploded")
+        return real_load(path)
+
+    monkeypatch.setattr(cc, "load_checkpoint_snapshot", flaky_load)
+    rc = tool.main(
+        [
+            "--export-checkpoint",
+            "--json",
+            "--from-collector-result",
+            str(
+                _state_result_file(
+                    tmp_path, "g3.json", observation_time="2026-09-06T12:00:00+00:00"
+                )
+            ),
+            "--checkpoint-state",
+            str(state),
+        ]
+    )
+    assert rc == 2
+    payload = _out(capsys)
+    assert payload["ok"] is False
+    assert payload["error"] == "final state revalidation failed; nothing was published"
+    assert "exploded" not in payload["error"] and str(state) not in payload["error"]
+    assert state.read_bytes() == prior
+    assert not (tmp_path / "state.json.lock").exists()
+    assert [p.name for p in tmp_path.glob(".state-*.tmp")] == []

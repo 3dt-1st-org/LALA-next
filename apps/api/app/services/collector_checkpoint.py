@@ -786,11 +786,20 @@ def update_checkpoint_state(state_path: Path, entry: Mapping) -> dict[str, Any]:
                 os.fsync(handle.fileno())
         except OSError as exc:
             raise CheckpointStateError("state serialization failed") from exc
-        os.chmod(temp_path, 0o600)
+        try:
+            os.chmod(temp_path, 0o600)
+        except OSError as exc:
+            raise CheckpointStateError("state publication could not secure permissions") from exc
         try:
             load_checkpoint_snapshot(temp_path)
             os.replace(temp_path, state_path)
             temp_path = None
+        except CheckpointSnapshotError as exc:
+            # The final revalidation of the encoded document failed: sanitized,
+            # prior bytes unchanged, owned temp cleaned by the finally block.
+            raise CheckpointStateError(
+                "final state revalidation failed; nothing was published"
+            ) from exc
         except OSError as exc:
             raise CheckpointStateError("atomic state publication failed") from exc
         return {
