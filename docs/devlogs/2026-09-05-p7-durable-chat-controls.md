@@ -227,6 +227,19 @@ assert `u.status = 'active'` with the extended param tuples; ticket-claim
 re-check asserted authenticated; delivery verifier test renamed to the
 authenticated contract with aggregation/propagation.
 
+Same-task review round: the first cut called the verifier with
+`viewer_issuer=`/`viewer_subject=` while the real service method takes
+`issuer=`/`subject=` — the permissive ``**kwargs`` test fake hid the
+mismatch, which in production raised ``TypeError`` inside
+``_resolve_allowed_actors`` and silently failed every delivery closed. The
+callback now uses the exact signature; the aggregation-test fakes were made
+signature-honest (explicit keywords, no ``**kwargs``) so drift fails loudly;
+and a production-path regression drives the REAL service → repository SQL →
+production callback → module manager over a recording keyed connection
+(deterministic under thread interleaving), proving active-member delivery
+plus deleting/deleted denial end-to-end. Full suite re-run for that
+production-code change: 2,485 passed.
+
 ## Runtime client (criterion 5)
 
 - `ChatWsClient` connects through a URI provider: every (re)connect fetches a
@@ -288,8 +301,8 @@ cross-session.
 
 - API: focused community suites (chat 74 — including the deterministic fanout
   lifecycle regressions, run five consecutive times green — guards 30,
-  idempotency 9, canonical 16, community 37) and the full suite **2,484
-  passed** (2026-09-06 account-lifecycle correction run); `ruff check`/`format` clean; OpenAPI
+  idempotency 9, canonical 16, community 37) and the full suite **2,485
+  passed** (2026-09-06 account-lifecycle correction + review round); `ruff check`/`format` clean; OpenAPI
   compat tests green (new paths are additive).
 - Flutter app: `flutter analyze` clean; community suites 65 passed; full suite
   **1,189 passed**.

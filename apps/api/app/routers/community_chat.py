@@ -292,8 +292,8 @@ async def _verify_room_access_for_actors(
             asyncio.to_thread(
                 service.authenticated_room_access,
                 room_id=room_id,
-                viewer_issuer=issuer,
-                viewer_subject=subject,
+                issuer=issuer,
+                subject=subject,
             )
             for issuer, subject in actors
         )

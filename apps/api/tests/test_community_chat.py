@@ -1000,10 +1000,17 @@ def test_verify_room_access_for_actors_aggregates_and_propagates_failure(
             self.rows = rows
             self.checked: list[tuple[str, str]] = []
 
-        def authenticated_room_access(self, **kwargs: Any) -> dict[str, Any] | None:
-            key = (kwargs["viewer_issuer"], kwargs["viewer_subject"])
-            self.checked.append(key)
-            return self.rows.get(key)
+        # Exact production signature: a kwarg mismatch must fail here loudly
+        # instead of being swallowed by **kwargs.
+        def authenticated_room_access(
+            self,
+            *,
+            room_id: UUID,
+            issuer: str,
+            subject: str,
+        ) -> dict[str, Any] | None:
+            self.checked.append((issuer, subject))
+            return self.rows.get((issuer, subject))
 
     service = AccessService(
         {
@@ -1023,7 +1030,9 @@ def test_verify_room_access_for_actors_aggregates_and_propagates_failure(
     assert service.checked == [(ISSUER, SUBJECT), ("https://revoked", "revoked")]
 
     class FailingService:
-        def authenticated_room_access(self, **_: Any) -> dict[str, Any] | None:
+        def authenticated_room_access(
+            self, *, room_id: UUID, issuer: str, subject: str
+        ) -> dict[str, Any] | None:
             raise ServiceError(
                 status_code=503,
                 code="COMMUNITY_CHAT_DB_UNAVAILABLE",
@@ -1037,6 +1046,108 @@ def test_verify_room_access_for_actors_aggregates_and_propagates_failure(
         raise AssertionError("store failure must propagate (fail closed)")
     except ServiceError:
         pass
+
+
+class _KeyedAccessCursor:
+    """Deterministic under any thread interleaving: fetchone answers by actor.
+
+    Binds the authenticated_room_access parameter shape explicitly, so the
+    production callback's kwargs are exercised against the REAL repository
+    SQL, not a permissive fake.
+    """
+
+    def __init__(self, allowed: set[tuple[str, str]], executed: list) -> None:
+        self._allowed = allowed
+        self._executed = executed
+        self._last_sql: str | None = None
+        self._last_params: tuple | None = None
+
+    def __enter__(self) -> _KeyedAccessCursor:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+    def execute(self, sql: str, params: Any = None) -> None:
+        self._executed.append((sql, params))
+        self._last_sql = sql
+        self._last_params = tuple(params) if params is not None else ()
+
+    def fetchone(self) -> Any:
+        # authenticated_room_access binds (room_id, issuer, subject, ...access)
+        params = self._last_params
+        actor = (params[1], params[2]) if len(params) >= 3 else None
+        if actor in self._allowed:
+            return _room_row("private")
+        return None
+
+
+class _KeyedAccessConnection:
+    def __init__(self, allowed: set[tuple[str, str]], executed: list) -> None:
+        self._allowed = allowed
+        self._executed = executed
+
+    def __enter__(self) -> _KeyedAccessConnection:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+    def cursor(self, cursor_factory: Any = None) -> _KeyedAccessCursor:
+        return _KeyedAccessCursor(self._allowed, self._executed)
+
+    def close(self) -> None:
+        return None
+
+
+def test_production_verifier_real_service_delivers_and_denies_by_account(
+    monkeypatch,
+) -> None:
+    """End-to-end callback regression at the real seams (no **kwargs fake).
+
+    Real CommunityChatService + real CommunityChatRepository over a recording
+    keyed connection, driven by the production ``_verify_room_access_for_actors``
+    callback through the module ConnectionManager. Catches kwarg/signature
+    drift between the router callback and the service contract (the class of
+    defect a permissive fake hides) and proves account-aware delivery.
+    """
+
+    from apps.api.app.routers import community_chat as chat_router
+
+    executed: list[tuple[str, Any]] = []
+    allowed_actors = {(ISSUER, SUBJECT)}
+    repository = CommunityChatRepository(
+        Settings(db_dsn=DB_DSN),
+        connect=lambda **kwargs: _KeyedAccessConnection(allowed_actors, executed),
+    )
+    service = CommunityChatService(repository)
+    monkeypatch.setattr(chat_router, "get_community_chat_service", lambda: service)
+
+    async def run() -> None:
+        manager.attach_access_verifier(chat_router._verify_room_access_for_actors)
+        member_ws = MockWebSocket()
+        deleted_ws = MockWebSocket()
+        await manager.connect(member_ws, room_id=ROOM_ID, issuer=ISSUER, subject=SUBJECT)
+        await manager.connect(deleted_ws, room_id=ROOM_ID, issuer="https://gone", subject="gone")
+        frame = {"type": "message", "data": {"id": "prod-verify-1", "body": "hi"}}
+
+        await manager.broadcast(room_id=ROOM_ID, payload=frame)
+
+        # Active member receives exactly one frame; the deleting/deleted
+        # actor's admitted socket is denied content-free and evicted.
+        assert member_ws.sent == [frame]
+        assert deleted_ws.sent == []
+        assert deleted_ws.closed_with == 1008
+        assert manager.room_connection_count(ROOM_ID) == 1
+
+    asyncio.run(run())
+
+    # Both decisions ran the real authenticated SQL predicate.
+    assert len(executed) == 2
+    for sql, _params in executed:
+        assert "FROM identity.users u" in sql
+        assert "u.status = 'active'" in sql
+        assert "community.chat_room_members" in sql
 
 
 def test_notify_delivery_route_revalidates_access_before_delivery() -> None:
