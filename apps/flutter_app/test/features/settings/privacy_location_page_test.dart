@@ -29,6 +29,64 @@ void main() {
   });
 
   testWidgets(
+    'a thrown travel-preferences remove also skips later destructive steps; retry completes',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(393, 852));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final platform = _AckFalseStore();
+      SharedPreferencesStorePlatform.instance = platform;
+      final privacyStore = PrivacySettingsStore();
+      final preferencesStore = TravelPreferencesStore();
+      final tripLibraryStore = TripLibraryStore();
+      await preferencesStore.ensureLoaded();
+      await preferencesStore.save(
+        const TravelPreferences(interests: {TravelInterest.localFood}),
+      );
+      SavedPlaceStore.add('saved-place');
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PrivacyLocationPage(
+            privacyStore: privacyStore,
+            preferencesStore: preferencesStore,
+            tripLibraryStore: tripLibraryStore,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('privacy-clear-guest-data')),
+      );
+      await tester.pumpAndSettle();
+
+      // The real platform THROWS on the document removal (not a false ack).
+      platform.failNextRemove(_platformDocKey);
+      await tester.tap(find.byKey(const ValueKey('privacy-clear-guest-data')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('기기 데이터 지우기'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('기기 데이터를 모두 지우지 못했어요. 다시 시도해 주세요.'), findsOneWidget);
+      expect(find.text('이 기기의 여행 데이터가 삭제됐어요.'), findsNothing);
+      expect(SavedPlaceStore.current, isNotEmpty);
+      expect(OnboardingState.isCompleted, isTrue);
+      expect((await platform.getAll()).containsKey(_platformDocKey), isTrue);
+
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('privacy-clear-guest-data')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('기기 데이터 지우기'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('이 기기의 여행 데이터가 삭제됐어요.'), findsOneWidget);
+      expect(SavedPlaceStore.current, isEmpty);
+      expect((await platform.getAll()).containsKey(_platformDocKey), isFalse);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'a failed travel-preferences clear surfaces the error and skips later steps; retry completes',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(393, 852));
@@ -170,11 +228,19 @@ class _AckFalseStore extends InMemorySharedPreferencesStore {
   _AckFalseStore() : super.empty();
 
   String? _ackFalseRemoveKey;
+  String? _failRemoveKey;
 
   void ackFalseNextRemove(String key) => _ackFalseRemoveKey = key;
 
+  /// One-shot THROWN failure on the next removal of [key].
+  void failNextRemove(String key) => _failRemoveKey = key;
+
   @override
   Future<bool> remove(String key) async {
+    if (_failRemoveKey == key) {
+      _failRemoveKey = null;
+      throw StateError('storage remove failed for $key');
+    }
     if (_ackFalseRemoveKey == key) {
       _ackFalseRemoveKey = null;
       return false;
