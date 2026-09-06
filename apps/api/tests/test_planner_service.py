@@ -445,7 +445,10 @@ def test_daily_plan_language_en_localizes_place_reason(monkeypatch) -> None:
     plan = planner_service.daily_plan(request)
 
     slot_place = plan["slots"][0]["place"]
-    assert slot_place["reason"] == "Open now · Nearby · Korea Tourism Organization data"
+    # The reason composer no longer emits an operating segment (estimated
+    # category hours are not a per-venue authority), so the embedded reason is
+    # proximity + provenance only.
+    assert slot_place["reason"] == "Nearby · Korea Tourism Organization data"
     # The slot's own copy stays EN too (no mixed-language dock).
     assert plan["slots"][0]["recommendation_reason"] == "Recommended as a local attraction"
 

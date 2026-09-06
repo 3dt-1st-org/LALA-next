@@ -43,9 +43,8 @@ def _patch_db_fetch_places(monkeypatch, *, places=None, raises=None):
 def _freeze_service_now(monkeypatch, *, fixed: datetime) -> None:
     """Pin the wall-clock ``list_places`` reads via ``datetime.now``.
 
-    ``list_places`` derives ``slot_time`` (the operating-status check) and the
-    freshness ``now`` from ``datetime.now(UTC)``. Without freezing, an assertion
-    on a category's "영업중" reason flickers with the CI run's UTC hour.
+    ``list_places`` anchors freshness math to ``datetime.now(UTC)``. Without
+    freezing, freshness assertions can flicker with the CI run's wall clock.
     ``fixed`` must be timezone-aware.
     """
 
@@ -477,7 +476,8 @@ def test_places_without_scores_handles_empty_list() -> None:
 
 def test_derive_place_reason_all_signals_present() -> None:
     # 모든 신호가 있는 경우: canonical order로 결합
-    # [operating] · [weather(S3)] · [activity(S2)] · [event(D4)] · [proximity] · [source(S1)]
+    # [weather(S3)] · [activity(S2)] · [event(D4)] · [proximity] · [source(S1)]
+    # (운영 상태 segment는 category 추정 시간만으로는 어떤 주장도 못 하므로 제거됨)
     place = {
         "category": "restaurant",
         "distance_m": 300,
@@ -489,57 +489,57 @@ def test_derive_place_reason_all_signals_present() -> None:
     current_weather = {
         "outdoor_status": "bad",  # 비/미세먼지로 실내 우선
     }
-    slot_time = "12:30"  # 영업시간 내
 
     result = places_service._derive_place_reason(
         place=place,
         current_weather=current_weather,
-        slot_time=slot_time,
     )
 
     # 모든 신호가 canonical order로 결합된 결정론적 결과
     assert result == (
-        "영업중 · 실내활동 적합 · 로컬 소비 활발 · 진행 중인 행사 · 근접 · 한국관광공사 데이터"
+        "실내활동 적합 · 로컬 소비 활발 · 진행 중인 행사 · 근접 · 한국관광공사 데이터"
     )
 
 
-def test_derive_place_reason_only_open_nearby() -> None:
-    # 날씨 좋고 근접: 운영중 + 근접만
+def test_derive_place_reason_only_nearby() -> None:
+    # 날씨 좋고 근접: 근접만 (운영 주장 없음)
     place = {
         "category": "attraction",
         "distance_m": 400,
         "upstream_source": "canonical",
     }
     current_weather = {"outdoor_status": "good"}  # 날씨 good → 추가 안 함
-    slot_time = "14:00"
 
     result = places_service._derive_place_reason(
         place=place,
         current_weather=current_weather,
-        slot_time=slot_time,
     )
 
-    assert result == "영업중 · 근접"
+    assert result == "근접"
 
 
-def test_derive_place_reason_honest_empty_closed() -> None:
-    # 폐장 상태: 운영 관련 reason 없음 (honest empty)
+def test_derive_place_reason_never_claims_operating_status() -> None:
+    # Truthfulness regression: category 추정 운영시간(opening_hours_service)은
+    # per-venue authority가 아니므로 어떤 시각에서도 영업중/Open now 주장을
+    # 만들어서는 안 된다. 과거 결함: UTC 슬롯을 한국 관행 추정 시간과 직접 비교해
+    # KST 자정(UTC 15:00, iPhone 스크린샷)에 식당(11:00-22:00 추정)에 "영업중"을
+    # 붙였다. 경계(정확한 마감 시각 22:00/자정 전후)와 주간 시각도 함께 검증.
     place = {
         "category": "restaurant",
-        "distance_m": 100,
-        "upstream_source": "kopis",
+        "distance_m": 300,
+        "upstream_source": "tour_api",
     }
     current_weather = {"outdoor_status": "good"}
-    slot_time = "23:00"  # 영업시간 외
 
     result = places_service._derive_place_reason(
         place=place,
         current_weather=current_weather,
-        slot_time=slot_time,
     )
 
-    # closed면 운영 reason 추가 안 함 (honest empty); D2 per-source phrase
-    assert result == "근접 · 공연예술통합전산망 데이터"
+    assert result == "근접 · 한국관광공사 데이터"
+    # 운영 토큰은 어떤 언어에서도 등장하지 않는다.
+    assert "영업중" not in result
+    assert "Open now" not in result
 
 
 def test_derive_place_reason_honest_empty_all_bad_signals() -> None:
@@ -550,12 +550,10 @@ def test_derive_place_reason_honest_empty_all_bad_signals() -> None:
         "upstream_source": "canonical",  # 공식 아님
     }
     current_weather = {"outdoor_status": "good"}  # 날씨 good → 추가 안 함
-    slot_time = "22:00"  # 폐장 가정
 
     result = places_service._derive_place_reason(
         place=place,
         current_weather=current_weather,
-        slot_time=slot_time,
     )
 
     assert result == ""  # honest empty, never "이유 없음"
@@ -569,15 +567,13 @@ def test_derive_place_reason_indoor_only_bad_weather() -> None:
         "upstream_source": "canonical",
     }
     current_weather = {"outdoor_status": "bad"}
-    slot_time = "15:00"
 
     result = places_service._derive_place_reason(
         place=place,
         current_weather=current_weather,
-        slot_time=slot_time,
     )
 
-    assert result == "영업중 · 실내활동 적합"
+    assert result == "실내활동 적합"
 
 
 def test_derive_place_reason_proximity_under_500m() -> None:
@@ -588,15 +584,13 @@ def test_derive_place_reason_proximity_under_500m() -> None:
         "upstream_source": "canonical",
     }
     current_weather = {"outdoor_status": "good"}
-    slot_time = "10:00"
 
     result = places_service._derive_place_reason(
         place=place,
         current_weather=current_weather,
-        slot_time=slot_time,
     )
 
-    assert result == "영업중 · 근접"
+    assert result == "근접"
 
 
 def test_derive_place_reason_proximity_over_500m() -> None:
@@ -607,15 +601,13 @@ def test_derive_place_reason_proximity_over_500m() -> None:
         "upstream_source": "canonical",
     }
     current_weather = {"outdoor_status": "good"}
-    slot_time = "12:00"
 
     result = places_service._derive_place_reason(
         place=place,
         current_weather=current_weather,
-        slot_time=slot_time,
     )
 
-    assert result == "영업중"  # 근접 없음
+    assert result == ""  # 근접 없음 + 운영 주장 없음 → honest empty
 
 
 def test_derive_place_reason_all_signals_present_en() -> None:
@@ -630,17 +622,15 @@ def test_derive_place_reason_all_signals_present_en() -> None:
         "is_ongoing": True,
     }
     current_weather = {"outdoor_status": "bad"}
-    slot_time = "12:30"
 
     result = places_service._derive_place_reason(
         place=place,
         current_weather=current_weather,
-        slot_time=slot_time,
         language="en",
     )
 
     assert result == (
-        "Open now · Indoor-friendly · Active local spending · Ongoing event · Nearby · "
+        "Indoor-friendly · Active local spending · Ongoing event · Nearby · "
         "Korea Tourism Organization data"
     )
 
@@ -654,18 +644,14 @@ def test_derive_place_reason_linked_not_ongoing_en() -> None:
         "is_ongoing": False,
     }
     current_weather = {"outdoor_status": "good", "temp": "30"}
-    slot_time = "10:00"
 
     result = places_service._derive_place_reason(
         place=place,
         current_weather=current_weather,
-        slot_time=slot_time,
         language="en",
     )
 
-    assert (
-        result == "Open now · Hot weather · Linked event · Korea Culture Information Service data"
-    )
+    assert result == "Hot weather · Linked event · Korea Culture Information Service data"
 
 
 def test_derive_place_reason_unknown_language_falls_back_to_ko() -> None:
@@ -679,10 +665,33 @@ def test_derive_place_reason_unknown_language_falls_back_to_ko() -> None:
     result = places_service._derive_place_reason(
         place=place,
         current_weather={"outdoor_status": "good"},
-        slot_time="12:00",
         language="fr",
     )
-    assert result == "영업중 · 근접 · 한국관광공사 데이터"
+    assert result == "근접 · 한국관광공사 데이터"
+
+
+def test_derive_place_reason_unknown_event_dates_never_claim_ongoing() -> None:
+    # D4 truthfulness: is_ongoing is trusted structured event-date metadata only.
+    # Unknown (None) or expired (False) dates must yield the linked-event phrase,
+    # never "진행 중인 행사" — and never any operating claim either.
+    base_place = {
+        "category": "event",
+        "distance_m": 900,
+        "upstream_source": "canonical",
+        "_has_linked_event": True,
+    }
+    for is_ongoing in (None, False):
+        result = places_service._derive_place_reason(
+            place={**base_place, "is_ongoing": is_ongoing},
+            current_weather={},
+        )
+        assert result == "행사 연계"
+    # Only structured ongoing=True claims an ongoing event.
+    ongoing = places_service._derive_place_reason(
+        place={**base_place, "is_ongoing": True},
+        current_weather={},
+    )
+    assert ongoing == "진행 중인 행사"
 
 
 def test_format_freshness_now() -> None:
@@ -826,13 +835,12 @@ def test_format_freshness_malformed_or_wrong_type_is_honest_none(updated_at) -> 
 def test_list_places_db_path_binds_reason_and_honest_none_freshness(monkeypatch) -> None:
     # DB payload shape: db_repository.fetch_places does NOT return updated_at,
     # so freshness must degrade to honest None (never fabricated). reason is
-    # derived from real signals (category + open hours + proximity + source).
+    # derived from real signals (proximity + source); no operating claim —
+    # category estimated hours are not a per-venue authority.
     monkeypatch.setattr(places_service, "get_settings", lambda: _fake_settings())
-    # Freeze the wall-clock list_places reads so the operating-status check
-    # (slot_time vs attraction hours 09:00-18:00) is deterministic; otherwise the
-    # asserted "영업중" flickers with the CI run's UTC hour.
+    # Freeze the wall-clock so freshness math is deterministic.
     _freeze_service_now(monkeypatch, fixed=datetime(2026, 8, 13, 12, 0, 0, tzinfo=UTC))
-    # attraction is open during day hours; near + non-canonical upstream source.
+    # Near + non-canonical upstream source.
     places = [
         {
             "place_id": "p1",
@@ -856,8 +864,9 @@ def test_list_places_db_path_binds_reason_and_honest_none_freshness(monkeypatch)
     )
 
     place = result["places"][0]
-    # Reason derived from signals (운영중 + 근접 + per-source S1 phrase); weather good → no indoor line.
-    assert place["reason"] == "영업중 · 근접 · 한국관광공사 데이터"
+    # Reason derived from signals (근접 + per-source S1 phrase); no operating
+    # segment and no weather line (good weather, outdoor category).
+    assert place["reason"] == "근접 · 한국관광공사 데이터"
     # DB payload omits updated_at → honest None freshness (no fabrication).
     assert place["freshness"] is None
     # Score compatibility preserved.
@@ -892,9 +901,58 @@ def test_list_places_db_path_binds_en_reason_for_language_en(monkeypatch) -> Non
     )
 
     place = result["places"][0]
-    assert place["reason"] == "Open now · Nearby · Korea Tourism Organization data"
+    assert place["reason"] == "Nearby · Korea Tourism Organization data"
     # The fetch layer sees the normalized en language (name localization parity).
     assert captured[0]["language"] == "en"
+
+
+@pytest.mark.parametrize(
+    "fixed_utc",
+    [
+        # KST 자정(UTC 15:00) — iPhone 스크린샷 결함: 과거 UTC 슬롯 15:00이
+        # 식당 추정 시간(11:00-22:00) 안이라 "영업중"을 붙였던 시각.
+        datetime(2026, 8, 13, 15, 0, 0, tzinfo=UTC),
+        # KST 자정 전후 1분 경계(23:59 / 00:01 KST).
+        datetime(2026, 8, 13, 14, 59, 0, tzinfo=UTC),
+        datetime(2026, 8, 13, 15, 1, 0, tzinfo=UTC),
+        # UTC 오후 = KST 심야(UTC 12:00 = 21:00 KST, 추정 마감 직전).
+        datetime(2026, 8, 13, 12, 0, 0, tzinfo=UTC),
+        # KST 정오(UTC 03:00) — 추정 시간 한가운데(주간).
+        datetime(2026, 8, 13, 3, 0, 0, tzinfo=UTC),
+        # 추정 마감 시각 정확히(22:00 KST = 13:00 UTC).
+        datetime(2026, 8, 13, 13, 0, 0, tzinfo=UTC),
+        # KST 심야(02:00, UTC 17:00) — 자정 넘김(overnight) 영업 관점 시각.
+        datetime(2026, 8, 13, 17, 0, 0, tzinfo=UTC),
+    ],
+)
+@pytest.mark.parametrize("language", ["ko", "en"])
+def test_list_places_reason_makes_no_operating_claim_across_timezones(
+    fixed_utc: datetime, language: str, monkeypatch
+) -> None:
+    # Source-proven UTC/local defect regression: 어떤 UTC/KST 시각(자정, 날짜
+    # 경계, 주간, 정확한 마감 엣지)에서도 추정 category 시간이 운영 주장을
+    # 만들지 않는다. 슬롯-시각 비교 자체가 제거되었다(스크린샷: KST 자정에
+    # "영업중"/"Open now" 배지).
+    monkeypatch.setattr(places_service, "get_settings", lambda: _fake_settings())
+    _freeze_service_now(monkeypatch, fixed=fixed_utc)
+    _patch_db_fetch_places(
+        monkeypatch,
+        places=[{"place_id": "p1", "name": "식당", "category": "restaurant", "distance_m": 900}],
+    )
+
+    result = places_service.list_places(
+        lat=37.5665,
+        lng=126.978,
+        radius_m=1000,
+        category="restaurant",
+        language=language,
+    )
+
+    reason = result["places"][0]["reason"]
+    assert "영업중" not in reason
+    assert "Open now" not in reason
+    # >500m + canonical + no weather → honest empty at every instant.
+    assert reason == ""
 
 
 def test_list_places_db_path_freshness_from_updated_at_when_present(monkeypatch) -> None:
@@ -1210,7 +1268,7 @@ def test_linked_event_reason_phrase_en(has_linked_event, is_ongoing, expected) -
 
 
 def test_derive_place_reason_canonical_order_full() -> None:
-    # All six segments present → joined in canonical order (§3).
+    # All five segments present → joined in canonical order (§3).
     place = {
         "category": "culture_venue",
         "distance_m": 200,
@@ -1220,13 +1278,9 @@ def test_derive_place_reason_canonical_order_full() -> None:
         "is_ongoing": False,
     }
     current_weather = {"outdoor_status": "good", "temp": "16"}
-    result = places_service._derive_place_reason(
-        place=place, current_weather=current_weather, slot_time="11:00"
-    )
-    # [operating] · [weather] · [activity] · [event] · [proximity] · [source]
-    assert result == (
-        "영업중 · 선선한 날씨 · 로컬 소비 활발 · 행사 연계 · 근접 · 문화정보원 데이터"
-    )
+    result = places_service._derive_place_reason(place=place, current_weather=current_weather)
+    # [weather] · [activity] · [event] · [proximity] · [source]
+    assert result == ("선선한 날씨 · 로컬 소비 활발 · 행사 연계 · 근접 · 문화정보원 데이터")
 
 
 def test_derive_place_reason_all_null_is_honest_empty() -> None:
@@ -1241,7 +1295,6 @@ def test_derive_place_reason_all_null_is_honest_empty() -> None:
     result = places_service._derive_place_reason(
         place=place,
         current_weather={},
-        slot_time="23:00",  # closed (attraction 09-18)
     )
     assert result == ""
 
@@ -1264,11 +1317,9 @@ def test_derive_place_reason_never_leaks_score_number_or_components() -> None:
         "region_spend_amount": 9876543,
     }
     current_weather = {"outdoor_status": "bad"}
-    result = places_service._derive_place_reason(
-        place=place, current_weather=current_weather, slot_time="12:30"
-    )
+    result = places_service._derive_place_reason(place=place, current_weather=current_weather)
     assert result == (
-        "영업중 · 실내활동 적합 · 로컬 소비 활발 · 진행 중인 행사 · 근접 · 한국관광공사 데이터"
+        "실내활동 적합 · 로컬 소비 활발 · 진행 중인 행사 · 근접 · 한국관광공사 데이터"
     )
     # No digit survives (no score/transaction count leaked).
     assert not any(ch.isdigit() for ch in result), result
