@@ -63,7 +63,7 @@ import os
 from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from apps.api.app.core.config import get_settings
@@ -212,7 +212,79 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument("--connect-timeout", type=int, default=5)
+    parser.add_argument(
+        "--schedule",
+        action="store_true",
+        help=(
+            "P5B offline regional work-plan: classify canonical regions from a "
+            "caller-supplied checkpoint snapshot and emit bounded pending-approval "
+            "collection argument arrays. Zero settings/DB/provider I/O; never "
+            "executes acquisition. Incompatible with --preview/--apply."
+        ),
+    )
+    parser.add_argument(
+        "--regions",
+        default=None,
+        help=(
+            "Schedule mode only: comma-separated canonical manual region ids "
+            "(deterministic sorted subset). Omit to plan over all mapped catalog "
+            "regions. Unknown ids fail closed."
+        ),
+    )
+    parser.add_argument(
+        "--checkpoint-snapshot",
+        default=None,
+        help=(
+            "Schedule mode only: explicit local checkpoint snapshot JSON built "
+            "from this collector's committed apply payloads "
+            "(collector_checkpoint.build_region_checkpoint). Optional — without "
+            "it every region is honestly DUE/unknown."
+        ),
+    )
+    parser.add_argument(
+        "--refresh-interval-hours",
+        type=int,
+        default=168,
+        help="Schedule mode only: completed sweeps older than this restart (default 168h).",
+    )
+    parser.add_argument(
+        "--max-regions",
+        type=int,
+        default=3,
+        help="Schedule mode only: bounded batch size of scheduled regions (default 3).",
+    )
+    parser.add_argument(
+        "--per-region-requests",
+        type=int,
+        default=None,
+        help=(
+            "Schedule mode only: request cap emitted per scheduled region. "
+            "Default: --max-requests if given, else 2 x --limit (the collector "
+            "default), bounded [2, hard cap]."
+        ),
+    )
+    parser.add_argument(
+        "--total-request-ceiling",
+        type=int,
+        default=None,
+        help=(
+            "Schedule mode only: TOTAL planned request ceiling across the batch. "
+            "Default: --max-regions x per-region-requests. Emitted caps always "
+            "sum within it; regions that no longer fit are DEFERRED."
+        ),
+    )
     args = parser.parse_args(argv)
+
+    if args.schedule and (args.apply or args.preview):
+        _write(
+            args,
+            {
+                "ok": False,
+                "mode": "plan",
+                "error": "--schedule cannot combine with --apply or --preview.",
+            },
+        )
+        return 2
 
     if args.limit <= 0:
         _write(args, {"ok": False, "mode": _mode(args), "error": "--limit must be positive."})
@@ -220,6 +292,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.apply and args.preview:
         _write(args, {"ok": False, "mode": "plan", "error": "Use either --apply or --preview."})
         return 2
+
+    if not args.apply and not args.preview and not args.schedule:
+        _write(args, _plan_payload())
+        return 0
+    if args.schedule:
+        return _run_schedule(args)
 
     # P5A bounds: default ceiling preserves the existing small batch's upper
     # bound (limit places x 2 endpoints); explicit values are finitely bounded.
@@ -319,6 +397,141 @@ def _read_window(
 def _cursor_scope(args: argparse.Namespace) -> str:
     """Human-readable scope the cursor is valid inside (resume contract)."""
     return args.region if args.region is not None else "global"
+
+
+# --- P5B schedule mode: offline regional work-plan (zero I/O) ---
+
+
+def _now_utc() -> datetime:
+    """Clock seam — tests inject deterministic timezone-aware UTC times."""
+    return datetime.now(UTC)
+
+
+def _run_schedule(args: argparse.Namespace) -> int:
+    from pathlib import Path
+
+    from apps.api.app.services import collector_checkpoint as cc
+
+    # Finite bounded schedule arguments, validated before ANY I/O. The
+    # per-region cap defaults to the collector's own safe default (2 x limit,
+    # or --max-requests when given) and always honors reserve-two.
+    per_region = args.per_region_requests
+    if per_region is None:
+        per_region = (
+            args.max_requests
+            if args.max_requests is not None
+            else _ENDPOINTS_PER_PLACE * args.limit
+        )
+    if not 2 <= per_region <= MAX_REQUESTS_HARD_CAP:
+        _write(
+            args,
+            {
+                "ok": False,
+                "mode": "schedule",
+                "error": (
+                    f"--per-region-requests must be between 2 (reserve-two) and "
+                    f"{MAX_REQUESTS_HARD_CAP}."
+                ),
+            },
+        )
+        return 2
+    if args.max_regions < 1:
+        _write(args, {"ok": False, "mode": "schedule", "error": "--max-regions must be >= 1."})
+        return 2
+    total_ceiling = args.total_request_ceiling
+    if total_ceiling is None:
+        total_ceiling = per_region * args.max_regions
+    if not 2 <= total_ceiling <= MAX_REQUESTS_HARD_CAP * args.max_regions:
+        _write(
+            args,
+            {
+                "ok": False,
+                "mode": "schedule",
+                "error": "--total-request-ceiling is outside the bounded range.",
+            },
+        )
+        return 2
+    if total_ceiling < per_region:
+        # An total below one per-region cap can never honor reserve-two for a
+        # single region: fail closed instead of emitting a vacuous plan.
+        _write(
+            args,
+            {
+                "ok": False,
+                "mode": "schedule",
+                "error": "--total-request-ceiling must be >= --per-region-requests.",
+            },
+        )
+        return 2
+    if args.refresh_interval_hours < 1:
+        _write(
+            args,
+            {"ok": False, "mode": "schedule", "error": "--refresh-interval-hours must be >= 1."},
+        )
+        return 2
+
+    # Region scope: explicit subset (sorted/deduplicated) or the whole catalog.
+    if args.regions is not None:
+        requested = [item.strip() for item in args.regions.split(",") if item.strip()]
+        unknown = [r for r in requested if r not in cc.canonical_region_ids()]
+        if unknown:
+            # Fixed message only — the raw list is never echoed.
+            _write(
+                args,
+                {
+                    "ok": False,
+                    "mode": "schedule",
+                    "error": (
+                        "--regions contains unknown/non-canonical manual region "
+                        "ids; no plan was produced."
+                    ),
+                },
+            )
+            return 2
+        regions = tuple(sorted(set(requested)))
+    else:
+        regions = cc.canonical_region_ids()
+
+    # Caller-supplied explicit snapshot only; strict schema; fail closed.
+    entries: dict[str, dict] = {}
+    if args.checkpoint_snapshot is not None:
+        try:
+            entries = cc.load_checkpoint_snapshot(Path(args.checkpoint_snapshot))
+        except cc.CheckpointSnapshotError as exc:
+            _write(args, {"ok": False, "mode": "schedule", "error": str(exc)})
+            return 2
+
+    plan = cc.plan_regional_collection(
+        regions=regions,
+        entries_by_region=entries,
+        now=_now_utc(),
+        refresh_interval=timedelta(hours=args.refresh_interval_hours),
+        per_region_limit=args.limit,
+        per_region_requests=per_region,
+        total_request_ceiling=total_ceiling,
+        max_regions=args.max_regions,
+    )
+    _write(
+        args,
+        {
+            "ok": True,
+            "mode": "schedule",
+            "db_mutation": False,
+            **plan,
+            "refresh_interval_hours": args.refresh_interval_hours,
+            "checkpoint_snapshot_supplied": args.checkpoint_snapshot is not None,
+            "plan_note": (
+                "planned_arguments are PENDING-APPROVAL collection arguments for "
+                "this collector (region/after_place_id/limit/max-requests) — "
+                "plain data, never executed here, no confirmation or credentials "
+                "included. Scheduling/recency only; not source-data freshness or "
+                "coverage proof. Snapshot source: committed apply payloads "
+                "bridged via collector_checkpoint.build_region_checkpoint "
+                "(operational persistence of these entries is a later scoped gap)."
+            ),
+        },
+    )
+    return 0
 
 
 # --- preview: read-only gate + places, then in-memory acquire + classify ---
@@ -971,6 +1184,16 @@ def _plan_payload() -> dict[str, Any]:
                 "honest zero-result success"
             ),
             "coverage": "unknown_until_governed_run",
+            "schedule_mode": (
+                "--schedule produces the OFFLINE regional work-plan from an "
+                "explicit checkpoint snapshot (--checkpoint-snapshot) built via "
+                "collector_checkpoint.build_region_checkpoint; zero "
+                "settings/DB/provider I/O; planned_arguments are pending-approval "
+                "argv data, never executed; alias-colliding regions are "
+                "BLOCKED_SCOPE until the collector gains a province-aware scope "
+                "predicate; operational persistence of checkpoint entries is a "
+                "later scoped gap"
+            ),
         },
     }
 
