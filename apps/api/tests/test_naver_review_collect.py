@@ -260,7 +260,10 @@ def test_plan_describes_continuation_without_any_io(monkeypatch, capsys):
 # -- argument validation fails closed before settings/DB/acquisition ------------
 
 
-@pytest.mark.parametrize("cursor", ["", " ", "has space", "a" * 129, "line\nbreak"])
+@pytest.mark.parametrize(
+    "cursor",
+    ["", " ", "has space", "a" * 129, "line\nbreak", "\x00nul", "\x7fdel", "\x1bescape", "\ttab"],
+)
 def test_malformed_cursor_fails_closed_before_any_io(cursor, monkeypatch, capsys):
     calls = _wire(monkeypatch, places=[], script={})
     monkeypatch.delenv("DB_DSN", raising=False)
@@ -271,6 +274,16 @@ def test_malformed_cursor_fails_closed_before_any_io(cursor, monkeypatch, capsys
     payload = _out(capsys)
     assert payload["ok"] is False
     assert "malformed" in payload["error"]
+
+    # The raw (possibly control-bearing) input is never echoed anywhere.
+    def _values(node):
+        if isinstance(node, dict):
+            for v in node.values():
+                yield from _values(v)
+        elif isinstance(node, str):
+            yield node
+
+    assert cursor not in [v for v in _values(payload) if v]
     assert calls == {
         "open": [],
         "read": [],
@@ -624,3 +637,202 @@ def test_no_cursor_call_shape_unchanged(monkeypatch, capsys):
     payload = _out(capsys)
     assert payload["after_place_id"] is None
     assert payload["next_after_place_id"] == "p1"
+
+
+# -- P5A correction regressions ----------------------------------------------------
+
+
+def test_name_skip_never_leaps_over_earlier_unresolved_place(monkeypatch, capsys):
+    # p1 ok, p2 network failure (cursor freezes at p1), p3 one-character name:
+    # the skip settles p3 but the published cursor MUST remain p1.
+    places = [_place("p1"), _place("p2"), _place("p3", name_ko="X")]
+    script = {
+        "p1": _collection("p1"),
+        "p2": _collection("p2", blog="network_error"),
+    }
+    calls = _wire(monkeypatch, places=places, script=script)
+
+    rc = tool.main(["--preview", "--json", "--after-place-id", "p0"])
+
+    assert rc == 0
+    assert calls["acquire"] == ["p1", "p2"]
+    payload = _out(capsys)
+    assert payload["places_name_skipped"] == 1
+    assert payload["places_completed"] == 2  # p1 + deterministic skip (no double count)
+    assert payload["next_after_place_id"] == "p1"
+    assert payload["exhausted"] is False
+
+
+def test_name_skip_after_budget_deferral_keeps_cursor(monkeypatch, capsys):
+    # Budget defers p2 (freeze); a later name-skip still must not advance.
+    places = [_place("p1"), _place("p2"), _place("p3", name_ko="X")]
+    script = {"p1": _collection("p1")}
+    calls = _wire(monkeypatch, places=places, script=script)
+
+    rc = tool.main(["--preview", "--json", "--max-requests", "2"])
+
+    assert rc == 0
+    assert calls["acquire"] == ["p1"]
+    payload = _out(capsys)
+    assert payload["places_deferred"] == 1
+    assert payload["places_name_skipped"] == 1
+    assert payload["next_after_place_id"] == "p1"
+
+
+def test_exhausted_false_with_terminal_failure_preview(monkeypatch, capsys):
+    # selected(2) < limit(5), deferred 0 — but p2 failed terminally: the window
+    # is NOT exhausted (an unresolved acquisition failure exists).
+    places = [_place("p1"), _place("p2")]
+    script = {
+        "p1": _collection("p1"),
+        "p2": _collection("p2", blog="network_error"),
+    }
+    _wire(monkeypatch, places=places, script=script)
+
+    rc = tool.main(["--preview", "--json", "--limit", "5"])
+
+    assert rc == 0
+    payload = _out(capsys)
+    assert payload["places"] == 2
+    assert payload["places_deferred"] == 0
+    assert payload["exhausted"] is False
+    assert payload["window_full"] is False
+
+
+def test_exhausted_true_only_when_every_selected_place_settled_clean(monkeypatch, capsys):
+    places = [_place("p1"), _place("p2", name_ko="X"), _place("p3")]
+    script = {"p1": _collection("p1"), "p3": _collection("p3")}
+    _wire(monkeypatch, places=places, script=script)
+
+    rc = tool.main(["--preview", "--json", "--limit", "5"])
+
+    assert rc == 0
+    payload = _out(capsys)
+    assert payload["places"] == 3
+    assert payload["places_completed"] == 3  # includes the name skip, no double count
+    assert payload["exhausted"] is True
+
+
+def test_apply_json_reports_honest_exhaustion_after_commit(monkeypatch, capsys):
+    places = [_place("p1"), _place("p2")]
+    script = {
+        "p1": _collection("p1"),
+        "p2": _collection("p2", cafe="parse_error"),
+    }
+    _wire(monkeypatch, places=places, script=script)
+    monkeypatch.setenv(tool.ALLOW_ENV, "1")
+
+    rc = tool.main(["--apply", "--json", "--confirm", tool.CONFIRM_TEXT, "--limit", "5"])
+
+    assert rc == 0
+    payload = _out(capsys)
+    assert payload["ok"] is True
+    assert payload["status"] == "degraded"
+    # Committed apply still reports the terminal failure honestly.
+    assert payload["exhausted"] is False
+    assert payload["next_after_place_id"] == "p1"
+
+
+def _wire_real_acquisition(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    places: list[ReviewMentionPlace],
+) -> list[str]:
+    """Wire DB/gate/read fakes but leave the REAL collect_mentions_for_place
+    (and its _fetch_items / credential boundary) installed."""
+    monkeypatch.setattr(tool, "_open_connection", lambda *a, **kw: _FakeConn())
+    monkeypatch.setattr(tool, "load_active_review_source", lambda *a, **kw: _registration())
+    monkeypatch.setattr(
+        tool, "_read_places_on_cursor", lambda cur, limit, names=None, cursor=None: list(places)
+    )
+    monkeypatch.setattr(tool, "record_job_run", lambda **kw: None)
+    monkeypatch.setenv("DB_DSN", "host=localhost dbname=test")
+    fetches: list[str] = []
+    monkeypatch.setattr(svc, "_fetch_items", lambda *a, **kw: fetches.append(a[0]) or [])
+    return fetches
+
+
+def test_absent_credentials_make_zero_wire_requests(monkeypatch, capsys):
+    # Real acquisition boundary, credentials absent: no HTTP request is
+    # launched (fetch sentinel must never fire), yet outcomes exist — so
+    # requests_used must be 0, not the number of outcome objects.
+    monkeypatch.delenv("NAVER_CLIENT_ID", raising=False)
+    monkeypatch.delenv("NAVER_CLIENT_SECRET", raising=False)
+    fetches = _wire_real_acquisition(monkeypatch, places=[_place("p1")])
+
+    rc = tool.main(["--preview", "--json", "--after-place-id", "p0"])
+
+    assert rc == 0
+    assert fetches == []
+    payload = _out(capsys)
+    assert payload["requests_used"] == 0
+    assert payload["requests_reserved_per_place"] == 2
+    assert payload["failure_tally"]["naver_blog"]["auth_missing"] == 1
+    assert payload["status"] == "failed"
+    # Fatal auth stop: second endpoint never launched -> single outcome, and
+    # the cursor did not advance.
+    assert payload["next_after_place_id"] == "p0"
+    assert payload["stop_reason"] == "fatal_provider_failure"
+
+
+@pytest.mark.parametrize("status_code", [401, 403, 429])
+def test_fatal_first_endpoint_never_launches_second_and_counts_one_wire_attempt(
+    status_code, monkeypatch, capsys
+):
+    # Post-request fatal failures (401/403/429) count as observed wire attempts
+    # and stop the place at the FIRST endpoint through the real boundary.
+    import io as _io
+    import urllib.error
+
+    monkeypatch.setenv("NAVER_CLIENT_ID", "test-cid")
+    monkeypatch.setenv("NAVER_CLIENT_SECRET", "test-csec")
+    fetches = _wire_real_acquisition(monkeypatch, places=[_place("p1"), _place("p2")])
+
+    def fatal_fetch(endpoint, *a, **kw):
+        fetches.append(endpoint)
+        raise urllib.error.HTTPError("u", status_code, "denied", {}, _io.BytesIO(b""))
+
+    monkeypatch.setattr(svc, "_fetch_items", fatal_fetch)
+
+    rc = tool.main(["--preview", "--json", "--after-place-id", "p0"])
+
+    assert rc == 0
+    # Exactly ONE HTTP attempt: the denied blog endpoint; cafe + p2 untouched.
+    assert fetches == ["blog"]
+    payload = _out(capsys)
+    assert payload["requests_used"] == 1
+    assert "naver_cafe" not in payload["failure_tally"]
+    assert payload["places_attempted"] == 1
+    assert payload["places_deferred"] == 1
+    assert payload["stop_reason"] == "fatal_provider_failure"
+    assert payload["next_after_place_id"] == "p0"
+    assert payload["exhausted"] is False
+
+
+def test_wire_attempts_count_post_request_network_and_parse_failures(monkeypatch, capsys):
+    # HTTP 500 (network_error after a request) and JSON parse garbage both
+    # occur after a real request and must count toward requests_used.
+    import io as _io
+    import json as _json
+    import urllib.error
+
+    monkeypatch.setenv("NAVER_CLIENT_ID", "test-cid")
+    monkeypatch.setenv("NAVER_CLIENT_SECRET", "test-csec")
+    fetches = _wire_real_acquisition(monkeypatch, places=[_place("p1")])
+
+    def flaky_fetch(endpoint, *a, **kw):
+        fetches.append(endpoint)
+        if endpoint == "blog":
+            raise urllib.error.HTTPError("u", 500, "boom", {}, _io.BytesIO(b""))
+        return _json.loads("not-json")
+
+    monkeypatch.setattr(svc, "_fetch_items", flaky_fetch)
+
+    rc = tool.main(["--preview", "--json"])
+
+    assert rc == 0
+    assert fetches == ["blog", "cafearticle"]
+    payload = _out(capsys)
+    assert payload["requests_used"] == 2
+    assert payload["failure_tally"]["naver_blog"]["network_error"] == 1
+    assert payload["failure_tally"]["naver_cafe"]["parse_error"] == 1

@@ -38,12 +38,16 @@ reuse the same ``--region`` scope (the cursor is only meaningful inside it);
 the payload echoes ``cursor_scope`` for that contract.
 
 **Per-run request ceiling (P5A):** ``--max-requests`` bounds actual provider
-endpoint requests (blog + cafearticle = up to 2 per place, counted from the
-real per-endpoint outcomes, including failed attempts). Default = 2 × limit
-(preserves the existing small batch's safe upper bound); hard validation cap
-500. A place is only started when the whole per-place endpoint pair fits the
-remaining budget; ``auth_missing``/``quota_exceeded`` stop the run instead of
-marching through the remaining places. No retries, no fallback provider.
+HTTP attempts (blog + cafearticle = up to 2 per place). ``requests_used``
+counts OBSERVED wire attempts (``AcquisitionOutcome.wire_attempted``): HTTP
+401/403/429/network/parse failures happen after a request and count, while a
+missing-credential stop launches no request and counts zero. The budget
+RESERVES both endpoint slots before starting a place (never split mid-place);
+the reservation is labeled separately from observed attempts. Acquisition of a
+place stops at the FIRST fatal ``auth_missing``/``quota_exceeded`` endpoint —
+the second endpoint is not launched and no outcome is fabricated for it — and
+the run stops instead of marching through the remaining places. No retries,
+no fallback provider.
 
 Raw provider text (title/body/url) is NEVER persisted, logged, or written to
 community.posts. Only content_sha256 + opaque external_key + provenance reach
@@ -56,7 +60,6 @@ import argparse
 import contextlib
 import json
 import os
-import re
 from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -115,9 +118,20 @@ _ENDPOINTS_PER_PLACE = 2
 MAX_REQUESTS_HARD_CAP = 500
 
 # P5A: bounded cursor contract. place_id slugs are short printable tokens; a
-# cursor with whitespace/control characters or unreasonable length is malformed
-# and fails closed before settings, DB, or acquisition.
-_CURSOR_PATTERN = re.compile(r"[^\s]{1,128}")
+# cursor containing whitespace, control/non-printable characters (NUL/DEL/ESC)
+# or unreasonable length is malformed and fails closed before settings, DB, or
+# acquisition. Printable-but-not-ASCII is allowed (matches the existing id
+# contract); isprintable() rejects the C0/C1 control planes and DEL.
+_CURSOR_MAX_LENGTH = 128
+
+
+def _is_valid_cursor(value: str) -> bool:
+    return (
+        bool(value)
+        and len(value) <= _CURSOR_MAX_LENGTH
+        and value.isprintable()
+        and not any(ch.isspace() for ch in value)
+    )
 
 
 @dataclass(frozen=True)
@@ -227,8 +241,10 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     # P5A cursor: malformed values fail closed BEFORE settings, DB, gate, or
-    # acquisition — a garbage cursor must never reach a query parameter.
-    if args.after_place_id is not None and _CURSOR_PATTERN.fullmatch(args.after_place_id) is None:
+    # acquisition — a garbage cursor must never reach a query parameter. The
+    # rejection output is a fixed message: the raw (possibly control-bearing)
+    # input is never echoed.
+    if args.after_place_id is not None and not _is_valid_cursor(args.after_place_id):
         _write(
             args,
             {
@@ -372,11 +388,12 @@ def _run_preview(
             "places_name_skipped": batch.places_name_skipped,
             "requests_used": batch.requests_used,
             "request_cap": batch.request_cap,
+            "requests_reserved_per_place": _ENDPOINTS_PER_PLACE,
             "stop_reason": batch.stop_reason,
             # Exhausted = the whole scoped window was selected and every
             # selected place settled (no budget/fatal stop). window_full only
             # says the limit-sized window MAY have more after it.
-            "exhausted": batch.places_count < args.limit and batch.places_deferred == 0,
+            "exhausted": _window_exhausted(batch, args.limit),
             "window_full": window_full,
         },
     )
@@ -537,8 +554,9 @@ def _run_apply(
             "places_name_skipped": batch.places_name_skipped,
             "requests_used": batch.requests_used,
             "request_cap": batch.request_cap,
+            "requests_reserved_per_place": _ENDPOINTS_PER_PLACE,
             "stop_reason": batch.stop_reason,
-            "exhausted": batch.places_count < args.limit and batch.places_deferred == 0,
+            "exhausted": _window_exhausted(batch, args.limit),
             "window_full": batch.places_count >= args.limit,
         },
     )
@@ -643,12 +661,20 @@ def _acquire_and_classify(
     for index, place in enumerate(places):
         if not place.name_ko or len(place.name_ko) < 2:
             # Deterministic skip (idempotent, zero requests): settles the place
-            # without acquisition so it cannot block cursor advancement.
+            # without acquisition. It may never leap over an earlier unresolved
+            # place — once the cursor is frozen (earlier partial failure or
+            # budget deferral) a skip settles but does not advance it.
             name_skipped += 1
             completed += 1
-            advanced = place.place_id
+            if not cursor_frozen:
+                advanced = place.place_id
             continue
 
+        # Reserve-two semantics: a place is only started when the whole
+        # endpoint pair fits the remaining budget (never split mid-place).
+        # This is a RESERVATION decision; requests_used below counts only
+        # OBSERVED wire attempts (outcome.wire_attempted), which can be fewer
+        # (e.g. absent credentials launch no request at all).
         if request_cap - requests_used < _ENDPOINTS_PER_PLACE:
             deferred += 1
             stop_reason = "request_budget_exhausted"
@@ -663,7 +689,7 @@ def _acquire_and_classify(
             display=display,
         )
         attempted += 1
-        requests_used += len(result.outcomes)
+        requests_used += sum(1 for o in result.outcomes if o.wire_attempted)
         place_clean = True
         fatal = False
         for outcome in result.outcomes:
@@ -814,6 +840,33 @@ def _build_weekly_aggregates(
 # --- status / output / guards ---
 
 
+def _has_degrading_failures(failure_tally: Mapping[str, Mapping[str, int]]) -> bool:
+    """True when any acquisition outcome was a real (unresolved) failure."""
+    return any(
+        category in _DEGRADING_CATEGORIES
+        for tallies in failure_tally.values()
+        for category in tallies
+    )
+
+
+def _window_exhausted(batch: _AcquireResult, limit: int) -> bool:
+    """Honest exhaustion: the WHOLE scoped window settled cleanly.
+
+    Requires (a) fewer places selected than the limit (a limit-sized window
+    may have more after it — that is ``window_full``, not exhaustion),
+    (b) every selected place settled (places_completed already includes
+    deterministic name-skips — no completed+name_skipped double counting),
+    and (c) no unresolved acquisition failure anywhere in the run. An empty
+    successfully-selected window is honestly exhausted; a window with any
+    degrading endpoint outcome never is.
+    """
+    return (
+        batch.places_count < limit
+        and batch.places_completed == batch.places_count
+        and not _has_degrading_failures(batch.failure_tally)
+    )
+
+
 def _compute_status(failure_tally: Mapping[str, Mapping[str, int]], quarantined_count: int) -> str:
     """succeeded / degraded / failed based on acquisition + quarantine health."""
     total_calls = 0
@@ -898,10 +951,13 @@ def _plan_payload() -> dict[str, Any]:
                 "place, and apply failures publish no advanced cursor"
             ),
             "request_cap": (
-                "--max-requests bounds actual provider endpoint requests "
-                "(blog + cafearticle = 2 per place, failed attempts included); "
-                "default 2 x --limit preserves the existing safe upper bound; "
-                f"hard validation cap {MAX_REQUESTS_HARD_CAP}"
+                "--max-requests bounds actual provider HTTP attempts "
+                "(blog + cafearticle = 2 per place); requests_used counts "
+                "observed wire attempts only (a fatal first endpoint never "
+                "launches the second, absent credentials launch none), while "
+                "the budget RESERVES both endpoint slots before starting a "
+                "place (requests_reserved_per_place); default 2 x --limit "
+                f"preserves the existing safe upper bound; hard cap {MAX_REQUESTS_HARD_CAP}"
             ),
             "stop_behavior": (
                 "auth_missing/quota_exceeded stop the run after the current "
