@@ -936,8 +936,9 @@ def update_checkpoint_state(state_path: Path, entry: Mapping) -> dict[str, Any]:
         merged: dict[str, dict] = {
             region: _canonical_entry(stored) for region, stored in prior.items()
         }
-        incoming = _apply_sweep_lineage(merged.get(incoming_region), incoming)
-
+        # Guard precedence (controller-approved): a recorded auth/quota stop
+        # refuses any NON-blocked incoming update BEFORE lineage evaluation, so
+        # page-cap/zero-progress raises can never defeat the sticky stop.
         if incoming["blocked"] != "auth_quota" and any(
             stored.get("blocked") == "auth_quota" for stored in merged.values()
         ):
@@ -945,6 +946,7 @@ def update_checkpoint_state(state_path: Path, entry: Mapping) -> dict[str, Any]:
                 "an auth/quota stop is recorded in this state; it is sticky "
                 "until an explicit operator reset — no update applied"
             )
+        incoming = _apply_sweep_lineage(merged.get(incoming_region), incoming)
 
         existing = merged.get(incoming_region)
         if existing is not None:

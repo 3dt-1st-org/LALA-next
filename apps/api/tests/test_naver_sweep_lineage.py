@@ -548,3 +548,404 @@ def test_new_shape_counterexamples_fail_closed(monkeypatch, tmp_path):
     }
     legacy["input_after_place_id"] = None
     assert _load_with(legacy) is None
+
+
+# == P5D2 durable tracked regressions (corrected premises) ==========================
+
+
+def _chain_page(
+    inp, nxt, obs, *, exhausted=False, places=2, attempted=2, completed=2, deferred=0, **kw
+):
+    return _raw_page(
+        input_cursor=inp,
+        next_cursor=nxt,
+        exhausted=exhausted,
+        observed=obs,
+        places=places,
+        attempted=attempted,
+        completed=completed,
+        deferred=deferred,
+        **kw,
+    )
+
+
+def test_r1_nonempty_terminal_chain_with_replay_after_each_publication(
+    monkeypatch, capsys, tmp_path
+):
+    """Clean null-start -> advancing intermediate -> NONEMPTY terminal; replay
+    immediately after EACH publication is rc0 with byte-identical state."""
+    _no_io(monkeypatch)
+    state = tmp_path / "state.json"
+    pages = [
+        _chain_page(None, "place-002", "2026-09-06T11:00:00+00:00"),
+        _chain_page("place-002", "place-004", "2026-09-06T11:30:00+00:00"),
+        # Nonempty terminal: 3 places, all settled, exhausted, cursor advanced.
+        _chain_page(
+            "place-004",
+            "place-006",
+            "2026-09-06T12:00:00+00:00",
+            exhausted=True,
+            places=3,
+            attempted=3,
+            completed=3,
+        ),
+    ]
+    for i, page in enumerate(pages):
+        assert _export_state(monkeypatch, capsys, tmp_path, state, page, f"r1-{i}.json") == 0
+        capsys.readouterr()
+        snapshot_after = state.read_bytes()
+        # Same-time identical replay of the JUST-published page.
+        assert _export_state(monkeypatch, capsys, tmp_path, state, page, f"r1-{i}-replay.json") == 0
+        capsys.readouterr()
+        assert state.read_bytes() == snapshot_after  # byte-identical proof/pages/times
+    entry = json.loads(state.read_text(encoding="utf-8"))["entries"][0]
+    assert entry["sweep_pages"] == 3
+    assert entry["whole_region_complete"] is True
+    assert entry["sweep_clean"] is True
+    assert entry["sweep_chain_started_at"] == "2026-09-06T11:00:00+00:00"
+    assert entry["empty_scope"] is None  # nonempty terminal is not an empty window
+
+
+def test_r2_zero_place_terminal_tail_is_window(monkeypatch, capsys, tmp_path):
+    """Separate FRESH chain whose final page is a genuine zero-place tail with
+    input == the actual committed head cursor: empty_scope=window (not region),
+    whole completion, identical replay."""
+    _no_io(monkeypatch)
+    state = tmp_path / "state2.json"
+    head = _chain_page(None, "place-102", "2026-09-06T11:00:00+00:00")
+    tail = _chain_page(
+        "place-102",
+        "place-102",
+        "2026-09-06T11:20:00+00:00",
+        exhausted=True,
+        places=0,
+        attempted=0,
+        completed=0,
+    )
+    for i, page in enumerate([head, tail]):
+        assert _export_state(monkeypatch, capsys, tmp_path, state, page, f"r2-{i}.json") == 0
+        capsys.readouterr()
+    snapshot = state.read_bytes()
+    entry = json.loads(snapshot.decode("utf-8"))["entries"][0]
+    assert entry["next_after_place_id"] == "place-102" == entry["input_after_place_id"]
+    assert entry["empty_scope"] == "window"
+    assert entry["whole_region_complete"] is True
+    assert entry["sweep_pages"] == 2
+    assert _export_state(monkeypatch, capsys, tmp_path, state, tail, "r2-replay.json") == 0
+    capsys.readouterr()
+    assert state.read_bytes() == snapshot
+
+
+def test_r3_same_time_conflict_and_older_rejection(monkeypatch, capsys, tmp_path):
+    _no_io(monkeypatch)
+    state = tmp_path / "state3.json"
+    stored_time = "2026-09-06T11:00:00+00:00"
+    page = _chain_page(None, "place-202", stored_time)
+    assert _export_state(monkeypatch, capsys, tmp_path, state, page, "r3-0.json") == 0
+    capsys.readouterr()
+    prior = state.read_bytes()
+
+    # EXACT stored observation time, one normalized page fact changed.
+    conflicting = _chain_page("place-202", "place-204", stored_time)
+    conflicting["requests_used"] = 6  # one normalized page fact changed
+    rc = _export_state(monkeypatch, capsys, tmp_path, state, conflicting, "r3-c.json")
+    assert rc == 2
+    assert "conflicting evidence" in json.loads(capsys.readouterr().out)["error"]
+    assert state.read_bytes() == prior
+
+    # Separate OLDER-time rejection.
+    older = _chain_page(None, "place-202", "2026-09-06T10:00:00+00:00")
+    rc = _export_state(monkeypatch, capsys, tmp_path, state, older, "r3-o.json")
+    assert rc == 2
+    assert "older" in json.loads(capsys.readouterr().out)["error"]
+    assert state.read_bytes() == prior
+
+
+def test_r4_incomplete_exhausted_tail_counters_not_hole(monkeypatch, capsys, tmp_path):
+    """Tail with places3/attempted2/completed2/deferred1 whose input EQUALS the
+    prefix's committed next cursor: rc0, advances without whole credit — the
+    no-credit is attributable to counters, not a cursor hole."""
+    from datetime import UTC, datetime
+
+    _no_io(monkeypatch)
+    frozen = datetime(2026, 9, 6, 13, 0, tzinfo=UTC)
+    monkeypatch.setattr(tool, "_now_utc", lambda: frozen)
+    state = tmp_path / "state4.json"
+    prefix = _chain_page(None, "place-302", "2026-09-06T11:00:00+00:00")
+    assert _export_state(monkeypatch, capsys, tmp_path, state, prefix, "r4-0.json") == 0
+    capsys.readouterr()
+    # Incomplete exhausted tail: prefix.next == tail.input (place-302).
+    tail = _chain_page(
+        "place-302",
+        "place-302",
+        "2026-09-06T11:30:00+00:00",
+        exhausted=True,
+        places=3,
+        attempted=2,
+        completed=2,
+        deferred=1,
+    )
+    rc = _export_state(monkeypatch, capsys, tmp_path, state, tail, "r4-1.json")
+    assert rc == 0  # exact expected outcome, not rc0-or-rc2
+    capsys.readouterr()
+    entry = json.loads(state.read_text(encoding="utf-8"))["entries"][0]
+    assert entry["sweep_pages"] == 2
+    assert entry["whole_region_complete"] is False
+    assert entry["sweep_clean"] is False
+    payload = _schedule(monkeypatch, capsys, state)
+    assert payload["region_states"]["busan-haeundae"] != "RECENTLY_COLLECTED"
+    assert payload["region_states"]["busan-haeundae"] != "EMPTY_OBSERVED"
+
+
+def test_r5_mixed_fatal_stop_priority_and_cap(monkeypatch, capsys, tmp_path):
+    from apps.api.app.services import collector_checkpoint as cc
+
+    _no_io(monkeypatch)
+    monkeypatch.setattr(cc, "SWEEP_MAX_PAGES", 2)
+    state = tmp_path / "state5.json"
+    # Other region preserved across every stop interaction.
+    other = _raw_page(
+        region="seoul-seongdong",
+        input_cursor=None,
+        next_cursor="s-2",
+        exhausted=False,
+        observed="2026-09-06T11:00:00+00:00",
+    )
+    assert _export_state(monkeypatch, capsys, tmp_path, state, other, "r5-o.json") == 0
+    capsys.readouterr()
+    # Chain to the cap: two clean pages.
+    assert (
+        _export_state(
+            monkeypatch,
+            capsys,
+            tmp_path,
+            state,
+            _chain_page(None, "place-402", "2026-09-06T11:00:00+00:00"),
+            "r5-a.json",
+        )
+        == 0
+    )
+    capsys.readouterr()
+    assert (
+        _export_state(
+            monkeypatch,
+            capsys,
+            tmp_path,
+            state,
+            _chain_page("place-402", "place-404", "2026-09-06T11:30:00+00:00"),
+            "r5-b.json",
+        )
+        == 0
+    )
+    capsys.readouterr()
+    at_cap = state.read_bytes()
+
+    # Mixed success+fatal status=degraded with ZERO progress at the cap head:
+    # sticky stop recorded (rc0), not a page-cap rejection.
+    mixed = _raw_page(
+        input_cursor="place-404",
+        next_cursor="place-404",
+        exhausted=False,
+        status="degraded",
+        places=2,
+        attempted=2,
+        completed=1,
+        tally={"naver_blog": {"ok": 1}, "naver_cafe": {"quota_exceeded": 1}},
+        observed="2026-09-06T12:00:00+00:00",
+    )
+    rc = _export_state(monkeypatch, capsys, tmp_path, state, mixed, "r5-m.json")
+    assert rc == 0
+    capsys.readouterr()
+    entries = {e["region"]: e for e in json.loads(state.read_text(encoding="utf-8"))["entries"]}
+    assert entries["busan-haeundae"]["blocked"] == "auth_quota"
+    assert entries["busan-haeundae"]["whole_region_complete"] is False
+    assert entries["seoul-seongdong"]["next_after_place_id"] == "s-2"  # preserved
+    stopped = state.read_bytes()
+
+    # Later clean reset attempt unchanged: sticky rejection.
+    clean_reset = _chain_page("place-404", "place-406", "2026-09-06T13:00:00+00:00")
+    rc = _export_state(monkeypatch, capsys, tmp_path, state, clean_reset, "r5-r.json")
+    assert rc == 2
+    assert "sticky" in json.loads(capsys.readouterr().out)["error"]
+    assert state.read_bytes() == stopped
+
+    # Older VALID fatal stays sticky too (fresh state, newer success first).
+    state2 = tmp_path / "state5b.json"
+    assert (
+        _export_state(
+            monkeypatch,
+            capsys,
+            tmp_path,
+            state2,
+            _chain_page(None, "place-502", "2026-09-06T12:00:00+00:00"),
+            "r5-n.json",
+        )
+        == 0
+    )
+    capsys.readouterr()
+    older_fatal = _raw_page(
+        input_cursor=None,
+        next_cursor=None,
+        exhausted=False,
+        status="failed",
+        ok=False,
+        places=1,
+        attempted=1,
+        completed=0,
+        deferred=0,
+        stop="fatal_provider_failure",
+        tally={"naver_blog": {"auth_missing": 1}},
+        observed="2026-09-06T10:00:00+00:00",
+    )
+    rc = _export_state(monkeypatch, capsys, tmp_path, state2, older_fatal, "r5-of.json")
+    assert rc == 0
+    capsys.readouterr()
+    doc = json.loads(state2.read_text(encoding="utf-8"))
+    assert doc["scope_contract"] == "tour_api_province_qualified_v1"  # sanity
+    assert at_cap  # referenced: cap snapshot existed before the stop
+    payload = _schedule(monkeypatch, capsys, state)
+    assert payload["auth_quota_blocked"] is True
+    assert payload["planned_argv"] == []
+
+
+def test_r6_unqualified_tail_then_valid_update(monkeypatch, capsys, tmp_path):
+    _no_io(monkeypatch)
+    state = tmp_path / "state6.json"
+    prefix = _chain_page(None, "place-602", "2026-09-06T11:00:00+00:00")
+    assert _export_state(monkeypatch, capsys, tmp_path, state, prefix, "r6-0.json") == 0
+    capsys.readouterr()
+    # Unqualified (marker-less legacy) tail at the head cursor, NEWER time.
+    unqualified = _chain_page("place-602", "place-604", "2026-09-06T11:30:00+00:00")
+    del unqualified["scope_contract"]
+    assert _export_state(monkeypatch, capsys, tmp_path, state, unqualified, "r6-u.json") == 0
+    capsys.readouterr()
+    entry = json.loads(state.read_text(encoding="utf-8"))["entries"][0]
+    assert "sweep_pages" not in entry  # chain dropped, no poison
+    # Later ordinary NEWER VALID update: exact rc0, strict reload succeeds.
+    valid = _chain_page(None, "place-612", "2026-09-06T12:00:00+00:00")
+    rc = _export_state(monkeypatch, capsys, tmp_path, state, valid, "r6-v.json")
+    assert rc == 0
+    capsys.readouterr()
+    entry = json.loads(state.read_text(encoding="utf-8"))["entries"][0]
+    assert entry["sweep_pages"] == 1 and entry["whole_region_complete"] is False
+
+
+def test_r7_newer_failed_retry_then_clean_success(monkeypatch, capsys, tmp_path):
+    _no_io(monkeypatch)
+    state = tmp_path / "state7.json"
+    assert (
+        _export_state(
+            monkeypatch,
+            capsys,
+            tmp_path,
+            state,
+            _chain_page(None, "place-702", "2026-09-06T11:00:00+00:00"),
+            "r7-0.json",
+        )
+        == 0
+    )
+    capsys.readouterr()
+    # NEWER failed nonfatal unchanged-cursor retry at the pending head.
+    failed_retry = _raw_page(
+        input_cursor="place-702",
+        next_cursor="place-702",
+        exhausted=False,
+        status="failed",
+        ok=False,
+        places=2,
+        attempted=2,
+        completed=0,
+        deferred=0,
+        stop="fatal_provider_failure",
+        tally={"naver_blog": {"network_error": 2}},
+        observed="2026-09-06T11:30:00+00:00",
+    )
+    rc = _export_state(monkeypatch, capsys, tmp_path, state, failed_retry, "r7-f.json")
+    assert rc == 0
+    capsys.readouterr()
+    entry = json.loads(state.read_text(encoding="utf-8"))["entries"][0]
+    assert entry["sweep_pages"] == 1  # proven clean prefix retained
+    assert entry["sweep_clean"] is True
+    # NEWER clean success at the SAME pending cursor continues the prefix.
+    resumed = _chain_page("place-702", "place-704", "2026-09-06T12:00:00+00:00")
+    rc = _export_state(monkeypatch, capsys, tmp_path, state, resumed, "r7-c.json")
+    assert rc == 0
+    capsys.readouterr()
+    entry = json.loads(state.read_text(encoding="utf-8"))["entries"][0]
+    assert entry["sweep_pages"] == 2
+    assert entry["sweep_clean"] is True
+    assert entry["next_after_place_id"] == "place-704"
+
+
+def test_r8_quarantined_tally_taints_like_degraded(monkeypatch, capsys, tmp_path):
+    """Raw ACCEPTED status=succeeded page with a real nonclean (network_error)
+    tally taints the chain exactly like degraded status."""
+    from datetime import UTC, datetime
+
+    _no_io(monkeypatch)
+    frozen = datetime(2026, 9, 6, 13, 0, tzinfo=UTC)
+    monkeypatch.setattr(tool, "_now_utc", lambda: frozen)
+    state = tmp_path / "state8.json"
+    assert (
+        _export_state(
+            monkeypatch,
+            capsys,
+            tmp_path,
+            state,
+            _chain_page(None, "place-802", "2026-09-06T11:00:00+00:00"),
+            "r8-0.json",
+        )
+        == 0
+    )
+    capsys.readouterr()
+    # status=succeeded but tally carries a real degrading category: the bridge
+    # accepts it (committed) and the chain must taint.
+    quarantined = _raw_page(
+        input_cursor="place-802",
+        next_cursor="place-804",
+        exhausted=False,
+        status="succeeded",
+        places=2,
+        attempted=2,
+        completed=1,
+        tally={"naver_blog": {"ok": 1}, "naver_cafe": {"network_error": 1}},
+        observed="2026-09-06T11:30:00+00:00",
+    )
+    rc = _export_state(monkeypatch, capsys, tmp_path, state, quarantined, "r8-q.json")
+    assert rc == 0
+    capsys.readouterr()
+    entry = json.loads(state.read_text(encoding="utf-8"))["entries"][0]
+    assert entry["sweep_clean"] is False
+    assert entry["next_after_place_id"] == "place-804"
+    # Later clean terminal from that exact cursor: still not fresh.
+    terminal = _chain_page(
+        "place-804",
+        "place-804",
+        "2026-09-06T12:00:00+00:00",
+        exhausted=True,
+        places=0,
+        attempted=0,
+        completed=0,
+    )
+    assert _export_state(monkeypatch, capsys, tmp_path, state, terminal, "r8-t.json") == 0
+    capsys.readouterr()
+    entry = json.loads(state.read_text(encoding="utf-8"))["entries"][0]
+    assert entry["whole_region_complete"] is False  # taint kills completion
+    assert entry["empty_scope"] == "window"  # honest: the page DID see 0 places
+    payload = _schedule(monkeypatch, capsys, state)
+    assert payload["region_states"]["busan-haeundae"] != "RECENTLY_COLLECTED"
+    # A genuinely new clean null-start requalifies.
+    assert (
+        _export_state(
+            monkeypatch,
+            capsys,
+            tmp_path,
+            state,
+            _chain_page(None, "place-902", "2026-09-06T12:30:00+00:00"),
+            "r8-n.json",
+        )
+        == 0
+    )
+    capsys.readouterr()
+    entry = json.loads(state.read_text(encoding="utf-8"))["entries"][0]
+    assert entry["sweep_pages"] == 1 and entry["sweep_clean"] is True
