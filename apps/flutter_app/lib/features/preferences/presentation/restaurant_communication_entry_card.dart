@@ -51,71 +51,81 @@ class _RestaurantCommunicationEntryCardState
           ),
           hint: _summary(widget.language, preferences),
           onTap: () => _showCommunicationSheet(preferences),
-          child: InkWell(
-            key: const ValueKey('restaurant-detail-show-staff'),
-            borderRadius: BorderRadius.circular(LalaVisualTokens.controlRadius),
-            onTap: () => _showCommunicationSheet(preferences),
-            child: Ink(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF7E8),
-                borderRadius: BorderRadius.circular(
-                  LalaVisualTokens.controlRadius,
-                ),
-                border: Border.all(color: const Color(0xFFF4C96A)),
+          child: Material(
+            // Local paint owner: Ink decorations paint on the nearest
+            // ancestor Material. Without this local one the yellow card
+            // paints on the page Scaffold's Material, which can keep the
+            // stale position when an async reflow moves this entry (r3).
+            // A transparent local Material moves the paint with the card.
+            color: Colors.transparent,
+            child: InkWell(
+              key: const ValueKey('restaurant-detail-show-staff'),
+              borderRadius: BorderRadius.circular(
+                LalaVisualTokens.controlRadius,
               ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFE9B8),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(
-                      Icons.record_voice_over_outlined,
-                      color: Color(0xFF9A5A00),
-                    ),
+              onTap: () => _showCommunicationSheet(preferences),
+              child: Ink(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF7E8),
+                  borderRadius: BorderRadius.circular(
+                    LalaVisualTokens.controlRadius,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _copy(
-                            widget.language,
-                            ko: '식당 직원에게 보여주기',
-                            en: 'Show restaurant staff',
-                            ja: 'お店のスタッフに見せる',
-                            zhHans: '给餐厅工作人员看',
-                            zhHant: '給餐廳工作人員看',
-                          ),
-                          style: const TextStyle(
-                            color: LalaVisualColors.ink,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _summary(widget.language, preferences),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: LalaVisualColors.muted,
-                            fontSize: 12,
-                            height: 1.3,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
+                  border: Border.all(color: const Color(0xFFF4C96A)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFE9B8),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.record_voice_over_outlined,
+                        color: Color(0xFF9A5A00),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  const Icon(Icons.chevron_right, color: Color(0xFF9A5A00)),
-                ],
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _copy(
+                              widget.language,
+                              ko: '식당 직원에게 보여주기',
+                              en: 'Show restaurant staff',
+                              ja: 'お店のスタッフに見せる',
+                              zhHans: '给餐厅工作人员看',
+                              zhHant: '給餐廳工作人員看',
+                            ),
+                            style: const TextStyle(
+                              color: LalaVisualColors.ink,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _summary(widget.language, preferences),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: LalaVisualColors.muted,
+                              fontSize: 12,
+                              height: 1.3,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Icon(Icons.chevron_right, color: Color(0xFF9A5A00)),
+                  ],
+                ),
               ),
             ),
           ),
