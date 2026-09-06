@@ -56,6 +56,12 @@ const Set<String> kLalaOpenMapNavigationHosts = <String>{
 /// Korean (and unknown values, which normalize to Korean) stay on NAVER;
 /// every supported visitor locale uses the open-vector path. This is the only
 /// place the locale-to-provider decision is made.
+LalaMapProviderKind selectLalaMapProvider(String? language) {
+  return normalizeLalaLanguage(language) == 'ko'
+      ? LalaMapProviderKind.naver
+      : LalaMapProviderKind.openVector;
+}
+
 /// Bottom inset reserving visible map space for the OpenVector credits row.
 ///
 /// The MapLibre attribution sits at the map container's bottom edge — bottom-
@@ -69,12 +75,6 @@ double mapCreditsBottomInset(LalaMapProviderKind provider, double dockHeight) =>
     provider == LalaMapProviderKind.openVector && dockHeight > 0
     ? dockHeight
     : 0.0;
-
-LalaMapProviderKind selectLalaMapProvider(String? language) {
-  return normalizeLalaLanguage(language) == 'ko'
-      ? LalaMapProviderKind.naver
-      : LalaMapProviderKind.openVector;
-}
 
 /// Whether [uri] is exactly the bundled open-vector embed document as
 /// produced by the installed `webview_flutter` platform implementations of
