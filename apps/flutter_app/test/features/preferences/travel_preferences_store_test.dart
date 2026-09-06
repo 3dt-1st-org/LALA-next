@@ -626,10 +626,14 @@ void main() {
 
       preferences.ackFalseNextKey(_platformDocKey);
       const chosen = TravelPreferences(interests: {TravelInterest.localFood});
-      await store.save(chosen);
+      await expectLater(
+        store.save(chosen),
+        throwsA(isA<TravelPreferencesPersistenceException>()),
+      );
 
-      // The plugin acknowledged failure (false, no throw): no value applied,
-      // no upload, and the timestamp half of the pair never moves ahead.
+      // The plugin acknowledged failure (false, no throw): the public save
+      // surfaced it, no value applied, no upload, and the timestamp half of
+      // the pair never moves ahead.
       expect(store.value, const TravelPreferences());
       expect(store.hasLocalDocument, isTrue);
       expect(store.syncStatus, TravelPreferencesSyncStatus.synced);
@@ -667,11 +671,15 @@ void main() {
 
       preferences.ackFalseNextKey(_platformTimestampKey);
       const chosen = TravelPreferences(interests: {TravelInterest.localFood});
-      await store.save(chosen);
+      await expectLater(
+        store.save(chosen),
+        throwsA(isA<TravelPreferencesPersistenceException>()),
+      );
 
-      // Nothing is claimed or uploaded. The plugin offers no transactional
-      // pair, so the document half may sit on disk as a degraded partial —
-      // but the store never publishes success for an unacknowledged pair.
+      // Nothing is claimed or uploaded and the failure surfaced. The plugin
+      // offers no transactional pair, so the document half may sit on disk as
+      // a degraded partial — but the store never publishes success for an
+      // unacknowledged pair.
       expect(store.value, const TravelPreferences());
       expect(store.deviceUpdatedAt, '2026-09-02T00:00:00Z');
       expect(remote.putCalls, isEmpty);
@@ -699,11 +707,14 @@ void main() {
       const saved = TravelPreferences(interests: {TravelInterest.localFood});
       await store.save(saved);
 
-      preferences.ackFalseNextKey(_platformDocKey);
-      await store.clear();
+      preferences.ackFalseNextRemove(_platformDocKey);
+      await expectLater(
+        store.clear(),
+        throwsA(isA<TravelPreferencesPersistenceException>()),
+      );
 
-      // Deletion was not acknowledged: the device copy and its persisted
-      // document stay intact instead of claiming a cleared state.
+      // Deletion was not acknowledged: the public clear surfaced it while the
+      // device copy and its persisted document stay intact.
       expect(store.value, saved);
       expect(store.hasLocalDocument, isTrue);
       expect(store.syncStatus, TravelPreferencesSyncStatus.localOnly);
@@ -715,6 +726,122 @@ void main() {
       expect(store.hasLocalDocument, isFalse);
       final disk = await preferences.diskSnapshot();
       expect(disk, isEmpty);
+    },
+  );
+
+  test(
+    'a failed clear after a parked save commits the newest document and surfaces the failure',
+    () async {
+      final preferences = _GatedSharedPreferencesStore();
+      SharedPreferencesStorePlatform.instance = preferences;
+      final store = TravelPreferencesStore();
+      const old = TravelPreferences(interests: {TravelInterest.history});
+      const fresh = TravelPreferences(interests: {TravelInterest.localFood});
+      await store.ensureLoaded();
+      await store.save(old);
+
+      // Park a pre-clear save mid-flight at the platform seam.
+      preferences.blockKey(_platformDocKey);
+      final saveFuture = store.save(fresh);
+      await pumpEventQueue();
+      final clearFuture = store.clear();
+      preferences.ackFalseNextRemove(_platformDocKey);
+
+      preferences.releaseKey(_platformDocKey);
+      await saveFuture;
+      await expectLater(
+        clearFuture,
+        throwsA(isA<TravelPreferencesPersistenceException>()),
+      );
+
+      // The parked save had already passed its fence checks, so the newest
+      // document committed; the clear's remove false-acked and the failure
+      // surfaced instead of silently leaving a false cleared state.
+      final disk = await preferences.diskSnapshot();
+      expect(disk[_platformDocKey], jsonEncode(fresh.toJson()));
+      expect(disk.containsKey(_platformTimestampKey), isTrue);
+      expect(preferences.operations.last, 'false-remove:$_platformDocKey');
+      expect(store.value, fresh);
+      expect(store.hasLocalDocument, isTrue);
+      expect(store.syncStatus, TravelPreferencesSyncStatus.localOnly);
+    },
+  );
+
+  test(
+    'a failed adoption surfaces an error instead of claiming synced from nothing',
+    () async {
+      final preferences = _GatedSharedPreferencesStore();
+      SharedPreferencesStorePlatform.instance = preferences;
+      final store = TravelPreferencesStore();
+      final remote = _MemoryRemote(
+        account: const TravelPreferences(),
+        revision: 3,
+      );
+
+      preferences.ackFalseNextKey(_platformDocKey);
+      await store.connectAccount(remote);
+
+      // The adoption write false-acked: nothing persisted and no local
+      // document exists, so an honest error is reported — never a synced
+      // pairing derived from matching pristine defaults.
+      expect(store.syncStatus, TravelPreferencesSyncStatus.error);
+      expect(store.hasLocalDocument, isFalse);
+      expect(
+        (await preferences.diskSnapshot()).containsKey(_platformDocKey),
+        isFalse,
+      );
+      expect(store.value, const TravelPreferences());
+
+      // The storage queue is intact: a retry adopts and reaches synced.
+      await store.retryAccountSync();
+      expect(store.syncStatus, TravelPreferencesSyncStatus.synced);
+      expect(store.hasLocalDocument, isTrue);
+      final disk = await preferences.diskSnapshot();
+      expect(
+        disk[_platformDocKey],
+        jsonEncode(const TravelPreferences().toJson()),
+      );
+    },
+  );
+
+  test(
+    'a failed clear during an in-flight upload repairs the stranded checking status',
+    () async {
+      final preferences = _GatedSharedPreferencesStore();
+      SharedPreferencesStorePlatform.instance = preferences;
+      final store = TravelPreferencesStore();
+      final remote = _PutGatedRemote(const TravelPreferences(), 2);
+      await store.connectAccount(remote);
+      expect(store.syncStatus, TravelPreferencesSyncStatus.synced);
+
+      remote.gatePut();
+      final upload = store.saveDevicePreferencesToAccount();
+      await remote.putStarted;
+      expect(store.syncStatus, TravelPreferencesSyncStatus.checking);
+
+      preferences.ackFalseNextRemove(_platformDocKey);
+      final clearFuture = store.clear();
+      await expectLater(
+        clearFuture,
+        throwsA(isA<TravelPreferencesPersistenceException>()),
+      );
+
+      remote.releasePut();
+      await upload;
+
+      // The fenced upload resolved inertly; the failed clear repaired the
+      // checking status it stranded instead of leaving it stuck, so retry
+      // paths are eligible again and the retained data stays claimed.
+      expect(store.syncStatus, isNot(TravelPreferencesSyncStatus.checking));
+      expect(store.syncStatus, TravelPreferencesSyncStatus.synced);
+      await store.retryAccountSync();
+      expect(store.syncStatus, TravelPreferencesSyncStatus.synced);
+      expect(store.hasLocalDocument, isTrue);
+      expect(
+        (await preferences.diskSnapshot()).containsKey(_platformDocKey),
+        isTrue,
+      );
+      expect(remote.putCalls.length, 1);
     },
   );
 }
@@ -771,7 +898,8 @@ class _GatedSharedPreferencesStore extends InMemorySharedPreferencesStore {
   final Map<String, Completer<void>> _gates = <String, Completer<void>>{};
   final Map<String, Completer<void>> _started = <String, Completer<void>>{};
   String? _failKey;
-  String? _ackFalseKey;
+  String? _ackFalseSetKey;
+  String? _ackFalseRemoveKey;
 
   void blockKey(String key) => _gates.putIfAbsent(key, Completer<void>.new);
 
@@ -784,9 +912,13 @@ class _GatedSharedPreferencesStore extends InMemorySharedPreferencesStore {
 
   void failNextKey(String key) => _failKey = key;
 
-  /// One-shot plugin-style failure acknowledgement: the mutation reports
+  /// One-shot plugin-style failure acknowledgement on a write: reports
   /// `false` without throwing and without touching the persisted data.
-  void ackFalseNextKey(String key) => _ackFalseKey = key;
+  void ackFalseNextKey(String key) => _ackFalseSetKey = key;
+
+  /// One-shot plugin-style failure acknowledgement on a removal: reports
+  /// `false` without throwing and without removing the persisted data.
+  void ackFalseNextRemove(String key) => _ackFalseRemoveKey = key;
 
   /// Resolves once the first mutation of [key] has reached the seam (and is
   /// parked there if a gate is installed).
@@ -811,8 +943,8 @@ class _GatedSharedPreferencesStore extends InMemorySharedPreferencesStore {
       _failKey = null;
       throw StateError('storage failed for $key');
     }
-    if (_ackFalseKey == key) {
-      _ackFalseKey = null;
+    if (_ackFalseSetKey == key) {
+      _ackFalseSetKey = null;
       operations.add('false-set:$key');
       return false;
     }
@@ -828,8 +960,8 @@ class _GatedSharedPreferencesStore extends InMemorySharedPreferencesStore {
     if (gate != null) {
       await gate.future;
     }
-    if (_ackFalseKey == key) {
-      _ackFalseKey = null;
+    if (_ackFalseRemoveKey == key) {
+      _ackFalseRemoveKey = null;
       operations.add('false-remove:$key');
       return false;
     }
@@ -840,6 +972,62 @@ class _GatedSharedPreferencesStore extends InMemorySharedPreferencesStore {
 
   /// Reads the persisted (prefixed) key/value pairs straight from the store.
   Future<Map<String, Object>> diskSnapshot() => getAll();
+}
+
+/// Remote with an optionally gated PUT; GET answers immediately.
+class _PutGatedRemote implements TravelPreferencesRemote {
+  _PutGatedRemote(this._account, this._revision);
+
+  TravelPreferences _account;
+  int _revision;
+  final List<TravelPreferences> putCalls = <TravelPreferences>[];
+  Completer<void>? _putGate;
+  Completer<void>? _putStarted;
+
+  void gatePut() {
+    _putGate = Completer<void>();
+    _putStarted = Completer<void>();
+  }
+
+  Future<void> get putStarted => _putStarted!.future;
+
+  void releasePut() {
+    final gate = _putGate;
+    if (gate != null && !gate.isCompleted) {
+      gate.complete();
+    }
+  }
+
+  @override
+  Future<TravelPreferencesRemoteDocument?> get() async =>
+      TravelPreferencesRemoteDocument(
+        preferences: _account,
+        revision: _revision,
+        updatedAt: '2026-09-02T00:00:00Z',
+      );
+
+  @override
+  Future<TravelPreferencesRemoteDocument> put({
+    required TravelPreferences preferences,
+    required int expectedRevision,
+  }) async {
+    putCalls.add(preferences);
+    final started = _putStarted;
+    if (started != null && !started.isCompleted) {
+      started.complete();
+    }
+    final gate = _putGate;
+    if (gate != null) {
+      await gate.future;
+    }
+    _account = preferences;
+    _revision += 1;
+    return TravelPreferencesRemoteDocument(
+      preferences: preferences,
+      revision: _revision,
+      updatedAt: '2026-09-02T00:01:00Z',
+    );
+  }
 }
 
 /// Preferences factory that can park individual acquisition calls, mirroring
