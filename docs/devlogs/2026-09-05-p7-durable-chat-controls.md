@@ -196,6 +196,37 @@ NOTIFY-route and REST-route guarded delivery, repository-level revoked-replay
 denial (no INSERT/NOTIFY, key not burned, predicate/scoping asserted), and
 the updated authorized-replay script.
 
+### Account-lifecycle correction (2026-09-06, verifier-confirmed F5)
+
+F3/F4 were independently confirmed fixed at `28e19c40` (9 probes, 2481 full
+API, all 3 CI on the actual merge commit). F5 remained: the room predicate
+allowed public rooms regardless of actor validity and private
+membership/ownership without an identity check, so a deleting (status=
+'deleting') private-room actor or a hard-deleted actor's admitted public-room
+socket kept delivery authority. Deletion is two-stage — `mark_user_deleting`
+sets 'deleting', `finalize_user_deletion` hard-deletes `identity.users` and
+inserts the tombstone (chat FKs then cascade) — so both stages must lose
+authenticated chat authority while guest public REST reads stay untouched.
+
+Fix: a new `_ACTIVE_ACTOR_SQL` (`EXISTS ... identity.users ... status =
+'active'`) ANDs the existing room predicate in every authenticated seam —
+`authenticated_room_access` (new repository/service contract used by ws
+ticket issuance, ticket-claim re-check and the delivery verifier), the
+guarded message INSERT (send cannot be published by a deleting/deleted
+actor, in the same statement/transaction), and the idempotent replay access
+gate. Guest public REST list/history keep the viewer-optional `room_access`
+contract unchanged. Denials map to the same indistinguishable 404 /
+content-free 1008; the store-unavailable path still fails closed; active
+authorized replay/conflict/non-burning semantics, single-use tickets, caps
+and fanout dedup are preserved.
+
+Regressions added/extended: `authenticated_room_access` SQL contract
+(active-account EXISTS ANDed before the room predicate, exact params) and
+denial; unavailability mapping; guarded-INSERT and replay-gate predicates now
+assert `u.status = 'active'` with the extended param tuples; ticket-claim
+re-check asserted authenticated; delivery verifier test renamed to the
+authenticated contract with aggregation/propagation.
+
 ## Runtime client (criterion 5)
 
 - `ChatWsClient` connects through a URI provider: every (re)connect fetches a
@@ -257,8 +288,8 @@ cross-session.
 
 - API: focused community suites (chat 74 — including the deterministic fanout
   lifecycle regressions, run five consecutive times green — guards 30,
-  idempotency 9, canonical 16, community 37) and the full suite **2,481
-  passed** (2026-09-06 authorization-lifecycle correction run); `ruff check`/`format` clean; OpenAPI
+  idempotency 9, canonical 16, community 37) and the full suite **2,484
+  passed** (2026-09-06 account-lifecycle correction run); `ruff check`/`format` clean; OpenAPI
   compat tests green (new paths are additive).
 - Flutter app: `flutter analyze` clean; community suites 65 passed; full suite
   **1,189 passed**.

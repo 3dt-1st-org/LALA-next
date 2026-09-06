@@ -51,6 +51,28 @@ def _access_params(viewer_issuer: str | None, viewer_subject: str | None) -> tup
     return (viewer, viewer, viewer_subject or None, viewer, viewer_subject or None)
 
 
+# Authenticated chat authority (ws admission/delivery/send/replay): the actor
+# must currently exist as an ACTIVE identity row. Deletion is two-stage —
+# ``mark_user_deleting`` sets status='deleting' (rows retained) and
+# ``finalize_user_deletion`` hard-deletes identity.users (tombstone inserted,
+# chat FKs cascade) — so an admitted socket can outlive its account. This
+# predicate denies both stages for every authenticated seam while guest public
+# REST reads (no actor) keep the room-only predicate.
+_ACTIVE_ACTOR_SQL = """
+    EXISTS (
+        SELECT 1
+        FROM identity.users u
+        WHERE u.issuer = %s
+          AND u.subject = %s
+          AND u.status = 'active'
+    )
+"""
+
+
+def _authenticated_access_params(issuer: str, subject: str) -> tuple:
+    return (issuer, subject, *_access_params(issuer, subject))
+
+
 class CommunityChatRepository:
     """psycopg2-backed community chat data access.
 
@@ -127,6 +149,32 @@ class CommunityChatRepository:
             WHERE r.id = %s AND {_ROOM_ACCESS_SQL}
         """
         params = (str(room_id), *_access_params(viewer_issuer, viewer_subject))
+        with self._cursor() as cur:
+            cur.execute(sql, params)
+            return cur.fetchone()
+
+    def authenticated_room_access(
+        self,
+        *,
+        room_id: UUID,
+        issuer: str,
+        subject: str,
+    ) -> dict[str, Any] | None:
+        """Room row iff the actor is a currently-active account with access.
+
+        Same room predicate as ``room_access`` plus the active-identity
+        requirement, so deleting (status='deleting'), finalized (row gone) or
+        unknown actors are denied even for public rooms. Used by every
+        authenticated chat seam: ws ticket issuance/claim, message send,
+        idempotent replay, and delivery-time revalidation.
+        """
+
+        sql = f"""
+            SELECT r.id, r.name, r.visibility, r.created_at
+            FROM community.chat_rooms r
+            WHERE r.id = %s AND {_ACTIVE_ACTOR_SQL} AND {_ROOM_ACCESS_SQL}
+        """
+        params = (str(room_id), *_authenticated_access_params(issuer, subject))
         with self._cursor() as cur:
             cur.execute(sql, params)
             return cur.fetchone()
@@ -284,7 +332,7 @@ class CommunityChatRepository:
                 (room_id, author_issuer, author_subject, body)
             SELECT %s, %s, %s, %s
             FROM community.chat_rooms r
-            WHERE r.id = %s AND {_ROOM_ACCESS_SQL}
+            WHERE r.id = %s AND {_ACTIVE_ACTOR_SQL} AND {_ROOM_ACCESS_SQL}
             RETURNING
                 id,
                 room_id,
@@ -297,7 +345,16 @@ class CommunityChatRepository:
         with self._cursor() as cur:
             cur.execute(
                 insert_sql,
-                (str(room_id), issuer, subject, body, str(room_id), *access),
+                (
+                    str(room_id),
+                    issuer,
+                    subject,
+                    body,
+                    str(room_id),
+                    issuer,
+                    subject,
+                    *access,
+                ),
             )
             row = cur.fetchone()
             if row is None:
@@ -350,7 +407,7 @@ class CommunityChatRepository:
         replay_access_sql = f"""
             SELECT r.id
             FROM community.chat_rooms r
-            WHERE r.id = %s AND {_ROOM_ACCESS_SQL}
+            WHERE r.id = %s AND {_ACTIVE_ACTOR_SQL} AND {_ROOM_ACCESS_SQL}
         """
         purge_sql = """
             DELETE FROM community.idempotency_keys
@@ -372,7 +429,7 @@ class CommunityChatRepository:
                 (room_id, author_issuer, author_subject, body)
             SELECT %s, %s, %s, %s
             FROM community.chat_rooms r
-            WHERE r.id = %s AND {_ROOM_ACCESS_SQL}
+            WHERE r.id = %s AND {_ACTIVE_ACTOR_SQL} AND {_ROOM_ACCESS_SQL}
             RETURNING
                 id,
                 room_id,
@@ -417,14 +474,23 @@ class CommunityChatRepository:
                 # (same predicate, same actor scoping, same transaction).
                 cur.execute(
                     replay_access_sql,
-                    (str(room_id), *access),
+                    (str(room_id), *_authenticated_access_params(issuer, subject)),
                 )
                 if cur.fetchone() is None:
                     return {"outcome": "denied", "message": None}
                 return {"outcome": "replayed", "message": dict(response)}
             cur.execute(
                 insert_sql,
-                (str(room_id), issuer, subject, body, str(room_id), *access),
+                (
+                    str(room_id),
+                    issuer,
+                    subject,
+                    body,
+                    str(room_id),
+                    issuer,
+                    subject,
+                    *access,
+                ),
             )
             row = cur.fetchone()
             if row is None:
@@ -527,10 +593,12 @@ class CommunityChatRepository:
             access_sql = f"""
                 SELECT r.id, r.name, r.visibility, r.created_at
                 FROM community.chat_rooms r
-                WHERE r.id = %s AND {_ROOM_ACCESS_SQL}
+                WHERE r.id = %s AND {_ACTIVE_ACTOR_SQL} AND {_ROOM_ACCESS_SQL}
             """
-            access = _access_params(row["issuer"], row["subject"])
-            cur.execute(access_sql, (str(room_id), *access))
+            cur.execute(
+                access_sql,
+                (str(room_id), *_authenticated_access_params(row["issuer"], row["subject"])),
+            )
             if cur.fetchone() is None:
                 return None
             return {"issuer": row["issuer"], "subject": row["subject"]}
@@ -662,6 +730,30 @@ class CommunityChatService:
         except CommunityChatRepositoryUnavailable as exc:
             raise _database_unavailable() from exc
 
+    def authenticated_room_access(
+        self,
+        *,
+        room_id: UUID,
+        issuer: str,
+        subject: str,
+    ) -> dict[str, Any] | None:
+        """Active-account + room access for authenticated chat authority.
+
+        Deletion-aware companion to ``room_access``: denies actors whose
+        identity row is 'deleting' or gone (and unknown actors) even for
+        public rooms, while guest public REST reads keep using the
+        viewer-optional ``room_access`` contract.
+        """
+
+        try:
+            return self._repository.authenticated_room_access(
+                room_id=room_id,
+                issuer=issuer,
+                subject=subject,
+            )
+        except CommunityChatRepositoryUnavailable as exc:
+            raise _database_unavailable() from exc
+
     def add_room_member(
         self,
         *,
@@ -783,8 +875,8 @@ class CommunityChatService:
         """Issue a single-use ticket after verifying room access for the actor."""
 
         try:
-            room = self._repository.room_access(
-                room_id=room_id, viewer_issuer=issuer, viewer_subject=subject
+            room = self._repository.authenticated_room_access(
+                room_id=room_id, issuer=issuer, subject=subject
             )
             if room is None:
                 raise _not_found("COMMUNITY_CHAT_ROOM_NOT_FOUND", "Chat room was not found.")

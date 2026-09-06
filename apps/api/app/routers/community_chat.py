@@ -276,18 +276,21 @@ async def _verify_room_access_for_actors(
 ) -> set[str]:
     """Current room access for each connected actor (delivery-time gate).
 
-    Uses the same ``room_access`` service contract as reads/writes — no
-    parallel authorization policy. Each check is a bounded single query run
-    off the event loop via ``asyncio.to_thread`` (work is bounded by the
-    per-room connection cap). Any store failure propagates so the manager
-    fails closed while keeping sockets for the retryable REST path.
+    Uses ``authenticated_room_access`` — the same room predicate as
+    reads/writes plus the active-account requirement — so a deleting or
+    hard-deleted actor's admitted socket loses delivery authority even in
+    public rooms. No parallel authorization policy. Each check is a bounded
+    single query run off the event loop via ``asyncio.to_thread`` (work is
+    bounded by the per-room connection cap). Any store failure propagates so
+    the manager fails closed while keeping sockets for the retryable REST
+    path.
     """
 
     service = get_community_chat_service()
     results = await asyncio.gather(
         *(
             asyncio.to_thread(
-                service.room_access,
+                service.authenticated_room_access,
                 room_id=room_id,
                 viewer_issuer=issuer,
                 viewer_subject=subject,

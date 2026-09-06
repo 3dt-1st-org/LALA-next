@@ -232,6 +232,53 @@ def test_room_access_returns_none_for_inaccessible_or_missing() -> None:
     assert "r.visibility = 'public'" in executed[0][0]
 
 
+def test_authenticated_room_access_requires_active_account_and_room_access() -> None:
+    repository, executed = _repo([_room_row("private")])
+
+    row = repository.authenticated_room_access(room_id=ROOM_ID, issuer=ISSUER, subject=SUBJECT)
+
+    assert row == _room_row("private")
+    sql, params = executed[0]
+    # Active-account requirement ANDs the room predicate: public rooms no
+    # longer bypass actor validity, and 'deleting' rows are denied.
+    assert "FROM identity.users u" in sql
+    assert "u.status = 'active'" in sql
+    assert "r.visibility = 'public'" in sql
+    assert "community.chat_room_members" in sql
+    assert params == (
+        str(ROOM_ID),
+        ISSUER,
+        SUBJECT,
+        ISSUER,
+        ISSUER,
+        SUBJECT,
+        ISSUER,
+        SUBJECT,
+    )
+
+
+def test_authenticated_room_access_denies_when_no_qualifying_row() -> None:
+    repository, _executed = _repo([None])
+
+    assert (
+        repository.authenticated_room_access(
+            room_id=ROOM_ID, issuer="https://deleting", subject="deleting"
+        )
+        is None
+    )
+
+
+def test_service_authenticated_room_access_maps_unavailability() -> None:
+    service = CommunityChatService(_UnavailableRepository())
+
+    with pytest.raises(ServiceError) as exc_info:
+        service.authenticated_room_access(room_id=ROOM_ID, issuer=ISSUER, subject=SUBJECT)
+
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.code == "COMMUNITY_CHAT_DB_UNAVAILABLE"
+    assert exc_info.value.retryable is True
+
+
 def test_list_messages_emits_count_then_paginated_query() -> None:
     repository, executed = _repo([{"count": 1}, _message_row()])
 
@@ -257,12 +304,19 @@ def test_create_message_is_access_guarded_and_emits_fanout_notify() -> None:
     assert "FROM community.chat_rooms r" in insert_sql
     assert "r.visibility = 'public'" in insert_sql
     assert "community.chat_room_members" in insert_sql
+    # Sending is authenticated authority: an active identity row is required
+    # in the same guarded statement, so a deleting/deleted actor cannot
+    # publish even in a public room.
+    assert "FROM identity.users u" in insert_sql
+    assert "u.status = 'active'" in insert_sql
     assert insert_params == (
         str(ROOM_ID),
         ISSUER,
         SUBJECT,
         "hello",
         str(ROOM_ID),
+        ISSUER,
+        SUBJECT,
         ISSUER,
         ISSUER,
         SUBJECT,
@@ -338,7 +392,7 @@ def test_create_message_idempotent_replays_committed_response() -> None:
         [
             None,  # claim loses (concurrent winner committed first)
             {"request_hash": request_hash, "response_json": stored},
-            {"id": ROOM_ID},  # replay access revalidation (still a member)
+            {"id": ROOM_ID},  # replay access revalidation (still an active member)
         ]
     )
 
@@ -355,6 +409,10 @@ def test_create_message_idempotent_replays_committed_response() -> None:
     # No message insert, no notify: the replay must not create anything.
     assert not any("INSERT INTO community.chat_messages" in sql for sql, _ in executed)
     assert not any("pg_notify" in sql for sql, _ in executed)
+    # Replay authority is account-aware: active identity row required.
+    replay_access_sql = executed[3][0]
+    assert "u.status = 'active'" in replay_access_sql
+    assert "FROM identity.users u" in replay_access_sql
 
 
 def test_create_message_idempotent_replay_denied_after_revocation() -> None:
@@ -392,12 +450,16 @@ def test_create_message_idempotent_replay_denied_after_revocation() -> None:
     deletes = [sql for sql, _ in executed if "DELETE FROM community.idempotency_keys" in sql]
     assert deletes == [deletes[0]]  # exactly the purge statement, once
     assert "expires_at < now()" in deletes[0]
-    # Access revalidation used the same predicate and actor scoping.
+    # Access revalidation used the authenticated predicate: active account
+    # required in the same statement, same actor scoping.
     access_sql, access_params = executed[3]
     assert "community.chat_room_members" in access_sql
     assert "r.visibility = 'public'" in access_sql
+    assert "u.status = 'active'" in access_sql
     assert access_params == (
         str(ROOM_ID),
+        ISSUER,
+        SUBJECT,
         ISSUER,
         ISSUER,
         SUBJECT,
@@ -489,7 +551,12 @@ def test_claim_ws_ticket_single_use_update_and_access_recheck() -> None:
     assert "used_at IS NULL" in claim_sql
     assert "expires_at > now()" in claim_sql
     assert claim_params[0] != "raw-ticket"  # only the digest is bound
-    assert "community.chat_room_members" in executed[1][0]  # access re-check
+    # Access re-check at claim time is authenticated authority: an active
+    # identity row is required, so a deleting/deleted ticket holder cannot
+    # complete admission even for a public room.
+    assert "community.chat_room_members" in executed[1][0]
+    assert "u.status = 'active'" in executed[1][0]
+    assert "FROM identity.users u" in executed[1][0]
 
 
 def test_claim_ws_ticket_rejects_used_expired_or_malformed() -> None:
@@ -537,6 +604,9 @@ class _UnavailableRepository:
         raise CommunityChatRepositoryUnavailable()
 
     def room_access(self, **_: Any) -> dict[str, Any] | None:
+        raise CommunityChatRepositoryUnavailable()
+
+    def authenticated_room_access(self, **_: Any) -> dict[str, Any] | None:
         raise CommunityChatRepositoryUnavailable()
 
     def add_room_member(self, **_: Any) -> dict[str, Any]:
@@ -676,13 +746,13 @@ def test_service_list_messages_returns_messages_for_accessible_room() -> None:
     }
 
 
-def test_service_issue_ws_ticket_checks_access_before_minting() -> None:
+def test_service_issue_ws_ticket_checks_active_account_access_before_minting() -> None:
     class TicketRepository(_UnavailableRepository):
         def __init__(self, room: dict[str, Any] | None) -> None:
             self.room = room
             self.minted = False
 
-        def room_access(self, **_: Any) -> dict[str, Any] | None:
+        def authenticated_room_access(self, **_: Any) -> dict[str, Any] | None:
             return self.room
 
         def issue_ws_ticket(self, **kwargs: Any) -> dict[str, Any]:
@@ -930,7 +1000,7 @@ def test_verify_room_access_for_actors_aggregates_and_propagates_failure(
             self.rows = rows
             self.checked: list[tuple[str, str]] = []
 
-        def room_access(self, **kwargs: Any) -> dict[str, Any] | None:
+        def authenticated_room_access(self, **kwargs: Any) -> dict[str, Any] | None:
             key = (kwargs["viewer_issuer"], kwargs["viewer_subject"])
             self.checked.append(key)
             return self.rows.get(key)
@@ -953,7 +1023,7 @@ def test_verify_room_access_for_actors_aggregates_and_propagates_failure(
     assert service.checked == [(ISSUER, SUBJECT), ("https://revoked", "revoked")]
 
     class FailingService:
-        def room_access(self, **_: Any) -> dict[str, Any] | None:
+        def authenticated_room_access(self, **_: Any) -> dict[str, Any] | None:
             raise ServiceError(
                 status_code=503,
                 code="COMMUNITY_CHAT_DB_UNAVAILABLE",
