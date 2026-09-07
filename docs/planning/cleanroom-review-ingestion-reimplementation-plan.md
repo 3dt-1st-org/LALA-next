@@ -747,9 +747,13 @@ inputs yields the same rows (no duplicates, no lost higher-tier enrichments).
   `apps/api/app/services/review_ingest_governance.py`, which runs the
   source-gate (`load_active_review_source`) → run create/resume → receipt →
   quarantine → finalize inside one transaction
-  (`persist_review_ingest_run` / `govern_review_ingest_on_cursor`); source
+  (`persist_review_ingest_run`, as PR #60 ships it); source
   registration (`register_review_source`) is a separate admin operation in its
-  own transaction, not part of the batch boundary. The aggregate-only
+  own transaction, not part of the batch boundary. (A later, post-#60 change on
+  `main` refactored the same boundary into a cursor-taking
+  `govern_review_ingest_on_cursor` variant for callers that co-locate the
+  aggregate upsert in the same transaction; the one-transaction guarantee this
+  plan relies on holds in both forms.) The aggregate-only
   receipt/dedupe is
   **implemented by this same migration**, not held for a separate one: receipts
   key cross-batch dedupe on (source, external_key, `content_sha256`), so an
@@ -767,13 +771,14 @@ inputs yields the same rows (no duplicates, no lost higher-tier enrichments).
   (enforced in code + test).
 
 > **Migration-numbering rule (locked):** `062` is already in use by
-> `062_review_ingestion_governance.sql` on `main`, and `063`/`064` are also
-> already taken (`063_local_signals_contract.sql`,
-> `064_planning_action_tables.sql`). The TARGET items above therefore carry
+> `062_review_ingestion_governance.sql` on `main`, and the canonical sequence on
+> `main` has since continued past it (at the time of this revision, through
+> `067_community_post_reports.sql`). The TARGET items above therefore carry
 > **no number — not even a document-list position that could be misread as one**:
 > each takes the next free canonical number at the time it is implemented,
-> chosen against `sql/canonical/` on `main` — never a pre-assigned value from
-> this document. Nothing in this plan reserves a migration slot.
+> chosen against `sql/canonical/` on `main` at implementation time — never a
+> pre-assigned value from this document and never an implied "next" number read
+> off a partial enumeration here. Nothing in this plan reserves a migration slot.
 
 **BLOCKED_EXTERNAL (not a migration at all — no raw-retention table):**
 
