@@ -12,6 +12,7 @@
 | 첫 실증 범위와 역할별 준비 | [MVP와 역할별 인계](planning/team-development-preparation-20260909/02-mvp-and-role-handoff.md) |
 | 앞으로 고를 결정과 진행 순서 | [다음 결정과 준비 작업](planning/team-development-preparation-20260909/03-next-decisions.md) |
 | 보존 태그, 원본 위치와 공개 범위 | [작업물 보존 목록](planning/team-development-preparation-20260909/04-preservation.md) |
+| 원격 브랜치 삭제·유지 근거와 복구 | [원격 브랜치 정리](planning/team-development-preparation-20260909/05-remote-branch-cleanup.md) |
 
 ## 이전 문서를 읽을 때
 
