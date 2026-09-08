@@ -14,10 +14,12 @@
 > read-only legacy tree at `/Users/geondongkim/3dt-1st-Project` and the current
 > LALA-next tree in this worktree.
 >
-> Reconciliation note (2026-08-19, corrected 2026-08-22 and 2026-08-24): this
-> revision aligns the plan with the approved contract decisions and with PR #60's
-> **merged** foundation (`062_review_ingestion_governance.sql` +
-> `apps/api/app/services/review_ingest_governance.py`). Locked facts it enforces:
+> Reconciliation note (2026-08-19, corrected 2026-08-22 and 2026-08-24,
+> re-verified 2026-09-08 against PR #60's merged migration + service source):
+> this revision aligns the plan with the approved contract decisions and with
+> PR #60's **merged** foundation (`062_review_ingestion_governance.sql` +
+> `apps/api/app/services/review_ingest_governance.py`). Locked facts it
+> enforces:
 > the registry is `ingest.review_sources` (there is no `ingest.source_registry`);
 > 062 does **not** retain raw review bodies; `community.posts_raw` is
 > **BLOCKED_EXTERNAL** (no raw review text stored, served, logged, or embedded
@@ -629,7 +631,7 @@ inputs yields the same rows (no duplicates, no lost higher-tier enrichments).
   `resolution='approved'` with a recorded approver/run.
 - **Observability:** quarantine depth is a metric/alert (§23).
 - **IMPLEMENTED in PR #60 (merged to `main`):** source-gate → run create/resume
-  → receipt dedupe → quarantine insert → run finalize run inside a **single
+  → receipt dedupe → quarantine insert → run finalize inside a **single
   transaction boundary** (`persist_review_ingest_run`'s `with conn:` block) so a
   partial failure rolls back and cannot leave the ledger, receipts, and the
   dead-letter out of sync. A late failure rolls the whole batch back and never
@@ -753,8 +755,7 @@ inputs yields the same rows (no duplicates, no lost higher-tier enrichments).
   `main` refactored the same boundary into a cursor-taking
   `govern_review_ingest_on_cursor` variant for callers that co-locate the
   aggregate upsert in the same transaction; the one-transaction guarantee this
-  plan relies on holds in both forms.) The aggregate-only
-  receipt/dedupe is
+  plan relies on holds in both forms.) The aggregate-only receipt/dedupe is
   **implemented by this same migration**, not held for a separate one: receipts
   key cross-batch dedupe on (source, external_key, `content_sha256`), so an
   exact replay (same triple, any run) yields `rowcount 0` and does not re-emit
@@ -913,8 +914,8 @@ history via `place_enrichments` generations.
 ### M4 — Uncertainty/recheck + quarantine + replay (PARTIALLY implemented)
 
 - **Implemented (062/PR #60, merged to `main`):** `community.ingest_quarantine`
-  dead-letter table
-  + typed `safe_metadata` persistence and the single-transaction quarantine
+  dead-letter table + typed `safe_metadata` persistence and the
+  single-transaction quarantine
   insert boundary (§19) — quarantine is a live surface, not a future table.
 - **Target:** gpt-5.4-mini recheck lane (§16); `--since/--window` replay (§20).
 - **Acceptance (Ops/DB):** low-confidence signals quarantined, not scored;
