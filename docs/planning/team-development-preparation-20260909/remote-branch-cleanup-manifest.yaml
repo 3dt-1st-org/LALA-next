@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "date": "2026-09-09",
   "repository": "3dt-1st-org/LALA-next",
-  "state": "prepared",
+  "state": "completed",
   "beforeRemoteHeadCount": 68,
   "plannedDeleteCount": 34,
   "plannedKeepCount": 34,
@@ -1187,5 +1187,21 @@
       "reason": "protected-or-open-pr",
       "prs": []
     }
-  ]
+  ],
+  "execution": {
+    "beforeRemoteHeadCount": 68,
+    "afterRemoteHeadCount": 34,
+    "deletedBranchCount": 34,
+    "recoveryTagCount": 34,
+    "recoveryTagsVerifiedBeforeDeletion": true,
+    "exactHeadLeasesUsed": true,
+    "atomicDeletionSucceeded": true,
+    "keptHeadsUnchangedDuringDeletion": true,
+    "openPrsPreserved": [
+      187,
+      206
+    ],
+    "localWorktreesRemoved": 0,
+    "productImplementationStarted": false
+  }
 }
