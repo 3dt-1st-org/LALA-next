@@ -1,5 +1,13 @@
 # LALA-next
 
+## 현재 팀 공동 개발 준비
+
+[2026-09-09 준비 문서](docs/planning/team-development-preparation-20260909/README.md)에서
+화면 선별, 공통 지침 수정안, 공용 개발 환경, MVVM 비교와 역할별 인계를 확인한다.
+상태는 준비안 작성·구현 착수 대기다. main과 후보 코드를 계속 비교하며 이 문서
+브랜치를 개발 시작점으로 선택한 것은 아니다. 아래 Wave 1·운영 안내는 해당 범위와
+환경을 확인한 뒤 사용한다.
+
 LALA-next is the refactored LALA backend and Flutter web/app workspace. The
 normal service path is a FastAPI public API, PostgreSQL/PostGIS/pgvector,
 official public-data APIs, and reviewed ingest/scoring/RAG pipelines. Shared
