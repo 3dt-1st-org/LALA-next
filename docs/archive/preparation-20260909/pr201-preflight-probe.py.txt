@@ -1,0 +1,250 @@
+"""PR201 independent preflight probes. DISPOSABLE: not part of the PR.
+
+Two deterministic probes for the controller's concerns:
+1. WS receive authorization is admission-only: a socket whose membership is
+   gone (member row removed / account deleted) still receives private room
+   broadcasts, and the documented 600 s idle bound is defeatable by keepalive
+   frames because every inbound frame resets the receive timeout.
+2. Durable idempotency REPLAY path performs no room-access check: a revoked
+   member replaying the same key + same payload receives the cached response
+   (room existence + cached content leak past revocation).
+"""
+from __future__ import annotations
+
+import asyncio
+import json
+from datetime import UTC, datetime
+from typing import Any
+from uuid import uuid4
+
+import pytest
+
+from apps.api.app.core.config import Settings
+from apps.api.app.services.community_chat_service import (
+    CommunityChatRepository,
+    _message_payload,  # noqa: PLC2701 - probe reuses the real shaper
+)
+from apps.api.app.services.community_idempotency import canonical_request_hash
+
+# ---------------------------------------------------------------------------
+# Probe 2: replay path has no membership check (repository SQL-fake level).
+# ---------------------------------------------------------------------------
+
+ROOM_ID = uuid4()
+MESSAGE_ID = uuid4()
+AUTHOR_USER_ID = uuid4()
+ISSUER = "https://issuer.example"
+SUBJECT = "user-subject"
+DB_DSN = "postgresql://redacted"
+KEY = "retry-probe-1"
+BODY = "probe body"
+
+
+class FakeCursor:
+    def __init__(self, rows: list[Any], executed: list[tuple[str, Any]]) -> None:
+        self._rows = rows
+        self._executed = executed
+
+    def __enter__(self) -> FakeCursor:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+    def execute(self, sql: str, params: Any = None) -> None:
+        self._executed.append((sql, params))
+
+    def fetchone(self) -> Any:
+        return self._rows.pop(0) if self._rows else None
+
+    def fetchall(self) -> list[Any]:
+        items = list(self._rows)
+        self._rows.clear()
+        return items
+
+
+class FakeConnection:
+    def __init__(self, rows: list[Any], executed: list[tuple[str, Any]]) -> None:
+        self._rows = rows
+        self._executed = executed
+
+    def __enter__(self) -> FakeConnection:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+    def cursor(self, cursor_factory: Any = None) -> FakeCursor:
+        return FakeCursor(self._rows, self._executed)
+
+    def close(self) -> None:
+        return None
+
+
+def test_replay_after_membership_revocation_returns_cached_response_without_access_check() -> None:
+    executed: list[tuple[str, Any]] = []
+    request_hash = canonical_request_hash(
+        {"room_id": str(ROOM_ID), "body": BODY}
+    )
+    stored_payload = {
+        "id": str(MESSAGE_ID),
+        "room_id": str(ROOM_ID),
+        "author_user_id": str(AUTHOR_USER_ID),
+        "body": BODY,
+        "created_at": datetime(2026, 9, 6, tzinfo=UTC).isoformat(),
+    }
+
+    def repo(rows: list[Any]) -> CommunityChatRepository:
+        return CommunityChatRepository(
+            Settings(db_dsn=DB_DSN),
+            connect=lambda **kwargs: FakeConnection(rows, executed),
+        )
+
+    # Call 1 (member): claim wins, guarded insert succeeds.
+    call1_rows = [
+        {"idempotency_key": KEY},  # claim ... RETURNING
+        {  # guarded INSERT ... RETURNING
+            "id": MESSAGE_ID,
+            "room_id": ROOM_ID,
+            "author_issuer": ISSUER,
+            "author_subject": SUBJECT,
+            "body": BODY,
+            "created_at": datetime(2026, 9, 6, tzinfo=UTC),
+        },
+        {"id": AUTHOR_USER_ID},  # _resolve_author_user_id
+    ]
+    result1 = repo(call1_rows).create_message_idempotent(
+        room_id=ROOM_ID, issuer=ISSUER, subject=SUBJECT, body=BODY,
+        idempotency_key=KEY,
+    )
+    assert result1["outcome"] == "created"
+
+    executed.clear()
+
+    # Call 2 (membership revoked, same key, same payload): claim misses,
+    # existing row matches hash -> replayed WITHOUT any access predicate.
+    call2_rows = [
+        None,  # claim ON CONFLICT DO NOTHING -> no row
+        {  # existing SELECT
+            "request_hash": request_hash,
+            "response_json": stored_payload,
+        },
+    ]
+    result2 = repo(call2_rows).create_message_idempotent(
+        room_id=ROOM_ID, issuer=ISSUER, subject=SUBJECT, body=BODY,
+        idempotency_key=KEY,
+    )
+
+    # OBSERVED: the cached response is handed back to the revoked actor.
+    assert result2["outcome"] == "replayed"
+    assert result2["message"] == stored_payload
+    # OBSERVED: no SQL executed on the replay path touches room visibility or
+    # membership (no chat_room_members / visibility predicate anywhere).
+    replay_sql = "\n".join(sql for sql, _ in executed)
+    assert "chat_room_members" not in replay_sql
+    assert "visibility" not in replay_sql
+    # Expected instead: the replay path must re-run the room-access predicate
+    # (or the service must gate replays) so a revoked actor gets the same
+    # content-free 404 without the cached response.
+
+
+def test_denied_create_releases_claim_and_leaks_nothing() -> None:
+    """Positive control: the DENIED (fresh-create) path does check access and
+    releases the claim - the gap is replay-specific, not path-wide."""
+    executed: list[tuple[str, Any]] = []
+    rows = [
+        {"idempotency_key": KEY},  # claim wins
+        None,  # guarded INSERT returns no row -> denied
+    ]
+    repository = CommunityChatRepository(
+        Settings(db_dsn=DB_DSN),
+        connect=lambda **kwargs: FakeConnection(rows, executed),
+    )
+    result = repository.create_message_idempotent(
+        room_id=ROOM_ID, issuer=ISSUER, subject=SUBJECT, body=BODY,
+        idempotency_key=KEY,
+    )
+    assert result["outcome"] == "denied"
+    sql_text = "\n".join(sql for sql, _ in executed)
+    assert "chat_room_members" in sql_text  # access predicate present
+    assert "DELETE FROM community.idempotency_keys" in sql_text  # claim released
+
+
+# ---------------------------------------------------------------------------
+# Probe 1: admission-only receive authorization (manager + handler policy).
+# ---------------------------------------------------------------------------
+
+
+class FakeWebSocket:
+    def __init__(self) -> None:
+        self.sent: list[Any] = []
+        self.accepted = False
+
+    async def accept(self) -> None:
+        self.accepted = True
+
+    async def send_json(self, payload: Any) -> None:
+        self.sent.append(payload)
+
+
+def test_broadcast_reaches_socket_whose_membership_was_deleted() -> None:
+    """End-to-end policy proof at the registry level: after 'membership is
+    deleted' (no registry API exists to express that), broadcast still sends
+    private frames to the previously admitted socket, and nothing between
+    admission and delivery consults membership."""
+    from apps.api.app.routers.community_chat import ConnectionManager
+
+    async def scenario() -> None:
+        manager = ConnectionManager()
+        victim = FakeWebSocket()
+        member = FakeWebSocket()
+        await manager.connect(
+            victim, room_id=ROOM_ID, issuer=ISSUER, subject="victim"
+        )
+        await manager.connect(
+            member, room_id=ROOM_ID, issuer=ISSUER, subject="member"
+        )
+        # Membership deletion / account deletion happens here. The registry
+        # has no eviction API; both sockets remain admitted.
+        payload = {"type": "message", "data": {"id": str(MESSAGE_ID), "body": "private"}}
+        await manager.broadcast_once(room_id=ROOM_ID, payload=payload)
+        # OBSERVED: the revoked-member socket received the private frame.
+        assert len(victim.sent) == 1
+        assert len(member.sent) == 1
+        # And a second broadcast is still delivered (not a one-frame grace).
+        await manager.broadcast_once(
+            room_id=ROOM_ID,
+            payload={"type": "message", "data": {"id": str(uuid4()), "body": "private-2"}},
+        )
+        assert len(victim.sent) == 2
+
+    asyncio.run(scenario())
+
+
+def test_idle_timeout_resets_on_any_frame_keepalive_defeats_bound() -> None:
+    """Source-policy probe: WS_IDLE_TIMEOUT_SECONDS wraps each receive_text,
+    so ANY inbound frame (even one that only draws a bounded error reply)
+    restarts the 600 s clock. A deleted member can therefore keep a socket
+    alive indefinitely while continuing to receive broadcasts. Verified
+    against the handler loop in community_chat.py (wait_for per frame)."""
+    from apps.api.app.routers import community_chat as router_module
+
+    # The timeout applies per receive; the loop re-arms it after every frame.
+    source = inspect_source(router_module.chat_room_ws)
+    assert "wait_for" in source and "WS_IDLE_TIMEOUT_SECONDS" in source
+    # _handle_chat_message keeps the connection open after rejections, so a
+    # garbage keepalive refreshes the idle clock without doing anything else.
+    handler_source = inspect_source(router_module._handle_chat_message)
+    assert "FRAME_TOO_LARGE" in handler_source or "INVALID_JSON" in handler_source
+    # OBSERVED (policy): no per-delivery membership check exists between
+    # admission and send_json; the documented 600 s bound is only a bound for
+    # silent clients.
+    broadcast_source = inspect_source(router_module.ConnectionManager.broadcast)
+    assert "send_json" in broadcast_source
+    assert "chat_room_members" not in broadcast_source  # no access predicate
+
+
+def inspect_source(func: Any) -> str:
+    import inspect
+
+    return inspect.getsource(func)
