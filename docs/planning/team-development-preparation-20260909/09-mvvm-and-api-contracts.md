@@ -1,6 +1,6 @@
 # 장소 상세 → 저장 → 목록: MVVM 비교와 계약
 
-상태: **설계 비교안 작성 / MVVM 선택 미결정**. 제품 코드·공개 API·DB 스키마를 변경하지 않는다. 근거는 main 9e312bb4와 후보 8aa184e3의 Git 객체이며, 현재 문서 브랜치의 코드가 최신 후보라고 가정하지 않는다.
+상태: **설계 비교·추천 작성 / 팀 채택 대기**. 첫 흐름은 A안인 기존 Controller 보완을 추천한다. 제품 코드·공개 API·DB 스키마는 변경하지 않는다. 근거는 main 9e312bb4와 후보 8aa184e3의 Git 객체이며, 현재 문서 브랜치의 코드가 최신 후보라고 가정하지 않는다.
 
 ## 1. 기존 구현을 연결해서 읽기
 
@@ -64,6 +64,30 @@ flowchart TD
 이는 설계 비교이지 두 구현을 작성하거나 새 패키지를 설치하는 작업이 아니다. 양쪽 모두 현재 lockfile의 Riverpod 2.6.1을 사실로 기록하며 버전 업그레이드를 끼워 넣지 않는다.
 
 선택 절차: 프론트가 상세·목록의 동일 상태 전이와 예상 변경 범위를 제시 → 백엔드가 API·오류 의미 확인 → 기술 리드가 상태 소유권·계정 전환·검증 가능성을 검토 → 팀이 A/B와 선택 이유·첫 적용 범위·공통 파일 리뷰 담당을 기록한다. 합의 전에는 추천 표시를 선택으로 취급하지 않는다.
+
+### 2026-09-10 추천: A안으로 첫 slice를 만든다
+
+두 SHA 모두 앱 루트에 `ProviderScope` 1개가 있지만 실제 provider 소비 코드는 0개다. 반면 앱에는 `ChangeNotifier` 기반 class 5개와 여러 `ValueNotifier` 상태가 있고, 저장 흐름은 `SavedPlaceStore`·`ActionPersistence`·`TripLibraryStore`·`SavedPlacesPage`가 이 패턴으로 연결된다. B안을 지금 선택하면 첫 저장 흐름에서 MVVM 책임 분리와 Riverpod 수명주기 도입을 동시에 검증해야 한다.
+
+첫 slice는 A안으로 다음 경계를 먼저 세우는 것을 추천한다.
+
+1. `SavedPlacesRepository` 계약이 저장 ID 관찰, 저장·해제, 장소 projection, 계정 연결 상태를 한 경계로 제공한다.
+2. 기존 static store·기기 persistence·원격 adapter는 Repository 구현 뒤에 보존한다. 같은 저장 집합을 새 상태에 복제하지 않는다.
+3. `SavedPlacesViewModel` 또는 같은 책임의 Controller가 loading·ready·error, category, 이전 응답 무시, 재시도를 소유한다.
+4. `SavedPlacesPage`는 상태 표시와 route·dialog 같은 단순 UI 처리, 사용자 명령 전달만 맡는다.
+5. 생성자 주입과 fake Repository로 상태 전이를 검사한다. `BuildContext`, HTTP DTO, SharedPreferences를 ViewModel 테스트에 넣지 않는다.
+
+| 판단 기준 | A: 기존 Controller 보완 | B: Riverpod 점진 도입 | 추천 해석 |
+|---|---|---|---|
+| 현재 코드와의 접점 | 높음 | 루트 scope만 있고 실제 소비 없음 | A가 첫 변경의 원인을 줄임 |
+| 책임 분리 검증 | Repository·Controller만으로 가능 | provider·override 규칙도 함께 필요 | A로 경계를 먼저 검증 |
+| 장기 DI·수명주기 | 팀 규칙을 직접 정해야 함 | 체계화 여지가 큼 | 첫 slice 뒤 실제 반복 비용으로 재평가 |
+| 학습·리뷰 부담 | 낮음 | 중간~높음 | 현재 팀 합류 단계에는 A가 적합 |
+| Riverpod 재도입 비용 | ViewModel 계약을 지키면 제한적 | 해당 없음 | Repository·ViewModel을 provider 비종속으로 유지 |
+
+Riverpod은 제거하지 않는다. 다음 조건 중 하나가 확인되면 두 번째 slice 전에 B안을 다시 검토한다: 같은 Repository를 소비하는 두 번째 ViewModel이 생김, 수동 구독·dispose 오류가 반복됨, 계정 scope별 객체 재생성이 필요함, 팀이 provider override·lifecycle 규칙과 리뷰 담당을 받아들임.
+
+팀이 A안을 채택할 때 기록할 한 줄은 `장소 저장 첫 slice = Repository + 주입형 ChangeNotifier ViewModel, Riverpod 전환 보류`다. 채택 전 상태는 추천이며 구현 지시가 아니다.
 
 ## 4. 공통 내부 계약 제안
 
@@ -134,3 +158,15 @@ R-02·R-03은 소스에서 도출한 검증 후보이며 이번에 재현한 버
 프론트는 S-12·S-23의 상태·이벤트와 A/B 설계, 백엔드는 C-01~C-04 계약, 기술 리드는 기기·계정 상태 소유권과 DB 준비, PM은 저장 후 다시 찾는 행동의 성공 기준을 확인한다.
 
 변경이 필요할 때만 API schema → OpenAPI → Dart 생성물·수동 adapter → UI → DB 호환성 순서로 영향 목록을 만든다. 계약을 설명하기 위해 코드 생성·마이그레이션·기존 저장 기능 재구현을 수행하지 않는다.
+
+팀이 A안을 채택하면 첫 구현 항목은 다음 다섯 결과로 제한한다.
+
+| 결과 | 담당 / 리뷰 | 완료 조건 |
+|---|---|---|
+| 저장 Repository 계약 | 프론트 / 백엔드·기술 리드 | C-01~C-04 의미와 계정 epoch를 타입·문서로 표현 |
+| 기존 store·remote adapter | 프론트 / 백엔드 | 기존 기기 우선·원격 합집합 정책을 보존하고 상태 중복 소유 없음 |
+| 저장 목록 ViewModel | 프론트 / 기술 리드 | loading·ready·error·missing-place·stale-response 상태를 위젯 없이 검사 |
+| SavedPlacesPage 연결 | 프론트 / 프론트 동료 | 화면에 API·persistence 순서 로직이 남지 않고 기존 route·문구·접근성 유지 |
+| 계약·회귀 검사 | 프론트+백엔드 / 기술 리드 | T-01~T-08, T-11~T-13 중 이 slice가 담당하는 항목과 R-01~R-04 결과 기록 |
+
+공개 API·DB schema·Riverpod 버전 변경은 이 첫 항목의 기본 범위가 아니다. 필요한 변화가 발견되면 별도 계약 변경으로 분리한다.

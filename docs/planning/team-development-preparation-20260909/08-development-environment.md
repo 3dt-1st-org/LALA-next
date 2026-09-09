@@ -1,10 +1,10 @@
 # 공용 개발 API와 개발 환경 준비표
 
-상태: **공용 개발 API 우선 확정 / 별도 개발 환경과 팀 접근은 미확인**. 이번에는 읽기 전용 조사와 구성안 작성만 수행한다. 클라우드 생성·서버 접속 명령 실행·DB 연결·시크릿 값 조회·설정 변경은 하지 않았다.
+상태: **공용 개발 API 우선 확정 / GitHub 배포 lane 구성 확인 / 현재 Azure 런타임 인수 대기**. 읽기 전용 조사와 구성안 작성만 수행했다. 클라우드 생성·서버 접속·DB 연결·시크릿 값 조회·설정 변경·workflow 실행은 하지 않았다.
 
 ## 1. 확인한 사실과 한계
 
-조사일 2026-09-09. 저장소의 배포 계정과 현재 AWS 호출 계정의 일치 여부만 확인했고, 계정·리소스 ID·주소 원문은 공개 문서에 싣지 않는다.
+조사일 2026-09-09, 갱신일 2026-09-10. GitHub 배포 설정과 현재 Azure CLI 접근 범위를 추가로 대조했다. 계정·구독·리소스 ID·주소 원문·시크릿 값은 공개 문서에 싣지 않는다.
 
 | 조사 | 확인 사실 | 판단 한계 |
 |---|---|---|
@@ -13,23 +13,38 @@
 | 같은 계정·리전 RDS 메타데이터 | 식별자에 lala가 포함된 PostgreSQL 인스턴스 1개, available | DB 내부의 개발 데이터베이스·계정 분리는 미확인 |
 | GitHub environment dev | 실제 존재, protection rule count 0 | 현재 개발 API의 가동·접근을 보장하지 않음 |
 | Azure Dev Deploy 이력 | 2026-06-23 성공, dev SHA 9989e987b47f7e4d62d53e1d439aba1e6f6c7f8e | 과거 성공이며 현재 API·DB·후보 계약 호환성은 미검증 |
+| GitHub dev OIDC 설정 | workflow가 요구하는 OIDC·구독·resource group·CORS 값이 등록됨. 기본값을 쓰는 선택 항목 2개는 미등록 | 값의 존재만 확인. 권한 유효성·현재 리소스 상태는 보장하지 않음 |
+| GitHub dev 비밀 metadata | 등록 2개, 필수 PostgreSQL 관리자 비밀 이름 존재 | 값 조회·유효성·회전 상태는 확인하지 않음 |
+| 현재 Azure CLI 접근 | 로그인된 enabled 구독 1개가 GitHub dev의 배포 구독과 불일치 | 이 로그인으로 dev 리소스의 존재·상태를 판정할 수 없음 |
+| Azure Resource Graph | 현재 로그인 구독에서 LALA 이름·기본 resource group과 일치하는 리소스 0개 | 배포 구독이 다르므로 “개발 환경 없음”의 증거가 아님 |
 | 앱 설정 | 기본 API 주소가 운영 주소로 지정됨 | 실제 실행하지 않음 |
 | API 시작 스크립트 | 기본 프로필 api, 기본 바인딩 0.0.0.0 | 단순 실행을 안전한 로컬 검사로 안내하면 안 됨 |
 | EC2 배포 workflow | main의 CI 성공 후 origin/main을 배포하는 구성 | 서버의 현재 실행 SHA·보호 규칙·실제 배포 상태는 이번에 미확인 |
 
-사용한 읽기 전용 호출은 STS GetCallerIdentity, EC2 DescribeInstances(Name 필터), RDS DescribeDBInstances의 LALA 항목 선별이다. 다른 계정·리전·태그 없는 리소스·호스트 내부를 포괄하지 않는다. **개발 환경이 없다는 결론이 아니라 분리를 확인하지 못한 상태**다.
+사용한 읽기 전용 호출은 AWS STS·EC2·RDS metadata, GitHub environment·deployment·workflow metadata, Azure account metadata와 Azure Resource Graph다. 다른 계정·구독·리전·태그 없는 리소스·호스트 내부를 포괄하지 않는다. **개발 환경이 없다는 결론이 아니라 현재 권한으로 가동 상태를 확인하지 못한 상태**다.
 
 보충 인계의 단서를 GitHub API와 저장소 파일로 재확인했다. [과거 Azure 배포 실행](https://github.com/3dt-1st-org/LALA-next/actions/runs/28034229769), [개발 배포 문서](../../operations/azure-dev-deployment.md), [workflow](../../../.github/workflows/azure-dev-deploy.yml), infra/azure/를 개발 환경의 추가 출발 자료로 사용한다. 오래된 Azure 개발 환경과 AWS 운영을 하나의 현재 환경으로 합쳐 설명하지 않는다.
 
-dev workflow에는 경로 필터가 있는 dev push와 workflow_dispatch가 있고 live AI·Speech의 기본 활성 표현이 있다. dev를 무조건 안전한 검사용 push 대상으로 사용하지 않는다. 과거 Azure Key Vault 배포와 현재 후보 api/worker의 AWS Secrets Manager 계약의 호환성도 인수 항목이다. 이번에는 workflow를 실행하거나 Azure 리소스·비밀을 조회하지 않았다.
+dev workflow에는 경로 필터가 있는 dev push와 workflow_dispatch가 있고 live AI·Speech의 기본 활성 표현이 있다. dev를 무조건 안전한 검사용 push 대상으로 사용하지 않는다. 과거 Azure Key Vault 배포와 현재 후보 api/worker의 AWS Secrets Manager 계약의 호환성도 인수 항목이다. 이번에는 Resource Graph로 **접근 중인 구독의 metadata만** 조회했고, 배포 구독의 리소스·Key Vault 비밀·DB 내용은 조회하지 않았다.
+
+### 2026-09-10 판정
+
+GitHub 설정은 “다시 배포할 수 있는 구성 흔적”이며, 현재 사용할 공용 개발 환경의 인수 증거는 아니다. 마지막 GitHub deployment는 2026-06-23의 `dev 9989e987` 성공으로 끝나고 environment URL도 기록되지 않았다. 그 이후의 Container App 상태, API 이미지 SHA, PostgreSQL readiness, 적용 SQL 수준은 미확인이다.
+
+따라서 G-03의 현재 상태는 **구성 확인 / 접근 차단 / 가동 미검증**이다. 기술 리드가 다음 둘 중 하나를 제공해야 다음 단계로 넘어간다.
+
+1. GitHub `dev`와 같은 Azure 구독의 읽기 권한을 제공해 이 문서의 조회 절차를 재실행한다.
+2. 운영 비밀을 제외한 현재 상태 보고서를 제공한다. 보고서에는 조사 시각, 앱·API SHA, Container App 상태, DB·PostGIS readiness, 정적 snapshot fallback 상태, 적용 SQL head, 개발 API URL 전달 경로를 포함한다.
+
+인수 담당자는 올바른 구독에서 `scripts/unix/verify_azure_resources.sh`와 `scripts/unix/verify_db_resources.sh`의 check-only 결과를 먼저 남긴다. 그다음 명시적으로 전달된 개발 주소의 `/healthz`와 `/readyz`를 확인한다. `readyz`에서 정상 데이터 경로가 DB-backed이고 DB·PostGIS가 configured이며 static snapshot fallback이 disabled인 경우에만 앱 통합 검사를 시작한다. 이 검사는 유료 AI·Speech 호출이나 배포를 포함하지 않는다.
 
 ## 2. 인수할 환경 카드
 
 | 항목 | 현재 값 또는 결정할 내용 | 주 담당 |
 |---|---|---|
-| 공용 개발 API URL·접근 방식 | [확인 필요] 운영 API를 대체값으로 쓰지 않음 | 기술 리드 |
-| API 프로세스·DB·권한의 운영 분리 | [확인 필요] 같은 호스트라면 서비스·DB·계정·배포 경로별 분리 증거 | 기술 리드 |
-| 앱 SHA / API SHA / 적용 SQL 수준 | [확인 필요] main·후보 조합별 계약 검사 후 기록 | 기술 리드 + 백엔드 |
+| 공용 개발 API URL·접근 방식 | [접근 차단] GitHub dev 설정은 있으나 현재 배포 구독 읽기 권한·environment URL 없음. 운영 API를 대체값으로 쓰지 않음 | 기술 리드 |
+| API 프로세스·DB·권한의 운영 분리 | [미검증] Container App·DB·Key Vault·배포 구독의 현재 상태와 운영 분리 증거 | 기술 리드 |
+| 앱 SHA / API SHA / 적용 SQL 수준 | [확인 필요] 추천 후보의 최종 통합 SHA와 배포 이미지·SQL head를 함께 기록 | 기술 리드 + 백엔드 |
 | 공개 조회·인증 테스트 경로 | 장소 조회, 저장 계정 API, 인증 callback·CORS 등록 | 백엔드 + 프론트 |
 | 개발 계정 | 게스트 경로 + 서로 다른 Logto 시험 계정 A/B. 자격증명은 비공개 전달 | 백엔드 + 기술 리드 |
 | 비밀 backend·프로필·공개 allowlist | registry·승인된 region/prefix/mapping·IAM·존재 metadata를 순서대로 확인 | 기술 리드 |
@@ -164,7 +179,7 @@ local 프로필은 dotenv를 읽을 수 있다. 기본 .env를 무조건 복사�
 ## 7. 장애와 개발 기준 선택
 
 - 공용 API 장애 시: 프론트는 fixture 기반 표시·상태 검사, 백엔드는 단위·계약 검사까지 진행한다. 저장·동기화·지도·음성 통합 결과는 대기한다.
-- 준비 자료 수령 후: 두 코드의 MVP 충족·수정 포함·의존성·검증 공백을 비교해 기술 리드가 선택 근거를 제시한다.
+- 화면 자료와 독립적으로: 후보를 조건부 통합 기준으로 추천한다. 화면 자료 수령 후에는 최종 MVP 범위에 비춰 통합 목록을 다시 확인한다.
 - main 선택 시: 혼합 지도 등 필요한 후보 변경만 목록화한다. 로컬의 과거 5개 커밋을 일괄 cherry-pick하지 않는다.
-- 후보 선택 시: 70개 추가 커밋 전체가 실증 범위가 되는 것은 아니다. 후보 SHA를 고정해 검증하고 main 통합은 별도로 진행한다.
+- 추천 경로인 후보 선택 시: 70개 추가 커밋 전체가 실증 범위가 되는 것은 아니다. #187과 #206의 스택을 정리해 최종 통합 SHA를 고정하고, 보류 기능은 보존하되 실증 완료 범위와 분리한다.
 - main 병합 전: 필수 리뷰·CI·검증 SHA 배포·DB 호환성·readiness·복구 담당을 합의한다. 이번에는 GitHub 설정이나 workflow를 바꾸지 않는다.
