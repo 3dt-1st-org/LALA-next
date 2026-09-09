@@ -6,7 +6,7 @@
 
 저장소 루트 기준 docs/planning/team-development-preparation-20260909/README.md와 03-next-decisions.md를 먼저 읽는다. 현재 단계는 준비 문서 작성과 합의이며 기능 구현, MVVM 전환, 화면 숨김, 병합, 배포는 별도 지시가 필요하다.
 
-main 9e312bb4와 후보 8aa184e3를 계속 비교한다. docs/team-preparation-20260909는 보존·문서용이며 개발 시작점이 아니다. 구현 착수 전에 정확한 기준 SHA를 기록한다.
+main 9e312bb4와 후보 8aa184e3를 계속 비교한다. 후보는 조건부 통합 기준 추천이며, Draft PR #187과 그 위의 #206을 정리·검증한 뒤 정확한 최종 시작 SHA를 기록한다. docs/team-preparation-20260909는 보존·문서용이며 개발 시작점이 아니다.
 
 첫 실증은 한국 방문 외국인의 진입·탐색·상세·저장·도슨트 흐름이다. 화면 선별 PDF와 온보딩 질문안은 수령 대기다. 상세 화면 범위를 임의 확정하지 않는다. 날씨에 따른 일정 재계획, Local Signals, 커뮤니티·채팅의 코드와 테스트는 보존한다. 실증 진입점 숨김은 후속 구현에서 다룬다.
 
@@ -16,14 +16,14 @@ main 9e312bb4와 후보 8aa184e3를 계속 비교한다. docs/team-preparation-2
 - 인증은 lib/auth의 Logto SDK 경유다. 직접 토큰 관리로 대체하지 않는다.
 - 색상·배치는 새로 구성할 수 있다. 서비스 일관성, 접근성, 데이터 출처와 ColorScheme.fromSeed를 유지한다.
 - LALA_BUILD_SHA를 유지하고 앱·API의 기준 SHA를 기록한다.
-- 장소 상세 → 저장 → 목록으로 기존 Controller 보완과 Riverpod 점진 도입을 비교한다. 상태 관리 방식은 팀 결정 전까지 미확정이다.
+- 장소 상세 → 저장 → 목록의 첫 slice에는 Repository + 주입형 ChangeNotifier ViewModel 방식의 기존 Controller 보완을 추천한다. 팀 채택 전에는 확정으로 쓰지 않으며 Riverpod을 제거하거나 일괄 전환하지 않는다.
 - View는 표시·입력, ViewModel/Controller는 화면 상태·비동기 순서, Repository는 데이터 정책, 서비스·adapter는 통신·영속화를 담당한다.
 - 취향·여행 설정의 expected_revision을 보존한다. timestamp를 충돌 제어의 자동 대체물로 취급하지 않는다.
 - API 변경은 서버 스키마·OpenAPI 수동 보완·Dart 생성 패키지·수동 adapter·DB 호환성을 함께 검토한다. 생성 코드와 adapter를 중복이라고 삭제하지 않는다.
 
 ## 개발과 검증
 
-공용 개발 API 우선이다. docs/planning/team-development-preparation-20260909/08-development-environment.md에서 주소·접근·앱/API 조합을 확인한다. 현재 별도 개발 환경의 분리 상태는 미확인이다. 운영 API 기본값을 개발 주소로 대신 쓰지 않는다.
+공용 개발 API 우선이다. docs/planning/team-development-preparation-20260909/08-development-environment.md에서 주소·접근·앱/API 조합을 확인한다. GitHub dev 배포 설정은 있으나 현재 Azure 런타임 접근·가동·분리 상태는 미검증이다. 기술 리드가 올바른 배포 구독의 읽기 권한 또는 비밀 없는 현재 상태 보고서를 제공하기 전에는 개발 환경 인수가 끝났다고 쓰지 않는다. 운영 API 기본값을 개발 주소로 대신 쓰지 않는다.
 
 운영 비밀 없는 단위·계약 검사는 CI 프로필로 실행한다. 상속된 DB·클라우드·인증 값을 배제하는 환경표의 명령을 사용한다. Flutter/Dart는 확정된 SDK와 lockfile 기준을 확인한다.
 
