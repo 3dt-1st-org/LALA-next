@@ -1,10 +1,10 @@
 # 준비안 검증 기록
 
-기준일: 2026-09-09, 추가 검증일: 2026-09-10. 기능 구현·앱 실행 인수와 문서 검수를 구분한다.
+기준일: 2026-09-09, 추가 검증일: 2026-09-10. 문서 검수, 코드 CI, API 배포, Flutter 실기기 인수를 구분한다.
 
 ## 1. 범위와 기준
 
-출발 문서 커밋은 740a42cc41edc1d43f8e5b8c0600c4ea56db8d28이다. 원격 main 9e312bb49af7afd981e5bdbbbb314d7d98ddf0e6과 후보 8aa184e375f381fa4de0a97bca82ffa3e59ba836의 SHA를 다시 조회했다. 최종 문서 커밋·원격 반영 여부는 실제 commit/push 후 전달하는 결과로 확인한다.
+출발 문서 커밋은 740a42cc41edc1d43f8e5b8c0600c4ea56db8d28이다. 원격 main 9e312bb49af7afd981e5bdbbbb314d7d98ddf0e6과 후보 8aa184e375f381fa4de0a97bca82ffa3e59ba836를 비교했고, 후속 병합 뒤 제품 코드 기준은 e64ed0583749ab0e6a372f48978eee1e8e49a265다.
 
 ## 2. 실행한 검수
 
@@ -27,7 +27,7 @@
 | 검사 | 결과 | 의미 |
 |---|---|---|
 | 원격 SHA | main `9e312bb4`, 후보 `8aa184e3`, dev `9989e987`, 문서 branch `96a587db` 재확인 | 조사 시점 원격 일치. 최종 문서 커밋은 이후 별도 기록 |
-| PR 상태·CI | #187·#206 OPEN Draft·CLEAN, 각 head의 API·Unix·Flutter CI 성공 | 리뷰·병합·배포 완료를 뜻하지 않음 |
+| 병합 전 PR 상태·CI | #187·#206 OPEN Draft·CLEAN, 각 head의 API·Unix·Flutter CI 성공 | 당시 snapshot. 최종 결과는 4절에 별도 기록 |
 | main 선별 API | 66 passed, 경고 1 | OpenAPI·계획·취향 계약의 격리 검사 |
 | 후보 선별 API | 70 passed, 경고 1 | 같은 범위와 후보 추가 회귀 검사. 실 DB·Logto 검사는 아님 |
 | main 선별 Flutter | 59 passed | cold start·저장 persistence·목록·여행 store 격리 검사 |
@@ -57,16 +57,31 @@ API 검사는 `LALA_RUNTIME_PROFILE=ci`, `AWS_EC2_METADATA_DISABLED=true`를 사
 
 이 시험은 초안의 내용 전달을 확인한다. 실제 사용자 설정과 충돌할 가능성, Claude·Copilot 적용, 실제 팀원 새 clone의 환경을 검증한 것은 아니다. 해당 확인은 [공통 지침 적용 절차](07-common-guidelines.md)에 남긴다.
 
-## 4. 이번에 실행하지 않은 검증
+## 4. 코드 병합과 배포 후 검증
+
+| 검사 | 결과 | 의미 |
+|---|---|---|
+| PR #187 | merge commit `055bea56` | 기존 커밋 계보를 보존해 #206 retarget 가능 |
+| #187 후 main CI | [run 34419870659](https://github.com/3dt-1st-org/LALA-next/actions/runs/34419870659) 성공 | 정확한 main에서 API·Unix·Flutter 잡 통과 |
+| #187 후 API 배포 | [run 34420193876](https://github.com/3dt-1st-org/LALA-next/actions/runs/34420193876) 성공 | EC2 코드 배포와 workflow health check 성공 |
+| PR #206 | main으로 retarget 후 merge commit `e64ed058` | 두 커밋·세 파일, CLEAN. 합성 merge tree와 head tree 일치 |
+| 최종 main CI | [run 34420377285](https://github.com/3dt-1st-org/LALA-next/actions/runs/34420377285) 성공 | API·Unix·Flutter 잡 모두 통과 |
+| 최종 API 배포 | [run 34420615436](https://github.com/3dt-1st-org/LALA-next/actions/runs/34420615436) 성공 | 배포 뒤 `/healthz`·`/readyz` HTTP 200, DB-backed |
+| 계보 | 후보 `8aa184e3`가 `e64ed058`의 조상 | 선택 후보가 최종 main 이력에 포함됨 |
+
+SQL 068은 additive·idempotent지만 EC2 자동 코드 배포가 적용하지 않는다. 운영 DB의 적용 SQL head는 확인하지 않았으므로 새 커뮤니티 채팅 내구성 경로를 사용하기 전 별도 확인·적용이 필요하다. Flutter 잡 성공은 앱스토어·웹·기기 빌드 배포를 뜻하지 않는다.
+
+## 5. 이번에 실행하지 않은 검증
 
 - 최종 선별 PDF·온보딩 질문안 대조: 자료 수령 전.
 - 실제 앱·브라우저·기기·지도·음성·Logto 로그인 검증: 미실행.
 - 실제 개발 API·DB 연결·분리·시험 계정 인수: GitHub 구성만 확인, Azure 배포 구독 접근 불일치로 runtime은 미확인.
 - 활성 루트 AGENTS·Claude·Copilot 적용: 미수행. 공통 지침 초안만 작성.
-- 제품 전체 test suite·실환경 통합 검증: 선별 단위·계약 검사만 실행.
-- workflow 실행·PR 병합·배포·DB 적용·비밀 값 조회: 미수행.
+- 개발 API·Logto·실 DB의 전체 사용자 흐름 검증: 미수행.
+- Flutter 앱 배포·실기기 검증: 미수행.
+- SQL 068 적용·비밀 값 조회: 미수행.
 
-## 5. 커밋 전 검사
+## 6. 커밋 전 검사
 
 작업 문서만 명시해 첫 pre-commit을 실행했다. Detect secrets가 README의 기존 항목 줄 번호를 44에서 52로 갱신하면서 재실행을 요구했다. baseline의 차이를 구조로 비교했으며 변경은 해당 줄 번호와 생성 시각뿐이다. 새 비밀 항목·fingerprint·검사 규칙 변경은 없다. 문서 위치 이동에 따른 검사 메타데이터로 함께 보존한다.
 

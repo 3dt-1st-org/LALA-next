@@ -6,13 +6,13 @@
 
 저장소 루트 기준 docs/planning/team-development-preparation-20260909/README.md와 03-next-decisions.md를 먼저 읽는다. 현재 단계는 준비 문서 작성과 합의이며 기능 구현, MVVM 전환, 화면 숨김, 병합, 배포는 별도 지시가 필요하다.
 
-main 9e312bb4와 후보 8aa184e3를 계속 비교한다. 후보는 조건부 통합 기준 추천이며, Draft PR #187과 그 위의 #206을 정리·검증한 뒤 정확한 최종 시작 SHA를 기록한다. docs/team-preparation-20260909는 보존·문서용이며 개발 시작점이 아니다.
+역사적 비교 기준은 main 9e312bb4와 후보 8aa184e3다. #187과 #206은 순서대로 병합됐으며 현재 제품 코드 기준은 main e64ed058이다. 원래 docs/team-preparation-20260909 브랜치는 보존용이며 개발 시작점이 아니다.
 
 첫 실증은 한국 방문 외국인의 진입·탐색·상세·저장·도슨트 흐름이다. 화면 선별 PDF와 온보딩 질문안은 수령 대기다. 상세 화면 범위를 임의 확정하지 않는다. 날씨에 따른 일정 재계획, Local Signals, 커뮤니티·채팅의 코드와 테스트는 보존한다. 실증 진입점 숨김은 후속 구현에서 다룬다.
 
 ## 기술·제품 기준
 
-- 지도 방향은 후보의 한국어 NAVER, en·ja·zh-Hans·zh-Hant open-vector다. 선택한 SHA의 실제 코드와 구분하고, 기존 지도·위치의 web/native/stub 분기와 출처 표시를 보존한다.
+- 지도 방향은 현재 main의 한국어 NAVER, en·ja·zh-Hans·zh-Hant open-vector다. 기존 지도·위치의 web/native/stub 분기와 출처 표시를 보존한다.
 - 인증은 lib/auth의 Logto SDK 경유다. 직접 토큰 관리로 대체하지 않는다.
 - 색상·배치는 새로 구성할 수 있다. 서비스 일관성, 접근성, 데이터 출처와 ColorScheme.fromSeed를 유지한다.
 - LALA_BUILD_SHA를 유지하고 앱·API의 기준 SHA를 기록한다.

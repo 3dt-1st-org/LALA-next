@@ -130,7 +130,7 @@
 - **분류:** 세부 범위 미결정. 목적: 장소 방문에 필요한 기본 날씨 정보를 확인.
 - **포함 검토:** 기본 정보·관측 시각·unknown 표현 검토. **보류·제외 검토:** 날씨 변화에 따른 자동 일정 재계획.
 - **코드 대조:** 후보에서 대표 파일 변경. [main 대표 소스](https://github.com/3dt-1st-org/LALA-next/blob/9e312bb49af7afd981e5bdbbbb314d7d98ddf0e6/apps/flutter_app/lib/features/weather/widgets/weather_sheet_content.dart) / [후보 대표 소스](https://github.com/3dt-1st-org/LALA-next/blob/8aa184e375f381fa4de0a97bca82ffa3e59ba836/apps/flutter_app/lib/features/weather/widgets/weather_sheet_content.dart).
-- **API·저장·공통 의존성:** Home/backend 날씨 응답 → WeatherSheetContent/신선도 helper. PR #206은 이 표시 계층의 후보 수정이며 운영 적용 완료가 아니다.
+- **API·저장·공통 의존성:** Home/backend 날씨 응답 → WeatherSheetContent/신선도 helper. PR #206은 main 병합과 CI를 완료했지만 Flutter 배포·실기기 검증은 별도다.
 - **남은 검증·결정:** 정보 표시와 자동 개입을 분리했는가. 현재 두 SHA의 실구동은 미검증.
 - **새 자료 대조:** 선별 PDF 쪽수·질문안 항목·일치/충돌·최종 판정·근거는 수령 후 기록.
 
